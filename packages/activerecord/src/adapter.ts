@@ -204,6 +204,12 @@ export class MemoryAdapter implements DatabaseAdapter {
     row: Record<string, unknown>,
     condition: string
   ): boolean {
+    // Always-false (empty IN generates 1=0)
+    if (condition.trim() === "1=0") return false;
+
+    // Always-true (empty NOT IN generates 1=1)
+    if (condition.trim() === "1=1") return true;
+
     // IS NULL
     const isNullMatch = condition.match(/"?(\w+)"?\."?(\w+)"?\s+IS\s+NULL/i);
     if (isNullMatch) {
@@ -216,6 +222,46 @@ export class MemoryAdapter implements DatabaseAdapter {
       return row[isNotNullMatch[2]] !== null && row[isNotNullMatch[2]] !== undefined;
     }
 
+    // NOT IN (...)
+    const notInMatch = condition.match(
+      /"?(\w+)"?\."?(\w+)"?\s+NOT\s+IN\s+\((.+?)\)/i
+    );
+    if (notInMatch) {
+      const [, , col, valList] = notInMatch;
+      const values = this.parseValues(valList);
+      return !values.some((v) => row[col] == v);
+    }
+
+    // IN (...)
+    const inMatch = condition.match(
+      /"?(\w+)"?\."?(\w+)"?\s+IN\s+\((.+?)\)/i
+    );
+    if (inMatch) {
+      const [, , col, valList] = inMatch;
+      const values = this.parseValues(valList);
+      return values.some((v) => row[col] == v);
+    }
+
+    // column != value (check before = to avoid matching != as =)
+    const neqMatch = condition.match(
+      /"?(\w+)"?\."?(\w+)"?\s*!=\s*(.+)/
+    );
+    if (neqMatch) {
+      const [, , col, rawVal] = neqMatch;
+      const val = this.parseSingleValue(rawVal.trim());
+      return row[col] != val;
+    }
+
+    // column <> value
+    const neqMatch2 = condition.match(
+      /"?(\w+)"?\."?(\w+)"?\s*<>\s*(.+)/
+    );
+    if (neqMatch2) {
+      const [, , col, rawVal] = neqMatch2;
+      const val = this.parseSingleValue(rawVal.trim());
+      return row[col] != val;
+    }
+
     // column = value
     const eqMatch = condition.match(
       /"?(\w+)"?\."?(\w+)"?\s*=\s*(.+)/
@@ -224,16 +270,6 @@ export class MemoryAdapter implements DatabaseAdapter {
       const [, , col, rawVal] = eqMatch;
       const val = this.parseSingleValue(rawVal.trim());
       return row[col] == val;
-    }
-
-    // column != value
-    const neqMatch = condition.match(
-      /"?(\w+)"?\."?(\w+)"?\s*!=\s*(.+)/
-    );
-    if (neqMatch) {
-      const [, , col, rawVal] = neqMatch;
-      const val = this.parseSingleValue(rawVal.trim());
-      return row[col] != val;
     }
 
     // column > value

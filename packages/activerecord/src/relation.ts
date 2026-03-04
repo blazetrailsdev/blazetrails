@@ -10,6 +10,7 @@ import { _setRelationCtor } from "./base.js";
 export class Relation<T extends Base> {
   private _modelClass: typeof Base;
   private _whereClauses: Array<Record<string, unknown>> = [];
+  private _whereNotClauses: Array<Record<string, unknown>> = [];
   private _orderClauses: Array<string | [string, "asc" | "desc"]> = [];
   private _limitValue: number | null = null;
   private _offsetValue: number | null = null;
@@ -32,6 +33,17 @@ export class Relation<T extends Base> {
   where(conditions: Record<string, unknown>): Relation<T> {
     const rel = this._clone();
     rel._whereClauses.push(conditions);
+    return rel;
+  }
+
+  /**
+   * Add NOT WHERE conditions. Accepts a hash of column/value pairs.
+   *
+   * Mirrors: ActiveRecord::Relation#where.not
+   */
+  whereNot(conditions: Record<string, unknown>): Relation<T> {
+    const rel = this._clone();
+    rel._whereNotClauses.push(conditions);
     return rel;
   }
 
@@ -198,16 +210,49 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Return the last record.
+   * Return the first record, or throw if none found.
+   *
+   * Mirrors: ActiveRecord::Relation#first!
+   */
+  async firstBang(): Promise<T> {
+    const record = await this.first();
+    if (!record) {
+      throw new Error(`${this._modelClass.name} not found`);
+    }
+    return record;
+  }
+
+  /**
+   * Return the last record. When no order is specified, defaults to
+   * ordering by primary key descending (matching Rails behavior).
    *
    * Mirrors: ActiveRecord::Relation#last
    */
   async last(): Promise<T | null> {
     if (this._isNone) return null;
-    const rel = this.reverseOrder();
-    rel._limitValue = 1;
+    let rel: Relation<T>;
+    if (this._orderClauses.length === 0) {
+      // Default to primary key desc when no order is specified
+      rel = this.order({ [this._modelClass.primaryKey]: "desc" as const });
+    } else {
+      rel = this.reverseOrder();
+    }
+    rel = rel.limit(1);
     const records = await rel.toArray();
     return records[0] ?? null;
+  }
+
+  /**
+   * Return the last record, or throw if none found.
+   *
+   * Mirrors: ActiveRecord::Relation#last!
+   */
+  async lastBang(): Promise<T> {
+    const record = await this.last();
+    if (!record) {
+      throw new Error(`${this._modelClass.name} not found`);
+    }
+    return record;
   }
 
   /**
@@ -301,6 +346,19 @@ export class Relation<T extends Base> {
   }
 
   /**
+   * Destroy all matching records (runs callbacks on each record).
+   *
+   * Mirrors: ActiveRecord::Relation#destroy_all
+   */
+  async destroyAll(): Promise<T[]> {
+    const records = await this.toArray();
+    for (const record of records) {
+      await record.destroy();
+    }
+    return records;
+  }
+
+  /**
    * Delete all matching records.
    *
    * Mirrors: ActiveRecord::Relation#delete_all
@@ -363,6 +421,17 @@ export class Relation<T extends Base> {
         }
       }
     }
+    for (const clause of this._whereNotClauses) {
+      for (const [key, value] of Object.entries(clause)) {
+        if (value === null) {
+          manager.where(table.get(key).isNotNull());
+        } else if (Array.isArray(value)) {
+          manager.where(table.get(key).notIn(value));
+        } else {
+          manager.where(table.get(key).notEq(value));
+        }
+      }
+    }
   }
 
   private _applyOrderToManager(
@@ -387,11 +456,50 @@ export class Relation<T extends Base> {
       for (const [key, value] of Object.entries(clause)) {
         if (value === null) {
           conditions.push(`"${table.name}"."${key}" IS NULL`);
+        } else if (typeof value === "boolean") {
+          conditions.push(
+            `"${table.name}"."${key}" = ${value ? "TRUE" : "FALSE"}`
+          );
         } else if (typeof value === "number") {
           conditions.push(`"${table.name}"."${key}" = ${value}`);
+        } else if (Array.isArray(value)) {
+          const vals = value
+            .map((v) => {
+              if (v === null) return "NULL";
+              if (typeof v === "number") return String(v);
+              return `'${String(v).replace(/'/g, "''")}'`;
+            })
+            .join(", ");
+          conditions.push(`"${table.name}"."${key}" IN (${vals})`);
         } else {
           conditions.push(
             `"${table.name}"."${key}" = '${String(value).replace(/'/g, "''")}'`
+          );
+        }
+      }
+    }
+    for (const clause of this._whereNotClauses) {
+      for (const [key, value] of Object.entries(clause)) {
+        if (value === null) {
+          conditions.push(`"${table.name}"."${key}" IS NOT NULL`);
+        } else if (typeof value === "boolean") {
+          conditions.push(
+            `"${table.name}"."${key}" != ${value ? "TRUE" : "FALSE"}`
+          );
+        } else if (typeof value === "number") {
+          conditions.push(`"${table.name}"."${key}" != ${value}`);
+        } else if (Array.isArray(value)) {
+          const vals = value
+            .map((v) => {
+              if (v === null) return "NULL";
+              if (typeof v === "number") return String(v);
+              return `'${String(v).replace(/'/g, "''")}'`;
+            })
+            .join(", ");
+          conditions.push(`"${table.name}"."${key}" NOT IN (${vals})`);
+        } else {
+          conditions.push(
+            `"${table.name}"."${key}" != '${String(value).replace(/'/g, "''")}'`
           );
         }
       }
@@ -402,6 +510,7 @@ export class Relation<T extends Base> {
   private _clone(): Relation<T> {
     const rel = new Relation<T>(this._modelClass);
     rel._whereClauses = [...this._whereClauses];
+    rel._whereNotClauses = [...this._whereNotClauses];
     rel._orderClauses = [...this._orderClauses];
     rel._limitValue = this._limitValue;
     rel._offsetValue = this._offsetValue;

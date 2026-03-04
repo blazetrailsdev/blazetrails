@@ -115,11 +115,28 @@ export class Base extends Model {
   // -- Finders (class methods) --
 
   /**
-   * Find a record by primary key.
+   * Find a record by primary key, or an array of records by primary keys.
    *
    * Mirrors: ActiveRecord::Base.find
    */
-  static async find(id: unknown): Promise<Base> {
+  static async find(id: unknown): Promise<any> {
+    // Multiple IDs — return an array
+    if (Array.isArray(id)) {
+      if (id.length === 0) return [];
+      const records = await this.all()
+        .where({ [this.primaryKey]: id })
+        .toArray();
+      // Ensure all IDs were found
+      if (records.length !== id.length) {
+        const foundIds = new Set(records.map((r: Base) => r.id));
+        const missing = id.filter((i) => !foundIds.has(i));
+        throw new Error(
+          `${this.name} with ${this.primaryKey} in [${missing.join(", ")}] not found`
+        );
+      }
+      return records;
+    }
+    // Single ID
     const record = await this.findBy({ [this.primaryKey]: id });
     if (!record) {
       throw new Error(
@@ -276,29 +293,43 @@ export class Base extends Model {
 
   /**
    * Save the record. Returns true if successful, false if validation fails.
+   * Raises if the record has been destroyed.
    *
    * Mirrors: ActiveRecord::Base#save
    */
   async save(): Promise<boolean> {
+    if (this._destroyed) {
+      throw new Error(
+        `Cannot save a destroyed ${(this.constructor as typeof Base).name}`
+      );
+    }
     if (!this.isValid()) return false;
 
     const ctor = this.constructor as typeof Base;
 
-    // Run save callbacks
+    // Run save callbacks.
+    // Use runBefore/runAfter to control the lifecycle:
+    // before_save → before_create/update → INSERT/UPDATE → after_create/update → after_save
     let saved = false;
-    ctor._callbackChain.run("save", this, () => {
-      if (this._newRecord) {
-        ctor._callbackChain.run("create", this, () => {
-          this._performInsert();
-          saved = true;
-        });
-      } else {
-        ctor._callbackChain.run("update", this, () => {
-          this._performUpdate();
-          saved = true;
-        });
-      }
-    });
+    if (!ctor._callbackChain.runBefore("save", this)) return false;
+
+    if (this._newRecord) {
+      const createResult = ctor._callbackChain.run("create", this, () => {
+        this._performInsert();
+        saved = true;
+      });
+      if (!createResult) saved = false;
+    } else {
+      const updateResult = ctor._callbackChain.run("update", this, () => {
+        this._performUpdate();
+        saved = true;
+      });
+      if (!updateResult) saved = false;
+    }
+
+    if (saved) {
+      ctor._callbackChain.runAfter("save", this);
+    }
 
     // Wait for the async operation
     if (this._pendingOperation) {
@@ -454,6 +485,42 @@ export class Base extends Model {
    */
   async destroyBang(): Promise<this> {
     return this.destroy();
+  }
+
+  /**
+   * Delete the record from the database without running callbacks.
+   *
+   * Mirrors: ActiveRecord::Base#delete
+   */
+  async delete(): Promise<this> {
+    const ctor = this.constructor as typeof Base;
+    const table = ctor.arelTable;
+    const pk = this.id;
+    const pkQuoted =
+      typeof pk === "number"
+        ? String(pk)
+        : `'${String(pk).replace(/'/g, "''")}'`;
+
+    const sql = `DELETE FROM "${table.name}" WHERE "${ctor.primaryKey}" = ${pkQuoted}`;
+    await ctor.adapter.executeMutation(sql);
+
+    this._destroyed = true;
+    return this;
+  }
+
+  /**
+   * Delete a record by primary key without callbacks.
+   *
+   * Mirrors: ActiveRecord::Base.delete
+   */
+  static async delete(id: unknown): Promise<number> {
+    const table = this.arelTable;
+    const pkQuoted =
+      typeof id === "number"
+        ? String(id)
+        : `'${String(id).replace(/'/g, "''")}'`;
+    const sql = `DELETE FROM "${table.name}" WHERE "${this.primaryKey}" = ${pkQuoted}`;
+    return this.adapter.executeMutation(sql);
   }
 
   /**

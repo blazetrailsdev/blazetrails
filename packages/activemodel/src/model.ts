@@ -316,8 +316,7 @@ export class Model {
     const ctor = this.constructor as typeof Model;
 
     // Run before_validation callbacks
-    const proceed = ctor._callbackChain.run("validation", this, () => {});
-    if (!proceed) return false;
+    if (!ctor._callbackChain.runBefore("validation", this)) return false;
 
     // Run attribute validations
     for (const entry of ctor._validations) {
@@ -336,7 +335,7 @@ export class Model {
     }
 
     // Run after_validation callbacks
-    ctor._callbackChain.run("validation", this, () => {});
+    ctor._callbackChain.runAfter("validation", this);
 
     return this.errors.empty;
   }

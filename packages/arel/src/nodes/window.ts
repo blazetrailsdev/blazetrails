@@ -1,0 +1,119 @@
+import { Node, NodeVisitor } from "./node.js";
+
+/**
+ * Window — a SQL window specification for OVER clauses.
+ *
+ * Mirrors: Arel::Nodes::Window
+ */
+export class Window extends Node {
+  orders: Node[];
+  partitions: Node[];
+  framingNode: Node | null;
+
+  constructor() {
+    super();
+    this.orders = [];
+    this.partitions = [];
+    this.framingNode = null;
+  }
+
+  order(...exprs: Node[]): this {
+    this.orders.push(...exprs);
+    return this;
+  }
+
+  partition(...exprs: Node[]): this {
+    this.partitions.push(...exprs);
+    return this;
+  }
+
+  frame(node: Node): this {
+    this.framingNode = node;
+    return this;
+  }
+
+  accept<T>(visitor: NodeVisitor<T>): T {
+    return visitor.visit(this);
+  }
+}
+
+/**
+ * NamedWindow — a named window definition (WINDOW w AS (...))
+ */
+export class NamedWindow extends Window {
+  readonly name: string;
+
+  constructor(name: string) {
+    super();
+    this.name = name;
+  }
+}
+
+/**
+ * Over — applies a window to an expression.
+ */
+export class Over extends Node {
+  readonly left: Node;
+  readonly right: Node | null;
+
+  constructor(left: Node, right: Node | null = null) {
+    super();
+    this.left = left;
+    this.right = right;
+  }
+
+  accept<T>(visitor: NodeVisitor<T>): T {
+    return visitor.visit(this);
+  }
+}
+
+/** Row-based frame bounds */
+export class Preceding extends Node {
+  readonly expr: Node | null;
+  constructor(expr: Node | null = null) {
+    super();
+    this.expr = expr;
+  }
+  accept<T>(visitor: NodeVisitor<T>): T {
+    return visitor.visit(this);
+  }
+}
+
+export class Following extends Node {
+  readonly expr: Node | null;
+  constructor(expr: Node | null = null) {
+    super();
+    this.expr = expr;
+  }
+  accept<T>(visitor: NodeVisitor<T>): T {
+    return visitor.visit(this);
+  }
+}
+
+export class CurrentRow extends Node {
+  accept<T>(visitor: NodeVisitor<T>): T {
+    return visitor.visit(this);
+  }
+}
+
+export class Rows extends Node {
+  readonly expr: Node | null;
+  constructor(expr: Node | null = null) {
+    super();
+    this.expr = expr;
+  }
+  accept<T>(visitor: NodeVisitor<T>): T {
+    return visitor.visit(this);
+  }
+}
+
+export class Range extends Node {
+  readonly expr: Node | null;
+  constructor(expr: Node | null = null) {
+    super();
+    this.expr = expr;
+  }
+  accept<T>(visitor: NodeVisitor<T>): T {
+    return visitor.visit(this);
+  }
+}

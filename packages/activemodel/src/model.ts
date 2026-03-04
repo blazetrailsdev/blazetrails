@@ -1,0 +1,424 @@
+import { Errors } from "./errors.js";
+import { typeRegistry } from "./types/registry.js";
+import { Type } from "./types/type.js";
+import { ModelName } from "./naming.js";
+import { DirtyTracker } from "./dirty.js";
+import { CallbackChain, CallbackFn, AroundCallbackFn } from "./callbacks.js";
+import { serializableHash, SerializeOptions } from "./serialization.js";
+import type { Validator, ConditionalOptions } from "./validations/validator.js";
+import { shouldValidate } from "./validations/validator.js";
+import {
+  PresenceValidator,
+  AbsenceValidator,
+  LengthValidator,
+  NumericalityValidator,
+  InclusionValidator,
+  ExclusionValidator,
+  FormatValidator,
+  AcceptanceValidator,
+  ConfirmationValidator,
+} from "./validations/validators.js";
+
+interface AttributeDefinition {
+  name: string;
+  type: Type;
+  defaultValue: unknown;
+}
+
+interface ValidationEntry {
+  attribute: string;
+  validator: Validator;
+}
+
+interface CustomValidationEntry {
+  method: string | ((record: any) => void);
+  options: ConditionalOptions;
+}
+
+/**
+ * Model — the base class that bundles Attributes, Validations, Callbacks,
+ * Dirty tracking, Serialization, and Naming.
+ *
+ * Mirrors: ActiveModel::Model (with all the included modules)
+ */
+export class Model {
+  // -- Class-level registries --
+  static _attributeDefinitions: Map<string, AttributeDefinition> = new Map();
+  static _validations: ValidationEntry[] = [];
+  static _customValidations: CustomValidationEntry[] = [];
+  static _callbackChain: CallbackChain = new CallbackChain();
+  private static _modelName: ModelName | null = null;
+
+  // -- Attributes (Phase 1000) --
+
+  static attribute(
+    name: string,
+    typeName: string,
+    options?: { default?: unknown }
+  ): void {
+    const type = typeRegistry.lookup(typeName);
+    const defaultValue = options?.default ?? null;
+    // Ensure subclass has its own copy
+    if (!Object.prototype.hasOwnProperty.call(this, "_attributeDefinitions")) {
+      this._attributeDefinitions = new Map(this._attributeDefinitions);
+    }
+    this._attributeDefinitions.set(name, { name, type, defaultValue });
+  }
+
+  static attributeNames(): string[] {
+    return Array.from(this._attributeDefinitions.keys());
+  }
+
+  // -- Validations (Phase 1100) --
+
+  static validates(
+    attribute: string,
+    rules: Record<string, unknown>
+  ): void {
+    if (!Object.prototype.hasOwnProperty.call(this, "_validations")) {
+      this._validations = [...this._validations];
+    }
+
+    if (rules.presence) {
+      const opts = rules.presence === true ? {} : (rules.presence as any);
+      this._validations.push({
+        attribute,
+        validator: new PresenceValidator(opts),
+      });
+    }
+
+    if (rules.absence) {
+      const opts = rules.absence === true ? {} : (rules.absence as any);
+      this._validations.push({
+        attribute,
+        validator: new AbsenceValidator(opts),
+      });
+    }
+
+    if (rules.length) {
+      this._validations.push({
+        attribute,
+        validator: new LengthValidator(rules.length as any),
+      });
+    }
+
+    if (rules.numericality) {
+      const opts =
+        rules.numericality === true ? {} : (rules.numericality as any);
+      this._validations.push({
+        attribute,
+        validator: new NumericalityValidator(opts),
+      });
+    }
+
+    if (rules.inclusion) {
+      this._validations.push({
+        attribute,
+        validator: new InclusionValidator(rules.inclusion as any),
+      });
+    }
+
+    if (rules.exclusion) {
+      this._validations.push({
+        attribute,
+        validator: new ExclusionValidator(rules.exclusion as any),
+      });
+    }
+
+    if (rules.format) {
+      this._validations.push({
+        attribute,
+        validator: new FormatValidator(rules.format as any),
+      });
+    }
+
+    if (rules.acceptance) {
+      const opts = rules.acceptance === true ? {} : (rules.acceptance as any);
+      this._validations.push({
+        attribute,
+        validator: new AcceptanceValidator(opts),
+      });
+    }
+
+    if (rules.confirmation) {
+      const opts =
+        rules.confirmation === true ? {} : (rules.confirmation as any);
+      this._validations.push({
+        attribute,
+        validator: new ConfirmationValidator(opts),
+      });
+    }
+  }
+
+  static validate(
+    methodOrFn: string | ((record: any) => void),
+    options: ConditionalOptions = {}
+  ): void {
+    if (!Object.prototype.hasOwnProperty.call(this, "_customValidations")) {
+      this._customValidations = [...this._customValidations];
+    }
+    this._customValidations.push({ method: methodOrFn, options });
+  }
+
+  // -- Callbacks (Phase 1200) --
+
+  static beforeValidation(fn: CallbackFn): void {
+    this._ensureOwnCallbacks();
+    this._callbackChain.register("before", "validation", fn);
+  }
+
+  static afterValidation(fn: CallbackFn): void {
+    this._ensureOwnCallbacks();
+    this._callbackChain.register("after", "validation", fn);
+  }
+
+  static beforeSave(fn: CallbackFn): void {
+    this._ensureOwnCallbacks();
+    this._callbackChain.register("before", "save", fn);
+  }
+
+  static afterSave(fn: CallbackFn): void {
+    this._ensureOwnCallbacks();
+    this._callbackChain.register("after", "save", fn);
+  }
+
+  static beforeCreate(fn: CallbackFn): void {
+    this._ensureOwnCallbacks();
+    this._callbackChain.register("before", "create", fn);
+  }
+
+  static afterCreate(fn: CallbackFn): void {
+    this._ensureOwnCallbacks();
+    this._callbackChain.register("after", "create", fn);
+  }
+
+  static beforeUpdate(fn: CallbackFn): void {
+    this._ensureOwnCallbacks();
+    this._callbackChain.register("before", "update", fn);
+  }
+
+  static afterUpdate(fn: CallbackFn): void {
+    this._ensureOwnCallbacks();
+    this._callbackChain.register("after", "update", fn);
+  }
+
+  static beforeDestroy(fn: CallbackFn): void {
+    this._ensureOwnCallbacks();
+    this._callbackChain.register("before", "destroy", fn);
+  }
+
+  static afterDestroy(fn: CallbackFn): void {
+    this._ensureOwnCallbacks();
+    this._callbackChain.register("after", "destroy", fn);
+  }
+
+  static aroundSave(fn: AroundCallbackFn): void {
+    this._ensureOwnCallbacks();
+    this._callbackChain.register("around", "save", fn);
+  }
+
+  static aroundCreate(fn: AroundCallbackFn): void {
+    this._ensureOwnCallbacks();
+    this._callbackChain.register("around", "create", fn);
+  }
+
+  static aroundUpdate(fn: AroundCallbackFn): void {
+    this._ensureOwnCallbacks();
+    this._callbackChain.register("around", "update", fn);
+  }
+
+  static aroundDestroy(fn: AroundCallbackFn): void {
+    this._ensureOwnCallbacks();
+    this._callbackChain.register("around", "destroy", fn);
+  }
+
+  private static _ensureOwnCallbacks(): void {
+    if (!Object.prototype.hasOwnProperty.call(this, "_callbackChain")) {
+      this._callbackChain = new CallbackChain();
+    }
+  }
+
+  // -- Naming (Phase 1300) --
+
+  static get modelName(): ModelName {
+    if (!this._modelName || this._modelName.name !== this.name) {
+      this._modelName = new ModelName(this.name);
+    }
+    return this._modelName;
+  }
+
+  // -- Instance --
+
+  _attributes: Map<string, unknown> = new Map();
+  errors: Errors = new Errors();
+  private _dirty: DirtyTracker = new DirtyTracker();
+
+  constructor(attrs: Record<string, unknown> = {}) {
+    const ctor = this.constructor as typeof Model;
+    const defs = ctor._attributeDefinitions;
+
+    for (const [name, def] of defs) {
+      if (name in attrs) {
+        this._attributes.set(name, def.type.cast(attrs[name]));
+      } else {
+        const defVal =
+          typeof def.defaultValue === "function"
+            ? def.defaultValue()
+            : def.defaultValue;
+        this._attributes.set(name, defVal);
+      }
+    }
+
+    // Also set any extra keys passed in (for confirmation fields, etc.)
+    for (const key of Object.keys(attrs)) {
+      if (!this._attributes.has(key)) {
+        this._attributes.set(key, attrs[key]);
+      }
+    }
+
+    this._dirty.snapshot(this._attributes);
+  }
+
+  // -- Attribute access --
+
+  readAttribute(name: string): unknown {
+    return this._attributes.get(name) ?? null;
+  }
+
+  writeAttribute(name: string, value: unknown): void {
+    const ctor = this.constructor as typeof Model;
+    const def = ctor._attributeDefinitions.get(name);
+    const oldValue = this._attributes.get(name);
+    const newValue = def ? def.type.cast(value) : value;
+    this._attributes.set(name, newValue);
+    this._dirty.attributeWillChange(name, oldValue, newValue);
+  }
+
+  get attributes(): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    for (const [k, v] of this._attributes) {
+      result[k] = v;
+    }
+    return result;
+  }
+
+  attributePresent(name: string): boolean {
+    const value = this._attributes.get(name);
+    if (value === null || value === undefined) return false;
+    if (typeof value === "string" && value.trim() === "") return false;
+    return true;
+  }
+
+  // -- Validations --
+
+  isValid(): boolean {
+    this.errors.clear();
+    const ctor = this.constructor as typeof Model;
+
+    // Run before_validation callbacks
+    const proceed = ctor._callbackChain.run("validation", this, () => {});
+    if (!proceed) return false;
+
+    // Run attribute validations
+    for (const entry of ctor._validations) {
+      const value = this._attributes.get(entry.attribute);
+      entry.validator.validate(this, entry.attribute, value, this.errors);
+    }
+
+    // Run custom validations
+    for (const entry of ctor._customValidations) {
+      if (!shouldValidate(this, entry.options)) continue;
+      if (typeof entry.method === "function") {
+        entry.method(this);
+      } else if (typeof (this as any)[entry.method] === "function") {
+        (this as any)[entry.method]();
+      }
+    }
+
+    // Run after_validation callbacks
+    ctor._callbackChain.run("validation", this, () => {});
+
+    return this.errors.empty;
+  }
+
+  isInvalid(): boolean {
+    return !this.isValid();
+  }
+
+  // -- Dirty tracking --
+
+  get changed(): boolean {
+    return this._dirty.changed;
+  }
+
+  get changedAttributes(): string[] {
+    return this._dirty.changedAttributes;
+  }
+
+  get changes(): Record<string, [unknown, unknown]> {
+    return this._dirty.changes;
+  }
+
+  attributeChanged(name: string): boolean {
+    return this._dirty.attributeChanged(name);
+  }
+
+  attributeWas(name: string): unknown {
+    return this._dirty.attributeWas(name);
+  }
+
+  attributeChange(name: string): [unknown, unknown] | undefined {
+    return this._dirty.attributeChange(name);
+  }
+
+  get previousChanges(): Record<string, [unknown, unknown]> {
+    return this._dirty.previousChanges;
+  }
+
+  restoreAttributes(): void {
+    this._dirty.restore(this._attributes);
+  }
+
+  changesApplied(): void {
+    this._dirty.changesApplied(this._attributes);
+  }
+
+  // -- Serialization --
+
+  serializableHash(options?: SerializeOptions): Record<string, unknown> {
+    return serializableHash(this, options);
+  }
+
+  asJson(options?: SerializeOptions): Record<string, unknown> {
+    return this.serializableHash(options);
+  }
+
+  toJson(options?: SerializeOptions): string {
+    return JSON.stringify(this.asJson(options));
+  }
+
+  // -- Naming / Conversion --
+
+  get modelName(): ModelName {
+    return (this.constructor as typeof Model).modelName;
+  }
+
+  toParam(): string | null {
+    return null;
+  }
+
+  toPartialPath(): string {
+    const mn = this.modelName;
+    return `${mn.collection}/_${mn.element}`;
+  }
+
+  // -- Callbacks helper for subclasses --
+
+  runCallbacks(event: string, block: () => void): boolean {
+    return (this.constructor as typeof Model)._callbackChain.run(
+      event,
+      this,
+      block
+    );
+  }
+}

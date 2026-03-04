@@ -1,0 +1,12 @@
+{
+  "name": "@rails-js/activemodel",
+  "version": "0.1.0",
+  "description": "Attributes, validations, callbacks, and serialization, mirroring Ruby's ActiveModel",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "files": ["dist"],
+  "license": "MIT"
+}

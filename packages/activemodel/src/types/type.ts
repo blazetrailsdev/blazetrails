@@ -1,0 +1,110 @@
+/**
+ * Base Type class — all types extend this.
+ *
+ * Mirrors: ActiveModel::Type::Value
+ */
+export abstract class Type<T = unknown> {
+  abstract readonly name: string;
+
+  /**
+   * Cast a raw value to this type.
+   */
+  abstract cast(value: unknown): T | null;
+
+  /**
+   * Deserialize from a database/storage representation.
+   * Default: delegates to cast.
+   */
+  deserialize(value: unknown): T | null {
+    return this.cast(value);
+  }
+
+  /**
+   * Serialize to a storage representation.
+   * Default: returns the cast value.
+   */
+  serialize(value: unknown): unknown {
+    return this.cast(value);
+  }
+}
+
+export class StringType extends Type<string> {
+  readonly name = "string";
+
+  cast(value: unknown): string | null {
+    if (value === null || value === undefined) return null;
+    return String(value);
+  }
+}
+
+export class IntegerType extends Type<number> {
+  readonly name = "integer";
+
+  cast(value: unknown): number | null {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "number") return Math.trunc(value);
+    const parsed = parseInt(String(value), 10);
+    return isNaN(parsed) ? null : parsed;
+  }
+}
+
+export class FloatType extends Type<number> {
+  readonly name = "float";
+
+  cast(value: unknown): number | null {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "number") return value;
+    const parsed = parseFloat(String(value));
+    return isNaN(parsed) ? null : parsed;
+  }
+}
+
+export class BooleanType extends Type<boolean> {
+  readonly name = "boolean";
+
+  private static readonly TRUE_VALUES = new Set([
+    true, 1, "1", "t", "T", "true", "TRUE", "on", "ON", "yes", "YES",
+  ]);
+  private static readonly FALSE_VALUES = new Set([
+    false, 0, "0", "f", "F", "false", "FALSE", "off", "OFF", "no", "NO",
+  ]);
+
+  cast(value: unknown): boolean | null {
+    if (value === null || value === undefined) return null;
+    if (BooleanType.TRUE_VALUES.has(value as any)) return true;
+    if (BooleanType.FALSE_VALUES.has(value as any)) return false;
+    return null;
+  }
+}
+
+export class DateType extends Type<Date> {
+  readonly name = "date";
+
+  cast(value: unknown): Date | null {
+    if (value === null || value === undefined) return null;
+    if (value instanceof Date) return value;
+    const d = new Date(String(value));
+    return isNaN(d.getTime()) ? null : d;
+  }
+}
+
+export class DateTimeType extends Type<Date> {
+  readonly name = "datetime";
+
+  cast(value: unknown): Date | null {
+    if (value === null || value === undefined) return null;
+    if (value instanceof Date) return value;
+    const d = new Date(String(value));
+    return isNaN(d.getTime()) ? null : d;
+  }
+}
+
+export class DecimalType extends Type<string> {
+  readonly name = "decimal";
+
+  cast(value: unknown): string | null {
+    if (value === null || value === undefined) return null;
+    const n = Number(value);
+    return isNaN(n) ? null : n.toString();
+  }
+}

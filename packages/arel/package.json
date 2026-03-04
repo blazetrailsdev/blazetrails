@@ -1,0 +1,12 @@
+{
+  "name": "@rails-js/arel",
+  "version": "0.1.0",
+  "description": "SQL AST builder and query generation, mirroring Ruby's Arel",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "files": ["dist"],
+  "license": "MIT"
+}

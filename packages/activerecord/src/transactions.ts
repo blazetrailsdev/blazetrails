@@ -1,0 +1,99 @@
+import type { Base } from "./base.js";
+import type { DatabaseAdapter } from "./adapter.js";
+
+/**
+ * Transaction — wraps adapter transactions with callbacks.
+ *
+ * Mirrors: ActiveRecord::Transactions
+ */
+export class Transaction {
+  private adapter: DatabaseAdapter;
+  private _afterCommitCallbacks: Array<() => void | Promise<void>> = [];
+  private _afterRollbackCallbacks: Array<() => void | Promise<void>> = [];
+
+  constructor(adapter: DatabaseAdapter) {
+    this.adapter = adapter;
+  }
+
+  /**
+   * Register an after_commit callback.
+   */
+  afterCommit(fn: () => void | Promise<void>): void {
+    this._afterCommitCallbacks.push(fn);
+  }
+
+  /**
+   * Register an after_rollback callback.
+   */
+  afterRollback(fn: () => void | Promise<void>): void {
+    this._afterRollbackCallbacks.push(fn);
+  }
+
+  /**
+   * Execute the after_commit callbacks.
+   */
+  async runAfterCommitCallbacks(): Promise<void> {
+    for (const fn of this._afterCommitCallbacks) {
+      await fn();
+    }
+  }
+
+  /**
+   * Execute the after_rollback callbacks.
+   */
+  async runAfterRollbackCallbacks(): Promise<void> {
+    for (const fn of this._afterRollbackCallbacks) {
+      await fn();
+    }
+  }
+}
+
+/**
+ * Execute a block within a database transaction.
+ *
+ * Mirrors: ActiveRecord::Base.transaction
+ */
+export async function transaction<T>(
+  modelClass: typeof Base,
+  fn: (tx: Transaction) => Promise<T>
+): Promise<T> {
+  const adapter = modelClass.adapter;
+  const tx = new Transaction(adapter);
+
+  await adapter.beginTransaction();
+
+  try {
+    const result = await fn(tx);
+    await adapter.commit();
+    await tx.runAfterCommitCallbacks();
+    return result;
+  } catch (error) {
+    await adapter.rollback();
+    await tx.runAfterRollbackCallbacks();
+    throw error;
+  }
+}
+
+/**
+ * Execute a block within a savepoint (nested transaction).
+ *
+ * Mirrors: ActiveRecord::Base.transaction(requires_new: true)
+ */
+export async function savepoint<T>(
+  modelClass: typeof Base,
+  name: string,
+  fn: () => Promise<T>
+): Promise<T> {
+  const adapter = modelClass.adapter;
+
+  await adapter.createSavepoint(name);
+
+  try {
+    const result = await fn();
+    await adapter.releaseSavepoint(name);
+    return result;
+  } catch (error) {
+    await adapter.rollbackToSavepoint(name);
+    throw error;
+  }
+}

@@ -20,3 +20,4 @@ export type { AssociationOptions } from "./associations.js";
 export { Transaction, transaction, savepoint } from "./transactions.js";
 export { SqliteAdapter } from "./adapters/sqlite-adapter.js";
 export { PostgresAdapter } from "./adapters/postgres-adapter.js";
+export { MysqlAdapter } from "./adapters/mysql-adapter.js";

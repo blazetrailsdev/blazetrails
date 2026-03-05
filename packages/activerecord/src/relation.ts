@@ -36,6 +36,13 @@ export class Relation<T extends Base> {
   private _orRelations: Relation<T>[] = [];
   private _havingClauses: string[] = [];
   private _isNone = false;
+  private _lockValue: string | null = null;
+  private _setOperation: { type: "union" | "unionAll" | "intersect" | "except"; other: Relation<T> } | null = null;
+  private _joinClauses: Array<{ type: "inner" | "left"; table: string; on: string }> = [];
+  private _rawJoins: string[] = [];
+  private _includesAssociations: string[] = [];
+  private _preloadAssociations: string[] = [];
+  private _eagerLoadAssociations: string[] = [];
   private _loaded = false;
   private _records: T[] = [];
 
@@ -216,6 +223,120 @@ export class Relation<T extends Base> {
     return rel;
   }
 
+  /**
+   * Add a lock clause (FOR UPDATE by default).
+   *
+   * Mirrors: ActiveRecord::Relation#lock
+   */
+  lock(clause: string | boolean = true): Relation<T> {
+    const rel = this._clone();
+    rel._lockValue = clause === true ? "FOR UPDATE" : clause === false ? null : clause;
+    return rel;
+  }
+
+  /**
+   * UNION with another relation.
+   *
+   * Mirrors: ActiveRecord::Relation#union
+   */
+  union(other: Relation<T>): Relation<T> {
+    const rel = this._clone();
+    rel._setOperation = { type: "union", other };
+    return rel;
+  }
+
+  /**
+   * UNION ALL with another relation.
+   *
+   * Mirrors: ActiveRecord::Relation#union_all
+   */
+  unionAll(other: Relation<T>): Relation<T> {
+    const rel = this._clone();
+    rel._setOperation = { type: "unionAll", other };
+    return rel;
+  }
+
+  /**
+   * INTERSECT with another relation.
+   *
+   * Mirrors: ActiveRecord::Relation#intersect
+   */
+  intersect(other: Relation<T>): Relation<T> {
+    const rel = this._clone();
+    rel._setOperation = { type: "intersect", other };
+    return rel;
+  }
+
+  /**
+   * EXCEPT with another relation.
+   *
+   * Mirrors: ActiveRecord::Relation#except_
+   */
+  except(other: Relation<T>): Relation<T> {
+    const rel = this._clone();
+    rel._setOperation = { type: "except", other };
+    return rel;
+  }
+
+  /**
+   * Add an INNER JOIN.
+   *
+   * Mirrors: ActiveRecord::Relation#joins
+   */
+  joins(tableOrSql: string, on?: string): Relation<T> {
+    const rel = this._clone();
+    if (on) {
+      rel._joinClauses.push({ type: "inner", table: tableOrSql, on });
+    } else {
+      rel._rawJoins.push(tableOrSql);
+    }
+    return rel;
+  }
+
+  /**
+   * Add a LEFT OUTER JOIN.
+   *
+   * Mirrors: ActiveRecord::Relation#left_joins
+   */
+  leftJoins(table: string, on: string): Relation<T> {
+    const rel = this._clone();
+    rel._joinClauses.push({ type: "left", table, on });
+    return rel;
+  }
+
+  /**
+   * Specify associations to be eager loaded (preload strategy).
+   *
+   * Mirrors: ActiveRecord::Relation#includes
+   */
+  includes(...associations: string[]): Relation<T> {
+    const rel = this._clone();
+    rel._includesAssociations.push(...associations);
+    return rel;
+  }
+
+  /**
+   * Specify associations to be preloaded with separate queries.
+   *
+   * Mirrors: ActiveRecord::Relation#preload
+   */
+  preload(...associations: string[]): Relation<T> {
+    const rel = this._clone();
+    rel._preloadAssociations.push(...associations);
+    return rel;
+  }
+
+  /**
+   * Specify associations to be eager loaded.
+   *
+   * Mirrors: ActiveRecord::Relation#eager_load
+   */
+  eagerLoad(...associations: string[]): Relation<T> {
+    const rel = this._clone();
+    rel._eagerLoadAssociations.push(...associations);
+    return rel;
+  }
+
   // -- Terminal methods --
 
   /**
@@ -233,16 +354,32 @@ export class Relation<T extends Base> {
       (row) => this._modelClass._instantiate(row) as T
     );
     this._loaded = true;
+
+    // Preload associations if requested
+    const allAssocs = [
+      ...this._includesAssociations,
+      ...this._preloadAssociations,
+      ...this._eagerLoadAssociations,
+    ];
+    if (allAssocs.length > 0 && this._records.length > 0) {
+      await this._preloadAssociationsForRecords(this._records, allAssocs);
+    }
+
     return this._records;
   }
 
   /**
-   * Return the first record.
+   * Return the first record, or first N records when n is given.
    *
    * Mirrors: ActiveRecord::Relation#first
    */
-  async first(): Promise<T | null> {
-    if (this._isNone) return null;
+  async first(n?: number): Promise<T | T[] | null> {
+    if (this._isNone) return n !== undefined ? [] : null;
+    if (n !== undefined) {
+      const rel = this._clone();
+      rel._limitValue = n;
+      return rel.toArray();
+    }
     const rel = this._clone();
     rel._limitValue = 1;
     const records = await rel.toArray();
@@ -259,23 +396,28 @@ export class Relation<T extends Base> {
     if (!record) {
       throw new Error(`${this._modelClass.name} not found`);
     }
-    return record;
+    return record as T;
   }
 
   /**
-   * Return the last record. When no order is specified, defaults to
-   * ordering by primary key descending (matching Rails behavior).
+   * Return the last record, or last N records when n is given.
+   * When no order is specified, defaults to ordering by primary key
+   * descending (matching Rails behavior).
    *
    * Mirrors: ActiveRecord::Relation#last
    */
-  async last(): Promise<T | null> {
-    if (this._isNone) return null;
+  async last(n?: number): Promise<T | T[] | null> {
+    if (this._isNone) return n !== undefined ? [] : null;
     let rel: Relation<T>;
     if (this._orderClauses.length === 0) {
-      // Default to primary key desc when no order is specified
       rel = this.order({ [this._modelClass.primaryKey]: "desc" as const });
     } else {
       rel = this.reverseOrder();
+    }
+    if (n !== undefined) {
+      rel = rel.limit(n);
+      const records = await rel.toArray();
+      return records.reverse();
     }
     rel = rel.limit(1);
     const records = await rel.toArray();
@@ -292,7 +434,31 @@ export class Relation<T extends Base> {
     if (!record) {
       throw new Error(`${this._modelClass.name} not found`);
     }
-    return record;
+    return record as T;
+  }
+
+  /**
+   * Pick values for columns from the first matching record.
+   *
+   * Mirrors: ActiveRecord::Relation#pick
+   */
+  async pick(...columns: string[]): Promise<unknown> {
+    const values = await this.limit(1).pluck(...columns);
+    return values[0] ?? null;
+  }
+
+  /**
+   * Return the query execution plan.
+   *
+   * Mirrors: ActiveRecord::Relation#explain
+   */
+  async explain(): Promise<string> {
+    const sql = this._toSql();
+    const adapter = this._modelClass.adapter as any;
+    if (typeof adapter.explain === "function") {
+      return adapter.explain(sql);
+    }
+    return `EXPLAIN not supported by this adapter`;
   }
 
   /**
@@ -528,10 +694,39 @@ export class Relation<T extends Base> {
   }
 
   private _toSql(): string {
+    // Set operations: generate both sides and combine
+    if (this._setOperation) {
+      const leftSql = this._toSqlWithoutSetOp();
+      const rightSql = this._setOperation.other._toSqlWithoutSetOp();
+      const op = {
+        union: "UNION",
+        unionAll: "UNION ALL",
+        intersect: "INTERSECT",
+        except: "EXCEPT",
+      }[this._setOperation.type];
+      return `(${leftSql}) ${op} (${rightSql})`;
+    }
+    return this._toSqlWithoutSetOp();
+  }
+
+  private _toSqlWithoutSetOp(): string {
     const table = this._modelClass.arelTable;
     const projections =
       this._selectColumns?.map((c) => table.get(c)) ?? ["*"];
     const manager = table.project(...(projections as any));
+
+    // Apply joins
+    for (const join of this._joinClauses) {
+      const onNode = new Nodes.SqlLiteral(join.on);
+      if (join.type === "inner") {
+        manager.join(join.table, onNode);
+      } else {
+        manager.outerJoin(join.table, onNode);
+      }
+    }
+    for (const rawJoin of this._rawJoins) {
+      manager.join(rawJoin);
+    }
 
     this._applyWheresToManager(manager, table);
     this._applyOrderToManager(manager, table);
@@ -546,6 +741,10 @@ export class Relation<T extends Base> {
 
     for (const clause of this._havingClauses) {
       manager.having(new Nodes.SqlLiteral(clause));
+    }
+
+    if (this._lockValue) {
+      manager.lock(this._lockValue);
     }
 
     return manager.toSql();
@@ -715,6 +914,131 @@ export class Relation<T extends Base> {
     return conditions;
   }
 
+  private async _preloadAssociationsForRecords(records: T[], assocNames: string[]): Promise<void> {
+    const modelClass = this._modelClass as any;
+    const associations: any[] = modelClass._associations ?? [];
+
+    for (const assocName of assocNames) {
+      const assocDef = associations.find((a: any) => a.name === assocName);
+      if (!assocDef) continue;
+
+      const { loadBelongsTo: _lb, loadHasMany: _lm, loadHasOne: _lo, modelRegistry: _mr } =
+        await import("./associations.js");
+
+      if (assocDef.type === "belongsTo") {
+        const className = assocDef.options.className ??
+          assocName.charAt(0).toUpperCase() + assocName.slice(1);
+        const foreignKey = assocDef.options.foreignKey ?? `${assocName}_id`;
+        const primaryKey = assocDef.options.primaryKey ?? "id";
+
+        const fkValues = [...new Set(records.map(r => r.readAttribute(foreignKey)).filter(v => v != null))];
+        if (fkValues.length === 0) continue;
+
+        const targetModel = _mr.get(className);
+        if (!targetModel) continue;
+
+        const related = await (targetModel as any).all().where({ [primaryKey]: fkValues }).toArray();
+        const relatedMap = new Map<unknown, any>();
+        for (const r of related) relatedMap.set(r.readAttribute(primaryKey), r);
+
+        for (const record of records) {
+          if (!(record as any)._preloadedAssociations) (record as any)._preloadedAssociations = new Map();
+          (record as any)._preloadedAssociations.set(assocName, relatedMap.get(record.readAttribute(foreignKey)) ?? null);
+        }
+      } else if (assocDef.type === "hasMany") {
+        const singularize = (w: string) => {
+          if (w.endsWith("ies")) return w.slice(0, -3) + "y";
+          if (w.endsWith("ses") || w.endsWith("xes") || w.endsWith("zes")) return w.slice(0, -2);
+          if (w.endsWith("s") && !w.endsWith("ss")) return w.slice(0, -1);
+          return w;
+        };
+        const camelize = (n: string) => n.split("_").map(p => p.charAt(0).toUpperCase() + p.slice(1)).join("");
+        const underscore = (n: string) => n.replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2").replace(/([a-z\d])([A-Z])/g, "$1_$2").toLowerCase();
+
+        const className = assocDef.options.className ?? camelize(singularize(assocName));
+        const foreignKey = assocDef.options.foreignKey ?? `${underscore(modelClass.name)}_id`;
+        const primaryKey = assocDef.options.primaryKey ?? modelClass.primaryKey;
+
+        // Handle through associations
+        if (assocDef.options.through) {
+          const throughAssocDef = associations.find((a: any) => a.name === assocDef.options.through);
+          if (!throughAssocDef) continue;
+
+          const throughClassName = throughAssocDef.options.className ??
+            camelize(singularize(throughAssocDef.name));
+          const throughModel = _mr.get(throughClassName);
+          if (!throughModel) continue;
+
+          const throughFk = throughAssocDef.options.foreignKey ?? `${underscore(modelClass.name)}_id`;
+          const pkValues = [...new Set(records.map(r => r.readAttribute(primaryKey)).filter(v => v != null))];
+          if (pkValues.length === 0) continue;
+
+          const throughRecords = await (throughModel as any).all().where({ [throughFk]: pkValues }).toArray();
+
+          const sourceName = assocDef.options.source ?? singularize(assocName);
+          const targetFk = `${underscore(sourceName)}_id`;
+          const targetModel = _mr.get(className);
+          if (!targetModel) continue;
+
+          const targetIds = [...new Set(throughRecords.map((r: any) => r.readAttribute(targetFk)).filter((v: any) => v != null))];
+          const targetRecords = targetIds.length > 0 ? await (targetModel as any).all().where({ id: targetIds }).toArray() : [];
+          const targetMap = new Map<unknown, any>();
+          for (const r of targetRecords) targetMap.set(r.readAttribute("id"), r);
+
+          for (const record of records) {
+            if (!(record as any)._preloadedAssociations) (record as any)._preloadedAssociations = new Map();
+            const pkVal = record.readAttribute(primaryKey);
+            const myThroughRecords = throughRecords.filter((tr: any) => tr.readAttribute(throughFk) == pkVal);
+            const myTargets = myThroughRecords.map((tr: any) => targetMap.get(tr.readAttribute(targetFk))).filter(Boolean);
+            (record as any)._preloadedAssociations.set(assocName, myTargets);
+          }
+          continue;
+        }
+
+        const pkValues = [...new Set(records.map(r => r.readAttribute(primaryKey)).filter(v => v != null))];
+        if (pkValues.length === 0) continue;
+
+        const targetModel = _mr.get(className);
+        if (!targetModel) continue;
+
+        const related = await (targetModel as any).all().where({ [foreignKey]: pkValues }).toArray();
+        const relatedMap = new Map<unknown, any[]>();
+        for (const r of related) {
+          const fk = r.readAttribute(foreignKey);
+          if (!relatedMap.has(fk)) relatedMap.set(fk, []);
+          relatedMap.get(fk)!.push(r);
+        }
+
+        for (const record of records) {
+          if (!(record as any)._preloadedAssociations) (record as any)._preloadedAssociations = new Map();
+          (record as any)._preloadedAssociations.set(assocName, relatedMap.get(record.readAttribute(primaryKey)) ?? []);
+        }
+      } else if (assocDef.type === "hasOne") {
+        const underscore = (n: string) => n.replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2").replace(/([a-z\d])([A-Z])/g, "$1_$2").toLowerCase();
+        const camelize = (n: string) => n.split("_").map(p => p.charAt(0).toUpperCase() + p.slice(1)).join("");
+
+        const className = assocDef.options.className ?? camelize(assocName);
+        const foreignKey = assocDef.options.foreignKey ?? `${underscore(modelClass.name)}_id`;
+        const primaryKey = assocDef.options.primaryKey ?? modelClass.primaryKey;
+
+        const pkValues = [...new Set(records.map(r => r.readAttribute(primaryKey)).filter(v => v != null))];
+        if (pkValues.length === 0) continue;
+
+        const targetModel = _mr.get(className);
+        if (!targetModel) continue;
+
+        const related = await (targetModel as any).all().where({ [foreignKey]: pkValues }).toArray();
+        const relatedMap = new Map<unknown, any>();
+        for (const r of related) relatedMap.set(r.readAttribute(foreignKey), r);
+
+        for (const record of records) {
+          if (!(record as any)._preloadedAssociations) (record as any)._preloadedAssociations = new Map();
+          (record as any)._preloadedAssociations.set(assocName, relatedMap.get(record.readAttribute(primaryKey)) ?? null);
+        }
+      }
+    }
+  }
+
   /** @internal */
   _clone(): Relation<T> {
     const rel = new Relation<T>(this._modelClass);
@@ -731,6 +1055,13 @@ export class Relation<T extends Base> {
     rel._havingClauses = [...this._havingClauses];
     rel._orRelations = [...this._orRelations];
     rel._isNone = this._isNone;
+    rel._lockValue = this._lockValue;
+    rel._setOperation = this._setOperation;
+    rel._joinClauses = [...this._joinClauses];
+    rel._rawJoins = [...this._rawJoins];
+    rel._includesAssociations = [...this._includesAssociations];
+    rel._preloadAssociations = [...this._preloadAssociations];
+    rel._eagerLoadAssociations = [...this._eagerLoadAssociations];
     return wrapWithScopeProxy(rel);
   }
 }

@@ -17,7 +17,7 @@ import { Quoted } from "../nodes/quoted.js";
 import { Union, UnionAll, Intersect, Except } from "../nodes/set-operations.js";
 import { With, WithRecursive } from "../nodes/with.js";
 import { Exists } from "../nodes/exists.js";
-import { Over } from "../nodes/window.js";
+import { Over, NamedWindow } from "../nodes/window.js";
 import { Table } from "../table.js";
 import { ToSql } from "../visitors/to-sql.js";
 
@@ -146,6 +146,44 @@ export class SelectManager {
     const onNode = onCondition ? new On(onCondition) : null;
     this.core.source.right.push(new OuterJoin(tableNode, onNode));
     return this;
+  }
+
+  /**
+   * RIGHT OUTER JOIN.
+   */
+  rightOuterJoin(table: Node | string, onCondition?: Node): this {
+    const tableNode = typeof table === "string" ? new SqlLiteral(table) : table;
+    const onNode = onCondition ? new On(onCondition) : null;
+    this.core.source.right.push(new RightOuterJoin(tableNode, onNode));
+    return this;
+  }
+
+  /**
+   * FULL OUTER JOIN.
+   */
+  fullOuterJoin(table: Node | string, onCondition?: Node): this {
+    const tableNode = typeof table === "string" ? new SqlLiteral(table) : table;
+    const onNode = onCondition ? new On(onCondition) : null;
+    this.core.source.right.push(new FullOuterJoin(tableNode, onNode));
+    return this;
+  }
+
+  /**
+   * CROSS JOIN.
+   */
+  crossJoin(table: Node | string): this {
+    const tableNode = typeof table === "string" ? new SqlLiteral(table) : table;
+    this.core.source.right.push(new CrossJoin(tableNode, null));
+    return this;
+  }
+
+  /**
+   * Define a named window.
+   */
+  window(name: string): NamedWindow {
+    const win = new NamedWindow(name);
+    this.core.windows.push(win);
+    return win;
   }
 
   /**

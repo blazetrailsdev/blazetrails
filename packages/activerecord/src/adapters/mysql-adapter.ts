@@ -148,6 +148,19 @@ export class MysqlAdapter implements DatabaseAdapter {
   }
 
   /**
+   * Return the query execution plan.
+   */
+  async explain(sql: string): Promise<string> {
+    const conn = await this.getConn();
+    try {
+      const [rows] = await conn.query(`EXPLAIN ${sql}`);
+      return (rows as any[]).map((r: any) => JSON.stringify(r)).join("\n");
+    } finally {
+      this.releaseConn(conn);
+    }
+  }
+
+  /**
    * Execute raw SQL (for DDL and other non-query statements).
    */
   async exec(sql: string): Promise<void> {

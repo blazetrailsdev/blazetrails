@@ -183,6 +183,19 @@ export class PostgresAdapter implements DatabaseAdapter {
   }
 
   /**
+   * Return the query execution plan.
+   */
+  async explain(sql: string): Promise<string> {
+    const client = await this.getClient();
+    try {
+      const result = await client.query(`EXPLAIN ${sql}`);
+      return result.rows.map((r: any) => r["QUERY PLAN"]).join("\n");
+    } finally {
+      this.releaseClient(client);
+    }
+  }
+
+  /**
    * Execute raw SQL (for DDL and other non-query statements).
    */
   async exec(sql: string): Promise<void> {

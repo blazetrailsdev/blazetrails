@@ -1,6 +1,16 @@
 import type { Base } from "./base.js";
 import type { DatabaseAdapter } from "./adapter.js";
 
+// Track the currently-active transaction (if any) for after_commit/after_rollback callbacks
+let _currentTransaction: Transaction | null = null;
+
+/**
+ * Get the currently active transaction, if any.
+ */
+export function currentTransaction(): Transaction | null {
+  return _currentTransaction;
+}
+
 /**
  * Transaction — wraps adapter transactions with callbacks.
  *
@@ -59,16 +69,20 @@ export async function transaction<T>(
 ): Promise<T> {
   const adapter = modelClass.adapter;
   const tx = new Transaction(adapter);
+  const previousTx = _currentTransaction;
+  _currentTransaction = tx;
 
   await adapter.beginTransaction();
 
   try {
     const result = await fn(tx);
     await adapter.commit();
+    _currentTransaction = previousTx;
     await tx.runAfterCommitCallbacks();
     return result;
   } catch (error) {
     await adapter.rollback();
+    _currentTransaction = previousTx;
     await tx.runAfterRollbackCallbacks();
     throw error;
   }

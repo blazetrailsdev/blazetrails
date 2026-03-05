@@ -322,6 +322,7 @@ export class Base extends Model {
 
   _newRecord = true;
   private _destroyed = false;
+  _preloadedAssociations: Map<string, unknown> = new Map();
 
   /**
    * Returns true if the record has not been saved yet.
@@ -364,6 +365,119 @@ export class Base extends Model {
   }
 
   /**
+   * Increment an attribute in memory.
+   *
+   * Mirrors: ActiveRecord::Base#increment
+   */
+  increment(attribute: string, by: number = 1): this {
+    const current = Number(this.readAttribute(attribute)) || 0;
+    this.writeAttribute(attribute, current + by);
+    return this;
+  }
+
+  /**
+   * Decrement an attribute in memory.
+   *
+   * Mirrors: ActiveRecord::Base#decrement
+   */
+  decrement(attribute: string, by: number = 1): this {
+    const current = Number(this.readAttribute(attribute)) || 0;
+    this.writeAttribute(attribute, current - by);
+    return this;
+  }
+
+  /**
+   * Toggle a boolean attribute in memory.
+   *
+   * Mirrors: ActiveRecord::Base#toggle
+   */
+  toggle(attribute: string): this {
+    const current = this.readAttribute(attribute);
+    this.writeAttribute(attribute, !current);
+    return this;
+  }
+
+  /**
+   * Increment and persist using updateColumn (skip validations).
+   *
+   * Mirrors: ActiveRecord::Base#increment!
+   */
+  async incrementBang(attribute: string, by: number = 1): Promise<this> {
+    this.increment(attribute, by);
+    await this.updateColumn(attribute, this.readAttribute(attribute));
+    return this;
+  }
+
+  /**
+   * Decrement and persist using updateColumn (skip validations).
+   *
+   * Mirrors: ActiveRecord::Base#decrement!
+   */
+  async decrementBang(attribute: string, by: number = 1): Promise<this> {
+    this.decrement(attribute, by);
+    await this.updateColumn(attribute, this.readAttribute(attribute));
+    return this;
+  }
+
+  /**
+   * Toggle and persist using updateColumn (skip validations).
+   *
+   * Mirrors: ActiveRecord::Base#toggle!
+   */
+  async toggleBang(attribute: string): Promise<this> {
+    this.toggle(attribute);
+    await this.updateColumn(attribute, this.readAttribute(attribute));
+    return this;
+  }
+
+  /**
+   * Run async validations (like uniqueness).
+   */
+  private async _runAsyncValidations(): Promise<boolean> {
+    const ctor = this.constructor as typeof Base;
+    const asyncValidators: Array<{ attribute: string; options: any }> =
+      (ctor as any)._asyncValidations ?? [];
+
+    for (const { attribute, options } of asyncValidators) {
+      const value = this.readAttribute(attribute);
+      if (value === null || value === undefined) continue;
+
+      const conditions: Record<string, unknown> = { [attribute]: value };
+
+      // Add scope columns
+      if (options.scope) {
+        const scopes = Array.isArray(options.scope) ? options.scope : [options.scope];
+        for (const scopeCol of scopes) {
+          conditions[scopeCol] = this.readAttribute(scopeCol);
+        }
+      }
+
+      // Exclude self if persisted
+      const existing = await ctor.findBy(conditions);
+      if (existing && (!this.isPersisted() || existing.id !== this.id)) {
+        this.errors.add(attribute, "taken", { message: options.message });
+      }
+    }
+
+    return this.errors.empty;
+  }
+
+  /**
+   * Register a uniqueness validation.
+   *
+   * Mirrors: validates uniqueness: true
+   */
+  static validatesUniqueness(
+    attribute: string,
+    options: { scope?: string | string[]; message?: string } = {}
+  ): void {
+    if (!Object.prototype.hasOwnProperty.call(this, "_asyncValidations")) {
+      (this as any)._asyncValidations = [...((this as any)._asyncValidations ?? [])];
+    }
+    (this as any)._asyncValidations.push({ attribute, options });
+  }
+
+  /**
    * Save the record. Returns true if successful, false if validation fails.
    * Raises if the record has been destroyed.
    *
@@ -376,6 +490,9 @@ export class Base extends Model {
       );
     }
     if (!this.isValid()) return false;
+
+    // Run async validations (uniqueness)
+    if (!await this._runAsyncValidations()) return false;
 
     const ctor = this.constructor as typeof Base;
 
@@ -412,6 +529,22 @@ export class Base extends Model {
     if (saved) {
       this._newRecord = false;
       this.changesApplied();
+
+      // Fire after_commit callbacks
+      const { currentTransaction } = await import("./transactions.js");
+      const tx = currentTransaction();
+      if (tx) {
+        // Inside a transaction — defer to commit
+        tx.afterCommit(() => {
+          ctor._callbackChain.runAfter("commit", this);
+        });
+        tx.afterRollback(() => {
+          ctor._callbackChain.runAfter("rollback", this);
+        });
+      } else {
+        // Not in a transaction — fire immediately
+        ctor._callbackChain.runAfter("commit", this);
+      }
     }
 
     return saved;
@@ -544,6 +677,10 @@ export class Base extends Model {
    */
   async destroy(): Promise<this> {
     const ctor = this.constructor as typeof Base;
+
+    // Process dependent associations before destroy
+    const { processDependentAssociations } = await import("./associations.js");
+    await processDependentAssociations(this);
 
     ctor._callbackChain.run("destroy", this, () => {
       const table = ctor.arelTable;

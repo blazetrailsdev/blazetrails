@@ -108,3 +108,38 @@ export class DecimalType extends Type<string> {
     return isNaN(n) ? null : n.toString();
   }
 }
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export class UuidType extends Type<string> {
+  readonly name = "uuid";
+
+  cast(value: unknown): string | null {
+    if (value === null || value === undefined) return null;
+    const str = String(value).toLowerCase();
+    if (!UUID_REGEX.test(str)) return null;
+    return str;
+  }
+}
+
+export class JsonType extends Type<unknown> {
+  readonly name = "json";
+
+  cast(value: unknown): unknown | null {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "string") {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return null;
+      }
+    }
+    return value;
+  }
+
+  serialize(value: unknown): unknown {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "string") return value;
+    return JSON.stringify(value);
+  }
+}

@@ -9,4 +9,5 @@ export {
   FormatValidator,
   AcceptanceValidator,
   ConfirmationValidator,
+  ComparisonValidator,
 } from "./validators.js";

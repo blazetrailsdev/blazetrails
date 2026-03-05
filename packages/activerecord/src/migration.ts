@@ -215,6 +215,11 @@ export class TableDefinition {
   }
 }
 
+interface RecordedOperation {
+  method: string;
+  args: unknown[];
+}
+
 /**
  * Migration — base class for database migrations.
  *
@@ -222,20 +227,23 @@ export class TableDefinition {
  */
 export abstract class Migration {
   protected adapter!: DatabaseAdapter;
+  private _recording = false;
+  private _recordedOps: RecordedOperation[] = [];
 
   /**
    * Override to define the forward migration.
    */
-  abstract up(): Promise<void>;
+  async up(): Promise<void> {
+    // Default: run change() in forward direction
+    await this._runChange("up");
+  }
 
   /**
    * Override to define the rollback migration.
-   * Default implementation throws if not overridden.
+   * Default: run change() in reverse direction.
    */
   async down(): Promise<void> {
-    throw new Error(
-      `${this.constructor.name}#down is not implemented. This migration is irreversible.`
-    );
+    await this._runChange("down");
   }
 
   /**
@@ -244,6 +252,61 @@ export abstract class Migration {
    */
   async change(): Promise<void> {
     // Subclasses override
+  }
+
+  private async _runChange(direction: "up" | "down"): Promise<void> {
+    if (direction === "up") {
+      await this.change();
+    } else {
+      // Record operations from change(), then replay in reverse
+      this._recording = true;
+      this._recordedOps = [];
+      await this.change();
+      this._recording = false;
+
+      // If no operations were recorded, migration is irreversible
+      if (this._recordedOps.length === 0) {
+        throw new Error(
+          `${this.constructor.name}#down is not implemented. This migration is irreversible.`
+        );
+      }
+
+      // Replay in reverse
+      for (const op of this._recordedOps.reverse()) {
+        await this._reverseOperation(op);
+      }
+    }
+  }
+
+  private async _reverseOperation(op: RecordedOperation): Promise<void> {
+    switch (op.method) {
+      case "createTable":
+        await this.dropTable(op.args[0] as string);
+        break;
+      case "dropTable":
+        throw new Error("Cannot reverse dropTable without table definition");
+      case "addColumn":
+        await this.removeColumn(op.args[0] as string, op.args[1] as string);
+        break;
+      case "removeColumn":
+        throw new Error("Cannot reverse removeColumn without type info");
+      case "addIndex":
+        await this.removeIndex(op.args[0] as string, {
+          column: op.args[1] as string | string[],
+        });
+        break;
+      case "removeIndex":
+        throw new Error("Cannot reverse removeIndex without column info");
+      case "renameColumn":
+        await this.renameColumn(
+          op.args[0] as string,
+          op.args[2] as string,
+          op.args[1] as string
+        );
+        break;
+      default:
+        throw new Error(`Cannot reverse operation: ${op.method}`);
+    }
   }
 
   /**
@@ -258,6 +321,10 @@ export abstract class Migration {
       | ((t: TableDefinition) => void),
     fn?: (t: TableDefinition) => void
   ): Promise<void> {
+    if (this._recording) {
+      this._recordedOps.push({ method: "createTable", args: [name, optionsOrFn, fn] });
+      return;
+    }
     let options: { id?: boolean } = {};
     let definer: ((t: TableDefinition) => void) | undefined;
 
@@ -291,6 +358,10 @@ export abstract class Migration {
    * Mirrors: ActiveRecord::Migration#drop_table
    */
   async dropTable(name: string): Promise<void> {
+    if (this._recording) {
+      this._recordedOps.push({ method: "dropTable", args: [name] });
+      return;
+    }
     await this.adapter.executeMutation(`DROP TABLE IF EXISTS "${name}"`);
   }
 
@@ -305,6 +376,10 @@ export abstract class Migration {
     type: ColumnType,
     options: ColumnOptions = {}
   ): Promise<void> {
+    if (this._recording) {
+      this._recordedOps.push({ method: "addColumn", args: [tableName, columnName, type, options] });
+      return;
+    }
     const sqlType = this._sqlType(type, options);
     const nullable =
       options.null === false ? " NOT NULL" : "";
@@ -321,6 +396,10 @@ export abstract class Migration {
    * Mirrors: ActiveRecord::Migration#remove_column
    */
   async removeColumn(tableName: string, columnName: string): Promise<void> {
+    if (this._recording) {
+      this._recordedOps.push({ method: "removeColumn", args: [tableName, columnName] });
+      return;
+    }
     await this.adapter.executeMutation(
       `ALTER TABLE "${tableName}" DROP COLUMN "${columnName}"`
     );
@@ -336,6 +415,10 @@ export abstract class Migration {
     oldName: string,
     newName: string
   ): Promise<void> {
+    if (this._recording) {
+      this._recordedOps.push({ method: "renameColumn", args: [tableName, oldName, newName] });
+      return;
+    }
     await this.adapter.executeMutation(
       `ALTER TABLE "${tableName}" RENAME COLUMN "${oldName}" TO "${newName}"`
     );
@@ -351,6 +434,10 @@ export abstract class Migration {
     columns: string | string[],
     options: { unique?: boolean; name?: string } = {}
   ): Promise<void> {
+    if (this._recording) {
+      this._recordedOps.push({ method: "addIndex", args: [tableName, columns, options] });
+      return;
+    }
     const cols = Array.isArray(columns) ? columns : [columns];
     const indexName =
       options.name ?? `index_${tableName}_on_${cols.join("_")}`;
@@ -370,6 +457,10 @@ export abstract class Migration {
     tableName: string,
     options: { column?: string | string[]; name?: string }
   ): Promise<void> {
+    if (this._recording) {
+      this._recordedOps.push({ method: "removeIndex", args: [tableName, options] });
+      return;
+    }
     let indexName: string;
     if (options.name) {
       indexName = options.name;
@@ -395,6 +486,13 @@ export abstract class Migration {
     } else {
       await this.down();
     }
+  }
+
+  /**
+   * Get the migration version from the class name or a static property.
+   */
+  get version(): string {
+    return (this.constructor as any).version ?? this.constructor.name;
   }
 
   private _sqlType(type: ColumnType, options: ColumnOptions): string {

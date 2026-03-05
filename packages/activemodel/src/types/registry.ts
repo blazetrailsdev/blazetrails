@@ -7,6 +7,8 @@ import {
   DateType,
   DateTimeType,
   DecimalType,
+  UuidType,
+  JsonType,
 } from "./type.js";
 
 /**
@@ -25,6 +27,8 @@ class TypeRegistry {
     this.register("date", () => new DateType());
     this.register("datetime", () => new DateTimeType());
     this.register("decimal", () => new DecimalType());
+    this.register("uuid", () => new UuidType());
+    this.register("json", () => new JsonType());
   }
 
   register(name: string, factory: () => Type): void {

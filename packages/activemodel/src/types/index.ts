@@ -7,5 +7,7 @@ export {
   DateType,
   DateTimeType,
   DecimalType,
+  UuidType,
+  JsonType,
 } from "./type.js";
 export { typeRegistry } from "./registry.js";

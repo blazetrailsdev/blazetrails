@@ -17,6 +17,7 @@ import {
   FormatValidator,
   AcceptanceValidator,
   ConfirmationValidator,
+  ComparisonValidator,
 } from "./validations/validators.js";
 
 interface AttributeDefinition {
@@ -148,6 +149,13 @@ export class Model {
         validator: new ConfirmationValidator(opts),
       });
     }
+
+    if (rules.comparison) {
+      this._validations.push({
+        attribute,
+        validator: new ComparisonValidator(rules.comparison as any),
+      });
+    }
   }
 
   static validate(
@@ -230,6 +238,16 @@ export class Model {
   static aroundDestroy(fn: AroundCallbackFn): void {
     this._ensureOwnCallbacks();
     this._callbackChain.register("around", "destroy", fn);
+  }
+
+  static afterCommit(fn: CallbackFn): void {
+    this._ensureOwnCallbacks();
+    this._callbackChain.register("after", "commit", fn);
+  }
+
+  static afterRollback(fn: CallbackFn): void {
+    this._ensureOwnCallbacks();
+    this._callbackChain.register("after", "rollback", fn);
   }
 
   private static _ensureOwnCallbacks(): void {

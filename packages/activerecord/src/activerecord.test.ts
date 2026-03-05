@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { Base, Relation, Range, MemoryAdapter, transaction, savepoint } from "./index.js";
+import { Base, Relation, Range, MemoryAdapter, transaction, savepoint, CollectionProxy, association, MigrationRunner } from "./index.js";
 import { Migration, TableDefinition, Schema } from "./migration.js";
 import {
   Associations,
@@ -7,6 +7,8 @@ import {
   loadBelongsTo,
   loadHasOne,
   loadHasMany,
+  loadHasManyThrough,
+  processDependentAssociations,
 } from "./associations.js";
 
 // -- Helpers --
@@ -3092,6 +3094,974 @@ describe("ActiveRecord", () => {
         .where({ name: ["Alice", "Bob"] })
         .toArray();
       expect(result).toHaveLength(2);
+    });
+  });
+
+  // =========================================================================
+  // Batch 1C — pick(), first(n), last(n)
+  // =========================================================================
+  describe("Relation: pick, first(n), last(n)", () => {
+    it("pick returns first row's columns", async () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static { this.attribute("name", "string"); this.attribute("age", "integer"); this.adapter = adapter; }
+      }
+      await User.create({ name: "Alice", age: 25 });
+      await User.create({ name: "Bob", age: 30 });
+      const result = await User.all().order("name").pick("name");
+      expect(result).toBe("Alice");
+    });
+
+    it("pick returns null when no records", async () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static { this.attribute("name", "string"); this.adapter = adapter; }
+      }
+      expect(await User.all().pick("name")).toBe(null);
+    });
+
+    it("first(n) returns array of n records", async () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static { this.attribute("name", "string"); this.adapter = adapter; }
+      }
+      await User.create({ name: "A" });
+      await User.create({ name: "B" });
+      await User.create({ name: "C" });
+      const result = await User.all().first(2) as Base[];
+      expect(result).toHaveLength(2);
+    });
+
+    it("first(n) returns empty array for none", async () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static { this.attribute("name", "string"); this.adapter = adapter; }
+      }
+      const result = await User.all().none().first(2);
+      expect(result).toEqual([]);
+    });
+
+    it("last(n) returns array of last n records", async () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static { this.attribute("name", "string"); this.adapter = adapter; }
+      }
+      await User.create({ name: "A" });
+      await User.create({ name: "B" });
+      await User.create({ name: "C" });
+      const result = await User.all().last(2) as Base[];
+      expect(result).toHaveLength(2);
+    });
+
+    it("last(n) returns empty array for none", async () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static { this.attribute("name", "string"); this.adapter = adapter; }
+      }
+      const result = await User.all().none().last(2);
+      expect(result).toEqual([]);
+    });
+  });
+
+  // =========================================================================
+  // Batch 1D — increment/decrement/toggle
+  // =========================================================================
+  describe("Base: increment/decrement/toggle", () => {
+    it("increment modifies attribute in memory", () => {
+      class Counter extends Base {
+        static { this.attribute("count", "integer", { default: 0 }); this.adapter = freshAdapter(); }
+      }
+      const c = new Counter();
+      c.increment("count");
+      expect(c.readAttribute("count")).toBe(1);
+    });
+
+    it("increment with custom amount", () => {
+      class Counter extends Base {
+        static { this.attribute("count", "integer", { default: 5 }); this.adapter = freshAdapter(); }
+      }
+      const c = new Counter();
+      c.increment("count", 3);
+      expect(c.readAttribute("count")).toBe(8);
+    });
+
+    it("decrement modifies attribute in memory", () => {
+      class Counter extends Base {
+        static { this.attribute("count", "integer", { default: 10 }); this.adapter = freshAdapter(); }
+      }
+      const c = new Counter();
+      c.decrement("count");
+      expect(c.readAttribute("count")).toBe(9);
+    });
+
+    it("decrement with custom amount", () => {
+      class Counter extends Base {
+        static { this.attribute("count", "integer", { default: 10 }); this.adapter = freshAdapter(); }
+      }
+      const c = new Counter();
+      c.decrement("count", 3);
+      expect(c.readAttribute("count")).toBe(7);
+    });
+
+    it("toggle flips boolean", () => {
+      class Feature extends Base {
+        static { this.attribute("active", "boolean", { default: false }); this.adapter = freshAdapter(); }
+      }
+      const f = new Feature();
+      f.toggle("active");
+      expect(f.readAttribute("active")).toBe(true);
+      f.toggle("active");
+      expect(f.readAttribute("active")).toBe(false);
+    });
+
+    it("incrementBang persists to DB", async () => {
+      const adapter = freshAdapter();
+      class Counter extends Base {
+        static { this.attribute("count", "integer", { default: 0 }); this.adapter = adapter; }
+      }
+      const c = await Counter.create({ count: 5 });
+      await c.incrementBang("count");
+      const reloaded = await Counter.find(c.id);
+      expect(reloaded.readAttribute("count")).toBe(6);
+    });
+
+    it("decrementBang persists to DB", async () => {
+      const adapter = freshAdapter();
+      class Counter extends Base {
+        static { this.attribute("count", "integer", { default: 0 }); this.adapter = adapter; }
+      }
+      const c = await Counter.create({ count: 5 });
+      await c.decrementBang("count");
+      const reloaded = await Counter.find(c.id);
+      expect(reloaded.readAttribute("count")).toBe(4);
+    });
+
+    it("toggleBang persists to DB", async () => {
+      const adapter = freshAdapter();
+      class Feature extends Base {
+        static { this.attribute("active", "boolean", { default: false }); this.adapter = adapter; }
+      }
+      const f = await Feature.create({ active: false });
+      await f.toggleBang("active");
+      const reloaded = await Feature.find(f.id);
+      expect(reloaded.readAttribute("active")).toBe(true);
+    });
+
+    it("increment returns this for chaining", () => {
+      class Counter extends Base {
+        static { this.attribute("a", "integer", { default: 0 }); this.attribute("b", "integer", { default: 0 }); this.adapter = freshAdapter(); }
+      }
+      const c = new Counter();
+      c.increment("a").increment("b");
+      expect(c.readAttribute("a")).toBe(1);
+      expect(c.readAttribute("b")).toBe(1);
+    });
+  });
+
+  // =========================================================================
+  // Batch 1E — explain()
+  // =========================================================================
+  describe("Relation: explain()", () => {
+    it("returns explain output from MemoryAdapter", async () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static { this.attribute("name", "string"); this.adapter = adapter; }
+      }
+      const result = await User.all().explain();
+      expect(result).toContain("MemoryAdapter");
+    });
+  });
+
+  // =========================================================================
+  // Batch 1F — union/intersect/except
+  // =========================================================================
+  describe("Relation: set operations", () => {
+    it("union combines two relations", async () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static { this.attribute("name", "string"); this.attribute("age", "integer"); this.adapter = adapter; }
+      }
+      await User.create({ name: "Alice", age: 20 });
+      await User.create({ name: "Bob", age: 30 });
+      await User.create({ name: "Charlie", age: 25 });
+
+      const young = User.where({ age: 20 });
+      const old = User.where({ age: 30 });
+      const result = await young.union(old).toArray();
+      expect(result).toHaveLength(2);
+    });
+
+    it("unionAll includes duplicates", async () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static { this.attribute("name", "string"); this.adapter = adapter; }
+      }
+      await User.create({ name: "Alice" });
+      const all1 = User.all();
+      const all2 = User.all();
+      const result = await all1.unionAll(all2).toArray();
+      expect(result).toHaveLength(2);
+    });
+
+    it("intersect finds common records", async () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static { this.attribute("name", "string"); this.attribute("active", "boolean"); this.adapter = adapter; }
+      }
+      await User.create({ name: "Alice", active: true });
+      await User.create({ name: "Bob", active: false });
+
+      const result = await User.all().intersect(User.where({ active: true })).toArray();
+      expect(result).toHaveLength(1);
+      expect(result[0].readAttribute("name")).toBe("Alice");
+    });
+
+    it("except removes common records", async () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static { this.attribute("name", "string"); this.attribute("active", "boolean"); this.adapter = adapter; }
+      }
+      await User.create({ name: "Alice", active: true });
+      await User.create({ name: "Bob", active: false });
+
+      const result = await User.all().except(User.where({ active: true })).toArray();
+      expect(result).toHaveLength(1);
+      expect(result[0].readAttribute("name")).toBe("Bob");
+    });
+
+    it("toSql generates UNION SQL", () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static { this.attribute("name", "string"); this.adapter = adapter; }
+      }
+      const sql = User.where({ name: "A" }).union(User.where({ name: "B" })).toSql();
+      expect(sql).toContain("UNION");
+    });
+  });
+
+  // =========================================================================
+  // Batch 1G — lock()
+  // =========================================================================
+  describe("Relation: lock()", () => {
+    it("toSql includes FOR UPDATE", () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static { this.attribute("name", "string"); this.adapter = adapter; }
+      }
+      const sql = User.all().lock().toSql();
+      expect(sql).toContain("FOR UPDATE");
+    });
+
+    it("toSql includes custom lock clause", () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static { this.attribute("name", "string"); this.adapter = adapter; }
+      }
+      const sql = User.all().lock("FOR SHARE").toSql();
+      expect(sql).toContain("FOR SHARE");
+    });
+
+    it("lock(false) removes lock", () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static { this.attribute("name", "string"); this.adapter = adapter; }
+      }
+      const sql = User.all().lock().lock(false).toSql();
+      expect(sql).not.toContain("FOR UPDATE");
+    });
+
+    it("MemoryAdapter tolerates FOR UPDATE in queries", async () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static { this.attribute("name", "string"); this.adapter = adapter; }
+      }
+      await User.create({ name: "Alice" });
+      const result = await User.all().lock().toArray();
+      expect(result).toHaveLength(1);
+    });
+  });
+
+  // =========================================================================
+  // Batch 2A — joins() and leftJoins()
+  // =========================================================================
+  describe("Relation: joins and leftJoins", () => {
+    it("joins generates INNER JOIN SQL", () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static { this.attribute("name", "string"); this.adapter = adapter; }
+      }
+      const sql = User.all().joins("posts", '"users"."id" = "posts"."user_id"').toSql();
+      expect(sql).toContain("INNER JOIN");
+      expect(sql).toContain('"posts"');
+    });
+
+    it("leftJoins generates LEFT OUTER JOIN SQL", () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static { this.attribute("name", "string"); this.adapter = adapter; }
+      }
+      const sql = User.all().leftJoins("posts", '"users"."id" = "posts"."user_id"').toSql();
+      expect(sql).toContain("LEFT OUTER JOIN");
+    });
+
+    it("raw joins with single string", () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static { this.attribute("name", "string"); this.adapter = adapter; }
+      }
+      const sql = User.all().joins('INNER JOIN "posts" ON "posts"."user_id" = "users"."id"').toSql();
+      expect(sql).toContain("INNER JOIN");
+    });
+  });
+
+  // =========================================================================
+  // Batch 3A — dependent: destroy/delete/nullify
+  // =========================================================================
+  describe("Associations: dependent", () => {
+    it("dependent destroy destroys children", async () => {
+      const adapter = freshAdapter();
+
+      class Comment extends Base {
+        static {
+          this.attribute("body", "string");
+          this.attribute("post_id", "integer");
+          this.adapter = adapter;
+        }
+      }
+
+      class Post extends Base {
+        static {
+          this.attribute("title", "string");
+          this.adapter = adapter;
+        }
+      }
+      (Post as any)._associations = [
+        { type: "hasMany", name: "comments", options: { dependent: "destroy", className: "Comment" } },
+      ];
+
+      registerModel(Post);
+      registerModel(Comment);
+
+      const post = await Post.create({ title: "Hello" });
+      await Comment.create({ body: "Nice", post_id: post.id });
+      await Comment.create({ body: "Great", post_id: post.id });
+
+      expect(await Comment.all().count()).toBe(2);
+      await post.destroy();
+      expect(await Comment.all().count()).toBe(0);
+    });
+
+    it("dependent nullify sets FK to null", async () => {
+      const adapter = freshAdapter();
+
+      class Reply extends Base {
+        static {
+          this.attribute("content", "string");
+          this.attribute("thread_id", "integer");
+          this.adapter = adapter;
+        }
+      }
+
+      class Thread extends Base {
+        static {
+          this.attribute("subject", "string");
+          this.adapter = adapter;
+        }
+      }
+      (Thread as any)._associations = [
+        { type: "hasMany", name: "replies", options: { dependent: "nullify", className: "Reply", foreignKey: "thread_id" } },
+      ];
+
+      registerModel(Thread);
+      registerModel(Reply);
+
+      const thread = await Thread.create({ subject: "Test" });
+      await Reply.create({ content: "Reply 1", thread_id: thread.id });
+
+      await thread.destroy();
+
+      const replies = await Reply.all().toArray();
+      expect(replies).toHaveLength(1);
+      expect(replies[0].readAttribute("thread_id")).toBe(null);
+    });
+  });
+
+  // =========================================================================
+  // Batch 3B — has_many through
+  // =========================================================================
+  describe("Associations: has_many through", () => {
+    it("loads through a join model", async () => {
+      const adapter = freshAdapter();
+
+      class Tag extends Base {
+        static {
+          this.attribute("name", "string");
+          this.adapter = adapter;
+        }
+      }
+
+      class Tagging extends Base {
+        static {
+          this.attribute("post_id", "integer");
+          this.attribute("tag_id", "integer");
+          this.adapter = adapter;
+        }
+      }
+
+      class Post extends Base {
+        static {
+          this.attribute("title", "string");
+          this.adapter = adapter;
+        }
+      }
+      (Post as any)._associations = [
+        { type: "hasMany", name: "taggings", options: { className: "Tagging" } },
+        { type: "hasMany", name: "tags", options: { through: "taggings", className: "Tag", source: "tag" } },
+      ];
+
+      registerModel(Post);
+      registerModel(Tagging);
+      registerModel(Tag);
+
+      const post = await Post.create({ title: "Hello" });
+      const tag1 = await Tag.create({ name: "ruby" });
+      const tag2 = await Tag.create({ name: "rails" });
+      await Tagging.create({ post_id: post.id, tag_id: tag1.id });
+      await Tagging.create({ post_id: post.id, tag_id: tag2.id });
+
+      const tags = await loadHasManyThrough(post, "tags", {
+        through: "taggings",
+        className: "Tag",
+        source: "tag",
+      });
+      expect(tags).toHaveLength(2);
+      const names = tags.map((t) => t.readAttribute("name"));
+      expect(names).toContain("ruby");
+      expect(names).toContain("rails");
+    });
+  });
+
+  // =========================================================================
+  // Batch 3C — CollectionProxy
+  // =========================================================================
+  describe("CollectionProxy", () => {
+    it("toArray loads associated records", async () => {
+      const adapter = freshAdapter();
+
+      class Item extends Base {
+        static {
+          this.attribute("name", "string");
+          this.attribute("order_id", "integer");
+          this.adapter = adapter;
+        }
+      }
+
+      class Order extends Base {
+        static {
+          this.attribute("number", "string");
+          this.adapter = adapter;
+        }
+      }
+      (Order as any)._associations = [
+        { type: "hasMany", name: "items", options: { className: "Item", foreignKey: "order_id" } },
+      ];
+
+      registerModel(Order);
+      registerModel(Item);
+
+      const order = await Order.create({ number: "ORD-001" });
+      await Item.create({ name: "Widget", order_id: order.id });
+      await Item.create({ name: "Gadget", order_id: order.id });
+
+      const proxy = association(order, "items");
+      const items = await proxy.toArray();
+      expect(items).toHaveLength(2);
+    });
+
+    it("build creates unsaved record with FK", async () => {
+      const adapter = freshAdapter();
+
+      class LineItem extends Base {
+        static {
+          this.attribute("name", "string");
+          this.attribute("invoice_id", "integer");
+          this.adapter = adapter;
+        }
+      }
+
+      class Invoice extends Base {
+        static {
+          this.attribute("number", "string");
+          this.adapter = adapter;
+        }
+      }
+      (Invoice as any)._associations = [
+        { type: "hasMany", name: "lineItems", options: { className: "LineItem", foreignKey: "invoice_id" } },
+      ];
+
+      registerModel(Invoice);
+      registerModel(LineItem);
+
+      const invoice = await Invoice.create({ number: "INV-001" });
+      const proxy = association(invoice, "lineItems");
+      const item = proxy.build({ name: "Widget" });
+      expect(item.readAttribute("invoice_id")).toBe(invoice.id);
+      expect(item.isNewRecord()).toBe(true);
+    });
+
+    it("create saves a new associated record", async () => {
+      const adapter = freshAdapter();
+
+      class Note extends Base {
+        static {
+          this.attribute("text", "string");
+          this.attribute("doc_id", "integer");
+          this.adapter = adapter;
+        }
+      }
+
+      class Doc extends Base {
+        static {
+          this.attribute("title", "string");
+          this.adapter = adapter;
+        }
+      }
+      (Doc as any)._associations = [
+        { type: "hasMany", name: "notes", options: { className: "Note", foreignKey: "doc_id" } },
+      ];
+
+      registerModel(Doc);
+      registerModel(Note);
+
+      const doc = await Doc.create({ title: "My Doc" });
+      const proxy = association(doc, "notes");
+      const note = await proxy.create({ text: "Remember this" });
+      expect(note.isPersisted()).toBe(true);
+      expect(note.readAttribute("doc_id")).toBe(doc.id);
+    });
+
+    it("count returns number of associated records", async () => {
+      const adapter = freshAdapter();
+
+      class Task extends Base {
+        static {
+          this.attribute("title", "string");
+          this.attribute("project_id", "integer");
+          this.adapter = adapter;
+        }
+      }
+
+      class Project extends Base {
+        static {
+          this.attribute("name", "string");
+          this.adapter = adapter;
+        }
+      }
+      (Project as any)._associations = [
+        { type: "hasMany", name: "tasks", options: { className: "Task", foreignKey: "project_id" } },
+      ];
+
+      registerModel(Project);
+      registerModel(Task);
+
+      const project = await Project.create({ name: "Rails-JS" });
+      await Task.create({ title: "Task 1", project_id: project.id });
+      await Task.create({ title: "Task 2", project_id: project.id });
+
+      const proxy = association(project, "tasks");
+      expect(await proxy.count()).toBe(2);
+    });
+  });
+
+  // =========================================================================
+  // Batch 4A — includes / preload / eagerLoad
+  // =========================================================================
+  describe("Eager Loading", () => {
+    it("includes preloads belongsTo associations", async () => {
+      const adapter = freshAdapter();
+
+      class Author extends Base {
+        static {
+          this.attribute("name", "string");
+          this.adapter = adapter;
+        }
+      }
+
+      class Book extends Base {
+        static {
+          this.attribute("title", "string");
+          this.attribute("author_id", "integer");
+          this.adapter = adapter;
+        }
+      }
+      (Book as any)._associations = [
+        { type: "belongsTo", name: "author", options: { className: "Author" } },
+      ];
+
+      registerModel(Author);
+      registerModel(Book);
+
+      const author = await Author.create({ name: "Bob" });
+      await Book.create({ title: "Book 1", author_id: author.id });
+      await Book.create({ title: "Book 2", author_id: author.id });
+
+      const books = await Book.all().includes("author").toArray();
+      expect(books).toHaveLength(2);
+      // Preloaded data should be cached
+      expect((books[0] as any)._preloadedAssociations.has("author")).toBe(true);
+    });
+
+    it("includes preloads hasMany associations", async () => {
+      const adapter = freshAdapter();
+
+      class Chapter extends Base {
+        static {
+          this.attribute("title", "string");
+          this.attribute("novel_id", "integer");
+          this.adapter = adapter;
+        }
+      }
+
+      class Novel extends Base {
+        static {
+          this.attribute("title", "string");
+          this.adapter = adapter;
+        }
+      }
+      (Novel as any)._associations = [
+        { type: "hasMany", name: "chapters", options: { className: "Chapter", foreignKey: "novel_id" } },
+      ];
+
+      registerModel(Novel);
+      registerModel(Chapter);
+
+      const novel = await Novel.create({ title: "Epic" });
+      await Chapter.create({ title: "Ch 1", novel_id: novel.id });
+      await Chapter.create({ title: "Ch 2", novel_id: novel.id });
+
+      const novels = await Novel.all().includes("chapters").toArray();
+      expect(novels).toHaveLength(1);
+      const preloaded = (novels[0] as any)._preloadedAssociations.get("chapters");
+      expect(preloaded).toHaveLength(2);
+    });
+
+    it("preload method works like includes", async () => {
+      const adapter = freshAdapter();
+
+      class Pet extends Base {
+        static {
+          this.attribute("name", "string");
+          this.attribute("owner_id", "integer");
+          this.adapter = adapter;
+        }
+      }
+
+      class Owner extends Base {
+        static {
+          this.attribute("name", "string");
+          this.adapter = adapter;
+        }
+      }
+      (Owner as any)._associations = [
+        { type: "hasMany", name: "pets", options: { className: "Pet", foreignKey: "owner_id" } },
+      ];
+
+      registerModel(Owner);
+      registerModel(Pet);
+
+      const owner = await Owner.create({ name: "Jane" });
+      await Pet.create({ name: "Rex", owner_id: owner.id });
+
+      const owners = await Owner.all().preload("pets").toArray();
+      expect((owners[0] as any)._preloadedAssociations.get("pets")).toHaveLength(1);
+    });
+
+    it("eagerLoad method works like includes", async () => {
+      const adapter = freshAdapter();
+
+      class Wheel extends Base {
+        static {
+          this.attribute("position", "string");
+          this.attribute("car_id", "integer");
+          this.adapter = adapter;
+        }
+      }
+
+      class Car extends Base {
+        static {
+          this.attribute("make", "string");
+          this.adapter = adapter;
+        }
+      }
+      (Car as any)._associations = [
+        { type: "hasMany", name: "wheels", options: { className: "Wheel", foreignKey: "car_id" } },
+      ];
+
+      registerModel(Car);
+      registerModel(Wheel);
+
+      const car = await Car.create({ make: "Toyota" });
+      await Wheel.create({ position: "FL", car_id: car.id });
+      await Wheel.create({ position: "FR", car_id: car.id });
+
+      const cars = await Car.all().eagerLoad("wheels").toArray();
+      expect((cars[0] as any)._preloadedAssociations.get("wheels")).toHaveLength(2);
+    });
+
+    it("loadBelongsTo uses preloaded cache", async () => {
+      const adapter = freshAdapter();
+
+      class Publisher extends Base {
+        static {
+          this.attribute("name", "string");
+          this.adapter = adapter;
+        }
+      }
+
+      class Magazine extends Base {
+        static {
+          this.attribute("title", "string");
+          this.attribute("publisher_id", "integer");
+          this.adapter = adapter;
+        }
+      }
+      (Magazine as any)._associations = [
+        { type: "belongsTo", name: "publisher", options: { className: "Publisher" } },
+      ];
+
+      registerModel(Publisher);
+      registerModel(Magazine);
+
+      const pub = await Publisher.create({ name: "Pub Co" });
+      await Magazine.create({ title: "Mag 1", publisher_id: pub.id });
+
+      const mags = await Magazine.all().includes("publisher").toArray();
+      // loadBelongsTo should use cache
+      const loaded = await loadBelongsTo(mags[0], "publisher", { className: "Publisher" });
+      expect(loaded!.readAttribute("name")).toBe("Pub Co");
+    });
+  });
+
+  // =========================================================================
+  // Batch 5A — afterCommit / afterRollback
+  // =========================================================================
+  describe("afterCommit / afterRollback", () => {
+    it("fires afterCommit callback outside transaction", async () => {
+      const adapter = freshAdapter();
+      const log: string[] = [];
+
+      class Order extends Base {
+        static {
+          this.attribute("total", "integer");
+          this.adapter = adapter;
+          this.afterCommit((record: any) => { log.push("committed"); });
+        }
+      }
+
+      await Order.create({ total: 100 });
+      expect(log).toContain("committed");
+    });
+
+    it("fires afterCommit inside transaction on commit", async () => {
+      const adapter = freshAdapter();
+      const log: string[] = [];
+
+      class Payment extends Base {
+        static {
+          this.attribute("amount", "integer");
+          this.adapter = adapter;
+          this.afterCommit((record: any) => { log.push("committed"); });
+        }
+      }
+
+      await transaction(Payment, async (tx) => {
+        await Payment.create({ amount: 50 });
+      });
+      expect(log).toContain("committed");
+    });
+  });
+
+  // =========================================================================
+  // Batch 6C — UniquenessValidator
+  // =========================================================================
+  describe("UniquenessValidator", () => {
+    it("validates uniqueness of an attribute", async () => {
+      const adapter = freshAdapter();
+
+      class Email extends Base {
+        static {
+          this.attribute("address", "string");
+          this.adapter = adapter;
+          this.validatesUniqueness("address");
+        }
+      }
+
+      const e1 = await Email.create({ address: "test@example.com" });
+      expect(e1.isPersisted()).toBe(true);
+
+      const e2 = new Email({ address: "test@example.com" });
+      const saved = await e2.save();
+      expect(saved).toBe(false);
+      expect(e2.errors.get("address")).toContain("has already been taken");
+    });
+
+    it("allows same value if record is itself", async () => {
+      const adapter = freshAdapter();
+
+      class Username extends Base {
+        static {
+          this.attribute("name", "string");
+          this.adapter = adapter;
+          this.validatesUniqueness("name");
+        }
+      }
+
+      const u = await Username.create({ name: "dean" });
+      // Re-saving same record should work
+      const saved = await u.save();
+      expect(saved).toBe(true);
+    });
+
+    it("validates with scope", async () => {
+      const adapter = freshAdapter();
+
+      class Membership extends Base {
+        static {
+          this.attribute("user_id", "integer");
+          this.attribute("group_id", "integer");
+          this.adapter = adapter;
+          this.validatesUniqueness("user_id", { scope: "group_id" });
+        }
+      }
+
+      await Membership.create({ user_id: 1, group_id: 1 });
+      // Same user, different group — should work
+      const m2 = await Membership.create({ user_id: 1, group_id: 2 });
+      expect(m2.isPersisted()).toBe(true);
+      // Same user, same group — should fail
+      const m3 = new Membership({ user_id: 1, group_id: 1 });
+      expect(await m3.save()).toBe(false);
+    });
+  });
+
+  // =========================================================================
+  // Batch 7A — Reversible Migrations
+  // =========================================================================
+  describe("Reversible Migrations", () => {
+    it("change method runs up and reverses on down", async () => {
+      const adapter = freshAdapter();
+
+      class CreatePosts extends Migration {
+        async change(): Promise<void> {
+          await this.createTable("posts", (t) => {
+            t.string("title");
+            t.text("body");
+          });
+        }
+      }
+
+      const migration = new CreatePosts();
+      // Up
+      await migration.run(adapter, "up");
+      // Table should exist - insert should work
+      await adapter.executeMutation(
+        `INSERT INTO "posts" ("title", "body") VALUES ('Hello', 'World')`
+      );
+      const rows = await adapter.execute(`SELECT * FROM "posts"`);
+      expect(rows).toHaveLength(1);
+
+      // Down — drops the table
+      await migration.run(adapter, "down");
+      const afterDrop = await adapter.execute(`SELECT * FROM "posts"`);
+      expect(afterDrop).toHaveLength(0);
+    });
+  });
+
+  // =========================================================================
+  // Batch 7B — Migration Runner
+  // =========================================================================
+  describe("MigrationRunner", () => {
+    it("migrate runs pending migrations", async () => {
+      const adapter = freshAdapter();
+
+      class M1 extends Migration {
+        static version = "001";
+        async up() { await this.createTable("users", (t) => { t.string("name"); }); }
+        async down() { await this.dropTable("users"); }
+      }
+
+      class M2 extends Migration {
+        static version = "002";
+        async up() { await this.createTable("posts", (t) => { t.string("title"); }); }
+        async down() { await this.dropTable("posts"); }
+      }
+
+      const runner = new MigrationRunner(adapter, [new M1(), new M2()]);
+      await runner.migrate();
+
+      // Tables should exist
+      await adapter.executeMutation(`INSERT INTO "users" ("name") VALUES ('Alice')`);
+      await adapter.executeMutation(`INSERT INTO "posts" ("title") VALUES ('Hello')`);
+      expect(await adapter.execute(`SELECT * FROM "users"`)).toHaveLength(1);
+      expect(await adapter.execute(`SELECT * FROM "posts"`)).toHaveLength(1);
+    });
+
+    it("status shows migration states", async () => {
+      const adapter = freshAdapter();
+
+      class M1 extends Migration {
+        static version = "001";
+        async up() { await this.createTable("items", (t) => { t.string("name"); }); }
+        async down() { await this.dropTable("items"); }
+      }
+
+      const runner = new MigrationRunner(adapter, [new M1()]);
+      let status = await runner.status();
+      expect(status[0].status).toBe("down");
+
+      await runner.migrate();
+      status = await runner.status();
+      expect(status[0].status).toBe("up");
+    });
+
+    it("rollback rolls back N migrations", async () => {
+      const adapter = freshAdapter();
+
+      class M1 extends Migration {
+        static version = "001";
+        async up() { await this.createTable("t1", (t) => { t.string("a"); }); }
+        async down() { await this.dropTable("t1"); }
+      }
+
+      class M2 extends Migration {
+        static version = "002";
+        async up() { await this.createTable("t2", (t) => { t.string("b"); }); }
+        async down() { await this.dropTable("t2"); }
+      }
+
+      const runner = new MigrationRunner(adapter, [new M1(), new M2()]);
+      await runner.migrate();
+
+      // Rollback 1
+      await runner.rollback(1);
+      const status = await runner.status();
+      expect(status[0].status).toBe("up");
+      expect(status[1].status).toBe("down");
+    });
+
+    it("migrate is idempotent", async () => {
+      const adapter = freshAdapter();
+
+      class M1 extends Migration {
+        static version = "001";
+        async up() { await this.createTable("x", (t) => { t.string("v"); }); }
+        async down() { await this.dropTable("x"); }
+      }
+
+      const runner = new MigrationRunner(adapter, [new M1()]);
+      await runner.migrate();
+      // Running again should not throw
+      await runner.migrate();
     });
   });
 });

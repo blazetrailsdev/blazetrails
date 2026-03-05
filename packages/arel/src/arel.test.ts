@@ -1177,4 +1177,62 @@ describe("Arel", () => {
       expect(mgr.toSql()).toBe('SELECT * FROM "users"');
     });
   });
+
+  // =========================================================================
+  // SelectManager convenience join methods
+  // =========================================================================
+  describe("SelectManager join methods", () => {
+    it("rightOuterJoin generates RIGHT OUTER JOIN", () => {
+      const mgr = new SelectManager(users);
+      mgr.project(star);
+      mgr.rightOuterJoin(posts, users.get("id").eq(posts.get("user_id")));
+      expect(mgr.toSql()).toContain("RIGHT OUTER JOIN");
+      expect(mgr.toSql()).toContain('"posts"');
+    });
+
+    it("fullOuterJoin generates FULL OUTER JOIN", () => {
+      const mgr = new SelectManager(users);
+      mgr.project(star);
+      mgr.fullOuterJoin(posts, users.get("id").eq(posts.get("user_id")));
+      expect(mgr.toSql()).toContain("FULL OUTER JOIN");
+    });
+
+    it("crossJoin generates CROSS JOIN", () => {
+      const mgr = new SelectManager(users);
+      mgr.project(star);
+      mgr.crossJoin(posts);
+      expect(mgr.toSql()).toContain("CROSS JOIN");
+      expect(mgr.toSql()).toContain('"posts"');
+    });
+
+    it("window creates a named window", () => {
+      const mgr = new SelectManager(users);
+      mgr.project(star);
+      const win = mgr.window("w");
+      win.order(users.get("created_at").asc());
+      // The window should be in core.windows
+      expect(mgr.toSql()).toContain("WINDOW");
+    });
+
+    it("rightOuterJoin with string table name", () => {
+      const mgr = new SelectManager(users);
+      mgr.project(star);
+      mgr.rightOuterJoin("posts");
+      expect(mgr.toSql()).toContain("RIGHT OUTER JOIN");
+    });
+
+    it("fullOuterJoin with string table name", () => {
+      const mgr = new SelectManager(users);
+      mgr.project(star);
+      mgr.fullOuterJoin("posts");
+      expect(mgr.toSql()).toContain("FULL OUTER JOIN");
+    });
+
+    it("crossJoin with string table name", () => {
+      const mgr = new SelectManager(users);
+      mgr.project(star);
+      mgr.crossJoin("posts");
+      expect(mgr.toSql()).toContain("CROSS JOIN");
+    });
+  });
 });

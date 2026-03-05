@@ -1345,4 +1345,276 @@ describe("ActiveModel", () => {
       expect(w.errors.get("value")).toContain("cannot be zero");
     });
   });
+
+  // =========================================================================
+  // ComparisonValidator
+  // =========================================================================
+  describe("ComparisonValidator", () => {
+    it("validates greaterThan", () => {
+      class Order extends Model {
+        static {
+          this.attribute("quantity", "integer");
+          this.validates("quantity", { comparison: { greaterThan: 0 } });
+        }
+      }
+      expect(new Order({ quantity: 5 }).isValid()).toBe(true);
+      expect(new Order({ quantity: 0 }).isValid()).toBe(false);
+      expect(new Order({ quantity: -1 }).isValid()).toBe(false);
+    });
+
+    it("validates greaterThanOrEqualTo", () => {
+      class Order extends Model {
+        static {
+          this.attribute("quantity", "integer");
+          this.validates("quantity", { comparison: { greaterThanOrEqualTo: 1 } });
+        }
+      }
+      expect(new Order({ quantity: 1 }).isValid()).toBe(true);
+      expect(new Order({ quantity: 0 }).isValid()).toBe(false);
+    });
+
+    it("validates lessThan", () => {
+      class Rating extends Model {
+        static {
+          this.attribute("score", "integer");
+          this.validates("score", { comparison: { lessThan: 10 } });
+        }
+      }
+      expect(new Rating({ score: 9 }).isValid()).toBe(true);
+      expect(new Rating({ score: 10 }).isValid()).toBe(false);
+    });
+
+    it("validates lessThanOrEqualTo", () => {
+      class Rating extends Model {
+        static {
+          this.attribute("score", "integer");
+          this.validates("score", { comparison: { lessThanOrEqualTo: 10 } });
+        }
+      }
+      expect(new Rating({ score: 10 }).isValid()).toBe(true);
+      expect(new Rating({ score: 11 }).isValid()).toBe(false);
+    });
+
+    it("validates equalTo", () => {
+      class Confirmation extends Model {
+        static {
+          this.attribute("value", "integer");
+          this.validates("value", { comparison: { equalTo: 42 } });
+        }
+      }
+      expect(new Confirmation({ value: 42 }).isValid()).toBe(true);
+      expect(new Confirmation({ value: 43 }).isValid()).toBe(false);
+    });
+
+    it("validates otherThan", () => {
+      class Item extends Model {
+        static {
+          this.attribute("status", "integer");
+          this.validates("status", { comparison: { otherThan: 0 } });
+        }
+      }
+      expect(new Item({ status: 1 }).isValid()).toBe(true);
+      expect(new Item({ status: 0 }).isValid()).toBe(false);
+    });
+
+    it("supports function comparands (like Rails procs)", () => {
+      class Event extends Model {
+        static {
+          this.attribute("startDate", "date");
+          this.attribute("endDate", "date");
+          this.validates("endDate", {
+            comparison: { greaterThan: (record: any) => record.readAttribute("startDate") },
+          });
+        }
+      }
+      const valid = new Event({
+        startDate: new Date("2024-01-01"),
+        endDate: new Date("2024-01-02"),
+      });
+      expect(valid.isValid()).toBe(true);
+
+      const invalid = new Event({
+        startDate: new Date("2024-01-02"),
+        endDate: new Date("2024-01-01"),
+      });
+      expect(invalid.isValid()).toBe(false);
+    });
+
+    it("works with dates", () => {
+      const tomorrow = new Date("2024-06-02");
+      class Booking extends Model {
+        static {
+          this.attribute("checkIn", "date");
+          this.validates("checkIn", { comparison: { greaterThanOrEqualTo: tomorrow } });
+        }
+      }
+      expect(new Booking({ checkIn: new Date("2024-06-02") }).isValid()).toBe(true);
+      expect(new Booking({ checkIn: new Date("2024-06-01") }).isValid()).toBe(false);
+    });
+
+    it("works with strings", () => {
+      class Item extends Model {
+        static {
+          this.attribute("code", "string");
+          this.validates("code", { comparison: { greaterThan: "A" } });
+        }
+      }
+      expect(new Item({ code: "B" }).isValid()).toBe(true);
+      expect(new Item({ code: "A" }).isValid()).toBe(false);
+    });
+
+    it("skips nil values", () => {
+      class Item extends Model {
+        static {
+          this.attribute("quantity", "integer");
+          this.validates("quantity", { comparison: { greaterThan: 0 } });
+        }
+      }
+      expect(new Item({}).isValid()).toBe(true);
+    });
+
+    it("supports custom message", () => {
+      class Item extends Model {
+        static {
+          this.attribute("qty", "integer");
+          this.validates("qty", {
+            comparison: { greaterThan: 0, message: "must be positive" },
+          });
+        }
+      }
+      const item = new Item({ qty: 0 });
+      expect(item.isValid()).toBe(false);
+      expect(item.errors.fullMessages).toContain("Qty must be positive");
+    });
+
+    it("supports multiple constraints", () => {
+      class Score extends Model {
+        static {
+          this.attribute("value", "integer");
+          this.validates("value", {
+            comparison: { greaterThanOrEqualTo: 0, lessThanOrEqualTo: 100 },
+          });
+        }
+      }
+      expect(new Score({ value: 50 }).isValid()).toBe(true);
+      expect(new Score({ value: -1 }).isValid()).toBe(false);
+      expect(new Score({ value: 101 }).isValid()).toBe(false);
+    });
+  });
+
+  // =========================================================================
+  // UUID Type
+  // =========================================================================
+  describe("UuidType", () => {
+    it("casts a valid UUID to lowercase", () => {
+      class Item extends Model {
+        static {
+          this.attribute("uuid", "uuid");
+        }
+      }
+      const item = new Item({ uuid: "550E8400-E29B-41D4-A716-446655440000" });
+      expect(item.readAttribute("uuid")).toBe("550e8400-e29b-41d4-a716-446655440000");
+    });
+
+    it("returns null for invalid UUID", () => {
+      class Item extends Model {
+        static {
+          this.attribute("uuid", "uuid");
+        }
+      }
+      const item = new Item({ uuid: "not-a-uuid" });
+      expect(item.readAttribute("uuid")).toBe(null);
+    });
+
+    it("handles null", () => {
+      class Item extends Model {
+        static {
+          this.attribute("uuid", "uuid");
+        }
+      }
+      const item = new Item({});
+      expect(item.readAttribute("uuid")).toBe(null);
+    });
+  });
+
+  // =========================================================================
+  // JSON Type
+  // =========================================================================
+  describe("JsonType", () => {
+    it("casts a JSON string to parsed object", () => {
+      class Config extends Model {
+        static {
+          this.attribute("data", "json");
+        }
+      }
+      const c = new Config({ data: '{"key":"value"}' });
+      expect(c.readAttribute("data")).toEqual({ key: "value" });
+    });
+
+    it("passes through objects", () => {
+      class Config extends Model {
+        static {
+          this.attribute("data", "json");
+        }
+      }
+      const c = new Config({ data: { key: "value" } });
+      expect(c.readAttribute("data")).toEqual({ key: "value" });
+    });
+
+    it("returns null for invalid JSON string", () => {
+      class Config extends Model {
+        static {
+          this.attribute("data", "json");
+        }
+      }
+      const c = new Config({ data: "not json{" });
+      expect(c.readAttribute("data")).toBe(null);
+    });
+
+    it("handles arrays", () => {
+      class Config extends Model {
+        static {
+          this.attribute("tags", "json");
+        }
+      }
+      const c = new Config({ tags: [1, 2, 3] });
+      expect(c.readAttribute("tags")).toEqual([1, 2, 3]);
+    });
+
+    it("handles null", () => {
+      class Config extends Model {
+        static {
+          this.attribute("data", "json");
+        }
+      }
+      const c = new Config({});
+      expect(c.readAttribute("data")).toBe(null);
+    });
+  });
+
+  // =========================================================================
+  // afterCommit / afterRollback callback registration
+  // =========================================================================
+  describe("afterCommit / afterRollback callbacks", () => {
+    it("registers afterCommit callback", () => {
+      class Order extends Model {
+        static {
+          this.attribute("total", "integer");
+          this.afterCommit(() => {});
+        }
+      }
+      // Should not throw
+      expect(new Order({ total: 1 }).isValid()).toBe(true);
+    });
+
+    it("registers afterRollback callback", () => {
+      class Order extends Model {
+        static {
+          this.attribute("total", "integer");
+          this.afterRollback(() => {});
+        }
+      }
+      expect(new Order({ total: 1 }).isValid()).toBe(true);
+    });
+  });
 });

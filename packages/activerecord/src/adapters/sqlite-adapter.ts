@@ -95,6 +95,14 @@ export class SqliteAdapter implements DatabaseAdapter {
   }
 
   /**
+   * Return the query execution plan.
+   */
+  async explain(sql: string): Promise<string> {
+    const rows = this.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all() as Record<string, unknown>[];
+    return rows.map((r) => `${r.id}|${r.parent}|${r.notused}|${r.detail}`).join("\n");
+  }
+
+  /**
    * Close the database connection.
    */
   close(): void {

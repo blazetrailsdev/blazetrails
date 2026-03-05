@@ -44,6 +44,12 @@ export interface DatabaseAdapter {
    * Rollback to a savepoint.
    */
   rollbackToSavepoint(name: string): Promise<void>;
+
+  /**
+   * Return the query execution plan.
+   * Optional — not all adapters support this.
+   */
+  explain?(sql: string): Promise<string>;
 }
 
 /**
@@ -53,9 +59,50 @@ export class MemoryAdapter implements DatabaseAdapter {
   private tables = new Map<string, Record<string, unknown>[]>();
   private autoIncrements = new Map<string, number>();
 
+  async explain(sql: string): Promise<string> {
+    return `MemoryAdapter: EXPLAIN for: ${sql}`;
+  }
+
   async execute(sql: string): Promise<Record<string, unknown>[]> {
+    // Set operations: (left) UNION|INTERSECT|EXCEPT (right)
+    const setOpMatch = sql.match(
+      /^\((.+)\)\s+(UNION ALL|UNION|INTERSECT|EXCEPT)\s+\((.+)\)$/is
+    );
+    if (setOpMatch) {
+      const [, leftSql, op, rightSql] = setOpMatch;
+      const leftRows = await this.execute(leftSql);
+      const rightRows = await this.execute(rightSql);
+      const upperOp = op.toUpperCase();
+      if (upperOp === "UNION ALL") {
+        return [...leftRows, ...rightRows];
+      }
+      if (upperOp === "UNION") {
+        const seen = new Set<string>();
+        const result: Record<string, unknown>[] = [];
+        for (const row of [...leftRows, ...rightRows]) {
+          const key = JSON.stringify(row);
+          if (!seen.has(key)) {
+            seen.add(key);
+            result.push(row);
+          }
+        }
+        return result;
+      }
+      if (upperOp === "INTERSECT") {
+        const rightKeys = new Set(rightRows.map(r => JSON.stringify(r)));
+        return leftRows.filter(r => rightKeys.has(JSON.stringify(r)));
+      }
+      if (upperOp === "EXCEPT") {
+        const rightKeys = new Set(rightRows.map(r => JSON.stringify(r)));
+        return leftRows.filter(r => !rightKeys.has(JSON.stringify(r)));
+      }
+    }
+
+    // Strip trailing lock clause (FOR UPDATE, etc.) before parsing
+    let cleanedSql = sql.replace(/\s+FOR\s+(UPDATE|SHARE|NO\s+KEY\s+UPDATE|KEY\s+SHARE)(\s+.*)?$/i, "");
+
     // Aggregate queries: COUNT(*), COUNT(col), SUM, AVG, MIN, MAX
-    const aggMatch = sql.match(
+    const aggMatch = cleanedSql.match(
       /SELECT\s+(COUNT|SUM|AVG|MIN|MAX)\((\*|"?\w+"?(?:\."?\w+"?)?)\)\s*(?:AS\s+\w+\s+)?FROM\s+"(\w+)"(?:\s+WHERE\s+(.+?))?$/i
     );
     if (aggMatch) {
@@ -86,8 +133,70 @@ export class MemoryAdapter implements DatabaseAdapter {
       return [{ val: null }];
     }
 
+    // Handle JOIN queries
+    const joinMatch = cleanedSql.match(
+      /SELECT\s+(.+?)\s+FROM\s+"(\w+)"\s+((?:(?:INNER|LEFT\s+OUTER)\s+JOIN\s+.+?\s+ON\s+.+?\s*)+)(?:WHERE\s+(.+?))?(?:\s+ORDER\s+BY\s+(.+?))?(?:\s+LIMIT\s+(\d+))?(?:\s+OFFSET\s+(\d+))?$/i
+    );
+    if (joinMatch) {
+      const [, projections, tableName, joinsPart, where, orderBy, limit, offset] = joinMatch;
+      let rows = [...(this.tables.get(tableName) ?? [])];
+
+      // Parse and apply joins
+      const joinRegex = /(INNER|LEFT\s+OUTER)\s+JOIN\s+"(\w+)"\s+ON\s+(.+?)(?=\s+(?:INNER|LEFT\s+OUTER)\s+JOIN|\s+WHERE|\s+ORDER|\s+LIMIT|\s+OFFSET|$)/gi;
+      let jm: RegExpExecArray | null;
+      while ((jm = joinRegex.exec(joinsPart)) !== null) {
+        const [, joinType, joinTable, onCondition] = jm;
+        const rightRows = [...(this.tables.get(joinTable) ?? [])];
+        const isLeft = joinType.toUpperCase().includes("LEFT");
+
+        const newRows: Record<string, unknown>[] = [];
+        for (const leftRow of rows) {
+          let matched = false;
+          for (const rightRow of rightRows) {
+            const combinedRow: Record<string, unknown> = { ...leftRow, ...rightRow };
+            if (this.evaluateWhere(combinedRow, onCondition.trim())) {
+              newRows.push(combinedRow);
+              matched = true;
+            }
+          }
+          if (!matched && isLeft) {
+            const nullRow: Record<string, unknown> = { ...leftRow };
+            newRows.push(nullRow);
+          }
+        }
+        rows = newRows;
+      }
+
+      if (where) {
+        rows = rows.filter((row) => this.evaluateWhere(row, where));
+      }
+      if (orderBy) {
+        rows = this.applyOrder(rows, orderBy);
+      }
+      if (offset) {
+        rows = rows.slice(parseInt(offset));
+      }
+      if (limit) {
+        rows = rows.slice(0, parseInt(limit));
+      }
+      if (projections.trim() !== "*") {
+        const cols = projections.split(",").map((c) => {
+          const parts = c.trim().replace(/"/g, "").split(".");
+          return parts[parts.length - 1];
+        });
+        rows = rows.map((row) => {
+          const result: Record<string, unknown> = {};
+          for (const col of cols) {
+            result[col] = row[col];
+          }
+          return result;
+        });
+      }
+      return rows;
+    }
+
     // Simple SQL parser for SELECT queries against in-memory store
-    const selectMatch = sql.match(
+    const selectMatch = cleanedSql.match(
       /SELECT\s+(.+?)\s+FROM\s+"(\w+)"(?:\s+WHERE\s+(.+?))?(?:\s+ORDER\s+BY\s+(.+?))?(?:\s+LIMIT\s+(\d+))?(?:\s+OFFSET\s+(\d+))?$/i
     );
 
@@ -177,6 +286,55 @@ export class MemoryAdapter implements DatabaseAdapter {
       }
       return affected;
     }
+
+    // CREATE TABLE (DDL)
+    const createTableMatch = sql.match(
+      /CREATE\s+TABLE(?:\s+IF\s+NOT\s+EXISTS)?\s+"(\w+)"/i
+    );
+    if (createTableMatch) {
+      const [, tableName] = createTableMatch;
+      if (!this.tables.has(tableName)) {
+        this.tables.set(tableName, []);
+      }
+      return 0;
+    }
+
+    // DROP TABLE (DDL)
+    const dropTableMatch = sql.match(
+      /DROP\s+TABLE(?:\s+IF\s+EXISTS)?\s+"(\w+)"/i
+    );
+    if (dropTableMatch) {
+      const [, tableName] = dropTableMatch;
+      this.tables.delete(tableName);
+      this.autoIncrements.delete(tableName);
+      return 0;
+    }
+
+    // ALTER TABLE ADD COLUMN
+    const alterAddMatch = sql.match(
+      /ALTER\s+TABLE\s+"(\w+)"\s+ADD\s+COLUMN/i
+    );
+    if (alterAddMatch) return 0;
+
+    // ALTER TABLE DROP COLUMN
+    const alterDropMatch = sql.match(
+      /ALTER\s+TABLE\s+"(\w+)"\s+DROP\s+COLUMN/i
+    );
+    if (alterDropMatch) return 0;
+
+    // ALTER TABLE RENAME COLUMN
+    const alterRenameMatch = sql.match(
+      /ALTER\s+TABLE\s+"(\w+)"\s+RENAME\s+COLUMN/i
+    );
+    if (alterRenameMatch) return 0;
+
+    // CREATE INDEX
+    const createIndexMatch = sql.match(/CREATE\s+(?:UNIQUE\s+)?INDEX/i);
+    if (createIndexMatch) return 0;
+
+    // DROP INDEX
+    const dropIndexMatch = sql.match(/DROP\s+INDEX/i);
+    if (dropIndexMatch) return 0;
 
     // DELETE
     const deleteMatch = sql.match(
@@ -318,97 +476,103 @@ export class MemoryAdapter implements DatabaseAdapter {
     // Always-true (empty NOT IN generates 1=1)
     if (condition.trim() === "1=1") return true;
 
+    // Helper to get column name from a "table"."col" or just "col" pattern
+    const getCol = (tableOrCol: string, col?: string): string =>
+      col !== undefined ? col : tableOrCol;
+
     // BETWEEN
     const betweenMatch = condition.match(
-      /"?(\w+)"?\."?(\w+)"?\s+BETWEEN\s+(.+?)\s+AND\s+(.+)/i
+      /"?(\w+)"?(?:\."?(\w+)"?)?\s+BETWEEN\s+(.+?)\s+AND\s+(.+)/i
     );
     if (betweenMatch) {
-      const [, , col, rawLow, rawHigh] = betweenMatch;
+      const col = getCol(betweenMatch[1], betweenMatch[2]);
       const val = Number(row[col]);
-      const low = Number(this.parseSingleValue(rawLow.trim()));
-      const high = Number(this.parseSingleValue(rawHigh.trim()));
+      const low = Number(this.parseSingleValue(betweenMatch[3].trim()));
+      const high = Number(this.parseSingleValue(betweenMatch[4].trim()));
       return val >= low && val <= high;
     }
 
     // IS NULL
-    const isNullMatch = condition.match(/"?(\w+)"?\."?(\w+)"?\s+IS\s+NULL/i);
+    const isNullMatch = condition.match(/"?(\w+)"?(?:\."?(\w+)"?)?\s+IS\s+NULL/i);
     if (isNullMatch) {
-      return row[isNullMatch[2]] === null || row[isNullMatch[2]] === undefined;
+      const col = getCol(isNullMatch[1], isNullMatch[2]);
+      return row[col] === null || row[col] === undefined;
     }
 
     // IS NOT NULL
-    const isNotNullMatch = condition.match(/"?(\w+)"?\."?(\w+)"?\s+IS\s+NOT\s+NULL/i);
+    const isNotNullMatch = condition.match(/"?(\w+)"?(?:\."?(\w+)"?)?\s+IS\s+NOT\s+NULL/i);
     if (isNotNullMatch) {
-      return row[isNotNullMatch[2]] !== null && row[isNotNullMatch[2]] !== undefined;
+      const col = getCol(isNotNullMatch[1], isNotNullMatch[2]);
+      return row[col] !== null && row[col] !== undefined;
     }
 
     // NOT IN (...)
     const notInMatch = condition.match(
-      /"?(\w+)"?\."?(\w+)"?\s+NOT\s+IN\s+\((.+?)\)/i
+      /"?(\w+)"?(?:\."?(\w+)"?)?\s+NOT\s+IN\s+\((.+?)\)/i
     );
     if (notInMatch) {
-      const [, , col, valList] = notInMatch;
-      const values = this.parseValues(valList);
+      const col = getCol(notInMatch[1], notInMatch[2]);
+      const values = this.parseValues(notInMatch[3]);
       return !values.some((v) => row[col] == v);
     }
 
     // IN (...)
     const inMatch = condition.match(
-      /"?(\w+)"?\."?(\w+)"?\s+IN\s+\((.+?)\)/i
+      /"?(\w+)"?(?:\."?(\w+)"?)?\s+IN\s+\((.+?)\)/i
     );
     if (inMatch) {
-      const [, , col, valList] = inMatch;
-      const values = this.parseValues(valList);
+      const col = getCol(inMatch[1], inMatch[2]);
+      const values = this.parseValues(inMatch[3]);
       return values.some((v) => row[col] == v);
     }
 
     // column != value (check before = to avoid matching != as =)
     const neqMatch = condition.match(
-      /"?(\w+)"?\."?(\w+)"?\s*!=\s*(.+)/
+      /"?(\w+)"?(?:\."?(\w+)"?)?\s*!=\s*(.+)/
     );
     if (neqMatch) {
-      const [, , col, rawVal] = neqMatch;
-      const val = this.parseSingleValue(rawVal.trim());
+      const col = getCol(neqMatch[1], neqMatch[2]);
+      const val = this.parseSingleValue(neqMatch[3].trim());
       return row[col] != val;
     }
 
     // column <> value
     const neqMatch2 = condition.match(
-      /"?(\w+)"?\."?(\w+)"?\s*<>\s*(.+)/
+      /"?(\w+)"?(?:\."?(\w+)"?)?\s*<>\s*(.+)/
     );
     if (neqMatch2) {
-      const [, , col, rawVal] = neqMatch2;
-      const val = this.parseSingleValue(rawVal.trim());
+      const col = getCol(neqMatch2[1], neqMatch2[2]);
+      const val = this.parseSingleValue(neqMatch2[3].trim());
       return row[col] != val;
     }
 
     // column = value
     const eqMatch = condition.match(
-      /"?(\w+)"?\."?(\w+)"?\s*=\s*(.+)/
+      /"?(\w+)"?(?:\."?(\w+)"?)?\s*=\s*(.+)/
     );
     if (eqMatch) {
-      const [, , col, rawVal] = eqMatch;
-      const val = this.parseSingleValue(rawVal.trim());
+      const col = getCol(eqMatch[1], eqMatch[2]);
+      const val = this.parseSingleValue(eqMatch[3].trim());
       return row[col] == val;
     }
 
     // column > value
     const gtMatch = condition.match(
-      /"?(\w+)"?\."?(\w+)"?\s*>\s*(.+)/
+      /"?(\w+)"?(?:\."?(\w+)"?)?\s*>\s*(.+)/
     );
     if (gtMatch) {
-      const [, , col, rawVal] = gtMatch;
-      const val = this.parseSingleValue(rawVal.trim());
+      const col = getCol(gtMatch[1], gtMatch[2]);
+      const val = this.parseSingleValue(gtMatch[3].trim());
       return Number(row[col]) > Number(val);
     }
 
     // column < value
     const ltMatch = condition.match(
-      /"?(\w+)"?\."?(\w+)"?\s*<\s*(.+)/
+      /"?(\w+)"?(?:\."?(\w+)"?)?\s*<\s*(.+)/
     );
     if (ltMatch) {
-      const [, , col, rawVal] = ltMatch;
-      const val = this.parseSingleValue(rawVal.trim());
+      const col = getCol(ltMatch[1], ltMatch[2]);
+      const val = this.parseSingleValue(ltMatch[3].trim());
       return Number(row[col]) < Number(val);
     }
 

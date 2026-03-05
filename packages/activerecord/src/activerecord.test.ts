@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { Base, Relation, Range, MemoryAdapter, transaction, savepoint, CollectionProxy, association, MigrationRunner, defineEnum, readEnumValue, enableSti, hasSecurePassword, store, loadHabtm, delegate, RecordNotFound, RecordInvalid, StaleObjectError, ReadOnlyRecord, columns, columnNames, reflectOnAssociation, reflectOnAllAssociations, acceptsNestedAttributesFor, assignNestedAttributes } from "./index.js";
+import { Base, Relation, Range, MemoryAdapter, transaction, savepoint, CollectionProxy, association, MigrationRunner, defineEnum, readEnumValue, enableSti, hasSecurePassword, store, loadHabtm, delegate, RecordNotFound, RecordInvalid, StaleObjectError, ReadOnlyRecord, columns, columnNames, reflectOnAssociation, reflectOnAllAssociations, acceptsNestedAttributesFor, assignNestedAttributes, hasSecureToken, composedOf, serialize } from "./index.js";
 import { Migration, TableDefinition, Schema } from "./migration.js";
 import {
   Associations,
@@ -5184,6 +5184,171 @@ describe("ActiveRecord", () => {
       const result = await b.save();
       expect(result).toBe(false);
       expect(b.isNewRecord()).toBe(true);
+    });
+  });
+
+  // -- Raw SQL where --
+  describe("where with raw SQL", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("supports raw SQL string with bind params", async () => {
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.attribute("age", "integer");
+      User.adapter = adapter;
+
+      await User.create({ name: "Alice", age: 25 });
+      await User.create({ name: "Bob", age: 17 });
+      await User.create({ name: "Charlie", age: 30 });
+
+      const sql = User.where("\"users\".\"age\" > ?", 18).toSql();
+      expect(sql).toContain("\"users\".\"age\" > 18");
+    });
+
+    it("rewhere replaces specific where conditions", async () => {
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.attribute("status", "string");
+      User.adapter = adapter;
+
+      await User.create({ name: "Alice", status: "active" });
+      await User.create({ name: "Bob", status: "inactive" });
+
+      const active = User.where({ status: "active" });
+      const inactive = active.rewhere({ status: "inactive" });
+      const records = await inactive.toArray();
+      expect(records.length).toBe(1);
+      expect(records[0].readAttribute("name")).toBe("Bob");
+    });
+  });
+
+  // -- has_secure_token --
+  describe("has_secure_token", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("auto-generates a token on create", async () => {
+      class ApiKey extends Base { static _tableName = "api_keys"; }
+      ApiKey.attribute("id", "integer");
+      ApiKey.attribute("token", "string");
+      ApiKey.adapter = adapter;
+      hasSecureToken(ApiKey);
+
+      const key = await ApiKey.create({});
+      expect(key.readAttribute("token")).toBeTruthy();
+      expect(typeof key.readAttribute("token")).toBe("string");
+      expect((key.readAttribute("token") as string).length).toBeGreaterThan(0);
+    });
+
+    it("allows regeneration of token", async () => {
+      class ApiKey extends Base { static _tableName = "api_keys"; }
+      ApiKey.attribute("id", "integer");
+      ApiKey.attribute("token", "string");
+      ApiKey.adapter = adapter;
+      hasSecureToken(ApiKey);
+
+      const key = await ApiKey.create({});
+      const originalToken = key.readAttribute("token");
+
+      const newToken = await (key as any).regenerateToken();
+      expect(newToken).not.toBe(originalToken);
+      expect(key.readAttribute("token")).toBe(newToken);
+    });
+
+    it("supports custom attribute name", async () => {
+      class Session extends Base { static _tableName = "sessions"; }
+      Session.attribute("id", "integer");
+      Session.attribute("auth_token", "string");
+      Session.adapter = adapter;
+      hasSecureToken(Session, "auth_token");
+
+      const s = await Session.create({});
+      expect(s.readAttribute("auth_token")).toBeTruthy();
+    });
+  });
+
+  // -- composed_of --
+  describe("composed_of", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("composes value objects from multiple attributes", async () => {
+      class Address {
+        constructor(public street: string, public city: string) {}
+      }
+
+      class Customer extends Base { static _tableName = "customers"; }
+      Customer.attribute("id", "integer");
+      Customer.attribute("address_street", "string");
+      Customer.attribute("address_city", "string");
+      Customer.adapter = adapter;
+      composedOf(Customer, "address", {
+        className: Address,
+        mapping: [["address_street", "street"], ["address_city", "city"]],
+      });
+
+      const c = await Customer.create({ address_street: "123 Main", address_city: "NYC" });
+      const addr = (c as any).address;
+      expect(addr).toBeInstanceOf(Address);
+      expect(addr.street).toBe("123 Main");
+      expect(addr.city).toBe("NYC");
+    });
+
+    it("decomposes value object on assignment", async () => {
+      class Address {
+        constructor(public street: string, public city: string) {}
+      }
+
+      class Customer extends Base { static _tableName = "customers"; }
+      Customer.attribute("id", "integer");
+      Customer.attribute("address_street", "string");
+      Customer.attribute("address_city", "string");
+      Customer.adapter = adapter;
+      composedOf(Customer, "address", {
+        className: Address,
+        mapping: [["address_street", "street"], ["address_city", "city"]],
+      });
+
+      const c = await Customer.create({ address_street: "old", address_city: "old" });
+      (c as any).address = new Address("456 Oak", "SF");
+
+      expect(c.readAttribute("address_street")).toBe("456 Oak");
+      expect(c.readAttribute("address_city")).toBe("SF");
+    });
+  });
+
+  // -- serialize --
+  describe("serialize", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("serializes and deserializes JSON data", async () => {
+      class Setting extends Base { static _tableName = "settings"; }
+      Setting.attribute("id", "integer");
+      Setting.attribute("data", "string");
+      Setting.adapter = adapter;
+      serialize(Setting, "data", { coder: "json" });
+
+      const s = await Setting.create({ data: JSON.stringify({ theme: "dark", fontSize: 14 }) });
+      const loaded = await Setting.find(s.id);
+      const data = loaded.readAttribute("data") as Record<string, unknown>;
+      expect(data.theme).toBe("dark");
+      expect(data.fontSize).toBe(14);
+    });
+
+    it("deserializes array coder", async () => {
+      class Pref extends Base { static _tableName = "prefs"; }
+      Pref.attribute("id", "integer");
+      Pref.attribute("tags", "string");
+      Pref.adapter = adapter;
+      serialize(Pref, "tags", { coder: "array" });
+
+      const p = await Pref.create({ tags: JSON.stringify(["ruby", "rails"]) });
+      const loaded = await Pref.find(p.id);
+      expect(loaded.readAttribute("tags")).toEqual(["ruby", "rails"]);
     });
   });
 });

@@ -271,8 +271,13 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.where
    */
-  static where(conditions: Record<string, unknown>): any {
-    return this.all().where(conditions);
+  static where(conditions: Record<string, unknown>): any;
+  static where(sql: string, ...binds: unknown[]): any;
+  static where(conditionsOrSql: Record<string, unknown> | string, ...binds: unknown[]): any {
+    if (typeof conditionsOrSql === "string") {
+      return this.all().where(conditionsOrSql, ...binds);
+    }
+    return this.all().where(conditionsOrSql);
   }
 
   /**

@@ -44,6 +44,9 @@ import {
   reflectOnAllAssociations,
   acceptsNestedAttributesFor,
   assignNestedAttributes,
+  hasSecureToken,
+  composedOf,
+  serialize,
 } from "./index.js";
 import { Migration } from "./migration.js";
 import { Associations } from "./associations.js";
@@ -4741,5 +4744,261 @@ describe("Nested Attributes (Rails-guided)", () => {
 
     const comments = await Comment.all().toArray();
     expect(comments.length).toBe(2);
+  });
+});
+
+// ==========================================================================
+// Raw SQL Where (Rails: where_test.rb)
+// ==========================================================================
+
+describe("Raw SQL Where (Rails-guided)", () => {
+  let adapter: MemoryAdapter;
+
+  beforeEach(() => {
+    adapter = freshAdapter();
+  });
+
+  // Rails: test "where with SQL string and bind values"
+  it("where accepts raw SQL string with ? placeholders", async () => {
+    class Person extends Base {
+      static { this._tableName = "people"; this.attribute("id", "integer"); this.attribute("name", "string"); this.attribute("age", "integer"); this.adapter = adapter; }
+    }
+
+    await Person.create({ name: "Alice", age: 25 });
+    await Person.create({ name: "Bob", age: 17 });
+    await Person.create({ name: "Charlie", age: 30 });
+
+    const sql = Person.where("\"people\".\"age\" > ?", 18).toSql();
+    expect(sql).toContain("\"people\".\"age\" > 18");
+  });
+
+  // Rails: test "where with string bind for LIKE"
+  it("where with LIKE query", async () => {
+    class Person extends Base {
+      static { this._tableName = "people"; this.attribute("id", "integer"); this.attribute("name", "string"); this.adapter = adapter; }
+    }
+
+    const sql = Person.where("\"people\".\"name\" LIKE ?", "%ali%").toSql();
+    expect(sql).toContain("LIKE '%ali%'");
+  });
+
+  // Rails: test "rewhere replaces existing conditions"
+  it("rewhere replaces conditions on the same column", async () => {
+    class Person extends Base {
+      static { this._tableName = "people"; this.attribute("id", "integer"); this.attribute("name", "string"); this.attribute("status", "string"); this.adapter = adapter; }
+    }
+
+    await Person.create({ name: "Alice", status: "active" });
+    await Person.create({ name: "Bob", status: "inactive" });
+
+    const base = Person.where({ status: "active" });
+    const rewritten = base.rewhere({ status: "inactive" });
+
+    const records = await rewritten.toArray();
+    expect(records.length).toBe(1);
+    expect(records[0].readAttribute("name")).toBe("Bob");
+  });
+
+  // Rails: test "rewhere preserves other conditions"
+  it("rewhere only replaces the specified keys", async () => {
+    class Person extends Base {
+      static { this._tableName = "people"; this.attribute("id", "integer"); this.attribute("name", "string"); this.attribute("status", "string"); this.attribute("role", "string"); this.adapter = adapter; }
+    }
+
+    await Person.create({ name: "Alice", status: "active", role: "admin" });
+    await Person.create({ name: "Bob", status: "inactive", role: "admin" });
+    await Person.create({ name: "Charlie", status: "inactive", role: "user" });
+
+    const base = Person.where({ status: "active", role: "admin" });
+    const rewritten = base.rewhere({ status: "inactive" });
+
+    const records = await rewritten.toArray();
+    expect(records.length).toBe(1);
+    expect(records[0].readAttribute("name")).toBe("Bob");
+  });
+});
+
+// ==========================================================================
+// has_secure_token (Rails: secure_token_test.rb)
+// ==========================================================================
+
+describe("has_secure_token (Rails-guided)", () => {
+  let adapter: MemoryAdapter;
+
+  beforeEach(() => {
+    adapter = freshAdapter();
+  });
+
+  // Rails: test "generates a token on create"
+  it("automatically generates a token on create", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("token", "string"); this.adapter = adapter; }
+    }
+    hasSecureToken(User);
+
+    const user = await User.create({});
+    expect(user.readAttribute("token")).toBeTruthy();
+    expect(typeof user.readAttribute("token")).toBe("string");
+  });
+
+  // Rails: test "does not overwrite existing token"
+  it("does not overwrite an explicitly set token", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("token", "string"); this.adapter = adapter; }
+    }
+    hasSecureToken(User);
+
+    const user = new User({ token: "my-custom-token" });
+    await user.save();
+    expect(user.readAttribute("token")).toBe("my-custom-token");
+  });
+
+  // Rails: test "regenerate token"
+  it("regenerateToken creates a new token and persists it", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("token", "string"); this.adapter = adapter; }
+    }
+    hasSecureToken(User);
+
+    const user = await User.create({});
+    const original = user.readAttribute("token");
+
+    const newToken = await (user as any).regenerateToken();
+    expect(newToken).not.toBe(original);
+    expect(user.readAttribute("token")).toBe(newToken);
+  });
+
+  // Rails: test "custom attribute name"
+  it("supports custom attribute names", async () => {
+    class Session extends Base {
+      static { this._tableName = "sessions"; this.attribute("id", "integer"); this.attribute("session_token", "string"); this.adapter = adapter; }
+    }
+    hasSecureToken(Session, "session_token");
+
+    const session = await Session.create({});
+    expect(session.readAttribute("session_token")).toBeTruthy();
+    expect(typeof (session as any).regenerateSessionToken).toBe("function");
+  });
+});
+
+// ==========================================================================
+// composed_of (Rails: aggregations_test.rb)
+// ==========================================================================
+
+describe("composed_of (Rails-guided)", () => {
+  let adapter: MemoryAdapter;
+
+  beforeEach(() => {
+    adapter = freshAdapter();
+  });
+
+  // Rails: test "reading a composed-of attribute"
+  it("reads a value object composed from multiple columns", async () => {
+    class Money {
+      constructor(public amount: number, public currency: string) {}
+    }
+
+    class Product extends Base {
+      static { this._tableName = "products"; this.attribute("id", "integer"); this.attribute("price_amount", "integer"); this.attribute("price_currency", "string"); this.adapter = adapter; }
+    }
+    composedOf(Product, "price", {
+      className: Money,
+      mapping: [["price_amount", "amount"], ["price_currency", "currency"]],
+    });
+
+    const p = await Product.create({ price_amount: 1999, price_currency: "USD" });
+    const price = (p as any).price;
+    expect(price).toBeInstanceOf(Money);
+    expect(price.amount).toBe(1999);
+    expect(price.currency).toBe("USD");
+  });
+
+  // Rails: test "writing a composed-of attribute"
+  it("decomposes value object into mapped columns on write", async () => {
+    class Money {
+      constructor(public amount: number, public currency: string) {}
+    }
+
+    class Product extends Base {
+      static { this._tableName = "products"; this.attribute("id", "integer"); this.attribute("price_amount", "integer"); this.attribute("price_currency", "string"); this.adapter = adapter; }
+    }
+    composedOf(Product, "price", {
+      className: Money,
+      mapping: [["price_amount", "amount"], ["price_currency", "currency"]],
+    });
+
+    const p = await Product.create({ price_amount: 0, price_currency: "EUR" });
+    (p as any).price = new Money(2500, "GBP");
+
+    expect(p.readAttribute("price_amount")).toBe(2500);
+    expect(p.readAttribute("price_currency")).toBe("GBP");
+  });
+
+  // Rails: test "composed_of returns null when all columns are null"
+  it("returns null when all mapped columns are null", () => {
+    class Money {
+      constructor(public amount: number, public currency: string) {}
+    }
+
+    class Product extends Base {
+      static { this._tableName = "products"; this.attribute("id", "integer"); this.attribute("price_amount", "integer"); this.attribute("price_currency", "string"); }
+    }
+    composedOf(Product, "price", {
+      className: Money,
+      mapping: [["price_amount", "amount"], ["price_currency", "currency"]],
+    });
+
+    const p = new Product({});
+    expect((p as any).price).toBeNull();
+  });
+});
+
+// ==========================================================================
+// serialize (Rails: serialized_attribute_test.rb)
+// ==========================================================================
+
+describe("serialize (Rails-guided)", () => {
+  let adapter: MemoryAdapter;
+
+  beforeEach(() => {
+    adapter = freshAdapter();
+  });
+
+  // Rails: test "serialized attribute"
+  it("deserializes JSON data on read", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("preferences", "string"); this.adapter = adapter; }
+    }
+    serialize(User, "preferences", { coder: "json" });
+
+    const user = await User.create({ preferences: JSON.stringify({ theme: "dark" }) });
+    const loaded = await User.find(user.id);
+    const prefs = loaded.readAttribute("preferences") as Record<string, unknown>;
+    expect(prefs.theme).toBe("dark");
+  });
+
+  // Rails: test "serialized array"
+  it("deserializes array data on read", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("roles", "string"); this.adapter = adapter; }
+    }
+    serialize(User, "roles", { coder: "array" });
+
+    const user = await User.create({ roles: JSON.stringify(["admin", "editor"]) });
+    const loaded = await User.find(user.id);
+    expect(loaded.readAttribute("roles")).toEqual(["admin", "editor"]);
+  });
+
+  // Rails: test "serialized hash"
+  it("deserializes hash data on read", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("settings", "string"); this.adapter = adapter; }
+    }
+    serialize(User, "settings", { coder: "hash" });
+
+    const user = await User.create({ settings: JSON.stringify({ notify: true }) });
+    const loaded = await User.find(user.id);
+    const settings = loaded.readAttribute("settings") as Record<string, unknown>;
+    expect(settings.notify).toBe(true);
   });
 });

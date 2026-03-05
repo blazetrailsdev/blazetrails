@@ -28,6 +28,7 @@ export class Relation<T extends Base> {
   private _modelClass: typeof Base;
   private _whereClauses: Array<Record<string, unknown>> = [];
   private _whereNotClauses: Array<Record<string, unknown>> = [];
+  private _whereRawClauses: string[] = [];
   private _orderClauses: Array<string | [string, "asc" | "desc"]> = [];
   private _limitValue: number | null = null;
   private _offsetValue: number | null = null;
@@ -52,12 +53,56 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Add WHERE conditions. Accepts a hash of column/value pairs.
+   * Add WHERE conditions. Accepts a hash of column/value pairs,
+   * or a raw SQL string with optional bind values.
    *
    * Mirrors: ActiveRecord::Relation#where
+   *
+   * Examples:
+   *   where({ name: "dean" })
+   *   where("age > ?", 18)
+   *   where("name LIKE ?", "%dean%")
    */
-  where(conditions: Record<string, unknown>): Relation<T> {
+  where(conditions: Record<string, unknown>): Relation<T>;
+  where(sql: string, ...binds: unknown[]): Relation<T>;
+  where(conditionsOrSql: Record<string, unknown> | string, ...binds: unknown[]): Relation<T> {
     const rel = this._clone();
+    if (typeof conditionsOrSql === "string") {
+      // Raw SQL with bind params — substitute ? placeholders
+      let sql = conditionsOrSql;
+      for (const bind of binds) {
+        const replacement = bind === null
+          ? "NULL"
+          : typeof bind === "number"
+            ? String(bind)
+            : typeof bind === "boolean"
+              ? bind ? "TRUE" : "FALSE"
+              : `'${String(bind).replace(/'/g, "''")}'`;
+        sql = sql.replace("?", replacement);
+      }
+      rel._whereRawClauses.push(sql);
+    } else {
+      rel._whereClauses.push(conditionsOrSql);
+    }
+    return rel;
+  }
+
+  /**
+   * Replace all existing WHERE conditions with new ones.
+   *
+   * Mirrors: ActiveRecord::Relation#rewhere
+   */
+  rewhere(conditions: Record<string, unknown>): Relation<T> {
+    const rel = this._clone();
+    // Remove existing clauses for the keys being rewritten
+    const keysToReplace = new Set(Object.keys(conditions));
+    rel._whereClauses = rel._whereClauses.map((clause) => {
+      const filtered: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(clause)) {
+        if (!keysToReplace.has(k)) filtered[k] = v;
+      }
+      return filtered;
+    }).filter((c) => Object.keys(c).length > 0);
     rel._whereClauses.push(conditions);
     return rel;
   }
@@ -128,11 +173,26 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Select specific columns.
+   * Select specific columns or raw SQL expressions.
    *
    * Mirrors: ActiveRecord::Relation#select
+   *
+   * Examples:
+   *   select("name", "email")
+   *   select("COUNT(*) as total")
    */
   select(...columns: string[]): Relation<T> {
+    const rel = this._clone();
+    rel._selectColumns = columns;
+    return rel;
+  }
+
+  /**
+   * Replace existing select columns.
+   *
+   * Mirrors: ActiveRecord::Relation#reselect
+   */
+  reselect(...columns: string[]): Relation<T> {
     const rel = this._clone();
     rel._selectColumns = columns;
     return rel;
@@ -835,8 +895,13 @@ export class Relation<T extends Base> {
 
   private _toSqlWithoutSetOp(): string {
     const table = this._modelClass.arelTable;
-    const projections =
-      this._selectColumns?.map((c) => table.get(c)) ?? ["*"];
+    const projections = this._selectColumns
+      ? this._selectColumns.map((c) => {
+          // If the column contains special chars (parens, spaces, *), treat as raw SQL
+          if (/[(*\s]/.test(c)) return new Nodes.SqlLiteral(c);
+          return table.get(c);
+        })
+      : ["*"];
     const manager = table.project(...(projections as any));
 
     // Apply joins
@@ -959,6 +1024,10 @@ export class Relation<T extends Base> {
         }
       }
     }
+    // Raw SQL WHERE clauses
+    for (const rawClause of this._whereRawClauses) {
+      manager.where(new Nodes.SqlLiteral(rawClause));
+    }
   }
 
   private _applyOrderToManager(
@@ -1034,6 +1103,10 @@ export class Relation<T extends Base> {
           );
         }
       }
+    }
+    // Raw SQL WHERE clauses
+    for (const rawClause of this._whereRawClauses) {
+      conditions.push(rawClause);
     }
     return conditions;
   }
@@ -1168,6 +1241,7 @@ export class Relation<T extends Base> {
     const rel = new Relation<T>(this._modelClass);
     rel._whereClauses = [...this._whereClauses];
     rel._whereNotClauses = [...this._whereNotClauses];
+    rel._whereRawClauses = [...this._whereRawClauses];
     rel._orderClauses = [...this._orderClauses];
     rel._limitValue = this._limitValue;
     rel._offsetValue = this._offsetValue;

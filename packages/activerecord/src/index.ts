@@ -49,3 +49,6 @@ export {
   reflectOnAllAssociations,
 } from "./reflection.js";
 export { acceptsNestedAttributesFor, assignNestedAttributes } from "./nested-attributes.js";
+export { hasSecureToken } from "./secure-token.js";
+export { composedOf } from "./composed-of.js";
+export { serialize } from "./serialize.js";

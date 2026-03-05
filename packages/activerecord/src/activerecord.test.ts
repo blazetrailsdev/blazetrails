@@ -7423,4 +7423,77 @@ describe("ActiveRecord", () => {
       expect(user.isChangedForAutosave()).toBe(true);
     });
   });
+
+  describe("cacheKey / cacheKeyWithVersion", () => {
+    it("returns model/new for new records", () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.adapter = adapter;
+
+      const user = new User({ name: "Alice" });
+      expect(user.cacheKey()).toBe("users/new");
+    });
+
+    it("returns model/id for persisted records", async () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.adapter = adapter;
+
+      const user = await User.create({ name: "Alice" });
+      expect(user.cacheKey()).toBe(`users/${user.id}`);
+    });
+
+    it("cacheKeyWithVersion includes updated_at", async () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.attribute("updated_at", "datetime");
+      User.adapter = adapter;
+
+      const user = await User.create({ name: "Alice" });
+      const key = user.cacheKeyWithVersion();
+      expect(key).toMatch(/^users\/\d+-\d+$/);
+    });
+
+    it("cacheVersion returns timestamp string", async () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("updated_at", "datetime");
+      User.adapter = adapter;
+
+      const user = await User.create({});
+      expect(user.cacheVersion()).not.toBeNull();
+    });
+  });
+
+  describe("scopeForCreate / whereValuesHash", () => {
+    it("scopeForCreate returns attributes for new records", () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.attribute("role", "string");
+      User.adapter = adapter;
+
+      const rel = User.all().where({ role: "admin" }).createWith({ name: "Default" });
+      expect(rel.scopeForCreate()).toEqual({ role: "admin", name: "Default" });
+    });
+
+    it("whereValuesHash returns the where conditions", () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("role", "string");
+      User.adapter = adapter;
+
+      const rel = User.all().where({ role: "admin" });
+      expect(rel.whereValuesHash()).toEqual({ role: "admin" });
+    });
+  });
 });

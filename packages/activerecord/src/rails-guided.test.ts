@@ -6993,4 +6993,48 @@ describe("Grouped Calculations (Rails-guided)", () => {
     expect(names).toEqual(["Alice", "Bob"]);
     expect((await User.ids()).length).toBe(2);
   });
+
+  // Rails: test "cache_key"
+  it("cacheKey returns model/id for persisted records and model/new for new records", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("name", "string"); this.attribute("updated_at", "datetime"); this.adapter = adapter; }
+    }
+
+    const newUser = new User({ name: "Alice" });
+    expect(newUser.cacheKey()).toBe("users/new");
+
+    const saved = await User.create({ name: "Alice" });
+    expect(saved.cacheKey()).toBe(`users/${saved.id}`);
+  });
+
+  // Rails: test "cache_key_with_version"
+  it("cacheKeyWithVersion includes updated_at timestamp", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("name", "string"); this.attribute("updated_at", "datetime"); this.adapter = adapter; }
+    }
+
+    const user = await User.create({ name: "Alice" });
+    const key = user.cacheKeyWithVersion();
+    expect(key).toMatch(/^users\/\d+-\d+$/);
+  });
+
+  // Rails: test "scope_for_create"
+  it("scopeForCreate returns equality where conditions for new record creation", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("name", "string"); this.attribute("role", "string"); this.adapter = adapter; }
+    }
+
+    const scope = User.all().where({ role: "admin" }).scopeForCreate();
+    expect(scope).toEqual({ role: "admin" });
+  });
+
+  // Rails: test "where_values_hash"
+  it("whereValuesHash returns a hash of equality conditions", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("name", "string"); this.attribute("role", "string"); this.adapter = adapter; }
+    }
+
+    const hash = User.all().where({ name: "Alice", role: "admin" }).whereValuesHash();
+    expect(hash).toEqual({ name: "Alice", role: "admin" });
+  });
 });

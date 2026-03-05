@@ -1519,6 +1519,24 @@ export class Relation<T extends Base> {
   /**
    * Extract scope attributes from the where clauses (for find_or_create_by).
    */
+  /**
+   * Return attributes that would be set on records created through this relation.
+   *
+   * Mirrors: ActiveRecord::Relation#scope_for_create
+   */
+  scopeForCreate(): Record<string, unknown> {
+    return { ...this._scopeAttributes(), ...this._createWithAttrs };
+  }
+
+  /**
+   * Return the where values hash for inspection.
+   *
+   * Mirrors: ActiveRecord::Relation#where_values_hash
+   */
+  whereValuesHash(): Record<string, unknown> {
+    return this._scopeAttributes();
+  }
+
   private _scopeAttributes(): Record<string, unknown> {
     const attrs: Record<string, unknown> = {};
     for (const clause of this._whereClauses) {

@@ -886,6 +886,48 @@ export class Base extends Model {
   }
 
   /**
+   * Return a cache key suitable for use in key/value stores.
+   *
+   * Mirrors: ActiveRecord::Base#cache_key
+   */
+  cacheKey(): string {
+    const ctor = this.constructor as typeof Base;
+    const modelKey = ctor.tableName;
+    const pk = this.id;
+    if (this.isNewRecord()) {
+      return `${modelKey}/new`;
+    }
+    return `${modelKey}/${pk}`;
+  }
+
+  /**
+   * Return a cache key with version based on updated_at.
+   *
+   * Mirrors: ActiveRecord::Base#cache_key_with_version
+   */
+  cacheKeyWithVersion(): string {
+    const base = this.cacheKey();
+    const updatedAt = this.readAttribute("updated_at");
+    if (updatedAt instanceof Date) {
+      return `${base}-${updatedAt.toISOString().replace(/[^0-9]/g, "")}`;
+    }
+    return base;
+  }
+
+  /**
+   * Return cache version (typically the updated_at timestamp).
+   *
+   * Mirrors: ActiveRecord::Base#cache_version
+   */
+  cacheVersion(): string | null {
+    const updatedAt = this.readAttribute("updated_at");
+    if (updatedAt instanceof Date) {
+      return updatedAt.toISOString().replace(/[^0-9]/g, "");
+    }
+    return null;
+  }
+
+  /**
    * Override writeAttribute to prevent modifications on frozen records.
    */
   writeAttribute(name: string, value: unknown): void {

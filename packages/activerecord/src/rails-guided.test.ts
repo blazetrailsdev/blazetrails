@@ -5942,4 +5942,110 @@ describe("Grouped Calculations (Rails-guided)", () => {
     expect(sql).toContain("draft");
     expect(sql).toContain("archived");
   });
+
+  // =====================================================================
+  // touch_all — activerecord/test/cases/touch_test.rb
+  // =====================================================================
+
+  // Rails: test "touch_all"
+  it("touchAll updates timestamps on matching records", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("updated_at", "datetime"); this.adapter = adapter; }
+    }
+
+    await Topic.create({});
+    await Topic.create({});
+
+    const affected = await Topic.all().touchAll();
+    expect(affected).toBe(2);
+  });
+
+  // Rails: test "touch_all with named timestamps"
+  it("touchAll can touch named timestamp columns", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("updated_at", "datetime"); this.attribute("checked_at", "datetime"); this.adapter = adapter; }
+    }
+
+    await Topic.create({});
+    const affected = await Topic.all().touchAll("checked_at");
+    expect(affected).toBe(1);
+  });
+
+  // =====================================================================
+  // static update — activerecord/test/cases/persistence_test.rb
+  // =====================================================================
+
+  // Rails: test "update class method"
+  it("static update(id, attrs) finds and updates a record", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    const topic = await Topic.create({ title: "Old" });
+    const updated = await Topic.update(topic.id, { title: "New" });
+    expect(updated.readAttribute("title")).toBe("New");
+  });
+
+  // =====================================================================
+  // static destroy_all — activerecord/test/cases/persistence_test.rb
+  // =====================================================================
+
+  // Rails: test "destroy_all class method"
+  it("static destroyAll destroys all records", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    await Topic.create({ title: "A" });
+    await Topic.create({ title: "B" });
+    await Topic.create({ title: "C" });
+    const destroyed = await Topic.destroyAll();
+    expect(destroyed).toHaveLength(3);
+    expect(await Topic.all().count()).toBe(0);
+  });
+
+  // =====================================================================
+  // where.associated / where.missing — activerecord/test/cases/relation/where_test.rb
+  // =====================================================================
+
+  // Rails: test "where.associated"
+  it("whereAssociated filters for records with a present FK", async () => {
+    class Author extends Base {
+      static { this._tableName = "rg_wa_authors"; this.attribute("id", "integer"); this.adapter = adapter; }
+    }
+    registerModel("RgWaAuthor", Author);
+
+    class Post extends Base {
+      static { this._tableName = "rg_wa_posts"; this.attribute("id", "integer"); this.attribute("rg_wa_author_id", "integer"); this.adapter = adapter; }
+    }
+    Associations.belongsTo.call(Post, "rgWaAuthor", { className: "RgWaAuthor" });
+
+    const author = await Author.create({});
+    await Post.create({ rg_wa_author_id: author.id });
+    await Post.create({ rg_wa_author_id: null });
+
+    const associated = await Post.all().whereAssociated("rgWaAuthor").toArray();
+    expect(associated).toHaveLength(1);
+  });
+
+  // Rails: test "where.missing"
+  it("whereMissing filters for records with a null FK", async () => {
+    class Author extends Base {
+      static { this._tableName = "rg_wm_authors"; this.attribute("id", "integer"); this.adapter = adapter; }
+    }
+    registerModel("RgWmAuthor", Author);
+
+    class Post extends Base {
+      static { this._tableName = "rg_wm_posts"; this.attribute("id", "integer"); this.attribute("rg_wm_author_id", "integer"); this.adapter = adapter; }
+    }
+    Associations.belongsTo.call(Post, "rgWmAuthor", { className: "RgWmAuthor" });
+
+    const author = await Author.create({});
+    await Post.create({ rg_wm_author_id: author.id });
+    await Post.create({ rg_wm_author_id: null });
+    await Post.create({ rg_wm_author_id: null });
+
+    const missing = await Post.all().whereMissing("rgWmAuthor").toArray();
+    expect(missing).toHaveLength(2);
+  });
 });

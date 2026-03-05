@@ -344,6 +344,35 @@ export class Base extends Model {
   }
 
   /**
+   * Find and update a record by primary key.
+   *
+   * Mirrors: ActiveRecord::Base.update(id, attrs)
+   */
+  static async update(id: unknown, attrs: Record<string, unknown>): Promise<Base> {
+    const record = await this.find(id);
+    await record.update(attrs);
+    return record;
+  }
+
+  /**
+   * Destroy all records (with callbacks).
+   *
+   * Mirrors: ActiveRecord::Base.destroy_all
+   */
+  static async destroyAll(): Promise<Base[]> {
+    return this.all().destroyAll();
+  }
+
+  /**
+   * Touch all records matching conditions (update timestamps).
+   *
+   * Mirrors: ActiveRecord::Relation#touch_all
+   */
+  static async touchAll(...names: string[]): Promise<number> {
+    return this.all().touchAll(...names);
+  }
+
+  /**
    * Find the first record matching conditions, or create one.
    *
    * Mirrors: ActiveRecord::Base.find_or_create_by

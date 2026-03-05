@@ -6076,4 +6076,105 @@ describe("ActiveRecord", () => {
       expect(sql).toContain("WHEN");
     });
   });
+
+  // -- touchAll --
+  describe("touchAll()", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("updates timestamps on all matching records", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("updated_at", "datetime");
+      Item.adapter = adapter;
+
+      await Item.create({});
+      await Item.create({});
+
+      const affected = await Item.all().touchAll();
+      expect(affected).toBe(2);
+    });
+  });
+
+  // -- static update --
+  describe("static update()", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("finds and updates a record by id", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      const item = await Item.create({ name: "Old" });
+      const updated = await Item.update(item.id, { name: "New" });
+      expect(updated.readAttribute("name")).toBe("New");
+    });
+  });
+
+  // -- static destroyAll --
+  describe("static destroyAll()", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("destroys all records", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ name: "A" });
+      await Item.create({ name: "B" });
+      const destroyed = await Item.destroyAll();
+      expect(destroyed).toHaveLength(2);
+      expect(await Item.all().count()).toBe(0);
+    });
+  });
+
+  // -- whereAssociated / whereMissing --
+  describe("whereAssociated / whereMissing", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("whereAssociated filters records WITH non-null FK", async () => {
+      class Author extends Base { static _tableName = "wa_authors"; }
+      Author.attribute("id", "integer");
+      Author.adapter = adapter;
+      registerModel("WaAuthor", Author);
+
+      class Book extends Base { static _tableName = "wa_books"; }
+      Book.attribute("id", "integer");
+      Book.attribute("wa_author_id", "integer");
+      Book.adapter = adapter;
+      Associations.belongsTo.call(Book, "waAuthor", { className: "WaAuthor" });
+
+      const author = await Author.create({});
+      await Book.create({ wa_author_id: author.id });
+      await Book.create({ wa_author_id: null });
+
+      const withAuthor = await Book.all().whereAssociated("waAuthor").toArray();
+      expect(withAuthor).toHaveLength(1);
+    });
+
+    it("whereMissing filters records WITH null FK", async () => {
+      class Author extends Base { static _tableName = "wm_authors"; }
+      Author.attribute("id", "integer");
+      Author.adapter = adapter;
+      registerModel("WmAuthor", Author);
+
+      class Book extends Base { static _tableName = "wm_books"; }
+      Book.attribute("id", "integer");
+      Book.attribute("wm_author_id", "integer");
+      Book.adapter = adapter;
+      Associations.belongsTo.call(Book, "wmAuthor", { className: "WmAuthor" });
+
+      const author = await Author.create({});
+      await Book.create({ wm_author_id: author.id });
+      await Book.create({ wm_author_id: null });
+
+      const withoutAuthor = await Book.all().whereMissing("wmAuthor").toArray();
+      expect(withoutAuthor).toHaveLength(1);
+    });
+  });
 });

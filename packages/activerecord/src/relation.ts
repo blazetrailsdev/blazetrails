@@ -115,6 +115,42 @@ export class Relation<T extends Base> {
   }
 
   /**
+   * Filter for records WHERE the association IS present (non-null FK).
+   *
+   * Mirrors: ActiveRecord::Relation#where.associated
+   */
+  whereAssociated(assocName: string): Relation<T> {
+    const modelClass = this._modelClass as any;
+    const associations: any[] = modelClass._associations ?? [];
+    const assocDef = associations.find((a: any) => a.name === assocName);
+
+    if (assocDef && assocDef.type === "belongsTo") {
+      const _underscore = (n: string) => n.replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2").replace(/([a-z\d])([A-Z])/g, "$1_$2").toLowerCase();
+      const foreignKey = assocDef.options.foreignKey ?? `${_underscore(assocName)}_id`;
+      return this.whereNot({ [foreignKey]: null });
+    }
+    return this;
+  }
+
+  /**
+   * Filter for records WHERE the association IS missing (null FK).
+   *
+   * Mirrors: ActiveRecord::Relation#where.missing
+   */
+  whereMissing(assocName: string): Relation<T> {
+    const modelClass = this._modelClass as any;
+    const associations: any[] = modelClass._associations ?? [];
+    const assocDef = associations.find((a: any) => a.name === assocName);
+
+    if (assocDef && assocDef.type === "belongsTo") {
+      const _underscore = (n: string) => n.replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2").replace(/([a-z\d])([A-Z])/g, "$1_$2").toLowerCase();
+      const foreignKey = assocDef.options.foreignKey ?? `${_underscore(assocName)}_id`;
+      return this.where({ [foreignKey]: null });
+    }
+    return this;
+  }
+
+  /**
    * Add NOT WHERE conditions. Accepts a hash of column/value pairs.
    *
    * Mirrors: ActiveRecord::Relation#where.not
@@ -1013,6 +1049,42 @@ export class Relation<T extends Base> {
 
     const table = this._modelClass.arelTable;
     let sql = `DELETE FROM "${table.name}"`;
+
+    const whereConditions = this._buildWhereStrings(table);
+    if (whereConditions.length > 0) {
+      sql += ` WHERE ${whereConditions.join(" AND ")}`;
+    }
+
+    return this._modelClass.adapter.executeMutation(sql);
+  }
+
+  /**
+   * Touch all matching records (update timestamps without callbacks).
+   *
+   * Mirrors: ActiveRecord::Relation#touch_all
+   */
+  async touchAll(...names: string[]): Promise<number> {
+    if (this._isNone) return 0;
+
+    const now = new Date();
+    const updates: Record<string, unknown> = {};
+
+    // Always touch updated_at if defined on the model
+    if (this._modelClass._attributeDefinitions.has("updated_at")) {
+      updates.updated_at = `'${now.toISOString()}'`;
+    }
+    for (const name of names) {
+      updates[name] = `'${now.toISOString()}'`;
+    }
+
+    if (Object.keys(updates).length === 0) return 0;
+
+    const table = this._modelClass.arelTable;
+    const setClauses = Object.entries(updates)
+      .map(([key, val]) => `"${key}" = ${val}`)
+      .join(", ");
+
+    let sql = `UPDATE "${table.name}" SET ${setClauses}`;
 
     const whereConditions = this._buildWhereStrings(table);
     if (whereConditions.length > 0) {

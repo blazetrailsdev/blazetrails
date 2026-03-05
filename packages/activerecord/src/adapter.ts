@@ -305,11 +305,11 @@ export class MemoryAdapter implements DatabaseAdapter {
 
     // INSERT (supports multi-row VALUES and ON CONFLICT)
     const insertMatch = sql.match(
-      /INSERT\s+INTO\s+"(\w+)"\s+\((.+?)\)\s+VALUES\s+(.+?)(?:\s+ON\s+CONFLICT\s*\((.+?)\)\s+(DO\s+NOTHING|DO\s+UPDATE\s+SET\s+.+))?$/is
+      /INSERT\s+INTO\s+"(\w+)"\s+\((.*?)\)\s+VALUES\s+(.+?)(?:\s+ON\s+CONFLICT\s*\((.+?)\)\s+(DO\s+NOTHING|DO\s+UPDATE\s+SET\s+.+))?$/is
     );
     if (insertMatch) {
       const [, tableName, colStr, valuesSection, conflictCols, conflictAction] = insertMatch;
-      const columns = colStr.split(",").map((c) => c.trim().replace(/"/g, ""));
+      const columns = colStr.trim() ? colStr.split(",").map((c) => c.trim().replace(/"/g, "")) : [];
 
       if (!this.tables.has(tableName)) {
         this.tables.set(tableName, []);

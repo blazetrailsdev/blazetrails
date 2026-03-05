@@ -123,6 +123,14 @@ export class Relation<T extends Base> {
       }
       return filtered;
     }).filter((c) => Object.keys(c).length > 0);
+    // Also remove NOT clauses for the same keys
+    rel._whereNotClauses = rel._whereNotClauses.map((clause) => {
+      const filtered: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(clause)) {
+        if (!keysToReplace.has(k)) filtered[k] = v;
+      }
+      return filtered;
+    }).filter((c) => Object.keys(c).length > 0);
     rel._whereClauses.push(conditions);
     return rel;
   }
@@ -1018,7 +1026,7 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#pick
    */
-  async pick(...columns: string[]): Promise<unknown> {
+  async pick(...columns: Array<string | Nodes.Attribute | Nodes.NamedFunction | Nodes.SqlLiteral>): Promise<unknown> {
     const values = await this.limit(1).pluck(...columns);
     return values[0] ?? null;
   }
@@ -1211,11 +1219,20 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#pluck
    */
-  async pluck(...columns: string[]): Promise<unknown[]> {
+  async pluck(...columns: Array<string | Nodes.Attribute | Nodes.NamedFunction | Nodes.SqlLiteral>): Promise<unknown[]> {
     if (this._isNone) return [];
 
     const table = this._modelClass.arelTable;
-    const projections = columns.map((c) => table.get(c));
+    const projections = columns.map((c) =>
+      typeof c === "string" ? table.get(c) : c
+    );
+    // Extract column names for result mapping
+    const columnNames = columns.map((c) => {
+      if (typeof c === "string") return c;
+      if (c instanceof Nodes.Attribute) return c.name;
+      // For functions/literals, use the SQL representation
+      return null;
+    });
     const manager = table.project(...projections);
     this._applyWheresToManager(manager, table);
     this._applyOrderToManager(manager, table);
@@ -1227,9 +1244,19 @@ export class Relation<T extends Base> {
     const rows = await this._modelClass.adapter.execute(sql);
 
     if (columns.length === 1) {
-      return rows.map((row) => row[columns[0]]);
+      const name = columnNames[0];
+      if (name) {
+        return rows.map((row) => row[name]);
+      }
+      // For expressions, return the first column value from each row
+      return rows.map((row) => Object.values(row)[0]);
     }
-    return rows.map((row) => columns.map((c) => row[c]));
+    return rows.map((row) => {
+      return columnNames.map((name, i) => {
+        if (name) return row[name];
+        return Object.values(row)[i];
+      });
+    });
   }
 
   /**

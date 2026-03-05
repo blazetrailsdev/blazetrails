@@ -6525,6 +6525,49 @@ describe("Grouped Calculations (Rails-guided)", () => {
     expect((conv as any).isMultipleQuestionType()).toBe(true);
   });
 
+  // Rails: test "or with scopes"
+  it("or combines two scoped relations", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("name", "string"); this.attribute("status", "string"); this.adapter = adapter; }
+    }
+    User.scope("active", (rel: any) => rel.where({ status: "active" }));
+    User.scope("pending", (rel: any) => rel.where({ status: "pending" }));
+
+    await User.create({ name: "A", status: "active" });
+    await User.create({ name: "B", status: "pending" });
+    await User.create({ name: "C", status: "archived" });
+
+    const result = await (User as any).active().or((User as any).pending()).toArray();
+    expect(result.length).toBe(2);
+  });
+
+  // Rails: test "rewhere clears NOT conditions"
+  it("rewhere replaces both where and whereNot for the same key", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("role", "string"); this.adapter = adapter; }
+    }
+
+    await User.create({ role: "admin" });
+    await User.create({ role: "viewer" });
+
+    const result = await User.all().whereNot({ role: "admin" }).rewhere({ role: "admin" }).toArray();
+    expect(result.length).toBe(1);
+    expect(result[0].readAttribute("role")).toBe("admin");
+  });
+
+  // Rails: test "pluck with Arel attributes"
+  it("pluck accepts Arel Attribute nodes", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("name", "string"); this.adapter = adapter; }
+    }
+
+    await User.create({ name: "Alice" });
+    await User.create({ name: "Bob" });
+
+    const names = await User.all().pluck(User.arelTable.get("name"));
+    expect(names.sort()).toEqual(["Alice", "Bob"]);
+  });
+
   // Rails: test "previously_new_record?"
   it("previously_new_record? returns true after first save", async () => {
     class User extends Base {

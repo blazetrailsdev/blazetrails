@@ -6802,4 +6802,65 @@ describe("ActiveRecord", () => {
       expect(user.destroyedByAssociation).toEqual({ name: "posts", type: "hasMany" });
     });
   });
+
+  describe("or with scope", () => {
+    it("combines two scoped relations with OR", async () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.attribute("role", "string");
+      User.adapter = adapter;
+      User.scope("admins", (rel: any) => rel.where({ role: "admin" }));
+      User.scope("editors", (rel: any) => rel.where({ role: "editor" }));
+
+      await User.create({ name: "Alice", role: "admin" });
+      await User.create({ name: "Bob", role: "editor" });
+      await User.create({ name: "Charlie", role: "viewer" });
+
+      const admins = (User as any).admins();
+      const editors = (User as any).editors();
+      const result = await admins.or(editors).toArray();
+      expect(result.length).toBe(2);
+      const names = result.map((r: any) => r.readAttribute("name")).sort();
+      expect(names).toEqual(["Alice", "Bob"]);
+    });
+  });
+
+  describe("rewhere clears NOT clauses", () => {
+    it("replaces whereNot clauses for the same key", async () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.attribute("role", "string");
+      User.adapter = adapter;
+
+      await User.create({ name: "Alice", role: "admin" });
+      await User.create({ name: "Bob", role: "viewer" });
+
+      // whereNot then rewhere should override the NOT condition
+      const rel = User.all().whereNot({ role: "admin" }).rewhere({ role: "admin" });
+      const result = await rel.toArray();
+      expect(result.length).toBe(1);
+      expect(result[0].readAttribute("name")).toBe("Alice");
+    });
+  });
+
+  describe("pluck with Arel nodes", () => {
+    it("accepts Arel Attribute nodes", async () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.adapter = adapter;
+
+      await User.create({ name: "Alice" });
+      await User.create({ name: "Bob" });
+
+      const nameAttr = User.arelTable.get("name");
+      const names = await User.all().pluck(nameAttr);
+      expect(names.sort()).toEqual(["Alice", "Bob"]);
+    });
+  });
 });

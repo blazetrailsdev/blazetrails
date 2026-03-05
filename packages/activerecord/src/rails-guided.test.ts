@@ -6789,4 +6789,42 @@ describe("Grouped Calculations (Rails-guided)", () => {
     await post.save({ touch: false });
     expect(post.readAttribute("updated_at")).toEqual(originalUpdatedAt);
   });
+
+  // Rails: test "attr_readonly"
+  it("attrReadonly prevents updating readonly attributes", async () => {
+    class Product extends Base {
+      static { this._tableName = "products"; this.attribute("id", "integer"); this.attribute("sku", "string"); this.attribute("name", "string"); this.adapter = adapter; this.attrReadonly("sku"); }
+    }
+
+    const product = await Product.create({ sku: "ABC-123", name: "Widget" });
+    product.writeAttribute("sku", "CHANGED");
+    product.writeAttribute("name", "Better Widget");
+    await product.save();
+    await product.reload();
+
+    expect(product.readAttribute("sku")).toBe("ABC-123");
+    expect(product.readAttribute("name")).toBe("Better Widget");
+  });
+
+  // Rails: test "readonly_attributes"
+  it("readonlyAttributes returns the list of readonly attributes", () => {
+    class Product extends Base {
+      static { this._tableName = "products"; this.attribute("id", "integer"); this.attribute("sku", "string"); this.adapter = adapter; this.attrReadonly("sku"); }
+    }
+    expect(Product.readonlyAttributes).toContain("sku");
+  });
+
+  // Rails: test "willSaveChangeToAttribute"
+  it("willSaveChangeToAttribute detects pending changes", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("name", "string"); this.adapter = adapter; }
+    }
+
+    const user = await User.create({ name: "Alice" });
+    expect(user.willSaveChangeToAttribute("name")).toBe(false);
+
+    user.writeAttribute("name", "Bob");
+    expect(user.willSaveChangeToAttribute("name")).toBe(true);
+    expect(user.willSaveChangeToAttributeValues("name")).toEqual(["Alice", "Bob"]);
+  });
 });

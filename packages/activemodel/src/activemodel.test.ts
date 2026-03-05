@@ -1648,6 +1648,36 @@ describe("ActiveModel", () => {
     });
   });
 
+  describe("willSaveChangeToAttribute", () => {
+    it("returns true when attribute has been changed", () => {
+      class Widget extends Model {
+        static {
+          this.attribute("name", "string");
+          this.attribute("size", "integer");
+        }
+      }
+
+      const w = new Widget({ name: "Test", size: 5 });
+      w.changesApplied();
+      w.writeAttribute("name", "Changed");
+      expect(w.willSaveChangeToAttribute("name")).toBe(true);
+      expect(w.willSaveChangeToAttribute("size")).toBe(false);
+    });
+
+    it("willSaveChangeToAttributeValues returns [old, new]", () => {
+      class Widget extends Model {
+        static {
+          this.attribute("name", "string");
+        }
+      }
+
+      const w = new Widget({ name: "Test" });
+      w.changesApplied();
+      w.writeAttribute("name", "Changed");
+      expect(w.willSaveChangeToAttributeValues("name")).toEqual(["Test", "Changed"]);
+    });
+  });
+
   describe("hasAttribute", () => {
     it("returns true for defined attributes", () => {
       class Widget extends Model {

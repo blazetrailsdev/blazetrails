@@ -486,11 +486,30 @@ export class Model {
     return this._dirty.attributeChanged(name);
   }
 
+  /**
+   * Check if a specific attribute will be saved on the next save.
+   * Alias for attributeChanged — mirrors Rails naming.
+   *
+   * Mirrors: ActiveModel::Dirty#will_save_change_to_attribute?
+   */
+  willSaveChangeToAttribute(name: string): boolean {
+    return this._dirty.attributeChanged(name);
+  }
+
   attributeWas(name: string): unknown {
     return this._dirty.attributeWas(name);
   }
 
   attributeChange(name: string): [unknown, unknown] | undefined {
+    return this._dirty.attributeChange(name);
+  }
+
+  /**
+   * Get the before/after values of a change that will be saved.
+   *
+   * Mirrors: ActiveModel::Dirty#will_save_change_to_attribute
+   */
+  willSaveChangeToAttributeValues(name: string): [unknown, unknown] | undefined {
     return this._dirty.attributeChange(name);
   }
 

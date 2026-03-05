@@ -7099,4 +7099,50 @@ describe("ActiveRecord", () => {
       expect(post.readAttribute("updated_at")).toEqual(originalUpdatedAt);
     });
   });
+
+  describe("attrReadonly", () => {
+    it("allows setting readonly attributes on create", async () => {
+      const adapter = freshAdapter();
+      class Product extends Base { static _tableName = "products"; }
+      Product.attribute("id", "integer");
+      Product.attribute("sku", "string");
+      Product.attribute("name", "string");
+      Product.adapter = adapter;
+      Product.attrReadonly("sku");
+
+      const product = await Product.create({ sku: "ABC-123", name: "Widget" });
+      expect(product.readAttribute("sku")).toBe("ABC-123");
+    });
+
+    it("ignores readonly attribute changes on update", async () => {
+      const adapter = freshAdapter();
+      class Product extends Base { static _tableName = "products"; }
+      Product.attribute("id", "integer");
+      Product.attribute("sku", "string");
+      Product.attribute("name", "string");
+      Product.adapter = adapter;
+      Product.attrReadonly("sku");
+
+      const product = await Product.create({ sku: "ABC-123", name: "Widget" });
+      product.writeAttribute("sku", "CHANGED");
+      product.writeAttribute("name", "Updated Widget");
+      await product.save();
+
+      // The in-memory value changes, but the SQL should not include sku
+      await product.reload();
+      expect(product.readAttribute("sku")).toBe("ABC-123");
+      expect(product.readAttribute("name")).toBe("Updated Widget");
+    });
+
+    it("exposes readonlyAttributes list", () => {
+      const adapter = freshAdapter();
+      class Product extends Base { static _tableName = "products"; }
+      Product.attribute("id", "integer");
+      Product.attribute("sku", "string");
+      Product.adapter = adapter;
+      Product.attrReadonly("sku");
+
+      expect(Product.readonlyAttributes).toContain("sku");
+    });
+  });
 });

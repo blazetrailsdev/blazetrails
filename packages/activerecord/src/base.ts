@@ -116,6 +116,32 @@ export class Base extends Model {
     return this._adapter;
   }
 
+  // -- Readonly attributes --
+  static _readonlyAttributes: Set<string> = new Set();
+
+  /**
+   * Mark attributes as readonly — they can be set on create but not on update.
+   *
+   * Mirrors: ActiveRecord::Base.attr_readonly
+   */
+  static attrReadonly(...attributes: string[]): void {
+    if (!Object.prototype.hasOwnProperty.call(this, "_readonlyAttributes")) {
+      this._readonlyAttributes = new Set(this._readonlyAttributes);
+    }
+    for (const attr of attributes) {
+      this._readonlyAttributes.add(attr);
+    }
+  }
+
+  /**
+   * Return the list of readonly attribute names.
+   *
+   * Mirrors: ActiveRecord::Base.readonly_attributes
+   */
+  static get readonlyAttributes(): string[] {
+    return Array.from(this._readonlyAttributes);
+  }
+
   // -- Scopes registry (used by Relation) --
   static _scopes: Map<string, (rel: any, ...args: any[]) => any> = new Map();
   static _defaultScope: ((rel: any) => any) | null = null;
@@ -1063,7 +1089,11 @@ export class Base extends Model {
       this.writeAttribute("updated_at", new Date());
     }
 
-    const changedAttrs = this.changes;
+    // Filter out readonly attributes from changes (they can only be set on create)
+    const changedAttrs = { ...this.changes };
+    for (const readonlyAttr of ctor._readonlyAttributes) {
+      delete changedAttrs[readonlyAttr];
+    }
 
     if (Object.keys(changedAttrs).length === 0) return;
 

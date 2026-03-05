@@ -116,6 +116,35 @@ export class Base extends Model {
     return this._adapter;
   }
 
+  /**
+   * Return the list of column names (attribute names).
+   *
+   * Mirrors: ActiveRecord::Base.column_names
+   */
+  static columnNames(): string[] {
+    return Array.from(this._attributeDefinitions.keys());
+  }
+
+  /**
+   * Convert an attribute name to a human-readable form.
+   *
+   * Mirrors: ActiveRecord::Base.human_attribute_name
+   */
+  static humanAttributeName(attr: string): string {
+    return attr
+      .replace(/_/g, " ")
+      .replace(/^\w/, (c) => c.toUpperCase());
+  }
+
+  /**
+   * Check if the model class has a given attribute defined.
+   *
+   * Mirrors: ActiveRecord::Base.has_attribute?
+   */
+  static hasAttributeDefinition(name: string): boolean {
+    return this._attributeDefinitions.has(name);
+  }
+
   // -- Readonly attributes --
   static _readonlyAttributes: Set<string> = new Set();
 
@@ -1357,6 +1386,15 @@ export class Base extends Model {
     }
     if (value instanceof Date) return `"${value.toISOString()}"`;
     return JSON.stringify(value);
+  }
+
+  /**
+   * Returns true if the record has changes, is new, or is marked for destruction.
+   *
+   * Mirrors: ActiveRecord::AutosaveAssociation#changed_for_autosave?
+   */
+  isChangedForAutosave(): boolean {
+    return this.isNewRecord() || this.changed || this._destroyed;
   }
 
   /**

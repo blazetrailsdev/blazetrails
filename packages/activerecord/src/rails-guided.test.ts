@@ -6890,4 +6890,62 @@ describe("Grouped Calculations (Rails-guided)", () => {
     }
     expect(ids).toEqual([4, 5, 6, 7, 8]);
   });
+
+  // Rails: test "column_names"
+  it("columnNames returns list of attribute names", () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("name", "string"); this.attribute("email", "string"); this.adapter = adapter; }
+    }
+    expect(User.columnNames()).toEqual(["id", "name", "email"]);
+  });
+
+  // Rails: test "human_attribute_name"
+  it("humanAttributeName converts to readable form", () => {
+    expect(Base.humanAttributeName("first_name")).toBe("First name");
+    expect(Base.humanAttributeName("email_address")).toBe("Email address");
+    expect(Base.humanAttributeName("id")).toBe("Id");
+  });
+
+  // Rails: test "blank? / present?"
+  it("isBlank and isPresent check for empty results", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("name", "string"); this.adapter = adapter; }
+    }
+
+    expect(await User.all().isBlank()).toBe(true);
+    expect(await User.all().isPresent()).toBe(false);
+
+    await User.create({ name: "Alice" });
+    expect(await User.all().isBlank()).toBe(false);
+    expect(await User.all().isPresent()).toBe(true);
+  });
+
+  // Rails: test "structurally_compatible?"
+  it("structurallyCompatible checks if relations can be combined", () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.adapter = adapter; }
+    }
+    class Post extends Base {
+      static { this._tableName = "posts"; this.attribute("id", "integer"); this.adapter = adapter; }
+    }
+
+    expect(User.all().structurallyCompatible(User.all())).toBe(true);
+    expect(User.all().structurallyCompatible(Post.all() as any)).toBe(false);
+  });
+
+  // Rails: test "changed_for_autosave?"
+  it("isChangedForAutosave detects records needing save", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("name", "string"); this.adapter = adapter; }
+    }
+
+    const newUser = new User({ name: "Alice" });
+    expect(newUser.isChangedForAutosave()).toBe(true);
+
+    const saved = await User.create({ name: "Bob" });
+    expect(saved.isChangedForAutosave()).toBe(false);
+
+    saved.writeAttribute("name", "Changed");
+    expect(saved.isChangedForAutosave()).toBe(true);
+  });
 });

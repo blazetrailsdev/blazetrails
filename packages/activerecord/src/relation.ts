@@ -757,6 +757,33 @@ export class Relation<T extends Base> {
   }
 
   /**
+   * Alias for isEmpty.
+   *
+   * Mirrors: ActiveRecord::Relation#blank?
+   */
+  async isBlank(): Promise<boolean> {
+    return this.isEmpty();
+  }
+
+  /**
+   * Alias for isAny (opposite of blank).
+   *
+   * Mirrors: ActiveRecord::Relation#present?
+   */
+  async isPresent(): Promise<boolean> {
+    return this.isAny();
+  }
+
+  /**
+   * Check if another relation is structurally compatible for use with or().
+   *
+   * Mirrors: ActiveRecord::Relation#structurally_compatible?
+   */
+  structurallyCompatible(other: Relation<T>): boolean {
+    return this._modelClass === other._modelClass;
+  }
+
+  /**
    * Return the number of loaded records (alias for toArray().length).
    *
    * Mirrors: ActiveRecord::Relation#length

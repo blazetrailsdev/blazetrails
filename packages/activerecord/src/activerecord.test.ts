@@ -7223,4 +7223,117 @@ describe("ActiveRecord", () => {
       expect(names.length).toBe(5);
     });
   });
+
+  describe("columnNames", () => {
+    it("returns the list of defined attribute names", () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.attribute("email", "string");
+      User.adapter = adapter;
+
+      expect(User.columnNames()).toEqual(["id", "name", "email"]);
+    });
+  });
+
+  describe("humanAttributeName", () => {
+    it("converts snake_case to human-readable form", () => {
+      expect(Base.humanAttributeName("first_name")).toBe("First name");
+      expect(Base.humanAttributeName("email")).toBe("Email");
+      expect(Base.humanAttributeName("created_at")).toBe("Created at");
+    });
+  });
+
+  describe("hasAttributeDefinition", () => {
+    it("returns true for defined attributes", () => {
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+
+      expect(User.hasAttributeDefinition("name")).toBe(true);
+      expect(User.hasAttributeDefinition("age")).toBe(false);
+    });
+  });
+
+  describe("isBlank / isPresent", () => {
+    it("isBlank returns true when no records exist", async () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.adapter = adapter;
+
+      expect(await User.all().isBlank()).toBe(true);
+      expect(await User.all().isPresent()).toBe(false);
+
+      await User.create({ name: "Alice" });
+      expect(await User.all().isBlank()).toBe(false);
+      expect(await User.all().isPresent()).toBe(true);
+    });
+  });
+
+  describe("structurallyCompatible", () => {
+    it("returns true for relations of the same model", () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.adapter = adapter;
+
+      const r1 = User.all().where({ id: 1 });
+      const r2 = User.all().where({ id: 2 });
+      expect(r1.structurallyCompatible(r2)).toBe(true);
+    });
+
+    it("returns false for relations of different models", () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.adapter = adapter;
+
+      class Post extends Base { static _tableName = "posts"; }
+      Post.attribute("id", "integer");
+      Post.adapter = adapter;
+
+      const r1 = User.all().where({ id: 1 });
+      const r2 = Post.all().where({ id: 2 });
+      expect(r1.structurallyCompatible(r2 as any)).toBe(false);
+    });
+  });
+
+  describe("isChangedForAutosave", () => {
+    it("returns true for new records", () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.adapter = adapter;
+
+      const user = new User({ name: "Alice" });
+      expect(user.isChangedForAutosave()).toBe(true);
+    });
+
+    it("returns false for persisted unchanged records", async () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.adapter = adapter;
+
+      const user = await User.create({ name: "Alice" });
+      expect(user.isChangedForAutosave()).toBe(false);
+    });
+
+    it("returns true for changed records", async () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.adapter = adapter;
+
+      const user = await User.create({ name: "Alice" });
+      user.writeAttribute("name", "Bob");
+      expect(user.isChangedForAutosave()).toBe(true);
+    });
+  });
 });

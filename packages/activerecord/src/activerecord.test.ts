@@ -9197,4 +9197,134 @@ describe("ActiveRecord", () => {
       expect(indexed["bob"]).toBeDefined();
     });
   });
+
+  describe("enum", () => {
+    it("defines enum attribute with predicate methods", async () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static {
+          this.attribute("id", "integer");
+          this.attribute("name", "string");
+          this.attribute("status", "integer");
+          this.adapter = adapter;
+          this.enum("status", { active: 0, inactive: 1, banned: 2 });
+        }
+      }
+      const user = await User.create({ name: "Alice", status: 0 });
+      expect((user as any).status).toBe("active");
+      expect((user as any).isActive()).toBe(true);
+      expect((user as any).isInactive()).toBe(false);
+      expect((user as any).isBanned()).toBe(false);
+    });
+
+    it("sets enum value by name", async () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static {
+          this.attribute("id", "integer");
+          this.attribute("name", "string");
+          this.attribute("status", "integer");
+          this.adapter = adapter;
+          this.enum("status", { active: 0, inactive: 1 });
+        }
+      }
+      const user = new User({ name: "Alice" });
+      (user as any).status = "inactive";
+      expect(user.readAttribute("status")).toBe(1);
+      expect((user as any).isInactive()).toBe(true);
+    });
+
+    it("provides bang setter methods", async () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static {
+          this.attribute("id", "integer");
+          this.attribute("name", "string");
+          this.attribute("status", "integer");
+          this.adapter = adapter;
+          this.enum("status", { active: 0, inactive: 1 });
+        }
+      }
+      const user = new User({ name: "Alice", status: 0 });
+      (user as any).inactiveBang();
+      expect((user as any).isInactive()).toBe(true);
+      expect(user.readAttribute("status")).toBe(1);
+    });
+
+    it("exposes the mapping via static getter", () => {
+      class User extends Base {
+        static {
+          this.attribute("id", "integer");
+          this.attribute("status", "integer");
+          this.enum("status", { active: 0, inactive: 1 });
+        }
+      }
+      expect((User as any).statuss).toEqual({ active: 0, inactive: 1 });
+    });
+
+    it("creates scopes for each enum value", async () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static {
+          this.attribute("id", "integer");
+          this.attribute("name", "string");
+          this.attribute("status", "integer");
+          this.adapter = adapter;
+          this.enum("status", { active: 0, inactive: 1 });
+        }
+      }
+      await User.create({ name: "Alice", status: 0 });
+      await User.create({ name: "Bob", status: 1 });
+      const activeUsers = await (User as any).active().toArray();
+      expect(activeUsers.length).toBe(1);
+      expect(activeUsers[0].readAttribute("name")).toBe("Alice");
+    });
+  });
+
+  describe("store", () => {
+    it("defines accessor methods for stored attributes", () => {
+      class User extends Base {
+        static {
+          this.attribute("id", "integer");
+          this.attribute("name", "string");
+          this.attribute("settings", "json");
+          this.adapter = freshAdapter();
+          this.store("settings", { accessors: ["theme", "locale"] });
+        }
+      }
+      const user = new User({ name: "Alice", settings: { theme: "dark", locale: "en" } });
+      expect((user as any).theme).toBe("dark");
+      expect((user as any).locale).toBe("en");
+    });
+
+    it("allows setting store values via accessors", () => {
+      class User extends Base {
+        static {
+          this.attribute("id", "integer");
+          this.attribute("settings", "json");
+          this.adapter = freshAdapter();
+          this.store("settings", { accessors: ["theme"] });
+        }
+      }
+      const user = new User({ settings: { theme: "light" } });
+      (user as any).theme = "dark";
+      const settings = user.readAttribute("settings") as Record<string, unknown>;
+      expect(settings.theme).toBe("dark");
+    });
+
+    it("initializes store from null gracefully", () => {
+      class User extends Base {
+        static {
+          this.attribute("id", "integer");
+          this.attribute("settings", "json");
+          this.adapter = freshAdapter();
+          this.store("settings", { accessors: ["theme"] });
+        }
+      }
+      const user = new User({});
+      expect((user as any).theme).toBeNull();
+      (user as any).theme = "neon";
+      expect((user as any).theme).toBe("neon");
+    });
+  });
 });

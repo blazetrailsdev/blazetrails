@@ -2662,4 +2662,66 @@ describe("ActiveModel", () => {
       expect(u.errors.fullMessage("base", "Something went wrong")).toBe("Something went wrong");
     });
   });
+
+  describe("conditional validates (if/unless)", () => {
+    it("skips validation when if condition returns false", () => {
+      class User extends Model {
+        static {
+          this.attribute("name", "string");
+          this.attribute("requires_name", "boolean");
+          this.validates("name", {
+            presence: true,
+            if: (record: any) => record.readAttribute("requires_name") === true,
+          });
+        }
+      }
+      const u = new User({ requires_name: false });
+      expect(u.isValid()).toBe(true);
+    });
+
+    it("runs validation when if condition returns true", () => {
+      class User extends Model {
+        static {
+          this.attribute("name", "string");
+          this.attribute("requires_name", "boolean");
+          this.validates("name", {
+            presence: true,
+            if: (record: any) => record.readAttribute("requires_name") === true,
+          });
+        }
+      }
+      const u = new User({ requires_name: true });
+      expect(u.isValid()).toBe(false);
+    });
+
+    it("skips validation when unless condition returns true", () => {
+      class User extends Model {
+        static {
+          this.attribute("name", "string");
+          this.attribute("skip_validation", "boolean");
+          this.validates("name", {
+            presence: true,
+            unless: (record: any) => record.readAttribute("skip_validation") === true,
+          });
+        }
+      }
+      const u = new User({ skip_validation: true });
+      expect(u.isValid()).toBe(true);
+    });
+
+    it("runs validation when unless condition returns false", () => {
+      class User extends Model {
+        static {
+          this.attribute("name", "string");
+          this.attribute("skip_validation", "boolean");
+          this.validates("name", {
+            presence: true,
+            unless: (record: any) => record.readAttribute("skip_validation") === true,
+          });
+        }
+      }
+      const u = new User({ skip_validation: false });
+      expect(u.isValid()).toBe(false);
+    });
+  });
 });

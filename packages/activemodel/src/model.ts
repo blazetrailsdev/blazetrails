@@ -30,6 +30,8 @@ interface ValidationEntry {
   attribute: string;
   validator: Validator;
   on?: string;
+  if?: ((record: any) => boolean) | string;
+  unless?: ((record: any) => boolean) | string;
 }
 
 interface CustomValidationEntry {
@@ -180,92 +182,64 @@ export class Model {
     }
 
     const onContext = rules.on as string | undefined;
+    const ifCond = rules.if as ((record: any) => boolean) | string | undefined;
+    const unlessCond = rules.unless as ((record: any) => boolean) | string | undefined;
+
+    const push = (validator: Validator) => {
+      this._validations.push({
+        attribute,
+        validator,
+        on: onContext,
+        ...(ifCond !== undefined && { if: ifCond }),
+        ...(unlessCond !== undefined && { unless: unlessCond }),
+      });
+    };
 
     if (rules.presence) {
       const opts = rules.presence === true ? {} : (rules.presence as any);
-      this._validations.push({
-        attribute,
-        validator: new PresenceValidator(opts),
-        on: onContext,
-      });
+      push(new PresenceValidator(opts));
     }
 
     if (rules.absence) {
       const opts = rules.absence === true ? {} : (rules.absence as any);
-      this._validations.push({
-        attribute,
-        validator: new AbsenceValidator(opts),
-        on: onContext,
-      });
+      push(new AbsenceValidator(opts));
     }
 
     if (rules.length) {
-      this._validations.push({
-        attribute,
-        validator: new LengthValidator(rules.length as any),
-        on: onContext,
-      });
+      push(new LengthValidator(rules.length as any));
     }
 
     if (rules.numericality) {
       const opts =
         rules.numericality === true ? {} : (rules.numericality as any);
-      this._validations.push({
-        attribute,
-        validator: new NumericalityValidator(opts),
-        on: onContext,
-      });
+      push(new NumericalityValidator(opts));
     }
 
     if (rules.inclusion) {
-      this._validations.push({
-        attribute,
-        validator: new InclusionValidator(rules.inclusion as any),
-        on: onContext,
-      });
+      push(new InclusionValidator(rules.inclusion as any));
     }
 
     if (rules.exclusion) {
-      this._validations.push({
-        attribute,
-        validator: new ExclusionValidator(rules.exclusion as any),
-        on: onContext,
-      });
+      push(new ExclusionValidator(rules.exclusion as any));
     }
 
     if (rules.format) {
-      this._validations.push({
-        attribute,
-        validator: new FormatValidator(rules.format as any),
-        on: onContext,
-      });
+      push(new FormatValidator(rules.format as any));
     }
 
     if (rules.acceptance) {
       const opts = rules.acceptance === true ? {} : (rules.acceptance as any);
-      this._validations.push({
-        attribute,
-        validator: new AcceptanceValidator(opts),
-        on: onContext,
-      });
+      push(new AcceptanceValidator(opts));
     }
 
     if (rules.confirmation) {
       const opts =
         rules.confirmation === true ? {} : (rules.confirmation as any);
-      this._validations.push({
-        attribute,
-        validator: new ConfirmationValidator(opts),
-        on: onContext,
-      });
+      push(new ConfirmationValidator(opts));
     }
 
     if (rules.comparison) {
-      this._validations.push({
-        attribute,
-        validator: new ComparisonValidator(rules.comparison as any),
-        on: onContext,
-      });
+      push(new ComparisonValidator(rules.comparison as any));
     }
   }
 
@@ -750,6 +724,23 @@ export class Model {
     for (const entry of ctor._validations) {
       // If validation has an `on` context, only run when context matches
       if (entry.on && entry.on !== effectiveContext) continue;
+      // Check if/unless conditions
+      if (entry.if !== undefined) {
+        const result = typeof entry.if === "function"
+          ? entry.if(this)
+          : typeof (this as any)[entry.if] === "function"
+            ? (this as any)[entry.if]()
+            : (this as any)[entry.if];
+        if (!result) continue;
+      }
+      if (entry.unless !== undefined) {
+        const result = typeof entry.unless === "function"
+          ? entry.unless(this)
+          : typeof (this as any)[entry.unless] === "function"
+            ? (this as any)[entry.unless]()
+            : (this as any)[entry.unless];
+        if (result) continue;
+      }
       const value = this._attributes.get(entry.attribute);
       entry.validator.validate(this, entry.attribute, value, this.errors);
     }

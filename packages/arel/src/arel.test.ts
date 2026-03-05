@@ -1526,4 +1526,78 @@ describe("Arel", () => {
       expect(visitor.compile(node)).toBe(" /* load users */ /* for dashboard */");
     });
   });
+
+  describe("Attribute string functions", () => {
+    const users = new Table("users");
+    const visitor = new Visitors.ToSql();
+
+    it("generates LENGTH()", () => {
+      const node = users.attr("name").length();
+      expect(visitor.compile(node)).toBe('LENGTH("users"."name")');
+    });
+
+    it("generates TRIM()", () => {
+      const node = users.attr("name").trim();
+      expect(visitor.compile(node)).toBe('TRIM("users"."name")');
+    });
+
+    it("generates LTRIM()", () => {
+      const node = users.attr("name").ltrim();
+      expect(visitor.compile(node)).toBe('LTRIM("users"."name")');
+    });
+
+    it("generates RTRIM()", () => {
+      const node = users.attr("name").rtrim();
+      expect(visitor.compile(node)).toBe('RTRIM("users"."name")');
+    });
+
+    it("generates SUBSTRING()", () => {
+      const node = users.attr("name").substring(1, 3);
+      expect(visitor.compile(node)).toBe('SUBSTRING("users"."name", 1, 3)');
+    });
+
+    it("generates CONCAT()", () => {
+      const node = users.attr("first_name").concat(" ", users.attr("last_name"));
+      const sql = visitor.compile(node);
+      expect(sql).toContain("CONCAT(");
+      expect(sql).toContain('"users"."first_name"');
+    });
+
+    it("generates REPLACE()", () => {
+      const node = users.attr("name").replace("old", "new");
+      const sql = visitor.compile(node);
+      expect(sql).toContain("REPLACE(");
+      expect(sql).toContain('"users"."name"');
+    });
+  });
+
+  describe("Attribute math functions", () => {
+    const users = new Table("users");
+    const visitor = new Visitors.ToSql();
+
+    it("generates ABS()", () => {
+      const node = users.attr("balance").abs();
+      expect(visitor.compile(node)).toBe('ABS("users"."balance")');
+    });
+
+    it("generates ROUND()", () => {
+      const node = users.attr("score").round(2);
+      expect(visitor.compile(node)).toBe('ROUND("users"."score", 2)');
+    });
+
+    it("generates ROUND() without precision", () => {
+      const node = users.attr("score").round();
+      expect(visitor.compile(node)).toBe('ROUND("users"."score")');
+    });
+
+    it("generates CEIL()", () => {
+      const node = users.attr("score").ceil();
+      expect(visitor.compile(node)).toBe('CEIL("users"."score")');
+    });
+
+    it("generates FLOOR()", () => {
+      const node = users.attr("score").floor();
+      expect(visitor.compile(node)).toBe('FLOOR("users"."score")');
+    });
+  });
 });

@@ -471,6 +471,95 @@ export class Model {
       .replace(/^\w/, (c) => c.toUpperCase());
   }
 
+  /**
+   * The i18n scope for translation lookups.
+   *
+   * Mirrors: ActiveModel::Translation.i18n_scope
+   */
+  static get i18nScope(): string {
+    return "activemodel";
+  }
+
+  /**
+   * Define attribute methods with a prefix.
+   * For each registered attribute, creates `{prefix}{attribute}` methods.
+   *
+   * Mirrors: ActiveModel::AttributeMethods.attribute_method_prefix
+   */
+  static attributeMethodPrefix(...prefixes: string[]): void {
+    if (!this.hasOwnProperty("_attributeMethodPrefixes")) {
+      this._attributeMethodPrefixes = [...(this._attributeMethodPrefixes || [])];
+    }
+    this._attributeMethodPrefixes.push(...prefixes);
+    this._defineAffixMethods();
+  }
+
+  /**
+   * Define attribute methods with a suffix.
+   * For each registered attribute, creates `{attribute}{suffix}` methods.
+   *
+   * Mirrors: ActiveModel::AttributeMethods.attribute_method_suffix
+   */
+  static attributeMethodSuffix(...suffixes: string[]): void {
+    if (!this.hasOwnProperty("_attributeMethodSuffixes")) {
+      this._attributeMethodSuffixes = [...(this._attributeMethodSuffixes || [])];
+    }
+    this._attributeMethodSuffixes.push(...suffixes);
+    this._defineAffixMethods();
+  }
+
+  /**
+   * Define attribute methods with both prefix and suffix.
+   *
+   * Mirrors: ActiveModel::AttributeMethods.attribute_method_affix
+   */
+  static attributeMethodAffix(...affixes: Array<{ prefix: string; suffix: string }>): void {
+    if (!this.hasOwnProperty("_attributeMethodAffixes")) {
+      this._attributeMethodAffixes = [...(this._attributeMethodAffixes || [])];
+    }
+    this._attributeMethodAffixes.push(...affixes);
+    this._defineAffixMethods();
+  }
+
+  static _attributeMethodPrefixes: string[] = [];
+  static _attributeMethodSuffixes: string[] = [];
+  static _attributeMethodAffixes: Array<{ prefix: string; suffix: string }> = [];
+
+  private static _defineAffixMethods(): void {
+    for (const [name] of this._attributeDefinitions) {
+      for (const prefix of this._attributeMethodPrefixes) {
+        const methodName = `${prefix}${name}`;
+        if (!this.prototype[methodName]) {
+          Object.defineProperty(this.prototype, methodName, {
+            value: function(this: Model) { return this.readAttribute(name); },
+            writable: true,
+            configurable: true,
+          });
+        }
+      }
+      for (const suffix of this._attributeMethodSuffixes) {
+        const methodName = `${name}${suffix}`;
+        if (!this.prototype[methodName]) {
+          Object.defineProperty(this.prototype, methodName, {
+            value: function(this: Model) { return this.readAttribute(name); },
+            writable: true,
+            configurable: true,
+          });
+        }
+      }
+      for (const { prefix, suffix } of this._attributeMethodAffixes) {
+        const methodName = `${prefix}${name}${suffix}`;
+        if (!this.prototype[methodName]) {
+          Object.defineProperty(this.prototype, methodName, {
+            value: function(this: Model) { return this.readAttribute(name); },
+            writable: true,
+            configurable: true,
+          });
+        }
+      }
+    }
+  }
+
   // -- Naming (Phase 1300) --
 
   static get modelName(): ModelName {
@@ -906,6 +995,15 @@ export class Model {
 
   get modelName(): ModelName {
     return (this.constructor as typeof Model).modelName;
+  }
+
+  /**
+   * Returns self. Required by ActiveModel::Conversion.
+   *
+   * Mirrors: ActiveModel::Conversion#to_model
+   */
+  toModel(): this {
+    return this;
   }
 
   toParam(): string | null {

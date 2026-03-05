@@ -7713,4 +7713,67 @@ describe("Grouped Calculations (Rails-guided)", () => {
     const spawned = rel.spawn();
     expect(spawned).not.toBe(rel);
   });
+
+  // Rails guide: invert_where — inverts where conditions
+  it("invertWhere swaps where and whereNot", async () => {
+    const adapter = new MemoryAdapter();
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("name", "string"); this.attribute("active", "boolean"); this.adapter = adapter; }
+    }
+    await User.create({ name: "Alice", active: true });
+    await User.create({ name: "Bob", active: false });
+    const active = await User.where({ active: true }).toArray();
+    expect(active.length).toBe(1);
+    const inactive = await User.where({ active: true }).invertWhere().toArray();
+    expect(inactive.length).toBe(1);
+    expect(inactive[0].readAttribute("name")).toBe("Bob");
+  });
+
+  // Rails guide: Relation#inspect — debug representation
+  it("inspect() returns human-readable relation info", () => {
+    const adapter = new MemoryAdapter();
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    const str = User.where({ name: "Alice" }).limit(5).inspect();
+    expect(str).toContain("User");
+    expect(str).toContain("Alice");
+    expect(str).toContain("limit(5)");
+  });
+
+  // Rails guide: toModel returns self (ActiveModel::Conversion)
+  it("toModel() returns self", () => {
+    const adapter = new MemoryAdapter();
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.adapter = adapter; }
+    }
+    const u = new User({});
+    expect(u.toModel()).toBe(u);
+  });
+
+  // Rails guide: i18nScope
+  it("i18nScope returns 'activemodel' on Model", () => {
+    // Base extends Model, so should inherit
+    const adapter = new MemoryAdapter();
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.adapter = adapter; }
+    }
+    expect(User.i18nScope).toBe("activemodel");
+  });
+
+  // Rails guide: attribute_method_prefix
+  it("attributeMethodPrefix defines prefixed methods", () => {
+    const adapter = new MemoryAdapter();
+    class User extends Base {
+      static {
+        this._tableName = "users";
+        this.attribute("id", "integer");
+        this.attribute("name", "string");
+        this.adapter = adapter;
+        this.attributeMethodPrefix("get_");
+      }
+    }
+    const u = new User({ name: "Alice" });
+    expect((u as any)["get_name"]()).toBe("Alice");
+  });
 });

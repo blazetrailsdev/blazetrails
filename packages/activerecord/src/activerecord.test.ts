@@ -8334,6 +8334,58 @@ describe("ActiveRecord", () => {
   });
 
   // ===========================================================================
+  // invertWhere
+  // ===========================================================================
+  describe("Relation#invertWhere", () => {
+    it("swaps where and whereNot clauses", async () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static { this.attribute("id", "integer"); this.attribute("name", "string"); this.attribute("role", "string"); this.adapter = adapter; }
+      }
+      await User.create({ name: "Alice", role: "admin" });
+      await User.create({ name: "Bob", role: "user" });
+      await User.create({ name: "Charlie", role: "admin" });
+
+      // where({ role: "admin" }) returns Alice, Charlie
+      const admins = await User.where({ role: "admin" }).toArray();
+      expect(admins.length).toBe(2);
+
+      // invertWhere() should return Bob (non-admins)
+      const nonAdmins = await User.where({ role: "admin" }).invertWhere().toArray();
+      expect(nonAdmins.length).toBe(1);
+      expect(nonAdmins[0].readAttribute("name")).toBe("Bob");
+    });
+  });
+
+  // ===========================================================================
+  // Relation#inspect
+  // ===========================================================================
+  describe("Relation#inspect", () => {
+    it("returns a readable string representation", () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static { this.attribute("id", "integer"); this.attribute("name", "string"); this.adapter = adapter; }
+      }
+      const rel = User.where({ name: "Alice" }).order("name").limit(10);
+      const str = rel.inspect();
+      expect(str).toContain("User");
+      expect(str).toContain("where");
+      expect(str).toContain("Alice");
+      expect(str).toContain("limit(10)");
+    });
+
+    it("shows distinct and group info", () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static { this.attribute("id", "integer"); this.attribute("role", "string"); this.adapter = adapter; }
+      }
+      const str = User.where({ role: "admin" }).distinct().inspect();
+      expect(str).toContain("distinct");
+      expect(str).toContain("admin");
+    });
+  });
+
+  // ===========================================================================
   // logger
   // ===========================================================================
   describe("Base.logger", () => {

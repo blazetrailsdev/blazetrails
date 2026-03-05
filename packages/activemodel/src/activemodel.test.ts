@@ -2328,4 +2328,67 @@ describe("ActiveModel", () => {
       expect(u.isPersisted()).toBe(false);
     });
   });
+
+  // ===========================================================================
+  // toModel (ActiveModel::Conversion)
+  // ===========================================================================
+  describe("toModel", () => {
+    it("returns self", () => {
+      class User extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const u = new User({ name: "Alice" });
+      expect(u.toModel()).toBe(u);
+    });
+  });
+
+  // ===========================================================================
+  // i18nScope
+  // ===========================================================================
+  describe("i18nScope", () => {
+    it("returns 'activemodel' by default", () => {
+      class User extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      expect(User.i18nScope).toBe("activemodel");
+    });
+  });
+
+  // ===========================================================================
+  // attributeMethodPrefix / attributeMethodSuffix / attributeMethodAffix
+  // ===========================================================================
+  describe("attribute method prefix/suffix/affix", () => {
+    it("defines prefixed methods for attributes", () => {
+      class User extends Model {
+        static {
+          this.attribute("name", "string");
+          this.attributeMethodPrefix("clear_");
+        }
+      }
+      const u = new User({ name: "Alice" });
+      expect((u as any)["clear_name"]()).toBe("Alice");
+    });
+
+    it("defines suffixed methods for attributes", () => {
+      class User extends Model {
+        static {
+          this.attribute("name", "string");
+          this.attributeMethodSuffix("_before_type_cast");
+        }
+      }
+      const u = new User({ name: "Alice" });
+      expect((u as any)["name_before_type_cast"]()).toBe("Alice");
+    });
+
+    it("defines affix methods with both prefix and suffix", () => {
+      class User extends Model {
+        static {
+          this.attribute("name", "string");
+          this.attributeMethodAffix({ prefix: "reset_", suffix: "_to_default" });
+        }
+      }
+      const u = new User({ name: "Alice" });
+      expect((u as any)["reset_name_to_default"]()).toBe("Alice");
+    });
+  });
 });

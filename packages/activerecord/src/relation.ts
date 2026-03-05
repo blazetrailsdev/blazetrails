@@ -443,6 +443,59 @@ export class Relation<T extends Base> {
   }
 
   /**
+   * Invert all existing WHERE conditions.
+   * Swaps where ↔ whereNot clauses.
+   *
+   * Mirrors: ActiveRecord::Relation#invert_where
+   */
+  invertWhere(): Relation<T> {
+    const rel = this._clone();
+    const oldWhere = rel._whereClauses;
+    const oldWhereNot = rel._whereNotClauses;
+    rel._whereClauses = oldWhereNot;
+    rel._whereNotClauses = oldWhere;
+    return rel;
+  }
+
+  /**
+   * Returns a human-readable string representation of the relation.
+   *
+   * Mirrors: ActiveRecord::Relation#inspect
+   */
+  inspect(): string {
+    const parts: string[] = [];
+    parts.push(`${this._modelClass.name}.all`);
+    if (this._whereClauses.length > 0) {
+      parts.push(`.where(${JSON.stringify(this._whereClauses.length === 1 ? this._whereClauses[0] : this._whereClauses)})`);
+    }
+    if (this._whereNotClauses.length > 0) {
+      parts.push(`.whereNot(${JSON.stringify(this._whereNotClauses.length === 1 ? this._whereNotClauses[0] : this._whereNotClauses)})`);
+    }
+    if (this._orderClauses.length > 0) {
+      parts.push(`.order(${JSON.stringify(this._orderClauses)})`);
+    }
+    if (this._limitValue !== null) {
+      parts.push(`.limit(${this._limitValue})`);
+    }
+    if (this._offsetValue !== null) {
+      parts.push(`.offset(${this._offsetValue})`);
+    }
+    if (this._selectColumns !== null) {
+      parts.push(`.select(${JSON.stringify(this._selectColumns)})`);
+    }
+    if (this._isDistinct) {
+      parts.push(`.distinct`);
+    }
+    if (this._groupColumns.length > 0) {
+      parts.push(`.group(${JSON.stringify(this._groupColumns)})`);
+    }
+    if (this._isNone) {
+      parts.push(`.none`);
+    }
+    return parts.join("");
+  }
+
+  /**
    * Returns a relation that will always produce an empty result.
    *
    * Mirrors: ActiveRecord::Relation#none

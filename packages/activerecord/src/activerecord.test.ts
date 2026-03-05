@@ -6543,4 +6543,58 @@ describe("ActiveRecord", () => {
       expect(await Item.all().length()).toBe(3);
     });
   });
+
+  // -- slice --
+  describe("slice()", () => {
+    it("returns a subset of attributes", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.attribute("status", "string");
+      Item.adapter = freshAdapter();
+
+      const item = await Item.create({ name: "Widget", status: "active" });
+      const sliced = item.slice("name", "status");
+      expect(sliced).toEqual({ name: "Widget", status: "active" });
+      expect(sliced).not.toHaveProperty("id");
+    });
+  });
+
+  // -- values_at --
+  describe("valuesAt()", () => {
+    it("returns attribute values as an array", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.attribute("status", "string");
+      Item.adapter = freshAdapter();
+
+      const item = await Item.create({ name: "Widget", status: "active" });
+      const values = item.valuesAt("name", "status");
+      expect(values).toEqual(["Widget", "active"]);
+    });
+  });
+
+  // -- distinct count --
+  describe("distinct count", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("count with distinct uses COUNT(DISTINCT ...)", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("category", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ category: "A" });
+      await Item.create({ category: "A" });
+      await Item.create({ category: "B" });
+
+      const total = await Item.all().count() as number;
+      expect(total).toBe(3);
+
+      const distinctCount = await Item.all().distinct().count("category") as number;
+      expect(distinctCount).toBe(2);
+    });
+  });
 });

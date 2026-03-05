@@ -159,12 +159,13 @@ export class MemoryAdapter implements DatabaseAdapter {
       return results;
     }
 
-    // Aggregate queries: COUNT(*), COUNT(col), SUM, AVG, MIN, MAX
+    // Aggregate queries: COUNT(*), COUNT(col), COUNT(DISTINCT col), SUM, AVG, MIN, MAX
     const aggMatch = cleanedSql.match(
-      /SELECT\s+(COUNT|SUM|AVG|MIN|MAX)\((\*|"?\w+"?(?:\."?\w+"?)?)\)\s*(?:AS\s+\w+\s+)?FROM\s+"(\w+)"(?:\s+WHERE\s+(.+?))?$/i
+      /SELECT\s+(COUNT|SUM|AVG|MIN|MAX)\((DISTINCT\s+)?(\*|"?\w+"?(?:\."?\w+"?)?)\)\s*(?:AS\s+\w+\s+)?FROM\s+"(\w+)"(?:\s+WHERE\s+(.+?))?$/i
     );
     if (aggMatch) {
-      const [, fn, colExpr, tableName, where] = aggMatch;
+      const [, fn, distinctFlag, colExpr, tableName, where] = aggMatch;
+      const isDistinct = !!distinctFlag;
       let rows = [...(this.tables.get(tableName) ?? [])];
       if (where) {
         rows = rows.filter((row) => this.evaluateWhere(row, where));
@@ -172,10 +173,18 @@ export class MemoryAdapter implements DatabaseAdapter {
       const upperFn = fn.toUpperCase();
       if (upperFn === "COUNT") {
         if (colExpr === "*") {
+          if (isDistinct) {
+            // COUNT(DISTINCT *) — count unique row combos (unusual, treat as normal count)
+            return [{ count: rows.length }];
+          }
           return [{ count: rows.length }];
         }
         const col = colExpr.replace(/"/g, "").split(".").pop()!;
         const nonNull = rows.filter((r) => r[col] !== null && r[col] !== undefined);
+        if (isDistinct) {
+          const uniqueValues = new Set(nonNull.map((r) => r[col]));
+          return [{ count: uniqueValues.size }];
+        }
         return [{ count: nonNull.length }];
       }
       const col = colExpr.replace(/"/g, "").split(".").pop()!;

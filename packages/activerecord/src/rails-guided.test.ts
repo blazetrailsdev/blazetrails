@@ -6414,4 +6414,52 @@ describe("Grouped Calculations (Rails-guided)", () => {
 
     expect(await Topic.all().length()).toBe(3);
   });
+
+  // =====================================================================
+  // slice / values_at — activerecord/test/cases/base_test.rb
+  // =====================================================================
+
+  // Rails: test "slice returns a hash of the given keys"
+  it("slice returns a subset of attributes", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.attribute("content", "string"); this.adapter = adapter; }
+    }
+
+    const topic = await Topic.create({ title: "Hello", content: "World" });
+    const sliced = topic.slice("title", "content");
+    expect(sliced).toEqual({ title: "Hello", content: "World" });
+    expect(sliced).not.toHaveProperty("id");
+  });
+
+  // Rails: test "values_at returns an array of attribute values"
+  it("valuesAt returns values as an array", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.attribute("content", "string"); this.adapter = adapter; }
+    }
+
+    const topic = await Topic.create({ title: "Hello", content: "World" });
+    expect(topic.valuesAt("title", "content")).toEqual(["Hello", "World"]);
+  });
+
+  // =====================================================================
+  // distinct count — activerecord/test/cases/calculations_test.rb
+  // =====================================================================
+
+  // Rails: test "should count distinct with column"
+  it("distinct().count(column) uses COUNT(DISTINCT ...)", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("author_name", "string"); this.adapter = adapter; }
+    }
+
+    await Topic.create({ author_name: "Alice" });
+    await Topic.create({ author_name: "Alice" });
+    await Topic.create({ author_name: "Bob" });
+    await Topic.create({ author_name: "Charlie" });
+
+    const total = await Topic.all().count() as number;
+    expect(total).toBe(4);
+
+    const distinctCount = await Topic.all().distinct().count("author_name") as number;
+    expect(distinctCount).toBe(3);
+  });
 });

@@ -1108,6 +1108,28 @@ export class Base extends Model {
   }
 
   /**
+   * Return a subset of the record's attributes as a plain object.
+   *
+   * Mirrors: ActiveRecord::Base#slice
+   */
+  slice(...keys: string[]): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    for (const key of keys) {
+      result[key] = this.readAttribute(key);
+    }
+    return result;
+  }
+
+  /**
+   * Return attribute values for the given keys as an array.
+   *
+   * Mirrors: ActiveRecord::Base#values_at
+   */
+  valuesAt(...keys: string[]): unknown[] {
+    return keys.map((key) => this.readAttribute(key));
+  }
+
+  /**
    * Assign attributes without saving.
    *
    * Mirrors: ActiveRecord::Base#assign_attributes

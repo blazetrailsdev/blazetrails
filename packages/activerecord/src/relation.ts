@@ -1024,9 +1024,17 @@ export class Relation<T extends Base> {
     }
 
     const table = this._modelClass.arelTable;
-    const countExpr = column
-      ? `COUNT("${table.name}"."${column}") AS count`
-      : "COUNT(*) AS count";
+    let countExpr: string;
+    if (column) {
+      const isDistinct = this._isDistinct;
+      countExpr = isDistinct
+        ? `COUNT(DISTINCT "${table.name}"."${column}") AS count`
+        : `COUNT("${table.name}"."${column}") AS count`;
+    } else {
+      countExpr = this._isDistinct
+        ? `COUNT(DISTINCT "${table.name}"."${this._modelClass.primaryKey}") AS count`
+        : "COUNT(*) AS count";
+    }
     const manager = table.project(countExpr);
     this._applyWheresToManager(manager, table);
 

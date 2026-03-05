@@ -1392,6 +1392,24 @@ export class Relation<T extends Base> {
   }
 
   /**
+   * Try to create first; if uniqueness violation, find the existing record.
+   *
+   * Mirrors: ActiveRecord::Relation#create_or_find_by
+   */
+  async createOrFindBy(
+    conditions: Record<string, unknown>,
+    extra?: Record<string, unknown>
+  ): Promise<T> {
+    try {
+      return await this._modelClass.create({ ...this._createWithAttrs, ...this._scopeAttributes(), ...conditions, ...extra }) as T;
+    } catch {
+      const records = await this.where(conditions).limit(1).toArray();
+      if (records.length > 0) return records[0];
+      throw new RecordNotFound(`${this._modelClass.name} not found`, this._modelClass.name);
+    }
+  }
+
+  /**
    * Insert multiple records in a single INSERT statement (skip callbacks/validations).
    *
    * Mirrors: ActiveRecord::Base.insert_all
@@ -1527,6 +1545,39 @@ export class Relation<T extends Base> {
       for (const record of batch) {
         yield record;
       }
+    }
+  }
+
+  /**
+   * Yields Relations scoped to each batch. Unlike findInBatches which yields
+   * arrays of records, this yields Relation objects that can be further refined.
+   *
+   * Mirrors: ActiveRecord::Batches#in_batches
+   */
+  async *inBatches({ batchSize = 1000 }: { batchSize?: number } = {}): AsyncGenerator<Relation<T>> {
+    const pk = this._modelClass.primaryKey;
+    let lastId: unknown = null;
+
+    while (true) {
+      let rel = this._clone();
+      if (lastId !== null) {
+        const pkQuoted = typeof lastId === "number" ? String(lastId) : `'${lastId}'`;
+        rel._whereRawClauses.push(`"${this._modelClass.arelTable.name}"."${pk}" > ${pkQuoted}`);
+      }
+      rel._orderClauses = [pk];
+      rel._limitValue = batchSize;
+
+      const records = await rel.toArray();
+      if (records.length === 0) break;
+
+      // Create a scoped relation for just these PKs
+      const ids = records.map((r) => (r as any).id);
+      const batchRel = this._clone();
+      batchRel._whereClauses.push({ [pk]: ids });
+      yield batchRel;
+
+      if (records.length < batchSize) break;
+      lastId = (records[records.length - 1] as any).id;
     }
   }
 

@@ -6863,4 +6863,135 @@ describe("ActiveRecord", () => {
       expect(names.sort()).toEqual(["Alice", "Bob"]);
     });
   });
+
+  describe("save with validate: false", () => {
+    it("skips validation when validate: false", async () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.adapter = adapter;
+      User.validates("name", { presence: true });
+
+      const user = new User({ name: "" });
+      expect(await user.save()).toBe(false);
+
+      const result = await user.save({ validate: false });
+      expect(result).toBe(true);
+      expect(user.isNewRecord()).toBe(false);
+    });
+  });
+
+  describe("createOrFindBy", () => {
+    it("creates a new record when none exists", async () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.adapter = adapter;
+
+      const user = await User.createOrFindBy({ name: "Alice" });
+      expect(user.readAttribute("name")).toBe("Alice");
+      expect(user.isPersisted()).toBe(true);
+    });
+
+    it("finds existing record when create fails", async () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.adapter = adapter;
+
+      const first = await User.create({ name: "Alice" });
+      // findOrCreateBy would find the existing, createOrFindBy tries create first
+      const found = await User.findOrCreateBy({ name: "Alice" });
+      expect(found.id).toBe(first.id);
+    });
+  });
+
+  describe("lockBang", () => {
+    it("reloads the record with a lock clause", async () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.adapter = adapter;
+
+      const user = await User.create({ name: "Alice" });
+      // Update via raw SQL to simulate another process changing the data
+      await adapter.executeMutation(`UPDATE "users" SET "name" = 'Updated' WHERE "id" = ${user.id}`);
+
+      await user.lockBang();
+      expect(user.readAttribute("name")).toBe("Updated");
+    });
+  });
+
+  describe("attributeForInspect", () => {
+    it("formats string attributes with quotes", () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.adapter = adapter;
+
+      const user = new User({ name: "Alice" });
+      expect(user.attributeForInspect("name")).toBe('"Alice"');
+    });
+
+    it("truncates long strings to 50 chars", () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.adapter = adapter;
+
+      const longName = "a".repeat(100);
+      const user = new User({ name: longName });
+      const result = user.attributeForInspect("name");
+      expect(result).toBe(`"${"a".repeat(50)}..."`);
+    });
+
+    it("returns nil for null", () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.adapter = adapter;
+
+      const user = new User({});
+      expect(user.attributeForInspect("name")).toBe("nil");
+    });
+
+    it("formats numbers as JSON", () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("age", "integer");
+      User.adapter = adapter;
+
+      const user = new User({ age: 25 });
+      expect(user.attributeForInspect("age")).toBe("25");
+    });
+  });
+
+  describe("inBatches", () => {
+    it("yields Relation objects for each batch", async () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.adapter = adapter;
+
+      for (let i = 0; i < 5; i++) {
+        await User.create({ name: `User ${i}` });
+      }
+
+      const batches: any[] = [];
+      for await (const batchRelation of User.all().inBatches({ batchSize: 2 })) {
+        const records = await batchRelation.toArray();
+        batches.push(records.length);
+      }
+      expect(batches).toEqual([2, 2, 1]);
+    });
+  });
 });

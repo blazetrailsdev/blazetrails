@@ -6636,4 +6636,91 @@ describe("Grouped Calculations (Rails-guided)", () => {
     expect(user.isFrozen()).toBe(true);
     expect(() => user.writeAttribute("name", "Bob")).toThrow();
   });
+
+  // Rails: test "save(validate: false)"
+  it("save(validate: false) skips validations", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("name", "string"); this.adapter = adapter; this.validates("name", { presence: true }); }
+    }
+
+    const user = new User({ name: "" });
+    expect(await user.save()).toBe(false);
+    expect(await user.save({ validate: false })).toBe(true);
+    expect(user.isPersisted()).toBe(true);
+  });
+
+  // Rails: test "create_or_find_by"
+  it("createOrFindBy creates when none exists", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("name", "string"); this.adapter = adapter; }
+    }
+
+    const user = await User.createOrFindBy({ name: "Alice" });
+    expect(user.readAttribute("name")).toBe("Alice");
+    expect(user.isPersisted()).toBe(true);
+  });
+
+  // Rails: test "lock! reloads with FOR UPDATE"
+  it("lockBang reloads the record", async () => {
+    class Account extends Base {
+      static { this._tableName = "accounts"; this.attribute("id", "integer"); this.attribute("balance", "integer"); this.adapter = adapter; }
+    }
+
+    const account = await Account.create({ balance: 100 });
+    await adapter.executeMutation(`UPDATE "accounts" SET "balance" = 200 WHERE "id" = ${account.id}`);
+
+    await account.lockBang();
+    expect(account.readAttribute("balance")).toBe(200);
+  });
+
+  // Rails: test "attribute_for_inspect"
+  it("attributeForInspect formats values for display", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("name", "string"); this.attribute("age", "integer"); this.adapter = adapter; }
+    }
+
+    const user = await User.create({ name: "Alice", age: 30 });
+    expect(user.attributeForInspect("name")).toBe('"Alice"');
+    expect(user.attributeForInspect("age")).toBe("30");
+    expect(user.attributeForInspect("id")).not.toBe("nil");
+  });
+
+  // Rails: test "attribute_for_inspect truncates long strings"
+  it("attributeForInspect truncates strings over 50 characters", () => {
+    class Post extends Base {
+      static { this._tableName = "posts"; this.attribute("id", "integer"); this.attribute("body", "string"); this.adapter = adapter; }
+    }
+
+    const post = new Post({ body: "x".repeat(100) });
+    expect(post.attributeForInspect("body")).toBe(`"${"x".repeat(50)}..."`);
+  });
+
+  // Rails: test "in_batches yields relations"
+  it("inBatches yields Relation objects for each batch", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("name", "string"); this.adapter = adapter; }
+    }
+
+    for (let i = 0; i < 7; i++) {
+      await User.create({ name: `User ${i}` });
+    }
+
+    const batchSizes: number[] = [];
+    for await (const batchRel of User.all().inBatches({ batchSize: 3 })) {
+      const records = await batchRel.toArray();
+      batchSizes.push(records.length);
+    }
+    expect(batchSizes).toEqual([3, 3, 1]);
+  });
+
+  // Rails: test "createOrFindBy on relation"
+  it("createOrFindBy works on Relation", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("name", "string"); this.attribute("role", "string"); this.adapter = adapter; }
+    }
+
+    const user = await User.all().createOrFindBy({ name: "Alice", role: "admin" });
+    expect(user.readAttribute("name")).toBe("Alice");
+    expect(user.readAttribute("role")).toBe("admin");
+  });
 });

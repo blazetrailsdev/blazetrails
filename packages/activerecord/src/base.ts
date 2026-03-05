@@ -485,6 +485,45 @@ export class Base extends Model {
   }
 
   /**
+   * Try to create a record first; if it already exists (uniqueness violation),
+   * find and return the existing one.
+   *
+   * Mirrors: ActiveRecord::Base.create_or_find_by
+   */
+  static async createOrFindBy(
+    conditions: Record<string, unknown>,
+    extra?: Record<string, unknown>
+  ): Promise<Base> {
+    try {
+      return await this.create({ ...conditions, ...extra });
+    } catch {
+      const record = await this.findBy(conditions);
+      if (record) return record;
+      throw new RecordNotFound(`${this.name} not found`, this.name);
+    }
+  }
+
+  /**
+   * Try to create a record first (raising on validation failure);
+   * if it already exists, find and return the existing one.
+   *
+   * Mirrors: ActiveRecord::Base.create_or_find_by!
+   */
+  static async createOrFindByBang(
+    conditions: Record<string, unknown>,
+    extra?: Record<string, unknown>
+  ): Promise<Base> {
+    try {
+      return await this.createBang({ ...conditions, ...extra });
+    } catch (e) {
+      if (e instanceof RecordInvalid) throw e;
+      const record = await this.findBy(conditions);
+      if (record) return record;
+      throw new RecordNotFound(`${this.name} not found`, this.name);
+    }
+  }
+
+  /**
    * Create a record and save it to the database.
    *
    * Mirrors: ActiveRecord::Base.create
@@ -793,7 +832,7 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base#save
    */
-  async save(): Promise<boolean> {
+  async save(options?: { validate?: boolean }): Promise<boolean> {
     if (this._destroyed) {
       throw new RecordNotSaved(
         `Cannot save a destroyed ${(this.constructor as typeof Base).name}`, this
@@ -802,16 +841,19 @@ export class Base extends Model {
     if (this._readonly) {
       throw new ReadOnlyRecord(this);
     }
-    // Set validation context for on: :create / on: :update
-    this._validationContext = this._newRecord ? "create" : "update";
-    if (!this.isValid()) {
+    const shouldValidate = options?.validate !== false;
+    if (shouldValidate) {
+      // Set validation context for on: :create / on: :update
+      this._validationContext = this._newRecord ? "create" : "update";
+      if (!this.isValid()) {
+        this._validationContext = null;
+        return false;
+      }
       this._validationContext = null;
-      return false;
-    }
-    this._validationContext = null;
 
-    // Run async validations (uniqueness)
-    if (!await this._runAsyncValidations()) return false;
+      // Run async validations (uniqueness)
+      if (!await this._runAsyncValidations()) return false;
+    }
 
     const ctor = this.constructor as typeof Base;
 
@@ -1142,6 +1184,45 @@ export class Base extends Model {
   }
 
   /**
+   * Reload the record with a pessimistic lock (SELECT ... FOR UPDATE).
+   *
+   * Mirrors: ActiveRecord::Base#lock!
+   */
+  async lockBang(lockClause: string = "FOR UPDATE"): Promise<this> {
+    const ctor = this.constructor as typeof Base;
+    const pk = this.id;
+    const pkQuoted = typeof pk === "number" ? String(pk) : `'${pk}'`;
+    const sql = `SELECT * FROM "${ctor.tableName}" WHERE "${ctor.primaryKey}" = ${pkQuoted} ${lockClause}`;
+    const rows = await ctor.adapter.execute(sql);
+
+    if (rows.length === 0) {
+      throw new RecordNotFound(
+        `${ctor.name} with ${ctor.primaryKey}=${pk} not found`,
+        ctor.name, ctor.primaryKey, pk
+      );
+    }
+
+    for (const [key, value] of Object.entries(rows[0])) {
+      this._attributes.set(key, value);
+    }
+    this._dirty.snapshot(this._attributes);
+    return this;
+  }
+
+  /**
+   * Wraps the passed block in a transaction, reloading the record with a lock.
+   *
+   * Mirrors: ActiveRecord::Base#with_lock
+   */
+  async withLock(fn: (record: this) => Promise<void> | void): Promise<void> {
+    const { transaction } = await import("./transactions.js");
+    await transaction(async () => {
+      await this.lockBang();
+      await fn(this);
+    });
+  }
+
+  /**
    * Returns the id as a string for URL params.
    *
    * Mirrors: ActiveRecord::Base#to_param
@@ -1167,6 +1248,22 @@ export class Base extends Model {
       })
       .join(", ");
     return `#<${ctor.name} ${attrs}>`;
+  }
+
+  /**
+   * Format a single attribute value for display in inspect output.
+   *
+   * Mirrors: ActiveRecord::Base#attribute_for_inspect
+   */
+  attributeForInspect(attr: string): string {
+    const value = this.readAttribute(attr);
+    if (value === null || value === undefined) return "nil";
+    if (typeof value === "string") {
+      if (value.length > 50) return `"${value.substring(0, 50)}..."`;
+      return `"${value}"`;
+    }
+    if (value instanceof Date) return `"${value.toISOString()}"`;
+    return JSON.stringify(value);
   }
 
   /**

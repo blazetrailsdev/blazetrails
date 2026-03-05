@@ -1125,6 +1125,27 @@ export class Model {
     return `${mn.collection}/_${mn.element}`;
   }
 
+  /**
+   * Check if this model instance responds to a method/attribute.
+   *
+   * Mirrors: ActiveModel::AttributeMethods#respond_to?
+   */
+  respondTo(method: string): boolean {
+    if (typeof (this as any)[method] === "function") return true;
+    if (this._attributes.has(method)) return true;
+    return false;
+  }
+
+  /**
+   * Returns the type of the attribute (the Type object).
+   *
+   * Mirrors: ActiveModel::Attributes#attribute_for_inspect
+   */
+  typeForAttribute(name: string): Type | null {
+    const def = (this.constructor as typeof Model)._attributeDefinitions.get(name);
+    return def ? def.type : null;
+  }
+
   // -- Callbacks helper for subclasses --
 
   runCallbacks(event: string, block: () => void): boolean {

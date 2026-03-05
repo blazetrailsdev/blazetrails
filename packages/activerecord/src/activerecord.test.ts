@@ -9463,4 +9463,60 @@ describe("ActiveRecord", () => {
       expect(sql).toContain("OFFSET 10");
     });
   });
+
+  describe("Base#isEqual", () => {
+    it("returns true for same class and same id", async () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static {
+          this.attribute("id", "integer");
+          this.attribute("name", "string");
+          this.adapter = adapter;
+        }
+      }
+      const u1 = await User.create({ name: "Alice" });
+      const u2 = await User.find(u1.id);
+      expect(u1.isEqual(u2)).toBe(true);
+    });
+
+    it("returns false for different ids", async () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static {
+          this.attribute("id", "integer");
+          this.attribute("name", "string");
+          this.adapter = adapter;
+        }
+      }
+      const u1 = await User.create({ name: "Alice" });
+      const u2 = await User.create({ name: "Bob" });
+      expect(u1.isEqual(u2)).toBe(false);
+    });
+
+    it("returns false for new records", () => {
+      class User extends Base {
+        static {
+          this.attribute("id", "integer");
+          this.attribute("name", "string");
+        }
+      }
+      const u1 = new User({ name: "Alice" });
+      const u2 = new User({ name: "Alice" });
+      expect(u1.isEqual(u2)).toBe(false);
+    });
+
+    it("returns false for non-Base objects", async () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static {
+          this.attribute("id", "integer");
+          this.attribute("name", "string");
+          this.adapter = adapter;
+        }
+      }
+      const u = await User.create({ name: "Alice" });
+      expect(u.isEqual("not a record")).toBe(false);
+      expect(u.isEqual(null)).toBe(false);
+    });
+  });
 });

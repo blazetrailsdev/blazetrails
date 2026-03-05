@@ -2863,4 +2863,53 @@ describe("ActiveModel", () => {
       expect(u.errors.get("email").length).toBeGreaterThan(0);
     });
   });
+
+  describe("respondTo", () => {
+    it("returns true for defined methods", () => {
+      class User extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const u = new User({ name: "Alice" });
+      expect(u.respondTo("readAttribute")).toBe(true);
+      expect(u.respondTo("isValid")).toBe(true);
+    });
+
+    it("returns true for attributes", () => {
+      class User extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const u = new User({ name: "Alice" });
+      expect(u.respondTo("name")).toBe(true);
+    });
+
+    it("returns false for non-existent methods/attributes", () => {
+      class User extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const u = new User({ name: "Alice" });
+      expect(u.respondTo("nonExistentMethod")).toBe(false);
+    });
+  });
+
+  describe("typeForAttribute", () => {
+    it("returns the type for a registered attribute", () => {
+      class User extends Model {
+        static {
+          this.attribute("name", "string");
+          this.attribute("age", "integer");
+        }
+      }
+      const u = new User({ name: "Alice", age: 25 });
+      expect(u.typeForAttribute("name")?.name).toBe("string");
+      expect(u.typeForAttribute("age")?.name).toBe("integer");
+    });
+
+    it("returns null for unknown attributes", () => {
+      class User extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const u = new User({ name: "Alice" });
+      expect(u.typeForAttribute("unknown")).toBeNull();
+    });
+  });
 });

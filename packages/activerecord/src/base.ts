@@ -2360,6 +2360,29 @@ export class Base extends Model {
   }
 
   /**
+   * Compare two records for equality based on class and primary key.
+   *
+   * Mirrors: ActiveRecord::Core#==
+   */
+  isEqual(other: unknown): boolean {
+    if (!(other instanceof Base)) return false;
+    if (this.constructor !== other.constructor) return false;
+    const thisId = this.id;
+    const otherId = other.id;
+    return thisId != null && thisId === otherId;
+  }
+
+  /**
+   * Return a string suitable for use as a URL slug.
+   * Override in subclasses for friendly URLs.
+   *
+   * Mirrors: ActiveRecord::Base#to_param
+   */
+  toSlug(): string | null {
+    return this.toParam();
+  }
+
+  /**
    * Sanitize a SQL template with bind parameters.
    *
    * Mirrors: ActiveRecord::Base.sanitize_sql_array

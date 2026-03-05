@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { Base, Relation, Range, MemoryAdapter, transaction, savepoint, CollectionProxy, association, MigrationRunner, defineEnum, readEnumValue, enableSti, hasSecurePassword, store, loadHabtm } from "./index.js";
+import { Base, Relation, Range, MemoryAdapter, transaction, savepoint, CollectionProxy, association, MigrationRunner, defineEnum, readEnumValue, enableSti, hasSecurePassword, store, loadHabtm, delegate } from "./index.js";
 import { Migration, TableDefinition, Schema } from "./migration.js";
 import {
   Associations,
@@ -4547,6 +4547,324 @@ describe("ActiveRecord", () => {
       // Store data should persist (might be serialized as object or string)
       expect((found as any).theme).toBe("dark");
       expect((found as any).language).toBe("en");
+    });
+  });
+
+  // -- Counter Cache --
+  describe("counter_cache", () => {
+    let adapter: MemoryAdapter;
+
+    beforeEach(() => {
+      adapter = freshAdapter();
+    });
+
+    it("increments counter on create and decrements on destroy", async () => {
+      class Post extends Base {
+        static _tableName = "posts";
+      }
+      Post.attribute("id", "integer");
+      Post.attribute("title", "string");
+      Post.attribute("comments_count", "integer", { default: 0 });
+      Post.adapter = adapter;
+      registerModel(Post);
+
+      class Comment extends Base {
+        static _tableName = "comments";
+      }
+      Comment.attribute("id", "integer");
+      Comment.attribute("body", "string");
+      Comment.attribute("post_id", "integer");
+      Comment.adapter = adapter;
+      Associations.belongsTo.call(Comment, "post", { counterCache: true });
+      registerModel(Comment);
+
+      const post = await Post.create({ title: "Hello" });
+      expect(post.readAttribute("comments_count")).toBe(0);
+
+      const c1 = await Comment.create({ body: "Nice!", post_id: post.id });
+      await post.reload();
+      expect(post.readAttribute("comments_count")).toBe(1);
+
+      const c2 = await Comment.create({ body: "Cool!", post_id: post.id });
+      await post.reload();
+      expect(post.readAttribute("comments_count")).toBe(2);
+
+      await c1.destroy();
+      await post.reload();
+      expect(post.readAttribute("comments_count")).toBe(1);
+    });
+
+    it("supports custom counter column name", async () => {
+      class Author extends Base {
+        static _tableName = "authors";
+      }
+      Author.attribute("id", "integer");
+      Author.attribute("name", "string");
+      Author.attribute("num_books", "integer", { default: 0 });
+      Author.adapter = adapter;
+      registerModel(Author);
+
+      class Book extends Base {
+        static _tableName = "books";
+      }
+      Book.attribute("id", "integer");
+      Book.attribute("title", "string");
+      Book.attribute("author_id", "integer");
+      Book.adapter = adapter;
+      Associations.belongsTo.call(Book, "author", { counterCache: "num_books" });
+      registerModel(Book);
+
+      const author = await Author.create({ name: "Tolkien" });
+      await Book.create({ title: "The Hobbit", author_id: author.id });
+      await author.reload();
+      expect(author.readAttribute("num_books")).toBe(1);
+    });
+  });
+
+  // -- Touch on belongs_to --
+  describe("touch on belongs_to", () => {
+    let adapter: MemoryAdapter;
+
+    beforeEach(() => {
+      adapter = freshAdapter();
+    });
+
+    it("touches parent updated_at when child is saved", async () => {
+      class Post extends Base {
+        static _tableName = "posts";
+      }
+      Post.attribute("id", "integer");
+      Post.attribute("title", "string");
+      Post.attribute("updated_at", "datetime");
+      Post.adapter = adapter;
+      registerModel(Post);
+
+      class Comment extends Base {
+        static _tableName = "comments";
+      }
+      Comment.attribute("id", "integer");
+      Comment.attribute("body", "string");
+      Comment.attribute("post_id", "integer");
+      Comment.adapter = adapter;
+      Associations.belongsTo.call(Comment, "post", { touch: true });
+      registerModel(Comment);
+
+      const post = await Post.create({ title: "Hello" });
+      const originalUpdatedAt = post.readAttribute("updated_at");
+
+      // Small delay to ensure different timestamp
+      await new Promise((r) => setTimeout(r, 10));
+
+      await Comment.create({ body: "Nice!", post_id: post.id });
+      await post.reload();
+
+      const newUpdatedAt = post.readAttribute("updated_at");
+      expect(newUpdatedAt).not.toEqual(originalUpdatedAt);
+    });
+  });
+
+  // -- Optimistic Locking --
+  describe("optimistic locking", () => {
+    let adapter: MemoryAdapter;
+
+    beforeEach(() => {
+      adapter = freshAdapter();
+    });
+
+    it("increments lock_version on update", async () => {
+      class Post extends Base {
+        static _tableName = "posts";
+      }
+      Post.attribute("id", "integer");
+      Post.attribute("title", "string");
+      Post.attribute("lock_version", "integer", { default: 0 });
+      Post.adapter = adapter;
+
+      const post = await Post.create({ title: "Hello" });
+      expect(post.readAttribute("lock_version")).toBe(0);
+
+      await post.update({ title: "Updated" });
+      expect(post.readAttribute("lock_version")).toBe(1);
+
+      await post.update({ title: "Updated Again" });
+      expect(post.readAttribute("lock_version")).toBe(2);
+    });
+
+    it("raises StaleObjectError on version mismatch", async () => {
+      class Post extends Base {
+        static _tableName = "posts";
+      }
+      Post.attribute("id", "integer");
+      Post.attribute("title", "string");
+      Post.attribute("lock_version", "integer", { default: 0 });
+      Post.adapter = adapter;
+
+      const post1 = await Post.create({ title: "Hello" });
+      const post2 = await Post.find(post1.id);
+
+      // Both have lock_version 0
+      await post1.update({ title: "Updated by 1" });
+      // post1 now has lock_version 1, but post2 still has 0
+
+      await expect(post2.update({ title: "Updated by 2" })).rejects.toThrow(
+        "StaleObjectError"
+      );
+    });
+  });
+
+  // -- Readonly --
+  describe("readonly", () => {
+    let adapter: MemoryAdapter;
+
+    beforeEach(() => {
+      adapter = freshAdapter();
+    });
+
+    it("prevents saving a readonly record", async () => {
+      class Post extends Base {
+        static _tableName = "posts";
+      }
+      Post.attribute("id", "integer");
+      Post.attribute("title", "string");
+      Post.adapter = adapter;
+
+      const post = await Post.create({ title: "Hello" });
+      post.readonlyBang();
+
+      expect(post.isReadonly()).toBe(true);
+      await expect(post.save()).rejects.toThrow("readonly");
+    });
+
+    it("prevents destroying a readonly record", async () => {
+      class Post extends Base {
+        static _tableName = "posts";
+      }
+      Post.attribute("id", "integer");
+      Post.attribute("title", "string");
+      Post.adapter = adapter;
+
+      const post = await Post.create({ title: "Hello" });
+      post.readonlyBang();
+
+      await expect(post.destroy()).rejects.toThrow("readonly");
+    });
+  });
+
+  // -- Validation Contexts --
+  describe("validation contexts", () => {
+    it("on: create only runs for new records", async () => {
+      class User extends Base {
+        static _tableName = "users";
+      }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.attribute("invite_code", "string");
+      User.adapter = freshAdapter();
+      User.validates("invite_code", { presence: true, on: "create" });
+
+      // Can't create without invite_code
+      const user = new User({ name: "Alice" });
+      const saved = await user.save();
+      expect(saved).toBe(false);
+
+      // Can create with invite_code
+      const user2 = new User({ name: "Alice", invite_code: "ABC123" });
+      const saved2 = await user2.save();
+      expect(saved2).toBe(true);
+
+      // Can update without invite_code (validation skipped for update context)
+      user2.writeAttribute("invite_code", null);
+      user2.writeAttribute("name", "Bob");
+      const saved3 = await user2.save();
+      expect(saved3).toBe(true);
+    });
+
+    it("on: update only runs for existing records", async () => {
+      class User extends Base {
+        static _tableName = "users";
+      }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.attribute("reason", "string");
+      User.adapter = freshAdapter();
+      User.validates("reason", { presence: true, on: "update" });
+
+      // Can create without reason
+      const user = await User.create({ name: "Alice" });
+      expect(user.isPersisted()).toBe(true);
+
+      // Can't update without reason
+      user.writeAttribute("name", "Bob");
+      const saved = await user.save();
+      expect(saved).toBe(false);
+
+      // Can update with reason
+      user.writeAttribute("reason", "Name change");
+      const saved2 = await user.save();
+      expect(saved2).toBe(true);
+    });
+  });
+
+  // -- Delegate --
+  describe("delegate", () => {
+    let adapter: MemoryAdapter;
+
+    beforeEach(() => {
+      adapter = freshAdapter();
+    });
+
+    it("delegates methods to an association", async () => {
+      class Author extends Base {
+        static _tableName = "authors";
+      }
+      Author.attribute("id", "integer");
+      Author.attribute("name", "string");
+      Author.attribute("email", "string");
+      Author.adapter = adapter;
+      registerModel(Author);
+
+      class Book extends Base {
+        static _tableName = "books";
+      }
+      Book.attribute("id", "integer");
+      Book.attribute("title", "string");
+      Book.attribute("author_id", "integer");
+      Book.adapter = adapter;
+      Associations.belongsTo.call(Book, "author");
+      delegate(Book, ["name", "email"], { to: "author" });
+      registerModel(Book);
+
+      const author = await Author.create({ name: "Tolkien", email: "jrr@shire.com" });
+      const book = await Book.create({ title: "The Hobbit", author_id: author.id });
+
+      expect(await (book as any).name()).toBe("Tolkien");
+      expect(await (book as any).email()).toBe("jrr@shire.com");
+    });
+
+    it("supports prefix option", async () => {
+      class Author extends Base {
+        static _tableName = "authors";
+      }
+      Author.attribute("id", "integer");
+      Author.attribute("name", "string");
+      Author.adapter = adapter;
+      registerModel(Author);
+
+      class Book extends Base {
+        static _tableName = "books";
+      }
+      Book.attribute("id", "integer");
+      Book.attribute("title", "string");
+      Book.attribute("author_id", "integer");
+      Book.adapter = adapter;
+      Associations.belongsTo.call(Book, "author");
+      delegate(Book, ["name"], { to: "author", prefix: true });
+      registerModel(Book);
+
+      const author = await Author.create({ name: "Tolkien" });
+      const book = await Book.create({ title: "The Hobbit", author_id: author.id });
+
+      expect(await (book as any).authorName()).toBe("Tolkien");
     });
   });
 });

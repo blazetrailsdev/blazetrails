@@ -13,6 +13,8 @@ export interface AssociationOptions {
   source?: string;
   polymorphic?: boolean;
   as?: string;
+  counterCache?: boolean | string;
+  touch?: boolean;
 }
 
 export interface AssociationDefinition {
@@ -460,4 +462,69 @@ export function association(record: Base, assocName: string): CollectionProxy {
     throw new Error(`Association "${assocName}" not found on ${ctor.name}`);
   }
   return new CollectionProxy(record, assocName, assocDef);
+}
+
+/**
+ * Update counter caches after a record is created or destroyed.
+ *
+ * Mirrors: ActiveRecord::CounterCache
+ */
+export async function updateCounterCaches(
+  record: Base,
+  direction: "increment" | "decrement"
+): Promise<void> {
+  const ctor = record.constructor as typeof Base;
+  const associations: AssociationDefinition[] = (ctor as any)._associations ?? [];
+
+  for (const assoc of associations) {
+    if (assoc.type !== "belongsTo" || !assoc.options.counterCache) continue;
+
+    const foreignKey = assoc.options.foreignKey ?? `${underscore(assoc.name)}_id`;
+    const fkValue = record.readAttribute(foreignKey);
+    if (fkValue === null || fkValue === undefined) continue;
+
+    const className = assoc.options.className ?? camelize(assoc.name);
+    const targetModel = resolveModel(className);
+
+    // Counter column name
+    const counterCol =
+      typeof assoc.options.counterCache === "string"
+        ? assoc.options.counterCache
+        : `${pluralize(underscore(ctor.name))}_count`;
+
+    const parent = await targetModel.findBy({ [targetModel.primaryKey]: fkValue });
+    if (!parent) continue;
+
+    if (direction === "increment") {
+      await parent.incrementBang(counterCol);
+    } else {
+      await parent.decrementBang(counterCol);
+    }
+  }
+}
+
+/**
+ * Touch parent associations after a record is saved or destroyed.
+ *
+ * Mirrors: ActiveRecord::Associations::Builder::BelongsTo touch option
+ */
+export async function touchBelongsToParents(record: Base): Promise<void> {
+  const ctor = record.constructor as typeof Base;
+  const associations: AssociationDefinition[] = (ctor as any)._associations ?? [];
+
+  for (const assoc of associations) {
+    if (assoc.type !== "belongsTo" || !assoc.options.touch) continue;
+
+    const foreignKey = assoc.options.foreignKey ?? `${underscore(assoc.name)}_id`;
+    const fkValue = record.readAttribute(foreignKey);
+    if (fkValue === null || fkValue === undefined) continue;
+
+    const className = assoc.options.className ?? camelize(assoc.name);
+    const targetModel = resolveModel(className);
+
+    const parent = await targetModel.findBy({ [targetModel.primaryKey]: fkValue });
+    if (!parent) continue;
+
+    await parent.touch();
+  }
 }

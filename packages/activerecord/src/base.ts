@@ -340,6 +340,7 @@ export class Base extends Model {
 
   _newRecord = true;
   private _destroyed = false;
+  private _readonly = false;
   _preloadedAssociations: Map<string, unknown> = new Map();
 
   /**
@@ -367,6 +368,25 @@ export class Base extends Model {
    */
   isDestroyed(): boolean {
     return this._destroyed;
+  }
+
+  /**
+   * Returns true if the record is marked readonly.
+   *
+   * Mirrors: ActiveRecord::Base#readonly?
+   */
+  isReadonly(): boolean {
+    return this._readonly;
+  }
+
+  /**
+   * Mark the record as readonly. Raises on save/update/destroy.
+   *
+   * Mirrors: ActiveRecord::Base#readonly!
+   */
+  readonlyBang(): this {
+    this._readonly = true;
+    return this;
   }
 
   /**
@@ -507,7 +527,18 @@ export class Base extends Model {
         `Cannot save a destroyed ${(this.constructor as typeof Base).name}`
       );
     }
-    if (!this.isValid()) return false;
+    if (this._readonly) {
+      throw new Error(
+        `${(this.constructor as typeof Base).name} is marked as readonly`
+      );
+    }
+    // Set validation context for on: :create / on: :update
+    this._validationContext = this._newRecord ? "create" : "update";
+    if (!this.isValid()) {
+      this._validationContext = null;
+      return false;
+    }
+    this._validationContext = null;
 
     // Run async validations (uniqueness)
     if (!await this._runAsyncValidations()) return false;
@@ -553,8 +584,19 @@ export class Base extends Model {
     }
 
     if (saved) {
+      const wasNewRecord = this._newRecord;
       this._newRecord = false;
       this.changesApplied();
+
+      // Counter cache: increment on create
+      if (wasNewRecord) {
+        const { updateCounterCaches } = await import("./associations.js");
+        await updateCounterCaches(this, "increment");
+      }
+
+      // Touch parent associations
+      const { touchBelongsToParents } = await import("./associations.js");
+      await touchBelongsToParents(this);
 
       // Fire after_commit callbacks
       const { currentTransaction } = await import("./transactions.js");
@@ -670,8 +712,26 @@ export class Base extends Model {
         ? String(pk)
         : `'${String(pk).replace(/'/g, "''")}'`;
 
-    const sql = `UPDATE "${table.name}" SET ${setClause} WHERE "${ctor.primaryKey}" = ${pkQuoted}`;
-    this._pendingOperation = ctor.adapter.executeMutation(sql).then(() => {});
+    // Optimistic locking: include lock_version in WHERE and increment it
+    let lockClause = "";
+    if (ctor._attributeDefinitions.has("lock_version")) {
+      const currentVersion = Number(this.readAttribute("lock_version")) || 0;
+      lockClause = ` AND "lock_version" = ${currentVersion}`;
+      this._attributes.set("lock_version", currentVersion + 1);
+    }
+
+    const finalSetClause = ctor._attributeDefinitions.has("lock_version")
+      ? `${setClause}, "lock_version" = ${this.readAttribute("lock_version")}`
+      : setClause;
+
+    const sql = `UPDATE "${table.name}" SET ${finalSetClause} WHERE "${ctor.primaryKey}" = ${pkQuoted}${lockClause}`;
+    this._pendingOperation = ctor.adapter.executeMutation(sql).then((affected) => {
+      if (lockClause && affected === 0) {
+        throw new Error(
+          `StaleObjectError: Attempted to update a stale ${ctor.name}. The record has been modified by another process.`
+        );
+      }
+    });
   }
 
   /**
@@ -704,6 +764,11 @@ export class Base extends Model {
    * Mirrors: ActiveRecord::Base#destroy
    */
   async destroy(): Promise<this> {
+    if (this._readonly) {
+      throw new Error(
+        `${(this.constructor as typeof Base).name} is marked as readonly`
+      );
+    }
     const ctor = this.constructor as typeof Base;
 
     // Process dependent associations before destroy
@@ -728,6 +793,11 @@ export class Base extends Model {
     }
 
     this._destroyed = true;
+
+    // Counter cache: decrement on destroy
+    const { updateCounterCaches } = await import("./associations.js");
+    await updateCounterCaches(this, "decrement");
+
     return this;
   }
 

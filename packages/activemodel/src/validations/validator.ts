@@ -13,6 +13,7 @@ export interface Validator {
 export interface ConditionalOptions {
   if?: (record: any) => boolean;
   unless?: (record: any) => boolean;
+  on?: "create" | "update";
 }
 
 export function shouldValidate(

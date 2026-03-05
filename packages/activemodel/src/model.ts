@@ -29,6 +29,7 @@ interface AttributeDefinition {
 interface ValidationEntry {
   attribute: string;
   validator: Validator;
+  on?: "create" | "update";
 }
 
 interface CustomValidationEntry {
@@ -80,11 +81,14 @@ export class Model {
       this._validations = [...this._validations];
     }
 
+    const onContext = rules.on as "create" | "update" | undefined;
+
     if (rules.presence) {
       const opts = rules.presence === true ? {} : (rules.presence as any);
       this._validations.push({
         attribute,
         validator: new PresenceValidator(opts),
+        on: onContext,
       });
     }
 
@@ -93,6 +97,7 @@ export class Model {
       this._validations.push({
         attribute,
         validator: new AbsenceValidator(opts),
+        on: onContext,
       });
     }
 
@@ -100,6 +105,7 @@ export class Model {
       this._validations.push({
         attribute,
         validator: new LengthValidator(rules.length as any),
+        on: onContext,
       });
     }
 
@@ -109,6 +115,7 @@ export class Model {
       this._validations.push({
         attribute,
         validator: new NumericalityValidator(opts),
+        on: onContext,
       });
     }
 
@@ -116,6 +123,7 @@ export class Model {
       this._validations.push({
         attribute,
         validator: new InclusionValidator(rules.inclusion as any),
+        on: onContext,
       });
     }
 
@@ -123,6 +131,7 @@ export class Model {
       this._validations.push({
         attribute,
         validator: new ExclusionValidator(rules.exclusion as any),
+        on: onContext,
       });
     }
 
@@ -130,6 +139,7 @@ export class Model {
       this._validations.push({
         attribute,
         validator: new FormatValidator(rules.format as any),
+        on: onContext,
       });
     }
 
@@ -138,6 +148,7 @@ export class Model {
       this._validations.push({
         attribute,
         validator: new AcceptanceValidator(opts),
+        on: onContext,
       });
     }
 
@@ -147,6 +158,7 @@ export class Model {
       this._validations.push({
         attribute,
         validator: new ConfirmationValidator(opts),
+        on: onContext,
       });
     }
 
@@ -154,6 +166,7 @@ export class Model {
       this._validations.push({
         attribute,
         validator: new ComparisonValidator(rules.comparison as any),
+        on: onContext,
       });
     }
   }
@@ -330,15 +343,20 @@ export class Model {
 
   // -- Validations --
 
-  isValid(): boolean {
+  _validationContext: "create" | "update" | null = null;
+
+  isValid(context?: "create" | "update"): boolean {
     this.errors.clear();
     const ctor = this.constructor as typeof Model;
+    const effectiveContext = context ?? this._validationContext;
 
     // Run before_validation callbacks
     if (!ctor._callbackChain.runBefore("validation", this)) return false;
 
     // Run attribute validations
     for (const entry of ctor._validations) {
+      // If validation has an `on` context, only run when context matches
+      if (entry.on && entry.on !== effectiveContext) continue;
       const value = this._attributes.get(entry.attribute);
       entry.validator.validate(this, entry.attribute, value, this.errors);
     }

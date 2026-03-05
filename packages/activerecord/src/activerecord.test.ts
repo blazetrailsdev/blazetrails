@@ -8156,4 +8156,50 @@ describe("ActiveRecord", () => {
       expect(typeof rel.countPublished).toBe("function");
     });
   });
+
+  describe("abstract_class", () => {
+    it("marks a class as abstract", () => {
+      class ApplicationRecord extends Base {
+        static { this.abstractClass = true; }
+      }
+      expect(ApplicationRecord.abstractClass).toBe(true);
+      expect(Base.abstractClass).toBe(false);
+    });
+  });
+
+  describe("table_name_prefix and table_name_suffix", () => {
+    it("applies prefix to inferred table name", () => {
+      class User extends Base {
+        static { this.tableNamePrefix = "app_"; }
+      }
+      expect(User.tableName).toBe("app_users");
+    });
+
+    it("applies suffix to inferred table name", () => {
+      class User extends Base {
+        static { this.tableNameSuffix = "_v2"; }
+      }
+      expect(User.tableName).toBe("users_v2");
+    });
+
+    it("applies both prefix and suffix", () => {
+      class User extends Base {
+        static {
+          this.tableNamePrefix = "myapp_";
+          this.tableNameSuffix = "_development";
+        }
+      }
+      expect(User.tableName).toBe("myapp_users_development");
+    });
+
+    it("does not apply prefix/suffix when tableName is explicitly set", () => {
+      class User extends Base {
+        static {
+          this.tableName = "custom_users";
+          this.tableNamePrefix = "app_";
+        }
+      }
+      expect(User.tableName).toBe("custom_users");
+    });
+  });
 });

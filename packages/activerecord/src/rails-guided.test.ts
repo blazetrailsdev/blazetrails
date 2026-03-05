@@ -7455,4 +7455,24 @@ describe("Grouped Calculations (Rails-guided)", () => {
     const rel = (Post as any).published();
     expect(typeof rel.recentFirst).toBe("function");
   });
+
+  // Rails guide: abstract_class — ApplicationRecord pattern
+  it("abstract_class marks a class as abstract (ApplicationRecord pattern)", () => {
+    class ApplicationRecord extends Base {
+      static { this.abstractClass = true; }
+    }
+    class User extends ApplicationRecord {}
+    expect(ApplicationRecord.abstractClass).toBe(true);
+    expect(User.abstractClass).toBe(false);
+    // User still gets its own inferred table name
+    expect(User.tableName).toBe("users");
+  });
+
+  // Rails guide: table_name_prefix / table_name_suffix
+  it("table_name_prefix and table_name_suffix customize table names", () => {
+    class Order extends Base {
+      static { this.tableNamePrefix = "shop_"; this.tableNameSuffix = "_records"; }
+    }
+    expect(Order.tableName).toBe("shop_orders_records");
+  });
 });

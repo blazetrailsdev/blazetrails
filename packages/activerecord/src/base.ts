@@ -60,6 +60,51 @@ export class Base extends Model {
   static _tableName: string | null = null;
   static _primaryKey = "id";
   static _adapter: DatabaseAdapter | null = null;
+  static _abstractClass = false;
+  static _tableNamePrefix = "";
+  static _tableNameSuffix = "";
+
+  /**
+   * Mark this class as abstract — it won't have its own table.
+   * Does not inherit from parent: only true if explicitly set on this class.
+   *
+   * Mirrors: ActiveRecord::Base.abstract_class
+   */
+  static get abstractClass(): boolean {
+    return Object.prototype.hasOwnProperty.call(this, "_abstractClass")
+      ? this._abstractClass
+      : false;
+  }
+
+  static set abstractClass(value: boolean) {
+    this._abstractClass = value;
+  }
+
+  /**
+   * Prefix applied to the inferred table name.
+   *
+   * Mirrors: ActiveRecord::Base.table_name_prefix
+   */
+  static get tableNamePrefix(): string {
+    return this._tableNamePrefix;
+  }
+
+  static set tableNamePrefix(prefix: string) {
+    this._tableNamePrefix = prefix;
+  }
+
+  /**
+   * Suffix applied to the inferred table name.
+   *
+   * Mirrors: ActiveRecord::Base.table_name_suffix
+   */
+  static get tableNameSuffix(): string {
+    return this._tableNameSuffix;
+  }
+
+  static set tableNameSuffix(suffix: string) {
+    this._tableNameSuffix = suffix;
+  }
 
   /**
    * Set or get the table name. Inferred from class name if not set.
@@ -72,7 +117,8 @@ export class Base extends Model {
     if (isStiSubclass(this)) {
       return getStiBase(this).tableName;
     }
-    return pluralize(underscore(this.name));
+    const inferred = pluralize(underscore(this.name));
+    return `${this._tableNamePrefix}${inferred}${this._tableNameSuffix}`;
   }
 
   static set tableName(name: string) {

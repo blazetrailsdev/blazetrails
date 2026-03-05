@@ -192,6 +192,44 @@ export class Base extends Model {
     return this._attributeDefinitions.has(name);
   }
 
+  // -- Timestamp control --
+  static _recordTimestamps = true;
+  private static _noTouching = false;
+
+  /**
+   * Controls whether timestamps are automatically set on save.
+   *
+   * Mirrors: ActiveRecord::Base.record_timestamps
+   */
+  static get recordTimestamps(): boolean {
+    return this._recordTimestamps;
+  }
+
+  static set recordTimestamps(value: boolean) {
+    this._recordTimestamps = value;
+  }
+
+  /**
+   * Execute a block with timestamp updates suppressed.
+   *
+   * Mirrors: ActiveRecord::Base.no_touching
+   */
+  static async noTouching<R>(fn: () => R | Promise<R>): Promise<R> {
+    this._noTouching = true;
+    try {
+      return await fn();
+    } finally {
+      this._noTouching = false;
+    }
+  }
+
+  /**
+   * Check if touching is currently suppressed.
+   */
+  static get isTouchingSuppressed(): boolean {
+    return this._noTouching;
+  }
+
   // -- Ignored columns --
   static _ignoredColumns: string[] = [];
 

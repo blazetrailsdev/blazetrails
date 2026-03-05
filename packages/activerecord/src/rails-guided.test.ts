@@ -7475,4 +7475,72 @@ describe("Grouped Calculations (Rails-guided)", () => {
     }
     expect(Order.tableName).toBe("shop_orders_records");
   });
+
+  // Rails guide: record_timestamps — control timestamp behavior
+  it("recordTimestamps controls timestamp auto-updates", () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.adapter = new MemoryAdapter(); }
+    }
+    expect(User.recordTimestamps).toBe(true);
+    User.recordTimestamps = false;
+    expect(User.recordTimestamps).toBe(false);
+  });
+
+  // Rails guide: no_touching — suppress touch callbacks
+  it("noTouching() suppresses touching during block", async () => {
+    const adapter = new MemoryAdapter();
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.adapter = adapter; }
+    }
+    let suppressed = false;
+    await User.noTouching(async () => {
+      suppressed = User.isTouchingSuppressed;
+    });
+    expect(suppressed).toBe(true);
+    expect(User.isTouchingSuppressed).toBe(false);
+  });
+
+  // Rails guide: generates_token_for — purpose-specific tokens
+  it("generatesTokenFor creates and resolves purpose tokens", async () => {
+    const { generatesTokenFor } = await import("./generates-token-for.js");
+    const adapter = new MemoryAdapter();
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    generatesTokenFor(User, "email_verify", {});
+    const user = await User.create({ name: "Alice" });
+    const token = (user as any).generateTokenFor("email_verify");
+    const found = await (User as any).findByTokenFor("email_verify", token);
+    expect(found).not.toBeNull();
+    expect(found!.readAttribute("name")).toBe("Alice");
+  });
+
+  // Rails guide: Relation#readonly? — check readonly status
+  it("Relation.isReadonly reflects readonly state", () => {
+    const adapter = new MemoryAdapter();
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.adapter = adapter; }
+    }
+    expect(User.all().isReadonly).toBe(false);
+    expect(User.all().readonly().isReadonly).toBe(true);
+  });
+
+  // Rails guide: define_model_callbacks — custom lifecycle callbacks
+  it("defineModelCallbacks creates custom callback methods", () => {
+    class Order extends Base {
+      static {
+        this._tableName = "orders";
+        this.attribute("id", "integer");
+        this.adapter = new MemoryAdapter();
+        this.defineModelCallbacks("ship", "deliver");
+      }
+    }
+    const log: string[] = [];
+    (Order as any).beforeShip(() => log.push("before_ship"));
+    (Order as any).afterDeliver(() => log.push("after_deliver"));
+    const o = new Order({});
+    (Order as any)._callbackChain.runBefore("ship", o);
+    (Order as any)._callbackChain.runAfter("deliver", o);
+    expect(log).toEqual(["before_ship", "after_deliver"]);
+  });
 });

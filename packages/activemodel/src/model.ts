@@ -363,6 +363,48 @@ export class Model {
   }
 
   /**
+   * Define custom model callbacks.
+   * Creates beforeX(), afterX(), and aroundX() class methods for each event name.
+   *
+   * Mirrors: ActiveModel::Callbacks.define_model_callbacks
+   */
+  static defineModelCallbacks(...eventNames: string[]): void {
+    for (const event of eventNames) {
+      const capitalizedEvent = event.charAt(0).toUpperCase() + event.slice(1);
+
+      // before<Event>
+      Object.defineProperty(this, `before${capitalizedEvent}`, {
+        value: function (fn: CallbackFn, conditions?: CallbackConditions) {
+          this._ensureOwnCallbacks();
+          this._callbackChain.register("before", event, fn, conditions);
+        },
+        writable: true,
+        configurable: true,
+      });
+
+      // after<Event>
+      Object.defineProperty(this, `after${capitalizedEvent}`, {
+        value: function (fn: CallbackFn, conditions?: CallbackConditions) {
+          this._ensureOwnCallbacks();
+          this._callbackChain.register("after", event, fn, conditions);
+        },
+        writable: true,
+        configurable: true,
+      });
+
+      // around<Event>
+      Object.defineProperty(this, `around${capitalizedEvent}`, {
+        value: function (fn: AroundCallbackFn, conditions?: CallbackConditions) {
+          this._ensureOwnCallbacks();
+          this._callbackChain.register("around", event, fn, conditions);
+        },
+        writable: true,
+        configurable: true,
+      });
+    }
+  }
+
+  /**
    * Convert an attribute name to a human-readable form.
    *
    * Mirrors: ActiveModel::Translation.human_attribute_name

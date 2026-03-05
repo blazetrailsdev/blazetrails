@@ -93,6 +93,8 @@ export class ToSql implements NodeVisitor<SQLString> {
     if (node instanceof Nodes.Case) return this.visitCase(node);
     if (node instanceof Nodes.Extract) return this.visitExtract(node);
     if (node instanceof Nodes.InfixOperation) return this.visitInfixOperation(node);
+    if (node instanceof Nodes.BindParam) return this.visitBindParam(node);
+    if (node instanceof Nodes.Concat) return this.visitConcat(node);
 
     // Functions
     if (node instanceof Nodes.NamedFunction) return this.visitNamedFunction(node);
@@ -644,6 +646,26 @@ export class ToSql implements NodeVisitor<SQLString> {
       this.visit(node.defaultValue);
     }
     this.collector.append(" END");
+    return this.collector;
+  }
+
+  // -- BindParam --
+
+  private visitBindParam(node: Nodes.BindParam): SQLString {
+    if (node.value !== undefined) {
+      this.collector.append(this.quote(node.value));
+    } else {
+      this.collector.append("?");
+    }
+    return this.collector;
+  }
+
+  // -- Concat --
+
+  private visitConcat(node: Nodes.Concat): SQLString {
+    this.visit(node.left);
+    this.collector.append(" || ");
+    this.visit(node.right);
     return this.collector;
   }
 

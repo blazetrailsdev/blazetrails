@@ -1386,4 +1386,44 @@ describe("Arel", () => {
       expect(sql).toBe('"users"."first_name" || "users"."last_name" AS full_name');
     });
   });
+
+  describe("BindParam node", () => {
+    it("generates ? placeholder when no value", () => {
+      const node = new Nodes.BindParam();
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(node)).toBe("?");
+    });
+
+    it("generates quoted value when value provided", () => {
+      const node = new Nodes.BindParam("hello");
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(node)).toBe("'hello'");
+    });
+
+    it("generates number value", () => {
+      const node = new Nodes.BindParam(42);
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(node)).toBe("42");
+    });
+  });
+
+  describe("Concat node", () => {
+    it("generates SQL concatenation with ||", () => {
+      const first = users.get("first_name");
+      const last = users.get("last_name");
+      const node = new Nodes.Concat(first, last);
+      const visitor = new Visitors.ToSql();
+      const sql = visitor.compile(node);
+      expect(sql).toBe('"users"."first_name" || "users"."last_name"');
+    });
+
+    it("supports .as() aliasing", () => {
+      const first = users.get("first_name");
+      const space = new Nodes.Quoted(" ");
+      const node = new Nodes.Concat(first, space).as("display_name");
+      const visitor = new Visitors.ToSql();
+      const sql = visitor.compile(node);
+      expect(sql).toBe('"users"."first_name" || \' \' AS display_name');
+    });
+  });
 });

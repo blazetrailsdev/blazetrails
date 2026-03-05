@@ -476,6 +476,24 @@ export class Relation<T extends Base> {
   }
 
   /**
+   * Check if this relation is marked readonly.
+   *
+   * Mirrors: ActiveRecord::Relation#readonly?
+   */
+  get isReadonly(): boolean {
+    return this._isReadonly;
+  }
+
+  /**
+   * Check if this relation has strict loading enabled.
+   *
+   * Mirrors: ActiveRecord::Relation#strict_loading?
+   */
+  get isStrictLoading(): boolean {
+    return this._isStrictLoading;
+  }
+
+  /**
    * Enable strict loading — lazily-loaded associations will raise.
    *
    * Mirrors: ActiveRecord::Relation#strict_loading

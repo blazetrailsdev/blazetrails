@@ -2118,4 +2118,40 @@ describe("ActiveModel", () => {
       expect(User.humanAttributeName("email")).toBe("Email");
     });
   });
+
+  describe("defineModelCallbacks()", () => {
+    it("creates before/after/around methods for custom events", () => {
+      class Payment extends Model {
+        static {
+          this.attribute("amount", "integer");
+          this.defineModelCallbacks("process", "refund");
+        }
+      }
+
+      const log: string[] = [];
+      (Payment as any).beforeProcess((record: any) => {
+        log.push("before_process");
+      });
+      (Payment as any).afterProcess((record: any) => {
+        log.push("after_process");
+      });
+
+      const p = new Payment({ amount: 100 });
+      // Run callbacks manually
+      (Payment as any)._callbackChain.runBefore("process", p);
+      (Payment as any)._callbackChain.runAfter("process", p);
+      expect(log).toEqual(["before_process", "after_process"]);
+    });
+
+    it("creates around callback", () => {
+      class Payment extends Model {
+        static {
+          this.attribute("amount", "integer");
+          this.defineModelCallbacks("charge");
+        }
+      }
+
+      expect(typeof (Payment as any).aroundCharge).toBe("function");
+    });
+  });
 });

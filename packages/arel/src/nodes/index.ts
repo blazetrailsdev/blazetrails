@@ -80,6 +80,8 @@ export { With, WithRecursive, TableAlias } from "./with.js";
 export { Case } from "./case.js";
 export { Extract } from "./extract.js";
 export { InfixOperation } from "./infix-operation.js";
+export { BindParam } from "./bind-param.js";
+export { Concat } from "./concat.js";
 
 import { SqlLiteral } from "./sql-literal.js";
 

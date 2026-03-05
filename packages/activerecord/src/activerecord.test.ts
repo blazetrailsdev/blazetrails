@@ -8131,6 +8131,95 @@ describe("ActiveRecord", () => {
     });
   });
 
+  describe("Relation.isReadonly", () => {
+    it("returns false by default", () => {
+      class User extends Base {
+        static { this.attribute("id", "integer"); this.adapter = freshAdapter(); }
+      }
+      expect(User.all().isReadonly).toBe(false);
+    });
+
+    it("returns true after .readonly()", () => {
+      class User extends Base {
+        static { this.attribute("id", "integer"); this.adapter = freshAdapter(); }
+      }
+      expect(User.all().readonly().isReadonly).toBe(true);
+    });
+  });
+
+  describe("recordTimestamps", () => {
+    it("defaults to true", () => {
+      class User extends Base {
+        static { this.attribute("id", "integer"); this.adapter = freshAdapter(); }
+      }
+      expect(User.recordTimestamps).toBe(true);
+    });
+
+    it("can be disabled", () => {
+      class User extends Base {
+        static { this.attribute("id", "integer"); this.adapter = freshAdapter(); this.recordTimestamps = false; }
+      }
+      expect(User.recordTimestamps).toBe(false);
+    });
+  });
+
+  describe("noTouching()", () => {
+    it("suppresses touching during the block", async () => {
+      class User extends Base {
+        static { this.attribute("id", "integer"); this.adapter = freshAdapter(); }
+      }
+      expect(User.isTouchingSuppressed).toBe(false);
+      await User.noTouching(async () => {
+        expect(User.isTouchingSuppressed).toBe(true);
+      });
+      expect(User.isTouchingSuppressed).toBe(false);
+    });
+  });
+
+  describe("generatesTokenFor()", () => {
+    it("generates and resolves a token", async () => {
+      const { generatesTokenFor } = await import("./generates-token-for.js");
+      const adapter = freshAdapter();
+      class User extends Base {
+        static {
+          this.attribute("id", "integer");
+          this.attribute("name", "string");
+          this.attribute("password_digest", "string");
+          this.adapter = adapter;
+        }
+      }
+      generatesTokenFor(User, "password_reset", {
+        generator: (record: any) => String(record.readAttribute("password_digest")),
+      });
+
+      const user = await User.create({ name: "Alice", password_digest: "abc123" });
+      const token = (user as any).generateTokenFor("password_reset");
+      expect(typeof token).toBe("string");
+      expect(token.length).toBeGreaterThan(10);
+
+      // Resolve the token
+      const found = await (User as any).findByTokenFor("password_reset", token);
+      expect(found).not.toBeNull();
+      expect(found.readAttribute("name")).toBe("Alice");
+    });
+
+    it("returns null for invalid token", async () => {
+      const { generatesTokenFor } = await import("./generates-token-for.js");
+      const adapter = freshAdapter();
+      class User extends Base {
+        static {
+          this.attribute("id", "integer");
+          this.attribute("name", "string");
+          this.adapter = adapter;
+        }
+      }
+      generatesTokenFor(User, "confirm", {});
+      await User.create({ name: "Alice" });
+      const found = await (User as any).findByTokenFor("confirm", "invalid-token");
+      expect(found).toBeNull();
+    });
+  });
+
   describe("scope with extension block", () => {
     it("adds extension methods to the scoped relation", () => {
       const adapter = freshAdapter();

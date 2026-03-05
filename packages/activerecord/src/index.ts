@@ -57,3 +57,4 @@ export { composedOf } from "./composed-of.js";
 export { serialize } from "./serialize.js";
 export { encrypts, defaultEncryptor, getEncryptor, isEncryptedAttribute } from "./encryption.js";
 export type { Encryptor } from "./encryption.js";
+export { generatesTokenFor } from "./generates-token-for.js";

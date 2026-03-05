@@ -6177,4 +6177,160 @@ describe("ActiveRecord", () => {
       expect(withoutAuthor).toHaveLength(1);
     });
   });
+
+  // -- positional finders --
+  describe("positional finders", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("second() returns the second record", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ name: "A" });
+      await Item.create({ name: "B" });
+      await Item.create({ name: "C" });
+      const item = await Item.all().second();
+      expect(item).not.toBeNull();
+      expect(item!.readAttribute("name")).toBe("B");
+    });
+
+    it("third() returns the third record", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ name: "A" });
+      await Item.create({ name: "B" });
+      await Item.create({ name: "C" });
+      const item = await Item.all().third();
+      expect(item!.readAttribute("name")).toBe("C");
+    });
+
+    it("fourth() and fifth() return correct records", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      for (const n of ["A", "B", "C", "D", "E"]) {
+        await Item.create({ name: n });
+      }
+      const fourth = await Item.all().fourth();
+      expect(fourth!.readAttribute("name")).toBe("D");
+      const fifth = await Item.all().fifth();
+      expect(fifth!.readAttribute("name")).toBe("E");
+    });
+
+    it("secondToLast() returns the second-to-last record", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ name: "A" });
+      await Item.create({ name: "B" });
+      await Item.create({ name: "C" });
+      const item = await Item.all().secondToLast();
+      expect(item!.readAttribute("name")).toBe("B");
+    });
+
+    it("thirdToLast() returns the third-to-last record", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ name: "A" });
+      await Item.create({ name: "B" });
+      await Item.create({ name: "C" });
+      await Item.create({ name: "D" });
+      const item = await Item.all().thirdToLast();
+      expect(item!.readAttribute("name")).toBe("B");
+    });
+
+    it("returns null when not enough records", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ name: "A" });
+      const item = await Item.all().second();
+      expect(item).toBeNull();
+    });
+
+    it("static second() delegates to Relation", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ name: "A" });
+      await Item.create({ name: "B" });
+      const item = await Item.second();
+      expect(item!.readAttribute("name")).toBe("B");
+    });
+  });
+
+  // -- select block form --
+  describe("select block form", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("filters loaded records with a function", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ name: "Apple" });
+      await Item.create({ name: "Banana" });
+      await Item.create({ name: "Avocado" });
+
+      const items = await Item.all().select(
+        (r: any) => (r.readAttribute("name") as string).startsWith("A")
+      );
+      expect(items).toHaveLength(2);
+    });
+  });
+
+  // -- findEach / findInBatches --
+  describe("findEach / findInBatches", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("findEach yields each record", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      for (let i = 0; i < 5; i++) await Item.create({ name: `Item ${i}` });
+
+      const names: string[] = [];
+      for await (const item of Item.all().findEach({ batchSize: 2 })) {
+        names.push(item.readAttribute("name") as string);
+      }
+      expect(names).toHaveLength(5);
+    });
+
+    it("findInBatches yields batches of records", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      for (let i = 0; i < 7; i++) await Item.create({ name: `Item ${i}` });
+
+      const batches: number[] = [];
+      for await (const batch of Item.all().findInBatches({ batchSize: 3 })) {
+        batches.push(batch.length);
+      }
+      expect(batches).toEqual([3, 3, 1]);
+    });
+  });
 });

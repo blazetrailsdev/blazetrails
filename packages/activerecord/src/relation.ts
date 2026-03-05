@@ -216,17 +216,23 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Select specific columns or raw SQL expressions.
+   * Select specific columns, or filter loaded records with a block.
    *
    * Mirrors: ActiveRecord::Relation#select
    *
    * Examples:
-   *   select("name", "email")
-   *   select("COUNT(*) as total")
+   *   select("name", "email")          // column projection
+   *   select("COUNT(*) as total")       // raw SQL expression
+   *   select(record => record.active)   // block form (returns array)
    */
-  select(...columns: string[]): Relation<T> {
+  select(fn: (record: T) => boolean): Promise<T[]>;
+  select(...columns: string[]): Relation<T>;
+  select(...args: any[]): Relation<T> | Promise<T[]> {
+    if (args.length === 1 && typeof args[0] === "function") {
+      return this.toArray().then((records) => records.filter(args[0]));
+    }
     const rel = this._clone();
-    rel._selectColumns = columns;
+    rel._selectColumns = args as string[];
     return rel;
   }
 
@@ -748,6 +754,91 @@ export class Relation<T extends Base> {
       throw new SoleRecordExceeded(this._modelClass.name);
     }
     return records[0];
+  }
+
+  /**
+   * Return the second record.
+   *
+   * Mirrors: ActiveRecord::Relation#second
+   */
+  async second(): Promise<T | null> {
+    return this._findNthWithLimit(1);
+  }
+
+  /**
+   * Return the third record.
+   *
+   * Mirrors: ActiveRecord::Relation#third
+   */
+  async third(): Promise<T | null> {
+    return this._findNthWithLimit(2);
+  }
+
+  /**
+   * Return the fourth record.
+   *
+   * Mirrors: ActiveRecord::Relation#fourth
+   */
+  async fourth(): Promise<T | null> {
+    return this._findNthWithLimit(3);
+  }
+
+  /**
+   * Return the fifth record.
+   *
+   * Mirrors: ActiveRecord::Relation#fifth
+   */
+  async fifth(): Promise<T | null> {
+    return this._findNthWithLimit(4);
+  }
+
+  /**
+   * Return the forty-second record.
+   *
+   * Mirrors: ActiveRecord::Relation#forty_two
+   */
+  async fortyTwo(): Promise<T | null> {
+    return this._findNthWithLimit(41);
+  }
+
+  /**
+   * Return the second-to-last record.
+   *
+   * Mirrors: ActiveRecord::Relation#second_to_last
+   */
+  async secondToLast(): Promise<T | null> {
+    return this._findNthFromLast(1);
+  }
+
+  /**
+   * Return the third-to-last record.
+   *
+   * Mirrors: ActiveRecord::Relation#third_to_last
+   */
+  async thirdToLast(): Promise<T | null> {
+    return this._findNthFromLast(2);
+  }
+
+  private async _findNthWithLimit(index: number): Promise<T | null> {
+    const rel = this._clone();
+    rel._limitValue = 1;
+    rel._offsetValue = (this._offsetValue ?? 0) + index;
+    if (rel._orderClauses.length === 0 && rel._rawOrderClauses.length === 0) {
+      rel._orderClauses.push(this._modelClass.primaryKey);
+    }
+    const records = await rel.toArray();
+    return records[0] ?? null;
+  }
+
+  private async _findNthFromLast(index: number): Promise<T | null> {
+    let rel: Relation<T>;
+    if (this._orderClauses.length === 0 && this._rawOrderClauses.length === 0) {
+      rel = this.order({ [this._modelClass.primaryKey]: "desc" as const });
+    } else {
+      rel = this.reverseOrder();
+    }
+    const result = await (rel as any)._findNthWithLimit(index);
+    return result;
   }
 
   /**

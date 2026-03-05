@@ -6048,4 +6048,165 @@ describe("Grouped Calculations (Rails-guided)", () => {
     const missing = await Post.all().whereMissing("rgWmAuthor").toArray();
     expect(missing).toHaveLength(2);
   });
+
+  // =====================================================================
+  // Positional finders — activerecord/test/cases/finder_test.rb
+  // =====================================================================
+
+  // Rails: test "second"
+  it("second returns the second record ordered by PK", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    await Topic.create({ title: "First" });
+    await Topic.create({ title: "Second" });
+    await Topic.create({ title: "Third" });
+
+    const topic = await Topic.second();
+    expect(topic).not.toBeNull();
+    expect(topic!.readAttribute("title")).toBe("Second");
+  });
+
+  // Rails: test "third"
+  it("third returns the third record ordered by PK", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    await Topic.create({ title: "First" });
+    await Topic.create({ title: "Second" });
+    await Topic.create({ title: "Third" });
+
+    const topic = await Topic.third();
+    expect(topic!.readAttribute("title")).toBe("Third");
+  });
+
+  // Rails: test "fourth"
+  it("fourth returns the fourth record", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    for (const t of ["A", "B", "C", "D", "E"]) {
+      await Topic.create({ title: t });
+    }
+    const topic = await Topic.fourth();
+    expect(topic!.readAttribute("title")).toBe("D");
+  });
+
+  // Rails: test "fifth"
+  it("fifth returns the fifth record", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    for (const t of ["A", "B", "C", "D", "E"]) {
+      await Topic.create({ title: t });
+    }
+    const topic = await Topic.fifth();
+    expect(topic!.readAttribute("title")).toBe("E");
+  });
+
+  // Rails: test "second_to_last"
+  it("secondToLast returns the second-to-last record", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    await Topic.create({ title: "First" });
+    await Topic.create({ title: "Second" });
+    await Topic.create({ title: "Third" });
+
+    const topic = await Topic.secondToLast();
+    expect(topic!.readAttribute("title")).toBe("Second");
+  });
+
+  // Rails: test "third_to_last"
+  it("thirdToLast returns the third-to-last record", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    await Topic.create({ title: "First" });
+    await Topic.create({ title: "Second" });
+    await Topic.create({ title: "Third" });
+    await Topic.create({ title: "Fourth" });
+
+    const topic = await Topic.thirdToLast();
+    expect(topic!.readAttribute("title")).toBe("Second");
+  });
+
+  // Rails: test "forty_two"
+  it("fortyTwo returns the 42nd record", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    // Create 43 records
+    for (let i = 1; i <= 43; i++) {
+      await Topic.create({ title: `Topic ${i}` });
+    }
+    const topic = await Topic.fortyTwo();
+    expect(topic!.readAttribute("title")).toBe("Topic 42");
+  });
+
+  // =====================================================================
+  // select block form — activerecord/test/cases/relation/select_test.rb
+  // =====================================================================
+
+  // Rails: test "select with block form"
+  it("select with block filters loaded records", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.attribute("approved", "boolean"); this.adapter = adapter; }
+    }
+
+    await Topic.create({ title: "Approved", approved: true });
+    await Topic.create({ title: "Not Approved", approved: false });
+    await Topic.create({ title: "Also Approved", approved: true });
+
+    const approved = await Topic.all().select(
+      (t: any) => t.readAttribute("approved") === true
+    );
+    expect(approved).toHaveLength(2);
+    expect(approved.every((t: any) => t.readAttribute("approved") === true)).toBe(true);
+  });
+
+  // =====================================================================
+  // find_each / find_in_batches — activerecord/test/cases/batches_test.rb
+  // =====================================================================
+
+  // Rails: test "find_each should execute the query in batches"
+  it("findEach processes all records in batches", async () => {
+    class Post extends Base {
+      static { this._tableName = "posts"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    for (let i = 0; i < 10; i++) {
+      await Post.create({ title: `Post ${i}` });
+    }
+
+    const titles: string[] = [];
+    for await (const post of Post.all().findEach({ batchSize: 3 })) {
+      titles.push(post.readAttribute("title") as string);
+    }
+    expect(titles).toHaveLength(10);
+  });
+
+  // Rails: test "find_in_batches should return batches"
+  it("findInBatches returns batch arrays", async () => {
+    class Post extends Base {
+      static { this._tableName = "posts"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    for (let i = 0; i < 10; i++) {
+      await Post.create({ title: `Post ${i}` });
+    }
+
+    const batchSizes: number[] = [];
+    for await (const batch of Post.all().findInBatches({ batchSize: 4 })) {
+      batchSizes.push(batch.length);
+    }
+    expect(batchSizes).toEqual([4, 4, 2]);
+  });
 });

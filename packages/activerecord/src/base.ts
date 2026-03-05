@@ -373,6 +373,62 @@ export class Base extends Model {
   }
 
   /**
+   * Return the second record.
+   * Mirrors: ActiveRecord::Base.second
+   */
+  static async second(): Promise<Base | null> {
+    return this.all().second();
+  }
+
+  /**
+   * Return the third record.
+   * Mirrors: ActiveRecord::Base.third
+   */
+  static async third(): Promise<Base | null> {
+    return this.all().third();
+  }
+
+  /**
+   * Return the fourth record.
+   * Mirrors: ActiveRecord::Base.fourth
+   */
+  static async fourth(): Promise<Base | null> {
+    return this.all().fourth();
+  }
+
+  /**
+   * Return the fifth record.
+   * Mirrors: ActiveRecord::Base.fifth
+   */
+  static async fifth(): Promise<Base | null> {
+    return this.all().fifth();
+  }
+
+  /**
+   * Return the forty-second record.
+   * Mirrors: ActiveRecord::Base.forty_two
+   */
+  static async fortyTwo(): Promise<Base | null> {
+    return this.all().fortyTwo();
+  }
+
+  /**
+   * Return the second-to-last record.
+   * Mirrors: ActiveRecord::Base.second_to_last
+   */
+  static async secondToLast(): Promise<Base | null> {
+    return this.all().secondToLast();
+  }
+
+  /**
+   * Return the third-to-last record.
+   * Mirrors: ActiveRecord::Base.third_to_last
+   */
+  static async thirdToLast(): Promise<Base | null> {
+    return this.all().thirdToLast();
+  }
+
+  /**
    * Find the first record matching conditions, or create one.
    *
    * Mirrors: ActiveRecord::Base.find_or_create_by

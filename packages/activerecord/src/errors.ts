@@ -100,3 +100,36 @@ export class ReadOnlyRecord extends Error {
     this.record = record;
   }
 }
+
+/**
+ * Raised when sole() finds more than one record.
+ *
+ * Mirrors: ActiveRecord::SoleRecordExceeded
+ */
+export class SoleRecordExceeded extends Error {
+  readonly model: string;
+
+  constructor(model: string) {
+    super(`${model} has more than one record`);
+    this.name = "SoleRecordExceeded";
+    this.model = model;
+  }
+}
+
+/**
+ * Raised when a lazy-loaded association is accessed on a strict_loading record.
+ *
+ * Mirrors: ActiveRecord::StrictLoadingViolationError
+ */
+export class StrictLoadingViolationError extends Error {
+  readonly record: any;
+  readonly association: string;
+
+  constructor(record: any, association: string) {
+    const model = record?.constructor?.name ?? "Record";
+    super(`${model} is marked for strict_loading. The ${association} association cannot be lazily loaded.`);
+    this.name = "StrictLoadingViolationError";
+    this.record = record;
+    this.association = association;
+  }
+}

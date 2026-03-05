@@ -39,6 +39,8 @@ export {
   RecordNotDestroyed,
   StaleObjectError,
   ReadOnlyRecord,
+  SoleRecordExceeded,
+  StrictLoadingViolationError,
 } from "./errors.js";
 export {
   AssociationReflection,

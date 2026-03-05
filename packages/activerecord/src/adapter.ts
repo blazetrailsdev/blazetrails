@@ -64,6 +64,9 @@ export class MemoryAdapter implements DatabaseAdapter {
   }
 
   async execute(sql: string): Promise<Record<string, unknown>[]> {
+    // Strip SQL comments (from annotate())
+    sql = sql.replace(/\/\*[^*]*\*\//g, "").trim();
+
     // Set operations: (left) UNION|INTERSECT|EXCEPT (right)
     const setOpMatch = sql.match(
       /^\((.+)\)\s+(UNION ALL|UNION|INTERSECT|EXCEPT)\s+\((.+)\)$/is
@@ -297,6 +300,9 @@ export class MemoryAdapter implements DatabaseAdapter {
   }
 
   async executeMutation(sql: string): Promise<number> {
+    // Strip SQL comments (from annotate())
+    sql = sql.replace(/\/\*[^*]*\*\//g, "").trim();
+
     // INSERT (supports multi-row VALUES and ON CONFLICT)
     const insertMatch = sql.match(
       /INSERT\s+INTO\s+"(\w+)"\s+\((.+?)\)\s+VALUES\s+(.+?)(?:\s+ON\s+CONFLICT\s*\((.+?)\)\s+(DO\s+NOTHING|DO\s+UPDATE\s+SET\s+.+))?$/is

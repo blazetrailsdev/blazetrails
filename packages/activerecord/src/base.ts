@@ -382,6 +382,7 @@ export class Base extends Model {
   _newRecord = true;
   private _destroyed = false;
   private _readonly = false;
+  _strictLoading = false;
   _preloadedAssociations: Map<string, unknown> = new Map();
 
   /**
@@ -427,6 +428,25 @@ export class Base extends Model {
    */
   readonlyBang(): this {
     this._readonly = true;
+    return this;
+  }
+
+  /**
+   * Returns true if strict loading is enabled.
+   *
+   * Mirrors: ActiveRecord::Base#strict_loading?
+   */
+  isStrictLoading(): boolean {
+    return this._strictLoading;
+  }
+
+  /**
+   * Enable strict loading — lazily-loaded associations will raise.
+   *
+   * Mirrors: ActiveRecord::Base#strict_loading!
+   */
+  strictLoadingBang(): this {
+    this._strictLoading = true;
     return this;
   }
 

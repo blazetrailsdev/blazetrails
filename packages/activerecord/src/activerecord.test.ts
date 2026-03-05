@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { Base, Relation, Range, MemoryAdapter, transaction, savepoint, CollectionProxy, association, MigrationRunner, defineEnum, readEnumValue, enableSti, hasSecurePassword, store, loadHabtm, delegate, RecordNotFound, RecordInvalid, StaleObjectError, ReadOnlyRecord, columns, columnNames, reflectOnAssociation, reflectOnAllAssociations, acceptsNestedAttributesFor, assignNestedAttributes, hasSecureToken, composedOf, serialize } from "./index.js";
+import { Base, Relation, Range, MemoryAdapter, transaction, savepoint, CollectionProxy, association, MigrationRunner, defineEnum, readEnumValue, enableSti, hasSecurePassword, store, loadHabtm, delegate, RecordNotFound, RecordInvalid, StaleObjectError, ReadOnlyRecord, SoleRecordExceeded, StrictLoadingViolationError, columns, columnNames, reflectOnAssociation, reflectOnAllAssociations, acceptsNestedAttributesFor, assignNestedAttributes, hasSecureToken, composedOf, serialize } from "./index.js";
 import { Migration, TableDefinition, Schema } from "./migration.js";
 import {
   Associations,
@@ -5496,6 +5496,215 @@ describe("ActiveRecord", () => {
 
       const sums = await Order.all().group("status").sum("total");
       expect(sums).toEqual({ pending: 300, shipped: 150 });
+    });
+  });
+
+  // -- readonly() --
+  describe("readonly()", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("marks loaded records as readonly", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ name: "Widget" });
+      const items = await Item.all().readonly().toArray();
+      expect(items[0].isReadonly()).toBe(true);
+      await expect(items[0].save()).rejects.toThrow(ReadOnlyRecord);
+    });
+  });
+
+  // -- sole() and take() --
+  describe("sole() and take()", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("sole() returns the only matching record", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ name: "Widget" });
+      const item = await Item.all().where({ name: "Widget" }).sole();
+      expect(item.readAttribute("name")).toBe("Widget");
+    });
+
+    it("sole() raises RecordNotFound when zero records", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      await expect(Item.all().where({ name: "Missing" }).sole()).rejects.toThrow(RecordNotFound);
+    });
+
+    it("sole() raises SoleRecordExceeded when multiple records", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ name: "Widget" });
+      await Item.create({ name: "Widget" });
+      await expect(Item.all().where({ name: "Widget" }).sole()).rejects.toThrow(SoleRecordExceeded);
+    });
+
+    it("take() returns a record without ordering", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ name: "A" });
+      await Item.create({ name: "B" });
+      const item = await Item.all().take();
+      expect(item).not.toBeNull();
+    });
+
+    it("take(n) returns n records", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ name: "A" });
+      await Item.create({ name: "B" });
+      await Item.create({ name: "C" });
+      const items = await Item.all().take(2);
+      expect(items).toHaveLength(2);
+    });
+
+    it("takeBang() raises when no records", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.adapter = adapter;
+
+      await expect(Item.all().takeBang()).rejects.toThrow(RecordNotFound);
+    });
+  });
+
+  // -- annotate() --
+  describe("annotate()", () => {
+    it("adds SQL comments to the query", () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.adapter = freshAdapter();
+
+      const sql = Item.all().annotate("loading items for user page").toSql();
+      expect(sql).toContain("/* loading items for user page */");
+    });
+
+    it("supports multiple annotations", () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.adapter = freshAdapter();
+
+      const sql = Item.all().annotate("controller: items", "action: index").toSql();
+      expect(sql).toContain("/* controller: items */");
+      expect(sql).toContain("/* action: index */");
+    });
+  });
+
+  // -- merge() --
+  describe("merge()", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("combines conditions from two relations", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.attribute("status", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ name: "A", status: "active" });
+      await Item.create({ name: "B", status: "inactive" });
+      await Item.create({ name: "C", status: "active" });
+
+      const active = Item.all().where({ status: "active" });
+      const items = await Item.all().where({ name: "A" }).merge(active).toArray();
+      expect(items).toHaveLength(1);
+      expect(items[0].readAttribute("name")).toBe("A");
+    });
+
+    it("merges order from other relation", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ name: "B" });
+      await Item.create({ name: "A" });
+
+      const ordered = Item.all().order({ name: "asc" });
+      const items = await Item.all().merge(ordered).toArray();
+      expect(items[0].readAttribute("name")).toBe("A");
+    });
+  });
+
+  // -- from() --
+  describe("from()", () => {
+    it("changes the FROM clause in SQL", () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.adapter = freshAdapter();
+
+      const sql = Item.all().from('"other_items"').toSql();
+      expect(sql).toContain('FROM "other_items"');
+      expect(sql).not.toContain('FROM "items"');
+    });
+  });
+
+  // -- strict_loading --
+  describe("strict_loading", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("raises StrictLoadingViolationError on lazy association load", async () => {
+      class Author extends Base { static _tableName = "authors"; }
+      Author.attribute("id", "integer");
+      Author.attribute("name", "string");
+      Author.adapter = adapter;
+      registerModel("Author", Author);
+
+      class Book extends Base { static _tableName = "books"; }
+      Book.attribute("id", "integer");
+      Book.attribute("author_id", "integer");
+      Book.adapter = adapter;
+      Associations.belongsTo.call(Book, "author");
+
+      const author = await Author.create({ name: "Test" });
+      await Book.create({ author_id: author.id });
+
+      const books = await Book.all().strictLoading().toArray();
+      expect(books[0].isStrictLoading()).toBe(true);
+      await expect(loadBelongsTo(books[0], "author", {})).rejects.toThrow(StrictLoadingViolationError);
+    });
+
+    it("strictLoadingBang() on a record instance", async () => {
+      class Author extends Base { static _tableName = "authors2"; }
+      Author.attribute("id", "integer");
+      Author.attribute("name", "string");
+      Author.adapter = adapter;
+      registerModel("Author2", Author);
+
+      class Post extends Base { static _tableName = "posts"; }
+      Post.attribute("id", "integer");
+      Post.attribute("author2_id", "integer");
+      Post.adapter = adapter;
+      Associations.belongsTo.call(Post, "author2", { className: "Author2" });
+
+      const author = await Author.create({ name: "Test" });
+      await Post.create({ author2_id: author.id });
+
+      const post = (await Post.all().first()) as Base;
+      post.strictLoadingBang();
+      expect(post.isStrictLoading()).toBe(true);
+      await expect(loadBelongsTo(post, "author2", { className: "Author2" })).rejects.toThrow(StrictLoadingViolationError);
     });
   });
 });

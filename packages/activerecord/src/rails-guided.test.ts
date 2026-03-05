@@ -38,6 +38,8 @@ import {
   RecordInvalid,
   ReadOnlyRecord,
   StaleObjectError,
+  SoleRecordExceeded,
+  StrictLoadingViolationError,
   columns,
   columnNames,
   reflectOnAssociation,
@@ -49,7 +51,7 @@ import {
   serialize,
 } from "./index.js";
 import { Migration } from "./migration.js";
-import { Associations } from "./associations.js";
+import { Associations, loadBelongsTo } from "./associations.js";
 
 function freshAdapter(): MemoryAdapter {
   return new MemoryAdapter();
@@ -5228,5 +5230,303 @@ describe("Grouped Calculations (Rails-guided)", () => {
 
     const mins = await Order.all().group("status").minimum("total");
     expect(mins).toEqual({ new: 100, paid: 150 });
+  });
+
+  // =====================================================================
+  // readonly — activerecord/test/cases/readonly_test.rb
+  // =====================================================================
+
+  // Rails: test "find with readonly option"
+  it("readonly() marks loaded records as frozen/readonly", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    await Topic.create({ title: "First" });
+    const topics = await Topic.all().readonly().toArray();
+    expect(topics[0].isReadonly()).toBe(true);
+  });
+
+  // Rails: test "readonly record cannot be saved"
+  it("readonly record raises ReadOnlyRecord on save", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    await Topic.create({ title: "First" });
+    const topic = (await Topic.all().readonly().first()) as Base;
+    topic.writeAttribute("title", "Modified");
+    await expect(topic.save()).rejects.toThrow(ReadOnlyRecord);
+  });
+
+  // Rails: test "readonly record cannot be destroyed"
+  it("readonly record raises ReadOnlyRecord on destroy", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    await Topic.create({ title: "First" });
+    const topic = (await Topic.all().readonly().first()) as Base;
+    await expect(topic.destroy()).rejects.toThrow(ReadOnlyRecord);
+  });
+
+  // =====================================================================
+  // sole — activerecord/test/cases/finder_test.rb
+  // =====================================================================
+
+  // Rails: test "sole"
+  it("sole() returns the only matching record", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    await Topic.create({ title: "Unique" });
+    const topic = await Topic.all().where({ title: "Unique" }).sole();
+    expect(topic.readAttribute("title")).toBe("Unique");
+  });
+
+  // Rails: test "sole when no records"
+  it("sole() raises RecordNotFound when no records found", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    await expect(Topic.all().where({ title: "Nothing" }).sole()).rejects.toThrow(RecordNotFound);
+  });
+
+  // Rails: test "sole when more than one record"
+  it("sole() raises SoleRecordExceeded when more than one record found", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    await Topic.create({ title: "Duplicate" });
+    await Topic.create({ title: "Duplicate" });
+    await expect(Topic.all().where({ title: "Duplicate" }).sole()).rejects.toThrow(SoleRecordExceeded);
+  });
+
+  // =====================================================================
+  // take — activerecord/test/cases/finder_test.rb
+  // =====================================================================
+
+  // Rails: test "take"
+  it("take() returns a record without implicit ordering", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    await Topic.create({ title: "First" });
+    await Topic.create({ title: "Second" });
+    const topic = await Topic.all().take();
+    expect(topic).not.toBeNull();
+  });
+
+  // Rails: test "take with limit"
+  it("take(n) returns an array of n records", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    await Topic.create({ title: "A" });
+    await Topic.create({ title: "B" });
+    await Topic.create({ title: "C" });
+    const topics = await Topic.all().take(2);
+    expect(topics).toHaveLength(2);
+  });
+
+  // Rails: test "take!"
+  it("takeBang() raises RecordNotFound when empty", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.adapter = adapter; }
+    }
+
+    await expect(Topic.all().takeBang()).rejects.toThrow(RecordNotFound);
+  });
+
+  // =====================================================================
+  // annotate — activerecord/test/cases/relation/annotate_test.rb
+  // =====================================================================
+
+  // Rails: test "annotate adds comment to the query"
+  it("annotate() appends SQL comment to generated query", () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.adapter = adapter; }
+    }
+
+    const sql = Topic.all().annotate("this is a test annotation").toSql();
+    expect(sql).toContain("/* this is a test annotation */");
+  });
+
+  // Rails: test "annotate is chainable"
+  it("annotate() is chainable and preserves multiple comments", () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.adapter = adapter; }
+    }
+
+    const sql = Topic.all()
+      .annotate("first annotation")
+      .annotate("second annotation")
+      .toSql();
+    expect(sql).toContain("/* first annotation */");
+    expect(sql).toContain("/* second annotation */");
+  });
+
+  // Rails: test "annotate works with where"
+  it("annotate() works alongside where clauses", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    await Topic.create({ title: "Hello" });
+    const topics = await Topic.all().where({ title: "Hello" }).annotate("finder").toArray();
+    expect(topics).toHaveLength(1);
+  });
+
+  // =====================================================================
+  // merge — activerecord/test/cases/relation/merging_test.rb
+  // =====================================================================
+
+  // Rails: test "merge conditions"
+  it("merge() combines where conditions from two relations", async () => {
+    class Post extends Base {
+      static { this._tableName = "posts"; this.attribute("id", "integer"); this.attribute("title", "string"); this.attribute("status", "string"); this.adapter = adapter; }
+    }
+
+    await Post.create({ title: "A", status: "published" });
+    await Post.create({ title: "B", status: "draft" });
+    await Post.create({ title: "A", status: "draft" });
+
+    const named = Post.all().where({ title: "A" });
+    const published = Post.all().where({ status: "published" });
+    const result = await named.merge(published).toArray();
+    expect(result).toHaveLength(1);
+    expect(result[0].readAttribute("title")).toBe("A");
+    expect(result[0].readAttribute("status")).toBe("published");
+  });
+
+  // Rails: test "merge with scope"
+  it("merge() works with named scopes", async () => {
+    class Post extends Base {
+      static { this._tableName = "posts"; this.attribute("id", "integer"); this.attribute("title", "string"); this.attribute("status", "string"); this.adapter = adapter; }
+    }
+    Post.scope("published", (rel: any) => rel.where({ status: "published" }));
+
+    await Post.create({ title: "X", status: "published" });
+    await Post.create({ title: "Y", status: "draft" });
+
+    const allPosts = Post.all();
+    const publishedScope = Post.all().where({ status: "published" });
+    const result = await allPosts.merge(publishedScope).toArray();
+    expect(result).toHaveLength(1);
+  });
+
+  // Rails: test "merge with ordering"
+  it("merge() adopts ordering from the merged relation", async () => {
+    class Post extends Base {
+      static { this._tableName = "posts"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    await Post.create({ title: "B" });
+    await Post.create({ title: "A" });
+
+    const ordered = Post.all().order({ title: "asc" });
+    const result = await Post.all().merge(ordered).toArray();
+    expect(result[0].readAttribute("title")).toBe("A");
+  });
+
+  // =====================================================================
+  // from — activerecord/test/cases/relation_test.rb
+  // =====================================================================
+
+  // Rails: test "from"
+  it("from() overrides the FROM clause in SQL generation", () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.adapter = adapter; }
+    }
+
+    const sql = Topic.all().from('"archived_topics"').toSql();
+    expect(sql).toContain('FROM "archived_topics"');
+    expect(sql).not.toContain('FROM "topics"');
+  });
+
+  // Rails: test "from with subquery"
+  it("from() works with subquery strings", () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    const subquery = '(SELECT * FROM "topics" WHERE "topics"."title" = \'Hello\') AS "filtered"';
+    const sql = Topic.all().from(subquery).toSql();
+    expect(sql).toContain("FROM (SELECT");
+    // The main FROM should be the subquery, not the original table directly
+    expect(sql).toMatch(/FROM\s*\(SELECT/);
+  });
+
+  // =====================================================================
+  // strict_loading — activerecord/test/cases/strict_loading_test.rb
+  // =====================================================================
+
+  // Rails: test "strict loading on a relation"
+  it("strictLoading() on Relation marks loaded records for strict loading", async () => {
+    class Author extends Base {
+      static { this._tableName = "sl_authors"; this.attribute("id", "integer"); this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    registerModel("SlAuthor", Author);
+
+    class Book extends Base {
+      static { this._tableName = "sl_books"; this.attribute("id", "integer"); this.attribute("sl_author_id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+    Associations.belongsTo.call(Book, "slAuthor", { className: "SlAuthor" });
+
+    const author = await Author.create({ name: "Jane" });
+    await Book.create({ sl_author_id: author.id, title: "Novel" });
+
+    const books = await Book.all().strictLoading().toArray();
+    expect(books[0].isStrictLoading()).toBe(true);
+    await expect(loadBelongsTo(books[0], "slAuthor", { className: "SlAuthor" })).rejects.toThrow(StrictLoadingViolationError);
+  });
+
+  // Rails: test "strict_loading!"
+  it("strictLoadingBang() on a record enables strict loading", async () => {
+    class Author extends Base {
+      static { this._tableName = "sl2_authors"; this.attribute("id", "integer"); this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    registerModel("Sl2Author", Author);
+
+    class Book extends Base {
+      static { this._tableName = "sl2_books"; this.attribute("id", "integer"); this.attribute("sl2_author_id", "integer"); this.adapter = adapter; }
+    }
+    Associations.belongsTo.call(Book, "sl2Author", { className: "Sl2Author" });
+
+    const author = await Author.create({ name: "Jane" });
+    await Book.create({ sl2_author_id: author.id });
+
+    const book = (await Book.all().first()) as Base;
+    book.strictLoadingBang();
+    await expect(loadBelongsTo(book, "sl2Author", { className: "Sl2Author" })).rejects.toThrow(StrictLoadingViolationError);
+  });
+
+  // Rails: test "strict_loading doesn't raise if association is preloaded"
+  it("strict_loading allows access to preloaded associations", async () => {
+    class Author extends Base {
+      static { this._tableName = "sl3_authors"; this.attribute("id", "integer"); this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    registerModel("Sl3Author", Author);
+
+    class Book extends Base {
+      static { this._tableName = "sl3_books"; this.attribute("id", "integer"); this.attribute("sl3_author_id", "integer"); this.adapter = adapter; }
+    }
+    Associations.belongsTo.call(Book, "sl3Author", { className: "Sl3Author" });
+    registerModel("Sl3Book", Book);
+
+    const author = await Author.create({ name: "Jane" });
+    await Book.create({ sl3_author_id: author.id });
+
+    // With includes, the association is preloaded — no error
+    const books = await Book.all().includes("sl3Author").strictLoading().toArray();
+    expect(books[0].isStrictLoading()).toBe(true);
+    // Preloaded association should be accessible without error
+    const loaded = await loadBelongsTo(books[0], "sl3Author", { className: "Sl3Author" });
+    expect(loaded).not.toBeNull();
   });
 });

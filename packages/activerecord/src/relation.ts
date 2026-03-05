@@ -1,7 +1,7 @@
 import { Table, SelectManager, Visitors, Nodes } from "@rails-js/arel";
 import type { Base } from "./base.js";
 import { _setRelationCtor, _setScopeProxyWrapper } from "./base.js";
-import { RecordNotFound } from "./errors.js";
+import { RecordNotFound, SoleRecordExceeded } from "./errors.js";
 
 /**
  * Range — represents a BETWEEN range for where clauses.
@@ -45,6 +45,10 @@ export class Relation<T extends Base> {
   private _includesAssociations: string[] = [];
   private _preloadAssociations: string[] = [];
   private _eagerLoadAssociations: string[] = [];
+  private _isReadonly = false;
+  private _isStrictLoading = false;
+  private _annotations: string[] = [];
+  private _fromClause: string | null = null;
   private _loaded = false;
   private _records: T[] = [];
 
@@ -296,6 +300,88 @@ export class Relation<T extends Base> {
   }
 
   /**
+   * Mark loaded records as readonly.
+   *
+   * Mirrors: ActiveRecord::Relation#readonly
+   */
+  readonly(value = true): Relation<T> {
+    const rel = this._clone();
+    rel._isReadonly = value;
+    return rel;
+  }
+
+  /**
+   * Enable strict loading — lazily-loaded associations will raise.
+   *
+   * Mirrors: ActiveRecord::Relation#strict_loading
+   */
+  strictLoading(value = true): Relation<T> {
+    const rel = this._clone();
+    rel._isStrictLoading = value;
+    return rel;
+  }
+
+  /**
+   * Add SQL comments to the query.
+   *
+   * Mirrors: ActiveRecord::Relation#annotate
+   */
+  annotate(...comments: string[]): Relation<T> {
+    const rel = this._clone();
+    rel._annotations.push(...comments);
+    return rel;
+  }
+
+  /**
+   * Merge another relation's conditions into this one.
+   *
+   * Mirrors: ActiveRecord::Relation#merge
+   */
+  merge(other: Relation<T>): Relation<T> {
+    const rel = this._clone();
+    rel._whereClauses.push(...other._whereClauses);
+    rel._whereNotClauses.push(...other._whereNotClauses);
+    rel._whereRawClauses.push(...other._whereRawClauses);
+    if (other._orderClauses.length > 0) {
+      rel._orderClauses = [...other._orderClauses];
+    }
+    if (other._limitValue !== null) {
+      rel._limitValue = other._limitValue;
+    }
+    if (other._offsetValue !== null) {
+      rel._offsetValue = other._offsetValue;
+    }
+    if (other._selectColumns) {
+      rel._selectColumns = [...other._selectColumns];
+    }
+    if (other._isDistinct) rel._isDistinct = true;
+    if (other._groupColumns.length > 0) {
+      rel._groupColumns.push(...other._groupColumns);
+    }
+    if (other._havingClauses.length > 0) {
+      rel._havingClauses.push(...other._havingClauses);
+    }
+    if (other._lockValue) rel._lockValue = other._lockValue;
+    if (other._isReadonly) rel._isReadonly = true;
+    if (other._isStrictLoading) rel._isStrictLoading = true;
+    rel._joinClauses.push(...other._joinClauses);
+    rel._rawJoins.push(...other._rawJoins);
+    rel._annotations.push(...other._annotations);
+    return rel;
+  }
+
+  /**
+   * Change the FROM clause (for subqueries or alternate table names).
+   *
+   * Mirrors: ActiveRecord::Relation#from
+   */
+  from(source: string): Relation<T> {
+    const rel = this._clone();
+    rel._fromClause = source;
+    return rel;
+  }
+
+  /**
    * UNION with another relation.
    *
    * Mirrors: ActiveRecord::Relation#union
@@ -416,6 +502,18 @@ export class Relation<T extends Base> {
     );
     this._loaded = true;
 
+    // Apply readonly and strict_loading flags to loaded records
+    if (this._isReadonly) {
+      for (const record of this._records) {
+        (record as any)._readonly = true;
+      }
+    }
+    if (this._isStrictLoading) {
+      for (const record of this._records) {
+        (record as any)._strictLoading = true;
+      }
+    }
+
     // Preload associations if requested
     const allAssocs = [
       ...this._includesAssociations,
@@ -492,6 +590,53 @@ export class Relation<T extends Base> {
    */
   async lastBang(): Promise<T> {
     const record = await this.last();
+    if (!record) {
+      throw new RecordNotFound(`${this._modelClass.name} not found`, this._modelClass.name);
+    }
+    return record as T;
+  }
+
+  /**
+   * Return exactly one record, or raise if zero or more than one.
+   *
+   * Mirrors: ActiveRecord::Relation#sole
+   */
+  async sole(): Promise<T> {
+    const rel = this._clone();
+    rel._limitValue = 2; // Only need 2 to detect "more than one"
+    const records = await rel.toArray();
+    if (records.length === 0) {
+      throw new RecordNotFound(`${this._modelClass.name} not found`, this._modelClass.name);
+    }
+    if (records.length > 1) {
+      throw new SoleRecordExceeded(this._modelClass.name);
+    }
+    return records[0];
+  }
+
+  /**
+   * Return a record without any implicit ordering.
+   *
+   * Mirrors: ActiveRecord::Relation#take
+   */
+  async take(limit?: number): Promise<T | T[] | null> {
+    const rel = this._clone();
+    if (limit !== undefined) {
+      rel._limitValue = limit;
+      return rel.toArray();
+    }
+    rel._limitValue = 1;
+    const records = await rel.toArray();
+    return records[0] ?? null;
+  }
+
+  /**
+   * Return a record without ordering, or throw if none found.
+   *
+   * Mirrors: ActiveRecord::Relation#take!
+   */
+  async takeBang(): Promise<T> {
+    const record = await this.take();
     if (!record) {
       throw new RecordNotFound(`${this._modelClass.name} not found`, this._modelClass.name);
     }
@@ -981,7 +1126,23 @@ export class Relation<T extends Base> {
       manager.lock(this._lockValue);
     }
 
-    return manager.toSql();
+    let sql = manager.toSql();
+
+    // Replace FROM clause if from() was used
+    if (this._fromClause) {
+      sql = sql.replace(
+        /FROM\s+"[^"]+"/,
+        `FROM ${this._fromClause}`
+      );
+    }
+
+    // Append SQL comments from annotate()
+    if (this._annotations.length > 0) {
+      const comments = this._annotations.map((c) => `/* ${c} */`).join(" ");
+      sql = `${sql} ${comments}`;
+    }
+
+    return sql;
   }
 
   private _buildWhereNodes(
@@ -1168,9 +1329,10 @@ export class Relation<T extends Base> {
         await import("./associations.js");
 
       if (assocDef.type === "belongsTo") {
+        const _underscore = (n: string) => n.replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2").replace(/([a-z\d])([A-Z])/g, "$1_$2").toLowerCase();
         const className = assocDef.options.className ??
           assocName.charAt(0).toUpperCase() + assocName.slice(1);
-        const foreignKey = assocDef.options.foreignKey ?? `${assocName}_id`;
+        const foreignKey = assocDef.options.foreignKey ?? `${_underscore(assocName)}_id`;
         const primaryKey = assocDef.options.primaryKey ?? "id";
 
         const fkValues = [...new Set(records.map(r => r.readAttribute(foreignKey)).filter(v => v != null))];
@@ -1305,6 +1467,10 @@ export class Relation<T extends Base> {
     rel._includesAssociations = [...this._includesAssociations];
     rel._preloadAssociations = [...this._preloadAssociations];
     rel._eagerLoadAssociations = [...this._eagerLoadAssociations];
+    rel._isReadonly = this._isReadonly;
+    rel._isStrictLoading = this._isStrictLoading;
+    rel._annotations = [...this._annotations];
+    rel._fromClause = this._fromClause;
     return wrapWithScopeProxy(rel);
   }
 }

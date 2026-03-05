@@ -1,4 +1,5 @@
 import type { Base } from "./base.js";
+import { StrictLoadingViolationError } from "./errors.js";
 
 /**
  * Association options.
@@ -77,9 +78,15 @@ export const modelRegistry = new Map<string, typeof Base>();
 
 /**
  * Register a model class for association resolution.
+ * Can be called as registerModel(Model) or registerModel("Name", Model).
  */
-export function registerModel(model: typeof Base): void {
-  modelRegistry.set(model.name, model);
+export function registerModel(nameOrModel: string | typeof Base, model?: typeof Base): void {
+  if (typeof nameOrModel === "string") {
+    if (!model) throw new Error("registerModel(name, model) requires a model class");
+    modelRegistry.set(nameOrModel, model);
+  } else {
+    modelRegistry.set(nameOrModel.name, nameOrModel);
+  }
 }
 
 /**
@@ -171,6 +178,11 @@ export async function loadBelongsTo(
     return (record as any)._preloadedAssociations.get(assocName) as Base | null;
   }
 
+  // Strict loading check: this is a lazy load
+  if ((record as any)._strictLoading) {
+    throw new StrictLoadingViolationError(record, assocName);
+  }
+
   const foreignKey = options.foreignKey ?? `${underscore(assocName)}_id`;
   const primaryKey = options.primaryKey ?? "id";
 
@@ -214,6 +226,11 @@ export async function loadHasOne(
   }
   if ((record as any)._preloadedAssociations?.has(assocName)) {
     return (record as any)._preloadedAssociations.get(assocName) as Base | null;
+  }
+
+  // Strict loading check
+  if ((record as any)._strictLoading) {
+    throw new StrictLoadingViolationError(record, assocName);
   }
 
   const ctor = record.constructor as typeof Base;
@@ -267,6 +284,11 @@ export async function loadHasMany(
   }
   if ((record as any)._preloadedAssociations?.has(assocName)) {
     return (record as any)._preloadedAssociations.get(assocName) as Base[];
+  }
+
+  // Strict loading check
+  if ((record as any)._strictLoading) {
+    throw new StrictLoadingViolationError(record, assocName);
   }
 
   // Handle through associations

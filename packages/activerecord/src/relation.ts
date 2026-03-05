@@ -89,7 +89,20 @@ export class Relation<T extends Base> {
       }
       rel._whereRawClauses.push(sql);
     } else {
-      rel._whereClauses.push(conditionsOrSql);
+      // Check for subquery values (Relation instances)
+      const normalConditions: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(conditionsOrSql)) {
+        if (value instanceof Relation) {
+          // Subquery: WHERE column IN (SELECT ...)
+          const subSql = value.toSql();
+          rel._whereRawClauses.push(`"${this._modelClass.arelTable.name}"."${key}" IN (${subSql})`);
+        } else {
+          normalConditions[key] = value;
+        }
+      }
+      if (Object.keys(normalConditions).length > 0) {
+        rel._whereClauses.push(normalConditions);
+      }
     }
     return rel;
   }
@@ -290,13 +303,28 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Add HAVING clause (raw SQL string).
+   * Add HAVING clause. Accepts raw SQL string or hash form.
    *
    * Mirrors: ActiveRecord::Relation#having
+   *
+   * Examples:
+   *   having("COUNT(*) > 5")
+   *   having({ count: 5 }) // having COUNT(*) = 5
    */
-  having(condition: string): Relation<T> {
+  having(condition: string | Record<string, unknown>): Relation<T> {
     const rel = this._clone();
-    rel._havingClauses.push(condition);
+    if (typeof condition === "string") {
+      rel._havingClauses.push(condition);
+    } else {
+      // Hash form: convert to SQL conditions
+      for (const [key, value] of Object.entries(condition)) {
+        if (typeof value === "number") {
+          rel._havingClauses.push(`${key} = ${value}`);
+        } else {
+          rel._havingClauses.push(`${key} = '${String(value).replace(/'/g, "''")}'`);
+        }
+      }
+    }
     return rel;
   }
 

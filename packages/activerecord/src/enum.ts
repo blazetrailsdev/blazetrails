@@ -47,7 +47,8 @@ export function getEnumDefinitions(
 export function defineEnum(
   modelClass: typeof Base,
   attribute: string,
-  valuesInput: string[] | Record<string, number>
+  valuesInput: string[] | Record<string, number>,
+  options?: { prefix?: boolean | string; suffix?: boolean | string }
 ): void {
   const mapping = new Map<string, number>();
   const reverseMapping = new Map<number, string>();
@@ -68,17 +69,41 @@ export function defineEnum(
   const def: EnumDefinition = { attribute, mapping, reverseMapping };
   defs.set(attribute, def);
 
+  // Compute prefix/suffix for method names
+  const prefixStr = options?.prefix === true
+    ? attribute
+    : typeof options?.prefix === "string"
+      ? options.prefix
+      : "";
+  const suffixStr = options?.suffix === true
+    ? attribute
+    : typeof options?.suffix === "string"
+      ? options.suffix
+      : "";
+
+  const methodName = (name: string) => {
+    if (prefixStr && suffixStr) return `${prefixStr}_${name}_${suffixStr}`;
+    if (prefixStr) return `${prefixStr}_${name}`;
+    if (suffixStr) return `${name}_${suffixStr}`;
+    return name;
+  };
+
+  // Camel-case a method name: "status_draft" -> "statusDraft"
+  const toCamel = (s: string) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+
   // Define scopes for each enum value
   for (const [name, value] of mapping) {
-    modelClass.scope(name, (rel: any) => rel.where({ [attribute]: value }));
+    const scopeName = toCamel(methodName(name));
+    modelClass.scope(scopeName, (rel: any) => rel.where({ [attribute]: value }));
   }
 
   // Define instance methods on the prototype
   for (const [name, value] of mapping) {
-    const capitalizedName = name.charAt(0).toUpperCase() + name.slice(1);
+    const fullName = toCamel(methodName(name));
+    const capitalizedFullName = fullName.charAt(0).toUpperCase() + fullName.slice(1);
 
-    // Predicate: record.isDraft()
-    Object.defineProperty(modelClass.prototype, `is${capitalizedName}`, {
+    // Predicate: record.isDraft() or record.isStatusDraft()
+    Object.defineProperty(modelClass.prototype, `is${capitalizedFullName}`, {
       value: function (this: Base) {
         return this.readAttribute(attribute) === value;
       },
@@ -86,9 +111,9 @@ export function defineEnum(
       configurable: true,
     });
 
-    // Setter: record.draft() — sets the value in memory
-    if (!modelClass.prototype.hasOwnProperty(name)) {
-      Object.defineProperty(modelClass.prototype, name, {
+    // Setter: record.draft() or record.statusDraft() — sets the value in memory
+    if (!modelClass.prototype.hasOwnProperty(fullName)) {
+      Object.defineProperty(modelClass.prototype, fullName, {
         value: function (this: Base) {
           this.writeAttribute(attribute, value);
         },
@@ -97,8 +122,8 @@ export function defineEnum(
       });
     }
 
-    // Bang setter: record.draftBang() — sets and persists via updateColumn
-    const bangName = `${name}Bang`;
+    // Bang setter: record.draftBang() or record.statusDraftBang()
+    const bangName = `${fullName}Bang`;
     Object.defineProperty(modelClass.prototype, bangName, {
       value: async function (this: any) {
         this.writeAttribute(attribute, value);
@@ -110,8 +135,8 @@ export function defineEnum(
       configurable: true,
     });
 
-    // whereNot scope: Model.notDraft() → where.not(status: value)
-    const notScopeName = `not${capitalizedName}`;
+    // whereNot scope: Model.notDraft() or Model.notStatusDraft()
+    const notScopeName = `not${capitalizedFullName}`;
     modelClass.scope(notScopeName, (rel: any) => rel.whereNot({ [attribute]: value }));
   }
 }

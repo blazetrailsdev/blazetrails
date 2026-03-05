@@ -6597,4 +6597,85 @@ describe("ActiveRecord", () => {
       expect(distinctCount).toBe(2);
     });
   });
+
+  // -- where with subquery --
+  describe("where with subquery", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("supports Relation as value for IN subquery", async () => {
+      class Author extends Base { static _tableName = "authors"; }
+      Author.attribute("id", "integer");
+      Author.attribute("name", "string");
+      Author.adapter = adapter;
+
+      class Post extends Base { static _tableName = "posts"; }
+      Post.attribute("id", "integer");
+      Post.attribute("author_id", "integer");
+      Post.attribute("title", "string");
+      Post.adapter = adapter;
+
+      const alice = await Author.create({ name: "Alice" });
+      const bob = await Author.create({ name: "Bob" });
+      await Post.create({ author_id: alice.id, title: "Post A" });
+      await Post.create({ author_id: bob.id, title: "Post B" });
+      await Post.create({ author_id: alice.id, title: "Post C" });
+
+      // Use a subquery to find posts by Alice
+      const aliceIds = Author.all().where({ name: "Alice" }).select("id") as any;
+      const sql = Post.all().where({ author_id: aliceIds }).toSql();
+      expect(sql).toContain("IN (SELECT");
+    });
+  });
+
+  // -- having hash form --
+  describe("having hash form", () => {
+    it("accepts hash conditions for having", () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("category", "string");
+      Item.adapter = freshAdapter();
+
+      const sql = Item.all()
+        .select("category", "COUNT(*) AS cnt")
+        .group("category")
+        .having("COUNT(*) > 1")
+        .toSql();
+      expect(sql).toContain("HAVING");
+      expect(sql).toContain("COUNT(*) > 1");
+    });
+  });
+
+  // -- enum prefix/suffix --
+  describe("enum prefix/suffix", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("prefix: true uses attribute name as prefix", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("status", "integer");
+      Item.adapter = adapter;
+      defineEnum(Item, "status", ["draft", "published"], { prefix: true });
+
+      const item = await Item.create({ status: 0 });
+      // Methods should be prefixed: isStatusDraft, statusDraft
+      expect(typeof (item as any).isStatusDraft).toBe("function");
+      expect((item as any).isStatusDraft()).toBe(true);
+      expect(typeof (item as any).isStatusPublished).toBe("function");
+      expect((item as any).isStatusPublished()).toBe(false);
+    });
+
+    it("prefix: string uses custom prefix", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("role", "integer");
+      Item.adapter = adapter;
+      defineEnum(Item, "role", ["admin", "user"], { prefix: "access" });
+
+      const item = await Item.create({ role: 0 });
+      expect(typeof (item as any).isAccessAdmin).toBe("function");
+      expect((item as any).isAccessAdmin()).toBe(true);
+    });
+  });
 });

@@ -6462,4 +6462,66 @@ describe("Grouped Calculations (Rails-guided)", () => {
     const distinctCount = await Topic.all().distinct().count("author_name") as number;
     expect(distinctCount).toBe(3);
   });
+
+  // =====================================================================
+  // where with subquery — activerecord/test/cases/relation/where_test.rb
+  // =====================================================================
+
+  // Rails: test "where with subquery relation"
+  it("where with Relation value generates IN subquery SQL", async () => {
+    class Author extends Base {
+      static { this._tableName = "authors"; this.attribute("id", "integer"); this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    class Post extends Base {
+      static { this._tableName = "posts"; this.attribute("id", "integer"); this.attribute("author_id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    const alice = await Author.create({ name: "Alice" });
+    await Author.create({ name: "Bob" });
+    await Post.create({ author_id: alice.id, title: "Hello" });
+
+    const aliceIds = Author.all().where({ name: "Alice" }).select("id") as any;
+    const sql = Post.all().where({ author_id: aliceIds }).toSql();
+    expect(sql).toContain("IN (SELECT");
+    expect(sql).toContain("author_id");
+  });
+
+  // =====================================================================
+  // enum prefix — activerecord/test/cases/enum_test.rb
+  // =====================================================================
+
+  // Rails: test "enum prefix true"
+  it("enum with prefix: true generates prefixed methods", async () => {
+    class Conversation extends Base {
+      static { this._tableName = "conversations"; this.attribute("id", "integer"); this.attribute("status", "integer"); this.adapter = adapter; }
+    }
+    defineEnum(Conversation, "status", ["active", "archived"], { prefix: true });
+
+    const conv = await Conversation.create({ status: 0 });
+    expect((conv as any).isStatusActive()).toBe(true);
+    expect((conv as any).isStatusArchived()).toBe(false);
+  });
+
+  // Rails: test "enum prefix string"
+  it("enum with prefix string generates custom-prefixed methods", async () => {
+    class Conversation extends Base {
+      static { this._tableName = "conversations"; this.attribute("id", "integer"); this.attribute("comments_status", "integer"); this.adapter = adapter; }
+    }
+    defineEnum(Conversation, "comments_status", ["open", "closed"], { prefix: "comments" });
+
+    const conv = await Conversation.create({ comments_status: 0 });
+    expect((conv as any).isCommentsOpen()).toBe(true);
+    expect((conv as any).isCommentsClosed()).toBe(false);
+  });
+
+  // Rails: test "enum suffix true"
+  it("enum with suffix: true generates suffixed methods", async () => {
+    class Conversation extends Base {
+      static { this._tableName = "conversations"; this.attribute("id", "integer"); this.attribute("question_type", "integer"); this.adapter = adapter; }
+    }
+    defineEnum(Conversation, "question_type", ["multiple", "single"], { suffix: true });
+
+    const conv = await Conversation.create({ question_type: 0 });
+    expect((conv as any).isMultipleQuestionType()).toBe(true);
+  });
 });

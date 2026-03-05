@@ -6994,4 +6994,109 @@ describe("ActiveRecord", () => {
       expect(batches).toEqual([2, 2, 1]);
     });
   });
+
+  describe("findBySql", () => {
+    it("returns model instances from raw SQL", async () => {
+      const adapter = freshAdapter();
+      class User extends Base { static _tableName = "users"; }
+      User.attribute("id", "integer");
+      User.attribute("name", "string");
+      User.adapter = adapter;
+
+      await User.create({ name: "Alice" });
+      await User.create({ name: "Bob" });
+
+      const results = await User.findBySql('SELECT * FROM "users" WHERE "name" = \'Alice\'');
+      expect(results.length).toBe(1);
+      expect(results[0].readAttribute("name")).toBe("Alice");
+      expect(results[0].isPersisted()).toBe(true);
+      expect(results[0].isNewRecord()).toBe(false);
+    });
+  });
+
+  describe("incrementCounter / decrementCounter", () => {
+    it("increments a counter column by primary key", async () => {
+      const adapter = freshAdapter();
+      class Post extends Base { static _tableName = "posts"; }
+      Post.attribute("id", "integer");
+      Post.attribute("comments_count", "integer", { default: 0 });
+      Post.adapter = adapter;
+
+      const post = await Post.create({ comments_count: 5 });
+      await Post.incrementCounter("comments_count", post.id);
+
+      await post.reload();
+      expect(post.readAttribute("comments_count")).toBe(6);
+    });
+
+    it("decrements a counter column by primary key", async () => {
+      const adapter = freshAdapter();
+      class Post extends Base { static _tableName = "posts"; }
+      Post.attribute("id", "integer");
+      Post.attribute("comments_count", "integer", { default: 0 });
+      Post.adapter = adapter;
+
+      const post = await Post.create({ comments_count: 5 });
+      await Post.decrementCounter("comments_count", post.id);
+
+      await post.reload();
+      expect(post.readAttribute("comments_count")).toBe(4);
+    });
+  });
+
+  describe("updateCounters", () => {
+    it("updates multiple counters for a record", async () => {
+      const adapter = freshAdapter();
+      class Post extends Base { static _tableName = "posts"; }
+      Post.attribute("id", "integer");
+      Post.attribute("likes_count", "integer", { default: 0 });
+      Post.attribute("comments_count", "integer", { default: 0 });
+      Post.adapter = adapter;
+
+      const post = await Post.create({ likes_count: 10, comments_count: 5 });
+      await Post.updateCounters(post.id, { likes_count: 3, comments_count: -2 });
+
+      await post.reload();
+      expect(post.readAttribute("likes_count")).toBe(13);
+      expect(post.readAttribute("comments_count")).toBe(3);
+    });
+  });
+
+  describe("save with touch: false", () => {
+    it("skips timestamp updates on save", async () => {
+      const adapter = freshAdapter();
+      class Post extends Base { static _tableName = "posts"; }
+      Post.attribute("id", "integer");
+      Post.attribute("title", "string");
+      Post.attribute("updated_at", "datetime");
+      Post.adapter = adapter;
+
+      const post = await Post.create({ title: "Hello" });
+      const originalUpdatedAt = post.readAttribute("updated_at");
+
+      // Wait a tiny bit so Date.now() would differ
+      await new Promise((r) => setTimeout(r, 5));
+
+      await post.update({ title: "Updated" });
+      const afterUpdate = post.readAttribute("updated_at");
+      expect(afterUpdate).not.toEqual(originalUpdatedAt);
+    });
+
+    it("does not update updated_at when touch: false", async () => {
+      const adapter = freshAdapter();
+      class Post extends Base { static _tableName = "posts"; }
+      Post.attribute("id", "integer");
+      Post.attribute("title", "string");
+      Post.attribute("updated_at", "datetime");
+      Post.adapter = adapter;
+
+      const post = await Post.create({ title: "Hello" });
+      const originalUpdatedAt = post.readAttribute("updated_at");
+
+      post.writeAttribute("title", "Updated");
+      await post.save({ touch: false });
+
+      expect(post.readAttribute("updated_at")).toEqual(originalUpdatedAt);
+    });
+  });
 });

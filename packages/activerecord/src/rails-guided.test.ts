@@ -6723,4 +6723,70 @@ describe("Grouped Calculations (Rails-guided)", () => {
     expect(user.readAttribute("name")).toBe("Alice");
     expect(user.readAttribute("role")).toBe("admin");
   });
+
+  // Rails: test "find_by_sql"
+  it("findBySql returns model instances from raw SQL", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("name", "string"); this.adapter = adapter; }
+    }
+
+    await User.create({ name: "Alice" });
+    await User.create({ name: "Bob" });
+
+    const results = await User.findBySql('SELECT * FROM "users" WHERE "name" = \'Bob\'');
+    expect(results.length).toBe(1);
+    expect(results[0].readAttribute("name")).toBe("Bob");
+    expect(results[0].isPersisted()).toBe(true);
+  });
+
+  // Rails: test "increment_counter"
+  it("incrementCounter increments a counter column", async () => {
+    class Post extends Base {
+      static { this._tableName = "posts"; this.attribute("id", "integer"); this.attribute("comments_count", "integer", { default: 0 }); this.adapter = adapter; }
+    }
+
+    const post = await Post.create({ comments_count: 3 });
+    await Post.incrementCounter("comments_count", post.id);
+    await post.reload();
+    expect(post.readAttribute("comments_count")).toBe(4);
+  });
+
+  // Rails: test "decrement_counter"
+  it("decrementCounter decrements a counter column", async () => {
+    class Post extends Base {
+      static { this._tableName = "posts"; this.attribute("id", "integer"); this.attribute("comments_count", "integer", { default: 0 }); this.adapter = adapter; }
+    }
+
+    const post = await Post.create({ comments_count: 5 });
+    await Post.decrementCounter("comments_count", post.id);
+    await post.reload();
+    expect(post.readAttribute("comments_count")).toBe(4);
+  });
+
+  // Rails: test "update_counters"
+  it("updateCounters updates multiple counters at once", async () => {
+    class Post extends Base {
+      static { this._tableName = "posts"; this.attribute("id", "integer"); this.attribute("likes_count", "integer", { default: 0 }); this.attribute("views_count", "integer", { default: 0 }); this.adapter = adapter; }
+    }
+
+    const post = await Post.create({ likes_count: 10, views_count: 100 });
+    await Post.updateCounters(post.id, { likes_count: 5, views_count: -10 });
+    await post.reload();
+    expect(post.readAttribute("likes_count")).toBe(15);
+    expect(post.readAttribute("views_count")).toBe(90);
+  });
+
+  // Rails: test "save(touch: false)"
+  it("save(touch: false) skips updating timestamps", async () => {
+    class Post extends Base {
+      static { this._tableName = "posts"; this.attribute("id", "integer"); this.attribute("title", "string"); this.attribute("updated_at", "datetime"); this.adapter = adapter; }
+    }
+
+    const post = await Post.create({ title: "Hello" });
+    const originalUpdatedAt = post.readAttribute("updated_at");
+
+    post.writeAttribute("title", "Changed");
+    await post.save({ touch: false });
+    expect(post.readAttribute("updated_at")).toEqual(originalUpdatedAt);
+  });
 });

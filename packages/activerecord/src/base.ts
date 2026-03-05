@@ -550,6 +550,64 @@ export class Base extends Model {
   }
 
   /**
+   * Execute raw SQL and return model instances.
+   *
+   * Mirrors: ActiveRecord::Base.find_by_sql
+   */
+  static async findBySql(sql: string): Promise<Base[]> {
+    const rows = await this.adapter.execute(sql);
+    return rows.map((row) => this._instantiate(row));
+  }
+
+  /**
+   * Increment counter columns for a record by primary key.
+   *
+   * Mirrors: ActiveRecord::Base.increment_counter
+   */
+  static async incrementCounter(
+    attribute: string,
+    id: unknown,
+    by: number = 1
+  ): Promise<number> {
+    const table = this.arelTable;
+    const pkQuoted = typeof id === "number" ? String(id) : `'${id}'`;
+    const sql = `UPDATE "${table.name}" SET "${attribute}" = "${attribute}" + ${by} WHERE "${this.primaryKey}" = ${pkQuoted}`;
+    return this.adapter.executeMutation(sql);
+  }
+
+  /**
+   * Decrement counter columns for a record by primary key.
+   *
+   * Mirrors: ActiveRecord::Base.decrement_counter
+   */
+  static async decrementCounter(
+    attribute: string,
+    id: unknown,
+    by: number = 1
+  ): Promise<number> {
+    return this.incrementCounter(attribute, id, -by);
+  }
+
+  /**
+   * Update counter columns for one or more records.
+   *
+   * Mirrors: ActiveRecord::Base.update_counters
+   */
+  static async updateCounters(
+    id: unknown | unknown[],
+    counters: Record<string, number>
+  ): Promise<number> {
+    const ids = Array.isArray(id) ? id : [id];
+    const table = this.arelTable;
+    const setClause = Object.entries(counters)
+      .map(([attr, amount]) => `"${attr}" = "${attr}" + ${amount}`)
+      .join(", ");
+    const idList = ids.map((i) => typeof i === "number" ? String(i) : `'${i}'`).join(", ");
+    const sql = `UPDATE "${table.name}" SET ${setClause} WHERE "${this.primaryKey}" IN (${idList})`;
+    return this.adapter.executeMutation(sql);
+  }
+
+  /**
    * Instantiate a model from a database row (marks it as persisted).
    */
   static _instantiate(row: Record<string, unknown>): Base {
@@ -832,7 +890,7 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base#save
    */
-  async save(options?: { validate?: boolean }): Promise<boolean> {
+  async save(options?: { validate?: boolean; touch?: boolean }): Promise<boolean> {
     if (this._destroyed) {
       throw new RecordNotSaved(
         `Cannot save a destroyed ${(this.constructor as typeof Base).name}`, this
@@ -855,6 +913,7 @@ export class Base extends Model {
       if (!await this._runAsyncValidations()) return false;
     }
 
+    this._skipTouch = options?.touch === false;
     const ctor = this.constructor as typeof Base;
 
     // Auto-set STI type column on new records
@@ -894,6 +953,7 @@ export class Base extends Model {
       await this._pendingOperation;
       this._pendingOperation = null;
     }
+    this._skipTouch = false;
 
     if (saved) {
       const wasNewRecord = this._newRecord;
@@ -945,18 +1005,21 @@ export class Base extends Model {
   }
 
   private _pendingOperation: Promise<void> | null = null;
+  private _skipTouch = false;
 
   private _performInsert(): void {
     const ctor = this.constructor as typeof Base;
     const table = ctor.arelTable;
 
-    // Auto-populate timestamps
-    const now = new Date();
-    if (ctor._attributeDefinitions.has("created_at") && this.readAttribute("created_at") === null) {
-      this._attributes.set("created_at", now);
-    }
-    if (ctor._attributeDefinitions.has("updated_at") && this.readAttribute("updated_at") === null) {
-      this._attributes.set("updated_at", now);
+    // Auto-populate timestamps (unless touch: false)
+    if (!this._skipTouch) {
+      const now = new Date();
+      if (ctor._attributeDefinitions.has("created_at") && this.readAttribute("created_at") === null) {
+        this._attributes.set("created_at", now);
+      }
+      if (ctor._attributeDefinitions.has("updated_at") && this.readAttribute("updated_at") === null) {
+        this._attributes.set("updated_at", now);
+      }
     }
 
     const attrs = this.attributes;
@@ -995,8 +1058,8 @@ export class Base extends Model {
     const ctor = this.constructor as typeof Base;
     const table = ctor.arelTable;
 
-    // Auto-populate updated_at timestamp
-    if (ctor._attributeDefinitions.has("updated_at")) {
+    // Auto-populate updated_at timestamp (unless touch: false)
+    if (!this._skipTouch && ctor._attributeDefinitions.has("updated_at")) {
       this.writeAttribute("updated_at", new Date());
     }
 

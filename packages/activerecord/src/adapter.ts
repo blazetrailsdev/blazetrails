@@ -403,6 +403,17 @@ export class MemoryAdapter implements DatabaseAdapter {
       for (const row of rows) {
         if (!where || this.evaluateWhere(row, where)) {
           for (const [col, val] of assignments) {
+            // Handle column-relative arithmetic: "col" + N or "col" - N
+            if (typeof val === "string") {
+              const arithMatch = val.match(/^"?(\w+)"?\s*([+-])\s*(-?\d+(?:\.\d+)?)$/);
+              if (arithMatch && arithMatch[1] === col) {
+                const current = Number(row[col]) || 0;
+                const op = arithMatch[2];
+                const amount = Number(arithMatch[3]);
+                row[col] = op === "+" ? current + amount : current - amount;
+                continue;
+              }
+            }
             row[col] = val;
           }
           affected++;

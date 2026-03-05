@@ -1617,4 +1617,50 @@ describe("ActiveModel", () => {
       expect(new Order({ total: 1 }).isValid()).toBe(true);
     });
   });
+
+  // =================================================================
+  // Phase: attribute_before_type_cast / hasAttribute
+  // =================================================================
+  describe("attributeBeforeTypeCast", () => {
+    it("returns the raw value before type casting", () => {
+      class Price extends Model {
+        static {
+          this.attribute("amount", "integer");
+        }
+      }
+
+      const price = new Price({ amount: "42" });
+      expect(price.readAttribute("amount")).toBe(42); // cast to integer
+      expect(price.readAttributeBeforeTypeCast("amount")).toBe("42"); // raw string
+    });
+
+    it("tracks raw values on writeAttribute", () => {
+      class Price extends Model {
+        static {
+          this.attribute("amount", "integer");
+        }
+      }
+
+      const price = new Price({ amount: 10 });
+      price.writeAttribute("amount", "99");
+      expect(price.readAttribute("amount")).toBe(99);
+      expect(price.readAttributeBeforeTypeCast("amount")).toBe("99");
+    });
+  });
+
+  describe("hasAttribute", () => {
+    it("returns true for defined attributes", () => {
+      class Widget extends Model {
+        static {
+          this.attribute("name", "string");
+          this.attribute("size", "integer");
+        }
+      }
+
+      const w = new Widget({ name: "Test" });
+      expect(w.hasAttribute("name")).toBe(true);
+      expect(w.hasAttribute("size")).toBe(true);
+      expect(w.hasAttribute("unknown")).toBe(false);
+    });
+  });
 });

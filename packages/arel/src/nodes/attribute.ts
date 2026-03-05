@@ -253,6 +253,22 @@ export class Attribute extends Node {
     return new NamedFunction("AVG", [this]);
   }
 
+  // -- String functions --
+
+  lower(): NamedFunction {
+    return new NamedFunction("LOWER", [this]);
+  }
+
+  upper(): NamedFunction {
+    return new NamedFunction("UPPER", [this]);
+  }
+
+  // -- Null handling --
+
+  coalesce(...others: unknown[]): NamedFunction {
+    return new NamedFunction("COALESCE", [this, ...others.map(buildQuoted)]);
+  }
+
   accept<T>(visitor: NodeVisitor<T>): T {
     return visitor.visit(this);
   }

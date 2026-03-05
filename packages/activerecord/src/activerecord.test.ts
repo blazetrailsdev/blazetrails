@@ -6501,4 +6501,46 @@ describe("ActiveRecord", () => {
       expect(Item.currentScope).toBeNull();
     });
   });
+
+  // -- load() --
+  describe("load()", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("eagerly loads records and returns the relation", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ name: "A" });
+      await Item.create({ name: "B" });
+
+      const rel = Item.all();
+      expect(rel.isLoaded).toBe(false);
+
+      const result = await rel.load();
+      expect(result).toBe(rel); // Returns itself
+      expect(rel.isLoaded).toBe(true);
+    });
+  });
+
+  // -- length() --
+  describe("length()", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("returns the number of records after loading", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ name: "A" });
+      await Item.create({ name: "B" });
+      await Item.create({ name: "C" });
+
+      expect(await Item.all().length()).toBe(3);
+    });
+  });
 });

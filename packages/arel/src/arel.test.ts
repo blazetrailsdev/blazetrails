@@ -1235,4 +1235,36 @@ describe("Arel", () => {
       expect(mgr.toSql()).toContain("CROSS JOIN");
     });
   });
+
+  // -- Attribute convenience functions --
+  describe("Attribute string/null functions", () => {
+    it("lower() generates LOWER function", () => {
+      const name = users.get("name");
+      const fn = name.lower();
+      const mgr = new SelectManager(users);
+      mgr.project(fn);
+      const sql = mgr.toSql();
+      expect(sql).toContain("LOWER");
+      expect(sql).toContain('"name"');
+    });
+
+    it("upper() generates UPPER function", () => {
+      const name = users.get("name");
+      const fn = name.upper();
+      const mgr = new SelectManager(users);
+      mgr.project(fn);
+      const sql = mgr.toSql();
+      expect(sql).toContain("UPPER");
+    });
+
+    it("coalesce() generates COALESCE function", () => {
+      const name = users.get("name");
+      const fn = name.coalesce("Unknown");
+      const mgr = new SelectManager(users);
+      mgr.project(fn);
+      const sql = mgr.toSql();
+      expect(sql).toContain("COALESCE");
+      expect(sql).toContain("'Unknown'");
+    });
+  });
 });

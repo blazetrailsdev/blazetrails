@@ -309,6 +309,7 @@ export class Model {
   // -- Instance --
 
   _attributes: Map<string, unknown> = new Map();
+  _attributesBeforeTypeCast: Map<string, unknown> = new Map();
   errors: Errors = new Errors();
   private _dirty: DirtyTracker = new DirtyTracker();
 
@@ -318,6 +319,7 @@ export class Model {
 
     for (const [name, def] of defs) {
       if (name in attrs) {
+        this._attributesBeforeTypeCast.set(name, attrs[name]);
         this._attributes.set(name, def.type.cast(attrs[name]));
       } else {
         const defVal =
@@ -352,9 +354,28 @@ export class Model {
     const ctor = this.constructor as typeof Model;
     const def = ctor._attributeDefinitions.get(name);
     const oldValue = this._attributes.get(name);
+    this._attributesBeforeTypeCast.set(name, value);
     const newValue = def ? def.type.cast(value) : value;
     this._attributes.set(name, newValue);
     this._dirty.attributeWillChange(name, oldValue, newValue);
+  }
+
+  /**
+   * Read the raw (uncast) value of an attribute.
+   *
+   * Mirrors: ActiveModel::Dirty#attribute_before_type_cast
+   */
+  readAttributeBeforeTypeCast(name: string): unknown {
+    return this._attributesBeforeTypeCast.get(name) ?? null;
+  }
+
+  /**
+   * Check if this model has the given attribute defined.
+   *
+   * Mirrors: ActiveModel::AttributeMethods#has_attribute?
+   */
+  hasAttribute(name: string): boolean {
+    return (this.constructor as typeof Model)._attributeDefinitions.has(name);
   }
 
   get attributes(): Record<string, unknown> {

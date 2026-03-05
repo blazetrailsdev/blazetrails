@@ -6361,4 +6361,57 @@ describe("Grouped Calculations (Rails-guided)", () => {
     });
     expect(Topic.currentScope).toBeNull();
   });
+
+  // =====================================================================
+  // Relation#load — activerecord/test/cases/relation_test.rb
+  // =====================================================================
+
+  // Rails: test "load loads the records"
+  it("load eagerly loads records and returns relation", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    await Topic.create({ title: "A" });
+    await Topic.create({ title: "B" });
+
+    const rel = Topic.all();
+    expect(rel.isLoaded).toBe(false);
+    const result = await rel.load();
+    expect(result.isLoaded).toBe(true);
+  });
+
+  // =====================================================================
+  // attribute_before_type_cast — activerecord/test/cases/attribute_methods_test.rb
+  // =====================================================================
+
+  // Rails: test "read_attribute_before_type_cast returns the raw value"
+  it("readAttributeBeforeTypeCast returns raw uncast value", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("written_on", "datetime"); this.adapter = adapter; }
+    }
+
+    const topic = new Topic({ written_on: "2024-01-15" });
+    // The cast value should be a Date
+    expect(topic.readAttribute("written_on")).toBeInstanceOf(Date);
+    // The before_type_cast value should be the raw string
+    expect(topic.readAttributeBeforeTypeCast("written_on")).toBe("2024-01-15");
+  });
+
+  // =====================================================================
+  // length — activerecord/test/cases/relation_test.rb
+  // =====================================================================
+
+  // Rails: test "length loads records and returns count"
+  it("length loads and returns record count", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    await Topic.create({ title: "A" });
+    await Topic.create({ title: "B" });
+    await Topic.create({ title: "C" });
+
+    expect(await Topic.all().length()).toBe(3);
+  });
 });

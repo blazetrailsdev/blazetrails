@@ -733,6 +733,17 @@ export class Relation<T extends Base> {
   // -- Terminal methods --
 
   /**
+   * Eagerly load the records and return the relation itself.
+   * Useful for chaining: `relation.load().isLoaded` is true.
+   *
+   * Mirrors: ActiveRecord::Relation#load
+   */
+  async load(): Promise<this> {
+    await this.toArray();
+    return this;
+  }
+
+  /**
    * Execute the query and return all records.
    *
    * Mirrors: ActiveRecord::Relation#to_a / #load

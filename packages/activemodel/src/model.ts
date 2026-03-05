@@ -957,6 +957,30 @@ export class Model {
     return this.changedAttributes;
   }
 
+  /**
+   * Return the changes hash that will be saved on the next save.
+   * Same as `changes` — returns { attr: [old, new] } for unsaved attributes.
+   *
+   * Mirrors: ActiveModel::Dirty#changes_to_save
+   */
+  get changesToSave(): Record<string, [unknown, unknown]> {
+    return this.changes;
+  }
+
+  /**
+   * Return a hash of all attributes with their database values
+   * (i.e. the values from before any unsaved changes).
+   *
+   * Mirrors: ActiveModel::Dirty#attributes_in_database
+   */
+  get attributesInDatabase(): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    for (const name of this.changedAttributes) {
+      result[name] = this.attributeInDatabase(name);
+    }
+    return result;
+  }
+
   savedChangeToAttributeValues(name: string): [unknown, unknown] | undefined {
     const changes = this._dirty.previousChanges;
     return changes[name];

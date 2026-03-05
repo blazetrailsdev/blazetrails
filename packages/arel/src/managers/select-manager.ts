@@ -15,7 +15,7 @@ import {
 } from "../nodes/join.js";
 import { Quoted } from "../nodes/quoted.js";
 import { Union, UnionAll, Intersect, Except } from "../nodes/set-operations.js";
-import { With, WithRecursive } from "../nodes/with.js";
+import { With, WithRecursive, TableAlias } from "../nodes/with.js";
 import { Exists } from "../nodes/exists.js";
 import { Over, NamedWindow } from "../nodes/window.js";
 import { Table } from "../table.js";
@@ -292,6 +292,24 @@ export class SelectManager {
    */
   exists(): Exists {
     return new Exists(this.ast);
+  }
+
+  /**
+   * Return the current ORDER BY expressions.
+   *
+   * Mirrors: Arel::SelectManager#orders
+   */
+  get orders(): Node[] {
+    return [...this.ast.orders];
+  }
+
+  /**
+   * Alias the entire subquery with a name, returning a TableAlias.
+   *
+   * Mirrors: Arel::SelectManager#as
+   */
+  as(alias: string): TableAlias {
+    return new TableAlias(this.ast, alias);
   }
 
   /**

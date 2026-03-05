@@ -2912,4 +2912,65 @@ describe("ActiveModel", () => {
       expect(u.typeForAttribute("unknown")).toBeNull();
     });
   });
+
+  describe("changesToSave", () => {
+    it("returns the changes hash for unsaved attributes", () => {
+      class User extends Model {
+        constructor(attrs: Record<string, unknown> = {}) {
+          super(attrs);
+        }
+      }
+      User.attribute("name", "string");
+      User.attribute("age", "integer");
+
+      const u = new User({ name: "Alice", age: 25 });
+      u.writeAttribute("name", "Bob");
+      const changes = u.changesToSave;
+      expect(changes["name"]).toEqual(["Alice", "Bob"]);
+      expect(changes["age"]).toBeUndefined();
+    });
+
+    it("returns empty object when no changes", () => {
+      class User extends Model {
+        constructor(attrs: Record<string, unknown> = {}) {
+          super(attrs);
+        }
+      }
+      User.attribute("name", "string");
+
+      const u = new User({ name: "Alice" });
+      expect(u.changesToSave).toEqual({});
+    });
+  });
+
+  describe("attributesInDatabase", () => {
+    it("returns database values for changed attributes", () => {
+      class User extends Model {
+        constructor(attrs: Record<string, unknown> = {}) {
+          super(attrs);
+        }
+      }
+      User.attribute("name", "string");
+      User.attribute("age", "integer");
+
+      const u = new User({ name: "Alice", age: 25 });
+      u.writeAttribute("name", "Bob");
+      u.writeAttribute("age", 30);
+      const dbValues = u.attributesInDatabase;
+      expect(dbValues["name"]).toBe("Alice");
+      expect(dbValues["age"]).toBe(25);
+    });
+
+    it("returns empty object when no changes", () => {
+      class User extends Model {
+        constructor(attrs: Record<string, unknown> = {}) {
+          super(attrs);
+        }
+      }
+      User.attribute("name", "string");
+
+      const u = new User({ name: "Alice" });
+      expect(u.attributesInDatabase).toEqual({});
+    });
+  });
 });

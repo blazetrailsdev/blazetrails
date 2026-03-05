@@ -9519,4 +9519,69 @@ describe("ActiveRecord", () => {
       expect(u.isEqual(null)).toBe(false);
     });
   });
+
+  describe("whereAny", () => {
+    it("matches records where ANY condition is true (OR)", async () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static {
+          this.attribute("id", "integer");
+          this.attribute("name", "string");
+          this.attribute("role", "string");
+          this.adapter = adapter;
+        }
+      }
+
+      await User.create({ name: "Alice", role: "admin" });
+      await User.create({ name: "Bob", role: "user" });
+      await User.create({ name: "Charlie", role: "user" });
+
+      const results = await User.where({}).whereAny({ name: "Alice" }, { role: "user" }).toArray();
+      expect(results.length).toBe(3);
+    });
+
+    it("filters correctly with strict conditions", async () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static {
+          this.attribute("id", "integer");
+          this.attribute("name", "string");
+          this.attribute("role", "string");
+          this.adapter = adapter;
+        }
+      }
+
+      await User.create({ name: "Alice", role: "admin" });
+      await User.create({ name: "Bob", role: "user" });
+      await User.create({ name: "Charlie", role: "mod" });
+
+      const results = await User.where({}).whereAny({ name: "Alice" }, { name: "Bob" }).toArray();
+      expect(results.length).toBe(2);
+      const names = results.map((u) => u.readAttribute("name")).sort();
+      expect(names).toEqual(["Alice", "Bob"]);
+    });
+  });
+
+  describe("whereAll", () => {
+    it("matches records where ALL conditions are true (AND)", async () => {
+      const adapter = freshAdapter();
+      class User extends Base {
+        static {
+          this.attribute("id", "integer");
+          this.attribute("name", "string");
+          this.attribute("role", "string");
+          this.adapter = adapter;
+        }
+      }
+
+      await User.create({ name: "Alice", role: "admin" });
+      await User.create({ name: "Alice", role: "user" });
+      await User.create({ name: "Bob", role: "admin" });
+
+      const results = await User.where({}).whereAll({ name: "Alice" }, { role: "admin" }).toArray();
+      expect(results.length).toBe(1);
+      expect(results[0].readAttribute("name")).toBe("Alice");
+      expect(results[0].readAttribute("role")).toBe("admin");
+    });
+  });
 });

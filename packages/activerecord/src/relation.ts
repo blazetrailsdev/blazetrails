@@ -225,6 +225,50 @@ export class Relation<T extends Base> {
   }
 
   /**
+   * WHERE ANY of the given conditions match (OR logic).
+   * Accepts an array of condition hashes.
+   *
+   * Mirrors: ActiveRecord::Relation#where.any (Rails 7.1)
+   */
+  whereAny(...conditions: Record<string, unknown>[]): Relation<T> {
+    if (conditions.length === 0) return this;
+    if (conditions.length === 1) return this.where(conditions[0]);
+    // Build a chain: where(cond1).or(where(cond2)).or(where(cond3))...
+    const makeRel = (cond: Record<string, unknown>) => {
+      const r = this._clone();
+      r._whereClauses = [cond];
+      r._whereNotClauses = [];
+      r._whereRawClauses = [];
+      r._orRelations = [];
+      return r;
+    };
+    let combined = makeRel(conditions[0]);
+    for (let i = 1; i < conditions.length; i++) {
+      combined = combined.or(makeRel(conditions[i]));
+    }
+    // Merge existing where clauses from `this` with the OR result
+    const rel = this._clone();
+    // Replace where clauses with the combined OR result
+    rel._whereClauses = combined._whereClauses;
+    rel._orRelations = [...rel._orRelations, ...combined._orRelations];
+    return rel;
+  }
+
+  /**
+   * WHERE ALL of the given conditions match (AND logic).
+   * Accepts an array of condition hashes.
+   *
+   * Mirrors: ActiveRecord::Relation#where.all (Rails 7.1)
+   */
+  whereAll(...conditions: Record<string, unknown>[]): Relation<T> {
+    let rel: Relation<T> = this;
+    for (const cond of conditions) {
+      rel = rel.where(cond);
+    }
+    return rel;
+  }
+
+  /**
    * Exclude specific records from the result.
    *
    * Mirrors: ActiveRecord::Relation#excluding / #without

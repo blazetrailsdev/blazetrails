@@ -1632,5 +1632,53 @@ describe("Arel", () => {
       const manager = users.project("*");
       expect(manager.source).toBeDefined();
     });
+
+    it("orders getter returns ORDER BY expressions", () => {
+      const users = new Table("users");
+      const manager = users.project("*").order(users.attr("name").asc());
+      expect(manager.orders.length).toBe(1);
+    });
+
+    it("as() returns a TableAlias for subquery aliasing", () => {
+      const users = new Table("users");
+      const subquery = users.project(users.attr("id"));
+      const aliased = subquery.as("sub");
+      expect(aliased).toBeInstanceOf(Nodes.TableAlias);
+      expect(aliased.name).toBe("sub");
+    });
+  });
+
+  describe("Table factory methods", () => {
+    it("alias() creates a TableAlias", () => {
+      const aliased = users.alias("u");
+      expect(aliased).toBeInstanceOf(Nodes.TableAlias);
+      expect(aliased.name).toBe("u");
+    });
+
+    it("alias() defaults name to table_2", () => {
+      const aliased = users.alias();
+      expect(aliased.name).toBe("users_2");
+    });
+
+    it("createJoin() creates an InnerJoin node", () => {
+      const join = users.createJoin(posts, users.attr("id").eq(posts.attr("user_id")));
+      expect(join).toBeInstanceOf(Nodes.InnerJoin);
+    });
+
+    it("createStringJoin() creates a StringJoin node", () => {
+      const join = users.createStringJoin("INNER JOIN posts ON posts.user_id = users.id");
+      expect(join).toBeInstanceOf(Nodes.StringJoin);
+    });
+
+    it("createOn() creates an On node", () => {
+      const on = users.createOn(users.attr("id").eq(posts.attr("user_id")));
+      expect(on).toBeInstanceOf(Nodes.On);
+    });
+
+    it("createTableAlias() creates a TableAlias node", () => {
+      const alias = users.createTableAlias(users, "u");
+      expect(alias).toBeInstanceOf(Nodes.TableAlias);
+      expect(alias.name).toBe("u");
+    });
   });
 });

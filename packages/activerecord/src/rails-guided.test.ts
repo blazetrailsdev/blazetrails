@@ -5792,4 +5792,154 @@ describe("Grouped Calculations (Rails-guided)", () => {
     const posts = await Post.all().extending(mod1).titled("Hello").toArray();
     expect(posts).toHaveLength(1);
   });
+
+  // =====================================================================
+  // enum enhancements — activerecord/test/cases/enum_test.rb
+  // =====================================================================
+
+  // Rails: test "enum bang setter persists"
+  it("enum bang setter persists the value", async () => {
+    class Conversation extends Base {
+      static { this._tableName = "conversations"; this.attribute("id", "integer"); this.attribute("status", "integer"); this.adapter = adapter; }
+    }
+    defineEnum(Conversation, "status", ["active", "archived"]);
+
+    const conv = await Conversation.create({ status: 0 });
+    expect((conv as any).isActive()).toBe(true);
+    await (conv as any).archivedBang();
+    expect((conv as any).isArchived()).toBe(true);
+    const reloaded = await Conversation.find(conv.id);
+    expect(reloaded.readAttribute("status")).toBe(1);
+  });
+
+  // Rails: test "enum generates not-scopes"
+  it("enum generates not-scope (e.g., notArchived)", async () => {
+    class Conversation extends Base {
+      static { this._tableName = "conversations"; this.attribute("id", "integer"); this.attribute("status", "integer"); this.adapter = adapter; }
+    }
+    defineEnum(Conversation, "status", ["active", "archived"]);
+
+    await Conversation.create({ status: 0 }); // active
+    await Conversation.create({ status: 1 }); // archived
+    await Conversation.create({ status: 0 }); // active
+
+    const notArchived = await (Conversation as any).notArchived().toArray();
+    expect(notArchived).toHaveLength(2);
+  });
+
+  // Rails: test "enum scopes"
+  it("enum generates scopes for each value", async () => {
+    class Conversation extends Base {
+      static { this._tableName = "conversations"; this.attribute("id", "integer"); this.attribute("status", "integer"); this.adapter = adapter; }
+    }
+    defineEnum(Conversation, "status", ["active", "archived"]);
+
+    await Conversation.create({ status: 0 }); // active
+    await Conversation.create({ status: 1 }); // archived
+
+    const active = await (Conversation as any).active().toArray();
+    expect(active).toHaveLength(1);
+    const archived = await (Conversation as any).archived().toArray();
+    expect(archived).toHaveLength(1);
+  });
+
+  // =====================================================================
+  // saved_changes — activerecord/test/cases/dirty_test.rb
+  // =====================================================================
+
+  // Rails: test "saved_changes"
+  it("savedChanges returns changes from the last save", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    const topic = await Topic.create({ title: "First" });
+    topic.writeAttribute("title", "Second");
+    await topic.save();
+    expect(topic.savedChanges).toHaveProperty("title");
+    const [before, after] = topic.savedChanges.title;
+    expect(before).toBe("First");
+    expect(after).toBe("Second");
+  });
+
+  // Rails: test "saved_change_to_attribute?"
+  it("savedChangeToAttribute() checks if attribute was changed in last save", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.attribute("body", "string"); this.adapter = adapter; }
+    }
+
+    const topic = await Topic.create({ title: "First", body: "Content" });
+    topic.writeAttribute("title", "Second");
+    await topic.save();
+    expect(topic.savedChangeToAttribute("title")).toBe(true);
+    expect(topic.savedChangeToAttribute("body")).toBe(false);
+  });
+
+  // =====================================================================
+  // destroy_by / delete_by — activerecord/test/cases/persistence_test.rb
+  // =====================================================================
+
+  // Rails: test "destroy_by"
+  it("destroyBy destroys matching records", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    await Topic.create({ title: "Keep" });
+    await Topic.create({ title: "Remove" });
+    await Topic.create({ title: "Remove" });
+
+    const destroyed = await Topic.destroyBy({ title: "Remove" });
+    expect(destroyed).toHaveLength(2);
+    const remaining = await Topic.all().toArray();
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].readAttribute("title")).toBe("Keep");
+  });
+
+  // Rails: test "delete_by"
+  it("deleteBy deletes matching records without callbacks", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    await Topic.create({ title: "Keep" });
+    await Topic.create({ title: "Remove" });
+
+    const count = await Topic.deleteBy({ title: "Remove" });
+    expect(count).toBe(1);
+    const remaining = await Topic.all().toArray();
+    expect(remaining).toHaveLength(1);
+  });
+
+  // Rails: test "update_all class method"
+  it("static updateAll updates all records", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("status", "string"); this.adapter = adapter; }
+    }
+
+    await Topic.create({ status: "draft" });
+    await Topic.create({ status: "draft" });
+
+    await Topic.updateAll({ status: "published" });
+    const topics = await Topic.all().toArray();
+    expect(topics.every(t => t.readAttribute("status") === "published")).toBe(true);
+  });
+
+  // =====================================================================
+  // in_order_of — activerecord/test/cases/relation_test.rb
+  // =====================================================================
+
+  // Rails: test "in_order_of"
+  it("inOrderOf() generates CASE-based ordering", () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("status", "string"); this.adapter = adapter; }
+    }
+
+    const sql = Topic.all().inOrderOf("status", ["published", "draft", "archived"]).toSql();
+    expect(sql).toContain("CASE");
+    expect(sql).toContain("WHEN");
+    expect(sql).toContain("published");
+    expect(sql).toContain("draft");
+    expect(sql).toContain("archived");
+  });
 });

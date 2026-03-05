@@ -317,6 +317,33 @@ export class Base extends Model {
   }
 
   /**
+   * Update all records matching the default scope.
+   *
+   * Mirrors: ActiveRecord::Base.update_all
+   */
+  static async updateAll(updates: Record<string, unknown>): Promise<number> {
+    return this.all().updateAll(updates);
+  }
+
+  /**
+   * Destroy records matching conditions (runs callbacks).
+   *
+   * Mirrors: ActiveRecord::Base.destroy_by
+   */
+  static async destroyBy(conditions: Record<string, unknown>): Promise<Base[]> {
+    return this.all().where(conditions).destroyAll();
+  }
+
+  /**
+   * Delete records matching conditions (no callbacks).
+   *
+   * Mirrors: ActiveRecord::Base.delete_by
+   */
+  static async deleteBy(conditions: Record<string, unknown>): Promise<number> {
+    return this.all().where(conditions).deleteAll();
+  }
+
+  /**
    * Find the first record matching conditions, or create one.
    *
    * Mirrors: ActiveRecord::Base.find_or_create_by

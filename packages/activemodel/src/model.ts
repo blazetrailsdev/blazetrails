@@ -442,6 +442,34 @@ export class Model {
     return this._dirty.previousChanges;
   }
 
+  /**
+   * Alias for previousChanges — the changes that were persisted in the last save.
+   *
+   * Mirrors: ActiveModel::Dirty#saved_changes
+   */
+  get savedChanges(): Record<string, [unknown, unknown]> {
+    return this._dirty.previousChanges;
+  }
+
+  /**
+   * Check if a specific attribute was saved in the last save.
+   *
+   * Mirrors: ActiveModel::Dirty#saved_change_to_attribute?
+   */
+  savedChangeToAttribute(name: string): boolean {
+    return name in this._dirty.previousChanges;
+  }
+
+  /**
+   * Get the before/after values of a specific attribute from the last save.
+   *
+   * Mirrors: ActiveModel::Dirty#saved_change_to_attribute
+   */
+  savedChangeToAttributeValues(name: string): [unknown, unknown] | undefined {
+    const changes = this._dirty.previousChanges;
+    return changes[name];
+  }
+
   restoreAttributes(): void {
     this._dirty.restore(this._attributes);
   }

@@ -30,6 +30,7 @@ export class Relation<T extends Base> {
   private _whereNotClauses: Array<Record<string, unknown>> = [];
   private _whereRawClauses: string[] = [];
   private _orderClauses: Array<string | [string, "asc" | "desc"]> = [];
+  private _rawOrderClauses: string[] = [];
   private _limitValue: number | null = null;
   private _offsetValue: number | null = null;
   private _selectColumns: string[] | null = null;
@@ -276,6 +277,28 @@ export class Relation<T extends Base> {
         "asc" | "desc",
       ];
     });
+    return rel;
+  }
+
+  /**
+   * Order by specific values of a column.
+   *
+   * Mirrors: ActiveRecord::Relation#in_order_of
+   */
+  inOrderOf(column: string, values: unknown[]): Relation<T> {
+    const rel = this._clone();
+    // Generate a CASE WHEN ... expression for ordering
+    const cases = values.map((v, i) => {
+      const quoted = v === null ? "NULL"
+        : typeof v === "number" ? String(v)
+        : `'${String(v).replace(/'/g, "''")}'`;
+      return `WHEN "${column}" = ${quoted} THEN ${i}`;
+    }).join(" ");
+    const caseExpr = `CASE ${cases} ELSE ${values.length} END`;
+    // Use raw SQL order — push as a string that the order manager treats as raw
+    rel._orderClauses = [];
+    rel._rawOrderClauses = rel._rawOrderClauses ?? [];
+    rel._rawOrderClauses.push(caseExpr);
     return rel;
   }
 
@@ -1348,6 +1371,10 @@ export class Relation<T extends Base> {
     manager: SelectManager,
     table: Table
   ): void {
+    // Raw order clauses (from inOrderOf)
+    for (const rawClause of this._rawOrderClauses) {
+      manager.order(new Nodes.SqlLiteral(rawClause));
+    }
     for (const clause of this._orderClauses) {
       if (typeof clause === "string") {
         manager.order(table.get(clause).asc());
@@ -1558,6 +1585,7 @@ export class Relation<T extends Base> {
     rel._whereNotClauses = [...this._whereNotClauses];
     rel._whereRawClauses = [...this._whereRawClauses];
     rel._orderClauses = [...this._orderClauses];
+    rel._rawOrderClauses = [...this._rawOrderClauses];
     rel._limitValue = this._limitValue;
     rel._offsetValue = this._offsetValue;
     rel._selectColumns = this._selectColumns

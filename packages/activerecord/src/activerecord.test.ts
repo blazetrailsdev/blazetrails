@@ -5939,4 +5939,141 @@ describe("ActiveRecord", () => {
       expect(items[0].readAttribute("name")).toBe("Widget");
     });
   });
+
+  // -- enum bang setters and not-scopes --
+  describe("enum enhancements", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("generates bang setter that persists", async () => {
+      class Task extends Base { static _tableName = "tasks"; }
+      Task.attribute("id", "integer");
+      Task.attribute("status", "integer");
+      Task.adapter = adapter;
+      defineEnum(Task, "status", ["pending", "active", "completed"]);
+
+      const task = await Task.create({ status: 0 });
+      await (task as any).activeBang();
+      expect(task.readAttribute("status")).toBe(1);
+      // Verify persisted
+      const reloaded = await Task.find(task.id);
+      expect(reloaded.readAttribute("status")).toBe(1);
+    });
+
+    it("generates not-scopes", async () => {
+      class Task extends Base { static _tableName = "tasks"; }
+      Task.attribute("id", "integer");
+      Task.attribute("status", "integer");
+      Task.adapter = adapter;
+      defineEnum(Task, "status", ["pending", "active", "completed"]);
+
+      await Task.create({ status: 0 }); // pending
+      await Task.create({ status: 1 }); // active
+      await Task.create({ status: 2 }); // completed
+
+      const nonPending = await (Task as any).notPending().toArray();
+      expect(nonPending).toHaveLength(2);
+    });
+  });
+
+  // -- savedChanges --
+  describe("savedChanges", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("tracks changes from the last save", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      const item = await Item.create({ name: "Original" });
+      item.writeAttribute("name", "Updated");
+      await item.save();
+      expect(item.savedChanges).toHaveProperty("name");
+      expect(item.savedChanges.name[1]).toBe("Updated");
+    });
+
+    it("savedChangeToAttribute returns true for changed attr", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      const item = await Item.create({ name: "Original" });
+      item.writeAttribute("name", "Updated");
+      await item.save();
+      expect(item.savedChangeToAttribute("name")).toBe(true);
+      expect(item.savedChangeToAttribute("id")).toBe(false);
+    });
+  });
+
+  // -- destroyBy and deleteBy --
+  describe("destroyBy and deleteBy", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("destroyBy destroys matching records with callbacks", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ name: "A" });
+      await Item.create({ name: "B" });
+      await Item.create({ name: "A" });
+
+      const destroyed = await Item.destroyBy({ name: "A" });
+      expect(destroyed).toHaveLength(2);
+      expect(await Item.all().count()).toBe(1);
+    });
+
+    it("deleteBy deletes matching records without callbacks", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ name: "A" });
+      await Item.create({ name: "B" });
+
+      const count = await Item.deleteBy({ name: "A" });
+      expect(count).toBe(1);
+      expect(await Item.all().count()).toBe(1);
+    });
+  });
+
+  // -- static updateAll --
+  describe("static updateAll", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("updates all records", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("status", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ status: "old" });
+      await Item.create({ status: "old" });
+
+      await Item.updateAll({ status: "new" });
+      const items = await Item.all().toArray();
+      expect(items.every(i => i.readAttribute("status") === "new")).toBe(true);
+    });
+  });
+
+  // -- inOrderOf --
+  describe("inOrderOf()", () => {
+    it("generates CASE WHEN ordering SQL", () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("status", "string");
+      Item.adapter = freshAdapter();
+
+      const sql = Item.all().inOrderOf("status", ["active", "pending", "archived"]).toSql();
+      expect(sql).toContain("CASE");
+      expect(sql).toContain("WHEN");
+    });
+  });
 });

@@ -86,8 +86,7 @@ export function defineEnum(
       configurable: true,
     });
 
-    // Bang setter: record.draft!() equivalent → record.setDraft()
-    // In JS we use the name directly: record.draft()
+    // Setter: record.draft() — sets the value in memory
     if (!modelClass.prototype.hasOwnProperty(name)) {
       Object.defineProperty(modelClass.prototype, name, {
         value: function (this: Base) {
@@ -97,6 +96,23 @@ export function defineEnum(
         configurable: true,
       });
     }
+
+    // Bang setter: record.draftBang() — sets and persists via updateColumn
+    const bangName = `${name}Bang`;
+    Object.defineProperty(modelClass.prototype, bangName, {
+      value: async function (this: any) {
+        this.writeAttribute(attribute, value);
+        if (this.isPersisted()) {
+          await this.updateColumn(attribute, value);
+        }
+      },
+      writable: true,
+      configurable: true,
+    });
+
+    // whereNot scope: Model.notDraft() → where.not(status: value)
+    const notScopeName = `not${capitalizedName}`;
+    modelClass.scope(notScopeName, (rel: any) => rel.whereNot({ [attribute]: value }));
   }
 }
 

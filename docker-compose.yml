@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgres:17
+    ports:
+      - "${PG_PORT:-25432}:5432"
+    environment:
+      POSTGRES_DB: rails_js_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  mariadb:
+    image: mariadb:11
+    ports:
+      - "${MYSQL_PORT:-13306}:3306"
+    environment:
+      MARIADB_DATABASE: rails_js_test
+      MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: "yes"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 2s
+      timeout: 5s
+      retries: 10

@@ -41,6 +41,20 @@ export class MysqlAdapter implements DatabaseAdapter {
   }
 
   /**
+   * Convert double-quoted identifiers to backtick-quoted for MySQL/MariaDB.
+   * Arel generates standard SQL with "table"."column", but MySQL uses backticks.
+   */
+  private mysqlQuote(sql: string): string {
+    // Replace "identifier" with `identifier`, but not inside single-quoted strings.
+    // Split on single-quoted strings, only transform non-string parts.
+    const parts = sql.split(/('(?:[^'\\]|\\.)*')/);
+    for (let i = 0; i < parts.length; i += 2) {
+      parts[i] = parts[i].replace(/"/g, "`");
+    }
+    return parts.join("");
+  }
+
+  /**
    * Execute a SELECT query and return rows.
    */
   async execute(
@@ -49,7 +63,7 @@ export class MysqlAdapter implements DatabaseAdapter {
   ): Promise<Record<string, unknown>[]> {
     const conn = await this.getConn();
     try {
-      const [rows] = await conn.query(sql, binds);
+      const [rows] = await conn.query(this.mysqlQuote(sql), binds);
       return rows as Record<string, unknown>[];
     } finally {
       this.releaseConn(conn);
@@ -65,7 +79,7 @@ export class MysqlAdapter implements DatabaseAdapter {
   ): Promise<number> {
     const conn = await this.getConn();
     try {
-      const [result] = await conn.query(sql, binds);
+      const [result] = await conn.query(this.mysqlQuote(sql), binds);
       const info = result as mysql.ResultSetHeader;
 
       // For INSERT, return the last inserted ID
@@ -153,7 +167,7 @@ export class MysqlAdapter implements DatabaseAdapter {
   async explain(sql: string): Promise<string> {
     const conn = await this.getConn();
     try {
-      const [rows] = await conn.query(`EXPLAIN ${sql}`);
+      const [rows] = await conn.query(`EXPLAIN ${this.mysqlQuote(sql)}`);
       return (rows as any[]).map((r: any) => JSON.stringify(r)).join("\n");
     } finally {
       this.releaseConn(conn);
@@ -166,7 +180,7 @@ export class MysqlAdapter implements DatabaseAdapter {
   async exec(sql: string): Promise<void> {
     const conn = await this.getConn();
     try {
-      await conn.query(sql);
+      await conn.query(this.mysqlQuote(sql));
     } finally {
       this.releaseConn(conn);
     }

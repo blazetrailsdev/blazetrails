@@ -478,7 +478,7 @@ export class Relation<T extends Base> {
 
     const sql = manager.toSql();
     const rows = await this._modelClass.adapter.execute(sql);
-    return (rows[0]?.count as number) ?? 0;
+    return Number(rows[0]?.count ?? 0);
   }
 
   /**

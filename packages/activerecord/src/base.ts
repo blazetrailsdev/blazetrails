@@ -163,6 +163,34 @@ export class Base extends Model {
     });
   }
 
+  // -- Scoping --
+
+  private static _currentScope: any | null = null;
+
+  /**
+   * Execute a block with the given relation as the current scope.
+   *
+   * Mirrors: ActiveRecord::Relation#scoping
+   */
+  static async scoping<R>(rel: any, fn: () => R | Promise<R>): Promise<R> {
+    const prev = this._currentScope;
+    this._currentScope = rel;
+    try {
+      return await fn();
+    } finally {
+      this._currentScope = prev;
+    }
+  }
+
+  /**
+   * Return the current scope if set, or null.
+   *
+   * Mirrors: ActiveRecord::Base.current_scope
+   */
+  static get currentScope(): any | null {
+    return this._currentScope;
+  }
+
   // -- Finders (class methods) --
 
   /**
@@ -1059,6 +1087,24 @@ export class Base extends Model {
   override toParam(): string | null {
     const pk = this.id;
     return pk != null ? String(pk) : null;
+  }
+
+  /**
+   * Return a human-readable string representation of this record.
+   *
+   * Mirrors: ActiveRecord::Base#inspect
+   */
+  inspect(): string {
+    const ctor = this.constructor as typeof Base;
+    const attrs = Array.from(this._attributes.entries())
+      .map(([k, v]) => {
+        if (v === null) return `${k}: nil`;
+        if (typeof v === "string") return `${k}: "${v}"`;
+        if (v instanceof Date) return `${k}: "${v.toISOString()}"`;
+        return `${k}: ${JSON.stringify(v)}`;
+      })
+      .join(", ");
+    return `#<${ctor.name} ${attrs}>`;
   }
 
   /**

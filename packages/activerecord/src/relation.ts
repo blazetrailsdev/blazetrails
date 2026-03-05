@@ -173,6 +173,26 @@ export class Relation<T extends Base> {
   }
 
   /**
+   * Exclude specific records from the result.
+   *
+   * Mirrors: ActiveRecord::Relation#excluding / #without
+   */
+  excluding(...records: T[]): Relation<T> {
+    const ids = records.map((r) => r.id).filter((id) => id != null);
+    if (ids.length === 0) return this;
+    return this.whereNot({ [this._modelClass.primaryKey]: ids });
+  }
+
+  /**
+   * Alias for excluding.
+   *
+   * Mirrors: ActiveRecord::Relation#without
+   */
+  without(...records: T[]): Relation<T> {
+    return this.excluding(...records);
+  }
+
+  /**
    * Add ORDER BY. Accepts column name or { column: "asc"|"desc" }.
    *
    * Mirrors: ActiveRecord::Relation#order
@@ -277,6 +297,17 @@ export class Relation<T extends Base> {
   having(condition: string): Relation<T> {
     const rel = this._clone();
     rel._havingClauses.push(condition);
+    return rel;
+  }
+
+  /**
+   * Replace GROUP BY columns.
+   *
+   * Mirrors: ActiveRecord::Relation#regroup
+   */
+  regroup(...columns: string[]): Relation<T> {
+    const rel = this._clone();
+    rel._groupColumns = [...columns];
     return rel;
   }
 
@@ -624,6 +655,79 @@ export class Relation<T extends Base> {
     const rel = this._clone();
     rel._eagerLoadAssociations.push(...associations);
     return rel;
+  }
+
+  // -- Relation state --
+
+  /**
+   * Check if the relation has been loaded.
+   *
+   * Mirrors: ActiveRecord::Relation#loaded?
+   */
+  get isLoaded(): boolean {
+    return this._loaded;
+  }
+
+  /**
+   * Reset the relation to force re-query next time.
+   *
+   * Mirrors: ActiveRecord::Relation#reset
+   */
+  reset(): this {
+    this._loaded = false;
+    this._records = [];
+    return this;
+  }
+
+  /**
+   * Returns count if not loaded, length of loaded records if loaded.
+   *
+   * Mirrors: ActiveRecord::Relation#size
+   */
+  async size(): Promise<number> {
+    if (this._loaded) return this._records.length;
+    return this.count() as Promise<number>;
+  }
+
+  /**
+   * Check if there are no matching records.
+   *
+   * Mirrors: ActiveRecord::Relation#empty?
+   */
+  async isEmpty(): Promise<boolean> {
+    if (this._loaded) return this._records.length === 0;
+    return !(await this.exists());
+  }
+
+  /**
+   * Check if there are any matching records.
+   *
+   * Mirrors: ActiveRecord::Relation#any?
+   */
+  async isAny(): Promise<boolean> {
+    if (this._loaded) return this._records.length > 0;
+    return this.exists();
+  }
+
+  /**
+   * Check if there are multiple matching records.
+   *
+   * Mirrors: ActiveRecord::Relation#many?
+   */
+  async isMany(): Promise<boolean> {
+    if (this._loaded) return this._records.length > 1;
+    const c = await this.count();
+    return (c as number) > 1;
+  }
+
+  /**
+   * Return the number of loaded records (alias for toArray().length).
+   *
+   * Mirrors: ActiveRecord::Relation#length
+   */
+  async length(): Promise<number> {
+    const records = await this.toArray();
+    return records.length;
   }
 
   // -- Terminal methods --

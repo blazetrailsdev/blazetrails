@@ -6333,4 +6333,172 @@ describe("ActiveRecord", () => {
       expect(batches).toEqual([3, 3, 1]);
     });
   });
+
+  // -- regroup --
+  describe("regroup()", () => {
+    it("replaces existing GROUP BY columns", () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("category", "string");
+      Item.attribute("status", "string");
+      Item.adapter = freshAdapter();
+
+      const sql = Item.all().group("category").regroup("status").toSql();
+      expect(sql).toContain("GROUP BY");
+      expect(sql).toContain("status");
+      expect(sql).not.toContain("category");
+    });
+  });
+
+  // -- excluding/without --
+  describe("excluding() / without()", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("excludes specific records by PK", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      const a = await Item.create({ name: "A" });
+      await Item.create({ name: "B" });
+      await Item.create({ name: "C" });
+
+      const remaining = await Item.all().excluding(a).toArray();
+      expect(remaining).toHaveLength(2);
+      expect(remaining.every((r: any) => r.readAttribute("name") !== "A")).toBe(true);
+    });
+
+    it("without() is an alias for excluding()", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      const a = await Item.create({ name: "A" });
+      await Item.create({ name: "B" });
+
+      const remaining = await Item.all().without(a).toArray();
+      expect(remaining).toHaveLength(1);
+    });
+  });
+
+  // -- relation state methods --
+  describe("Relation state: isLoaded, reset, size, isEmpty, isAny, isMany", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("isLoaded returns false before loading", () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.adapter = adapter;
+
+      const rel = Item.all();
+      expect(rel.isLoaded).toBe(false);
+    });
+
+    it("isLoaded returns true after toArray()", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ name: "A" });
+      const rel = Item.all();
+      await rel.toArray();
+      expect(rel.isLoaded).toBe(true);
+    });
+
+    it("reset clears loaded state", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ name: "A" });
+      const rel = Item.all();
+      await rel.toArray();
+      expect(rel.isLoaded).toBe(true);
+      rel.reset();
+      expect(rel.isLoaded).toBe(false);
+    });
+
+    it("size returns count without loading", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ name: "A" });
+      await Item.create({ name: "B" });
+      const rel = Item.all();
+      expect(await rel.size()).toBe(2);
+    });
+
+    it("isEmpty returns true when no records", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.adapter = adapter;
+
+      expect(await Item.all().isEmpty()).toBe(true);
+    });
+
+    it("isAny returns true when records exist", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ name: "A" });
+      expect(await Item.all().isAny()).toBe(true);
+    });
+
+    it("isMany returns true when more than one record", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      await Item.create({ name: "A" });
+      expect(await Item.all().isMany()).toBe(false);
+      await Item.create({ name: "B" });
+      expect(await Item.all().isMany()).toBe(true);
+    });
+  });
+
+  // -- inspect --
+  describe("inspect()", () => {
+    it("returns a human-readable string", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = freshAdapter();
+
+      const item = await Item.create({ name: "Widget" });
+      const str = item.inspect();
+      expect(str).toContain("#<Item");
+      expect(str).toContain('name: "Widget"');
+      expect(str).toContain("id:");
+    });
+  });
+
+  // -- scoping --
+  describe("scoping()", () => {
+    let adapter: MemoryAdapter;
+    beforeEach(() => { adapter = freshAdapter(); });
+
+    it("sets currentScope within the block", async () => {
+      class Item extends Base { static _tableName = "items"; }
+      Item.attribute("id", "integer");
+      Item.attribute("name", "string");
+      Item.adapter = adapter;
+
+      const activeScope = Item.all().where({ name: "Active" });
+      await Item.scoping(activeScope, async () => {
+        expect(Item.currentScope).toBe(activeScope);
+      });
+      expect(Item.currentScope).toBeNull();
+    });
+  });
 });

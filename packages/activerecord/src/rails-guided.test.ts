@@ -6209,4 +6209,156 @@ describe("Grouped Calculations (Rails-guided)", () => {
     }
     expect(batchSizes).toEqual([4, 4, 2]);
   });
+
+  // =====================================================================
+  // regroup — activerecord/test/cases/relation/group_test.rb
+  // =====================================================================
+
+  // Rails: test "regroup replaces group columns"
+  it("regroup replaces existing GROUP BY", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("category", "string"); this.attribute("status", "string"); this.adapter = adapter; }
+    }
+
+    await Topic.create({ category: "tech", status: "active" });
+    await Topic.create({ category: "tech", status: "archived" });
+    await Topic.create({ category: "sports", status: "active" });
+
+    const counts = await Topic.all().group("category").regroup("status").count() as Record<string, number>;
+    expect(counts["active"]).toBe(2);
+    expect(counts["archived"]).toBe(1);
+  });
+
+  // =====================================================================
+  // excluding / without — activerecord/test/cases/relation/excluding_test.rb
+  // =====================================================================
+
+  // Rails: test "excluding with records"
+  it("excluding removes specific records by PK", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    const first = await Topic.create({ title: "First" });
+    await Topic.create({ title: "Second" });
+    await Topic.create({ title: "Third" });
+
+    const remaining = await Topic.all().excluding(first).toArray();
+    expect(remaining).toHaveLength(2);
+    expect(remaining.every((t: any) => t.readAttribute("title") !== "First")).toBe(true);
+  });
+
+  // Rails: test "without is an alias"
+  it("without is an alias for excluding", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    const t1 = await Topic.create({ title: "A" });
+    const t2 = await Topic.create({ title: "B" });
+    await Topic.create({ title: "C" });
+
+    const remaining = await Topic.all().without(t1, t2).toArray();
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].readAttribute("title")).toBe("C");
+  });
+
+  // =====================================================================
+  // Relation state — activerecord/test/cases/relation_test.rb
+  // =====================================================================
+
+  // Rails: test "loaded?"
+  it("isLoaded tracks whether records have been fetched", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    await Topic.create({ title: "Test" });
+    const rel = Topic.all();
+    expect(rel.isLoaded).toBe(false);
+    await rel.toArray();
+    expect(rel.isLoaded).toBe(true);
+    rel.reset();
+    expect(rel.isLoaded).toBe(false);
+  });
+
+  // Rails: test "size"
+  it("size returns count efficiently", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    await Topic.create({ title: "A" });
+    await Topic.create({ title: "B" });
+    expect(await Topic.all().size()).toBe(2);
+  });
+
+  // Rails: test "empty?"
+  it("isEmpty checks for empty result", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    expect(await Topic.all().isEmpty()).toBe(true);
+    await Topic.create({ title: "A" });
+    expect(await Topic.all().isEmpty()).toBe(false);
+  });
+
+  // Rails: test "any?"
+  it("isAny checks for any matching records", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    expect(await Topic.all().isAny()).toBe(false);
+    await Topic.create({ title: "A" });
+    expect(await Topic.all().isAny()).toBe(true);
+  });
+
+  // Rails: test "many?"
+  it("isMany returns true for 2+ records", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    await Topic.create({ title: "A" });
+    expect(await Topic.all().isMany()).toBe(false);
+    await Topic.create({ title: "B" });
+    expect(await Topic.all().isMany()).toBe(true);
+  });
+
+  // =====================================================================
+  // inspect — activerecord/test/cases/base_test.rb
+  // =====================================================================
+
+  // Rails: test "inspect"
+  it("inspect returns a human-readable representation", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    const topic = await Topic.create({ title: "Hello" });
+    const str = topic.inspect();
+    expect(str).toContain("#<Topic");
+    expect(str).toContain('title: "Hello"');
+    expect(str).toContain("id:");
+  });
+
+  // =====================================================================
+  // scoping — activerecord/test/cases/scoping/scoping_test.rb
+  // =====================================================================
+
+  // Rails: test "scoping sets current_scope"
+  it("scoping sets and restores currentScope", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+
+    const scope = Topic.all().where({ title: "Active" });
+    expect(Topic.currentScope).toBeNull();
+    await Topic.scoping(scope, async () => {
+      expect(Topic.currentScope).toBe(scope);
+    });
+    expect(Topic.currentScope).toBeNull();
+  });
 });

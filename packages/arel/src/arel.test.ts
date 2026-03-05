@@ -1731,4 +1731,29 @@ describe("Arel", () => {
       expect(manager.columns.length).toBe(2);
     });
   });
+
+  describe("UpdateManager introspection", () => {
+    it("wheres getter returns WHERE conditions", () => {
+      const manager = new UpdateManager();
+      manager.table(users);
+      manager.where(users.attr("id").eq(1));
+      expect(manager.wheres.length).toBe(1);
+    });
+
+    it("key() sets primary key condition", () => {
+      const manager = new UpdateManager();
+      manager.table(users);
+      manager.key(users.attr("id").eq(1));
+      expect(manager.ast.key).not.toBeNull();
+    });
+  });
+
+  describe("DeleteManager introspection", () => {
+    it("wheres getter returns WHERE conditions", () => {
+      const manager = new DeleteManager();
+      manager.from(users);
+      manager.where(users.attr("id").eq(1));
+      expect(manager.wheres.length).toBe(1);
+    });
+  });
 });

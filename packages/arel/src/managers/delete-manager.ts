@@ -50,6 +50,15 @@ export class DeleteManager {
   }
 
   /**
+   * Return the current WHERE conditions.
+   *
+   * Mirrors: Arel::DeleteManager#wheres
+   */
+  get wheres(): Node[] {
+    return [...this.ast.wheres];
+  }
+
+  /**
    * Generate SQL string.
    */
   toSql(): string {

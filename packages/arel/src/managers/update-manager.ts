@@ -62,6 +62,25 @@ export class UpdateManager {
   }
 
   /**
+   * Return the current WHERE conditions.
+   *
+   * Mirrors: Arel::UpdateManager#wheres
+   */
+  get wheres(): Node[] {
+    return [...this.ast.wheres];
+  }
+
+  /**
+   * Set a primary key condition for the update.
+   *
+   * Mirrors: Arel::UpdateManager#key=
+   */
+  key(keyNode: Node): this {
+    this.ast.key = keyNode;
+    return this;
+  }
+
+  /**
    * Generate SQL string.
    */
   toSql(): string {

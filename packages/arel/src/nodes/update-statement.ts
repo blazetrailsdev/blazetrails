@@ -11,6 +11,7 @@ export class UpdateStatement extends Node {
   wheres: Node[];
   orders: Node[];
   limit: Node | null;
+  key: Node | null;
 
   constructor() {
     super();
@@ -19,6 +20,7 @@ export class UpdateStatement extends Node {
     this.wheres = [];
     this.orders = [];
     this.limit = null;
+    this.key = null;
   }
 
   accept<T>(visitor: NodeVisitor<T>): T {

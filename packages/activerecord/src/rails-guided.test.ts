@@ -23,10 +23,20 @@ import {
   loadHasOne,
   loadHasMany,
   loadHasManyThrough,
+  loadHabtm,
   association,
   MigrationRunner,
+  defineEnum,
+  readEnumValue,
+  castEnumValue,
+  enableSti,
+  hasSecurePassword,
+  store,
+  storeAccessor,
+  delegate,
 } from "./index.js";
 import { Migration } from "./migration.js";
+import { Associations } from "./associations.js";
 
 function freshAdapter(): MemoryAdapter {
   return new MemoryAdapter();
@@ -3433,5 +3443,733 @@ describe("Rails-guided: New Features", () => {
     await User.create({ name: "Alice" });
     const result = await User.all().unionAll(User.all()).toArray();
     expect(result).toHaveLength(2); // Same record appears twice
+  });
+});
+
+// ==========================================================================
+// Enum (Rails: enum_test.rb)
+// ==========================================================================
+
+describe("Enum (Rails-guided)", () => {
+  let adapter: MemoryAdapter;
+
+  beforeEach(() => {
+    adapter = freshAdapter();
+  });
+
+  // Rails: test "enums are stored as integers"
+  it("stores enum values as integers in the database", async () => {
+    class Conversation extends Base {
+      static { this.attribute("id", "integer"); this.attribute("status", "integer"); this.adapter = adapter; }
+    }
+    defineEnum(Conversation, "status", ["active", "archived"]);
+
+    const conv = await Conversation.create({ status: 0 });
+    expect(conv.readAttribute("status")).toBe(0);
+    expect(readEnumValue(conv, "status")).toBe("active");
+  });
+
+  // Rails: test "enums with hash mapping"
+  it("supports explicit integer mapping", async () => {
+    class Conversation extends Base {
+      static { this.attribute("id", "integer"); this.attribute("status", "integer"); this.adapter = adapter; }
+    }
+    defineEnum(Conversation, "status", { active: 0, archived: 1, trashed: 2 });
+
+    const conv = await Conversation.create({ status: 2 });
+    expect(readEnumValue(conv, "status")).toBe("trashed");
+    expect(castEnumValue(Conversation, "status", "archived")).toBe(1);
+  });
+
+  // Rails: test "query by enum scope"
+  it("provides scopes for each value", async () => {
+    class Conversation extends Base {
+      static { this.attribute("id", "integer"); this.attribute("status", "integer"); this.adapter = adapter; }
+    }
+    defineEnum(Conversation, "status", ["active", "archived"]);
+
+    await Conversation.create({ status: 0 });
+    await Conversation.create({ status: 0 });
+    await Conversation.create({ status: 1 });
+
+    const active = await (Conversation as any).active().toArray();
+    expect(active).toHaveLength(2);
+
+    const archived = await (Conversation as any).archived().toArray();
+    expect(archived).toHaveLength(1);
+  });
+
+  // Rails: test "enum predicate methods"
+  it("provides predicate methods", () => {
+    class Conversation extends Base {
+      static { this.attribute("id", "integer"); this.attribute("status", "integer"); this.adapter = adapter; }
+    }
+    defineEnum(Conversation, "status", ["active", "archived"]);
+
+    const conv = new Conversation({ status: 0 });
+    expect((conv as any).isActive()).toBe(true);
+    expect((conv as any).isArchived()).toBe(false);
+  });
+
+  // Rails: test "enum bang methods (setters)"
+  it("provides setter methods that change the value", () => {
+    class Conversation extends Base {
+      static { this.attribute("id", "integer"); this.attribute("status", "integer"); this.adapter = adapter; }
+    }
+    defineEnum(Conversation, "status", ["active", "archived"]);
+
+    const conv = new Conversation({ status: 0 });
+    expect((conv as any).isActive()).toBe(true);
+    (conv as any).archived();
+    expect((conv as any).isArchived()).toBe(true);
+    expect(conv.readAttribute("status")).toBe(1);
+  });
+
+  // Rails: test "multiple enums on same model"
+  it("supports multiple enums on one model", () => {
+    class Conversation extends Base {
+      static { this.attribute("id", "integer"); this.attribute("status", "integer"); this.attribute("priority", "integer"); this.adapter = adapter; }
+    }
+    defineEnum(Conversation, "status", ["active", "archived"]);
+    defineEnum(Conversation, "priority", ["low", "medium", "high"]);
+
+    const conv = new Conversation({ status: 0, priority: 2 });
+    expect(readEnumValue(conv, "status")).toBe("active");
+    expect(readEnumValue(conv, "priority")).toBe("high");
+  });
+});
+
+// ==========================================================================
+// Single Table Inheritance (Rails: inheritance_test.rb)
+// ==========================================================================
+
+describe("STI (Rails-guided)", () => {
+  let adapter: MemoryAdapter;
+
+  beforeEach(() => {
+    adapter = freshAdapter();
+  });
+
+  // Rails: test "subclass uses parent table"
+  it("subclass inherits the base table name", () => {
+    class Company extends Base {
+      static { this._tableName = "companies"; }
+    }
+    enableSti(Company);
+    class Firm extends Company {}
+    class Client extends Company {}
+
+    expect(Firm.tableName).toBe("companies");
+    expect(Client.tableName).toBe("companies");
+  });
+
+  // Rails: test "save sets the type column"
+  it("automatically sets the type column on create", async () => {
+    class Company extends Base {
+      static { this._tableName = "companies"; this.attribute("id", "integer"); this.attribute("name", "string"); this.attribute("type", "string"); this.adapter = adapter; }
+    }
+    enableSti(Company);
+
+    class Firm extends Company {}
+    Firm.adapter = adapter;
+    registerModel(Firm);
+
+    const firm = await Firm.create({ name: "Acme" });
+    expect(firm.readAttribute("type")).toBe("Firm");
+  });
+
+  // Rails: test "find returns correct subclass"
+  it("returns instances of the correct subclass from base queries", async () => {
+    class Company extends Base {
+      static { this._tableName = "companies"; this.attribute("id", "integer"); this.attribute("name", "string"); this.attribute("type", "string"); this.adapter = adapter; }
+    }
+    enableSti(Company);
+
+    class Firm extends Company {}
+    Firm.adapter = adapter;
+    registerModel(Firm);
+
+    class Client extends Company {}
+    Client.adapter = adapter;
+    registerModel(Client);
+
+    await Firm.create({ name: "Acme" });
+    await Client.create({ name: "BigCorp" });
+
+    const all = await Company.all().toArray();
+    expect(all).toHaveLength(2);
+    expect(all[0]).toBeInstanceOf(Firm);
+    expect(all[1]).toBeInstanceOf(Client);
+  });
+
+  // Rails: test "subclass query only returns subclass records"
+  it("subclass queries auto-filter by type", async () => {
+    class Company extends Base {
+      static { this._tableName = "companies"; this.attribute("id", "integer"); this.attribute("name", "string"); this.attribute("type", "string"); this.adapter = adapter; }
+    }
+    enableSti(Company);
+
+    class Firm extends Company {}
+    Firm.adapter = adapter;
+    registerModel(Firm);
+
+    class Client extends Company {}
+    Client.adapter = adapter;
+    registerModel(Client);
+
+    await Firm.create({ name: "Acme" });
+    await Client.create({ name: "BigCorp" });
+    await Firm.create({ name: "SmallCo" });
+
+    expect(await Firm.all().count()).toBe(2);
+    expect(await Client.all().count()).toBe(1);
+    expect(await Company.all().count()).toBe(3);
+  });
+});
+
+// ==========================================================================
+// Polymorphic Associations (Rails: belongs_to_associations_test.rb)
+// ==========================================================================
+
+describe("Polymorphic Associations (Rails-guided)", () => {
+  let adapter: MemoryAdapter;
+
+  beforeEach(() => {
+    adapter = freshAdapter();
+  });
+
+  // Rails: test "belongs_to polymorphic"
+  it("loads the correct parent type via polymorphic belongs_to", async () => {
+    class Post extends Base {
+      static { this._tableName = "posts"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+    registerModel(Post);
+
+    class Image extends Base {
+      static { this._tableName = "images"; this.attribute("id", "integer"); this.attribute("url", "string"); this.adapter = adapter; }
+    }
+    registerModel(Image);
+
+    class Comment extends Base {
+      static { this._tableName = "comments"; this.attribute("id", "integer"); this.attribute("body", "string"); this.attribute("commentable_id", "integer"); this.attribute("commentable_type", "string"); this.adapter = adapter; }
+    }
+    Associations.belongsTo.call(Comment, "commentable", { polymorphic: true });
+
+    const post = await Post.create({ title: "Hello" });
+    const image = await Image.create({ url: "cat.jpg" });
+
+    const c1 = await Comment.create({ body: "Great post!", commentable_id: post.id, commentable_type: "Post" });
+    const c2 = await Comment.create({ body: "Nice pic!", commentable_id: image.id, commentable_type: "Image" });
+
+    const parent1 = await loadBelongsTo(c1, "commentable", { polymorphic: true });
+    expect(parent1!.readAttribute("title")).toBe("Hello");
+
+    const parent2 = await loadBelongsTo(c2, "commentable", { polymorphic: true });
+    expect(parent2!.readAttribute("url")).toBe("cat.jpg");
+  });
+
+  // Rails: test "has_many :as"
+  it("loads polymorphic children via has_many as:", async () => {
+    class Post extends Base {
+      static { this._tableName = "posts"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+    Associations.hasMany.call(Post, "comments", { as: "commentable" });
+    registerModel(Post);
+
+    class Comment extends Base {
+      static { this._tableName = "comments"; this.attribute("id", "integer"); this.attribute("body", "string"); this.attribute("commentable_id", "integer"); this.attribute("commentable_type", "string"); this.adapter = adapter; }
+    }
+    registerModel(Comment);
+
+    const post = await Post.create({ title: "Hello" });
+    await Comment.create({ body: "Nice!", commentable_id: post.id, commentable_type: "Post" });
+    await Comment.create({ body: "Cool!", commentable_id: post.id, commentable_type: "Post" });
+    await Comment.create({ body: "Wrong", commentable_id: post.id, commentable_type: "Image" });
+
+    const comments = await loadHasMany(post, "comments", { as: "commentable" });
+    expect(comments).toHaveLength(2);
+  });
+});
+
+// ==========================================================================
+// HABTM (Rails: has_and_belongs_to_many_associations_test.rb)
+// ==========================================================================
+
+describe("HABTM (Rails-guided)", () => {
+  let adapter: MemoryAdapter;
+
+  beforeEach(() => {
+    adapter = freshAdapter();
+  });
+
+  // Rails: test "has_and_belongs_to_many basic"
+  it("loads records through a join table", async () => {
+    class Developer extends Base {
+      static { this._tableName = "developers"; this.attribute("id", "integer"); this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    Associations.hasAndBelongsToMany.call(Developer, "projects", { joinTable: "developers_projects" });
+    registerModel(Developer);
+
+    class Project extends Base {
+      static { this._tableName = "projects"; this.attribute("id", "integer"); this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    registerModel(Project);
+
+    const dev = await Developer.create({ name: "David" });
+    const p1 = await Project.create({ name: "Rails" });
+    const p2 = await Project.create({ name: "Basecamp" });
+
+    await adapter.executeMutation(`INSERT INTO "developers_projects" ("developer_id", "project_id") VALUES (${dev.id}, ${p1.id})`);
+    await adapter.executeMutation(`INSERT INTO "developers_projects" ("developer_id", "project_id") VALUES (${dev.id}, ${p2.id})`);
+
+    const projects = await loadHabtm(dev, "projects", { joinTable: "developers_projects" });
+    expect(projects).toHaveLength(2);
+    expect(projects.map((p: any) => p.readAttribute("name")).sort()).toEqual(["Basecamp", "Rails"]);
+  });
+});
+
+// ==========================================================================
+// SecurePassword (Rails: secure_password_test.rb)
+// ==========================================================================
+
+describe("SecurePassword (Rails-guided)", () => {
+  let adapter: MemoryAdapter;
+
+  beforeEach(() => {
+    adapter = freshAdapter();
+  });
+
+  // Rails: test "authenticate with correct password"
+  it("authenticate returns the user on success", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("name", "string"); this.attribute("password_digest", "string"); this.adapter = adapter; }
+    }
+    hasSecurePassword(User, { validations: false });
+
+    const user = new User({ name: "Alice" });
+    (user as any).password = "mUc3m00RsqyRe";
+    await user.save();
+
+    expect((user as any).authenticate("mUc3m00RsqyRe")).toBe(user);
+  });
+
+  // Rails: test "authenticate with wrong password"
+  it("authenticate returns false on failure", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("password_digest", "string"); this.adapter = adapter; }
+    }
+    hasSecurePassword(User, { validations: false });
+
+    const user = new User({});
+    (user as any).password = "mUc3m00RsqyRe";
+    await user.save();
+
+    expect((user as any).authenticate("wrong")).toBe(false);
+  });
+
+  // Rails: test "validates password presence on create"
+  it("requires password on create when validations enabled", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("password_digest", "string"); this.adapter = adapter; }
+    }
+    hasSecurePassword(User);
+
+    const user = new User({});
+    expect(await user.save()).toBe(false);
+    expect(user.errors.fullMessages).toContain("Password can't be blank");
+  });
+
+  // Rails: test "password confirmation"
+  it("validates password confirmation", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("password_digest", "string"); this.adapter = adapter; }
+    }
+    hasSecurePassword(User);
+
+    const user = new User({});
+    (user as any).password = "secret";
+    (user as any).passwordConfirmation = "nomatch";
+    expect(await user.save()).toBe(false);
+    expect(user.errors.fullMessages.some((m: string) => m.includes("doesn't match"))).toBe(true);
+  });
+});
+
+// ==========================================================================
+// Store (Rails: store_test.rb)
+// ==========================================================================
+
+describe("Store (Rails-guided)", () => {
+  let adapter: MemoryAdapter;
+
+  beforeEach(() => {
+    adapter = freshAdapter();
+  });
+
+  // Rails: test "reading store attributes through accessors"
+  it("reads stored attributes through accessors", () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("settings", "json"); this.adapter = adapter; }
+    }
+    store(User, "settings", { accessors: ["color", "homepage"] });
+
+    const user = new User({ settings: { color: "blue", homepage: "37signals.com" } });
+    expect((user as any).color).toBe("blue");
+    expect((user as any).homepage).toBe("37signals.com");
+  });
+
+  // Rails: test "writing store attributes through accessors"
+  it("writes stored attributes through accessors", () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("settings", "json"); this.adapter = adapter; }
+    }
+    store(User, "settings", { accessors: ["color", "homepage"] });
+
+    const user = new User({});
+    (user as any).color = "red";
+    (user as any).homepage = "example.com";
+
+    const settings = user.readAttribute("settings") as any;
+    expect(settings.color).toBe("red");
+    expect(settings.homepage).toBe("example.com");
+  });
+
+  // Rails: test "updating store attributes"
+  it("persists store changes through save", async () => {
+    class User extends Base {
+      static { this._tableName = "users"; this.attribute("id", "integer"); this.attribute("settings", "json"); this.adapter = adapter; }
+    }
+    store(User, "settings", { accessors: ["color"] });
+    registerModel(User);
+
+    const user = await User.create({});
+    (user as any).color = "green";
+    await user.save();
+
+    const reloaded = await User.find(user.id);
+    expect((reloaded as any).color).toBe("green");
+  });
+});
+
+// ==========================================================================
+// Counter Cache (Rails: counter_cache_test.rb)
+// ==========================================================================
+
+describe("Counter Cache (Rails-guided)", () => {
+  let adapter: MemoryAdapter;
+
+  beforeEach(() => {
+    adapter = freshAdapter();
+  });
+
+  // Rails: test "increment counter cache on create"
+  it("increments the counter cache on create", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("title", "string"); this.attribute("replies_count", "integer", { default: 0 }); this.adapter = adapter; }
+    }
+    registerModel(Topic);
+
+    class Reply extends Base {
+      static { this._tableName = "replies"; this.attribute("id", "integer"); this.attribute("content", "string"); this.attribute("topic_id", "integer"); this.adapter = adapter; }
+    }
+    Associations.belongsTo.call(Reply, "topic", { counterCache: true });
+    registerModel(Reply);
+
+    const topic = await Topic.create({ title: "Discussion" });
+    await Reply.create({ content: "First!", topic_id: topic.id });
+    await Reply.create({ content: "Second!", topic_id: topic.id });
+
+    await topic.reload();
+    expect(topic.readAttribute("replies_count")).toBe(2);
+  });
+
+  // Rails: test "decrement counter cache on destroy"
+  it("decrements the counter cache on destroy", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("replies_count", "integer", { default: 0 }); this.adapter = adapter; }
+    }
+    registerModel(Topic);
+
+    class Reply extends Base {
+      static { this._tableName = "replies"; this.attribute("id", "integer"); this.attribute("topic_id", "integer"); this.adapter = adapter; }
+    }
+    Associations.belongsTo.call(Reply, "topic", { counterCache: true });
+    registerModel(Reply);
+
+    const topic = await Topic.create({});
+    const reply = await Reply.create({ topic_id: topic.id });
+    await topic.reload();
+    expect(topic.readAttribute("replies_count")).toBe(1);
+
+    await reply.destroy();
+    await topic.reload();
+    expect(topic.readAttribute("replies_count")).toBe(0);
+  });
+
+  // Rails: test "custom counter cache column"
+  it("supports a custom counter column name", async () => {
+    class Topic extends Base {
+      static { this._tableName = "topics"; this.attribute("id", "integer"); this.attribute("num_replies", "integer", { default: 0 }); this.adapter = adapter; }
+    }
+    registerModel(Topic);
+
+    class Reply extends Base {
+      static { this._tableName = "replies"; this.attribute("id", "integer"); this.attribute("topic_id", "integer"); this.adapter = adapter; }
+    }
+    Associations.belongsTo.call(Reply, "topic", { counterCache: "num_replies" });
+    registerModel(Reply);
+
+    const topic = await Topic.create({});
+    await Reply.create({ topic_id: topic.id });
+    await topic.reload();
+    expect(topic.readAttribute("num_replies")).toBe(1);
+  });
+});
+
+// ==========================================================================
+// Optimistic Locking (Rails: locking_test.rb)
+// ==========================================================================
+
+describe("Optimistic Locking (Rails-guided)", () => {
+  let adapter: MemoryAdapter;
+
+  beforeEach(() => {
+    adapter = freshAdapter();
+  });
+
+  // Rails: test "lock_version is incremented on save"
+  it("increments lock_version on each update", async () => {
+    class Person extends Base {
+      static { this._tableName = "people"; this.attribute("id", "integer"); this.attribute("name", "string"); this.attribute("lock_version", "integer", { default: 0 }); this.adapter = adapter; }
+    }
+
+    const p = await Person.create({ name: "Szymon" });
+    expect(p.readAttribute("lock_version")).toBe(0);
+
+    await p.update({ name: "Szymon Nowak" });
+    expect(p.readAttribute("lock_version")).toBe(1);
+  });
+
+  // Rails: test "stale object raises"
+  it("raises StaleObjectError when lock_version is stale", async () => {
+    class Person extends Base {
+      static { this._tableName = "people"; this.attribute("id", "integer"); this.attribute("name", "string"); this.attribute("lock_version", "integer", { default: 0 }); this.adapter = adapter; }
+    }
+
+    const p1 = await Person.create({ name: "Szymon" });
+    const p2 = await Person.find(p1.id);
+
+    await p1.update({ name: "Changed by p1" });
+
+    await expect(p2.update({ name: "Changed by p2" })).rejects.toThrow("StaleObjectError");
+  });
+});
+
+// ==========================================================================
+// Readonly (Rails: readonly_test.rb)
+// ==========================================================================
+
+describe("Readonly (Rails-guided)", () => {
+  let adapter: MemoryAdapter;
+
+  beforeEach(() => {
+    adapter = freshAdapter();
+  });
+
+  // Rails: test "readonly record cannot be saved"
+  it("raises on save for readonly records", async () => {
+    class Post extends Base {
+      static { this._tableName = "posts"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+    const post = await Post.create({ title: "Hello" });
+    post.readonlyBang();
+    await expect(post.save()).rejects.toThrow("readonly");
+  });
+
+  // Rails: test "readonly record cannot be destroyed"
+  it("raises on destroy for readonly records", async () => {
+    class Post extends Base {
+      static { this._tableName = "posts"; this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+    const post = await Post.create({ title: "Hello" });
+    post.readonlyBang();
+    await expect(post.destroy()).rejects.toThrow("readonly");
+  });
+
+  // Rails: test "readonly? predicate"
+  it("isReadonly reflects the readonly state", async () => {
+    class Post extends Base {
+      static { this._tableName = "posts"; this.attribute("id", "integer"); this.adapter = adapter; }
+    }
+    const post = await Post.create({});
+    expect(post.isReadonly()).toBe(false);
+    post.readonlyBang();
+    expect(post.isReadonly()).toBe(true);
+  });
+});
+
+// ==========================================================================
+// Validation Contexts (Rails: validations_test.rb)
+// ==========================================================================
+
+describe("Validation Contexts (Rails-guided)", () => {
+  let adapter: MemoryAdapter;
+
+  beforeEach(() => {
+    adapter = freshAdapter();
+  });
+
+  // Rails: test "validation on: :create"
+  it("runs create-only validations only on new records", async () => {
+    class User extends Base {
+      static {
+        this._tableName = "users";
+        this.attribute("id", "integer");
+        this.attribute("name", "string");
+        this.attribute("terms", "string");
+        this.adapter = adapter;
+        this.validates("terms", { presence: true, on: "create" });
+      }
+    }
+
+    // Fails on create
+    const u1 = new User({ name: "Alice" });
+    expect(await u1.save()).toBe(false);
+
+    // Succeeds with terms
+    const u2 = await User.create({ name: "Alice", terms: "accepted" });
+    expect(u2.isPersisted()).toBe(true);
+
+    // Can update without terms
+    u2.writeAttribute("terms", null);
+    expect(await u2.save()).toBe(true);
+  });
+
+  // Rails: test "validation on: :update"
+  it("runs update-only validations only on persisted records", async () => {
+    class User extends Base {
+      static {
+        this._tableName = "users";
+        this.attribute("id", "integer");
+        this.attribute("name", "string");
+        this.attribute("change_reason", "string");
+        this.adapter = adapter;
+        this.validates("change_reason", { presence: true, on: "update" });
+      }
+    }
+
+    // Create succeeds without change_reason
+    const user = await User.create({ name: "Alice" });
+    expect(user.isPersisted()).toBe(true);
+
+    // Update fails without change_reason
+    user.writeAttribute("name", "Bob");
+    expect(await user.save()).toBe(false);
+
+    // Update succeeds with change_reason
+    user.writeAttribute("change_reason", "Typo fix");
+    expect(await user.save()).toBe(true);
+  });
+});
+
+// ==========================================================================
+// Delegate (Rails: delegate_test.rb)
+// ==========================================================================
+
+describe("Delegate (Rails-guided)", () => {
+  let adapter: MemoryAdapter;
+
+  beforeEach(() => {
+    adapter = freshAdapter();
+  });
+
+  // Rails: test "delegate to association"
+  it("delegates attribute reads to a belongs_to association", async () => {
+    class Author extends Base {
+      static { this._tableName = "authors"; this.attribute("id", "integer"); this.attribute("name", "string"); this.attribute("city", "string"); this.adapter = adapter; }
+    }
+    registerModel(Author);
+
+    class Post extends Base {
+      static { this._tableName = "posts"; this.attribute("id", "integer"); this.attribute("title", "string"); this.attribute("author_id", "integer"); this.adapter = adapter; }
+    }
+    Associations.belongsTo.call(Post, "author");
+    delegate(Post, ["name", "city"], { to: "author" });
+
+    const author = await Author.create({ name: "DHH", city: "Chicago" });
+    const post = await Post.create({ title: "Rails is great", author_id: author.id });
+
+    expect(await (post as any).name()).toBe("DHH");
+    expect(await (post as any).city()).toBe("Chicago");
+  });
+
+  // Rails: test "delegate with prefix"
+  it("delegate with prefix: true prefixes method names", async () => {
+    class Author extends Base {
+      static { this._tableName = "authors"; this.attribute("id", "integer"); this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    registerModel(Author);
+
+    class Post extends Base {
+      static { this._tableName = "posts"; this.attribute("id", "integer"); this.attribute("author_id", "integer"); this.adapter = adapter; }
+    }
+    Associations.belongsTo.call(Post, "author");
+    delegate(Post, ["name"], { to: "author", prefix: true });
+
+    const author = await Author.create({ name: "DHH" });
+    const post = await Post.create({ author_id: author.id });
+
+    expect(await (post as any).authorName()).toBe("DHH");
+  });
+
+  // Rails: test "delegate returns null when association is nil"
+  it("returns null when the association target is nil", async () => {
+    class Author extends Base {
+      static { this._tableName = "authors"; this.attribute("id", "integer"); this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    registerModel(Author);
+
+    class Post extends Base {
+      static { this._tableName = "posts"; this.attribute("id", "integer"); this.attribute("author_id", "integer"); this.adapter = adapter; }
+    }
+    Associations.belongsTo.call(Post, "author");
+    delegate(Post, ["name"], { to: "author" });
+
+    const post = await Post.create({ author_id: null });
+    expect(await (post as any).name()).toBeNull();
+  });
+});
+
+// ==========================================================================
+// Touch (Rails: touch_test.rb)
+// ==========================================================================
+
+describe("Touch on belongs_to (Rails-guided)", () => {
+  let adapter: MemoryAdapter;
+
+  beforeEach(() => {
+    adapter = freshAdapter();
+  });
+
+  // Rails: test "touch parent on save"
+  it("touches the parent record when child is saved", async () => {
+    class Post extends Base {
+      static { this._tableName = "posts"; this.attribute("id", "integer"); this.attribute("title", "string"); this.attribute("updated_at", "datetime"); this.adapter = adapter; }
+    }
+    registerModel(Post);
+
+    class Comment extends Base {
+      static { this._tableName = "comments"; this.attribute("id", "integer"); this.attribute("body", "string"); this.attribute("post_id", "integer"); this.adapter = adapter; }
+    }
+    Associations.belongsTo.call(Comment, "post", { touch: true });
+    registerModel(Comment);
+
+    const post = await Post.create({ title: "Hello" });
+    const before = post.readAttribute("updated_at");
+
+    await new Promise((r) => setTimeout(r, 10));
+    await Comment.create({ body: "Reply", post_id: post.id });
+
+    await post.reload();
+    expect(post.readAttribute("updated_at")).not.toEqual(before);
   });
 });

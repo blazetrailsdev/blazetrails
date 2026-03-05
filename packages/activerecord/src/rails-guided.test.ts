@@ -7155,4 +7155,47 @@ describe("Grouped Calculations (Rails-guided)", () => {
     await user.touch();
     expect(log).toEqual(["touched"]);
   });
+
+  // Rails: test "dependent restrict_with_exception"
+  it("dependent restrictWithException raises on destroy with children", async () => {
+    class RGComment extends Base {
+      static { this._tableName = "rg_comments"; this.attribute("id", "integer"); this.attribute("rg_post_id", "integer"); this.adapter = adapter; }
+    }
+    class RGPost extends Base {
+      static _tableName = "rg_posts";
+      static _associations: any[] = [
+        { type: "hasMany", name: "rgComments", options: { dependent: "restrictWithException", className: "RGComment", foreignKey: "rg_post_id" } },
+      ];
+      static { this.attribute("id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+    registerModel(RGComment);
+    registerModel(RGPost);
+
+    const post = await RGPost.create({ title: "Hello" });
+    await RGComment.create({ rg_post_id: post.id });
+
+    await expect(post.destroy()).rejects.toThrow("Cannot delete record");
+  });
+
+  // Rails: test "belongs_to required"
+  it("belongs_to required: true validates FK presence", async () => {
+    class RGAuthor extends Base {
+      static { this._tableName = "rg_authors"; this.attribute("id", "integer"); this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    class RGBook extends Base {
+      static { this._tableName = "rg_books"; this.attribute("id", "integer"); this.attribute("rg_author_id", "integer"); this.attribute("title", "string"); this.adapter = adapter; }
+    }
+    registerModel(RGAuthor);
+    registerModel(RGBook);
+    Associations.belongsTo.call(RGBook, "rgAuthor", { required: true, foreignKey: "rg_author_id" });
+
+    const book = new RGBook({ title: "Orphan" });
+    const saved = await book.save();
+    expect(saved).toBe(false);
+
+    const author = await RGAuthor.create({ name: "Tolkien" });
+    const book2 = new RGBook({ title: "LotR", rg_author_id: author.id });
+    const saved2 = await book2.save();
+    expect(saved2).toBe(true);
+  });
 });

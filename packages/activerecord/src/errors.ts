@@ -133,3 +133,21 @@ export class StrictLoadingViolationError extends Error {
     this.association = association;
   }
 }
+
+/**
+ * Raised when a dependent: :restrict_with_exception association prevents deletion.
+ *
+ * Mirrors: ActiveRecord::DeleteRestrictionError
+ */
+export class DeleteRestrictionError extends Error {
+  readonly record: any;
+  readonly association: string;
+
+  constructor(record: any, association: string) {
+    const model = record?.constructor?.name ?? "Record";
+    super(`Cannot delete record because of dependent ${association}`);
+    this.name = "DeleteRestrictionError";
+    this.record = record;
+    this.association = association;
+  }
+}

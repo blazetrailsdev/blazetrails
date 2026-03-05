@@ -41,6 +41,7 @@ export {
   ReadOnlyRecord,
   SoleRecordExceeded,
   StrictLoadingViolationError,
+  DeleteRestrictionError,
 } from "./errors.js";
 export {
   AssociationReflection,

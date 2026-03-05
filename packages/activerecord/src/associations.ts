@@ -1,5 +1,5 @@
 import type { Base } from "./base.js";
-import { StrictLoadingViolationError } from "./errors.js";
+import { StrictLoadingViolationError, DeleteRestrictionError } from "./errors.js";
 
 /**
  * Association options.
@@ -8,7 +8,7 @@ export interface AssociationOptions {
   foreignKey?: string;
   className?: string;
   primaryKey?: string;
-  dependent?: "destroy" | "nullify" | "delete";
+  dependent?: "destroy" | "nullify" | "delete" | "restrictWithException" | "restrictWithError";
   inverseOf?: string;
   through?: string;
   source?: string;
@@ -17,6 +17,8 @@ export interface AssociationOptions {
   counterCache?: boolean | string;
   touch?: boolean;
   scope?: (rel: any) => any;
+  required?: boolean;
+  optional?: boolean;
 }
 
 export interface AssociationDefinition {
@@ -120,6 +122,12 @@ export class Associations {
       this._associations = [...(this._associations ?? [])];
     }
     this._associations.push({ type: "belongsTo", name, options });
+
+    // If required: true (or optional: false), add presence validation on the FK
+    if (options.required || options.optional === false) {
+      const foreignKey = options.foreignKey ?? `${underscore(name)}_id`;
+      (this as any).validates(foreignKey, { presence: true });
+    }
   }
 
   /**
@@ -446,6 +454,15 @@ export async function processDependentAssociations(record: Base): Promise<void> 
         for (const child of children) {
           await child.updateColumn(foreignKey, null);
         }
+      } else if (dep === "restrictWithException") {
+        if (children.length > 0) {
+          throw new DeleteRestrictionError(record, assoc.name);
+        }
+      } else if (dep === "restrictWithError") {
+        if (children.length > 0) {
+          (record as any).errors?.add("base", "invalid", { message: `Cannot delete record because dependent ${assoc.name} exist` });
+          throw new DeleteRestrictionError(record, assoc.name);
+        }
       }
     } else if (assoc.type === "hasOne") {
       const child = await loadHasOne(record, assoc.name, assoc.options);
@@ -457,6 +474,11 @@ export async function processDependentAssociations(record: Base): Promise<void> 
       } else if (dep === "nullify") {
         const foreignKey = assoc.options.foreignKey ?? `${underscore(ctor.name)}_id`;
         await child.updateColumn(foreignKey, null);
+      } else if (dep === "restrictWithException") {
+        throw new DeleteRestrictionError(record, assoc.name);
+      } else if (dep === "restrictWithError") {
+        (record as any).errors?.add("base", "invalid", { message: `Cannot delete record because dependent ${assoc.name} exists` });
+        throw new DeleteRestrictionError(record, assoc.name);
       }
     }
   }

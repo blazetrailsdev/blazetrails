@@ -7674,4 +7674,110 @@ describe("ActiveRecord", () => {
       expect(touched).toEqual(["Alice"]);
     });
   });
+
+  describe("dependent: restrictWithException", () => {
+    it("prevents deletion when associated records exist", async () => {
+      const adapter = freshAdapter();
+
+      class DComment extends Base { static _tableName = "d_comments"; }
+      DComment.attribute("id", "integer");
+      DComment.attribute("d_post_id", "integer");
+      DComment.attribute("body", "string");
+      DComment.adapter = adapter;
+
+      class DPost extends Base {
+        static _tableName = "d_posts";
+        static _associations: any[] = [
+          { type: "hasMany", name: "dComments", options: { dependent: "restrictWithException", className: "DComment", foreignKey: "d_post_id" } },
+        ];
+      }
+      DPost.attribute("id", "integer");
+      DPost.attribute("title", "string");
+      DPost.adapter = adapter;
+
+      registerModel(DComment);
+      registerModel(DPost);
+
+      const post = await DPost.create({ title: "Hello" });
+      await DComment.create({ d_post_id: post.id, body: "Nice!" });
+
+      await expect(post.destroy()).rejects.toThrow("Cannot delete record because of dependent dComments");
+    });
+
+    it("allows deletion when no associated records exist", async () => {
+      const adapter = freshAdapter();
+
+      class DReview extends Base { static _tableName = "d_reviews"; }
+      DReview.attribute("id", "integer");
+      DReview.attribute("d_article_id", "integer");
+      DReview.adapter = adapter;
+
+      class DArticle extends Base {
+        static _tableName = "d_articles";
+        static _associations: any[] = [
+          { type: "hasMany", name: "dReviews", options: { dependent: "restrictWithException", className: "DReview", foreignKey: "d_article_id" } },
+        ];
+      }
+      DArticle.attribute("id", "integer");
+      DArticle.attribute("title", "string");
+      DArticle.adapter = adapter;
+
+      registerModel(DReview);
+      registerModel(DArticle);
+
+      const article = await DArticle.create({ title: "Hello" });
+      await article.destroy();
+      expect(article.isDestroyed()).toBe(true);
+    });
+  });
+
+  describe("belongs_to required option", () => {
+    it("validates presence of foreign key when required: true", async () => {
+      const adapter = freshAdapter();
+
+      class RAuthor extends Base { static _tableName = "r_authors"; }
+      RAuthor.attribute("id", "integer");
+      RAuthor.attribute("name", "string");
+      RAuthor.adapter = adapter;
+
+      class RBook extends Base { static _tableName = "r_books"; }
+      RBook.attribute("id", "integer");
+      RBook.attribute("author_id", "integer");
+      RBook.attribute("title", "string");
+      RBook.adapter = adapter;
+
+      registerModel(RAuthor);
+      registerModel(RBook);
+      Associations.belongsTo.call(RBook, "author", { required: true });
+
+      const book = new RBook({ title: "No Author" });
+      const saved = await book.save();
+      expect(saved).toBe(false);
+      expect(book.errors.fullMessages.some((m: string) => m.toLowerCase().includes("author_id"))).toBe(true);
+    });
+
+    it("passes validation when foreign key is present", async () => {
+      const adapter = freshAdapter();
+
+      class RWriter extends Base { static _tableName = "r_writers"; }
+      RWriter.attribute("id", "integer");
+      RWriter.attribute("name", "string");
+      RWriter.adapter = adapter;
+
+      class RNovel extends Base { static _tableName = "r_novels"; }
+      RNovel.attribute("id", "integer");
+      RNovel.attribute("writer_id", "integer");
+      RNovel.attribute("title", "string");
+      RNovel.adapter = adapter;
+
+      registerModel(RWriter);
+      registerModel(RNovel);
+      Associations.belongsTo.call(RNovel, "writer", { required: true });
+
+      const writer = await RWriter.create({ name: "Tolkien" });
+      const novel = new RNovel({ title: "LotR", writer_id: writer.id });
+      const saved = await novel.save();
+      expect(saved).toBe(true);
+    });
+  });
 });

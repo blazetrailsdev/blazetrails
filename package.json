@@ -1,5 +1,5 @@
 {
-  "name": "rails-js",
+  "name": "rails-ts",
   "private": true,
   "workspaces": [
     "packages/*"

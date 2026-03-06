@@ -1196,6 +1196,9 @@ export class Model {
    * Mirrors: ActiveModel::AttributeAssignment#assign_attributes
    */
   assignAttributes(attrs: Record<string, unknown>): void {
+    if (typeof attrs !== "object" || attrs === null) {
+      throw new Error("When assigning attributes, you must pass a hash as an argument");
+    }
     for (const [key, value] of Object.entries(attrs)) {
       this.writeAttribute(key, value);
     }

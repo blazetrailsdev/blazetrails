@@ -6,6 +6,7 @@
 export class SQLString {
   private parts: string[] = [];
   readonly bindValues: unknown[] = [];
+  retryable = true;
 
   append(str: string): this {
     this.parts.push(str);

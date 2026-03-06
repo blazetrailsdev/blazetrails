@@ -91,6 +91,7 @@ export {
   BitwiseShiftRight,
 } from "./infix-operation.js";
 export { BindParam } from "./bind-param.js";
+export { BoundSqlLiteral } from "./bound-sql-literal.js";
 export { Concat } from "./concat.js";
 export { True, False } from "./true-false.js";
 export { Regexp, NotRegexp } from "./regexp.js";

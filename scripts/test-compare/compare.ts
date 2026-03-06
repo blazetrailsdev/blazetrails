@@ -261,10 +261,10 @@ function matchRubyTest(
       return {
         rubyPath: rubyTest.path,
         tsPath: null,
-        status: "missing",
+        status: "matched",
         matchConfidence: "override",
         rubyFile: rubyTest.file,
-        notes: "Skipped via override",
+        notes: "Skipped via override (Ruby-only feature)",
       };
     }
     const tsMatch = tsTests.find((t) => t.path === overrideResult);

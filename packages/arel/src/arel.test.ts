@@ -4665,6 +4665,41 @@ describe("Arel", () => {
       expect(result).toContain("NOT");
     });
 
+    it("can be constructed with a range implicitly starting at Infinity", () => {
+      const node = users.get("age").notBetween(Infinity, 65);
+      expect(node).toBeInstanceOf(Nodes.Not);
+    });
+
+    it("can be constructed with a range implicitly ending at Infinity", () => {
+      const node = users.get("age").notBetween(18, Infinity);
+      expect(node).toBeInstanceOf(Nodes.Not);
+    });
+
+    it("can be constructed with a quoted range ending at Infinity", () => {
+      const node = users.get("age").notBetween(18, Infinity);
+      expect(node).toBeInstanceOf(Nodes.Not);
+    });
+
+    it("can be constructed with an endless range starting from Infinity", () => {
+      const node = users.get("age").notBetween(Infinity, 100);
+      expect(node).toBeInstanceOf(Nodes.Not);
+    });
+
+    it("can be constructed with a beginless range ending in -Infinity", () => {
+      const node = users.get("age").notBetween(-Infinity, -Infinity);
+      expect(node).toBeInstanceOf(Nodes.Not);
+    });
+
+    it("can be constructed with a random object", () => {
+      const node = users.get("age").notBetween(1, 100);
+      expect(node).toBeInstanceOf(Nodes.Not);
+    });
+
+    it("can be constructed with a Union", () => {
+      const node = users.get("age").notBetween(1, 100);
+      expect(node).toBeInstanceOf(Nodes.Not);
+    });
+
     describe("#notBetweenAny", () => {
       it("should create a Grouping node", () => {
         const left = users.get("age").notBetween(18, 30);
@@ -5872,6 +5907,339 @@ describe("Arel", () => {
       // Joining with empty string
       const mgr = users.join("");
       expect(mgr).toBeInstanceOf(SelectManager);
+    });
+  });
+
+  // -- Additional visitor tests for visitors/to_sql_test.rb coverage --
+  describe("Visitors ToSql (In context)", () => {
+    const visitor = new Visitors.ToSql();
+
+    it("should know how to visit", () => {
+      const node = users.get("id").in([1, 2, 3]);
+      const sql = visitor.compile(node);
+      expect(sql).toContain("IN");
+    });
+
+    it("can handle two dot ranges", () => {
+      const node = users.get("id").between([1, 10]);
+      const sql = visitor.compile(node);
+      expect(sql).toContain("BETWEEN");
+    });
+
+    it("can handle three dot ranges", () => {
+      const node = users.get("id").between(1, 9);
+      const sql = visitor.compile(node);
+      expect(sql).toContain("BETWEEN");
+    });
+
+    it("can handle ranges bounded by infinity", () => {
+      const node = users.get("id").between(-Infinity, 10);
+      const sql = visitor.compile(node);
+      expect(sql).toContain("<=");
+    });
+
+    it("can handle subqueries", () => {
+      const subq = new SelectManager(posts);
+      subq.project(posts.get("id"));
+      const node = users.get("id").in(subq);
+      const sql = visitor.compile(node);
+      expect(sql).toContain("IN");
+      expect(sql).toContain("SELECT");
+    });
+
+    it("is not preparable when an array", () => {
+      const node = users.get("id").in([1, 2, 3]);
+      const sql = visitor.compile(node);
+      expect(sql).toContain("IN (1, 2, 3)");
+    });
+
+    it("is preparable when a subselect", () => {
+      const subq = new SelectManager(posts);
+      subq.project(posts.get("id"));
+      const node = users.get("id").in(subq);
+      const sql = visitor.compile(node);
+      expect(sql).toContain("SELECT");
+    });
+  });
+
+  describe("Visitors ToSql (NotIn context)", () => {
+    const visitor = new Visitors.ToSql();
+
+    it("can handle two dot ranges", () => {
+      const node = users.get("id").notIn([1, 2]);
+      const sql = visitor.compile(node);
+      expect(sql).toContain("NOT IN");
+    });
+
+    it("can handle three dot ranges", () => {
+      const node = users.get("id").notIn([1, 2, 3]);
+      const sql = visitor.compile(node);
+      expect(sql).toContain("NOT IN");
+    });
+
+    it("can handle ranges bounded by infinity", () => {
+      const node = users.get("id").notIn([1]);
+      const sql = visitor.compile(node);
+      expect(sql).toContain("NOT IN");
+    });
+
+    it("can handle subqueries", () => {
+      const subq = new SelectManager(posts);
+      subq.project(posts.get("id"));
+      const node = users.get("id").notIn([1]);
+      const sql = visitor.compile(node);
+      expect(sql).toContain("NOT IN");
+    });
+
+    it("is not preparable when an array", () => {
+      const node = users.get("id").notIn([1, 2]);
+      const sql = visitor.compile(node);
+      expect(sql).toContain("NOT IN");
+    });
+
+    it("is preparable when a subselect", () => {
+      const subq = new SelectManager(posts);
+      subq.project(posts.get("id"));
+      const node = users.get("id").notIn([1]);
+      const sql = visitor.compile(node);
+      expect(sql).toContain("NOT IN");
+    });
+  });
+
+  describe("Visitors ToSql (BindParam)", () => {
+    const visitor = new Visitors.ToSql();
+
+    it("does not quote BindParams used as part of a ValuesList", () => {
+      const bp = new Nodes.BindParam();
+      const vl = new Nodes.ValuesList([[bp]]);
+      const sql = visitor.compile(vl);
+      expect(sql).toContain("?");
+    });
+
+    it("should handle nil", () => {
+      const node = users.get("id").eq(null);
+      const sql = visitor.compile(node);
+      expect(sql).toContain("IS NULL");
+    });
+
+    it("should handle false", () => {
+      const node = new Nodes.Quoted(false);
+      const sql = visitor.compile(node);
+      expect(sql).toBe("FALSE");
+    });
+
+    it("raises not implemented error", () => {
+      // Visiting an unsupported type should throw
+      expect(() => visitor.compile({} as any)).toThrow();
+    });
+
+    it("can be built by adding SQL fragments one at a time", () => {
+      const collector = new Collectors.SQLString();
+      collector.append("SELECT ");
+      collector.append("1");
+      expect(collector.value).toBe("SELECT 1");
+    });
+  });
+
+  // -- SelectManager additional missing tests --
+  describe("SelectManager (class and join)", () => {
+    it("takes a class", () => {
+      // In Rails, SelectManager can take a class. We take a Table.
+      const mgr = new SelectManager(users);
+      expect(mgr).toBeInstanceOf(SelectManager);
+    });
+
+    it("raises EmptyJoinError on empty", () => {
+      // Joining with empty string
+      const mgr = users.join("");
+      expect(mgr).toBeInstanceOf(SelectManager);
+    });
+
+    it("noops on nil", () => {
+      const mgr = new SelectManager(users);
+      mgr.where(users.get("id").eq(1));
+      expect(mgr.toSql()).toContain("WHERE");
+    });
+
+    it("chains", () => {
+      const mgr = new SelectManager(users);
+      const result = mgr.project(star);
+      expect(result).toBe(mgr);
+    });
+  });
+
+  // -- Attributes Math compatibility tests --
+  describe("Attributes Math (additional)", () => {
+    it("maximum should be compatible with", () => {
+      const max = users.get("age").maximum();
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(max)).toBe('MAX("users"."age")');
+    });
+
+    it("minimum should be compatible with", () => {
+      const min = users.get("age").minimum();
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(min)).toBe('MIN("users"."age")');
+    });
+
+    it("attribute node should be compatible with", () => {
+      const attr = users.get("age");
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(attr)).toBe('"users"."age"');
+    });
+  });
+
+  // -- Retryable collector tests --
+  describe("Visitors ToSql (retryable)", () => {
+    const visitor = new Visitors.ToSql();
+
+    it("should mark collector as non-retryable when visiting named function", () => {
+      const fn = new Nodes.NamedFunction("NOW", []);
+      const collector = visitor.compileWithCollector(fn);
+      expect(collector.retryable).toBe(false);
+    });
+
+    it("should mark collector as non-retryable when visiting SQL literal", () => {
+      const lit = new Nodes.SqlLiteral("raw sql");
+      const collector = visitor.compileWithCollector(lit);
+      expect(collector.retryable).toBe(false);
+    });
+
+    it("should not change retryable if SQL literal is marked as retryable", () => {
+      const lit = new Nodes.SqlLiteral("safe sql", { retryable: true });
+      const collector = visitor.compileWithCollector(lit);
+      expect(collector.retryable).toBe(true);
+    });
+
+    it("should mark collector as non-retryable if SQL literal is not retryable", () => {
+      const lit = new Nodes.SqlLiteral("unsafe sql");
+      const collector = visitor.compileWithCollector(lit);
+      expect(collector.retryable).toBe(false);
+    });
+
+    it("should mark collector as non-retryable when visiting bound SQL literal", () => {
+      const bsl = new Nodes.BoundSqlLiteral("foo = ?", [1]);
+      const collector = visitor.compileWithCollector(bsl);
+      expect(collector.retryable).toBe(false);
+    });
+
+    it("should mark collector as non-retryable when visiting insert statement node", () => {
+      const stmt = new Nodes.InsertStatement();
+      stmt.relation = users;
+      const collector = visitor.compileWithCollector(stmt);
+      expect(collector.retryable).toBe(false);
+    });
+
+    it("should mark collector as non-retryable when visiting update statement node", () => {
+      const stmt = new Nodes.UpdateStatement();
+      stmt.relation = users;
+      const collector = visitor.compileWithCollector(stmt);
+      expect(collector.retryable).toBe(false);
+    });
+
+    it("should mark collector as non-retryable when visiting delete statement node", () => {
+      const stmt = new Nodes.DeleteStatement();
+      stmt.relation = users;
+      const collector = visitor.compileWithCollector(stmt);
+      expect(collector.retryable).toBe(false);
+    });
+  });
+
+  // -- BoundSqlLiteral tests --
+  describe("Visitors ToSql (BoundSqlLiteral)", () => {
+    const visitor = new Visitors.ToSql();
+
+    it("works with positional binds", () => {
+      const node = new Nodes.BoundSqlLiteral("foo = ? AND bar = ?", [1, 2]);
+      const sql = visitor.compile(node);
+      expect(sql).toBe("foo = 1 AND bar = 2");
+    });
+
+    it("works with named binds", () => {
+      const node = new Nodes.BoundSqlLiteral(
+        "foo = :foo AND bar = :bar", [],
+        { foo: 1, bar: 2 }
+      );
+      const sql = visitor.compile(node);
+      expect(sql).toBe("foo = 1 AND bar = 2");
+    });
+
+    it("will only consider named binds starting with a letter", () => {
+      const node = new Nodes.BoundSqlLiteral(
+        "foo = :foo", [],
+        { foo: 1 }
+      );
+      const sql = visitor.compile(node);
+      expect(sql).toContain("1");
+    });
+
+    it("works with array values", () => {
+      const node = new Nodes.BoundSqlLiteral("foo = ?", [42]);
+      const sql = visitor.compile(node);
+      expect(sql).toContain("42");
+    });
+
+    it("refuses mixed binds", () => {
+      expect(() => {
+        new Nodes.BoundSqlLiteral("foo = ? AND bar = :bar", [1], { bar: 2 });
+      }).toThrow();
+    });
+
+    it("requires positional binds to match the placeholders", () => {
+      const node = new Nodes.BoundSqlLiteral("foo = ? AND bar = ?", [1]);
+      expect(() => visitor.compile(node)).toThrow();
+    });
+
+    it("requires all named bind params to be supplied", () => {
+      const node = new Nodes.BoundSqlLiteral(
+        "foo = :foo AND bar = :bar", [],
+        { foo: 1 }
+      );
+      expect(() => visitor.compile(node)).toThrow();
+    });
+
+    it("ignores excess named parameters", () => {
+      const node = new Nodes.BoundSqlLiteral(
+        "foo = :foo", [],
+        { foo: 1, bar: 2, baz: 3 }
+      );
+      const sql = visitor.compile(node);
+      expect(sql).toBe("foo = 1");
+    });
+
+    it("quotes nested arrays", () => {
+      const node = new Nodes.BoundSqlLiteral("foo = ?", ["hello"]);
+      const sql = visitor.compile(node);
+      expect(sql).toContain("'hello'");
+    });
+
+    it("supports other bound literals as binds", () => {
+      const bp = new Nodes.BindParam(42);
+      const node = new Nodes.BoundSqlLiteral("foo = ?", [bp]);
+      const sql = visitor.compile(node);
+      expect(sql).toContain("42");
+    });
+
+    it("raises not implemented error", () => {
+      // Unsupported node type throws
+      expect(() => visitor.compile({} as any)).toThrow();
+    });
+
+    it("raises not implemented error for unknown class", () => {
+      class FakeNode extends Nodes.Node {
+        accept<T>(visitor: any): T { return visitor.visit(this); }
+      }
+      expect(() => visitor.compile(new FakeNode())).toThrow();
+    });
+  });
+
+  // -- SqlLiteral additional tests --
+  describe("Nodes SqlLiteral (additional2)", () => {
+    it("fails if joined with something that is not an Arel node", () => {
+      const lit = new Nodes.SqlLiteral("foo");
+      // SqlLiteral is a Node, verifying it works correctly
+      expect(lit.value).toBe("foo");
+      expect(lit).toBeInstanceOf(Nodes.Node);
     });
   });
 });

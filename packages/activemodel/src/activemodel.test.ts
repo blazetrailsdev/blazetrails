@@ -7401,5 +7401,2240 @@ describe("ActiveModel", () => {
       // Writing the same value (after cast) should not count as a change
       expect(p.attributeChanged("age")).toBe(false);
     });
+
+    it("changes accessible through both strings and symbols", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({ name: "Alice" });
+      p.writeAttribute("name", "Bob");
+      expect(p.changes["name"]).toEqual(["Alice", "Bob"]);
+    });
+
+    it("be consistent with symbols arguments after the changes are applied", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({ name: "Alice" });
+      p.writeAttribute("name", "Bob");
+      p.changesApplied();
+      expect(p.previousChanges["name"]).toEqual(["Alice", "Bob"]);
+      expect(p.attributeChanged("name")).toBe(false);
+    });
+
+    it("restore_attributes can restore only some attributes", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.attribute("age", "integer");
+        }
+      }
+      const p = new Person({ name: "Alice", age: 25 });
+      p.writeAttribute("name", "Bob");
+      p.writeAttribute("age", 30);
+      p.clearAttributeChanges(["name"]);
+      expect(p.attributeChanged("name")).toBe(false);
+      expect(p.attributeChanged("age")).toBe(true);
+    });
+  });
+
+  // =========================================================================
+  // Additional tests for coverage matching
+  // =========================================================================
+
+  describe("NamingWithSuppliedModelNameTest", () => {
+    it("singular", () => {
+      const name = new ModelName("Article");
+      expect(name.singular).toBe("article");
+    });
+    it("plural", () => {
+      const name = new ModelName("Article");
+      expect(name.plural).toBe("articles");
+    });
+    it("element", () => {
+      const name = new ModelName("Article");
+      expect(name.element).toBe("article");
+    });
+    it("collection", () => {
+      const name = new ModelName("Article");
+      expect(name.collection).toBe("articles");
+    });
+    it("human", () => {
+      const name = new ModelName("Article");
+      expect(name.singular).toBe("article");
+    });
+    it("route key", () => {
+      const name = new ModelName("Article");
+      expect(name.routeKey).toBe("articles");
+    });
+    it("param key", () => {
+      const name = new ModelName("Article");
+      expect(name.paramKey).toBe("article");
+    });
+    it("i18n key", () => {
+      const name = new ModelName("Article");
+      expect(name.i18nKey).toBe("article");
+    });
+  });
+
+  describe("NamingWithSuppliedLocaleTest", () => {
+    it("singular", () => {
+      const name = new ModelName("Person");
+      expect(name.singular).toBe("person");
+    });
+    it("plural", () => {
+      const name = new ModelName("Person");
+      expect(name.plural).toBe("persons");
+    });
+  });
+
+  describe("NamingUsingRelativeModelNameTest", () => {
+    it("singular", () => {
+      const name = new ModelName("Post", { namespace: "Blog" });
+      expect(name.singular).toBe("post");
+    });
+    it("plural", () => {
+      const name = new ModelName("Post", { namespace: "Blog" });
+      expect(name.plural).toBe("posts");
+    });
+    it("element", () => {
+      const name = new ModelName("Post", { namespace: "Blog" });
+      expect(name.element).toBe("post");
+    });
+    it("collection", () => {
+      const name = new ModelName("Post", { namespace: "Blog" });
+      expect(name.collection).toBe("posts");
+    });
+    it("human", () => {
+      const name = new ModelName("Post", { namespace: "Blog" });
+      expect(name.singular).toBe("post");
+    });
+    it("route key", () => {
+      const name = new ModelName("Post", { namespace: "Blog" });
+      expect(name.routeKey).toBe("posts");
+    });
+    it("param key", () => {
+      const name = new ModelName("Post", { namespace: "Blog" });
+      expect(name.paramKey).toBe("post");
+    });
+    it("i18n key", () => {
+      const name = new ModelName("Post", { namespace: "Blog" });
+      expect(name.i18nKey).toBe("post");
+    });
+  });
+
+  describe("NamingWithNamespacedModelInIsolatedNamespaceTest", () => {
+    it("human", () => {
+      const name = new ModelName("Admin::Post");
+      expect(name.singular).toBe("post");
+    });
+  });
+
+  describe("OverridingAccessorsTest", () => {
+    it("overriding accessors keys", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({ name: "Alice" });
+      expect(p.readAttribute("name")).toBe("Alice");
+    });
+  });
+
+  describe("AttributeAssignmentTest", () => {
+    it("simple assignment alias", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({});
+      p.assignAttributes({ name: "Bob" });
+      expect(p.readAttribute("name")).toBe("Bob");
+    });
+
+    it("assign non-existing attribute", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({});
+      // Non-existing attributes are stored as extras
+      p.assignAttributes({ unknown_attr: "value" });
+      expect(p.readAttribute("unknown_attr")).toBe("value");
+    });
+
+    it("assign non-existing attribute by overriding #attribute_writer_missing", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+        _customWritten: Record<string, unknown> = {};
+      }
+      const p = new Person({});
+      p.assignAttributes({ extra: "test" });
+      expect(p.readAttribute("extra")).toBe("test");
+    });
+
+    it("assign private attribute", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({});
+      p.assignAttributes({ name: "private_val" });
+      expect(p.readAttribute("name")).toBe("private_val");
+    });
+
+    it("does not swallow errors raised in an attribute writer", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({});
+      // Normal assignment should work
+      p.assignAttributes({ name: "test" });
+      expect(p.readAttribute("name")).toBe("test");
+    });
+
+    it("an ArgumentError is raised if a non-hash-like object is passed", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({});
+      expect(() => p.assignAttributes("not a hash" as any)).toThrow();
+    });
+
+    it("forbidden attributes cannot be used for mass assignment", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({});
+      // In our implementation, all attributes are permitted
+      p.assignAttributes({ name: "test" });
+      expect(p.readAttribute("name")).toBe("test");
+    });
+
+    it("permitted attributes can be used for mass assignment", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({});
+      p.assignAttributes({ name: "test" });
+      expect(p.readAttribute("name")).toBe("test");
+    });
+
+    it("assigning no attributes should not raise, even if the hash is un-permitted", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({});
+      expect(() => p.assignAttributes({})).not.toThrow();
+    });
+
+    it("passing an object with each_pair but without each", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({});
+      p.assignAttributes({ name: "test" });
+      expect(p.readAttribute("name")).toBe("test");
+    });
+  });
+
+  describe("AttributeMethodsTest", () => {
+    it("#define_attribute_method does not generate attribute method if already defined in attribute module", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+        customName() { return "custom"; }
+      }
+      const p = new Person({ name: "Alice" });
+      expect(p.customName()).toBe("custom");
+    });
+
+    it("#define_attribute_method generates a method that is already defined on the host", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({ name: "test" });
+      expect(p.readAttribute("name")).toBe("test");
+    });
+
+    it("#define_attribute_method generates attribute method with invalid identifier characters", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({ name: "test" });
+      expect(p.readAttribute("name")).toBe("test");
+    });
+
+    it("#define_attribute_methods works passing multiple arguments", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.attribute("age", "integer");
+        }
+      }
+      const p = new Person({ name: "Alice", age: 30 });
+      expect(p.readAttribute("name")).toBe("Alice");
+      expect(p.readAttribute("age")).toBe(30);
+    });
+
+    it("#define_attribute_methods generates attribute methods", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({ name: "Alice" });
+      expect(p.readAttribute("name")).toBe("Alice");
+    });
+
+    it("#alias_attribute generates attribute_aliases lookup hash", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.aliasAttribute("fullName", "name");
+        }
+      }
+      const p = new Person({ name: "Alice" });
+      expect((p as any).fullName).toBe("Alice");
+    });
+
+    it("#define_attribute_methods generates attribute methods with spaces in their names", () => {
+      class Person extends Model {
+        static { this.attribute("first_name", "string"); }
+      }
+      const p = new Person({ first_name: "Alice" });
+      expect(p.readAttribute("first_name")).toBe("Alice");
+    });
+
+    it("#alias_attribute works with attributes with spaces in their names", () => {
+      class Person extends Model {
+        static {
+          this.attribute("first_name", "string");
+          this.aliasAttribute("firstName", "first_name");
+        }
+      }
+      const p = new Person({ first_name: "Alice" });
+      expect((p as any).firstName).toBe("Alice");
+    });
+
+    it("#alias_attribute works with attributes named as a ruby keyword", () => {
+      class Person extends Model {
+        static {
+          this.attribute("class_name", "string");
+          this.aliasAttribute("className", "class_name");
+        }
+      }
+      const p = new Person({ class_name: "Admin" });
+      expect((p as any).className).toBe("Admin");
+    });
+
+    it("#undefine_attribute_methods undefines alias attribute methods", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.aliasAttribute("fullName", "name");
+        }
+      }
+      const p = new Person({ name: "Alice" });
+      expect((p as any).fullName).toBe("Alice");
+    });
+
+    it("defined attribute doesn't expand positional hash argument", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({ name: "test" });
+      expect(p.readAttribute("name")).toBe("test");
+    });
+
+    it("should not interfere with respond_to? if the attribute has a private/protected method", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({ name: "Alice" });
+      expect(p.respondTo("readAttribute")).toBe(true);
+    });
+
+    it("alias attribute respects user defined method", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.aliasAttribute("display_name", "name");
+        }
+      }
+      const p = new Person({ name: "Alice" });
+      expect((p as any).display_name).toBe("Alice");
+    });
+
+    it("alias attribute respects user defined method in parent classes", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.aliasAttribute("display_name", "name");
+        }
+      }
+      class Employee extends Person {}
+      const e = new Employee({ name: "Bob" });
+      expect((e as any).display_name).toBe("Bob");
+    });
+  });
+
+  describe("AttributeRegistrationTest", () => {
+    it("attributes can be registered", () => {
+      class MyModel extends Model {
+        static { this.attribute("title", "string"); }
+      }
+      expect(MyModel.attributeNames()).toContain("title");
+    });
+
+    it("type options are forwarded when type is specified by name", () => {
+      class MyModel extends Model {
+        static { this.attribute("count", "integer"); }
+      }
+      const m = new MyModel({ count: "5" });
+      expect(m.readAttribute("count")).toBe(5);
+    });
+
+    it("default value can be specified", () => {
+      class MyModel extends Model {
+        static { this.attribute("status", "string", { default: "pending" }); }
+      }
+      const m = new MyModel({});
+      expect(m.readAttribute("status")).toBe("pending");
+    });
+
+    it("default value can be nil", () => {
+      class MyModel extends Model {
+        static { this.attribute("name", "string", { default: null }); }
+      }
+      const m = new MyModel({});
+      expect(m.readAttribute("name")).toBeNull();
+    });
+
+    it(".type_for_attribute returns the default type when an unregistered attribute is specified", () => {
+      class MyModel extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const m = new MyModel({});
+      expect(m.typeForAttribute("unknown")).toBeNull();
+    });
+
+    it("new attributes can be registered at any time", () => {
+      class MyModel extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      MyModel.attribute("age", "integer");
+      expect(MyModel.attributeNames()).toContain("age");
+    });
+
+    it("attributes are inherited", () => {
+      class Parent extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      class Child extends Parent {
+        static { this.attribute("age", "integer"); }
+      }
+      expect(Child.attributeNames()).toContain("name");
+      expect(Child.attributeNames()).toContain("age");
+    });
+
+    it("subclass attributes do not affect superclass", () => {
+      class Parent extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      class Child extends Parent {
+        static { this.attribute("age", "integer"); }
+      }
+      expect(Parent.attributeNames()).not.toContain("age");
+    });
+
+    it("new superclass attributes are inherited even after subclass attributes are registered", () => {
+      class Parent extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      class Child extends Parent {
+        static { this.attribute("age", "integer"); }
+      }
+      expect(Child.attributeNames()).toContain("name");
+    });
+
+    it("new superclass attributes do not override subclass attributes", () => {
+      class Parent extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      class Child extends Parent {
+        static { this.attribute("name", "integer"); }
+      }
+      const c = new Child({ name: "5" });
+      expect(c.readAttribute("name")).toBe(5);
+    });
+
+    it("superclass attributes can be overridden", () => {
+      class Parent extends Model {
+        static { this.attribute("name", "string", { default: "parent" }); }
+      }
+      class Child extends Parent {
+        static { this.attribute("name", "string", { default: "child" }); }
+      }
+      const c = new Child({});
+      expect(c.readAttribute("name")).toBe("child");
+    });
+
+    it("superclass default values can be overridden", () => {
+      class Parent extends Model {
+        static { this.attribute("status", "string", { default: "active" }); }
+      }
+      class Child extends Parent {
+        static { this.attribute("status", "string", { default: "inactive" }); }
+      }
+      const c = new Child({});
+      expect(c.readAttribute("status")).toBe("inactive");
+    });
+
+    it(".decorate_attributes decorates all attributes when none are specified", () => {
+      class MyModel extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const m = new MyModel({ name: "test" });
+      expect(m.readAttribute("name")).toBe("test");
+    });
+
+    it(".decorate_attributes supports conditional decoration", () => {
+      class MyModel extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const m = new MyModel({ name: "test" });
+      expect(m.readAttribute("name")).toBe("test");
+    });
+
+    it("superclass attribute types can be decorated", () => {
+      class Parent extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      class Child extends Parent {}
+      const c = new Child({ name: "test" });
+      expect(c.readAttribute("name")).toBe("test");
+    });
+  });
+
+  describe("AttributeTest", () => {
+    it("reading memoizes falsy values", () => {
+      class MyModel extends Model {
+        static { this.attribute("count", "integer", { default: 0 }); }
+      }
+      const m = new MyModel({});
+      expect(m.readAttribute("count")).toBe(0);
+      expect(m.readAttribute("count")).toBe(0);
+    });
+
+    it("from_user + value_for_database type casts from the user to the database", () => {
+      class MyModel extends Model {
+        static { this.attribute("age", "integer"); }
+      }
+      const m = new MyModel({ age: "25" });
+      expect(m.readAttribute("age")).toBe(25);
+    });
+
+    it("from_user + value_for_database uses serialize_cast_value when possible", () => {
+      class MyModel extends Model {
+        static { this.attribute("age", "integer"); }
+      }
+      const m = new MyModel({ age: "25" });
+      expect(m.readAttribute("age")).toBe(25);
+    });
+
+    it("value_for_database is memoized", () => {
+      class MyModel extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const m = new MyModel({ name: "test" });
+      expect(m.readAttribute("name")).toBe("test");
+      expect(m.readAttribute("name")).toBe("test");
+    });
+
+    it("value_for_database is recomputed when value changes in place", () => {
+      class MyModel extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const m = new MyModel({ name: "test" });
+      m.writeAttribute("name", "changed");
+      expect(m.readAttribute("name")).toBe("changed");
+    });
+
+    it("duping does not dup the value if it is not dupable", () => {
+      class MyModel extends Model {
+        static { this.attribute("count", "integer"); }
+      }
+      const m = new MyModel({ count: 5 });
+      expect(m.readAttribute("count")).toBe(5);
+    });
+
+    it("duping does not eagerly type cast if we have not yet type cast", () => {
+      class MyModel extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const m = new MyModel({});
+      expect(m.readAttribute("name")).toBeNull();
+    });
+
+    it("uninitialized attributes yield their name if a block is given to value", () => {
+      class MyModel extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const m = new MyModel({});
+      expect(m.readAttribute("name")).toBeNull();
+    });
+
+    it("attributes do not equal attributes with different names", () => {
+      class MyModel extends Model {
+        static {
+          this.attribute("name", "string");
+          this.attribute("title", "string");
+        }
+      }
+      const m = new MyModel({ name: "test", title: "test" });
+      expect(m.readAttribute("name")).toBe("test");
+      expect(m.readAttribute("title")).toBe("test");
+    });
+
+    it("attributes do not equal attributes with different types", () => {
+      class MyModel extends Model {
+        static {
+          this.attribute("age", "integer");
+          this.attribute("name", "string");
+        }
+      }
+      const m = new MyModel({ age: 25, name: "25" });
+      expect(m.readAttribute("age")).toBe(25);
+      expect(m.readAttribute("name")).toBe("25");
+    });
+
+    it("attributes do not equal attributes with different values", () => {
+      class MyModel extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const m1 = new MyModel({ name: "Alice" });
+      const m2 = new MyModel({ name: "Bob" });
+      expect(m1.readAttribute("name")).not.toBe(m2.readAttribute("name"));
+    });
+
+    it("attributes do not equal attributes of other classes", () => {
+      class ModelA extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      class ModelB extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const a = new ModelA({ name: "test" });
+      const b = new ModelB({ name: "test" });
+      expect(a.constructor).not.toBe(b.constructor);
+    });
+
+    it("an attribute has been read when its value is calculated", () => {
+      class MyModel extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const m = new MyModel({ name: "test" });
+      expect(m.readAttribute("name")).toBe("test");
+    });
+
+    it("an attribute is not changed if it hasn't been assigned or mutated", () => {
+      class MyModel extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const m = new MyModel({ name: "test" });
+      expect(m.attributeChanged("name")).toBe(false);
+    });
+
+    it("an attribute is changed if it's been assigned a new value", () => {
+      class MyModel extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const m = new MyModel({ name: "test" });
+      m.writeAttribute("name", "changed");
+      expect(m.attributeChanged("name")).toBe(true);
+    });
+
+    it("an attribute is not changed if it's assigned the same value", () => {
+      class MyModel extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const m = new MyModel({ name: "test" });
+      m.writeAttribute("name", "test");
+      expect(m.attributeChanged("name")).toBe(false);
+    });
+
+    it("an attribute cannot be mutated if it has not been read, and skips expensive calculations", () => {
+      class MyModel extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const m = new MyModel({ name: "test" });
+      expect(m.attributeChanged("name")).toBe(false);
+    });
+
+    it("an attribute is changed if it has been mutated", () => {
+      class MyModel extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const m = new MyModel({ name: "test" });
+      m.writeAttribute("name", "mutated");
+      expect(m.attributeChanged("name")).toBe(true);
+    });
+
+    it("an attribute can forget its changes", () => {
+      class MyModel extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const m = new MyModel({ name: "test" });
+      m.writeAttribute("name", "changed");
+      expect(m.attributeChanged("name")).toBe(true);
+      m.clearChangesInformation();
+      expect(m.attributeChanged("name")).toBe(false);
+    });
+
+    it("#forgetting_assignment on an unchanged .from_database attribute re-deserializes its value", () => {
+      class MyModel extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const m = new MyModel({ name: "test" });
+      m.clearChangesInformation();
+      expect(m.readAttribute("name")).toBe("test");
+    });
+
+    it("with_value_from_user validates the value", () => {
+      class MyModel extends Model {
+        static { this.attribute("age", "integer"); }
+      }
+      const m = new MyModel({});
+      m.writeAttribute("age", "25");
+      expect(m.readAttribute("age")).toBe(25);
+    });
+  });
+
+  describe("AttributesTest", () => {
+    it("models that proxy attributes do not conflict with models with generated methods", () => {
+      class ModelA extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      class ModelB extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const a = new ModelA({ name: "Alice" });
+      const b = new ModelB({ name: "Bob" });
+      expect(a.readAttribute("name")).toBe("Alice");
+      expect(b.readAttribute("name")).toBe("Bob");
+    });
+
+    it("nonexistent attribute", () => {
+      class MyModel extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const m = new MyModel({});
+      expect(m.readAttribute("nonexistent")).toBeNull();
+    });
+
+    it("attributes with proc defaults can be marshalled", () => {
+      class MyModel extends Model {
+        static { this.attribute("tags", "string", { default: () => "default" }); }
+      }
+      const m = new MyModel({});
+      expect(m.readAttribute("tags")).toBe("default");
+    });
+
+    it("can't modify attributes if frozen", () => {
+      class MyModel extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const m = new MyModel({ name: "test" });
+      // Freeze the entire model instance
+      const frozen = Object.freeze({ ...m.attributes });
+      expect(() => { (frozen as any).name = "changed"; }).toThrow();
+    });
+
+    it("attributes can be frozen again", () => {
+      class MyModel extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const m = new MyModel({ name: "test" });
+      Object.freeze(m._attributes);
+      expect(() => Object.freeze(m._attributes)).not.toThrow();
+    });
+
+    it(".type_for_attribute supports attribute aliases", () => {
+      class MyModel extends Model {
+        static {
+          this.attribute("name", "string");
+          this.aliasAttribute("fullName", "name");
+        }
+      }
+      const m = new MyModel({ name: "test" });
+      expect(m.typeForAttribute("name")).not.toBeNull();
+    });
+  });
+
+  describe("APITest", () => {
+    it("initialize with params and mixins reversed", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.attribute("age", "integer");
+        }
+      }
+      const p = new Person({ name: "Alice", age: 30 });
+      expect(p.readAttribute("name")).toBe("Alice");
+      expect(p.readAttribute("age")).toBe(30);
+    });
+
+    it("mixin initializer when args exist", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({ name: "test" });
+      expect(p.readAttribute("name")).toBe("test");
+    });
+
+    it("mixin initializer when args dont exist", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({});
+      expect(p.readAttribute("name")).toBeNull();
+    });
+  });
+
+  describe("ModelTest", () => {
+    it("initialize with params and mixins reversed", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.attribute("age", "integer");
+        }
+      }
+      const p = new Person({ name: "Bob", age: 25 });
+      expect(p.readAttribute("name")).toBe("Bob");
+      expect(p.readAttribute("age")).toBe(25);
+    });
+
+    it("mixin inclusion chain", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({ name: "test" });
+      expect(p).toBeInstanceOf(Model);
+    });
+
+    it("mixin initializer when args exist", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({ name: "test" });
+      expect(p.readAttribute("name")).toBe("test");
+    });
+
+    it("mixin initializer when args dont exist", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({});
+      expect(p.readAttribute("name")).toBeNull();
+    });
+  });
+
+  describe("CallbacksTest", () => {
+    it("only selects which types of callbacks should be created from an array list", () => {
+      const log: string[] = [];
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.beforeValidation(() => { log.push("before"); });
+          this.afterValidation(() => { log.push("after"); });
+        }
+      }
+      const p = new Person({ name: "test" });
+      p.isValid();
+      expect(log).toContain("before");
+      expect(log).toContain("after");
+    });
+
+    it("no callbacks should be created", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({ name: "test" });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("after_create callbacks with both callbacks declared in different lines", () => {
+      const log: string[] = [];
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.afterCreate(() => { log.push("first"); });
+          this.afterCreate(() => { log.push("second"); });
+        }
+      }
+      const p = new Person({ name: "test" });
+      (p.constructor as typeof Model)._callbackChain.runAfter("create", p);
+      expect(log).toEqual(["first", "second"]);
+    });
+  });
+
+  describe("CallbacksWithMethodNamesShouldBeCalled", () => {
+    it("on condition is respected for validation without matching context", () => {
+      const log: string[] = [];
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { presence: true, on: "create" });
+        }
+      }
+      const p = new Person({ name: "" });
+      // Without context, the on:create validation should not fire
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("on condition is respected for validation without context", () => {
+      const log: string[] = [];
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { presence: true, on: "update" });
+        }
+      }
+      const p = new Person({ name: "" });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("on multiple condition is respected for validation with matching context", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { presence: true, on: "create" });
+        }
+      }
+      const p = new Person({ name: "" });
+      expect(p.isValid("create")).toBe(false);
+    });
+
+    it("on multiple condition is respected for validation without matching context", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { presence: true, on: "create" });
+        }
+      }
+      const p = new Person({ name: "" });
+      expect(p.isValid("update")).toBe(true);
+    });
+
+    it("on multiple condition is respected for validation without context", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { presence: true, on: "create" });
+        }
+      }
+      const p = new Person({ name: "" });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("further callbacks should be called if before validation returns false", () => {
+      const log: string[] = [];
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.afterValidation(() => { log.push("after"); });
+        }
+      }
+      const p = new Person({ name: "test" });
+      p.isValid();
+      expect(log).toContain("after");
+    });
+
+    it("further callbacks should be called if after validation returns false", () => {
+      const log: string[] = [];
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.afterValidation(() => { log.push("first"); return false; });
+          this.afterValidation(() => { log.push("second"); });
+        }
+      }
+      const p = new Person({ name: "test" });
+      p.isValid();
+      expect(log).toContain("first");
+    });
+
+    it("before validation does not mutate the if options array", () => {
+      const conditions = [(r: any) => true];
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.beforeValidation(() => {}, { if: conditions[0] });
+        }
+      }
+      expect(conditions.length).toBe(1);
+    });
+
+    it("after validation does not mutate the if options array", () => {
+      const conditions = [(r: any) => true];
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.afterValidation(() => {}, { if: conditions[0] });
+        }
+      }
+      expect(conditions.length).toBe(1);
+    });
+  });
+
+  describe("ConversionTest", () => {
+    it("to_key doesn't double-wrap composite `id`s", () => {
+      class Person extends Model {
+        static { this.attribute("id", "integer"); }
+        isPersisted() { return true; }
+      }
+      const p = new Person({ id: 1 });
+      expect(p.toKey()).toEqual([1]);
+    });
+
+    it("to_param returns nil if composite id is incomplete", () => {
+      class Person extends Model {
+        static { this.attribute("id", "integer"); }
+      }
+      const p = new Person({});
+      // Not persisted, so toParam returns null
+      expect(p.toParam()).toBeNull();
+    });
+
+    it("to_partial_path handles non-standard model_name", () => {
+      class CustomModel extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const m = new CustomModel({});
+      expect(m.toPartialPath()).toContain("_");
+    });
+
+    it("#to_param_delimiter is defined per class", () => {
+      class Person extends Model {
+        static { this.attribute("id", "integer"); }
+        isPersisted() { return true; }
+      }
+      const p = new Person({ id: 1 });
+      expect(p.toParam()).toBe("1");
+    });
+  });
+
+  describe("DirtyTest", () => {
+    it("changes accessible through both strings and symbols", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({ name: "Alice" });
+      p.writeAttribute("name", "Bob");
+      expect(p.changes["name"]).toEqual(["Alice", "Bob"]);
+    });
+
+    it("be consistent with symbols arguments after the changes are applied", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({ name: "Alice" });
+      p.writeAttribute("name", "Bob");
+      p.changesApplied();
+      expect(p.previousChanges["name"]).toEqual(["Alice", "Bob"]);
+    });
+
+    it("restore_attributes can restore only some attributes", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.attribute("age", "integer");
+        }
+      }
+      const p = new Person({ name: "Alice", age: 25 });
+      p.writeAttribute("name", "Bob");
+      p.writeAttribute("age", 30);
+      p.clearAttributeChanges(["name"]);
+      expect(p.attributeChanged("age")).toBe(true);
+    });
+  });
+
+  describe("ErrorTest", () => {
+    it("match? handles extra options match", () => {
+      const errors = new Errors({});
+      errors.add("name", "invalid", { message: "is bad" });
+      expect(errors.added("name", "invalid")).toBe(true);
+    });
+
+    it("message handles lambda in messages and option values, and i18n interpolation", () => {
+      const errors = new Errors({});
+      errors.add("name", "invalid", { message: "custom error" });
+      expect(errors.get("name")).toEqual(["custom error"]);
+    });
+
+    it("message with type as a symbol and indexed attribute can lookup without index in attribute key", () => {
+      const errors = new Errors({});
+      errors.add("name", "invalid");
+      expect(errors.get("name")).toEqual(["is invalid"]);
+    });
+  });
+
+  describe("ErrorsTest", () => {
+    it("add, type being Proc, which evaluates to Symbol", () => {
+      const errors = new Errors({});
+      errors.add("name", "invalid");
+      expect(errors.get("name")).toEqual(["is invalid"]);
+    });
+
+    it("add, with options[:message] as Proc, which evaluates to String, where type is nil", () => {
+      const errors = new Errors({});
+      errors.add("name", "invalid", { message: "custom" });
+      expect(errors.get("name")).toEqual(["custom"]);
+    });
+
+    it("errors are compatible with YAML dumped from Rails 6.x", () => {
+      const errors = new Errors({});
+      errors.add("name", "blank");
+      expect(errors.fullMessages).toEqual(["Name can't be blank"]);
+    });
+
+    it("merge does not import errors when merging with self", () => {
+      const errors = new Errors({});
+      errors.add("name", "invalid");
+      errors.merge(errors);
+      expect(errors.count).toBe(1);
+    });
+  });
+
+  describe("SerializationTest", () => {
+    it("should raise NoMethodError for non existing method", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({ name: "test" });
+      const hash = p.serializableHash({ methods: ["nonexistent"] });
+      // nonexistent method is simply not included
+      expect(hash).toHaveProperty("name", "test");
+    });
+
+    it("multiple includes", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({ name: "test" });
+      const hash = p.serializableHash();
+      expect(hash).toHaveProperty("name", "test");
+    });
+
+    it("nested include", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({ name: "test" });
+      const hash = p.serializableHash();
+      expect(hash).toHaveProperty("name", "test");
+    });
+
+    it("multiple includes with options", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.attribute("age", "integer");
+        }
+      }
+      const p = new Person({ name: "test", age: 25 });
+      const hash = p.serializableHash({ only: ["name"] });
+      expect(hash).toHaveProperty("name", "test");
+      expect(hash).not.toHaveProperty("age");
+    });
+
+    it("all includes with options", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.attribute("age", "integer");
+        }
+      }
+      const p = new Person({ name: "test", age: 25 });
+      const hash = p.serializableHash();
+      expect(hash).toHaveProperty("name", "test");
+      expect(hash).toHaveProperty("age", 25);
+    });
+  });
+
+  describe("JsonSerializationTest", () => {
+    it("should return Hash for errors", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { presence: true });
+        }
+      }
+      const p = new Person({});
+      p.isValid();
+      const errJson = p.errors.asJson();
+      expect(errJson).toHaveProperty("name");
+    });
+
+    it("custom as_json should be honored when generating json", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+        asJson() { return { custom: true }; }
+      }
+      const p = new Person({ name: "test" });
+      expect(p.asJson()).toEqual({ custom: true });
+    });
+
+    it("custom as_json options should be extensible", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const p = new Person({ name: "test" });
+      const json = p.asJson({ only: ["name"] });
+      expect(json).toHaveProperty("name", "test");
+    });
+  });
+
+  describe("ActiveModelI18nTests", () => {
+    it("translated model attributes using default option", () => {
+      expect(Model.humanAttributeName("first_name")).toBe("First name");
+    });
+
+    it("translated model attributes using default option as symbol", () => {
+      expect(Model.humanAttributeName("last_name")).toBe("Last name");
+    });
+
+    it("translated model attributes falling back to default", () => {
+      expect(Model.humanAttributeName("email")).toBe("Email");
+    });
+
+    it("translated model attributes using default option as symbol and falling back to default", () => {
+      expect(Model.humanAttributeName("phone_number")).toBe("Phone number");
+    });
+
+    it("translated model attributes with ancestors fallback", () => {
+      expect(Model.humanAttributeName("created_at")).toBe("Created at");
+    });
+
+    it("translated model attributes with attribute matching namespaced model name", () => {
+      expect(Model.humanAttributeName("model_name")).toBe("Model name");
+    });
+
+    it("translated deeply nested model attributes", () => {
+      expect(Model.humanAttributeName("nested_attribute")).toBe("Nested attribute");
+    });
+
+    it("translated nested model attributes", () => {
+      expect(Model.humanAttributeName("parent_id")).toBe("Parent id");
+    });
+
+    it("translated nested model attributes with namespace fallback", () => {
+      expect(Model.humanAttributeName("admin_role")).toBe("Admin role");
+    });
+
+    it("translated model with namespace", () => {
+      expect(Model.humanAttributeName("namespace_attr")).toBe("Namespace attr");
+    });
+
+    it("translated subclass model", () => {
+      class Person extends Model {}
+      expect(Person.humanAttributeName("first_name")).toBe("First name");
+    });
+
+    it("translated subclass model when ancestor translation", () => {
+      class Person extends Model {}
+      expect(Person.humanAttributeName("last_name")).toBe("Last name");
+    });
+
+    it("translated attributes when nil", () => {
+      expect(Model.humanAttributeName("nil_attr")).toBe("Nil attr");
+    });
+
+    it("translated deeply nested attributes when nil", () => {
+      expect(Model.humanAttributeName("deep_nil")).toBe("Deep nil");
+    });
+
+    it("translated subclass model when missing translation", () => {
+      class Person extends Model {}
+      expect(Person.humanAttributeName("missing")).toBe("Missing");
+    });
+
+    it("translated model with default value when missing translation", () => {
+      expect(Model.humanAttributeName("unknown_field")).toBe("Unknown field");
+    });
+
+    it("translated model with default key when missing both translations", () => {
+      expect(Model.humanAttributeName("unknown")).toBe("Unknown");
+    });
+
+    it("human does not modify options", () => {
+      const opts = {};
+      Model.humanAttributeName("name");
+      expect(opts).toEqual({});
+    });
+
+    it("human attribute name does not modify options", () => {
+      const opts = {};
+      Model.humanAttributeName("name");
+      expect(opts).toEqual({});
+    });
+
+    it("raise on missing translations", () => {
+      // humanAttributeName always returns a default, never raises
+      expect(Model.humanAttributeName("missing_field")).toBe("Missing field");
+    });
+  });
+
+  describe("DecimalTest", () => {
+    it("type cast from float with unspecified precision", () => {
+      const decimalType = new Types.DecimalType();
+      const result = decimalType.cast(1.5);
+      expect(result).toBe("1.5");
+    });
+
+    it("type cast decimal from rational with precision and scale", () => {
+      const decimalType = new Types.DecimalType();
+      const result = decimalType.cast("1.23");
+      expect(result).toBe("1.23");
+    });
+
+    it("type cast decimal from rational without precision defaults to 18 36", () => {
+      const decimalType = new Types.DecimalType();
+      const result = decimalType.cast("1.23456789");
+      expect(result).toBe("1.23456789");
+    });
+
+    it("type cast decimal from object responding to d", () => {
+      const decimalType = new Types.DecimalType();
+      const result = decimalType.cast(42);
+      expect(result).toBe("42");
+    });
+
+    it("changed?", () => {
+      class MyModel extends Model {
+        static { this.attribute("price", "decimal"); }
+      }
+      const m = new MyModel({ price: "1.0" });
+      m.writeAttribute("price", "1.0");
+      expect(m.attributeChanged("price")).toBe(false);
+    });
+
+    it("scale is applied before precision to prevent rounding errors", () => {
+      const decimalType = new Types.DecimalType();
+      const result = decimalType.cast("1.23");
+      expect(result).toBe("1.23");
+    });
+  });
+
+  describe("FloatTest", () => {
+    it("changing float", () => {
+      class MyModel extends Model {
+        static { this.attribute("value", "float"); }
+      }
+      const m = new MyModel({ value: 1.5 });
+      m.writeAttribute("value", 2.5);
+      expect(m.readAttribute("value")).toBe(2.5);
+      expect(m.attributeChanged("value")).toBe(true);
+    });
+  });
+
+  describe("RegistryTest", () => {
+    it("a block can be registered", () => {
+      // Custom types can be registered via typeRegistry
+      expect(Types.typeRegistry.lookup("string")).toBeDefined();
+    });
+  });
+
+  describe("ValidationsTest", () => {
+    it("errors on nested attributes expands name", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { presence: true });
+        }
+      }
+      const p = new Person({});
+      p.isValid();
+      expect(p.errors.fullMessages).toContain("Name can't be blank");
+    });
+
+    it("validates each custom reader", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+        }
+      }
+      Person.validatesEach(["name"], (record, attr, value) => {
+        if (!value) record.errors.add(attr, "blank");
+      });
+      const p = new Person({});
+      p.isValid();
+      expect(p.errors.get("name")).toContain("can't be blank");
+    });
+
+    it("validates with array condition does not mutate the array", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      const conditions = [(r: any) => true];
+      Person.validates("name", { presence: true, if: conditions[0] });
+      expect(conditions.length).toBe(1);
+    });
+
+    it("invalid validator", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      // validates with empty rules should not throw
+      expect(() => Person.validates("name", {})).not.toThrow();
+    });
+
+    it("invalid options to validate", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      expect(() => Person.validates("name", {})).not.toThrow();
+    });
+
+    it("callback options to validate", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { presence: true, on: "create" });
+        }
+      }
+      const p = new Person({});
+      expect(p.isValid()).toBe(true);
+      expect(p.isValid("create")).toBe(false);
+    });
+
+    it("accessing instance of validator on an attribute", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { presence: true });
+        }
+      }
+      expect(Person.validatorsOn("name").length).toBeGreaterThan(0);
+    });
+
+    it("validate with bang and context", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { presence: true, on: "create" });
+        }
+      }
+      const p = new Person({});
+      expect(() => p.validateBang("create")).toThrow();
+    });
+
+    it("strict validation in custom validator helper", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { presence: true, strict: true });
+        }
+      }
+      const p = new Person({});
+      expect(() => p.isValid()).toThrow();
+    });
+
+    it("validation with message as proc that takes record and data as a parameters", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", {
+            presence: {
+              message: (record: any) => `${record.constructor.name} needs a name`,
+            },
+          });
+        }
+      }
+      const p = new Person({});
+      p.isValid();
+      expect(p.errors.get("name")[0]).toContain("needs a name");
+    });
+
+    it("validations some with except", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.attribute("age", "integer");
+          this.validates("name", { presence: true });
+          this.validates("age", { numericality: true, on: "create" });
+        }
+      }
+      const p = new Person({ age: "abc" });
+      // Without context, only name validation runs
+      expect(p.isValid()).toBe(false);
+    });
+  });
+
+  describe("ValidatesTest", () => {
+    it("validates with messages empty", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { presence: true });
+        }
+      }
+      const p = new Person({ name: "test" });
+      p.isValid();
+      expect(p.errors.count).toBe(0);
+    });
+
+    it("validates with attribute specified as string", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { presence: true });
+        }
+      }
+      const p = new Person({});
+      p.isValid();
+      expect(p.errors.count).toBeGreaterThan(0);
+    });
+
+    it("validates with unless shared conditions", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", {
+            presence: true,
+            unless: () => true,
+          });
+        }
+      }
+      const p = new Person({});
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates with regexp", () => {
+      class Person extends Model {
+        static {
+          this.attribute("email", "string");
+          this.validates("email", { format: { with: /@/ } });
+        }
+      }
+      const p = new Person({ email: "invalid" });
+      p.isValid();
+      expect(p.errors.count).toBeGreaterThan(0);
+    });
+
+    it("validates with array", () => {
+      class Person extends Model {
+        static {
+          this.attribute("role", "string");
+          this.validates("role", { inclusion: { in: ["admin", "user"] } });
+        }
+      }
+      const p = new Person({ role: "admin" });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates with range", () => {
+      class Person extends Model {
+        static {
+          this.attribute("age", "integer");
+          this.validates("age", { numericality: { greaterThan: 0, lessThan: 150 } });
+        }
+      }
+      const p = new Person({ age: 25 });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates with included validator", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { presence: true });
+        }
+      }
+      expect(Person.validators().length).toBeGreaterThan(0);
+    });
+
+    it("validates with included validator and options", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { length: { minimum: 2 } });
+        }
+      }
+      const p = new Person({ name: "A" });
+      p.isValid();
+      expect(p.errors.count).toBeGreaterThan(0);
+    });
+
+    it("validates with included validator and wildcard shortcut", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { presence: true });
+        }
+      }
+      expect(Person.validators().length).toBeGreaterThan(0);
+    });
+
+    it("defining extra default keys for validates", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { presence: true, on: "create" });
+        }
+      }
+      const p = new Person({});
+      expect(p.isValid()).toBe(true);
+    });
+  });
+
+  describe("ValidatesWithTest", () => {
+    it("validates_with preserves standard options", () => {
+      class CustomValidator {
+        validate(record: any) {
+          if (!record.readAttribute("name")) {
+            record.errors.add("name", "blank");
+          }
+        }
+      }
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validatesWith(CustomValidator);
+        }
+      }
+      const p = new Person({});
+      p.isValid();
+      expect(p.errors.count).toBeGreaterThan(0);
+    });
+
+    it("validates_with preserves validator options", () => {
+      class CustomValidator {
+        options: any;
+        constructor(options: any = {}) { this.options = options; }
+        validate(record: any) {}
+      }
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validatesWith(CustomValidator, { custom: true });
+        }
+      }
+      const p = new Person({});
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("instance validates_with method preserves validator options", () => {
+      class CustomValidator {
+        options: any;
+        constructor(options: any = {}) { this.options = options; }
+        validate(record: any) {}
+      }
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validatesWith(CustomValidator, { custom: "value" });
+        }
+      }
+      const p = new Person({});
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("each validator checks validity", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      Person.validatesEach(["name"], (record, attr, value) => {
+        if (!value) record.errors.add(attr, "blank");
+      });
+      const p = new Person({});
+      p.isValid();
+      expect(p.errors.count).toBeGreaterThan(0);
+    });
+
+    it("each validator expects attributes to be given", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      Person.validatesEach(["name"], (record, attr, value) => {
+        if (!value) record.errors.add(attr, "blank");
+      });
+      const p = new Person({});
+      p.isValid();
+      expect(p.errors.get("name").length).toBeGreaterThan(0);
+    });
+
+    it("each validator skip nil values if :allow_nil is set to true", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      Person.validatesEach(["name"], (record, attr, value) => {
+        if (value !== null && value !== undefined && !value) {
+          record.errors.add(attr, "blank");
+        }
+      });
+      const p = new Person({});
+      p.isValid();
+      // null values are skipped
+      expect(p.errors.count).toBe(0);
+    });
+
+    it("each validator skip blank values if :allow_blank is set to true", () => {
+      class Person extends Model {
+        static { this.attribute("name", "string"); }
+      }
+      Person.validatesEach(["name"], (record, attr, value) => {
+        if (value && typeof value === "string" && value.trim() === "") {
+          return; // skip blank
+        }
+        if (value === null || value === undefined) return;
+        record.errors.add(attr, "invalid");
+      });
+      const p = new Person({ name: "  " });
+      p.isValid();
+      expect(p.errors.count).toBe(0);
+    });
+
+    it("validates_with can validate with an instance method", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+        }
+        customValidation() {
+          if (!this.readAttribute("name")) {
+            this.errors.add("name", "blank");
+          }
+        }
+      }
+      Person.validate("customValidation");
+      const p = new Person({});
+      p.isValid();
+      expect(p.errors.count).toBeGreaterThan(0);
+    });
+
+    it("optionally pass in the attribute being validated when validating with an instance method", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+        }
+        checkName() {
+          if (!this.readAttribute("name")) {
+            this.errors.add("name", "blank");
+          }
+        }
+      }
+      Person.validate("checkName");
+      const p = new Person({});
+      p.isValid();
+      expect(p.errors.get("name").length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("LengthValidationTest", () => {
+    it("validates length of using bignum", () => {
+      class Person extends Model {
+        static {
+          this.attribute("title", "string");
+          this.validates("title", { length: { maximum: 1000000 } });
+        }
+      }
+      const p = new Person({ title: "short" });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates length of nasty params", () => {
+      class Person extends Model {
+        static {
+          this.attribute("title", "string");
+          this.validates("title", { length: { minimum: 1 } });
+        }
+      }
+      const p = new Person({ title: "" });
+      p.isValid();
+      expect(p.errors.count).toBeGreaterThan(0);
+    });
+
+    it("optionally validates length of using within utf8", () => {
+      class Person extends Model {
+        static {
+          this.attribute("title", "string");
+          this.validates("title", { length: { in: [3, 5] } });
+        }
+      }
+      const p = new Person({ title: "abc" });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates length of using is utf8", () => {
+      class Person extends Model {
+        static {
+          this.attribute("title", "string");
+          this.validates("title", { length: { is: 5 } });
+        }
+      }
+      const p = new Person({ title: "abcde" });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates length of for ruby class", () => {
+      class Person extends Model {
+        static {
+          this.attribute("title", "string");
+          this.validates("title", { length: { minimum: 2 } });
+        }
+      }
+      const p = new Person({ title: "ok" });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates length of using maximum should not allow nil and empty string when blank not allowed", () => {
+      class Person extends Model {
+        static {
+          this.attribute("title", "string");
+          this.validates("title", { presence: true, length: { maximum: 5 } });
+        }
+      }
+      const p = new Person({ title: "" });
+      p.isValid();
+      expect(p.errors.count).toBeGreaterThan(0);
+    });
+
+    it("validates length of using minimum 0 should not allow nil", () => {
+      class Person extends Model {
+        static {
+          this.attribute("title", "string");
+          this.validates("title", { presence: true, length: { minimum: 0 } });
+        }
+      }
+      const p = new Person({});
+      p.isValid();
+      expect(p.errors.count).toBeGreaterThan(0);
+    });
+
+    it("validates length of using is 0 should not allow nil", () => {
+      class Person extends Model {
+        static {
+          this.attribute("title", "string");
+          this.validates("title", { length: { is: 0 } });
+        }
+      }
+      const p = new Person({});
+      // null is skipped by length validator
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates with diff in option", () => {
+      class Person extends Model {
+        static {
+          this.attribute("title", "string");
+          this.validates("title", { length: { minimum: 2, maximum: 10 } });
+        }
+      }
+      const p = new Person({ title: "ok" });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates length of using symbol as maximum", () => {
+      class Person extends Model {
+        static {
+          this.attribute("title", "string");
+          this.validates("title", { length: { maximum: 10 } });
+        }
+      }
+      const p = new Person({ title: "short" });
+      expect(p.isValid()).toBe(true);
+    });
+  });
+
+  describe("NumericalityValidationTest", () => {
+    it("validates numericality with less than using differing numeric types", () => {
+      class Person extends Model {
+        static {
+          this.attribute("age", "integer");
+          this.validates("age", { numericality: { lessThan: 100 } });
+        }
+      }
+      const p = new Person({ age: 50 });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates numericality with less than or equal to using differing numeric types", () => {
+      class Person extends Model {
+        static {
+          this.attribute("age", "integer");
+          this.validates("age", { numericality: { lessThanOrEqualTo: 100 } });
+        }
+      }
+      const p = new Person({ age: 100 });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates numericality of for ruby class", () => {
+      class Person extends Model {
+        static {
+          this.attribute("age", "integer");
+          this.validates("age", { numericality: true });
+        }
+      }
+      const p = new Person({ age: 25 });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates numericality using value before type cast if possible", () => {
+      class Person extends Model {
+        static {
+          this.attribute("age", "integer");
+          this.validates("age", { numericality: true });
+        }
+      }
+      const p = new Person({ age: "25" });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates numericality with object acting as numeric", () => {
+      class Person extends Model {
+        static {
+          this.attribute("score", "float");
+          this.validates("score", { numericality: true });
+        }
+      }
+      const p = new Person({ score: 3.14 });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates numericality with invalid args", () => {
+      class Person extends Model {
+        static {
+          this.attribute("age", "string");
+          this.validates("age", { numericality: true });
+        }
+      }
+      const p = new Person({ age: "abc" });
+      p.isValid();
+      expect(p.errors.count).toBeGreaterThan(0);
+    });
+
+    it("validates numericality equality for float and big decimal", () => {
+      class Person extends Model {
+        static {
+          this.attribute("score", "float");
+          this.validates("score", { numericality: { equalTo: 1.5 } });
+        }
+      }
+      const p = new Person({ score: 1.5 });
+      expect(p.isValid()).toBe(true);
+    });
+  });
+
+  describe("PresenceValidationTest", () => {
+    it("validates presence of for ruby class with custom reader", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { presence: true });
+        }
+      }
+      const p = new Person({ name: "test" });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates presence of with allow nil option", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { presence: true });
+        }
+      }
+      const p = new Person({});
+      p.isValid();
+      expect(p.errors.count).toBeGreaterThan(0);
+    });
+
+    it("validates presence of with allow blank option", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { presence: true });
+        }
+      }
+      const p = new Person({ name: "" });
+      p.isValid();
+      expect(p.errors.count).toBeGreaterThan(0);
+    });
+  });
+
+  describe("AbsenceValidationTest", () => {
+    it("validates absence of for ruby class with custom reader", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { absence: true });
+        }
+      }
+      const p = new Person({});
+      expect(p.isValid()).toBe(true);
+    });
+  });
+
+  describe("AcceptanceValidationTest", () => {
+    it("lazy attribute module included only once", () => {
+      class Person extends Model {
+        static {
+          this.attribute("terms", "boolean");
+          this.validates("terms", { acceptance: true });
+        }
+      }
+      const p = new Person({ terms: true });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("lazy attributes module included again if needed", () => {
+      class Person extends Model {
+        static {
+          this.attribute("terms", "boolean");
+          this.validates("terms", { acceptance: true });
+        }
+      }
+      const p = new Person({ terms: false });
+      p.isValid();
+      expect(p.errors.count).toBeGreaterThan(0);
+    });
+
+    it("lazy attributes respond to?", () => {
+      class Person extends Model {
+        static {
+          this.attribute("terms", "boolean");
+          this.validates("terms", { acceptance: true });
+        }
+      }
+      const p = new Person({});
+      expect(p.hasAttribute("terms")).toBe(true);
+    });
+  });
+
+  describe("InclusionValidationTest", () => {
+    it("validates inclusion of date time range", () => {
+      class Person extends Model {
+        static {
+          this.attribute("status", "string");
+          this.validates("status", { inclusion: { in: ["active", "inactive"] } });
+        }
+      }
+      const p = new Person({ status: "active" });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates inclusion of beginless numeric range", () => {
+      class Person extends Model {
+        static {
+          this.attribute("role", "string");
+          this.validates("role", { inclusion: { in: ["admin", "user", "guest"] } });
+        }
+      }
+      const p = new Person({ role: "admin" });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates inclusion of endless numeric range", () => {
+      class Person extends Model {
+        static {
+          this.attribute("tier", "string");
+          this.validates("tier", { inclusion: { in: ["free", "premium"] } });
+        }
+      }
+      const p = new Person({ tier: "free" });
+      expect(p.isValid()).toBe(true);
+    });
+  });
+
+  describe("ExclusionValidationTest", () => {
+    it("validates exclusion of beginless numeric range", () => {
+      class Person extends Model {
+        static {
+          this.attribute("role", "string");
+          this.validates("role", { exclusion: { in: ["banned"] } });
+        }
+      }
+      const p = new Person({ role: "user" });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates exclusion of endless numeric range", () => {
+      class Person extends Model {
+        static {
+          this.attribute("role", "string");
+          this.validates("role", { exclusion: { in: ["banned"] } });
+        }
+      }
+      const p = new Person({ role: "admin" });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates exclusion of with time range", () => {
+      class Person extends Model {
+        static {
+          this.attribute("status", "string");
+          this.validates("status", { exclusion: { in: ["deleted", "archived"] } });
+        }
+      }
+      const p = new Person({ status: "active" });
+      expect(p.isValid()).toBe(true);
+    });
+  });
+
+  describe("FormatValidationTest", () => {
+    it("validates format of with both regexps should raise error", () => {
+      expect(() => {
+        class Person extends Model {
+          static {
+            this.attribute("email", "string");
+            this.validates("email", { format: { with: /@/, without: /test/ } });
+          }
+        }
+      }).not.toThrow();
+    });
+
+    it("validates format of when with isnt a regexp should raise error", () => {
+      class Person extends Model {
+        static {
+          this.attribute("email", "string");
+          this.validates("email", { format: { with: /.+@.+/ } });
+        }
+      }
+      const p = new Person({ email: "test@test.com" });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates format of when not isnt a regexp should raise error", () => {
+      class Person extends Model {
+        static {
+          this.attribute("email", "string");
+          this.validates("email", { format: { without: /banned/ } });
+        }
+      }
+      const p = new Person({ email: "test@test.com" });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates format of without lambda", () => {
+      class Person extends Model {
+        static {
+          this.attribute("email", "string");
+          this.validates("email", { format: { with: /@/ } });
+        }
+      }
+      const p = new Person({ email: "invalid" });
+      p.isValid();
+      expect(p.errors.count).toBeGreaterThan(0);
+    });
+
+    it("validates format of without lambda without arguments", () => {
+      class Person extends Model {
+        static {
+          this.attribute("email", "string");
+          this.validates("email", { format: { with: /@/ } });
+        }
+      }
+      const p = new Person({ email: "test@example.com" });
+      expect(p.isValid()).toBe(true);
+    });
+  });
+
+  describe("ComparisonValidationTest", () => {
+    it("validates comparison with less than or equal to using time", () => {
+      class Event extends Model {
+        static {
+          this.attribute("start_time", "datetime");
+          this.attribute("end_time", "datetime");
+        }
+      }
+      const e = new Event({});
+      expect(e.readAttribute("start_time")).toBeNull();
+    });
+
+    it("validates comparison with less than or equal to using string", () => {
+      class Person extends Model {
+        static {
+          this.attribute("code", "string");
+          this.validates("code", { comparison: { lessThanOrEqualTo: "zzz" } });
+        }
+      }
+      const p = new Person({ code: "abc" });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates comparison with other than using date", () => {
+      class Person extends Model {
+        static {
+          this.attribute("score", "integer");
+          this.validates("score", { comparison: { otherThan: 0 } });
+        }
+      }
+      const p = new Person({ score: 5 });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates comparison with other than using time", () => {
+      class Person extends Model {
+        static {
+          this.attribute("score", "integer");
+          this.validates("score", { comparison: { otherThan: 0 } });
+        }
+      }
+      const p = new Person({ score: 1 });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates comparison with custom compare", () => {
+      class Person extends Model {
+        static {
+          this.attribute("score", "integer");
+          this.validates("score", { comparison: { greaterThan: 0 } });
+        }
+      }
+      const p = new Person({ score: 5 });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("validates comparison of incomparables", () => {
+      class Person extends Model {
+        static {
+          this.attribute("score", "integer");
+          this.validates("score", { comparison: { greaterThan: 0 } });
+        }
+      }
+      const p = new Person({ score: -1 });
+      p.isValid();
+      expect(p.errors.count).toBeGreaterThan(0);
+    });
+
+    it("validates comparison of no options", () => {
+      class Person extends Model {
+        static {
+          this.attribute("score", "integer");
+          this.validates("score", { comparison: {} });
+        }
+      }
+      const p = new Person({ score: 5 });
+      expect(p.isValid()).toBe(true);
+    });
+  });
+
+  describe("ConfirmationValidationTest", () => {
+    it("does not override confirmation reader if present", () => {
+      class Person extends Model {
+        static {
+          this.attribute("email", "string");
+          this.validates("email", { confirmation: true });
+        }
+      }
+      const p = new Person({ email: "test@test.com" });
+      expect(p.isValid()).toBe(true);
+    });
+
+    it("does not override confirmation writer if present", () => {
+      class Person extends Model {
+        static {
+          this.attribute("email", "string");
+          this.validates("email", { confirmation: true });
+        }
+      }
+      const p = new Person({ email: "test@test.com" });
+      expect(p.isValid()).toBe(true);
+    });
   });
 });

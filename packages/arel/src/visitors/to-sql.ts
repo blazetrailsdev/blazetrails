@@ -17,6 +17,12 @@ export class ToSql implements NodeVisitor<SQLString> {
     return this.collector.value;
   }
 
+  compileWithCollector(node: Node): SQLString {
+    this.collector = new SQLString();
+    this.visit(node);
+    return this.collector;
+  }
+
   visit(node: Node): SQLString {
     if (node instanceof Nodes.SelectStatement) return this.visitSelectStatement(node);
     if (node instanceof Nodes.SelectCore) return this.visitSelectCore(node);
@@ -110,6 +116,7 @@ export class ToSql implements NodeVisitor<SQLString> {
     if (node instanceof Nodes.Case) return this.visitCase(node);
     if (node instanceof Nodes.Extract) return this.visitExtract(node);
     if (node instanceof Nodes.InfixOperation) return this.visitInfixOperation(node);
+    if (node instanceof Nodes.BoundSqlLiteral) return this.visitBoundSqlLiteral(node);
     if (node instanceof Nodes.BindParam) return this.visitBindParam(node);
     if (node instanceof Nodes.Concat) return this.visitConcat(node);
 
@@ -225,6 +232,7 @@ export class ToSql implements NodeVisitor<SQLString> {
   }
 
   private visitInsertStatement(node: Nodes.InsertStatement): SQLString {
+    this.collector.retryable = false;
     this.collector.append("INSERT INTO ");
     if (node.relation) this.visit(node.relation);
 
@@ -248,6 +256,7 @@ export class ToSql implements NodeVisitor<SQLString> {
   }
 
   private visitUpdateStatement(node: Nodes.UpdateStatement): SQLString {
+    this.collector.retryable = false;
     this.collector.append("UPDATE ");
     if (node.relation) this.visit(node.relation);
 
@@ -278,6 +287,7 @@ export class ToSql implements NodeVisitor<SQLString> {
   }
 
   private visitDeleteStatement(node: Nodes.DeleteStatement): SQLString {
+    this.collector.retryable = false;
     this.collector.append("DELETE FROM ");
     if (node.relation) this.visit(node.relation);
 
@@ -560,6 +570,7 @@ export class ToSql implements NodeVisitor<SQLString> {
   // -- Functions --
 
   private visitNamedFunction(node: Nodes.NamedFunction): SQLString {
+    this.collector.retryable = false;
     this.collector.append(node.name);
     this.collector.append("(");
     if (node.distinct) this.collector.append("DISTINCT ");
@@ -692,6 +703,16 @@ export class ToSql implements NodeVisitor<SQLString> {
       this.collector.append(this.quote(node.value));
     } else {
       this.collector.append("?");
+    }
+    return this.collector;
+  }
+
+  // -- BoundSqlLiteral --
+
+  private visitBoundSqlLiteral(node: Nodes.BoundSqlLiteral): SQLString {
+    this.collector.retryable = false;
+    for (const part of node.parts) {
+      this.visit(part);
     }
     return this.collector;
   }
@@ -935,6 +956,9 @@ export class ToSql implements NodeVisitor<SQLString> {
   }
 
   private visitSqlLiteral(node: Nodes.SqlLiteral): SQLString {
+    if (!(node as any).retryableFlag) {
+      this.collector.retryable = false;
+    }
     this.collector.append(node.value);
     return this.collector;
   }

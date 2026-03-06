@@ -49,8 +49,7 @@ query.toSql();
   parity.
 - **Type-safe, string-friendly** — Typed column references are preferred, but
   the string form is always supported for parity with Rails.
-- **Incremental** — Built in phases, each producing a usable, tested subset.
-  See the [roadmap](docs/ROADMAP.md).
+- **Incremental** — Built to match the behaviors validated by the Rails test suite.
 
 ## Project Status
 
@@ -72,8 +71,6 @@ This project is actively developed. We measure progress by comparing our API sur
 | `activerecord` | 13.7% | 742 / 5428 |
 | **Total** | **30.8%** | **2092 / 6791** |
 
-See the [roadmap](docs/ROADMAP.md) for detailed phase information.
-
 ## Development
 
 ```bash
@@ -94,9 +91,6 @@ packages/
   arel/           — SQL AST and query building
   activemodel/    — Validations, callbacks, dirty tracking, serialization
   activerecord/   — ORM layer (persistence, querying, associations)
-docs/
-  ROADMAP.md      — Phase overview and progress
-  phases/         — Detailed phase specs (100, 200, 300, ...)
 ```
 
 ## License

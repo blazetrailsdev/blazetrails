@@ -69,6 +69,19 @@ export class Model {
       this._attributeDefinitions = new Map(this._attributeDefinitions);
     }
     this._attributeDefinitions.set(name, { name, type, defaultValue });
+
+    // Auto-define property getter/setter so instances can access attributes directly (e.g. record.title)
+    if (!Object.prototype.hasOwnProperty.call(this.prototype, name)) {
+      Object.defineProperty(this.prototype, name, {
+        get(this: Model) {
+          return this.readAttribute(name);
+        },
+        set(this: Model, value: unknown) {
+          this.writeAttribute(name, value);
+        },
+        configurable: true,
+      });
+    }
   }
 
   static attributeNames(): string[] {

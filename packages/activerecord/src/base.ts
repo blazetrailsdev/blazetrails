@@ -754,6 +754,15 @@ export class Base extends Model {
   }
 
   /**
+   * Shorthand for all().from(source).
+   *
+   * Mirrors: ActiveRecord::Base.from
+   */
+  static from(source: string): any {
+    return this.all().from(source);
+  }
+
+  /**
    * Shorthand for all().where(conditions).
    *
    * Mirrors: ActiveRecord::Base.where

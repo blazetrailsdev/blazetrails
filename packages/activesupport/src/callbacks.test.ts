@@ -12,10 +12,10 @@ describe("Callbacks", () => {
     it("runs before callbacks in order", () => {
       const target = { log: [] as string[] };
       defineCallbacks(target, "save");
-      setCallback(target, "save", "before", (t) => {
+      setCallback(target, "save", "before", (t: any) => {
         t.log.push("before1");
       });
-      setCallback(target, "save", "before", (t) => {
+      setCallback(target, "save", "before", (t: any) => {
         t.log.push("before2");
       });
 
@@ -29,10 +29,10 @@ describe("Callbacks", () => {
     it("runs after callbacks in reverse order", () => {
       const target = { log: [] as string[] };
       defineCallbacks(target, "save");
-      setCallback(target, "save", "after", (t) => {
+      setCallback(target, "save", "after", (t: any) => {
         t.log.push("after1");
       });
-      setCallback(target, "save", "after", (t) => {
+      setCallback(target, "save", "after", (t: any) => {
         t.log.push("after2");
       });
 
@@ -46,7 +46,7 @@ describe("Callbacks", () => {
     it("runs around callbacks wrapping the block", () => {
       const target = { log: [] as string[] };
       defineCallbacks(target, "save");
-      setCallback(target, "save", "around", (t, next) => {
+      setCallback(target, "save", "around", (t: any, next: () => void) => {
         t.log.push("around-before");
         next();
         t.log.push("around-after");
@@ -62,13 +62,13 @@ describe("Callbacks", () => {
     it("runs before, around, and after in correct order", () => {
       const target = { log: [] as string[] };
       defineCallbacks(target, "save");
-      setCallback(target, "save", "before", (t) => t.log.push("before"));
-      setCallback(target, "save", "around", (t, next) => {
+      setCallback(target, "save", "before", (t: any) => t.log.push("before"));
+      setCallback(target, "save", "around", (t: any, next: () => void) => {
         t.log.push("around-pre");
         next();
         t.log.push("around-post");
       });
-      setCallback(target, "save", "after", (t) => t.log.push("after"));
+      setCallback(target, "save", "after", (t: any) => t.log.push("after"));
 
       runCallbacks(target, "save", () => target.log.push("block"));
 
@@ -87,7 +87,7 @@ describe("Callbacks", () => {
       const target = { log: [] as string[] };
       defineCallbacks(target, "save");
       setCallback(target, "save", "before", () => false);
-      setCallback(target, "save", "before", (t) => {
+      setCallback(target, "save", "before", (t: any) => {
         t.log.push("should-not-run");
       });
 
@@ -115,7 +115,7 @@ describe("Callbacks", () => {
     it("around callback can halt by not calling next", () => {
       const target = { log: [] as string[] };
       defineCallbacks(target, "save");
-      setCallback(target, "save", "around", (t) => {
+      setCallback(target, "save", "around", (t: any) => {
         t.log.push("halted");
         // not calling next
       });
@@ -132,7 +132,7 @@ describe("Callbacks", () => {
     it("respects :if condition", () => {
       const target = { log: [] as string[], shouldRun: false };
       defineCallbacks(target, "save");
-      setCallback(target, "save", "before", (t) => t.log.push("conditional"), {
+      setCallback(target, "save", "before", (t: any) => t.log.push("conditional"), {
         if: (t) => t.shouldRun,
       });
 
@@ -147,7 +147,7 @@ describe("Callbacks", () => {
     it("respects :unless condition", () => {
       const target = { log: [] as string[], skip: true };
       defineCallbacks(target, "save");
-      setCallback(target, "save", "before", (t) => t.log.push("run"), {
+      setCallback(target, "save", "before", (t: any) => t.log.push("run"), {
         unless: (t) => t.skip,
       });
 
@@ -162,7 +162,7 @@ describe("Callbacks", () => {
     it("supports array of :if conditions", () => {
       const target = { log: [] as string[], a: true, b: false };
       defineCallbacks(target, "save");
-      setCallback(target, "save", "before", (t) => t.log.push("run"), {
+      setCallback(target, "save", "before", (t: any) => t.log.push("run"), {
         if: [(t) => t.a, (t) => t.b],
       });
 
@@ -179,8 +179,8 @@ describe("Callbacks", () => {
     it("prepends callback to front of chain", () => {
       const target = { log: [] as string[] };
       defineCallbacks(target, "save");
-      setCallback(target, "save", "before", (t) => t.log.push("first"));
-      setCallback(target, "save", "before", (t) => t.log.push("prepended"), {
+      setCallback(target, "save", "before", (t: any) => t.log.push("first"));
+      setCallback(target, "save", "before", (t: any) => t.log.push("prepended"), {
         prepend: true,
       });
 
@@ -195,7 +195,7 @@ describe("Callbacks", () => {
       defineCallbacks(target, "save");
       const cb = (t: any) => t.log.push("skipped");
       setCallback(target, "save", "before", cb);
-      setCallback(target, "save", "before", (t) => t.log.push("kept"));
+      setCallback(target, "save", "before", (t: any) => t.log.push("kept"));
 
       skipCallback(target, "save", "before", cb);
       runCallbacks(target, "save");
@@ -207,8 +207,8 @@ describe("Callbacks", () => {
     it("removes all callbacks from a chain", () => {
       const target = { log: [] as string[] };
       defineCallbacks(target, "save");
-      setCallback(target, "save", "before", (t) => t.log.push("a"));
-      setCallback(target, "save", "after", (t) => t.log.push("b"));
+      setCallback(target, "save", "before", (t: any) => t.log.push("a"));
+      setCallback(target, "save", "after", (t: any) => t.log.push("b"));
 
       resetCallbacks(target, "save");
       runCallbacks(target, "save", () => target.log.push("block"));
@@ -236,8 +236,8 @@ describe("Callbacks", () => {
     it("works without a block", () => {
       const target = { log: [] as string[] };
       defineCallbacks(target, "save");
-      setCallback(target, "save", "before", (t) => t.log.push("before"));
-      setCallback(target, "save", "after", (t) => t.log.push("after"));
+      setCallback(target, "save", "before", (t: any) => t.log.push("before"));
+      setCallback(target, "save", "after", (t: any) => t.log.push("after"));
 
       runCallbacks(target, "save");
       expect(target.log).toEqual(["before", "after"]);

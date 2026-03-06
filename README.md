@@ -2,7 +2,7 @@
 
 TypeScript packages that mirror the Ruby on Rails API.
 
-The ultimate goal of this project is to be **100% API compatible with all of Rails**.
+The ultimate goal of this project is to be **100% API compatible with all of Rails**, matching the behavior **test for test**.
 
 If you can read the [Rails API docs](https://api.rubyonrails.org/), you already
 know how to use this. Class names, method signatures, and behavior are designed

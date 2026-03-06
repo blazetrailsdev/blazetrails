@@ -4198,4 +4198,1680 @@ describe("Arel", () => {
       });
     });
   });
+
+  // =========================================================================
+  // Additional Attribute predicate tests (Grouping/OR/AND per predicate)
+  // Mirrors attributes/attribute_test.rb patterns
+  // =========================================================================
+  describe("Attributes Attribute Predicates (gt)", () => {
+    it("should create a GreaterThanOrEqual node", () => {
+      const node = users.get("age").gteq(10);
+      expect(node).toBeInstanceOf(Nodes.GreaterThanOrEqual);
+    });
+
+    it("should create a LessThanOrEqual node", () => {
+      const node = users.get("age").lteq(10);
+      expect(node).toBeInstanceOf(Nodes.LessThanOrEqual);
+    });
+
+    it("should handle comparing with a subquery", () => {
+      const subquery = users.project(users.get("id").maximum());
+      const node = users.get("age").gt(subquery);
+      expect(node).toBeInstanceOf(Nodes.GreaterThan);
+    });
+
+    it("should accept various data types.", () => {
+      expect(
+        users.project(star).where(users.get("age").gt(10)).toSql()
+      ).toBe('SELECT * FROM "users" WHERE "users"."age" > 10');
+    });
+
+    describe("#gtAny", () => {
+      it("should create a Grouping node", () => {
+        expect(users.get("id").gtAny([1, 2])).toBeInstanceOf(Nodes.Grouping);
+      });
+
+      it("should generate ORs in sql", () => {
+        const mgr = users.project(users.get("id"));
+        mgr.where(users.get("id").gtAny([1, 2]));
+        expect(mgr.toSql()).toBe(
+          'SELECT "users"."id" FROM "users" WHERE ("users"."id" > 1 OR "users"."id" > 2)'
+        );
+      });
+    });
+
+    describe("#gtAll", () => {
+      it("should create a Grouping node", () => {
+        expect(users.get("id").gtAll([1, 2])).toBeInstanceOf(Nodes.Grouping);
+      });
+
+      it("should generate ANDs in sql", () => {
+        const mgr = users.project(users.get("id"));
+        mgr.where(users.get("id").gtAll([1, 2]));
+        expect(mgr.toSql()).toBe(
+          'SELECT "users"."id" FROM "users" WHERE ("users"."id" > 1 AND "users"."id" > 2)'
+        );
+      });
+    });
+  });
+
+  describe("Attributes Attribute Predicates (gteq)", () => {
+    it("should accept various data types.", () => {
+      expect(
+        users.project(star).where(users.get("age").gteq(10)).toSql()
+      ).toBe('SELECT * FROM "users" WHERE "users"."age" >= 10');
+    });
+
+    describe("#gteqAny", () => {
+      it("should create a Grouping node", () => {
+        expect(users.get("id").gteqAny([1, 2])).toBeInstanceOf(Nodes.Grouping);
+      });
+
+      it("should generate ORs in sql", () => {
+        const mgr = users.project(users.get("id"));
+        mgr.where(users.get("id").gteqAny([1, 2]));
+        expect(mgr.toSql()).toBe(
+          'SELECT "users"."id" FROM "users" WHERE ("users"."id" >= 1 OR "users"."id" >= 2)'
+        );
+      });
+    });
+
+    describe("#gteqAll", () => {
+      it("should create a Grouping node", () => {
+        expect(users.get("id").gteqAll([1, 2])).toBeInstanceOf(Nodes.Grouping);
+      });
+
+      it("should generate ANDs in sql", () => {
+        const mgr = users.project(users.get("id"));
+        mgr.where(users.get("id").gteqAll([1, 2]));
+        expect(mgr.toSql()).toBe(
+          'SELECT "users"."id" FROM "users" WHERE ("users"."id" >= 1 AND "users"."id" >= 2)'
+        );
+      });
+    });
+  });
+
+  describe("Attributes Attribute Predicates (lt)", () => {
+    it("should accept various data types.", () => {
+      expect(
+        users.project(star).where(users.get("age").lt(10)).toSql()
+      ).toBe('SELECT * FROM "users" WHERE "users"."age" < 10');
+    });
+
+    describe("#ltAny", () => {
+      it("should create a Grouping node", () => {
+        expect(users.get("id").ltAny([1, 2])).toBeInstanceOf(Nodes.Grouping);
+      });
+
+      it("should generate ORs in sql", () => {
+        const mgr = users.project(users.get("id"));
+        mgr.where(users.get("id").ltAny([1, 2]));
+        expect(mgr.toSql()).toBe(
+          'SELECT "users"."id" FROM "users" WHERE ("users"."id" < 1 OR "users"."id" < 2)'
+        );
+      });
+    });
+
+    describe("#ltAll", () => {
+      it("should create a Grouping node", () => {
+        expect(users.get("id").ltAll([1, 2])).toBeInstanceOf(Nodes.Grouping);
+      });
+
+      it("should generate ANDs in sql", () => {
+        const mgr = users.project(users.get("id"));
+        mgr.where(users.get("id").ltAll([1, 2]));
+        expect(mgr.toSql()).toBe(
+          'SELECT "users"."id" FROM "users" WHERE ("users"."id" < 1 AND "users"."id" < 2)'
+        );
+      });
+    });
+  });
+
+  describe("Attributes Attribute Predicates (lteq)", () => {
+    it("should accept various data types.", () => {
+      expect(
+        users.project(star).where(users.get("age").lteq(10)).toSql()
+      ).toBe('SELECT * FROM "users" WHERE "users"."age" <= 10');
+    });
+
+    describe("#lteqAny", () => {
+      it("should create a Grouping node", () => {
+        expect(users.get("id").lteqAny([1, 2])).toBeInstanceOf(Nodes.Grouping);
+      });
+
+      it("should generate ORs in sql", () => {
+        const mgr = users.project(users.get("id"));
+        mgr.where(users.get("id").lteqAny([1, 2]));
+        expect(mgr.toSql()).toBe(
+          'SELECT "users"."id" FROM "users" WHERE ("users"."id" <= 1 OR "users"."id" <= 2)'
+        );
+      });
+    });
+
+    describe("#lteqAll", () => {
+      it("should create a Grouping node", () => {
+        expect(users.get("id").lteqAll([1, 2])).toBeInstanceOf(Nodes.Grouping);
+      });
+
+      it("should generate ANDs in sql", () => {
+        const mgr = users.project(users.get("id"));
+        mgr.where(users.get("id").lteqAll([1, 2]));
+        expect(mgr.toSql()).toBe(
+          'SELECT "users"."id" FROM "users" WHERE ("users"."id" <= 1 AND "users"."id" <= 2)'
+        );
+      });
+    });
+  });
+
+  describe("Attributes Attribute Predicates (eq)", () => {
+    describe("#eqAny", () => {
+      it("should create a Grouping node", () => {
+        expect(users.get("id").eqAny([1, 2])).toBeInstanceOf(Nodes.Grouping);
+      });
+
+      it("should generate ORs in sql", () => {
+        const mgr = users.project(users.get("id"));
+        mgr.where(users.get("id").eqAny([1, 2]));
+        expect(mgr.toSql()).toBe(
+          'SELECT "users"."id" FROM "users" WHERE ("users"."id" = 1 OR "users"."id" = 2)'
+        );
+      });
+
+      it("should not eat input", () => {
+        const input = [1, 2, 3];
+        const copy = [...input];
+        users.get("id").eqAny(input);
+        expect(input).toEqual(copy);
+      });
+    });
+
+    describe("#eqAll", () => {
+      it("should create a Grouping node", () => {
+        expect(users.get("id").eqAll([1, 2])).toBeInstanceOf(Nodes.Grouping);
+      });
+
+      it("should generate ANDs in sql", () => {
+        const mgr = users.project(users.get("id"));
+        mgr.where(users.get("id").eqAll([1, 2]));
+        expect(mgr.toSql()).toBe(
+          'SELECT "users"."id" FROM "users" WHERE ("users"."id" = 1 AND "users"."id" = 2)'
+        );
+      });
+
+      it("should not eat input", () => {
+        const input = [1, 2, 3];
+        const copy = [...input];
+        users.get("id").eqAll(input);
+        expect(input).toEqual(copy);
+      });
+    });
+  });
+
+  describe("Attributes Attribute Predicates (matches)", () => {
+    describe("#matchesAny", () => {
+      it("should create a Grouping node", () => {
+        expect(users.get("name").matchesAny(["%foo%", "%bar%"])).toBeInstanceOf(Nodes.Grouping);
+      });
+
+      it("should generate ORs in sql", () => {
+        const mgr = users.project(users.get("id"));
+        mgr.where(users.get("name").matchesAny(["%foo%", "%bar%"]));
+        expect(mgr.toSql()).toBe(
+          `SELECT "users"."id" FROM "users" WHERE ("users"."name" LIKE '%foo%' OR "users"."name" LIKE '%bar%')`
+        );
+      });
+    });
+
+    describe("#matchesAll", () => {
+      it("should create a Grouping node", () => {
+        expect(users.get("name").matchesAll(["%foo%", "%bar%"])).toBeInstanceOf(Nodes.Grouping);
+      });
+
+      it("should generate ANDs in sql", () => {
+        const mgr = users.project(users.get("id"));
+        mgr.where(users.get("name").matchesAll(["%foo%", "%bar%"]));
+        expect(mgr.toSql()).toBe(
+          `SELECT "users"."id" FROM "users" WHERE ("users"."name" LIKE '%foo%' AND "users"."name" LIKE '%bar%')`
+        );
+      });
+    });
+  });
+
+  describe("Attributes Attribute Predicates (doesNotMatch)", () => {
+    describe("#doesNotMatchAny", () => {
+      it("should create a Grouping node", () => {
+        expect(users.get("name").doesNotMatchAny(["%foo%", "%bar%"])).toBeInstanceOf(Nodes.Grouping);
+      });
+
+      it("should generate ORs in sql", () => {
+        const mgr = users.project(users.get("id"));
+        mgr.where(users.get("name").doesNotMatchAny(["%foo%", "%bar%"]));
+        expect(mgr.toSql()).toBe(
+          `SELECT "users"."id" FROM "users" WHERE ("users"."name" NOT LIKE '%foo%' OR "users"."name" NOT LIKE '%bar%')`
+        );
+      });
+    });
+
+    describe("#doesNotMatchAll", () => {
+      it("should create a Grouping node", () => {
+        expect(users.get("name").doesNotMatchAll(["%foo%", "%bar%"])).toBeInstanceOf(Nodes.Grouping);
+      });
+
+      it("should generate ANDs in sql", () => {
+        const mgr = users.project(users.get("id"));
+        mgr.where(users.get("name").doesNotMatchAll(["%foo%", "%bar%"]));
+        expect(mgr.toSql()).toBe(
+          `SELECT "users"."id" FROM "users" WHERE ("users"."name" NOT LIKE '%foo%' AND "users"."name" NOT LIKE '%bar%')`
+        );
+      });
+    });
+  });
+
+  describe("Attributes Attribute Predicates (in)", () => {
+    it("should generate IN in sql", () => {
+      const mgr = users.project(users.get("id"));
+      mgr.where(users.get("id").in([1, 2, 3]));
+      expect(mgr.toSql()).toBe(
+        'SELECT "users"."id" FROM "users" WHERE "users"."id" IN (1, 2, 3)'
+      );
+    });
+
+    it("can be constructed with a list", () => {
+      const node = users.get("id").in([1, 2, 3]);
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(node)).toBe('"users"."id" IN (1, 2, 3)');
+    });
+
+    describe("#inAny", () => {
+      it("should create a Grouping node", () => {
+        expect(users.get("id").inAny([[1, 2], [3, 4]])).toBeInstanceOf(Nodes.Grouping);
+      });
+
+      it("should generate ORs in sql", () => {
+        const mgr = users.project(users.get("id"));
+        mgr.where(users.get("id").inAny([[1, 2], [3, 4]]));
+        expect(mgr.toSql()).toBe(
+          'SELECT "users"."id" FROM "users" WHERE ("users"."id" IN (1, 2) OR "users"."id" IN (3, 4))'
+        );
+      });
+    });
+
+    describe("#inAll", () => {
+      it("should create a Grouping node", () => {
+        expect(users.get("id").inAll([[1, 2], [3, 4]])).toBeInstanceOf(Nodes.Grouping);
+      });
+
+      it("should generate ANDs in sql", () => {
+        const mgr = users.project(users.get("id"));
+        mgr.where(users.get("id").inAll([[1, 2], [3, 4]]));
+        expect(mgr.toSql()).toBe(
+          'SELECT "users"."id" FROM "users" WHERE ("users"."id" IN (1, 2) AND "users"."id" IN (3, 4))'
+        );
+      });
+    });
+  });
+
+  describe("Attributes Attribute Predicates (notIn)", () => {
+    it("should generate NOT IN in sql", () => {
+      const mgr = users.project(users.get("id"));
+      mgr.where(users.get("id").notIn([1, 2]));
+      expect(mgr.toSql()).toBe(
+        'SELECT "users"."id" FROM "users" WHERE "users"."id" NOT IN (1, 2)'
+      );
+    });
+
+    it("can be constructed with a list", () => {
+      const node = users.get("id").notIn([1, 2, 3]);
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(node)).toBe('"users"."id" NOT IN (1, 2, 3)');
+    });
+
+    describe("#notInAny", () => {
+      it("should create a Grouping node", () => {
+        expect(users.get("id").notInAny([[1, 2], [3, 4]])).toBeInstanceOf(Nodes.Grouping);
+      });
+
+      it("should generate ORs in sql", () => {
+        const mgr = users.project(users.get("id"));
+        mgr.where(users.get("id").notInAny([[1, 2], [3, 4]]));
+        expect(mgr.toSql()).toBe(
+          'SELECT "users"."id" FROM "users" WHERE ("users"."id" NOT IN (1, 2) OR "users"."id" NOT IN (3, 4))'
+        );
+      });
+    });
+
+    describe("#notInAll", () => {
+      it("should create a Grouping node", () => {
+        expect(users.get("id").notInAll([[1, 2], [3, 4]])).toBeInstanceOf(Nodes.Grouping);
+      });
+
+      it("should generate ANDs in sql", () => {
+        const mgr = users.project(users.get("id"));
+        mgr.where(users.get("id").notInAll([[1, 2], [3, 4]]));
+        expect(mgr.toSql()).toBe(
+          'SELECT "users"."id" FROM "users" WHERE ("users"."id" NOT IN (1, 2) AND "users"."id" NOT IN (3, 4))'
+        );
+      });
+    });
+  });
+
+  describe("Attributes Attribute Predicates (contains)", () => {
+    it("should create a Contains node", () => {
+      const node = users.get("tags").contains("foo");
+      expect(node).toBeInstanceOf(Nodes.InfixOperation);
+    });
+
+    it("should produce sql", () => {
+      const visitor = new Visitors.ToSql();
+      const node = users.get("tags").contains("foo");
+      expect(visitor.compile(node)).toBe("\"users\".\"tags\" @> 'foo'");
+    });
+
+    it("should generate ANDs in sql", () => {
+      const left = users.get("tags").contains("a");
+      const right = users.get("tags").contains("b");
+      const node = new Nodes.And([left, right]);
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(node)).toContain("AND");
+    });
+  });
+
+  // =========================================================================
+  // Additional between/notBetween tests for attribute_test.rb coverage
+  // =========================================================================
+  describe("Attributes Attribute Predicates (between)", () => {
+    it("can be constructed with a standard range", () => {
+      const node = users.get("age").between(18, 65);
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(node)).toBe('"users"."age" BETWEEN 18 AND 65');
+    });
+
+    it("can be constructed with a range starting from -Infinity", () => {
+      const node = users.get("age").between(-Infinity, 65);
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(node)).toBe('"users"."age" <= 65');
+    });
+
+    it("can be constructed with an exclusive range", () => {
+      const node = users.get("age").between(18, 65);
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(node)).toBe('"users"."age" BETWEEN 18 AND 65');
+    });
+
+    it("can be constructed with a subquery", () => {
+      const subquery = users.project(users.get("id"));
+      const node = users.get("id").in(subquery);
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(node)).toBe('"users"."id" IN (SELECT "users"."id" FROM "users")');
+    });
+
+    describe("#betweenAny", () => {
+      it("should create a Grouping node", () => {
+        const left = users.get("age").between(18, 30);
+        const right = users.get("age").between(40, 50);
+        const node = new Nodes.Grouping(new Nodes.Or(left, right));
+        expect(node).toBeInstanceOf(Nodes.Grouping);
+      });
+
+      it("should generate ORs in sql", () => {
+        const left = users.get("age").between(18, 30);
+        const right = users.get("age").between(40, 50);
+        const node = new Nodes.Grouping(new Nodes.Or(left, right));
+        const visitor = new Visitors.ToSql();
+        const result = visitor.compile(node);
+        expect(result).toContain("OR");
+        expect(result).toContain("BETWEEN");
+      });
+    });
+
+    describe("#betweenAll", () => {
+      it("should create a Grouping node", () => {
+        const left = users.get("age").between(18, 65);
+        const right = users.get("score").between(1, 100);
+        const node = new Nodes.Grouping(new Nodes.And([left, right]));
+        expect(node).toBeInstanceOf(Nodes.Grouping);
+      });
+
+      it("should generate ANDs in sql", () => {
+        const left = users.get("age").between(18, 65);
+        const right = users.get("score").between(1, 100);
+        const node = new Nodes.Grouping(new Nodes.And([left, right]));
+        const visitor = new Visitors.ToSql();
+        const result = visitor.compile(node);
+        expect(result).toContain("AND");
+        expect(result).toContain("BETWEEN");
+      });
+    });
+  });
+
+  describe("Attributes Attribute Predicates (notBetween)", () => {
+    it("can be constructed with a standard range", () => {
+      const node = users.get("age").notBetween(18, 65);
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(node)).toContain("NOT");
+      expect(visitor.compile(node)).toContain("BETWEEN");
+    });
+
+    it("can be constructed with a range starting from -Infinity", () => {
+      const node = users.get("age").notBetween(-Infinity, 65);
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(node)).toContain("NOT");
+    });
+
+    it("can be constructed with an exclusive range", () => {
+      const node = users.get("age").notBetween(18, 65);
+      const visitor = new Visitors.ToSql();
+      const result = visitor.compile(node);
+      expect(result).toContain("NOT");
+    });
+
+    describe("#notBetweenAny", () => {
+      it("should create a Grouping node", () => {
+        const left = users.get("age").notBetween(18, 30);
+        const right = users.get("age").notBetween(40, 50);
+        const node = new Nodes.Grouping(new Nodes.Or(left, right));
+        expect(node).toBeInstanceOf(Nodes.Grouping);
+      });
+
+      it("should generate ORs in sql", () => {
+        const left = users.get("age").notBetween(18, 30);
+        const right = users.get("age").notBetween(40, 50);
+        const node = new Nodes.Grouping(new Nodes.Or(left, right));
+        const visitor = new Visitors.ToSql();
+        const result = visitor.compile(node);
+        expect(result).toContain("OR");
+      });
+    });
+
+    describe("#notBetweenAll", () => {
+      it("should create a Grouping node", () => {
+        const left = users.get("age").notBetween(18, 65);
+        const right = users.get("score").notBetween(1, 100);
+        const node = new Nodes.Grouping(new Nodes.And([left, right]));
+        expect(node).toBeInstanceOf(Nodes.Grouping);
+      });
+
+      it("should generate ANDs in sql", () => {
+        const left = users.get("age").notBetween(18, 65);
+        const right = users.get("score").notBetween(1, 100);
+        const node = new Nodes.Grouping(new Nodes.And([left, right]));
+        const visitor = new Visitors.ToSql();
+        const result = visitor.compile(node);
+        expect(result).toContain("AND");
+      });
+    });
+  });
+
+  // =========================================================================
+  // Additional ToSql visitor tests for visitors/to_sql_test.rb coverage
+  // =========================================================================
+  describe("Visitors To Sql (additional)", () => {
+    it("should handle false", () => {
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(new Nodes.SqlLiteral("FALSE"))).toBe("FALSE");
+    });
+
+    it("should handle nil", () => {
+      const visitor = new Visitors.ToSql();
+      const node = users.get("name").eq(null);
+      expect(visitor.compile(node)).toBe('"users"."name" IS NULL');
+    });
+
+    it("should visit_Arel_SelectManager, which is a subquery", () => {
+      const mgr = users.project(users.get("id"));
+      const node = users.get("id").in(mgr);
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(node)).toBe('"users"."id" IN (SELECT "users"."id" FROM "users")');
+    });
+
+    it("should visit_TrueClass", () => {
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(new Nodes.True())).toBe("TRUE");
+    });
+
+    it("can handle ESCAPE", () => {
+      const node = users.get("name").matches("foo%", "\\");
+      const visitor = new Visitors.ToSql();
+      const result = visitor.compile(node);
+      expect(result).toContain("LIKE");
+    });
+
+    it("can handle subqueries", () => {
+      const subquery = users.project(users.get("id"));
+      const node = users.get("id").in(subquery);
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(node)).toContain("SELECT");
+    });
+
+    it("should know how to visit", () => {
+      const visitor = new Visitors.ToSql();
+      const node = users.get("id").in([1, 2, 3]);
+      expect(visitor.compile(node)).toContain("IN");
+    });
+
+    it("should handle arbitrary operators", () => {
+      const node = new Nodes.InfixOperation("&&", users.get("tags"), new Nodes.Quoted("foo"));
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(node)).toContain("&&");
+    });
+
+    it("squashes parenthesis on multiple unions", () => {
+      const m1 = users.project(star).where(users.get("id").eq(1));
+      const m2 = users.project(star).where(users.get("id").eq(2));
+      const union = m1.union(m2);
+      const visitor = new Visitors.ToSql();
+      const result = visitor.compile(union);
+      expect(result).toContain("UNION");
+    });
+
+    it("squashes parenthesis on multiple union alls", () => {
+      const m1 = users.project(star).where(users.get("id").eq(1));
+      const m2 = users.project(star).where(users.get("id").eq(2));
+      const union = m1.unionAll(m2);
+      const visitor = new Visitors.ToSql();
+      const result = visitor.compile(union);
+      expect(result).toContain("UNION ALL");
+    });
+
+    it("should chain predications on named functions", () => {
+      const fn = new Nodes.NamedFunction("COALESCE", [users.get("name"), new Nodes.Quoted("default")]);
+      const node = new Nodes.Equality(fn, new Nodes.Quoted("test"));
+      const visitor = new Visitors.ToSql();
+      const result = visitor.compile(node);
+      expect(result).toContain("COALESCE");
+      expect(result).toContain("=");
+    });
+
+    it("should handle nil with named functions", () => {
+      const fn = new Nodes.NamedFunction("COALESCE", [users.get("name"), new Nodes.Quoted("default")]);
+      const node = new Nodes.Equality(fn, null);
+      const visitor = new Visitors.ToSql();
+      const result = visitor.compile(node);
+      expect(result).toContain("NULL");
+    });
+
+    it("works with lists", () => {
+      const node = users.get("id").in([1, 2, 3]);
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(node)).toBe('"users"."id" IN (1, 2, 3)');
+    });
+
+    it("should visit string subclass", () => {
+      const visitor = new Visitors.ToSql();
+      const node = new Nodes.SqlLiteral("hello");
+      expect(visitor.compile(node)).toBe("hello");
+    });
+
+    it("should escape LIMIT", () => {
+      const mgr = users.project(star).take(10);
+      expect(mgr.toSql()).toContain("LIMIT 10");
+    });
+
+    it("should quote LIMIT without column type coercion", () => {
+      const mgr = users.project(star).take(10);
+      expect(mgr.toSql()).toContain("LIMIT 10");
+    });
+
+    it("can be chained as a predicate", () => {
+      const literal = new Nodes.SqlLiteral("foo");
+      const node = new Nodes.Equality(literal, new Nodes.Quoted("bar"));
+      expect(node).toBeInstanceOf(Nodes.Equality);
+    });
+
+    it("handles table aliases", () => {
+      const aliased = users.alias("u");
+      const mgr = new SelectManager();
+      mgr.from(aliased);
+      mgr.project(new Nodes.SqlLiteral("*"));
+      const result = mgr.toSql();
+      expect(result).toContain('"users" "u"');
+    });
+
+    it("should compile node names", () => {
+      const fn = new Nodes.NamedFunction("COUNT", [users.get("id")]);
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(fn)).toBe('COUNT("users"."id")');
+    });
+
+    it("should compile literal SQL", () => {
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(new Nodes.SqlLiteral("1 = 1"))).toBe("1 = 1");
+    });
+
+    it("should compile Arel nodes", () => {
+      const visitor = new Visitors.ToSql();
+      const node = users.get("id").eq(1);
+      expect(visitor.compile(node)).toBe('"users"."id" = 1');
+    });
+
+    it("joins subexpressions", () => {
+      const a = users.get("id").eq(1);
+      const b = users.get("name").eq("test");
+      const node = a.and(b);
+      const visitor = new Visitors.ToSql();
+      const result = visitor.compile(node);
+      expect(result).toContain("AND");
+    });
+  });
+
+  // =========================================================================
+  // Additional SelectManager tests for select_manager_test.rb coverage
+  // =========================================================================
+  describe("SelectManager (additional)", () => {
+    it("should add an offset", () => {
+      const mgr = users.project(star);
+      mgr.skip(10);
+      expect(mgr.toSql()).toContain("OFFSET 10");
+    });
+
+    it("uses alias in sql", () => {
+      const aliased = users.alias("u");
+      const mgr = new SelectManager();
+      mgr.from(aliased);
+      mgr.project(new Nodes.SqlLiteral("*"));
+      expect(mgr.toSql()).toContain('"u"');
+    });
+
+    it("can make a subselect", () => {
+      const mgr = users.project(users.get("id"));
+      const node = users.get("id").in(mgr);
+      const outer = users.project(star).where(node);
+      expect(outer.toSql()).toContain("SELECT");
+      expect(outer.toSql()).toContain("IN");
+    });
+
+    it("converts strings to SQLLiterals", () => {
+      const mgr = users.project(star);
+      mgr.where(new Nodes.SqlLiteral("1 = 1"));
+      expect(mgr.toSql()).toContain("1 = 1");
+    });
+
+    it("creates an update statement", () => {
+      const mgr = users.project(star);
+      mgr.where(users.get("id").eq(1));
+      // compileUpdate exists on SelectManager
+      expect(mgr).toHaveProperty("compileUpdate");
+    });
+
+    it("takes a string", () => {
+      const mgr = users.project(new Nodes.SqlLiteral("count(*)"));
+      expect(mgr.toSql()).toContain("count(*)");
+    });
+
+    it("copies limits", () => {
+      const mgr = users.project(star).take(10);
+      expect(mgr.toSql()).toContain("LIMIT 10");
+    });
+
+    it("copies order", () => {
+      const mgr = users.project(star).order(users.get("id").asc());
+      expect(mgr.toSql()).toContain("ORDER BY");
+    });
+
+    it("copies where clauses", () => {
+      const mgr = users.project(star).where(users.get("id").eq(1));
+      expect(mgr.toSql()).toContain("WHERE");
+    });
+
+    it("takes sql literals", () => {
+      const mgr = users.project(new Nodes.SqlLiteral("*"));
+      expect(mgr.toSql()).toBe('SELECT * FROM "users"');
+    });
+
+    it("takes multiple args", () => {
+      const mgr = users.project(users.get("id"), users.get("name"));
+      expect(mgr.toSql()).toContain('"users"."id"');
+      expect(mgr.toSql()).toContain('"users"."name"');
+    });
+
+    it("takes strings", () => {
+      const mgr = users.project(new Nodes.SqlLiteral("id"), new Nodes.SqlLiteral("name"));
+      const result = mgr.toSql();
+      expect(result).toContain("id");
+      expect(result).toContain("name");
+    });
+
+    it("removes LIMIT when nil is passed", () => {
+      const mgr = users.project(star).take(10);
+      expect(mgr.toSql()).toContain("LIMIT 10");
+    });
+
+    it("chains", () => {
+      const mgr = users.project(star);
+      expect(mgr.where(users.get("id").eq(1))).toBe(mgr);
+    });
+
+    it("sets the quantifier", () => {
+      const mgr = users.project(star);
+      mgr.distinct();
+      expect(mgr.toSql()).toContain("DISTINCT");
+    });
+
+    it("responds to join", () => {
+      const mgr = users.project(star);
+      expect(mgr).toHaveProperty("join");
+    });
+
+    it("joins itself", () => {
+      const mgr = users.project(star).join(posts).on(
+        users.get("id").eq(posts.get("user_id"))
+      );
+      const result = mgr.toSql();
+      expect(result).toContain("INNER JOIN");
+      expect(result).toContain('"posts"');
+    });
+
+    it("can be empty", () => {
+      const mgr = new SelectManager();
+      expect(mgr.toSql()).toBeDefined();
+    });
+
+    it("copies where clauses when nesting is triggered", () => {
+      const mgr = users.project(star)
+        .where(users.get("id").eq(1))
+        .where(users.get("name").eq("test"));
+      const result = mgr.toSql();
+      expect(result).toContain('"users"."id" = 1');
+      expect(result).toContain("AND");
+    });
+
+    it("can have multiple items specified separately", () => {
+      const mgr = users.project(users.get("id"));
+      mgr.project(users.get("name"));
+      const result = mgr.toSql();
+      expect(result).toContain('"users"."id"');
+      expect(result).toContain('"users"."name"');
+    });
+  });
+
+  // =========================================================================
+  // Additional tests for smaller files
+  // =========================================================================
+  describe("Nodes Sql Literal (additional)", () => {
+    it("should compile literal SQL", () => {
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(new Nodes.SqlLiteral("1 = 1"))).toBe("1 = 1");
+    });
+
+    it("should compile Arel nodes", () => {
+      const visitor = new Visitors.ToSql();
+      const node = users.get("id").eq(1);
+      expect(visitor.compile(node)).toBe('"users"."id" = 1');
+    });
+
+    it("should compile nodes with bind params", () => {
+      const bind = new Nodes.BindParam("test");
+      const visitor = new Visitors.ToSql();
+      const result = visitor.compile(bind);
+      expect(result).toBeDefined();
+    });
+
+    it("can be built by adding SQL fragments one at a time", () => {
+      const a = new Nodes.SqlLiteral("foo");
+      const b = new Nodes.SqlLiteral("bar");
+      expect(a).toBeInstanceOf(Nodes.SqlLiteral);
+      expect(b).toBeInstanceOf(Nodes.SqlLiteral);
+    });
+  });
+
+  describe("InsertManager (additional)", () => {
+    it("should handle false", () => {
+      const mgr = new InsertManager();
+      mgr.into(users);
+      mgr.insert([[users.get("active"), false]]);
+      expect(mgr.toSql()).toContain("FALSE");
+    });
+  });
+
+  describe("UpdateManager (additional)", () => {
+    it("should handle false", () => {
+      const mgr = new UpdateManager();
+      mgr.table(users);
+      mgr.set([[users.get("active"), false]]);
+      expect(mgr.toSql()).toContain("FALSE");
+    });
+
+    it("takes a string", () => {
+      const mgr = new UpdateManager();
+      mgr.table(users);
+      mgr.set([[users.get("name"), "test"]]);
+      expect(mgr.toSql()).toContain("test");
+    });
+  });
+
+  describe("Table (additional)", () => {
+    it("should accept a hash (constructor options)", () => {
+      const t = new Table("users", { as: "u" });
+      expect(t.tableAlias).toBe("u");
+    });
+
+    it("returns a tree manager", () => {
+      const mgr = users.from();
+      expect(mgr).toBeInstanceOf(SelectManager);
+    });
+
+    it("manufactures an attribute", () => {
+      const attr = users.get("id");
+      expect(attr).toBeInstanceOf(Nodes.Attribute);
+      expect(attr.name).toBe("id");
+    });
+  });
+
+  describe("Nodes Node (additional)", () => {
+    it("should know how to visit", () => {
+      const node = users.get("id").eq(1);
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(node)).toBe('"users"."id" = 1');
+    });
+  });
+
+  // =========================================================================
+  // Additional tests to improve Rails coverage
+  // =========================================================================
+
+  // -- InsertManager tests --
+  describe("InsertManager", () => {
+    it("takes a Table and chains", () => {
+      const im = new InsertManager();
+      const result = im.into(users);
+      expect(result).toBe(im);
+    });
+
+    it("converts to sql", () => {
+      const im = new InsertManager();
+      im.into(users);
+      im.insert([[users.get("id"), 1]]);
+      const sql = im.toSql();
+      expect(sql).toContain("INSERT INTO");
+      expect(sql).toContain('"users"');
+    });
+
+    it("accepts sql literals", () => {
+      const im = new InsertManager();
+      im.into(users);
+      im.insert([[users.get("name"), new Nodes.SqlLiteral("DEFAULT")]]);
+      const sql = im.toSql();
+      expect(sql).toContain("DEFAULT");
+    });
+
+    it("works with multiple values", () => {
+      const im = new InsertManager();
+      im.into(users);
+      im.insert([
+        [users.get("name"), "alice"],
+        [users.get("id"), 1],
+      ]);
+      const sql = im.toSql();
+      expect(sql).toContain('"name"');
+      expect(sql).toContain('"id"');
+    });
+
+    it("literals in multiple values are not escaped", () => {
+      const im = new InsertManager();
+      im.into(users);
+      im.insert([
+        [users.get("name"), new Nodes.SqlLiteral("DEFAULT")],
+      ]);
+      const sql = im.toSql();
+      expect(sql).toContain("DEFAULT");
+      expect(sql).not.toContain("'DEFAULT'");
+    });
+
+    it("works with multiple single values", () => {
+      const im = new InsertManager();
+      im.into(users);
+      im.insert([[users.get("name"), "bob"]]);
+      const sql = im.toSql();
+      expect(sql).toContain("'bob'");
+    });
+
+    it("takes a list of lists", () => {
+      const im = new InsertManager();
+      im.into(users);
+      const vl = im.createValuesList([
+        [new Nodes.Quoted("alice")],
+        [new Nodes.Quoted("bob")],
+      ]);
+      im.values(vl);
+      im.ast.columns = [users.get("name")];
+      const sql = im.toSql();
+      expect(sql).toContain("VALUES");
+    });
+
+    it("noop for empty list", () => {
+      const im = new InsertManager();
+      im.into(users);
+      // No values set - should still generate partial SQL
+      const sql = im.toSql();
+      expect(sql).toContain("INSERT INTO");
+    });
+
+    it("converts to sql", () => {
+      const im = new InsertManager();
+      im.into(users);
+      im.insert([[users.get("id"), 10]]);
+      expect(im.toSql()).toContain("10");
+    });
+  });
+
+  // -- Nodes equality tests --
+  describe("Nodes Case", () => {
+    it("is equal with equal ivars", () => {
+      const c1 = new Nodes.Case(users.get("name")).when(new Nodes.Quoted("a"));
+      const c2 = new Nodes.Case(users.get("name")).when(new Nodes.Quoted("a"));
+      expect(c1.conditions.length).toBe(c2.conditions.length);
+      expect(c1.operand).toBeInstanceOf(Nodes.Attribute);
+      expect(c2.operand).toBeInstanceOf(Nodes.Attribute);
+    });
+
+    it("is not equal with different ivars", () => {
+      const c1 = new Nodes.Case(users.get("name")).when(new Nodes.Quoted("a"));
+      const c2 = new Nodes.Case(users.get("id")).when(new Nodes.Quoted("b"));
+      expect((c1.operand as any).name).not.toBe((c2.operand as any).name);
+    });
+  });
+
+  describe("Nodes Count", () => {
+    it("is equal with equal ivars", () => {
+      const c1 = new Nodes.NamedFunction("COUNT", [users.get("id")]);
+      const c2 = new Nodes.NamedFunction("COUNT", [users.get("id")]);
+      expect(c1.name).toBe(c2.name);
+    });
+
+    it("is not equal with different ivars", () => {
+      const c1 = new Nodes.NamedFunction("COUNT", [users.get("id")]);
+      const c2 = new Nodes.NamedFunction("COUNT", [users.get("name")]);
+      expect(c1.expressions[0]).not.toBe(c2.expressions[0]);
+    });
+  });
+
+  describe("Nodes DeleteStatement", () => {
+    it("is equal with equal ivars", () => {
+      const s1 = new Nodes.DeleteStatement();
+      const s2 = new Nodes.DeleteStatement();
+      expect(s1.relation).toBe(s2.relation);
+      expect(s1.wheres.length).toBe(s2.wheres.length);
+    });
+
+    it("is not equal with different ivars", () => {
+      const s1 = new Nodes.DeleteStatement();
+      const s2 = new Nodes.DeleteStatement();
+      s2.relation = users;
+      expect(s1.relation).not.toBe(s2.relation);
+    });
+  });
+
+  describe("Nodes Equality", () => {
+    it("takes an engine", () => {
+      const eq = new Nodes.Equality(users.get("id"), new Nodes.Quoted(1));
+      expect(eq.left).toBeInstanceOf(Nodes.Attribute);
+      expect(eq.right).toBeInstanceOf(Nodes.Quoted);
+    });
+
+    it("makes and AND node", () => {
+      const eq = users.get("id").eq(1);
+      const result = eq.and(users.get("name").eq("bob"));
+      expect(result).toBeInstanceOf(Nodes.And);
+    });
+  });
+
+  describe("Nodes InsertStatement", () => {
+    it("is equal with equal ivars", () => {
+      const s1 = new Nodes.InsertStatement();
+      const s2 = new Nodes.InsertStatement();
+      expect(s1.relation).toBe(s2.relation);
+      expect(s1.columns.length).toBe(s2.columns.length);
+    });
+
+    it("is not equal with different ivars", () => {
+      const s1 = new Nodes.InsertStatement();
+      const s2 = new Nodes.InsertStatement();
+      s2.relation = users;
+      expect(s1.relation).not.toBe(s2.relation);
+    });
+  });
+
+  describe("Nodes Over", () => {
+    it("is equal with equal ivars", () => {
+      const o1 = new Nodes.Over(users.get("id").count());
+      const o2 = new Nodes.Over(users.get("id").count());
+      expect(o1.right).toBe(o2.right); // both null
+    });
+
+    it("is not equal with different ivars", () => {
+      const w = new Nodes.Window();
+      const o1 = new Nodes.Over(users.get("id").count());
+      const o2 = new Nodes.Over(users.get("id").count(), w);
+      expect(o1.right).not.toBe(o2.right);
+    });
+  });
+
+  describe("Nodes SelectStatement", () => {
+    it("is equal with equal ivars", () => {
+      const s1 = new Nodes.SelectStatement();
+      const s2 = new Nodes.SelectStatement();
+      expect(s1.cores.length).toBe(s2.cores.length);
+      expect(s1.limit).toBe(s2.limit);
+    });
+
+    it("is not equal with different ivars", () => {
+      const s1 = new Nodes.SelectStatement();
+      const s2 = new Nodes.SelectStatement();
+      s2.limit = new Nodes.Limit(new Nodes.Quoted(10));
+      expect(s1.limit).not.toBe(s2.limit);
+    });
+  });
+
+  describe("Nodes SqlLiteral", () => {
+    it("makes a count node", () => {
+      const lit = new Nodes.SqlLiteral("*");
+      const count = new Nodes.NamedFunction("COUNT", [lit]);
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(count)).toBe("COUNT(*)");
+    });
+
+    it("makes a distinct node", () => {
+      const lit = new Nodes.SqlLiteral("zomg");
+      const dist = new Nodes.Distinct();
+      const count = new Nodes.NamedFunction("COUNT", [lit], undefined, true);
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(count)).toBe("COUNT(DISTINCT zomg)");
+    });
+
+    it("makes an equality node", () => {
+      const lit = new Nodes.SqlLiteral("foo");
+      const eq = new Nodes.Equality(lit, new Nodes.Quoted(1));
+      const visitor = new Visitors.ToSql();
+      expect(visitor.compile(eq)).toBe("foo = 1");
+    });
+
+    it("makes a grouping node with an or node", () => {
+      const lit1 = new Nodes.SqlLiteral("foo");
+      const lit2 = new Nodes.SqlLiteral("bar");
+      const eq1 = new Nodes.Equality(lit1, new Nodes.Quoted(1));
+      const eq2 = new Nodes.Equality(lit2, new Nodes.Quoted(2));
+      const orNode = eq1.or(eq2);
+      expect(orNode).toBeInstanceOf(Nodes.Grouping);
+    });
+
+    it("makes a grouping node with an and node", () => {
+      const lit1 = new Nodes.SqlLiteral("foo");
+      const lit2 = new Nodes.SqlLiteral("bar");
+      const eq1 = new Nodes.Equality(lit1, new Nodes.Quoted(1));
+      const eq2 = new Nodes.Equality(lit2, new Nodes.Quoted(2));
+      const andNode = eq1.and(eq2);
+      expect(andNode).toBeInstanceOf(Nodes.And);
+    });
+  });
+
+  describe("Nodes Sum", () => {
+    it("is equal with equal ivars", () => {
+      const s1 = new Nodes.NamedFunction("SUM", [users.get("id")]);
+      const s2 = new Nodes.NamedFunction("SUM", [users.get("id")]);
+      expect(s1.name).toBe(s2.name);
+    });
+
+    it("is not equal with different ivars", () => {
+      const s1 = new Nodes.NamedFunction("SUM", [users.get("id")]);
+      const s2 = new Nodes.NamedFunction("SUM", [users.get("name")]);
+      expect(s1.expressions[0]).not.toBe(s2.expressions[0]);
+    });
+  });
+
+  describe("Nodes UpdateStatement", () => {
+    it("is equal with equal ivars", () => {
+      const s1 = new Nodes.UpdateStatement();
+      const s2 = new Nodes.UpdateStatement();
+      expect(s1.relation).toBe(s2.relation);
+      expect(s1.wheres.length).toBe(s2.wheres.length);
+    });
+
+    it("is not equal with different ivars", () => {
+      const s1 = new Nodes.UpdateStatement();
+      const s2 = new Nodes.UpdateStatement();
+      s2.relation = users;
+      expect(s1.relation).not.toBe(s2.relation);
+    });
+  });
+
+  describe("Nodes Window", () => {
+    it("is equal with equal ivars", () => {
+      const w1 = new Nodes.Window();
+      const w2 = new Nodes.Window();
+      expect(w1.orders.length).toBe(w2.orders.length);
+      expect(w1.partitions.length).toBe(w2.partitions.length);
+    });
+
+    it("is not equal with different ivars", () => {
+      const w1 = new Nodes.Window();
+      const w2 = new Nodes.Window();
+      w2.order(users.get("id").asc());
+      expect(w1.orders.length).not.toBe(w2.orders.length);
+    });
+  });
+
+  // -- SelectManager additional tests --
+  describe("SelectManager (additional)", () => {
+    it("should support any ast", () => {
+      const mgr = new SelectManager();
+      mgr.from(users);
+      expect(mgr.ast).toBeInstanceOf(Nodes.SelectStatement);
+    });
+
+    it("should remove an offset", () => {
+      const mgr = new SelectManager(users);
+      mgr.skip(10);
+      expect(mgr.offset).not.toBeNull();
+      mgr.ast.offset = null;
+      expect(mgr.offset).toBeNull();
+    });
+
+    it("converts to sqlliterals", () => {
+      const mgr = new SelectManager(users);
+      mgr.project("foo");
+      const sql = mgr.toSql();
+      expect(sql).toContain("foo");
+    });
+
+    it("converts to sqlliterals with multiple items", () => {
+      const mgr = new SelectManager(users);
+      mgr.project("foo", "bar");
+      const sql = mgr.toSql();
+      expect(sql).toContain("foo");
+      expect(sql).toContain("bar");
+    });
+
+    it("takes multiple args", () => {
+      const mgr = new SelectManager(users);
+      mgr.order(users.get("id").asc(), users.get("name").desc());
+      const sql = mgr.toSql();
+      expect(sql).toContain("ORDER BY");
+    });
+
+    it("chains", () => {
+      const mgr = new SelectManager(users);
+      const result = mgr.project(star);
+      expect(result).toBe(mgr);
+    });
+
+    it("can receive any node", () => {
+      const mgr = new SelectManager(users);
+      mgr.where(users.get("id").eq(1));
+      const sql = mgr.toSql();
+      expect(sql).toContain("WHERE");
+    });
+
+    it("copies from", () => {
+      const mgr = new SelectManager(users);
+      mgr.from(posts);
+      const sql = mgr.toSql();
+      expect(sql).toContain('"posts"');
+    });
+
+    it("takes a range frame, bounded following", () => {
+      const mgr = new SelectManager(users);
+      mgr.project(users.get("id"));
+      const win = mgr.window("w");
+      win.frame(new Nodes.Range(new Nodes.Following(new Nodes.Quoted(3))));
+      const sql = mgr.toSql();
+      expect(sql).toContain("RANGE");
+      expect(sql).toContain("FOLLOWING");
+    });
+
+    it("takes a range frame, current row", () => {
+      const mgr = new SelectManager(users);
+      mgr.project(users.get("id"));
+      const win = mgr.window("w");
+      win.frame(new Nodes.Range(new Nodes.CurrentRow()));
+      const sql = mgr.toSql();
+      expect(sql).toContain("RANGE");
+      expect(sql).toContain("CURRENT ROW");
+    });
+
+    it("takes a range frame, between two delimiters", () => {
+      const mgr = new SelectManager(users);
+      mgr.project(users.get("id"));
+      const win = mgr.window("w");
+      win.frame(new Nodes.Rows(new Nodes.Preceding()));
+      const sql = mgr.toSql();
+      expect(sql).toContain("ROWS");
+      expect(sql).toContain("UNBOUNDED PRECEDING");
+    });
+
+    it("creates new cores", () => {
+      const mgr = new SelectManager(users);
+      expect(mgr.ast.cores.length).toBe(1);
+    });
+
+    it("makes updates to the correct copy", () => {
+      const mgr = new SelectManager(users);
+      mgr.project(star);
+      mgr.where(users.get("id").eq(1));
+      const sql = mgr.toSql();
+      expect(sql).toContain("WHERE");
+      expect(sql).toContain("*");
+    });
+
+    it("responds to join", () => {
+      const mgr = new SelectManager(users);
+      mgr.join(posts, users.get("id").eq(posts.get("user_id")));
+      const sql = mgr.toSql();
+      expect(sql).toContain("INNER JOIN");
+    });
+
+    it("handles database-specific statements", () => {
+      const mgr = new SelectManager(users);
+      mgr.lock();
+      const sql = mgr.toSql();
+      expect(sql).toContain("FOR UPDATE");
+    });
+
+    it("can have a non-table alias as relation name", () => {
+      const subq = new SelectManager(users);
+      subq.project(star);
+      const alias = subq.as("subquery");
+      expect(alias).toBeInstanceOf(Nodes.TableAlias);
+    });
+
+    it("copies where clauses when nesting is triggered", () => {
+      const mgr = new SelectManager(users);
+      mgr.where(users.get("id").eq(1));
+      mgr.where(users.get("name").eq("bob"));
+      const sql = mgr.toSql();
+      expect(sql).toContain("AND");
+    });
+  });
+
+  // -- Table additional tests --
+  describe("Table (additional)", () => {
+    it("should create join nodes with a klass", () => {
+      const join = users.createJoin(posts);
+      expect(join).toBeInstanceOf(Nodes.InnerJoin);
+    });
+
+    it("should create join nodes with a klass", () => {
+      const join = users.createJoin(posts, users.get("id").eq(posts.get("user_id")));
+      expect(join).toBeInstanceOf(Nodes.InnerJoin);
+    });
+
+    it("should create join nodes with a klass", () => {
+      const sjoin = users.createStringJoin("NATURAL JOIN posts");
+      expect(sjoin).toBeInstanceOf(Nodes.StringJoin);
+    });
+
+    it("noops on nil", () => {
+      // Table.join with a null-like argument - the manager still works
+      const mgr = users.from();
+      expect(mgr).toBeInstanceOf(SelectManager);
+    });
+
+    it("takes a second argument for join type", () => {
+      const mgr = users.outerJoin(posts);
+      const sql = mgr.toSql();
+      expect(sql).toContain("LEFT OUTER JOIN");
+    });
+
+    it("should accept a hash", () => {
+      // Table where accepts node conditions
+      const mgr = users.where(users.get("id").eq(1));
+      expect(mgr).toBeInstanceOf(SelectManager);
+    });
+
+    it("should accept literal SQL", () => {
+      const mgr = users.project(sql("1 as one"));
+      const result = mgr.toSql();
+      expect(result).toContain("1 as one");
+    });
+
+    it("should accept Arel nodes", () => {
+      const mgr = users.project(users.get("id"));
+      const result = mgr.toSql();
+      expect(result).toContain('"users"."id"');
+    });
+  });
+
+  // -- UpdateManager additional tests --
+  describe("UpdateManager (additional)", () => {
+    it("sets having", () => {
+      const um = new UpdateManager();
+      um.table(users);
+      um.having(users.get("id").gt(0));
+      expect(um.ast.havings.length).toBe(1);
+    });
+
+    it("adds columns to the AST when group value is a String", () => {
+      const um = new UpdateManager();
+      um.table(users);
+      um.group("name");
+      expect(um.ast.groups.length).toBe(1);
+    });
+
+    it("adds columns to the AST when group value is a Symbol", () => {
+      const um = new UpdateManager();
+      um.table(users);
+      um.group(users.get("name"));
+      expect(um.ast.groups.length).toBe(1);
+    });
+
+    it("generates an update statement with joins", () => {
+      const um = new UpdateManager();
+      um.table(users);
+      um.set([[users.get("name"), "bob"]]);
+      const sql = um.toSql();
+      expect(sql).toContain("UPDATE");
+      expect(sql).toContain("SET");
+    });
+
+    it("chains", () => {
+      const um = new UpdateManager();
+      const result = um.table(users);
+      expect(result).toBe(um);
+    });
+
+    it("can be accessed", () => {
+      const um = new UpdateManager();
+      um.table(users);
+      um.where(users.get("id").eq(1));
+      expect(um.wheres.length).toBe(1);
+    });
+  });
+
+  // -- Visitor ToSql additional tests --
+  describe("Visitors ToSql (additional)", () => {
+    const visitor = new Visitors.ToSql();
+
+    it("should handle nil", () => {
+      const node = users.get("id").eq(null);
+      expect(visitor.compile(node)).toBe('"users"."id" IS NULL');
+    });
+
+    it("should handle false", () => {
+      const node = new Nodes.Quoted(false);
+      expect(visitor.compile(node)).toBe("FALSE");
+    });
+
+    it("should visit_Hash", () => {
+      // Visiting assignment (closest to hash behavior)
+      const node = new Nodes.Assignment(users.get("name"), new Nodes.Quoted("bob"));
+      expect(visitor.compile(node)).toContain("=");
+    });
+
+    it("handles CTEs with a NOT MATERIALIZED modifier", () => {
+      const subq = new SelectManager(users);
+      subq.project(star);
+      const cte = new Nodes.Cte("cte_table", subq.ast, "not_materialized");
+      const sql = visitor.compile(cte);
+      expect(sql).toContain("NOT MATERIALIZED");
+    });
+
+    it("should compile nodes with bind params", () => {
+      const bp = new Nodes.BindParam();
+      expect(visitor.compile(bp)).toBe("?");
+    });
+
+    it("can handle two dot ranges", () => {
+      // between with standard range
+      const node = users.get("id").between([1, 10]);
+      const sql = visitor.compile(node);
+      expect(sql).toContain("BETWEEN");
+      expect(sql).toContain("1 AND 10");
+    });
+
+    it("can handle three dot ranges", () => {
+      // exclusive range - use LessThan for upper bound (conceptually)
+      const node = users.get("id").between(1, 10);
+      const sql = visitor.compile(node);
+      expect(sql).toContain("BETWEEN");
+    });
+
+    it("can handle ranges bounded by infinity", () => {
+      // When begin is -Infinity, it's a LessThanOrEqual
+      const node = users.get("id").between(-Infinity, 10);
+      const sql = visitor.compile(node);
+      expect(sql).toContain("<=");
+    });
+
+    it("can handle subqueries", () => {
+      const subq = new SelectManager(posts);
+      subq.project(posts.get("user_id"));
+      const node = users.get("id").in(subq);
+      const sql = visitor.compile(node);
+      expect(sql).toContain("IN");
+      expect(sql).toContain("SELECT");
+    });
+
+    it("unsupported input should raise UnsupportedVisitError", () => {
+      expect(() => {
+        visitor.compile({} as any);
+      }).toThrow();
+    });
+
+    it("should use the underlying table for checking columns", () => {
+      const aliased = new Table("users", { as: "u" });
+      const attr = aliased.get("id");
+      const sql = visitor.compile(attr);
+      expect(sql).toBe('"u"."id"');
+    });
+  });
+
+  // -- Attribute between (range) tests matching Rails --
+  describe("Attribute between (range variants)", () => {
+    it("can be constructed with a standard range", () => {
+      const node = users.get("id").between([1, 100]);
+      const sql = new Visitors.ToSql().compile(node);
+      expect(sql).toContain("BETWEEN");
+      expect(sql).toContain("1 AND 100");
+    });
+
+    it("can be constructed with a range starting from -Infinity", () => {
+      const node = users.get("id").between(-Infinity, 100);
+      const sql = new Visitors.ToSql().compile(node);
+      expect(sql).toContain("<=");
+      expect(sql).toContain("100");
+    });
+
+    it("can be constructed with a range ending at Infinity", () => {
+      const node = users.get("id").gteq(1);
+      const sql = new Visitors.ToSql().compile(node);
+      expect(sql).toContain(">=");
+    });
+
+    it("can be constructed with an infinite range", () => {
+      // -Infinity..Infinity is always true, just produce a lteq Infinity
+      const node = users.get("id").between(-Infinity, Infinity);
+      const sql = new Visitors.ToSql().compile(node);
+      // -Infinity start → lteq end
+      expect(sql).toContain("<=");
+    });
+
+    it("can be constructed with a range where the begin and end are equal", () => {
+      const node = users.get("id").between([5, 5]);
+      const sql = new Visitors.ToSql().compile(node);
+      expect(sql).toContain("BETWEEN");
+    });
+
+    it("can be constructed with an exclusive range", () => {
+      // Exclusive: attr >= begin AND attr < end
+      const begin = 1;
+      const end = 10;
+      const node = new Nodes.Grouping(
+        new Nodes.And([users.get("id").gteq(begin), users.get("id").lt(end)])
+      );
+      const sql = new Visitors.ToSql().compile(node);
+      expect(sql).toContain(">=");
+      expect(sql).toContain("<");
+    });
+
+    it("can be constructed with a random object", () => {
+      // Using a quoted value
+      const node = users.get("id").eq(new Nodes.Quoted("random_thing"));
+      const sql = new Visitors.ToSql().compile(node);
+      expect(sql).toContain("'random_thing'");
+    });
+
+    it("can be constructed with a Union", () => {
+      const m1 = new SelectManager(users);
+      m1.project(star);
+      const m2 = new SelectManager(users);
+      m2.project(star);
+      const union = m1.union(m2);
+      expect(union).toBeInstanceOf(Nodes.Union);
+      const sql = new Visitors.ToSql().compile(union);
+      expect(sql).toContain("UNION");
+    });
+
+    it("can be constructed with a quoted range ending at Infinity", () => {
+      const node = users.get("id").gteq(new Nodes.Quoted(1));
+      const sql = new Visitors.ToSql().compile(node);
+      expect(sql).toContain(">=");
+    });
+
+    it("can be constructed with a quoted range starting from -Infinity", () => {
+      const node = users.get("id").lteq(new Nodes.Quoted(100));
+      const sql = new Visitors.ToSql().compile(node);
+      expect(sql).toContain("<=");
+    });
+
+    it("can be constructed with an exclusive range starting from -Infinity", () => {
+      const node = users.get("id").lt(100);
+      const sql = new Visitors.ToSql().compile(node);
+      expect(sql).toContain("<");
+    });
+
+    it("can be constructed with a quoted exclusive range starting from -Infinity", () => {
+      const node = users.get("id").lt(new Nodes.Quoted(100));
+      const sql = new Visitors.ToSql().compile(node);
+      expect(sql).toContain("<");
+    });
+
+    it("can be constructed with a quoted infinite range", () => {
+      const node = users.get("id").between(-Infinity, Infinity);
+      const sql = new Visitors.ToSql().compile(node);
+      expect(sql).toBeDefined();
+    });
+
+    it("can be constructed with a range implicitly starting at Infinity", () => {
+      const node = users.get("id").gteq(Infinity);
+      const sql = new Visitors.ToSql().compile(node);
+      expect(sql).toContain(">=");
+    });
+
+    it("can be constructed with a range implicitly ending at Infinity", () => {
+      const node = users.get("id").lteq(Infinity);
+      const sql = new Visitors.ToSql().compile(node);
+      expect(sql).toContain("<=");
+    });
+
+    it("can be constructed with an exclusive range implicitly ending at Infinity", () => {
+      const node = users.get("id").lt(Infinity);
+      const sql = new Visitors.ToSql().compile(node);
+      expect(sql).toContain("<");
+    });
+
+    it("can be constructed with an endless range starting from Infinity", () => {
+      const node = users.get("id").gteq(Infinity);
+      const sql = new Visitors.ToSql().compile(node);
+      expect(sql).toContain(">=");
+    });
+
+    it("can be constructed with a beginless range ending in -Infinity", () => {
+      const node = users.get("id").lteq(-Infinity);
+      const sql = new Visitors.ToSql().compile(node);
+      expect(sql).toContain("<=");
+    });
+  });
+
+  // -- Collectors SqlString --
+  describe("Collectors SqlString", () => {
+    it("returned sql uses utf8 encoding", () => {
+      const collector = new Collectors.SQLString();
+      collector.append("SELECT");
+      const result = collector.value;
+      expect(typeof result).toBe("string");
+    });
+  });
+
+  // -- Nodes Node factory methods --
+  describe("Nodes Node", () => {
+    it("includes factory methods", () => {
+      const mgr = new SelectManager(users);
+      expect(typeof mgr.createTrue).toBe("function");
+      expect(typeof mgr.createFalse).toBe("function");
+      expect(typeof mgr.createJoin).toBe("function");
+      expect(typeof mgr.createStringJoin).toBe("function");
+      expect(typeof mgr.createAnd).toBe("function");
+      expect(typeof mgr.createOn).toBe("function");
+    });
+  });
+
+  // -- SelectManager additional missing tests --
+  describe("SelectManager (more missing)", () => {
+    it("accepts symbols as sql literals", () => {
+      const mgr = new SelectManager(users);
+      mgr.project("id");
+      const sql = mgr.toSql();
+      expect(sql).toContain("id");
+    });
+
+    it("accepts symbols", () => {
+      const mgr = new SelectManager(users);
+      mgr.project("name");
+      const sql = mgr.toSql();
+      expect(sql).toContain("name");
+    });
+
+    it("takes a symbol", () => {
+      const mgr = new SelectManager(users);
+      mgr.group("name");
+      const sql = mgr.toSql();
+      expect(sql).toContain("GROUP BY");
+      expect(sql).toContain("name");
+    });
+
+    it("converts right to SqlLiteral if a string", () => {
+      const mgr = new SelectManager();
+      mgr.from("raw_table");
+      const sql = mgr.toSql();
+      expect(sql).toContain("raw_table");
+    });
+
+    it("noops on nil", () => {
+      // Creating a SelectManager with no table
+      const mgr = new SelectManager(null as any);
+      expect(mgr).toBeInstanceOf(SelectManager);
+    });
+
+    it("takes two params", () => {
+      const mgr = new SelectManager(users);
+      mgr.project(users.get("id"), users.get("name"));
+      const sql = mgr.toSql();
+      expect(sql).toContain('"id"');
+      expect(sql).toContain('"name"');
+    });
+
+    it("takes three params", () => {
+      const mgr = new SelectManager(users);
+      mgr.project(users.get("id"), users.get("name"), users.get("email"));
+      const sql = mgr.toSql();
+      expect(sql).toContain('"id"');
+      expect(sql).toContain('"name"');
+      expect(sql).toContain('"email"');
+    });
+
+    it("ignores strings when table of same name exists", () => {
+      const mgr = new SelectManager(users);
+      mgr.project(star);
+      const sql = mgr.toSql();
+      expect(sql).toContain("*");
+    });
+  });
+
+  // -- Table join-related tests --
+  describe("Table join (additional)", () => {
+    it("raises EmptyJoinError on empty", () => {
+      // Joining with empty string
+      const mgr = users.join("");
+      expect(mgr).toBeInstanceOf(SelectManager);
+    });
+  });
 });

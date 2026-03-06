@@ -10,7 +10,10 @@
     "test:watch": "vitest",
     "test:db": "PG_TEST_URL=postgres://postgres:postgres@localhost:25432/rails_js_test MYSQL_TEST_URL=mysql://root@localhost:13306/rails_js_test vitest run",
     "db:up": "docker compose up -d --wait",
-    "db:down": "docker compose down"
+    "db:down": "docker compose down",
+    "api:compare": "cd scripts/api-compare && bash fetch-rails.sh && ruby extract-ruby-api.rb && npx tsx extract-ts-api.ts && npx tsx compare.ts",
+    "test:compare": "cd scripts/test-compare && bash fetch-rails-tests.sh && ruby extract-ruby-tests.rb && npx tsx extract-ts-tests.ts && npx tsx compare.ts",
+    "test:stubs": "npm run test:compare && npx tsx scripts/test-compare/generate-stubs.ts"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

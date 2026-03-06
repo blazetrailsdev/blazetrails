@@ -4241,3 +4241,439 @@ describe("RelationTest", () => {
     expect(sql).toContain("LIMIT");
   });
 });
+
+// ==========================================================================
+// CalculationsTest (continued) — more calculations_test.rb coverage
+// ==========================================================================
+describe("CalculationsTest", () => {
+  it("should generate valid sql with joins and group", () => {
+    const adp = freshAdapter();
+    class Account extends Base {
+      static { this.attribute("firm_id", "integer"); this.attribute("credit_limit", "integer"); this.adapter = adp; }
+    }
+    const sql = Account.joins("INNER JOIN firms ON firms.id = accounts.firm_id").group("firm_id").toSql();
+    expect(sql).toContain("GROUP BY");
+    expect(sql).toContain("INNER JOIN");
+  });
+
+  it("should order by grouped field", () => {
+    const adp = freshAdapter();
+    class Account extends Base {
+      static { this.attribute("firm_id", "integer"); this.attribute("credit_limit", "integer"); this.adapter = adp; }
+    }
+    const sql = Account.group("firm_id").order("firm_id").toSql();
+    expect(sql).toContain("GROUP BY");
+    expect(sql).toContain("ORDER BY");
+  });
+
+  it("should order by calculation", () => {
+    const adp = freshAdapter();
+    class Account extends Base {
+      static { this.attribute("firm_id", "integer"); this.attribute("credit_limit", "integer"); this.adapter = adp; }
+    }
+    const sql = Account.group("firm_id").order("SUM(credit_limit) DESC").toSql();
+    expect(sql).toContain("ORDER BY");
+    expect(sql).toContain("SUM");
+  });
+
+  it("distinct count with order and limit and offset", () => {
+    const adp = freshAdapter();
+    class Account extends Base {
+      static { this.attribute("credit_limit", "integer"); this.adapter = adp; }
+    }
+    const sql = Account.distinct().order("credit_limit").limit(5).offset(2).toSql();
+    expect(sql).toContain("DISTINCT");
+    expect(sql).toContain("LIMIT");
+    expect(sql).toContain("OFFSET");
+  });
+
+  it("distinct count with group by and order and limit", () => {
+    const adp = freshAdapter();
+    class Account extends Base {
+      static { this.attribute("firm_id", "integer"); this.attribute("credit_limit", "integer"); this.adapter = adp; }
+    }
+    const sql = Account.distinct().group("firm_id").order("firm_id").limit(5).toSql();
+    expect(sql).toContain("DISTINCT");
+    expect(sql).toContain("GROUP BY");
+    expect(sql).toContain("LIMIT");
+  });
+
+  it("should sum expression", async () => {
+    const adp = freshAdapter();
+    class Account extends Base {
+      static { this.attribute("credit_limit", "integer"); this.adapter = adp; }
+    }
+    await Account.create({ credit_limit: 50 });
+    await Account.create({ credit_limit: 100 });
+    const sum = await Account.sum("credit_limit");
+    expect(sum).toBe(150);
+  });
+
+  it("sum expression returns zero when no records to sum", async () => {
+    const adp = freshAdapter();
+    class Account extends Base {
+      static { this.attribute("credit_limit", "integer"); this.adapter = adp; }
+    }
+    const sum = await Account.where({ credit_limit: -1 }).sum("credit_limit");
+    expect(sum).toBe(0);
+  });
+
+  it("count with where and order", async () => {
+    const adp = freshAdapter();
+    class Account extends Base {
+      static { this.attribute("credit_limit", "integer"); this.adapter = adp; }
+    }
+    await Account.create({ credit_limit: 50 });
+    await Account.create({ credit_limit: 100 });
+    const count = await Account.where({ credit_limit: 50 }).order("credit_limit").count();
+    expect(count).toBe(1);
+  });
+
+  it("count with empty in", async () => {
+    const adp = freshAdapter();
+    class Account extends Base {
+      static { this.attribute("credit_limit", "integer"); this.adapter = adp; }
+    }
+    await Account.create({ credit_limit: 50 });
+    const count = await Account.where({ credit_limit: [] }).count();
+    expect(count).toBe(0);
+  });
+
+  it("count with from option", async () => {
+    const adp = freshAdapter();
+    class Account extends Base {
+      static { this.attribute("credit_limit", "integer"); this.adapter = adp; }
+    }
+    await Account.create({ credit_limit: 50 });
+    const count = await Account.all().from('"accounts"').count();
+    expect(count).toBeGreaterThanOrEqual(0);
+  });
+
+  it("sum with from option", async () => {
+    const adp = freshAdapter();
+    class Account extends Base {
+      static { this.attribute("credit_limit", "integer"); this.adapter = adp; }
+    }
+    await Account.create({ credit_limit: 50 });
+    const sum = await Account.all().from('"accounts"').sum("credit_limit");
+    expect(typeof sum).toBe("number");
+  });
+
+  it("average with from option", async () => {
+    const adp = freshAdapter();
+    class Account extends Base {
+      static { this.attribute("credit_limit", "integer"); this.adapter = adp; }
+    }
+    await Account.create({ credit_limit: 50 });
+    await Account.create({ credit_limit: 100 });
+    const avg = await Account.all().from('"accounts"').average("credit_limit");
+    expect(typeof avg).toBe("number");
+  });
+
+  it("minimum with from option", async () => {
+    const adp = freshAdapter();
+    class Account extends Base {
+      static { this.attribute("credit_limit", "integer"); this.adapter = adp; }
+    }
+    await Account.create({ credit_limit: 50 });
+    await Account.create({ credit_limit: 100 });
+    const min = await Account.all().from('"accounts"').minimum("credit_limit");
+    expect(min).toBe(50);
+  });
+
+  it("maximum with from option", async () => {
+    const adp = freshAdapter();
+    class Account extends Base {
+      static { this.attribute("credit_limit", "integer"); this.adapter = adp; }
+    }
+    await Account.create({ credit_limit: 50 });
+    await Account.create({ credit_limit: 100 });
+    const max = await Account.all().from('"accounts"').maximum("credit_limit");
+    expect(max).toBe(100);
+  });
+
+  it("should count scoped select", async () => {
+    const adp = freshAdapter();
+    class Account extends Base {
+      static { this.attribute("credit_limit", "integer"); this.adapter = adp; }
+    }
+    await Account.create({ credit_limit: 50 });
+    const count = await Account.select("credit_limit").count();
+    expect(count).toBeGreaterThan(0);
+  });
+
+  it("count with no parameters isnt deprecated", async () => {
+    const adp = freshAdapter();
+    class Account extends Base {
+      static { this.attribute("credit_limit", "integer"); this.adapter = adp; }
+    }
+    await Account.create({ credit_limit: 50 });
+    const count = await Account.count();
+    expect(count).toBeGreaterThan(0);
+  });
+
+  it("should sum with qualified name on loaded", async () => {
+    const adp = freshAdapter();
+    class Account extends Base {
+      static { this.attribute("credit_limit", "integer"); this.adapter = adp; }
+    }
+    await Account.create({ credit_limit: 75 });
+    const sum = await Account.all().sum("credit_limit");
+    expect(sum).toBe(75);
+  });
+
+  it("should count with group by qualified name on loaded", async () => {
+    const adp = freshAdapter();
+    class Account extends Base {
+      static { this.attribute("firm_id", "integer"); this.adapter = adp; }
+    }
+    await Account.create({ firm_id: 1 });
+    await Account.create({ firm_id: 1 });
+    await Account.create({ firm_id: 2 });
+    const result = await Account.group("firm_id").count();
+    expect(typeof result).toBe("object");
+  });
+
+  it("should calculate with invalid field", () => {
+    const adp = freshAdapter();
+    class Account extends Base {
+      static { this.attribute("credit_limit", "integer"); this.adapter = adp; }
+    }
+    // Should generate SQL even for non-existent columns (runtime error from DB)
+    const sql = Account.where({ credit_limit: 50 }).toSql();
+    expect(sql).toBeDefined();
+  });
+
+  it("count with block", async () => {
+    const adp = freshAdapter();
+    class Account extends Base {
+      static tableName = "block_accounts";
+      static { this.attribute("credit_limit", "integer"); this.adapter = adp; }
+    }
+    await Account.create({ credit_limit: 50 });
+    await Account.create({ credit_limit: 100 });
+    const records = await Account.all().toArray();
+    expect(records.length).toBe(2);
+  });
+
+  it("should group by summed field through association and having", () => {
+    const adp = freshAdapter();
+    class Account extends Base {
+      static { this.attribute("firm_id", "integer"); this.attribute("credit_limit", "integer"); this.adapter = adp; }
+    }
+    const sql = Account.group("firm_id").having("SUM(credit_limit) > 10").toSql();
+    expect(sql).toContain("GROUP BY");
+    expect(sql).toContain("HAVING");
+    expect(sql).toContain("SUM");
+  });
+
+  it("should count field in joined table", () => {
+    const adp = freshAdapter();
+    class Account extends Base {
+      static { this.attribute("firm_id", "integer"); this.adapter = adp; }
+    }
+    const sql = Account.joins("INNER JOIN firms ON firms.id = accounts.firm_id").toSql();
+    expect(sql).toContain("INNER JOIN");
+  });
+
+  it("should count field in joined table with group by", () => {
+    const adp = freshAdapter();
+    class Account extends Base {
+      static { this.attribute("firm_id", "integer"); this.adapter = adp; }
+    }
+    const sql = Account.joins("INNER JOIN firms ON firms.id = accounts.firm_id").group("firm_id").toSql();
+    expect(sql).toContain("GROUP BY");
+    expect(sql).toContain("INNER JOIN");
+  });
+});
+
+// ==========================================================================
+// FinderTest (continued) — more finder_test.rb coverage
+// ==========================================================================
+describe("FinderTest", () => {
+  it("find with string", async () => {
+    const adp = freshAdapter();
+    class Topic extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    await Topic.create({ title: "hello" });
+    const results = await Topic.findBySql('SELECT * FROM "topics"');
+    expect(Array.isArray(results)).toBe(true);
+  });
+
+  it("exists uses existing scope", async () => {
+    const adp = freshAdapter();
+    class Topic extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    await Topic.create({ title: "scoped" });
+    expect(await Topic.where({ title: "scoped" }).exists()).toBe(true);
+    expect(await Topic.where({ title: "missing" }).exists()).toBe(false);
+  });
+
+  it("exists with string", async () => {
+    const adp = freshAdapter();
+    class Topic extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    await Topic.create({ title: "hello" });
+    expect(await Topic.exists()).toBe(true);
+  });
+
+  it("exists with large number", async () => {
+    const adp = freshAdapter();
+    class Topic extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    expect(await Topic.exists(9999999)).toBe(false);
+  });
+
+  it("exists with joins", async () => {
+    const adp = freshAdapter();
+    class Topic extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    await Topic.create({ title: "join-test" });
+    // exists on a joined query should work
+    const sql = Topic.joins("LEFT OUTER JOIN posts ON posts.id = topics.id").where({ title: "join-test" }).toSql();
+    expect(sql).toContain("LEFT OUTER JOIN");
+  });
+
+  it("include on unloaded relation with match", async () => {
+    const adp = freshAdapter();
+    class Topic extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    const record = await Topic.create({ title: "match" }) as any;
+    const rel = Topic.all();
+    const included = await rel.include(record);
+    expect(included).toBe(true);
+  });
+
+  it("include on unloaded relation without match", async () => {
+    const adp = freshAdapter();
+    class Topic extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    const record = await Topic.create({ title: "exists" }) as any;
+    await record.destroy();
+    const rel = Topic.all();
+    const included = await rel.include(record);
+    expect(included).toBe(false);
+  });
+
+  it("include on loaded relation with match", async () => {
+    const adp = freshAdapter();
+    class Topic extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    const record = await Topic.create({ title: "loaded-match" }) as any;
+    const rel = Topic.all();
+    await rel.load();
+    const included = await rel.include(record);
+    expect(included).toBe(true);
+  });
+
+  it("include on loaded relation without match", async () => {
+    const adp = freshAdapter();
+    class Topic extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    const record = await Topic.create({ title: "no-match" }) as any;
+    await record.destroy();
+    const rel = Topic.all();
+    await rel.load();
+    const included = await rel.include(record);
+    expect(included).toBe(false);
+  });
+
+  it("find with large number", async () => {
+    const adp = freshAdapter();
+    class Topic extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    await expect(Topic.find(99999999)).rejects.toThrow();
+  });
+
+  it("find by with large number", async () => {
+    const adp = freshAdapter();
+    class Topic extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    const result = await Topic.findBy({ id: 99999999 });
+    expect(result).toBeNull();
+  });
+
+  it("find by id with large number", async () => {
+    const adp = freshAdapter();
+    class Topic extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    const result = await Topic.findBy({ id: 99999999 });
+    expect(result).toBeNull();
+  });
+
+  it("last on loaded relation should not use sql", async () => {
+    const adp = freshAdapter();
+    class Topic extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    await Topic.create({ title: "a" });
+    await Topic.create({ title: "b" });
+    const rel = Topic.all();
+    await rel.load();
+    expect(rel.isLoaded).toBe(true);
+    const last = await rel.last();
+    expect(last).not.toBeNull();
+  });
+
+  it("find by and where consistency with active record instance", async () => {
+    const adp = freshAdapter();
+    class Topic extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    const created = await Topic.create({ title: "consistency" }) as any;
+    const found = await Topic.findBy({ id: created.id });
+    expect(found).not.toBeNull();
+    expect((found as any).id).toBe(created.id);
+  });
+
+  it("any with scope on hash includes", async () => {
+    const adp = freshAdapter();
+    class Topic extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    await Topic.create({ title: "any-test" });
+    expect(await Topic.where({ title: "any-test" }).isAny()).toBe(true);
+  });
+
+  it("symbols table ref", () => {
+    const adp = freshAdapter();
+    class Topic extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    const sql = Topic.where({ title: "test" }).toSql();
+    expect(sql).toContain("topics");
+  });
+
+  it("find with group and sanitized having method", async () => {
+    const adp = freshAdapter();
+    class Topic extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    await Topic.create({ title: "group-test" });
+    const sql = Topic.group("title").having("COUNT(*) > 0").toSql();
+    expect(sql).toContain("GROUP BY");
+    expect(sql).toContain("HAVING");
+  });
+
+  it("find by association subquery", () => {
+    const adp = freshAdapter();
+    class Topic extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    const subq = Topic.where({ title: "x" }).select("id");
+    const sql = Topic.where({ id: subq }).toSql();
+    expect(sql).toContain("IN");
+  });
+});

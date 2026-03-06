@@ -4765,7 +4765,7 @@ describe("Arel", () => {
     });
 
     it("can handle ESCAPE", () => {
-      const node = users.get("name").matches("foo%", "\\");
+      const node = users.get("name").matches("foo%", true, "\\");
       const visitor = new Visitors.ToSql();
       const result = visitor.compile(node);
       expect(result).toContain("LIKE");

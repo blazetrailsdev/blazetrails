@@ -1938,9 +1938,9 @@ describe("BasicsTest", () => {
 
   it("abstract class table name", () => {
     class AbstractModel extends Base {
-      static { this.isAbstractClass = true; }
+      static { this.abstractClass = true; }
     }
-    expect(AbstractModel.isAbstractClass).toBe(true);
+    expect(AbstractModel.abstractClass).toBe(true);
   });
 
   it("initialize with invalid attribute", () => {

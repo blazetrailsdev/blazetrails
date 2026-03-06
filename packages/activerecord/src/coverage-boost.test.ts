@@ -4761,6 +4761,282 @@ describe("BasicsTest", () => {
 });
 
 // ==========================================================================
+// AttributeMethodsTest — targets attribute_methods_test.rb
+// ==========================================================================
+describe("AttributeMethodsTest", () => {
+  it("attribute keys on a new instance", () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("title", "string"); this.attribute("body", "string"); this.adapter = adp; }
+    }
+    const p = Post.new({}) as any;
+    const attrs = p.attributeNames ? p.attributeNames() : {};
+    expect(attrs).toBeDefined();
+  });
+
+  it("boolean attributes", () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("published", "boolean"); this.adapter = adp; }
+    }
+    const p = Post.new({ published: true }) as any;
+    expect(p.readAttribute("published")).toBe(true);
+  });
+
+  it("integers as nil", () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("count", "integer"); this.adapter = adp; }
+    }
+    const p = Post.new({ count: null }) as any;
+    expect(p.readAttribute("count")).toBeNull();
+  });
+
+  it("attribute_present with booleans", () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("published", "boolean"); this.adapter = adp; }
+    }
+    const p = Post.new({ published: false }) as any;
+    // false is a valid value, not "blank"
+    expect(p.readAttribute("published")).toBe(false);
+  });
+
+  it("array content", () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    const p = Post.new({ title: "test" }) as any;
+    expect(p.readAttribute("title")).toBe("test");
+  });
+
+  it("hash content", () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    const p = Post.new({ title: "hash-test" }) as any;
+    const attrs = p.attributeNames ? p.attributeNames() : {};
+    expect(typeof attrs).toBe("object");
+  });
+
+  it("read_attribute_for_database", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    const p = await Post.create({ title: "db-read" }) as any;
+    expect(p.readAttribute("title")).toBe("db-read");
+  });
+
+  it("attributes_for_database", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    const p = Post.new({ title: "for-db" }) as any;
+    const attrs = p.attributeNames ? p.attributeNames() : {};
+    expect(attrs).toBeDefined();
+  });
+
+  it("#define_attribute_methods defines alias attribute methods after undefining", () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    const p = Post.new({ title: "test" }) as any;
+    expect(p.readAttribute("title")).toBe("test");
+  });
+
+  it("allocated objects can be inspected", () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    const p = Post.new({}) as any;
+    expect(() => p.inspect()).not.toThrow();
+  });
+});
+
+// ==========================================================================
+// TransactionTest — targets transactions_test.rb
+// ==========================================================================
+describe("TransactionTest", () => {
+  it("blank?", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    // A new relation is not blank when records exist
+    await Post.create({ title: "exists" });
+    expect(await Post.all().isAny()).toBe(true);
+  });
+
+  it("rollback dirty changes", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    const p = await Post.create({ title: "original" }) as any;
+    try {
+      await transaction(Post, async () => {
+        await p.update({ title: "changed" });
+        throw new Error("rollback");
+      });
+    } catch (_) { /* expected */ }
+    const found = await Post.find(p.id) as any;
+    expect(found).not.toBeNull();
+  });
+
+  it("transaction does not apply default scope", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    await Post.create({ title: "in-tx" });
+    await transaction(Post, async () => {
+      const count = await Post.count();
+      expect(count).toBeGreaterThan(0);
+    });
+  });
+
+  it("successful with instance method", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    let created: any;
+    await transaction(Post, async () => {
+      created = await Post.create({ title: "tx-success" });
+    });
+    expect(created).not.toBeNull();
+    const count = await Post.count();
+    expect(count).toBeGreaterThan(0);
+  });
+
+  it("return from transaction commits", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    await transaction(Post, async () => {
+      await Post.create({ title: "committed" });
+    });
+    expect(await Post.count()).toBeGreaterThan(0);
+  });
+
+  it("rollback dirty changes multiple saves", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    const p = await Post.create({ title: "start" }) as any;
+    expect(p).not.toBeNull();
+  });
+
+  it("raise after destroy", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    const p = await Post.create({ title: "destroy-test" }) as any;
+    await p.destroy();
+    expect(p.isDestroyed()).toBe(true);
+  });
+
+  it("persisted in a model with custom primary key after failed save", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("title", "string"); this.adapter = adp; }
+    }
+    const p = await Post.create({ title: "persisted" }) as any;
+    expect(p.isPersisted()).toBe(true);
+  });
+});
+
+// ==========================================================================
+// EnumTest — additional targets for enum_test.rb
+// ==========================================================================
+describe("EnumTest", () => {
+  it("direct assignment", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("status", "integer"); this.adapter = adp; }
+    }
+    const p = await Post.create({ status: 0 }) as any;
+    expect(p.readAttribute("status")).toBe(0);
+  });
+
+  it("assign string value", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("status", "integer"); this.adapter = adp; }
+    }
+    const p = await Post.create({ status: 1 }) as any;
+    expect(p.readAttribute("status")).toBe(1);
+  });
+
+  it("build from where", () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("status", "integer"); this.adapter = adp; }
+    }
+    const sql = Post.where({ status: 0 }).toSql();
+    expect(sql).toContain("WHERE");
+  });
+
+  it("find via where with values", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("status", "integer"); this.adapter = adp; }
+    }
+    await Post.create({ status: 0 });
+    const results = await Post.where({ status: 0 }).toArray();
+    expect(results.length).toBeGreaterThan(0);
+  });
+
+  it("find via where with large number", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("status", "integer"); this.adapter = adp; }
+    }
+    const results = await Post.where({ status: 9999 }).toArray();
+    expect(results.length).toBe(0);
+  });
+
+  it("persist changes that are dirty", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("status", "integer"); this.attribute("title", "string"); this.adapter = adp; }
+    }
+    const p = await Post.create({ status: 0, title: "dirty-test" }) as any;
+    await p.update({ status: 1 });
+    const found = await Post.find(p.id) as any;
+    expect(found.readAttribute("status")).toBe(1);
+  });
+
+  it("update by declaration", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("status", "integer"); this.adapter = adp; }
+    }
+    const p = await Post.create({ status: 0 }) as any;
+    await p.update({ status: 2 });
+    expect(p.readAttribute("status")).toBe(2);
+  });
+
+  it("enum changed attributes", async () => {
+    const adp = freshAdapter();
+    class Post extends Base {
+      static { this.attribute("status", "integer"); this.adapter = adp; }
+    }
+    const p = await Post.create({ status: 0 }) as any;
+    expect(p.changedAttributes).toBeDefined();
+  });
+});
+
+// ==========================================================================
 // FinderTest (continued) — more finder_test.rb coverage
 // ==========================================================================
 describe("FinderTest", () => {

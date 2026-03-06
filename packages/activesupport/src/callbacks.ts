@@ -1,0 +1,190 @@
+/**
+ * Callback system mirroring Rails ActiveSupport::Callbacks.
+ *
+ * Provides defineCallbacks, setCallback, skipCallback, resetCallbacks,
+ * and runCallbacks for before/after/around lifecycle hooks.
+ */
+
+export type CallbackKind = "before" | "after" | "around";
+
+export type CallbackCondition = (target: any) => boolean;
+
+export interface CallbackOptions {
+  if?: CallbackCondition | CallbackCondition[];
+  unless?: CallbackCondition | CallbackCondition[];
+  prepend?: boolean;
+}
+
+export interface DefineCallbacksOptions {
+  /**
+   * When true (default), a before callback returning `false` halts the chain.
+   */
+  terminator?: boolean;
+}
+
+export type BeforeCallback = (target: any) => boolean | void;
+export type AfterCallback = (target: any) => void;
+export type AroundCallback = (target: any, next: () => void) => void;
+
+export type AnyCallback = BeforeCallback | AfterCallback | AroundCallback;
+
+interface CallbackEntry {
+  kind: CallbackKind;
+  callback: AnyCallback;
+  options: CallbackOptions;
+}
+
+interface CallbackChain {
+  entries: CallbackEntry[];
+  chainOptions: DefineCallbacksOptions;
+}
+
+const CALLBACKS = Symbol("callbacks");
+
+function getCallbackChains(target: any): Map<string, CallbackChain> {
+  if (!target[CALLBACKS]) {
+    target[CALLBACKS] = new Map<string, CallbackChain>();
+  }
+  return target[CALLBACKS];
+}
+
+/**
+ * Register a named callback chain on the target object/class prototype.
+ */
+export function defineCallbacks(
+  target: any,
+  name: string,
+  options: DefineCallbacksOptions = {}
+): void {
+  const chains = getCallbackChains(target);
+  if (!chains.has(name)) {
+    chains.set(name, {
+      entries: [],
+      chainOptions: { terminator: true, ...options },
+    });
+  }
+}
+
+/**
+ * Add a callback to a named chain.
+ */
+export function setCallback(
+  target: any,
+  name: string,
+  kind: CallbackKind,
+  callback: AnyCallback,
+  options: CallbackOptions = {}
+): void {
+  const chains = getCallbackChains(target);
+  const chain = chains.get(name);
+  if (!chain) {
+    throw new Error(
+      `No callback chain "${name}" defined. Call defineCallbacks first.`
+    );
+  }
+  const entry: CallbackEntry = { kind, callback, options };
+  if (options.prepend) {
+    chain.entries.unshift(entry);
+  } else {
+    chain.entries.push(entry);
+  }
+}
+
+/**
+ * Remove a callback from a named chain.
+ */
+export function skipCallback(
+  target: any,
+  name: string,
+  kind: CallbackKind,
+  callback: AnyCallback
+): void {
+  const chains = getCallbackChains(target);
+  const chain = chains.get(name);
+  if (!chain) return;
+  chain.entries = chain.entries.filter(
+    (e) => !(e.kind === kind && e.callback === callback)
+  );
+}
+
+/**
+ * Remove all callbacks from a named chain.
+ */
+export function resetCallbacks(target: any, name: string): void {
+  const chains = getCallbackChains(target);
+  const chain = chains.get(name);
+  if (chain) {
+    chain.entries = [];
+  }
+}
+
+function shouldRun(entry: CallbackEntry, target: any): boolean {
+  const { options } = entry;
+  if (options.if) {
+    const conditions = Array.isArray(options.if) ? options.if : [options.if];
+    if (!conditions.every((cond) => cond(target))) return false;
+  }
+  if (options.unless) {
+    const conditions = Array.isArray(options.unless)
+      ? options.unless
+      : [options.unless];
+    if (conditions.some((cond) => cond(target))) return false;
+  }
+  return true;
+}
+
+/**
+ * Execute the callback chain. Returns false if the chain was halted.
+ */
+export function runCallbacks(
+  target: any,
+  name: string,
+  block?: () => void
+): boolean {
+  const chains = getCallbackChains(target);
+  const chain = chains.get(name);
+  if (!chain) {
+    block?.();
+    return true;
+  }
+
+  const befores = chain.entries.filter((e) => e.kind === "before");
+  const afters = chain.entries.filter((e) => e.kind === "after");
+  const arounds = chain.entries.filter((e) => e.kind === "around");
+  const terminator = chain.chainOptions.terminator !== false;
+
+  // Run before callbacks
+  for (const entry of befores) {
+    if (!shouldRun(entry, target)) continue;
+    const result = (entry.callback as BeforeCallback)(target);
+    if (terminator && result === false) {
+      return false;
+    }
+  }
+
+  // Build the around chain wrapping the block
+  let core = () => {
+    block?.();
+  };
+
+  // Wrap arounds from outside-in (last registered wraps outermost)
+  for (let i = arounds.length - 1; i >= 0; i--) {
+    const entry = arounds[i];
+    const inner = core;
+    if (!shouldRun(entry, target)) continue;
+    core = () => {
+      (entry.callback as AroundCallback)(target, inner);
+    };
+  }
+
+  core();
+
+  // Run after callbacks (in reverse order, matching Rails)
+  for (let i = afters.length - 1; i >= 0; i--) {
+    const entry = afters[i];
+    if (!shouldRun(entry, target)) continue;
+    (entry.callback as AfterCallback)(target);
+  }
+
+  return true;
+}

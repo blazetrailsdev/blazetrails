@@ -426,6 +426,7 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
     "nested_error_test.rb": [
       { file: "activemodel.test.ts", describeBlock: "Errors" },
       { file: "activemodel.test.ts", describeBlock: "NestedError" },
+      { file: "activemodel.test.ts", describeBlock: "NestedErrorTest" },
       { file: "activemodel.test.ts", describeBlock: "Errors enhancements" },
     ],
     "callbacks_test.rb": [
@@ -446,6 +447,9 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
       { file: "activemodel.test.ts", describeBlock: "NamingUsingRelativeModelNameTest" },
       { file: "activemodel.test.ts", describeBlock: "NamingWithNamespacedModelInIsolatedNamespaceTest" },
       { file: "activemodel.test.ts", describeBlock: "OverridingAccessorsTest" },
+      { file: "activemodel.test.ts", describeBlock: "NamingHelpersTest" },
+      { file: "activemodel.test.ts", describeBlock: "NamingTest" },
+      { file: "activemodel.test.ts", describeBlock: "NamingWithNamespacedModelInSharedNamespaceTest" },
     ],
     "serialization_test.rb": [
       { file: "activemodel.test.ts", describeBlock: "Serialization" },
@@ -563,6 +567,7 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
     "type/float_test.rb": [
       { file: "activemodel.test.ts", describeBlock: "Types" },
       { file: "activemodel.test.ts", describeBlock: "Type Float (ported)" },
+      { file: "activemodel.test.ts", describeBlock: "FloatTest" },
     ],
     "type/time_test.rb": [
       { file: "activemodel.test.ts", describeBlock: "Types" },

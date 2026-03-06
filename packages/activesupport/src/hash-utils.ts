@@ -128,8 +128,8 @@ export function extractOptions<T>(args: T[]): [T[], AnyObject] {
 /**
  * Convert all keys to strings (Rails' stringify_keys).
  */
-export function stringifyKeys<T extends AnyObject>(obj: T): Record<string, T[keyof T]> {
-  const result: Record<string, T[keyof T]> = {};
+export function stringifyKeys<T extends AnyObject>(obj: T): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
   for (const key of Object.keys(obj)) {
     result[String(key)] = obj[key];
   }
@@ -147,7 +147,7 @@ export function deepStringifyKeys(obj: unknown): unknown {
  * Convert all keys to symbols — in TypeScript we use strings, so this is
  * equivalent to stringifyKeys but mirrors Rails' symbolize_keys semantics.
  */
-export function symbolizeKeys<T extends AnyObject>(obj: T): Record<string, T[keyof T]> {
+export function symbolizeKeys<T extends AnyObject>(obj: T): Record<string, unknown> {
   return stringifyKeys(obj);
 }
 

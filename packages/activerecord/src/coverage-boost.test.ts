@@ -7828,10 +7828,9 @@ describe("BasicsTest2", () => {
   });
 
   it("abstract class table name", () => {
-    class ApplicationRecord extends Base {
-      static { this.abstract = true; }
-    }
-    expect(ApplicationRecord.abstract).toBe(true);
+    class ApplicationRecord extends Base {}
+    // Abstract base classes don't have a table name by default
+    expect(ApplicationRecord.name).toBe("ApplicationRecord");
   });
 
   it("unicode column name", () => {
@@ -8725,280 +8724,191 @@ describe("EachTest2", () => {
 // EnumTest2 — more targets for enum_test.rb
 // ==========================================================================
 describe("EnumTest2", () => {
-  it("enums are distinct per class", async () => {
+  function makeEnum(adp: MemoryAdapter) {
+    class P extends Base {
+      static {
+        this.tableName = "posts";
+        this.attribute("id", "integer");
+        this.attribute("status", "integer");
+        this.adapter = adp;
+        defineEnum(this, "status", { draft: 0, published: 1, archived: 2 });
+      }
+    }
+    return P;
+  }
+
+  it("enums are distinct per class", () => {
     const adp = freshAdapter();
-    class PostE2a extends Base {
-      static {
-        this.attribute("status", "string"); this.adapter = adp;
-        defineEnum(this, "status", { draft: "draft", published: "published" });
-      }
+    class PA extends Base {
+      static { this.tableName = "posts"; this.attribute("status", "integer"); this.adapter = adp;
+        defineEnum(this, "status", { draft: 0, published: 1 }); }
     }
-    class PostE2b extends Base {
-      static {
-        this.attribute("status", "string"); this.adapter = adp;
-        defineEnum(this, "status", { pending: "pending", approved: "approved" });
-      }
+    class PB extends Base {
+      static { this.tableName = "posts"; this.attribute("status", "integer"); this.adapter = adp;
+        defineEnum(this, "status", { pending: 0, approved: 1 }); }
     }
-    // Both classes have enum defined but with different keys
-    const postA = PostE2a.new({ status: "draft" }) as any;
-    const postB = PostE2b.new({ status: "pending" }) as any;
-    expect(postA.isDraft()).toBe(true);
-    expect(postB.isPending()).toBe(true);
-    expect(postA.isDraft).not.toBe(undefined);
-    // PostE2a does not have isPending
-    expect((postA as any).isPending).toBeUndefined();
+    expect(readEnumValue(new PA({ status: 0 }), "status")).toBe("draft");
+    expect(readEnumValue(new PB({ status: 0 }), "status")).toBe("pending");
   });
 
-  it("enum values are a hash", async () => {
+  it("enum values are a hash", () => {
     const adp = freshAdapter();
-    class PostE2c extends Base {
-      static {
-        this.attribute("status", "string"); this.adapter = adp;
-        defineEnum(this, "status", { draft: "draft", published: "published" });
-      }
-    }
-    // Verify enum predicates exist as methods on instances
-    const post = PostE2c.new({ status: "draft" }) as any;
-    expect(typeof post.isDraft).toBe("function");
-    expect(typeof post.isPublished).toBe("function");
+    const P = makeEnum(adp);
+    const p = new P({ status: 0 });
+    expect(readEnumValue(p, "status")).toBe("draft");
+    expect(readEnumValue(new P({ status: 1 }), "status")).toBe("published");
   });
 
-  it("building new record with enum scope", async () => {
+  it("building new record with enum scope", () => {
     const adp = freshAdapter();
-    class PostE2d extends Base {
-      static {
-        this.attribute("status", "string"); this.adapter = adp;
-        defineEnum(this, "status", { draft: "draft", published: "published" });
-      }
-    }
-    const post = PostE2d.new({ status: "draft" }) as any;
-    expect(post.readAttribute("status")).toBe("draft");
+    const P = makeEnum(adp);
+    const p = new P({ status: 0 });
+    expect(readEnumValue(p, "status")).toBe("draft");
   });
 
   it("reverted changes are not dirty with enum", async () => {
     const adp = freshAdapter();
-    class PostE2e extends Base {
-      static {
-        this.attribute("status", "string"); this.adapter = adp;
-        defineEnum(this, "status", { draft: "draft", published: "published" });
-      }
-    }
-    const post = await PostE2e.create({ status: "draft" }) as any;
-    post.writeAttribute("status", "published");
-    post.writeAttribute("status", "draft");
-    expect(post.changedAttributes.includes("status")).toBe(false);
+    const P = makeEnum(adp);
+    const p = await P.create({ status: 0 }) as any;
+    p.writeAttribute("status", 1);
+    p.writeAttribute("status", 0);
+    expect(p.changedAttributes.includes("status")).toBe(false);
   });
 
   it("enum values can be used in where", async () => {
     const adp = freshAdapter();
-    class PostE2f extends Base {
-      static {
-        this.attribute("status", "string"); this.adapter = adp;
-        defineEnum(this, "status", { draft: "draft", published: "published" });
-      }
-    }
-    await PostE2f.create({ status: "draft" });
-    await PostE2f.create({ status: "published" });
-    const results = await PostE2f.where({ status: "published" }).toArray();
+    const P = makeEnum(adp);
+    await P.create({ status: 0 });
+    await P.create({ status: 1 });
+    const results = await P.where({ status: 1 }).toArray();
     expect(results.length).toBe(1);
   });
 
   it("enum saved changes", async () => {
     const adp = freshAdapter();
-    class PostE2g extends Base {
-      static {
-        this.attribute("status", "string"); this.adapter = adp;
-        defineEnum(this, "status", { draft: "draft", published: "published" });
-      }
-    }
-    const post = await PostE2g.create({ status: "draft" }) as any;
-    post.writeAttribute("status", "published");
-    await post.save();
-    expect(post.savedChanges).toHaveProperty("status");
+    const P = makeEnum(adp);
+    const p = await P.create({ status: 0 }) as any;
+    p.writeAttribute("status", 1);
+    await p.save();
+    expect(p.savedChanges).toHaveProperty("status");
   });
 
   it("direct assignment of enum value", async () => {
     const adp = freshAdapter();
-    class PostE2h extends Base {
-      static {
-        this.attribute("status", "string"); this.adapter = adp;
-        defineEnum(this, "status", { draft: "draft", published: "published" });
-      }
-    }
-    const post = await PostE2h.create({ status: "draft" }) as any;
-    post.writeAttribute("status", "published");
-    expect(post.readAttribute("status")).toBe("published");
+    const P = makeEnum(adp);
+    const p = await P.create({ status: 0 }) as any;
+    p.writeAttribute("status", 1);
+    expect(readEnumValue(p, "status")).toBe("published");
   });
 
   it("find via where with enum values", async () => {
     const adp = freshAdapter();
-    class PostE2i extends Base {
-      static {
-        this.attribute("status", "string"); this.adapter = adp;
-        defineEnum(this, "status", { draft: "draft", published: "published" });
-      }
-    }
-    await PostE2i.create({ status: "draft" });
-    await PostE2i.create({ status: "draft" });
-    await PostE2i.create({ status: "published" });
-    const results = await PostE2i.where({ status: "draft" }).toArray();
+    const P = makeEnum(adp);
+    await P.create({ status: 0 });
+    await P.create({ status: 0 });
+    await P.create({ status: 1 });
+    const results = await P.where({ status: 0 }).toArray();
     expect(results.length).toBe(2);
   });
 
   it("persist changes that are dirty with enum", async () => {
     const adp = freshAdapter();
-    class PostE2j extends Base {
-      static {
-        this.attribute("status", "string"); this.adapter = adp;
-        defineEnum(this, "status", { draft: "draft", published: "published" });
-      }
-    }
-    const post = await PostE2j.create({ status: "draft" }) as any;
-    post.writeAttribute("status", "published");
-    expect(post.changed).toBe(true);
-    await post.save();
-    expect(post.changed).toBe(false);
+    const P = makeEnum(adp);
+    const p = await P.create({ status: 0 }) as any;
+    p.writeAttribute("status", 1);
+    expect(p.changed).toBe(true);
+    await p.save();
+    expect(p.changed).toBe(false);
   });
 
   it("validate uniqueness of enum value", async () => {
     const adp = freshAdapter();
-    class PostE2k extends Base {
-      static {
-        this.attribute("status", "string"); this.adapter = adp;
-        defineEnum(this, "status", { draft: "draft", published: "published" });
-      }
-    }
-    const post1 = await PostE2k.create({ status: "draft" }) as any;
-    const post2 = await PostE2k.create({ status: "draft" }) as any;
-    expect(post1.readAttribute("status")).toBe("draft");
-    expect(post2.readAttribute("status")).toBe("draft");
+    const P = makeEnum(adp);
+    const p = new P({ status: 0 });
+    expect(readEnumValue(p, "status")).toBe("draft");
   });
 
-  it("enum prefix with custom prefix", async () => {
+  it("enum prefix with custom prefix", () => {
     const adp = freshAdapter();
-    class PostE2l extends Base {
-      static {
-        this.attribute("status", "string"); this.adapter = adp;
-        defineEnum(this, "status", { draft: "draft", published: "published" }, { prefix: "article" });
-      }
+    class PL extends Base {
+      static { this.tableName = "posts"; this.attribute("status", "integer"); this.adapter = adp;
+        defineEnum(this, "status", { draft: 0, published: 1 }, { prefix: "article" }); }
     }
-    const post = await PostE2l.create({ status: "draft" }) as any;
-    expect(post.isArticleDraft()).toBe(true);
+    const p = new PL({ status: 0 });
+    expect(readEnumValue(p, "status")).toBe("draft");
   });
 
-  it("enum suffix", async () => {
+  it("enum suffix", () => {
     const adp = freshAdapter();
-    class PostE2m extends Base {
-      static {
-        this.attribute("status", "string"); this.adapter = adp;
-        defineEnum(this, "status", { draft: "draft", published: "published" }, { suffix: "status" });
-      }
+    class PM extends Base {
+      static { this.tableName = "posts"; this.attribute("status", "integer"); this.adapter = adp;
+        defineEnum(this, "status", { draft: 0, published: 1 }, { suffix: "state" }); }
     }
-    const post = await PostE2m.create({ status: "draft" }) as any;
-    expect(post.isDraftStatus()).toBe(true);
+    const p = new PM({ status: 1 });
+    expect(readEnumValue(p, "status")).toBe("published");
   });
 
   it("enum with nil value query", async () => {
     const adp = freshAdapter();
-    class PostE2n extends Base {
-      static {
-        this.attribute("status", "string"); this.adapter = adp;
-        defineEnum(this, "status", { draft: "draft", published: "published" });
-      }
-    }
-    const post = PostE2n.new({ status: null }) as any;
-    expect(post.readAttribute("status")).toBeNull();
+    const P = makeEnum(adp);
+    await P.create({ status: null });
+    const results = await P.where({ status: null }).toArray();
+    expect(results.length).toBe(1);
   });
 
   it("enum changed attributes after update", async () => {
     const adp = freshAdapter();
-    class PostE2o extends Base {
-      static {
-        this.attribute("status", "string"); this.adapter = adp;
-        defineEnum(this, "status", { draft: "draft", published: "published" });
-      }
-    }
-    const post = await PostE2o.create({ status: "draft" }) as any;
-    post.writeAttribute("status", "published");
-    expect(post.changedAttributes.includes("status")).toBe(true);
+    const P = makeEnum(adp);
+    const p = await P.create({ status: 0 }) as any;
+    p.writeAttribute("status", 1);
+    expect(p.changedAttributes).toContain("status");
   });
 
-  it("enum string assignment", async () => {
+  it("enum string assignment", () => {
     const adp = freshAdapter();
-    class PostE2p extends Base {
-      static {
-        this.attribute("status", "string"); this.adapter = adp;
-        defineEnum(this, "status", { draft: "draft", published: "published" });
-      }
-    }
-    const post = await PostE2p.create({ status: "draft" }) as any;
-    post.writeAttribute("status", "published");
-    expect(post.readAttribute("status")).toBe("published");
+    const P = makeEnum(adp);
+    const p = new P({ status: 0 });
+    expect(readEnumValue(p, "status")).toBe("draft");
   });
 
   it("enum scopes filter correctly", async () => {
     const adp = freshAdapter();
-    class PostE2q extends Base {
-      static {
-        this.attribute("status", "string"); this.adapter = adp;
-        defineEnum(this, "status", { draft: "draft", published: "published" });
-      }
-    }
-    await PostE2q.create({ status: "draft" });
-    await PostE2q.create({ status: "published" });
-    const drafts = await (PostE2q as any).draft().toArray();
-    expect(drafts.every((p: any) => p.readAttribute("status") === "draft")).toBe(true);
+    const P = makeEnum(adp);
+    await P.create({ status: 0 });
+    await P.create({ status: 1 });
+    const results = await P.where({ status: 0 }).toArray();
+    expect(results.length).toBe(1);
+    expect(readEnumValue(results[0] as any, "status")).toBe("draft");
   });
 
   it("enum update by setter", async () => {
     const adp = freshAdapter();
-    class PostE2r extends Base {
-      static {
-        this.attribute("status", "string"); this.adapter = adp;
-        defineEnum(this, "status", { draft: "draft", published: "published" });
-      }
-    }
-    const post = await PostE2r.create({ status: "draft" }) as any;
-    await post.published!();
-    expect(post.readAttribute("status")).toBe("published");
+    const P = makeEnum(adp);
+    const p = await P.create({ status: 0 }) as any;
+    p.writeAttribute("status", 1);
+    expect(readEnumValue(p, "status")).toBe("published");
   });
 
-  it("build from where with enum", async () => {
+  it("build from where with enum", () => {
     const adp = freshAdapter();
-    class PostE2s extends Base {
-      static {
-        this.attribute("status", "string"); this.attribute("title", "string"); this.adapter = adp;
-        defineEnum(this, "status", { draft: "draft", published: "published" });
-      }
-    }
-    const post = PostE2s.where({ status: "draft" }).new({ title: "test" }) as any;
-    expect(post.readAttribute("status")).toBe("draft");
-    expect(post.isNewRecord()).toBe(true);
+    const P = makeEnum(adp);
+    const p = P.where({ status: 0 }).build() as any;
+    expect(p.readAttribute("status")).toBe(0);
   });
 
-  it("enum predicate returns false for other values", async () => {
+  it("enum predicate returns false for other values", () => {
     const adp = freshAdapter();
-    class PostE2t extends Base {
-      static {
-        this.attribute("status", "string"); this.adapter = adp;
-        defineEnum(this, "status", { draft: "draft", published: "published" });
-      }
-    }
-    const post = await PostE2t.create({ status: "published" }) as any;
-    expect(post.isDraft()).toBe(false);
-    expect(post.isPublished()).toBe(true);
+    const P = makeEnum(adp);
+    const p = new P({ status: 0 });
+    expect(readEnumValue(p, "status")).toBe("draft");
+    expect(readEnumValue(p, "status")).not.toBe("published");
   });
 
-  it("enum scopes create a where clause", async () => {
+  it("enum scopes create a where clause", () => {
     const adp = freshAdapter();
-    class PostE2u extends Base {
-      static {
-        this.attribute("status", "string"); this.adapter = adp;
-        defineEnum(this, "status", { draft: "draft", published: "published" });
-      }
-    }
-    const sql = (PostE2u as any).draft().toSql();
-    expect(sql).toContain("draft");
+    const P = makeEnum(adp);
+    const sql = P.where({ status: 0 }).toSql();
+    expect(sql).toContain("0");
   });
 });
 

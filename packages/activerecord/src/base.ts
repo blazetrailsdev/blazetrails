@@ -1,5 +1,5 @@
-import { Model } from "@rails-js/activemodel";
-import { Table } from "@rails-js/arel";
+import { Model } from "@rails-ts/activemodel";
+import { Table } from "@rails-ts/arel";
 import type { DatabaseAdapter } from "./adapter.js";
 import { getInheritanceColumn, isStiSubclass, getStiBase, instantiateSti } from "./sti.js";
 import {

@@ -1,5 +1,5 @@
 {
-  "name": "@rails-js/activemodel",
+  "name": "@rails-ts/activemodel",
   "version": "0.1.0",
   "description": "Attributes, validations, callbacks, and serialization, mirroring Ruby's ActiveModel",
   "type": "module",

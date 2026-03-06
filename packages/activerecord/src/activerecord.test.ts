@@ -8467,7 +8467,7 @@ describe("ActiveRecord", () => {
       const fakePost = { _attributes: new Map<string, string | number>([["title", "Hello"], ["id", 1]]) };
       (author as any)._preloadedAssociations = new Map([["posts", [fakePost]]]);
 
-      const { serializableHash } = await import("@rails-js/activemodel");
+      const { serializableHash } = await import("@rails-ts/activemodel");
       const hash = serializableHash(author, { include: ["posts"] });
       expect(hash.name).toBe("Alice");
       expect(Array.isArray(hash.posts)).toBe(true);

@@ -1,5 +1,5 @@
 {
-  "name": "@rails-js/activerecord",
+  "name": "@rails-ts/activerecord",
   "version": "0.1.0",
   "description": "ORM layer mirroring Ruby's ActiveRecord, built on @rails-js/arel and @rails-js/activemodel",
   "type": "module",
@@ -9,8 +9,8 @@
     "build": "tsc"
   },
   "dependencies": {
-    "@rails-js/arel": "0.1.0",
-    "@rails-js/activemodel": "0.1.0"
+    "@rails-ts/arel": "0.1.0",
+    "@rails-ts/activemodel": "0.1.0"
   },
   "files": ["dist"],
   "license": "MIT"

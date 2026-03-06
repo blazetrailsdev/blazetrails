@@ -1,5 +1,5 @@
 {
-  "name": "@rails-js/arel",
+  "name": "@rails-ts/arel",
   "version": "0.1.0",
   "description": "SQL AST builder and query generation, mirroring Ruby's Arel",
   "type": "module",

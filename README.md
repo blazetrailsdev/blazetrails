@@ -53,6 +53,32 @@ query.toSql();
   the string form is always supported for parity with Rails.
 - **Incremental** — Built to match the behaviors validated by the Rails test suite.
 
+## Ruby to TypeScript Conventions
+
+To maintain Rails parity while staying idiomatic to TypeScript, we follow a few standard transformations:
+
+### Method Names
+| Ruby / Rails | TypeScript / `rails-js` | Example |
+|--------------|-------------------------|---------|
+| `valid?` | `isValid()` | Predicates (`?`) become `is*` prefix. |
+| `save!` | `saveBang()` | Bang methods (`!`) become `*Bang` suffix. |
+| `initialize` | `constructor` | Standard TypeScript class constructors. |
+| `table[:id]` | `table.get("id")` | The `[]` operator is mapped to `get()`. |
+| `model[:id]` | `model.readAttribute("id")` | Explicit attribute reading. |
+| `model[:id] = 1` | `model.writeAttribute("id", 1)` | Explicit attribute writing. |
+
+### Property Access
+While Rails dynamically generates getters and setters for all database columns, TypeScript requires these to be known at compile-time. You can use `readAttribute` and `writeAttribute` for any field, or use `aliasAttribute` to create typed properties:
+
+```typescript
+class User extends Model {
+  static {
+    this.attribute("name", "string");
+    this.aliasAttribute("name", "name"); // Creates u.name getter/setter
+  }
+}
+```
+
 ## Project Status
 
 This project is actively developed. We measure progress by comparing our API surface and test suite against the original Ruby on Rails source code.

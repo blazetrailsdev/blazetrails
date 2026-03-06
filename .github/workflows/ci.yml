@@ -7,8 +7,20 @@ on:
     branches: [main]
 
 jobs:
-  unit:
-    name: Unit Tests
+  build:
+    name: Build & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+
+  unit-tests:
+    name: Unit Tests (SQLite)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,7 +31,7 @@ jobs:
       - run: npm ci
       - run: npx vitest run
 
-  postgres:
+  postgres-tests:
     name: PostgreSQL Tests
     runs-on: ubuntu-latest
     services:
@@ -47,7 +59,7 @@ jobs:
         env:
           PG_TEST_URL: postgres://postgres:postgres@localhost:5432/rails_js_test
 
-  mariadb:
+  mariadb-tests:
     name: MariaDB Tests
     runs-on: ubuntu-latest
     services:
@@ -73,3 +85,19 @@ jobs:
       - run: npx vitest run
         env:
           MYSQL_TEST_URL: mysql://root@localhost:3306/rails_js_test
+
+  rails-comparison:
+    name: Rails API/Test Comparison
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+      - run: npm ci
+      - run: npm run api:compare
+      - run: npm run test:compare

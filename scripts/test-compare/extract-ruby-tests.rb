@@ -20,9 +20,10 @@ OUTPUT_DIR = File.join(SCRIPT_DIR, "output")
 
 # Map packages to their test directories
 PACKAGE_TEST_DIRS = {
-  "arel"         => File.join(RAILS_DIR, "activerecord", "test", "cases", "arel"),
-  "activemodel"  => File.join(RAILS_DIR, "activemodel", "test", "cases"),
-  "activerecord" => File.join(RAILS_DIR, "activerecord", "test", "cases"),
+  "arel"          => File.join(RAILS_DIR, "activerecord", "test", "cases", "arel"),
+  "activemodel"   => File.join(RAILS_DIR, "activemodel", "test", "cases"),
+  "activerecord"  => File.join(RAILS_DIR, "activerecord", "test", "cases"),
+  "activesupport" => File.join(RAILS_DIR, "activesupport", "test"),
 }
 
 # Files/directories to skip (infrastructure, not actual tests)

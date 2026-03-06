@@ -583,6 +583,42 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
   },
 
   // ==========================================================================
+  // ActiveSupport
+  // ==========================================================================
+  activesupport: {
+    "inflector_test.rb": [
+      { file: "activesupport.test.ts", describeBlock: "Inflector" },
+    ],
+    "callbacks_test.rb": [
+      { file: "callbacks.test.ts", describeBlock: "Callbacks" },
+    ],
+    "concern_test.rb": [
+      { file: "concern.test.ts", describeBlock: "Concern" },
+    ],
+    "hash_with_indifferent_access_test.rb": [
+      { file: "collections.test.ts", describeBlock: "HashWithIndifferentAccess" },
+    ],
+    "core_ext/string_ext_test.rb": [
+      { file: "activesupport.test.ts", describeBlock: "String utilities" },
+    ],
+    "core_ext/enumerable_test.rb": [
+      { file: "collections.test.ts", describeBlock: "deepMerge" },
+      { file: "collections.test.ts", describeBlock: "slice" },
+      { file: "collections.test.ts", describeBlock: "except" },
+    ],
+    "core_ext/hash_ext_test.rb": [
+      { file: "collections.test.ts", describeBlock: "deepMerge" },
+      { file: "collections.test.ts", describeBlock: "deepDup" },
+      { file: "collections.test.ts", describeBlock: "deepTransformKeys" },
+      { file: "collections.test.ts", describeBlock: "deepCamelizeKeys" },
+      { file: "collections.test.ts", describeBlock: "deepUnderscoreKeys" },
+    ],
+    "class_attribute_test.rb": [
+      { file: "class-attribute.test.ts", describeBlock: "classAttribute" },
+    ],
+  },
+
+  // ==========================================================================
   // ActiveRecord
   // ==========================================================================
   activerecord: {

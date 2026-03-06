@@ -18,6 +18,13 @@ const OUTPUT_DIR = path.join(SCRIPT_DIR, "output");
 const PACKAGE_TEST_FILES: Record<string, string[]> = {
   arel: ["packages/arel/src/arel.test.ts"],
   activemodel: ["packages/activemodel/src/activemodel.test.ts"],
+  activesupport: [
+    "packages/activesupport/src/activesupport.test.ts",
+    "packages/activesupport/src/callbacks.test.ts",
+    "packages/activesupport/src/concern.test.ts",
+    "packages/activesupport/src/class-attribute.test.ts",
+    "packages/activesupport/src/collections.test.ts",
+  ],
   activerecord: [
     "packages/activerecord/src/activerecord.test.ts",
     "packages/activerecord/src/rails-guided.test.ts",

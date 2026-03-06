@@ -596,6 +596,7 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
       { file: "rails-guided.test.ts", describeBlock: "Persistence edge cases (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "update_column / update_columns (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Grouped Calculations (Rails-guided)" },
+      { file: "base-extended.test.ts", describeBlock: "Persistence (extended)" },
     ],
     "finder_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "finders" },
@@ -607,6 +608,8 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
       { file: "rails-guided.test.ts", describeBlock: "Finders (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Finders edge cases (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Grouped Calculations (Rails-guided)" },
+      { file: "relations.test.ts", describeBlock: "Finders" },
+      { file: "base-extended.test.ts", describeBlock: "Finders (extended)" },
     ],
     "relations_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "Relation" },
@@ -629,6 +632,7 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
       { file: "rails-guided.test.ts", describeBlock: "Relation query edge cases (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Rails-guided: New Features" },
       { file: "rails-guided.test.ts", describeBlock: "Grouped Calculations (Rails-guided)" },
+      { file: "relations.test.ts", describeBlock: "Relation" },
     ],
     "relation/where_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "where with Range" },
@@ -637,17 +641,26 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
       { file: "rails-guided.test.ts", describeBlock: "Grouped Calculations (Rails-guided)" },
       { file: "coverage-boost.test.ts", describeBlock: "WhereTest" },
       { file: "coverage-boost.test.ts", describeBlock: "WhereClauseTest" },
+      { file: "relations.test.ts", describeBlock: "where" },
+      { file: "relations.test.ts", describeBlock: "whereNot" },
+      { file: "relations.test.ts", describeBlock: "whereAny" },
+      { file: "relations.test.ts", describeBlock: "whereAll" },
+      { file: "relations.test.ts", describeBlock: "where with Range" },
+      { file: "relations.test.ts", describeBlock: "rewhere" },
+      { file: "relations.test.ts", describeBlock: "invertWhere" },
     ],
     "relation/or_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "Relation#or" },
       { file: "rails-guided.test.ts", describeBlock: "Relation#or (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Grouped Calculations (Rails-guided)" },
       { file: "coverage-boost.test.ts", describeBlock: "OrTest" },
+      { file: "relations.test.ts", describeBlock: "or" },
     ],
     "relation/and_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "and()" },
       { file: "rails-guided.test.ts", describeBlock: "Grouped Calculations (Rails-guided)" },
       { file: "coverage-boost.test.ts", describeBlock: "AndTest" },
+      { file: "relations.test.ts", describeBlock: "and" },
     ],
     "relation/delete_all_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "destroyBy and deleteBy" },
@@ -659,20 +672,24 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
     "relation/field_ordered_values_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "inOrderOf()" },
       { file: "coverage-boost.test.ts", describeBlock: "FieldOrderedValuesTest" },
+      { file: "relations.test.ts", describeBlock: "inOrderOf" },
     ],
     "relation/order_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "Relation" },
       { file: "activerecord.test.ts", describeBlock: "regroup()" },
       { file: "coverage-boost.test.ts", describeBlock: "OrderTest" },
+      { file: "relations.test.ts", describeBlock: "order" },
     ],
     "relation/select_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "select block form" },
       { file: "activerecord.test.ts", describeBlock: "Relation" },
       { file: "coverage-boost.test.ts", describeBlock: "SelectTest" },
+      { file: "relations.test.ts", describeBlock: "select" },
     ],
     "relation/structural_compatibility_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "structurallyCompatible" },
       { file: "coverage-boost.test.ts", describeBlock: "StructuralCompatibilityTest" },
+      { file: "relations.test.ts", describeBlock: "structurallyCompatible" },
     ],
     "relation/update_all_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "static updateAll" },
@@ -704,6 +721,11 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
       { file: "rails-guided.test.ts", describeBlock: "Calculations (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Calculations edge cases (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Grouped Calculations (Rails-guided)" },
+      { file: "base-extended.test.ts", describeBlock: "Calculations (extended)" },
+      { file: "relations.test.ts", describeBlock: "sum / average / minimum / maximum" },
+      { file: "relations.test.ts", describeBlock: "count" },
+      { file: "relations.test.ts", describeBlock: "pluck" },
+      { file: "relations.test.ts", describeBlock: "pick" },
     ],
     "aggregations_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "Aggregations" },
@@ -717,6 +739,8 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
       { file: "rails-guided.test.ts", describeBlock: "default_scope / unscoped (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Grouped Calculations (Rails-guided)" },
       { file: "coverage-boost.test.ts", describeBlock: "ScopingTest" },
+      { file: "relations.test.ts", describeBlock: "defaultScope" },
+      { file: "relations.test.ts", describeBlock: "unscoped" },
     ],
     "scoping/named_scoping_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "Scopes" },
@@ -725,12 +749,15 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
       { file: "rails-guided.test.ts", describeBlock: "Scopes (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Scopes edge cases (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Grouped Calculations (Rails-guided)" },
+      { file: "relations.test.ts", describeBlock: "scope" },
+      { file: "relations.test.ts", describeBlock: "Scoping" },
     ],
     "scoping/relation_scoping_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "scoping()" },
       { file: "activerecord.test.ts", describeBlock: "Scopes" },
       { file: "activerecord.test.ts", describeBlock: "Scopes (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Grouped Calculations (Rails-guided)" },
+      { file: "relations.test.ts", describeBlock: "scoping block" },
     ],
     "associations/belongs_to_associations_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "Associations" },
@@ -738,6 +765,10 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
       { file: "activerecord.test.ts", describeBlock: "Callbacks (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Associations (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Grouped Calculations (Rails-guided)" },
+      { file: "associations.test.ts", describeBlock: "BelongsToAssociations" },
+      { file: "associations.test.ts", describeBlock: "DependentAssociations" },
+      { file: "associations.test.ts", describeBlock: "StrictLoading" },
+      { file: "associations.test.ts", describeBlock: "TouchBelongsToParents" },
     ],
     "associations/has_many_associations_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "Associations" },
@@ -746,12 +777,19 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
       { file: "activerecord.test.ts", describeBlock: "Callbacks (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Associations (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Grouped Calculations (Rails-guided)" },
+      { file: "associations.test.ts", describeBlock: "HasManyAssociations" },
+      { file: "associations.test.ts", describeBlock: "CollectionProxy" },
+      { file: "associations.test.ts", describeBlock: "DependentAssociations" },
+      { file: "associations.test.ts", describeBlock: "CounterCache" },
     ],
     "associations/has_one_associations_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "Associations" },
       { file: "activerecord.test.ts", describeBlock: "Associations: dependent" },
       { file: "rails-guided.test.ts", describeBlock: "Associations (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Grouped Calculations (Rails-guided)" },
+      { file: "associations.test.ts", describeBlock: "HasOneAssociations" },
+      { file: "associations.test.ts", describeBlock: "DependentAssociations" },
+      { file: "associations.test.ts", describeBlock: "StrictLoading" },
     ],
     "associations/has_many_through_associations_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "Associations: has_many through" },
@@ -759,6 +797,7 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
       { file: "activerecord.test.ts", describeBlock: "association scopes" },
       { file: "activerecord.test.ts", describeBlock: "CollectionProxy" },
       { file: "rails-guided.test.ts", describeBlock: "Grouped Calculations (Rails-guided)" },
+      { file: "associations.test.ts", describeBlock: "HasManyThroughAssociations" },
     ],
     "associations/has_and_belongs_to_many_associations_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "has_and_belongs_to_many" },
@@ -766,6 +805,7 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
       { file: "activerecord.test.ts", describeBlock: "Associations: dependent" },
       { file: "rails-guided.test.ts", describeBlock: "HABTM (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Grouped Calculations (Rails-guided)" },
+      { file: "associations.test.ts", describeBlock: "HasAndBelongsToManyAssociations" },
     ],
     "associations/has_one_through_associations_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "Associations" },
@@ -782,6 +822,7 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
       { file: "activerecord.test.ts", describeBlock: "Associations" },
       { file: "rails-guided.test.ts", describeBlock: "inverse_of (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Grouped Calculations (Rails-guided)" },
+      { file: "associations.test.ts", describeBlock: "AssociationReflection" },
     ],
     "associations/join_model_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "Associations" },
@@ -789,6 +830,8 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
       { file: "activerecord.test.ts", describeBlock: "Associations: dependent" },
       { file: "rails-guided.test.ts", describeBlock: "Associations (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Grouped Calculations (Rails-guided)" },
+      { file: "associations.test.ts", describeBlock: "AssociationDefinitions" },
+      { file: "associations.test.ts", describeBlock: "AssociationReflection" },
     ],
     "associations/left_outer_join_association_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "Relation: joins and leftJoins" },
@@ -833,6 +876,9 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
       { file: "rails-guided.test.ts", describeBlock: "Associations (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Grouped Calculations (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Rails-guided: New Features" },
+      { file: "associations.test.ts", describeBlock: "AssociationDefinitions" },
+      { file: "associations.test.ts", describeBlock: "AssociationReflection" },
+      { file: "associations.test.ts", describeBlock: "CollectionProxy" },
     ],
     "transactions_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "Transactions" },
@@ -876,6 +922,7 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
       { file: "coverage-boost.test.ts", describeBlock: "EnumTest" },
       { file: "rails-guided.test.ts", describeBlock: "Enum (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Grouped Calculations (Rails-guided)" },
+      { file: "base-extended.test.ts", describeBlock: "Enum (extended)" },
     ],
     "inheritance_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "STI" },
@@ -912,6 +959,7 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
       { file: "activerecord.test.ts", describeBlock: "counter_cache" },
       { file: "rails-guided.test.ts", describeBlock: "Counter Cache (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Grouped Calculations (Rails-guided)" },
+      { file: "associations.test.ts", describeBlock: "CounterCache" },
     ],
     "migration_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "Migrations" },
@@ -929,6 +977,7 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
       { file: "activerecord.test.ts", describeBlock: "Base features (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Reflection (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Grouped Calculations (Rails-guided)" },
+      { file: "associations.test.ts", describeBlock: "AssociationReflection" },
     ],
     "nested_attributes_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "acceptsNestedAttributesFor" },
@@ -990,6 +1039,7 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
       { file: "rails-guided.test.ts", describeBlock: "Grouped Calculations (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Rails-guided: New Features" },
       { file: "coverage-boost.test.ts", describeBlock: "AttributeMethodsTest" },
+      { file: "base-extended.test.ts", describeBlock: "Attributes (extended)" },
     ],
     "cache_key_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "cacheKey / cacheKeyWithVersion" },
@@ -1050,6 +1100,7 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
       { file: "rails-guided.test.ts", describeBlock: "Grouped Calculations (Rails-guided)" },
       { file: "rails-guided.test.ts", describeBlock: "Rails-guided: New Features" },
       { file: "coverage-boost.test.ts", describeBlock: "BasicsTest" },
+      { file: "base-extended.test.ts", describeBlock: "Base (extended)" },
     ],
     "autosave_association_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "Associations" },
@@ -1104,6 +1155,7 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
       { file: "activerecord.test.ts", describeBlock: "Relation" },
       { file: "activerecord.test.ts", describeBlock: "Relation (extended)" },
       { file: "rails-guided.test.ts", describeBlock: "Grouped Calculations (Rails-guided)" },
+      { file: "relations.test.ts", describeBlock: "merge" },
     ],
     "relation/mutation_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "Relation" },
@@ -1116,6 +1168,7 @@ export const TEST_FILE_MAP: Record<string, FileMap> = {
     "strict_loading_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "strict_loading" },
       { file: "activerecord.test.ts", describeBlock: "strictLoadingByDefault" },
+      { file: "associations.test.ts", describeBlock: "StrictLoading" },
     ],
     "primary_keys_test.rb": [
       { file: "activerecord.test.ts", describeBlock: "primary key" },

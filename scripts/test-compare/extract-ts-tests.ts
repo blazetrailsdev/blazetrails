@@ -22,6 +22,9 @@ const PACKAGE_TEST_FILES: Record<string, string[]> = {
     "packages/activerecord/src/activerecord.test.ts",
     "packages/activerecord/src/rails-guided.test.ts",
     "packages/activerecord/src/coverage-boost.test.ts",
+    "packages/activerecord/src/associations.test.ts",
+    "packages/activerecord/src/relations.test.ts",
+    "packages/activerecord/src/base-extended.test.ts",
   ],
 };
 

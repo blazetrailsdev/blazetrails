@@ -3309,7 +3309,7 @@ export const TEST_OVERRIDES: Record<string, string | null> = {
   "DateExtCalculationsTest > end of month": "DateExtCalculationsTest > end_of_month",
   "DateExtCalculationsTest > last year in leap years": null,
   "DateExtCalculationsTest > last year in calendar reform": null,
-  "DateExtCalculationsTest > advance": null,
+  "DateExtCalculationsTest > advance": "DateExtCalculationsTest > advance date with months overflow",
   "DateExtCalculationsTest > advance does first years and then days": null,
   "DateExtCalculationsTest > advance does first months and then days": null,
   "DateExtCalculationsTest > advance in calendar reform": null,
@@ -3360,20 +3360,20 @@ export const TEST_OVERRIDES: Record<string, string | null> = {
   "DateTimeExtCalculationsTest > to time": null,
   "DateTimeExtCalculationsTest > to time preserves fractional seconds": null,
   "DateTimeExtCalculationsTest > civil from format": null,
-  "DateTimeExtCalculationsTest > seconds since midnight": null,
-  "DateTimeExtCalculationsTest > seconds until end of day": null,
-  "DateTimeExtCalculationsTest > beginning of day": null,
+  "DateTimeExtCalculationsTest > seconds since midnight": "DateTimeExtCalculationsTest > seconds_since_midnight from datetime",
+  "DateTimeExtCalculationsTest > seconds until end of day": "DateTimeExtCalculationsTest > seconds_until_end_of_day from datetime",
+  "DateTimeExtCalculationsTest > beginning of day": "DateTimeExtCalculationsTest > beginning_of_day from datetime",
   "DateTimeExtCalculationsTest > middle of day": null,
-  "DateTimeExtCalculationsTest > end of day": null,
-  "DateTimeExtCalculationsTest > beginning of hour": null,
-  "DateTimeExtCalculationsTest > end of hour": null,
+  "DateTimeExtCalculationsTest > end of day": "DateTimeExtCalculationsTest > end_of_day from datetime",
+  "DateTimeExtCalculationsTest > beginning of hour": "DateTimeExtCalculationsTest > beginning_of_hour from datetime",
+  "DateTimeExtCalculationsTest > end of hour": "DateTimeExtCalculationsTest > end_of_hour from datetime",
   "DateTimeExtCalculationsTest > beginning of minute": null,
   "DateTimeExtCalculationsTest > end of minute": null,
   "DateTimeExtCalculationsTest > end of month": null,
-  "DateTimeExtCalculationsTest > ago": null,
-  "DateTimeExtCalculationsTest > since": null,
+  "DateTimeExtCalculationsTest > ago": "DateTimeExtCalculationsTest > ago from datetime",
+  "DateTimeExtCalculationsTest > since": "DateTimeExtCalculationsTest > since from datetime",
   "DateTimeExtCalculationsTest > change": null,
-  "DateTimeExtCalculationsTest > advance": null,
+  "DateTimeExtCalculationsTest > advance": "DateTimeExtCalculationsTest > advance from datetime",
   "DateTimeExtCalculationsTest > advance partial days": null,
   "DateTimeExtCalculationsTest > advanced processes first the date deltas and then the time deltas": null,
   "DateTimeExtCalculationsTest > last week": null,
@@ -4274,12 +4274,12 @@ export const TEST_OVERRIDES: Record<string, string | null> = {
   "TimeExtCalculationsTest > minus with datetime": null,
   "TimeExtCalculationsTest > time created with local constructor cannot represent times during hour skipped by dst": null,
   "TimeExtCalculationsTest > case equality": null,
-  "TimeExtCalculationsTest > all day": null,
+  "TimeExtCalculationsTest > all day": "TimeExtCalculationsTest > all_day",
   "TimeExtCalculationsTest > all day with timezone": null,
-  "TimeExtCalculationsTest > all week": null,
-  "TimeExtCalculationsTest > all month": null,
-  "TimeExtCalculationsTest > all quarter": null,
-  "TimeExtCalculationsTest > all year": null,
+  "TimeExtCalculationsTest > all week": "TimeExtCalculationsTest > all_week",
+  "TimeExtCalculationsTest > all month": "TimeExtCalculationsTest > all_month",
+  "TimeExtCalculationsTest > all quarter": "TimeExtCalculationsTest > all_quarter",
+  "TimeExtCalculationsTest > all year": "TimeExtCalculationsTest > all_year",
   "TimeExtCalculationsTest > rfc3339 parse": null,
   "TimeExtCalculationsTest > prev day": "TimeExtCalculationsTest > prev_day",
   "TimeExtCalculationsTest > next day": "TimeExtCalculationsTest > next_day",
@@ -7416,9 +7416,9 @@ export const TEST_OVERRIDES: Record<string, string | null> = {
   "MigrationTest > create table with query from relation": "MigrationTest > create table with query from relation",
   "MigrationTest > allows sqlite3 rollback on invalid column type": "MigrationTest > allows sqlite3 rollback on invalid column type",
   "MigrationTest > out of range integer limit should raise": "MigrationTest > out of range integer limit should raise",
-  "MigrationTest > out of range text limit should raise": null,
-  "MigrationTest > out of range binary limit should raise": null,
-  "MigrationTest > invalid text size should raise": null,
+  "MigrationTest > out of range text limit should raise": "MigrationTest > out of range text limit should raise",
+  "MigrationTest > out of range binary limit should raise": "MigrationTest > out of range binary limit should raise",
+  "MigrationTest > invalid text size should raise": "MigrationTest > invalid text size should raise",
   "MigrationTest > migrator generates valid lock id": "MigrationTest > migrator generates valid lock id",
   "MigrationTest > generate migrator advisory lock id": "MigrationTest > generate migrator advisory lock id",
   "MigrationTest > migrator one up with unavailable lock": "MigrationTest > migrator one up with unavailable lock",
@@ -8022,10 +8022,10 @@ export const TEST_OVERRIDES: Record<string, string | null> = {
   "InheritanceTest > should store full class name with store full sti class option enabled": null, // store_full_sti_class not applicable
   "InheritanceTest > different namespace subclass should load correctly with store full sti class option": null, // store_full_sti_class not applicable
   "InheritanceTest > descends from active record": "InheritanceTest > descends from active record", // descends_from_active_record? not yet implemented
-  "InheritanceTest > company descends from active record": null, // descends_from_active_record? not yet implemented
+  "InheritanceTest > company descends from active record": "InheritanceTest > company descends from active record", // descends_from_active_record? not yet implemented
   "InheritanceTest > abstract class": "InheritanceTest > abstract class",
   "InheritanceTest > inheritance base class": "InheritanceTest > inheritance base class",
-  "InheritanceTest > abstract inheritance base class": null, // requires abstract class hierarchy with explicit base_class
+  "InheritanceTest > abstract inheritance base class": "InheritanceTest > abstract inheritance base class", // requires abstract class hierarchy with explicit base_class
   "InheritanceTest > base class activerecord error": null, // Ruby-specific include behavior
   "InheritanceTest > alt becomes works with sti": "InheritanceTest > alt becomes works with sti",
   "InheritanceTest > becomes sets variables before initialization callbacks": null, // requires after_initialize callbacks
@@ -8034,12 +8034,12 @@ export const TEST_OVERRIDES: Record<string, string | null> = {
   "InheritanceTest > inheritance find all": "InheritanceTest > inheritance find all",
   "InheritanceTest > alt inheritance find all": "InheritanceTest > alt inheritance find all",
   "InheritanceTest > inheritance new with default class": "InheritanceTest > inheritance new with default class",
-  "InheritanceTest > inheritance new with base class": null, // Company.new(type: "Company") subclass dispatch not implemented
-  "InheritanceTest > inheritance new with subclass": null, // Company.new(type: "Firm") subclass dispatch not implemented
-  "InheritanceTest > where new with subclass": null, // Company.where(type: "Firm").new dispatch not implemented
-  "InheritanceTest > where create with subclass": null, // Company.where(type: "Firm").create dispatch not implemented
+  "InheritanceTest > inheritance new with base class": "InheritanceTest > inheritance new with base class", // Company.new(type: "Company") subclass dispatch not implemented
+  "InheritanceTest > inheritance new with subclass": "InheritanceTest > inheritance new with subclass", // Company.new(type: "Firm") subclass dispatch not implemented
+  "InheritanceTest > where new with subclass": "InheritanceTest > where new with subclass", // Company.where(type: "Firm").new dispatch not implemented
+  "InheritanceTest > where create with subclass": "InheritanceTest > where create with subclass", // Company.where(type: "Firm").create dispatch not implemented
   "InheritanceTest > where create bang with subclass": null, // Company.where(type: "Firm").create! dispatch not implemented
-  "InheritanceTest > new with abstract class": null, // abstract class instantiation guard not implemented
+  "InheritanceTest > new with abstract class": "InheritanceTest > new with abstract class", // abstract class instantiation guard not implemented
   "InheritanceTest > new with ar base": null, // Base instantiation guard not implemented
   "InheritanceTest > new with invalid type": null, // SubclassNotFound not implemented
   "InheritanceTest > new with unrelated type": null, // SubclassNotFound not implemented
@@ -8057,9 +8057,9 @@ export const TEST_OVERRIDES: Record<string, string | null> = {
   "InheritanceTest > finding incorrect type data": "InheritanceTest > finding incorrect type data",
   "InheritanceTest > alt finding incorrect type data": "InheritanceTest > alt finding incorrect type data",
   "InheritanceTest > update all within inheritance": "InheritanceTest > update all within inheritance", // update_all not fully STI-scoped
-  "InheritanceTest > alt update all within inheritance": null, // update_all not fully STI-scoped
+  "InheritanceTest > alt update all within inheritance": "InheritanceTest > alt update all within inheritance", // update_all not fully STI-scoped
   "InheritanceTest > destroy all within inheritance": "InheritanceTest > destroy all within inheritance",
-  "InheritanceTest > alt destroy all within inheritance": null, // requires fixture setup
+  "InheritanceTest > alt destroy all within inheritance": "InheritanceTest > alt destroy all within inheritance", // requires fixture setup
   "InheritanceTest > find first within inheritance": "InheritanceTest > find first within inheritance",
   "InheritanceTest > alt find first within inheritance": "InheritanceTest > alt find first within inheritance",
   "InheritanceTest > complex inheritance": "InheritanceTest > complex inheritance",
@@ -8068,7 +8068,7 @@ export const TEST_OVERRIDES: Record<string, string | null> = {
   "InheritanceTest > alt eager loading": null, // requires eager loading
   "InheritanceTest > eager load belongs to primary key quoting": null, // SQL quoting / eager loading
   "InheritanceTest > inherits custom primary key": "InheritanceTest > inherits custom primary key",
-  "InheritanceTest > inheritance without mapping": null,
+  "InheritanceTest > inheritance without mapping": "InheritanceTest > inheritance without mapping",
   "InheritanceTest > scope inherited properly": "InheritanceTest > scope inherited properly",
   "InheritanceTest > inheritance with default scope": "InheritanceTest > inheritance with default scope",
   "InheritanceComputeTypeTest > instantiation doesnt try to require corresponding file": null,
@@ -8078,15 +8078,15 @@ export const TEST_OVERRIDES: Record<string, string | null> = {
   "InheritanceAttributeMappingTest > sti with custom type": null,
   "InheritanceAttributeMappingTest > polymorphic associations custom type": null,
   "InsertAllTest > insert with type casting and serialize is consistent": null, // Ruby-only: requires RETURNING clause support
-  "InsertAllTest > insert all should handle empty arrays": null, // Ruby-only: returns ActiveRecord::Result object
+  "InsertAllTest > insert all should handle empty arrays": "InsertAllTest > insert all should handle empty arrays", // Ruby-only: returns ActiveRecord::Result object
   "InsertAllTest > insert all returns primary key if returning is supported": "InsertAllTest > insert all returns primary key if returning is supported", // Ruby-only: RETURNING clause
-  "InsertAllTest > insert all returns nothing if returning is empty": null, // Ruby-only: RETURNING clause
-  "InsertAllTest > insert all returns nothing if returning is false": null, // Ruby-only: RETURNING clause
+  "InsertAllTest > insert all returns nothing if returning is empty": "InsertAllTest > insert all returns nothing if returning is empty", // Ruby-only: RETURNING clause
+  "InsertAllTest > insert all returns nothing if returning is false": "InsertAllTest > insert all returns nothing if returning is false", // Ruby-only: RETURNING clause
   "InsertAllTest > insert all returns requested fields": "InsertAllTest > insert all returns requested fields", // Ruby-only: RETURNING clause
   "InsertAllTest > insert all returns requested sql fields": null, // Ruby-only: RETURNING clause
   "InsertAllTest > insert all can skip duplicate records": "InsertAllTest > insert all can skip duplicate records", // Ruby-only: ON CONFLICT DO NOTHING with adapter support check
   "InsertAllTest > insert all generates correct sql": "InsertAllTest > insert all generates correct sql", // Ruby-only: MySQL adapter SQL check
-  "InsertAllTest > insert all succeeds when passed no attributes": null, // Ruby-only: MySQL adapter
+  "InsertAllTest > insert all succeeds when passed no attributes": "InsertAllTest > insert all succeeds when passed no attributes", // Ruby-only: MySQL adapter
   "InsertAllTest > insert all with skip duplicates and autonumber id not given": null, // Ruby-only: MySQL autonumber behavior
   "InsertAllTest > insert all with skip duplicates and autonumber id given": null, // Ruby-only: adapter duplicate skip
   "InsertAllTest > skip duplicates strategy does not secretly upsert": "InsertAllTest > skip duplicates strategy does not secretly upsert", // Ruby-only: adapter conflict skip

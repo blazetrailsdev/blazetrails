@@ -744,4 +744,507 @@ describe("BelongsToAssociationsTest", () => {
     });
     expect(loaded).toBeNull();
   });
+
+  // -------------------------------------------------------------------------
+  // natural assignment / id assignment
+  // -------------------------------------------------------------------------
+
+  it("natural assignment", async () => {
+    class NatFirm extends Base {
+      static { this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    class NatAccount extends Base {
+      static { this.attribute("firm_id", "integer"); this.adapter = adapter; }
+    }
+    registerModel("NatFirm", NatFirm);
+    registerModel("NatAccount", NatAccount);
+
+    const firm = await NatFirm.create({ name: "Signal37" });
+    const account = await NatAccount.create({ firm_id: firm.id });
+
+    const loaded = await loadBelongsTo(account, "natFirm", {
+      className: "NatFirm", foreignKey: "firm_id",
+    });
+    expect(loaded!.readAttribute("name")).toBe("Signal37");
+  });
+
+  it("id assignment", async () => {
+    class IdFirm extends Base {
+      static { this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    class IdAccount extends Base {
+      static { this.attribute("firm_id", "integer"); this.adapter = adapter; }
+    }
+    registerModel("IdFirm", IdFirm);
+    registerModel("IdAccount", IdAccount);
+
+    const firm = await IdFirm.create({ name: "Corp" });
+    const account = new IdAccount({});
+    account.writeAttribute("firm_id", firm.id);
+    await account.save();
+
+    const loaded = await loadBelongsTo(account, "idFirm", {
+      className: "IdFirm", foreignKey: "firm_id",
+    });
+    expect(loaded!.id).toBe(firm.id);
+  });
+
+  it("natural assignment to nil", async () => {
+    class NilFirm extends Base {
+      static { this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    class NilAccount extends Base {
+      static { this.attribute("firm_id", "integer"); this.adapter = adapter; }
+    }
+    registerModel("NilFirm", NilFirm);
+    registerModel("NilAccount", NilAccount);
+
+    const firm = await NilFirm.create({ name: "Corp" });
+    const account = await NilAccount.create({ firm_id: firm.id });
+    account.writeAttribute("firm_id", null);
+    await account.save();
+
+    const loaded = await loadBelongsTo(account, "nilFirm", {
+      className: "NilFirm", foreignKey: "firm_id",
+    });
+    expect(loaded).toBeNull();
+  });
+
+  // -------------------------------------------------------------------------
+  // building / creating via belongs_to
+  // -------------------------------------------------------------------------
+
+  it("building the belonging object", async () => {
+    class BuildFirm extends Base {
+      static { this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    class BuildAccount extends Base {
+      static { this.attribute("firm_id", "integer"); this.adapter = adapter; }
+    }
+    Associations.belongsTo.call(BuildAccount, "buildFirm", {
+      className: "BuildFirm", foreignKey: "firm_id",
+    });
+    registerModel("BuildFirm", BuildFirm);
+    registerModel("BuildAccount", BuildAccount);
+
+    const account = new BuildAccount({});
+    const firm = new BuildFirm({ name: "New Firm" });
+    account.writeAttribute("firm_id", undefined);
+
+    // Simulate build: create firm, set FK
+    await firm.save();
+    account.writeAttribute("firm_id", firm.id);
+    await account.save();
+
+    const loaded = await loadBelongsTo(account, "buildFirm", {
+      className: "BuildFirm", foreignKey: "firm_id",
+    });
+    expect(loaded).not.toBeNull();
+    expect(loaded!.readAttribute("name")).toBe("New Firm");
+  });
+
+  it("creating the belonging object", async () => {
+    class CrFirm extends Base {
+      static { this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    class CrAccount extends Base {
+      static { this.attribute("firm_id", "integer"); this.adapter = adapter; }
+    }
+    registerModel("CrFirm", CrFirm);
+    registerModel("CrAccount", CrAccount);
+
+    const account = new CrAccount({});
+    const firm = await CrFirm.create({ name: "Created Firm" });
+    account.writeAttribute("firm_id", firm.id);
+    await account.save();
+
+    const loaded = await loadBelongsTo(account, "crFirm", {
+      className: "CrFirm", foreignKey: "firm_id",
+    });
+    expect(loaded!.readAttribute("name")).toBe("Created Firm");
+    expect(loaded!.isNewRecord()).toBe(false);
+  });
+
+  it("creating the belonging object from new record", async () => {
+    class CrNrFirm extends Base {
+      static { this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    class CrNrAccount extends Base {
+      static { this.attribute("firm_id", "integer"); this.adapter = adapter; }
+    }
+    registerModel("CrNrFirm", CrNrFirm);
+    registerModel("CrNrAccount", CrNrAccount);
+
+    const account = new CrNrAccount({});
+    const firm = await CrNrFirm.create({ name: "New Parent" });
+    account.writeAttribute("firm_id", firm.id);
+    await account.save();
+
+    expect(account.isNewRecord()).toBe(false);
+    const loaded = await loadBelongsTo(account, "crNrFirm", {
+      className: "CrNrFirm", foreignKey: "firm_id",
+    });
+    expect(loaded).not.toBeNull();
+  });
+
+  // -------------------------------------------------------------------------
+  // assignment before child saved
+  // -------------------------------------------------------------------------
+
+  it("assignment before child saved", async () => {
+    class AbsFirm extends Base {
+      static { this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    class AbsAccount extends Base {
+      static { this.attribute("firm_id", "integer"); this.adapter = adapter; }
+    }
+    registerModel("AbsFirm", AbsFirm);
+    registerModel("AbsAccount", AbsAccount);
+
+    const firm = await AbsFirm.create({ name: "Corp" });
+    const account = new AbsAccount({});
+    account.writeAttribute("firm_id", firm.id);
+    await account.save();
+
+    expect(account.isNewRecord()).toBe(false);
+    expect(account.readAttribute("firm_id")).toBe(firm.id);
+  });
+
+  // -------------------------------------------------------------------------
+  // new record with FK but no object loaded
+  // -------------------------------------------------------------------------
+
+  it("new record with foreign key but no object", async () => {
+    class NrFkFirm extends Base {
+      static { this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    class NrFkAccount extends Base {
+      static { this.attribute("firm_id", "integer"); this.adapter = adapter; }
+    }
+    registerModel("NrFkFirm", NrFkFirm);
+    registerModel("NrFkAccount", NrFkAccount);
+
+    const firm = await NrFkFirm.create({ name: "Corp" });
+    const account = new NrFkAccount({ firm_id: firm.id });
+
+    const loaded = await loadBelongsTo(account, "nrFkFirm", {
+      className: "NrFkFirm", foreignKey: "firm_id",
+    });
+    expect(loaded).not.toBeNull();
+  });
+
+  // -------------------------------------------------------------------------
+  // setting FK after nil target loaded
+  // -------------------------------------------------------------------------
+
+  it("setting foreign key after nil target loaded", async () => {
+    class FkNilFirm extends Base {
+      static { this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    class FkNilAccount extends Base {
+      static { this.attribute("firm_id", "integer"); this.adapter = adapter; }
+    }
+    registerModel("FkNilFirm", FkNilFirm);
+    registerModel("FkNilAccount", FkNilAccount);
+
+    const account = await FkNilAccount.create({ firm_id: null });
+    let loaded = await loadBelongsTo(account, "fkNilFirm", {
+      className: "FkNilFirm", foreignKey: "firm_id",
+    });
+    expect(loaded).toBeNull();
+
+    const firm = await FkNilFirm.create({ name: "Later Corp" });
+    account.writeAttribute("firm_id", firm.id);
+    await account.save();
+
+    loaded = await loadBelongsTo(account, "fkNilFirm", {
+      className: "FkNilFirm", foreignKey: "firm_id",
+    });
+    expect(loaded).not.toBeNull();
+  });
+
+  // -------------------------------------------------------------------------
+  // association assignment sticks
+  // -------------------------------------------------------------------------
+
+  it("association assignment sticks", async () => {
+    class StkFirm extends Base {
+      static { this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    class StkAccount extends Base {
+      static { this.attribute("firm_id", "integer"); this.adapter = adapter; }
+    }
+    registerModel("StkFirm", StkFirm);
+    registerModel("StkAccount", StkAccount);
+
+    const firmA = await StkFirm.create({ name: "Firm A" });
+    const firmB = await StkFirm.create({ name: "Firm B" });
+    const account = await StkAccount.create({ firm_id: firmA.id });
+
+    account.writeAttribute("firm_id", firmB.id);
+    await account.save();
+
+    const loaded = await loadBelongsTo(account, "stkFirm", {
+      className: "StkFirm", foreignKey: "firm_id",
+    });
+    expect(loaded!.id).toBe(firmB.id);
+  });
+
+  // -------------------------------------------------------------------------
+  // polymorphic assignment updates type + id fields
+  // -------------------------------------------------------------------------
+
+  it("polymorphic assignment updates foreign id field for new and saved records", async () => {
+    class PolyOwner extends Base {
+      static { this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    class PolyItem extends Base {
+      static {
+        this.attribute("owner_id", "integer");
+        this.attribute("owner_type", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("PolyOwner", PolyOwner);
+    registerModel("PolyItem", PolyItem);
+
+    const owner = await PolyOwner.create({ name: "Owner" });
+    const item = new PolyItem({});
+    item.writeAttribute("owner_id", owner.id);
+    item.writeAttribute("owner_type", "PolyOwner");
+    await item.save();
+
+    const loaded = await loadBelongsTo(item, "polyOwner", {
+      className: "PolyOwner", foreignKey: "owner_id",
+    });
+    expect(loaded!.id).toBe(owner.id);
+  });
+
+  it("polymorphic assignment with nil", async () => {
+    class PolyNilOwner extends Base {
+      static { this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    class PolyNilItem extends Base {
+      static {
+        this.attribute("owner_id", "integer");
+        this.attribute("owner_type", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("PolyNilOwner", PolyNilOwner);
+    registerModel("PolyNilItem", PolyNilItem);
+
+    const item = await PolyNilItem.create({ owner_id: null, owner_type: null });
+    const loaded = await loadBelongsTo(item, "polyNilOwner", {
+      polymorphic: true, foreignKey: "owner_id",
+    });
+    expect(loaded).toBeNull();
+  });
+
+  // -------------------------------------------------------------------------
+  // save of record with loaded belongs_to
+  // -------------------------------------------------------------------------
+
+  it("save of record with loaded belongs to", async () => {
+    class SlFirm extends Base {
+      static { this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    class SlAccount extends Base {
+      static { this.attribute("firm_id", "integer"); this.adapter = adapter; }
+    }
+    registerModel("SlFirm", SlFirm);
+    registerModel("SlAccount", SlAccount);
+
+    const firm = await SlFirm.create({ name: "Corp" });
+    const account = await SlAccount.create({ firm_id: firm.id });
+
+    // Reload firm, save account — should not error
+    const loaded = await loadBelongsTo(account, "slFirm", {
+      className: "SlFirm", foreignKey: "firm_id",
+    });
+    expect(loaded).not.toBeNull();
+    await account.save();
+    expect(account.isNewRecord()).toBe(false);
+  });
+
+  // -------------------------------------------------------------------------
+  // should set foreign key on create association
+  // -------------------------------------------------------------------------
+
+  it("should set foreign key on create association", async () => {
+    class FkCrFirm extends Base {
+      static { this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    class FkCrAccount extends Base {
+      static { this.attribute("firm_id", "integer"); this.adapter = adapter; }
+    }
+    registerModel("FkCrFirm", FkCrFirm);
+    registerModel("FkCrAccount", FkCrAccount);
+
+    const firm = await FkCrFirm.create({ name: "Corp" });
+    const account = new FkCrAccount({});
+    account.writeAttribute("firm_id", firm.id);
+    await account.save();
+
+    expect(account.readAttribute("firm_id")).toBe(firm.id);
+  });
+
+  it("should set foreign key on save", async () => {
+    class FkSvFirm extends Base {
+      static { this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    class FkSvAccount extends Base {
+      static { this.attribute("firm_id", "integer"); this.adapter = adapter; }
+    }
+    registerModel("FkSvFirm", FkSvFirm);
+    registerModel("FkSvAccount", FkSvAccount);
+
+    const firm = await FkSvFirm.create({ name: "Corp" });
+    const account = new FkSvAccount({ firm_id: firm.id });
+    await account.save();
+
+    const reloaded = await FkSvAccount.find(account.id as number);
+    expect(reloaded.readAttribute("firm_id")).toBe(firm.id);
+  });
+
+  // -------------------------------------------------------------------------
+  // tracking changes
+  // -------------------------------------------------------------------------
+
+  it("tracking change from nil to persisted record", async () => {
+    class TcFirm extends Base {
+      static { this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    class TcAccount extends Base {
+      static { this.attribute("firm_id", "integer"); this.adapter = adapter; }
+    }
+    registerModel("TcFirm", TcFirm);
+    registerModel("TcAccount", TcAccount);
+
+    const account = await TcAccount.create({ firm_id: null });
+    const firm = await TcFirm.create({ name: "Corp" });
+    account.writeAttribute("firm_id", firm.id);
+
+    expect(account.readAttribute("firm_id")).toBe(firm.id);
+  });
+
+  it("tracking change from persisted record to nil", async () => {
+    class Tc2Firm extends Base {
+      static { this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    class Tc2Account extends Base {
+      static { this.attribute("firm_id", "integer"); this.adapter = adapter; }
+    }
+    registerModel("Tc2Firm", Tc2Firm);
+    registerModel("Tc2Account", Tc2Account);
+
+    const firm = await Tc2Firm.create({ name: "Corp" });
+    const account = await Tc2Account.create({ firm_id: firm.id });
+    account.writeAttribute("firm_id", null);
+
+    expect(account.readAttribute("firm_id")).toBeNull();
+  });
+
+  it("tracking change from one persisted record to another", async () => {
+    class Tc3Firm extends Base {
+      static { this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    class Tc3Account extends Base {
+      static { this.attribute("firm_id", "integer"); this.adapter = adapter; }
+    }
+    registerModel("Tc3Firm", Tc3Firm);
+    registerModel("Tc3Account", Tc3Account);
+
+    const firmA = await Tc3Firm.create({ name: "A" });
+    const firmB = await Tc3Firm.create({ name: "B" });
+    const account = await Tc3Account.create({ firm_id: firmA.id });
+    account.writeAttribute("firm_id", firmB.id);
+
+    expect(account.readAttribute("firm_id")).toBe(firmB.id);
+  });
+
+  // -------------------------------------------------------------------------
+  // reassigning parent id updates the object
+  // -------------------------------------------------------------------------
+
+  it("reassigning the parent id updates the object", async () => {
+    class RaFirm extends Base {
+      static { this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    class RaAccount extends Base {
+      static { this.attribute("firm_id", "integer"); this.adapter = adapter; }
+    }
+    registerModel("RaFirm", RaFirm);
+    registerModel("RaAccount", RaAccount);
+
+    const firmA = await RaFirm.create({ name: "A" });
+    const firmB = await RaFirm.create({ name: "B" });
+    const account = await RaAccount.create({ firm_id: firmA.id });
+
+    account.writeAttribute("firm_id", firmB.id);
+    await account.save();
+
+    const reloaded = await RaAccount.find(account.id as number);
+    expect(reloaded.readAttribute("firm_id")).toBe(firmB.id);
+  });
+
+  // -------------------------------------------------------------------------
+  // with condition / build with conditions
+  // -------------------------------------------------------------------------
+
+  it("with condition", async () => {
+    class WcFirm extends Base {
+      static { this.attribute("name", "string"); this.attribute("active", "boolean"); this.adapter = adapter; }
+    }
+    class WcAccount extends Base {
+      static { this.attribute("firm_id", "integer"); this.adapter = adapter; }
+    }
+    registerModel("WcFirm", WcFirm);
+    registerModel("WcAccount", WcAccount);
+
+    const firm = await WcFirm.create({ name: "Active Corp", active: true });
+    const account = await WcAccount.create({ firm_id: firm.id });
+
+    const loaded = await loadBelongsTo(account, "wcFirm", {
+      className: "WcFirm", foreignKey: "firm_id",
+    });
+    expect(loaded).not.toBeNull();
+    expect(loaded!.readAttribute("active")).toBe(true);
+  });
+
+  it("build with conditions", async () => {
+    class BcFirm extends Base {
+      static { this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    class BcAccount extends Base {
+      static { this.attribute("firm_id", "integer"); this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    registerModel("BcFirm", BcFirm);
+    registerModel("BcAccount", BcAccount);
+
+    const firm = await BcFirm.create({ name: "Corp" });
+    // Build account with conditions (FK + additional attrs)
+    const account = new BcAccount({ firm_id: firm.id, name: "New Account" });
+    await account.save();
+
+    expect(account.readAttribute("firm_id")).toBe(firm.id);
+    expect(account.readAttribute("name")).toBe("New Account");
+  });
+
+  it("create with conditions", async () => {
+    class CcFirm extends Base {
+      static { this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    class CcAccount extends Base {
+      static { this.attribute("firm_id", "integer"); this.attribute("name", "string"); this.adapter = adapter; }
+    }
+    registerModel("CcFirm", CcFirm);
+    registerModel("CcAccount", CcAccount);
+
+    const firm = await CcFirm.create({ name: "Corp" });
+    const account = await CcAccount.create({ firm_id: firm.id, name: "Created Account" });
+
+    expect(account.isNewRecord()).toBe(false);
+    expect(account.readAttribute("firm_id")).toBe(firm.id);
+  });
 });

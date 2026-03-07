@@ -48,6 +48,12 @@ const PACKAGE_TEST_FILES: Record<string, string[]> = {
     "packages/activerecord/src/migration.test.ts",
     "packages/activerecord/src/serialized-extended.test.ts",
     "packages/activerecord/src/eager-hmthrough.test.ts",
+    "packages/activerecord/src/has-many-extended.test.ts",
+    "packages/activerecord/src/has-many-belongs-to.test.ts",
+    "packages/activerecord/src/has-one-habtm.test.ts",
+    "packages/activerecord/src/belongs-to-extended.test.ts",
+    "packages/activerecord/src/calculations-finder-basics.test.ts",
+    "packages/activerecord/src/reflection-migration.test.ts",
   ],
 };
 

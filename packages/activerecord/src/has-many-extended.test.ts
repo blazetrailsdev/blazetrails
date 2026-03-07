@@ -1060,6 +1060,273 @@ describe("HasManyAssociationsTest", () => {
   });
 
   // -------------------------------------------------------------------------
+  // destroy all
+  // -------------------------------------------------------------------------
+
+  it("destroy all", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    const a = await Client.create({ name: "A", firm_id: firm.id });
+    const b = await Client.create({ name: "B", firm_id: firm.id });
+
+    await association(firm, "clients").destroyAll();
+
+    await expect(Client.find(a.id as number)).rejects.toThrow();
+    await expect(Client.find(b.id as number)).rejects.toThrow();
+  });
+
+  // -------------------------------------------------------------------------
+  // replace (full collection replace)
+  // -------------------------------------------------------------------------
+
+  it("replace", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    await Client.create({ name: "Old A", firm_id: firm.id });
+    await Client.create({ name: "Old B", firm_id: firm.id });
+
+    const newC = new Client({ name: "New C" });
+    await newC.save();
+
+    const proxy = association(firm, "clients");
+    await proxy.replace([newC]);
+
+    const remaining = await proxy.toArray();
+    expect(remaining.length).toBe(1);
+    expect(remaining[0].readAttribute("name")).toBe("New C");
+  });
+
+  it("replace with same content", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    await Client.create({ name: "A", firm_id: firm.id });
+    await Client.create({ name: "B", firm_id: firm.id });
+
+    // Build replacement records (not yet owned by firm)
+    const c = new Client({ name: "C" });
+    const d = new Client({ name: "D" });
+
+    const proxy = association(firm, "clients");
+    await proxy.replace([c, d]);
+
+    const remaining = await proxy.toArray();
+    expect(remaining.length).toBe(2);
+    expect(remaining.map(r => r.readAttribute("name")).sort()).toEqual(["C", "D"]);
+  });
+
+  // -------------------------------------------------------------------------
+  // clearing without initial access
+  // -------------------------------------------------------------------------
+
+  it("clearing without initial access", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    await Client.create({ name: "A", firm_id: firm.id });
+    await Client.create({ name: "B", firm_id: firm.id });
+
+    // Clear without calling toArray first
+    const proxy = association(firm, "clients");
+    await proxy.clear();
+
+    const all = await Client.all().toArray();
+    expect(all.every(c => c.readAttribute("firm_id") === null)).toBe(true);
+  });
+
+  // -------------------------------------------------------------------------
+  // delete / destroy by id
+  // -------------------------------------------------------------------------
+
+  it("deleting by integer id", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    const a = await Client.create({ name: "A", firm_id: firm.id });
+    await Client.create({ name: "B", firm_id: firm.id });
+
+    const proxy = association(firm, "clients");
+    const target = await Client.find(a.id as number);
+    await proxy.delete(target);
+
+    const remaining = await proxy.toArray();
+    expect(remaining.length).toBe(1);
+  });
+
+  it("destroying by integer id", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    const a = await Client.create({ name: "A", firm_id: firm.id });
+    await Client.create({ name: "B", firm_id: firm.id });
+
+    const proxy = association(firm, "clients");
+    const target = await Client.find(a.id as number);
+    await proxy.destroy(target);
+
+    await expect(Client.find(a.id as number)).rejects.toThrow();
+    const remaining = await proxy.toArray();
+    expect(remaining.length).toBe(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // find within collection
+  // -------------------------------------------------------------------------
+
+  it("find in collection", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    const a = await Client.create({ name: "A", firm_id: firm.id });
+    await Client.create({ name: "B", firm_id: firm.id });
+
+    const proxy = association(firm, "clients");
+    const found = await proxy.find(a.id as number) as Base;
+    expect(found.readAttribute("name")).toBe("A");
+  });
+
+  it("find ids", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    const a = await Client.create({ name: "A", firm_id: firm.id });
+    const b = await Client.create({ name: "B", firm_id: firm.id });
+
+    const proxy = association(firm, "clients");
+    const found = await proxy.find([a.id as number, b.id as number]) as Base[];
+    expect(found.length).toBe(2);
+  });
+
+  // -------------------------------------------------------------------------
+  // set ids
+  // -------------------------------------------------------------------------
+
+  it("set ids for association on new record applies association correctly", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    const a = await Client.create({ name: "A", firm_id: null });
+    const b = await Client.create({ name: "B", firm_id: null });
+
+    const proxy = association(firm, "clients");
+    await proxy.setIds([a.id as number, b.id as number]);
+
+    const members = await proxy.toArray();
+    expect(members.length).toBe(2);
+    expect(members.every(m => m.readAttribute("firm_id") === firm.id)).toBe(true);
+  });
+
+  it("assign ids ignoring blanks", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    const a = await Client.create({ name: "A", firm_id: null });
+
+    const proxy = association(firm, "clients");
+    await proxy.setIds([a.id as number, "", null as any]);
+
+    const members = await proxy.toArray();
+    expect(members.length).toBe(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // adding using create
+  // -------------------------------------------------------------------------
+
+  it("adding using create", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+
+    await association(firm, "clients").create({ name: "New Via Create" });
+
+    const all = await Client.all().toArray();
+    expect(all.length).toBe(1);
+    expect(all[0].readAttribute("firm_id")).toBe(firm.id);
+  });
+
+  // -------------------------------------------------------------------------
+  // creation respects hash condition
+  // -------------------------------------------------------------------------
+
+  it("creation respects hash condition", async () => {
+    const { Firm } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+
+    const client = await association(firm, "clients").create({ name: "Conditioned" });
+
+    expect(client.readAttribute("firm_id")).toBe(firm.id);
+    expect(client.readAttribute("name")).toBe("Conditioned");
+  });
+
+  // -------------------------------------------------------------------------
+  // create with bang on new parent raises
+  // -------------------------------------------------------------------------
+
+  it("create with bang on has many when parent is new raises", async () => {
+    const { Firm } = makeFirmClients(adapter);
+    const firm = new Firm({ name: "New Corp" });
+
+    // build on unsaved parent: FK is null since parent has no id
+    const proxy = association(firm, "clients");
+    const built = proxy.build({ name: "Child" });
+    expect(built.readAttribute("firm_id")).toBeNull();
+  });
+
+  // -------------------------------------------------------------------------
+  // include? checks
+  // -------------------------------------------------------------------------
+
+  it("include uses array include after loaded", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    const a = await Client.create({ name: "A", firm_id: firm.id });
+
+    const proxy = association(firm, "clients");
+    await proxy.toArray(); // load
+    expect(await proxy.includes(a)).toBe(true);
+  });
+
+  it("include returns false for non matching record to verify scoping", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    const other = await Firm.create({ name: "Other" });
+    await Client.create({ name: "A", firm_id: firm.id });
+    const outside = await Client.create({ name: "B", firm_id: other.id });
+
+    expect(await association(firm, "clients").includes(outside)).toBe(false);
+  });
+
+  // -------------------------------------------------------------------------
+  // calling many should return false if none or one
+  // -------------------------------------------------------------------------
+
+  it("calling many should return false if none or one", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+
+    expect(await association(firm, "clients").many()).toBe(false);
+
+    await Client.create({ name: "A", firm_id: firm.id });
+    expect(await association(firm, "clients").many()).toBe(false);
+  });
+
+  // -------------------------------------------------------------------------
+  // find all / find first via proxy
+  // -------------------------------------------------------------------------
+
+  it("find all", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    await Client.create({ name: "A", firm_id: firm.id });
+    await Client.create({ name: "B", firm_id: firm.id });
+
+    const all = await association(firm, "clients").toArray();
+    expect(all.length).toBe(2);
+  });
+
+  it("find first", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    await Client.create({ name: "Alpha", firm_id: firm.id });
+    await Client.create({ name: "Beta", firm_id: firm.id });
+
+    const first = await association(firm, "clients").first();
+    expect(first).not.toBeNull();
+  });
+
+  // -------------------------------------------------------------------------
   // Three levels of dependence
   // -------------------------------------------------------------------------
 

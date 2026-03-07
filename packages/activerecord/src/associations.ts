@@ -725,6 +725,61 @@ export class CollectionProxy {
     if (record.isNewRecord()) throw new Error("Failed to create record");
     return record;
   }
+
+  /**
+   * Replace the collection with a new set of records.
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#replace
+   */
+  async replace(records: Base[]): Promise<void> {
+    await this.clear();
+    await this.push(...records);
+  }
+
+  /**
+   * Destroy all records in the collection (runs callbacks, deletes from DB).
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#destroy_all
+   */
+  async destroyAll(): Promise<void> {
+    const records = await this.toArray();
+    for (const record of records) {
+      await record.destroy();
+    }
+  }
+
+  /**
+   * Find records within the association by id or array of ids.
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#find
+   */
+  async find(id: number | number[]): Promise<Base | Base[]> {
+    const records = await this.toArray();
+    const targetModel = (records[0]?.constructor ?? Object) as typeof Base;
+    const pk = targetModel.primaryKey ?? "id";
+    if (Array.isArray(id)) {
+      const found = records.filter(r => id.includes(r.readAttribute(pk) as number));
+      if (found.length !== id.length) throw new Error(`Couldn't find all records with ids: ${id}`);
+      return found;
+    }
+    const found = records.find(r => r.readAttribute(pk) === id);
+    if (!found) throw new Error(`Couldn't find record with id=${id}`);
+    return found;
+  }
+
+  /**
+   * Set the collection to exactly the records identified by ids.
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#ids=
+   */
+  async setIds(ids: (number | string)[]): Promise<void> {
+    const className = this._assocDef.options.className ??
+      camelize(singularize(this._assocName));
+    const targetModel = resolveModel(className);
+    const cleanIds = ids.filter(id => id !== null && id !== undefined && id !== "");
+    const records = await Promise.all(cleanIds.map(id => targetModel.find(Number(id))));
+    await this.replace(records);
+  }
 }
 
 /**

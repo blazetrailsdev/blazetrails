@@ -2,6 +2,23 @@ import type { Base } from "./base.js";
 import { modelRegistry } from "./associations.js";
 
 /**
+ * Register a class as a subclass of its parent.
+ * Call this in a static initializer block on subclasses to enable
+ * subclasses/descendants tracking.
+ *
+ * Mirrors the implicit subclass registration Rails does via Ruby's
+ * inherited hook.
+ */
+export function registerSubclass(klass: typeof Base): void {
+  const parent = Object.getPrototypeOf(klass) as typeof Base;
+  if (!parent || parent === Function.prototype) return;
+  if (!Object.prototype.hasOwnProperty.call(parent, "_subclasses")) {
+    (parent as any)._subclasses = [];
+  }
+  (parent as any)._subclasses.push(klass);
+}
+
+/**
  * Single Table Inheritance support.
  *
  * When a model has an inheritance column (default: "type"), subclasses

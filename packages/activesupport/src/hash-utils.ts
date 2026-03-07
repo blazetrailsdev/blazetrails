@@ -231,3 +231,57 @@ function isPlainObject(value: unknown): value is AnyObject {
   const proto = Object.getPrototypeOf(value);
   return proto === Object.prototype || proto === null;
 }
+
+/**
+ * Convert a plain object to a URL query string (Rails' to_param / to_query).
+ * Keys are sorted ascending. Values are URL-encoded with spaces as +.
+ */
+export function toParam(obj: Record<string, unknown>): string {
+  const keys = Object.keys(obj).sort();
+  if (keys.length === 0) return "";
+  return keys
+    .map((k) => {
+      const encoded =
+        encodeURIComponent(k) + "=" + encodeURIComponent(String(obj[k]));
+      return encoded.replace(/%20/g, "+");
+    })
+    .join("&");
+}
+
+/**
+ * Remove null and undefined values from a plain object (Rails' compact).
+ */
+export function compact<T extends AnyObject>(obj: T): Partial<T> {
+  const result: Partial<T> = {};
+  for (const key of Object.keys(obj)) {
+    if (obj[key] !== null && obj[key] !== undefined) {
+      result[key as keyof T] = obj[key] as T[keyof T];
+    }
+  }
+  return result;
+}
+
+/**
+ * Remove blank values from a plain object (Rails' compact_blank for hashes).
+ * Blank: null, undefined, empty string, empty array, empty object, false.
+ */
+export function compactBlankObj<T extends AnyObject>(obj: T): Partial<T> {
+  const result: Partial<T> = {};
+  for (const key of Object.keys(obj)) {
+    const val = obj[key];
+    if (!_isBlankValue(val)) {
+      result[key as keyof T] = val as T[keyof T];
+    }
+  }
+  return result;
+}
+
+function _isBlankValue(value: unknown): boolean {
+  if (value === null || value === undefined || value === false) return true;
+  if (typeof value === "string") return value.trim() === "";
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === "object" && value !== null) {
+    return Object.keys(value).length === 0;
+  }
+  return false;
+}

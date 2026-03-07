@@ -84,3 +84,139 @@ export function inBatchesOf<T>(collection: T[], size: number): T[][] {
 export function compactBlank<T>(collection: T[]): T[] {
   return collection.filter((item) => !isBlank(item));
 }
+
+/**
+ * many? — true if more than one element (optionally matching a predicate).
+ */
+export function many<T>(collection: T[], fn?: (item: T) => boolean): boolean {
+  if (!fn) return collection.length > 1;
+  let count = 0;
+  for (const item of collection) {
+    if (fn(item)) {
+      count++;
+      if (count > 1) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * tally — count occurrences of each element.
+ */
+export function tally<T extends string | number>(collection: T[]): Record<string, number> {
+  const result: Record<string, number> = {};
+  for (const item of collection) {
+    const key = String(item);
+    result[key] = (result[key] ?? 0) + 1;
+  }
+  return result;
+}
+
+/**
+ * filterMap — map and remove null/undefined results.
+ */
+export function filterMap<T, U>(
+  collection: T[],
+  fn: (item: T) => U | null | undefined
+): U[] {
+  const result: U[] = [];
+  for (const item of collection) {
+    const mapped = fn(item);
+    if (mapped !== null && mapped !== undefined) {
+      result.push(mapped);
+    }
+  }
+  return result;
+}
+
+/**
+ * excluding — remove elements from collection (alias for without).
+ */
+export function excluding<T>(collection: T[], ...others: T[]): T[] {
+  const set = new Set(others);
+  return collection.filter((item) => !set.has(item));
+}
+
+/**
+ * including — append elements to collection.
+ */
+export function including<T>(collection: T[], ...others: T[]): T[] {
+  return [...collection, ...others];
+}
+
+/**
+ * minBy — find element with minimum mapped value.
+ */
+export function minBy<T>(collection: T[], fn: (item: T) => number): T | undefined {
+  if (collection.length === 0) return undefined;
+  return collection.reduce((best, item) => (fn(item) < fn(best) ? item : best));
+}
+
+/**
+ * maxBy — find element with maximum mapped value.
+ */
+export function maxBy<T>(collection: T[], fn: (item: T) => number): T | undefined {
+  if (collection.length === 0) return undefined;
+  return collection.reduce((best, item) => (fn(item) > fn(best) ? item : best));
+}
+
+/**
+ * eachCons — sliding window of size n.
+ */
+export function eachCons<T>(collection: T[], n: number): T[][] {
+  const result: T[][] = [];
+  for (let i = 0; i <= collection.length - n; i++) {
+    result.push(collection.slice(i, i + n));
+  }
+  return result;
+}
+
+/**
+ * eachSlice — split into chunks of size n.
+ */
+export function eachSlice<T>(collection: T[], n: number): T[][] {
+  const result: T[][] = [];
+  for (let i = 0; i < collection.length; i += n) {
+    result.push(collection.slice(i, i + n));
+  }
+  return result;
+}
+
+/**
+ * inOrderOf — reorder collection by a series of key values.
+ * Elements not in the series are dropped by default (filter: true).
+ * With filter: false, unmatched elements are appended at the end in original order.
+ */
+export function inOrderOf<T>(
+  collection: T[],
+  fn: (item: T) => unknown,
+  series: unknown[],
+  options: { filter?: boolean } = {}
+): T[] {
+  const filter = options.filter !== false;
+  const seriesMap = new Map<unknown, T[]>();
+  for (const key of series) {
+    seriesMap.set(key, []);
+  }
+
+  const unmatched: T[] = [];
+  for (const item of collection) {
+    const key = fn(item);
+    if (seriesMap.has(key)) {
+      seriesMap.get(key)!.push(item);
+    } else {
+      unmatched.push(item);
+    }
+  }
+
+  const ordered: T[] = [];
+  for (const key of series) {
+    ordered.push(...(seriesMap.get(key) ?? []));
+  }
+
+  if (!filter) {
+    ordered.push(...unmatched);
+  }
+
+  return ordered;
+}

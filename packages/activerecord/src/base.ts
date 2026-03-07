@@ -206,6 +206,9 @@ export class Base extends Model {
   static get inheritanceColumn(): string | null {
     return (this as any)._inheritanceColumn ?? null;
   }
+  static set inheritanceColumn(col: string | null) {
+    (this as any)._inheritanceColumn = col;
+  }
 
   /**
    * Return the base class in an STI hierarchy.
@@ -214,6 +217,32 @@ export class Base extends Model {
    */
   static get baseClass(): typeof Base {
     return getStiBase(this);
+  }
+
+  /**
+   * Return direct subclasses of this class.
+   * Subclasses register themselves via registerSubclass().
+   *
+   * Mirrors: ActiveRecord::Base.subclasses
+   */
+  static get subclasses(): (typeof Base)[] {
+    return Object.prototype.hasOwnProperty.call(this, "_subclasses")
+      ? (this as any)._subclasses
+      : [];
+  }
+
+  /**
+   * Return all descendant classes (recursive).
+   *
+   * Mirrors: ActiveRecord::Base.descendants
+   */
+  static get descendants(): (typeof Base)[] {
+    const result: (typeof Base)[] = [];
+    for (const sub of this.subclasses) {
+      result.push(sub);
+      result.push(...sub.descendants);
+    }
+    return result;
   }
 
   // -- Logger --
@@ -637,8 +666,8 @@ export class Base extends Model {
       }
       return records;
     }
-    // Single ID
-    const record = await this.findBy({ [this.primaryKey]: id });
+    // Single ID — use all() so STI type filter is applied
+    const record = await this.all().where({ [this.primaryKey]: id }).first();
     if (!record) {
       throw new RecordNotFound(
         `${this.name} with ${this.primaryKey}=${id} not found`,
@@ -774,6 +803,10 @@ export class Base extends Model {
       return this.all().where(conditionsOrSql, ...binds);
     }
     return this.all().where(conditionsOrSql);
+  }
+
+  static whereNot(conditions: Record<string, unknown>): any {
+    return this.all().whereNot(conditions);
   }
 
   /**
@@ -1797,6 +1830,11 @@ export class Base extends Model {
         await updateCounterCaches(this, "increment");
       }
 
+      // Autosave associations
+      const { autosaveAssociations } = await import("./autosave.js");
+      const autosaveOk = await autosaveAssociations(this);
+      if (!autosaveOk) return false;
+
       // Touch parent associations
       const { touchBelongsToParents } = await import("./associations.js");
       await touchBelongsToParents(this);
@@ -2700,4 +2738,24 @@ export class Base extends Model {
     };
   }
 
+
+  // Underscore aliases for bang methods (Rails uses ! suffix, TS uses _ suffix)
+  static async first_(): Promise<Base> { return (this as any).firstBang(); }
+  static async last_(): Promise<Base> { return (this as any).lastBang(); }
+  static async take_(): Promise<Base> {
+    const r = await (this as any).all().take();
+    if (!r) throw new RecordNotFound(`${(this as any).name} record not found`, (this as any).name, (this as any).primaryKey, null);
+    return r;
+  }
+  static async findBy_(conditions: Record<string, unknown>): Promise<Base> { return (this as any).findByBang(conditions); }
+
+  previouslyNewRecord(): boolean { return this.isPreviouslyNewRecord(); }
+
+  static async tableExists(): Promise<boolean> {
+    return true; // MemoryAdapter always has tables
+  }
+
+  static hasAttribute(name: string): boolean {
+    return this.hasAttributeDefinition(name);
+  }
 }

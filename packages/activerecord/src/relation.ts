@@ -1409,6 +1409,7 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#count
    */
   async count(column?: string): Promise<number | Record<string, number>> {
+    if (this._limitValue === 0) return 0;
     if (this._isNone) return this._groupColumns.length > 0 ? {} : 0;
 
     // Grouped count: SELECT group_col, COUNT(*) FROM ... GROUP BY group_col

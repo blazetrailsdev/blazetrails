@@ -1196,3 +1196,179 @@ export class Schema {
     await this.adapter.executeMutation(td.toSql());
   }
 }
+
+/**
+ * MigrationContext — wraps an adapter with schema-aware migration methods
+ * and synchronous schema inspection. Designed for use with MemoryAdapter
+ * in tests and for defining migrations programmatically.
+ *
+ * Mirrors: ActiveRecord::MigrationContext
+ */
+export class MigrationContext {
+  private _tables = new Set<string>();
+  private _columns = new Map<string, Set<string>>();
+  private _indexes = new Map<string, { columns: string[]; unique: boolean; name?: string }[]>();
+
+  constructor(private adapter: DatabaseAdapter) {}
+
+  async createTable(
+    name: string,
+    options?: { primaryKey?: string | false; force?: boolean; id?: boolean },
+    fn?: (t: TableDefinition) => void
+  ): Promise<void> {
+    if (options?.force) {
+      await this.dropTable(name).catch(() => {});
+    }
+    const td = new TableDefinition(name, { id: options?.id });
+    if (fn) fn(td);
+    await this.adapter.executeMutation(td.toSql());
+    this._tables.add(name);
+    const cols = new Set<string>();
+    for (const col of td.columns) {
+      cols.add(col.name);
+    }
+    this._columns.set(name, cols);
+  }
+
+  async dropTable(name: string): Promise<void> {
+    await this.adapter.executeMutation(`DROP TABLE IF EXISTS "${name}"`);
+    this._tables.delete(name);
+    this._columns.delete(name);
+    this._indexes.delete(name);
+  }
+
+  async addColumn(
+    table: string,
+    column: string,
+    type: string,
+    _options?: ColumnOptions
+  ): Promise<void> {
+    await this.adapter.executeMutation(
+      `ALTER TABLE "${table}" ADD COLUMN "${column}" ${type.toUpperCase()}`
+    );
+    if (!this._columns.has(table)) this._columns.set(table, new Set());
+    this._columns.get(table)!.add(column);
+  }
+
+  async removeColumn(table: string, ...columns: string[]): Promise<void> {
+    for (const column of columns) {
+      await this.adapter.executeMutation(
+        `ALTER TABLE "${table}" DROP COLUMN "${column}"`
+      );
+      this._columns.get(table)?.delete(column);
+    }
+  }
+
+  async renameColumn(table: string, from: string, to: string): Promise<void> {
+    await this.adapter.executeMutation(
+      `ALTER TABLE "${table}" RENAME COLUMN "${from}" TO "${to}"`
+    );
+    const cols = this._columns.get(table);
+    if (cols) {
+      cols.delete(from);
+      cols.add(to);
+    }
+  }
+
+  async changeColumn(
+    table: string,
+    column: string,
+    type: string,
+    _options?: ColumnOptions
+  ): Promise<void> {
+    await this.adapter.executeMutation(
+      `ALTER TABLE "${table}" ALTER COLUMN "${column}" TYPE ${type.toUpperCase()}`
+    );
+  }
+
+  async addIndex(
+    table: string,
+    columns: string | string[],
+    options?: { unique?: boolean; name?: string }
+  ): Promise<void> {
+    const cols = Array.isArray(columns) ? columns : [columns];
+    const unique = options?.unique ?? false;
+    const indexName =
+      options?.name ?? `index_${table}_on_${cols.join("_and_")}`;
+    const uniqueStr = unique ? "UNIQUE " : "";
+    const colsStr = cols.map((c) => `"${c}"`).join(", ");
+    await this.adapter.executeMutation(
+      `CREATE ${uniqueStr}INDEX "${indexName}" ON "${table}" (${colsStr})`
+    );
+    if (!this._indexes.has(table)) this._indexes.set(table, []);
+    this._indexes.get(table)!.push({ columns: cols, unique, name: indexName });
+  }
+
+  async removeIndex(
+    table: string,
+    options: { column?: string | string[]; name?: string }
+  ): Promise<void> {
+    let indexName = options.name;
+    if (!indexName && options.column) {
+      const cols = Array.isArray(options.column) ? options.column : [options.column];
+      indexName = `index_${table}_on_${cols.join("_and_")}`;
+    }
+    if (indexName) {
+      await this.adapter.executeMutation(`DROP INDEX "${indexName}"`);
+      const tableIndexes = this._indexes.get(table);
+      if (tableIndexes) {
+        this._indexes.set(
+          table,
+          tableIndexes.filter((i) => i.name !== indexName)
+        );
+      }
+    }
+  }
+
+  async renameTable(from: string, to: string): Promise<void> {
+    await this.adapter.executeMutation(
+      `ALTER TABLE "${from}" RENAME TO "${to}"`
+    );
+    this._tables.delete(from);
+    this._tables.add(to);
+    const cols = this._columns.get(from);
+    if (cols) {
+      this._columns.delete(from);
+      this._columns.set(to, cols);
+    }
+    const indexes = this._indexes.get(from);
+    if (indexes) {
+      this._indexes.delete(from);
+      this._indexes.set(to, indexes);
+    }
+  }
+
+  async reversible(
+    fn: (dir: {
+      up: (cb: () => Promise<void>) => void;
+      down: (cb: () => Promise<void>) => void;
+    }) => void
+  ): Promise<void> {
+    let upFn: (() => Promise<void>) | null = null;
+    fn({
+      up: (cb) => { upFn = cb; },
+      down: () => {},
+    });
+    if (upFn) await upFn();
+  }
+
+  async revert(fn: () => Promise<void>): Promise<void> {
+    // For testing purposes, just run the function in reverse conceptually.
+    // A full revert implementation would record and reverse operations.
+    await fn();
+  }
+
+  tableExists(name: string): boolean {
+    return this._tables.has(name);
+  }
+
+  columnExists(table: string, column: string): boolean {
+    return this._columns.get(table)?.has(column) ?? false;
+  }
+
+  indexExists(table: string, column: string): boolean {
+    return (
+      this._indexes.get(table)?.some((i) => i.columns.includes(column)) ?? false
+    );
+  }
+}

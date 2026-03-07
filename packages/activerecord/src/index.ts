@@ -6,6 +6,7 @@ export {
   Migration,
   TableDefinition,
   Schema,
+  MigrationContext,
 } from "./migration.js";
 export type { ColumnType, ColumnOptions } from "./migration.js";
 export { MigrationRunner } from "./migration-runner.js";
@@ -28,7 +29,7 @@ export type { AssociationOptions } from "./associations.js";
 export { Transaction, transaction, savepoint, currentTransaction } from "./transactions.js";
 export { delegate } from "./delegate.js";
 export { defineEnum, readEnumValue, castEnumValue } from "./enum.js";
-export { enableSti, getInheritanceColumn, instantiateSti } from "./sti.js";
+export { enableSti, getInheritanceColumn, instantiateSti, registerSubclass } from "./sti.js";
 export { hasSecurePassword } from "./secure-password.js";
 export { store, storeAccessor } from "./store.js";
 export { SqliteAdapter } from "./adapters/sqlite-adapter.js";
@@ -60,3 +61,5 @@ export { serialize } from "./serialize.js";
 export { encrypts, defaultEncryptor, getEncryptor, isEncryptedAttribute } from "./encryption.js";
 export type { Encryptor } from "./encryption.js";
 export { generatesTokenFor } from "./generates-token-for.js";
+
+export { markForDestruction, isMarkedForDestruction, isDestroyable } from "./autosave.js";

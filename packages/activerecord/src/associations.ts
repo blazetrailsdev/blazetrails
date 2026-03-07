@@ -17,6 +17,7 @@ export interface AssociationOptions {
   as?: string;
   counterCache?: boolean | string;
   touch?: boolean;
+  autosave?: boolean;
   scope?: (rel: any) => any;
   required?: boolean;
   optional?: boolean;

@@ -1,0 +1,215 @@
+import type { Base } from "./base.js";
+import type { AssociationDefinition } from "./associations.js";
+import { underscore, camelize, singularize } from "@rails-ts/activesupport";
+
+const MARKED_FOR_DESTRUCTION = Symbol("markedForDestruction");
+
+/**
+ * Mark a record to be destroyed when the parent saves.
+ *
+ * Mirrors: ActiveRecord::AutosaveAssociation#mark_for_destruction
+ */
+export function markForDestruction(record: Base): void {
+  (record as any)[MARKED_FOR_DESTRUCTION] = true;
+}
+
+/**
+ * Check if a record is marked for destruction.
+ *
+ * Mirrors: ActiveRecord::AutosaveAssociation#marked_for_destruction?
+ */
+export function isMarkedForDestruction(record: Base): boolean {
+  return !!(record as any)[MARKED_FOR_DESTRUCTION];
+}
+
+/**
+ * Check if a record is destroyable (not new and marked for destruction).
+ *
+ * Mirrors: ActiveRecord::AutosaveAssociation#destroyed_when_parent_is_saved?
+ */
+export function isDestroyable(record: Base): boolean {
+  return !record.isNewRecord() && isMarkedForDestruction(record);
+}
+
+/**
+ * Autosave associated records when the owner is saved.
+ * Called from Base.save() after the main record is persisted.
+ *
+ * Mirrors: ActiveRecord::AutosaveAssociation
+ */
+export async function autosaveAssociations(record: Base): Promise<boolean> {
+  const ctor = record.constructor as typeof Base;
+  const associations: AssociationDefinition[] = (ctor as any)._associations ?? [];
+
+  for (const assoc of associations) {
+    if (!assoc.options.autosave) continue;
+
+    const result = await autosaveAssociation(record, assoc);
+    if (!result) return false;
+  }
+
+  return true;
+}
+
+async function autosaveAssociation(
+  record: Base,
+  assoc: AssociationDefinition
+): Promise<boolean> {
+  const cachedAssociations: Map<string, unknown> | undefined =
+    (record as any)._cachedAssociations;
+  const preloadedAssociations: Map<string, unknown> | undefined =
+    (record as any)._preloadedAssociations;
+
+  // Only autosave if the association is already loaded/cached
+  const isLoaded =
+    cachedAssociations?.has(assoc.name) ||
+    preloadedAssociations?.has(assoc.name);
+
+  if (!isLoaded) return true;
+
+  if (assoc.type === "hasMany") {
+    return autosaveHasMany(record, assoc);
+  } else if (assoc.type === "hasOne") {
+    return autosaveHasOne(record, assoc);
+  } else if (assoc.type === "belongsTo") {
+    return autosaveBelongsTo(record, assoc);
+  }
+
+  return true;
+}
+
+async function autosaveHasMany(
+  record: Base,
+  assoc: AssociationDefinition
+): Promise<boolean> {
+  const cached =
+    (record as any)._cachedAssociations?.get(assoc.name) ??
+    (record as any)._preloadedAssociations?.get(assoc.name);
+
+  const children: Base[] = Array.isArray(cached) ? cached : [];
+
+  for (const child of children) {
+    if (isMarkedForDestruction(child)) {
+      if (!child.isNewRecord()) {
+        await child.destroy();
+      }
+      continue;
+    }
+
+    if (child.isNewRecord() || child.changed) {
+      // Set FK if not set
+      const ctor = record.constructor as typeof Base;
+      const foreignKey =
+        assoc.options.foreignKey ?? `${underscore(ctor.name)}_id`;
+      const primaryKey = assoc.options.primaryKey ?? ctor.primaryKey;
+      const pkValue = record.readAttribute(primaryKey);
+      if (pkValue !== null && pkValue !== undefined) {
+        child.writeAttribute(foreignKey, pkValue);
+      }
+
+      const saved = await child.save();
+      if (!saved) {
+        // Propagate errors to parent
+        propagateErrors(record, child, assoc.name);
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+async function autosaveHasOne(
+  record: Base,
+  assoc: AssociationDefinition
+): Promise<boolean> {
+  const child =
+    (record as any)._cachedAssociations?.get(assoc.name) ??
+    (record as any)._preloadedAssociations?.get(assoc.name);
+
+  if (!child || !(child instanceof Object)) return true;
+  const childRecord = child as Base;
+
+  if (isMarkedForDestruction(childRecord)) {
+    if (!childRecord.isNewRecord()) {
+      await childRecord.destroy();
+    }
+    return true;
+  }
+
+  if (childRecord.isNewRecord() || childRecord.changed) {
+    const ctor = record.constructor as typeof Base;
+    const foreignKey =
+      assoc.options.foreignKey ?? `${underscore(ctor.name)}_id`;
+    const primaryKey = assoc.options.primaryKey ?? ctor.primaryKey;
+    const pkValue = record.readAttribute(primaryKey);
+    if (pkValue !== null && pkValue !== undefined) {
+      childRecord.writeAttribute(foreignKey, pkValue);
+    }
+
+    const saved = await childRecord.save();
+    if (!saved) {
+      propagateErrors(record, childRecord, assoc.name);
+      return false;
+    }
+  }
+
+  return true;
+}
+
+async function autosaveBelongsTo(
+  record: Base,
+  assoc: AssociationDefinition
+): Promise<boolean> {
+  const associated =
+    (record as any)._cachedAssociations?.get(assoc.name) ??
+    (record as any)._preloadedAssociations?.get(assoc.name);
+
+  if (!associated || !(associated instanceof Object)) return true;
+  const assocRecord = associated as Base;
+
+  if (isMarkedForDestruction(assocRecord)) {
+    if (!assocRecord.isNewRecord()) {
+      await assocRecord.destroy();
+    }
+    return true;
+  }
+
+  if (assocRecord.isNewRecord() || assocRecord.changed) {
+    const saved = await assocRecord.save();
+    if (!saved) {
+      propagateErrors(record, assocRecord, assoc.name);
+      return false;
+    }
+
+    // Update FK on owner after saving the associated record
+    const foreignKey =
+      assoc.options.foreignKey ?? `${underscore(assoc.name)}_id`;
+    const primaryKey = assoc.options.primaryKey ?? "id";
+    const pkValue = assocRecord.readAttribute(primaryKey);
+    if (pkValue !== null && pkValue !== undefined) {
+      record.writeAttribute(foreignKey, pkValue);
+    }
+  }
+
+  return true;
+}
+
+function propagateErrors(parent: Base, child: Base, assocName: string): void {
+  const childErrors = (child as any).errors;
+  if (!childErrors) return;
+
+  const parentErrors = (parent as any).errors;
+  if (!parentErrors) return;
+
+  // Add a base error about the invalid association
+  parentErrors.add("base", "invalid", {
+    message: `${assocName} is invalid`,
+  });
+
+  // Copy each child error to parent
+  const errorMessages = (Array.isArray(childErrors.fullMessages) ? childErrors.fullMessages : []) as string[];
+  for (const msg of errorMessages) {
+    parentErrors.add("base", "invalid", { message: msg });
+  }
+}

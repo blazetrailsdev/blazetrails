@@ -1,4 +1,4 @@
-# rails-js
+# rails-ts
 
 TypeScript packages that mirror the Ruby on Rails API.
 
@@ -13,9 +13,9 @@ that Ruby can't.
 
 | Package | Rails Equivalent | Description |
 |---------|-----------------|-------------|
-| `@rails-js/arel` | [Arel](https://api.rubyonrails.org/classes/Arel.html) | SQL AST builder and query generation |
-| `@rails-js/activemodel` | [ActiveModel](https://api.rubyonrails.org/classes/ActiveModel.html) | Attributes, validations, callbacks, serialization |
-| `@rails-js/activerecord` | [ActiveRecord](https://api.rubyonrails.org/classes/ActiveRecord.html) | ORM tying Arel and ActiveModel together |
+| `@rails-ts/arel` | [Arel](https://api.rubyonrails.org/classes/Arel.html) | SQL AST builder and query generation |
+| `@rails-ts/activemodel` | [ActiveModel](https://api.rubyonrails.org/classes/ActiveModel.html) | Attributes, validations, callbacks, serialization |
+| `@rails-ts/activerecord` | [ActiveRecord](https://api.rubyonrails.org/classes/ActiveRecord.html) | ORM tying Arel and ActiveModel together |
 
 ## Quick Example
 
@@ -32,7 +32,7 @@ query.to_sql
 ```
 
 ```typescript
-// TypeScript / rails-js
+// TypeScript / rails-ts
 const users = new Arel.Table("users");
 const query = users.project(users.get("name"))
                    .where(users.get("age").gt(21))
@@ -58,7 +58,7 @@ query.toSql();
 To maintain Rails parity while staying idiomatic to TypeScript, we follow a few standard transformations:
 
 ### Method Names
-| Ruby / Rails | TypeScript / `rails-js` | Example |
+| Ruby / Rails | TypeScript / `rails-ts` | Example |
 |--------------|-------------------------|---------|
 | `valid?` | `isValid()` | Predicates (`?`) become `is*` prefix. |
 | `save!` | `saveBang()` | Bang methods (`!`) become `*Bang` suffix. |

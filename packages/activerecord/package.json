@@ -1,7 +1,7 @@
 {
   "name": "@rails-ts/activerecord",
   "version": "0.1.0",
-  "description": "ORM layer mirroring Ruby's ActiveRecord, built on @rails-js/arel and @rails-js/activemodel",
+  "description": "ORM layer mirroring Ruby's ActiveRecord, built on @rails-ts/arel and @rails-ts/activemodel",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

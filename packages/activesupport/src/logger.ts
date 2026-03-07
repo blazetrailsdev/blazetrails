@@ -122,11 +122,11 @@ export class Logger {
     return this.log(Logger.UNKNOWN, message);
   }
 
-  readonly "debug?": boolean;
-  readonly "info?": boolean;
-  readonly "warn?": boolean;
-  readonly "error?": boolean;
-  readonly "fatal?": boolean;
+  get "debug?"(): boolean { return this.level <= Logger.DEBUG; }
+  get "info?"(): boolean { return this.level <= Logger.INFO; }
+  get "warn?"(): boolean { return this.level <= Logger.WARN; }
+  get "error?"(): boolean { return this.level <= Logger.ERROR; }
+  get "fatal?"(): boolean { return this.level <= Logger.FATAL; }
 
   get debugEnabled(): boolean { return this.level <= Logger.DEBUG; }
   get infoEnabled(): boolean { return this.level <= Logger.INFO; }

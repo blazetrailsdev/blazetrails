@@ -767,6 +767,299 @@ describe("HasManyAssociationsTest", () => {
   });
 
   // -------------------------------------------------------------------------
+  // taking
+  // -------------------------------------------------------------------------
+
+  it("taking", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    await Client.create({ name: "A", firm_id: firm.id });
+    await Client.create({ name: "B", firm_id: firm.id });
+
+    const proxy = association(firm, "clients");
+    const taken = await proxy.take();
+    expect(taken).not.toBeNull();
+  });
+
+  it("taking not found", async () => {
+    const { Firm } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Empty Corp" });
+
+    const proxy = association(firm, "clients");
+    const taken = await proxy.take();
+    expect(taken).toBeNull();
+  });
+
+  it("taking with a number", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    await Client.create({ name: "A", firm_id: firm.id });
+    await Client.create({ name: "B", firm_id: firm.id });
+    await Client.create({ name: "C", firm_id: firm.id });
+
+    const proxy = association(firm, "clients");
+    const taken = await proxy.take(2) as Base[];
+    expect(taken.length).toBe(2);
+  });
+
+  // -------------------------------------------------------------------------
+  // many? / none? / one?
+  // -------------------------------------------------------------------------
+
+  it("calling many should return true if more than one", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    await Client.create({ name: "A", firm_id: firm.id });
+    await Client.create({ name: "B", firm_id: firm.id });
+
+    expect(await association(firm, "clients").many()).toBe(true);
+  });
+
+  it("calling many should return false if only one", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    await Client.create({ name: "A", firm_id: firm.id });
+
+    expect(await association(firm, "clients").many()).toBe(false);
+  });
+
+  it("calling none should return true if none", async () => {
+    const { Firm } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Empty" });
+
+    expect(await association(firm, "clients").none()).toBe(true);
+  });
+
+  it("calling none should return false if any", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    await Client.create({ name: "A", firm_id: firm.id });
+
+    expect(await association(firm, "clients").none()).toBe(false);
+  });
+
+  it("calling one should return false if zero", async () => {
+    const { Firm } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Empty" });
+
+    expect(await association(firm, "clients").one()).toBe(false);
+  });
+
+  it("calling one should return false if more than one", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    await Client.create({ name: "A", firm_id: firm.id });
+    await Client.create({ name: "B", firm_id: firm.id });
+
+    expect(await association(firm, "clients").one()).toBe(false);
+  });
+
+  it("calling one should return true if exactly one", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    await Client.create({ name: "A", firm_id: firm.id });
+
+    expect(await association(firm, "clients").one()).toBe(true);
+  });
+
+  // -------------------------------------------------------------------------
+  // first_or_initialize / first_or_create
+  // -------------------------------------------------------------------------
+
+  it("first_or_initialize adds the record to the association", async () => {
+    const { Firm } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+
+    const proxy = association(firm, "clients");
+    const client = await proxy.firstOrInitialize({ name: "New Client" });
+
+    expect(client.readAttribute("name")).toBe("New Client");
+    expect(client.readAttribute("firm_id")).toBe(firm.id);
+    expect(client.isNewRecord()).toBe(true);
+  });
+
+  it("first_or_initialize returns existing when found", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    await Client.create({ name: "Existing", firm_id: firm.id });
+
+    const proxy = association(firm, "clients");
+    const client = await proxy.firstOrInitialize({ name: "Existing" });
+
+    expect(client.isNewRecord()).toBe(false);
+  });
+
+  it("first_or_create adds the record to the association", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+
+    const proxy = association(firm, "clients");
+    const client = await proxy.firstOrCreate({ name: "New Client" });
+
+    expect(client.readAttribute("name")).toBe("New Client");
+    expect(client.readAttribute("firm_id")).toBe(firm.id);
+    expect(client.isNewRecord()).toBe(false);
+
+    const all = await Client.all().toArray();
+    expect(all.length).toBe(1);
+  });
+
+  it("first_or_create! adds the record to the association", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+
+    const proxy = association(firm, "clients");
+    const client = await proxy.firstOrCreate_({ name: "New Client" });
+
+    expect(client.isNewRecord()).toBe(false);
+    expect(client.readAttribute("firm_id")).toBe(firm.id);
+
+    const all = await Client.all().toArray();
+    expect(all.length).toBe(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // exists?
+  // -------------------------------------------------------------------------
+
+  it("exists respects association scope", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    const other = await Firm.create({ name: "Other" });
+    await Client.create({ name: "A", firm_id: firm.id });
+    await Client.create({ name: "B", firm_id: other.id });
+
+    expect(await association(firm, "clients").exists()).toBe(true);
+    expect(await association(other, "clients").exists()).toBe(true);
+
+    const empty = await Firm.create({ name: "Empty" });
+    expect(await association(empty, "clients").exists()).toBe(false);
+  });
+
+  // -------------------------------------------------------------------------
+  // sending new to proxy = build
+  // -------------------------------------------------------------------------
+
+  it("sending new to association proxy should have same effect as calling new", async () => {
+    const { Firm } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+
+    const proxy = association(firm, "clients");
+    const built = proxy.build({ name: "Via Build" });
+
+    expect(built.readAttribute("firm_id")).toBe(firm.id);
+    expect(built.isNewRecord()).toBe(true);
+  });
+
+  // -------------------------------------------------------------------------
+  // attributes set on initialization from where clause
+  // -------------------------------------------------------------------------
+
+  it("attributes are being set when initialized from has many association with where clause", async () => {
+    const { Firm } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+
+    const proxy = association(firm, "clients");
+    const client = await proxy.firstOrInitialize({ name: "Scoped Client" });
+
+    expect(client.readAttribute("name")).toBe("Scoped Client");
+    expect(client.readAttribute("firm_id")).toBe(firm.id);
+  });
+
+  // -------------------------------------------------------------------------
+  // include? after build
+  // -------------------------------------------------------------------------
+
+  it("include method in has many association should return true for instance added with build", async () => {
+    const { Firm } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+
+    const proxy = association(firm, "clients");
+    const built = proxy.build({ name: "Built" });
+    await built.save();
+
+    expect(await proxy.includes(built)).toBe(true);
+  });
+
+  // -------------------------------------------------------------------------
+  // replace returns target
+  // -------------------------------------------------------------------------
+
+  it("replace returns target", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    await Client.create({ name: "Old", firm_id: firm.id });
+
+    const proxy = association(firm, "clients");
+    const newRecord = new Client({ name: "New" });
+    await proxy.clear();
+    await proxy.push(newRecord);
+
+    const result = await proxy.toArray();
+    expect(result.length).toBe(1);
+    expect(result[0].readAttribute("name")).toBe("New");
+  });
+
+  // -------------------------------------------------------------------------
+  // create with nil values
+  // -------------------------------------------------------------------------
+
+  it("create from association with nil values should work", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+
+    const proxy = association(firm, "clients");
+    const client = await proxy.create({ name: null });
+
+    expect(client.isNewRecord()).toBe(false);
+    expect(client.readAttribute("firm_id")).toBe(firm.id);
+    expect(client.readAttribute("name")).toBeNull();
+  });
+
+  // -------------------------------------------------------------------------
+  // finding with conditions
+  // -------------------------------------------------------------------------
+
+  it("finding with condition", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    await Client.create({ name: "Microsoft", firm_id: firm.id });
+    await Client.create({ name: "Apple", firm_id: firm.id });
+
+    const proxy = association(firm, "clients");
+    const matches = await proxy.where({ name: "Microsoft" });
+    expect(matches.length).toBe(1);
+    expect(matches[0].readAttribute("name")).toBe("Microsoft");
+  });
+
+  it("finding with condition hash", async () => {
+    const { Firm, Client } = makeFirmClients(adapter);
+    const firm = await Firm.create({ name: "Corp" });
+    await Client.create({ name: "Alpha", firm_id: firm.id });
+    await Client.create({ name: "Beta", firm_id: firm.id });
+
+    const proxy = association(firm, "clients");
+    const matches = await proxy.where({ name: "Alpha" });
+    expect(matches.length).toBe(1);
+  });
+
+  // -------------------------------------------------------------------------
+  // attributes set on null relationship initialization
+  // -------------------------------------------------------------------------
+
+  it("attributes are set when initialized from has many null relationship", async () => {
+    const { Firm } = makeFirmClients(adapter);
+    const firm = new Firm({ name: "New Firm" });
+
+    // New record — collection is empty/null
+    const records = await loadHasMany(firm, "clients", {
+      className: "Client",
+      foreignKey: "firm_id",
+    });
+    expect(records).toEqual([]);
+  });
+
+  // -------------------------------------------------------------------------
   // Three levels of dependence
   // -------------------------------------------------------------------------
 

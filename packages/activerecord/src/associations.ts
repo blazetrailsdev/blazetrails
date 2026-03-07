@@ -626,6 +626,105 @@ export class CollectionProxy {
     const records = await this.toArray();
     return records[records.length - 1] ?? null;
   }
+
+  /**
+   * Return the first n records (or first record if n omitted).
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#take
+   */
+  async take(n?: number): Promise<Base | Base[] | null> {
+    const records = await this.toArray();
+    if (n === undefined) return records[0] ?? null;
+    return records.slice(0, n);
+  }
+
+  /**
+   * True if the collection has more than one record.
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#many?
+   */
+  async many(): Promise<boolean> {
+    return (await this.count()) > 1;
+  }
+
+  /**
+   * True if the collection has no records.
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#none?
+   */
+  async none(): Promise<boolean> {
+    return (await this.count()) === 0;
+  }
+
+  /**
+   * True if the collection has exactly one record.
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#one?
+   */
+  async one(): Promise<boolean> {
+    return (await this.count()) === 1;
+  }
+
+  /**
+   * True if any records exist in the collection (optionally matching conditions).
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#exists?
+   */
+  async exists(conditions: Record<string, unknown> = {}): Promise<boolean> {
+    const records = await this.toArray();
+    if (Object.keys(conditions).length === 0) return records.length > 0;
+    return records.some(r =>
+      Object.entries(conditions).every(([k, v]) => r.readAttribute(k) === v)
+    );
+  }
+
+  /**
+   * Filter the collection by conditions. Returns matching records.
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#where
+   */
+  async where(conditions: Record<string, unknown>): Promise<Base[]> {
+    const records = await this.toArray();
+    return records.filter(r =>
+      Object.entries(conditions).every(([k, v]) => r.readAttribute(k) === v)
+    );
+  }
+
+  /**
+   * Find first record matching conditions, or build (but don't save) a new one.
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#first_or_initialize
+   */
+  async firstOrInitialize(conditions: Record<string, unknown> = {}): Promise<Base> {
+    const matches = await this.where(conditions);
+    if (matches.length > 0) return matches[0];
+    return this.build(conditions);
+  }
+
+  /**
+   * Find first record matching conditions, or create one.
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#first_or_create
+   */
+  async firstOrCreate(conditions: Record<string, unknown> = {}): Promise<Base> {
+    const matches = await this.where(conditions);
+    if (matches.length > 0) return matches[0];
+    return this.create(conditions);
+  }
+
+  /**
+   * Find first record matching conditions, or create one (raises on failure).
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#first_or_create!
+   */
+  async firstOrCreate_(conditions: Record<string, unknown> = {}): Promise<Base> {
+    const matches = await this.where(conditions);
+    if (matches.length > 0) return matches[0];
+    const record = this.build(conditions);
+    await record.save();
+    if (record.isNewRecord()) throw new Error("Failed to create record");
+    return record;
+  }
 }
 
 /**

@@ -46,12 +46,29 @@ export default defineConfig(
     files: [
       "packages/rack/src/**/*.ts",
       "packages/actionpack/src/**/*.ts",
-      "packages/activesupport/src/**/*.ts",
       "packages/cli/src/**/*.ts",
     ],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
       "no-undef": "off",
+      "unused-imports/no-unused-vars": "off",
+    },
+  },
+  {
+    files: ["packages/activesupport/src/**/*.ts"],
+    languageOptions: {
+      globals: {
+        Buffer: "readonly",
+        setTimeout: "readonly",
+        process: "readonly",
+        console: "readonly",
+        performance: "readonly",
+        TextEncoder: "readonly",
+        TextDecoder: "readonly",
+      },
+    },
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
       "unused-imports/no-unused-vars": "off",
     },
   },

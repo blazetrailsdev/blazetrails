@@ -7,6 +7,7 @@ import {
   RecordNotFound,
   RecordInvalid,
   RecordNotSaved,
+  RecordNotDestroyed,
   StaleObjectError,
   ReadOnlyRecord,
 } from "./errors.js";
@@ -2272,29 +2273,31 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base#destroy
    */
-  async destroy(): Promise<this> {
+  async destroy(): Promise<this | false> {
     if (this._readonly) {
       throw new ReadOnlyRecord(this);
     }
     const ctor = this.constructor as typeof Base;
 
-    // Process dependent associations before destroy
-    const { processDependentAssociations } = await import("./associations.js");
-    await processDependentAssociations(this);
-
     const halted = !ctor._callbackChain.run("destroy", this, () => {
-      const table = ctor.arelTable;
-      const pk = this.id;
-      if (Array.isArray(pk) ? pk.every((v) => v == null) : pk == null) {
-        // New (unpersisted) record — nothing to delete from DB
-        return;
-      }
+      // Process dependent associations inside callback chain
+      // so they're skipped when beforeDestroy halts
+      this._pendingOperation = (async () => {
+        const { processDependentAssociations } = await import("./associations.js");
+        await processDependentAssociations(this);
 
-      const sql = `DELETE FROM "${table.name}" WHERE ${ctor._buildPkWhere(pk)}`;
-      this._pendingOperation = ctor.adapter.executeMutation(sql).then(() => {});
+        const table = ctor.arelTable;
+        const pk = this.id;
+        if (Array.isArray(pk) ? pk.every((v) => v == null) : pk == null) {
+          return;
+        }
+
+        const sql = `DELETE FROM "${table.name}" WHERE ${ctor._buildPkWhere(pk)}`;
+        await ctor.adapter.executeMutation(sql);
+      })();
     });
 
-    if (halted) return false as any;
+    if (halted) return false;
 
     if (this._pendingOperation) {
       await this._pendingOperation;
@@ -2317,7 +2320,11 @@ export class Base extends Model {
    * Mirrors: ActiveRecord::Base#destroy!
    */
   async destroyBang(): Promise<this> {
-    return this.destroy();
+    const result = await this.destroy();
+    if (result === false) {
+      throw new RecordNotDestroyed("Failed to destroy the record", this);
+    }
+    return result;
   }
 
   /**

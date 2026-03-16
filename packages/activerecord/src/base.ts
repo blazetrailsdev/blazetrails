@@ -2279,29 +2279,17 @@ export class Base extends Model {
     }
     const ctor = this.constructor as typeof Base;
 
-    const halted = !ctor._callbackChain.run("destroy", this, () => {
-      // Process dependent associations inside callback chain
-      // so they're skipped when beforeDestroy halts
-      this._pendingOperation = (async () => {
-        const { processDependentAssociations } = await import("./associations.js");
-        await processDependentAssociations(this);
+    if (!ctor._callbackChain.runBefore("destroy", this)) return false;
 
-        const table = ctor.arelTable;
-        const pk = this.id;
-        if (Array.isArray(pk) ? pk.every((v) => v == null) : pk == null) {
-          return;
-        }
+    // Process dependent associations + delete row
+    const { processDependentAssociations } = await import("./associations.js");
+    await processDependentAssociations(this);
 
-        const sql = `DELETE FROM "${table.name}" WHERE ${ctor._buildPkWhere(pk)}`;
-        await ctor.adapter.executeMutation(sql);
-      })();
-    });
-
-    if (halted) return false;
-
-    if (this._pendingOperation) {
-      await this._pendingOperation;
-      this._pendingOperation = null;
+    const table = ctor.arelTable;
+    const pk = this.id;
+    if (!(Array.isArray(pk) ? pk.every((v) => v == null) : pk == null)) {
+      const sql = `DELETE FROM "${table.name}" WHERE ${ctor._buildPkWhere(pk)}`;
+      await ctor.adapter.executeMutation(sql);
     }
 
     this._destroyed = true;
@@ -2310,6 +2298,8 @@ export class Base extends Model {
     // Counter cache: decrement on destroy
     const { updateCounterCaches } = await import("./associations.js");
     await updateCounterCaches(this, "decrement");
+
+    ctor._callbackChain.runAfter("destroy", this);
 
     return this;
   }

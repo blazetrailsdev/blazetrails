@@ -272,10 +272,7 @@ describe("DurationTest", () => {
     expect(result instanceof Date).toBe(true);
   });
 
-  it("since and ago anchored to time zone now when time zone is set", () => {
-    // No TimeWithZone in JS — skip timezone-specific behavior
-    expect(true).toBe(true);
-  });
+  it.todo("since and ago anchored to time zone now when time zone is set");
 
   it("before and after", () => {
     const t = new Date(2000, 0, 1, 0, 0, 0, 0);

@@ -45,16 +45,5 @@ describe("AtomicWriteTest", () => {
     expect(result).toBe("returned value");
   });
 
-  it("probe stat in when no dir", () => {
-    // When directory doesn't exist, we simulate error handling
-    let error: Error | null = null;
-    try {
-      // A real implementation would throw if directory doesn't exist
-      const r = atomicWrite("/nonexistent/dir/file.txt", () => "data");
-    } catch (e) {
-      error = e as Error;
-    }
-    // Since our test impl doesn't check fs, just verify the concept
-    expect(true).toBe(true);
-  });
+  it.todo("probe stat in when no dir");
 });

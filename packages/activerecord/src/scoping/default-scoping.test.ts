@@ -1449,30 +1449,16 @@ describe("DefaultScopingTest", () => {
     adapter = freshAdapter();
   });
 
-  it("default scope as class method referencing scope", () => {
-    expect(true).toBe(true);
-  });
-  it("default scope with all queries runs on update columns", () => {
-    expect(true).toBe(true);
-  });
-  it("nilable default scope with all queries runs on update columns", () => {
-    expect(true).toBe(true);
-  });
-  it("default scope with all queries runs on destroy", () => {
-    expect(true).toBe(true);
-  });
-  it("nilable default scope with all queries runs on destroy", () => {
-    expect(true).toBe(true);
-  });
-  it("default scope with all queries runs on reload", () => {
-    expect(true).toBe(true);
-  });
-  it("default scope with all queries runs on reload but default scope without all queries does not", () => {
-    expect(true).toBe(true);
-  });
-  it("nilable default scope with all queries runs on reload", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("default scope as class method referencing scope");
+  it.todo("default scope with all queries runs on update columns");
+  it.todo("nilable default scope with all queries runs on update columns");
+  it.todo("default scope with all queries runs on destroy");
+  it.todo("nilable default scope with all queries runs on destroy");
+  it.todo("default scope with all queries runs on reload");
+  it.todo(
+    "default scope with all queries runs on reload but default scope without all queries does not",
+  );
+  it.todo("nilable default scope with all queries runs on reload");
   it("order after reorder combines orders", () => {
     class Post extends Base {
       static {
@@ -1521,9 +1507,7 @@ describe("DefaultScopingTest", () => {
     }
     expect(Post.where({ title: "a" }).unscope("where")).toBeInstanceOf(Relation);
   });
-  it("unscope with grouping attributes", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("unscope with grouping attributes");
   it("unscope reverse order", () => {
     class Post extends Base {
       static {
@@ -1533,36 +1517,16 @@ describe("DefaultScopingTest", () => {
     }
     expect(Post.order("title").unscope("order")).toBeInstanceOf(Relation);
   });
-  it("unscope joins and select on developers projects", () => {
-    expect(true).toBe(true);
-  });
-  it("unscope left outer joins", () => {
-    expect(true).toBe(true);
-  });
-  it("unscope left joins", () => {
-    expect(true).toBe(true);
-  });
-  it("unscope includes", () => {
-    expect(true).toBe(true);
-  });
-  it("unscope eager load", () => {
-    expect(true).toBe(true);
-  });
-  it("unscope preloads", () => {
-    expect(true).toBe(true);
-  });
-  it("unscope having", () => {
-    expect(true).toBe(true);
-  });
-  it("unscope errors with invalid value", () => {
-    expect(true).toBe(true);
-  });
-  it("unscope errors with non where hash keys", () => {
-    expect(true).toBe(true);
-  });
-  it("unscope errors with non symbol or hash arguments", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("unscope joins and select on developers projects");
+  it.todo("unscope left outer joins");
+  it.todo("unscope left joins");
+  it.todo("unscope includes");
+  it.todo("unscope eager load");
+  it.todo("unscope preloads");
+  it.todo("unscope having");
+  it.todo("unscope errors with invalid value");
+  it.todo("unscope errors with non where hash keys");
+  it.todo("unscope errors with non symbol or hash arguments");
   it("where attribute merge", () => {
     class Post extends Base {
       static {
@@ -1592,9 +1556,7 @@ describe("DefaultScopingTest", () => {
     const p = await Post.create({ title: "nested" });
     expect((p as any).isPersisted()).toBe(true);
   });
-  it("joins not affected by scope other than default or unscoped", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("joins not affected by scope other than default or unscoped");
   it("default scope order ignored by aggregations", async () => {
     class Post extends Base {
       static {
@@ -1605,12 +1567,8 @@ describe("DefaultScopingTest", () => {
     await Post.create({ title: "a" });
     expect(await Post.count()).toBeGreaterThan(0);
   });
-  it("default scope with references works through collection association", () => {
-    expect(true).toBe(true);
-  });
-  it("default scope with references works through association", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("default scope with references works through collection association");
+  it.todo("default scope with references works through association");
   it("default scope with references works with find by", async () => {
     class Post extends Base {
       static {
@@ -1622,30 +1580,18 @@ describe("DefaultScopingTest", () => {
     const p = await Post.findBy({ title: "ref" });
     expect(p).not.toBeNull();
   });
-  it("additional conditions are ANDed with the default scope", () => {
-    expect(true).toBe(true);
-  });
-  it("additional conditions in a scope are ANDed with the default scope", () => {
-    expect(true).toBe(true);
-  });
-  it("with abstract class where clause should not be duplicated", () => {
-    expect(true).toBe(true);
-  });
-  it("sti conditions are not carried in default scope", () => {
-    expect(true).toBe(true);
-  });
-  it("with abstract class scope should be executed in correct context", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("additional conditions are ANDed with the default scope");
+  it.todo("additional conditions in a scope are ANDed with the default scope");
+  it.todo("with abstract class where clause should not be duplicated");
+  it.todo("sti conditions are not carried in default scope");
+  it.todo("with abstract class scope should be executed in correct context");
 });
 
 // ==========================================================================
 // DefaultScopingWithThreadTest — from scoping/default_scoping_test.rb
 // ==========================================================================
 describe("DefaultScopingTest", () => {
-  it("default scoping with threads", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("default scoping with threads");
 });
 
 describe("DefaultScopingTest", () => {

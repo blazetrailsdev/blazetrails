@@ -989,21 +989,11 @@ describe("NamedScopingTest", () => {
     adapter = freshAdapter();
   });
 
-  it("has many associations have access to scopes", () => {
-    expect(true).toBe(true);
-  });
-  it("scope with STI", () => {
-    expect(true).toBe(true);
-  });
-  it("has many through associations have access to scopes", () => {
-    expect(true).toBe(true);
-  });
-  it("scopes honor current scopes from when defined", () => {
-    expect(true).toBe(true);
-  });
-  it("scopes body is a callable", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("has many associations have access to scopes");
+  it.todo("scope with STI");
+  it.todo("has many through associations have access to scopes");
+  it.todo("scopes honor current scopes from when defined");
+  it.todo("scopes body is a callable");
   it("spaces in scope names", () => {
     class Post extends Base {
       static {
@@ -1027,18 +1017,10 @@ describe("NamedScopingTest", () => {
     expect(r1.length).toBe(1);
     expect(r2.length).toBe(1);
   });
-  it("table names for chaining scopes with and without table name included", () => {
-    expect(true).toBe(true);
-  });
-  it("scopes are cached on associations", () => {
-    expect(true).toBe(true);
-  });
-  it("scopes with arguments are cached on associations", () => {
-    expect(true).toBe(true);
-  });
-  it("scoped are lazy loaded if table still does not exist", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("table names for chaining scopes with and without table name included");
+  it.todo("scopes are cached on associations");
+  it.todo("scopes with arguments are cached on associations");
+  it.todo("scoped are lazy loaded if table still does not exist");
 });
 
 describe("NamedScopingTest", () => {

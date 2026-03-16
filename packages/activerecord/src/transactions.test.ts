@@ -877,36 +877,16 @@ describe("TransactionTest", () => {
     adapter = freshAdapter();
   });
 
-  it("rollback dirty changes even with raise during rollback removes from pool", () => {
-    expect(true).toBe(true);
-  });
-  it("rollback dirty changes even with raise during rollback doesnt commit transaction", () => {
-    expect(true).toBe(true);
-  });
-  it("connection removed from pool when commit raises and rollback raises", () => {
-    expect(true).toBe(true);
-  });
-  it("connection removed from pool when begin raises after successfully beginning a transaction", () => {
-    expect(true).toBe(true);
-  });
-  it("connection removed from pool when thread killed in begin after successfully beginning a transaction", () => {
-    expect(true).toBe(true);
-  });
-  it("rollback dirty changes then retry save on new record with autosave association", () => {
-    expect(true).toBe(true);
-  });
-  it("add to null transaction", () => {
-    expect(true).toBe(true);
-  });
-  it("deprecation on ruby timeout outside inner transaction", () => {
-    expect(true).toBe(true);
-  });
-  it("rolling back in a callback rollbacks before save", () => {
-    expect(true).toBe(true);
-  });
-  it("raising exception in nested transaction restore state in save", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("rollback dirty changes even with raise during rollback removes from pool");
+  it.todo("rollback dirty changes even with raise during rollback doesnt commit transaction");
+  it.todo("connection removed from pool when commit raises and rollback raises");
+  it.todo("connection removed from pool when begin raises after successfully beginning a transaction");
+  it.todo("connection removed from pool when thread killed in begin after successfully beginning a transaction");
+  it.todo("rollback dirty changes then retry save on new record with autosave association");
+  it.todo("add to null transaction");
+  it.todo("deprecation on ruby timeout outside inner transaction");
+  it.todo("rolling back in a callback rollbacks before save");
+  it.todo("raising exception in nested transaction restore state in save");
   it("transaction state is cleared when record is persisted", async () => {
     class Post extends Base {
       static {
@@ -917,153 +897,71 @@ describe("TransactionTest", () => {
     const p = await Post.create({ title: "txn-state" });
     expect((p as any).isPersisted()).toBe(true);
   });
-  it("cancellation from before destroy rollbacks in destroy", () => {
-    expect(true).toBe(true);
-  });
-  it("callback rollback in create with record invalid exception", () => {
-    expect(true).toBe(true);
-  });
-  it("callback rollback in create with rollback exception", () => {
-    expect(true).toBe(true);
-  });
-  it("nested transaction with new transaction applies parent state on rollback", () => {
-    expect(true).toBe(true);
-  });
-  it("nested transaction without new transaction applies parent state on rollback", () => {
-    expect(true).toBe(true);
-  });
-  it("double nested transaction applies parent state on rollback", () => {
-    expect(true).toBe(true);
-  });
-  it("invalid keys for transaction", () => {
-    expect(true).toBe(true);
-  });
-  it("no savepoint in nested transaction without force", () => {
-    expect(true).toBe(true);
-  });
-  it("many savepoints", () => {
-    expect(true).toBe(true);
-  });
-  it("using named savepoints", () => {
-    expect(true).toBe(true);
-  });
-  it("releasing named savepoints", () => {
-    expect(true).toBe(true);
-  });
-  it("savepoints name", () => {
-    expect(true).toBe(true);
-  });
-  it("rollback when thread killed", () => {
-    expect(true).toBe(true);
-  });
-  it("dont restore new record in subsequent transaction", () => {
-    expect(true).toBe(true);
-  });
-  it("assign custom primary key after rollback", () => {
-    expect(true).toBe(true);
-  });
-  it("read attribute with custom primary key after rollback", () => {
-    expect(true).toBe(true);
-  });
-  it("write attribute after rollback", () => {
-    expect(true).toBe(true);
-  });
-  it("write attribute with custom primary key after rollback", () => {
-    expect(true).toBe(true);
-  });
-  it("sqlite add column in transaction", () => {
-    expect(true).toBe(true);
-  });
-  it("sqlite default transaction mode is immediate", () => {
-    expect(true).toBe(true);
-  });
-  it("mark transaction state as committed", () => {
-    expect(true).toBe(true);
-  });
-  it("mark transaction state as rolledback", () => {
-    expect(true).toBe(true);
-  });
-  it("mark transaction state as nil", () => {
-    expect(true).toBe(true);
-  });
-  it("transaction rollback with primarykeyless tables", () => {
-    expect(true).toBe(true);
-  });
-  it("unprepared statement materializes transaction", () => {
-    expect(true).toBe(true);
-  });
-  it("nested transactions skip excess savepoints", () => {
-    expect(true).toBe(true);
-  });
-  it("prepared statement materializes transaction", () => {
-    expect(true).toBe(true);
-  });
-  it("savepoint does not materialize transaction", () => {
-    expect(true).toBe(true);
-  });
-  it("raising does not materialize transaction", () => {
-    expect(true).toBe(true);
-  });
-  it("accessing raw connection materializes transaction", () => {
-    expect(true).toBe(true);
-  });
-  it("accessing raw connection disables lazy transactions", () => {
-    expect(true).toBe(true);
-  });
-  it("checking in connection reenables lazy transactions", () => {
-    expect(true).toBe(true);
-  });
-  it("transactions can be manually materialized", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("cancellation from before destroy rollbacks in destroy");
+  it.todo("callback rollback in create with record invalid exception");
+  it.todo("callback rollback in create with rollback exception");
+  it.todo("nested transaction with new transaction applies parent state on rollback");
+  it.todo("nested transaction without new transaction applies parent state on rollback");
+  it.todo("double nested transaction applies parent state on rollback");
+  it.todo("invalid keys for transaction");
+  it.todo("no savepoint in nested transaction without force");
+  it.todo("many savepoints");
+  it.todo("using named savepoints");
+  it.todo("releasing named savepoints");
+  it.todo("savepoints name");
+  it.todo("rollback when thread killed");
+  it.todo("dont restore new record in subsequent transaction");
+  it.todo("assign custom primary key after rollback");
+  it.todo("read attribute with custom primary key after rollback");
+  it.todo("write attribute after rollback");
+  it.todo("write attribute with custom primary key after rollback");
+  it.todo("sqlite add column in transaction");
+  it.todo("sqlite default transaction mode is immediate");
+  it.todo("mark transaction state as committed");
+  it.todo("mark transaction state as rolledback");
+  it.todo("mark transaction state as nil");
+  it.todo("transaction rollback with primarykeyless tables");
+  it.todo("unprepared statement materializes transaction");
+  it.todo("nested transactions skip excess savepoints");
+  it.todo("prepared statement materializes transaction");
+  it.todo("savepoint does not materialize transaction");
+  it.todo("raising does not materialize transaction");
+  it.todo("accessing raw connection materializes transaction");
+  it.todo("accessing raw connection disables lazy transactions");
+  it.todo("checking in connection reenables lazy transactions");
+  it.todo("transactions can be manually materialized");
 });
 
 // ==========================================================================
 // TransactionsWithTransactionalFixturesTest — from transactions_test.rb
 // ==========================================================================
 describe("TransactionsWithTransactionalFixturesTest", () => {
-  it("automatic savepoint in outer transaction", () => {
-    expect(true).toBe(true);
-  });
-  it("no automatic savepoint for inner transaction", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("automatic savepoint in outer transaction");
+  it.todo("no automatic savepoint for inner transaction");
 });
 
 // ==========================================================================
 // TransactionUUIDTest — from transactions_test.rb
 // ==========================================================================
 describe("TransactionUUIDTest", () => {
-  it("the uuid is lazily computed", () => {
-    expect(true).toBe(true);
-  });
-  it("the uuid for regular transactions is generated and memoized", () => {
-    expect(true).toBe(true);
-  });
-  it("the uuid for null transactions is nil", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("the uuid is lazily computed");
+  it.todo("the uuid for regular transactions is generated and memoized");
+  it.todo("the uuid for null transactions is nil");
 });
 
 // ==========================================================================
 // ConcurrentTransactionTest — from transactions_test.rb
 // ==========================================================================
 describe("ConcurrentTransactionTest", () => {
-  it("transaction per thread", () => {
-    expect(true).toBe(true);
-  });
-  it("transaction isolation  read committed", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("transaction per thread");
+  it.todo("transaction isolation  read committed");
 });
 
 // ==========================================================================
 // after current transaction commit multidb nested transactions (standalone)
 // ==========================================================================
 describe("TransactionTest", () => {
-  it("after current transaction commit multidb nested transactions", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("after current transaction commit multidb nested transactions");
 });
 
 describe("TransactionTest", () => {

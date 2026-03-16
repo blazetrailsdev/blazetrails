@@ -383,63 +383,27 @@ describe("DirtyTest", () => {
     adapter = freshAdapter();
   });
 
-  it("time attributes changes with time zone", () => {
-    expect(true).toBe(true);
-  });
-  it("setting time attributes with time zone field to itself should not be marked as a change", () => {
-    expect(true).toBe(true);
-  });
-  it("time attributes changes without time zone by skip", () => {
-    expect(true).toBe(true);
-  });
-  it("time attributes changes without time zone", () => {
-    expect(true).toBe(true);
-  });
-  it("nullable decimal not marked as changed if new value is blank", () => {
-    expect(true).toBe(true);
-  });
-  it("nullable float not marked as changed if new value is blank", () => {
-    expect(true).toBe(true);
-  });
-  it("nullable datetime not marked as changed if new value is blank", () => {
-    expect(true).toBe(true);
-  });
-  it("integer zero to integer zero not marked as changed", () => {
-    expect(true).toBe(true);
-  });
-  it("float zero to string zero not marked as changed", () => {
-    expect(true).toBe(true);
-  });
-  it("zero to blank marked as changed", () => {
-    expect(true).toBe(true);
-  });
-  it("virtual attribute will change", () => {
-    expect(true).toBe(true);
-  });
-  it("attribute should be compared with type cast", () => {
-    expect(true).toBe(true);
-  });
-  it("partial update with optimistic locking", () => {
-    expect(true).toBe(true);
-  });
-  it("save always should update timestamps when serialized attributes are present", () => {
-    expect(true).toBe(true);
-  });
-  it("save should not save serialized attribute with partial writes if not present", () => {
-    expect(true).toBe(true);
-  });
-  it("changes to save should not mutate array of hashes", () => {
-    expect(true).toBe(true);
-  });
-  it("field named field", () => {
-    expect(true).toBe(true);
-  });
-  it("datetime attribute can be updated with fractional seconds", () => {
-    expect(true).toBe(true);
-  });
-  it("datetime attribute doesnt change if zone is modified in string", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("time attributes changes with time zone");
+  it.todo(
+    "setting time attributes with time zone field to itself should not be marked as a change",
+  );
+  it.todo("time attributes changes without time zone by skip");
+  it.todo("time attributes changes without time zone");
+  it.todo("nullable decimal not marked as changed if new value is blank");
+  it.todo("nullable float not marked as changed if new value is blank");
+  it.todo("nullable datetime not marked as changed if new value is blank");
+  it.todo("integer zero to integer zero not marked as changed");
+  it.todo("float zero to string zero not marked as changed");
+  it.todo("zero to blank marked as changed");
+  it.todo("virtual attribute will change");
+  it.todo("attribute should be compared with type cast");
+  it.todo("partial update with optimistic locking");
+  it.todo("save always should update timestamps when serialized attributes are present");
+  it.todo("save should not save serialized attribute with partial writes if not present");
+  it.todo("changes to save should not mutate array of hashes");
+  it.todo("field named field");
+  it.todo("datetime attribute can be updated with fractional seconds");
+  it.todo("datetime attribute doesnt change if zone is modified in string");
   it("partial insert", async () => {
     class Post extends Base {
       static {
@@ -460,39 +424,17 @@ describe("DirtyTest", () => {
     const p = await Post.create({});
     expect((p as any).isPersisted()).toBe(true);
   });
-  it("in place mutation detection", () => {
-    expect(true).toBe(true);
-  });
-  it("in place mutation for binary", () => {
-    expect(true).toBe(true);
-  });
-  it("changes is correct for subclass", () => {
-    expect(true).toBe(true);
-  });
-  it("changes is correct if override attribute reader", () => {
-    expect(true).toBe(true);
-  });
-  it("attribute_changed? doesn't compute in-place changes for unrelated attributes", () => {
-    expect(true).toBe(true);
-  });
-  it("attribute_will_change! doesn't try to save non-persistable attributes", () => {
-    expect(true).toBe(true);
-  });
-  it("virtual attributes are not written with partial_writes off", () => {
-    expect(true).toBe(true);
-  });
-  it("mutating and then assigning doesn't remove the change", () => {
-    expect(true).toBe(true);
-  });
-  it("getters with side effects are allowed", () => {
-    expect(true).toBe(true);
-  });
-  it("attributes assigned but not selected are dirty", () => {
-    expect(true).toBe(true);
-  });
-  it("attributes not selected are still missing after save", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("in place mutation detection");
+  it.todo("in place mutation for binary");
+  it.todo("changes is correct for subclass");
+  it.todo("changes is correct if override attribute reader");
+  it.todo("attribute_changed? doesn't compute in-place changes for unrelated attributes");
+  it.todo("attribute_will_change! doesn't try to save non-persistable attributes");
+  it.todo("virtual attributes are not written with partial_writes off");
+  it.todo("mutating and then assigning doesn't remove the change");
+  it.todo("getters with side effects are allowed");
+  it.todo("attributes assigned but not selected are dirty");
+  it.todo("attributes not selected are still missing after save");
   it("saved_changes? returns whether the last call to save changed anything", async () => {
     class Post extends Base {
       static {
@@ -503,21 +445,11 @@ describe("DirtyTest", () => {
     const p = (await Post.create({ title: "a" })) as any;
     expect(p.isPersisted()).toBe(true);
   });
-  it("changed? in around callbacks after yield returns false", () => {
-    expect(true).toBe(true);
-  });
-  it("partial insert off with unchanged default function attribute", () => {
-    expect(true).toBe(true);
-  });
-  it("partial insert off with changed default function attribute", () => {
-    expect(true).toBe(true);
-  });
-  it("partial insert off with changed composite identity primary key attribute", () => {
-    expect(true).toBe(true);
-  });
-  it("attribute_changed? properly type casts enum values", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("changed? in around callbacks after yield returns false");
+  it.todo("partial insert off with unchanged default function attribute");
+  it.todo("partial insert off with changed default function attribute");
+  it.todo("partial insert off with changed composite identity primary key attribute");
+  it.todo("attribute_changed? properly type casts enum values");
 });
 
 describe("DirtyTest", () => {

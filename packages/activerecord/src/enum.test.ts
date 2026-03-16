@@ -727,12 +727,8 @@ describe("EnumTest", () => {
     adapter = freshAdapter();
   });
 
-  it("type.cast", () => {
-    expect(true).toBe(true);
-  });
-  it("type.serialize", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("type.cast");
+  it.todo("type.serialize");
   it("find via where with strings", () => {
     class Post extends Base {
       static {
@@ -770,177 +766,67 @@ describe("EnumTest", () => {
     const p = await Post.create({ status: "active" });
     expect((p as any).isPersisted()).toBe(true);
   });
-  it("enum methods are overwritable", () => {
-    expect(true).toBe(true);
-  });
-  it("enum value after write symbol", () => {
-    expect(true).toBe(true);
-  });
-  it("enum attribute was", () => {
-    expect(true).toBe(true);
-  });
-  it("enum attribute changed", () => {
-    expect(true).toBe(true);
-  });
-  it("enum attribute changed to", () => {
-    expect(true).toBe(true);
-  });
-  it("enum attribute changed from", () => {
-    expect(true).toBe(true);
-  });
-  it("enum attribute changed from old status to new status", () => {
-    expect(true).toBe(true);
-  });
-  it("enum didn't change", () => {
-    expect(true).toBe(true);
-  });
-  it("assign non existing value raises an error", () => {
-    expect(true).toBe(true);
-  });
-  it("validation with 'validate: true' option", () => {
-    expect(true).toBe(true);
-  });
-  it("validation with 'validate: hash' option", () => {
-    expect(true).toBe(true);
-  });
-  it("NULL values from database should be casted to nil", () => {
-    expect(true).toBe(true);
-  });
-  it("deserialize nil value to enum which defines nil value to hash", () => {
-    expect(true).toBe(true);
-  });
-  it("assign nil value", () => {
-    expect(true).toBe(true);
-  });
-  it("assign nil value to enum which defines nil value to hash", () => {
-    expect(true).toBe(true);
-  });
-  it("assign empty string value", () => {
-    expect(true).toBe(true);
-  });
-  it("assign false value to a field defined as not boolean", () => {
-    expect(true).toBe(true);
-  });
-  it("assign false value to a field defined as boolean", () => {
-    expect(true).toBe(true);
-  });
-  it("assign long empty string value", () => {
-    expect(true).toBe(true);
-  });
-  it("constant to access the mapping", () => {
-    expect(true).toBe(true);
-  });
-  it("attribute_before_type_cast", () => {
-    expect(true).toBe(true);
-  });
-  it("attribute_for_database", () => {
-    expect(true).toBe(true);
-  });
-  it("attributes_for_database", () => {
-    expect(true).toBe(true);
-  });
-  it("invalid definition values raise an ArgumentError", () => {
-    expect(true).toBe(true);
-  });
-  it("reserved enum names", () => {
-    expect(true).toBe(true);
-  });
-  it("can use id as a value with a prefix or suffix", () => {
-    expect(true).toBe(true);
-  });
-  it("overriding enum method should not raise", () => {
-    expect(true).toBe(true);
-  });
-  it("validate inclusion of value in array", () => {
-    expect(true).toBe(true);
-  });
-  it("enums are inheritable", () => {
-    expect(true).toBe(true);
-  });
-  it("attempting to modify enum raises error", () => {
-    expect(true).toBe(true);
-  });
-  it("declare multiple enums with suffix: true", () => {
-    expect(true).toBe(true);
-  });
-  it("enum with alias_attribute", () => {
-    expect(true).toBe(true);
-  });
-  it("uses default status when no status is provided in fixtures", () => {
-    expect(true).toBe(true);
-  });
-  it("uses default value from database on initialization", () => {
-    expect(true).toBe(true);
-  });
-  it("uses default value from database on initialization when using custom mapping", () => {
-    expect(true).toBe(true);
-  });
-  it("data type of Enum type", () => {
-    expect(true).toBe(true);
-  });
-  it("overloaded default by :default", () => {
-    expect(true).toBe(true);
-  });
-  it(":_default is invalid in the new API", () => {
-    expect(true).toBe(true);
-  });
-  it(":_prefix is invalid in the new API", () => {
-    expect(true).toBe(true);
-  });
-  it(":_suffix is invalid in the new API", () => {
-    expect(true).toBe(true);
-  });
-  it(":_scopes is invalid in the new API", () => {
-    expect(true).toBe(true);
-  });
-  it(":_instance_methods is invalid in the new API", () => {
-    expect(true).toBe(true);
-  });
-  it("scopes can be disabled by :scopes", () => {
-    expect(true).toBe(true);
-  });
-  it("enum labels as keyword arguments", () => {
-    expect(true).toBe(true);
-  });
-  it("option names can be used as label", () => {
-    expect(true).toBe(true);
-  });
-  it("capital characters for enum names", () => {
-    expect(true).toBe(true);
-  });
-  it("unicode characters for enum names", () => {
-    expect(true).toBe(true);
-  });
-  it("mangling collision for enum names", () => {
-    expect(true).toBe(true);
-  });
-  it("deserialize enum value to original hash key", () => {
-    expect(true).toBe(true);
-  });
-  it("serializable? with large number label", () => {
-    expect(true).toBe(true);
-  });
-  it("enum logs a warning if auto-generated negative scopes would clash with other enum names", () => {
-    expect(true).toBe(true);
-  });
-  it("enum logs a warning if auto-generated negative scopes would clash with other enum names regardless of order", () => {
-    expect(true).toBe(true);
-  });
-  it("enum doesn't log a warning if no clashes detected", () => {
-    expect(true).toBe(true);
-  });
-  it("enum doesn't log a warning if opting out of scopes", () => {
-    expect(true).toBe(true);
-  });
-  it("raises for attributes with undeclared type", () => {
-    expect(true).toBe(true);
-  });
-  it("supports attributes declared with a explicit type", () => {
-    expect(true).toBe(true);
-  });
-  it("default methods can be disabled by :instance_methods", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("enum methods are overwritable");
+  it.todo("enum value after write symbol");
+  it.todo("enum attribute was");
+  it.todo("enum attribute changed");
+  it.todo("enum attribute changed to");
+  it.todo("enum attribute changed from");
+  it.todo("enum attribute changed from old status to new status");
+  it.todo("enum didn't change");
+  it.todo("assign non existing value raises an error");
+  it.todo("validation with 'validate: true' option");
+  it.todo("validation with 'validate: hash' option");
+  it.todo("NULL values from database should be casted to nil");
+  it.todo("deserialize nil value to enum which defines nil value to hash");
+  it.todo("assign nil value");
+  it.todo("assign nil value to enum which defines nil value to hash");
+  it.todo("assign empty string value");
+  it.todo("assign false value to a field defined as not boolean");
+  it.todo("assign false value to a field defined as boolean");
+  it.todo("assign long empty string value");
+  it.todo("constant to access the mapping");
+  it.todo("attribute_before_type_cast");
+  it.todo("attribute_for_database");
+  it.todo("attributes_for_database");
+  it.todo("invalid definition values raise an ArgumentError");
+  it.todo("reserved enum names");
+  it.todo("can use id as a value with a prefix or suffix");
+  it.todo("overriding enum method should not raise");
+  it.todo("validate inclusion of value in array");
+  it.todo("enums are inheritable");
+  it.todo("attempting to modify enum raises error");
+  it.todo("declare multiple enums with suffix: true");
+  it.todo("enum with alias_attribute");
+  it.todo("uses default status when no status is provided in fixtures");
+  it.todo("uses default value from database on initialization");
+  it.todo("uses default value from database on initialization when using custom mapping");
+  it.todo("data type of Enum type");
+  it.todo("overloaded default by :default");
+  it.todo(":_default is invalid in the new API");
+  it.todo(":_prefix is invalid in the new API");
+  it.todo(":_suffix is invalid in the new API");
+  it.todo(":_scopes is invalid in the new API");
+  it.todo(":_instance_methods is invalid in the new API");
+  it.todo("scopes can be disabled by :scopes");
+  it.todo("enum labels as keyword arguments");
+  it.todo("option names can be used as label");
+  it.todo("capital characters for enum names");
+  it.todo("unicode characters for enum names");
+  it.todo("mangling collision for enum names");
+  it.todo("deserialize enum value to original hash key");
+  it.todo("serializable? with large number label");
+  it.todo(
+    "enum logs a warning if auto-generated negative scopes would clash with other enum names",
+  );
+  it.todo(
+    "enum logs a warning if auto-generated negative scopes would clash with other enum names regardless of order",
+  );
+  it.todo("enum doesn't log a warning if no clashes detected");
+  it.todo("enum doesn't log a warning if opting out of scopes");
+  it.todo("raises for attributes with undeclared type");
+  it.todo("supports attributes declared with a explicit type");
+  it.todo("default methods can be disabled by :instance_methods");
 });
 
 describe("EnumTest", () => {

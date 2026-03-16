@@ -774,51 +774,21 @@ describe("PersistenceTest", () => {
     adapter = freshAdapter();
   });
 
-  it("populates non primary key autoincremented column", () => {
-    expect(true).toBe(true);
-  });
-  it("populates autoincremented id pk regardless of its position in columns list", () => {
-    expect(true).toBe(true);
-  });
-  it("fills auto populated columns on creation", () => {
-    expect(true).toBe(true);
-  });
-  it("update many with duplicated ids!", () => {
-    expect(true).toBe(true);
-  });
-  it("update many with invalid id!", () => {
-    expect(true).toBe(true);
-  });
-  it("update many with active record base object!", () => {
-    expect(true).toBe(true);
-  });
-  it("update many with array of active record base objects!", () => {
-    expect(true).toBe(true);
-  });
-  it("destroy with single composite primary key", () => {
-    expect(true).toBe(true);
-  });
-  it("destroy with multiple composite primary keys", () => {
-    expect(true).toBe(true);
-  });
-  it("destroy with invalid ids for a model that expects composite keys", () => {
-    expect(true).toBe(true);
-  });
-  it("becomes after reload schema from cache", () => {
-    expect(true).toBe(true);
-  });
-  it("becomes wont break mutation tracking", () => {
-    expect(true).toBe(true);
-  });
-  it("becomes includes changed attributes", () => {
-    expect(true).toBe(true);
-  });
-  it("becomes initializes missing attributes", () => {
-    expect(true).toBe(true);
-  });
-  it("becomes keeps extra attributes", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("populates non primary key autoincremented column");
+  it.todo("populates autoincremented id pk regardless of its position in columns list");
+  it.todo("fills auto populated columns on creation");
+  it.todo("update many with duplicated ids!");
+  it.todo("update many with invalid id!");
+  it.todo("update many with active record base object!");
+  it.todo("update many with array of active record base objects!");
+  it.todo("destroy with single composite primary key");
+  it.todo("destroy with multiple composite primary keys");
+  it.todo("destroy with invalid ids for a model that expects composite keys");
+  it.todo("becomes after reload schema from cache");
+  it.todo("becomes wont break mutation tracking");
+  it.todo("becomes includes changed attributes");
+  it.todo("becomes initializes missing attributes");
+  it.todo("becomes keeps extra attributes");
   it("decrement with touch an attribute updates timestamps", async () => {
     class Post extends Base {
       static {
@@ -830,12 +800,8 @@ describe("PersistenceTest", () => {
     const p = (await Post.create({ views: 5 })) as any;
     expect(p.isPersisted()).toBe(true);
   });
-  it("create model with uuid pk populates id", () => {
-    expect(true).toBe(true);
-  });
-  it("create model with custom named uuid pk populates id", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("create model with uuid pk populates id");
+  it.todo("create model with custom named uuid pk populates id");
   it("create through factory with block", async () => {
     class Post extends Base {
       static {
@@ -856,18 +822,10 @@ describe("PersistenceTest", () => {
     const p = await Post.create({ title: "factory2" });
     expect((p as any).isPersisted()).toBe(true);
   });
-  it("preserve original sti type", () => {
-    expect(true).toBe(true);
-  });
-  it("update sti subclass type", () => {
-    expect(true).toBe(true);
-  });
-  it("becomes default sti subclass", () => {
-    expect(true).toBe(true);
-  });
-  it("destroy for a failed to destroy cpk record", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("preserve original sti type");
+  it.todo("update sti subclass type");
+  it.todo("becomes default sti subclass");
+  it.todo("destroy for a failed to destroy cpk record");
   it("update all with custom sql as value", async () => {
     class Post extends Base {
       static {
@@ -878,48 +836,20 @@ describe("PersistenceTest", () => {
     await Post.create({ title: "old" });
     expect(await Post.count()).toBeGreaterThan(0);
   });
-  it("update attribute for readonly attribute", () => {
-    expect(true).toBe(true);
-  });
-  it("update attribute for readonly attribute!", () => {
-    expect(true).toBe(true);
-  });
-  it("update attribute with one updated!", () => {
-    expect(true).toBe(true);
-  });
-  it("update attribute for aborted callback!", () => {
-    expect(true).toBe(true);
-  });
-  it("update column with model having primary key other than id", () => {
-    expect(true).toBe(true);
-  });
-  it("update columns with model having primary key other than id", () => {
-    expect(true).toBe(true);
-  });
-  it("update columns should not modify updated at", () => {
-    expect(true).toBe(true);
-  });
-  it("update columns with default scope", () => {
-    expect(true).toBe(true);
-  });
-  it("reset column information resets children", () => {
-    expect(true).toBe(true);
-  });
-  it("reload uses query constraints config", () => {
-    expect(true).toBe(true);
-  });
-  it("destroy uses query constraints config", () => {
-    expect(true).toBe(true);
-  });
-  it("delete uses query constraints config", () => {
-    expect(true).toBe(true);
-  });
-  it("update attribute uses query constraints config", () => {
-    expect(true).toBe(true);
-  });
-  it("it is possible to update parts of the query constraints config", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("update attribute for readonly attribute");
+  it.todo("update attribute for readonly attribute!");
+  it.todo("update attribute with one updated!");
+  it.todo("update attribute for aborted callback!");
+  it.todo("update column with model having primary key other than id");
+  it.todo("update columns with model having primary key other than id");
+  it.todo("update columns should not modify updated at");
+  it.todo("update columns with default scope");
+  it.todo("reset column information resets children");
+  it.todo("reload uses query constraints config");
+  it.todo("destroy uses query constraints config");
+  it.todo("delete uses query constraints config");
+  it.todo("update attribute uses query constraints config");
+  it.todo("it is possible to update parts of the query constraints config");
 });
 
 describe("PersistenceTest", () => {
@@ -4345,31 +4275,17 @@ describe("PersistenceTest", () => {
     expect(u.isPersisted()).toBe(true);
   });
 
-  it("query constraints list is nil if primary key is nil", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("query constraints list is nil if primary key is nil");
 
-  it("query constraints list is nil for non cpk model", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("query constraints list is nil for non cpk model");
 
-  it("query constraints list equals to composite primary key", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("query constraints list equals to composite primary key");
 
-  it("child keeps parents query constraints", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("child keeps parents query constraints");
 
-  it("child keeps parents query contraints derived from composite pk", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("child keeps parents query contraints derived from composite pk");
 
-  it("query constraints raises an error when no columns provided", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("query constraints raises an error when no columns provided");
 
-  it("child class with query constraints overrides parents", () => {
-    expect(true).toBe(true);
-  });
+  it.todo("child class with query constraints overrides parents");
 });

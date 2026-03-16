@@ -552,9 +552,57 @@ describe("StoreTest", () => {
     /* needs type checking */
   });
 
-  it.skip("reading store attributes through accessors with prefix", () => {});
-  it.skip("writing store attributes through accessors with prefix", () => {});
-  it.skip("updating the store will mark it as changed", () => {});
+  it("reading store attributes through accessors with prefix", async () => {
+    const a = freshAdapter();
+    class User extends Base {
+      static {
+        this.attribute("name", "string");
+        this.attribute("settings", "string");
+        this.adapter = a;
+      }
+    }
+    store(User, "settings", { accessors: ["theme"], prefix: true });
+    const u = await User.create({
+      name: "Alice",
+      settings: JSON.stringify({ theme: "dark" }),
+    });
+    expect((u as any).settings_theme).toBe("dark");
+  });
+
+  it("writing store attributes through accessors with prefix", async () => {
+    const a = freshAdapter();
+    class User extends Base {
+      static {
+        this.attribute("name", "string");
+        this.attribute("settings", "string");
+        this.adapter = a;
+      }
+    }
+    store(User, "settings", { accessors: ["theme"], prefix: true });
+    const u = await User.create({ name: "Alice" });
+    (u as any).settings_theme = "light";
+    const parsed = JSON.parse(u.readAttribute("settings") as string);
+    expect(parsed.theme).toBe("light");
+  });
+
+  it("updating the store will mark it as changed", async () => {
+    const a = freshAdapter();
+    class User extends Base {
+      static {
+        this.attribute("name", "string");
+        this.attribute("settings", "string");
+        this.adapter = a;
+      }
+    }
+    store(User, "settings", { accessors: ["theme"] });
+    const u = await User.create({
+      name: "Alice",
+      settings: JSON.stringify({ theme: "dark" }),
+    });
+    await u.reload();
+    (u as any).theme = "light";
+    expect(u.changedAttributes).toContain("settings");
+  });
 });
 
 describe("StoreTest", () => {

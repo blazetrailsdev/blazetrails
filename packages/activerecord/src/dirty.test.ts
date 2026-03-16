@@ -116,11 +116,71 @@ describe("DirtyTest", () => {
     expect(typeof t.changed).toBe("boolean");
   });
 
-  it.skip("aliased attribute changes", () => {});
-  it.skip("saved_change_to_attribute? returns whether a change occurred in the last save", () => {});
-  it.skip("saved_change_to_attribute returns the change that occurred in the last save", () => {});
-  it.skip("attribute_before_last_save returns the original value before saving", () => {});
-  it.skip("changed? in after callbacks returns false", () => {});
+  it.skip("aliased attribute changes", () => {
+    /* needs aliasAttribute support in dirty tracking */
+  });
+
+  it("saved_change_to_attribute? returns whether a change occurred in the last save", async () => {
+    class Topic extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    const t = await Topic.create({ title: "original" });
+    t.writeAttribute("title", "updated");
+    await t.save();
+    expect(t.savedChangeToAttribute("title")).toBe(true);
+    expect(t.savedChangeToAttribute("title", { to: "updated" })).toBe(true);
+    expect(t.savedChangeToAttribute("title", { to: "other" })).toBe(false);
+  });
+
+  it("saved_change_to_attribute returns the change that occurred in the last save", async () => {
+    class Topic extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    const t = await Topic.create({ title: "original" });
+    t.writeAttribute("title", "updated");
+    await t.save();
+    const changes = t.previousChanges;
+    expect(changes["title"]).toBeDefined();
+    expect(changes["title"][0]).toBe("original");
+    expect(changes["title"][1]).toBe("updated");
+  });
+
+  it("attribute_before_last_save returns the original value before saving", async () => {
+    class Topic extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    const t = await Topic.create({ title: "original" });
+    t.writeAttribute("title", "changed");
+    await t.save();
+    expect(t.attributeBeforeLastSave("title")).toBe("original");
+  });
+
+  it.skip("changed? in after callbacks returns false", async () => {
+    /* changesApplied() is called after afterSave callbacks, not before */
+    let changedInCallback: boolean | undefined = true;
+    class Topic extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+        this.afterSave(function (record: any) {
+          changedInCallback = record.changed;
+        });
+      }
+    }
+    const t = await Topic.create({ title: "original" });
+    t.writeAttribute("title", "updated");
+    await t.save();
+    expect(changedInCallback).toBe(false);
+  });
 });
 
 // ==========================================================================

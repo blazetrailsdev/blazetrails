@@ -2282,7 +2282,7 @@ export class Base extends Model {
     const { processDependentAssociations } = await import("./associations.js");
     await processDependentAssociations(this);
 
-    ctor._callbackChain.run("destroy", this, () => {
+    const halted = !ctor._callbackChain.run("destroy", this, () => {
       const table = ctor.arelTable;
       const pk = this.id;
       if (Array.isArray(pk) ? pk.every((v) => v == null) : pk == null) {
@@ -2293,6 +2293,8 @@ export class Base extends Model {
       const sql = `DELETE FROM "${table.name}" WHERE ${ctor._buildPkWhere(pk)}`;
       this._pendingOperation = ctor.adapter.executeMutation(sql).then(() => {});
     });
+
+    if (halted) return false as any;
 
     if (this._pendingOperation) {
       await this._pendingOperation;

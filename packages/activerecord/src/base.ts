@@ -2279,34 +2279,32 @@ export class Base extends Model {
     }
     const ctor = this.constructor as typeof Base;
 
-    if (!ctor._callbackChain.runBefore("destroy", this)) return false;
+    const halted = !ctor._callbackChain.run("destroy", this, () => {
+      this._pendingOperation = (async () => {
+        const { processDependentAssociations } = await import("./associations.js");
+        await processDependentAssociations(this);
 
-    // Run around callbacks wrapping the destroy operation
-    let executed = false;
-    ctor._callbackChain.runAround("destroy", this, () => {
-      executed = true;
+        const table = ctor.arelTable;
+        const pk = this.id;
+        if (!(Array.isArray(pk) ? pk.every((v) => v == null) : pk == null)) {
+          const sql = `DELETE FROM "${table.name}" WHERE ${ctor._buildPkWhere(pk)}`;
+          await ctor.adapter.executeMutation(sql);
+        }
+      })();
     });
-    if (!executed) return false;
 
-    // Process dependent associations + delete row
-    const { processDependentAssociations } = await import("./associations.js");
-    await processDependentAssociations(this);
+    if (halted) return false;
 
-    const table = ctor.arelTable;
-    const pk = this.id;
-    if (!(Array.isArray(pk) ? pk.every((v) => v == null) : pk == null)) {
-      const sql = `DELETE FROM "${table.name}" WHERE ${ctor._buildPkWhere(pk)}`;
-      await ctor.adapter.executeMutation(sql);
+    if (this._pendingOperation) {
+      await this._pendingOperation;
+      this._pendingOperation = null;
     }
 
     this._destroyed = true;
     this._frozen = true;
 
-    // Counter cache: decrement on destroy
     const { updateCounterCaches } = await import("./associations.js");
     await updateCounterCaches(this, "decrement");
-
-    ctor._callbackChain.runAfter("destroy", this);
 
     return this;
   }

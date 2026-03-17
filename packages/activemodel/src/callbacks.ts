@@ -69,21 +69,8 @@ export class CallbackChain {
    */
   run(event: CallbackEvent, record: AnyRecord, block: () => void): boolean {
     if (!this.runBefore(event, record)) return false;
-
-    // Around callbacks wrap the block
-    const arounds = this.callbacks.filter(
-      (c) => c.timing === "around" && c.event === event && this._shouldRun(c, record),
-    );
-
-    let chain = block;
-    for (const cb of [...arounds].reverse()) {
-      const prev = chain;
-      chain = () => (cb.fn as AroundCallbackFn)(record, prev);
-    }
-    chain();
-
+    this._composeAndRunArounds(event, record, block);
     this.runAfter(event, record);
-
     return true;
   }
 
@@ -91,6 +78,10 @@ export class CallbackChain {
    * Run only around callbacks for an event, wrapping the given block.
    */
   runAround(event: CallbackEvent, record: AnyRecord, block: () => void): void {
+    this._composeAndRunArounds(event, record, block);
+  }
+
+  private _composeAndRunArounds(event: CallbackEvent, record: AnyRecord, block: () => void): void {
     const arounds = this.callbacks.filter(
       (c) => c.timing === "around" && c.event === event && this._shouldRun(c, record),
     );

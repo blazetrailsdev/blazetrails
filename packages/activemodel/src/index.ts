@@ -4,7 +4,13 @@ export { Errors, NestedError } from "./errors.js";
 export { ModelName } from "./naming.js";
 export { DirtyTracker } from "./dirty.js";
 export { CallbackChain } from "./callbacks.js";
-export type { CallbackConditions } from "./callbacks.js";
+export type {
+  CallbackConditions,
+  CallbackFn,
+  AroundCallbackFn,
+  SyncAroundCallbackFn,
+  AsyncAroundCallbackFn,
+} from "./callbacks.js";
 export { serializableHash } from "./serialization.js";
 export { Type } from "./types/type.js";
 

@@ -5,10 +5,29 @@ type AnyRecord = any;
  * Callback types.
  */
 export type CallbackFn = (record: AnyRecord) => void | boolean | Promise<void | boolean>;
-export type AroundCallbackFn = (
+/**
+ * Sync around callback — used by the synchronous run() method.
+ * proceed() is synchronous and must be called (not awaited).
+ */
+export type SyncAroundCallbackFn = (record: AnyRecord, proceed: () => void) => void;
+
+/**
+ * Async-compatible around callback — used by runAsync().
+ * proceed() returns a Promise and can be awaited. The callback
+ * itself may return a Promise.
+ */
+export type AsyncAroundCallbackFn = (
   record: AnyRecord,
   proceed: () => void | Promise<void>,
 ) => void | Promise<void>;
+
+/**
+ * Around callback type accepted by register(). Compatible with both
+ * run() (sync) and runAsync() (async). If used with run(), the callback
+ * MUST be synchronous — async callbacks will silently run out of order.
+ * Use runAsync() for async around callbacks.
+ */
+export type AroundCallbackFn = AsyncAroundCallbackFn;
 
 export type CallbackTiming = "before" | "after" | "around";
 export type CallbackEvent = string;
@@ -81,7 +100,7 @@ export class CallbackChain {
     let chain = block;
     for (const cb of [...arounds].reverse()) {
       const prev = chain;
-      chain = () => (cb.fn as AroundCallbackFn)(record, prev);
+      chain = () => (cb.fn as SyncAroundCallbackFn)(record, prev);
     }
     chain();
 
@@ -128,7 +147,7 @@ export class CallbackChain {
           return result;
         };
         try {
-          await (cb.fn as AroundCallbackFn)(record, wrappedProceed);
+          await (cb.fn as AsyncAroundCallbackFn)(record, wrappedProceed);
           if (pendingProceed) await pendingProceed;
         } catch (aroundError) {
           if (pendingProceed) await pendingProceed.catch(() => {});

@@ -2281,6 +2281,13 @@ export class Base extends Model {
 
     if (!ctor._callbackChain.runBefore("destroy", this)) return false;
 
+    // Run around callbacks wrapping the destroy operation
+    let executed = false;
+    ctor._callbackChain.runAround("destroy", this, () => {
+      executed = true;
+    });
+    if (!executed) return false;
+
     // Process dependent associations + delete row
     const { processDependentAssociations } = await import("./associations.js");
     await processDependentAssociations(this);

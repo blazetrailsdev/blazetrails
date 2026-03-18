@@ -1,163 +1,103 @@
 # ActiveRecord: Road to 100% Test Coverage
 
-Current state: **52.0%** (4,358 implemented / 8,385 total Ruby tests). 340/342 files mapped, 0 misplaced, 79 wrong describes, 3,783 skipped.
+Current state: **52.2%** (4,374 / 8,385 tests). 3,767 skipped, 52 wrong describes, 244 unmatched.
 
 ## How coverage is measured
 
-`npm run convention:compare` extracts test names from both Rails Ruby source and our TypeScript tests, then matches them by normalized name and describe-block ancestry. File mapping is convention-based: `finder_test.rb` maps to `finder.test.ts` (snake_case to kebab-case).
+`npm run convention:compare` matches our test names against the Rails test suite. `OK` = passing, `Skip` = `it.skip` stub, `Desc` = wrong describe block, `Miss` = no TS equivalent.
 
-The percentage reflects **implemented** (non-skipped) tests only. Skipped stubs (`it.skip`) are tracked separately.
+## Two workstreams
 
-Columns in the output: `OK` (implemented, non-skipped), `Skip` (matched but `it.skip`), `Desc` (wrong describe block), `Move` (misplaced — wrong file), `Miss` (no TS equivalent at all), `Tot` (total Ruby tests in file).
+The remaining 4,011 tests split cleanly into two parallel tracks that rarely touch the same files.
 
-## The gap: 4,027 tests
+### Workstream A: Associations & Querying (~815 skipped)
 
-To reach 100%, we need to implement 4,027 more tests (8,385 - 4,358). These break down into:
+Covers association features, eager loading, scoping, where clauses, and finders.
 
-- **3,783 skipped tests** — `it.skip()` stubs that need real implementations
-- **244 unmatched tests** — Ruby tests with no TS equivalent (across existing and 2 missing files)
+| File                                                             | Skipped | Notes                               |
+| ---------------------------------------------------------------- | ------- | ----------------------------------- |
+| associations/has-many-through-associations.test.ts               | 98      | Largest association file            |
+| associations/eager.test.ts                                       | 76      | includes/preload, 20 unmatched      |
+| associations.test.ts                                             | 72      | General association tests           |
+| autosave-association.test.ts                                     | 68      | Autosave edge cases                 |
+| associations/nested-through-associations.test.ts                 | 54      | Nested through                      |
+| scoping/relation-scoping.test.ts                                 | 53      | Scoping + finders, 1 wrong describe |
+| associations/has-and-belongs-to-many-associations.test.ts        | 48      | HABTM                               |
+| associations/join-model.test.ts                                  | 43      | Join models                         |
+| relation/where.test.ts                                           | 36      | Where clause features               |
+| associations/inverse-associations.test.ts                        | 35      | Inverse of                          |
+| associations/has-one-associations.test.ts                        | 31      | Has-one features                    |
+| associations/has-one-through-associations.test.ts                | 29      | Has-one-through                     |
+| associations/has-many-through-disable-joins-associations.test.ts | 28      | Disable joins                       |
+| nested-attributes.test.ts                                        | ~18     | 18 wrong describes to fix           |
 
-## Completed work
+#### Key capabilities to implement
 
-### Wrong describes: 382 → 79 (done: PRs #66–#70, #77–#81)
-
-All PostgreSQL, MySQL, core ORM, association, and transaction wrong describes have been fixed. The remaining 79 are spread across smaller files.
-
-### Missing files: 145 → 2 (done: PR #89)
-
-Generated `it.skip` stubs for 143 missing files. Only 2 Ruby files lack a TS equivalent.
-
-### Fixture-dependent tests (done: PRs #60, #71)
-
-Converted fixture-dependent tests in has-many-through, where-chain, transaction-callbacks, strict-loading, and autosave-association to be self-contained.
-
-### Counter cache (done: PR #76)
-
-Fixed `resetCounters` (was broken — treated `_associations` as Map instead of array). Added `resolveCounterColumn` helper for custom counter cache columns, `countHasMany` for efficient counting. Unskipped 9 counter-cache tests.
-
-### Inverse associations (done: PR #87)
-
-Added `InverseOfAssociationNotFoundError` with Levenshtein-based "Did you mean?" suggestions. Validation runs at association load time. Unskipped 5 inverse association tests.
-
-### Readonly checks (done: PR #93)
-
-Added readonly guards to `touch()` and `updateColumns()`. Unskipped 2 tests.
-
-### Async callback chain (done: PRs #102, #110, #112)
-
-Major refactor: `CallbackChain` is now async-first. `run()`/`runBefore()`/`runAfter()` are async and properly await promise-returning callbacks. Sync variants (`runSync`/`runBeforeSync`/`runAfterSync`) exist for constructors and validation.
-
-- `destroy()` respects `beforeDestroy` halt, returns `false`, `destroyBang()` throws `RecordNotDestroyed`
-- `afterCreate`/`afterUpdate`/`afterDestroy` fire after DB operation completes
-- Around callbacks support async `proceed()`, block execution tracking
-- ~24 tests unskipped as a side effect
-
-### Insert all / upsert (done: PR #90)
-
-Implemented timestamps tracking, RETURNING clause, adapter-specific SQL generation.
-
-### Store / dirty tracking (done: PR #72)
-
-Unskipped store and dirty tracking edge case tests.
-
-### Batch unskips (done: PRs #82–#86, #88, #108)
-
-Various batches of test unskips across core ORM, callbacks, and associations.
+- **Through associations**: has-many-through, has-one-through, nested-through — the biggest chunk
+- **Eager loading**: `includes`, `preload`, `eagerLoad` — partially done (#114)
+- **Scoping**: `scoping()` integration with finders, default scopes, unscoped
+- **Where clause**: `where.not`, `where.associated`, `where.missing`, OR/AND chaining
+- **HABTM**: join table management, bidirectional syncing
+- **Autosave**: nested attribute saving, validation propagation, destroy marking
 
 ---
 
-## Remaining work areas (parallelizable)
+### Workstream B: Core ORM & Infrastructure (~2,950 skipped)
 
-### Area 1: Wrong describes (79 remaining)
+Covers base class features, adapters, fixtures, schema, encryption, and connections.
 
-Most of the original 382 wrong describes have been fixed. The remaining 79 are spread across various files — check `convention:compare` output for the current list.
+| File                                                             | Skipped | Notes                        |
+| ---------------------------------------------------------------- | ------- | ---------------------------- |
+| fixtures.test.ts                                                 | 149     | Fixture loading/caching      |
+| base.test.ts                                                     | 69      | Core Base class features     |
+| query-cache.test.ts                                              | 62      | Query caching layer          |
+| adapters/postgresql/postgresql-adapter.test.ts                   | 51      | PG adapter                   |
+| encryption/encryptable-record.test.ts                            | 51      | Encrypted attributes         |
+| adapters/trilogy/trilogy-adapter.test.ts                         | 51      | MySQL adapter                |
+| connection-pool.test.ts                                          | 50      | Connection pooling           |
+| migration.test.ts                                                | 50      | Migration features           |
+| adapters/postgresql/range.test.ts                                | 46      | PG range type                |
+| adapters/postgresql/hstore.test.ts                               | 44      | PG hstore, 3 wrong describes |
+| adapters/postgresql/array.test.ts                                | 41      | PG array type                |
+| insert-all.test.ts                                               | 42      | Insert all / upsert          |
+| reflection.test.ts                                               | 40      | Reflection API               |
+| connection-adapters/merge-and-resolve-default-url-config.test.ts | 40      | DB config                    |
+| adapters/postgresql/schema.test.ts                               | 39      | PG schema                    |
+| unsafe-raw-sql.test.ts                                           | 37      | SQL sanitization             |
+| multiparameter-attributes.test.ts                                | 37      | Multi-param attrs            |
+| adapters/postgresql/postgresql-rake.test.ts                      | 37      | PG rake tasks                |
+| migrator.test.ts                                                 | 35      | Migrator                     |
+| strict-loading.test.ts                                           | 34      | Strict loading modes         |
+| schema-dumper.test.ts                                            | 67      | Schema dumper                |
+| tasks/database-tasks.test.ts                                     | 78      | DB tasks                     |
 
----
+#### Key capabilities to implement
 
-### Area 2: Unskip tests (3,783 skipped)
-
-Grouped by the feature/capability that blocks them.
-
-#### Sub-area 2A: Association features
-
-| PR    | Area                                         | Status          |
-| ----- | -------------------------------------------- | --------------- |
-| 2A.1  | Fixture-dependent association tests          | Done (#60, #71) |
-| 2A.2  | Eager loading — includes/preload (~84 tests) | Open            |
-| 2A.3  | Counter cache (~35 tests)                    | Done (#76)      |
-| 2A.4  | Inverse associations (~40 tests)             | Done (#87)      |
-| 2A.5  | Has-one features (~33 tests)                 | Partial (#107)  |
-| 2A.6  | Has-one-through features (~29 tests)         | Open            |
-| 2A.7  | HABTM features (~48 tests)                   | Open            |
-| 2A.8  | Nested through associations (~54 tests)      | Open            |
-| 2A.9  | Strict loading modes (~37 tests)             | Partial (#107)  |
-| 2A.10 | Autosave edge cases (~40 tests)              | Open            |
-
-#### Sub-area 2B: Core ORM features
-
-| PR    | Area                                     | Status         |
-| ----- | ---------------------------------------- | -------------- |
-| 2B.1  | Base class features (~74 tests)          | Partial (#101) |
-| 2B.2  | Locking (~33 tests)                      | Partial (#101) |
-| 2B.3  | Where clause features (~36 tests)        | Open           |
-| 2B.4  | Where chain (~31 tests)                  | Open           |
-| 2B.5  | Reflection API (~43 tests)               | Partial (#101) |
-| 2B.6  | Serialized attributes (~19 tests)        | Partial (#101) |
-| 2B.7  | Transaction callbacks (~22 tests)        | Partial (#101) |
-| 2B.8  | Insert all / upsert (~42 tests)          | Done (#90)     |
-| 2B.9  | Nested attributes edge cases (~19 tests) | Open           |
-| 2B.10 | Migration features (~50 tests)           | Open           |
-
-#### Sub-area 2C: Smaller files
-
-| PR   | File(s)                           | Skipped | Status         |
-| ---- | --------------------------------- | ------- | -------------- |
-| 2C.1 | store.test.ts                     | 7       | Done (#72)     |
-| 2C.2 | dirty.test.ts                     | 5       | Done (#72)     |
-| 2C.3 | scoping/named-scoping.test.ts     | 6       | Partial (#105) |
-| 2C.4 | token-for.test.ts                 | 2       | Done (#71)     |
-| 2C.5 | associations/join-model.test.ts   | 54      | Done (#106)    |
-| 2C.6 | view.test.ts                      | 5       | Open           |
-| 2C.7 | associations/has-many (remaining) | 5       | Partial (#105) |
+- **PostgreSQL types**: range, hstore, array, geometric, cidr/inet — ~250 skipped across PG files
+- **Base class**: attribute API, type casting, inheritance, abstract classes
+- **Fixtures**: loading, caching, transactional fixtures
+- **Query cache**: caching layer, invalidation, notification hooks
+- **Schema/migrations**: DDL generation, schema dumper, migrator
+- **Encryption**: encrypted attributes, key management, querying encrypted columns
+- **Connections**: pooling, switching, resolver, multi-DB
 
 ---
 
-### Area 3: Missing files — mostly done
+### Shared / small items (52 wrong describes)
 
-Only 2 files remain unmapped. The bulk of missing file stubs were generated in PR #89.
+These can be picked up by either workstream as they touch the relevant files:
 
----
-
-### Area 4: PostgreSQL adapter features (300+ skipped)
-
-All files in `adapters/postgresql/`. Requires `PG_TEST_URL`.
-
-| PR  | Area                    | Tests | Status      |
-| --- | ----------------------- | ----- | ----------- |
-| 4.1 | PostgreSQL schema tests | ~71   | Done (#99)  |
-| 4.2 | PostgreSQL adapter core | ~60   | Done (#103) |
-| 4.3 | Range type support      | ~46   | Open        |
-| 4.4 | HStore type support     | ~44   | Open        |
-| 4.5 | Array type support      | ~41   | Open        |
-| 4.6 | Geometric types         | ~29   | Open        |
-| 4.7 | Smaller PG type files   | ~50   | Open        |
+- nested-attributes.test.ts (18 wrong describes)
+- PostgreSQL adapter files (26 wrong describes across ~12 files)
+- scoping/relation-scoping.test.ts (1 wrong describe)
+- associations/nested-error.test.ts (3 wrong describes)
 
 ---
 
-## Tracking progress
+## Tracking
 
 ```bash
 npm run convention:compare -- --package activerecord
 ```
 
 Target: `activerecord — 8385/8385 tests (100%)`
-
-## Suggested parallel tracks
-
-Three people could work simultaneously on:
-
-1. **Track A: Wrong describes + structural** — Fix remaining 79 wrong describes. Pure file restructuring, no feature code.
-2. **Track B: Association features** — Area 2A. Implements association capabilities and unskips tests.
-3. **Track C: Core ORM + PostgreSQL** — Areas 2B and 4. Implements ORM features and PG adapter.
-
-Each track touches different files and can merge independently.

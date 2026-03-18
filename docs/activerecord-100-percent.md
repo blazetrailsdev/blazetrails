@@ -16,14 +16,28 @@ The remaining 4,011 tests split into two parallel tracks that rarely touch the s
 
 Covers association features, eager loading, scoping, where clauses, and finders.
 
-#### PR A1: Through associations (~152 skipped)
+#### PR A1: Through associations (~152 skipped → ~103 remaining)
 
-| File                                               | Skipped |
-| -------------------------------------------------- | ------- |
-| associations/has-many-through-associations.test.ts | 98      |
-| associations/nested-through-associations.test.ts   | 54      |
+| File                                               | Before | After |
+| -------------------------------------------------- | ------ | ----- |
+| associations/has-many-through-associations.test.ts | 98     | 55    |
+| associations/nested-through-associations.test.ts   | 54     | 48    |
 
-Implement has-many-through join logic, nested through chains, and through-source reflection.
+Implemented in #123: through-aware `build`/`create` on `CollectionProxy`,
+49 new passing tests covering basic through CRUD, polymorphic/STI through,
+nested through chains, and collection proxy operations (push/delete/replace/setIds).
+
+Remaining ~103 skipped tests need:
+
+- **SQL join generation** (~20): `joins`, `left_joins`, `inner_join`, `explicitly_joining_join_table`, `joining_has_many_through_*`
+- **Scope merging on through** (~15): `source_scope`, `through_scope_with_includes/joins`, `unscope`, `default_scope_on_target`, `rewhere`
+- **Preload for nested through** (~25): all `*_preload` and `*_preload_via_joins` tests in nested-through
+- **Counter caches** (6): `update_counter_caches_on_*`
+- **Transactions** (2): `transaction_method_starts_transaction`, `through_model_to_create_transactions`
+- **Reflection metadata** (1): `modifying_has_many_through_has_one_reflection_should_raise` (needs `HasManyThroughCantAssociateThroughHasOneOrManyReflection`)
+- **Validation propagation** (3): `create_bang_should_raise`, `save_bang_should_raise`, `save_returns_falsy` when join record has errors
+- **`_pushThrough` FK resolution**: currently uses convention-based `sourceFk`; should resolve the source association's configured `foreignKey` option to handle nonstandard FK columns correctly
+- **Order preservation**: through loader uses WHERE IN which returns by PK order; true order preservation needs ORDER BY support
 
 #### PR A2: Eager loading (~76 skipped)
 

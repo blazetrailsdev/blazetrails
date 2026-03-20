@@ -1631,14 +1631,15 @@ export class Relation<T extends Base> {
       }
     }
 
-    // Preload associations if requested
-    const allAssocs = [
-      ...this._includesAssociations,
-      ...this._preloadAssociations,
-      ...this._eagerLoadAssociations,
-    ];
-    if (allAssocs.length > 0 && this._records.length > 0) {
-      await this._preloadAssociationsForRecords(this._records, allAssocs);
+    // Eager load via LEFT JOINs (eager_load associations)
+    if (this._eagerLoadAssociations.length > 0 && this._records.length > 0) {
+      await this._eagerLoadViaJoins(this._records, this._eagerLoadAssociations);
+    }
+
+    // Preload associations if requested (includes + preload)
+    const preloadAssocs = [...this._includesAssociations, ...this._preloadAssociations];
+    if (preloadAssocs.length > 0 && this._records.length > 0) {
+      await this._preloadAssociationsForRecords(this._records, preloadAssocs);
     }
 
     return [...this._records];
@@ -3124,6 +3125,88 @@ export class Relation<T extends Base> {
       conditions.push(rawClause);
     }
     return conditions;
+  }
+
+  private async _eagerLoadViaJoins(records: T[], assocNames: string[]): Promise<void> {
+    const modelClass = this._modelClass as any;
+    const associations: any[] = modelClass._associations ?? [];
+    const sourceTable = modelClass.tableName;
+    const sourcePk = modelClass.primaryKey ?? "id";
+
+    for (const assocName of assocNames) {
+      const assocDef = associations.find((a: any) => a.name === assocName);
+      if (!assocDef) continue;
+
+      const joinInfo = this._resolveAssociationJoin(assocName);
+      if (!joinInfo) continue;
+
+      const joins = Array.isArray(joinInfo) ? joinInfo : [joinInfo];
+      const targetJoin = joins[joins.length - 1];
+
+      const joinClauses = joins.map((j) => `LEFT OUTER JOIN "${j.table}" ON ${j.on}`).join(" ");
+
+      const sql =
+        `SELECT "${sourceTable}".*, "${targetJoin.table}".* FROM "${sourceTable}" ${joinClauses}` +
+        ` WHERE "${sourceTable}"."${sourcePk}" IN (${records
+          .map((r) => {
+            const pk = r.readAttribute(sourcePk);
+            return typeof pk === "number" ? pk : `'${pk}'`;
+          })
+          .join(", ")})`;
+
+      const rows = await modelClass.adapter.execute(sql);
+
+      if (assocDef.type === "hasMany" || (assocDef.options && assocDef.options.through)) {
+        const childrenByPk = new Map<unknown, any[]>();
+        const { modelRegistry: _mr } = await import("./associations.js");
+
+        const className =
+          assocDef.options.className ??
+          (assocDef.type === "hasMany" ? _camelize(_singularize(assocName)) : _camelize(assocName));
+        const targetModel = _mr.get(className);
+
+        for (const row of rows) {
+          const parentPk = row[sourcePk];
+          if (!childrenByPk.has(parentPk)) childrenByPk.set(parentPk, []);
+
+          const targetTable = targetJoin.table;
+          const childPk = row.id ?? row[`${targetTable}_id`];
+          if (childPk != null && targetModel) {
+            const child = targetModel._instantiate(row);
+            childrenByPk.get(parentPk)!.push(child);
+          }
+        }
+
+        for (const record of records) {
+          if (!(record as any)._preloadedAssociations) {
+            (record as any)._preloadedAssociations = new Map();
+          }
+          const pk = record.readAttribute(sourcePk);
+          (record as any)._preloadedAssociations.set(assocName, childrenByPk.get(pk) ?? []);
+        }
+      } else if (assocDef.type === "belongsTo" || assocDef.type === "hasOne") {
+        const foreignKey = assocDef.options.foreignKey ?? `${_toUnderscore(assocName)}_id`;
+        const { modelRegistry: _mr } = await import("./associations.js");
+        const className = assocDef.options.className ?? _camelize(assocName);
+        const targetModel = _mr.get(className);
+
+        const targetByFk = new Map<unknown, any>();
+        for (const row of rows) {
+          const fk = row[foreignKey];
+          if (fk != null && targetModel && !targetByFk.has(fk)) {
+            targetByFk.set(fk, targetModel._instantiate(row));
+          }
+        }
+
+        for (const record of records) {
+          if (!(record as any)._preloadedAssociations) {
+            (record as any)._preloadedAssociations = new Map();
+          }
+          const fk = record.readAttribute(foreignKey);
+          (record as any)._preloadedAssociations.set(assocName, targetByFk.get(fk) ?? null);
+        }
+      }
+    }
   }
 
   private async _preloadAssociationsForRecords(records: T[], assocNames: string[]): Promise<void> {

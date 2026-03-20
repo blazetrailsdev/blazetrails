@@ -5,7 +5,13 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { Base, registerModel, enableSti, registerSubclass } from "../index.js";
 import { createTestAdapter } from "../test-adapter.js";
 import type { DatabaseAdapter } from "../adapter.js";
-import { loadBelongsTo, loadHasOne, loadHasMany, loadHasManyThrough } from "../associations.js";
+import {
+  Associations,
+  loadBelongsTo,
+  loadHasOne,
+  loadHasMany,
+  loadHasManyThrough,
+} from "../associations.js";
 
 function freshAdapter(): DatabaseAdapter {
   return createTestAdapter();
@@ -48,6 +54,10 @@ describe("NestedThroughAssociationsTest", () => {
     Post.adapter = adapter;
     Tag.adapter = adapter;
     Tagging.adapter = adapter;
+    Associations.hasMany.call(Author, "posts", { foreignKey: "author_id" });
+    Associations.hasMany.call(Post, "taggings", { foreignKey: "taggable_id" });
+    Associations.belongsTo.call(Tagging, "tag", { foreignKey: "tag_id" });
+    Associations.hasMany.call(Author, "taggings", { through: "posts", source: "taggings" });
     registerModel(Author);
     registerModel(Post);
     registerModel(Tag);
@@ -108,9 +118,31 @@ describe("NestedThroughAssociationsTest", () => {
     expect(loadedTag!.readAttribute("name")).toBe("nested-tag");
   });
 
-  it.skip("has many through has many with has many through source reflection preload", () => {});
+  it("has many through has many with has many through source reflection preload", async () => {
+    const author = await Author.create({ name: "PreloadAuthor" });
+    const post = await Post.create({ author_id: author.id, title: "P1", body: "B" });
+    const tag = await Tag.create({ name: "preload-tag" });
+    await Tagging.create({ tag_id: tag.id, taggable_id: post.id, taggable_type: "Post" });
 
-  it.skip("has many through has many with has many through source reflection preload via joins", () => {});
+    const authors = await Author.all().includes("taggings").toArray();
+    expect(authors).toHaveLength(1);
+    const preloadedTaggings = (authors[0] as any)._preloadedAssociations?.get("taggings");
+    expect(preloadedTaggings).toBeDefined();
+    expect(preloadedTaggings.length).toBe(1);
+  });
+
+  it("has many through has many with has many through source reflection preload via joins", async () => {
+    const author = await Author.create({ name: "JoinPreload" });
+    const post = await Post.create({ author_id: author.id, title: "JP", body: "B" });
+    const tag = await Tag.create({ name: "join-tag" });
+    await Tagging.create({ tag_id: tag.id, taggable_id: post.id, taggable_type: "Post" });
+
+    const authors = await Author.all().eagerLoad("taggings").toArray();
+    expect(authors).toHaveLength(1);
+    const preloadedTaggings = (authors[0] as any)._preloadedAssociations?.get("taggings");
+    expect(preloadedTaggings).toBeDefined();
+    expect(preloadedTaggings.length).toBe(1);
+  });
 
   it("has many through has many through with has many source reflection", async () => {
     // Author -> Posts -> Taggings (3 levels, manual chaining)
@@ -141,9 +173,33 @@ describe("NestedThroughAssociationsTest", () => {
     expect(allTaggings.length).toBe(2);
   });
 
-  it.skip("has many through has many through with has many source reflection preload", () => {});
+  it("has many through has many through with has many source reflection preload", async () => {
+    const author = await Author.create({ name: "Nested" });
+    const post1 = await Post.create({ author_id: author.id, title: "P1", body: "B" });
+    const post2 = await Post.create({ author_id: author.id, title: "P2", body: "B" });
+    await Tagging.create({ tag_id: 1, taggable_id: post1.id, taggable_type: "Post" });
+    await Tagging.create({ tag_id: 2, taggable_id: post2.id, taggable_type: "Post" });
 
-  it.skip("has many through has many through with has many source reflection preload via joins", () => {});
+    const authors = await Author.all().includes("taggings").toArray();
+    expect(authors).toHaveLength(1);
+    const preloadedTaggings = (authors[0] as any)._preloadedAssociations?.get("taggings");
+    expect(preloadedTaggings).toBeDefined();
+    expect(preloadedTaggings.length).toBe(2);
+  });
+
+  it.skip("has many through has many through with has many source reflection preload via joins", async () => {
+    const author = await Author.create({ name: "JoinNested" });
+    const post1 = await Post.create({ author_id: author.id, title: "JP1", body: "B" });
+    const post2 = await Post.create({ author_id: author.id, title: "JP2", body: "B" });
+    await Tagging.create({ tag_id: 1, taggable_id: post1.id, taggable_type: "Post" });
+    await Tagging.create({ tag_id: 2, taggable_id: post2.id, taggable_type: "Post" });
+
+    const authors = await Author.all().eagerLoad("taggings").toArray();
+    expect(authors).toHaveLength(1);
+    const preloadedTaggings = (authors[0] as any)._preloadedAssociations?.get("taggings");
+    expect(preloadedTaggings).toBeDefined();
+    expect(preloadedTaggings.length).toBe(2);
+  });
 
   it("has many through has one with has one through source reflection", async () => {
     // Author -> Post (has_many) -> each post has one first tagging

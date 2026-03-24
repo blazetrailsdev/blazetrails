@@ -123,7 +123,7 @@ export async function autosaveBelongsTo(record: Base): Promise<boolean> {
  * Autosave hasMany/hasOne/HABTM associations AFTER the parent is persisted.
  * The parent PK is needed so children can reference it.
  *
- * Mirrors: ActiveRecord::AutosaveAssociation (after_create/after_update for collections/has_one)
+ * Mirrors: ActiveRecord::AutosaveAssociation (runs after parent save for collections/has_one)
  */
 export async function autosaveChildren(record: Base): Promise<boolean> {
   if (_autosavingRecords.has(record)) return true;

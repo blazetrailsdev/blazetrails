@@ -38,8 +38,8 @@ function normalizeSqliteDefault(raw: unknown): unknown {
   if (str === "FALSE" || str === "false") return false;
   if (/^-?\d+(\.\d+)?$/.test(str)) return Number(str);
 
-  // Expression defaults (CURRENT_TIMESTAMP, etc.) — keep as-is
-  return str;
+  // Expression defaults (CURRENT_TIMESTAMP, etc.) — omit to avoid mis-quoting on reload
+  return undefined;
 }
 
 /**
@@ -82,6 +82,9 @@ export class AdapterSchemaSource implements SchemaSource {
 
   async columns(tableName: string): Promise<ColumnInfo[]> {
     const t = await this.type();
+    if (t === "mysql") {
+      throw new Error("MySQL schema introspection is not yet supported by AdapterSchemaSource.");
+    }
 
     if (t === "postgres") {
       // Use format_type for precise types (handles enums, domains, arrays)
@@ -132,6 +135,9 @@ export class AdapterSchemaSource implements SchemaSource {
 
   async indexes(tableName: string): Promise<IndexInfo[]> {
     const t = await this.type();
+    if (t === "mysql") {
+      throw new Error("MySQL schema introspection is not yet supported by AdapterSchemaSource.");
+    }
 
     if (t === "postgres") {
       const rows = await this.adapter.execute(
@@ -141,7 +147,7 @@ export class AdapterSchemaSource implements SchemaSource {
          JOIN pg_index ix ON t.oid = ix.indrelid
          JOIN pg_class i ON i.oid = ix.indexrelid
          JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY(ix.indkey)
-         WHERE t.relname = ? AND NOT ix.indisprimary
+         WHERE t.oid = ?::regclass AND NOT ix.indisprimary
          GROUP BY i.relname, ix.indisunique`,
         [tableName],
       );

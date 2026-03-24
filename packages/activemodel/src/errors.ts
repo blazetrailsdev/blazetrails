@@ -35,13 +35,7 @@ export class Errors {
     type: string = "invalid",
     options?: { message?: string | ((record: AnyRecord) => string) } & Record<string, unknown>,
   ): void {
-    let resolvedOptions: Record<string, unknown> = { ...options };
-
-    if (typeof options?.message === "function") {
-      resolvedOptions = { ...resolvedOptions, message: options.message(this._base) };
-    }
-
-    const error = new ActiveModelError(this._base, attribute, type, resolvedOptions);
+    const error = new ActiveModelError(this._base, attribute, type, { ...options });
     this._errors.push(error);
   }
 

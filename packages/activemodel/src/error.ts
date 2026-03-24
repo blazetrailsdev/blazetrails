@@ -127,7 +127,7 @@ export class Error {
     base: AnyRecord,
     options: Record<string, unknown> = {},
   ): string {
-    if (options.message && typeof options.message === "string") {
+    if (typeof options.message === "string") {
       return Error.interpolate(options.message, options);
     }
 

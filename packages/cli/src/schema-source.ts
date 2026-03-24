@@ -84,11 +84,19 @@ export class AdapterSchemaSource implements SchemaSource {
     const t = await this.type();
 
     if (t === "postgres") {
+      // Use format_type for precise types (handles enums, domains, arrays)
       const rows = await this.adapter.execute(
-        `SELECT column_name, data_type, is_nullable, column_default, character_maximum_length, numeric_precision, numeric_scale
-         FROM information_schema.columns
-         WHERE table_name = ? AND table_schema = 'public'
-         ORDER BY ordinal_position`,
+        `SELECT a.attname AS column_name,
+                pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type,
+                NOT a.attnotnull AS is_nullable,
+                pg_get_expr(d.adbin, d.adrelid) AS column_default,
+                CASE WHEN a.atttypid = 1043 THEN a.atttypmod - 4 ELSE NULL END AS character_maximum_length,
+                CASE WHEN a.atttypid IN (1700) THEN ((a.atttypmod - 4) >> 16) & 65535 ELSE NULL END AS numeric_precision,
+                CASE WHEN a.atttypid IN (1700) THEN (a.atttypmod - 4) & 65535 ELSE NULL END AS numeric_scale
+         FROM pg_attribute a
+         LEFT JOIN pg_attrdef d ON a.attrelid = d.adrelid AND a.attnum = d.adnum
+         WHERE a.attrelid = ?::regclass AND a.attnum > 0 AND NOT a.attisdropped
+         ORDER BY a.attnum`,
         [tableName],
       );
       const pkRows = await this.adapter.execute(
@@ -103,11 +111,11 @@ export class AdapterSchemaSource implements SchemaSource {
         name: r.column_name,
         type: r.data_type,
         primaryKey: pkCols.has(r.column_name),
-        null: r.is_nullable === "YES",
+        null: !!r.is_nullable,
         default: r.column_default,
-        limit: r.character_maximum_length ?? undefined,
-        precision: r.numeric_precision ?? undefined,
-        scale: r.numeric_scale ?? undefined,
+        limit: r.character_maximum_length != null ? Number(r.character_maximum_length) : undefined,
+        precision: r.numeric_precision != null ? Number(r.numeric_precision) : undefined,
+        scale: r.numeric_scale != null ? Number(r.numeric_scale) : undefined,
       }));
     }
 
@@ -128,7 +136,7 @@ export class AdapterSchemaSource implements SchemaSource {
     if (t === "postgres") {
       const rows = await this.adapter.execute(
         `SELECT i.relname AS name, ix.indisunique AS unique,
-                array_agg(a.attname ORDER BY array_position(ix.indkey, a.attnum)) AS columns
+                array_agg(a.attname ORDER BY array_position(ix.indkey::int2[], a.attnum::int2)) AS columns
          FROM pg_class t
          JOIN pg_index ix ON t.oid = ix.indrelid
          JOIN pg_class i ON i.oid = ix.indexrelid

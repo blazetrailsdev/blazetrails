@@ -39,8 +39,9 @@ export function isDestroyable(record: Base): boolean {
  *
  * Mirrors: ActiveRecord::AutosaveAssociation#validate_collection_association
  */
-// Cycle guard: prevent infinite recursion when inverseOf caching is present
+// Cycle guards: prevent infinite recursion when inverseOf caching is present
 const _validatingRecords = new WeakSet<object>();
+const _autosavingRecords = new WeakSet<object>();
 
 export function validateAssociations(record: Base, context?: string): void {
   if (_validatingRecords.has(record)) return;
@@ -97,18 +98,25 @@ export function validateAssociations(record: Base, context?: string): void {
  * Mirrors: ActiveRecord::AutosaveAssociation (before_save for belongs_to)
  */
 export async function autosaveBelongsTo(record: Base): Promise<boolean> {
-  const ctor = record.constructor as typeof Base;
-  const associations: AssociationDefinition[] = (ctor as any)._associations ?? [];
+  if (_autosavingRecords.has(record)) return true;
+  _autosavingRecords.add(record);
 
-  for (const assoc of associations) {
-    if (!assoc.options.autosave) continue;
-    if (assoc.type !== "belongsTo") continue;
+  try {
+    const ctor = record.constructor as typeof Base;
+    const associations: AssociationDefinition[] = (ctor as any)._associations ?? [];
 
-    const result = await autosaveAssociation(record, assoc);
-    if (!result) return false;
+    for (const assoc of associations) {
+      if (!assoc.options.autosave) continue;
+      if (assoc.type !== "belongsTo") continue;
+
+      const result = await autosaveAssociation(record, assoc);
+      if (!result) return false;
+    }
+
+    return true;
+  } finally {
+    _autosavingRecords.delete(record);
   }
-
-  return true;
 }
 
 /**
@@ -118,18 +126,25 @@ export async function autosaveBelongsTo(record: Base): Promise<boolean> {
  * Mirrors: ActiveRecord::AutosaveAssociation (after_create/after_update for collections/has_one)
  */
 export async function autosaveChildren(record: Base): Promise<boolean> {
-  const ctor = record.constructor as typeof Base;
-  const associations: AssociationDefinition[] = (ctor as any)._associations ?? [];
+  if (_autosavingRecords.has(record)) return true;
+  _autosavingRecords.add(record);
 
-  for (const assoc of associations) {
-    if (!assoc.options.autosave) continue;
-    if (assoc.type === "belongsTo") continue;
+  try {
+    const ctor = record.constructor as typeof Base;
+    const associations: AssociationDefinition[] = (ctor as any)._associations ?? [];
 
-    const result = await autosaveAssociation(record, assoc);
-    if (!result) return false;
+    for (const assoc of associations) {
+      if (!assoc.options.autosave) continue;
+      if (assoc.type === "belongsTo") continue;
+
+      const result = await autosaveAssociation(record, assoc);
+      if (!result) return false;
+    }
+
+    return true;
+  } finally {
+    _autosavingRecords.delete(record);
   }
-
-  return true;
 }
 
 /**

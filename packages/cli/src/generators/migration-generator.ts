@@ -36,13 +36,17 @@ function isReference(type: string): boolean {
   return type === "references" || type === "belongs_to";
 }
 
+function referenceOpts(col: ParsedColumn): string {
+  const opts: string[] = ["foreignKey: true"];
+  if (col.unique) {
+    opts.push("index: { unique: true }");
+  }
+  return `{ ${opts.join(", ")} }`;
+}
+
 function columnLine(col: ParsedColumn): string {
   if (isReference(col.type)) {
-    const opts: string[] = ["foreignKey: true"];
-    if (col.unique) {
-      opts.push("index: { unique: true }");
-    }
-    return `      t.references("${col.name}", { ${opts.join(", ")} });`;
+    return `      t.references("${col.name}", ${referenceOpts(col)});`;
   }
   return `      t.${col.type}("${col.name}");`;
 }
@@ -118,7 +122,7 @@ ${body.down}
       const upLines = columns
         .map((c) => {
           if (isReference(c.type)) {
-            return `    await this.addReference("${table}", "${c.name}", { foreignKey: true });`;
+            return `    await this.addReference("${table}", "${c.name}", ${referenceOpts(c)});`;
           }
           return `    await this.addColumn("${table}", "${c.name}", "${c.type}");`;
         })
@@ -132,7 +136,6 @@ ${body.down}
         })
         .join("\n");
 
-      // Add explicit indexes for non-reference columns
       const idxLines = indexLines(table, columns);
       const up = idxLines ? `${upLines}\n${idxLines}` : upLines;
       return { up, down: downLines };
@@ -153,7 +156,7 @@ ${body.down}
       const downLines = columns
         .map((c) => {
           if (isReference(c.type)) {
-            return `    await this.addReference("${table}", "${c.name}", { foreignKey: true });`;
+            return `    await this.addReference("${table}", "${c.name}", ${referenceOpts(c)});`;
           }
           return `    await this.addColumn("${table}", "${c.name}", "${c.type}");`;
         })

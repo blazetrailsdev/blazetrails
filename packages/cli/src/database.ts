@@ -32,12 +32,10 @@ export async function loadDatabaseConfig(
 ): Promise<DatabaseConfig> {
   const resolvedEnv = env ?? resolveEnv();
 
+  // Always read from source .ts to avoid running stale compiled config
   const candidates = [
     path.join(cwd, "config", "database.ts"),
-    path.join(cwd, "config", "database.js"),
     path.join(cwd, "src", "config", "database.ts"),
-    path.join(cwd, "src", "config", "database.js"),
-    path.join(cwd, "dist", "config", "database.js"),
   ];
 
   let configPath: string | undefined;
@@ -54,7 +52,18 @@ export async function loadDatabaseConfig(
     );
   }
 
-  const mod = await import(pathToFileURL(configPath).href);
+  let mod: any;
+  try {
+    mod = await import(pathToFileURL(configPath).href);
+  } catch (error: any) {
+    const rel = path.relative(cwd, configPath);
+    const enhanced = new Error(
+      `Failed to load database config from "${rel}": ${error.message}. ` +
+        `Run with tsx (e.g., "npx tsx node_modules/.bin/rails-ts").`,
+    );
+    (enhanced as any).cause = error;
+    throw enhanced;
+  }
   const configs = mod.default ?? mod;
 
   const envConfig = configs[resolvedEnv];

@@ -128,13 +128,9 @@ export function dbCommand(): Command {
     .command("seed")
     .description("Run database seeds")
     .action(async () => {
-      const seedCandidates = [
-        path.join(process.cwd(), "db", "seeds.ts"),
-        path.join(process.cwd(), "db", "seeds.js"),
-      ];
-      const seedFile = seedCandidates.find((f) => fs.existsSync(f));
-      if (!seedFile) {
-        console.log("No seeds file found at db/seeds.ts or db/seeds.js");
+      const seedFile = path.join(process.cwd(), "db", "seeds.ts");
+      if (!fs.existsSync(seedFile)) {
+        console.log("No seeds file found at db/seeds.ts");
         return;
       }
 

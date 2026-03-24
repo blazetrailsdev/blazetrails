@@ -3,14 +3,16 @@ import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import type { MigrationProxy } from "@rails-ts/activerecord";
 
-const MIGRATION_FILE_PATTERN = /^(\d+)-(.+)\.(ts|js)$/;
+const MIGRATION_FILE_PATTERN = /^(\d+)-(.+)\.ts$/;
 
 /**
  * Discover migration files from a directory and return MigrationProxy objects
  * compatible with the Migrator class.
  *
- * Migration files are expected to match the pattern: {timestamp}-{name}.ts (or .js)
- * e.g., 20260318120000-create-users.ts
+ * Migration files must be TypeScript (.ts). They are imported at runtime,
+ * so the CLI must be run with a TypeScript loader (e.g., tsx).
+ *
+ * Files match: {timestamp}-{name}.ts (e.g., 20260318120000-create-users.ts)
  */
 export async function discoverMigrations(migrationsDir: string): Promise<MigrationProxy[]> {
   if (!fs.existsSync(migrationsDir)) {
@@ -57,6 +59,12 @@ export async function discoverMigrations(migrationsDir: string): Promise<Migrati
   return proxies;
 }
 
+function isMigrationClass(value: unknown): boolean {
+  if (typeof value !== "function") return false;
+  const proto = (value as any).prototype;
+  return proto && typeof proto.run === "function";
+}
+
 async function loadMigrationClass(
   filePath: string,
 ): Promise<new () => { run(adapter: any, direction: "up" | "down"): Promise<void> }> {
@@ -64,23 +72,29 @@ async function loadMigrationClass(
   try {
     mod = await import(pathToFileURL(filePath).href);
   } catch (error: any) {
-    if (path.extname(filePath) === ".ts") {
-      const enhanced = new Error(
-        `Failed to load TypeScript migration "${filePath}". ` +
-          `Ensure a TypeScript loader (tsx, ts-node) is configured, ` +
-          `or compile migrations to .js first.`,
-      );
-      (enhanced as any).cause = error;
-      throw enhanced;
-    }
-    throw error;
+    const enhanced = new Error(
+      `Failed to load migration "${filePath}". ` +
+        `The CLI imports .ts migrations directly — run with tsx ` +
+        `(e.g., "npx tsx node_modules/.bin/rails-ts db migrate").`,
+    );
+    (enhanced as any).cause = error;
+    throw enhanced;
   }
 
-  // Try default export first, then find the first class export
-  if (mod.default && typeof mod.default === "function") {
+  if (isMigrationClass(mod.default)) {
     return mod.default;
   }
 
+  for (const value of Object.values(mod)) {
+    if (isMigrationClass(value)) {
+      return value as any;
+    }
+  }
+
+  // Fallback: first function export
+  if (mod.default && typeof mod.default === "function") {
+    return mod.default;
+  }
   for (const value of Object.values(mod)) {
     if (typeof value === "function" && value !== mod.default) {
       return value as any;

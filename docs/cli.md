@@ -62,10 +62,12 @@ The CLI loads database config and creates adapters through two functions in
 
 `packages/cli/src/migration-loader.ts` provides `discoverMigrations(dir)`:
 
-- Reads `db/migrations/` and matches files like `{timestamp}-{name}.ts`
+- Reads `db/migrations/` and matches `.ts` files like `{timestamp}-{name}.ts`
+- Always imports from source `.ts` — never compiled `.js` — to avoid running stale migrations
 - Extracts version from the filename prefix
 - Returns `MigrationProxy[]` compatible with the `Migrator` class
 - Lazily imports migration files only when actually running them
+- Requires a TypeScript loader at runtime (e.g., run via `npx tsx`)
 
 ### Migration execution
 

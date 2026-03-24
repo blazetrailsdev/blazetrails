@@ -43,6 +43,35 @@ function normalizeSqliteDefault(raw: unknown): unknown {
 }
 
 /**
+ * Normalize a Postgres default value expression.
+ * Only emit literal defaults; omit expression defaults (nextval, now(), etc.)
+ * to avoid semantic changes on schema round-trip.
+ */
+function normalizePgDefault(raw: unknown): unknown {
+  if (raw === null || raw === undefined) return undefined;
+  const str = String(raw);
+
+  // String literal with type cast: 'value'::type
+  const strMatch = str.match(/^'((?:[^']|'')*)'(?:::[\w\s."[\](),]+)*$/);
+  if (strMatch) {
+    return strMatch[1].replace(/''/g, "'");
+  }
+
+  // Numeric literal with optional cast: 42::integer, (3.14)::numeric
+  const numMatch = str.match(/^\(?(-?\d+(?:\.\d+)?)\)?(?:::[\w\s."[\](),]+)*$/);
+  if (numMatch) {
+    return Number(numMatch[1]);
+  }
+
+  if (str === "true") return true;
+  if (str === "false") return false;
+  if (str === "NULL::*" || str === "NULL") return undefined;
+
+  // Expression defaults (nextval(...), now(), gen_random_uuid(), etc.) — omit
+  return undefined;
+}
+
+/**
  * Adapter-backed SchemaSource for use with SchemaDumper.
  * Queries the actual database for table, column, and index info.
  * Supports SQLite and Postgres.
@@ -93,9 +122,9 @@ export class AdapterSchemaSource implements SchemaSource {
                 pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type,
                 NOT a.attnotnull AS is_nullable,
                 pg_get_expr(d.adbin, d.adrelid) AS column_default,
-                CASE WHEN a.atttypid = 1043 THEN a.atttypmod - 4 ELSE NULL END AS character_maximum_length,
-                CASE WHEN a.atttypid IN (1700) THEN ((a.atttypmod - 4) >> 16) & 65535 ELSE NULL END AS numeric_precision,
-                CASE WHEN a.atttypid IN (1700) THEN (a.atttypmod - 4) & 65535 ELSE NULL END AS numeric_scale
+                CASE WHEN a.atttypid = 1043 AND a.atttypmod > 0 THEN a.atttypmod - 4 ELSE NULL END AS character_maximum_length,
+                CASE WHEN a.atttypid IN (1700) AND a.atttypmod > 0 THEN ((a.atttypmod - 4) >> 16) & 65535 ELSE NULL END AS numeric_precision,
+                CASE WHEN a.atttypid IN (1700) AND a.atttypmod > 0 THEN (a.atttypmod - 4) & 65535 ELSE NULL END AS numeric_scale
          FROM pg_attribute a
          LEFT JOIN pg_attrdef d ON a.attrelid = d.adrelid AND a.attnum = d.adnum
          WHERE a.attrelid = ?::regclass AND a.attnum > 0 AND NOT a.attisdropped
@@ -115,7 +144,7 @@ export class AdapterSchemaSource implements SchemaSource {
         type: r.data_type,
         primaryKey: pkCols.has(r.column_name),
         null: !!r.is_nullable,
-        default: r.column_default,
+        default: normalizePgDefault(r.column_default),
         limit: r.character_maximum_length != null ? Number(r.character_maximum_length) : undefined,
         precision: r.numeric_precision != null ? Number(r.numeric_precision) : undefined,
         scale: r.numeric_scale != null ? Number(r.numeric_scale) : undefined,

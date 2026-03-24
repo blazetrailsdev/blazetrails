@@ -131,7 +131,7 @@ export class Errors {
   copy(other: Errors): void {
     for (const error of other._errors) {
       this._errors.push(
-        new ActiveModelError(this._base, error.attribute, error.type, { ...error.options }),
+        new ActiveModelError(this._base, error.attribute, error.rawType, { ...error.options }),
       );
     }
   }
@@ -174,7 +174,7 @@ export class Errors {
 
   import(error: ActiveModelError, options?: { attribute?: string }): void {
     const attr = options?.attribute ?? error.attribute;
-    this._errors.push(new ActiveModelError(this._base, attr, error.type, { ...error.options }));
+    this._errors.push(new ActiveModelError(this._base, attr, error.rawType, { ...error.options }));
   }
 
   asJson(_options?: Record<string, unknown>): Record<string, string[]> {

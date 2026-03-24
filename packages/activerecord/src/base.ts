@@ -2243,7 +2243,10 @@ export class Base extends Model {
     // Autosave belongsTo BEFORE parent persist (sets FK on parent)
     const { autosaveBelongsTo, autosaveChildren } = await import("./autosave.js");
     const belongsToOk = await autosaveBelongsTo(this);
-    if (!belongsToOk) return false;
+    if (!belongsToOk) {
+      this._skipTouch = false;
+      return false;
+    }
 
     const wasNewRecord = this._newRecord;
     if (this._newRecord) {

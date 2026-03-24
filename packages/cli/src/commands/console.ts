@@ -2,6 +2,7 @@ import { Command } from "commander";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
+import * as vm from "node:vm";
 
 export function consoleCommand(): Command {
   const cmd = new Command("console");
@@ -29,10 +30,45 @@ export function consoleCommand(): Command {
 
     console.log("Loading rails-ts console...");
 
+    // Custom eval that supports top-level await (e.g., `await User.all()`)
+    const asyncEval = (code: string, context: any, _filename: string, callback: any) => {
+      (async () => {
+        try {
+          // Try as-is first (handles expressions, assignments, etc.)
+          const result = await vm.runInNewContext(
+            `(async () => { return (\n${code}\n); })()`,
+            context,
+            { breakOnSigint: true },
+          );
+          callback(null, result);
+        } catch {
+          try {
+            // Retry as statements (handles `const x = await ...`)
+            const result = await vm.runInNewContext(`(async () => {\n${code}\n})()`, context, {
+              breakOnSigint: true,
+            });
+            callback(null, result);
+          } catch (err: any) {
+            // Check for recoverable errors (incomplete input)
+            if (isRecoverable(err)) {
+              callback(new (repl as any).Recoverable(err));
+            } else {
+              callback(err);
+            }
+          }
+        }
+      })();
+    };
+
     const r = repl.start({
       prompt: "rails-ts> ",
-      useGlobal: true,
+      eval: asyncEval,
     });
+
+    // Copy globals into the REPL context
+    r.context.console = console;
+    r.context.process = process;
+    r.context.require = require;
 
     r.on("exit", async () => {
       if (dbAdapter && typeof dbAdapter.close === "function") {
@@ -74,9 +110,14 @@ export function consoleCommand(): Command {
       }
     }
 
+    console.log("Supports top-level await (e.g., await User.all())");
     console.log('Type ".exit" or Ctrl+D to quit.');
     console.log("");
   });
 
   return cmd;
+}
+
+function isRecoverable(err: Error): boolean {
+  return /^(Unexpected end of input|Unexpected token)/.test(err.message);
 }

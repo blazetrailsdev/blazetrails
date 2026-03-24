@@ -328,9 +328,10 @@ class ApiExtractor
 
   # Update module file to where its first method is defined (not where it was first opened)
   def maybe_update_module_file(fqn, target)
-    if @modules[fqn] && target[:instanceMethods].length + target[:classMethods].length == 1
-      target[:file] = @current_file
-    end
+    return unless @modules[fqn]
+    return if target[:first_method_file]
+    target[:first_method_file] = @current_file
+    target[:file] = @current_file
   end
 
   def process_command(node)

@@ -50,6 +50,8 @@ export class Error {
         key !== "on" &&
         key !== "allow_nil" &&
         key !== "allow_blank" &&
+        key !== "allowNil" &&
+        key !== "allowBlank" &&
         key !== "strict" &&
         key !== "message"
       ) {

@@ -15,3 +15,10 @@ export class BinaryType extends Type<Uint8Array> {
     return this.cast(value);
   }
 }
+
+export class Data {
+  readonly value: Uint8Array;
+  constructor(value: Uint8Array | string) {
+    this.value = typeof value === "string" ? new TextEncoder().encode(value) : value;
+  }
+}

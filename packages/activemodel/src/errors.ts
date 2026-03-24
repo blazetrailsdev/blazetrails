@@ -399,3 +399,29 @@ export class Errors {
     return `#<ActiveModel::Errors [${details.join(", ")}]>`;
   }
 }
+
+export class StrictValidationFailed extends Error {
+  constructor(message?: string) {
+    super(message);
+    this.name = "StrictValidationFailed";
+  }
+}
+
+export class RangeError extends globalThis.RangeError {
+  constructor(message?: string) {
+    super(message);
+    this.name = "ActiveModel::RangeError";
+  }
+}
+
+export class UnknownAttributeError extends Error {
+  readonly record: unknown;
+  readonly attribute: string;
+  constructor(record: unknown, attribute: string) {
+    const model = (record as { constructor?: { name?: string } })?.constructor?.name ?? "Record";
+    super(`unknown attribute '${attribute}' for ${model}.`);
+    this.name = "UnknownAttributeError";
+    this.record = record;
+    this.attribute = attribute;
+  }
+}

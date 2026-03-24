@@ -85,3 +85,7 @@ function normalizeIncludes(
   }
   return include;
 }
+
+export interface Serialization {
+  serializableHash(options?: Record<string, unknown>): Record<string, unknown>;
+}

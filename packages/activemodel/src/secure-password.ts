@@ -116,3 +116,17 @@ export function hasSecurePassword(
     });
   }
 }
+
+export class InstanceMethodsOnActivation {
+  readonly attribute: string;
+  constructor(attribute: string) {
+    this.attribute = attribute;
+  }
+}
+
+export interface SecurePassword {
+  _brand?: "SecurePassword";
+}
+export interface SecurePasswordClassMethods {
+  hasSecurePassword(attribute?: string, options?: Record<string, unknown>): void;
+}

@@ -43,3 +43,23 @@ export function shouldValidate(record: AnyRecord, options: ConditionalOptions): 
   }
   return true;
 }
+
+export class EachValidator {
+  readonly attributes: string[];
+  readonly options: Record<string, unknown>;
+
+  constructor(options: Record<string, unknown> & { attributes: string[] }) {
+    this.attributes = options.attributes;
+    this.options = options;
+  }
+}
+
+export class BlockValidator {
+  readonly block: (...args: unknown[]) => void;
+  readonly options: Record<string, unknown>;
+
+  constructor(options: Record<string, unknown> & { block: (...args: unknown[]) => void }) {
+    this.block = options.block;
+    this.options = options;
+  }
+}

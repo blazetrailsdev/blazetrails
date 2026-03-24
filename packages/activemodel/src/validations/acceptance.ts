@@ -20,3 +20,10 @@ export class AcceptanceValidator implements Validator {
     }
   }
 }
+
+export class LazilyDefineAttributes {
+  readonly attributes: string[];
+  constructor(attributes: string[]) {
+    this.attributes = attributes;
+  }
+}

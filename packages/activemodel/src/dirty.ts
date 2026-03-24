@@ -131,3 +131,10 @@ export class DirtyTracker {
     this._changedAttributes.clear();
   }
 }
+
+export interface Dirty {
+  isChanged(): boolean;
+  changedAttributes(): Record<string, unknown>;
+  changes(): Record<string, [unknown, unknown]>;
+  previousChanges(): Record<string, [unknown, unknown]>;
+}

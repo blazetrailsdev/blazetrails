@@ -105,3 +105,10 @@ export function Attributes<TBase extends Constructor>(Base: TBase) {
 
   return AttributesMixin;
 }
+
+export interface Attributes {
+  _brand?: "Attributes";
+}
+export interface AttributesClassMethods {
+  attribute(name: string, type?: string, options?: Record<string, unknown>): void;
+}

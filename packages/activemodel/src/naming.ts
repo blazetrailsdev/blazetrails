@@ -96,3 +96,7 @@ export class ModelName {
     return [scope, "models"];
   }
 }
+
+export interface Naming {
+  modelName(): unknown;
+}

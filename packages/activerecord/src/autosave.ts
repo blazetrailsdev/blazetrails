@@ -91,7 +91,49 @@ export function validateAssociations(record: Base, context?: string): void {
 }
 
 /**
- * Autosave associated records when the owner is saved.
+ * Autosave belongsTo associations BEFORE the parent is persisted.
+ * This ensures the FK on the parent is set before the INSERT/UPDATE.
+ *
+ * Mirrors: ActiveRecord::AutosaveAssociation (before_save for belongs_to)
+ */
+export async function autosaveBelongsTo(record: Base): Promise<boolean> {
+  const ctor = record.constructor as typeof Base;
+  const associations: AssociationDefinition[] = (ctor as any)._associations ?? [];
+
+  for (const assoc of associations) {
+    if (!assoc.options.autosave) continue;
+    if (assoc.type !== "belongsTo") continue;
+
+    const result = await autosaveAssociation(record, assoc);
+    if (!result) return false;
+  }
+
+  return true;
+}
+
+/**
+ * Autosave hasMany/hasOne/HABTM associations AFTER the parent is persisted.
+ * The parent PK is needed so children can reference it.
+ *
+ * Mirrors: ActiveRecord::AutosaveAssociation (after_create/after_update for collections/has_one)
+ */
+export async function autosaveChildren(record: Base): Promise<boolean> {
+  const ctor = record.constructor as typeof Base;
+  const associations: AssociationDefinition[] = (ctor as any)._associations ?? [];
+
+  for (const assoc of associations) {
+    if (!assoc.options.autosave) continue;
+    if (assoc.type === "belongsTo") continue;
+
+    const result = await autosaveAssociation(record, assoc);
+    if (!result) return false;
+  }
+
+  return true;
+}
+
+/**
+ * Autosave all associated records (legacy entry point).
  * Called from Base.save() after the main record is persisted.
  *
  * Mirrors: ActiveRecord::AutosaveAssociation
@@ -125,7 +167,7 @@ async function autosaveAssociation(record: Base, assoc: AssociationDefinition): 
   } else if (assoc.type === "hasOne") {
     return autosaveHasOne(record, assoc);
   } else if (assoc.type === "belongsTo") {
-    return autosaveBelongsTo(record, assoc);
+    return _autosaveBelongsTo(record, assoc);
   } else if (assoc.type === "hasAndBelongsToMany") {
     return autosaveHabtm(record, assoc);
   }
@@ -204,7 +246,7 @@ async function autosaveHasOne(record: Base, assoc: AssociationDefinition): Promi
   return true;
 }
 
-async function autosaveBelongsTo(record: Base, assoc: AssociationDefinition): Promise<boolean> {
+async function _autosaveBelongsTo(record: Base, assoc: AssociationDefinition): Promise<boolean> {
   const associated =
     (record as any)._cachedAssociations?.get(assoc.name) ??
     (record as any)._preloadedAssociations?.get(assoc.name);

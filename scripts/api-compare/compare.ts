@@ -62,7 +62,8 @@ function shortName(fqn: string): string {
 
 /**
  * FQN → candidate TS class names to try matching.
- * For `Arel::Visitors::Dot::Node`, returns ["Node", "DotNode"]
+ * For `Arel::Visitors::Dot::Node`, returns ["Node", "DotNode", "NodeDot"]
+ * For `ActiveModel::Type::String`, returns ["String", "TypeString", "StringType"]
  * so inner classes like Dot::Node can match DotNode in TS.
  */
 function candidateNames(fqn: string): string[] {

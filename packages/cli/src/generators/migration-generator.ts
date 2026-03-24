@@ -39,6 +39,9 @@ function isReference(type: string): boolean {
 function columnLine(col: ParsedColumn): string {
   if (isReference(col.type)) {
     const opts: string[] = ["foreignKey: true"];
+    if (col.unique) {
+      opts.push("index: { unique: true }");
+    }
     return `      t.references("${col.name}", { ${opts.join(", ")} });`;
   }
   return `      t.${col.type}("${col.name}");`;

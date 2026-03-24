@@ -131,6 +131,7 @@ export function tsType(colType: ColumnType): string {
     case "timestamp":
       return "Date";
     case "references":
+    case "belongs_to":
       return "number";
     default:
       return "string";

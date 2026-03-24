@@ -19,8 +19,11 @@ export function consoleCommand(): Command {
       console.log(
         `Connected to ${config.adapter ?? "sqlite3"} (${config.database ?? "in-memory"})`,
       );
-    } catch {
-      console.log("No database connection (config/database.ts not found or failed to connect).");
+    } catch (error) {
+      console.log("Could not connect to database.");
+      if (error instanceof Error) {
+        console.log(error.message);
+      }
     }
 
     console.log("Loading rails-ts console...");
@@ -41,6 +44,7 @@ export function consoleCommand(): Command {
 
     // Load models from the current project
     const modelsDir = path.join(process.cwd(), "src", "app", "models");
+    let loadedCount = 0;
     if (fs.existsSync(modelsDir)) {
       const files = fs
         .readdirSync(modelsDir)
@@ -53,12 +57,13 @@ export function consoleCommand(): Command {
               (r.context as any)[name] = value;
             }
           }
+          loadedCount++;
         } catch {
           // Skip files that fail to import
         }
       }
-      if (files.length > 0) {
-        console.log(`Loaded ${files.length} model(s) from src/app/models/`);
+      if (loadedCount > 0) {
+        console.log(`Loaded ${loadedCount} model(s) from src/app/models/`);
       }
     }
 

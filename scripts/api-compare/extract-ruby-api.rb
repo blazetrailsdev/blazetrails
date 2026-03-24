@@ -297,6 +297,11 @@ class ApiExtractor
     else
       target[:instanceMethods] << method_info
     end
+
+    # Update module file to where its first method is defined (not where it was first opened)
+    if @modules[fqn] && target[:instanceMethods].length + target[:classMethods].length == 1
+      target[:file] = @current_file
+    end
   end
 
   def process_defs(node)
@@ -320,6 +325,11 @@ class ApiExtractor
       params: params,
       file: @current_file,
     }
+
+    # Update module file to where its first method is defined
+    if @modules[fqn] && target[:instanceMethods].length + target[:classMethods].length == 1
+      target[:file] = @current_file
+    end
   end
 
   def process_command(node)

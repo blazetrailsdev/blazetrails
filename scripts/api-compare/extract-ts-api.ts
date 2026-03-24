@@ -141,8 +141,10 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
         };
       } else if (ts.isExportDeclaration(node)) {
         // Handle `export * as Foo from "./bar.js"` — namespace re-exports
+        // Only record if not already defined by an interface/namespace declaration
         if (node.exportClause && ts.isNamespaceExport(node.exportClause)) {
           const name = node.exportClause.name.text;
+          if (info.modules[name]) return;
           info.modules[name] = {
             name,
             file: relPath,

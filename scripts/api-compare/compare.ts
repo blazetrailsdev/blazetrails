@@ -298,9 +298,20 @@ function main() {
       });
     }
     for (const [fqn, info] of Object.entries(rubyPkg.modules)) {
+      const mod = info as unknown as ClassInfo;
+      // Skip pure namespace modules (no methods, no includes, no extends)
+      // — these are just Ruby's `module Foo; end` containers that map to directories in TS
+      if (
+        mod.instanceMethods.length === 0 &&
+        mod.classMethods.length === 0 &&
+        mod.includes.length === 0 &&
+        mod.extends.length === 0
+      ) {
+        continue;
+      }
       allRuby.push({
         fqn,
-        info: info as unknown as ClassInfo,
+        info: mod,
         kind: "module",
       });
     }

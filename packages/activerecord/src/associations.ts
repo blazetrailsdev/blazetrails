@@ -2153,9 +2153,14 @@ export async function createThroughAssociation(
     (record as any)._cachedAssociations = (record as any)._cachedAssociations ?? new Map();
     (record as any)._cachedAssociations.set(assocName, target);
   } else {
-    // Transaction rolled back — reset in-memory persisted state
-    target._newRecord = true;
-    through._newRecord = true;
+    // Transaction rolled back — reset in-memory persisted state and PKs
+    for (const rec of [target, through]) {
+      rec._newRecord = true;
+      const pk = (rec.constructor as typeof Base).primaryKey;
+      if (!Array.isArray(pk)) {
+        rec.writeAttribute(pk as string, null);
+      }
+    }
   }
 
   return target;

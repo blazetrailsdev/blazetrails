@@ -69,7 +69,7 @@ export function consoleCommand(): Command {
     // Copy globals into the REPL context
     r.context.console = console;
     r.context.process = process;
-    r.context.require = createRequire(import.meta.url);
+    r.context.require = createRequire(path.join(process.cwd(), "package.json"));
 
     r.on("exit", async () => {
       if (dbAdapter && typeof dbAdapter.close === "function") {

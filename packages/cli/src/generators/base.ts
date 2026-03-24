@@ -100,7 +100,8 @@ export type ColumnType =
   | "date"
   | "datetime"
   | "timestamp"
-  | "references";
+  | "references"
+  | "belongs_to";
 
 export function parseColumns(args: string[]): Array<{ name: string; type: ColumnType }> {
   const columns: Array<{ name: string; type: ColumnType }> = [];

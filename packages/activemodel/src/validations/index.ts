@@ -1,14 +1,12 @@
-export type { Validator, ConditionalOptions } from "./validator.js";
-export { shouldValidate } from "./validator.js";
-export {
-  PresenceValidator,
-  AbsenceValidator,
-  LengthValidator,
-  NumericalityValidator,
-  InclusionValidator,
-  ExclusionValidator,
-  FormatValidator,
-  AcceptanceValidator,
-  ConfirmationValidator,
-  ComparisonValidator,
-} from "./validators.js";
+export type { Validator, ConditionalOptions } from "../validator.js";
+export { shouldValidate } from "../validator.js";
+export { PresenceValidator } from "./presence.js";
+export { AbsenceValidator } from "./absence.js";
+export { LengthValidator } from "./length.js";
+export { NumericalityValidator } from "./numericality.js";
+export { InclusionValidator } from "./inclusion.js";
+export { ExclusionValidator } from "./exclusion.js";
+export { FormatValidator } from "./format.js";
+export { AcceptanceValidator } from "./acceptance.js";
+export { ConfirmationValidator } from "./confirmation.js";
+export { ComparisonValidator } from "./comparison.js";

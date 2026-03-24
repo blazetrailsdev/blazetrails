@@ -4,8 +4,8 @@ type AnyRecord = any;
 import { Error as ActiveModelError } from "./error.js";
 
 /**
- * ErrorDetail — backward-compatible type for error data.
- * In Rails this is ActiveModel::Error, which is now a real class.
+ * ErrorDetail is now an alias for ActiveModel::Error.
+ * Previously a plain interface, now the real Error class.
  */
 export type ErrorDetail = ActiveModelError;
 

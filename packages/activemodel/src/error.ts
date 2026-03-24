@@ -87,7 +87,13 @@ export class Error {
   }
 
   inspect(): string {
-    return `#<ActiveModel::Error attribute=${this.attribute}, type=${this.type}, options=${JSON.stringify(this.options)}>`;
+    let optionsStr: string;
+    try {
+      optionsStr = JSON.stringify(this.options);
+    } catch {
+      optionsStr = "{...}";
+    }
+    return `#<ActiveModel::Error attribute=${this.attribute}, type=${this.type}, options=${optionsStr}>`;
   }
 
   private interpolateMessage(msg: string): string {

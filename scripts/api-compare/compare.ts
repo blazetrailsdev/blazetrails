@@ -60,6 +60,22 @@ function shortName(fqn: string): string {
   return parts[parts.length - 1];
 }
 
+/**
+ * FQN → candidate TS class names to try matching.
+ * For `Arel::Visitors::Dot::Node`, returns ["Node", "DotNode"]
+ * so inner classes like Dot::Node can match DotNode in TS.
+ */
+function candidateNames(fqn: string): string[] {
+  const parts = fqn.split("::");
+  const name = parts[parts.length - 1];
+  const candidates = [name];
+  if (parts.length >= 2) {
+    const parent = parts[parts.length - 2];
+    candidates.push(parent + name);
+  }
+  return candidates;
+}
+
 const OPERATORS = new Set([
   "[]",
   "[]=",
@@ -242,11 +258,17 @@ function main() {
     const tsPkg = ts.packages[pkg];
 
     // Build TS lookup: shortName → { file, classInfo }[]
+    // Includes both classes and modules (interfaces/namespaces)
     const tsClassesByName = new Map<string, { file: string; info: ClassInfo }[]>();
     if (tsPkg) {
       for (const [name, cls] of Object.entries(tsPkg.classes)) {
         const entries = tsClassesByName.get(name) || [];
         entries.push({ file: cls.file || "", info: cls });
+        tsClassesByName.set(name, entries);
+      }
+      for (const [name, mod] of Object.entries(tsPkg.modules)) {
+        const entries = tsClassesByName.get(name) || [];
+        entries.push({ file: mod.file || "", info: mod });
         tsClassesByName.set(name, entries);
       }
     }
@@ -256,6 +278,9 @@ function main() {
     if (tsPkg) {
       for (const cls of Object.values(tsPkg.classes)) {
         if (cls.file) tsFileSet.add(cls.file);
+      }
+      for (const mod of Object.values(tsPkg.modules)) {
+        if (mod.file) tsFileSet.add(mod.file);
       }
     }
 
@@ -308,13 +333,27 @@ function main() {
 
       for (const item of items) {
         const name = shortName(item.fqn);
-        const tsEntries = tsClassesByName.get(name) || [];
+        const candidates = candidateNames(item.fqn);
+
+        // Try each candidate name (short name first, then parent-prefixed)
+        // Skip candidates whose entries are all already consumed
+        let tsEntries: { file: string; info: ClassInfo }[] = [];
+        let matchedName = name;
+        for (const candidate of candidates) {
+          const entries = tsClassesByName.get(candidate) || [];
+          const hasUnconsumed = entries.some((e) => !consumedTs.has(`${candidate}:${e.file}`));
+          if (hasUnconsumed) {
+            tsEntries = entries;
+            matchedName = candidate;
+            break;
+          }
+        }
 
         // Prefer match in expected file, then any unconsumed match
         const inExpected = tsEntries.find(
-          (e) => e.file === expectedTs && !consumedTs.has(`${name}:${e.file}`),
+          (e) => e.file === expectedTs && !consumedTs.has(`${matchedName}:${e.file}`),
         );
-        const inAny = tsEntries.find((e) => !consumedTs.has(`${name}:${e.file}`));
+        const inAny = tsEntries.find((e) => !consumedTs.has(`${matchedName}:${e.file}`));
 
         let status: ClassStatus;
         let actualFile: string | null = null;
@@ -324,14 +363,14 @@ function main() {
           status = "found";
           actualFile = expectedTs;
           tsClass = inExpected.info;
-          consumedTs.add(`${name}:${expectedTs}`);
+          consumedTs.add(`${matchedName}:${expectedTs}`);
           fileFound++;
           totalFound++;
         } else if (inAny) {
           status = "misplaced";
           actualFile = inAny.file;
           tsClass = inAny.info;
-          consumedTs.add(`${name}:${inAny.file}`);
+          consumedTs.add(`${matchedName}:${inAny.file}`);
           fileMisplaced++;
           totalMisplaced++;
         } else {

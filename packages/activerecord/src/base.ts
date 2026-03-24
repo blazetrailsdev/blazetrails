@@ -31,10 +31,10 @@ export function _setScopeProxyWrapper(wrapper: (rel: any) => any): void {
 }
 
 // Late-bound validateAssociations to break circular dependency with autosave.ts
-let _validateAssociationsFn: ((record: any) => void) | null = null;
+let _validateAssociationsFn: ((record: any, context?: string) => void) | null = null;
 
 /** @internal Called by autosave.ts to register validateAssociations. */
-export function _setValidateAssociationsFn(fn: (record: any) => void): void {
+export function _setValidateAssociationsFn(fn: (record: any, context?: string) => void): void {
   _validateAssociationsFn = fn;
 }
 
@@ -3243,10 +3243,10 @@ export class Base extends Model {
    * Mirrors: ActiveRecord::Validations#valid?
    */
   override isValid(context?: string): boolean {
-    const result = super.isValid(context);
-    // Validate loaded associations (Rails validates during validation phase)
+    const effectiveContext = context ?? this._validationContext ?? undefined;
+    const result = super.isValid(effectiveContext);
     if (_validateAssociationsFn) {
-      _validateAssociationsFn(this);
+      _validateAssociationsFn(this, effectiveContext);
     }
     return result && !this.errors.any;
   }

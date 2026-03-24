@@ -393,8 +393,8 @@ describe("TestDestroyAsPartOfAutosaveAssociation", () => {
     const parrot = await Parrot.create({ name: "Polly" });
     const proxy = association(pirate, "parrots");
     await proxy.push(parrot);
-    // Parrot is persisted and unchanged — even if we force-clear name after save,
-    // it shouldn't be revalidated since it's not changed
+    // Parrot is persisted and unchanged; autosave validation should only consider
+    // associated records that have actually been changed
     cacheAssoc(pirate, "parrots", [parrot]);
     expect(pirate.isValid()).toBe(true);
   });

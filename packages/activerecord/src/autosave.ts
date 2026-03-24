@@ -39,46 +39,54 @@ export function isDestroyable(record: Base): boolean {
  *
  * Mirrors: ActiveRecord::AutosaveAssociation#validate_collection_association
  */
-export function validateAssociations(record: Base): void {
-  const ctor = record.constructor as typeof Base;
-  const associations: AssociationDefinition[] = (ctor as any)._associations ?? [];
+// Cycle guard: prevent infinite recursion when inverseOf caching is present
+const _validatingRecords = new WeakSet<object>();
 
-  for (const assoc of associations) {
-    if (assoc.options.validate === false) continue;
+export function validateAssociations(record: Base, context?: string): void {
+  if (_validatingRecords.has(record)) return;
+  _validatingRecords.add(record);
 
-    const cached =
-      (record as any)._cachedAssociations?.get(assoc.name) ??
-      (record as any)._preloadedAssociations?.get(assoc.name);
-    if (!cached) continue;
+  try {
+    const ctor = record.constructor as typeof Base;
+    const associations: AssociationDefinition[] = (ctor as any)._associations ?? [];
 
-    const records: Base[] = Array.isArray(cached) ? cached : [cached];
-    for (const child of records) {
-      if (typeof child.isDestroyed === "function" && child.isDestroyed()) continue;
-      if (isMarkedForDestruction(child)) continue;
+    for (const assoc of associations) {
+      if (assoc.options.validate === false) continue;
 
-      // Only validate new or changed records
-      if (!child.isNewRecord() && !child.changed) continue;
+      const cached =
+        (record as any)._cachedAssociations?.get(assoc.name) ??
+        (record as any)._preloadedAssociations?.get(assoc.name);
+      if (!cached) continue;
 
-      if (typeof child.isValid === "function" && !child.isValid()) {
-        const parentErrors = (record as any).errors;
-        if (parentErrors) {
-          if (assoc.options.autosave) {
-            // With autosave: propagate individual child errors
-            const childErrors = (child as any).errors;
-            if (childErrors) {
-              const msgs = (
-                Array.isArray(childErrors.fullMessages) ? childErrors.fullMessages : []
-              ) as string[];
-              for (const msg of msgs) {
-                parentErrors.add("base", "invalid", { message: msg });
+      const records: Base[] = Array.isArray(cached) ? cached : [cached];
+      for (const child of records) {
+        if (typeof child.isDestroyed === "function" && child.isDestroyed()) continue;
+        if (isMarkedForDestruction(child)) continue;
+
+        if (!child.isNewRecord() && !child.changed) continue;
+
+        if (typeof child.isValid === "function" && !child.isValid(context)) {
+          const parentErrors = (record as any).errors;
+          if (parentErrors) {
+            if (assoc.options.autosave) {
+              const childErrors = (child as any).errors;
+              if (childErrors) {
+                const msgs = (
+                  Array.isArray(childErrors.fullMessages) ? childErrors.fullMessages : []
+                ) as string[];
+                for (const msg of msgs) {
+                  parentErrors.add("base", "invalid", { message: msg });
+                }
               }
+            } else {
+              parentErrors.add(assoc.name, "invalid");
             }
-          } else {
-            parentErrors.add(assoc.name, "invalid");
           }
         }
       }
     }
+  } finally {
+    _validatingRecords.delete(record);
   }
 }
 

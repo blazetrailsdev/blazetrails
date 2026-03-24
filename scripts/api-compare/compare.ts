@@ -71,7 +71,10 @@ function candidateNames(fqn: string): string[] {
   const candidates = [name];
   if (parts.length >= 2) {
     const parent = parts[parts.length - 2];
+    // ParentName — e.g., Dot::Node → DotNode
     candidates.push(parent + name);
+    // NameParent — e.g., Type::String → StringType
+    candidates.push(name + parent);
   }
   return candidates;
 }

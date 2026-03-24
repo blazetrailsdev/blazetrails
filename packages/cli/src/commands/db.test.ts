@@ -76,13 +76,22 @@ describe("resolveEnv", () => {
 });
 
 describe("connectAdapter", () => {
+  let adapter: any;
+
+  afterEach(async () => {
+    if (adapter && typeof adapter.close === "function") {
+      await adapter.close();
+    }
+    adapter = undefined;
+  });
+
   it("creates SqliteAdapter for sqlite3", async () => {
-    const adapter = await connectAdapter({ adapter: "sqlite3", database: ":memory:" });
+    adapter = await connectAdapter({ adapter: "sqlite3", database: ":memory:" });
     expect(adapter.constructor.name).toBe("SqliteAdapter");
   });
 
   it("creates SqliteAdapter for sqlite", async () => {
-    const adapter = await connectAdapter({ adapter: "sqlite", database: ":memory:" });
+    adapter = await connectAdapter({ adapter: "sqlite", database: ":memory:" });
     expect(adapter.constructor.name).toBe("SqliteAdapter");
   });
 
@@ -190,18 +199,23 @@ describe("discoverMigrations", () => {
 
 describe("full migration flow", () => {
   let tmpDir: string;
+  let adapter: any;
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "rails-ts-flow-"));
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    if (adapter && typeof adapter.close === "function") {
+      adapter.close();
+    }
+    adapter = undefined;
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
   it("migrate, status, rollback with SQLite", async () => {
     const { SqliteAdapter } = await import("@rails-ts/activerecord");
-    const adapter = new SqliteAdapter(":memory:");
+    adapter = new SqliteAdapter(":memory:");
 
     fs.writeFileSync(
       path.join(tmpDir, "20260101000000-create-posts.ts"),

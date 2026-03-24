@@ -26,7 +26,7 @@ export class MigrationGenerator extends GeneratorBase {
       `import { Migration } from "@rails-ts/activerecord";
 
 export class ${className} extends Migration {
-  version = "${timestamp}";
+  static version = "${timestamp}";
 
   async up(): Promise<void> {
 ${body.up}

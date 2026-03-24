@@ -2,14 +2,47 @@ import { Command } from "commander";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
-import { loadDatabaseConfig, connectAdapter } from "../database.js";
+import { loadDatabaseConfig, connectAdapter, type DatabaseConfig } from "../database.js";
 import { discoverMigrations } from "../migration-loader.js";
 import { Migrator } from "@rails-ts/activerecord";
 import type { DatabaseAdapter } from "@rails-ts/activerecord";
 
-function closeAdapter(adapter: DatabaseAdapter): void {
+/**
+ * Build a config that connects to the system database (for CREATE/DROP DATABASE).
+ * Handles both param-based and URL-based configs.
+ */
+function buildSystemConfig(
+  config: DatabaseConfig,
+  adapterName: string,
+): { systemConfig: DatabaseConfig; dbNameResolved: string } {
+  const isMysql = adapterName === "mysql2" || adapterName === "mysql";
+  const systemDb = isMysql ? undefined : "postgres";
+
+  if (config.url) {
+    const parsed = new URL(config.url);
+    const dbNameResolved = parsed.pathname.replace(/^\//, "");
+    if (!dbNameResolved) {
+      throw new Error(
+        `Could not extract database name from URL. Ensure the URL includes a database path.`,
+      );
+    }
+    parsed.pathname = isMysql ? "/" : "/postgres";
+    return {
+      systemConfig: { ...config, url: parsed.toString(), database: systemDb },
+      dbNameResolved,
+    };
+  }
+
+  const dbNameResolved = config.database!;
+  return {
+    systemConfig: { ...config, url: undefined, database: systemDb },
+    dbNameResolved,
+  };
+}
+
+async function closeAdapter(adapter: DatabaseAdapter): Promise<void> {
   if (typeof (adapter as any).close === "function") {
-    (adapter as any).close();
+    await (adapter as any).close();
   }
 }
 
@@ -45,7 +78,7 @@ export function dbCommand(): Command {
           console.log("All migrations are up to date.");
         }
       } finally {
-        closeAdapter(adapter);
+        await closeAdapter(adapter);
       }
     });
 
@@ -65,14 +98,21 @@ export function dbCommand(): Command {
           return;
         }
 
+        const step = Number(opts.step);
+        if (!Number.isInteger(step) || step < 1) {
+          console.error(`Invalid value for --step: "${opts.step}". Expected a positive integer.`);
+          process.exitCode = 1;
+          return;
+        }
+
         const migrator = new Migrator(adapter, migrations);
-        await migrator.rollback(parseInt(opts.step, 10));
+        await migrator.rollback(step);
 
         for (const line of migrator.output) {
           console.log(line);
         }
       } finally {
-        closeAdapter(adapter);
+        await closeAdapter(adapter);
       }
     });
 
@@ -97,7 +137,7 @@ export function dbCommand(): Command {
         await import(pathToFileURL(seedFile).href);
         console.log("Seeds completed.");
       } finally {
-        closeAdapter(adapter);
+        await closeAdapter(adapter);
       }
     });
 
@@ -119,21 +159,18 @@ export function dbCommand(): Command {
         }
       } else {
         const dbName = config.database;
-        if (!dbName) {
+        if (!dbName && !config.url) {
           throw new Error(
             `No database name specified in config for adapter "${adapterName}". Set the "database" property.`,
           );
         }
-        const systemConfig = {
-          ...config,
-          database: adapterName === "mysql2" || adapterName === "mysql" ? undefined : "postgres",
-        };
+        const { systemConfig, dbNameResolved } = buildSystemConfig(config, adapterName);
         const systemAdapter = await connectAdapter(systemConfig);
         try {
-          await systemAdapter.executeMutation(`CREATE DATABASE "${dbName}"`);
-          console.log(`Created database '${dbName}'`);
+          await systemAdapter.executeMutation(`CREATE DATABASE "${dbNameResolved}"`);
+          console.log(`Created database '${dbNameResolved}'`);
         } finally {
-          closeAdapter(systemAdapter);
+          await closeAdapter(systemAdapter);
         }
       }
     });
@@ -153,21 +190,18 @@ export function dbCommand(): Command {
         }
       } else {
         const dbName = config.database;
-        if (!dbName) {
+        if (!dbName && !config.url) {
           throw new Error(
             `No database name specified in config for adapter "${adapterName}". Set the "database" property.`,
           );
         }
-        const systemConfig = {
-          ...config,
-          database: adapterName === "mysql2" || adapterName === "mysql" ? undefined : "postgres",
-        };
+        const { systemConfig, dbNameResolved } = buildSystemConfig(config, adapterName);
         const systemAdapter = await connectAdapter(systemConfig);
         try {
-          await systemAdapter.executeMutation(`DROP DATABASE IF EXISTS "${dbName}"`);
-          console.log(`Dropped database '${dbName}'`);
+          await systemAdapter.executeMutation(`DROP DATABASE IF EXISTS "${dbNameResolved}"`);
+          console.log(`Dropped database '${dbNameResolved}'`);
         } finally {
-          closeAdapter(systemAdapter);
+          await closeAdapter(systemAdapter);
         }
       }
     });
@@ -199,7 +233,7 @@ export function dbCommand(): Command {
         }
         console.log("");
       } finally {
-        closeAdapter(adapter);
+        await closeAdapter(adapter);
       }
     });
 

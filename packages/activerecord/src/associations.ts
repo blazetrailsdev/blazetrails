@@ -2152,6 +2152,10 @@ export async function createThroughAssociation(
   if (success) {
     (record as any)._cachedAssociations = (record as any)._cachedAssociations ?? new Map();
     (record as any)._cachedAssociations.set(assocName, target);
+  } else {
+    // Transaction rolled back — reset in-memory persisted state
+    target._newRecord = true;
+    through._newRecord = true;
   }
 
   return target;

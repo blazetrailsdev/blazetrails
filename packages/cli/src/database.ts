@@ -32,10 +32,12 @@ export async function loadDatabaseConfig(
 ): Promise<DatabaseConfig> {
   const resolvedEnv = env ?? resolveEnv();
 
-  // Always read from source .ts to avoid running stale compiled config
+  // Prefer .ts (source of truth) over .js (compiled)
   const candidates = [
     path.join(cwd, "config", "database.ts"),
+    path.join(cwd, "config", "database.js"),
     path.join(cwd, "src", "config", "database.ts"),
+    path.join(cwd, "src", "config", "database.js"),
   ];
 
   let configPath: string | undefined;

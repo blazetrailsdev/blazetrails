@@ -3,27 +3,43 @@ import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import type { MigrationProxy } from "@rails-ts/activerecord";
 
-const MIGRATION_FILE_PATTERN = /^(\d+)-(.+)\.ts$/;
+const MIGRATION_FILE_PATTERN = /^(\d+)-(.+)\.(ts|js)$/;
 
 /**
  * Discover migration files from a directory and return MigrationProxy objects
  * compatible with the Migrator class.
  *
- * Migration files must be TypeScript (.ts). They are imported at runtime,
- * so the CLI must be run with a TypeScript loader (e.g., tsx).
+ * Supports both .ts and .js migration files. When both exist for the same
+ * migration, .ts is preferred (source of truth over compiled output).
  *
- * Files match: {timestamp}-{name}.ts (e.g., 20260318120000-create-users.ts)
+ * Files match: {timestamp}-{name}.ts or .js (e.g., 20260318120000-create-users.ts)
  */
 export async function discoverMigrations(migrationsDir: string): Promise<MigrationProxy[]> {
   if (!fs.existsSync(migrationsDir)) {
     return [];
   }
 
-  const files = fs
-    .readdirSync(migrationsDir)
-    .filter((f) => MIGRATION_FILE_PATTERN.test(f))
-    .sort();
+  const rawFiles = fs.readdirSync(migrationsDir).filter((f) => MIGRATION_FILE_PATTERN.test(f));
 
+  // Deduplicate by basename (version-name), preferring .ts over .js
+  const byBasename = new Map<string, string>();
+  for (const file of rawFiles) {
+    const ext = path.extname(file);
+    const basename = file.slice(0, -ext.length);
+    const existing = byBasename.get(basename);
+
+    if (!existing) {
+      byBasename.set(basename, file);
+      continue;
+    }
+
+    // Prefer .ts (source) over .js (compiled)
+    if (path.extname(existing) === ".js" && ext === ".ts") {
+      byBasename.set(basename, file);
+    }
+  }
+
+  const files = Array.from(byBasename.values()).sort();
   const proxies: MigrationProxy[] = [];
 
   for (const file of files) {
@@ -72,13 +88,16 @@ async function loadMigrationClass(
   try {
     mod = await import(pathToFileURL(filePath).href);
   } catch (error: any) {
-    const enhanced = new Error(
-      `Failed to load migration "${filePath}". ` +
-        `The CLI imports .ts migrations directly — run with tsx ` +
-        `(e.g., "npx tsx node_modules/.bin/rails-ts db migrate").`,
-    );
-    (enhanced as any).cause = error;
-    throw enhanced;
+    if (path.extname(filePath) === ".ts") {
+      const enhanced = new Error(
+        `Failed to load TypeScript migration "${filePath}". ` +
+          `Ensure a TypeScript loader (tsx, ts-node) is configured, ` +
+          `or use compiled .js migrations instead.`,
+      );
+      (enhanced as any).cause = error;
+      throw enhanced;
+    }
+    throw error;
   }
 
   if (isMigrationClass(mod.default)) {

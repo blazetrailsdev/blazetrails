@@ -4,9 +4,11 @@
  * Mirrors: ActiveModel::ValidationError
  */
 export class ValidationError extends Error {
-  readonly model: unknown;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  readonly model: any;
 
-  constructor(model: { errors: { fullMessages: string[] } }) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  constructor(model: any) {
     super(`Validation failed: ${model.errors.fullMessages.join(", ")}`);
     this.name = "ValidationError";
     this.model = model;

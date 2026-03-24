@@ -418,10 +418,12 @@ export class StrictValidationFailed extends Error {
  * Mirrors: ActiveModel::UnknownAttributeError
  */
 export class UnknownAttributeError extends Error {
-  readonly record: unknown;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  readonly record: any;
   readonly attribute: string;
 
-  constructor(record: unknown, attribute: string) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  constructor(record: any, attribute: string) {
     const model = (record as { constructor?: { name?: string } })?.constructor?.name ?? "Record";
     super(`unknown attribute '${attribute}' for ${model}.`);
     this.name = "UnknownAttributeError";
@@ -438,6 +440,6 @@ export class UnknownAttributeError extends Error {
 export class ActiveModelRangeError extends globalThis.RangeError {
   constructor(message?: string) {
     super(message);
-    this.name = "ActiveModel::RangeError";
+    this.name = "ActiveModelRangeError";
   }
 }

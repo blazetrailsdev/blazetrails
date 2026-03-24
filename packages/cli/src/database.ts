@@ -50,7 +50,7 @@ export async function loadDatabaseConfig(
 
   if (!configPath) {
     throw new Error(
-      "No database config found. Expected config/database.ts or src/config/database.ts",
+      "No database config found. Expected config/database.ts (.js) or src/config/database.ts (.js)",
     );
   }
 

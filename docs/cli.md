@@ -50,8 +50,10 @@ migrate, rollback, and status. The console doesn't yet connect to a database.
 The CLI loads database config and creates adapters through two functions in
 `packages/cli/src/database.ts`:
 
-- **`loadDatabaseConfig(env?, cwd?)`** -- Dynamically imports
-  `config/database.ts` or `src/config/database.ts` from the project root.
+- **`loadDatabaseConfig(env?, cwd?)`** -- Dynamically imports the database
+  config from the project root. Searches for `config/database.ts`,
+  `config/database.js`, `src/config/database.ts`, or `src/config/database.js`
+  (in that order). Both TypeScript and JavaScript configs are supported.
   Resolves environment from `RAILS_TS_ENV` > `NODE_ENV` > `"development"`.
 - **`connectAdapter(config)`** -- Creates the right adapter instance based on
   `config.adapter`: `"sqlite3"` -> `SqliteAdapter`, `"postgresql"` ->

@@ -2091,11 +2091,13 @@ export async function createThroughAssociation(
 
   let success = false;
 
+  const { Rollback } = await import("./transactions.js");
+
   await record.transaction(async () => {
     if (sourceType === "belongsTo") {
       // belongsTo: FK on through record -> save target first to get PK, wire through, save through
       const targetSaved = await target.save();
-      if (!targetSaved) return;
+      if (!targetSaved) throw new Rollback();
 
       const sourceFk = sourceAssocDef?.options?.foreignKey ?? `${underscore(sourceName)}_id`;
       if (Array.isArray(sourceFk)) {
@@ -2115,11 +2117,11 @@ export async function createThroughAssociation(
       }
 
       const throughSaved = await through.save();
-      if (!throughSaved) return;
+      if (!throughSaved) throw new Rollback();
     } else if (sourceType === "hasOne" || sourceType === "hasMany") {
       // hasOne/hasMany: FK on target -> save through first to get PK, wire target, save target
       const throughSaved = await through.save();
-      if (!throughSaved) return;
+      if (!throughSaved) throw new Rollback();
 
       const sourceAsName = sourceAssocDef?.options?.as;
       const targetFk = sourceAsName
@@ -2137,7 +2139,7 @@ export async function createThroughAssociation(
         target.writeAttribute(`${underscore(sourceAsName)}_type`, throughCtor.name);
       }
       const targetSaved = await target.save();
-      if (!targetSaved) return;
+      if (!targetSaved) throw new Rollback();
     } else {
       throw new Error(
         `createThroughAssociation: unsupported source type "${sourceType}" for ${assocName}`,

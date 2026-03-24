@@ -30,8 +30,13 @@ export class Error {
   }
 
   get message(): string {
-    if (this.options.message && typeof this.options.message === "string") {
-      return this.interpolateMessage(this.options.message);
+    const msg = this.options.message;
+    if (typeof msg === "string") {
+      return Error.interpolate(msg, this.options);
+    }
+    if (typeof msg === "function") {
+      const result = (msg as (base: AnyRecord) => unknown)(this.base);
+      if (typeof result === "string") return Error.interpolate(result, this.options);
     }
     return Error.generateMessage(this.attribute, this.type, this.base, this.options);
   }
@@ -96,9 +101,9 @@ export class Error {
     return `#<ActiveModel::Error attribute=${this.attribute}, type=${this.type}, options=${optionsStr}>`;
   }
 
-  private interpolateMessage(msg: string): string {
+  static interpolate(msg: string, options: Record<string, unknown>): string {
     return msg.replace(/%\{(\w+)\}/g, (_, key) => {
-      return this.options[key] !== undefined ? String(this.options[key]) : `%{${key}}`;
+      return options[key] !== undefined ? String(options[key]) : `%{${key}}`;
     });
   }
 
@@ -121,11 +126,7 @@ export class Error {
     options: Record<string, unknown> = {},
   ): string {
     if (options.message && typeof options.message === "string") {
-      let msg = options.message;
-      msg = msg.replace(/%\{(\w+)\}/g, (_, key) => {
-        return options[key] !== undefined ? String(options[key]) : `%{${key}}`;
-      });
-      return msg;
+      return Error.interpolate(options.message, options);
     }
 
     const modelClass = base?.constructor;

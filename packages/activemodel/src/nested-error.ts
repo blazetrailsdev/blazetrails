@@ -3,6 +3,7 @@ import { Error as ActiveModelError } from "./error.js";
 interface ErrorLike {
   attribute: string;
   type: string;
+  rawType?: string;
   message: string;
   options?: Record<string, unknown>;
 }
@@ -22,7 +23,7 @@ export class NestedError extends ActiveModelError {
     options?: { attribute?: string },
   ) {
     const attribute = options?.attribute ?? innerError.attribute;
-    super(base, attribute, innerError.type, innerError.options ?? {});
+    super(base, attribute, innerError.rawType ?? innerError.type, innerError.options ?? {});
     this.innerError = innerError;
   }
 

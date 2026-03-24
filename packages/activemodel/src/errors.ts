@@ -399,3 +399,45 @@ export class Errors {
     return `#<ActiveModel::Errors [${details.join(", ")}]>`;
   }
 }
+
+/**
+ * Raised when a strict validation fails.
+ *
+ * Mirrors: ActiveModel::StrictValidationFailed
+ */
+export class StrictValidationFailed extends Error {
+  constructor(message?: string) {
+    super(message);
+    this.name = "StrictValidationFailed";
+  }
+}
+
+/**
+ * Raised when an unknown attribute is set via mass assignment.
+ *
+ * Mirrors: ActiveModel::UnknownAttributeError
+ */
+export class UnknownAttributeError extends Error {
+  readonly record: unknown;
+  readonly attribute: string;
+
+  constructor(record: unknown, attribute: string) {
+    const model = (record as { constructor?: { name?: string } })?.constructor?.name ?? "Record";
+    super(`unknown attribute '${attribute}' for ${model}.`);
+    this.name = "UnknownAttributeError";
+    this.record = record;
+    this.attribute = attribute;
+  }
+}
+
+/**
+ * Raised when ActiveModel::RangeError occurs (value out of database range).
+ *
+ * Mirrors: ActiveModel::RangeError
+ */
+export class ActiveModelRangeError extends globalThis.RangeError {
+  constructor(message?: string) {
+    super(message);
+    this.name = "ActiveModel::RangeError";
+  }
+}

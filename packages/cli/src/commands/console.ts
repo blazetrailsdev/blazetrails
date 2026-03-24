@@ -10,12 +10,13 @@ export function consoleCommand(): Command {
     const repl = await import("node:repl");
 
     // Connect to database
+    let dbAdapter: any;
     try {
       const { loadDatabaseConfig, connectAdapter } = await import("../database.js");
       const config = await loadDatabaseConfig();
-      const adapter = await connectAdapter(config);
+      dbAdapter = await connectAdapter(config);
       const { Base } = await import("@rails-ts/activerecord");
-      Base.adapter = adapter;
+      Base.adapter = dbAdapter;
       console.log(
         `Connected to ${config.adapter ?? "sqlite3"} (${config.database ?? "in-memory"})`,
       );
@@ -31,6 +32,12 @@ export function consoleCommand(): Command {
     const r = repl.start({
       prompt: "rails-ts> ",
       useGlobal: true,
+    });
+
+    r.on("exit", async () => {
+      if (dbAdapter && typeof dbAdapter.close === "function") {
+        await dbAdapter.close();
+      }
     });
 
     // Make activerecord Base available

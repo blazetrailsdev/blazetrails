@@ -40,6 +40,14 @@ function buildSystemConfig(
   };
 }
 
+const VALID_IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_-]*$/;
+
+function validateDbName(name: string): void {
+  if (!VALID_IDENTIFIER.test(name)) {
+    throw new Error(`Invalid database name "${name}". Names must match ${VALID_IDENTIFIER}.`);
+  }
+}
+
 async function closeAdapter(adapter: DatabaseAdapter): Promise<void> {
   if (typeof (adapter as any).close === "function") {
     await (adapter as any).close();
@@ -120,9 +128,13 @@ export function dbCommand(): Command {
     .command("seed")
     .description("Run database seeds")
     .action(async () => {
-      const seedFile = path.join(process.cwd(), "db", "seeds.ts");
-      if (!fs.existsSync(seedFile)) {
-        console.log("No seeds file found at db/seeds.ts");
+      const seedCandidates = [
+        path.join(process.cwd(), "db", "seeds.ts"),
+        path.join(process.cwd(), "db", "seeds.js"),
+      ];
+      const seedFile = seedCandidates.find((f) => fs.existsSync(f));
+      if (!seedFile) {
+        console.log("No seeds file found at db/seeds.ts or db/seeds.js");
         return;
       }
 
@@ -165,6 +177,7 @@ export function dbCommand(): Command {
           );
         }
         const { systemConfig, dbNameResolved } = buildSystemConfig(config, adapterName);
+        validateDbName(dbNameResolved);
         const systemAdapter = await connectAdapter(systemConfig);
         try {
           await systemAdapter.executeMutation(`CREATE DATABASE "${dbNameResolved}"`);
@@ -196,6 +209,7 @@ export function dbCommand(): Command {
           );
         }
         const { systemConfig, dbNameResolved } = buildSystemConfig(config, adapterName);
+        validateDbName(dbNameResolved);
         const systemAdapter = await connectAdapter(systemConfig);
         try {
           await systemAdapter.executeMutation(`DROP DATABASE IF EXISTS "${dbNameResolved}"`);

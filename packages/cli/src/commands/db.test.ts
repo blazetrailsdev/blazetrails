@@ -207,7 +207,7 @@ describe("full migration flow", () => {
 
   afterEach(async () => {
     if (adapter && typeof adapter.close === "function") {
-      adapter.close();
+      await adapter.close();
     }
     adapter = undefined;
     fs.rmSync(tmpDir, { recursive: true, force: true });

@@ -34,7 +34,10 @@ export async function loadDatabaseConfig(
 
   const candidates = [
     path.join(cwd, "config", "database.ts"),
+    path.join(cwd, "config", "database.js"),
     path.join(cwd, "src", "config", "database.ts"),
+    path.join(cwd, "src", "config", "database.js"),
+    path.join(cwd, "dist", "config", "database.js"),
   ];
 
   let configPath: string | undefined;

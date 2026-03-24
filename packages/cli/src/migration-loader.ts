@@ -60,7 +60,21 @@ export async function discoverMigrations(migrationsDir: string): Promise<Migrati
 async function loadMigrationClass(
   filePath: string,
 ): Promise<new () => { run(adapter: any, direction: "up" | "down"): Promise<void> }> {
-  const mod = await import(pathToFileURL(filePath).href);
+  let mod: any;
+  try {
+    mod = await import(pathToFileURL(filePath).href);
+  } catch (error: any) {
+    if (path.extname(filePath) === ".ts") {
+      const enhanced = new Error(
+        `Failed to load TypeScript migration "${filePath}". ` +
+          `Ensure a TypeScript loader (tsx, ts-node) is configured, ` +
+          `or compile migrations to .js first.`,
+      );
+      (enhanced as any).cause = error;
+      throw enhanced;
+    }
+    throw error;
+  }
 
   // Try default export first, then find the first class export
   if (mod.default && typeof mod.default === "function") {

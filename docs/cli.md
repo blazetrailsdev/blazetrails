@@ -30,7 +30,7 @@ migrate, rollback, and status. The console doesn't yet connect to a database.
 | `rails-ts db migrate:status`                           | Shows up/down status per migration               | Reads from `schema_migrations` table        |
 | `rails-ts db create`                                   | Creates the database                             | SQLite: creates file; PG/MySQL: CREATE DB   |
 | `rails-ts db drop`                                     | Drops the database                               | SQLite: deletes file; PG/MySQL: DROP DB     |
-| `rails-ts db seed`                                     | Runs `db/seeds.ts`                               | Establishes DB connection first             |
+| `rails-ts db seed`                                     | Runs `db/seeds.ts` or `db/seeds.js`              | Establishes DB connection first             |
 
 ### What's still needed
 

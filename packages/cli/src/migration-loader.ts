@@ -110,15 +110,8 @@ async function loadMigrationClass(
     }
   }
 
-  // Fallback: first function export
-  if (mod.default && typeof mod.default === "function") {
-    return mod.default;
-  }
-  for (const value of Object.values(mod)) {
-    if (typeof value === "function" && value !== mod.default) {
-      return value as any;
-    }
-  }
-
-  throw new Error(`No migration class found in ${filePath}`);
+  throw new Error(
+    `No migration class found in ${filePath}. ` +
+      `Expected a class extending Migration with a run(adapter, direction) method.`,
+  );
 }

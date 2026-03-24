@@ -346,18 +346,31 @@ function main() {
         const name = shortName(item.fqn);
         const candidates = candidateNames(item.fqn);
 
-        // Try each candidate name (short name first, then parent-prefixed)
-        // Skip candidates whose entries are all already consumed
+        // Prefer a candidate that has an unconsumed entry in the expected file,
+        // and only fall back to any-unconsumed candidate.
         let tsEntries: { file: string; info: ClassInfo }[] = [];
         let matchedName = name;
+        let fallbackEntries: { file: string; info: ClassInfo }[] | null = null;
+        let fallbackName: string | null = null;
         for (const candidate of candidates) {
           const entries = tsClassesByName.get(candidate) || [];
-          const hasUnconsumed = entries.some((e) => !consumedTs.has(`${candidate}:${e.file}`));
-          if (hasUnconsumed) {
+          const hasUnconsumedInExpected = entries.some(
+            (e) => e.file === expectedTs && !consumedTs.has(`${candidate}:${e.file}`),
+          );
+          if (hasUnconsumedInExpected) {
             tsEntries = entries;
             matchedName = candidate;
             break;
           }
+          const hasUnconsumed = entries.some((e) => !consumedTs.has(`${candidate}:${e.file}`));
+          if (hasUnconsumed && !fallbackEntries) {
+            fallbackEntries = entries;
+            fallbackName = candidate;
+          }
+        }
+        if (tsEntries.length === 0 && fallbackEntries && fallbackName) {
+          tsEntries = fallbackEntries;
+          matchedName = fallbackName;
         }
 
         // Prefer match in expected file, then any unconsumed match

@@ -298,10 +298,7 @@ class ApiExtractor
       target[:instanceMethods] << method_info
     end
 
-    # Update module file to where its first method is defined (not where it was first opened)
-    if @modules[fqn] && target[:instanceMethods].length + target[:classMethods].length == 1
-      target[:file] = @current_file
-    end
+    maybe_update_module_file(fqn, target)
   end
 
   def process_defs(node)
@@ -326,7 +323,11 @@ class ApiExtractor
       file: @current_file,
     }
 
-    # Update module file to where its first method is defined
+    maybe_update_module_file(fqn, target)
+  end
+
+  # Update module file to where its first method is defined (not where it was first opened)
+  def maybe_update_module_file(fqn, target)
     if @modules[fqn] && target[:instanceMethods].length + target[:classMethods].length == 1
       target[:file] = @current_file
     end
@@ -478,6 +479,7 @@ class ApiExtractor
           file: @current_file,
         }
       end
+      maybe_update_module_file(fqn, target)
     end
   end
 
@@ -510,6 +512,7 @@ class ApiExtractor
           file: @current_file,
         }
       end
+      maybe_update_module_file(fqn, target)
     end
   end
 
@@ -531,6 +534,7 @@ class ApiExtractor
       file: @current_file,
       notes: "alias",
     }
+    maybe_update_module_file(fqn, target)
   end
 
   def process_scope(args)

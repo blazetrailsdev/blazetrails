@@ -1,5 +1,6 @@
 import type { AnyRecord, ConditionalOptions, Errors, Validator } from "./helpers.js";
-import { isBlank, shouldValidate } from "./helpers.js";
+import { shouldValidate } from "./helpers.js";
+import { isBlank } from "@rails-ts/activesupport";
 
 export interface PresenceOptions extends ConditionalOptions {
   message?: string | ((record: AnyRecord) => string);

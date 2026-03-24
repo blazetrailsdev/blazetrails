@@ -1,4 +1,5 @@
 import type { Base } from "./base.js";
+import { _setValidateAssociationsFn } from "./base.js";
 import type { AssociationDefinition } from "./associations.js";
 import { underscore } from "@rails-ts/activesupport";
 
@@ -29,6 +30,56 @@ export function isMarkedForDestruction(record: Base): boolean {
  */
 export function isDestroyable(record: Base): boolean {
   return !record.isNewRecord() && isMarkedForDestruction(record);
+}
+
+/**
+ * Validate associated records during the parent's validation phase.
+ * Runs for all associations where validate !== false (default true).
+ * Only validates loaded/cached associations — doesn't trigger lazy loads.
+ *
+ * Mirrors: ActiveRecord::AutosaveAssociation#validate_collection_association
+ */
+export function validateAssociations(record: Base): void {
+  const ctor = record.constructor as typeof Base;
+  const associations: AssociationDefinition[] = (ctor as any)._associations ?? [];
+
+  for (const assoc of associations) {
+    if (assoc.options.validate === false) continue;
+
+    const cached =
+      (record as any)._cachedAssociations?.get(assoc.name) ??
+      (record as any)._preloadedAssociations?.get(assoc.name);
+    if (!cached) continue;
+
+    const records: Base[] = Array.isArray(cached) ? cached : [cached];
+    for (const child of records) {
+      if (typeof child.isDestroyed === "function" && child.isDestroyed()) continue;
+      if (isMarkedForDestruction(child)) continue;
+
+      // Only validate new or changed records
+      if (!child.isNewRecord() && !child.changed) continue;
+
+      if (typeof child.isValid === "function" && !child.isValid()) {
+        const parentErrors = (record as any).errors;
+        if (parentErrors) {
+          if (assoc.options.autosave) {
+            // With autosave: propagate individual child errors
+            const childErrors = (child as any).errors;
+            if (childErrors) {
+              const msgs = (
+                Array.isArray(childErrors.fullMessages) ? childErrors.fullMessages : []
+              ) as string[];
+              for (const msg of msgs) {
+                parentErrors.add("base", "invalid", { message: msg });
+              }
+            }
+          } else {
+            parentErrors.add(assoc.name, "invalid");
+          }
+        }
+      }
+    }
+  }
 }
 
 /**
@@ -226,3 +277,6 @@ function propagateErrors(parent: Base, child: Base, assocName: string): void {
     parentErrors.add("base", "invalid", { message: msg });
   }
 }
+
+// Register validateAssociations with Base to break circular dependency
+_setValidateAssociationsFn(validateAssociations);

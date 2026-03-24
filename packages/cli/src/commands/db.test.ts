@@ -305,38 +305,43 @@ describe("schema dump and load", () => {
       await import("@rails-ts/activerecord");
     const { AdapterSchemaSource } = await import("../schema-source.js");
 
-    // Create a database with a table
     const sourceAdapter = new SqliteAdapter(":memory:");
-    const ctx = new MigrationContext(sourceAdapter);
-    await ctx.createTable("users", {}, (t) => {
-      t.string("name");
-      t.integer("age");
-    });
-
-    // Dump schema
-    const source = new AdapterSchemaSource(sourceAdapter);
-    const schema = await SchemaDumper.dump(source);
-    expect(schema).toContain("users");
-    expect(schema).toContain("createTable");
-
-    // Load into a fresh database
     const targetAdapter = new SqliteAdapter(":memory:");
-    const targetCtx = new MigrationContext(targetAdapter);
-    const defineSchema = new Function(
-      "ctx",
-      schema
-        .replace("export default async function defineSchema(ctx: any) {", "return (async () => {")
-        .replace(/}$/, "})();"),
-    );
-    await defineSchema(targetCtx);
+    try {
+      // Create a database with a table
+      const ctx = new MigrationContext(sourceAdapter);
+      await ctx.createTable("users", {}, (t) => {
+        t.string("name");
+        t.integer("age");
+      });
 
-    // Verify table exists in target
-    const tables = await targetAdapter.execute(
-      `SELECT name FROM sqlite_master WHERE type='table' AND name='users'`,
-    );
-    expect(tables).toHaveLength(1);
+      // Dump schema
+      const source = new AdapterSchemaSource(sourceAdapter);
+      const schema = await SchemaDumper.dump(source);
+      expect(schema).toContain("users");
+      expect(schema).toContain("createTable");
 
-    sourceAdapter.close();
-    targetAdapter.close();
+      // Load into a fresh database
+      const targetCtx = new MigrationContext(targetAdapter);
+      const defineSchema = new Function(
+        "ctx",
+        schema
+          .replace(
+            "export default async function defineSchema(ctx: any) {",
+            "return (async () => {",
+          )
+          .replace(/}$/, "})();"),
+      );
+      await defineSchema(targetCtx);
+
+      // Verify table exists in target
+      const tables = await targetAdapter.execute(
+        `SELECT name FROM sqlite_master WHERE type='table' AND name='users'`,
+      );
+      expect(tables).toHaveLength(1);
+    } finally {
+      sourceAdapter.close();
+      targetAdapter.close();
+    }
   });
 });

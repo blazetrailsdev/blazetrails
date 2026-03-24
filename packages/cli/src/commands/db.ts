@@ -321,7 +321,21 @@ export function dbCommand(): Command {
       await withAdapter(async (adapter) => {
         const { MigrationContext } = await import("@rails-ts/activerecord");
         const ctx = new MigrationContext(adapter);
-        const mod = await import(pathToFileURL(schemaFile).href);
+        let mod: any;
+        try {
+          mod = await import(pathToFileURL(schemaFile).href);
+        } catch (error: any) {
+          if (schemaFile.endsWith(".ts")) {
+            const enhanced = new Error(
+              `Failed to load schema file "${schemaFile}". ` +
+                `Ensure a TypeScript loader (tsx, ts-node) is configured, ` +
+                `or use a compiled db/schema.js instead.`,
+            );
+            (enhanced as any).cause = error;
+            throw enhanced;
+          }
+          throw error;
+        }
         const defineSchema = mod.default ?? mod;
         if (typeof defineSchema !== "function") {
           throw new Error(`Schema file must export a default function, got ${typeof defineSchema}`);

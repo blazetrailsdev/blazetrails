@@ -85,8 +85,8 @@ Post.where({ published: true }).order("title");
 # Install dependencies
 pnpm install
 
-# Run tests (uses in-memory SQLite adapter by default)
-npx vitest run
+# Run tests (uses SQLite adapter by default)
+pnpm vitest run
 
 # Build all packages
 pnpm run build
@@ -112,11 +112,11 @@ CI runs `convention:compare` on every push to ensure we don't regress.
 
 Tests run against all three database backends in CI:
 
-| Backend             | How to run locally                          | Env variable     |
-| ------------------- | ------------------------------------------- | ---------------- |
-| In-memory (default) | `npx vitest run`                            | (none)           |
-| PostgreSQL          | `PG_TEST_URL=postgres://... npx vitest run` | `PG_TEST_URL`    |
-| MySQL/MariaDB       | `MYSQL_TEST_URL=mysql://... npx vitest run` | `MYSQL_TEST_URL` |
+| Backend          | How to run locally                           | Env variable     |
+| ---------------- | -------------------------------------------- | ---------------- |
+| SQLite (default) | `pnpm vitest run`                            | (none)           |
+| PostgreSQL       | `PG_TEST_URL=postgres://... pnpm vitest run` | `PG_TEST_URL`    |
+| MySQL/MariaDB    | `MYSQL_TEST_URL=mysql://... pnpm vitest run` | `MYSQL_TEST_URL` |
 
 The `SchemaAdapter` wrapper auto-creates tables from model attribute definitions, so tests don't need manual DDL.
 

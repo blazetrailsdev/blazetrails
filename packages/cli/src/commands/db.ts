@@ -1,6 +1,182 @@
 import { Command } from "commander";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { pathToFileURL } from "node:url";
+import { loadDatabaseConfig, connectAdapter, type DatabaseConfig } from "../database.js";
+import { discoverMigrations } from "../migration-loader.js";
+import { Migrator } from "@rails-ts/activerecord";
+import type { DatabaseAdapter } from "@rails-ts/activerecord";
+
+// --- Helpers ---
+
+function buildSystemConfig(
+  config: DatabaseConfig,
+  adapterName: string,
+): { systemConfig: DatabaseConfig; dbNameResolved: string } {
+  const isMysql = adapterName === "mysql2" || adapterName === "mysql";
+  const systemDb = isMysql ? undefined : "postgres";
+
+  if (config.url) {
+    const parsed = new URL(config.url);
+    const dbNameResolved = parsed.pathname.replace(/^\//, "");
+    if (!dbNameResolved) {
+      throw new Error(
+        `Could not extract database name from URL. Ensure the URL includes a database path.`,
+      );
+    }
+    parsed.pathname = isMysql ? "/" : "/postgres";
+    return {
+      systemConfig: { ...config, url: parsed.toString(), database: systemDb },
+      dbNameResolved,
+    };
+  }
+
+  const dbNameResolved = config.database!;
+  return {
+    systemConfig: { ...config, url: undefined, database: systemDb },
+    dbNameResolved,
+  };
+}
+
+const VALID_IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_-]*$/;
+
+function validateDbName(name: string): void {
+  if (!VALID_IDENTIFIER.test(name)) {
+    throw new Error(`Invalid database name "${name}". Names must match ${VALID_IDENTIFIER}.`);
+  }
+}
+
+async function closeAdapter(adapter: DatabaseAdapter): Promise<void> {
+  if (typeof (adapter as any).close === "function") {
+    await (adapter as any).close();
+  }
+}
+
+async function withAdapter(fn: (adapter: DatabaseAdapter) => Promise<void>): Promise<void> {
+  const config = await loadDatabaseConfig();
+  const adapter = await connectAdapter(config);
+  try {
+    await fn(adapter);
+  } finally {
+    await closeAdapter(adapter);
+  }
+}
+
+function migrationsDir(): string {
+  return path.join(process.cwd(), "db", "migrations");
+}
+
+async function runMigrate(adapter: DatabaseAdapter, targetVersion?: string): Promise<void> {
+  const migrations = await discoverMigrations(migrationsDir());
+  if (migrations.length === 0) {
+    console.log("No migrations found.");
+    return;
+  }
+
+  const migrator = new Migrator(adapter, migrations);
+  await migrator.migrate(targetVersion ?? null);
+
+  for (const line of migrator.output) {
+    console.log(line);
+  }
+
+  const pending = await migrator.pendingMigrations();
+  if (pending.length === 0) {
+    console.log("All migrations are up to date.");
+  }
+}
+
+async function runRollback(adapter: DatabaseAdapter, steps: number): Promise<void> {
+  const migrations = await discoverMigrations(migrationsDir());
+  if (migrations.length === 0) {
+    console.log("No migrations found.");
+    return;
+  }
+
+  const migrator = new Migrator(adapter, migrations);
+  await migrator.rollback(steps);
+
+  for (const line of migrator.output) {
+    console.log(line);
+  }
+}
+
+async function runSeed(): Promise<void> {
+  const seedCandidates = [
+    path.join(process.cwd(), "db", "seeds.ts"),
+    path.join(process.cwd(), "db", "seeds.js"),
+  ];
+  const seedFile = seedCandidates.find((f) => fs.existsSync(f));
+  if (!seedFile) {
+    console.log("No seeds file found at db/seeds.ts or db/seeds.js");
+    return;
+  }
+
+  console.log("Running seeds...");
+  await import(pathToFileURL(seedFile).href);
+  console.log("Seeds completed.");
+}
+
+async function runCreate(): Promise<void> {
+  const config = await loadDatabaseConfig();
+  const adapterName = config.adapter ?? "sqlite3";
+
+  if (adapterName === "sqlite3" || adapterName === "sqlite") {
+    const dbPath = config.database;
+    if (dbPath && dbPath !== ":memory:") {
+      fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+      if (!fs.existsSync(dbPath)) {
+        fs.writeFileSync(dbPath, "");
+      }
+      console.log(`Created database '${dbPath}'`);
+    }
+  } else {
+    if (!config.database && !config.url) {
+      throw new Error(
+        `No database name specified in config for adapter "${adapterName}". Set the "database" property.`,
+      );
+    }
+    const { systemConfig, dbNameResolved } = buildSystemConfig(config, adapterName);
+    validateDbName(dbNameResolved);
+    const systemAdapter = await connectAdapter(systemConfig);
+    try {
+      await systemAdapter.executeMutation(`CREATE DATABASE "${dbNameResolved}"`);
+      console.log(`Created database '${dbNameResolved}'`);
+    } finally {
+      await closeAdapter(systemAdapter);
+    }
+  }
+}
+
+async function runDrop(): Promise<void> {
+  const config = await loadDatabaseConfig();
+  const adapterName = config.adapter ?? "sqlite3";
+
+  if (adapterName === "sqlite3" || adapterName === "sqlite") {
+    const dbPath = config.database;
+    if (dbPath && dbPath !== ":memory:" && fs.existsSync(dbPath)) {
+      fs.unlinkSync(dbPath);
+      console.log(`Dropped database '${dbPath}'`);
+    }
+  } else {
+    if (!config.database && !config.url) {
+      throw new Error(
+        `No database name specified in config for adapter "${adapterName}". Set the "database" property.`,
+      );
+    }
+    const { systemConfig, dbNameResolved } = buildSystemConfig(config, adapterName);
+    validateDbName(dbNameResolved);
+    const systemAdapter = await connectAdapter(systemConfig);
+    try {
+      await systemAdapter.executeMutation(`DROP DATABASE IF EXISTS "${dbNameResolved}"`);
+      console.log(`Dropped database '${dbNameResolved}'`);
+    } finally {
+      await closeAdapter(systemAdapter);
+    }
+  }
+}
+
+// --- Command definitions ---
 
 export function dbCommand(): Command {
   const cmd = new Command("db");
@@ -9,132 +185,107 @@ export function dbCommand(): Command {
   cmd
     .command("migrate")
     .description("Run pending migrations")
-    .action(async () => {
-      const cwd = process.cwd();
-      const migrationsDir = path.join(cwd, "db", "migrations");
-
-      if (!fs.existsSync(migrationsDir)) {
-        console.log("No migrations directory found.");
-        return;
-      }
-
-      const files = fs
-        .readdirSync(migrationsDir)
-        .filter((f) => f.endsWith(".ts"))
-        .sort();
-
-      if (files.length === 0) {
-        console.log("No pending migrations.");
-        return;
-      }
-
-      for (const file of files) {
-        console.log(`  Migrating: ${file}`);
-        const mod = await import(path.join(migrationsDir, file));
-        const MigrationClass = Object.values(mod).find(
-          (v) => typeof v === "function" && v !== mod.default,
-        ) as any;
-
-        if (MigrationClass) {
-          const migration = new MigrationClass();
-          await migration.up();
-          console.log(`  Migrated:  ${file}`);
-        }
-      }
+    .option("--version <version>", "Migrate to a specific version")
+    .action(async (opts) => {
+      await withAdapter((adapter) => runMigrate(adapter, opts.version));
     });
 
   cmd
     .command("rollback")
-    .description("Rollback the last migration")
-    .action(async () => {
-      const cwd = process.cwd();
-      const migrationsDir = path.join(cwd, "db", "migrations");
-
-      if (!fs.existsSync(migrationsDir)) {
-        console.log("No migrations directory found.");
+    .description("Rollback migrations")
+    .option("--step <n>", "Number of migrations to rollback", "1")
+    .action(async (opts) => {
+      const step = Number(opts.step);
+      if (!Number.isInteger(step) || step < 1) {
+        console.error(`Invalid value for --step: "${opts.step}". Expected a positive integer.`);
+        process.exitCode = 1;
         return;
       }
-
-      const files = fs
-        .readdirSync(migrationsDir)
-        .filter((f) => f.endsWith(".ts"))
-        .sort()
-        .reverse();
-
-      if (files.length === 0) {
-        console.log("No migrations to rollback.");
-        return;
-      }
-
-      const file = files[0];
-      console.log(`  Rolling back: ${file}`);
-      const mod = await import(path.join(migrationsDir, file));
-      const MigrationClass = Object.values(mod).find(
-        (v) => typeof v === "function" && v !== mod.default,
-      ) as any;
-
-      if (MigrationClass) {
-        const migration = new MigrationClass();
-        await migration.down();
-        console.log(`  Rolled back:  ${file}`);
-      }
+      await withAdapter((adapter) => runRollback(adapter, step));
     });
 
   cmd
     .command("seed")
     .description("Run database seeds")
     .action(async () => {
-      const seedFile = path.join(process.cwd(), "db", "seeds.ts");
-      if (!fs.existsSync(seedFile)) {
-        console.log("No seeds file found at db/seeds.ts");
-        return;
-      }
-      console.log("Running seeds...");
-      await import(seedFile);
-      console.log("Seeds completed.");
+      await withAdapter(async (adapter) => {
+        const { Base } = await import("@rails-ts/activerecord");
+        Base.adapter = adapter;
+        await runSeed();
+      });
     });
 
-  cmd
-    .command("create")
-    .description("Create the database")
-    .action(async () => {
-      console.log("Database created.");
-    });
+  cmd.command("create").description("Create the database").action(runCreate);
 
-  cmd
-    .command("drop")
-    .description("Drop the database")
-    .action(async () => {
-      console.log("Database dropped.");
-    });
+  cmd.command("drop").description("Drop the database").action(runDrop);
 
   cmd
     .command("migrate:status")
     .description("Show migration status")
     .action(async () => {
-      const cwd = process.cwd();
-      const migrationsDir = path.join(cwd, "db", "migrations");
+      await withAdapter(async (adapter) => {
+        const migrations = await discoverMigrations(migrationsDir());
+        if (migrations.length === 0) {
+          console.log("No migrations found.");
+          return;
+        }
 
-      if (!fs.existsSync(migrationsDir)) {
-        console.log("No migrations directory found.");
+        const migrator = new Migrator(adapter, migrations);
+        const statuses = await migrator.migrationsStatus();
+
+        console.log("");
+        console.log(" Status   Migration ID    Migration Name");
+        console.log("--------------------------------------------------");
+        for (const s of statuses) {
+          const statusStr = s.status === "up" ? "  up  " : " down ";
+          console.log(`${statusStr}   ${s.version.padEnd(16)}${s.name}`);
+        }
+        console.log("");
+      });
+    });
+
+  cmd
+    .command("migrate:redo")
+    .description("Rollback and re-run the last migration")
+    .option("--step <n>", "Number of migrations to redo", "1")
+    .action(async (opts) => {
+      const step = Number(opts.step);
+      if (!Number.isInteger(step) || step < 1) {
+        console.error(`Invalid value for --step: "${opts.step}". Expected a positive integer.`);
+        process.exitCode = 1;
         return;
       }
+      await withAdapter(async (adapter) => {
+        await runRollback(adapter, step);
+        await runMigrate(adapter);
+      });
+    });
 
-      const files = fs
-        .readdirSync(migrationsDir)
-        .filter((f) => f.endsWith(".ts"))
-        .sort();
+  cmd
+    .command("reset")
+    .description("Drop, create, migrate, and seed the database")
+    .action(async () => {
+      await runDrop();
+      await runCreate();
+      await withAdapter(async (adapter) => {
+        await runMigrate(adapter);
+        const { Base } = await import("@rails-ts/activerecord");
+        Base.adapter = adapter;
+        await runSeed();
+      });
+    });
 
-      console.log("");
-      console.log(" Status   Migration ID    Migration Name");
-      console.log("--------------------------------------------------");
-      for (const file of files) {
-        const match = file.match(/^(\d+)/);
-        const id = match ? match[1] : "???";
-        const name = file.replace(/^\d+-/, "").replace(/\.ts$/, "");
-        console.log(`   up     ${id.padEnd(16)}${name}`);
-      }
-      console.log("");
+  cmd
+    .command("setup")
+    .description("Create, migrate, and seed the database")
+    .action(async () => {
+      await runCreate();
+      await withAdapter(async (adapter) => {
+        await runMigrate(adapter);
+        const { Base } = await import("@rails-ts/activerecord");
+        Base.adapter = adapter;
+        await runSeed();
+      });
     });
 
   return cmd;

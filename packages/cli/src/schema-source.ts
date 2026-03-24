@@ -6,27 +6,70 @@ function sqliteId(name: string): string {
   return `"${name.replace(/"/g, '""')}"`;
 }
 
+/** Detect adapter type via instanceof (falls back to constructor name for subclasses). */
+async function detectAdapter(adapter: DatabaseAdapter): Promise<"sqlite" | "postgres" | "mysql"> {
+  const { SqliteAdapter, PostgresAdapter, MysqlAdapter } = await import("@rails-ts/activerecord");
+  if (adapter instanceof PostgresAdapter) return "postgres";
+  if (adapter instanceof MysqlAdapter) return "mysql";
+  if (adapter instanceof SqliteAdapter) return "sqlite";
+  // Fallback for subclasses
+  const name = adapter.constructor.name;
+  if (name.includes("Postgres")) return "postgres";
+  if (name.includes("Mysql")) return "mysql";
+  return "sqlite";
+}
+
+/**
+ * Normalize a SQLite default value expression.
+ * PRAGMA table_info returns SQL expressions like 'foo', 0, NULL, CURRENT_TIMESTAMP.
+ */
+function normalizeSqliteDefault(raw: unknown): unknown {
+  if (raw === null || raw === undefined) return undefined;
+  const str = String(raw);
+
+  // String literal: 'value' or 'it''s'
+  const strMatch = str.match(/^'((?:[^']|'')*)'$/);
+  if (strMatch) {
+    return strMatch[1].replace(/''/g, "'");
+  }
+
+  if (str === "NULL") return undefined;
+  if (str === "TRUE" || str === "true") return true;
+  if (str === "FALSE" || str === "false") return false;
+  if (/^-?\d+(\.\d+)?$/.test(str)) return Number(str);
+
+  // Expression defaults (CURRENT_TIMESTAMP, etc.) — keep as-is
+  return str;
+}
+
 /**
  * Adapter-backed SchemaSource for use with SchemaDumper.
  * Queries the actual database for table, column, and index info.
  * Supports SQLite and Postgres.
  */
 export class AdapterSchemaSource implements SchemaSource {
+  private _type: "sqlite" | "postgres" | "mysql" | undefined;
+
   constructor(private adapter: DatabaseAdapter) {}
 
-  private get adapterName(): string {
-    return this.adapter.constructor.name;
+  private async type(): Promise<"sqlite" | "postgres" | "mysql"> {
+    if (!this._type) {
+      this._type = await detectAdapter(this.adapter);
+    }
+    return this._type;
   }
 
   async tables(): Promise<string[]> {
-    if (this.adapterName.includes("Postgres")) {
+    const t = await this.type();
+
+    if (t === "postgres") {
       const rows = await this.adapter.execute(
         `SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename`,
       );
       return (rows as any[]).map((r: any) => r.tablename);
     }
 
-    if (this.adapterName.includes("Mysql")) {
+    if (t === "mysql") {
       throw new Error("MySQL schema introspection is not yet supported by AdapterSchemaSource.");
     }
 
@@ -38,7 +81,9 @@ export class AdapterSchemaSource implements SchemaSource {
   }
 
   async columns(tableName: string): Promise<ColumnInfo[]> {
-    if (this.adapterName.includes("Postgres")) {
+    const t = await this.type();
+
+    if (t === "postgres") {
       const rows = await this.adapter.execute(
         `SELECT column_name, data_type, is_nullable, column_default, character_maximum_length, numeric_precision, numeric_scale
          FROM information_schema.columns
@@ -73,12 +118,14 @@ export class AdapterSchemaSource implements SchemaSource {
       type: r.type,
       primaryKey: r.pk > 0,
       null: r.notnull === 0,
-      default: r.dflt_value,
+      default: normalizeSqliteDefault(r.dflt_value),
     }));
   }
 
   async indexes(tableName: string): Promise<IndexInfo[]> {
-    if (this.adapterName.includes("Postgres")) {
+    const t = await this.type();
+
+    if (t === "postgres") {
       const rows = await this.adapter.execute(
         `SELECT i.relname AS name, ix.indisunique AS unique,
                 array_agg(a.attname ORDER BY array_position(ix.indkey, a.attnum)) AS columns

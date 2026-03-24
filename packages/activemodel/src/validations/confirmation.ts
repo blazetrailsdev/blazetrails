@@ -1,5 +1,6 @@
 import type { AnyRecord, ConditionalOptions, Errors, Validator } from "./helpers.js";
-import { humanize, shouldValidate } from "./helpers.js";
+import { shouldValidate } from "./helpers.js";
+import { humanize } from "@rails-ts/activesupport";
 
 export interface ConfirmationOptions extends ConditionalOptions {
   message?: string;

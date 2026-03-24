@@ -1,9 +1,7 @@
 import type { Errors } from "../errors.js";
 import type { Validator, ConditionalOptions, AnyRecord } from "../validator.js";
 import { shouldValidate } from "../validator.js";
-import { humanize } from "@rails-ts/activesupport";
-
-export { shouldValidate, humanize };
+export { shouldValidate };
 export type { Errors, Validator, ConditionalOptions, AnyRecord };
 
 export function isBlank(value: unknown): boolean {

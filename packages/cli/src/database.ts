@@ -1,5 +1,6 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
+import { pathToFileURL } from "node:url";
 import type { DatabaseAdapter } from "@rails-ts/activerecord";
 
 export interface DatabaseConfig {
@@ -50,7 +51,7 @@ export async function loadDatabaseConfig(
     );
   }
 
-  const mod = await import(configPath);
+  const mod = await import(pathToFileURL(configPath).href);
   const configs = mod.default ?? mod;
 
   const envConfig = configs[resolvedEnv];

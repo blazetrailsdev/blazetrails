@@ -87,7 +87,9 @@ export async function transaction<T>(
   const previousTx = _currentTransaction;
   _currentTransaction = tx;
 
-  // If already in a transaction, use a savepoint for nesting
+  // If already in a transaction (check adapter state or module-level tracker),
+  // use a savepoint for nesting. This handles both explicit nesting and
+  // concurrent saves that share an adapter connection.
   const nested = previousTx !== null;
   const spName = nested ? `sp_${++_savepointCounter}` : null;
 

@@ -2472,11 +2472,120 @@ describe("TestAutosaveAssociationValidationsOnAHasOneAssociation", () => {
 });
 
 describe("TestAutosaveAssociationOnAHasOneThroughAssociation", () => {
-  it.skip("should not has one through model", () => {
-    /* needs autosave association integration */
+  it("should not has one through model", async () => {
+    const adapter = freshAdapter();
+    class HotOrg extends Base {
+      static {
+        this._tableName = "hot_orgs";
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class HotMember extends Base {
+      static {
+        this._tableName = "hot_members";
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class HotDetail extends Base {
+      static {
+        this._tableName = "hot_details";
+        this.attribute("hot_org_id", "integer");
+        this.attribute("hot_member_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("HotOrg", HotOrg);
+    registerModel("HotMember", HotMember);
+    registerModel("HotDetail", HotDetail);
+    (HotMember as any)._associations = [
+      {
+        type: "hasOne",
+        name: "hotDetail",
+        options: { className: "HotDetail", foreignKey: "hot_member_id" },
+      },
+      {
+        type: "hasOne",
+        name: "hotOrg",
+        options: { className: "HotOrg", through: "hotDetail", source: "hotOrg" },
+      },
+    ];
+    (HotDetail as any)._associations = [
+      {
+        type: "belongsTo",
+        name: "hotOrg",
+        options: { className: "HotOrg", foreignKey: "hot_org_id" },
+      },
+      {
+        type: "belongsTo",
+        name: "hotMember",
+        options: { className: "HotMember", foreignKey: "hot_member_id" },
+      },
+    ];
+    const org = await HotOrg.create({ name: "Org" });
+    const member = await HotMember.create({ name: "M" });
+    await HotDetail.create({ hot_org_id: org.id, hot_member_id: member.id });
+    // Saving member should not raise even if org is cached — has_one_through is not autosaved
+    const saved = await member.save();
+    expect(saved).toBe(true);
   });
-  it.skip("should not reversed has one through model", () => {
-    /* needs autosave association integration */
+  it("should not reversed has one through model", async () => {
+    const adapter = freshAdapter();
+    class RevOrg extends Base {
+      static {
+        this._tableName = "rev_orgs";
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class RevMember extends Base {
+      static {
+        this._tableName = "rev_members";
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class RevDetail extends Base {
+      static {
+        this._tableName = "rev_details";
+        this.attribute("rev_org_id", "integer");
+        this.attribute("rev_member_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("RevOrg", RevOrg);
+    registerModel("RevMember", RevMember);
+    registerModel("RevDetail", RevDetail);
+    (RevOrg as any)._associations = [
+      {
+        type: "hasOne",
+        name: "revDetail",
+        options: { className: "RevDetail", foreignKey: "rev_org_id" },
+      },
+      {
+        type: "hasOne",
+        name: "revMember",
+        options: { className: "RevMember", through: "revDetail", source: "revMember" },
+      },
+    ];
+    (RevDetail as any)._associations = [
+      {
+        type: "belongsTo",
+        name: "revOrg",
+        options: { className: "RevOrg", foreignKey: "rev_org_id" },
+      },
+      {
+        type: "belongsTo",
+        name: "revMember",
+        options: { className: "RevMember", foreignKey: "rev_member_id" },
+      },
+    ];
+    const org = await RevOrg.create({ name: "Org" });
+    const member = await RevMember.create({ name: "M" });
+    await RevDetail.create({ rev_org_id: org.id, rev_member_id: member.id });
+    const saved = await org.save();
+    expect(saved).toBe(true);
   });
 });
 
@@ -2515,14 +2624,81 @@ describe("TestAutosaveAssociationOnAHasManyAssociationWithInverse", () => {
 });
 
 describe("TestAutosaveAssociationOnABelongsToAssociationDefinedAsRecord", () => {
-  it.skip("should not raise error", () => {
-    /* needs autosave association integration */
+  it("should not raise error", async () => {
+    const adapter = freshAdapter();
+    class BtOwner extends Base {
+      static {
+        this._tableName = "bt_owners";
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class BtRecord extends Base {
+      static {
+        this._tableName = "bt_records";
+        this.attribute("value", "string");
+        this.attribute("bt_owner_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("BtOwner", BtOwner);
+    registerModel("BtRecord", BtRecord);
+    (BtRecord as any)._associations = [
+      {
+        type: "belongsTo",
+        name: "btOwner",
+        options: { className: "BtOwner", foreignKey: "bt_owner_id", autosave: true },
+      },
+    ];
+    const owner = await BtOwner.create({ name: "Owner" });
+    const record = new BtRecord({ value: "V", bt_owner_id: owner.id });
+    cacheAssoc(record, "btOwner", owner);
+    const saved = await record.save();
+    expect(saved).toBe(true);
   });
 });
 
 describe("TestAutosaveAssociationWithTouch", () => {
-  it.skip("autosave with touch should not raise system stack error", () => {
-    /* needs autosave association integration */
+  it("autosave with touch should not raise system stack error", async () => {
+    const adapter = freshAdapter();
+    class TchParent extends Base {
+      static {
+        this._tableName = "tch_parents";
+        this.attribute("name", "string");
+        this.attribute("updated_at", "string");
+        this.adapter = adapter;
+      }
+    }
+    class TchChild extends Base {
+      static {
+        this._tableName = "tch_children";
+        this.attribute("value", "string");
+        this.attribute("tch_parent_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("TchParent", TchParent);
+    registerModel("TchChild", TchChild);
+    (TchParent as any)._associations = [
+      {
+        type: "hasMany",
+        name: "tchChildren",
+        options: { className: "TchChild", foreignKey: "tch_parent_id", autosave: true },
+      },
+    ];
+    (TchChild as any)._associations = [
+      {
+        type: "belongsTo",
+        name: "tchParent",
+        options: { className: "TchParent", foreignKey: "tch_parent_id", touch: true },
+      },
+    ];
+    const parent = await TchParent.create({ name: "P" });
+    const child = new TchChild({ value: "C", tch_parent_id: parent.id });
+    cacheAssoc(parent, "tchChildren", [child]);
+    // Should not infinite-loop (autosave -> touch -> save -> autosave...)
+    const saved = await parent.save();
+    expect(saved).toBe(true);
   });
 });
 
@@ -2583,8 +2759,41 @@ describe("TestDefaultAutosaveAssociationOnAHasManyAssociationWithAcceptsNestedAt
 });
 
 describe("should update children when autosave is true and parent is new but child is not", () => {
-  it.skip("should update children when autosave is true and parent is new but child is not", () => {
-    /* needs autosave association integration */
+  it("should update children when autosave is true and parent is new but child is not", async () => {
+    const adapter = freshAdapter();
+    class UcParent extends Base {
+      static {
+        this._tableName = "uc_parents";
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class UcChild extends Base {
+      static {
+        this._tableName = "uc_children";
+        this.attribute("val", "string");
+        this.attribute("uc_parent_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("UcParent", UcParent);
+    registerModel("UcChild", UcChild);
+    (UcParent as any)._associations = [
+      {
+        type: "hasMany",
+        name: "ucChildren",
+        options: { className: "UcChild", foreignKey: "uc_parent_id", autosave: true },
+      },
+    ];
+    // Child exists, parent is new
+    const child = await UcChild.create({ val: "existing" });
+    const parent = new UcParent({ name: "new parent" });
+    child.val = "updated";
+    cacheAssoc(parent, "ucChildren", [child]);
+    await parent.save();
+    expect(parent.isNewRecord()).toBe(false);
+    const reloaded = await UcChild.find(child.id);
+    expect(reloaded.val).toBe("updated");
   });
   it("should automatically save the associated models", async () => {
     const adapter = freshAdapter();

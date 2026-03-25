@@ -20,7 +20,8 @@ git sparse-checkout add \
   activerecord/test/cases \
   activesupport/test \
   actionpack/test/dispatch \
-  actionpack/test/controller
+  actionpack/test/controller \
+  railties/test
 
 echo "Rails test source ready at $RAILS_DIR"
 

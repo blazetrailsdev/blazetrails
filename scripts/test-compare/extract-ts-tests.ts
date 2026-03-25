@@ -10,6 +10,8 @@ const OUTPUT_DIR = path.join(SCRIPT_DIR, "output");
 
 function getPackageTestFiles(): Record<string, string[]> {
   const packages = ["arel", "activemodel", "activerecord", "activesupport", "rack"];
+  // Railties maps to our cli package
+  const packageAliases: Record<string, string> = { railties: "cli" };
   const result: Record<string, string[]> = {};
 
   for (const pkg of packages) {
@@ -34,6 +36,12 @@ function getPackageTestFiles(): Record<string, string[]> {
   // Shared test files also relevant to controller/ Ruby tests
   result["actioncontroller"] = [...actionControllerFiles, ...actionDispatchFiles];
   result["actionview"] = actionViewFiles;
+
+  // Aliased packages (railties → cli)
+  for (const [alias, dir] of Object.entries(packageAliases)) {
+    const files = globSync(`packages/${dir}/src/**/*.test.ts`, { cwd: ROOT_DIR }).sort();
+    result[alias] = files;
+  }
 
   return result;
 }

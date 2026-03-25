@@ -84,9 +84,16 @@ function indexLines(table: string, columns: ParsedColumn[]): string {
   for (const col of columns) {
     if (!col.index && !(isReference(col.type) && col.unique)) continue;
     if (isReference(col.type) && !col.unique) continue; // references auto-index unless :uniq
-    const colName = isReference(col.type) ? `${col.name}_id` : col.name;
-    const opts = col.unique ? ", { unique: true }" : "";
-    lines.push(`    await this.addIndex("${table}", "${colName}"${opts});`);
+
+    if (isReference(col.type)) {
+      // Polymorphic refs index both _id and _type columns
+      const cols = col.polymorphic ? `["${col.name}_id", "${col.name}_type"]` : `"${col.name}_id"`;
+      const opts = col.unique ? ", { unique: true }" : "";
+      lines.push(`    await this.addIndex("${table}", ${cols}${opts});`);
+    } else {
+      const opts = col.unique ? ", { unique: true }" : "";
+      lines.push(`    await this.addIndex("${table}", "${col.name}"${opts});`);
+    }
   }
   return lines.join("\n");
 }

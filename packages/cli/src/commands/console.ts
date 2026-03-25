@@ -36,10 +36,12 @@ export function consoleCommand(): Command {
     // Note: `const`/`let` declarations inside the async IIFE don't persist
     // across inputs — use plain assignment (`x = await ...`) for that.
     const asyncEval = (code: string, context: any, _filename: string, callback: any) => {
+      // Strip trailing whitespace/semicolons so `return (expr)` wrapper is valid
+      const trimmed = code.replace(/[\s;]+$/, "");
       (async () => {
         try {
           const result = await vm.runInNewContext(
-            `(async () => { return (\n${code}\n); })()`,
+            `(async () => { return (\n${trimmed}\n); })()`,
             context,
             { breakOnSigint: true },
           );
@@ -127,6 +129,5 @@ export function consoleCommand(): Command {
 
 function isRecoverable(err: Error): boolean {
   if (!(err instanceof SyntaxError)) return false;
-  const msg = err.message;
-  return msg === "Unexpected end of input" || msg === "Unexpected end of script";
+  return /\b(Unexpected end of input|Unexpected end of script|Unterminated)\b/i.test(err.message);
 }

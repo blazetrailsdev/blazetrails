@@ -135,14 +135,19 @@ export class DirtyTracker {
    * Restore attributes to their original values.
    */
   restore(
-    attributes: Map<string, unknown> | { writeCastValue(name: string, value: unknown): void },
+    attributes:
+      | Map<string, unknown>
+      | {
+          writeFromDatabase(name: string, value: unknown): void;
+          writeCastValue(name: string, value: unknown): void;
+        },
   ): void {
     for (const [name] of this._changedAttributes) {
       const original = this._originalAttributes.get(name);
       if (attributes instanceof Map) {
         attributes.set(name, original);
       } else {
-        attributes.writeCastValue(name, original);
+        attributes.writeFromDatabase(name, original);
       }
     }
     this._changedAttributes.clear();

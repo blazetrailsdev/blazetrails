@@ -132,7 +132,18 @@ export class Attribute {
   }
 
   private changedFromAssignment(): boolean {
-    return this.isAssigned();
+    if (!this.isAssigned()) return false;
+    const current = this.value;
+    const original = this.originalValue;
+    if (current === original) return false;
+    if (
+      typeof current === "number" &&
+      typeof original === "number" &&
+      isNaN(current) &&
+      isNaN(original)
+    )
+      return false;
+    return true;
   }
 
   // --- Factory methods ---

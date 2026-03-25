@@ -15,7 +15,7 @@ export class ConfirmationValidator implements Validator {
     if (!shouldValidate(record, this.options)) return;
     const confirmationAttr = `${attribute}Confirmation`;
     const confirmation = record.readAttribute?.(confirmationAttr) ?? record[confirmationAttr];
-    if (confirmation === undefined) return;
+    if (confirmation == null) return;
     const caseSensitive = this.options.caseSensitive ?? true;
     let matches: boolean;
     if (!caseSensitive && typeof value === "string" && typeof confirmation === "string") {

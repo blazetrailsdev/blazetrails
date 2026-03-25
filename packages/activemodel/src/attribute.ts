@@ -83,12 +83,7 @@ export class Attribute {
   }
 
   withType(type: Type): Attribute {
-    return new (this.constructor as typeof Attribute)(
-      this.name,
-      this.valueBeforeTypeCast,
-      type,
-      this.originalAttribute,
-    );
+    return Attribute.withCastValue(this.name, this.value, type);
   }
 
   isInitialized(): boolean {

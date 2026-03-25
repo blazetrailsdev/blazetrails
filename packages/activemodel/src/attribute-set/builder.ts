@@ -118,7 +118,7 @@ export class AttributeSet {
   deepDup(): AttributeSet {
     const newAttrs = new Map<string, Attribute>();
     for (const [name, attr] of this.attributes) {
-      newAttrs.set(name, attr);
+      newAttrs.set(name, Object.assign(Object.create(Object.getPrototypeOf(attr)), attr));
     }
     return new AttributeSet(newAttrs);
   }
@@ -170,7 +170,10 @@ export class Builder {
       } else {
         const defaultAttr = this.defaultAttributes.get(name);
         if (defaultAttr) {
-          attrs.set(name, defaultAttr);
+          attrs.set(
+            name,
+            Object.assign(Object.create(Object.getPrototypeOf(defaultAttr)), defaultAttr),
+          );
         } else {
           attrs.set(name, Attribute.uninitialized(name, type));
         }

@@ -68,8 +68,12 @@ export class AttributeSet {
   }
 
   writeFromDatabase(name: string, value: unknown): void {
-    const attr = this.getAttribute(name);
-    this.attributes.set(name, attr.withValueFromDatabase(value));
+    const existing = this.attributes.get(name);
+    if (existing) {
+      this.attributes.set(name, existing.withValueFromDatabase(value));
+    } else {
+      this.attributes.set(name, Attribute.fromDatabase(name, value, new ValueType()));
+    }
   }
 
   writeCastValue(name: string, value: unknown): void {

@@ -95,15 +95,13 @@ export class DirtyTracker {
     }
   }
 
-  restore(
-    attributes: Map<string, unknown> | { writeCastValue(name: string, value: unknown): void },
-  ): void {
+  restore(attributes: Map<string, unknown> | { set(name: string, value: unknown): void }): void {
     for (const [name] of this._changedAttributes) {
       const original = this._originalAttributes.get(name);
       if (attributes instanceof Map) {
         attributes.set(name, original);
       } else {
-        attributes.writeCastValue(name, original);
+        attributes.set(name, original);
       }
     }
     this._changedAttributes.clear();

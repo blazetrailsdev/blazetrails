@@ -190,6 +190,7 @@ function pkgFromPath(relPath: string): string {
     if (parts[1] === "actionpack" && parts[3]) {
       return parts[3]; // actiondispatch, actioncontroller, actionview
     }
+    if (parts[1] === "cli") return "railties";
     return parts[1];
   }
   return "unknown";

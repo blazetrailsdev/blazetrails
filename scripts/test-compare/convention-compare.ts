@@ -18,7 +18,7 @@
  *
  * By default, detailed per-file tables, misplaced tests, and wrong-describe
  * output are only shown for the focus packages (arel, activemodel, activerecord,
- * activesupport, rack). Using --package overrides this and always shows detail.
+ * activesupport, rack, railties). Using --package overrides this and always shows detail.
  *
  * Usage:
  *   npx tsx scripts/test-compare/convention-compare.ts [--missing] [--json] [--package activesupport]

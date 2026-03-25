@@ -26,7 +26,7 @@ git sparse-checkout add \
 echo "Rails test source ready at $RAILS_DIR"
 
 # Quick check that test dirs exist
-for dir in "activerecord/test/cases/arel" "activemodel/test/cases" "activerecord/test/cases" "activesupport/test"; do
+for dir in "activerecord/test/cases/arel" "activemodel/test/cases" "activerecord/test/cases" "activesupport/test" "railties/test"; do
   if [ -d "$dir" ]; then
     count=$(find "$dir" -name "*_test.rb" -o -name "test_*.rb" | wc -l)
     echo "  $dir: $count test files"

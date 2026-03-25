@@ -2,6 +2,8 @@ import { Attribute } from "../attribute.js";
 import { Type } from "../type/value.js";
 import { typeRegistry } from "../type/registry.js";
 
+const LAZY_ATTR = Symbol("lazyAttr");
+
 /**
  * A set of Attribute instances keyed by name.
  *
@@ -119,7 +121,7 @@ export class AttributeSet {
         } else {
           // Clone so lazy evaluation doesn't affect the live attribute
           const cloned = Object.assign(Object.create(Object.getPrototypeOf(attr)), attr);
-          result.set(name, { __lazyAttr: cloned });
+          result.set(name, { [LAZY_ATTR]: cloned });
         }
       }
     }
@@ -130,9 +132,9 @@ export class AttributeSet {
    * Resolve a snapshot value — handles both direct values and lazy Attribute clones.
    */
   static resolveSnapshotValue(value: unknown): unknown {
-    if (value && typeof value === "object" && "__lazyAttr" in value) {
-      const attr = (value as { __lazyAttr: Attribute }).__lazyAttr;
-      return attr.value;
+    if (value && typeof value === "object" && LAZY_ATTR in value) {
+      const attr = (value as Record<symbol, unknown>)[LAZY_ATTR];
+      if (attr instanceof Attribute) return attr.value;
     }
     return value;
   }

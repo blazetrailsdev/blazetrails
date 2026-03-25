@@ -111,10 +111,18 @@ export class DirtyTracker {
     }
   }
 
-  restore(attributes: { set(name: string, value: unknown): void }): void {
+  restore(attributes: {
+    set(name: string, value: unknown): void;
+    delete?(name: string): boolean;
+  }): void {
     for (const [name] of this._changedAttributes) {
-      const original = resolveValue(this._originalAttributes.get(name));
-      attributes.set(name, original);
+      if (!this._originalHas.has(name)) {
+        // Attribute was absent — remove it rather than setting undefined
+        attributes.delete?.(name);
+      } else {
+        const original = resolveValue(this._originalAttributes.get(name));
+        attributes.set(name, original);
+      }
     }
     this._changedAttributes.clear();
   }

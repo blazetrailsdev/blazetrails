@@ -1,5 +1,4 @@
-import { Type } from "./type/value.js";
-import { ValueType } from "./type/value.js";
+import { Type, ValueType } from "./type/value.js";
 
 /**
  * Wraps a single attribute value with its type, tracking the original

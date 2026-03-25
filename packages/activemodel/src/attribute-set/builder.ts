@@ -137,17 +137,14 @@ export class AttributeSet {
    * Make AttributeSet iterable — yields [name, value] pairs for compatibility
    * with code that iterates `for (const [k, v] of _attributes)`.
    */
-  *[Symbol.iterator](): Iterator<[string, unknown]> {
+  *[Symbol.iterator](): IterableIterator<[string, unknown]> {
     for (const name of this.keys()) {
       yield [name, this.fetchValue(name)];
     }
   }
 
-  /**
-   * Return entries as [name, value] array for Array.from() compatibility.
-   */
   entries(): IterableIterator<[string, unknown]> {
-    return this[Symbol.iterator]() as IterableIterator<[string, unknown]>;
+    return this[Symbol.iterator]();
   }
 }
 

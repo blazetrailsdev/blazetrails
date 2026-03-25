@@ -30,5 +30,14 @@ export class Schema {
     const td = new TableDefinition(name, { adapterName: this._adapterName });
     if (fn) fn(td);
     await this.adapter.executeMutation(td.toSql());
+
+    for (const idx of td.indexes) {
+      const indexName = idx.name ?? `index_${name}_on_${idx.columns.join("_and_")}`;
+      const unique = idx.unique ? "UNIQUE " : "";
+      const cols = idx.columns.map((c) => `"${c}"`).join(", ");
+      await this.adapter.executeMutation(
+        `CREATE ${unique}INDEX "${indexName}" ON "${name}" (${cols})`,
+      );
+    }
   }
 }

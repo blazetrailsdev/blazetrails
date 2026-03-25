@@ -147,4 +147,29 @@ describe("MigrationGeneratorTest", () => {
   it.skip("create table migration ignores virtual attributes", () => {
     // Needs virtual attribute type detection (rich_text, attachment, etc.)
   });
+
+  // Additional coverage (no direct Rails test name match)
+
+  it("create table migration with polymorphic references", () => {
+    const gen = makeGen();
+    const files = gen.run("CreateComments", ["commentable:references{polymorphic}"]);
+    const content = readMigration(files);
+    expect(content).toContain('t.references("commentable", { polymorphic: true })');
+    expect(content).not.toContain("foreignKey");
+  });
+
+  it("add migration with polymorphic references", () => {
+    const gen = makeGen();
+    const files = gen.run("AddCommentableToComments", ["commentable:references{polymorphic}"]);
+    const content = readMigration(files);
+    expect(content).toContain('addReference("comments", "commentable", { polymorphic: true })');
+  });
+
+  it("create table migration with unique reference index", () => {
+    const gen = makeGen();
+    const files = gen.run("CreatePosts", ["user:references:uniq"]);
+    const content = readMigration(files);
+    expect(content).toContain('t.references("user", { foreignKey: true, index: false })');
+    expect(content).toContain('addIndex("posts", "user_id", { unique: true })');
+  });
 });

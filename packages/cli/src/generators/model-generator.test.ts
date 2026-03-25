@@ -162,4 +162,24 @@ describe("ModelGeneratorTest", () => {
   it.skip("plural names are singularized", () => {
     // Needs singularization of model name input (e.g., "Users" → "User")
   });
+
+  // Additional coverage (no direct Rails test name match)
+
+  it("model file includes attribute declarations", () => {
+    const gen = makeGen();
+    gen.run("User", ["name:string", "email:string", "age:integer"]);
+    const content = fs.readFileSync(path.join(tmpDir, "src/app/models/user.ts"), "utf-8");
+    expect(content).toContain("class User extends Base");
+    expect(content).toContain('this.attribute("name", "string")');
+    expect(content).toContain('this.attribute("email", "string")');
+    expect(content).toContain('this.attribute("age", "integer")');
+  });
+
+  it("model with multi-word name uses kebab-case filename", () => {
+    const gen = makeGen();
+    gen.run("BlogPost", ["title:string"]);
+    expect(fs.existsSync(path.join(tmpDir, "src/app/models/blog-post.ts"))).toBe(true);
+    const content = fs.readFileSync(path.join(tmpDir, "src/app/models/blog-post.ts"), "utf-8");
+    expect(content).toContain("class BlogPost extends Base");
+  });
 });

@@ -17,14 +17,8 @@ export function quoteIdentifier(name: string, adapter?: "sqlite" | "postgres" | 
  * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#quote_table_name
  */
 export function quoteTableName(name: string, adapter?: "sqlite" | "postgres" | "mysql"): string {
-  if (adapter === "mysql") {
-    return name
-      .split(".")
-      .map((part) => `\`${part.replace(/`/g, "``")}\``)
-      .join(".");
-  }
   return name
     .split(".")
-    .map((part) => `"${part.replace(/"/g, '""')}"`)
+    .map((part) => quoteIdentifier(part, adapter))
     .join(".");
 }

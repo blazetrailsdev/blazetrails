@@ -2279,6 +2279,9 @@ export class Base extends Model {
       this._skipTouch = false;
 
       if (saved) {
+        // Set transaction action early so rollback callbacks have correct context
+        this._transactionAction = wasNewRecord ? "create" : "update";
+
         await ctor._callbackChain.runAfter("save", this);
 
         if (wasNewRecord) {
@@ -2291,8 +2294,6 @@ export class Base extends Model {
 
         const { touchBelongsToParents } = await import("./associations.js");
         await touchBelongsToParents(this);
-
-        this._transactionAction = wasNewRecord ? "create" : "update";
       }
 
       return saved;
@@ -2300,7 +2301,12 @@ export class Base extends Model {
 
     let saved: boolean;
     if (hasAutosave) {
-      const txResult = await this.transaction(async () => saveBody());
+      const { Rollback } = await import("./transactions.js");
+      const txResult = await this.transaction(async () => {
+        const result = await saveBody();
+        if (!result) throw new Rollback();
+        return result;
+      });
       saved = txResult ?? false;
     } else {
       saved = await saveBody();
@@ -2320,6 +2326,15 @@ export class Base extends Model {
         });
       } else {
         await ctor._callbackChain.runAfter("commit", this);
+      }
+    } else if (hasAutosave) {
+      // Transaction was rolled back — fire after_rollback
+      if (outerTx) {
+        outerTx.afterRollback(async () => {
+          await ctor._callbackChain.runAfter("rollback", this);
+        });
+      } else {
+        await ctor._callbackChain.runAfter("rollback", this);
       }
     }
 

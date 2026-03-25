@@ -10,20 +10,18 @@ export class DirtyTracker {
 
   /**
    * Take a snapshot of the current attributes as the "clean" state.
+   * For AttributeSet, uses snapshotValues() which captures already-read
+   * values without forcing lazy evaluation on unread attributes.
    */
-  snapshot(attributes: Map<string, unknown> | { toHash(): Record<string, unknown> }): void {
+  snapshot(attributes: Map<string, unknown> | { snapshotValues(): Map<string, unknown> }): void {
     if (attributes instanceof Map) {
       this._originalAttributes = new Map(attributes);
     } else {
-      const hash = attributes.toHash();
-      this._originalAttributes = new Map(Object.entries(hash));
+      this._originalAttributes = attributes.snapshotValues();
     }
     this._changedAttributes.clear();
   }
 
-  /**
-   * Record an attribute change.
-   */
   attributeWillChange(name: string, from: unknown, to: unknown): void {
     if (from === to) {
       this._changedAttributes.delete(name);
@@ -37,23 +35,14 @@ export class DirtyTracker {
     }
   }
 
-  /**
-   * Has any attribute changed?
-   */
   get changed(): boolean {
     return this._changedAttributes.size > 0;
   }
 
-  /**
-   * List of changed attribute names.
-   */
   get changedAttributes(): string[] {
     return Array.from(this._changedAttributes.keys());
   }
 
-  /**
-   * Map of attribute => [old, new].
-   */
   get changes(): Record<string, [unknown, unknown]> {
     const result: Record<string, [unknown, unknown]> = {};
     for (const [k, v] of this._changedAttributes) {
@@ -62,46 +51,31 @@ export class DirtyTracker {
     return result;
   }
 
-  /**
-   * Was this specific attribute changed?
-   */
   attributeChanged(name: string): boolean {
     return this._changedAttributes.has(name);
   }
 
-  /**
-   * The previous value of an attribute (before the change).
-   */
   attributeWas(name: string): unknown {
     const change = this._changedAttributes.get(name);
     return change ? change[0] : this._originalAttributes.get(name);
   }
 
-  /**
-   * The change for a specific attribute: [old, new] or undefined.
-   */
   attributeChange(name: string): [unknown, unknown] | undefined {
     return this._changedAttributes.get(name);
   }
 
-  /**
-   * Commit changes — the current state becomes the "clean" state.
-   */
   changesApplied(
-    currentAttributes: Map<string, unknown> | { toHash(): Record<string, unknown> },
+    currentAttributes: Map<string, unknown> | { snapshotValues(): Map<string, unknown> },
   ): void {
     this._previousChanges = new Map(this._changedAttributes);
     if (currentAttributes instanceof Map) {
       this._originalAttributes = new Map(currentAttributes);
     } else {
-      this._originalAttributes = new Map(Object.entries(currentAttributes.toHash()));
+      this._originalAttributes = currentAttributes.snapshotValues();
     }
     this._changedAttributes.clear();
   }
 
-  /**
-   * Changes from the last save/commit.
-   */
   get previousChanges(): Record<string, [unknown, unknown]> {
     const result: Record<string, [unknown, unknown]> = {};
     for (const [k, v] of this._previousChanges) {
@@ -110,37 +84,19 @@ export class DirtyTracker {
     return result;
   }
 
-  /**
-   * Clear all dirty tracking information (changes + previous changes).
-   *
-   * Mirrors: ActiveModel::Dirty#clear_changes_information
-   */
   clearChangesInformation(): void {
     this._changedAttributes.clear();
     this._previousChanges.clear();
   }
 
-  /**
-   * Clear dirty tracking for specific attributes.
-   *
-   * Mirrors: ActiveModel::Dirty#clear_attribute_changes
-   */
   clearAttributeChanges(attributes: string[]): void {
     for (const attr of attributes) {
       this._changedAttributes.delete(attr);
     }
   }
 
-  /**
-   * Restore attributes to their original values.
-   */
   restore(
-    attributes:
-      | Map<string, unknown>
-      | {
-          writeFromDatabase(name: string, value: unknown): void;
-          writeCastValue(name: string, value: unknown): void;
-        },
+    attributes: Map<string, unknown> | { writeCastValue(name: string, value: unknown): void },
   ): void {
     for (const [name] of this._changedAttributes) {
       const original = this._originalAttributes.get(name);

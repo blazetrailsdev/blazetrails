@@ -99,6 +99,21 @@ export class AttributeSet {
     return result;
   }
 
+  /**
+   * Capture current values without forcing lazy evaluation on unread attributes.
+   * For read attributes, captures the cast value. For unread ones, captures
+   * the cast value (since it was pre-computed in the constructor).
+   */
+  snapshotValues(): Map<string, unknown> {
+    const result = new Map<string, unknown>();
+    for (const [name, attr] of this.attributes) {
+      if (attr.isInitialized()) {
+        result.set(name, attr.hasBeenRead() ? attr.value : attr.value);
+      }
+    }
+    return result;
+  }
+
   valuesForDatabase(): Record<string, unknown> {
     const result: Record<string, unknown> = {};
     for (const [name, attr] of this.attributes) {
@@ -121,9 +136,26 @@ export class AttributeSet {
 
   deepDup(): AttributeSet {
     const newAttrs = new Map<string, Attribute>();
+    const originalToClone = new Map<Attribute, Attribute>();
+
+    // First pass: clone each Attribute
     for (const [name, attr] of this.attributes) {
-      newAttrs.set(name, Object.assign(Object.create(Object.getPrototypeOf(attr)), attr));
+      const cloned = Object.assign(Object.create(Object.getPrototypeOf(attr)), attr);
+      newAttrs.set(name, cloned);
+      originalToClone.set(attr, cloned);
     }
+
+    // Second pass: remap originalAttribute chains to cloned instances
+    for (const [, cloned] of newAttrs) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const orig = (cloned as any).originalAttribute as Attribute | null;
+      if (orig) {
+        const mapped = originalToClone.get(orig);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (mapped) (cloned as any).originalAttribute = mapped;
+      }
+    }
+
     return new AttributeSet(newAttrs);
   }
 

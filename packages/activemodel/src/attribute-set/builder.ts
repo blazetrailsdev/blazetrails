@@ -132,26 +132,29 @@ export class AttributeSet {
     }
   }
 
-  deepDup(): AttributeSet {
-    const newAttrs = new Map<string, Attribute>();
-    const originalToClone = new Map<Attribute, Attribute>();
+  private cloneAttribute(attr: Attribute, cache: Map<Attribute, Attribute>): Attribute {
+    const existing = cache.get(attr);
+    if (existing) return existing;
 
-    // First pass: clone each Attribute
-    for (const [name, attr] of this.attributes) {
-      const cloned = Object.assign(Object.create(Object.getPrototypeOf(attr)), attr);
-      newAttrs.set(name, cloned);
-      originalToClone.set(attr, cloned);
+    const cloned = Object.assign(Object.create(Object.getPrototypeOf(attr)), attr);
+    cache.set(attr, cloned);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const orig = (attr as any).originalAttribute as Attribute | null;
+    if (orig) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (cloned as any).originalAttribute = this.cloneAttribute(orig, cache);
     }
 
-    // Second pass: remap originalAttribute chains to cloned instances
-    for (const [, cloned] of newAttrs) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const orig = (cloned as any).originalAttribute as Attribute | null;
-      if (orig) {
-        const mapped = originalToClone.get(orig);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if (mapped) (cloned as any).originalAttribute = mapped;
-      }
+    return cloned;
+  }
+
+  deepDup(): AttributeSet {
+    const newAttrs = new Map<string, Attribute>();
+    const cache = new Map<Attribute, Attribute>();
+
+    for (const [name, attr] of this.attributes) {
+      newAttrs.set(name, this.cloneAttribute(attr, cache));
     }
 
     return new AttributeSet(newAttrs);

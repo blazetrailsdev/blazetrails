@@ -115,11 +115,12 @@ export class Attribute {
   }
 
   equals(other: Attribute): boolean {
+    const typeEqual = this.type === other.type || this.type.constructor === other.type.constructor;
     return (
       this.constructor === other.constructor &&
       this.name === other.name &&
       this.valueBeforeTypeCast === other.valueBeforeTypeCast &&
-      this.type === other.type
+      typeEqual
     );
   }
 

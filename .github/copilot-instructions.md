@@ -46,4 +46,4 @@ ActiveRecord's power comes from Arel. When building queries, subqueries, or SQL 
 
 ## Measuring progress
 
-Progress is measured by `npm run test:compare`, which matches our test files and test names against the actual Rails test suite. CI runs this on every push.
+Progress is measured by `pnpm run test:compare`, which matches our test files and test names against the actual Rails test suite. CI runs this on every push.

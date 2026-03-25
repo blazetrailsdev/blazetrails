@@ -65,7 +65,7 @@ The primary measure of progress is the `test:compare` script output.
 It compares our test files and test names against the Rails test suite:
 
 ```bash
-npm run test:compare
+pnpm run test:compare
 ```
 
 Run it to see current stats per package. Use `--package <name>` for a single package.

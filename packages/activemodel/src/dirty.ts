@@ -147,7 +147,7 @@ export class DirtyTracker {
       if (attributes instanceof Map) {
         attributes.set(name, original);
       } else {
-        attributes.writeFromDatabase(name, original);
+        attributes.writeCastValue(name, original);
       }
     }
     this._changedAttributes.clear();

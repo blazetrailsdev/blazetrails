@@ -881,11 +881,86 @@ describe("TestDefaultAutosaveAssociationOnAHasOneAssociation", () => {
     // child should be persisted
     expect(account.isNewRecord()).toBe(false);
   });
-  it.skip("callbacks firing order on update", () => {
-    /* needs more callback infrastructure */
+  it("callbacks firing order on update", async () => {
+    const log: string[] = [];
+    class CuFirm extends Base {
+      static {
+        this.attribute("name", "string");
+        this.beforeSave(function () {
+          log.push("before_save");
+        });
+        this.afterUpdate(function () {
+          log.push("after_update");
+        });
+        this.afterSave(function () {
+          log.push("after_save");
+        });
+      }
+    }
+    class CuAccount extends Base {
+      static {
+        this.attribute("credit_limit", "integer");
+        this.attribute("cu_firm_id", "integer");
+      }
+    }
+    CuFirm.adapter = adapter;
+    CuAccount.adapter = adapter;
+    registerModel("CuFirm", CuFirm);
+    registerModel("CuAccount", CuAccount);
+    (CuFirm as any)._associations = [
+      {
+        type: "hasOne",
+        name: "cuAccount",
+        options: { autosave: true, className: "CuAccount", foreignKey: "cu_firm_id" },
+      },
+    ];
+    const firm = await CuFirm.create({ name: "LLC" });
+    log.length = 0;
+    firm.name = "Updated LLC";
+    const account = new CuAccount({ credit_limit: 200 });
+    cacheAssoc(firm, "cuAccount", account);
+    await firm.save();
+    expect(log.indexOf("before_save")).toBeLessThan(log.indexOf("after_update"));
+    expect(log.indexOf("after_update")).toBeLessThan(log.indexOf("after_save"));
+    expect(account.isNewRecord()).toBe(false);
   });
-  it.skip("callbacks firing order on save", () => {
-    /* needs more callback infrastructure */
+  it("callbacks firing order on save", async () => {
+    const log: string[] = [];
+    class CsFirm extends Base {
+      static {
+        this.attribute("name", "string");
+        this.beforeSave(function () {
+          log.push("before_save");
+        });
+        this.afterSave(function () {
+          log.push("after_save");
+        });
+      }
+    }
+    class CsAccount extends Base {
+      static {
+        this.attribute("credit_limit", "integer");
+        this.attribute("cs_firm_id", "integer");
+      }
+    }
+    CsFirm.adapter = adapter;
+    CsAccount.adapter = adapter;
+    registerModel("CsFirm", CsFirm);
+    registerModel("CsAccount", CsAccount);
+    (CsFirm as any)._associations = [
+      {
+        type: "hasOne",
+        name: "csAccount",
+        options: { autosave: true, className: "CsAccount", foreignKey: "cs_firm_id" },
+      },
+    ];
+    const firm = await CsFirm.create({ name: "LLC" });
+    log.length = 0;
+    firm.name = "Updated";
+    await firm.save();
+    expect(log).toContain("before_save");
+    expect(log).toContain("after_save");
+    expect(log.indexOf("before_save")).toBeLessThan(log.indexOf("after_save"));
   });
   it("callbacks on child when parent autosaves child", async () => {
     const log: string[] = [];
@@ -1099,8 +1174,21 @@ describe("TestAutosaveAssociationOnAHasOneAssociation", () => {
   it.skip("should still raise an ActiveRecordRecord Invalid exception if we want that", () => {
     /* save! not fully implemented */
   });
-  it.skip("should not save and return false if a callback cancelled saving", () => {
-    /* callbacks not implemented */
+  it("should not save and return false if a callback cancelled saving", async () => {
+    class CcPirate extends Base {
+      static {
+        this.attribute("catchphrase", "string");
+        this.beforeSave(function () {
+          return false;
+        });
+      }
+    }
+    CcPirate.adapter = adapter;
+    registerModel("CcPirate", CcPirate);
+    const pirate = new CcPirate({ catchphrase: "Cancelled" });
+    const saved = await pirate.save();
+    expect(saved).toBe(false);
+    expect(pirate.isNewRecord()).toBe(true);
   });
   it("should rollback any changes if an exception occurred while saving", async () => {
     const { Pirate, Ship } = makeModels();
@@ -1432,8 +1520,22 @@ describe("TestAutosaveAssociationOnABelongsToAssociation", () => {
   it.skip("should still raise an ActiveRecordRecord Invalid exception if we want that", () => {
     /* save! not fully implemented */
   });
-  it.skip("should not save and return false if a callback cancelled saving", () => {
-    /* callbacks not implemented */
+  it("should not save and return false if a callback cancelled saving", async () => {
+    class CcShip extends Base {
+      static {
+        this.attribute("name", "string");
+        this.attribute("pirate_id", "integer");
+        this.beforeSave(function () {
+          return false;
+        });
+      }
+    }
+    CcShip.adapter = adapter;
+    registerModel("CcShip", CcShip);
+    const ship = new CcShip({ name: "Cancelled" });
+    const saved = await ship.save();
+    expect(saved).toBe(false);
+    expect(ship.isNewRecord()).toBe(true);
   });
   it("should rollback any changes if an exception occurred while saving", async () => {
     const { Pirate, Ship } = makeModels();
@@ -1850,23 +1952,198 @@ describe("TestHasManyAutosaveAssociationWhichItselfHasAutosaveAssociations", () 
 });
 
 describe("TestAutosaveAssociationValidationMethodsGeneration", () => {
-  it.skip("should generate validation methods for has_many associations", () => {
-    /* needs autosave association integration */
+  let adapter: DatabaseAdapter;
+  beforeEach(() => {
+    adapter = freshAdapter();
   });
-  it.skip("should generate validation methods for has_one associations with :validate => true", () => {
-    /* needs autosave association integration */
+
+  it("should generate validation methods for has_many associations", async () => {
+    class VmParent extends Base {
+      static {
+        this._tableName = "vm_parents";
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class VmChild extends Base {
+      static {
+        this._tableName = "vm_children";
+        this.attribute("val", "string");
+        this.attribute("vm_parent_id", "integer");
+        this.adapter = adapter;
+        this.validates("val", { presence: true });
+      }
+    }
+    registerModel("VmParent", VmParent);
+    registerModel("VmChild", VmChild);
+    (VmParent as any)._associations = [
+      {
+        type: "hasMany",
+        name: "vmChildren",
+        options: { className: "VmChild", foreignKey: "vm_parent_id", validate: true },
+      },
+    ];
+    const parent = await VmParent.create({ name: "P" });
+    const child = new VmChild({ val: "" });
+    cacheAssoc(parent, "vmChildren", [child]);
+    expect(parent.isValid()).toBe(false);
   });
-  it.skip("should not generate validation methods for has_one associations without :validate => true", () => {
-    /* needs autosave association integration */
+
+  it("should generate validation methods for has_one associations with :validate => true", async () => {
+    class VoParent extends Base {
+      static {
+        this._tableName = "vo_parents";
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class VoChild extends Base {
+      static {
+        this._tableName = "vo_children";
+        this.attribute("val", "string");
+        this.attribute("vo_parent_id", "integer");
+        this.adapter = adapter;
+        this.validates("val", { presence: true });
+      }
+    }
+    registerModel("VoParent", VoParent);
+    registerModel("VoChild", VoChild);
+    (VoParent as any)._associations = [
+      {
+        type: "hasOne",
+        name: "voChild",
+        options: { className: "VoChild", foreignKey: "vo_parent_id", validate: true },
+      },
+    ];
+    const parent = await VoParent.create({ name: "P" });
+    const child = new VoChild({ val: "" });
+    cacheAssoc(parent, "voChild", child);
+    expect(parent.isValid()).toBe(false);
   });
-  it.skip("should generate validation methods for belongs_to associations with :validate => true", () => {
-    /* needs autosave association integration */
+
+  it("should not generate validation methods for has_one associations without :validate => true", async () => {
+    class NvParent extends Base {
+      static {
+        this._tableName = "nv_parents";
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class NvChild extends Base {
+      static {
+        this._tableName = "nv_children";
+        this.attribute("val", "string");
+        this.attribute("nv_parent_id", "integer");
+        this.adapter = adapter;
+        this.validates("val", { presence: true });
+      }
+    }
+    registerModel("NvParent", NvParent);
+    registerModel("NvChild", NvChild);
+    (NvParent as any)._associations = [
+      {
+        type: "hasOne",
+        name: "nvChild",
+        options: { className: "NvChild", foreignKey: "nv_parent_id", validate: false },
+      },
+    ];
+    const parent = await NvParent.create({ name: "P" });
+    const child = new NvChild({ val: "" });
+    cacheAssoc(parent, "nvChild", child);
+    expect(parent.isValid()).toBe(true);
   });
-  it.skip("should not generate validation methods for belongs_to associations without :validate => true", () => {
-    /* needs autosave association integration */
+
+  it("should generate validation methods for belongs_to associations with :validate => true", async () => {
+    class BvOwner extends Base {
+      static {
+        this._tableName = "bv_owners";
+        this.attribute("name", "string");
+        this.adapter = adapter;
+        this.validates("name", { presence: true });
+      }
+    }
+    class BvChild extends Base {
+      static {
+        this._tableName = "bv_children";
+        this.attribute("val", "string");
+        this.attribute("bv_owner_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("BvOwner", BvOwner);
+    registerModel("BvChild", BvChild);
+    (BvChild as any)._associations = [
+      {
+        type: "belongsTo",
+        name: "bvOwner",
+        options: { className: "BvOwner", foreignKey: "bv_owner_id", validate: true },
+      },
+    ];
+    const child = await BvChild.create({ val: "ok" });
+    const owner = new BvOwner({ name: "" });
+    cacheAssoc(child, "bvOwner", owner);
+    expect(child.isValid()).toBe(false);
   });
-  it.skip("should generate validation methods for HABTM associations with :validate => true", () => {
-    /* needs autosave association integration */
+
+  it("should not generate validation methods for belongs_to associations without :validate => true", async () => {
+    class NbOwner extends Base {
+      static {
+        this._tableName = "nb_owners";
+        this.attribute("name", "string");
+        this.adapter = adapter;
+        this.validates("name", { presence: true });
+      }
+    }
+    class NbChild extends Base {
+      static {
+        this._tableName = "nb_children";
+        this.attribute("val", "string");
+        this.attribute("nb_owner_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("NbOwner", NbOwner);
+    registerModel("NbChild", NbChild);
+    (NbChild as any)._associations = [
+      {
+        type: "belongsTo",
+        name: "nbOwner",
+        options: { className: "NbOwner", foreignKey: "nb_owner_id", validate: false },
+      },
+    ];
+    const child = await NbChild.create({ val: "ok" });
+    const owner = new NbOwner({ name: "" });
+    cacheAssoc(child, "nbOwner", owner);
+    expect(child.isValid()).toBe(true);
+  });
+
+  it("should generate validation methods for HABTM associations with :validate => true", async () => {
+    class HvParent extends Base {
+      static {
+        this._tableName = "hv_parents";
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class HvTag extends Base {
+      static {
+        this._tableName = "hv_tags";
+        this.attribute("label", "string");
+        this.adapter = adapter;
+        this.validates("label", { presence: true });
+      }
+    }
+    registerModel("HvParent", HvParent);
+    registerModel("HvTag", HvTag);
+    Associations.hasAndBelongsToMany.call(HvParent, "hvTags", {
+      className: "HvTag",
+      joinTable: "hv_parents_hv_tags",
+      validate: true,
+    });
+    const parent = await HvParent.create({ name: "P" });
+    const tag = new HvTag({ label: "" });
+    cacheAssoc(parent, "hvTags", [tag]);
+    expect(parent.isValid()).toBe(false);
   });
 });
 

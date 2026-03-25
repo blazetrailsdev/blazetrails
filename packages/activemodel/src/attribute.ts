@@ -102,6 +102,18 @@ export class Attribute {
     return this.withValueFromDatabase(this.valueForDatabase);
   }
 
+  /**
+   * Force-set the memoized cast value without replacing the Attribute or
+   * losing valueBeforeTypeCast. Used for post-cast transformations like
+   * normalization and nullifyBlanks.
+   */
+  overrideCastValue(value: unknown): void {
+    this._value = value;
+    this._hasValue = true;
+    this._valueForDatabase = undefined;
+    this._hasValueForDatabase = false;
+  }
+
   equals(other: Attribute): boolean {
     return (
       this.constructor === other.constructor &&

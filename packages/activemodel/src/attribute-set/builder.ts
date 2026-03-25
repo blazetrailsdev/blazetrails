@@ -73,8 +73,12 @@ export class AttributeSet {
   }
 
   writeCastValue(name: string, value: unknown): void {
-    const attr = this.getAttribute(name);
-    this.attributes.set(name, attr.withCastValue(value));
+    const attr = this.attributes.get(name);
+    if (attr) {
+      attr.overrideCastValue(value);
+    } else {
+      this.attributes.set(name, Attribute.withCastValue(name, value, new ValueType()));
+    }
   }
 
   toHash(): Record<string, unknown> {

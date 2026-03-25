@@ -8,7 +8,9 @@ import { Base, MigrationContext, MigrationRunner, Migrator } from "./index.js";
 import type { MigrationProxy } from "./migrator.js";
 import { createTestAdapter, adapterType } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
-import { Migration, TableDefinition, Schema } from "./migration.js";
+import { Migration } from "./migration.js";
+import { TableDefinition } from "./connection-adapters/abstract/schema-definitions.js";
+import { Schema } from "./schema.js";
 
 function freshContext(): { adapter: DatabaseAdapter; ctx: MigrationContext } {
   const adapter = createTestAdapter();

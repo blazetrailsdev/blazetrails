@@ -1,5 +1,5 @@
 import type { Errors } from "./errors.js";
-import { isBlank } from "@rails-ts/activesupport";
+import { isBlank, underscore } from "@rails-ts/activesupport";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyRecord = any;
@@ -57,10 +57,7 @@ export abstract class Validator {
   }
 
   static get kind(): string {
-    return this.name
-      .replace(/([a-z])([A-Z])/g, "$1_$2")
-      .toLowerCase()
-      .replace(/_validator$/, "");
+    return underscore(this.name).replace(/_validator$/, "");
   }
 
   get kind(): string {
@@ -79,11 +76,11 @@ export class EachValidator extends Validator {
   readonly attributes: string[];
 
   constructor(options: Record<string, unknown> & { attributes?: string | string[] }) {
-    const attrs = options.attributes ?? [];
+    const rawAttrs = options.attributes;
     const { attributes: _, ...rest } = options;
     super(rest);
-    this.attributes = Array.isArray(attrs) ? attrs : [attrs];
-    if (this.attributes.length === 0) {
+    this.attributes = rawAttrs === undefined ? [] : Array.isArray(rawAttrs) ? rawAttrs : [rawAttrs];
+    if (this.attributes.length === 0 || this.attributes.some((attr) => isBlank(attr))) {
       throw new Error(":attributes cannot be blank");
     }
     this.checkValidity();

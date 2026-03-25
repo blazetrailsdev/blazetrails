@@ -20,8 +20,12 @@ export function serializableHash(
   record: AnyRecord,
   options: SerializeOptions = {},
 ): Record<string, unknown> {
-  const attrs: Map<string, unknown> = record._attributes ?? new Map();
-  let keys = Array.from(attrs.keys());
+  const attrHash =
+    record.attributes ??
+    (record._attributes instanceof Map
+      ? Object.fromEntries(record._attributes)
+      : (record._attributes?.toHash?.() ?? {}));
+  let keys = Object.keys(attrHash);
 
   if (options.only) {
     keys = keys.filter((k) => options.only!.includes(k));
@@ -31,7 +35,7 @@ export function serializableHash(
 
   const result: Record<string, unknown> = {};
   for (const key of keys) {
-    result[key] = attrs.get(key);
+    result[key] = attrHash[key];
   }
 
   if (options.methods) {

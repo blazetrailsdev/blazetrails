@@ -11,8 +11,13 @@ export class DirtyTracker {
   /**
    * Take a snapshot of the current attributes as the "clean" state.
    */
-  snapshot(attributes: Map<string, unknown>): void {
-    this._originalAttributes = new Map(attributes);
+  snapshot(attributes: Map<string, unknown> | { toHash(): Record<string, unknown> }): void {
+    if (attributes instanceof Map) {
+      this._originalAttributes = new Map(attributes);
+    } else {
+      const hash = attributes.toHash();
+      this._originalAttributes = new Map(Object.entries(hash));
+    }
     this._changedAttributes.clear();
   }
 
@@ -82,9 +87,15 @@ export class DirtyTracker {
   /**
    * Commit changes — the current state becomes the "clean" state.
    */
-  changesApplied(currentAttributes: Map<string, unknown>): void {
+  changesApplied(
+    currentAttributes: Map<string, unknown> | { toHash(): Record<string, unknown> },
+  ): void {
     this._previousChanges = new Map(this._changedAttributes);
-    this._originalAttributes = new Map(currentAttributes);
+    if (currentAttributes instanceof Map) {
+      this._originalAttributes = new Map(currentAttributes);
+    } else {
+      this._originalAttributes = new Map(Object.entries(currentAttributes.toHash()));
+    }
     this._changedAttributes.clear();
   }
 
@@ -123,10 +134,16 @@ export class DirtyTracker {
   /**
    * Restore attributes to their original values.
    */
-  restore(attributes: Map<string, unknown>): void {
+  restore(
+    attributes: Map<string, unknown> | { writeCastValue(name: string, value: unknown): void },
+  ): void {
     for (const [name] of this._changedAttributes) {
       const original = this._originalAttributes.get(name);
-      attributes.set(name, original);
+      if (attributes instanceof Map) {
+        attributes.set(name, original);
+      } else {
+        attributes.writeCastValue(name, original);
+      }
     }
     this._changedAttributes.clear();
   }

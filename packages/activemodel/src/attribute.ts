@@ -1,0 +1,240 @@
+import { Type } from "./type/value.js";
+import { ValueType } from "./type/value.js";
+
+/**
+ * Wraps a single attribute value with its type, tracking the original
+ * value before type cast and memoizing the cast result.
+ *
+ * Mirrors: ActiveModel::Attribute
+ */
+export class Attribute {
+  readonly name: string;
+  readonly valueBeforeTypeCast: unknown;
+  readonly type: Type;
+  private originalAttribute: Attribute | null;
+  private _value: unknown;
+  private _hasValue: boolean;
+  private _valueForDatabase: unknown;
+  private _hasValueForDatabase: boolean;
+
+  constructor(
+    name: string,
+    valueBeforeTypeCast: unknown,
+    type: Type,
+    originalAttribute: Attribute | null = null,
+    value?: unknown,
+  ) {
+    this.name = name;
+    this.valueBeforeTypeCast = valueBeforeTypeCast;
+    this.type = type;
+    this.originalAttribute = originalAttribute;
+    if (value !== undefined) {
+      this._value = value;
+      this._hasValue = true;
+    } else {
+      this._value = undefined;
+      this._hasValue = false;
+    }
+    this._valueForDatabase = undefined;
+    this._hasValueForDatabase = false;
+  }
+
+  get value(): unknown {
+    if (!this._hasValue) {
+      this._value = this.typeCast(this.valueBeforeTypeCast);
+      this._hasValue = true;
+    }
+    return this._value;
+  }
+
+  get originalValue(): unknown {
+    if (this.isAssigned()) {
+      return this.originalAttribute!.originalValue;
+    }
+    return this.typeCast(this.valueBeforeTypeCast);
+  }
+
+  get valueForDatabase(): unknown {
+    if (!this._hasValueForDatabase) {
+      this._valueForDatabase = this.type.serialize(this.value);
+      this._hasValueForDatabase = true;
+    }
+    return this._valueForDatabase;
+  }
+
+  isChanged(): boolean {
+    return this.changedFromAssignment() || this.changedInPlace();
+  }
+
+  changedInPlace(): boolean {
+    return false;
+  }
+
+  withValueFromUser(value: unknown): Attribute {
+    return Attribute.fromUser(this.name, value, this.type, this.originalAttribute ?? this);
+  }
+
+  withValueFromDatabase(value: unknown): Attribute {
+    return Attribute.fromDatabase(this.name, value, this.type);
+  }
+
+  withCastValue(value: unknown): Attribute {
+    return new WithCastValue(this.name, value, this.type);
+  }
+
+  withType(type: Type): Attribute {
+    return new (this.constructor as typeof Attribute)(
+      this.name,
+      this.valueBeforeTypeCast,
+      type,
+      this.originalAttribute,
+    );
+  }
+
+  isInitialized(): boolean {
+    return true;
+  }
+
+  cameFromUser(): boolean {
+    return false;
+  }
+
+  hasBeenRead(): boolean {
+    return this._hasValue;
+  }
+
+  forgettingAssignment(): Attribute {
+    return this.withValueFromDatabase(this.valueForDatabase);
+  }
+
+  equals(other: Attribute): boolean {
+    return (
+      this.constructor === other.constructor &&
+      this.name === other.name &&
+      this.valueBeforeTypeCast === other.valueBeforeTypeCast &&
+      this.type === other.type
+    );
+  }
+
+  protected typeCast(_value: unknown): unknown {
+    throw new Error("NotImplementedError: subclasses must implement typeCast");
+  }
+
+  private isAssigned(): boolean {
+    return this.originalAttribute !== null;
+  }
+
+  private changedFromAssignment(): boolean {
+    return this.isAssigned();
+  }
+
+  // --- Factory methods ---
+
+  static fromDatabase(name: string, value: unknown, type: Type, castValue?: unknown): FromDatabase {
+    return new FromDatabase(name, value, type, null, castValue);
+  }
+
+  static fromUser(
+    name: string,
+    value: unknown,
+    type: Type,
+    originalAttribute: Attribute | null = null,
+  ): FromUser {
+    return new FromUser(name, value, type, originalAttribute);
+  }
+
+  static withCastValue(name: string, value: unknown, type: Type): WithCastValue {
+    return new WithCastValue(name, value, type);
+  }
+
+  static null(name: string): Null {
+    return new Null(name);
+  }
+
+  static uninitialized(name: string, type: Type): Uninitialized {
+    return new Uninitialized(name, type);
+  }
+
+  /**
+   * Create an attribute where we already have both the raw and cast values.
+   * Used in the Model constructor after applying normalization/nullify.
+   */
+  static fromUserWithValue(
+    name: string,
+    rawValue: unknown,
+    castValue: unknown,
+    type: Type,
+  ): FromUser {
+    return new FromUser(name, rawValue, type, null, castValue);
+  }
+}
+
+export class FromDatabase extends Attribute {
+  protected typeCast(value: unknown): unknown {
+    return this.type.deserialize(value);
+  }
+}
+
+export class FromUser extends Attribute {
+  protected typeCast(value: unknown): unknown {
+    return this.type.cast(value);
+  }
+
+  cameFromUser(): boolean {
+    return true;
+  }
+}
+
+export class WithCastValue extends Attribute {
+  protected typeCast(value: unknown): unknown {
+    return value;
+  }
+
+  changedInPlace(): boolean {
+    return false;
+  }
+}
+
+export class Null extends Attribute {
+  constructor(name: string) {
+    super(name, null, new ValueType());
+  }
+
+  protected typeCast(): unknown {
+    return null;
+  }
+
+  withValueFromDatabase(_value: unknown): Attribute {
+    throw new Error(`can't write unknown attribute \`${this.name}\``);
+  }
+
+  withValueFromUser(_value: unknown): Attribute {
+    throw new Error(`can't write unknown attribute \`${this.name}\``);
+  }
+}
+
+export class Uninitialized extends Attribute {
+  constructor(name: string, type: Type) {
+    super(name, null, type);
+  }
+
+  get value(): unknown {
+    return undefined;
+  }
+
+  get valueForDatabase(): unknown {
+    return undefined;
+  }
+
+  isInitialized(): boolean {
+    return false;
+  }
+
+  forgettingAssignment(): Attribute {
+    return new Uninitialized(this.name, this.type);
+  }
+
+  protected typeCast(): unknown {
+    return undefined;
+  }
+}

@@ -920,6 +920,9 @@ describe("TestDefaultAutosaveAssociationOnAHasOneAssociation", () => {
     const account = new CuAccount({ credit_limit: 200 });
     cacheAssoc(firm, "cuAccount", account);
     await firm.save();
+    expect(log).toContain("before_save");
+    expect(log).toContain("after_update");
+    expect(log).toContain("after_save");
     expect(log.indexOf("before_save")).toBeLessThan(log.indexOf("after_update"));
     expect(log.indexOf("after_update")).toBeLessThan(log.indexOf("after_save"));
     expect(account.isNewRecord()).toBe(false);
@@ -2526,9 +2529,14 @@ describe("TestAutosaveAssociationOnAHasOneThroughAssociation", () => {
     const org = await HotOrg.create({ name: "Org" });
     const member = await HotMember.create({ name: "M" });
     await HotDetail.create({ hot_org_id: org.id, hot_member_id: member.id });
-    // Saving member should not raise even if org is cached — has_one_through is not autosaved
+    // Cache the through target — even cached, has_one_through should not autosave
+    cacheAssoc(member, "hotOrg", org);
+    org.name = "Modified";
     const saved = await member.save();
     expect(saved).toBe(true);
+    // Org should NOT have been persisted with the change
+    const reloadedOrg = await HotOrg.find(org.id);
+    expect(reloadedOrg.name).toBe("Org");
   });
   it("should not reversed has one through model", async () => {
     const adapter = freshAdapter();
@@ -2584,8 +2592,12 @@ describe("TestAutosaveAssociationOnAHasOneThroughAssociation", () => {
     const org = await RevOrg.create({ name: "Org" });
     const member = await RevMember.create({ name: "M" });
     await RevDetail.create({ rev_org_id: org.id, rev_member_id: member.id });
+    cacheAssoc(org, "revMember", member);
+    member.name = "Modified";
     const saved = await org.save();
     expect(saved).toBe(true);
+    const reloadedMember = await RevMember.find(member.id);
+    expect(reloadedMember.name).toBe("M");
   });
 });
 
@@ -2790,10 +2802,12 @@ describe("should update children when autosave is true and parent is new but chi
     const parent = new UcParent({ name: "new parent" });
     child.val = "updated";
     cacheAssoc(parent, "ucChildren", [child]);
-    await parent.save();
+    const saved = await parent.save();
+    expect(saved).toBe(true);
     expect(parent.isNewRecord()).toBe(false);
     const reloaded = await UcChild.find(child.id);
     expect(reloaded.val).toBe("updated");
+    expect(reloaded.readAttribute("uc_parent_id")).toBe(parent.id);
   });
   it("should automatically save the associated models", async () => {
     const adapter = freshAdapter();

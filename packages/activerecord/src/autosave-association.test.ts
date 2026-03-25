@@ -959,11 +959,14 @@ describe("TestDefaultAutosaveAssociationOnAHasOneAssociation", () => {
     ];
     const firm = await CsFirm.create({ name: "LLC" });
     log.length = 0;
+    const account = new CsAccount({ credit_limit: 10 });
+    cacheAssoc(firm, "csAccount", account);
     firm.name = "Updated";
     await firm.save();
     expect(log).toContain("before_save");
     expect(log).toContain("after_save");
     expect(log.indexOf("before_save")).toBeLessThan(log.indexOf("after_save"));
+    expect(account.isNewRecord()).toBe(false);
   });
   it("callbacks on child when parent autosaves child", async () => {
     const log: string[] = [];

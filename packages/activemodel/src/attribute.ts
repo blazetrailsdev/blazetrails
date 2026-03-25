@@ -149,7 +149,10 @@ export class Attribute {
   // --- Factory methods ---
 
   static fromDatabase(name: string, value: unknown, type: Type, castValue?: unknown): FromDatabase {
-    return new FromDatabase(name, value, type, null, castValue);
+    if (arguments.length >= 4) {
+      return new FromDatabase(name, value, type, null, castValue);
+    }
+    return new FromDatabase(name, value, type, null);
   }
 
   static fromUser(

@@ -10,8 +10,8 @@ export class DirtyTracker {
 
   /**
    * Take a snapshot of the current attributes as the "clean" state.
-   * For AttributeSet, uses snapshotValues() which captures already-read
-   * values without forcing lazy evaluation on unread attributes.
+   * For AttributeSet, uses snapshotValues() which captures cast
+   * values for all initialized attributes.
    */
   snapshot(attributes: Map<string, unknown> | { snapshotValues(): Map<string, unknown> }): void {
     if (attributes instanceof Map) {

@@ -40,15 +40,8 @@ describe("SchemaDumperTest", () => {
     expect(output).toContain("users");
   });
 
-  it("schema dump uses force cascade on create table", async () => {
-    await ctx.createTable("authors", {}, (t) => {
-      t.string("name");
-    });
-    const output = SchemaDumper.dump(ctx);
-    expect(output).toContain("createTable");
-    expect(output).toContain("authors");
-    // Our dumper emits createTable — force: cascade is a PG-specific concern
-    // that we don't emit yet, but the table should be present
+  it.skip("schema dump uses force cascade on create table", () => {
+    /* needs force: :cascade option emitted in SchemaDumper output */
   });
 
   it.skip("schema dump excludes sqlite sequence", () => {
@@ -230,12 +223,8 @@ describe("SchemaDumperTest", () => {
     expect(output).toContain("scale: 2");
   });
 
-  it("schema dump includes bigint default", async () => {
-    await ctx.createTable("defaults", {}, (t) => {
-      t.integer("bigint_default", { default: 0 });
-    });
-    const output = SchemaDumper.dump(ctx);
-    expect(output).toMatch(/integer.*"bigint_default".*default: 0/);
+  it.skip("schema dump includes bigint default", () => {
+    /* needs bigint column type in TableDefinition */
   });
 
   it.skip("schema dump includes limit on array type", () => {
@@ -275,12 +264,8 @@ describe("SchemaDumperTest", () => {
     expect(output).toMatch(/string.*"id".*null: false/);
   });
 
-  it("schema dump keeps id false when id is false and unique not null column added", async () => {
-    await ctx.createTable("string_key_objects", { id: false }, (t) => {
-      t.string("id", { null: false });
-    });
-    const output = SchemaDumper.dump(ctx);
-    expect(output).toContain("id: false");
+  it.skip("schema dump keeps id false when id is false and unique not null column added", () => {
+    /* needs unique constraint + id: false */
   });
 
   it.skip("foreign keys are dumped at the bottom to circumvent dependency issues", () => {
@@ -293,15 +278,8 @@ describe("SchemaDumperTest", () => {
     /* needs foreign key dump config */
   });
 
-  it("schema dump with table name prefix and suffix", async () => {
-    ctx.tableNamePrefix = "pre_";
-    ctx.tableNameSuffix = "_suf";
-    await ctx.createTable("pre_users_suf", {}, (t) => {
-      t.string("name");
-    });
-    const output = SchemaDumper.dump(ctx);
-    // Dumper should include the table (prefix/suffix are part of the DB table name)
-    expect(output).toContain("createTable");
+  it.skip("schema dump with table name prefix and suffix", () => {
+    /* needs prefix/suffix stripping in SchemaDumper */
   });
 
   it.skip("schema dump with table name prefix and suffix regexp escape", () => {
@@ -383,7 +361,7 @@ describe("SchemaDumperDefaultsTest", () => {
     const output = SchemaDumper.dump(ctx);
     expect(output).toMatch(/string.*"string_with_default".*default: "Hello!"/);
     expect(output).toMatch(/date.*"date_with_default".*default: "2014-06-05"/);
-    expect(output).toMatch(/datetime.*"datetime_with_default"/);
+    expect(output).toMatch(/datetime.*"datetime_with_default".*default:/);
     expect(output).toMatch(/decimal.*"decimal_with_default".*precision: 3.*scale: 2/);
   });
 

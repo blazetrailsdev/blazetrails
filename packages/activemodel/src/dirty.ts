@@ -1,3 +1,9 @@
+import { AttributeSet } from "./attribute-set/builder.js";
+
+function resolveValue(value: unknown): unknown {
+  return AttributeSet.resolveSnapshotValue(value);
+}
+
 /**
  * Dirty tracking mixin — tracks attribute changes on a model.
  *
@@ -5,19 +11,22 @@
  */
 export class DirtyTracker {
   private _originalAttributes: Map<string, unknown> = new Map();
+  private _originalHas: Set<string> = new Set();
   private _changedAttributes: Map<string, [unknown, unknown]> = new Map();
   private _previousChanges: Map<string, [unknown, unknown]> = new Map();
 
   /**
    * Take a snapshot of the current attributes as the "clean" state.
-   * For AttributeSet, uses snapshotValues() which captures cast
-   * values for all initialized attributes.
+   * For AttributeSet, uses snapshotValues() which captures values
+   * without forcing lazy evaluation on unread FromDatabase attributes.
    */
   snapshot(attributes: Map<string, unknown> | { snapshotValues(): Map<string, unknown> }): void {
     if (attributes instanceof Map) {
       this._originalAttributes = new Map(attributes);
+      this._originalHas = new Set(attributes.keys());
     } else {
       this._originalAttributes = attributes.snapshotValues();
+      this._originalHas = new Set(this._originalAttributes.keys());
     }
     this._changedAttributes.clear();
   }
@@ -26,11 +35,16 @@ export class DirtyTracker {
     if (from === to) {
       this._changedAttributes.delete(name);
     } else {
-      const original = this._originalAttributes.get(name);
-      if (to === original) {
-        this._changedAttributes.delete(name);
+      if (!this._originalHas.has(name)) {
+        // Attribute was absent/uninitialized — any write is a change
+        this._changedAttributes.set(name, [undefined, to]);
       } else {
-        this._changedAttributes.set(name, [this._originalAttributes.get(name), to]);
+        const original = resolveValue(this._originalAttributes.get(name));
+        if (to === original) {
+          this._changedAttributes.delete(name);
+        } else {
+          this._changedAttributes.set(name, [original, to]);
+        }
       }
     }
   }
@@ -57,7 +71,7 @@ export class DirtyTracker {
 
   attributeWas(name: string): unknown {
     const change = this._changedAttributes.get(name);
-    return change ? change[0] : this._originalAttributes.get(name);
+    return change ? change[0] : resolveValue(this._originalAttributes.get(name));
   }
 
   attributeChange(name: string): [unknown, unknown] | undefined {
@@ -70,8 +84,10 @@ export class DirtyTracker {
     this._previousChanges = new Map(this._changedAttributes);
     if (currentAttributes instanceof Map) {
       this._originalAttributes = new Map(currentAttributes);
+      this._originalHas = new Set(currentAttributes.keys());
     } else {
       this._originalAttributes = currentAttributes.snapshotValues();
+      this._originalHas = new Set(this._originalAttributes.keys());
     }
     this._changedAttributes.clear();
   }
@@ -95,9 +111,9 @@ export class DirtyTracker {
     }
   }
 
-  restore(attributes: Map<string, unknown> | { set(name: string, value: unknown): void }): void {
+  restore(attributes: { set(name: string, value: unknown): void }): void {
     for (const [name] of this._changedAttributes) {
-      const original = this._originalAttributes.get(name);
+      const original = resolveValue(this._originalAttributes.get(name));
       attributes.set(name, original);
     }
     this._changedAttributes.clear();

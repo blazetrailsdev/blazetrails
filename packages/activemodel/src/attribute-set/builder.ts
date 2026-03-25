@@ -105,16 +105,36 @@ export class AttributeSet {
   }
 
   /**
-   * Capture current cast values for all initialized attributes.
+   * Capture current values for all initialized attributes.
+   * For already-read attributes, captures the cast value directly.
+   * For unread attributes, clones the Attribute so it can be lazily
+   * evaluated later without affecting the original.
    */
   snapshotValues(): Map<string, unknown> {
     const result = new Map<string, unknown>();
     for (const [name, attr] of this.attributes) {
       if (attr.isInitialized()) {
-        result.set(name, attr.value);
+        if (attr.hasBeenRead()) {
+          result.set(name, attr.value);
+        } else {
+          // Clone so lazy evaluation doesn't affect the live attribute
+          const cloned = Object.assign(Object.create(Object.getPrototypeOf(attr)), attr);
+          result.set(name, { __lazyAttr: cloned });
+        }
       }
     }
     return result;
+  }
+
+  /**
+   * Resolve a snapshot value — handles both direct values and lazy Attribute clones.
+   */
+  static resolveSnapshotValue(value: unknown): unknown {
+    if (value && typeof value === "object" && "__lazyAttr" in value) {
+      const attr = (value as { __lazyAttr: Attribute }).__lazyAttr;
+      return attr.value;
+    }
+    return value;
   }
 
   valuesForDatabase(): Record<string, unknown> {

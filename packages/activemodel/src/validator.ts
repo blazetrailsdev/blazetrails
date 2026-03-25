@@ -20,8 +20,6 @@ export interface ValidatorContract {
   validate(record: AnyRecord, attribute: string, value: unknown, errors: Errors): void;
 }
 
-// Re-export as Validator for backward compat
-
 function evaluateCondition(record: AnyRecord, cond: ConditionFn): boolean {
   if (typeof cond === "function") return cond(record);
   const method = record[cond];
@@ -50,7 +48,7 @@ export function shouldValidate(record: AnyRecord, options: ConditionalOptions): 
  *
  * Mirrors: ActiveModel::Validator
  */
-export class Validator {
+export abstract class Validator {
   readonly options: Record<string, unknown>;
 
   constructor(options: Record<string, unknown> = {}) {
@@ -69,9 +67,7 @@ export class Validator {
     return (this.constructor as typeof Validator).kind;
   }
 
-  validate(_record: AnyRecord): void {
-    throw new Error("Subclasses must implement a validate(record) method.");
-  }
+  abstract validate(_record: AnyRecord): void;
 }
 
 /**
@@ -82,7 +78,7 @@ export class Validator {
 export class EachValidator extends Validator {
   readonly attributes: string[];
 
-  constructor(options: Record<string, unknown> & { attributes?: string[] }) {
+  constructor(options: Record<string, unknown> & { attributes?: string | string[] }) {
     const attrs = options.attributes ?? [];
     const { attributes: _, ...rest } = options;
     super(rest);
@@ -96,7 +92,7 @@ export class EachValidator extends Validator {
   validate(record: AnyRecord): void {
     for (const attribute of this.attributes) {
       const value = record.readAttribute ? record.readAttribute(attribute) : record[attribute];
-      if (value === null && this.options.allowNil) continue;
+      if (value == null && this.options.allowNil) continue;
       if (isBlank(value) && this.options.allowBlank) continue;
       this.validateEach(record, attribute, value);
     }
@@ -120,7 +116,7 @@ export class BlockValidator extends EachValidator {
   private block: (record: AnyRecord, attribute: string, value: unknown) => void;
 
   constructor(
-    options: Record<string, unknown> & { attributes?: string[] },
+    options: Record<string, unknown> & { attributes?: string | string[] },
     block: (record: AnyRecord, attribute: string, value: unknown) => void,
   ) {
     super(options);

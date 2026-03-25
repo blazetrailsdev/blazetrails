@@ -2241,6 +2241,7 @@ export class Base extends Model {
 
     const saveBody = async (): Promise<boolean> => {
       let saved = false;
+      this._transactionAction = undefined;
       if (!(await ctor._callbackChain.runBefore("save", this))) return false;
 
       const belongsToOk = await autosaveBelongsTo(this);

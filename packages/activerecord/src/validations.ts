@@ -1,5 +1,5 @@
 /**
- * Raised by save! when the record is invalid.
+ * Raised by bang persistence methods (save!, create!) when the record is invalid.
  *
  * Mirrors: ActiveRecord::RecordInvalid
  */
@@ -7,8 +7,12 @@ export class RecordInvalid extends Error {
   readonly record: any;
 
   constructor(record: any) {
-    const messages = record.errors?.fullMessages?.join(", ") ?? "Validation failed";
-    super(`Validation failed: ${messages}`);
+    const fullMessages = record.errors?.fullMessages;
+    const message =
+      Array.isArray(fullMessages) && fullMessages.length > 0
+        ? `Validation failed: ${fullMessages.join(", ")}`
+        : "Validation failed";
+    super(message);
     this.name = "RecordInvalid";
     this.record = record;
   }

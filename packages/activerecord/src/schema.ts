@@ -1,19 +1,6 @@
 import type { DatabaseAdapter } from "./adapter.js";
 import { TableDefinition } from "./connection-adapters/abstract/schema-definitions.js";
-
-/** Detect adapter type from an adapter instance. */
-function detectAdapterName(
-  adapter: DatabaseAdapter | null | undefined,
-): "sqlite" | "postgres" | "mysql" {
-  const name = adapter?.constructor?.name ?? "";
-  if (name.includes("Postgres") || name === "SchemaAdapter") {
-    if (process.env.PG_TEST_URL) return "postgres";
-    if (process.env.MYSQL_TEST_URL) return "mysql";
-    return "sqlite";
-  }
-  if (name.includes("Mysql") || name.includes("Maria")) return "mysql";
-  return "sqlite";
-}
+import { detectAdapterName } from "./adapter-name.js";
 
 /**
  * Schema — defines database schema declaratively.

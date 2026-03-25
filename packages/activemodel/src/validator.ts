@@ -91,9 +91,12 @@ export class EachValidator extends Validator {
 
   validate(record: AnyRecord): void {
     for (const attribute of this.attributes) {
-      const value = record.readAttribute ? record.readAttribute(attribute) : record[attribute];
-      if (value == null && this.options.allowNil) continue;
-      if (isBlank(value) && this.options.allowBlank) continue;
+      const value =
+        typeof record.readAttribute === "function"
+          ? record.readAttribute(attribute)
+          : record[attribute];
+      if (value == null && this.options.allowNil === true) continue;
+      if (isBlank(value) && this.options.allowBlank === true) continue;
       this.validateEach(record, attribute, value);
     }
   }

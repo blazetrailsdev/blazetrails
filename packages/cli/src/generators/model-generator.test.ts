@@ -20,6 +20,12 @@ function makeGen() {
   return new ModelGenerator({ cwd: tmpDir, output: (m) => lines.push(m) });
 }
 
+function findMigration(files: string[]): string {
+  const migFile = files.find((f) => f.startsWith("db/migrations/"));
+  expect(migFile).toBeDefined();
+  return fs.readFileSync(path.join(tmpDir, migFile!), "utf-8");
+}
+
 describe("ModelGeneratorTest", () => {
   it("invokes default orm", () => {
     const gen = makeGen();
@@ -54,8 +60,7 @@ describe("ModelGeneratorTest", () => {
   it("migration with attributes", () => {
     const gen = makeGen();
     const files = gen.run("User", ["name:string", "email:string", "age:integer"]);
-    const migFile = files.find((f) => f.startsWith("db/migrations/"))!;
-    const content = fs.readFileSync(path.join(tmpDir, migFile), "utf-8");
+    const content = findMigration(files);
     expect(content).toContain('t.string("name")');
     expect(content).toContain('t.string("email")');
     expect(content).toContain('t.integer("age")');
@@ -64,8 +69,7 @@ describe("ModelGeneratorTest", () => {
   it("migration with attributes and with index", () => {
     const gen = makeGen();
     const files = gen.run("User", ["email:string:index", "token:string:uniq"]);
-    const migFile = files.find((f) => f.startsWith("db/migrations/"))!;
-    const content = fs.readFileSync(path.join(tmpDir, migFile), "utf-8");
+    const content = findMigration(files);
     expect(content).toContain("addIndex");
     expect(content).toContain("unique: true");
   });
@@ -73,16 +77,14 @@ describe("ModelGeneratorTest", () => {
   it("migration with timestamps", () => {
     const gen = makeGen();
     const files = gen.run("User", ["name:string"]);
-    const migFile = files.find((f) => f.startsWith("db/migrations/"))!;
-    const content = fs.readFileSync(path.join(tmpDir, migFile), "utf-8");
+    const content = findMigration(files);
     expect(content).toContain("t.timestamps()");
   });
 
   it("migration timestamps are skipped", () => {
     const gen = makeGen();
     const files = gen.run("User", ["name:string"], { timestamps: false });
-    const migFile = files.find((f) => f.startsWith("db/migrations/"))!;
-    const content = fs.readFileSync(path.join(tmpDir, migFile), "utf-8");
+    const content = findMigration(files);
     expect(content).not.toContain("timestamps");
   });
 
@@ -137,16 +139,14 @@ describe("ModelGeneratorTest", () => {
   it("foreign key is added for references", () => {
     const gen = makeGen();
     const files = gen.run("Comment", ["post:references"]);
-    const migFile = files.find((f) => f.startsWith("db/migrations/"))!;
-    const content = fs.readFileSync(path.join(tmpDir, migFile), "utf-8");
+    const content = findMigration(files);
     expect(content).toContain("foreignKey: true");
   });
 
   it("foreign key is skipped for polymorphic references", () => {
     const gen = makeGen();
     const files = gen.run("Comment", ["commentable:references{polymorphic}"]);
-    const migFile = files.find((f) => f.startsWith("db/migrations/"))!;
-    const content = fs.readFileSync(path.join(tmpDir, migFile), "utf-8");
+    const content = findMigration(files);
     expect(content).toContain("polymorphic: true");
     expect(content).not.toContain("foreignKey");
   });
@@ -154,8 +154,7 @@ describe("ModelGeneratorTest", () => {
   it("foreign key is not added for non references", () => {
     const gen = makeGen();
     const files = gen.run("User", ["name:string"]);
-    const migFile = files.find((f) => f.startsWith("db/migrations/"))!;
-    const content = fs.readFileSync(path.join(tmpDir, migFile), "utf-8");
+    const content = findMigration(files);
     expect(content).not.toContain("foreignKey");
   });
 

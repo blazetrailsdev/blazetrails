@@ -44,7 +44,13 @@ export function consoleCommand(): Command {
             { breakOnSigint: true },
           );
           callback(null, result);
-        } catch {
+        } catch (exprErr: any) {
+          // Only fall back to statement mode for syntax errors (expression wrapper failed to parse).
+          // Runtime errors should not trigger a re-execution.
+          if (!(exprErr instanceof SyntaxError)) {
+            callback(exprErr);
+            return;
+          }
           try {
             const result = await vm.runInNewContext(`(async () => {\n${code}\n})()`, context, {
               breakOnSigint: true,

@@ -456,6 +456,23 @@ describe("Migrations", () => {
       const rows = await adapter.execute(`SELECT * FROM "posts"`);
       expect(rows).toHaveLength(1);
     });
+
+    it("creates indexes declared in table definition", async () => {
+      const adapter = freshAdapter();
+
+      await Schema.define(adapter, async (schema) => {
+        await schema.createTable("users", (t) => {
+          t.string("email");
+          t.index(["email"], { unique: true });
+        });
+      });
+
+      // Insert a row, then try inserting a duplicate — unique index should prevent it
+      await adapter.executeMutation(`INSERT INTO "users" ("email") VALUES ('a@b.com')`);
+      await expect(
+        adapter.executeMutation(`INSERT INTO "users" ("email") VALUES ('a@b.com')`),
+      ).rejects.toThrow();
+    });
   });
 });
 

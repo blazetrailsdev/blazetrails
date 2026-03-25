@@ -7,7 +7,7 @@ import { typeRegistry } from "./type/registry.js";
  *
  * Mirrors: ActiveModel::Attribute
  */
-export class Attribute {
+export abstract class Attribute {
   readonly name: string;
   readonly valueBeforeTypeCast: unknown;
   readonly type: Type;
@@ -125,8 +125,16 @@ export class Attribute {
     );
   }
 
-  protected typeCast(_value: unknown): unknown {
-    throw new Error("NotImplementedError: subclasses must implement typeCast");
+  protected abstract typeCast(value: unknown): unknown;
+
+  /** Access the original attribute for cloning. */
+  getOriginalAttribute(): Attribute | null {
+    return this.originalAttribute;
+  }
+
+  /** Set the original attribute (used by deepDup). */
+  setOriginalAttribute(attr: Attribute | null): void {
+    this.originalAttribute = attr;
   }
 
   private isAssigned(): boolean {

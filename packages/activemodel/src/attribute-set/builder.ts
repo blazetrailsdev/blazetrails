@@ -144,11 +144,9 @@ export class AttributeSet {
     const cloned = Object.assign(Object.create(Object.getPrototypeOf(attr)), attr);
     cache.set(attr, cloned);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const orig = (attr as any).originalAttribute as Attribute | null;
+    const orig = attr.getOriginalAttribute();
     if (orig) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (cloned as any).originalAttribute = this.cloneAttribute(orig, cache);
+      cloned.setOriginalAttribute(this.cloneAttribute(orig, cache));
     }
 
     return cloned;

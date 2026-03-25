@@ -133,6 +133,14 @@ describe("MigrationGenerator", () => {
     expect(content).toContain('addReference("comments", "commentable", { polymorphic: true })');
   });
 
+  it("handles :uniq on references with separate unique index", () => {
+    const gen = makeGen();
+    const files = gen.run("CreatePosts", ["user:references:uniq"]);
+    const content = fs.readFileSync(path.join(tmpDir, files[0]), "utf-8");
+    expect(content).toContain('t.references("user", { foreignKey: true, index: false })');
+    expect(content).toContain('addIndex("posts", "user_id", { unique: true })');
+  });
+
   it("supports --no-timestamps via options", () => {
     const gen = makeGen();
     const files = gen.run("CreateUsers", ["name:string"], { timestamps: false });

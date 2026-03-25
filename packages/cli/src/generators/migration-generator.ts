@@ -66,7 +66,8 @@ function referenceOpts(col: ParsedColumn): string {
     opts.push("foreignKey: true");
   }
   if (col.unique) {
-    opts.push("index: { unique: true }");
+    // Suppress the default index — we'll add a unique one separately
+    opts.push("index: false");
   }
   return `{ ${opts.join(", ")} }`;
 }
@@ -81,9 +82,11 @@ function columnLine(col: ParsedColumn): string {
 function indexLines(table: string, columns: ParsedColumn[]): string {
   const lines: string[] = [];
   for (const col of columns) {
-    if (!col.index || isReference(col.type)) continue; // references auto-index
+    if (!col.index && !(isReference(col.type) && col.unique)) continue;
+    if (isReference(col.type) && !col.unique) continue; // references auto-index unless :uniq
+    const colName = isReference(col.type) ? `${col.name}_id` : col.name;
     const opts = col.unique ? ", { unique: true }" : "";
-    lines.push(`    await this.addIndex("${table}", "${col.name}"${opts});`);
+    lines.push(`    await this.addIndex("${table}", "${colName}"${opts});`);
   }
   return lines.join("\n");
 }

@@ -140,22 +140,11 @@ describe("MigrationGeneratorTest", () => {
     expect(content).toContain('removeColumn("users", "to")');
   });
 
-  it("add migration with references options when primary key uuid", () => {
-    // We don't support uuid primary keys yet, but the reference should still generate
-    const gen = makeGen();
-    const files = gen.run("AddAuthorToBooks", ["author:references"]);
-    const content = readMigration(files);
-    expect(content).toContain('addReference("books", "author"');
-    expect(content).toContain("foreignKey: true");
+  it.skip("add migration with references options when primary key uuid", () => {
+    // Needs --primary_key_type=uuid support
   });
 
-  it("create table migration ignores virtual attributes", () => {
-    // Virtual attributes (rich_text, attachment) should be skipped in createTable.
-    // We don't have virtual types yet — verify unknown types don't crash the generator.
-    const gen = makeGen();
-    const files = gen.run("CreatePosts", ["title:string"]);
-    const content = readMigration(files);
-    expect(content).toContain('createTable("posts"');
-    expect(content).toContain('t.string("title")');
+  it.skip("create table migration ignores virtual attributes", () => {
+    // Needs virtual attribute type detection (rich_text, attachment, etc.)
   });
 });

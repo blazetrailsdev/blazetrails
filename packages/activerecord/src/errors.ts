@@ -168,16 +168,6 @@ export class UnknownAttributeError extends Error {
   }
 }
 
-// Association errors — defined in associations/errors.ts, re-exported here for backward compat
-export {
-  DeleteRestrictionError,
-  InverseOfAssociationNotFoundError,
-  HasManyThroughCantAssociateThroughHasOneOrManyReflection,
-  HasManyThroughNestedAssociationsAreReadonly,
-  HasOneThroughNestedAssociationsAreReadonly,
-  HasManyThroughOrderError,
-} from "./associations/errors.js";
-
 export class NameError extends Error {
   constructor(message: string) {
     super(message);

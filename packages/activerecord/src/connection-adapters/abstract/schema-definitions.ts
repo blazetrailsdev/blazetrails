@@ -158,7 +158,7 @@ export class TableDefinition {
    */
   toSql(): string {
     const columnDefs = this.columns.map((col) => {
-      const parts = [quoteIdentifier(col.name)];
+      const parts = [quoteIdentifier(col.name, this._adapterName)];
 
       switch (col.type) {
         case "primary_key":
@@ -220,6 +220,6 @@ export class TableDefinition {
       return parts.join(" ");
     });
 
-    return `CREATE TABLE ${quoteTableName(this.tableName)} (${columnDefs.join(", ")})`;
+    return `CREATE TABLE ${quoteTableName(this.tableName, this._adapterName)} (${columnDefs.join(", ")})`;
   }
 }

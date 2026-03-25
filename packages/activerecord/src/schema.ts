@@ -32,12 +32,13 @@ export class Schema {
     if (fn) fn(td);
     await this.adapter.executeMutation(td.toSql());
 
+    const adp = this._adapterName;
     for (const idx of td.indexes) {
       const indexName = idx.name ?? `index_${name}_on_${idx.columns.join("_and_")}`;
       const unique = idx.unique ? "UNIQUE " : "";
-      const cols = idx.columns.map((c) => quoteIdentifier(c)).join(", ");
+      const cols = idx.columns.map((c) => quoteIdentifier(c, adp)).join(", ");
       await this.adapter.executeMutation(
-        `CREATE ${unique}INDEX ${quoteIdentifier(indexName)} ON ${quoteTableName(name)} (${cols})`,
+        `CREATE ${unique}INDEX ${quoteIdentifier(indexName, adp)} ON ${quoteTableName(name, adp)} (${cols})`,
       );
     }
   }

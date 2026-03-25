@@ -1,0 +1,19 @@
+import { Attribute, FromUser } from "../attribute.js";
+import { Type } from "../type/value.js";
+
+/**
+ * Attribute with a user-provided default value, which may be a function.
+ * When the value is a function, it's evaluated lazily on first access.
+ *
+ * Mirrors: ActiveModel::Attribute::UserProvidedDefault
+ */
+export class UserProvidedDefault extends FromUser {
+  private userProvidedValue: unknown;
+
+  constructor(name: string, value: unknown, type: Type, databaseDefault: Attribute | null = null) {
+    // If value is a function (proc), evaluate it for the initial valueBeforeTypeCast
+    const resolvedValue = typeof value === "function" ? value() : value;
+    super(name, resolvedValue, type, databaseDefault);
+    this.userProvidedValue = value;
+  }
+}

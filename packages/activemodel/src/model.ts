@@ -834,12 +834,7 @@ export class Model {
       if (name in attrs) {
         let castValue = def.type.cast(attrs[name]);
         castValue = ctor._applyNormalization(name, castValue);
-        if (typeof castValue === "string" && castValue.trim() === "") {
-          const nbConfig = ctor._nullifyBlanks;
-          if (nbConfig === true || (Array.isArray(nbConfig) && nbConfig.includes(name))) {
-            castValue = null;
-          }
-        }
+        castValue = this._applyNullifyBlanks(name, castValue);
         attrMap.set(name, Attribute.fromUserWithValue(name, attrs[name], castValue, def.type));
       } else {
         const defVal =

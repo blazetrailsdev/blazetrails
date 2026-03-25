@@ -1,5 +1,6 @@
 import { Attribute } from "../attribute.js";
-import { Type, ValueType } from "../type/value.js";
+import { Type } from "../type/value.js";
+import { typeRegistry } from "../type/registry.js";
 
 /**
  * A set of Attribute instances keyed by name.
@@ -34,7 +35,7 @@ export class AttributeSet {
       this.attributes.set(name, attrOrValue);
     } else {
       const existing = this.attributes.get(name);
-      const type = existing ? existing.type : new ValueType();
+      const type = existing ? existing.type : typeRegistry.lookup("value");
       this.attributes.set(name, Attribute.withCastValue(name, attrOrValue, type));
     }
   }
@@ -61,8 +62,8 @@ export class AttributeSet {
     if (existing) {
       this.attributes.set(name, existing.withValueFromUser(value));
     } else {
-      // New attribute not previously declared — create a FromUser with ValueType
-      this.attributes.set(name, Attribute.fromUser(name, value, new ValueType()));
+      // New attribute not previously declared — create a FromUser with default type
+      this.attributes.set(name, Attribute.fromUser(name, value, typeRegistry.lookup("value")));
     }
     return value;
   }
@@ -72,7 +73,7 @@ export class AttributeSet {
     if (existing) {
       this.attributes.set(name, existing.withValueFromDatabase(value));
     } else {
-      this.attributes.set(name, Attribute.fromDatabase(name, value, new ValueType()));
+      this.attributes.set(name, Attribute.fromDatabase(name, value, typeRegistry.lookup("value")));
     }
   }
 
@@ -81,7 +82,7 @@ export class AttributeSet {
     if (attr) {
       attr.overrideCastValue(value);
     } else {
-      this.attributes.set(name, Attribute.withCastValue(name, value, new ValueType()));
+      this.attributes.set(name, Attribute.withCastValue(name, value, typeRegistry.lookup("value")));
     }
   }
 

@@ -1,4 +1,5 @@
-import { Type, ValueType } from "./type/value.js";
+import { Type } from "./type/value.js";
+import { typeRegistry } from "./type/registry.js";
 
 /**
  * Wraps a single attribute value with its type, tracking the original
@@ -219,7 +220,7 @@ export class WithCastValue extends Attribute {
 
 export class Null extends Attribute {
   constructor(name: string) {
-    super(name, null, new ValueType());
+    super(name, null, typeRegistry.lookup("value"));
   }
 
   protected typeCast(): unknown {

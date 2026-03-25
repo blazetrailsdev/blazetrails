@@ -151,9 +151,7 @@ export class SubclassNotFound extends Error {
 }
 
 /**
- * Raised when a dependent: :restrict_with_exception association prevents deletion.
- *
- * Mirrors: ActiveRecord::DeleteRestrictionError
+ * Mirrors: ActiveRecord::UnknownAttributeError
  */
 export class UnknownAttributeError extends Error {
   readonly record: any;

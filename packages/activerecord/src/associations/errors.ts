@@ -9,7 +9,6 @@ export class DeleteRestrictionError extends Error {
   readonly association: string;
 
   constructor(record: any, association: string) {
-    const model = record?.constructor?.name ?? "Record";
     super(`Cannot delete record because of dependent ${association}`);
     this.name = "DeleteRestrictionError";
     this.record = record;

@@ -1,3 +1,5 @@
+import { quoteIdentifier, quoteTableName } from "../../quoting.js";
+
 /**
  * Column type mapping.
  */
@@ -156,7 +158,7 @@ export class TableDefinition {
    */
   toSql(): string {
     const columnDefs = this.columns.map((col) => {
-      const parts = [`"${col.name}"`];
+      const parts = [quoteIdentifier(col.name)];
 
       switch (col.type) {
         case "primary_key":
@@ -218,6 +220,6 @@ export class TableDefinition {
       return parts.join(" ");
     });
 
-    return `CREATE TABLE "${this.tableName}" (${columnDefs.join(", ")})`;
+    return `CREATE TABLE ${quoteTableName(this.tableName)} (${columnDefs.join(", ")})`;
   }
 }

@@ -1,6 +1,7 @@
 import type { DatabaseAdapter } from "./adapter.js";
 import { TableDefinition } from "./connection-adapters/abstract/schema-definitions.js";
 import { detectAdapterName } from "./adapter-name.js";
+import { quoteIdentifier, quoteTableName } from "./quoting.js";
 
 /**
  * Schema — defines database schema declaratively.
@@ -10,7 +11,7 @@ import { detectAdapterName } from "./adapter-name.js";
 export class Schema {
   static async define(
     adapter: DatabaseAdapter,
-    fn: (schema: Schema) => Promise<void>,
+    fn: (schema: Schema) => void | Promise<void>,
   ): Promise<void> {
     const schema = new Schema(adapter);
     await fn(schema);
@@ -34,9 +35,9 @@ export class Schema {
     for (const idx of td.indexes) {
       const indexName = idx.name ?? `index_${name}_on_${idx.columns.join("_and_")}`;
       const unique = idx.unique ? "UNIQUE " : "";
-      const cols = idx.columns.map((c) => `"${c}"`).join(", ");
+      const cols = idx.columns.map((c) => quoteIdentifier(c)).join(", ");
       await this.adapter.executeMutation(
-        `CREATE ${unique}INDEX "${indexName}" ON "${name}" (${cols})`,
+        `CREATE ${unique}INDEX ${quoteIdentifier(indexName)} ON ${quoteTableName(name)} (${cols})`,
       );
     }
   }

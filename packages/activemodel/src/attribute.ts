@@ -27,7 +27,8 @@ export class Attribute {
     this.valueBeforeTypeCast = valueBeforeTypeCast;
     this.type = type;
     this.originalAttribute = originalAttribute;
-    if (value !== undefined) {
+
+    if (arguments.length >= 5) {
       this._value = value;
       this._hasValue = true;
     } else {

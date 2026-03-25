@@ -73,13 +73,15 @@ export abstract class Validator {
  * Mirrors: ActiveModel::EachValidator
  */
 export class EachValidator extends Validator {
-  readonly attributes: string[];
+  readonly attributes: readonly string[];
 
   constructor(options: Record<string, unknown> & { attributes?: string | string[] }) {
     const rawAttrs = options.attributes;
     const { attributes: _, ...rest } = options;
     super(rest);
-    this.attributes = rawAttrs === undefined ? [] : Array.isArray(rawAttrs) ? rawAttrs : [rawAttrs];
+    this.attributes = Object.freeze(
+      rawAttrs === undefined ? [] : Array.isArray(rawAttrs) ? [...rawAttrs] : [rawAttrs],
+    );
     if (this.attributes.length === 0 || this.attributes.some((attr) => isBlank(attr))) {
       throw new Error(":attributes cannot be blank");
     }

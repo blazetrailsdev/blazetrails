@@ -186,7 +186,7 @@ export class TableDefinition {
           parts.push(`DECIMAL(${col.options.precision ?? 10}, ${col.options.scale ?? 0})`);
           break;
         case "boolean":
-          parts.push(this._adapterName === "postgres" ? "BOOLEAN" : "BOOLEAN");
+          parts.push("BOOLEAN");
           break;
         case "date":
           parts.push("DATE");

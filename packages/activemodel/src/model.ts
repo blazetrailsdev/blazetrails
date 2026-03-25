@@ -885,7 +885,7 @@ export class Model {
 
   writeAttribute(name: string, value: unknown): void {
     const ctor = this.constructor as typeof Model;
-    const oldValue = this.readAttribute(name);
+    const oldValue = this._attributes.has(name) ? this._attributes.fetchValue(name) : undefined;
     this._attributes.writeFromUser(name, value);
     // Apply normalization and nullify blanks on the cast value
     let newValue = this._attributes.fetchValue(name);

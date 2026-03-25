@@ -100,15 +100,13 @@ export class AttributeSet {
   }
 
   /**
-   * Capture current values without forcing lazy evaluation on unread attributes.
-   * For read attributes, captures the cast value. For unread ones, captures
-   * the cast value (since it was pre-computed in the constructor).
+   * Capture current cast values for all initialized attributes.
    */
   snapshotValues(): Map<string, unknown> {
     const result = new Map<string, unknown>();
     for (const [name, attr] of this.attributes) {
       if (attr.isInitialized()) {
-        result.set(name, attr.hasBeenRead() ? attr.value : attr.value);
+        result.set(name, attr.value);
       }
     }
     return result;

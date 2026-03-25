@@ -51,7 +51,7 @@ export class Attribute {
     if (this.isAssigned()) {
       return this.originalAttribute!.originalValue;
     }
-    return this.typeCast(this.valueBeforeTypeCast);
+    return this.value;
   }
 
   get valueForDatabase(): unknown {

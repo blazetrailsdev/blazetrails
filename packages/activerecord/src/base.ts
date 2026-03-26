@@ -1091,8 +1091,9 @@ export class Base extends Model {
    * Mirrors: ActiveRecord::Base.all
    */
   static all(): any {
-    if (this.currentScope) {
-      return this.currentScope._clone();
+    const scope = this.currentScope;
+    if (scope) {
+      return scope._clone();
     }
     return this._buildDefaultRelation();
   }
@@ -1636,8 +1637,9 @@ export class Base extends Model {
    * Mirrors: ActiveRecord::Base.create
    */
   private static _mergeCurrentScopeAttrs(attrs: Record<string, unknown>): Record<string, unknown> {
-    if (this.currentScope) {
-      const scopeAttrs = this.currentScope.scopeForCreate?.() ?? {};
+    const scope = this.currentScope;
+    if (scope) {
+      const scopeAttrs = scope.scopeForCreate?.() ?? {};
       return { ...scopeAttrs, ...attrs };
     }
     return attrs;

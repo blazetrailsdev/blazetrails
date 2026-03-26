@@ -19,11 +19,11 @@ export class Scoping {
 export class ScopeRegistry {
   private static _currentScopes: WeakMap<object, any> = new WeakMap();
 
-  static currentScope(modelClass: any): any | null {
+  static currentScope(modelClass: object): any | null {
     return this._currentScopes.get(modelClass) ?? null;
   }
 
-  static setCurrentScope(modelClass: any, scope: any): void {
+  static setCurrentScope(modelClass: object, scope: any): void {
     if (scope === null) {
       this._currentScopes.delete(modelClass);
     } else {

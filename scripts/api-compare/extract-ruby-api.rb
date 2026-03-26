@@ -178,10 +178,8 @@ class ApiExtractor
 
       names.each do |name|
         class_fqn = fqn_prefix.empty? ? name : "#{fqn_prefix}::#{name}"
-        is_new = @classes[class_fqn].nil?
         @classes[class_fqn] ||= new_class_info(name, class_fqn)
         @classes[class_fqn][:superclass] = superclass if superclass
-        @classes[class_fqn][:file] = @current_file if is_new
       end
     end
   end

@@ -62,7 +62,12 @@ export class PostgreSQL extends ToSql {
       if (Array.isArray(v)) return this.quoteArrayLiteral(v);
       if (typeof v === "number") return String(v);
       if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
-      if (v instanceof Date) return `"${v.toISOString()}"`;
+      if (v instanceof Date) {
+        const y = v.getFullYear();
+        const m = String(v.getMonth() + 1).padStart(2, "0");
+        const d = String(v.getDate()).padStart(2, "0");
+        return `"${y}-${m}-${d}"`;
+      }
       const str = String(v);
       const escaped = str.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
       return `"${escaped}"`;

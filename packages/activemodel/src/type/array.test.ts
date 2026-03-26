@@ -52,6 +52,11 @@ describe("ArrayType", () => {
     expect(type.cast("{a,NULL,b}")).toEqual(["a", null, "b"]);
   });
 
+  it("treats unquoted empty elements as null", () => {
+    const type = new ArrayType(new StringType());
+    expect(type.cast("{a,,b}")).toEqual(["a", null, "b"]);
+  });
+
   it("casts nested JS arrays", () => {
     const type = new ArrayType(new IntegerType());
     expect(

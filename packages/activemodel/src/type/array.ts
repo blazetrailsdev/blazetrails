@@ -82,7 +82,7 @@ export class ArrayType extends Type<unknown[]> {
 
   private castElement(raw: string, wasQuoted: boolean): unknown {
     if (!wasQuoted) raw = raw.trim();
-    if (!wasQuoted && raw === "NULL") return null;
+    if (!wasQuoted && (raw === "NULL" || raw === "")) return null;
     if (raw.startsWith("{")) {
       const sub = new ArrayType(this.subtype);
       return sub.parseArrayLiteral(raw);

@@ -65,4 +65,9 @@ describe("quoteDefaultExpression", () => {
   it("quotes plain string CURRENT_TIMESTAMP as a literal", () => {
     expect(quoteDefaultExpression("CURRENT_TIMESTAMP")).toBe(" DEFAULT 'CURRENT_TIMESTAMP'");
   });
+
+  it("throws TypeError when function returns non-string/non-SqlLiteral", () => {
+    expect(() => quoteDefaultExpression(() => 123)).toThrow(TypeError);
+    expect(() => quoteDefaultExpression(() => undefined)).toThrow(TypeError);
+  });
 });

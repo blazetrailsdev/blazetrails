@@ -48,7 +48,14 @@ export function quote(value: unknown): string {
  */
 export function quoteDefaultExpression(value: unknown): string {
   if (value === undefined) return "";
-  if (typeof value === "function") return ` DEFAULT ${value()}`;
+  if (typeof value === "function") {
+    const result = (value as () => unknown)();
+    if (typeof result === "string") return ` DEFAULT ${result}`;
+    if (isSqlLiteral(result)) return ` DEFAULT ${result.value}`;
+    throw new TypeError(
+      "quoteDefaultExpression expected function default to return a string or SqlLiteral",
+    );
+  }
   if (isSqlLiteral(value)) return ` DEFAULT ${value.value}`;
   return ` DEFAULT ${quote(value)}`;
 }

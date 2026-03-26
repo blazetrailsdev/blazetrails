@@ -244,7 +244,7 @@ export class Builder {
 }
 
 /**
- * Lazy variant of AttributeSet that defers attribute creation until access.
+ * Lazy variant of AttributeSet. Currently delegates to the base implementation.
  *
  * Mirrors: ActiveModel::LazyAttributeSet
  */

@@ -43,7 +43,7 @@ export { DecimalType } from "./type/decimal.js";
 export { BigIntegerType } from "./type/big-integer.js";
 export { ImmutableStringType } from "./type/immutable-string.js";
 export { ValueType } from "./type/value.js";
-export { BinaryType } from "./type/binary.js";
+export { BinaryType, Data as BinaryData } from "./type/binary.js";
 export { TimeType } from "./type/time.js";
 export { UuidType } from "./type/uuid.js";
 export { JsonType } from "./type/json.js";

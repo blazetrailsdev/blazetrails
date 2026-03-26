@@ -7,7 +7,7 @@ function cloneValue(value: unknown): unknown {
   // Only deep-clone plain objects; preserve class instances as-is
   const proto = Object.getPrototypeOf(value);
   if (proto !== Object.prototype && proto !== null) return value;
-  const result: Record<string, unknown> = {};
+  const result: Record<string, unknown> = proto === null ? Object.create(null) : {};
   for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
     result[k] = cloneValue(v);
   }

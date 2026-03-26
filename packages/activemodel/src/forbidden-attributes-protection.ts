@@ -5,7 +5,7 @@
  */
 export class ForbiddenAttributesError extends globalThis.Error {
   constructor(message?: string) {
-    super(message ?? "Cannot mass-assign protected attributes");
+    super(message);
     this.name = "ForbiddenAttributesError";
   }
 }

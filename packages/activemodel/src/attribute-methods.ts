@@ -1,5 +1,5 @@
 /**
- * Raised when accessing an attribute that doesn't exist.
+ * Represents an error related to a missing attribute.
  *
  * Mirrors: ActiveModel::MissingAttributeError
  */

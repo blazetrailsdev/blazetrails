@@ -83,9 +83,11 @@ export class AttributeMutationTracker {
   }
 
   forgetChange(name: string): void {
-    const attr = this.attributes.getAttribute(name);
-    this.attributes.set(name, attr.forgettingAssignment());
     this.forcedChanges.delete(name);
+    if (this.attributes.has(name)) {
+      const attr = this.attributes.getAttribute(name);
+      this.attributes.set(name, attr.forgettingAssignment());
+    }
   }
 
   originalValue(name: string): unknown {

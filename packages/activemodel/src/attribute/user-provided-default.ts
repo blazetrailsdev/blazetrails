@@ -8,7 +8,8 @@ import { Type } from "../type/value.js";
  * Mirrors: ActiveModel::Attribute::UserProvidedDefault
  */
 export class UserProvidedDefault extends FromUser {
-  private userProvidedValue: unknown;
+  /** The original default value (may be a function), preserved for withType/marshal. */
+  readonly userProvidedValue: unknown;
 
   constructor(name: string, value: unknown, type: Type, databaseDefault: Attribute | null = null) {
     // If value is a function (proc), evaluate it for the initial valueBeforeTypeCast

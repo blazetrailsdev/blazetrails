@@ -202,6 +202,10 @@ export class CallbackChain {
   }
 }
 
-export interface Callbacks {
+export interface CallbacksClassMethods {
   defineModelCallbacks(...events: string[]): void;
+}
+
+export interface Callbacks {
+  _brand?: "Callbacks";
 }

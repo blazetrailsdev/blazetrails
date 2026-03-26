@@ -38,7 +38,6 @@ export interface Validations {
   isInvalid(): boolean;
   validateBang(context?: string): boolean;
   validationContext: string | null;
-  validatesWith(...args: unknown[]): void;
 }
 
 export interface ValidationsClassMethods {
@@ -48,5 +47,4 @@ export interface ValidationsClassMethods {
   clearValidators(): void;
   validatorsOn(attribute: string): unknown[];
   validates(attribute: string, options: Record<string, unknown>): void;
-  validatesWith(...args: unknown[]): void;
 }

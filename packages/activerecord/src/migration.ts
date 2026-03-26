@@ -947,7 +947,10 @@ export abstract class Migration {
     if (defaultValue === null) return " DEFAULT NULL";
     if (typeof defaultValue === "boolean") return ` DEFAULT ${defaultValue ? "TRUE" : "FALSE"}`;
     if (typeof defaultValue === "number") return ` DEFAULT ${defaultValue}`;
-    return ` DEFAULT '${String(defaultValue).replace(/'/g, "''")}'`;
+    if (typeof defaultValue === "function") return ` DEFAULT ${defaultValue()}`;
+    const str = String(defaultValue);
+    if (/^[A-Z_]+(?:\(\))?$/.test(str)) return ` DEFAULT ${str}`;
+    return ` DEFAULT '${str.replace(/'/g, "''")}'`;
   }
 }
 

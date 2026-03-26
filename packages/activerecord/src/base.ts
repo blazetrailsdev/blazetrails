@@ -28,12 +28,12 @@ function quoteArrayLiteral(arr: unknown[]): string {
   return `{${elements.join(",")}}`;
 }
 
-export function quoteSqlValue(v: unknown): string {
+export function quoteSqlValue(v: unknown, asArray = false): string {
   if (v === null || v === undefined) return "NULL";
   if (typeof v === "number") return String(v);
   if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
   if (v instanceof Date) return `'${v.toISOString()}'`;
-  if (Array.isArray(v)) {
+  if (asArray && Array.isArray(v)) {
     const arrayLiteral = quoteArrayLiteral(v);
     return `'${arrayLiteral.replace(/'/g, "''")}'`;
   }
@@ -2426,7 +2426,13 @@ export class Base extends Model {
     }
 
     const colList = columns.map((c) => `"${c}"`).join(", ");
-    const valList = values.map((v) => quoteSqlValue(v)).join(", ");
+    const valList = columns
+      .map((c, i) => {
+        const def = ctor._attributeDefinitions.get(c);
+        const isArray = def?.type?.name === "array";
+        return quoteSqlValue(values[i], isArray);
+      })
+      .join(", ");
 
     let sql: string;
     if (columns.length === 0) {
@@ -2472,7 +2478,9 @@ export class Base extends Model {
     const setClause = Object.keys(changedAttrs)
       .map((key) => {
         const val = this.readAttribute(key);
-        return `"${key}" = ${quoteSqlValue(val)}`;
+        const def = ctor._attributeDefinitions.get(key);
+        const isArray = def?.type?.name === "array";
+        return `"${key}" = ${quoteSqlValue(val, isArray)}`;
       })
       .join(", ");
 

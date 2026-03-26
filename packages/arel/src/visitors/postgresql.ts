@@ -47,6 +47,27 @@ export class PostgreSQL extends ToSql {
   protected override visitNotRegexp(node: Nodes.NotRegexp): SQLString {
     return this.visitBinaryOp(node, node.caseSensitive ? "!~" : "!~*");
   }
+
+  protected override quote(value: unknown): string {
+    if (Array.isArray(value)) {
+      const arrayLiteral = this.quoteArrayLiteral(value);
+      return `'${arrayLiteral.replace(/'/g, "''")}'`;
+    }
+    return super.quote(value);
+  }
+
+  private quoteArrayLiteral(arr: unknown[]): string {
+    const elements = arr.map((v) => {
+      if (v === null || v === undefined) return "NULL";
+      if (Array.isArray(v)) return this.quoteArrayLiteral(v);
+      if (typeof v === "number") return String(v);
+      if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
+      const str = String(v);
+      const escaped = str.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      return `"${escaped}"`;
+    });
+    return `{${elements.join(",")}}`;
+  }
 }
 
 /**

@@ -79,7 +79,8 @@ export class Relation<T extends Base> {
    *   where("name LIKE ?", "%dean%")
    */
   where(): WhereChain;
-  where(conditions: Record<string, unknown> | null | undefined): Relation<T>;
+  where(conditions: undefined): WhereChain;
+  where(conditions: Record<string, unknown> | null): Relation<T>;
   where(sql: string, ...binds: unknown[]): Relation<T>;
   where(node: Nodes.Node): Relation<T>;
   where(
@@ -3029,7 +3030,7 @@ export class Relation<T extends Base> {
   }
 
   private _resolveColumn(table: Table, key: string): Nodes.Attribute {
-    return new PredicateBuilder(table).resolveColumn(key);
+    return PredicateBuilder.resolveColumn(table, key);
   }
 
   private _buildWhereNodes(

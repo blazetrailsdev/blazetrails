@@ -54,11 +54,15 @@ export class PredicateBuilder {
   }
 
   resolveColumn(key: string): Nodes.Attribute {
-    if (key.includes('"')) return this.table.get(key);
+    return PredicateBuilder.resolveColumn(this.table, key);
+  }
+
+  static resolveColumn(table: Table, key: string): Nodes.Attribute {
+    if (key.includes('"')) return table.get(key);
     const firstDot = key.indexOf(".");
-    if (firstDot === -1) return this.table.get(key);
+    if (firstDot === -1) return table.get(key);
     const secondDot = key.indexOf(".", firstDot + 1);
-    if (secondDot !== -1) return this.table.get(key);
+    if (secondDot !== -1) return table.get(key);
     return new Table(key.slice(0, firstDot)).get(key.slice(firstDot + 1));
   }
 }

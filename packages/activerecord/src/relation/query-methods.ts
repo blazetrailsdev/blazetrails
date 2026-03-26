@@ -17,7 +17,7 @@ export class QueryMethods {
     "references",
     "extending",
     "unscope",
-    "optimizer_hints",
+    "optimizerHints",
     "annotate",
   ] as const;
 

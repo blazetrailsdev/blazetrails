@@ -551,7 +551,7 @@ export class Relation<T extends Base> {
    */
   reselect(...columns: (string | Nodes.SqlLiteral)[]): Relation<T> {
     const rel = this._clone();
-    rel._selectColumns = columns;
+    rel._selectColumns = columns.map((c) => (c instanceof Nodes.SqlLiteral ? c : String(c)));
     return rel;
   }
 
@@ -741,7 +741,7 @@ export class Relation<T extends Base> {
     }
     if (this._selectColumns !== null) {
       const cols = this._selectColumns.map((c) =>
-        c instanceof Nodes.SqlLiteral ? `Arel.sql(${JSON.stringify(c.value)})` : JSON.stringify(c),
+        c instanceof Nodes.SqlLiteral ? `sql(${JSON.stringify(c.value)})` : JSON.stringify(c),
       );
       parts.push(`.select(${cols.join(", ")})`);
     }

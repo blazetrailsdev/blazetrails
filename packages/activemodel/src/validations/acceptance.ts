@@ -24,3 +24,19 @@ export class AcceptanceValidator implements Validator {
     }
   }
 }
+
+export class LazilyDefineAttributes {
+  readonly attributes: readonly string[];
+
+  constructor(attributes: string[]) {
+    this.attributes = Object.freeze([...attributes]);
+  }
+
+  include(attribute: string): boolean {
+    return this.attributes.includes(attribute);
+  }
+
+  matches(method: string): string | null {
+    return this.include(method) ? method : null;
+  }
+}

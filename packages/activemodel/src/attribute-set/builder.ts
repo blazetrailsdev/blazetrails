@@ -242,3 +242,66 @@ export class Builder {
     return new AttributeSet(attrs);
   }
 }
+
+/**
+ * Lazy variant of AttributeSet that defers attribute creation until access.
+ *
+ * Mirrors: ActiveModel::LazyAttributeSet
+ */
+export class LazyAttributeSet extends AttributeSet {}
+
+/**
+ * Lazy hash of attribute objects, materializes on demand.
+ *
+ * Mirrors: ActiveModel::LazyAttributeHash
+ */
+export class LazyAttributeHash {
+  private delegate: Map<string, Attribute> = new Map();
+  private types: Map<string, Type>;
+  private values: Record<string, unknown>;
+
+  constructor(types: Map<string, Type>, values: Record<string, unknown>) {
+    this.types = types;
+    this.values = values;
+  }
+
+  get(name: string): Attribute {
+    if (this.delegate.has(name)) return this.delegate.get(name)!;
+    return this.assignDefault(name);
+  }
+
+  set(name: string, attr: Attribute): void {
+    this.delegate.set(name, attr);
+  }
+
+  has(name: string): boolean {
+    return this.delegate.has(name) || name in this.values || this.types.has(name);
+  }
+
+  keys(): string[] {
+    const allKeys = new Set([
+      ...this.delegate.keys(),
+      ...Object.keys(this.values),
+      ...this.types.keys(),
+    ]);
+    return [...allKeys];
+  }
+
+  deepDup(): LazyAttributeHash {
+    const copy = new LazyAttributeHash(this.types, { ...this.values });
+    for (const [name, attr] of this.delegate) {
+      copy.delegate.set(name, Object.assign(Object.create(Object.getPrototypeOf(attr)), attr));
+    }
+    return copy;
+  }
+
+  private assignDefault(name: string): Attribute {
+    const type = this.types.get(name);
+    if (name in this.values && type) {
+      const attr = Attribute.fromDatabase(name, this.values[name], type);
+      this.delegate.set(name, attr);
+      return attr;
+    }
+    return Attribute.null(name);
+  }
+}

@@ -35,7 +35,7 @@ export class Relation<T extends Base> {
   private _rawOrderClauses: string[] = [];
   private _limitValue: number | null = null;
   private _offsetValue: number | null = null;
-  private _selectColumns: string[] | null = null;
+  private _selectColumns: (string | Nodes.SqlLiteral)[] | null = null;
   private _isDistinct = false;
   private _distinctOnColumns: string[] = [];
   private _groupColumns: string[] = [];
@@ -540,9 +540,7 @@ export class Relation<T extends Base> {
       return this.toArray().then((records) => records.filter(args[0]));
     }
     const rel = this._clone();
-    rel._selectColumns = args.map((a: any) =>
-      a instanceof Nodes.SqlLiteral ? a.value : String(a),
-    );
+    rel._selectColumns = args.map((a: any) => (a instanceof Nodes.SqlLiteral ? a : String(a)));
     return rel;
   }
 
@@ -551,7 +549,7 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#reselect
    */
-  reselect(...columns: string[]): Relation<T> {
+  reselect(...columns: (string | Nodes.SqlLiteral)[]): Relation<T> {
     const rel = this._clone();
     rel._selectColumns = columns;
     return rel;
@@ -742,7 +740,10 @@ export class Relation<T extends Base> {
       parts.push(`.offset(${this._offsetValue})`);
     }
     if (this._selectColumns !== null) {
-      parts.push(`.select(${JSON.stringify(this._selectColumns)})`);
+      const cols = this._selectColumns.map((c) =>
+        c instanceof Nodes.SqlLiteral ? `Arel.sql(${JSON.stringify(c.value)})` : JSON.stringify(c),
+      );
+      parts.push(`.select(${cols.join(", ")})`);
     }
     if (this._isDistinct) {
       parts.push(`.distinct`);
@@ -2717,7 +2718,7 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#select_values
    */
-  get selectValues(): string[] {
+  get selectValues(): (string | Nodes.SqlLiteral)[] {
     return this._selectColumns ?? [];
   }
 
@@ -2930,6 +2931,7 @@ export class Relation<T extends Base> {
   private _buildProjections(table: Table): any[] {
     if (this._selectColumns) {
       return this._selectColumns.map((c) => {
+        if (c instanceof Nodes.SqlLiteral) return c;
         if (/[(*\s]/.test(c)) return new Nodes.SqlLiteral(c);
         return table.get(c);
       });

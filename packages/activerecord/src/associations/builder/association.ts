@@ -20,11 +20,22 @@ export class Association {
     ];
   }
 
-  static build(model: any, name: string, options: Record<string, unknown>): void {
+  static build(model: any, name: string, options: Record<string, unknown> = {}): void {
     new this().build(model, name, options);
   }
 
-  build(_model: any, _name: string, _options: Record<string, unknown>): void {
-    // Subclasses define association on the model
+  build(model: any, name: string, options: Record<string, unknown>): void {
+    this.ensureOwnAssociations(model);
+    this.defineAssociation(model, name, options);
+  }
+
+  protected ensureOwnAssociations(model: any): void {
+    if (!Object.prototype.hasOwnProperty.call(model, "_associations")) {
+      model._associations = [...(model._associations ?? [])];
+    }
+  }
+
+  protected defineAssociation(_model: any, _name: string, _options: Record<string, unknown>): void {
+    // Subclasses push the appropriate AssociationDefinition
   }
 }

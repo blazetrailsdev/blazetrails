@@ -15,4 +15,12 @@ export class HasMany extends CollectionAssociation {
       "counter_cache",
     ];
   }
+
+  protected override defineAssociation(
+    model: any,
+    name: string,
+    options: Record<string, unknown>,
+  ): void {
+    model._associations.push({ type: "hasMany", name, options });
+  }
 }

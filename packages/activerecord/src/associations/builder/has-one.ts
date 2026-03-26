@@ -14,4 +14,15 @@ export class HasOne extends SingularAssociation {
       "disable_joins",
     ];
   }
+
+  protected override defineAssociation(
+    model: any,
+    name: string,
+    options: Record<string, unknown>,
+  ): void {
+    if (options.counterCache) {
+      throw new Error("has_one associations do not support counter_cache");
+    }
+    model._associations.push({ type: "hasOne", name, options });
+  }
 }

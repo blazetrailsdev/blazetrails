@@ -88,12 +88,12 @@ export class AttributeMutationTracker {
     this.forcedChanges.set(name, cloneValue(value));
   }
 
-  private attrNames(): string[] {
-    return this.attributes.keys();
+  protected attributeChanged(name: string): boolean {
+    return this.forcedChanges.has(name) || this.attributes.getAttribute(name).isChanged();
   }
 
-  private attributeChanged(name: string): boolean {
-    return this.forcedChanges.has(name) || this.attributes.getAttribute(name).isChanged();
+  protected attrNames(): string[] {
+    return this.attributes.keys();
   }
 }
 
@@ -104,6 +104,14 @@ export class AttributeMutationTracker {
  */
 export class ForcedMutationTracker extends AttributeMutationTracker {
   private finalizedChanges: Record<string, [unknown, unknown]> | null = null;
+
+  protected override attributeChanged(name: string): boolean {
+    return this.forcedChanges.has(name);
+  }
+
+  protected override attrNames(): string[] {
+    return Array.from(this.forcedChanges.keys());
+  }
 
   changedInPlace(_name: string): boolean {
     return false;

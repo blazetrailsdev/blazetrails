@@ -25,7 +25,7 @@ export class Named {
 
     Object.defineProperty(modelClass, name, {
       value: function (...args: any[]) {
-        return modelClass.all()[name](...args);
+        return (this as any).all()[name](...args);
       },
       writable: true,
       configurable: true,

@@ -112,12 +112,16 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
     if (filePath.endsWith(".d.ts")) continue;
 
     const relPath = path.relative(srcDir, filePath);
+    let fileHasClassOrModule = false;
+    const fileFunctions: MethodInfo[] = [];
+
     ts.forEachChild(sourceFile, (node) => {
       if (ts.isClassDeclaration(node) && node.name) {
         if (!isExported(node)) return;
         const classInfo = extractClass(node, checker, relPath);
         if (classInfo) {
           info.classes[classInfo.name] = classInfo;
+          fileHasClassOrModule = true;
         }
       } else if (ts.isInterfaceDeclaration(node) && node.name) {
         if (!isExported(node)) return;
@@ -130,6 +134,7 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
           instanceMethods: [],
           classMethods: [],
         };
+        fileHasClassOrModule = true;
       } else if (ts.isModuleDeclaration(node) && node.name) {
         if (!isExported(node)) return;
         const name = node.name.text;
@@ -141,6 +146,7 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
           instanceMethods: [],
           classMethods: [],
         };
+        fileHasClassOrModule = true;
       } else if (ts.isExportDeclaration(node)) {
         // Handle `export * as Foo from "./bar.js"` — namespace re-exports
         // Only record if not already defined by an interface/namespace declaration
@@ -155,9 +161,40 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
             instanceMethods: [],
             classMethods: [],
           };
+          fileHasClassOrModule = true;
         }
+      } else if (ts.isFunctionDeclaration(node) && node.name && isExported(node)) {
+        // Track exported functions — may become module methods
+        fileFunctions.push({
+          name: node.name.text,
+          visibility: "public",
+          params: extractParameters(node.parameters),
+          isStatic: false,
+        });
       }
     });
+
+    // If a file has exported functions but no class/interface/namespace,
+    // create a module entry from the file name. This matches Rails' pattern
+    // where modules like Enum, Sanitization, etc. contain methods.
+    if (!fileHasClassOrModule && fileFunctions.length > 0) {
+      const baseName = path.basename(relPath, ".ts");
+      // Convert kebab-case to PascalCase: "secure-password" → "SecurePassword"
+      const moduleName = baseName
+        .split("-")
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join("");
+      if (!info.modules[moduleName] && !info.classes[moduleName]) {
+        info.modules[moduleName] = {
+          name: moduleName,
+          file: relPath,
+          includes: [],
+          extends: [],
+          instanceMethods: fileFunctions,
+          classMethods: [],
+        };
+      }
+    }
   }
 
   return info;

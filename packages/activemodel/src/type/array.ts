@@ -49,7 +49,11 @@ export class ArrayType extends Type<unknown[]> {
       const ch = inner[i];
       if (inQuote) {
         if (ch === "\\") {
-          current += inner[++i];
+          if (i + 1 < inner.length) {
+            current += inner[++i];
+          } else {
+            current += "\\";
+          }
         } else if (ch === '"') {
           inQuote = false;
         } else {
@@ -77,6 +81,7 @@ export class ArrayType extends Type<unknown[]> {
   }
 
   private castElement(raw: string, wasQuoted: boolean): unknown {
+    if (!wasQuoted) raw = raw.trim();
     if (!wasQuoted && raw === "NULL") return null;
     if (raw.startsWith("{")) {
       const sub = new ArrayType(this.subtype);

@@ -41,7 +41,10 @@ describe("ArrayType", () => {
 
   it("parses multi-dimensional arrays", () => {
     const type = new ArrayType(new IntegerType());
-    expect(type.cast("{{1,2},{3,4}}")).toEqual([[1, 2], [3, 4]]);
+    expect(type.cast("{{1,2},{3,4}}")).toEqual([
+      [1, 2],
+      [3, 4],
+    ]);
   });
 
   it("handles NULL elements", () => {

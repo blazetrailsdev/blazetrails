@@ -2423,9 +2423,7 @@ export class Base extends Model {
     }
 
     const colList = columns.map((c) => `"${c}"`).join(", ");
-    const valList = values
-      .map((v) => quoteSqlValue(v))
-      .join(", ");
+    const valList = values.map((v) => quoteSqlValue(v)).join(", ");
 
     let sql: string;
     if (columns.length === 0) {

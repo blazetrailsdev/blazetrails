@@ -2579,6 +2579,7 @@ export class Base extends Model {
       this._frozen = true;
       this._collectionProxies.clear();
       this._preloadedAssociations.clear();
+      this._associationInstances.clear();
     }));
 
     if (halted) return false;
@@ -2681,6 +2682,7 @@ export class Base extends Model {
     (this as any)._dirty.snapshot(this._attributes);
     this._collectionProxies.clear();
     this._preloadedAssociations.clear();
+    this._associationInstances.clear();
     return this;
   }
 
@@ -3332,7 +3334,10 @@ export class Base extends Model {
    */
   association(name: string): AssociationInstance {
     const existing = this._associationInstances.get(name);
-    if (existing) return existing;
+    if (existing) {
+      this._syncAssociationInstance(name, existing);
+      return existing;
+    }
 
     const ctor = this.constructor as any;
     const associations: any[] = ctor._associations ?? [];
@@ -3342,23 +3347,7 @@ export class Base extends Model {
     }
 
     const instance = this._buildAssociationInstance(assocDef);
-
-    // Sync with existing cached/preloaded/inverse-cached state
-    const proxy = this._collectionProxies.get(name) as any;
-    if (proxy && proxy.loaded) {
-      instance.setTarget(proxy.target);
-    } else {
-      const cachedAssociation = (this as any)._cachedAssociations?.get(name);
-      if (cachedAssociation !== undefined) {
-        instance.setTarget(cachedAssociation as any);
-      } else {
-        const preloaded = this._preloadedAssociations?.get(name) ?? null;
-        if (preloaded !== null) {
-          instance.setTarget(preloaded as any);
-        }
-      }
-    }
-
+    this._syncAssociationInstance(name, instance);
     this._associationInstances.set(name, instance);
     return instance;
   }
@@ -3385,6 +3374,23 @@ export class Base extends Model {
         return new HasManyThroughAssociation(this, assocDef);
       default:
         return new AssociationInstance(this, assocDef);
+    }
+  }
+
+  private _syncAssociationInstance(name: string, instance: AssociationInstance): void {
+    const proxy = this._collectionProxies.get(name) as any;
+    if (proxy && proxy.loaded) {
+      instance.setTarget(proxy.target);
+    } else {
+      const cachedAssociation = (this as any)._cachedAssociations?.get(name);
+      if (cachedAssociation !== undefined) {
+        instance.setTarget(cachedAssociation as any);
+      } else {
+        const preloaded = this._preloadedAssociations?.get(name) ?? null;
+        if (preloaded !== null) {
+          instance.setTarget(preloaded as any);
+        }
+      }
     }
   }
 

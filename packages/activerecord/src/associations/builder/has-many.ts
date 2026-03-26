@@ -10,9 +10,9 @@ export class HasMany extends CollectionAssociation {
       "as",
       "through",
       "source",
-      "source_type",
-      "disable_joins",
-      "counter_cache",
+      "sourceType",
+      "disableJoins",
+      "counterCache",
     ];
   }
 

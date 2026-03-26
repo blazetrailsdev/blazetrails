@@ -16,9 +16,6 @@ export class CollectionAssociation extends Association {
   }
 
   get size(): number {
-    if (this.loaded) {
-      return this.target.length;
-    }
     return this.target.length;
   }
 

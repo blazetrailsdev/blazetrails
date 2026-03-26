@@ -109,7 +109,7 @@ export class HasOneAssociationPolymorphicThroughError extends Error {
 export class HasManyThroughSourceAssociationNotFoundError extends Error {
   constructor(owner: string, through: string, source: string, association: string) {
     super(
-      `Could not find the source association(s) :${source} in model ${through}. Try 'hasMany ${association}, { through: "${through}", source: "<source>" }'. Is it one of ${source}?`,
+      `Could not find the source association(s) :${source} on ${owner} through '${through}'. Try 'hasMany ${association}, { through: "${through}", source: "<source_name>" }' with a valid source association defined on ${through}.`,
     );
     this.name = "HasManyThroughSourceAssociationNotFoundError";
   }

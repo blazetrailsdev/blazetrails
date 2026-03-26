@@ -14,9 +14,9 @@ export class Association {
       "dependent",
       "primaryKey",
       "inverseOf",
-      "strict_loading",
-      "ensuring_owner_was",
-      "query_constraints",
+      "strictLoading",
+      "ensuringOwnerWas",
+      "queryConstraints",
     ];
   }
 

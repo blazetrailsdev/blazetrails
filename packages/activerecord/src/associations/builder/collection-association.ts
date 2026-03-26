@@ -7,12 +7,6 @@ import { Association } from "./association.js";
  */
 export class CollectionAssociation extends Association {
   static override validOptions(options: Record<string, unknown>): string[] {
-    return [
-      ...super.validOptions(options),
-      "before_add",
-      "after_add",
-      "before_remove",
-      "after_remove",
-    ];
+    return [...super.validOptions(options), "beforeAdd", "afterAdd", "beforeRemove", "afterRemove"];
   }
 }

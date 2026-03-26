@@ -10,8 +10,8 @@ export class HasOne extends SingularAssociation {
       "as",
       "through",
       "source",
-      "source_type",
-      "disable_joins",
+      "sourceType",
+      "disableJoins",
     ];
   }
 

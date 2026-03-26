@@ -164,32 +164,39 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
           fileHasClassOrModule = true;
         }
       } else if (ts.isFunctionDeclaration(node) && node.name && isExported(node)) {
-        // Track exported functions — may become module methods
+        const line = node.getSourceFile().getLineAndCharacterOfPosition(node.getStart()).line + 1;
         fileFunctions.push({
           name: node.name.text,
           visibility: "public",
           params: extractParameters(node.parameters),
           isStatic: false,
+          line,
+          file: relPath,
         });
       }
     });
 
     // Also capture functions exported via `export { foo, bar }` (named export lists).
-    // Resolve each exported name back to its local declaration to extract params.
+    // Resolve aliases so ExportSpecifier nodes reach the underlying FunctionDeclaration.
     if (!fileHasClassOrModule) {
       const moduleSymbol = checker.getSymbolAtLocation(sourceFile);
       if (moduleSymbol) {
         const exports = checker.getExportsOfModule(moduleSymbol);
         for (const sym of exports) {
-          // Skip if already captured via `export function` syntax
+          if (sym.name.startsWith("_")) continue;
           if (fileFunctions.some((f) => f.name === sym.name)) continue;
-          const decl = sym.valueDeclaration ?? sym.declarations?.[0];
+          const resolved = sym.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym) : sym;
+          const decl = resolved.valueDeclaration ?? resolved.declarations?.[0];
           if (decl && ts.isFunctionDeclaration(decl)) {
+            const line =
+              decl.getSourceFile().getLineAndCharacterOfPosition(decl.getStart()).line + 1;
             fileFunctions.push({
               name: sym.name,
               visibility: "public",
               params: extractParameters(decl.parameters),
               isStatic: false,
+              line,
+              file: relPath,
             });
           }
         }

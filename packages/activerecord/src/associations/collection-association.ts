@@ -1,5 +1,5 @@
 import type { Base } from "../base.js";
-import type { AssociationReflection } from "../reflection.js";
+import type { AssociationDefinition } from "../associations.js";
 import { Association } from "./association.js";
 
 /**
@@ -10,8 +10,8 @@ import { Association } from "./association.js";
 export class CollectionAssociation extends Association {
   declare target: Base[];
 
-  constructor(owner: Base, reflection: AssociationReflection) {
-    super(owner, reflection);
+  constructor(owner: Base, definition: AssociationDefinition) {
+    super(owner, definition);
     this.target = [];
   }
 
@@ -19,14 +19,14 @@ export class CollectionAssociation extends Association {
     if (this.loaded) {
       return this.target.length;
     }
-    return this.countRecords();
+    return this.target.length;
   }
 
   isEmpty(): boolean {
     return this.size === 0;
   }
 
-  protected countRecords(): number {
-    return this.target.length;
+  get reader(): Base[] {
+    return this.target;
   }
 }

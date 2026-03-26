@@ -1,5 +1,5 @@
 import type { Base } from "../base.js";
-import type { AssociationReflection } from "../reflection.js";
+import type { AssociationDefinition } from "../associations.js";
 import { Association } from "./association.js";
 
 /**
@@ -10,8 +10,8 @@ import { Association } from "./association.js";
 export class SingularAssociation extends Association {
   declare target: Base | null;
 
-  constructor(owner: Base, reflection: AssociationReflection) {
-    super(owner, reflection);
+  constructor(owner: Base, definition: AssociationDefinition) {
+    super(owner, definition);
   }
 
   get reader(): Base | null {

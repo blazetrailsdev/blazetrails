@@ -14,6 +14,13 @@ import {
   ReadOnlyRecord,
 } from "./errors.js";
 import { encrypts as _encrypts, getEncryptor } from "./encryption.js";
+import { Association as AssociationInstance } from "./associations/association.js";
+import { BelongsToAssociation } from "./associations/belongs-to-association.js";
+import { BelongsToPolymorphicAssociation } from "./associations/belongs-to-polymorphic-association.js";
+import { HasOneAssociation } from "./associations/has-one-association.js";
+import { HasOneThroughAssociation } from "./associations/has-one-through-association.js";
+import { HasManyAssociation } from "./associations/has-many-association.js";
+import { HasManyThroughAssociation } from "./associations/has-many-through-association.js";
 
 // Late-bound Relation constructor to break circular dependency.
 // Set by relation.ts when it loads.
@@ -1832,6 +1839,7 @@ export class Base extends Model {
   _strictLoadingBypassCount = 0;
   _preloadedAssociations: Map<string, unknown> = new Map();
   _collectionProxies: Map<string, unknown> = new Map();
+  _associationInstances: Map<string, AssociationInstance> = new Map();
 
   /**
    * Track whether we're inside _instantiate (loading from DB).
@@ -3321,27 +3329,56 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base#association
    */
-  association(name: string): { name: string; loaded: boolean; target: unknown } {
+  association(name: string): AssociationInstance {
+    const existing = this._associationInstances.get(name);
+    if (existing) return existing;
+
     const ctor = this.constructor as any;
     const associations: any[] = ctor._associations ?? [];
     const assocDef = associations.find((a: any) => a.name === name);
     if (!assocDef) {
       throw new Error(`Association '${name}' not found on ${ctor.name}`);
     }
+
+    const instance = this._buildAssociationInstance(assocDef);
+
+    // Sync with existing cached/preloaded state
     const proxy = this._collectionProxies.get(name) as any;
-    if (proxy) {
-      return {
-        name,
-        loaded: proxy.loaded,
-        target: proxy.loaded ? proxy.target : null,
-      };
+    if (proxy && proxy.loaded) {
+      instance.setTarget(proxy.target);
+    } else {
+      const cached = this._preloadedAssociations?.get(name) ?? null;
+      if (cached !== null) {
+        instance.setTarget(cached as any);
+      }
     }
-    const cached = this._preloadedAssociations?.get(name) ?? null;
-    return {
-      name,
-      loaded: cached !== null,
-      target: cached,
-    };
+
+    this._associationInstances.set(name, instance);
+    return instance;
+  }
+
+  private _buildAssociationInstance(assocDef: any): AssociationInstance {
+    switch (assocDef.type) {
+      case "belongsTo":
+        if (assocDef.options.polymorphic) {
+          return new BelongsToPolymorphicAssociation(this, assocDef);
+        }
+        return new BelongsToAssociation(this, assocDef);
+      case "hasOne":
+        if (assocDef.options.through) {
+          return new HasOneThroughAssociation(this, assocDef);
+        }
+        return new HasOneAssociation(this, assocDef);
+      case "hasMany":
+        if (assocDef.options.through) {
+          return new HasManyThroughAssociation(this, assocDef);
+        }
+        return new HasManyAssociation(this, assocDef);
+      case "hasAndBelongsToMany":
+        return new HasManyThroughAssociation(this, assocDef);
+      default:
+        return new AssociationInstance(this, assocDef);
+    }
   }
 
   // Underscore aliases for bang methods (Rails uses ! suffix, TS uses _ suffix)

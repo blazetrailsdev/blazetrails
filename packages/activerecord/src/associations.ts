@@ -229,6 +229,16 @@ export class Associations {
 }
 
 /**
+ * Sync loaded result to the association instance if one exists.
+ */
+function syncToAssociationInstance(record: Base, assocName: string, result: unknown): void {
+  const instances = (record as any)._associationInstances as Map<string, any> | undefined;
+  if (instances?.has(assocName)) {
+    instances.get(assocName)!.setTarget(result);
+  }
+}
+
+/**
  * Load a belongs_to association.
  */
 export async function loadBelongsTo(
@@ -292,6 +302,7 @@ export async function loadBelongsTo(
       (result as any)._cachedAssociations = (result as any)._cachedAssociations ?? new Map();
       (result as any)._cachedAssociations.set(options.inverseOf, record);
     }
+    syncToAssociationInstance(record, assocName, result);
     return result;
   }
 
@@ -306,6 +317,7 @@ export async function loadBelongsTo(
     (result as any)._cachedAssociations.set(options.inverseOf, record);
   }
 
+  syncToAssociationInstance(record, assocName, result);
   return result;
 }
 
@@ -380,6 +392,7 @@ export async function loadHasOne(
       (result as any)._cachedAssociations = (result as any)._cachedAssociations ?? new Map();
       (result as any)._cachedAssociations.set(options.inverseOf, record);
     }
+    syncToAssociationInstance(record, assocName, result);
     return result;
   }
 
@@ -401,6 +414,7 @@ export async function loadHasOne(
     (result as any)._cachedAssociations.set(options.inverseOf, record);
   }
 
+  syncToAssociationInstance(record, assocName, result);
   return result;
 }
 
@@ -539,6 +553,7 @@ export async function loadHasMany(
         (child as any)._cachedAssociations.set(options.inverseOf, record);
       }
     }
+    syncToAssociationInstance(record, assocName, results);
     return results;
   }
 
@@ -560,6 +575,7 @@ export async function loadHasMany(
     }
   }
 
+  syncToAssociationInstance(record, assocName, results);
   return results;
 }
 

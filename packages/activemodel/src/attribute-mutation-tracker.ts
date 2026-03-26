@@ -104,7 +104,9 @@ export class AttributeMutationTracker {
   }
 
   protected attrNames(): string[] {
-    return this.attributes.keys();
+    const keys = new Set(this.attributes.keys());
+    for (const name of this.forcedChanges.keys()) keys.add(name);
+    return [...keys];
   }
 }
 

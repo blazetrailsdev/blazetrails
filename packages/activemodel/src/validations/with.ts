@@ -1,4 +1,5 @@
-import { EachValidator, AnyRecord } from "../validator.js";
+import { EachValidator } from "../validator.js";
+import type { AnyRecord } from "../validator.js";
 
 export class WithValidator extends EachValidator {
   override checkValidity(): void {

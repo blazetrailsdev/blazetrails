@@ -15,5 +15,8 @@
   "dependencies": {
     "@rails-ts/activesupport": "workspace:*",
     "bcryptjs": "^3.0.3"
+  },
+  "devDependencies": {
+    "yaml": "^2.8.3"
   }
 }

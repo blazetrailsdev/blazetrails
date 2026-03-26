@@ -31,6 +31,7 @@ export { BinaryType } from "./type/binary.js";
 export { TimeType } from "./type/time.js";
 export { UuidType } from "./type/uuid.js";
 export { JsonType } from "./type/json.js";
+export { ArrayType } from "./type/array.js";
 
 import { StringType } from "./type/string.js";
 import { IntegerType } from "./type/integer.js";

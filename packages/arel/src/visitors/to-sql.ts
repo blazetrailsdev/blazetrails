@@ -1131,7 +1131,23 @@ export class ToSql implements NodeVisitor<SQLString> {
     ) {
       return `'${(value as { toISOString: () => string }).toISOString()}'`;
     }
+    if (Array.isArray(value)) {
+      return `'${this.quoteArrayLiteral(value)}'`;
+    }
     const escaped = String(value).replace(/'/g, "''");
     return `'${escaped}'`;
+  }
+
+  private quoteArrayLiteral(arr: unknown[]): string {
+    const elements = arr.map((v) => {
+      if (v === null || v === undefined) return "NULL";
+      if (Array.isArray(v)) return this.quoteArrayLiteral(v);
+      if (typeof v === "number") return String(v);
+      if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
+      const str = String(v);
+      const escaped = str.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      return `"${escaped}"`;
+    });
+    return `{${elements.join(",")}}`;
   }
 }

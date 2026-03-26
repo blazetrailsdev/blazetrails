@@ -15,6 +15,29 @@ import {
 } from "./errors.js";
 import { encrypts as _encrypts, getEncryptor } from "./encryption.js";
 
+function quoteArrayLiteral(arr: unknown[]): string {
+  const elements = arr.map((v) => {
+    if (v === null || v === undefined) return "NULL";
+    if (Array.isArray(v)) return quoteArrayLiteral(v);
+    if (typeof v === "number") return String(v);
+    if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
+    const str = String(v);
+    const escaped = str.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    return `"${escaped}"`;
+  });
+  return `{${elements.join(",")}}`;
+}
+
+function quoteSqlValue(v: unknown): string {
+  if (v === null || v === undefined) return "NULL";
+  if (typeof v === "number") return String(v);
+  if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
+  if (v instanceof Date) return `'${v.toISOString()}'`;
+  if (Array.isArray(v)) return `'${quoteArrayLiteral(v)}'`;
+  if (typeof v === "object") return `'${JSON.stringify(v).replace(/'/g, "''")}'`;
+  return `'${String(v).replace(/'/g, "''")}'`;
+}
+
 // Late-bound Relation constructor to break circular dependency.
 // Set by relation.ts when it loads.
 let _RelationCtor: (new (modelClass: typeof Base) => any) | null = null;
@@ -2401,14 +2424,7 @@ export class Base extends Model {
 
     const colList = columns.map((c) => `"${c}"`).join(", ");
     const valList = values
-      .map((v) => {
-        if (v === null) return "NULL";
-        if (typeof v === "number") return String(v);
-        if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
-        if (v instanceof Date) return `'${v.toISOString()}'`;
-        if (typeof v === "object") return `'${JSON.stringify(v).replace(/'/g, "''")}'`;
-        return `'${String(v).replace(/'/g, "''")}'`;
-      })
+      .map((v) => quoteSqlValue(v))
       .join(", ");
 
     let sql: string;
@@ -2455,13 +2471,7 @@ export class Base extends Model {
     const setClause = Object.keys(changedAttrs)
       .map((key) => {
         const val = this.readAttribute(key);
-        if (val === null) return `"${key}" = NULL`;
-        if (typeof val === "number") return `"${key}" = ${val}`;
-        if (typeof val === "boolean") return `"${key}" = ${val ? "TRUE" : "FALSE"}`;
-        if (val instanceof Date) return `"${key}" = '${val.toISOString()}'`;
-        if (typeof val === "object")
-          return `"${key}" = '${JSON.stringify(val).replace(/'/g, "''")}'`;
-        return `"${key}" = '${String(val).replace(/'/g, "''")}'`;
+        return `"${key}" = ${quoteSqlValue(val)}`;
       })
       .join(", ");
 

@@ -1,4 +1,5 @@
 import { quoteIdentifier, quoteTableName } from "../../quoting.js";
+import { formatDefaultClause } from "../../sql-default.js";
 
 /**
  * Column type mapping.
@@ -213,16 +214,8 @@ export class TableDefinition {
       }
 
       if (col.options.default !== undefined) {
-        const def = col.options.default;
-        if (def === null) {
-          parts.push("DEFAULT NULL");
-        } else if (typeof def === "boolean") {
-          parts.push(`DEFAULT ${def ? "TRUE" : "FALSE"}`);
-        } else if (typeof def === "number") {
-          parts.push(`DEFAULT ${def}`);
-        } else {
-          parts.push(`DEFAULT '${String(def).replace(/'/g, "''")}'`);
-        }
+        const clause = formatDefaultClause(col.options.default);
+        if (clause) parts.push(clause.trimStart());
       }
 
       return parts.join(" ");

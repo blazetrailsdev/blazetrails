@@ -5,6 +5,7 @@ import {
   type ColumnOptions,
 } from "./connection-adapters/abstract/schema-definitions.js";
 import { detectAdapterName } from "./adapter-name.js";
+import { formatDefaultClause } from "./sql-default.js";
 
 interface RecordedOperation {
   method: string;
@@ -943,14 +944,7 @@ export abstract class Migration {
   }
 
   private _defaultClause(defaultValue: unknown): string {
-    if (defaultValue === undefined) return "";
-    if (defaultValue === null) return " DEFAULT NULL";
-    if (typeof defaultValue === "boolean") return ` DEFAULT ${defaultValue ? "TRUE" : "FALSE"}`;
-    if (typeof defaultValue === "number") return ` DEFAULT ${defaultValue}`;
-    if (typeof defaultValue === "function") return ` DEFAULT ${defaultValue()}`;
-    const str = String(defaultValue);
-    if (/^[A-Z_]+(?:\(\))?$/.test(str)) return ` DEFAULT ${str}`;
-    return ` DEFAULT '${str.replace(/'/g, "''")}'`;
+    return formatDefaultClause(defaultValue);
   }
 }
 

@@ -1,5 +1,4 @@
-import { quoteIdentifier, quoteTableName } from "../../quoting.js";
-import { quoteDefaultExpression } from "../../quoting.js";
+import { quoteIdentifier, quoteTableName, quoteDefaultExpression } from "../../quoting.js";
 
 /**
  * Column type mapping.

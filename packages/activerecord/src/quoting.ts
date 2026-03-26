@@ -38,13 +38,26 @@ export function quote(value: unknown): string {
 /**
  * Quote a column default expression for use in DDL.
  *
- * In Rails, proc/lambda defaults produce raw SQL expressions (e.g.
- * `-> { "CURRENT_TIMESTAMP" }`). All other values are quoted as literals.
+ * Raw SQL defaults should be expressed as:
+ * - A function: `() => "CURRENT_TIMESTAMP"` (mirrors Rails `-> { "CURRENT_TIMESTAMP" }`)
+ * - An Arel SqlLiteral: `new SqlLiteral("CURRENT_TIMESTAMP")` (mirrors `Arel.sql(...)`)
+ *
+ * All other values are quoted as literals via `quote()`.
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter#quote_default_expression
  */
 export function quoteDefaultExpression(value: unknown): string {
   if (value === undefined) return "";
   if (typeof value === "function") return ` DEFAULT ${value()}`;
+  if (isSqlLiteral(value)) return ` DEFAULT ${value.value}`;
   return ` DEFAULT ${quote(value)}`;
+}
+
+function isSqlLiteral(value: unknown): value is { value: string } {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    value.constructor?.name === "SqlLiteral" &&
+    typeof (value as any).value === "string"
+  );
 }

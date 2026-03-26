@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { quote, quoteDefaultExpression } from "./quoting.js";
+import { Nodes } from "@rails-ts/arel";
 
 describe("quote", () => {
   it("returns NULL for null", () => {
@@ -53,5 +54,15 @@ describe("quoteDefaultExpression", () => {
 
   it("passes through function calls like now()", () => {
     expect(quoteDefaultExpression(() => "now()")).toBe(" DEFAULT now()");
+  });
+
+  it("passes through SqlLiteral instances as raw SQL", () => {
+    expect(quoteDefaultExpression(new Nodes.SqlLiteral("CURRENT_TIMESTAMP"))).toBe(
+      " DEFAULT CURRENT_TIMESTAMP",
+    );
+  });
+
+  it("quotes plain string CURRENT_TIMESTAMP as a literal", () => {
+    expect(quoteDefaultExpression("CURRENT_TIMESTAMP")).toBe(" DEFAULT 'CURRENT_TIMESTAMP'");
   });
 });

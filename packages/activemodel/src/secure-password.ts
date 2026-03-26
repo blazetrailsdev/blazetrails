@@ -128,3 +128,11 @@ export class InstanceMethodsOnActivation {
     this.attribute = attribute;
   }
 }
+
+export interface SecurePassword {
+  minCost: boolean;
+}
+
+export interface SecurePasswordClassMethods {
+  hasSecurePassword(attribute?: string, options?: Record<string, unknown>): void;
+}

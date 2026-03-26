@@ -37,3 +37,21 @@ export class AttributeMethodPattern {
     return `${this.prefix}${attrName}${this.suffix}`;
   }
 }
+
+export interface AttributeMethods {
+  attributeMissing(name: string): unknown;
+  respondTo(method: string): boolean;
+}
+
+export interface AttributeMethodsClassMethods {
+  attributeMethodPrefix(...prefixes: string[]): void;
+  attributeMethodSuffix(...suffixes: string[]): void;
+  aliasAttribute(newName: string, oldName: string): void;
+  defineAttributeMethods(...attrNames: string[]): void;
+  defineAttributeMethod(attrName: string): void;
+  undefineAttributeMethods(): void;
+}
+
+export interface AttrNames {
+  defineAttributeAccessorMethod(name: string): void;
+}

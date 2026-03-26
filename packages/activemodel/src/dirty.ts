@@ -1,4 +1,4 @@
-import { AttributeSet } from "./attribute-set/builder.js";
+import { AttributeSet } from "./attribute-set.js";
 
 function resolveValue(value: unknown): unknown {
   return AttributeSet.resolveSnapshotValue(value);
@@ -126,4 +126,20 @@ export class DirtyTracker {
     }
     this._changedAttributes.clear();
   }
+}
+
+export interface Dirty {
+  isChanged(): boolean;
+  changed(): string[];
+  attributeChanged(name: string): boolean;
+  attributeWas(name: string): unknown;
+  attributePreviouslyChanged(name: string): boolean;
+  attributePreviouslyWas(name: string): unknown;
+  restoreAttributes(attributes?: string[]): void;
+  clearChangesInformation(): void;
+  clearAttributeChanges(attributes: string[]): void;
+  changedAttributes(): Record<string, unknown>;
+  changes(): Record<string, [unknown, unknown]>;
+  previousChanges(): Record<string, [unknown, unknown]>;
+  attributeChangedInPlace(name: string): boolean;
 }

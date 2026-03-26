@@ -21,3 +21,16 @@ export class AbsenceValidator implements Validator {
     }
   }
 }
+
+export interface HelperMethods {
+  validatesAbsenceOf(...args: unknown[]): void;
+  validatesAcceptanceOf(...args: unknown[]): void;
+  validatesComparisonOf(...args: unknown[]): void;
+  validatesConfirmationOf(...args: unknown[]): void;
+  validatesExclusionOf(...args: unknown[]): void;
+  validatesFormatOf(...args: unknown[]): void;
+  validatesInclusionOf(...args: unknown[]): void;
+  validatesLengthOf(...args: unknown[]): void;
+  validatesNumericalityOf(...args: unknown[]): void;
+  validatesPresenceOf(...args: unknown[]): void;
+}

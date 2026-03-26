@@ -30,3 +30,24 @@ export class ValidationContext {
     return this.name;
   }
 }
+
+export interface Validations {
+  errors: unknown;
+  isValid(context?: string): boolean;
+  validate(context?: string): unknown;
+  isInvalid(): boolean;
+  validateBang(context?: string): boolean;
+  validationContext: string | undefined;
+  validatesWith(...args: unknown[]): void;
+}
+
+export interface ValidationsClassMethods {
+  validatesEach(attributes: string[], fn: unknown): void;
+  validate(fn: unknown, options?: Record<string, unknown>): void;
+  validators(): unknown[];
+  clearValidators(): void;
+  validatorsOn(attribute: string): unknown[];
+  validates(attribute: string, options: Record<string, unknown>): void;
+  validatesBang(attribute: string, options: Record<string, unknown>): void;
+  validatesWith(...args: unknown[]): void;
+}

@@ -96,3 +96,10 @@ export class ModelName {
     return [scope, "models"];
   }
 }
+
+export interface Naming {
+  modelName(): unknown;
+}
+
+// Alias matching Rails ActiveModel::Name
+export class Name extends ModelName {}

@@ -7,6 +7,7 @@ export class BinaryType extends Type<Uint8Array> {
 
   cast(value: unknown): Uint8Array | null {
     if (value === null || value === undefined) return null;
+    if (value instanceof Data) return textEncoder.encode(value.value);
     if (value instanceof Uint8Array) return value;
     return textEncoder.encode(String(value));
   }
@@ -14,8 +15,18 @@ export class BinaryType extends Type<Uint8Array> {
   serialize(value: unknown): Uint8Array | null {
     return this.cast(value);
   }
+
+  deserialize(value: unknown): Uint8Array | null {
+    if (value instanceof Data) return textEncoder.encode(value.value);
+    return this.cast(value);
+  }
 }
 
+/**
+ * Wraps binary data with utility methods.
+ *
+ * Mirrors: ActiveModel::Type::Binary::Data
+ */
 export class Data {
   readonly value: string;
 
@@ -28,11 +39,11 @@ export class Data {
   }
 
   byteSize(): number {
-    return new TextEncoder().encode(this.value).length;
+    return textEncoder.encode(this.value).length;
   }
 
   hex(): string {
-    return Array.from(new TextEncoder().encode(this.value))
+    return Array.from(textEncoder.encode(this.value))
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
   }

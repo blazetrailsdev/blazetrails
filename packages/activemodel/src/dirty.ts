@@ -129,8 +129,8 @@ export class DirtyTracker {
 }
 
 export interface Dirty {
-  isChanged(): boolean;
-  readonly changed: string[];
+  readonly changed: boolean;
+  readonly changedAttributes: string[];
   attributeChanged(name: string): boolean;
   attributeWas(name: string): unknown;
   attributePreviouslyChanged(name: string): boolean;
@@ -138,7 +138,6 @@ export interface Dirty {
   restoreAttributes(attributes?: string[]): void;
   clearChangesInformation(): void;
   clearAttributeChanges(attributes: string[]): void;
-  readonly changedAttributes: Record<string, unknown>;
   readonly changes: Record<string, [unknown, unknown]>;
   readonly previousChanges: Record<string, [unknown, unknown]>;
   attributeChangedInPlace(name: string): boolean;

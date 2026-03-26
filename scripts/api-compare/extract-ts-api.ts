@@ -187,7 +187,7 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
           if (fileFunctions.some((f) => f.name === sym.name)) continue;
           const resolved = sym.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym) : sym;
           const decl = resolved.valueDeclaration ?? resolved.declarations?.[0];
-          if (decl && ts.isFunctionDeclaration(decl)) {
+          if (decl && ts.isFunctionDeclaration(decl) && decl.getSourceFile() === sourceFile) {
             const line =
               decl.getSourceFile().getLineAndCharacterOfPosition(decl.getStart()).line + 1;
             fileFunctions.push({

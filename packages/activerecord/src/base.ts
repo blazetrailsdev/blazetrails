@@ -15,6 +15,7 @@ import {
 } from "./errors.js";
 import { encrypts as _encrypts, getEncryptor } from "./encryption.js";
 
+/** @internal */
 export function quoteSqlValue(v: unknown, asArray = false): string {
   if (v === null || v === undefined) return "NULL";
   if (typeof v === "number") return String(v);

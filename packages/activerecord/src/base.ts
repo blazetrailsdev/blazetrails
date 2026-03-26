@@ -15,6 +15,7 @@ import {
 } from "./errors.js";
 import { encrypts as _encrypts, getEncryptor } from "./encryption.js";
 import { Association as AssociationInstance } from "./associations/association.js";
+import { AssociationNotFoundError } from "./associations/errors.js";
 import { BelongsToAssociation } from "./associations/belongs-to-association.js";
 import { BelongsToPolymorphicAssociation } from "./associations/belongs-to-polymorphic-association.js";
 import { HasOneAssociation } from "./associations/has-one-association.js";
@@ -3337,19 +3338,24 @@ export class Base extends Model {
     const associations: any[] = ctor._associations ?? [];
     const assocDef = associations.find((a: any) => a.name === name);
     if (!assocDef) {
-      throw new Error(`Association '${name}' not found on ${ctor.name}`);
+      throw new AssociationNotFoundError(this, name);
     }
 
     const instance = this._buildAssociationInstance(assocDef);
 
-    // Sync with existing cached/preloaded state
+    // Sync with existing cached/preloaded/inverse-cached state
     const proxy = this._collectionProxies.get(name) as any;
     if (proxy && proxy.loaded) {
       instance.setTarget(proxy.target);
     } else {
-      const cached = this._preloadedAssociations?.get(name) ?? null;
-      if (cached !== null) {
-        instance.setTarget(cached as any);
+      const cachedAssociation = (this as any)._cachedAssociations?.get(name);
+      if (cachedAssociation !== undefined) {
+        instance.setTarget(cachedAssociation as any);
+      } else {
+        const preloaded = this._preloadedAssociations?.get(name) ?? null;
+        if (preloaded !== null) {
+          instance.setTarget(preloaded as any);
+        }
       }
     }
 
@@ -3358,19 +3364,20 @@ export class Base extends Model {
   }
 
   private _buildAssociationInstance(assocDef: any): AssociationInstance {
+    const opts = assocDef.options ?? {};
     switch (assocDef.type) {
       case "belongsTo":
-        if (assocDef.options.polymorphic) {
+        if (opts.polymorphic) {
           return new BelongsToPolymorphicAssociation(this, assocDef);
         }
         return new BelongsToAssociation(this, assocDef);
       case "hasOne":
-        if (assocDef.options.through) {
+        if (opts.through) {
           return new HasOneThroughAssociation(this, assocDef);
         }
         return new HasOneAssociation(this, assocDef);
       case "hasMany":
-        if (assocDef.options.through) {
+        if (opts.through) {
           return new HasManyThroughAssociation(this, assocDef);
         }
         return new HasManyAssociation(this, assocDef);

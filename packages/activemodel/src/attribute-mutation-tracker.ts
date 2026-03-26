@@ -15,8 +15,7 @@ function cloneValue(value: unknown): unknown {
 }
 
 function valuesEqual(a: unknown, b: unknown): boolean {
-  if (Object.is(a, b)) return true;
-  return false;
+  return a === b;
 }
 
 /**

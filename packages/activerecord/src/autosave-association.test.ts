@@ -13,7 +13,7 @@ import { Associations, setBelongsTo, association, loadHasManyThrough } from "./a
 
 import { createTestAdapter } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
-import { markForDestruction, isMarkedForDestruction } from "./autosave-association.js";
+import { markForDestruction, isMarkedForDestruction } from "./autosave.js";
 
 // -- Helpers --
 function freshAdapter(): DatabaseAdapter {

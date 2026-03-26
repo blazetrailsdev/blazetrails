@@ -105,8 +105,4 @@ export { Migrator } from "./migration.js";
 export type { MigrationProxy, MigrationLike } from "./migration.js";
 export type { DelegatedTypeOptions } from "./delegated-type.js";
 
-export {
-  markForDestruction,
-  isMarkedForDestruction,
-  isDestroyable,
-} from "./autosave-association.js";
+export { markForDestruction, isMarkedForDestruction, isDestroyable } from "./autosave.js";

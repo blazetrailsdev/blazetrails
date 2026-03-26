@@ -4,11 +4,19 @@ function cloneValue(value: unknown): unknown {
   if (value === null || typeof value !== "object") return value;
   if (value instanceof Date) return new Date(value.getTime());
   if (Array.isArray(value)) return value.map(cloneValue);
+  // Only deep-clone plain objects; preserve class instances as-is
+  const proto = Object.getPrototypeOf(value);
+  if (proto !== Object.prototype && proto !== null) return value;
   const result: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
     result[k] = cloneValue(v);
   }
   return result;
+}
+
+function valuesEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  return false;
 }
 
 /**
@@ -61,8 +69,10 @@ export class AttributeMutationTracker {
 
   isChanged(name: string, options?: { from?: unknown; to?: unknown }): boolean {
     if (!this.attributeChanged(name)) return false;
-    if (options && "from" in options && this.originalValue(name) !== options.from) return false;
-    if (options && "to" in options && this.attributes.fetchValue(name) !== options.to) return false;
+    if (options && "from" in options && !valuesEqual(this.originalValue(name), options.from))
+      return false;
+    if (options && "to" in options && !valuesEqual(this.attributes.fetchValue(name), options.to))
+      return false;
     return true;
   }
 
@@ -84,6 +94,7 @@ export class AttributeMutationTracker {
   }
 
   forceChange(name: string): void {
+    if (this.forcedChanges.has(name)) return;
     const value = this.attributes.fetchValue(name);
     this.forcedChanges.set(name, cloneValue(value));
   }
@@ -118,7 +129,10 @@ export class ForcedMutationTracker extends AttributeMutationTracker {
   }
 
   changeToAttribute(name: string): [unknown, unknown] | undefined {
-    if (this.finalizedChanges && name in this.finalizedChanges) {
+    if (
+      this.finalizedChanges &&
+      Object.prototype.hasOwnProperty.call(this.finalizedChanges, name)
+    ) {
       return [...this.finalizedChanges[name]];
     }
     return super.changeToAttribute(name);
@@ -136,10 +150,9 @@ export class ForcedMutationTracker extends AttributeMutationTracker {
   }
 
   forceChange(name: string): void {
-    if (!this.forcedChanges.has(name)) {
-      const value = this.attributes.fetchValue(name);
-      this.forcedChanges.set(name, value);
-    }
+    if (this.forcedChanges.has(name)) return;
+    const value = this.attributes.fetchValue(name);
+    this.forcedChanges.set(name, cloneValue(value));
   }
 
   finalizeChanges(): void {

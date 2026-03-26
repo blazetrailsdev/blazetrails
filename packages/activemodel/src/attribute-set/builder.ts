@@ -289,10 +289,23 @@ export class LazyAttributeHash {
 
   deepDup(): LazyAttributeHash {
     const copy = new LazyAttributeHash(this.types, { ...this.values });
+    const cache = new Map<Attribute, Attribute>();
     for (const [name, attr] of this.delegate) {
-      copy.delegate.set(name, Object.assign(Object.create(Object.getPrototypeOf(attr)), attr));
+      copy.delegate.set(name, LazyAttributeHash.cloneAttr(attr, cache));
     }
     return copy;
+  }
+
+  private static cloneAttr(attr: Attribute, cache: Map<Attribute, Attribute>): Attribute {
+    const existing = cache.get(attr);
+    if (existing) return existing;
+    const cloned = Object.assign(Object.create(Object.getPrototypeOf(attr)), attr);
+    cache.set(attr, cloned);
+    const orig = attr.getOriginalAttribute();
+    if (orig) {
+      cloned.setOriginalAttribute(LazyAttributeHash.cloneAttr(orig, cache));
+    }
+    return cloned;
   }
 
   private assignDefault(name: string): Attribute {

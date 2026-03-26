@@ -13,12 +13,16 @@ export class WithValidator extends EachValidator {
 
   validateEach(record: AnyRecord, attribute: string, _value: unknown): void {
     const methodName = this.options.with as string;
-    if (typeof record[methodName] === "function") {
-      if (record[methodName].length === 0) {
-        record[methodName]();
-      } else {
-        record[methodName](attribute);
-      }
+    const method = record[methodName];
+    if (typeof method !== "function") {
+      throw new globalThis.Error(
+        `WithValidator expected ${methodName} to be a function on the record`,
+      );
+    }
+    if (method.length === 0) {
+      method.call(record);
+    } else {
+      method.call(record, attribute);
     }
   }
 }

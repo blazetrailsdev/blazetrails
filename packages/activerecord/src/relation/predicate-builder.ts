@@ -1,29 +1,64 @@
+import { Table, Nodes } from "@rails-ts/arel";
+import { Range } from "../connection-adapters/postgresql/oid/range.js";
+
 /**
  * Converts hash conditions ({ name: "dean", age: 30 }) into
- * Arel predicates (name = 'dean' AND age = 30).
+ * Arel predicate nodes. Used by Relation to build WHERE clauses.
  *
  * Mirrors: ActiveRecord::PredicateBuilder
  */
 export class PredicateBuilder {
-  readonly table: any;
+  readonly table: Table;
 
-  constructor(table: any) {
+  constructor(table: Table) {
     this.table = table;
   }
 
-  buildFromHash(attributes: Record<string, unknown>): any[] {
-    const predicates: any[] = [];
-    for (const [key, value] of Object.entries(attributes)) {
-      predicates.push(this.buildPredicate(key, value));
+  buildFromHash(conditions: Record<string, unknown>): Nodes.Node[] {
+    const nodes: Nodes.Node[] = [];
+    for (const [key, value] of Object.entries(conditions)) {
+      const attr = this.resolveColumn(key);
+      if (value === null) {
+        nodes.push(attr.isNull());
+      } else if (value instanceof Range) {
+        if (value.excludeEnd) {
+          nodes.push(attr.gteq(value.begin));
+          nodes.push(attr.lt(value.end));
+        } else {
+          nodes.push(attr.between(value.begin, value.end));
+        }
+      } else if (Array.isArray(value)) {
+        nodes.push(attr.in(value));
+      } else {
+        nodes.push(attr.eq(value));
+      }
     }
-    return predicates;
+    return nodes;
   }
 
-  private buildPredicate(key: string, value: unknown): any {
-    const attribute = this.table[key];
-    if (Array.isArray(value)) {
-      return attribute?.in(value);
+  buildNegatedFromHash(conditions: Record<string, unknown>): Nodes.Node[] {
+    const nodes: Nodes.Node[] = [];
+    for (const [key, value] of Object.entries(conditions)) {
+      const attr = this.resolveColumn(key);
+      if (value === null) {
+        nodes.push(attr.isNotNull());
+      } else if (value instanceof Range) {
+        nodes.push(attr.notBetween(value.begin, value.end));
+      } else if (Array.isArray(value)) {
+        nodes.push(attr.notIn(value));
+      } else {
+        nodes.push(attr.notEq(value));
+      }
     }
-    return attribute?.eq(value);
+    return nodes;
+  }
+
+  resolveColumn(key: string): Nodes.Attribute {
+    if (key.includes('"')) return this.table.get(key);
+    const firstDot = key.indexOf(".");
+    if (firstDot === -1) return this.table.get(key);
+    const secondDot = key.indexOf(".", firstDot + 1);
+    if (secondDot !== -1) return this.table.get(key);
+    return new Table(key.slice(0, firstDot)).get(key.slice(firstDot + 1));
   }
 }

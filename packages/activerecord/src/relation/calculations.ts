@@ -1,10 +1,34 @@
 /**
- * Calculation methods mixed into Relation: count, sum, average,
- * minimum, maximum, pluck, pick, ids.
+ * Calculation methods: count, sum, average, minimum, maximum, pluck, pick, ids.
+ * These are mixed into Relation in Rails. Here, Relation delegates to these
+ * static methods, passing itself as the first argument.
  *
  * Mirrors: ActiveRecord::Calculations
  */
-export class Calculations {}
+export class Calculations {
+  static async count(relation: any, column?: string): Promise<number | Record<string, number>> {
+    return relation._performCount(column);
+  }
+
+  static async sum(relation: any, column?: string): Promise<number | Record<string, number>> {
+    return relation._performSum(column);
+  }
+
+  static async average(
+    relation: any,
+    column: string,
+  ): Promise<number | null | Record<string, number>> {
+    return relation._performAverage(column);
+  }
+
+  static async minimum(relation: any, column: string): Promise<unknown | Record<string, unknown>> {
+    return relation._performMinimum(column);
+  }
+
+  static async maximum(relation: any, column: string): Promise<unknown | Record<string, unknown>> {
+    return relation._performMaximum(column);
+  }
+}
 
 /**
  * Tracks column aliases during calculation queries to avoid

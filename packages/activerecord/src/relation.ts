@@ -16,6 +16,9 @@ export { Range };
 import { WhereChain } from "./relation/query-methods.js";
 import { Merger } from "./relation/merger.js";
 import { Batches } from "./relation/batches.js";
+import { PredicateBuilder } from "./relation/predicate-builder.js";
+import { Calculations } from "./relation/calculations.js";
+import { FinderMethods } from "./relation/finder-methods.js";
 
 /**
  * Relation — the lazy, chainable query interface.
@@ -1783,6 +1786,10 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#first
    */
   async first(n?: number): Promise<T | T[] | null> {
+    return FinderMethods.first(this, n);
+  }
+
+  async _performFirst(n?: number): Promise<T | T[] | null> {
     if (this._isNone) return n !== undefined ? [] : null;
     if (n !== undefined) {
       const rel = this._clone();
@@ -1816,6 +1823,10 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#last
    */
   async last(n?: number): Promise<T | T[] | null> {
+    return FinderMethods.last(this, n);
+  }
+
+  async _performLast(n?: number): Promise<T | T[] | null> {
     if (this._isNone) return n !== undefined ? [] : null;
     let rel: Relation<T>;
     if (this._orderClauses.length === 0) {
@@ -2011,6 +2022,10 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#count
    */
   async count(column?: string): Promise<number | Record<string, number>> {
+    return Calculations.count(this, column);
+  }
+
+  async _performCount(column?: string): Promise<number | Record<string, number>> {
     if (this._limitValue === 0) return 0;
     if (this._isNone) return this._groupColumns.length > 0 ? {} : 0;
 
@@ -2053,6 +2068,10 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#sum
    */
   async sum(column?: string): Promise<number | Record<string, number>> {
+    return Calculations.sum(this, column);
+  }
+
+  async _performSum(column?: string): Promise<number | Record<string, number>> {
     if (this._isNone) return this._groupColumns.length > 0 ? {} : 0;
     if (!column) return 0;
     if (this._groupColumns.length > 0) {
@@ -2069,6 +2088,10 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#average
    */
   async average(column: string): Promise<number | null | Record<string, number>> {
+    return Calculations.average(this, column);
+  }
+
+  async _performAverage(column: string): Promise<number | null | Record<string, number>> {
     if (this._isNone) return this._groupColumns.length > 0 ? {} : null;
     if (this._groupColumns.length > 0) {
       return this._groupedAggregate("AVG", column);
@@ -2083,6 +2106,10 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#minimum
    */
   async minimum(column: string): Promise<unknown | Record<string, unknown>> {
+    return Calculations.minimum(this, column);
+  }
+
+  async _performMinimum(column: string): Promise<unknown | Record<string, unknown>> {
     if (this._isNone) return this._groupColumns.length > 0 ? {} : null;
     if (this._groupColumns.length > 0) {
       return this._groupedAggregate("MIN", column);
@@ -2097,6 +2124,10 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#maximum
    */
   async maximum(column: string): Promise<unknown | Record<string, unknown>> {
+    return Calculations.maximum(this, column);
+  }
+
+  async _performMaximum(column: string): Promise<unknown | Record<string, unknown>> {
     if (this._isNone) return this._groupColumns.length > 0 ? {} : null;
     if (this._groupColumns.length > 0) {
       return this._groupedAggregate("MAX", column);
@@ -2998,12 +3029,7 @@ export class Relation<T extends Base> {
   }
 
   private _resolveColumn(table: Table, key: string): Nodes.Attribute {
-    if (key.includes('"')) return table.get(key);
-    const firstDot = key.indexOf(".");
-    if (firstDot === -1) return table.get(key);
-    const secondDot = key.indexOf(".", firstDot + 1);
-    if (secondDot !== -1) return table.get(key);
-    return new Table(key.slice(0, firstDot)).get(key.slice(firstDot + 1));
+    return new PredicateBuilder(table).resolveColumn(key);
   }
 
   private _buildWhereNodes(
@@ -3011,39 +3037,13 @@ export class Relation<T extends Base> {
     whereClauses: Array<Record<string, unknown>>,
     whereNotClauses: Array<Record<string, unknown>>,
   ): Nodes.Node[] {
+    const builder = new PredicateBuilder(table);
     const nodes: Nodes.Node[] = [];
     for (const clause of whereClauses) {
-      for (const [key, value] of Object.entries(clause)) {
-        const attr = this._resolveColumn(table, key);
-        if (value === null) {
-          nodes.push(attr.isNull());
-        } else if (value instanceof Range) {
-          if (value.excludeEnd) {
-            nodes.push(attr.gteq(value.begin));
-            nodes.push(attr.lt(value.end));
-          } else {
-            nodes.push(attr.between(value.begin, value.end));
-          }
-        } else if (Array.isArray(value)) {
-          nodes.push(attr.in(value));
-        } else {
-          nodes.push(attr.eq(value));
-        }
-      }
+      nodes.push(...builder.buildFromHash(clause));
     }
     for (const clause of whereNotClauses) {
-      for (const [key, value] of Object.entries(clause)) {
-        const attr = this._resolveColumn(table, key);
-        if (value === null) {
-          nodes.push(attr.isNotNull());
-        } else if (value instanceof Range) {
-          nodes.push(attr.notBetween(value.begin, value.end));
-        } else if (Array.isArray(value)) {
-          nodes.push(attr.notIn(value));
-        } else {
-          nodes.push(attr.notEq(value));
-        }
-      }
+      nodes.push(...builder.buildNegatedFromHash(clause));
     }
     return nodes;
   }
@@ -3909,6 +3909,10 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#find
    */
   async find(...ids: unknown[]): Promise<T | T[]> {
+    return FinderMethods.find(this, ...ids);
+  }
+
+  async _performFind(...ids: unknown[]): Promise<T | T[]> {
     const pk = this._modelClass.primaryKey;
     if (ids.length === 1 && !Array.isArray(ids[0])) {
       const records = await this.where({ [pk as string]: ids[0] })

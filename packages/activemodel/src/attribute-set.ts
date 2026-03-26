@@ -204,9 +204,3 @@ export class AttributeSet {
     return this[Symbol.iterator]();
   }
 }
-
-/**
- * Builds an AttributeSet from type definitions and raw values.
- *
- * Mirrors: ActiveModel::AttributeSet::Builder
- */

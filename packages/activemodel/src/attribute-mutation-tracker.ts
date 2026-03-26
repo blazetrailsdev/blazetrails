@@ -15,7 +15,10 @@ function cloneValue(value: unknown): unknown {
 }
 
 function valuesEqual(a: unknown, b: unknown): boolean {
-  return a === b;
+  if (a === b) return true;
+  if (typeof a === "number" && typeof b === "number" && Number.isNaN(a) && Number.isNaN(b))
+    return true;
+  return false;
 }
 
 /**
@@ -179,7 +182,7 @@ export class NullMutationTracker {
     return {};
   }
 
-  changeToAttribute(_name: string): undefined {
+  changeToAttribute(_name: string): [unknown, unknown] | undefined {
     return undefined;
   }
 
@@ -187,7 +190,7 @@ export class NullMutationTracker {
     return false;
   }
 
-  isChanged(_name: string): boolean {
+  isChanged(_name: string, _options?: { from?: unknown; to?: unknown }): boolean {
     return false;
   }
 
@@ -195,7 +198,7 @@ export class NullMutationTracker {
     return false;
   }
 
-  originalValue(_name: string): undefined {
+  originalValue(_name: string): unknown {
     return undefined;
   }
 

@@ -27,8 +27,11 @@ export class ArrayType extends Type<unknown[]> {
 
   serialize(value: unknown): unknown {
     if (value === null || value === undefined) return null;
-    if (!Array.isArray(value)) return value;
-    return value.map((v) => (Array.isArray(v) ? this.serialize(v) : this.subtype.serialize(v)));
+    const array = Array.isArray(value) ? value : this.cast(value);
+    if (array === null) return null;
+    return (array as unknown[]).map((v) =>
+      Array.isArray(v) ? this.serialize(v) : this.subtype.serialize(v),
+    );
   }
 
   private parseArrayLiteral(str: string): unknown[] {

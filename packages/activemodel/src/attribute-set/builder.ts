@@ -2,8 +2,6 @@ import { Attribute } from "../attribute.js";
 import { Type } from "../type/value.js";
 import { AttributeSet } from "../attribute-set.js";
 
-export { AttributeSet } from "../attribute-set.js";
-
 export class Builder {
   readonly types: Map<string, Type>;
   readonly defaultAttributes: Map<string, Attribute>;

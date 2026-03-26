@@ -239,3 +239,52 @@ describe("MigrationGeneratorTest (JavaScript project)", () => {
     expect(content).toContain('t.text("body")');
   });
 });
+
+describe("MigrationGeneratorTest (JavaScript ESM project)", () => {
+  let esmTmpDir: string;
+  let esmLines: string[];
+
+  beforeEach(() => {
+    esmTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "rails-ts-esm-test-"));
+    // No tsconfig.json, but package.json has "type": "module"
+    fs.writeFileSync(path.join(esmTmpDir, "package.json"), JSON.stringify({ type: "module" }));
+    esmLines = [];
+  });
+
+  afterEach(() => {
+    fs.rmSync(esmTmpDir, { recursive: true, force: true });
+  });
+
+  function makeEsmGen() {
+    return new MigrationGenerator({ cwd: esmTmpDir, output: (m) => esmLines.push(m) });
+  }
+
+  function readEsmMigration(files: string[]): string {
+    return fs.readFileSync(path.join(esmTmpDir, files[0]), "utf-8");
+  }
+
+  it("generates .js file with ESM imports", () => {
+    const gen = makeEsmGen();
+    const files = gen.run("CreateUsers", []);
+    expect(files[0]).toMatch(/\.js$/);
+    const content = readEsmMigration(files);
+    expect(content).toContain('import { Migration } from "@rails-ts/activerecord"');
+    expect(content).not.toContain("require(");
+  });
+
+  it("uses export class instead of module.exports", () => {
+    const gen = makeEsmGen();
+    const files = gen.run("CreateUsers", []);
+    const content = readEsmMigration(files);
+    expect(content).toContain("export class CreateUsers");
+    expect(content).not.toContain("module.exports");
+  });
+
+  it("omits TypeScript return type annotations", () => {
+    const gen = makeEsmGen();
+    const files = gen.run("CreateUsers", []);
+    const content = readEsmMigration(files);
+    expect(content).not.toContain("Promise<void>");
+    expect(content).toContain("async up()");
+  });
+});

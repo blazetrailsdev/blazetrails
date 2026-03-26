@@ -11,6 +11,7 @@ export class ControllerGenerator extends GeneratorBase {
 
     const ext = this.ext();
     const ts = this.isTypeScript();
+    const esm = this.isESM();
     const returnType = ts ? ": Promise<void>" : "";
 
     // Controller file
@@ -18,11 +19,11 @@ export class ControllerGenerator extends GeneratorBase {
       .map((a) => `  async ${a}()${returnType} {\n    // TODO: implement\n  }`)
       .join("\n\n");
 
-    const importLine = ts
+    const importLine = esm
       ? `import { ActionController } from "@rails-ts/actionpack";`
       : `const { ActionController } = require("@rails-ts/actionpack");`;
-    const exportPrefix = ts ? "export class" : "class";
-    const exportSuffix = ts ? "" : `\nmodule.exports = { ${className} };\n`;
+    const exportPrefix = esm ? "export class" : "class";
+    const exportSuffix = esm ? "" : `\nmodule.exports = { ${className} };\n`;
 
     this.createFile(
       `src/app/controllers/${fileName}${ext}`,
@@ -39,7 +40,7 @@ ${exportSuffix}`,
       .map((a) => `  it("${a}", () => {\n    // TODO: test ${a} action\n  });`)
       .join("\n\n");
 
-    if (ts) {
+    if (esm) {
       this.createFile(
         `test/controllers/${fileName}.test${ext}`,
         `import { describe, it, expect } from "vitest";

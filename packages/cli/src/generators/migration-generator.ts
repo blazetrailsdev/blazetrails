@@ -112,13 +112,14 @@ export class MigrationGenerator extends GeneratorBase {
     const ext = this.ext();
     const filename = `db/migrations/${timestamp}-${dasherize(name)}${ext}`;
     const ts = this.isTypeScript();
+    const esm = this.isESM();
 
-    const importLine = ts
+    const importLine = esm
       ? `import { Migration } from "@rails-ts/activerecord";`
       : `const { Migration } = require("@rails-ts/activerecord");`;
-    const exportPrefix = ts ? "export class" : "class";
+    const exportPrefix = esm ? "export class" : "class";
     const returnType = ts ? ": Promise<void>" : "";
-    const exportSuffix = ts ? "" : `\n\nmodule.exports = { ${className} };\n`;
+    const exportSuffix = esm ? "" : `\n\nmodule.exports = { ${className} };\n`;
 
     this.createFile(
       filename,

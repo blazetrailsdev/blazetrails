@@ -26,6 +26,18 @@ export abstract class GeneratorBase {
     return fs.existsSync(path.join(this.cwd, "tsconfig.json"));
   }
 
+  protected isESM(): boolean {
+    if (this.isTypeScript()) return true;
+    const pkgPath = path.join(this.cwd, "package.json");
+    if (!fs.existsSync(pkgPath)) return false;
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+      return pkg.type === "module";
+    } catch {
+      return false;
+    }
+  }
+
   protected ext(): string {
     return this.isTypeScript() ? ".ts" : ".js";
   }

@@ -47,9 +47,9 @@ export class ModelGenerator extends GeneratorBase {
     const staticBlock = attrLines ? `\n  static {\n${attrLines}\n  }\n` : "";
 
     const ext = this.ext();
-    const ts = this.isTypeScript();
+    const esm = this.isESM();
 
-    if (ts) {
+    if (esm) {
       this.createFile(
         `src/app/models/${fileName}${ext}`,
         `import { Base } from "@rails-ts/activerecord";
@@ -71,7 +71,7 @@ module.exports = { ${className} };
 
     // Test file
     if (test) {
-      if (ts) {
+      if (esm) {
         this.createFile(
           `test/models/${fileName}.test${ext}`,
           `import { describe, it, expect } from "vitest";

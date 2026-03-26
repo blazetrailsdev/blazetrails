@@ -90,12 +90,13 @@ export class ScaffoldGenerator extends GeneratorBase {
     plural: string,
   ): string {
     const ts = this.isTypeScript();
-    const importLine = ts
+    const esm = this.isESM();
+    const importLine = esm
       ? `import { ActionController } from "@rails-ts/actionpack";`
       : `const { ActionController } = require("@rails-ts/actionpack");`;
-    const exportPrefix = ts ? "export class" : "class";
+    const exportPrefix = esm ? "export class" : "class";
     const returnType = ts ? ": Promise<void>" : "";
-    const exportSuffix = ts ? "" : `\nmodule.exports = { ${controllerClassName} };\n`;
+    const exportSuffix = esm ? "" : `\nmodule.exports = { ${controllerClassName} };\n`;
 
     return `${importLine}
 
@@ -144,8 +145,8 @@ ${exportSuffix}`;
   }
 
   private controllerTestSource(className: string, fileName: string): string {
-    const ts = this.isTypeScript();
-    const importLines = ts
+    const esm = this.isESM();
+    const importLines = esm
       ? `import { describe, it, expect } from "vitest";\nimport { ${className} } from "../../src/app/controllers/${fileName}.js";`
       : `const { describe, it, expect } = require("vitest");\nconst { ${className} } = require("../../src/app/controllers/${fileName}.js");`;
 

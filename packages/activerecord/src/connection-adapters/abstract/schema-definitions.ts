@@ -219,7 +219,7 @@ export class TableDefinition {
           parts.push(this._adapterName === "postgres" ? "BYTEA" : "BLOB");
           break;
         case "json":
-          parts.push(this._adapterName === "mysql" ? "JSON" : "JSON");
+          parts.push("JSON");
           break;
         case "jsonb":
           parts.push(this._adapterName === "postgres" ? "JSONB" : "JSON");

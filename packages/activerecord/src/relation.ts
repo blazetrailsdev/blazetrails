@@ -2626,8 +2626,12 @@ export class Relation<T extends Base> {
       }
     } else if (options?.onDuplicate instanceof Nodes.SqlLiteral) {
       // Custom SQL via Arel.sql() — matches Rails' on_duplicate: Arel.sql("...")
-      const conflictTarget = `ON CONFLICT (${uniqueCols.map((c) => `"${c}"`).join(", ")})`;
-      sql = `INSERT INTO "${table.name}" (${colList}) VALUES ${valueRows.join(", ")} ${conflictTarget} DO UPDATE SET ${options.onDuplicate.value}`;
+      if (isMysql) {
+        sql = `INSERT INTO "${table.name}" (${colList}) VALUES ${valueRows.join(", ")} ON DUPLICATE KEY UPDATE ${options.onDuplicate.value}`;
+      } else {
+        const conflictTarget = `ON CONFLICT (${uniqueCols.map((c) => `"${c}"`).join(", ")})`;
+        sql = `INSERT INTO "${table.name}" (${colList}) VALUES ${valueRows.join(", ")} ${conflictTarget} DO UPDATE SET ${options.onDuplicate.value}`;
+      }
     } else {
       // Default upsert or updateOnly
       let updateCols: string[];

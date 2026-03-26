@@ -286,8 +286,10 @@ describe("InsertAllTest", () => {
     const Book = makeBookWithAdapter();
     const book = await Book.create({ title: "Existing", author: "Original" });
     const { sql } = await import("@rails-ts/arel");
+    const isMysql = !!process.env.MYSQL_TEST_URL;
+    const expr = isMysql ? sql("`author` = VALUES(`author`)") : sql('"author" = EXCLUDED."author"');
     await Book.upsertAll([{ id: book.id, title: "Existing", author: "Updated" }], {
-      onDuplicate: sql('"author" = EXCLUDED."author"'),
+      onDuplicate: expr,
     });
     const all = await Book.all().toArray();
     expect(all).toHaveLength(1);
@@ -436,8 +438,10 @@ describe("InsertAllTest", () => {
     const Book = makeBookWithAdapter();
     const existing = await Book.create({ title: "Existing", author: "A" });
     const { sql } = await import("@rails-ts/arel");
+    const isMysql = !!process.env.MYSQL_TEST_URL;
+    const expr = isMysql ? sql("`author` = VALUES(`author`)") : sql('"author" = EXCLUDED."author"');
     await Book.upsertAll([{ id: existing.id, title: "Existing", author: "B" }], {
-      onDuplicate: sql('"author" = EXCLUDED."author"'),
+      onDuplicate: expr,
     });
     const book = await Book.findBy({ title: "Existing" });
     expect((book as any).author).toBe("B");
@@ -534,8 +538,10 @@ describe("InsertAllTest", () => {
     const Book = makeBookWithAdapter();
     const book = await Book.create({ title: "Original", author: "Alice" });
     const { sql } = await import("@rails-ts/arel");
+    const isMysql = !!process.env.MYSQL_TEST_URL;
+    const expr = isMysql ? sql("`author` = VALUES(`author`)") : sql('"author" = EXCLUDED."author"');
     await Book.upsertAll([{ id: book.id, title: "Original", author: "Bob" }], {
-      onDuplicate: sql('"author" = EXCLUDED."author"'),
+      onDuplicate: expr,
     });
     const all = await Book.all().toArray();
     expect(all).toHaveLength(1);
@@ -546,8 +552,10 @@ describe("InsertAllTest", () => {
     const Book = makeBookWithAdapter();
     const book = await Book.create({ title: "Original", author: "Alice", status: 0 });
     const { sql } = await import("@rails-ts/arel");
+    const isMysql = !!process.env.MYSQL_TEST_URL;
+    const expr = isMysql ? sql("`author` = VALUES(`author`)") : sql('"author" = EXCLUDED."author"');
     await Book.upsertAll([{ id: book.id, title: "Original", author: "Bob", status: 1 }], {
-      onDuplicate: sql('"author" = EXCLUDED."author"'),
+      onDuplicate: expr,
     });
     const all = await Book.all().toArray();
     expect(all).toHaveLength(1);

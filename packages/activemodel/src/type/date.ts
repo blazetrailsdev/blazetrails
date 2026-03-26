@@ -10,3 +10,8 @@ export class DateType extends Type<Date> {
     return isNaN(d.getTime()) ? null : d;
   }
 }
+
+import type { Timezone } from "./helpers/timezone.js";
+type _TZ = DateType extends Pick<Timezone, never> ? true : never;
+const _tz: _TZ = true;
+void _tz;

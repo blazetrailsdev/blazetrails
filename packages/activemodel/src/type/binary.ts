@@ -44,3 +44,8 @@ export class Data {
       .join("");
   }
 }
+
+import type { Mutable } from "./helpers/mutable.js";
+type _Mutable = BinaryType extends Pick<Mutable, "cast"> ? true : never;
+const _m: _Mutable = true;
+void _m;

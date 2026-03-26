@@ -30,3 +30,8 @@ export class ExclusionValidator implements Validator {
     }
   }
 }
+
+import type { Clusivity } from "./clusivity.js";
+
+const _checkClusivity: ExclusionValidator extends Pick<Clusivity, never> ? true : never = true;
+void _checkClusivity;

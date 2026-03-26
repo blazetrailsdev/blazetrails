@@ -78,3 +78,9 @@ export class ComparisonValidator implements Validator {
     }
   }
 }
+
+import type { Comparability } from "./comparability.js";
+
+const _checkComparability: ComparisonValidator extends Pick<Comparability, never> ? true : never =
+  true;
+void _checkComparability;

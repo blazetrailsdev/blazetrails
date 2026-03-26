@@ -12,3 +12,8 @@ export class TimeType extends Type<Date> {
     return isNaN(d.getTime()) ? null : d;
   }
 }
+
+import type { TimeValue } from "./helpers/time-value.js";
+type _TV = TimeType extends Pick<TimeValue, never> ? true : never;
+const _tv: _TV = true;
+void _tv;

@@ -100,3 +100,8 @@ export class NumericalityValidator implements Validator {
     }
   }
 }
+
+import type { ResolveValue } from "./resolve-value.js";
+
+const _checkResolve: NumericalityValidator extends Pick<ResolveValue, never> ? true : never = true;
+void _checkResolve;

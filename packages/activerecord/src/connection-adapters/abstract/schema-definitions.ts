@@ -1,5 +1,5 @@
 import { quoteIdentifier, quoteTableName } from "../../quoting.js";
-import { formatDefaultClause } from "../../sql-default.js";
+import { quoteDefaultExpression } from "../../quoting.js";
 
 /**
  * Column type mapping.
@@ -214,7 +214,7 @@ export class TableDefinition {
       }
 
       if (col.options.default !== undefined) {
-        const clause = formatDefaultClause(col.options.default);
+        const clause = quoteDefaultExpression(col.options.default);
         if (clause) parts.push(clause.trimStart());
       }
 

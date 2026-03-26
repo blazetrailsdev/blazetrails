@@ -5,7 +5,7 @@ import {
   type ColumnOptions,
 } from "./connection-adapters/abstract/schema-definitions.js";
 import { detectAdapterName } from "./adapter-name.js";
-import { formatDefaultClause } from "./sql-default.js";
+import { quoteDefaultExpression } from "./quoting.js";
 
 interface RecordedOperation {
   method: string;
@@ -944,7 +944,7 @@ export abstract class Migration {
   }
 
   private _defaultClause(defaultValue: unknown): string {
-    return formatDefaultClause(defaultValue);
+    return quoteDefaultExpression(defaultValue);
   }
 }
 

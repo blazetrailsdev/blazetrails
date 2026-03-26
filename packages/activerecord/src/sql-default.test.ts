@@ -1,50 +1,57 @@
 import { describe, it, expect } from "vitest";
-import { formatDefaultClause } from "./sql-default.js";
+import { quote, quoteDefaultExpression } from "./quoting.js";
 
-describe("formatDefaultClause", () => {
-  it("returns empty string for undefined", () => {
-    expect(formatDefaultClause(undefined)).toBe("");
+describe("quote", () => {
+  it("returns NULL for null", () => {
+    expect(quote(null)).toBe("NULL");
   });
 
-  it("returns DEFAULT NULL for null", () => {
-    expect(formatDefaultClause(null)).toBe(" DEFAULT NULL");
-  });
-
-  it("returns DEFAULT TRUE/FALSE for booleans", () => {
-    expect(formatDefaultClause(true)).toBe(" DEFAULT TRUE");
-    expect(formatDefaultClause(false)).toBe(" DEFAULT FALSE");
+  it("returns TRUE/FALSE for booleans", () => {
+    expect(quote(true)).toBe("TRUE");
+    expect(quote(false)).toBe("FALSE");
   });
 
   it("returns unquoted numbers", () => {
-    expect(formatDefaultClause(42)).toBe(" DEFAULT 42");
-    expect(formatDefaultClause(3.14)).toBe(" DEFAULT 3.14");
+    expect(quote(42)).toBe("42");
+    expect(quote(3.14)).toBe("3.14");
   });
 
-  it("quotes regular strings", () => {
-    expect(formatDefaultClause("hello")).toBe(" DEFAULT 'hello'");
+  it("quotes strings with single quotes", () => {
+    expect(quote("hello")).toBe("'hello'");
   });
 
   it("escapes single quotes in strings", () => {
-    expect(formatDefaultClause("it's")).toBe(" DEFAULT 'it''s'");
+    expect(quote("it's")).toBe("'it''s'");
+  });
+});
+
+describe("quoteDefaultExpression", () => {
+  it("returns empty string for undefined", () => {
+    expect(quoteDefaultExpression(undefined)).toBe("");
   });
 
-  it("does not quote CURRENT_TIMESTAMP", () => {
-    expect(formatDefaultClause("CURRENT_TIMESTAMP")).toBe(" DEFAULT CURRENT_TIMESTAMP");
+  it("returns DEFAULT NULL for null", () => {
+    expect(quoteDefaultExpression(null)).toBe(" DEFAULT NULL");
   });
 
-  it("does not quote CURRENT_TIMESTAMP with precision", () => {
-    expect(formatDefaultClause("CURRENT_TIMESTAMP(6)")).toBe(" DEFAULT CURRENT_TIMESTAMP(6)");
+  it("returns DEFAULT TRUE/FALSE for booleans", () => {
+    expect(quoteDefaultExpression(true)).toBe(" DEFAULT TRUE");
+    expect(quoteDefaultExpression(false)).toBe(" DEFAULT FALSE");
   });
 
-  it("does not quote SQL function calls like now()", () => {
-    expect(formatDefaultClause("now()")).toBe(" DEFAULT now()");
+  it("returns unquoted numbers", () => {
+    expect(quoteDefaultExpression(42)).toBe(" DEFAULT 42");
   });
 
-  it("does not quote uuid_generate_v4()", () => {
-    expect(formatDefaultClause("uuid_generate_v4()")).toBe(" DEFAULT uuid_generate_v4()");
+  it("quotes regular strings", () => {
+    expect(quoteDefaultExpression("hello")).toBe(" DEFAULT 'hello'");
   });
 
-  it("supports function-style defaults", () => {
-    expect(formatDefaultClause(() => "CURRENT_TIMESTAMP")).toBe(" DEFAULT CURRENT_TIMESTAMP");
+  it("passes through function return values as raw SQL", () => {
+    expect(quoteDefaultExpression(() => "CURRENT_TIMESTAMP")).toBe(" DEFAULT CURRENT_TIMESTAMP");
+  });
+
+  it("passes through function calls like now()", () => {
+    expect(quoteDefaultExpression(() => "now()")).toBe(" DEFAULT now()");
   });
 });

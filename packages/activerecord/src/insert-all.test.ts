@@ -282,8 +282,16 @@ describe("InsertAllTest", () => {
   it.skip("insert_all with on_duplicate updates record timestamps", () => {
     /* needs ON CONFLICT DO UPDATE with timestamp columns */
   });
-  it.skip("insert_all with raw sql on_duplicate", () => {
-    /* needs raw SQL on_duplicate option */
+  it("insert_all with raw sql on_duplicate", async () => {
+    const Book = makeBookWithAdapter();
+    const book = await Book.create({ title: "Existing", author: "Original" });
+    const { sql } = await import("@rails-ts/arel");
+    await Book.upsertAll([{ id: book.id, title: "Existing", author: "Updated" }], {
+      onDuplicate: sql('"author" = EXCLUDED."author"'),
+    });
+    const all = await Book.all().toArray();
+    expect(all).toHaveLength(1);
+    expect((all[0] as any).author).toBe("Updated");
   });
   it.skip("upsert all has a clear error message when a column does not exist", () => {
     /* needs column validation */
@@ -424,8 +432,15 @@ describe("InsertAllTest", () => {
   it.skip("insert_all with returning and on_duplicate", () => {
     /* needs RETURNING + ON CONFLICT */
   });
-  it.skip("insert_all with on_duplicate raw sql", () => {
-    /* needs raw SQL on_duplicate option */
+  it("insert_all with on_duplicate raw sql", async () => {
+    const Book = makeBookWithAdapter();
+    const existing = await Book.create({ title: "Existing", author: "A" });
+    const { sql } = await import("@rails-ts/arel");
+    await Book.upsertAll([{ id: existing.id, title: "Existing", author: "B" }], {
+      onDuplicate: sql('"author" = EXCLUDED."author"'),
+    });
+    const book = await Book.findBy({ title: "Existing" });
+    expect((book as any).author).toBe("B");
   });
   it.skip("insert_all does not include readonly attributes", () => {
     /* needs readonly attribute filtering in insertAll */
@@ -515,9 +530,31 @@ describe("InsertAllTest", () => {
   it.skip("upsert all works with partitioned indexes", () => {});
   it.skip("insert all has many through", () => {});
   it.skip("upsert all has many through", () => {});
-  it.skip("upsert all updates using provided sql", () => {});
+  it("upsert all updates using provided sql", async () => {
+    const Book = makeBookWithAdapter();
+    const book = await Book.create({ title: "Original", author: "Alice" });
+    const { sql } = await import("@rails-ts/arel");
+    await Book.upsertAll([{ id: book.id, title: "Original", author: "Bob" }], {
+      onDuplicate: sql('"author" = EXCLUDED."author"'),
+    });
+    const all = await Book.all().toArray();
+    expect(all).toHaveLength(1);
+    expect((all[0] as any).author).toBe("Bob");
+  });
   it.skip("upsert all updates using values function on duplicate raw sql", () => {});
-  it.skip("upsert all updates using provided sql and unique by", () => {});
+  it("upsert all updates using provided sql and unique by", async () => {
+    const Book = makeBookWithAdapter();
+    const book = await Book.create({ title: "Original", author: "Alice", status: 0 });
+    const { sql } = await import("@rails-ts/arel");
+    await Book.upsertAll([{ id: book.id, title: "Original", author: "Bob", status: 1 }], {
+      onDuplicate: sql('"author" = EXCLUDED."author"'),
+    });
+    const all = await Book.all().toArray();
+    expect(all).toHaveLength(1);
+    expect((all[0] as any).author).toBe("Bob");
+    // status should NOT be updated since onDuplicate only mentions author
+    expect((all[0] as any).status).toBe(0);
+  });
   it.skip("insert all when table name contains database", () => {});
 
   let adapter: DatabaseAdapter;

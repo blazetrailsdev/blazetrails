@@ -534,13 +534,15 @@ export class Relation<T extends Base> {
    *   select(record => record.active)   // block form (returns array)
    */
   select(fn: (record: T) => boolean): Promise<T[]>;
-  select(...columns: string[]): Relation<T>;
+  select(...columns: (string | Nodes.SqlLiteral)[]): Relation<T>;
   select(...args: any[]): Relation<T> | Promise<T[]> {
     if (args.length === 1 && typeof args[0] === "function") {
       return this.toArray().then((records) => records.filter(args[0]));
     }
     const rel = this._clone();
-    rel._selectColumns = args as string[];
+    rel._selectColumns = args.map((a: any) =>
+      a instanceof Nodes.SqlLiteral ? a.value : String(a),
+    );
     return rel;
   }
 
@@ -2580,7 +2582,7 @@ export class Relation<T extends Base> {
     options?: {
       uniqueBy?: string | string[];
       updateOnly?: string | string[];
-      onDuplicate?: unknown;
+      onDuplicate?: "skip" | "update" | Nodes.SqlLiteral;
     },
   ): Promise<number> {
     if (options?.onDuplicate !== undefined && options?.updateOnly !== undefined) {
@@ -2622,8 +2624,12 @@ export class Relation<T extends Base> {
         const conflictTarget = `ON CONFLICT (${uniqueCols.map((c) => `"${c}"`).join(", ")})`;
         sql = `INSERT INTO "${table.name}" (${colList}) VALUES ${valueRows.join(", ")} ${conflictTarget} DO NOTHING`;
       }
+    } else if (options?.onDuplicate instanceof Nodes.SqlLiteral) {
+      // Custom SQL via Arel.sql() — matches Rails' on_duplicate: Arel.sql("...")
+      const conflictTarget = `ON CONFLICT (${uniqueCols.map((c) => `"${c}"`).join(", ")})`;
+      sql = `INSERT INTO "${table.name}" (${colList}) VALUES ${valueRows.join(", ")} ${conflictTarget} DO UPDATE SET ${options.onDuplicate.value}`;
     } else {
-      // updateOnly restricts which columns get updated on conflict
+      // Default upsert or updateOnly
       let updateCols: string[];
       if (options?.updateOnly) {
         const only = Array.isArray(options.updateOnly) ? options.updateOnly : [options.updateOnly];
@@ -2632,18 +2638,19 @@ export class Relation<T extends Base> {
         updateCols = columns.filter((c) => !uniqueCols.includes(c));
       }
 
+      let updateClause: string;
       if (isMysql) {
-        const updateClause =
+        updateClause =
           updateCols.length > 0
             ? updateCols.map((c) => `"${c}" = VALUES("${c}")`).join(", ")
             : `"${columns[0]}" = VALUES("${columns[0]}")`;
         sql = `INSERT INTO "${table.name}" (${colList}) VALUES ${valueRows.join(", ")} ON DUPLICATE KEY UPDATE ${updateClause}`;
       } else {
-        const conflictTarget = `ON CONFLICT (${uniqueCols.map((c) => `"${c}"`).join(", ")})`;
-        const updateClause =
+        updateClause =
           updateCols.length > 0
             ? updateCols.map((c) => `"${c}" = EXCLUDED."${c}"`).join(", ")
             : `"${columns[0]}" = EXCLUDED."${columns[0]}"`;
+        const conflictTarget = `ON CONFLICT (${uniqueCols.map((c) => `"${c}"`).join(", ")})`;
         sql = `INSERT INTO "${table.name}" (${colList}) VALUES ${valueRows.join(", ")} ${conflictTarget} DO UPDATE SET ${updateClause}`;
       }
     }

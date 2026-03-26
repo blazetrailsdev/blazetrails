@@ -52,6 +52,37 @@ describe("ArrayType", () => {
     expect(type.cast("{a,NULL,b}")).toEqual(["a", null, "b"]);
   });
 
+  it("casts nested JS arrays", () => {
+    const type = new ArrayType(new IntegerType());
+    expect(
+      type.cast([
+        [1, 2],
+        [3, 4],
+      ]),
+    ).toEqual([
+      [1, 2],
+      [3, 4],
+    ]);
+  });
+
+  it("handles quoted NULL elements as strings", () => {
+    const type = new ArrayType(new StringType());
+    expect(type.cast('{"a","NULL","b"}')).toEqual(["a", "NULL", "b"]);
+  });
+
+  it("serializes nested JS arrays", () => {
+    const type = new ArrayType(new IntegerType());
+    expect(
+      type.serialize([
+        [1, 2],
+        [3, 4],
+      ]),
+    ).toEqual([
+      [1, 2],
+      [3, 4],
+    ]);
+  });
+
   it("serializes arrays", () => {
     const type = new ArrayType(new IntegerType());
     expect(type.serialize([1, 2, 3])).toEqual([1, 2, 3]);

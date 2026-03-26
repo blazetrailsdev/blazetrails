@@ -1132,7 +1132,8 @@ export class ToSql implements NodeVisitor<SQLString> {
       return `'${(value as { toISOString: () => string }).toISOString()}'`;
     }
     if (Array.isArray(value)) {
-      return `'${this.quoteArrayLiteral(value)}'`;
+      const arrayLiteral = this.quoteArrayLiteral(value);
+      return `'${arrayLiteral.replace(/'/g, "''")}'`;
     }
     const escaped = String(value).replace(/'/g, "''");
     return `'${escaped}'`;

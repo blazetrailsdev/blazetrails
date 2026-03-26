@@ -28,12 +28,15 @@ function quoteArrayLiteral(arr: unknown[]): string {
   return `{${elements.join(",")}}`;
 }
 
-function quoteSqlValue(v: unknown): string {
+export function quoteSqlValue(v: unknown): string {
   if (v === null || v === undefined) return "NULL";
   if (typeof v === "number") return String(v);
   if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
   if (v instanceof Date) return `'${v.toISOString()}'`;
-  if (Array.isArray(v)) return `'${quoteArrayLiteral(v)}'`;
+  if (Array.isArray(v)) {
+    const arrayLiteral = quoteArrayLiteral(v);
+    return `'${arrayLiteral.replace(/'/g, "''")}'`;
+  }
   if (typeof v === "object") return `'${JSON.stringify(v).replace(/'/g, "''")}'`;
   return `'${String(v).replace(/'/g, "''")}'`;
 }

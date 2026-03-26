@@ -17,7 +17,7 @@ export class ArrayType extends Type<unknown[]> {
   cast(value: unknown): unknown[] | null {
     if (value === null || value === undefined) return null;
     if (Array.isArray(value)) {
-      return value.map((v) => this.subtype.cast(v));
+      return value.map((v) => (Array.isArray(v) ? this.cast(v) : this.subtype.cast(v)));
     }
     if (typeof value === "string") {
       return this.parseArrayLiteral(value);
@@ -28,7 +28,7 @@ export class ArrayType extends Type<unknown[]> {
   serialize(value: unknown): unknown {
     if (value === null || value === undefined) return null;
     if (!Array.isArray(value)) return value;
-    return value.map((v) => this.subtype.serialize(v));
+    return value.map((v) => (Array.isArray(v) ? this.serialize(v) : this.subtype.serialize(v)));
   }
 
   private parseArrayLiteral(str: string): unknown[] {
@@ -42,6 +42,7 @@ export class ArrayType extends Type<unknown[]> {
     const results: unknown[] = [];
     let current = "";
     let inQuote = false;
+    let wasQuoted = false;
     let depth = 0;
 
     for (let i = 0; i < inner.length; i++) {
@@ -61,20 +62,22 @@ export class ArrayType extends Type<unknown[]> {
         depth--;
         current += ch;
       } else if (ch === "," && depth === 0) {
-        results.push(this.castElement(current));
+        results.push(this.castElement(current, wasQuoted));
         current = "";
+        wasQuoted = false;
       } else if (ch === '"') {
         inQuote = true;
+        wasQuoted = true;
       } else {
         current += ch;
       }
     }
-    results.push(this.castElement(current));
+    results.push(this.castElement(current, wasQuoted));
     return results;
   }
 
-  private castElement(raw: string): unknown {
-    if (raw === "NULL") return null;
+  private castElement(raw: string, wasQuoted: boolean): unknown {
+    if (!wasQuoted && raw === "NULL") return null;
     if (raw.startsWith("{")) {
       const sub = new ArrayType(this.subtype);
       return sub.parseArrayLiteral(raw);

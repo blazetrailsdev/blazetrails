@@ -34,6 +34,7 @@ export class QueryMethods {
 
 /**
  * Provides chainable where.not(), where.associated(), where.missing().
+ * Returned by `Relation#where()` when called with no arguments.
  *
  * Mirrors: ActiveRecord::QueryMethods::WhereChain
  */

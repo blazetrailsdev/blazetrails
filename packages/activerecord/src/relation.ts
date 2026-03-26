@@ -13,6 +13,9 @@ import {
 
 import { Range } from "./connection-adapters/postgresql/oid/range.js";
 export { Range };
+import { WhereChain } from "./relation/query-methods.js";
+import { Merger } from "./relation/merger.js";
+import { Batches } from "./relation/batches.js";
 
 /**
  * Relation — the lazy, chainable query interface.
@@ -72,15 +75,16 @@ export class Relation<T extends Base> {
    *   where("age > ?", 18)
    *   where("name LIKE ?", "%dean%")
    */
-  where(): Relation<T>;
+  where(): WhereChain;
   where(conditions: Record<string, unknown> | null | undefined): Relation<T>;
   where(sql: string, ...binds: unknown[]): Relation<T>;
   where(node: Nodes.Node): Relation<T>;
   where(
     conditionsOrSql?: Record<string, unknown> | string | Nodes.Node | null,
     ...binds: unknown[]
-  ): Relation<T> {
-    if (conditionsOrSql === undefined || conditionsOrSql === null) return this._clone();
+  ): Relation<T> | WhereChain {
+    if (conditionsOrSql === undefined) return new WhereChain(this._clone());
+    if (conditionsOrSql === null) return this._clone();
 
     // Arel node: store directly, bypass string/hash processing
     if (conditionsOrSql instanceof Nodes.Node) {
@@ -836,37 +840,7 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#merge
    */
   merge<U extends Base>(other: Relation<U>): Relation<T> {
-    const rel = this._clone();
-    rel._whereClauses.push(...other._whereClauses);
-    rel._whereNotClauses.push(...other._whereNotClauses);
-    rel._whereRawClauses.push(...other._whereRawClauses);
-    rel._whereArelNodes.push(...other._whereArelNodes);
-    if (other._orderClauses.length > 0) {
-      rel._orderClauses = [...other._orderClauses];
-    }
-    if (other._limitValue !== null) {
-      rel._limitValue = other._limitValue;
-    }
-    if (other._offsetValue !== null) {
-      rel._offsetValue = other._offsetValue;
-    }
-    if (other._selectColumns) {
-      rel._selectColumns = [...other._selectColumns];
-    }
-    if (other._isDistinct) rel._isDistinct = true;
-    if (other._groupColumns.length > 0) {
-      rel._groupColumns.push(...other._groupColumns);
-    }
-    if (other._havingClauses.length > 0) {
-      rel._havingClauses.push(...other._havingClauses);
-    }
-    if (other._lockValue) rel._lockValue = other._lockValue;
-    if (other._isReadonly) rel._isReadonly = true;
-    if (other._isStrictLoading) rel._isStrictLoading = true;
-    rel._joinClauses.push(...other._joinClauses);
-    rel._rawJoins.push(...other._rawJoins);
-    rel._annotations.push(...other._annotations);
-    return rel;
+    return new Merger(this, other).merge();
   }
 
   /**
@@ -2799,7 +2773,7 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#find_in_batches
    */
   async *findInBatches({
-    batchSize = 1000,
+    batchSize = Batches.DEFAULT_BATCH_SIZE,
     start,
     finish,
     order,
@@ -2851,7 +2825,7 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#find_each
    */
   async *findEach({
-    batchSize = 1000,
+    batchSize = Batches.DEFAULT_BATCH_SIZE,
     start,
     finish,
     order,
@@ -2874,7 +2848,9 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Batches#in_batches
    */
-  async *inBatches({ batchSize = 1000 }: { batchSize?: number } = {}): AsyncGenerator<Relation<T>> {
+  async *inBatches({
+    batchSize = Batches.DEFAULT_BATCH_SIZE,
+  }: { batchSize?: number } = {}): AsyncGenerator<Relation<T>> {
     const pk = this._modelClass.primaryKey;
     let lastId: unknown = null;
 

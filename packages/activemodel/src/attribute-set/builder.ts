@@ -315,6 +315,11 @@ export class LazyAttributeHash {
       this.delegate.set(name, attr);
       return attr;
     }
+    if (type) {
+      const attr = Attribute.uninitialized(name, type);
+      this.delegate.set(name, attr);
+      return attr;
+    }
     return Attribute.null(name);
   }
 }

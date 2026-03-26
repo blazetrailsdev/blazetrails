@@ -12,7 +12,11 @@ export class YAMLEncoder {
   }
 
   decode(encoded: string): Record<string, unknown> {
-    return YAML.parse(encoded) as Record<string, unknown>;
+    const parsed = YAML.parse(encoded);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      throw new globalThis.Error("YAMLEncoder.decode expected a YAML mapping (object)");
+    }
+    return parsed as Record<string, unknown>;
   }
 
   types(): Record<string, string> {

@@ -19,10 +19,6 @@ export class WithValidator extends EachValidator {
         `WithValidator expected ${methodName} to be a function on the record`,
       );
     }
-    if (method.length === 0) {
-      method.call(record);
-    } else {
-      method.call(record, attribute);
-    }
+    method.call(record, attribute);
   }
 }

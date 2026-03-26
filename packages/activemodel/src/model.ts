@@ -1024,7 +1024,7 @@ export class Model {
    *
    * Mirrors: ActiveModel::Validations#validate
    */
-  validate(context?: string): this {
+  validate(context?: string | ValidationContext): this {
     this.isValid(context);
     return this;
   }

@@ -32,12 +32,12 @@ export class ValidationContext {
 }
 
 export interface Validations {
-  errors: unknown;
-  isValid(context?: string): boolean;
-  validate(context?: string): unknown;
+  errors: import("./errors.js").Errors;
+  isValid(context?: string | ValidationContext): boolean;
+  validate(context?: string | ValidationContext): this;
   isInvalid(): boolean;
   validateBang(context?: string): boolean;
-  validationContext: string | undefined;
+  validationContext: string | null;
   validatesWith(...args: unknown[]): void;
 }
 
@@ -48,6 +48,5 @@ export interface ValidationsClassMethods {
   clearValidators(): void;
   validatorsOn(attribute: string): unknown[];
   validates(attribute: string, options: Record<string, unknown>): void;
-  validatesBang(attribute: string, options: Record<string, unknown>): void;
   validatesWith(...args: unknown[]): void;
 }

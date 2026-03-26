@@ -106,5 +106,7 @@ function normalizeIncludes(
 }
 
 export interface Serialization {
-  serializableHash(options?: Record<string, unknown>): Record<string, unknown>;
+  serializableHash(
+    options?: import("./serialization.js").SerializeOptions,
+  ): Record<string, unknown>;
 }

@@ -98,7 +98,7 @@ export class ModelName {
 }
 
 export interface Naming {
-  modelName(): unknown;
+  readonly modelName: unknown;
 }
 
 // Alias matching Rails ActiveModel::Name

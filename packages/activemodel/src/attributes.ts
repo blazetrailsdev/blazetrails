@@ -108,7 +108,7 @@ export function Attributes<TBase extends Constructor>(Base: TBase) {
 
 export interface Attributes {
   attributes: Record<string, unknown>;
-  attributeNames: string[];
+  attributeNames(): string[];
 }
 
 export interface AttributesClassMethods {

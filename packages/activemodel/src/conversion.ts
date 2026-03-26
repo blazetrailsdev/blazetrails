@@ -6,5 +6,5 @@ export interface Conversion {
 }
 
 export interface ConversionClassMethods {
-  toPartialPath(): string;
+  _toPartialPath(): string;
 }

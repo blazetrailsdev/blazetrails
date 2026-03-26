@@ -2,6 +2,7 @@ import { Node } from "../nodes/node.js";
 import * as Nodes from "../nodes/index.js";
 import { SQLString } from "../collectors/sql-string.js";
 import { ToSql } from "./to-sql.js";
+import { quoteArrayLiteral } from "../quote-array.js";
 
 /**
  * PostgreSQL visitor — extends generic ToSql with PostgreSQL-specific features.
@@ -50,29 +51,10 @@ export class PostgreSQL extends ToSql {
 
   protected override quote(value: unknown): string {
     if (Array.isArray(value)) {
-      const arrayLiteral = this.quoteArrayLiteral(value);
-      return `'${arrayLiteral.replace(/'/g, "''")}'`;
+      const literal = quoteArrayLiteral(value);
+      return `'${literal.replace(/'/g, "''")}'`;
     }
     return super.quote(value);
-  }
-
-  private quoteArrayLiteral(arr: unknown[]): string {
-    const elements = arr.map((v) => {
-      if (v === null || v === undefined) return "NULL";
-      if (Array.isArray(v)) return this.quoteArrayLiteral(v);
-      if (typeof v === "number") return String(v);
-      if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
-      if (v instanceof Date) {
-        const y = v.getFullYear();
-        const m = String(v.getMonth() + 1).padStart(2, "0");
-        const d = String(v.getDate()).padStart(2, "0");
-        return `"${y}-${m}-${d}"`;
-      }
-      const str = String(v);
-      const escaped = str.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-      return `"${escaped}"`;
-    });
-    return `{${elements.join(",")}}`;
   }
 }
 

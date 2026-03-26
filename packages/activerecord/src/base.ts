@@ -1,5 +1,5 @@
 import { Model } from "@rails-ts/activemodel";
-import { Table } from "@rails-ts/arel";
+import { Table, quoteArrayLiteral } from "@rails-ts/arel";
 import { pluralize, underscore } from "@rails-ts/activesupport";
 import type { DatabaseAdapter } from "./adapter.js";
 import { NameError, SubclassNotFound } from "./errors.js";
@@ -14,20 +14,6 @@ import {
   ReadOnlyRecord,
 } from "./errors.js";
 import { encrypts as _encrypts, getEncryptor } from "./encryption.js";
-
-function quoteArrayLiteral(arr: unknown[]): string {
-  const elements = arr.map((v) => {
-    if (v === null || v === undefined) return "NULL";
-    if (Array.isArray(v)) return quoteArrayLiteral(v);
-    if (typeof v === "number") return String(v);
-    if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
-    if (v instanceof Date) return `"${v.toISOString()}"`;
-    const str = String(v);
-    const escaped = str.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-    return `"${escaped}"`;
-  });
-  return `{${elements.join(",")}}`;
-}
 
 export function quoteSqlValue(v: unknown, asArray = false): string {
   if (v === null || v === undefined) return "NULL";

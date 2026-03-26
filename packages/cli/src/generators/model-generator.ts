@@ -47,34 +47,20 @@ export class ModelGenerator extends GeneratorBase {
     const staticBlock = attrLines ? `\n  static {\n${attrLines}\n  }\n` : "";
 
     const ext = this.ext();
-    const esm = this.isESM();
 
-    if (esm) {
-      this.createFile(
-        `src/app/models/${fileName}${ext}`,
-        `import { Base } from "@rails-ts/activerecord";
+    this.createFile(
+      `src/app/models/${fileName}${ext}`,
+      `import { Base } from "@rails-ts/activerecord";
 
 export class ${className} extends Base {${staticBlock}}
 `,
-      );
-    } else {
-      this.createFile(
-        `src/app/models/${fileName}${ext}`,
-        `const { Base } = require("@rails-ts/activerecord");
-
-class ${className} extends Base {${staticBlock}}
-
-module.exports = { ${className} };
-`,
-      );
-    }
+    );
 
     // Test file
     if (test) {
-      if (esm) {
-        this.createFile(
-          `test/models/${fileName}.test${ext}`,
-          `import { describe, it, expect } from "vitest";
+      this.createFile(
+        `test/models/${fileName}.test${ext}`,
+        `import { describe, it, expect } from "vitest";
 import { ${className} } from "../../src/app/models/${fileName}.js";
 
 describe("${className}", () => {
@@ -83,21 +69,7 @@ describe("${className}", () => {
   });
 });
 `,
-        );
-      } else {
-        this.createFile(
-          `test/models/${fileName}.test${ext}`,
-          `const { describe, it, expect } = require("vitest");
-const { ${className} } = require("../../src/app/models/${fileName}.js");
-
-describe("${className}", () => {
-  it("exists", () => {
-    expect(${className}).toBeDefined();
-  });
-});
-`,
-        );
-      }
+      );
     }
 
     // Migration

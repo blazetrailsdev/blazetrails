@@ -90,17 +90,11 @@ export class ScaffoldGenerator extends GeneratorBase {
     plural: string,
   ): string {
     const ts = this.isTypeScript();
-    const esm = this.isESM();
-    const importLine = esm
-      ? `import { ActionController } from "@rails-ts/actionpack";`
-      : `const { ActionController } = require("@rails-ts/actionpack");`;
-    const exportPrefix = esm ? "export class" : "class";
     const returnType = ts ? ": Promise<void>" : "";
-    const exportSuffix = esm ? "" : `\nmodule.exports = { ${controllerClassName} };\n`;
 
-    return `${importLine}
+    return `import { ActionController } from "@rails-ts/actionpack";
 
-${exportPrefix} ${controllerClassName} extends ActionController.Base {
+export class ${controllerClassName} extends ActionController.Base {
   async index()${returnType} {
     // const ${plural} = await ${modelClassName}.all();
     const ${plural}${ts ? ": any[]" : ""} = [];
@@ -141,16 +135,12 @@ ${exportPrefix} ${controllerClassName} extends ActionController.Base {
     this.redirectTo("/${plural}");
   }
 }
-${exportSuffix}`;
+`;
   }
 
   private controllerTestSource(className: string, fileName: string): string {
-    const esm = this.isESM();
-    const importLines = esm
-      ? `import { describe, it, expect } from "vitest";\nimport { ${className} } from "../../src/app/controllers/${fileName}.js";`
-      : `const { describe, it, expect } = require("vitest");\nconst { ${className} } = require("../../src/app/controllers/${fileName}.js");`;
-
-    return `${importLines}
+    return `import { describe, it, expect } from "vitest";
+import { ${className} } from "../../src/app/controllers/${fileName}.js";
 
 describe("${className}", () => {
   it("index", () => {

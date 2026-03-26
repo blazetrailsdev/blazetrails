@@ -78,16 +78,16 @@ export class Relation<T extends Base> {
    *   where("age > ?", 18)
    *   where("name LIKE ?", "%dean%")
    */
-  where(): WhereChain;
-  where(conditions: undefined): WhereChain;
+  where(): WhereChain<Relation<T>>;
+  where(conditions: undefined): WhereChain<Relation<T>>;
   where(conditions: Record<string, unknown> | null): Relation<T>;
   where(sql: string, ...binds: unknown[]): Relation<T>;
   where(node: Nodes.Node): Relation<T>;
   where(
     conditionsOrSql?: Record<string, unknown> | string | Nodes.Node | null,
     ...binds: unknown[]
-  ): Relation<T> | WhereChain {
-    if (conditionsOrSql === undefined) return new WhereChain(this._clone());
+  ): Relation<T> | WhereChain<Relation<T>> {
+    if (conditionsOrSql === undefined) return new WhereChain<Relation<T>>(this._clone());
     if (conditionsOrSql === null) return this._clone();
 
     // Arel node: store directly, bypass string/hash processing
@@ -2106,11 +2106,11 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#minimum
    */
-  async minimum(column: string): Promise<unknown | Record<string, unknown>> {
+  async minimum(column: string): Promise<unknown | null | Record<string, unknown>> {
     return Calculations.minimum(this, column);
   }
 
-  async _performMinimum(column: string): Promise<unknown | Record<string, unknown>> {
+  async _performMinimum(column: string): Promise<unknown | null | Record<string, unknown>> {
     if (this._isNone) return this._groupColumns.length > 0 ? {} : null;
     if (this._groupColumns.length > 0) {
       return this._groupedAggregate("MIN", column);
@@ -2124,11 +2124,11 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#maximum
    */
-  async maximum(column: string): Promise<unknown | Record<string, unknown>> {
+  async maximum(column: string): Promise<unknown | null | Record<string, unknown>> {
     return Calculations.maximum(this, column);
   }
 
-  async _performMaximum(column: string): Promise<unknown | Record<string, unknown>> {
+  async _performMaximum(column: string): Promise<unknown | null | Record<string, unknown>> {
     if (this._isNone) return this._groupColumns.length > 0 ? {} : null;
     if (this._groupColumns.length > 0) {
       return this._groupedAggregate("MAX", column);

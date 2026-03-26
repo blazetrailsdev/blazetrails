@@ -33,27 +33,36 @@ export class QueryMethods {
 }
 
 /**
+ * Interface for the scope that WhereChain delegates to.
+ */
+export interface WhereChainScope<R> {
+  whereNot(conditions: Record<string, unknown>): R;
+  whereAssociated(...associationNames: string[]): R;
+  whereMissing(...associationNames: string[]): R;
+}
+
+/**
  * Provides chainable where.not(), where.associated(), where.missing().
  * Returned by `Relation#where()` when called with no arguments.
  *
  * Mirrors: ActiveRecord::QueryMethods::WhereChain
  */
-export class WhereChain {
-  private _scope: any;
+export class WhereChain<R = any> {
+  private _scope: WhereChainScope<R>;
 
-  constructor(scope: any) {
+  constructor(scope: WhereChainScope<R>) {
     this._scope = scope;
   }
 
-  not(conditions: Record<string, unknown>): any {
+  not(conditions: Record<string, unknown>): R {
     return this._scope.whereNot(conditions);
   }
 
-  associated(...associationNames: string[]): any {
+  associated(...associationNames: string[]): R {
     return this._scope.whereAssociated(...associationNames);
   }
 
-  missing(...associationNames: string[]): any {
+  missing(...associationNames: string[]): R {
     return this._scope.whereMissing(...associationNames);
   }
 }

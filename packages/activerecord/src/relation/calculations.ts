@@ -21,11 +21,17 @@ export class Calculations {
     return relation._performAverage(column);
   }
 
-  static async minimum(relation: any, column: string): Promise<unknown | Record<string, unknown>> {
+  static async minimum(
+    relation: any,
+    column: string,
+  ): Promise<unknown | null | Record<string, unknown>> {
     return relation._performMinimum(column);
   }
 
-  static async maximum(relation: any, column: string): Promise<unknown | Record<string, unknown>> {
+  static async maximum(
+    relation: any,
+    column: string,
+  ): Promise<unknown | null | Record<string, unknown>> {
     return relation._performMaximum(column);
   }
 }

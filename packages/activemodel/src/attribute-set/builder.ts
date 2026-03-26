@@ -275,7 +275,11 @@ export class LazyAttributeHash {
   }
 
   has(name: string): boolean {
-    return this.delegate.has(name) || name in this.values || this.types.has(name);
+    return (
+      this.delegate.has(name) ||
+      Object.prototype.hasOwnProperty.call(this.values, name) ||
+      this.types.has(name)
+    );
   }
 
   keys(): string[] {
@@ -310,7 +314,7 @@ export class LazyAttributeHash {
 
   private assignDefault(name: string): Attribute {
     const type = this.types.get(name);
-    if (name in this.values && type) {
+    if (Object.prototype.hasOwnProperty.call(this.values, name) && type) {
       const attr = Attribute.fromDatabase(name, this.values[name], type);
       this.delegate.set(name, attr);
       return attr;

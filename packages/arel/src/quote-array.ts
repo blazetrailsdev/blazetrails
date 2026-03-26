@@ -11,10 +11,7 @@ export function quoteArrayLiteral(arr: unknown[]): string {
     if (typeof v === "number") return String(v);
     if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
     if (v instanceof Date) {
-      const y = v.getFullYear();
-      const m = String(v.getMonth() + 1).padStart(2, "0");
-      const d = String(v.getDate()).padStart(2, "0");
-      return `"${y}-${m}-${d}"`;
+      return `"${v.toISOString()}"`;
     }
     if (
       typeof v === "object" &&
@@ -24,7 +21,16 @@ export function quoteArrayLiteral(arr: unknown[]): string {
     ) {
       return `"${(v as { toISOString: () => string }).toISOString()}"`;
     }
-    const str = String(v);
+    let str: string;
+    if (typeof v === "object" && v !== null) {
+      try {
+        str = JSON.stringify(v);
+      } catch {
+        str = String(v);
+      }
+    } else {
+      str = String(v);
+    }
     const escaped = str.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
     return `"${escaped}"`;
   });

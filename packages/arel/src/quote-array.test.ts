@@ -35,9 +35,9 @@ describe("quoteArrayLiteral", () => {
     expect(quoteArrayLiteral([true, false])).toBe("{TRUE,FALSE}");
   });
 
-  it("handles Date values with YYYY-MM-DD format", () => {
-    const d = new Date(2026, 2, 26);
-    expect(quoteArrayLiteral([d])).toBe('{"2026-03-26"}');
+  it("handles Date values with toISOString", () => {
+    const d = new Date("2026-03-26T12:00:00.000Z");
+    expect(quoteArrayLiteral([d])).toBe(`{"${d.toISOString()}"}`);
   });
 
   it("handles empty arrays", () => {

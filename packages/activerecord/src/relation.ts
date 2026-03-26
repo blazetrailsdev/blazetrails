@@ -2544,14 +2544,9 @@ export class Relation<T extends Base> {
     const columns = Object.keys(mergedRecords[0]);
     const colList = columns.map((c) => `"${c}"`).join(", ");
 
-    const arrayColumns = new Set(
-      columns.filter((c) => {
-        const def = this._modelClass._attributeDefinitions.get(c);
-        return def?.type?.name === "array";
-      }),
-    );
+    const arrayCols = this._arrayColumnSet(columns);
     const valueRows = mergedRecords.map((row) => {
-      const vals = columns.map((c) => quoteSqlValue(row[c], arrayColumns.has(c)));
+      const vals = columns.map((c) => quoteSqlValue(row[c], arrayCols.has(c)));
       return `(${vals.join(", ")})`;
     });
 
@@ -2596,14 +2591,9 @@ export class Relation<T extends Base> {
     const columns = Object.keys(mergedRecords[0]);
     const colList = columns.map((c) => `"${c}"`).join(", ");
 
-    const upsertArrayColumns = new Set(
-      columns.filter((c) => {
-        const def = this._modelClass._attributeDefinitions.get(c);
-        return def?.type?.name === "array";
-      }),
-    );
+    const upsertArrayCols = this._arrayColumnSet(columns);
     const valueRows = mergedRecords.map((row) => {
-      const vals = columns.map((c) => quoteSqlValue(row[c], upsertArrayColumns.has(c)));
+      const vals = columns.map((c) => quoteSqlValue(row[c], upsertArrayCols.has(c)));
       return `(${vals.join(", ")})`;
     });
 
@@ -2653,6 +2643,15 @@ export class Relation<T extends Base> {
     }
 
     return this._modelClass.adapter.executeMutation(sql);
+  }
+
+  private _arrayColumnSet(columns: string[]): Set<string> {
+    return new Set(
+      columns.filter((c) => {
+        const def = this._modelClass._attributeDefinitions.get(c);
+        return def?.type?.name === "array";
+      }),
+    );
   }
 
   /**

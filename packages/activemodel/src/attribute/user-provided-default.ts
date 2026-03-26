@@ -3,7 +3,7 @@ import { Type } from "../type/value.js";
 
 /**
  * Attribute with a user-provided default value, which may be a function.
- * When the value is a function, it's evaluated lazily on first access.
+ * When the value is a function, it's evaluated eagerly at construction time.
  *
  * Mirrors: ActiveModel::Attribute::UserProvidedDefault
  */

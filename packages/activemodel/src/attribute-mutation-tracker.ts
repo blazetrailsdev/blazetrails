@@ -1,5 +1,16 @@
 import { AttributeSet } from "./attribute-set/builder.js";
 
+function cloneValue(value: unknown): unknown {
+  if (value === null || typeof value !== "object") return value;
+  if (value instanceof Date) return new Date(value.getTime());
+  if (Array.isArray(value)) return value.map(cloneValue);
+  const result: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    result[k] = cloneValue(v);
+  }
+  return result;
+}
+
 /**
  * Tracks attribute mutations by comparing current Attribute state
  * against original values.
@@ -50,8 +61,8 @@ export class AttributeMutationTracker {
 
   isChanged(name: string, options?: { from?: unknown; to?: unknown }): boolean {
     if (!this.attributeChanged(name)) return false;
-    if (options?.from !== undefined && this.originalValue(name) !== options.from) return false;
-    if (options?.to !== undefined && this.attributes.fetchValue(name) !== options.to) return false;
+    if (options && "from" in options && this.originalValue(name) !== options.from) return false;
+    if (options && "to" in options && this.attributes.fetchValue(name) !== options.to) return false;
     return true;
   }
 
@@ -66,11 +77,15 @@ export class AttributeMutationTracker {
   }
 
   originalValue(name: string): unknown {
+    if (this.forcedChanges.has(name)) {
+      return this.forcedChanges.get(name);
+    }
     return this.attributes.getAttribute(name).originalValue;
   }
 
   forceChange(name: string): void {
-    this.forcedChanges.set(name, this.attributes.fetchValue(name));
+    const value = this.attributes.fetchValue(name);
+    this.forcedChanges.set(name, cloneValue(value));
   }
 
   private attrNames(): string[] {
@@ -161,4 +176,8 @@ export class NullMutationTracker {
   originalValue(_name: string): undefined {
     return undefined;
   }
+
+  forceChange(_name: string): void {}
+  forgetChange(_name: string): void {}
+  finalizeChanges(): void {}
 }

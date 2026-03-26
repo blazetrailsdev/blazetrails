@@ -3,7 +3,7 @@
  *
  * Mirrors: ActiveModel::MissingAttributeError
  */
-export class MissingAttributeError extends Error {
+export class MissingAttributeError extends globalThis.Error {
   constructor(message?: string) {
     super(message);
     this.name = "MissingAttributeError";

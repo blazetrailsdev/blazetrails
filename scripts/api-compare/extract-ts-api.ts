@@ -174,6 +174,28 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
       }
     });
 
+    // Also capture functions exported via `export { foo, bar }` (named export lists).
+    // Resolve each exported name back to its local declaration to extract params.
+    if (!fileHasClassOrModule) {
+      const moduleSymbol = checker.getSymbolAtLocation(sourceFile);
+      if (moduleSymbol) {
+        const exports = checker.getExportsOfModule(moduleSymbol);
+        for (const sym of exports) {
+          // Skip if already captured via `export function` syntax
+          if (fileFunctions.some((f) => f.name === sym.name)) continue;
+          const decl = sym.valueDeclaration ?? sym.declarations?.[0];
+          if (decl && ts.isFunctionDeclaration(decl)) {
+            fileFunctions.push({
+              name: sym.name,
+              visibility: "public",
+              params: extractParameters(decl.parameters),
+              isStatic: false,
+            });
+          }
+        }
+      }
+    }
+
     // If a file has exported functions but no class/interface/namespace,
     // create a module entry from the file name. This matches Rails' pattern
     // where modules like Enum, Sanitization, etc. contain methods.

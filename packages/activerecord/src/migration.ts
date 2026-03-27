@@ -8,6 +8,7 @@ import {
 } from "./connection-adapters/abstract/schema-definitions.js";
 import { SchemaStatements } from "./connection-adapters/abstract/schema-statements.js";
 import { detectAdapterName } from "./adapter-name.js";
+import { quoteIdentifier, quoteTableName } from "./quoting.js";
 
 export type {
   ReferentialAction,
@@ -902,22 +903,21 @@ export class MigrationContext {
     const cols = Array.isArray(columns) ? columns : [columns];
     const unique = options?.unique ?? false;
     const indexName = options?.name ?? `index_${table}_on_${cols.join("_and_")}`;
+    const an = this._adapterName;
     const uniqueStr = unique ? "UNIQUE " : "";
     const ifNotExistsStr = options?.ifNotExists ? "IF NOT EXISTS " : "";
-    const isMysql = this._adapterName === "mysql";
-    const q = isMysql ? "`" : '"';
     const colsStr = cols
       .map((c) => {
-        let col = `${q}${c}${q}`;
-        if (!isMysql) {
+        let col = quoteIdentifier(c, an);
+        if (an !== "mysql") {
           const ord = options?.order?.[c];
           if (ord) col += ` ${ord.toUpperCase()}`;
         }
         return col;
       })
       .join(", ");
-    let sql = `CREATE ${uniqueStr}INDEX ${ifNotExistsStr}${q}${indexName}${q} ON ${q}${table}${q} (${colsStr})`;
-    if (!isMysql && options?.where) sql += ` WHERE ${options.where}`;
+    let sql = `CREATE ${uniqueStr}INDEX ${ifNotExistsStr}${quoteIdentifier(indexName, an)} ON ${quoteTableName(table, an)} (${colsStr})`;
+    if (an !== "mysql" && options?.where) sql += ` WHERE ${options.where}`;
     await this.adapter.executeMutation(sql);
     if (!this._indexes.has(table)) this._indexes.set(table, []);
     this._indexes.get(table)!.push({ columns: cols, unique, name: indexName });

@@ -32,10 +32,7 @@ import {
   noTouching as _noTouchingBlock,
   isAppliedTo as _isNoTouchingApplied,
 } from "./no-touching.js";
-import {
-  suppress as _suppressBlock,
-  isSuppressed as _isSuppressed,
-} from "./suppressor.js";
+import { suppress as _suppressBlock, isSuppressed as _isSuppressed } from "./suppressor.js";
 import {
   inspect as coreInspect,
   attributeForInspect as coreAttributeForInspect,

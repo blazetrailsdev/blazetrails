@@ -12,10 +12,7 @@ const _noTouchingDepth = new Map<Function, number>();
  *
  * Mirrors: ActiveRecord::NoTouching.no_touching
  */
-export async function noTouching<R>(
-  modelClass: Function,
-  fn: () => R | Promise<R>,
-): Promise<R> {
+export async function noTouching<R>(modelClass: Function, fn: () => R | Promise<R>): Promise<R> {
   const depth = _noTouchingDepth.get(modelClass) ?? 0;
   _noTouchingDepth.set(modelClass, depth + 1);
   try {

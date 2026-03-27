@@ -31,6 +31,14 @@ type Definition =
 export class SchemaCreation {
   constructor(protected adapterName: "sqlite" | "postgres" | "mysql") {}
 
+  protected supportsPartialIndex(): boolean {
+    return this.adapterName !== "mysql";
+  }
+
+  protected supportsIndexSortOrder(): boolean {
+    return this.adapterName !== "mysql";
+  }
+
   accept(o: Definition): string {
     if (o instanceof TableDefinition) return this.visitTableDefinition(o);
     if (o instanceof AddColumnDefinition) return this.visitAddColumnDefinition(o);
@@ -79,12 +87,14 @@ export class SchemaCreation {
     );
     const columnsSql = index.columns.map((c) => {
       let col = quoteIdentifier(c, this.adapterName);
-      const order = index.orders[c];
-      if (order) col += ` ${order.toUpperCase()}`;
+      if (this.supportsIndexSortOrder()) {
+        const order = index.orders[c];
+        if (order) col += ` ${order.toUpperCase()}`;
+      }
       return col;
     });
     parts.push(`(${columnsSql.join(", ")})`);
-    if (index.where) parts.push(`WHERE ${index.where}`);
+    if (this.supportsPartialIndex() && index.where) parts.push(`WHERE ${index.where}`);
     return parts.join(" ");
   }
 

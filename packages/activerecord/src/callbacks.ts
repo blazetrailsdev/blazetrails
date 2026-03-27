@@ -8,21 +8,11 @@
  * Mirrors: ActiveRecord::Callbacks
  */
 
-type CallbackTiming = "before" | "after" | "around";
-type CallbackEvent =
-  | "validation"
-  | "save"
-  | "create"
-  | "update"
-  | "destroy"
-  | "find"
-  | "initialize"
-  | "touch";
-
 export type CallbackOptions = {
   on?: "create" | "update" | Array<"create" | "update">;
   if?: (record: any) => boolean;
   unless?: (record: any) => boolean;
+  prepend?: boolean;
 };
 
 /**
@@ -157,24 +147,16 @@ export function afterDestroy(
 
 function registerCallback(
   modelClass: any,
-  timing: CallbackTiming,
-  event: CallbackEvent,
+  timing: "before" | "after",
+  event: string,
   fn: Function,
   options?: CallbackOptions,
 ): void {
   if (!modelClass._callbackChain) return;
-  const wrappedFn =
-    options?.if || options?.unless
-      ? (record: any) => {
-          if (options.if && !options.if(record)) return;
-          if (options.unless && options.unless(record)) return;
-          return fn(record);
-        }
-      : fn;
-
-  if (timing === "before") {
-    modelClass._callbackChain.registerBefore(event, wrappedFn as any);
-  } else if (timing === "after") {
-    modelClass._callbackChain.registerAfter(event, wrappedFn as any);
-  }
+  modelClass._callbackChain.register(timing, event, fn, {
+    if: options?.if,
+    unless: options?.unless,
+    on: options?.on,
+    prepend: options?.prepend,
+  });
 }

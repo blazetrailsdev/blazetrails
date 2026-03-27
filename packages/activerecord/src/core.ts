@@ -150,6 +150,7 @@ export function attributeForInspect(record: CoreRecord, attr: string): string {
 export function isEqual(record: CoreRecord, other: unknown): boolean {
   if (other === null || other === undefined) return false;
   if (typeof other !== "object") return false;
+  if (!(other instanceof (record.constructor as any))) return false;
   if (record.constructor !== (other as any).constructor) return false;
   const thisId = record.id;
   const otherId = (other as CoreRecord).id;

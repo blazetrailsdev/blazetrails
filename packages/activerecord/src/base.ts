@@ -63,7 +63,7 @@ import {
 } from "./integration.js";
 import {
   noTouching as _noTouchingBlock,
-  isAppliedTo as _isTouchingSuppressed,
+  isAppliedTo as _isNoTouchingApplied,
 } from "./no-touching.js";
 import {
   suppress as _suppressBlock,
@@ -830,11 +830,11 @@ export class Base extends Model {
   }
 
   static async noTouching<R>(fn: () => R | Promise<R>): Promise<R> {
-    return _noTouchingBlock(fn);
+    return _noTouchingBlock(this, fn);
   }
 
   static get isTouchingSuppressed(): boolean {
-    return _isTouchingSuppressed();
+    return _isNoTouchingApplied(this);
   }
 
   // -- Sequence name --
@@ -3412,9 +3412,19 @@ export class Base extends Model {
     return this.toParam();
   }
 
-  static sanitizeSqlArray = sanitizeSqlArray;
-  static sanitizeSql = sanitizeSql;
-  static sanitizeSqlLike = sanitizeSqlLike;
+  static sanitizeSqlArray(template: string, ...binds: unknown[]): string {
+    return sanitizeSqlArray(template, ...binds);
+  }
+
+  static sanitizeSql(input: string | [string, ...unknown[]]): string {
+    if (typeof input === "string") return input;
+    const [template, ...binds] = input;
+    return this.sanitizeSqlArray(template, ...binds);
+  }
+
+  static sanitizeSqlLike(value: string, escapeChar: string = "\\"): string {
+    return sanitizeSqlLike(value, escapeChar);
+  }
 
   /**
    * Returns true if the record was previously persisted but is now destroyed.

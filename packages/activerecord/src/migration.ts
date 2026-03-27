@@ -175,7 +175,7 @@ export abstract class Migration {
     await this.schema.createTable(name, optionsOrFn, fn);
   }
 
-  async dropTable(name?: string, options?: { ifExists?: boolean }): Promise<void> {
+  async dropTable(name: string, options?: { ifExists?: boolean }): Promise<void> {
     if (this._recording) {
       this._recordedOps.push({ method: "dropTable", args: [name] });
       return;

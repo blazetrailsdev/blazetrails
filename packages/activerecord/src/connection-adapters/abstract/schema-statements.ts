@@ -73,11 +73,8 @@ export class SchemaStatements {
     }
   }
 
-  async dropTable(name?: string, options: { ifExists?: boolean } = {}): Promise<void> {
-    if (!name) {
-      throw new Error("Table name is required for dropTable");
-    }
-    const ifExists = options.ifExists !== false ? " IF EXISTS" : "";
+  async dropTable(name: string, options: { ifExists?: boolean } = {}): Promise<void> {
+    const ifExists = options.ifExists ? " IF EXISTS" : "";
     await this.adapter.executeMutation(`DROP TABLE${ifExists} ${this._qi(name)}`);
   }
 
@@ -509,7 +506,8 @@ export class SchemaStatements {
       }
       case "postgres": {
         const rows = await this.adapter.execute(
-          `SELECT a.attname FROM pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey) WHERE i.indrelid = '"${tableName}"'::regclass AND i.indisprimary LIMIT 1`,
+          `SELECT a.attname FROM pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey) WHERE i.indrelid = to_regclass($1) AND i.indisprimary LIMIT 1`,
+          [tableName],
         );
         return rows.length > 0 ? (rows[0] as any).attname : null;
       }

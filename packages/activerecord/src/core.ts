@@ -50,12 +50,11 @@ export class InspectionMask {
 // ---------------------------------------------------------------------------
 
 interface CoreRecord {
-  readonly id: unknown;
+  id: unknown;
   _attributes: Map<string, unknown>;
   _newRecord: boolean;
   readAttribute(name: string): unknown;
   isPersisted(): boolean;
-  constructor: { name: string };
 }
 
 /**
@@ -64,7 +63,7 @@ interface CoreRecord {
  * Mirrors: ActiveRecord::Core#inspect
  */
 export function inspect(record: CoreRecord): string {
-  const ctor = record.constructor;
+  const ctor = record.constructor as { name: string };
   const attrs = Array.from(record._attributes.entries())
     .map(([k, v]) => {
       if (v === null) return `${k}: nil`;

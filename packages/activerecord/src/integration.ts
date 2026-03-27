@@ -5,10 +5,9 @@
  */
 
 interface Identifiable {
-  readonly id: unknown;
+  id: unknown;
   isNewRecord(): boolean;
   readAttribute(name: string): unknown;
-  constructor: { tableName: string };
 }
 
 /**
@@ -27,7 +26,7 @@ export function toParam(record: Identifiable): string | null {
  * Mirrors: ActiveRecord::Integration#cache_key
  */
 export function cacheKey(record: Identifiable): string {
-  const modelKey = record.constructor.tableName;
+  const modelKey = (record.constructor as any).tableName as string;
   const pk = record.id;
   if (record.isNewRecord()) {
     return `${modelKey}/new`;

@@ -24,6 +24,10 @@ export class SchemaStatements {
     protected adapterName: "sqlite" | "postgres" | "mysql" = detectAdapterName(adapter),
   ) {}
 
+  protected _qi(name: string): string {
+    return quoteIdentifier(name, this.adapterName);
+  }
+
   async createTable(
     name: string,
     optionsOrFn?:
@@ -90,7 +94,7 @@ export class SchemaStatements {
     const defaultClause = this._defaultClause(options.default);
 
     await this.adapter.executeMutation(
-      `ALTER TABLE "${tableName}" ADD COLUMN "${columnName}" ${sqlType}${nullable}${defaultClause}`,
+      `ALTER TABLE ${this._qi(tableName)} ADD COLUMN ${this._qi(columnName)} ${sqlType}${nullable}${defaultClause}`,
     );
   }
 
@@ -102,12 +106,14 @@ export class SchemaStatements {
     if (options.ifExists && !(await this.columnExists(tableName, columnName))) {
       return;
     }
-    await this.adapter.executeMutation(`ALTER TABLE "${tableName}" DROP COLUMN "${columnName}"`);
+    await this.adapter.executeMutation(
+      `ALTER TABLE ${this._qi(tableName)} DROP COLUMN ${this._qi(columnName)}`,
+    );
   }
 
   async renameColumn(tableName: string, oldName: string, newName: string): Promise<void> {
     await this.adapter.executeMutation(
-      `ALTER TABLE "${tableName}" RENAME COLUMN "${oldName}" TO "${newName}"`,
+      `ALTER TABLE ${this._qi(tableName)} RENAME COLUMN ${this._qi(oldName)} TO ${this._qi(newName)}`,
     );
   }
 
@@ -141,9 +147,11 @@ export class SchemaStatements {
     }
 
     if (this.adapterName === "mysql") {
-      await this.adapter.executeMutation(`DROP INDEX \`${indexName}\` ON \`${tableName}\``);
+      await this.adapter.executeMutation(
+        `DROP INDEX ${this._qi(indexName)} ON ${this._qi(tableName)}`,
+      );
     } else {
-      await this.adapter.executeMutation(`DROP INDEX IF EXISTS "${indexName}"`);
+      await this.adapter.executeMutation(`DROP INDEX IF EXISTS ${this._qi(indexName)}`);
     }
   }
 
@@ -154,22 +162,39 @@ export class SchemaStatements {
     options: ColumnOptions = {},
   ): Promise<void> {
     const sqlType = this.typeToSql(type, options);
-    const nullable = options.null === false ? " NOT NULL" : "";
-    const defaultClause = this._defaultClause(options.default);
+    const table = this._qi(tableName);
+    const col = this._qi(columnName);
 
     if (this.adapterName === "mysql") {
+      const nullable = options.null === false ? " NOT NULL" : "";
+      const defaultClause = this._defaultClause(options.default);
       await this.adapter.executeMutation(
-        `ALTER TABLE "${tableName}" MODIFY COLUMN "${columnName}" ${sqlType}${nullable}${defaultClause}`,
+        `ALTER TABLE ${table} MODIFY COLUMN ${col} ${sqlType}${nullable}${defaultClause}`,
       );
+    } else if (this.adapterName === "postgres") {
+      const clauses: string[] = [`ALTER COLUMN ${col} TYPE ${sqlType}`];
+      if (options.null !== undefined) {
+        clauses.push(
+          `ALTER COLUMN ${col} ${options.null === false ? "SET NOT NULL" : "DROP NOT NULL"}`,
+        );
+      }
+      if (options.default !== undefined) {
+        clauses.push(`ALTER COLUMN ${col} SET${this._defaultClause(options.default)}`);
+      }
+      await this.adapter.executeMutation(`ALTER TABLE ${table} ${clauses.join(", ")}`);
     } else {
+      const nullable = options.null === false ? " NOT NULL" : "";
+      const defaultClause = this._defaultClause(options.default);
       await this.adapter.executeMutation(
-        `ALTER TABLE "${tableName}" ALTER COLUMN "${columnName}" TYPE ${sqlType}${nullable}${defaultClause}`,
+        `ALTER TABLE ${table} ALTER COLUMN ${col} TYPE ${sqlType}${nullable}${defaultClause}`,
       );
     }
   }
 
   async renameTable(oldName: string, newName: string): Promise<void> {
-    await this.adapter.executeMutation(`ALTER TABLE "${oldName}" RENAME TO "${newName}"`);
+    await this.adapter.executeMutation(
+      `ALTER TABLE ${this._qi(oldName)} RENAME TO ${this._qi(newName)}`,
+    );
   }
 
   async tableExists(tableName: string): Promise<boolean> {
@@ -224,7 +249,7 @@ export class SchemaStatements {
         : options;
     const clause = this._defaultClause(defaultVal);
     await this.adapter.executeMutation(
-      `ALTER TABLE "${tableName}" ALTER COLUMN "${columnName}" SET${clause || " DEFAULT NULL"}`,
+      `ALTER TABLE ${this._qi(tableName)} ALTER COLUMN ${this._qi(columnName)} SET${clause || " DEFAULT NULL"}`,
     );
   }
 
@@ -237,12 +262,12 @@ export class SchemaStatements {
     if (!allowNull && defaultValue !== undefined) {
       const quoted = quoteDefaultExpression(defaultValue).replace(/^ DEFAULT /, "");
       await this.adapter.executeMutation(
-        `UPDATE "${tableName}" SET "${columnName}" = ${quoted} WHERE "${columnName}" IS NULL`,
+        `UPDATE ${this._qi(tableName)} SET ${this._qi(columnName)} = ${quoted} WHERE ${this._qi(columnName)} IS NULL`,
       );
     }
     const constraint = allowNull ? "DROP NOT NULL" : "SET NOT NULL";
     await this.adapter.executeMutation(
-      `ALTER TABLE "${tableName}" ALTER COLUMN "${columnName}" ${constraint}`,
+      `ALTER TABLE ${this._qi(tableName)} ALTER COLUMN ${this._qi(columnName)} ${constraint}`,
     );
   }
 
@@ -287,7 +312,7 @@ export class SchemaStatements {
     const pk = options.primaryKey ?? "id";
     const name = options.name ?? `fk_${fromTable}_${column}`;
     await this.adapter.executeMutation(
-      `ALTER TABLE "${fromTable}" ADD CONSTRAINT "${name}" FOREIGN KEY ("${column}") REFERENCES "${toTable}" ("${pk}")`,
+      `ALTER TABLE ${this._qi(fromTable)} ADD CONSTRAINT ${this._qi(name)} FOREIGN KEY (${this._qi(column)}) REFERENCES ${this._qi(toTable)} (${this._qi(pk)})`,
     );
   }
 
@@ -306,7 +331,9 @@ export class SchemaStatements {
     } else {
       throw new Error("removeForeignKey requires a target table or options");
     }
-    await this.adapter.executeMutation(`ALTER TABLE "${fromTable}" DROP CONSTRAINT "${name}"`);
+    await this.adapter.executeMutation(
+      `ALTER TABLE ${this._qi(fromTable)} DROP CONSTRAINT ${this._qi(name)}`,
+    );
   }
 
   async addTimestamps(tableName: string, options: ColumnOptions = {}): Promise<void> {
@@ -357,7 +384,9 @@ export class SchemaStatements {
   }
 
   async renameIndex(_tableName: string, oldName: string, newName: string): Promise<void> {
-    await this.adapter.executeMutation(`ALTER INDEX "${oldName}" RENAME TO "${newName}"`);
+    await this.adapter.executeMutation(
+      `ALTER INDEX ${this._qi(oldName)} RENAME TO ${this._qi(newName)}`,
+    );
   }
 
   indexName(tableName: string, options: { column?: string | string[] }): string {
@@ -455,7 +484,7 @@ export class SchemaStatements {
       }
       case "mysql": {
         const rows = await this.adapter.execute(
-          `SHOW INDEX FROM \`${tableName}\` WHERE Key_name != 'PRIMARY'`,
+          `SHOW INDEX FROM \`${tableName}\` WHERE Key_name != 'PRIMARY' ORDER BY Key_name, Seq_in_index`,
         );
         const indexMap = new Map<string, { columns: string[]; unique: boolean }>();
         for (const row of rows as any[]) {

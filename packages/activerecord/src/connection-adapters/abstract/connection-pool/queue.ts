@@ -18,16 +18,22 @@ export class BiasedConditionVariable {
 
   wait(timeout: number): Promise<DatabaseAdapter> {
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        const idx = this._waiters.indexOf(resolve);
+      const state = { timer: 0 as unknown as ReturnType<typeof setTimeout> };
+
+      const waiter = (conn: DatabaseAdapter) => {
+        clearTimeout(state.timer);
+        const idx = this._waiters.indexOf(waiter);
+        if (idx >= 0) this._waiters.splice(idx, 1);
+        resolve(conn);
+      };
+
+      state.timer = setTimeout(() => {
+        const idx = this._waiters.indexOf(waiter);
         if (idx >= 0) this._waiters.splice(idx, 1);
         reject(new Error("Connection pool timeout"));
       }, timeout * 1000);
 
-      this._waiters.push((conn) => {
-        clearTimeout(timer);
-        resolve(conn);
-      });
+      this._waiters.push(waiter);
     });
   }
 

@@ -23,8 +23,8 @@ export class Reaper {
     this._timer = setInterval(() => {
       this._pool.removeStaleConnections?.();
     }, this._interval * 1000);
-    if (this._timer && typeof this._timer === "object" && "unref" in this._timer) {
-      (this._timer as NodeJS.Timeout).unref();
+    if (this._timer) {
+      (this._timer as any).unref?.();
     }
   }
 

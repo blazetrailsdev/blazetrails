@@ -51,7 +51,7 @@ export class InspectionMask {
 
 interface CoreRecord {
   id: unknown;
-  _attributes: Map<string, unknown>;
+  _attributes: Iterable<[string, unknown]>;
   _newRecord: boolean;
   readAttribute(name: string): unknown;
   isPersisted(): boolean;
@@ -64,7 +64,7 @@ interface CoreRecord {
  */
 export function inspect(record: CoreRecord): string {
   const ctor = record.constructor as { name: string };
-  const attrs = Array.from(record._attributes.entries())
+  const attrs = Array.from(record._attributes)
     .map(([k, v]) => {
       if (v === null) return `${k}: nil`;
       if (typeof v === "string") return `${k}: "${v}"`;

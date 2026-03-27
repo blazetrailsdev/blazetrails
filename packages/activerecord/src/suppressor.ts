@@ -34,8 +34,10 @@ export async function suppress<R>(modelClass: Function, fn: () => R | Promise<R>
  * Mirrors: ActiveRecord::Suppressor.registry
  */
 export function isSuppressed(modelClass: Function): boolean {
-  if ((_suppressionDepth.get(modelClass) ?? 0) > 0) return true;
-  const parent = Object.getPrototypeOf(modelClass);
-  if (parent && (_suppressionDepth.get(parent) ?? 0) > 0) return true;
+  let current: unknown = modelClass;
+  while (current && typeof current === "function") {
+    if ((_suppressionDepth.get(current as Function) ?? 0) > 0) return true;
+    current = Object.getPrototypeOf(current);
+  }
   return false;
 }

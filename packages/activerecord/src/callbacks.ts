@@ -9,10 +9,13 @@
  */
 
 export type CallbackOptions = {
-  on?: "create" | "update" | Array<"create" | "update">;
   if?: (record: any) => boolean;
   unless?: (record: any) => boolean;
   prepend?: boolean;
+};
+
+export type ValidationCallbackOptions = CallbackOptions & {
+  on?: "create" | "update" | Array<"create" | "update">;
 };
 
 /**
@@ -23,7 +26,7 @@ export type CallbackOptions = {
 export function beforeValidation(
   modelClass: any,
   fn: (record: any) => void | Promise<void>,
-  options?: CallbackOptions,
+  options?: ValidationCallbackOptions,
 ): void {
   registerCallback(modelClass, "before", "validation", fn, options);
 }
@@ -36,7 +39,7 @@ export function beforeValidation(
 export function afterValidation(
   modelClass: any,
   fn: (record: any) => void | Promise<void>,
-  options?: CallbackOptions,
+  options?: ValidationCallbackOptions,
 ): void {
   registerCallback(modelClass, "after", "validation", fn, options);
 }
@@ -150,7 +153,7 @@ function registerCallback(
   timing: "before" | "after",
   event: string,
   fn: Function,
-  options?: CallbackOptions,
+  options?: CallbackOptions | ValidationCallbackOptions,
 ): void {
   if (!modelClass._callbackChain) return;
   // Clone the chain if it's inherited from a parent, so we don't
@@ -158,10 +161,12 @@ function registerCallback(
   if (!Object.prototype.hasOwnProperty.call(modelClass, "_callbackChain")) {
     modelClass._callbackChain = modelClass._callbackChain.clone();
   }
-  modelClass._callbackChain.register(timing, event, fn, {
-    if: options?.if,
-    unless: options?.unless,
-    on: options?.on,
-    prepend: options?.prepend,
-  });
+  const conditions: Record<string, unknown> = {};
+  if (options?.if) conditions.if = options.if;
+  if (options?.unless) conditions.unless = options.unless;
+  if (options?.prepend) conditions.prepend = options.prepend;
+  if (event === "validation" && "on" in (options ?? {})) {
+    conditions.on = (options as ValidationCallbackOptions).on;
+  }
+  modelClass._callbackChain.register(timing, event, fn, conditions);
 }

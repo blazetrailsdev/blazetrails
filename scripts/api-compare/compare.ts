@@ -343,22 +343,30 @@ function main() {
       candidates: string[];
     }
     const allItems: ItemWithMeta[] = [];
+    const itemToMeta = new Map<object, ItemWithMeta>();
     for (const [rubyFile, items] of byFile.entries()) {
       const expectedTs = rubyFileToTs(rubyFile);
       for (const item of items) {
-        allItems.push({
+        const meta: ItemWithMeta = {
           item,
           rubyFile,
           expectedTs,
           candidates: candidateNames(item.fqn),
-        });
+        };
+        allItems.push(meta);
+        itemToMeta.set(item, meta);
       }
     }
 
     // Pass 1: exact-file matches only
     const matchResults = new Map<
       ItemWithMeta,
-      { status: ClassStatus; matchedName: string; actualFile: string | null; tsClass: ClassInfo | null }
+      {
+        status: ClassStatus;
+        matchedName: string;
+        actualFile: string | null;
+        tsClass: ClassInfo | null;
+      }
     >();
 
     for (const meta of allItems) {
@@ -381,7 +389,12 @@ function main() {
         }
       }
       if (!matched) {
-        matchResults.set(meta, { status: "missing", matchedName: "", actualFile: null, tsClass: null });
+        matchResults.set(meta, {
+          status: "missing",
+          matchedName: "",
+          actualFile: null,
+          tsClass: null,
+        });
       }
     }
 
@@ -419,13 +432,20 @@ function main() {
       let fileMissing = 0;
 
       for (const item of items) {
-        const meta = allItems.find((m) => m.item === item && m.rubyFile === rubyFile)!;
+        const meta = itemToMeta.get(item)!;
         const result = matchResults.get(meta)!;
         const { status, matchedName, actualFile, tsClass } = result;
 
-        if (status === "found") { fileFound++; totalFound++; }
-        else if (status === "misplaced") { fileMisplaced++; totalMisplaced++; }
-        else { fileMissing++; totalMissing++; }
+        if (status === "found") {
+          fileFound++;
+          totalFound++;
+        } else if (status === "misplaced") {
+          fileMisplaced++;
+          totalMisplaced++;
+        } else {
+          fileMissing++;
+          totalMissing++;
+        }
 
         // Method comparison for found/misplaced classes
         let methodsMatched = 0;

@@ -136,9 +136,11 @@ export abstract class Migration {
         break;
       case "changeColumn":
         throw new Error("Cannot reverse changeColumn without previous type info");
-      case "addForeignKey":
-        await this.removeForeignKey(op.args[0] as string, op.args[1] as string);
+      case "addForeignKey": {
+        const fkOpts = op.args[2] as { column?: string; name?: string } | undefined;
+        await this.removeForeignKey(op.args[0] as string, fkOpts ?? (op.args[1] as string));
         break;
+      }
       case "createJoinTable":
         await this.dropJoinTable(
           op.args[0] as string,

@@ -74,10 +74,11 @@ export class SchemaStatements {
   }
 
   async dropTable(name?: string, options: { ifExists?: boolean } = {}): Promise<void> {
+    if (!name) {
+      throw new Error("Table name is required for dropTable");
+    }
     const ifExists = options.ifExists !== false ? " IF EXISTS" : "";
-    await this.adapter.executeMutation(
-      `DROP TABLE${ifExists} ${quoteIdentifier(name ?? "", this.adapterName)}`,
-    );
+    await this.adapter.executeMutation(`DROP TABLE${ifExists} ${this._qi(name)}`);
   }
 
   async addColumn(

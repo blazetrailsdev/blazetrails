@@ -136,6 +136,18 @@ export abstract class Migration {
         break;
       case "changeColumn":
         throw new Error("Cannot reverse changeColumn without previous type info");
+      case "addForeignKey":
+        await this.removeForeignKey(op.args[0] as string, op.args[1] as string);
+        break;
+      case "createJoinTable":
+        await this.dropJoinTable(
+          op.args[0] as string,
+          op.args[1] as string,
+          op.args[2] as { tableName?: string } | undefined,
+        );
+        break;
+      case "dropJoinTable":
+        throw new Error("Cannot reverse dropJoinTable without table definition");
       default:
         throw new Error(`Cannot reverse operation: ${op.method}`);
     }
@@ -362,6 +374,10 @@ export abstract class Migration {
     options?: { tableName?: string } | ((t: TableDefinition) => void),
     fn?: (t: TableDefinition) => void,
   ): Promise<void> {
+    if (this._recording) {
+      this._recordedOps.push({ method: "createJoinTable", args: [table1, table2, options, fn] });
+      return;
+    }
     await this.schema.createJoinTable(table1, table2, options, fn);
   }
 
@@ -370,11 +386,18 @@ export abstract class Migration {
     table2: string,
     options?: { tableName?: string },
   ): Promise<void> {
+    if (this._recording) {
+      this._recordedOps.push({ method: "dropJoinTable", args: [table1, table2, options] });
+      return;
+    }
     await this.schema.dropJoinTable(table1, table2, options);
   }
 
   async changeTable(tableName: string, fn?: (t: Table) => void | Promise<void>): Promise<void> {
-    await this.schema.changeTable(tableName, fn);
+    // Build Table against Migration (not SchemaStatements) so that
+    // per-operation recording in addColumn/removeColumn/etc. still applies
+    const table = new Table(tableName, this);
+    if (fn) await fn(table);
   }
 
   async renameIndex(_tableName: string, oldName: string, newName: string): Promise<void> {

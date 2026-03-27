@@ -4,9 +4,6 @@
  * Mirrors: ActiveRecord::Core
  */
 
-import { ConnectionHandler } from "./connection-adapters/abstract/connection-handler.js";
-import { DatabaseConfigurations } from "./database-configurations.js";
-
 /**
  * The Core module interface — methods mixed into every AR model.
  *
@@ -24,53 +21,6 @@ export interface Core {
   strictLoadingBang(): this;
   isFrozen(): boolean;
   freeze(): this;
-}
-
-// ---------------------------------------------------------------------------
-// Class-level state (shared across all models)
-// ---------------------------------------------------------------------------
-
-let _configurations: DatabaseConfigurations | null = null;
-let _connectionHandler: ConnectionHandler = new ConnectionHandler();
-
-/**
- * Get the global database configurations.
- *
- * Mirrors: ActiveRecord::Core.configurations
- */
-export function configurations(): DatabaseConfigurations | null {
-  return _configurations;
-}
-
-/**
- * Set the global database configurations.
- *
- * Mirrors: ActiveRecord::Core.configurations=
- */
-export function setConfigurations(configs: DatabaseConfigurations | Record<string, any>): void {
-  if (configs instanceof DatabaseConfigurations) {
-    _configurations = configs;
-  } else {
-    _configurations = new DatabaseConfigurations(configs);
-  }
-}
-
-/**
- * Get the connection handler.
- *
- * Mirrors: ActiveRecord::Core.connection_handler
- */
-export function connectionHandler(): ConnectionHandler {
-  return _connectionHandler;
-}
-
-/**
- * Set the connection handler.
- *
- * Mirrors: ActiveRecord::Core.connection_handler=
- */
-export function setConnectionHandler(handler: ConnectionHandler): void {
-  _connectionHandler = handler;
 }
 
 /**

@@ -36,7 +36,12 @@ export async function noTouching<R>(
  * Mirrors: ActiveRecord::NoTouching.applied_to?
  */
 export function isAppliedTo(modelClass: Function): boolean {
-  return (_noTouchingDepth.get(modelClass) ?? 0) > 0;
+  let current: unknown = modelClass;
+  while (current && typeof current === "function") {
+    if ((_noTouchingDepth.get(current as Function) ?? 0) > 0) return true;
+    current = Object.getPrototypeOf(current);
+  }
+  return false;
 }
 
 /**

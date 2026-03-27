@@ -153,6 +153,11 @@ function registerCallback(
   options?: CallbackOptions,
 ): void {
   if (!modelClass._callbackChain) return;
+  // Clone the chain if it's inherited from a parent, so we don't
+  // register callbacks on sibling subclasses
+  if (!Object.prototype.hasOwnProperty.call(modelClass, "_callbackChain")) {
+    modelClass._callbackChain = modelClass._callbackChain.clone();
+  }
   modelClass._callbackChain.register(timing, event, fn, {
     if: options?.if,
     unless: options?.unless,

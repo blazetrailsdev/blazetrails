@@ -23,7 +23,7 @@ export function sanitizeSqlArray(template: string, ...binds: unknown[]): string 
               ? "TRUE"
               : "FALSE"
             : `'${String(bind).replace(/'/g, "''")}'`;
-    result = result.replace("?", quoted);
+    result = result.replace("?", () => quoted);
   }
   return result;
 }
@@ -49,8 +49,8 @@ export function sanitizeSqlLike(value: string, escapeChar: string = "\\"): strin
   return value
     .replace(
       new RegExp(escapeChar.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"),
-      escapeChar + escapeChar,
+      () => escapeChar + escapeChar,
     )
-    .replace(/%/g, escapeChar + "%")
-    .replace(/_/g, escapeChar + "_");
+    .replace(/%/g, () => escapeChar + "%")
+    .replace(/_/g, () => escapeChar + "_");
 }

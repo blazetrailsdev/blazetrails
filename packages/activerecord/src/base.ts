@@ -21,6 +21,29 @@ import { HashConfig } from "./database-configurations/hash-config.js";
 import { readFileSync, existsSync } from "fs";
 import { resolve } from "path";
 import { pathToFileURL } from "url";
+import { sanitizeSqlArray, sanitizeSqlLike } from "./sanitization.js";
+import {
+  toParam as integrationToParam,
+  cacheKey as integrationCacheKey,
+  cacheKeyWithVersion as integrationCacheKeyWithVersion,
+  cacheVersion as integrationCacheVersion,
+} from "./integration.js";
+import {
+  noTouching as _noTouchingBlock,
+  isAppliedTo as _isNoTouchingApplied,
+} from "./no-touching.js";
+import {
+  suppress as _suppressBlock,
+  isSuppressed as _isSuppressed,
+} from "./suppressor.js";
+import {
+  inspect as coreInspect,
+  attributeForInspect as coreAttributeForInspect,
+  isEqual as coreIsEqual,
+  isPresent as coreIsPresent,
+  isBlank as coreIsBlank,
+} from "./core.js";
+import { ScopeRegistry } from "./scoping.js";
 
 type AdapterConstructor = new (config: any) => DatabaseAdapter;
 
@@ -50,33 +73,6 @@ async function _loadAdapter(name: string): Promise<AdapterConstructor> {
       );
   }
 }
-import {
-  sanitizeSqlArray,
-  sanitizeSql,
-  sanitizeSqlLike,
-} from "./sanitization.js";
-import {
-  toParam as integrationToParam,
-  cacheKey as integrationCacheKey,
-  cacheKeyWithVersion as integrationCacheKeyWithVersion,
-  cacheVersion as integrationCacheVersion,
-} from "./integration.js";
-import {
-  noTouching as _noTouchingBlock,
-  isAppliedTo as _isNoTouchingApplied,
-} from "./no-touching.js";
-import {
-  suppress as _suppressBlock,
-  isSuppressed as _isSuppressed,
-} from "./suppressor.js";
-import {
-  inspect as coreInspect,
-  attributeForInspect as coreAttributeForInspect,
-  isEqual as coreIsEqual,
-  isPresent as coreIsPresent,
-  isBlank as coreIsBlank,
-} from "./core.js";
-import { ScopeRegistry } from "./scoping.js";
 import { Default as DefaultScoping } from "./scoping/default.js";
 import { Named as NamedScoping } from "./scoping/named.js";
 import { AssociationNotFoundError } from "./associations/errors.js";

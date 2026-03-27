@@ -9,7 +9,12 @@
  */
 
 import type { DatabaseAdapter } from "../../adapter.js";
-import { TableDefinition, type ColumnType, type ColumnOptions } from "./schema-definitions.js";
+import {
+  TableDefinition,
+  Table,
+  type ColumnType,
+  type ColumnOptions,
+} from "./schema-definitions.js";
 import { detectAdapterName } from "../../adapter-name.js";
 import { quoteIdentifier, quoteDefaultExpression } from "../../quoting.js";
 
@@ -80,7 +85,7 @@ export class SchemaStatements {
     if (options.ifNotExists && (await this.columnExists(tableName, columnName))) {
       return;
     }
-    const sqlType = this._sqlType(type, options);
+    const sqlType = this.typeToSql(type, options);
     const nullable = options.null === false ? " NOT NULL" : "";
     const defaultClause = this._defaultClause(options.default);
 
@@ -148,7 +153,7 @@ export class SchemaStatements {
     type: ColumnType,
     options: ColumnOptions = {},
   ): Promise<void> {
-    const sqlType = this._sqlType(type, options);
+    const sqlType = this.typeToSql(type, options);
     const nullable = options.null === false ? " NOT NULL" : "";
     const defaultClause = this._defaultClause(options.default);
 
@@ -344,6 +349,11 @@ export class SchemaStatements {
   ): Promise<void> {
     const tableName = options?.tableName ?? [table1, table2].sort().join("_");
     await this.dropTable(tableName);
+  }
+
+  async changeTable(tableName: string, fn?: (t: Table) => void | Promise<void>): Promise<void> {
+    const table = new Table(tableName, this);
+    if (fn) await fn(table);
   }
 
   async renameIndex(_tableName: string, oldName: string, newName: string): Promise<void> {
@@ -568,7 +578,60 @@ export class SchemaStatements {
     }
   }
 
-  protected _sqlType(type: ColumnType, options: ColumnOptions): string {
+  async viewExists(viewName: string): Promise<boolean> {
+    let rows: Record<string, unknown>[];
+    switch (this.adapterName) {
+      case "sqlite":
+        rows = await this.adapter.execute(
+          `SELECT name FROM sqlite_master WHERE type='view' AND name='${viewName}'`,
+        );
+        break;
+      case "postgres":
+        rows = await this.adapter.execute(
+          `SELECT 1 FROM pg_views WHERE schemaname = 'public' AND viewname = '${viewName}' LIMIT 1`,
+        );
+        break;
+      case "mysql":
+        rows = await this.adapter.execute(
+          `SELECT 1 FROM information_schema.views WHERE table_schema = DATABASE() AND table_name = '${viewName}' LIMIT 1`,
+        );
+        break;
+    }
+    return rows.length > 0;
+  }
+
+  async indexExists(
+    tableName: string,
+    columnName: string | string[],
+    options?: { unique?: boolean; name?: string },
+  ): Promise<boolean> {
+    const allIndexes = await this.indexes(tableName);
+    const targetCols = Array.isArray(columnName) ? columnName : [columnName];
+
+    return allIndexes.some((idx) => {
+      if (options?.name && idx.name !== options.name) return false;
+      if (options?.unique !== undefined && idx.unique !== options.unique) return false;
+      return (
+        targetCols.length === idx.columns.length && targetCols.every((c, i) => c === idx.columns[i])
+      );
+    });
+  }
+
+  async foreignKeyExists(
+    fromTable: string,
+    toTableOrOptions?: string | { column?: string; name?: string },
+  ): Promise<boolean> {
+    const fks = await this.foreignKeys(fromTable);
+    if (typeof toTableOrOptions === "string") {
+      return fks.some((fk) => fk.to === toTableOrOptions);
+    }
+    if (toTableOrOptions?.column) {
+      return fks.some((fk) => fk.column === toTableOrOptions.column);
+    }
+    return fks.length > 0;
+  }
+
+  typeToSql(type: ColumnType, options: ColumnOptions = {}): string {
     switch (type) {
       case "string":
         return `VARCHAR(${options.limit ?? 255})`;

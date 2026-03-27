@@ -374,8 +374,7 @@ export abstract class Migration {
   }
 
   async changeTable(tableName: string, fn?: (t: Table) => void | Promise<void>): Promise<void> {
-    const table = new Table(tableName, this);
-    if (fn) await fn(table);
+    await this.schema.changeTable(tableName, fn);
   }
 
   async renameIndex(_tableName: string, oldName: string, newName: string): Promise<void> {
@@ -524,43 +523,16 @@ export abstract class Migration {
     return this._recording;
   }
 
-  /**
-   * Check if a view exists.
-   *
-   * Mirrors: ActiveRecord::Migration#view_exists?
-   */
   async isViewExists(viewName: string): Promise<boolean> {
-    const rows = await this.adapter.execute(
-      `SELECT name FROM sqlite_master WHERE type='view' AND name='${viewName}'`,
-    );
-    return rows.length > 0;
+    return this.schema.viewExists(viewName);
   }
 
-  /**
-   * Check if an index exists on a table.
-   *
-   * Mirrors: ActiveRecord::Migration#index_exists?
-   */
   async isIndexExists(
     tableName: string,
     columnName: string | string[],
-    _options?: { unique?: boolean; name?: string },
+    options?: { unique?: boolean; name?: string },
   ): Promise<boolean> {
-    const indexList = await this.adapter.execute(`PRAGMA index_list("${tableName}")`);
-    const targetCols = Array.isArray(columnName) ? columnName : [columnName];
-    for (const idx of indexList as any[]) {
-      if (_options?.name && idx.name !== _options.name) continue;
-      if (_options?.unique !== undefined && (idx.unique === 1) !== _options.unique) continue;
-      const colInfo = await this.adapter.execute(`PRAGMA index_info("${idx.name}")`);
-      const indexCols = (colInfo as any[]).map((c: any) => c.name);
-      if (
-        targetCols.length === indexCols.length &&
-        targetCols.every((c, i) => c === indexCols[i])
-      ) {
-        return true;
-      }
-    }
-    return false;
+    return this.schema.indexExists(tableName, columnName, options);
   }
 
   /**

@@ -2,7 +2,7 @@ export { Base } from "./base.js";
 export { Relation, Range } from "./relation.js";
 export type { DatabaseAdapter } from "./adapter.js";
 export { Migration, MigrationContext } from "./migration.js";
-export { TableDefinition } from "./connection-adapters/abstract/schema-definitions.js";
+export { TableDefinition, Table } from "./connection-adapters/abstract/schema-definitions.js";
 export type {
   ColumnType,
   ColumnOptions,

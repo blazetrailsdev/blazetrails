@@ -1,6 +1,7 @@
 import type { DatabaseAdapter } from "./adapter.js";
 import {
   TableDefinition,
+  Table,
   type ColumnType,
   type ColumnOptions,
 } from "./connection-adapters/abstract/schema-definitions.js";
@@ -372,12 +373,9 @@ export abstract class Migration {
     await this.schema.dropJoinTable(table1, table2, options);
   }
 
-  async changeTable(
-    tableName: string,
-    fn?: (t: ChangeTableProxy) => void | Promise<void>,
-  ): Promise<void> {
-    const proxy = new ChangeTableProxy(tableName, this);
-    if (fn) await fn(proxy);
+  async changeTable(tableName: string, fn?: (t: Table) => void | Promise<void>): Promise<void> {
+    const table = new Table(tableName, this);
+    if (fn) await fn(table);
   }
 
   async renameIndex(_tableName: string, oldName: string, newName: string): Promise<void> {
@@ -591,67 +589,6 @@ export abstract class Migration {
    */
   get version(): string {
     return (this.constructor as any).version ?? this.constructor.name;
-  }
-}
-
-/**
- * ChangeTableProxy — used inside changeTable blocks.
- *
- * Mirrors: ActiveRecord::ConnectionAdapters::Table
- */
-class ChangeTableProxy {
-  constructor(
-    private _tableName: string,
-    private _migration: Migration,
-  ) {}
-
-  async string(name: string, options: ColumnOptions = {}): Promise<void> {
-    await (this._migration as any).addColumn(this._tableName, name, "string", options);
-  }
-  async text(name: string, options: ColumnOptions = {}): Promise<void> {
-    await (this._migration as any).addColumn(this._tableName, name, "text", options);
-  }
-  async integer(name: string, options: ColumnOptions = {}): Promise<void> {
-    await (this._migration as any).addColumn(this._tableName, name, "integer", options);
-  }
-  async float(name: string, options: ColumnOptions = {}): Promise<void> {
-    await (this._migration as any).addColumn(this._tableName, name, "float", options);
-  }
-  async decimal(name: string, options: ColumnOptions = {}): Promise<void> {
-    await (this._migration as any).addColumn(this._tableName, name, "decimal", options);
-  }
-  async boolean(name: string, options: ColumnOptions = {}): Promise<void> {
-    await (this._migration as any).addColumn(this._tableName, name, "boolean", options);
-  }
-  async date(name: string, options: ColumnOptions = {}): Promise<void> {
-    await (this._migration as any).addColumn(this._tableName, name, "date", options);
-  }
-  async datetime(name: string, options: ColumnOptions = {}): Promise<void> {
-    await (this._migration as any).addColumn(this._tableName, name, "datetime", options);
-  }
-  async remove(name: string): Promise<void> {
-    await (this._migration as any).removeColumn(this._tableName, name);
-  }
-  async rename(oldName: string, newName: string): Promise<void> {
-    await (this._migration as any).renameColumn(this._tableName, oldName, newName);
-  }
-  async index(
-    columns: string | string[],
-    options?: { unique?: boolean; name?: string },
-  ): Promise<void> {
-    await (this._migration as any).addIndex(this._tableName, columns, options);
-  }
-  async removeIndex(options: { column?: string | string[]; name?: string }): Promise<void> {
-    await (this._migration as any).removeIndex(this._tableName, options);
-  }
-  async references(
-    name: string,
-    options?: ColumnOptions & { polymorphic?: boolean; foreignKey?: boolean },
-  ): Promise<void> {
-    await (this._migration as any).addReference(this._tableName, name, options);
-  }
-  async timestamps(options?: ColumnOptions): Promise<void> {
-    await (this._migration as any).addTimestamps(this._tableName, options);
   }
 }
 

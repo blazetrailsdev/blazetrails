@@ -186,7 +186,10 @@ export class ReferenceDefinition {
       table.string(`${this.name}_type`, this.options);
     }
     if (this.index) {
-      table.index([`${this.name}_id`]);
+      const columns = this.polymorphic
+        ? [`${this.name}_type`, `${this.name}_id`]
+        : [`${this.name}_id`];
+      table.index(columns);
     }
   }
 }

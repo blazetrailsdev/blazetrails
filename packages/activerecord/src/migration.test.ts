@@ -600,6 +600,58 @@ describe("Migration DDL (extended)", () => {
     await m.run(adapter, "up");
   });
 
+  it("addIndex with where option generates partial index", async () => {
+    const adapter = freshAdapter();
+    class AddPartialIdx extends Migration {
+      async up() {
+        await this.createTable("games", (t) => {
+          t.string("status");
+          t.integer("turn");
+        });
+        await this.addIndex("games", ["status", "turn"], {
+          name: "idx_active",
+          where: "status = 'active'",
+        });
+      }
+      async down() {}
+    }
+    const m = new AddPartialIdx();
+    await m.run(adapter, "up");
+  });
+
+  it("addIndex with order option generates ordered index", async () => {
+    const adapter = freshAdapter();
+    class AddOrderedIdx extends Migration {
+      async up() {
+        await this.createTable("games", (t) => {
+          t.datetime("created_at");
+        });
+        await this.addIndex("games", ["created_at"], {
+          name: "idx_created",
+          order: { created_at: "desc" },
+        });
+      }
+      async down() {}
+    }
+    const m = new AddOrderedIdx();
+    await m.run(adapter, "up");
+  });
+
+  it("addIndex with ifNotExists option", async () => {
+    const adapter = freshAdapter();
+    class AddIdxIfNotExists extends Migration {
+      async up() {
+        await this.createTable("users", (t) => {
+          t.string("email");
+        });
+        await this.addIndex("users", ["email"], { ifNotExists: true });
+      }
+      async down() {}
+    }
+    const m = new AddIdxIfNotExists();
+    await m.run(adapter, "up");
+  });
+
   it.skipIf(adapterType === "sqlite")(
     "changeColumn generates ALTER TABLE ALTER COLUMN",
     async () => {

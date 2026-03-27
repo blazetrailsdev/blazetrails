@@ -77,7 +77,14 @@ export class SchemaCreation {
     parts.push(
       `${quoteIdentifier(index.name, this.adapterName)} ON ${quoteTableName(index.table, this.adapterName)}`,
     );
-    parts.push(`(${index.columns.map((c) => quoteIdentifier(c, this.adapterName)).join(", ")})`);
+    const columnsSql = index.columns.map((c) => {
+      let col = quoteIdentifier(c, this.adapterName);
+      const order = index.orders[c];
+      if (order) col += ` ${order.toUpperCase()}`;
+      return col;
+    });
+    parts.push(`(${columnsSql.join(", ")})`);
+    if (index.where) parts.push(`WHERE ${index.where}`);
     return parts.join(" ");
   }
 

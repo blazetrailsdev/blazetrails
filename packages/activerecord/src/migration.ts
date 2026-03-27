@@ -15,6 +15,97 @@ export type {
   AddForeignKeyOptions,
 } from "./connection-adapters/abstract/schema-definitions.js";
 
+export class MigrationError extends Error {
+  constructor(message?: string) {
+    super(message);
+    this.name = "MigrationError";
+  }
+}
+
+export class IrreversibleMigration extends MigrationError {
+  constructor(message = "This migration uses a feature that is not reversible.") {
+    super(message);
+    this.name = "IrreversibleMigration";
+  }
+}
+
+export class DuplicateMigrationVersionError extends MigrationError {
+  constructor(version: string | number) {
+    super(`Multiple migrations have the version number ${version}.`);
+    this.name = "DuplicateMigrationVersionError";
+  }
+}
+
+export class DuplicateMigrationNameError extends MigrationError {
+  constructor(name: string) {
+    super(`Multiple migrations have the name ${name}.`);
+    this.name = "DuplicateMigrationNameError";
+  }
+}
+
+export class UnknownMigrationVersionError extends MigrationError {
+  constructor(version: string | number) {
+    super(`No migration with version number ${version}.`);
+    this.name = "UnknownMigrationVersionError";
+  }
+}
+
+export class IllegalMigrationNameError extends MigrationError {
+  constructor(name: string) {
+    super(`Illegal name for migration file: ${name}.`);
+    this.name = "IllegalMigrationNameError";
+  }
+}
+
+export class InvalidMigrationTimestampError extends MigrationError {
+  constructor(version: string | number) {
+    super(`Invalid timestamp ${version} in migration file name.`);
+    this.name = "InvalidMigrationTimestampError";
+  }
+}
+
+export class PendingMigrationError extends MigrationError {
+  constructor(message = "Migrations are pending. Run `migrate` to resolve.") {
+    super(message);
+    this.name = "PendingMigrationError";
+  }
+}
+
+export class ConcurrentMigrationError extends MigrationError {
+  constructor(message = "Cannot run migrations because another migration is currently running.") {
+    super(message);
+    this.name = "ConcurrentMigrationError";
+  }
+}
+
+export class NoEnvironmentInSchemaError extends MigrationError {
+  constructor(message = "Environment data not found in the schema.") {
+    super(message);
+    this.name = "NoEnvironmentInSchemaError";
+  }
+}
+
+export class ProtectedEnvironmentError extends MigrationError {
+  constructor(env: string) {
+    super(`You are attempting to run a destructive action against your '${env}' database.`);
+    this.name = "ProtectedEnvironmentError";
+  }
+}
+
+export class EnvironmentMismatchError extends MigrationError {
+  constructor(message = "The environment does not match the stored environment.") {
+    super(message);
+    this.name = "EnvironmentMismatchError";
+  }
+}
+
+export class EnvironmentStorageError extends MigrationError {
+  constructor(message = "Cannot store environment data.") {
+    super(message);
+    this.name = "EnvironmentStorageError";
+  }
+}
+
 interface RecordedOperation {
   method: string;
   args: unknown[];
@@ -1350,5 +1441,33 @@ export class Migrator {
       const action = direction === "up" ? "migrated" : "reverted";
       this._output.push(`== ${proxy.version} ${proxy.name}: ${action} ==`);
     }
+  }
+}
+
+/**
+ * Mirrors: ActiveRecord::Migration::Current
+ *
+ * Alias for the latest migration version — migrations that don't
+ * specify a version inherit from this.
+ */
+export class Current extends Migration {
+  async up(): Promise<void> {}
+  async down(): Promise<void> {}
+}
+
+/**
+ * Mirrors: ActiveRecord::Migration::CheckPending
+ *
+ * Middleware that raises PendingMigrationError if migrations are pending.
+ */
+export class CheckPending {
+  private _app: (env: Record<string, unknown>) => Promise<unknown>;
+
+  constructor(app: (env: Record<string, unknown>) => Promise<unknown>) {
+    this._app = app;
+  }
+
+  async call(env: Record<string, unknown>): Promise<unknown> {
+    return this._app(env);
   }
 }

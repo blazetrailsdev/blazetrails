@@ -11,7 +11,7 @@
 import type { DatabaseAdapter } from "../../adapter.js";
 import { TableDefinition, type ColumnType, type ColumnOptions } from "./schema-definitions.js";
 import { detectAdapterName } from "../../adapter-name.js";
-import { quoteDefaultExpression } from "../../quoting.js";
+import { quoteIdentifier, quoteDefaultExpression } from "../../quoting.js";
 
 export class SchemaStatements {
   constructor(
@@ -60,17 +60,15 @@ export class SchemaStatements {
     await this.adapter.executeMutation(td.toSql());
 
     for (const idx of td.indexes) {
-      const indexName = idx.name ?? `index_${name}_on_${idx.columns.join("_and_")}`;
-      const unique = idx.unique ? "UNIQUE " : "";
-      const cols = idx.columns.map((c) => `"${c}"`).join(", ");
-      await this.adapter.executeMutation(
-        `CREATE ${unique}INDEX "${indexName}" ON "${name}" (${cols})`,
-      );
+      await this.addIndex(name, idx.columns, { unique: idx.unique, name: idx.name });
     }
   }
 
-  async dropTable(name?: string, _options?: { ifExists?: boolean }): Promise<void> {
-    await this.adapter.executeMutation(`DROP TABLE IF EXISTS "${name}"`);
+  async dropTable(name?: string, options: { ifExists?: boolean } = {}): Promise<void> {
+    const ifExists = options.ifExists !== false ? " IF EXISTS" : "";
+    await this.adapter.executeMutation(
+      `DROP TABLE${ifExists} ${quoteIdentifier(name ?? "", this.adapterName)}`,
+    );
   }
 
   async addColumn(
@@ -116,9 +114,10 @@ export class SchemaStatements {
     const cols = Array.isArray(columns) ? columns : [columns];
     const indexName = options.name ?? `index_${tableName}_on_${cols.join("_and_")}`;
     const unique = options.unique ? "UNIQUE " : "";
+    const quotedCols = cols.map((c) => quoteIdentifier(c, this.adapterName)).join(", ");
 
     await this.adapter.executeMutation(
-      `CREATE ${unique}INDEX "${indexName}" ON "${tableName}" (${cols.map((c) => `"${c}"`).join(", ")})`,
+      `CREATE ${unique}INDEX ${quoteIdentifier(indexName, this.adapterName)} ON ${quoteIdentifier(tableName, this.adapterName)} (${quotedCols})`,
     );
   }
 
@@ -169,15 +168,44 @@ export class SchemaStatements {
   }
 
   async tableExists(tableName: string): Promise<boolean> {
-    const rows = await this.adapter.execute(
-      `SELECT name FROM sqlite_master WHERE type='table' AND name='${tableName}'`,
-    );
+    let rows: Record<string, unknown>[];
+    switch (this.adapterName) {
+      case "sqlite":
+        rows = await this.adapter.execute(
+          `SELECT name FROM sqlite_master WHERE type='table' AND name='${tableName}'`,
+        );
+        break;
+      case "postgres":
+        rows = await this.adapter.execute(
+          `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '${tableName}' LIMIT 1`,
+        );
+        break;
+      case "mysql":
+        rows = await this.adapter.execute(
+          `SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = '${tableName}' LIMIT 1`,
+        );
+        break;
+    }
     return rows.length > 0;
   }
 
   async columnExists(tableName: string, columnName: string): Promise<boolean> {
-    const rows = await this.adapter.execute(`PRAGMA table_info("${tableName}")`);
-    return rows.some((row: any) => row.name === columnName);
+    let rows: Record<string, unknown>[];
+    switch (this.adapterName) {
+      case "sqlite":
+        rows = await this.adapter.execute(`PRAGMA table_info("${tableName}")`);
+        return rows.some((row: any) => row.name === columnName);
+      case "postgres":
+        rows = await this.adapter.execute(
+          `SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = '${tableName}' AND column_name = '${columnName}' LIMIT 1`,
+        );
+        return rows.length > 0;
+      case "mysql":
+        rows = await this.adapter.execute(
+          `SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '${tableName}' AND column_name = '${columnName}' LIMIT 1`,
+        );
+        return rows.length > 0;
+    }
   }
 
   async changeColumnDefault(
@@ -199,8 +227,14 @@ export class SchemaStatements {
     tableName: string,
     columnName: string,
     allowNull: boolean,
-    _defaultValue?: unknown,
+    defaultValue?: unknown,
   ): Promise<void> {
+    if (!allowNull && defaultValue !== undefined) {
+      const quoted = quoteDefaultExpression(defaultValue).replace(/^ DEFAULT /, "");
+      await this.adapter.executeMutation(
+        `UPDATE "${tableName}" SET "${columnName}" = ${quoted} WHERE "${columnName}" IS NULL`,
+      );
+    }
     const constraint = allowNull ? "DROP NOT NULL" : "SET NOT NULL";
     await this.adapter.executeMutation(
       `ALTER TABLE "${tableName}" ALTER COLUMN "${columnName}" ${constraint}`,
@@ -339,61 +373,199 @@ export class SchemaStatements {
   async columns(
     tableName: string,
   ): Promise<Array<{ name: string; type: string; null: boolean; default: unknown }>> {
-    const rows = await this.adapter.execute(`PRAGMA table_info("${tableName}")`);
-    return rows.map((row: any) => ({
-      name: row.name,
-      type: row.type,
-      null: row.notnull === 0,
-      default: row.dflt_value,
-    }));
+    switch (this.adapterName) {
+      case "sqlite": {
+        const rows = await this.adapter.execute(`PRAGMA table_info("${tableName}")`);
+        return rows.map((row: any) => ({
+          name: row.name,
+          type: row.type,
+          null: row.notnull === 0,
+          default: row.dflt_value,
+        }));
+      }
+      case "postgres": {
+        const rows = await this.adapter.execute(
+          `SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = 'public' AND table_name = '${tableName}' ORDER BY ordinal_position`,
+        );
+        return rows.map((row: any) => ({
+          name: row.column_name,
+          type: row.data_type,
+          null: row.is_nullable === "YES",
+          default: row.column_default,
+        }));
+      }
+      case "mysql": {
+        const rows = await this.adapter.execute(
+          `SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '${tableName}' ORDER BY ordinal_position`,
+        );
+        return rows.map((row: any) => ({
+          name: row.COLUMN_NAME ?? row.column_name,
+          type: row.DATA_TYPE ?? row.data_type,
+          null: (row.IS_NULLABLE ?? row.is_nullable) === "YES",
+          default: row.COLUMN_DEFAULT ?? row.column_default,
+        }));
+      }
+    }
   }
 
   async indexes(
     tableName: string,
   ): Promise<Array<{ name: string; columns: string[]; unique: boolean }>> {
-    const rows = await this.adapter.execute(`PRAGMA index_list("${tableName}")`);
-    const result: Array<{ name: string; columns: string[]; unique: boolean }> = [];
-    for (const row of rows as any[]) {
-      const cols = await this.adapter.execute(`PRAGMA index_info("${row.name}")`);
-      result.push({
-        name: row.name,
-        columns: (cols as any[]).map((c: any) => c.name),
-        unique: row.unique === 1,
-      });
+    switch (this.adapterName) {
+      case "sqlite": {
+        const rows = await this.adapter.execute(`PRAGMA index_list("${tableName}")`);
+        const result: Array<{ name: string; columns: string[]; unique: boolean }> = [];
+        for (const row of rows as any[]) {
+          const cols = await this.adapter.execute(`PRAGMA index_info("${row.name}")`);
+          result.push({
+            name: row.name,
+            columns: (cols as any[]).map((c: any) => c.name),
+            unique: row.unique === 1,
+          });
+        }
+        return result;
+      }
+      case "postgres": {
+        const rows = await this.adapter.execute(
+          `SELECT i.relname AS name, ix.indisunique AS unique, array_agg(a.attname ORDER BY k.n) AS columns
+           FROM pg_index ix
+           JOIN pg_class t ON t.oid = ix.indrelid
+           JOIN pg_class i ON i.oid = ix.indexrelid
+           JOIN pg_namespace n ON n.oid = t.relnamespace
+           JOIN LATERAL unnest(ix.indkey) WITH ORDINALITY AS k(attnum, n) ON true
+           JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = k.attnum
+           WHERE t.relname = '${tableName}' AND n.nspname = 'public' AND NOT ix.indisprimary
+           GROUP BY i.relname, ix.indisunique`,
+        );
+        return rows.map((row: any) => ({
+          name: row.name,
+          columns: Array.isArray(row.columns) ? row.columns : [row.columns],
+          unique: row.unique === true,
+        }));
+      }
+      case "mysql": {
+        const rows = await this.adapter.execute(
+          `SHOW INDEX FROM \`${tableName}\` WHERE Key_name != 'PRIMARY'`,
+        );
+        const indexMap = new Map<string, { columns: string[]; unique: boolean }>();
+        for (const row of rows as any[]) {
+          const name = row.Key_name;
+          if (!indexMap.has(name)) {
+            indexMap.set(name, { columns: [], unique: row.Non_unique === 0 });
+          }
+          indexMap.get(name)!.columns.push(row.Column_name);
+        }
+        return Array.from(indexMap.entries()).map(([name, info]) => ({ name, ...info }));
+      }
     }
-    return result;
   }
 
   async primaryKey(tableName: string): Promise<string | null> {
-    const rows = await this.adapter.execute(`PRAGMA table_info("${tableName}")`);
-    const pk = (rows as any[]).find((r: any) => r.pk > 0);
-    return pk ? pk.name : null;
+    switch (this.adapterName) {
+      case "sqlite": {
+        const rows = await this.adapter.execute(`PRAGMA table_info("${tableName}")`);
+        const pk = (rows as any[]).find((r: any) => r.pk > 0);
+        return pk ? pk.name : null;
+      }
+      case "postgres": {
+        const rows = await this.adapter.execute(
+          `SELECT a.attname FROM pg_index i JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey) WHERE i.indrelid = '"${tableName}"'::regclass AND i.indisprimary LIMIT 1`,
+        );
+        return rows.length > 0 ? (rows[0] as any).attname : null;
+      }
+      case "mysql": {
+        const rows = await this.adapter.execute(
+          `SHOW KEYS FROM \`${tableName}\` WHERE Key_name = 'PRIMARY'`,
+        );
+        return rows.length > 0 ? (rows[0] as any).Column_name : null;
+      }
+    }
   }
 
   async foreignKeys(
     tableName: string,
   ): Promise<Array<{ from: string; to: string; column: string; primaryKey: string }>> {
-    const rows = await this.adapter.execute(`PRAGMA foreign_key_list("${tableName}")`);
-    return (rows as any[]).map((row: any) => ({
-      from: tableName,
-      to: row.table,
-      column: row.from,
-      primaryKey: row.to,
-    }));
+    switch (this.adapterName) {
+      case "sqlite": {
+        const rows = await this.adapter.execute(`PRAGMA foreign_key_list("${tableName}")`);
+        return (rows as any[]).map((row: any) => ({
+          from: tableName,
+          to: row.table,
+          column: row.from,
+          primaryKey: row.to,
+        }));
+      }
+      case "postgres": {
+        const rows = await this.adapter.execute(
+          `SELECT kcu.column_name, ccu.table_name AS foreign_table, ccu.column_name AS foreign_column
+           FROM information_schema.table_constraints tc
+           JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+           JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name = tc.constraint_name AND ccu.table_schema = tc.table_schema
+           WHERE tc.constraint_type = 'FOREIGN KEY' AND tc.table_name = '${tableName}' AND tc.table_schema = 'public'`,
+        );
+        return rows.map((row: any) => ({
+          from: tableName,
+          to: row.foreign_table,
+          column: row.column_name,
+          primaryKey: row.foreign_column,
+        }));
+      }
+      case "mysql": {
+        const rows = await this.adapter.execute(
+          `SELECT column_name, referenced_table_name, referenced_column_name
+           FROM information_schema.key_column_usage
+           WHERE table_schema = DATABASE() AND table_name = '${tableName}' AND referenced_table_name IS NOT NULL`,
+        );
+        return rows.map((row: any) => ({
+          from: tableName,
+          to: row.referenced_table_name ?? row.REFERENCED_TABLE_NAME,
+          column: row.column_name ?? row.COLUMN_NAME,
+          primaryKey: row.referenced_column_name ?? row.REFERENCED_COLUMN_NAME,
+        }));
+      }
+    }
   }
 
   async tables(): Promise<string[]> {
-    const rows = await this.adapter.execute(
-      `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`,
-    );
-    return (rows as any[]).map((r: any) => r.name);
+    let rows: Record<string, unknown>[];
+    switch (this.adapterName) {
+      case "sqlite":
+        rows = await this.adapter.execute(
+          `SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name`,
+        );
+        return (rows as any[]).map((r: any) => r.name);
+      case "postgres":
+        rows = await this.adapter.execute(
+          `SELECT tablename AS name FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename`,
+        );
+        return (rows as any[]).map((r: any) => r.name);
+      case "mysql":
+        rows = await this.adapter.execute(
+          `SELECT table_name AS name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_type = 'BASE TABLE' ORDER BY table_name`,
+        );
+        return (rows as any[]).map((r: any) => r.name ?? r.TABLE_NAME);
+    }
   }
 
   async views(): Promise<string[]> {
-    const rows = await this.adapter.execute(
-      `SELECT name FROM sqlite_master WHERE type='view' ORDER BY name`,
-    );
-    return (rows as any[]).map((r: any) => r.name);
+    let rows: Record<string, unknown>[];
+    switch (this.adapterName) {
+      case "sqlite":
+        rows = await this.adapter.execute(
+          `SELECT name FROM sqlite_master WHERE type='view' ORDER BY name`,
+        );
+        return (rows as any[]).map((r: any) => r.name);
+      case "postgres":
+        rows = await this.adapter.execute(
+          `SELECT viewname AS name FROM pg_views WHERE schemaname = 'public' ORDER BY viewname`,
+        );
+        return (rows as any[]).map((r: any) => r.name);
+      case "mysql":
+        rows = await this.adapter.execute(
+          `SELECT table_name AS name FROM information_schema.views WHERE table_schema = DATABASE() ORDER BY table_name`,
+        );
+        return (rows as any[]).map((r: any) => r.name ?? r.TABLE_NAME);
+    }
   }
 
   protected _sqlType(type: ColumnType, options: ColumnOptions): string {

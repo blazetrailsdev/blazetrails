@@ -2,7 +2,7 @@
  * Mirrors Rails activerecord/test/cases/adapters/postgresql/uuid_test.rb
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest";
-import { describeIfPg, PostgresAdapter, PG_TEST_URL } from "./test-helper.js";
+import { describeIfPg, PostgresAdapter, PG_TEST_URL } from "../../../adapters/postgresql/test-helper.js";
 import { isValidUuid, normalizeUuid } from "./uuid.js";
 
 describeIfPg("PostgresAdapter", () => {

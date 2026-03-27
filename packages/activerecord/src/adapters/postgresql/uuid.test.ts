@@ -2,12 +2,8 @@
  * Mirrors Rails activerecord/test/cases/adapters/postgresql/uuid_test.rb
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest";
-import {
-  describeIfPg,
-  PostgreSQLAdapter,
-  PG_TEST_URL,
-} from "../../../adapters/postgresql/test-helper.js";
-import { isValidUuid, normalizeUuid } from "./uuid.js";
+import { describeIfPg, PostgreSQLAdapter, PG_TEST_URL } from "./test-helper.js";
+import { isValidUuid, normalizeUuid } from "../../connection-adapters/postgresql/oid/uuid.js";
 
 describeIfPg("PostgreSQLAdapter", () => {
   let adapter: PostgreSQLAdapter;

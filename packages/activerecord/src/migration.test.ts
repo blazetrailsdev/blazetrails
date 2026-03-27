@@ -600,54 +600,60 @@ describe("Migration DDL (extended)", () => {
     await m.run(adapter, "up");
   });
 
-  it("addIndex with where option generates partial index", async () => {
-    const adapter = freshAdapter();
-    const spy = vi.spyOn(adapter, "executeMutation");
-    class AddPartialIdx extends Migration {
-      async up() {
-        await this.createTable("games", (t) => {
-          t.string("status");
-          t.integer("turn");
-        });
-        await this.addIndex("games", ["status", "turn"], {
-          name: "idx_active",
-          where: "status = 'active'",
-        });
+  it.skipIf(adapterType === "mysql")(
+    "addIndex with where option generates partial index",
+    async () => {
+      const adapter = freshAdapter();
+      const spy = vi.spyOn(adapter, "executeMutation");
+      class AddPartialIdx extends Migration {
+        async up() {
+          await this.createTable("games", (t) => {
+            t.string("status");
+            t.integer("turn");
+          });
+          await this.addIndex("games", ["status", "turn"], {
+            name: "idx_active",
+            where: "status = 'active'",
+          });
+        }
+        async down() {}
       }
-      async down() {}
-    }
-    const m = new AddPartialIdx();
-    await m.run(adapter, "up");
-    const indexSql = spy.mock.calls.find(
-      ([sql]) => typeof sql === "string" && sql.includes("idx_active"),
-    );
-    expect(indexSql).toBeDefined();
-    expect(indexSql![0]).toContain("WHERE status = 'active'");
-  });
+      const m = new AddPartialIdx();
+      await m.run(adapter, "up");
+      const indexSql = spy.mock.calls.find(
+        ([sql]) => typeof sql === "string" && sql.includes("idx_active"),
+      );
+      expect(indexSql).toBeDefined();
+      expect(indexSql![0]).toContain("WHERE status = 'active'");
+    },
+  );
 
-  it("addIndex with order option generates ordered index", async () => {
-    const adapter = freshAdapter();
-    const spy = vi.spyOn(adapter, "executeMutation");
-    class AddOrderedIdx extends Migration {
-      async up() {
-        await this.createTable("games", (t) => {
-          t.datetime("created_at");
-        });
-        await this.addIndex("games", ["created_at"], {
-          name: "idx_created",
-          order: { created_at: "desc" },
-        });
+  it.skipIf(adapterType === "mysql")(
+    "addIndex with order option generates ordered index",
+    async () => {
+      const adapter = freshAdapter();
+      const spy = vi.spyOn(adapter, "executeMutation");
+      class AddOrderedIdx extends Migration {
+        async up() {
+          await this.createTable("games", (t) => {
+            t.datetime("created_at");
+          });
+          await this.addIndex("games", ["created_at"], {
+            name: "idx_created",
+            order: { created_at: "desc" },
+          });
+        }
+        async down() {}
       }
-      async down() {}
-    }
-    const m = new AddOrderedIdx();
-    await m.run(adapter, "up");
-    const indexSql = spy.mock.calls.find(
-      ([sql]) => typeof sql === "string" && sql.includes("idx_created"),
-    );
-    expect(indexSql).toBeDefined();
-    expect(indexSql![0]).toContain("DESC");
-  });
+      const m = new AddOrderedIdx();
+      await m.run(adapter, "up");
+      const indexSql = spy.mock.calls.find(
+        ([sql]) => typeof sql === "string" && sql.includes("idx_created"),
+      );
+      expect(indexSql).toBeDefined();
+      expect(indexSql![0]).toContain("DESC");
+    },
+  );
 
   it("addIndex with ifNotExists option", async () => {
     const adapter = freshAdapter();

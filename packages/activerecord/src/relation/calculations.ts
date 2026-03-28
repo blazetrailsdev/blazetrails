@@ -29,16 +29,26 @@ interface CalculationRelation {
 
 type AggFn = "count" | "sum" | "average" | "minimum" | "maximum";
 
+const SQL_FN_NAMES: Record<AggFn, string> = {
+  count: "COUNT",
+  sum: "SUM",
+  average: "AVG",
+  minimum: "MIN",
+  maximum: "MAX",
+};
+
 function buildAggNode(table: any, fn: AggFn, column: string, distinct: boolean): any {
+  const sqlName = SQL_FN_NAMES[fn];
   if (column === "*") {
-    return new Nodes.NamedFunction(fn === "count" ? "COUNT" : fn.toUpperCase(), [
-      new Nodes.SqlLiteral("*"),
-    ]);
+    return new Nodes.NamedFunction(sqlName, [new Nodes.SqlLiteral("*")], undefined, distinct);
   }
   const attr = table.get(column);
+  if (distinct) {
+    return new Nodes.NamedFunction(sqlName, [attr], undefined, true);
+  }
   switch (fn) {
     case "count":
-      return attr.count(distinct);
+      return attr.count(false);
     case "sum":
       return attr.sum();
     case "average":

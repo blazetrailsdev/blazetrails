@@ -223,4 +223,54 @@ describe("Controller JSON rendering integration", () => {
       page: "2",
     });
   });
+
+  it("path params take precedence over query/body params", async () => {
+    class PostsController extends Base {
+      async show() {
+        this.render({ json: { id: this.params.get("id") } });
+      }
+    }
+
+    const c = new PostsController();
+    await c.dispatch(
+      "show",
+      new Request({
+        REQUEST_METHOD: "GET",
+        PATH_INFO: "/posts/5",
+        QUERY_STRING: "id=999",
+        "action_dispatch.request.path_parameters": {
+          controller: "posts",
+          action: "show",
+          id: "5",
+        },
+      }),
+      new Response(),
+    );
+
+    expect(JSON.parse(c.body)).toEqual({ id: "5" });
+  });
+
+  it("parses nested query parameters", async () => {
+    class PostsController extends Base {
+      async index() {
+        const user = this.params.get("user");
+        this.render({ json: { user } });
+      }
+    }
+
+    const c = new PostsController();
+    await c.dispatch(
+      "index",
+      new Request({
+        REQUEST_METHOD: "GET",
+        PATH_INFO: "/posts",
+        QUERY_STRING: "user[name]=dean&user[role]=admin",
+      }),
+      new Response(),
+    );
+
+    expect(JSON.parse(c.body)).toEqual({
+      user: { name: "dean", role: "admin" },
+    });
+  });
 });

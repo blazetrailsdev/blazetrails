@@ -52,7 +52,7 @@ export class Metal extends AbstractController {
     this.request = request;
     this.response = response;
     this.params = (request as any).parameters ??
-      new Parameters({ ...request.pathParameters, ...request.params });
+      new Parameters({ ...request.params, ...request.pathParameters });
 
     await this.processAction(action);
 

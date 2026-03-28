@@ -6,6 +6,7 @@
  */
 
 import type { RackEnv } from "@blazetrails/rack";
+import { parseNestedQuery } from "@blazetrails/rack";
 
 export class Request {
   readonly env: RackEnv;
@@ -248,25 +249,25 @@ export class Request {
 
   // --- Parameters ---
 
-  get params(): Record<string, string> {
-    // Return cached if already computed
+  get params(): Record<string, unknown> {
     if (this.env["action_dispatch.request.parameters"]) {
-      return this.env["action_dispatch.request.parameters"] as Record<string, string>;
+      return this.env["action_dispatch.request.parameters"] as Record<string, unknown>;
     }
-    return { ...this.queryParameters, ...this.requestParameters };
+    const merged: Record<string, unknown> = {
+      ...this.queryParameters,
+      ...this.requestParameters,
+    };
+    this.env["action_dispatch.request.parameters"] = merged;
+    return merged;
   }
 
-  get queryParameters(): Record<string, string> {
+  get queryParameters(): Record<string, unknown> {
     const qs = this.queryString;
     if (!qs) return {};
-    const result: Record<string, string> = {};
-    for (const [key, value] of new URLSearchParams(qs)) {
-      result[key] = value;
-    }
-    return result;
+    return parseNestedQuery(qs);
   }
 
-  get requestParameters(): Record<string, string> {
+  get requestParameters(): Record<string, unknown> {
     const input = this.env["rack.input"];
     if (!input || typeof input !== "string") return {};
     const ct = ((this.env["CONTENT_TYPE"] as string) || "").toLowerCase();
@@ -280,11 +281,7 @@ export class Request {
         // ignore
       }
     } else if (ct.includes("application/x-www-form-urlencoded")) {
-      const result: Record<string, string> = {};
-      for (const [key, value] of new URLSearchParams(input)) {
-        result[key] = value;
-      }
-      return result;
+      return parseNestedQuery(input);
     }
     return {};
   }

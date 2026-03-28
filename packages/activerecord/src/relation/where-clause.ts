@@ -26,7 +26,9 @@ export class WhereClause {
   except(...columns: string[]): WhereClause {
     const filtered = this.predicates.filter((p) => {
       if (typeof p === "object" && p !== null) {
-        return !columns.some((col) => col in (p as Record<string, unknown>));
+        return !columns.some((col) =>
+          Object.prototype.hasOwnProperty.call(p as Record<string, unknown>, col),
+        );
       }
       return true;
     });
@@ -34,7 +36,9 @@ export class WhereClause {
   }
 
   or(other: WhereClause): WhereClause {
-    return new WhereClause([...this.predicates, ...other.predicates]);
+    if (this.isEmpty()) return other;
+    if (other.isEmpty()) return this;
+    return new WhereClause([{ _or: [this.predicates, other.predicates] }]);
   }
 
   toH(): Record<string, unknown> {

@@ -1,8 +1,8 @@
 /**
  * BatchEnumerator — iterates over a relation in batches.
  *
- * Used by findEach/findInBatches to process large result sets
- * without loading everything into memory at once.
+ * Currently loads the full result set then slices into batches.
+ * Incremental fetching (LIMIT/OFFSET per batch) is a future optimization.
  *
  * Mirrors: ActiveRecord::Batches::BatchEnumerator
  */
@@ -12,6 +12,9 @@ export class BatchEnumerator<T> {
   readonly ofSize: number;
 
   constructor(relation: { toArray(): Promise<T[]> }, ofSize: number = 1000) {
+    if (ofSize < 1) {
+      throw new Error("Batch size must be a positive integer");
+    }
     this._relation = relation;
     this.ofSize = ofSize;
   }

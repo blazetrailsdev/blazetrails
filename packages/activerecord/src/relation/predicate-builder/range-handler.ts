@@ -1,7 +1,7 @@
 /**
  * RangeHandler — handles range values in WHERE predicates.
  *
- * Converts `where(age: { gte: 18, lt: 65 })` style range conditions.
+ * Converts range objects `{ begin, end }` into between/gteq/lteq predicates.
  *
  * Mirrors: ActiveRecord::PredicateBuilder::RangeHandler
  */

@@ -207,6 +207,19 @@ export async function performMaximum(
 }
 
 /**
+ * Interface for the calculation methods mixed into Relation.
+ * Used with interface merging so the methods appear as proper
+ * method signatures in .d.ts output.
+ */
+export interface CalculationMethods {
+  count(column?: string): Promise<number | Record<string, number>>;
+  sum(column?: string): Promise<number | Record<string, number>>;
+  average(column: string): Promise<number | null | Record<string, number>>;
+  minimum(column: string): Promise<unknown | null | Record<string, unknown>>;
+  maximum(column: string): Promise<unknown | null | Record<string, unknown>>;
+}
+
+/**
  * Tracks column aliases during calculation queries to avoid
  * conflicts when multiple aggregates are computed.
  *

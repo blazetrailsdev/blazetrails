@@ -23,6 +23,7 @@ import {
   performAverage,
   performMinimum,
   performMaximum,
+  type CalculationMethods,
 } from "./relation/calculations.js";
 import { FinderMethods } from "./relation/finder-methods.js";
 import { FromClause } from "./relation/from-clause.js";
@@ -34,6 +35,7 @@ import { BatchEnumerator } from "./relation/batches/batch-enumerator.js";
  *
  * Mirrors: ActiveRecord::Relation
  */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class Relation<T extends Base> {
   private _modelClass: typeof Base;
   /** @internal */
@@ -2017,55 +2019,8 @@ export class Relation<T extends Base> {
     return `EXPLAIN not supported by this adapter`;
   }
 
-  /**
-   * Count records. Optionally count a specific column (ignores NULLs).
-   * When used with group(), returns a Record keyed by group value.
-   *
-   * Mirrors: ActiveRecord::Relation#count
-   */
-  async count(column?: string): Promise<number | Record<string, number>> {
-    return performCount.call(this as any, column);
-  }
-
-  /**
-   * Sum a column.
-   * When used with group(), returns a Record keyed by group value.
-   *
-   * Mirrors: ActiveRecord::Relation#sum
-   */
-  async sum(column?: string): Promise<number | Record<string, number>> {
-    return performSum.call(this as any, column);
-  }
-
-  /**
-   * Average a column.
-   * When used with group(), returns a Record keyed by group value.
-   *
-   * Mirrors: ActiveRecord::Relation#average
-   */
-  async average(column: string): Promise<number | null | Record<string, number>> {
-    return performAverage.call(this as any, column);
-  }
-
-  /**
-   * Minimum value of a column.
-   * When used with group(), returns a Record keyed by group value.
-   *
-   * Mirrors: ActiveRecord::Relation#minimum
-   */
-  async minimum(column: string): Promise<unknown | null | Record<string, unknown>> {
-    return performMinimum.call(this as any, column);
-  }
-
-  /**
-   * Maximum value of a column.
-   * When used with group(), returns a Record keyed by group value.
-   *
-   * Mirrors: ActiveRecord::Relation#maximum
-   */
-  async maximum(column: string): Promise<unknown | null | Record<string, unknown>> {
-    return performMaximum.call(this as any, column);
-  }
+  // count, sum, average, minimum, maximum are mixed in via
+  // interface merge + prototype assignment (see bottom of file)
 
   private _applyJoinsToManager(manager: SelectManager): void {
     for (const join of this._joinClauses) {
@@ -4385,6 +4340,23 @@ function wrapWithScopeProxy<T extends Base>(rel: Relation<T>): Relation<T> {
     },
   });
 }
+
+// ---------------------------------------------------------------------------
+// Mixin: calculation methods via interface merge + prototype assignment.
+// The interface merge declares proper method signatures in .d.ts output.
+// The prototype assignment wires the implementations from calculations.ts.
+// ---------------------------------------------------------------------------
+
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface Relation<T> extends CalculationMethods {}
+
+Object.defineProperties(Relation.prototype, {
+  count: { value: performCount, writable: true, configurable: true, enumerable: false },
+  sum: { value: performSum, writable: true, configurable: true, enumerable: false },
+  average: { value: performAverage, writable: true, configurable: true, enumerable: false },
+  minimum: { value: performMinimum, writable: true, configurable: true, enumerable: false },
+  maximum: { value: performMaximum, writable: true, configurable: true, enumerable: false },
+});
 
 // Register Relation with Base to break the circular dependency.
 _setRelationCtor(Relation as any);

@@ -1529,23 +1529,16 @@ export class CheckPending {
 
   constructor(
     app: (env: Record<string, unknown>) => Promise<unknown>,
-    migratorOrOptions?:
-      | Migrator
-      | {
-          migrator?: Migrator;
-          pendingConnection?: PendingMigrationConnection;
-          migrations?: MigrationProxy[];
-        },
+    options: {
+      migrator?: Migrator;
+      pendingConnection?: PendingMigrationConnection;
+      migrations?: MigrationProxy[];
+    } = {},
   ) {
     this._app = app;
-    if (migratorOrOptions instanceof Migrator) {
-      this._migrator = migratorOrOptions;
-      this._migrations = [];
-    } else {
-      this._migrator = migratorOrOptions?.migrator;
-      this._pendingConnection = migratorOrOptions?.pendingConnection;
-      this._migrations = migratorOrOptions?.migrations ?? [];
-    }
+    this._migrator = options.migrator;
+    this._pendingConnection = options.pendingConnection;
+    this._migrations = options.migrations ?? [];
   }
 
   async call(env: Record<string, unknown>): Promise<unknown> {

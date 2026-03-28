@@ -30,7 +30,7 @@ export class SqlTypeMetadata implements Deduplicable {
   }
 
   deduplicateKey(): string {
-    return `${this.sqlType}|${this.type}|${this.limit}|${this.precision}|${this.scale}`;
+    return JSON.stringify([this.sqlType, this.type, this.limit, this.precision, this.scale]);
   }
 
   toString(): string {

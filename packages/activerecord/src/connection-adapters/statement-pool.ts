@@ -17,16 +17,16 @@ export class StatementPool<T = unknown> {
   }
 
   get(key: string): T | undefined {
-    const stmt = this._statements.get(key);
-    if (stmt !== undefined) {
-      // Move to end for LRU
-      this._statements.delete(key);
-      this._statements.set(key, stmt);
-    }
+    if (!this._statements.has(key)) return undefined;
+    const stmt = this._statements.get(key) as T;
+    // Move to end for LRU
+    this._statements.delete(key);
+    this._statements.set(key, stmt);
     return stmt;
   }
 
   set(key: string, stmt: T): void {
+    if (this._maxSize <= 0) return;
     this._statements.delete(key);
     if (this._statements.size >= this._maxSize) {
       const firstKey = this._statements.keys().next().value;

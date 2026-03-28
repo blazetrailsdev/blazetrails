@@ -27,6 +27,7 @@ import { detectAdapterName } from "../../adapter-name.js";
 import { quoteIdentifier, quoteDefaultExpression } from "./quoting.js";
 import { Column } from "../column.js";
 import { SqlTypeMetadata } from "../sql-type-metadata.js";
+import { deduplicate } from "../deduplicable.js";
 
 export class SchemaStatements {
   private _schemaCreation?: SchemaCreation;
@@ -487,7 +488,7 @@ export class SchemaStatements {
       case "sqlite": {
         const rows = await this.adapter.execute(`PRAGMA table_info("${tableName}")`);
         return rows.map((row: any) => {
-          const meta = new SqlTypeMetadata({ sqlType: row.type, type: row.type });
+          const meta = deduplicate(new SqlTypeMetadata({ sqlType: row.type, type: row.type }));
           return new Column(row.name, row.dflt_value, meta, row.notnull === 0, {
             primaryKey: row.pk > 0,
           });
@@ -495,7 +496,7 @@ export class SchemaStatements {
       }
       case "postgres": {
         const rows = await this.adapter.execute(
-          `SELECT c.column_name, c.udt_name, c.character_maximum_length, c.numeric_precision, c.numeric_scale, c.is_nullable, c.column_default,
+          `SELECT c.column_name, c.data_type, c.udt_name, c.character_maximum_length, c.numeric_precision, c.numeric_scale, c.is_nullable, c.column_default,
             CASE WHEN pk.attname IS NOT NULL THEN true ELSE false END AS is_primary_key
           FROM information_schema.columns c
           LEFT JOIN (
@@ -509,23 +510,27 @@ export class SchemaStatements {
           [tableName],
         );
         return rows.map((row: any) => {
-          let sqlType: string = row.udt_name;
+          // Use udt_name for the type mapper (e.g. "varchar", "int4")
+          // but data_type for the full SQL type (e.g. "timestamp without time zone")
+          let sqlType: string = row.data_type;
           if (row.character_maximum_length) {
-            sqlType = `${sqlType}(${row.character_maximum_length})`;
+            sqlType = `${row.udt_name}(${row.character_maximum_length})`;
           } else if (
             row.numeric_precision != null &&
             row.numeric_scale != null &&
-            (sqlType === "numeric" || sqlType === "decimal")
+            (row.udt_name === "numeric" || row.udt_name === "decimal")
           ) {
             sqlType = `numeric(${row.numeric_precision},${row.numeric_scale})`;
           }
-          const meta = new SqlTypeMetadata({
-            sqlType,
-            type: row.udt_name,
-            limit: row.character_maximum_length ?? null,
-            precision: row.numeric_precision ?? null,
-            scale: row.numeric_scale ?? null,
-          });
+          const meta = deduplicate(
+            new SqlTypeMetadata({
+              sqlType,
+              type: row.udt_name,
+              limit: row.character_maximum_length ?? null,
+              precision: row.numeric_precision ?? null,
+              scale: row.numeric_scale ?? null,
+            }),
+          );
           return new Column(row.column_name, row.column_default, meta, row.is_nullable === "YES", {
             primaryKey: row.is_primary_key === true,
           });
@@ -551,13 +556,15 @@ export class SchemaStatements {
           ) {
             sqlType = `${sqlType}(${precision},${scale})`;
           }
-          const meta = new SqlTypeMetadata({
-            sqlType,
-            type: row.DATA_TYPE ?? row.data_type,
-            limit: maxLen ?? null,
-            precision: precision ?? null,
-            scale: scale ?? null,
-          });
+          const meta = deduplicate(
+            new SqlTypeMetadata({
+              sqlType,
+              type: row.DATA_TYPE ?? row.data_type,
+              limit: maxLen ?? null,
+              precision: precision ?? null,
+              scale: scale ?? null,
+            }),
+          );
           return new Column(
             name,
             row.COLUMN_DEFAULT ?? row.column_default,

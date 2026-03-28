@@ -43,7 +43,7 @@ export class Column {
   }
 
   get type(): string | null {
-    return this.sqlTypeMetadata?.type ?? null;
+    return this.sqlTypeMetadata?.sqlType ?? this.sqlTypeMetadata?.type ?? null;
   }
 
   get limit(): number | null {
@@ -59,7 +59,7 @@ export class Column {
   }
 
   get hasDefault(): boolean {
-    return this.default !== null || this.defaultFunction !== null;
+    return this.default != null || this.defaultFunction !== null;
   }
 
   get isNullable(): boolean {

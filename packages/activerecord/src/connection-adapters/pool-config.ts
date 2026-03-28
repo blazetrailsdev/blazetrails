@@ -5,12 +5,13 @@
  */
 
 import type { DatabaseConfig } from "../database-configurations/database-config.js";
+import type { SchemaCache } from "./schema-cache.js";
 
 export class PoolConfig {
   readonly role: string;
   readonly shard: string;
   readonly dbConfig: DatabaseConfig;
-  private _schemaCache: unknown = null;
+  private _schemaCache: SchemaCache | null = null;
 
   constructor(
     dbConfig: DatabaseConfig,
@@ -24,11 +25,11 @@ export class PoolConfig {
     this.shard = options.shard ?? "default";
   }
 
-  get schemaCache(): unknown {
+  get schemaCache(): SchemaCache | null {
     return this._schemaCache;
   }
 
-  set schemaCache(cache: unknown) {
+  set schemaCache(cache: SchemaCache | null) {
     this._schemaCache = cache;
   }
 

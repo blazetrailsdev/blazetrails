@@ -268,29 +268,55 @@ export class Request {
   }
 
   get requestParameters(): Record<string, unknown> {
+    const cached = this.env["action_dispatch.request.request_parameters"];
+    if (cached && typeof cached === "object") {
+      return cached as Record<string, unknown>;
+    }
+
     const raw = this.env["rack.input"];
-    if (!raw) return {};
-    const input =
-      typeof raw === "string"
-        ? raw
-        : typeof (raw as any).read === "function"
-          ? (raw as any).read()
-          : null;
-    if (!input || typeof input !== "string") return {};
+    if (!raw) {
+      this.env["action_dispatch.request.request_parameters"] = {};
+      return {};
+    }
+
+    let input: string | null;
+    if (typeof raw === "string") {
+      input = raw;
+    } else if (typeof (raw as any).read === "function") {
+      input = (raw as any).read();
+      if (typeof (raw as any).rewind === "function") {
+        try {
+          (raw as any).rewind();
+        } catch {
+          // ignore rewind errors
+        }
+      }
+    } else {
+      input = null;
+    }
+
+    if (!input || typeof input !== "string") {
+      this.env["action_dispatch.request.request_parameters"] = {};
+      return {};
+    }
+
+    let params: Record<string, unknown> = {};
     const ct = ((this.env["CONTENT_TYPE"] as string) || "").toLowerCase();
     if (ct.includes("application/json")) {
       try {
         const parsed = JSON.parse(input);
         if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-          return parsed;
+          params = parsed;
         }
       } catch {
         // ignore
       }
     } else if (ct.includes("application/x-www-form-urlencoded")) {
-      return parseNestedQuery(input);
+      params = parseNestedQuery(input);
     }
-    return {};
+
+    this.env["action_dispatch.request.request_parameters"] = params;
+    return params;
   }
 
   get pathParameters(): Record<string, string> {

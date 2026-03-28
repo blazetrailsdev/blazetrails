@@ -4,17 +4,6 @@ import { Request } from "../../actiondispatch/request.js";
 import { Response } from "../../actiondispatch/response.js";
 import { Base, API } from "../base.js";
 import { bodyToString } from "@blazetrails/rack";
-import type { RackEnv } from "@blazetrails/rack";
-
-function dispatch(ControllerClass: typeof Base, action: string, env: RackEnv) {
-  return async () => {
-    const req = new Request(env);
-    const res = new Response();
-    const c = new ControllerClass();
-    await c.dispatch(action, req, res);
-    return c.toRackResponse();
-  };
-}
 
 describe("Controller JSON rendering integration", () => {
   it("renders JSON from a controller action", async () => {

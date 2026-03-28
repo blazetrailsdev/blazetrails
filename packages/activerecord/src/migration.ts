@@ -182,8 +182,11 @@ export abstract class Migration {
       // Record operations from change(), then replay in reverse
       this._recording = true;
       this._recorder = new CommandRecorder();
-      await this.change();
-      this._recording = false;
+      try {
+        await this.change();
+      } finally {
+        this._recording = false;
+      }
 
       // If no operations were recorded, migration is irreversible
       if (this._recorder.commands.length === 0) {
@@ -615,15 +618,18 @@ export abstract class Migration {
       // Record operations and reverse them, preserving outer recorder state
       const outerRecording = this._recording;
       const outerRecorder = this._recorder;
+      const innerRecorder = new CommandRecorder();
       this._recording = true;
-      this._recorder = new CommandRecorder();
-      await migrationOrFn();
-      this._recording = false;
-      for (const { cmd, args } of this._recorder.commands.slice().reverse()) {
+      this._recorder = innerRecorder;
+      try {
+        await migrationOrFn();
+      } finally {
+        this._recording = outerRecording;
+        this._recorder = outerRecorder;
+      }
+      for (const { cmd, args } of innerRecorder.commands.slice().reverse()) {
         await this._reverseOperation(cmd, args);
       }
-      this._recording = outerRecording;
-      this._recorder = outerRecorder;
     }
   }
 

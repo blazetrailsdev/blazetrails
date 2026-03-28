@@ -51,8 +51,7 @@ async function groupedAggregate(
 ): Promise<Record<string, number>> {
   const table = rel._modelClass.arelTable;
   const groupCol = rel._groupColumns[0];
-  const aggExpr =
-    column === "*" ? `${fn}(*) AS val` : `${fn}("${table.name}"."${column}") AS val`;
+  const aggExpr = column === "*" ? `${fn}(*) AS val` : `${fn}("${table.name}"."${column}") AS val`;
   const manager = table.project(`"${table.name}"."${groupCol}" AS group_key, ${aggExpr}`);
   rel._applyJoinsToManager(manager);
   rel._applyWheresToManager(manager, table);

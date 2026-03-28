@@ -144,6 +144,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - run: pnpm --filter @blazetrails/website exec svelte-kit sync
       - run: pnpm --filter @blazetrails/website exec vitest run --no-file-parallelism
       - run: pnpm --filter @blazetrails/website run prepare:wasm
       - run: pnpm --filter @blazetrails/website run docs:generate

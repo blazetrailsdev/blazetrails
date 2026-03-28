@@ -52,7 +52,7 @@ COPY --from=base /app/packages/actionpack/package.json packages/actionpack/
 COPY --from=base /app/packages/cli/package.json packages/cli/
 COPY --from=base /app/packages/website/package.json packages/website/
 
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 # Copy built artifacts
 COPY --from=base /app/packages/activesupport/dist/ packages/activesupport/dist/

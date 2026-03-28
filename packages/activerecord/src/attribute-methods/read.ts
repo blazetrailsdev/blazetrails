@@ -1,19 +1,18 @@
 /**
  * Attribute reading methods.
  *
+ * The actual readAttribute implementation lives on Model (from
+ * @blazetrails/activemodel). This module exists to match the Rails
+ * file structure for ActiveRecord::AttributeMethods::Read.
+ *
  * Mirrors: ActiveRecord::AttributeMethods::Read
  */
 
-interface Readable {
-  readAttribute(name: string): unknown;
-}
-
 /**
- * Read an attribute value. In Base, this applies decryption and type
- * casting — use readAttributeBeforeTypeCast for raw values.
+ * The Read module interface.
  *
- * Mirrors: ActiveRecord::AttributeMethods::Read#read_attribute
+ * Mirrors: ActiveRecord::AttributeMethods::Read
  */
-export function readAttribute(this: Readable, name: string): unknown {
-  return this.readAttribute(name);
+export interface Read {
+  readAttribute(name: string): unknown;
 }

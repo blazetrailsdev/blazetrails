@@ -9,7 +9,7 @@
 
 interface DirtyRecord {
   changed: boolean;
-  changedAttributes: Record<string, unknown>;
+  changedAttributes: string[];
   changes: Record<string, [unknown, unknown]>;
   previousChanges: Record<string, [unknown, unknown]>;
   readAttribute(name: string): unknown;

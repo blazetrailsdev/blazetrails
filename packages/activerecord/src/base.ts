@@ -32,6 +32,7 @@ import {
   hasAttribute as _hasAttribute,
   attributePresent as _attributePresent,
   attributeNamesList as _attributeNamesList,
+  accessedFields as _accessedFields,
 } from "./attribute-methods.js";
 import { toKey as _toKey } from "./attribute-methods/primary-key.js";
 import {
@@ -3196,6 +3197,7 @@ export class Base extends Model {
   declare hasAttribute: (name: string) => boolean;
   declare attributePresent: (name: string) => boolean;
   declare toKey: () => unknown[] | null;
+  declare accessedFields: () => string[];
 
   get attributeNamesList(): string[] {
     return _attributeNamesList.call(this as any);
@@ -3559,6 +3561,7 @@ mixin(Base.prototype, {
   // AttributeMethods
   hasAttribute: _hasAttribute,
   attributePresent: _attributePresent,
+  accessedFields: _accessedFields,
   // PrimaryKey
   toKey: _toKey,
 });

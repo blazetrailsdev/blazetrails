@@ -1,19 +1,19 @@
 /**
  * Attribute writing methods.
  *
+ * The actual writeAttribute implementation lives on Model (from
+ * @blazetrails/activemodel), with Base adding encryption and frozen
+ * checks. This module exists to match the Rails file structure for
+ * ActiveRecord::AttributeMethods::Write.
+ *
  * Mirrors: ActiveRecord::AttributeMethods::Write
  */
 
-interface Writable {
-  writeAttribute(name: string, value: unknown): void;
-}
-
 /**
- * Write an attribute value. In Base, this validates the attribute name,
- * checks for frozen state, and applies encryption.
+ * The Write module interface.
  *
- * Mirrors: ActiveRecord::AttributeMethods::Write#write_attribute
+ * Mirrors: ActiveRecord::AttributeMethods::Write
  */
-export function writeAttribute(this: Writable, name: string, value: unknown): void {
-  this.writeAttribute(name, value);
+export interface Write {
+  writeAttribute(name: string, value: unknown): void;
 }

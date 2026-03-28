@@ -1535,8 +1535,6 @@ export class Migrator {
  */
 export class Current extends Migration {
   static readonly VERSION = CURRENT_VERSION;
-  async up(): Promise<void> {}
-  async down(): Promise<void> {}
 }
 
 // Register the current version so Migration.forVersion(1.0) works

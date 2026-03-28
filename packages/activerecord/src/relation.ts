@@ -2910,13 +2910,13 @@ export class Relation<T extends Base> {
         const records = await rel.toArray();
         if (records.length === 0) break;
 
-        const ids = records.map((r) => (r as any).id);
+        const ids = records.map((r) => (r as any).readAttribute(pk as string));
         const batchRel = self._clone();
         batchRel._whereClause.conditions.push({ [pk as string]: ids });
         yield batchRel;
 
         if (records.length < batchSize) break;
-        lastId = (records[records.length - 1] as any).id;
+        lastId = (records[records.length - 1] as any).readAttribute(pk as string);
       }
     }, batchSize);
   }

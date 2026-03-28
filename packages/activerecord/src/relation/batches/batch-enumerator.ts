@@ -8,7 +8,14 @@
  * Mirrors: ActiveRecord::Batches::BatchEnumerator
  */
 
-export class BatchEnumerator<T> {
+interface BatchRelation {
+  toArray(): Promise<any[]>;
+  deleteAll(): Promise<number>;
+  updateAll(updates: Record<string, unknown>): Promise<number>;
+  destroyAll(): Promise<any[]>;
+}
+
+export class BatchEnumerator<T extends BatchRelation> {
   private _generator: () => AsyncGenerator<T>;
   readonly ofSize: number;
 
@@ -32,7 +39,7 @@ export class BatchEnumerator<T> {
 
   async eachRecord(fn: (record: any) => void | Promise<void>): Promise<void> {
     for await (const batchRelation of this) {
-      const records = await (batchRelation as any).toArray();
+      const records = await batchRelation.toArray();
       for (const record of records) {
         await fn(record);
       }
@@ -42,7 +49,7 @@ export class BatchEnumerator<T> {
   async deleteAll(): Promise<number> {
     let total = 0;
     for await (const batchRelation of this) {
-      total += await (batchRelation as any).deleteAll();
+      total += await batchRelation.deleteAll();
     }
     return total;
   }
@@ -50,7 +57,7 @@ export class BatchEnumerator<T> {
   async updateAll(updates: Record<string, unknown>): Promise<number> {
     let total = 0;
     for await (const batchRelation of this) {
-      total += await (batchRelation as any).updateAll(updates);
+      total += await batchRelation.updateAll(updates);
     }
     return total;
   }
@@ -58,7 +65,7 @@ export class BatchEnumerator<T> {
   async destroyAll(): Promise<any[]> {
     const destroyed: any[] = [];
     for await (const batchRelation of this) {
-      const records = await (batchRelation as any).destroyAll();
+      const records = await batchRelation.destroyAll();
       destroyed.push(...records);
     }
     return destroyed;

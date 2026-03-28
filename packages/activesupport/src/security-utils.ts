@@ -15,6 +15,11 @@ export class SecurityUtils {
   static secureCompare(a: string, b: string): boolean {
     const aBuf = Buffer.from(a);
     const bBuf = Buffer.from(b);
-    return aBuf.length === bBuf.length && this.fixedLengthSecureCompare(a, b);
+
+    if (aBuf.length !== bBuf.length) {
+      return false;
+    }
+
+    return timingSafeEqual(aBuf, bBuf);
   }
 }

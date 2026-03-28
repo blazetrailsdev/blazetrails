@@ -134,7 +134,7 @@ describe("loadDatabaseConfig", () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "rails-ts-db-test-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "trails-db-test-"));
   });
 
   afterEach(() => {
@@ -180,7 +180,7 @@ describe("discoverMigrations", () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "rails-ts-migrations-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "trails-migrations-"));
   });
 
   afterEach(() => {
@@ -232,7 +232,7 @@ describe("full migration flow", () => {
   let adapter: any;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "rails-ts-flow-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "trails-flow-"));
   });
 
   afterEach(async () => {

@@ -61,7 +61,7 @@ export async function loadDatabaseConfig(
     const rel = path.relative(cwd, configPath);
     const enhanced = new Error(
       `Failed to load database config from "${rel}": ${error.message}. ` +
-        `Run with tsx (e.g., "npx tsx node_modules/.bin/rails-ts").`,
+        `Run with tsx (e.g., "npx tsx node_modules/.bin/trails").`,
     );
     (enhanced as any).cause = error;
     throw enhanced;

@@ -53,7 +53,8 @@ async function groupedAggregate(
   rel: CalculationRelation,
   fn: string,
   column: string,
-): Promise<Record<string, number>> {
+  coerceNumeric: boolean = true,
+): Promise<Record<string, unknown>> {
   const table = rel._modelClass.arelTable;
   const groupCol = rel._groupColumns[0];
   const col = column === "*" ? "*" : quoteColumn(table.name, column);
@@ -68,10 +69,11 @@ async function groupedAggregate(
   if (rel._offsetValue !== null) sql += ` OFFSET ${rel._offsetValue}`;
   const rows = await rel._modelClass.adapter.execute(sql);
 
-  const result: Record<string, number> = {};
+  const result: Record<string, unknown> = {};
   for (const row of rows) {
     const key = String(row.group_key ?? "null");
-    result[key] = Number(row.val ?? 0);
+    const val = row.val ?? 0;
+    result[key] = coerceNumeric ? Number(val) : val;
   }
   return result;
 }
@@ -84,7 +86,7 @@ export async function performCount(
   if (this._isNone) return this._groupColumns.length > 0 ? {} : 0;
 
   if (this._groupColumns.length > 0) {
-    return groupedAggregate(this, "COUNT", column ?? "*");
+    return groupedAggregate(this, "COUNT", column ?? "*", true) as Promise<Record<string, number>>;
   }
 
   if (this._limitValue !== null) {
@@ -100,8 +102,20 @@ export async function performCount(
   } else if (this._isDistinct) {
     const pk = this._modelClass.primaryKey;
     if (Array.isArray(pk)) {
+      // Multi-column DISTINCT COUNT requires a subquery since
+      // COUNT(DISTINCT col1, col2) isn't valid on SQLite/PG
       const cols = pk.map((c) => quoteColumn(table.name, c)).join(", ");
-      countExpr = `COUNT(DISTINCT ${cols}) AS count`;
+      countExpr = `COUNT(*) AS count`;
+      const subquery = `SELECT DISTINCT ${cols} FROM "${table.name}"`;
+      const manager = table.project(countExpr);
+      this._applyJoinsToManager(manager);
+      this._applyWheresToManager(manager, table);
+      const innerSql = manager
+        .toSql()
+        .replace(`SELECT ${countExpr} FROM`, `SELECT DISTINCT ${cols} FROM`);
+      const sql = `SELECT COUNT(*) AS count FROM (${innerSql}) AS subquery`;
+      const rows = await this._modelClass.adapter.execute(sql);
+      return Number(rows[0]?.count ?? 0);
     } else {
       countExpr = `COUNT(DISTINCT ${quoteColumn(table.name, pk)}) AS count`;
     }
@@ -124,7 +138,7 @@ export async function performSum(
   if (this._isNone) return this._groupColumns.length > 0 ? {} : 0;
   if (!column) return 0;
   if (this._groupColumns.length > 0) {
-    return groupedAggregate(this, "SUM", column);
+    return groupedAggregate(this, "SUM", column, true) as Promise<Record<string, number>>;
   }
   return ((await singleAggregate(this, "SUM", column, true)) as number) ?? 0;
 }
@@ -135,7 +149,7 @@ export async function performAverage(
 ): Promise<number | null | Record<string, number>> {
   if (this._isNone) return this._groupColumns.length > 0 ? {} : null;
   if (this._groupColumns.length > 0) {
-    return groupedAggregate(this, "AVG", column);
+    return groupedAggregate(this, "AVG", column, true) as Promise<Record<string, number>>;
   }
   return singleAggregate(this, "AVG", column, true) as Promise<number | null>;
 }
@@ -146,7 +160,7 @@ export async function performMinimum(
 ): Promise<unknown | null | Record<string, unknown>> {
   if (this._isNone) return this._groupColumns.length > 0 ? {} : null;
   if (this._groupColumns.length > 0) {
-    return groupedAggregate(this, "MIN", column);
+    return groupedAggregate(this, "MIN", column, false);
   }
   return singleAggregate(this, "MIN", column, false);
 }
@@ -157,7 +171,7 @@ export async function performMaximum(
 ): Promise<unknown | null | Record<string, unknown>> {
   if (this._isNone) return this._groupColumns.length > 0 ? {} : null;
   if (this._groupColumns.length > 0) {
-    return groupedAggregate(this, "MAX", column);
+    return groupedAggregate(this, "MAX", column, false);
   }
   return singleAggregate(this, "MAX", column, false);
 }

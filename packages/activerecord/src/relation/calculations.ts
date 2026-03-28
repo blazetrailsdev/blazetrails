@@ -1,39 +1,155 @@
 /**
  * Calculation methods: count, sum, average, minimum, maximum, pluck, pick, ids.
- * These are mixed into Relation in Rails. Here, Relation delegates to these
- * static methods, passing itself as the first argument.
+ *
+ * These are the real implementations behind Relation's calculation methods.
+ * Each function uses this-typing so it can be assigned to Relation.prototype
+ * directly, accessing internal state through `this`.
  *
  * Mirrors: ActiveRecord::Calculations
  */
-export class Calculations {
-  static async count(relation: any, column?: string): Promise<number | Record<string, number>> {
-    return relation._performCount(column);
+
+interface CalculationRelation {
+  _modelClass: {
+    arelTable: any;
+    primaryKey: string | string[];
+    adapter: { execute(sql: string): Promise<Record<string, unknown>[]> };
+  };
+  _limitValue: number | null;
+  _offsetValue: number | null;
+  _isNone: boolean;
+  _isDistinct: boolean;
+  _groupColumns: string[];
+  _applyJoinsToManager(manager: any): void;
+  _applyWheresToManager(manager: any, table: any): void;
+  _applyOrderToManager(manager: any, table: any): void;
+  toArray(): Promise<any[]>;
+}
+
+async function singleAggregate(
+  rel: CalculationRelation,
+  fn: string,
+  column: string,
+): Promise<number | null> {
+  const table = rel._modelClass.arelTable;
+  const projection = rel._isDistinct
+    ? `${fn}(DISTINCT "${table.name}"."${column}") AS val`
+    : `${fn}("${table.name}"."${column}") AS val`;
+  const manager = table.project(projection);
+  rel._applyJoinsToManager(manager);
+  rel._applyWheresToManager(manager, table);
+
+  const sql = manager.toSql();
+  const rows = await rel._modelClass.adapter.execute(sql);
+  const val = rows[0]?.val;
+  return val === undefined || val === null ? null : Number(val);
+}
+
+async function groupedAggregate(
+  rel: CalculationRelation,
+  fn: string,
+  column: string,
+): Promise<Record<string, number>> {
+  const table = rel._modelClass.arelTable;
+  const groupCol = rel._groupColumns[0];
+  const aggExpr =
+    column === "*" ? `${fn}(*) AS val` : `${fn}("${table.name}"."${column}") AS val`;
+  const manager = table.project(`"${table.name}"."${groupCol}" AS group_key, ${aggExpr}`);
+  rel._applyJoinsToManager(manager);
+  rel._applyWheresToManager(manager, table);
+  manager.group(groupCol);
+
+  let sql = manager.toSql();
+  if (rel._limitValue !== null) sql += ` LIMIT ${rel._limitValue}`;
+  if (rel._offsetValue !== null) sql += ` OFFSET ${rel._offsetValue}`;
+  const rows = await rel._modelClass.adapter.execute(sql);
+
+  const result: Record<string, number> = {};
+  for (const row of rows) {
+    const key = String(row.group_key ?? "null");
+    result[key] = Number(row.val ?? 0);
+  }
+  return result;
+}
+
+export async function performCount(
+  this: CalculationRelation,
+  column?: string,
+): Promise<number | Record<string, number>> {
+  if (this._limitValue === 0) return 0;
+  if (this._isNone) return this._groupColumns.length > 0 ? {} : 0;
+
+  if (this._groupColumns.length > 0) {
+    return groupedAggregate(this, "COUNT", column ?? "*");
   }
 
-  static async sum(relation: any, column?: string): Promise<number | Record<string, number>> {
-    return relation._performSum(column);
+  if (this._limitValue !== null) {
+    const rows = await this.toArray();
+    return rows.length;
   }
 
-  static async average(
-    relation: any,
-    column: string,
-  ): Promise<number | null | Record<string, number>> {
-    return relation._performAverage(column);
+  const table = this._modelClass.arelTable;
+  let countExpr: string;
+  if (column) {
+    countExpr = this._isDistinct
+      ? `COUNT(DISTINCT "${table.name}"."${column}") AS count`
+      : `COUNT("${table.name}"."${column}") AS count`;
+  } else {
+    countExpr = this._isDistinct
+      ? `COUNT(DISTINCT "${table.name}"."${this._modelClass.primaryKey}") AS count`
+      : "COUNT(*) AS count";
   }
+  const manager = table.project(countExpr);
+  this._applyJoinsToManager(manager);
+  this._applyWheresToManager(manager, table);
 
-  static async minimum(
-    relation: any,
-    column: string,
-  ): Promise<unknown | null | Record<string, unknown>> {
-    return relation._performMinimum(column);
-  }
+  const sql = manager.toSql();
+  const rows = await this._modelClass.adapter.execute(sql);
+  return Number(rows[0]?.count ?? 0);
+}
 
-  static async maximum(
-    relation: any,
-    column: string,
-  ): Promise<unknown | null | Record<string, unknown>> {
-    return relation._performMaximum(column);
+export async function performSum(
+  this: CalculationRelation,
+  column?: string,
+): Promise<number | Record<string, number>> {
+  if (this._isNone) return this._groupColumns.length > 0 ? {} : 0;
+  if (!column) return 0;
+  if (this._groupColumns.length > 0) {
+    return groupedAggregate(this, "SUM", column);
   }
+  return (await singleAggregate(this, "SUM", column)) ?? 0;
+}
+
+export async function performAverage(
+  this: CalculationRelation,
+  column: string,
+): Promise<number | null | Record<string, number>> {
+  if (this._isNone) return this._groupColumns.length > 0 ? {} : null;
+  if (this._groupColumns.length > 0) {
+    return groupedAggregate(this, "AVG", column);
+  }
+  return singleAggregate(this, "AVG", column);
+}
+
+export async function performMinimum(
+  this: CalculationRelation,
+  column: string,
+): Promise<unknown | null | Record<string, unknown>> {
+  if (this._isNone) return this._groupColumns.length > 0 ? {} : null;
+  if (this._groupColumns.length > 0) {
+    return groupedAggregate(this, "MIN", column);
+  }
+  return singleAggregate(this, "MIN", column);
+}
+
+export async function performMaximum(
+  this: CalculationRelation,
+  column: string,
+): Promise<unknown | null | Record<string, unknown>> {
+  if (this._isNone) return this._groupColumns.length > 0 ? {} : null;
+  if (this._groupColumns.length > 0) {
+    return groupedAggregate(this, "MAX", column);
+  }
+  return singleAggregate(this, "MAX", column);
 }
 
 /**

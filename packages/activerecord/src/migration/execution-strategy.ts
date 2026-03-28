@@ -7,10 +7,17 @@
  * other cross-cutting concerns.
  */
 
+import type { DatabaseAdapter } from "../adapter.js";
+
+export interface MigrationLike {
+  up(adapter: DatabaseAdapter): Promise<void>;
+  down(adapter: DatabaseAdapter): Promise<void>;
+}
+
 export abstract class ExecutionStrategy {
   abstract exec(
     direction: "up" | "down",
-    migration: { up(adapter: unknown): Promise<void>; down(adapter: unknown): Promise<void> },
-    adapter: unknown,
+    migration: MigrationLike,
+    adapter: DatabaseAdapter,
   ): Promise<void>;
 }

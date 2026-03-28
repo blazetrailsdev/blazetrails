@@ -11,7 +11,7 @@
  */
 
 import type { DatabaseAdapter } from "../adapter.js";
-import { ConnectionHandler } from "../connection-adapters/abstract/connection-handler.js";
+import type { ConnectionHandler } from "../connection-adapters/abstract/connection-handler.js";
 
 export class PendingMigrationConnection {
   private _connectionName: string;
@@ -39,9 +39,20 @@ export class PendingMigrationConnection {
     if (this._connectionHandler) {
       const pool = this._connectionHandler.retrieveConnectionPool(this._connectionName);
       if (pool) {
-        return pool.checkout();
+        this._adapter = pool.checkout();
+        return this._adapter;
       }
     }
     return undefined;
+  }
+
+  release(): void {
+    if (this._adapter && this._connectionHandler) {
+      const pool = this._connectionHandler.retrieveConnectionPool(this._connectionName);
+      if (pool) {
+        pool.checkin(this._adapter);
+        this._adapter = undefined;
+      }
+    }
   }
 }

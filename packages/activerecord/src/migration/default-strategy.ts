@@ -7,13 +7,15 @@
  * wrap this with advisory locks to prevent concurrent migrations.
  */
 
+import type { DatabaseAdapter } from "../adapter.js";
 import { ExecutionStrategy } from "./execution-strategy.js";
+import type { MigrationLike } from "./execution-strategy.js";
 
 export class DefaultStrategy extends ExecutionStrategy {
   async exec(
     direction: "up" | "down",
-    migration: { up(adapter: unknown): Promise<void>; down(adapter: unknown): Promise<void> },
-    adapter: unknown,
+    migration: MigrationLike,
+    adapter: DatabaseAdapter,
   ): Promise<void> {
     if (direction === "up") {
       await migration.up(adapter);

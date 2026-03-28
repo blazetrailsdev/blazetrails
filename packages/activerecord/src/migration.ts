@@ -15,7 +15,7 @@ import { InternalMetadata } from "./internal-metadata.js";
 import { DatabaseConfigurations } from "./database-configurations.js";
 import { DefaultStrategy } from "./migration/default-strategy.js";
 import type { ExecutionStrategy } from "./migration/execution-strategy.js";
-import { PendingMigrationConnection } from "./migration/pending-migration-connection.js";
+import type { PendingMigrationConnection } from "./migration/pending-migration-connection.js";
 
 export type {
   ReferentialAction,
@@ -1529,16 +1529,23 @@ export class CheckPending {
 
   constructor(
     app: (env: Record<string, unknown>) => Promise<unknown>,
-    options: {
-      migrator?: Migrator;
-      pendingConnection?: PendingMigrationConnection;
-      migrations?: MigrationProxy[];
-    } = {},
+    migratorOrOptions?:
+      | Migrator
+      | {
+          migrator?: Migrator;
+          pendingConnection?: PendingMigrationConnection;
+          migrations?: MigrationProxy[];
+        },
   ) {
     this._app = app;
-    this._migrator = options.migrator;
-    this._pendingConnection = options.pendingConnection;
-    this._migrations = options.migrations ?? [];
+    if (migratorOrOptions instanceof Migrator) {
+      this._migrator = migratorOrOptions;
+      this._migrations = [];
+    } else {
+      this._migrator = migratorOrOptions?.migrator;
+      this._pendingConnection = migratorOrOptions?.pendingConnection;
+      this._migrations = migratorOrOptions?.migrations ?? [];
+    }
   }
 
   async call(env: Record<string, unknown>): Promise<unknown> {

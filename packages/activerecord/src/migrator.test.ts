@@ -527,8 +527,11 @@ describe("MigratorTest", () => {
     class LoggingStrategy extends ExecutionStrategy {
       async exec(
         direction: "up" | "down",
-        migration: { up(a: unknown): Promise<void>; down(a: unknown): Promise<void> },
-        a: unknown,
+        migration: {
+          up(a: DatabaseAdapter): Promise<void>;
+          down(a: DatabaseAdapter): Promise<void>;
+        },
+        a: DatabaseAdapter,
       ): Promise<void> {
         log.push(`before:${direction}`);
         if (direction === "up") {

@@ -947,6 +947,38 @@ describe("EachTest", () => {
     adapter = freshAdapter();
   });
 
+  it("in_batches each_batch should yield batch relations if block is given", async () => {
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    for (let i = 0; i < 5; i++) await Post.create({ title: `post-${i}` });
+    const batches: any[] = [];
+    await Post.all()
+      .inBatches({ batchSize: 2 })
+      .eachBatch((batch: any) => {
+        batches.push(batch);
+      });
+    expect(batches.length).toBe(3);
+  });
+
+  it("in_batches each_batch should return enumerator if no block given", async () => {
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    for (let i = 0; i < 4; i++) await Post.create({ title: `post-${i}` });
+    const batches: any[] = [];
+    for await (const batch of Post.all().inBatches({ batchSize: 2 }).eachBatch()) {
+      batches.push(batch);
+    }
+    expect(batches.length).toBe(2);
+  });
+
   it("in_batches each_record should yield record if block is given", async () => {
     class Post extends Base {
       static {

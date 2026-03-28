@@ -7,7 +7,6 @@
 interface PrimaryKeyRecord {
   id: unknown;
   readAttribute(name: string): unknown;
-  constructor: Function & { primaryKey: string | string[] };
 }
 
 /**
@@ -15,8 +14,8 @@ interface PrimaryKeyRecord {
  *
  * Mirrors: ActiveRecord::AttributeMethods::PrimaryKey#to_key
  */
-export function toKey(record: PrimaryKeyRecord): unknown[] | null {
-  const pk = record.id;
+export function toKey(this: PrimaryKeyRecord): unknown[] | null {
+  const pk = this.id;
   return pk != null ? [pk] : null;
 }
 
@@ -25,13 +24,13 @@ export function toKey(record: PrimaryKeyRecord): unknown[] | null {
  *
  * Mirrors: ActiveRecord::AttributeMethods::PrimaryKey#primary_key_values_present?
  */
-export function isPrimaryKeyValuesPresent(record: PrimaryKeyRecord): boolean {
-  const pk = (record.constructor as any).primaryKey;
+export function isPrimaryKeyValuesPresent(this: PrimaryKeyRecord): boolean {
+  const pk = (this.constructor as any).primaryKey;
   if (Array.isArray(pk)) {
     return pk.every((col: string) => {
-      const v = record.readAttribute(col);
+      const v = this.readAttribute(col);
       return v !== null && v !== undefined;
     });
   }
-  return record.id != null;
+  return this.id != null;
 }

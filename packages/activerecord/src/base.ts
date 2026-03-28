@@ -29,16 +29,16 @@ import { resolve } from "path";
 import { pathToFileURL } from "url";
 import { sanitizeSqlArray, sanitizeSqlLike } from "./sanitization.js";
 import {
-  hasAttribute as amHasAttribute,
-  isAttributePresent as amIsAttributePresent,
-  attributeNames as amAttributeNames,
+  hasAttribute as _hasAttribute,
+  attributePresent as _attributePresent,
+  attributeNamesList as _attributeNamesList,
 } from "./attribute-methods.js";
-import { toKey as pkToKey } from "./attribute-methods/primary-key.js";
+import { toKey as _toKey } from "./attribute-methods/primary-key.js";
 import {
-  toParam as integrationToParam,
-  cacheKey as integrationCacheKey,
-  cacheKeyWithVersion as integrationCacheKeyWithVersion,
-  cacheVersion as integrationCacheVersion,
+  toParam as _toParam,
+  cacheKey as _cacheKey,
+  cacheKeyWithVersion as _cacheKeyWithVersion,
+  cacheVersion as _cacheVersion,
 } from "./integration.js";
 import {
   noTouching as _noTouchingBlock,
@@ -46,11 +46,11 @@ import {
 } from "./no-touching.js";
 import { suppress as _suppressBlock, isSuppressed as _isSuppressed } from "./suppressor.js";
 import {
-  inspect as coreInspect,
-  attributeForInspect as coreAttributeForInspect,
-  isEqual as coreIsEqual,
-  isPresent as coreIsPresent,
-  isBlank as coreIsBlank,
+  inspect as _inspect,
+  attributeForInspect as _attributeForInspect,
+  isEqual as _isEqual,
+  isPresent as _isPresent,
+  isBlank as _isBlank,
 } from "./core.js";
 import { ScopeRegistry } from "./scoping.js";
 
@@ -2248,17 +2248,9 @@ export class Base extends Model {
     this._destroyedByAssociation = assoc;
   }
 
-  cacheKey(): string {
-    return integrationCacheKey(this);
-  }
-
-  cacheKeyWithVersion(): string {
-    return integrationCacheKeyWithVersion(this);
-  }
-
-  cacheVersion(): string | null {
-    return integrationCacheVersion(this);
-  }
+  declare cacheKey: () => string;
+  declare cacheKeyWithVersion: () => string;
+  declare cacheVersion: () => string | null;
 
   /**
    * Override readAttribute to decrypt encrypted attributes.
@@ -2988,17 +2980,10 @@ export class Base extends Model {
     });
   }
 
-  override toParam(): string | null {
-    return integrationToParam(this);
-  }
+  declare toParam: () => string | null;
 
-  inspect(): string {
-    return coreInspect(this as any);
-  }
-
-  attributeForInspect(attr: string): string {
-    return coreAttributeForInspect(this as any, attr);
-  }
+  declare inspect: () => string;
+  declare attributeForInspect: (attr: string) => string;
 
   /**
    * Returns true if the record has changes, is new, or is marked for destruction.
@@ -3208,20 +3193,12 @@ export class Base extends Model {
     return instance;
   }
 
-  hasAttribute(name: string): boolean {
-    return amHasAttribute(this as any, name);
-  }
-
-  attributePresent(name: string): boolean {
-    return amIsAttributePresent(this as any, name);
-  }
+  declare hasAttribute: (name: string) => boolean;
+  declare attributePresent: (name: string) => boolean;
+  declare toKey: () => unknown[] | null;
 
   get attributeNamesList(): string[] {
-    return amAttributeNames(this as any);
-  }
-
-  toKey(): unknown[] | null {
-    return pkToKey(this as any);
+    return _attributeNamesList.call(this as any);
   }
 
   /**
@@ -3343,9 +3320,7 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Core#==
    */
-  isEqual(other: unknown): boolean {
-    return coreIsEqual(this as any, other);
-  }
+  declare isEqual: (other: unknown) => boolean;
 
   /**
    * Return a string suitable for use as a URL slug.
@@ -3442,13 +3417,8 @@ export class Base extends Model {
     return this;
   }
 
-  isPresent(): boolean {
-    return coreIsPresent(this as any);
-  }
-
-  isBlank(): boolean {
-    return coreIsBlank(this as any);
-  }
+  declare isPresent: () => boolean;
+  declare isBlank: () => boolean;
 
   equals(other: unknown): boolean {
     return this.isEqual(other);
@@ -3555,3 +3525,29 @@ export class Base extends Model {
     return this.hasAttributeDefinition(name);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Mixin: attach extracted module functions directly to Base.prototype.
+// This is the TS equivalent of Ruby's `include Module` — the real
+// implementation lives in the module file, Base just wires it up.
+// ---------------------------------------------------------------------------
+
+// Core (inspect, isEqual, isPresent, isBlank)
+Base.prototype.inspect = _inspect;
+Base.prototype.attributeForInspect = _attributeForInspect;
+Base.prototype.isEqual = _isEqual;
+Base.prototype.isPresent = _isPresent;
+Base.prototype.isBlank = _isBlank;
+
+// Integration (toParam, cacheKey, cacheVersion)
+Base.prototype.toParam = _toParam;
+Base.prototype.cacheKey = _cacheKey;
+Base.prototype.cacheKeyWithVersion = _cacheKeyWithVersion;
+Base.prototype.cacheVersion = _cacheVersion;
+
+// AttributeMethods (hasAttribute, attributePresent)
+Base.prototype.hasAttribute = _hasAttribute;
+Base.prototype.attributePresent = _attributePresent;
+
+// PrimaryKey (toKey)
+Base.prototype.toKey = _toKey;

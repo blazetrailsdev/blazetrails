@@ -7,8 +7,6 @@
  *   Notifications.unsubscribe(sub);
  */
 
-export { Event } from "./notifications/instrumenter.js";
-export type { EventPayload } from "./notifications/instrumenter.js";
 import { Event } from "./notifications/instrumenter.js";
 import type { EventPayload } from "./notifications/instrumenter.js";
 

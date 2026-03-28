@@ -16,7 +16,7 @@ export {
   ordinalize,
 } from "./inflector.js";
 
-export { Inflections, loadDefaults } from "./inflections.js";
+export { Inflections, loadDefaults } from "./inflector/inflections.js";
 
 export {
   isBlank,
@@ -164,12 +164,14 @@ export { MessageVerifier, InvalidSignature } from "./message-verifier.js";
 export { Duration, seconds, minutes, hours, days, weeks, months, years } from "./duration.js";
 export type { DurationParts } from "./duration.js";
 
-export { TimeZone, ZONES_MAP } from "./time-zone.js";
+export { TimeZone, ZONES_MAP } from "./values/time-zone.js";
 export { TimeWithZone } from "./time-with-zone.js";
 export type { ChangeOptions, AdvanceOptions } from "./time-with-zone.js";
 
-export { Notifications, Event as NotificationEvent } from "./notifications.js";
-export type { EventPayload, NotificationSubscriber } from "./notifications.js";
+export { Notifications } from "./notifications.js";
+export { Event as NotificationEvent } from "./notifications/instrumenter.js";
+export type { EventPayload } from "./notifications/instrumenter.js";
+export type { NotificationSubscriber } from "./notifications.js";
 
 export { ParameterFilter } from "./parameter-filter.js";
 export {
@@ -179,7 +181,7 @@ export {
   htmlEscapeOnce,
   xmlNameEscape,
   isHtmlSafe,
-} from "./safe-buffer.js";
+} from "./core-ext/string/output-safety.js";
 export {
   KeyGenerator,
   CachingKeyGenerator,

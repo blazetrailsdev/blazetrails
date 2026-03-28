@@ -1,8 +1,8 @@
 /**
  * Time zone conversion for ActiveRecord attributes.
  *
- * Automatically converts time attributes to the application's time zone
- * when reading, and to UTC when writing.
+ * Stub: actual zone conversion is not yet implemented. The TimeZoneConverter
+ * class exists to match the Rails module structure for api:compare.
  *
  * Mirrors: ActiveRecord::AttributeMethods::TimeZoneConversion
  */

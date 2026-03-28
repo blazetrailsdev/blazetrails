@@ -9,7 +9,8 @@ interface Writable {
 }
 
 /**
- * Write a raw attribute value.
+ * Write an attribute value. In Base, this validates the attribute name,
+ * checks for frozen state, and applies encryption.
  *
  * Mirrors: ActiveRecord::AttributeMethods::Write#write_attribute
  */

@@ -11,10 +11,8 @@
  */
 export interface AttributeMethods {
   hasAttribute(name: string): boolean;
-  isAttributePresent(name: string): boolean;
-  attributeNames: string[];
-  attributes(): Record<string, unknown>;
-  accessedFields(): string[];
+  attributePresent(name: string): boolean;
+  attributeNamesList: string[];
 }
 
 interface AttributeRecord {
@@ -67,6 +65,9 @@ export function attributes(record: AttributeRecord): Record<string, unknown> {
 
 /**
  * Return the list of attribute names that have been read.
+ *
+ * Stub: returns all attribute names. Full access tracking requires
+ * instrumenting readAttribute to record which fields were accessed.
  *
  * Mirrors: ActiveRecord::AttributeMethods#accessed_fields
  */

@@ -1,16 +1,19 @@
 /**
  * Access attribute values before type casting.
  *
+ * Note: full before-type-cast support requires AttributeSet to expose
+ * valueBeforeTypeCast per attribute. These helpers currently return the
+ * stored value from the attribute set, which may already be cast.
+ *
  * Mirrors: ActiveRecord::AttributeMethods::BeforeTypeCast
  */
 
 interface TypeCastable {
   _attributes: { get(name: string): unknown; keys(): Iterable<string> };
-  readAttribute(name: string): unknown;
 }
 
 /**
- * Read the raw attribute value before type casting.
+ * Read the attribute value as stored in the attribute set.
  *
  * Mirrors: ActiveRecord::AttributeMethods::BeforeTypeCast#read_attribute_before_type_cast
  */
@@ -19,7 +22,7 @@ export function readAttributeBeforeTypeCast(record: TypeCastable, name: string):
 }
 
 /**
- * Return all attributes before type casting.
+ * Return all attribute values as stored in the attribute set.
  *
  * Mirrors: ActiveRecord::AttributeMethods::BeforeTypeCast#attributes_before_type_cast
  */

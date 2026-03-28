@@ -9,9 +9,9 @@
 
 interface DirtyRecord {
   changed: boolean;
-  changedAttributes(): Record<string, unknown>;
-  changes(): Record<string, [unknown, unknown]>;
-  previousChanges(): Record<string, [unknown, unknown]>;
+  changedAttributes: Record<string, unknown>;
+  changes: Record<string, [unknown, unknown]>;
+  previousChanges: Record<string, [unknown, unknown]>;
   readAttribute(name: string): unknown;
 }
 
@@ -21,8 +21,7 @@ interface DirtyRecord {
  * Mirrors: ActiveRecord::AttributeMethods::Dirty#saved_change_to_attribute?
  */
 export function isSavedChangeToAttribute(record: DirtyRecord, attr: string): boolean {
-  const prev = record.previousChanges();
-  return attr in prev;
+  return attr in record.previousChanges;
 }
 
 /**
@@ -34,8 +33,7 @@ export function savedChangeToAttribute(
   record: DirtyRecord,
   attr: string,
 ): [unknown, unknown] | null {
-  const prev = record.previousChanges();
-  return prev[attr] ?? null;
+  return record.previousChanges[attr] ?? null;
 }
 
 /**
@@ -54,7 +52,7 @@ export function attributeBeforeLastSave(record: DirtyRecord, attr: string): unkn
  * Mirrors: ActiveRecord::AttributeMethods::Dirty#saved_changes?
  */
 export function isSavedChanges(record: DirtyRecord): boolean {
-  return Object.keys(record.previousChanges()).length > 0;
+  return Object.keys(record.previousChanges).length > 0;
 }
 
 /**
@@ -63,7 +61,7 @@ export function isSavedChanges(record: DirtyRecord): boolean {
  * Mirrors: ActiveRecord::AttributeMethods::Dirty#saved_changes
  */
 export function savedChanges(record: DirtyRecord): Record<string, [unknown, unknown]> {
-  return record.previousChanges();
+  return record.previousChanges;
 }
 
 /**
@@ -72,8 +70,7 @@ export function savedChanges(record: DirtyRecord): Record<string, [unknown, unkn
  * Mirrors: ActiveRecord::AttributeMethods::Dirty#will_save_change_to_attribute?
  */
 export function isWillSaveChangeToAttribute(record: DirtyRecord, attr: string): boolean {
-  const current = record.changes();
-  return attr in current;
+  return attr in record.changes;
 }
 
 /**
@@ -85,8 +82,7 @@ export function attributeChangeToBeSaved(
   record: DirtyRecord,
   attr: string,
 ): [unknown, unknown] | null {
-  const current = record.changes();
-  return current[attr] ?? null;
+  return record.changes[attr] ?? null;
 }
 
 /**
@@ -114,7 +110,7 @@ export function isHasChangesToSave(record: DirtyRecord): boolean {
  * Mirrors: ActiveRecord::AttributeMethods::Dirty#changes_to_save
  */
 export function changesToSave(record: DirtyRecord): Record<string, [unknown, unknown]> {
-  return record.changes();
+  return record.changes;
 }
 
 /**
@@ -123,5 +119,5 @@ export function changesToSave(record: DirtyRecord): Record<string, [unknown, unk
  * Mirrors: ActiveRecord::AttributeMethods::Dirty#changed_attribute_names_to_save
  */
 export function changedAttributeNamesToSave(record: DirtyRecord): string[] {
-  return Object.keys(record.changes());
+  return Object.keys(record.changes);
 }

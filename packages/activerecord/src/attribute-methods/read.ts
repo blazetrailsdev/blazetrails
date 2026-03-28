@@ -9,7 +9,8 @@ interface Readable {
 }
 
 /**
- * Read a raw attribute value, bypassing any type casting.
+ * Read an attribute value. In Base, this applies decryption and type
+ * casting — use readAttributeBeforeTypeCast for raw values.
  *
  * Mirrors: ActiveRecord::AttributeMethods::Read#read_attribute
  */

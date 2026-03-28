@@ -11,7 +11,7 @@ interface PrimaryKeyRecord {
 }
 
 /**
- * Return an array for cache key identification: [model_name, id].
+ * Return an array of primary key values for this record, or null if unsaved.
  *
  * Mirrors: ActiveRecord::AttributeMethods::PrimaryKey#to_key
  */

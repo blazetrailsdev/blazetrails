@@ -13,6 +13,9 @@ import { CommandRecorder } from "./migration/command-recorder.js";
 import { SchemaMigration } from "./schema-migration.js";
 import { InternalMetadata } from "./internal-metadata.js";
 import { DatabaseConfigurations } from "./database-configurations.js";
+import { DefaultStrategy } from "./migration/default-strategy.js";
+import type { ExecutionStrategy } from "./migration/execution-strategy.js";
+import { PendingMigrationConnection } from "./migration/pending-migration-connection.js";
 
 export type {
   ReferentialAction,
@@ -1148,19 +1151,21 @@ export class Migrator {
   private _schemaMigration: SchemaMigration;
   private _internalMetadata: InternalMetadata;
   private _environment: string;
+  private _strategy: ExecutionStrategy;
   verbose = true;
   private _output: string[] = [];
 
   constructor(
     adapter: DatabaseAdapter,
     migrations: MigrationProxy[],
-    options: { environment?: string } = {},
+    options: { environment?: string; strategy?: ExecutionStrategy } = {},
   ) {
     this._adapter = adapter;
     this._schemaMigration = new SchemaMigration(adapter);
     this._internalMetadata = new InternalMetadata(adapter);
     this._environment =
       options.environment ?? (process.env.NODE_ENV || DatabaseConfigurations.defaultEnv);
+    this._strategy = options.strategy ?? new DefaultStrategy();
     this._validateMigrations(migrations);
     const normalized = migrations.map((m) => ({
       ...m,
@@ -1434,12 +1439,11 @@ export class Migrator {
     }
 
     const migration = proxy.migration();
+    await this._strategy.exec(direction, migration, this._adapter);
     if (direction === "up") {
-      await migration.up(this._adapter);
       await this._schemaMigration.recordVersion(proxy.version);
       await this._internalMetadata.set("environment", this._environment);
     } else {
-      await migration.down(this._adapter);
       await this._schemaMigration.deleteVersion(proxy.version);
     }
 
@@ -1520,15 +1524,33 @@ export class Current extends Migration {
 export class CheckPending {
   private _app: (env: Record<string, unknown>) => Promise<unknown>;
   private _migrator?: Migrator;
+  private _pendingConnection?: PendingMigrationConnection;
+  private _migrations: MigrationProxy[];
 
-  constructor(app: (env: Record<string, unknown>) => Promise<unknown>, migrator?: Migrator) {
+  constructor(
+    app: (env: Record<string, unknown>) => Promise<unknown>,
+    options: {
+      migrator?: Migrator;
+      pendingConnection?: PendingMigrationConnection;
+      migrations?: MigrationProxy[];
+    } = {},
+  ) {
     this._app = app;
-    this._migrator = migrator;
+    this._migrator = options.migrator;
+    this._pendingConnection = options.pendingConnection;
+    this._migrations = options.migrations ?? [];
   }
 
   async call(env: Record<string, unknown>): Promise<unknown> {
-    if (this._migrator) {
-      const pending = await this._migrator.pendingMigrations();
+    let migrator = this._migrator;
+    if (!migrator && this._pendingConnection) {
+      const adapter = this._pendingConnection.adapter;
+      if (adapter && this._migrations.length > 0) {
+        migrator = new Migrator(adapter, this._migrations);
+      }
+    }
+    if (migrator) {
+      const pending = await migrator.pendingMigrations();
       if (pending.length > 0) {
         throw new PendingMigrationError(
           `Migrations are pending. To resolve this issue, run:\n\n  migrate\n\n` +

@@ -12,6 +12,7 @@ import { quoteIdentifier, quoteTableName } from "./connection-adapters/abstract/
 import { CommandRecorder } from "./migration/command-recorder.js";
 import { SchemaMigration } from "./schema-migration.js";
 import { InternalMetadata } from "./internal-metadata.js";
+import { DatabaseConfigurations } from "./database-configurations.js";
 
 export type {
   ReferentialAction,
@@ -1158,7 +1159,8 @@ export class Migrator {
     this._adapter = adapter;
     this._schemaMigration = new SchemaMigration(adapter);
     this._internalMetadata = new InternalMetadata(adapter);
-    this._environment = options.environment ?? (process.env.NODE_ENV || "development");
+    this._environment =
+      options.environment ?? (process.env.NODE_ENV || DatabaseConfigurations.defaultEnv);
     this._validateMigrations(migrations);
     const normalized = migrations.map((m) => ({
       ...m,
@@ -1478,13 +1480,18 @@ export class Migrator {
    *
    * Mirrors: ActiveRecord::Tasks::DatabaseTasks.check_protected_environments!
    */
-  async checkProtectedEnvironments(
-    protectedEnvironments: string[] = ["production"],
-  ): Promise<void> {
+  async checkProtectedEnvironments(protectedEnvironments?: string[]): Promise<void> {
     await this._ensureSchemaTable();
     const stored = await this._internalMetadata.get("environment");
     const env = stored ?? this._environment;
-    if (protectedEnvironments.includes(env)) {
+
+    let envList = protectedEnvironments;
+    if (!envList) {
+      const { Base } = await import("./base.js");
+      envList = Base.protectedEnvironments ?? ["production"];
+    }
+
+    if (envList.includes(env)) {
       throw new ProtectedEnvironmentError(env);
     }
   }

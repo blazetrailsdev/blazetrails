@@ -57,8 +57,14 @@ export async function buildRackEnv(req: IncomingMessage, port: number): Promise<
   const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
 
   const isTLS = "encrypted" in req.socket && (req.socket as any).encrypted;
-  const forwardedProto = req.headers["x-forwarded-proto"];
-  const scheme = isTLS || forwardedProto === "https" ? "https" : "http";
+  const forwardedProtoRaw = req.headers["x-forwarded-proto"];
+  const forwardedProtos = Array.isArray(forwardedProtoRaw)
+    ? forwardedProtoRaw.join(",")
+    : forwardedProtoRaw || "";
+  const isForwardedHttps = forwardedProtos
+    .split(",")
+    .some((p) => p.trim().toLowerCase() === "https");
+  const scheme = isTLS || isForwardedHttps ? "https" : "http";
 
   const env: RackEnv = {
     REQUEST_METHOD: (req.method || "GET").toUpperCase(),
@@ -87,10 +93,21 @@ export async function buildRackEnv(req: IncomingMessage, port: number): Promise<
   return env;
 }
 
+const MAX_BODY_SIZE = 10 * 1024 * 1024; // 10 MB
+
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on("data", (chunk) => chunks.push(chunk));
+    let totalLength = 0;
+    req.on("data", (chunk: Buffer) => {
+      totalLength += chunk.length;
+      if (totalLength > MAX_BODY_SIZE) {
+        req.destroy();
+        reject(new Error("Request body too large"));
+        return;
+      }
+      chunks.push(chunk);
+    });
     req.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
     req.on("error", reject);
   });

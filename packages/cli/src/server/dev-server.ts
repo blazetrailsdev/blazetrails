@@ -29,8 +29,7 @@ export class DevServer {
     this.server = await createServer({
       // If the project has its own vite.config, let Vite load it (which
       // already registers trailsPlugin). Otherwise provide our own config.
-      ...(hasViteConfig ? {} : { configFile: false }),
-      root: this.cwd,
+      ...(hasViteConfig ? {} : { configFile: false, root: this.cwd }),
       plugins: hasViteConfig ? [] : [trailsPlugin({ cwd: this.cwd })],
       server: {
         port: this.port,

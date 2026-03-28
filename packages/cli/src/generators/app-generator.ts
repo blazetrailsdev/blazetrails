@@ -254,6 +254,7 @@ program.parse(process.argv);
       "bin/setup",
       `#!/usr/bin/env node
 import { execSync } from "node:child_process";
+import { rmSync, mkdirSync } from "node:fs";
 
 function system(command) {
   console.log(\`  $ \${command}\`);
@@ -267,7 +268,10 @@ console.log("\\n== Preparing database ==");
 system("trails db setup");
 
 console.log("\\n== Removing old logs and tempfiles ==");
-system("rm -rf log/* tmp/*");
+for (const dir of ["log", "tmp"]) {
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
+}
 
 console.log("\\n== Done! ==");
 `,

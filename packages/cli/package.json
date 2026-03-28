@@ -7,7 +7,10 @@
   },
   "exports": {
     ".": "./dist/cli.js",
-    "./vite": "./dist/server/vite-plugin.js"
+    "./vite": {
+      "types": "./dist/server/vite-plugin.d.ts",
+      "default": "./dist/server/vite-plugin.js"
+    }
   },
   "files": [
     "dist"

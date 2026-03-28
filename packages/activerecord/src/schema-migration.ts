@@ -5,6 +5,7 @@
  */
 
 import type { DatabaseAdapter } from "./adapter.js";
+import { detectAdapterName } from "./adapter-name.js";
 
 export class NullSchemaMigration {
   async createTable(): Promise<void> {}
@@ -65,10 +66,16 @@ export class SchemaMigration {
   }
 
   async recordVersion(version: string): Promise<void> {
-    await this._adapter.executeMutation(
-      `INSERT OR IGNORE INTO ${SchemaMigration.TABLE_NAME} (version) VALUES (?)`,
-      [version],
-    );
+    const adapterName = detectAdapterName(this._adapter);
+    let sql: string;
+    if (adapterName === "mysql") {
+      sql = `INSERT IGNORE INTO ${SchemaMigration.TABLE_NAME} (version) VALUES (?)`;
+    } else if (adapterName === "postgres") {
+      sql = `INSERT INTO ${SchemaMigration.TABLE_NAME} (version) VALUES ($1) ON CONFLICT DO NOTHING`;
+    } else {
+      sql = `INSERT OR IGNORE INTO ${SchemaMigration.TABLE_NAME} (version) VALUES (?)`;
+    }
+    await this._adapter.executeMutation(sql, [version]);
   }
 
   async deleteVersion(version: string): Promise<void> {

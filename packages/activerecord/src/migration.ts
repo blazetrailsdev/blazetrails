@@ -1341,7 +1341,7 @@ export class Migrator {
 
     for (const m of migrations) {
       if (!m.version || !/^\d+$/.test(m.version)) {
-        throw new IllegalMigrationNameError(
+        throw new MigrationError(
           `Invalid migration version: ${m.version}. Version must be a numeric string.`,
         );
       }

@@ -48,6 +48,9 @@ export class PendingMigrationConnection {
       }
     }
 
-    throw new Error("No database adapter available for pending migrations");
+    throw new Error(
+      `No database adapter available for pending migrations on connection "${this._connectionName}". ` +
+        "Provide either an adapter or a connectionHandler with a pool for this connection.",
+    );
   }
 }

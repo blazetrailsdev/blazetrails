@@ -1566,12 +1566,23 @@ export class CheckPending {
               }),
             );
           }
-        } catch {
-          // Table may exist with incompatible schema; treat as no versions applied
+        } catch (err: unknown) {
+          if (err instanceof Error && /no such column|does not exist/i.test(err.message)) {
+            // Table exists with incompatible schema; treat as no versions applied
+          } else {
+            throw err;
+          }
         }
-        const pendingCount = this._migrations.filter(
-          (m) => !applied.has(String(BigInt(m.version))),
-        ).length;
+        let pendingCount = 0;
+        for (const m of this._migrations) {
+          let normalized: string;
+          try {
+            normalized = String(BigInt(m.version));
+          } catch {
+            throw new MigrationError(`Invalid migration version "${m.version}" in CheckPending`);
+          }
+          if (!applied.has(normalized)) pendingCount++;
+        }
         this._throwIfPending(pendingCount);
       });
     }

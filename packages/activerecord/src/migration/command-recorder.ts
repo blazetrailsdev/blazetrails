@@ -27,10 +27,19 @@ export class CommandRecorder {
   }
 
   inverse(): Array<{ cmd: string; args: unknown[] }> {
-    const swapArgs = new Set(["renameTable", "renameColumn", "renameIndex"]);
     return [...this._commands].reverse().map(({ cmd, args }) => {
       const invertedCmd = this._invertCommand(cmd);
-      const invertedArgs = swapArgs.has(cmd) ? [...args].reverse() : args;
+      let invertedArgs: unknown[] = args;
+
+      if (cmd === "renameTable") {
+        invertedArgs = [...args].reverse();
+      } else if (cmd === "renameColumn" || cmd === "renameIndex") {
+        if (args.length >= 3) {
+          const [table, from, to, ...rest] = args;
+          invertedArgs = [table, to, from, ...rest];
+        }
+      }
+
       return { cmd: invertedCmd, args: invertedArgs };
     });
   }

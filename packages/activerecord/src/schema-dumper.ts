@@ -3,8 +3,8 @@
  *
  * Mirrors: ActiveRecord::SchemaDumper
  *
- * This is the top-level SchemaDumper that delegates to adapter-specific
- * dumpers in connection-adapters/abstract/schema-dumper.ts.
+ * Stub — not yet wired to adapter introspection. Will eventually delegate
+ * to adapter-specific dumpers in connection-adapters/abstract/schema-dumper.ts.
  */
 
 import type { DatabaseAdapter } from "./adapter.js";

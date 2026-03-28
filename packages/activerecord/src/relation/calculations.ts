@@ -72,8 +72,12 @@ async function groupedAggregate(
   const result: Record<string, unknown> = {};
   for (const row of rows) {
     const key = String(row.group_key ?? "null");
-    const val = row.val ?? 0;
-    result[key] = coerceNumeric ? Number(val) : val;
+    const val = row.val;
+    if (val === undefined || val === null) {
+      result[key] = coerceNumeric ? 0 : null;
+    } else {
+      result[key] = coerceNumeric ? Number(val) : val;
+    }
   }
   return result;
 }
@@ -105,15 +109,11 @@ export async function performCount(
       // Multi-column DISTINCT COUNT requires a subquery since
       // COUNT(DISTINCT col1, col2) isn't valid on SQLite/PG
       const cols = pk.map((c) => quoteColumn(table.name, c)).join(", ");
-      countExpr = `COUNT(*) AS count`;
-      const subquery = `SELECT DISTINCT ${cols} FROM "${table.name}"`;
-      const manager = table.project(countExpr);
-      this._applyJoinsToManager(manager);
-      this._applyWheresToManager(manager, table);
-      const innerSql = manager
-        .toSql()
-        .replace(`SELECT ${countExpr} FROM`, `SELECT DISTINCT ${cols} FROM`);
-      const sql = `SELECT COUNT(*) AS count FROM (${innerSql}) AS subquery`;
+      const innerManager = table.project(cols);
+      innerManager.distinct();
+      this._applyJoinsToManager(innerManager);
+      this._applyWheresToManager(innerManager, table);
+      const sql = `SELECT COUNT(*) AS count FROM (${innerManager.toSql()}) AS subquery`;
       const rows = await this._modelClass.adapter.execute(sql);
       return Number(rows[0]?.count ?? 0);
     } else {

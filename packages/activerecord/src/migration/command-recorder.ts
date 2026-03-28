@@ -17,7 +17,6 @@ export interface StraightReversions {
 
 export class CommandRecorder {
   private _commands: Array<{ cmd: string; args: unknown[] }> = [];
-  private _reverseOrder = false;
 
   get commands(): Array<{ cmd: string; args: unknown[] }> {
     return [...this._commands];
@@ -28,9 +27,11 @@ export class CommandRecorder {
   }
 
   inverse(): Array<{ cmd: string; args: unknown[] }> {
+    const swapArgs = new Set(["renameTable", "renameColumn", "renameIndex"]);
     return [...this._commands].reverse().map(({ cmd, args }) => {
       const invertedCmd = this._invertCommand(cmd);
-      return { cmd: invertedCmd, args };
+      const invertedArgs = swapArgs.has(cmd) ? [...args].reverse() : args;
+      return { cmd: invertedCmd, args: invertedArgs };
     });
   }
 

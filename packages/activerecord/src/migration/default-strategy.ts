@@ -6,4 +6,8 @@
 
 import { ExecutionStrategy } from "./execution-strategy.js";
 
-export class DefaultStrategy extends ExecutionStrategy {}
+export class DefaultStrategy extends ExecutionStrategy {
+  async exec(method: string, args: unknown[]): Promise<unknown> {
+    throw new Error(`DefaultStrategy#exec is not yet wired: ${method}`);
+  }
+}

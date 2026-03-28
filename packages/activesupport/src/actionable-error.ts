@@ -9,9 +9,21 @@ export class ActionableError {
   static _actions: Record<string, () => void> = {};
 
   static actions(error: any): Record<string, () => void> {
-    if (error && typeof error._actions === "object") {
+    if (!error || typeof error !== "object") {
+      return {};
+    }
+
+    // Check the constructor (class-level actions, matching Rails' class_attribute behavior)
+    const ctor = error.constructor as { _actions?: Record<string, () => void> } | undefined;
+    if (ctor && typeof ctor._actions === "object") {
+      return ctor._actions;
+    }
+
+    // Also accept a class directly (not an instance)
+    if (typeof error === "function" && typeof error._actions === "object") {
       return error._actions;
     }
+
     return {};
   }
 

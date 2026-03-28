@@ -22,7 +22,11 @@ export class ConfigurationFile {
     }
 
     try {
-      return (yamlParse(this.content) as Record<string, unknown>) || {};
+      const parsed = yamlParse(this.content);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+      return {};
     } catch (error: any) {
       throw new ConfigurationFile.FormatError(
         `YAML syntax error occurred while parsing ${this.contentPath}. ` +

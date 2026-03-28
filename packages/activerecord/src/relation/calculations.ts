@@ -139,8 +139,10 @@ export async function performCount(
       innerManager.distinct();
       this._applyJoinsToManager(innerManager);
       this._applyWheresToManager(innerManager, table);
-      const sql = `SELECT COUNT(*) AS count FROM (${innerManager.toSql()}) AS subquery`;
-      const rows = await this._modelClass.adapter.execute(sql);
+      const countAll = new Nodes.NamedFunction("COUNT", [new Nodes.SqlLiteral("*")]);
+      const outerManager = table.project(countAll.as("count"));
+      outerManager.from(new Nodes.SqlLiteral(`(${innerManager.toSql()}) AS subquery`));
+      const rows = await this._modelClass.adapter.execute(outerManager.toSql());
       return Number(rows[0]?.count ?? 0);
     }
     const countNode = table.get(pk).count(true);

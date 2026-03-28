@@ -571,17 +571,23 @@ export class SchemaStatements {
       }
       case "mysql": {
         const rows = await this.adapter.execute(
-          `SHOW INDEX FROM \`${tableName}\` WHERE Key_name != 'PRIMARY' ORDER BY Key_name, Seq_in_index`,
+          `SHOW INDEX FROM \`${tableName}\` WHERE Key_name != 'PRIMARY'`,
         );
-        const indexMap = new Map<string, { columns: string[]; unique: boolean }>();
+        const indexMap = new Map<
+          string,
+          { columns: string[]; unique: boolean; seqs: [number, string][] }
+        >();
         for (const row of rows as any[]) {
           const name = row.Key_name;
           if (!indexMap.has(name)) {
-            indexMap.set(name, { columns: [], unique: row.Non_unique === 0 });
+            indexMap.set(name, { columns: [], unique: row.Non_unique === 0, seqs: [] });
           }
-          indexMap.get(name)!.columns.push(row.Column_name);
+          indexMap.get(name)!.seqs.push([row.Seq_in_index, row.Column_name]);
         }
-        return Array.from(indexMap.entries()).map(([name, info]) => ({ name, ...info }));
+        return Array.from(indexMap.entries()).map(([name, info]) => {
+          info.seqs.sort((a, b) => a[0] - b[0]);
+          return { name, columns: info.seqs.map((s) => s[1]), unique: info.unique };
+        });
       }
     }
   }

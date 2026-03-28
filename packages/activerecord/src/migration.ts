@@ -22,6 +22,10 @@ export type {
   AddForeignKeyOptions,
 } from "./connection-adapters/abstract/schema-definitions.js";
 
+export { ExecutionStrategy, type MigrationLike } from "./migration/execution-strategy.js";
+export { DefaultStrategy } from "./migration/default-strategy.js";
+export { PendingMigrationConnection } from "./migration/pending-migration-connection.js";
+
 export class MigrationError extends Error {
   constructor(message?: string) {
     super(message);
@@ -1140,8 +1144,6 @@ export interface MigrationProxy {
   migration: () => MigrationLike;
 }
 
-export type { MigrationLike } from "./migration/execution-strategy.js";
-
 export class Migrator {
   private _adapter: DatabaseAdapter;
   private _migrations: MigrationProxy[];
@@ -1540,22 +1542,47 @@ export class CheckPending {
 
   async call(env: Record<string, unknown>): Promise<unknown> {
     if (this._migrator) {
-      await this._checkPending(this._migrator);
-    } else if (this._pendingConnection && this._migrations.length > 0) {
+      const pending = await this._migrator.pendingMigrations();
+      this._throwIfPending(pending.length);
+    } else if (this._pendingConnection) {
+      if (this._migrations.length === 0) {
+        throw new MigrationError(
+          "CheckPending requires a migrations list when using pendingConnection",
+        );
+      }
       await this._pendingConnection.withAdapter(async (adapter) => {
-        const migrator = new Migrator(adapter, this._migrations);
-        await this._checkPending(migrator);
+        const sm = new SchemaMigration(adapter);
+        let applied = new Set<string>();
+        try {
+          if (await sm.tableExists()) {
+            const versions = await sm.allVersions();
+            applied = new Set(
+              versions.map((v) => {
+                try {
+                  return String(BigInt(v));
+                } catch {
+                  return v;
+                }
+              }),
+            );
+          }
+        } catch {
+          // Table may exist with incompatible schema; treat as no versions applied
+        }
+        const pendingCount = this._migrations.filter(
+          (m) => !applied.has(String(BigInt(m.version))),
+        ).length;
+        this._throwIfPending(pendingCount);
       });
     }
     return this._app(env);
   }
 
-  private async _checkPending(migrator: Migrator): Promise<void> {
-    const pending = await migrator.pendingMigrations();
-    if (pending.length > 0) {
+  private _throwIfPending(count: number): void {
+    if (count > 0) {
       throw new PendingMigrationError(
         `Migrations are pending. To resolve this issue, run:\n\n  migrate\n\n` +
-          `You have ${pending.length} pending migration(s).`,
+          `You have ${count} pending migration(s).`,
       );
     }
   }

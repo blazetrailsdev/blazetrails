@@ -1,3 +1,5 @@
+import { timingSafeEqual } from "crypto";
+
 export class SecurityUtils {
   static fixedLengthSecureCompare(a: string, b: string): boolean {
     const aBuf = Buffer.from(a);
@@ -7,11 +9,7 @@ export class SecurityUtils {
       throw new Error("string length mismatch.");
     }
 
-    let result = 0;
-    for (let i = 0; i < aBuf.length; i++) {
-      result |= aBuf[i] ^ bBuf[i];
-    }
-    return result === 0;
+    return timingSafeEqual(aBuf, bBuf);
   }
 
   static secureCompare(a: string, b: string): boolean {

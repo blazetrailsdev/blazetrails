@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { writeFileSync, mkdtempSync, rmSync } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
 import { ConfigurationFile } from "./configuration-file.js";
 
 describe("ConfigurationFileTest", () => {
@@ -19,7 +19,7 @@ describe("ConfigurationFileTest", () => {
     try {
       expect(() => ConfigurationFile.parse(path)).toThrow(/bad\.yml/);
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(dir, { recursive: true });
     }
   });
 
@@ -28,7 +28,7 @@ describe("ConfigurationFileTest", () => {
     try {
       expect(() => ConfigurationFile.parse(path)).toThrow(/bad2\.yml/);
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(dir, { recursive: true });
     }
   });
 
@@ -38,7 +38,7 @@ describe("ConfigurationFileTest", () => {
       const result = ConfigurationFile.parse(path);
       expect(result).toEqual({ name: "test", count: 42 });
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      rmSync(dir, { recursive: true });
     }
   });
 });

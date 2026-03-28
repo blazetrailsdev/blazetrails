@@ -17,6 +17,7 @@ export interface AttributeMethods {
 
 interface AttributeRecord {
   _attributes: { has(name: string): boolean; keys(): Iterable<string>; get(name: string): unknown };
+  _accessedFields: Set<string>;
   readAttribute(name: string): unknown;
 }
 
@@ -64,15 +65,13 @@ export function attributes(record: AttributeRecord): Record<string, unknown> {
 }
 
 /**
- * Return the list of attribute names that have been read.
- *
- * Stub: returns all attribute names. Full access tracking requires
- * instrumenting readAttribute to record which fields were accessed.
+ * Return the list of attribute names that have been read on this record.
+ * Useful for identifying unused columns to optimize SELECT queries.
  *
  * Mirrors: ActiveRecord::AttributeMethods#accessed_fields
  */
 export function accessedFields(record: AttributeRecord): string[] {
-  return [...record._attributes.keys()];
+  return [...record._accessedFields];
 }
 
 /**

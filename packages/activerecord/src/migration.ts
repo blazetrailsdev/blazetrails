@@ -609,7 +609,9 @@ export abstract class Migration {
       (migrationOrFn as any).adapter = this.adapter;
       await migrationOrFn.down();
     } else {
-      // Record operations and reverse them
+      // Record operations and reverse them, preserving outer recorder state
+      const outerRecording = this._recording;
+      const outerRecorder = this._recorder;
       this._recording = true;
       this._recorder = new CommandRecorder();
       await migrationOrFn();
@@ -617,7 +619,8 @@ export abstract class Migration {
       for (const { cmd, args } of this._recorder.commands.slice().reverse()) {
         await this._reverseOperation(cmd, args);
       }
-      this._recorder = new CommandRecorder();
+      this._recording = outerRecording;
+      this._recorder = outerRecorder;
     }
   }
 

@@ -8,6 +8,8 @@
  * Mirrors: ActiveRecord::Calculations
  */
 
+import { quoteIdentifier } from "../connection-adapters/abstract/quoting.js";
+
 interface CalculationRelation {
   _modelClass: {
     arelTable: any;
@@ -26,7 +28,7 @@ interface CalculationRelation {
 }
 
 function quoteColumn(tableName: string, column: string): string {
-  return `"${tableName}"."${column.replace(/"/g, '""')}"`;
+  return `${quoteIdentifier(tableName)}.${quoteIdentifier(column)}`;
 }
 
 async function singleAggregate(
@@ -64,9 +66,9 @@ async function groupedAggregate(
   rel._applyWheresToManager(manager, table);
   manager.group(groupCol);
 
-  let sql = manager.toSql();
-  if (rel._limitValue !== null) sql += ` LIMIT ${rel._limitValue}`;
-  if (rel._offsetValue !== null) sql += ` OFFSET ${rel._offsetValue}`;
+  if (rel._limitValue !== null) manager.take(rel._limitValue);
+  if (rel._offsetValue !== null) manager.skip(rel._offsetValue);
+  const sql = manager.toSql();
   const rows = await rel._modelClass.adapter.execute(sql);
 
   const result: Record<string, unknown> = {};
@@ -100,8 +102,9 @@ export async function performCount(
 
   const table = this._modelClass.arelTable;
   let countExpr: string;
-  if (column) {
-    const col = quoteColumn(table.name, column);
+  const effectiveColumn = column === "*" ? undefined : column;
+  if (effectiveColumn) {
+    const col = quoteColumn(table.name, effectiveColumn);
     countExpr = this._isDistinct ? `COUNT(DISTINCT ${col}) AS count` : `COUNT(${col}) AS count`;
   } else if (this._isDistinct) {
     const pk = this._modelClass.primaryKey;

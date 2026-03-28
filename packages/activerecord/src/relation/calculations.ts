@@ -88,7 +88,7 @@ async function groupedAggregate(
 ): Promise<Record<string, unknown>> {
   const table = rel._modelClass.arelTable;
   const groupCol = rel._groupColumns[0];
-  const aggNode = buildAggNode(table, fn, column, false);
+  const aggNode = buildAggNode(table, fn, column, rel._isDistinct);
   const manager = table.project(table.get(groupCol).as("group_key"), aggNode.as("val"));
   rel._applyJoinsToManager(manager);
   rel._applyWheresToManager(manager, table);

@@ -21,6 +21,7 @@ import { Calculations } from "./relation/calculations.js";
 import { FinderMethods } from "./relation/finder-methods.js";
 import { FromClause } from "./relation/from-clause.js";
 import { WhereClause } from "./relation/where-clause.js";
+import { BatchEnumerator } from "./relation/batches/batch-enumerator.js";
 
 /**
  * Relation — the lazy, chainable query interface.
@@ -2880,40 +2881,44 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Yields Relations scoped to each batch. Unlike findInBatches which yields
-   * arrays of records, this yields Relation objects that can be further refined.
+   * Returns a BatchEnumerator that yields Relations scoped to each batch.
+   * Unlike findInBatches which yields arrays of records, this yields
+   * Relation objects that can be further refined, and supports batch-level
+   * operations like deleteAll/updateAll.
    *
    * Mirrors: ActiveRecord::Batches#in_batches
    */
-  async *inBatches({
+  inBatches({
     batchSize = Batches.DEFAULT_BATCH_SIZE,
-  }: { batchSize?: number } = {}): AsyncGenerator<Relation<T>> {
-    const pk = this._modelClass.primaryKey;
-    let lastId: unknown = null;
+  }: { batchSize?: number } = {}): BatchEnumerator<Relation<T>> {
+    const self = this;
+    return new BatchEnumerator(async function* () {
+      const pk = self._modelClass.primaryKey;
+      let lastId: unknown = null;
 
-    while (true) {
-      const rel = this._clone();
-      if (lastId !== null) {
-        const pkQuoted = typeof lastId === "number" ? String(lastId) : `'${lastId}'`;
-        rel._whereClause.rawClauses.push(
-          `"${this._modelClass.arelTable.name}"."${pk}" > ${pkQuoted}`,
-        );
+      while (true) {
+        const rel = self._clone();
+        if (lastId !== null) {
+          const pkQuoted = typeof lastId === "number" ? String(lastId) : `'${lastId}'`;
+          rel._whereClause.rawClauses.push(
+            `"${self._modelClass.arelTable.name}"."${pk}" > ${pkQuoted}`,
+          );
+        }
+        rel._orderClauses = [pk as string];
+        rel._limitValue = batchSize;
+
+        const records = await rel.toArray();
+        if (records.length === 0) break;
+
+        const ids = records.map((r) => (r as any).id);
+        const batchRel = self._clone();
+        batchRel._whereClause.conditions.push({ [pk as string]: ids });
+        yield batchRel;
+
+        if (records.length < batchSize) break;
+        lastId = (records[records.length - 1] as any).id;
       }
-      rel._orderClauses = [pk as string];
-      rel._limitValue = batchSize;
-
-      const records = await rel.toArray();
-      if (records.length === 0) break;
-
-      // Create a scoped relation for just these PKs
-      const ids = records.map((r) => (r as any).id);
-      const batchRel = this._clone();
-      batchRel._whereClause.conditions.push({ [pk as string]: ids });
-      yield batchRel;
-
-      if (records.length < batchSize) break;
-      lastId = (records[records.length - 1] as any).id;
-    }
+    }, batchSize);
   }
 
   // -- SQL generation --

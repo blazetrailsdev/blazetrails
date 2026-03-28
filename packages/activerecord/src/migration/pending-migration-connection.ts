@@ -17,7 +17,6 @@ export class PendingMigrationConnection {
   private _connectionName: string;
   private _adapter?: DatabaseAdapter;
   private _connectionHandler?: ConnectionHandler;
-  private _checkedOut = false;
 
   constructor(
     options: {
@@ -36,38 +35,19 @@ export class PendingMigrationConnection {
   }
 
   async withAdapter<T>(callback: (adapter: DatabaseAdapter) => Promise<T> | T): Promise<T> {
-    const adapter = this._checkoutAdapter();
-    if (!adapter) {
-      throw new Error("No database adapter available for pending migrations");
+    // If a static adapter was provided, use it directly (no pool lifecycle)
+    if (this._adapter) {
+      return callback(this._adapter);
     }
-    try {
-      return await callback(adapter);
-    } finally {
-      this._releaseIfCheckedOut();
-    }
-  }
 
-  private _checkoutAdapter(): DatabaseAdapter | undefined {
-    if (this._adapter) return this._adapter;
+    // Otherwise checkout from pool, ensuring checkin on completion
     if (this._connectionHandler) {
       const pool = this._connectionHandler.retrieveConnectionPool(this._connectionName);
       if (pool) {
-        this._adapter = pool.checkout();
-        this._checkedOut = true;
-        return this._adapter;
+        return pool.withConnection((adapter) => callback(adapter as DatabaseAdapter));
       }
     }
-    return undefined;
-  }
 
-  private _releaseIfCheckedOut(): void {
-    if (this._checkedOut && this._adapter && this._connectionHandler) {
-      const pool = this._connectionHandler.retrieveConnectionPool(this._connectionName);
-      if (pool) {
-        pool.checkin(this._adapter);
-      }
-      this._adapter = undefined;
-      this._checkedOut = false;
-    }
+    throw new Error("No database adapter available for pending migrations");
   }
 }

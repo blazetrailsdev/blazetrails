@@ -295,7 +295,7 @@ export class Request {
   get format(): string | undefined {
     // Check explicit format parameter
     const paramFormat = this.params?.["format"];
-    if (paramFormat) return paramFormat;
+    if (paramFormat) return String(paramFormat);
 
     // Check path extension
     const ext = this.path.match(/\.(\w+)$/);

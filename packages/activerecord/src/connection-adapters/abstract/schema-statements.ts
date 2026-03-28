@@ -506,7 +506,11 @@ export class SchemaStatements {
           let type: string = row.udt_name;
           if (row.character_maximum_length) {
             type = `${type}(${row.character_maximum_length})`;
-          } else if (row.numeric_precision != null && row.numeric_scale != null) {
+          } else if (
+            row.numeric_precision != null &&
+            row.numeric_scale != null &&
+            (type === "numeric" || type === "decimal")
+          ) {
             type = `numeric(${row.numeric_precision},${row.numeric_scale})`;
           }
           return {

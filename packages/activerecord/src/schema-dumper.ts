@@ -63,8 +63,7 @@ export class SchemaDumper {
 
   async dump(): Promise<string> {
     const source = new AdapterSchemaSource(this._adapter);
-    const result = await AbstractSchemaDumper.dump(source);
-    return result as string;
+    return await AbstractSchemaDumper.dump(source);
   }
 
   async dumpWithVersion(): Promise<string> {

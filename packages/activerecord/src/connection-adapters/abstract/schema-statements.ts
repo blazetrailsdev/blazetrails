@@ -499,23 +499,33 @@ export class SchemaStatements {
       case "postgres": {
         const pk = await this.primaryKey(tableName);
         const rows = await this.adapter.execute(
-          `SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = 'public' AND table_name = '${tableName}' ORDER BY ordinal_position`,
+          `SELECT column_name, udt_name, character_maximum_length, numeric_precision, numeric_scale, is_nullable, column_default FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 ORDER BY ordinal_position`,
+          [tableName],
         );
-        return rows.map((row: any) => ({
-          name: row.column_name,
-          type: row.data_type,
-          null: row.is_nullable === "YES",
-          default: row.column_default,
-          primaryKey: row.column_name === pk,
-        }));
+        return rows.map((row: any) => {
+          let type: string = row.udt_name;
+          if (row.character_maximum_length) {
+            type = `${type}(${row.character_maximum_length})`;
+          } else if (row.numeric_precision && row.numeric_scale) {
+            type = `numeric(${row.numeric_precision},${row.numeric_scale})`;
+          }
+          return {
+            name: row.column_name,
+            type,
+            null: row.is_nullable === "YES",
+            default: row.column_default,
+            primaryKey: row.column_name === pk,
+          };
+        });
       }
       case "mysql": {
         const rows = await this.adapter.execute(
-          `SELECT column_name, column_key, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '${tableName}' ORDER BY ordinal_position`,
+          `SELECT column_name, column_key, column_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? ORDER BY ordinal_position`,
+          [tableName],
         );
         return rows.map((row: any) => ({
           name: row.COLUMN_NAME ?? row.column_name,
-          type: row.DATA_TYPE ?? row.data_type,
+          type: row.COLUMN_TYPE ?? row.column_type,
           null: (row.IS_NULLABLE ?? row.is_nullable) === "YES",
           default: row.COLUMN_DEFAULT ?? row.column_default,
           primaryKey: (row.COLUMN_KEY ?? row.column_key) === "PRI",

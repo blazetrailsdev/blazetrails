@@ -29,6 +29,7 @@ import { WhereClause } from "./relation/where-clause.js";
  */
 export class Relation<T extends Base> {
   private _modelClass: typeof Base;
+  /** @internal */
   _whereClause: WhereClause = WhereClause.empty();
   private _orderClauses: Array<string | [string, "asc" | "desc"]> = [];
   private _rawOrderClauses: string[] = [];

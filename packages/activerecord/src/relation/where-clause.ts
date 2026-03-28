@@ -50,14 +50,24 @@ export class WhereClause {
   }
 
   invert(): WhereClause {
-    return new WhereClause(this.notConditions, this.conditions, this.rawClauses, this.arelNodes);
+    return new WhereClause(
+      [...this.notConditions],
+      [...this.conditions],
+      [...this.rawClauses],
+      [...this.arelNodes],
+    );
   }
 
   except(...columns: string[]): WhereClause {
     const filtered = this.conditions.filter(
       (p) => !columns.some((col) => Object.prototype.hasOwnProperty.call(p, col)),
     );
-    return new WhereClause(filtered, this.notConditions, this.rawClauses, this.arelNodes);
+    return new WhereClause(
+      filtered,
+      [...this.notConditions],
+      [...this.rawClauses],
+      [...this.arelNodes],
+    );
   }
 
   clear(): void {

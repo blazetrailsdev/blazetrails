@@ -12,7 +12,7 @@ export class BatchEnumerator<T> {
   readonly ofSize: number;
 
   constructor(relation: { toArray(): Promise<T[]> }, ofSize: number = 1000) {
-    if (ofSize < 1) {
+    if (!Number.isInteger(ofSize) || ofSize < 1) {
       throw new Error("Batch size must be a positive integer");
     }
     this._relation = relation;

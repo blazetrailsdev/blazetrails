@@ -268,7 +268,14 @@ export class Request {
   }
 
   get requestParameters(): Record<string, unknown> {
-    const input = this.env["rack.input"];
+    const raw = this.env["rack.input"];
+    if (!raw) return {};
+    const input =
+      typeof raw === "string"
+        ? raw
+        : typeof (raw as any).read === "function"
+          ? (raw as any).read()
+          : null;
     if (!input || typeof input !== "string") return {};
     const ct = ((this.env["CONTENT_TYPE"] as string) || "").toLowerCase();
     if (ct.includes("application/json")) {

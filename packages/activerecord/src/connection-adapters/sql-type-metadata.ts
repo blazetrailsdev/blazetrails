@@ -22,8 +22,8 @@ export class SqlTypeMetadata implements Deduplicable {
       scale?: number | null;
     } = {},
   ) {
-    this.sqlType = options.sqlType ?? "";
-    this.type = options.type ?? "";
+    this.sqlType = options.sqlType ?? options.type ?? "";
+    this.type = options.type ?? options.sqlType ?? "";
     this.limit = options.limit ?? null;
     this.precision = options.precision ?? null;
     this.scale = options.scale ?? null;

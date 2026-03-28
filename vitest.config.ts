@@ -11,11 +11,11 @@ export default defineConfig({
       "@blazetrails/activerecord": path.resolve(__dirname, "packages/activerecord/src/index.ts"),
       "@blazetrails/rack": path.resolve(__dirname, "packages/rack/src/index.ts"),
       "@blazetrails/actionpack": path.resolve(__dirname, "packages/actionpack/src/index.ts"),
-      $frontiers: path.resolve(__dirname, "packages/website/src/lib/frontiers"),
     },
   },
   test: {
     globals: true,
-    include: ["packages/*/src/**/*.test.ts", "packages/website/server/**/*.test.ts"],
+    include: ["packages/*/src/**/*.test.ts"],
+    exclude: ["**/node_modules/**", "**/dist/**", "packages/website/**"],
   },
 });

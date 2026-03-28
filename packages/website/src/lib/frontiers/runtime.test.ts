@@ -60,6 +60,112 @@ describe("Runtime", () => {
       expect(results[0].columns).toEqual(["a", "b"]);
       expect(results[0].values).toEqual([[1, 2]]);
     });
+
+    it("returns empty array for DDL statements", () => {
+      const results = runtime.executeSQL('CREATE TABLE "test_ddl" ("id" INTEGER PRIMARY KEY)');
+      expect(results).toEqual([]);
+    });
+
+    it("returns empty array for INSERT", () => {
+      runtime.executeSQL('CREATE TABLE "test_ins" ("name" TEXT)');
+      const results = runtime.executeSQL("INSERT INTO \"test_ins\" VALUES ('hello')");
+      expect(results).toEqual([]);
+    });
+
+    it("returns rows after INSERT + SELECT", () => {
+      runtime.executeSQL('CREATE TABLE "test_sel" ("val" INTEGER)');
+      runtime.executeSQL('INSERT INTO "test_sel" VALUES (42)');
+      const results = runtime.executeSQL('SELECT * FROM "test_sel"');
+      expect(results).toHaveLength(1);
+      expect(results[0].values).toEqual([[42]]);
+    });
+
+    it("handles multiple result sets from multi-statement SQL", () => {
+      runtime.executeSQL('CREATE TABLE "multi" ("n" INTEGER)');
+      runtime.executeSQL('INSERT INTO "multi" VALUES (1)');
+      runtime.executeSQL('INSERT INTO "multi" VALUES (2)');
+      // sql.js db.exec() can run multiple statements separated by ;
+      const results = runtime.executeSQL(
+        'SELECT * FROM "multi" WHERE n = 1; SELECT * FROM "multi" WHERE n = 2',
+      );
+      expect(results).toHaveLength(2);
+      expect(results[0].values).toEqual([[1]]);
+      expect(results[1].values).toEqual([[2]]);
+    });
+
+    it("returns empty array for SELECT on empty table", () => {
+      // sql.js db.exec() returns [] (no result sets) when SELECT matches no rows
+      runtime.executeSQL('CREATE TABLE "empty_t" ("x" TEXT)');
+      const results = runtime.executeSQL('SELECT * FROM "empty_t"');
+      expect(results).toEqual([]);
+    });
+
+    it("throws on invalid SQL", () => {
+      expect(() => runtime.executeSQL("NOT VALID SQL")).toThrow();
+    });
+
+    it("throws on nonexistent table", () => {
+      expect(() => runtime.executeSQL('SELECT * FROM "does_not_exist"')).toThrow();
+    });
+
+    it("handles NULL values", () => {
+      runtime.executeSQL('CREATE TABLE "nulls" ("a" TEXT, "b" INTEGER)');
+      runtime.executeSQL('INSERT INTO "nulls" VALUES (NULL, NULL)');
+      const results = runtime.executeSQL('SELECT * FROM "nulls"');
+      expect(results[0].values).toEqual([[null, null]]);
+    });
+
+    it("handles special characters in values", () => {
+      runtime.executeSQL('CREATE TABLE "special" ("v" TEXT)');
+      runtime.executeSQL("INSERT INTO \"special\" VALUES ('it''s a \"test\"')");
+      const results = runtime.executeSQL('SELECT * FROM "special"');
+      expect(results[0].values[0][0]).toBe('it\'s a "test"');
+    });
+
+    it("handles large result sets", () => {
+      runtime.executeSQL('CREATE TABLE "big" ("n" INTEGER)');
+      for (let i = 0; i < 100; i++) {
+        runtime.executeSQL(`INSERT INTO "big" VALUES (${i})`);
+      }
+      const results = runtime.executeSQL('SELECT * FROM "big"');
+      expect(results[0].values).toHaveLength(100);
+    });
+
+    it("works with aggregate functions", () => {
+      runtime.executeSQL('CREATE TABLE "agg" ("val" REAL)');
+      runtime.executeSQL('INSERT INTO "agg" VALUES (10.5)');
+      runtime.executeSQL('INSERT INTO "agg" VALUES (20.5)');
+      const results = runtime.executeSQL(
+        'SELECT COUNT(*) as c, SUM(val) as s, AVG(val) as a FROM "agg"',
+      );
+      expect(results[0].columns).toEqual(["c", "s", "a"]);
+      expect(results[0].values[0][0]).toBe(2);
+      expect(results[0].values[0][1]).toBe(31);
+      expect(results[0].values[0][2]).toBe(15.5);
+    });
+
+    it("works with JOINs", () => {
+      runtime.executeSQL('CREATE TABLE "authors_t" ("id" INTEGER PRIMARY KEY, "name" TEXT)');
+      runtime.executeSQL(
+        'CREATE TABLE "books_t" ("id" INTEGER PRIMARY KEY, "title" TEXT, "author_id" INTEGER)',
+      );
+      runtime.executeSQL("INSERT INTO \"authors_t\" VALUES (1, 'Alice')");
+      runtime.executeSQL("INSERT INTO \"books_t\" VALUES (1, 'Book One', 1)");
+      const results = runtime.executeSQL(
+        'SELECT b.title, a.name FROM "books_t" b JOIN "authors_t" a ON b.author_id = a.id',
+      );
+      expect(results[0].values).toEqual([["Book One", "Alice"]]);
+    });
+
+    it("is accessible from user code via executeCode", async () => {
+      runtime.executeSQL('CREATE TABLE "from_code" ("x" INTEGER)');
+      runtime.executeSQL('INSERT INTO "from_code" VALUES (99)');
+      const result = await runtime.executeCode(
+        "return runtime.executeSQL('SELECT * FROM \"from_code\"')",
+      );
+      const cast = result as Array<{ columns: string[]; values: unknown[][] }>;
+      expect(cast[0].values).toEqual([[99]]);
+    });
   });
 
   describe("getTables", () => {

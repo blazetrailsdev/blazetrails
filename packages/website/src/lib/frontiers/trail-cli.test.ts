@@ -294,6 +294,61 @@ describe("Trail CLI", () => {
     });
   });
 
+  describe("db:prepare", () => {
+    it("migrates pending and seeds on fresh db", async () => {
+      writeMigration("20240101000001", "CreateUsers", "users");
+      runtime.vfs.write(
+        "db/seeds.ts",
+        `await adapter.executeMutation('INSERT INTO "users" ("name") VALUES (?)', ["Seeded"]);`,
+      );
+
+      const result = await runtime.exec("db:prepare");
+      expect(result.success).toBe(true);
+      expect(runtime.getTables()).toContain("users");
+      const rows = await runtime.adapter.execute('SELECT * FROM "users"');
+      expect(rows).toHaveLength(1);
+      expect(rows[0].name).toBe("Seeded");
+    });
+
+    it("is idempotent — no-op if already migrated", async () => {
+      writeMigration("20240101000001", "CreateUsers", "users");
+      await runtime.exec("db:prepare");
+
+      const result = await runtime.exec("db:prepare");
+      expect(result.success).toBe(true);
+      expect(result.output.some((l) => l.includes("up to date"))).toBe(true);
+    });
+
+    it("does not seed if tables already have data", async () => {
+      writeMigration("20240101000001", "CreateUsers", "users");
+      runtime.vfs.write(
+        "db/seeds.ts",
+        `await adapter.executeMutation('INSERT INTO "users" ("name") VALUES (?)', ["SeedUser"]);`,
+      );
+
+      await runtime.exec("db:migrate");
+      await runtime.adapter.executeMutation('INSERT INTO "users" ("name") VALUES (?)', [
+        "ManualUser",
+      ]);
+
+      await runtime.exec("db:prepare");
+      const rows = await runtime.adapter.execute('SELECT * FROM "users"');
+      expect(rows.every((r) => r.name !== "SeedUser")).toBe(true);
+    });
+
+    it("works with no seed file", async () => {
+      writeMigration("20240101000001", "CreateUsers", "users");
+      const result = await runtime.exec("db:prepare");
+      expect(result.success).toBe(true);
+      expect(runtime.getTables()).toContain("users");
+    });
+
+    it("works with no migrations", async () => {
+      const result = await runtime.exec("db:prepare");
+      expect(result.success).toBe(true);
+    });
+  });
+
   describe("db:drop", () => {
     it("drops all tables", async () => {
       writeMigration("20240101000001", "CreateUsers", "users");

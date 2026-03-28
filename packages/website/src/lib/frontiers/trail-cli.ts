@@ -687,6 +687,36 @@ app.registerController("${resourceName}", ${className}Controller);
         log("Seeds completed.");
       },
 
+      "db:prepare": async () => {
+        // Like Rails db:prepare — migrate pending, seed if fresh
+        let migrated = 0;
+        await withMigrator(async (migrator) => {
+          const pending = await migrator.pendingMigrations();
+          if (pending.length === 0) {
+            log("Database is up to date.");
+            return;
+          }
+          await migrator.migrate();
+          for (const line of migrator.output) log(line);
+          migrated = pending.length;
+          log(`${migrated} migration(s) applied.`);
+        });
+
+        // Seed if migrations were just applied and tables are empty
+        if (migrated > 0) {
+          const seedFile = runtime.vfs.read("db/seeds.ts") ?? runtime.vfs.read("db/seeds.js");
+          if (seedFile) {
+            try {
+              log("Running seeds...");
+              await runtime.executeCode(seedFile.content);
+              log("Seeds completed.");
+            } catch (e: any) {
+              log(`Seed error: ${e.message}`);
+            }
+          }
+        }
+      },
+
       "db:setup": async (_args, opts) => {
         await commands["db:migrate"]([], opts);
         await commands["db:seed"]([], opts);
@@ -965,6 +995,7 @@ app.registerController("${resourceName}", ${className}Controller);
             "  scaffold <name> [cols...]              Model + migration + controller + views",
             "  g <type> <name> [cols...]              Alias for generate",
             "  server                                  Load routes + controllers",
+            "  routes                                  Show registered routes",
             "  routes                                  Show registered routes",
             "  sample [name]                           Load a sample database",
             "  sql <file.sql | SELECT ...>            Execute SQL",

@@ -610,7 +610,7 @@ describe("MigratorTest", () => {
       expect(Klass).toBe(V0_9);
     } finally {
       resetVersionRegistry();
-      registerVersion("1.0", Current as any);
+      registerVersion("1.0", Current);
     }
   });
 

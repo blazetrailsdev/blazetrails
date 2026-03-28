@@ -57,7 +57,7 @@ function compareVersions(a: string, b: string): number {
  * Register a migration version class.
  */
 export function registerVersion(version: string, klass: MigrationClass): void {
-  versionRegistry.set(version, klass);
+  versionRegistry.set(normalizeVersion(version), klass);
 }
 
 /**
@@ -92,10 +92,11 @@ export function findVersion(version: string | number): MigrationClass {
   }
 
   if (best) return best;
-  throw new Error(
-    `Unknown migration version: ${version}. ` +
-      `Registered versions: ${[...versionRegistry.keys()].sort().join(", ")}`,
-  );
+
+  const sorted = [...versionRegistry.keys()].sort(compareVersions).join(", ");
+  const err = new Error(`Unknown migration version: ${version}. Registered versions: ${sorted}`);
+  err.name = "MigrationError";
+  throw err;
 }
 
 /**

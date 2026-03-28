@@ -30,7 +30,7 @@ export class PoolManager {
     return deleted;
   }
 
-  get poolConfigs(): Array<{ role: string; shard: string; pool: ConnectionPool }> {
+  get poolEntries(): Array<{ role: string; shard: string; pool: ConnectionPool }> {
     const result: Array<{ role: string; shard: string; pool: ConnectionPool }> = [];
     for (const [role, shardMap] of this._pools) {
       for (const [shard, pool] of shardMap) {

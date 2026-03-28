@@ -46,6 +46,10 @@ export class Column {
     return this.sqlTypeMetadata?.sqlType ?? this.sqlTypeMetadata?.type ?? null;
   }
 
+  get baseType(): string | null {
+    return this.sqlTypeMetadata?.type ?? null;
+  }
+
   get limit(): number | null {
     return this.sqlTypeMetadata?.limit ?? null;
   }

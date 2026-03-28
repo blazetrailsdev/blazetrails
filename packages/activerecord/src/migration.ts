@@ -228,6 +228,9 @@ export abstract class Migration {
       case "renameTable":
         await this.renameTable(args[1] as string, args[0] as string);
         break;
+      case "renameIndex":
+        await this.renameIndex(args[0] as string, args[2] as string, args[1] as string);
+        break;
       case "changeColumn":
         throw new IrreversibleMigration("Cannot reverse changeColumn without previous type info");
       case "addForeignKey": {

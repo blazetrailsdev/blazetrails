@@ -18,8 +18,8 @@ export class Digest {
   }
 
   static set hashDigestClass(klass: HashDigestClass) {
-    if (!klass || typeof klass.hexdigest !== "function") {
-      throw new TypeError(`${String(klass)} is expected to implement hexdigest class method`);
+    if (typeof klass.hexdigest !== "function") {
+      throw new Error(`${klass} is expected to implement hexdigest class method`);
     }
     this._hashDigestClass = klass;
   }

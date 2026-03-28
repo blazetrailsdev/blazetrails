@@ -25,6 +25,8 @@ import {
 import { SchemaCreation } from "./schema-creation.js";
 import { detectAdapterName } from "../../adapter-name.js";
 import { quoteIdentifier, quoteDefaultExpression } from "./quoting.js";
+import { Column } from "../column.js";
+import { SqlTypeMetadata } from "../sql-type-metadata.js";
 
 export class SchemaStatements {
   private _schemaCreation?: SchemaCreation;
@@ -480,21 +482,16 @@ export class SchemaStatements {
     }
   }
 
-  async columns(
-    tableName: string,
-  ): Promise<
-    Array<{ name: string; type: string; null: boolean; default: unknown; primaryKey: boolean }>
-  > {
+  async columns(tableName: string): Promise<Column[]> {
     switch (this.adapterName) {
       case "sqlite": {
         const rows = await this.adapter.execute(`PRAGMA table_info("${tableName}")`);
-        return rows.map((row: any) => ({
-          name: row.name,
-          type: row.type,
-          null: row.notnull === 0,
-          default: row.dflt_value,
-          primaryKey: row.pk > 0,
-        }));
+        return rows.map((row: any) => {
+          const meta = new SqlTypeMetadata({ sqlType: row.type, type: row.type });
+          return new Column(row.name, row.dflt_value, meta, row.notnull === 0, {
+            primaryKey: row.pk > 0,
+          });
+        });
       }
       case "postgres": {
         const rows = await this.adapter.execute(
@@ -512,23 +509,26 @@ export class SchemaStatements {
           [tableName],
         );
         return rows.map((row: any) => {
-          let type: string = row.udt_name;
+          let sqlType: string = row.udt_name;
           if (row.character_maximum_length) {
-            type = `${type}(${row.character_maximum_length})`;
+            sqlType = `${sqlType}(${row.character_maximum_length})`;
           } else if (
             row.numeric_precision != null &&
             row.numeric_scale != null &&
-            (type === "numeric" || type === "decimal")
+            (sqlType === "numeric" || sqlType === "decimal")
           ) {
-            type = `numeric(${row.numeric_precision},${row.numeric_scale})`;
+            sqlType = `numeric(${row.numeric_precision},${row.numeric_scale})`;
           }
-          return {
-            name: row.column_name,
-            type,
-            null: row.is_nullable === "YES",
-            default: row.column_default,
+          const meta = new SqlTypeMetadata({
+            sqlType,
+            type: row.udt_name,
+            limit: row.character_maximum_length ?? null,
+            precision: row.numeric_precision ?? null,
+            scale: row.numeric_scale ?? null,
+          });
+          return new Column(row.column_name, row.column_default, meta, row.is_nullable === "YES", {
             primaryKey: row.is_primary_key === true,
-          };
+          });
         });
       }
       case "mysql": {
@@ -538,26 +538,35 @@ export class SchemaStatements {
         );
         return rows.map((row: any) => {
           const name = row.COLUMN_NAME ?? row.column_name;
-          let type: string = row.DATA_TYPE ?? row.data_type;
+          let sqlType: string = row.DATA_TYPE ?? row.data_type;
           const maxLen = row.CHARACTER_MAXIMUM_LENGTH ?? row.character_maximum_length;
           const precision = row.NUMERIC_PRECISION ?? row.numeric_precision;
           const scale = row.NUMERIC_SCALE ?? row.numeric_scale;
-          if (maxLen != null && (type === "varchar" || type === "char")) {
-            type = `${type}(${maxLen})`;
+          if (maxLen != null && (sqlType === "varchar" || sqlType === "char")) {
+            sqlType = `${sqlType}(${maxLen})`;
           } else if (
             precision != null &&
             scale != null &&
-            (type === "decimal" || type === "numeric")
+            (sqlType === "decimal" || sqlType === "numeric")
           ) {
-            type = `${type}(${precision},${scale})`;
+            sqlType = `${sqlType}(${precision},${scale})`;
           }
-          return {
+          const meta = new SqlTypeMetadata({
+            sqlType,
+            type: row.DATA_TYPE ?? row.data_type,
+            limit: maxLen ?? null,
+            precision: precision ?? null,
+            scale: scale ?? null,
+          });
+          return new Column(
             name,
-            type,
-            null: (row.IS_NULLABLE ?? row.is_nullable) === "YES",
-            default: row.COLUMN_DEFAULT ?? row.column_default,
-            primaryKey: (row.COLUMN_KEY ?? row.column_key) === "PRI",
-          };
+            row.COLUMN_DEFAULT ?? row.column_default,
+            meta,
+            (row.IS_NULLABLE ?? row.is_nullable) === "YES",
+            {
+              primaryKey: (row.COLUMN_KEY ?? row.column_key) === "PRI",
+            },
+          );
         });
       }
     }

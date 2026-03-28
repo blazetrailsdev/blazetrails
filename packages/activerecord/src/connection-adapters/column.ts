@@ -14,6 +14,7 @@ export class Column {
   readonly defaultFunction: string | null;
   readonly collation: string | null;
   readonly comment: string | null;
+  readonly primaryKey: boolean;
 
   constructor(
     name: string,
@@ -24,6 +25,7 @@ export class Column {
       defaultFunction?: string | null;
       collation?: string | null;
       comment?: string | null;
+      primaryKey?: boolean;
     } = {},
   ) {
     this.name = name;
@@ -33,6 +35,7 @@ export class Column {
     this.defaultFunction = options.defaultFunction ?? null;
     this.collation = options.collation ?? null;
     this.comment = options.comment ?? null;
+    this.primaryKey = options.primaryKey ?? false;
   }
 
   get sqlType(): string | null {

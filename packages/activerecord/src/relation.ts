@@ -2892,8 +2892,11 @@ export class Relation<T extends Base> {
     batchSize = Batches.DEFAULT_BATCH_SIZE,
   }: { batchSize?: number } = {}): BatchEnumerator<Relation<T>> {
     const self = this;
+    const pk = this._modelClass.primaryKey;
+    if (Array.isArray(pk)) {
+      throw new Error("inBatches does not support composite primary keys");
+    }
     return new BatchEnumerator(async function* () {
-      const pk = self._modelClass.primaryKey;
       let lastId: unknown = null;
 
       while (true) {
@@ -2904,19 +2907,19 @@ export class Relation<T extends Base> {
             `"${self._modelClass.arelTable.name}"."${pk}" > ${pkQuoted}`,
           );
         }
-        rel._orderClauses = [pk as string];
+        rel._orderClauses = [pk];
         rel._limitValue = batchSize;
 
         const records = await rel.toArray();
         if (records.length === 0) break;
 
-        const ids = records.map((r) => (r as any).readAttribute(pk as string));
+        const ids = records.map((r) => (r as any).readAttribute(pk));
         const batchRel = self._clone();
-        batchRel._whereClause.conditions.push({ [pk as string]: ids });
+        batchRel._whereClause.conditions.push({ [pk]: ids });
         yield batchRel;
 
         if (records.length < batchSize) break;
-        lastId = (records[records.length - 1] as any).readAttribute(pk as string);
+        lastId = (records[records.length - 1] as any).readAttribute(pk);
       }
     }, batchSize);
   }

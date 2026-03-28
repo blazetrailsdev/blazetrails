@@ -8,7 +8,7 @@
  * Mirrors: ActiveRecord::Calculations
  */
 
-import { quoteIdentifier } from "../connection-adapters/abstract/quoting.js";
+import { Nodes } from "@blazetrails/arel";
 
 interface CalculationRelation {
   _modelClass: {
@@ -27,19 +27,38 @@ interface CalculationRelation {
   toArray(): Promise<any[]>;
 }
 
-function quoteColumn(tableName: string, column: string): string {
-  return `${quoteIdentifier(tableName)}.${quoteIdentifier(column)}`;
+type AggFn = "count" | "sum" | "average" | "minimum" | "maximum";
+
+function buildAggNode(table: any, fn: AggFn, column: string, distinct: boolean): any {
+  if (column === "*") {
+    return new Nodes.NamedFunction(fn === "count" ? "COUNT" : fn.toUpperCase(), [
+      new Nodes.SqlLiteral("*"),
+    ]);
+  }
+  const attr = table.get(column);
+  switch (fn) {
+    case "count":
+      return attr.count(distinct);
+    case "sum":
+      return attr.sum();
+    case "average":
+      return attr.average();
+    case "minimum":
+      return attr.minimum();
+    case "maximum":
+      return attr.maximum();
+  }
 }
 
 async function singleAggregate(
   rel: CalculationRelation,
-  fn: string,
+  fn: AggFn,
   column: string,
   coerceNumeric: boolean = true,
 ): Promise<unknown | null> {
   const table = rel._modelClass.arelTable;
-  const col = quoteColumn(table.name, column);
-  const projection = rel._isDistinct ? `${fn}(DISTINCT ${col}) AS val` : `${fn}(${col}) AS val`;
+  const aggNode = buildAggNode(table, fn, column, rel._isDistinct);
+  const projection = aggNode.as("val");
   const manager = table.project(projection);
   rel._applyJoinsToManager(manager);
   rel._applyWheresToManager(manager, table);
@@ -53,15 +72,14 @@ async function singleAggregate(
 
 async function groupedAggregate(
   rel: CalculationRelation,
-  fn: string,
+  fn: AggFn,
   column: string,
   coerceNumeric: boolean = true,
 ): Promise<Record<string, unknown>> {
   const table = rel._modelClass.arelTable;
   const groupCol = rel._groupColumns[0];
-  const col = column === "*" ? "*" : quoteColumn(table.name, column);
-  const aggExpr = `${fn}(${col}) AS val`;
-  const manager = table.project(`${quoteColumn(table.name, groupCol)} AS group_key, ${aggExpr}`);
+  const aggNode = buildAggNode(table, fn, column, false);
+  const manager = table.project(table.get(groupCol).as("group_key"), aggNode.as("val"));
   rel._applyJoinsToManager(manager);
   rel._applyWheresToManager(manager, table);
   manager.group(groupCol);
@@ -92,7 +110,7 @@ export async function performCount(
   if (this._isNone) return this._groupColumns.length > 0 ? {} : 0;
 
   if (this._groupColumns.length > 0) {
-    return groupedAggregate(this, "COUNT", column ?? "*", true) as Promise<Record<string, number>>;
+    return groupedAggregate(this, "count", column ?? "*", true) as Promise<Record<string, number>>;
   }
 
   if (this._limitValue !== null) {
@@ -101,36 +119,43 @@ export async function performCount(
   }
 
   const table = this._modelClass.arelTable;
-  let countExpr: string;
   const effectiveColumn = column === "*" ? undefined : column;
+
   if (effectiveColumn) {
-    const col = quoteColumn(table.name, effectiveColumn);
-    countExpr = this._isDistinct ? `COUNT(DISTINCT ${col}) AS count` : `COUNT(${col}) AS count`;
-  } else if (this._isDistinct) {
+    const countNode = table.get(effectiveColumn).count(this._isDistinct);
+    const manager = table.project(countNode.as("count"));
+    this._applyJoinsToManager(manager);
+    this._applyWheresToManager(manager, table);
+    const rows = await this._modelClass.adapter.execute(manager.toSql());
+    return Number(rows[0]?.count ?? 0);
+  }
+
+  if (this._isDistinct) {
     const pk = this._modelClass.primaryKey;
     if (Array.isArray(pk)) {
       // Multi-column DISTINCT COUNT requires a subquery since
       // COUNT(DISTINCT col1, col2) isn't valid on SQLite/PG
-      const cols = pk.map((c) => quoteColumn(table.name, c)).join(", ");
-      const innerManager = table.project(cols);
+      const innerManager = table.project(...pk.map((c: string) => table.get(c)));
       innerManager.distinct();
       this._applyJoinsToManager(innerManager);
       this._applyWheresToManager(innerManager, table);
       const sql = `SELECT COUNT(*) AS count FROM (${innerManager.toSql()}) AS subquery`;
       const rows = await this._modelClass.adapter.execute(sql);
       return Number(rows[0]?.count ?? 0);
-    } else {
-      countExpr = `COUNT(DISTINCT ${quoteColumn(table.name, pk)}) AS count`;
     }
-  } else {
-    countExpr = "COUNT(*) AS count";
+    const countNode = table.get(pk).count(true);
+    const manager = table.project(countNode.as("count"));
+    this._applyJoinsToManager(manager);
+    this._applyWheresToManager(manager, table);
+    const rows = await this._modelClass.adapter.execute(manager.toSql());
+    return Number(rows[0]?.count ?? 0);
   }
-  const manager = table.project(countExpr);
+
+  const countAll = new Nodes.NamedFunction("COUNT", [new Nodes.SqlLiteral("*")]);
+  const manager = table.project(countAll.as("count"));
   this._applyJoinsToManager(manager);
   this._applyWheresToManager(manager, table);
-
-  const sql = manager.toSql();
-  const rows = await this._modelClass.adapter.execute(sql);
+  const rows = await this._modelClass.adapter.execute(manager.toSql());
   return Number(rows[0]?.count ?? 0);
 }
 
@@ -141,9 +166,9 @@ export async function performSum(
   if (this._isNone) return this._groupColumns.length > 0 ? {} : 0;
   if (!column) return 0;
   if (this._groupColumns.length > 0) {
-    return groupedAggregate(this, "SUM", column, true) as Promise<Record<string, number>>;
+    return groupedAggregate(this, "sum", column, true) as Promise<Record<string, number>>;
   }
-  return ((await singleAggregate(this, "SUM", column, true)) as number) ?? 0;
+  return ((await singleAggregate(this, "sum", column, true)) as number) ?? 0;
 }
 
 export async function performAverage(
@@ -152,9 +177,9 @@ export async function performAverage(
 ): Promise<number | null | Record<string, number>> {
   if (this._isNone) return this._groupColumns.length > 0 ? {} : null;
   if (this._groupColumns.length > 0) {
-    return groupedAggregate(this, "AVG", column, true) as Promise<Record<string, number>>;
+    return groupedAggregate(this, "average", column, true) as Promise<Record<string, number>>;
   }
-  return singleAggregate(this, "AVG", column, true) as Promise<number | null>;
+  return singleAggregate(this, "average", column, true) as Promise<number | null>;
 }
 
 export async function performMinimum(
@@ -163,9 +188,9 @@ export async function performMinimum(
 ): Promise<unknown | null | Record<string, unknown>> {
   if (this._isNone) return this._groupColumns.length > 0 ? {} : null;
   if (this._groupColumns.length > 0) {
-    return groupedAggregate(this, "MIN", column, false);
+    return groupedAggregate(this, "minimum", column, false);
   }
-  return singleAggregate(this, "MIN", column, false);
+  return singleAggregate(this, "minimum", column, false);
 }
 
 export async function performMaximum(
@@ -174,9 +199,9 @@ export async function performMaximum(
 ): Promise<unknown | null | Record<string, unknown>> {
   if (this._isNone) return this._groupColumns.length > 0 ? {} : null;
   if (this._groupColumns.length > 0) {
-    return groupedAggregate(this, "MAX", column, false);
+    return groupedAggregate(this, "maximum", column, false);
   }
-  return singleAggregate(this, "MAX", column, false);
+  return singleAggregate(this, "maximum", column, false);
 }
 
 /**

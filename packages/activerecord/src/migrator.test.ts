@@ -6,6 +6,10 @@ import {
   EnvironmentMismatchError,
   NoEnvironmentInSchemaError,
   ProtectedEnvironmentError,
+  Migration,
+  Current,
+  registerVersion,
+  currentVersion,
 } from "./migration.js";
 import type { MigrationProxy } from "./migration.js";
 import { ExecutionStrategy } from "./migration/execution-strategy.js";
@@ -574,5 +578,38 @@ describe("MigratorTest", () => {
     const app = async () => "ok";
     const check = new CheckPending(app, { pendingConnection: conn, migrations });
     expect(await check.call({})).toBe("ok");
+  });
+
+  it("Migration.version returns Current for the current version", () => {
+    const Klass = Migration.forVersion(1.0);
+    expect(Klass).toBe(Current);
+  });
+
+  it("Migration.version returns Current for string version", () => {
+    const Klass = Migration.forVersion("1.0");
+    expect(Klass).toBe(Current);
+  });
+
+  it("Migration.version throws when no compatible version exists", () => {
+    expect(() => Migration.forVersion(0.1)).toThrow(/Unknown migration version/);
+  });
+
+  it("currentVersion returns the current version string", () => {
+    expect(currentVersion()).toBe("1.0");
+  });
+
+  it("registerVersion allows custom versions", () => {
+    class V0_9 extends Migration {
+      async up(): Promise<void> {}
+      async down(): Promise<void> {}
+    }
+    registerVersion("0.9", V0_9 as any);
+    const Klass = Migration.forVersion(0.9);
+    expect(Klass).toBe(V0_9);
+  });
+
+  it("findVersion falls back to nearest lower version", () => {
+    const Klass = Migration.forVersion(1.5);
+    expect(Klass).toBe(Current);
   });
 });

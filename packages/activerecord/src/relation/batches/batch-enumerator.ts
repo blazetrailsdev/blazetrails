@@ -31,19 +31,41 @@ export class BatchEnumerator<T extends BatchRelation> {
     yield* this._generator();
   }
 
-  async eachBatch(fn: (batch: T) => void | Promise<void>): Promise<void> {
-    for await (const batch of this) {
-      await fn(batch);
+  eachBatch(): AsyncGenerator<T>;
+  eachBatch(fn: (batch: T) => void | Promise<void>): Promise<void>;
+  eachBatch(fn?: (batch: T) => void | Promise<void>): AsyncGenerator<T> | Promise<void> {
+    if (!fn) {
+      return this._generator();
     }
+    return (async () => {
+      for await (const batch of this) {
+        await fn(batch);
+      }
+    })();
   }
 
-  async eachRecord(fn: (record: any) => void | Promise<void>): Promise<void> {
-    for await (const batchRelation of this) {
-      const records = await batchRelation.toArray();
-      for (const record of records) {
-        await fn(record);
-      }
+  eachRecord(): AsyncGenerator<any>;
+  eachRecord(fn: (record: any) => void | Promise<void>): Promise<void>;
+  eachRecord(fn?: (record: any) => void | Promise<void>): AsyncGenerator<any> | Promise<void> {
+    const self = this;
+    if (!fn) {
+      return (async function* () {
+        for await (const batchRelation of self) {
+          const records = await batchRelation.toArray();
+          for (const record of records) {
+            yield record;
+          }
+        }
+      })();
     }
+    return (async () => {
+      for await (const batchRelation of self) {
+        const records = await batchRelation.toArray();
+        for (const record of records) {
+          await fn(record);
+        }
+      }
+    })();
   }
 
   async deleteAll(): Promise<number> {

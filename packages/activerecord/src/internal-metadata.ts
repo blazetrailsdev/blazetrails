@@ -5,6 +5,7 @@
  */
 
 import type { DatabaseAdapter } from "./adapter.js";
+import { detectAdapterName } from "./adapter-name.js";
 
 export class NullInternalMetadata {
   async createTable(): Promise<void> {}
@@ -32,12 +33,13 @@ export class InternalMetadata {
   }
 
   async createTable(): Promise<void> {
+    const tsType = detectAdapterName(this._adapter) === "postgres" ? "TIMESTAMP" : "DATETIME";
     await this._adapter.executeMutation(
       `CREATE TABLE IF NOT EXISTS ${this._quotedTable} (` +
         `"key" VARCHAR(255) NOT NULL PRIMARY KEY, ` +
         `"value" VARCHAR(255), ` +
-        `"created_at" DATETIME NOT NULL, ` +
-        `"updated_at" DATETIME NOT NULL)`,
+        `"created_at" ${tsType} NOT NULL, ` +
+        `"updated_at" ${tsType} NOT NULL)`,
     );
   }
 

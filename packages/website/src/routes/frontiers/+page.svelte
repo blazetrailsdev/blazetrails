@@ -50,9 +50,6 @@
   let activeFilePath = $state("README.md");
   let openFiles: string[] = $state(["README.md"]);
 
-  // Embed mode
-  let embedMode = $state(false);
-
   // Overlays
   let showFileSwitcher = $state(false);
   let showCommandPalette = $state(false);
@@ -132,7 +129,6 @@
     MonacoEditor = monacoMod.default;
 
     try {
-      embedMode = new URLSearchParams(location.search).has("embed");
       apiBase = import.meta.env.VITE_FRONTIERS_API || null;
       if (apiBase) setApiBase(apiBase);
 
@@ -445,7 +441,6 @@
 
 <div class="flex h-screen flex-col">
   <!-- Header -->
-  {#if !embedMode}
   <header class="flex items-center justify-between border-b border-border bg-surface-raised px-4 py-2">
     <div class="flex items-center gap-3">
       <h1 class="text-lg font-bold text-accent">Frontiers</h1>
@@ -476,7 +471,6 @@
       <button class="rounded border border-border px-2 py-1 text-xs text-text-muted hover:border-error hover:text-error" onclick={resetDB}>Reset</button>
     </div>
   </header>
-  {/if}
 
   {#if loading}
     <div class="flex flex-1 flex-col items-center justify-center gap-3">
@@ -491,13 +485,11 @@
         <Pane minSize={20}>
           <Splitpanes>
             <!-- File tree -->
-            {#if !embedMode}
             <Pane size={15} minSize={10} maxSize={25}>
               <div class="h-full bg-surface-raised">
                 <FileTree {files} bind:activeFilePath oncreate={createFile} ondelete={deleteFile} />
               </div>
             </Pane>
-            {/if}
 
             <!-- Editor -->
             <Pane size={45} minSize={20}>
@@ -555,11 +547,9 @@
         </Pane>
 
         <!-- Console -->
-        {#if !embedMode}
         <Pane size={20} minSize={8} maxSize={40}>
           <ConsolePanel bind:this={consolePanel} bind:lines={consoleLines} />
         </Pane>
-        {/if}
       </Splitpanes>
     </div>
   {/if}

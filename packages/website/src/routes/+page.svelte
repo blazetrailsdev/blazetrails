@@ -177,9 +177,6 @@ const users = await User.where({ name: "Alice" })
         <a href="/frontiers" class="rounded-lg bg-accent px-6 py-3 font-medium text-surface hover:bg-accent-hover">
           Open Frontiers
         </a>
-        <a href="/frontiers?embed=true" class="rounded-lg border border-border px-6 py-3 font-medium text-text-muted hover:border-accent hover:text-accent">
-          Embed Mode
-        </a>
       </div>
       <div class="mt-12 overflow-hidden rounded-lg border border-border shadow-2xl">
         <div class="flex items-center gap-2 border-b border-border bg-surface-raised px-4 py-2">

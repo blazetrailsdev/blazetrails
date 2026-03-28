@@ -40,7 +40,6 @@
 - [x] Import/export projects as .sqlite files
 - [x] Fork a shared project
 - [x] Version history (compressed snapshots, save/restore/delete)
-- [x] Embed mode (?embed=true)
 - [x] Green/brown earth tone theme with water blue info color
 - [x] Style guide (STYLEGUIDE.md)
 

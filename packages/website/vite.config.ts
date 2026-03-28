@@ -30,4 +30,13 @@ export default defineConfig({
   optimizeDeps: {
     include: ["sql.js"],
   },
+  build: {
+    rollupOptions: {
+      onwarn(warning, warn) {
+        // Suppress dynamic import warnings from stubbed Node modules
+        if (warning.code === "EVAL" || warning.message?.includes("cannot be analyzed")) return;
+        warn(warning);
+      },
+    },
+  },
 });

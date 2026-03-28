@@ -57,7 +57,7 @@ export class InternalMetadata {
   }
 
   async set(key: string, value: string): Promise<void> {
-    const now = new Date().toISOString();
+    const now = new Date().toISOString().replace("T", " ").replace("Z", "");
     const existing = await this.get(key);
     if (existing !== null) {
       await this._adapter.executeMutation(

@@ -248,8 +248,45 @@ export class Request {
 
   // --- Parameters ---
 
-  get params(): Record<string, string> | undefined {
-    return this.env["action_dispatch.request.parameters"] as Record<string, string> | undefined;
+  get params(): Record<string, string> {
+    // Return cached if already computed
+    if (this.env["action_dispatch.request.parameters"]) {
+      return this.env["action_dispatch.request.parameters"] as Record<string, string>;
+    }
+    return { ...this.queryParameters, ...this.requestParameters };
+  }
+
+  get queryParameters(): Record<string, string> {
+    const qs = this.queryString;
+    if (!qs) return {};
+    const result: Record<string, string> = {};
+    for (const [key, value] of new URLSearchParams(qs)) {
+      result[key] = value;
+    }
+    return result;
+  }
+
+  get requestParameters(): Record<string, string> {
+    const input = this.env["rack.input"];
+    if (!input || typeof input !== "string") return {};
+    const ct = ((this.env["CONTENT_TYPE"] as string) || "").toLowerCase();
+    if (ct.includes("application/json")) {
+      try {
+        const parsed = JSON.parse(input);
+        if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+          return parsed;
+        }
+      } catch {
+        // ignore
+      }
+    } else if (ct.includes("application/x-www-form-urlencoded")) {
+      const result: Record<string, string> = {};
+      for (const [key, value] of new URLSearchParams(input)) {
+        result[key] = value;
+      }
+      return result;
+    }
+    return {};
   }
 
   get pathParameters(): Record<string, string> {

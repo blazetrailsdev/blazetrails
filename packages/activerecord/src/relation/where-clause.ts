@@ -59,15 +59,26 @@ export class WhereClause {
   }
 
   except(...columns: string[]): WhereClause {
-    const filtered = this.conditions.filter(
-      (p) => !columns.some((col) => Object.prototype.hasOwnProperty.call(p, col)),
-    );
-    return new WhereClause(
-      filtered,
-      [...this.notConditions],
-      [...this.rawClauses],
-      [...this.arelNodes],
-    );
+    const colSet = new Set(columns);
+    const filtered = this.conditions
+      .map((clause) => {
+        const kept: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(clause)) {
+          if (!colSet.has(k)) kept[k] = v;
+        }
+        return kept;
+      })
+      .filter((clause) => Object.keys(clause).length > 0);
+    const filteredNot = this.notConditions
+      .map((clause) => {
+        const kept: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(clause)) {
+          if (!colSet.has(k)) kept[k] = v;
+        }
+        return kept;
+      })
+      .filter((clause) => Object.keys(clause).length > 0);
+    return new WhereClause(filtered, filteredNot, [...this.rawClauses], [...this.arelNodes]);
   }
 
   clear(): void {

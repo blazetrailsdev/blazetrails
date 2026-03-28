@@ -14,6 +14,6 @@ interface Readable {
  *
  * Mirrors: ActiveRecord::AttributeMethods::Read#read_attribute
  */
-export function readAttribute(record: Readable, name: string): unknown {
-  return record.readAttribute(name);
+export function readAttribute(this: Readable, name: string): unknown {
+  return this.readAttribute(name);
 }

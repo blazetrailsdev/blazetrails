@@ -14,6 +14,6 @@ interface Writable {
  *
  * Mirrors: ActiveRecord::AttributeMethods::Write#write_attribute
  */
-export function writeAttribute(record: Writable, name: string, value: unknown): void {
-  record.writeAttribute(name, value);
+export function writeAttribute(this: Writable, name: string, value: unknown): void {
+  this.writeAttribute(name, value);
 }

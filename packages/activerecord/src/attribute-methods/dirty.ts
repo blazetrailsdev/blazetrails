@@ -21,7 +21,7 @@ interface DirtyRecord {
  * Mirrors: ActiveRecord::AttributeMethods::Dirty#saved_change_to_attribute?
  */
 export function isSavedChangeToAttribute(record: DirtyRecord, attr: string): boolean {
-  return attr in record.previousChanges;
+  return Object.prototype.hasOwnProperty.call(record.previousChanges, attr);
 }
 
 /**
@@ -70,7 +70,7 @@ export function savedChanges(record: DirtyRecord): Record<string, [unknown, unkn
  * Mirrors: ActiveRecord::AttributeMethods::Dirty#will_save_change_to_attribute?
  */
 export function isWillSaveChangeToAttribute(record: DirtyRecord, attr: string): boolean {
-  return attr in record.changes;
+  return Object.prototype.hasOwnProperty.call(record.changes, attr);
 }
 
 /**

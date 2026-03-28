@@ -14,7 +14,7 @@ import { SchemaMigration } from "./schema-migration.js";
 import { InternalMetadata } from "./internal-metadata.js";
 import { DatabaseConfigurations } from "./database-configurations.js";
 import { DefaultStrategy } from "./migration/default-strategy.js";
-import type { ExecutionStrategy } from "./migration/execution-strategy.js";
+import type { ExecutionStrategy, MigrationLike } from "./migration/execution-strategy.js";
 import type { PendingMigrationConnection } from "./migration/pending-migration-connection.js";
 
 export type {
@@ -1140,10 +1140,7 @@ export interface MigrationProxy {
   migration: () => MigrationLike;
 }
 
-export interface MigrationLike {
-  up(adapter: DatabaseAdapter): Promise<void>;
-  down(adapter: DatabaseAdapter): Promise<void>;
-}
+export type { MigrationLike } from "./migration/execution-strategy.js";
 
 export class Migrator {
   private _adapter: DatabaseAdapter;
@@ -1542,22 +1539,24 @@ export class CheckPending {
   }
 
   async call(env: Record<string, unknown>): Promise<unknown> {
-    let migrator = this._migrator;
-    if (!migrator && this._pendingConnection) {
-      const adapter = this._pendingConnection.adapter;
-      if (adapter && this._migrations.length > 0) {
-        migrator = new Migrator(adapter, this._migrations);
-      }
-    }
-    if (migrator) {
-      const pending = await migrator.pendingMigrations();
-      if (pending.length > 0) {
-        throw new PendingMigrationError(
-          `Migrations are pending. To resolve this issue, run:\n\n  migrate\n\n` +
-            `You have ${pending.length} pending migration(s).`,
-        );
-      }
+    if (this._migrator) {
+      await this._checkPending(this._migrator);
+    } else if (this._pendingConnection && this._migrations.length > 0) {
+      await this._pendingConnection.withAdapter(async (adapter) => {
+        const migrator = new Migrator(adapter, this._migrations);
+        await this._checkPending(migrator);
+      });
     }
     return this._app(env);
+  }
+
+  private async _checkPending(migrator: Migrator): Promise<void> {
+    const pending = await migrator.pendingMigrations();
+    if (pending.length > 0) {
+      throw new PendingMigrationError(
+        `Migrations are pending. To resolve this issue, run:\n\n  migrate\n\n` +
+          `You have ${pending.length} pending migration(s).`,
+      );
+    }
   }
 }

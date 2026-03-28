@@ -2835,15 +2835,13 @@ export class Relation<T extends Base> {
 
       // Apply start/finish range constraints
       if (start !== undefined) {
-        const startQuoted = typeof start === "number" ? String(start) : `'${start}'`;
         rel._whereClause.rawClauses.push(
-          `"${this._modelClass.arelTable.name}"."${pk}" >= ${startQuoted}`,
+          `"${this._modelClass.arelTable.name}"."${pk}" >= ${quoteSqlValue(start)}`,
         );
       }
       if (finish !== undefined) {
-        const finishQuoted = typeof finish === "number" ? String(finish) : `'${finish}'`;
         rel._whereClause.rawClauses.push(
-          `"${this._modelClass.arelTable.name}"."${pk}" <= ${finishQuoted}`,
+          `"${this._modelClass.arelTable.name}"."${pk}" <= ${quoteSqlValue(finish)}`,
         );
       }
 
@@ -2902,13 +2900,13 @@ export class Relation<T extends Base> {
       while (true) {
         const rel = self._clone();
         if (lastId !== null) {
-          const pkQuoted = typeof lastId === "number" ? String(lastId) : `'${lastId}'`;
           rel._whereClause.rawClauses.push(
-            `"${self._modelClass.arelTable.name}"."${pk}" > ${pkQuoted}`,
+            `"${self._modelClass.arelTable.name}"."${pk}" > ${quoteSqlValue(lastId)}`,
           );
         }
         rel._orderClauses = [pk];
         rel._limitValue = batchSize;
+        rel._selectColumns = [pk];
 
         const records = await rel.toArray();
         if (records.length === 0) break;

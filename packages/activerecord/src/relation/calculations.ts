@@ -25,15 +25,19 @@ interface CalculationRelation {
   toArray(): Promise<any[]>;
 }
 
+function quoteColumn(tableName: string, column: string): string {
+  return `"${tableName}"."${column.replace(/"/g, '""')}"`;
+}
+
 async function singleAggregate(
   rel: CalculationRelation,
   fn: string,
   column: string,
-): Promise<number | null> {
+  coerceNumeric: boolean = true,
+): Promise<unknown | null> {
   const table = rel._modelClass.arelTable;
-  const projection = rel._isDistinct
-    ? `${fn}(DISTINCT "${table.name}"."${column}") AS val`
-    : `${fn}("${table.name}"."${column}") AS val`;
+  const col = quoteColumn(table.name, column);
+  const projection = rel._isDistinct ? `${fn}(DISTINCT ${col}) AS val` : `${fn}(${col}) AS val`;
   const manager = table.project(projection);
   rel._applyJoinsToManager(manager);
   rel._applyWheresToManager(manager, table);
@@ -41,7 +45,8 @@ async function singleAggregate(
   const sql = manager.toSql();
   const rows = await rel._modelClass.adapter.execute(sql);
   const val = rows[0]?.val;
-  return val === undefined || val === null ? null : Number(val);
+  if (val === undefined || val === null) return null;
+  return coerceNumeric ? Number(val) : val;
 }
 
 async function groupedAggregate(
@@ -51,8 +56,9 @@ async function groupedAggregate(
 ): Promise<Record<string, number>> {
   const table = rel._modelClass.arelTable;
   const groupCol = rel._groupColumns[0];
-  const aggExpr = column === "*" ? `${fn}(*) AS val` : `${fn}("${table.name}"."${column}") AS val`;
-  const manager = table.project(`"${table.name}"."${groupCol}" AS group_key, ${aggExpr}`);
+  const col = column === "*" ? "*" : quoteColumn(table.name, column);
+  const aggExpr = `${fn}(${col}) AS val`;
+  const manager = table.project(`${quoteColumn(table.name, groupCol)} AS group_key, ${aggExpr}`);
   rel._applyJoinsToManager(manager);
   rel._applyWheresToManager(manager, table);
   manager.group(groupCol);
@@ -89,13 +95,18 @@ export async function performCount(
   const table = this._modelClass.arelTable;
   let countExpr: string;
   if (column) {
-    countExpr = this._isDistinct
-      ? `COUNT(DISTINCT "${table.name}"."${column}") AS count`
-      : `COUNT("${table.name}"."${column}") AS count`;
+    const col = quoteColumn(table.name, column);
+    countExpr = this._isDistinct ? `COUNT(DISTINCT ${col}) AS count` : `COUNT(${col}) AS count`;
+  } else if (this._isDistinct) {
+    const pk = this._modelClass.primaryKey;
+    if (Array.isArray(pk)) {
+      const cols = pk.map((c) => quoteColumn(table.name, c)).join(", ");
+      countExpr = `COUNT(DISTINCT ${cols}) AS count`;
+    } else {
+      countExpr = `COUNT(DISTINCT ${quoteColumn(table.name, pk)}) AS count`;
+    }
   } else {
-    countExpr = this._isDistinct
-      ? `COUNT(DISTINCT "${table.name}"."${this._modelClass.primaryKey}") AS count`
-      : "COUNT(*) AS count";
+    countExpr = "COUNT(*) AS count";
   }
   const manager = table.project(countExpr);
   this._applyJoinsToManager(manager);
@@ -115,7 +126,7 @@ export async function performSum(
   if (this._groupColumns.length > 0) {
     return groupedAggregate(this, "SUM", column);
   }
-  return (await singleAggregate(this, "SUM", column)) ?? 0;
+  return ((await singleAggregate(this, "SUM", column, true)) as number) ?? 0;
 }
 
 export async function performAverage(
@@ -126,7 +137,7 @@ export async function performAverage(
   if (this._groupColumns.length > 0) {
     return groupedAggregate(this, "AVG", column);
   }
-  return singleAggregate(this, "AVG", column);
+  return singleAggregate(this, "AVG", column, true) as Promise<number | null>;
 }
 
 export async function performMinimum(
@@ -137,7 +148,7 @@ export async function performMinimum(
   if (this._groupColumns.length > 0) {
     return groupedAggregate(this, "MIN", column);
   }
-  return singleAggregate(this, "MIN", column);
+  return singleAggregate(this, "MIN", column, false);
 }
 
 export async function performMaximum(
@@ -148,7 +159,7 @@ export async function performMaximum(
   if (this._groupColumns.length > 0) {
     return groupedAggregate(this, "MAX", column);
   }
-  return singleAggregate(this, "MAX", column);
+  return singleAggregate(this, "MAX", column, false);
 }
 
 /**

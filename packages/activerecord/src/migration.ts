@@ -1531,7 +1531,7 @@ export class Migrator {
  * Alias for the latest migration version. Migrations that don't
  * specify a version inherit from this.
  *
- * Equivalent to Migration.version(CURRENT_VERSION).
+ * Equivalent to Migration.forVersion(CURRENT_VERSION).
  */
 export class Current extends Migration {
   static readonly VERSION = CURRENT_VERSION;
@@ -1540,7 +1540,7 @@ export class Current extends Migration {
 }
 
 // Register the current version so Migration.forVersion(1.0) works
-registerVersion(CURRENT_VERSION, Current as unknown as abstract new (...args: any[]) => Migration);
+registerVersion(CURRENT_VERSION, Current);
 
 /**
  * Mirrors: ActiveRecord::Migration::CheckPending

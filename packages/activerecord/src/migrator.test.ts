@@ -11,6 +11,7 @@ import {
   registerVersion,
   currentVersion,
 } from "./migration.js";
+import { resetVersionRegistry } from "./migration/compatibility.js";
 import type { MigrationProxy } from "./migration.js";
 import { ExecutionStrategy } from "./migration/execution-strategy.js";
 import { PendingMigrationConnection } from "./migration/pending-migration-connection.js";
@@ -603,9 +604,14 @@ describe("MigratorTest", () => {
       async up(): Promise<void> {}
       async down(): Promise<void> {}
     }
-    registerVersion("0.9", V0_9 as any);
-    const Klass = Migration.forVersion(0.9);
-    expect(Klass).toBe(V0_9);
+    registerVersion("0.9", V0_9);
+    try {
+      const Klass = Migration.forVersion(0.9);
+      expect(Klass).toBe(V0_9);
+    } finally {
+      resetVersionRegistry();
+      registerVersion("1.0", Current as any);
+    }
   });
 
   it("findVersion falls back to nearest lower version", () => {

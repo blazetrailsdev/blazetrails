@@ -12,16 +12,46 @@
  *     async change() { ... }
  *   }
  *
- * The current version is always available as Migration.Current.
+ * The current version can be obtained via currentVersion() / CURRENT_VERSION
+ * and used with Migration.forVersion(currentVersion()).
  */
 
 import type { Migration } from "../migration.js";
 
-type MigrationClass = abstract new (...args: any[]) => Migration;
+export type MigrationClass =
+  | (abstract new (...args: any[]) => Migration)
+  | (new (...args: any[]) => Migration);
 
 const CURRENT_VERSION = "1.0";
 
 const versionRegistry = new Map<string, MigrationClass>();
+
+/**
+ * Normalize a version input to a canonical string key.
+ * Ensures numeric 1.0 becomes "1.0" (not "1").
+ */
+function normalizeVersion(version: string | number): string {
+  if (typeof version === "number") {
+    const str = String(version);
+    return str.includes(".") ? str : `${str}.0`;
+  }
+  return version;
+}
+
+/**
+ * Parse a version string into [major, minor] for comparison.
+ */
+function parseVersion(v: string): [number, number] {
+  const parts = v.split(".");
+  return [parseInt(parts[0], 10) || 0, parseInt(parts[1], 10) || 0];
+}
+
+function compareVersions(a: string, b: string): number {
+  const [aMaj, aMin] = parseVersion(a);
+  const [bMaj, bMin] = parseVersion(b);
+  if (aMaj !== bMaj) return aMaj - bMaj;
+  return aMin - bMin;
+}
 
 /**
  * Register a migration version class.
@@ -31,26 +61,33 @@ export function registerVersion(version: string, klass: MigrationClass): void {
 }
 
 /**
+ * Reset the version registry (for testing only).
+ */
+export function resetVersionRegistry(): void {
+  versionRegistry.clear();
+}
+
+/**
  * Look up the migration base class for a given version.
  * Returns the exact version if registered, or the nearest lower version.
  *
  * Mirrors: ActiveRecord::Migration::Compatibility.find(version)
  */
 export function findVersion(version: string | number): MigrationClass {
-  const key = String(version);
+  const key = normalizeVersion(version);
   const exact = versionRegistry.get(key);
   if (exact) return exact;
 
-  // Find nearest lower version
-  const numericTarget = parseFloat(key);
+  // Find nearest lower version using proper version comparison
   let best: MigrationClass | undefined;
-  let bestVersion = -Infinity;
+  let bestKey = "";
 
   for (const [v, klass] of versionRegistry) {
-    const num = parseFloat(v);
-    if (num <= numericTarget && num > bestVersion) {
-      bestVersion = num;
-      best = klass;
+    if (compareVersions(v, key) <= 0) {
+      if (!best || compareVersions(v, bestKey) > 0) {
+        bestKey = v;
+        best = klass;
+      }
     }
   }
 

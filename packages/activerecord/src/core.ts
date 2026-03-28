@@ -67,6 +67,7 @@ export function inspect(record: CoreRecord): string {
   const attrs = Array.from(record._attributes)
     .map(([k, v]) => {
       if (v === null) return `${k}: nil`;
+      if (v instanceof InspectionMask) return `${k}: ${v}`;
       if (typeof v === "string") return `${k}: "${v}"`;
       if (v instanceof Date) return `${k}: "${v.toISOString()}"`;
       return `${k}: ${JSON.stringify(v)}`;
@@ -83,6 +84,7 @@ export function inspect(record: CoreRecord): string {
 export function attributeForInspect(record: CoreRecord, attr: string): string {
   const value = record.readAttribute(attr);
   if (value === null || value === undefined) return "nil";
+  if (value instanceof InspectionMask) return value.toString();
   if (typeof value === "string") {
     if (value.length > 50) return `"${value.substring(0, 50)}..."`;
     return `"${value}"`;

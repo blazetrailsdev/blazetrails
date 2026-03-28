@@ -4,6 +4,8 @@
  * Mirrors: ActiveRecord::Sanitization
  */
 
+import { quote } from "./quoting.js";
+
 /**
  * Sanitize a SQL template with bind parameters.
  * Replaces `?` placeholders with properly quoted values.
@@ -13,16 +15,7 @@
 export function sanitizeSqlArray(template: string, ...binds: unknown[]): string {
   let result = template;
   for (const bind of binds) {
-    const quoted =
-      bind === null || bind === undefined
-        ? "NULL"
-        : typeof bind === "number"
-          ? String(bind)
-          : typeof bind === "boolean"
-            ? bind
-              ? "TRUE"
-              : "FALSE"
-            : `'${String(bind).replace(/'/g, "''")}'`;
+    const quoted = quote(bind);
     result = result.replace("?", () => quoted);
   }
   return result;

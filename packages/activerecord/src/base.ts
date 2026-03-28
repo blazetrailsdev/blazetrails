@@ -29,6 +29,12 @@ import { resolve } from "path";
 import { pathToFileURL } from "url";
 import { sanitizeSqlArray, sanitizeSqlLike } from "./sanitization.js";
 import {
+  hasAttribute as amHasAttribute,
+  isAttributePresent as amIsAttributePresent,
+  attributeNames as amAttributeNames,
+} from "./attribute-methods.js";
+import { toKey as pkToKey } from "./attribute-methods/primary-key.js";
+import {
   toParam as integrationToParam,
   cacheKey as integrationCacheKey,
   cacheKeyWithVersion as integrationCacheKeyWithVersion,
@@ -3202,44 +3208,20 @@ export class Base extends Model {
     return instance;
   }
 
-  /**
-   * Check whether an attribute exists on this model.
-   *
-   * Mirrors: ActiveRecord::Base#has_attribute?
-   */
   hasAttribute(name: string): boolean {
-    return this._attributes.has(name);
+    return amHasAttribute(this as any, name);
   }
 
-  /**
-   * Check whether an attribute is present (not null, not undefined, not empty string).
-   *
-   * Mirrors: ActiveRecord::Base#attribute_present?
-   */
   attributePresent(name: string): boolean {
-    const value = this.readAttribute(name);
-    if (value === null || value === undefined) return false;
-    if (typeof value === "string" && value.trim() === "") return false;
-    return true;
+    return amIsAttributePresent(this as any, name);
   }
 
-  /**
-   * Return the list of attribute names for this record instance.
-   *
-   * Mirrors: ActiveRecord::Base#attribute_names
-   */
   get attributeNamesList(): string[] {
-    return [...this._attributes.keys()];
+    return amAttributeNames(this as any);
   }
 
-  /**
-   * Return an array for cache key identification: [model_name, id].
-   *
-   * Mirrors: ActiveRecord::Base#to_key
-   */
   toKey(): unknown[] | null {
-    const pk = this.id;
-    return pk != null ? [pk] : null;
+    return pkToKey(this as any);
   }
 
   /**

@@ -497,9 +497,18 @@ export class SchemaStatements {
         }));
       }
       case "postgres": {
-        const pk = await this.primaryKey(tableName);
         const rows = await this.adapter.execute(
-          `SELECT column_name, udt_name, character_maximum_length, numeric_precision, numeric_scale, is_nullable, column_default FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 ORDER BY ordinal_position`,
+          `SELECT c.column_name, c.udt_name, c.character_maximum_length, c.numeric_precision, c.numeric_scale, c.is_nullable, c.column_default,
+            CASE WHEN pk.attname IS NOT NULL THEN true ELSE false END AS is_primary_key
+          FROM information_schema.columns c
+          LEFT JOIN (
+            SELECT a.attname
+            FROM pg_index i
+            JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+            WHERE i.indrelid = to_regclass($1) AND i.indisprimary
+          ) pk ON pk.attname = c.column_name
+          WHERE c.table_schema = 'public' AND c.table_name = $1
+          ORDER BY c.ordinal_position`,
           [tableName],
         );
         return rows.map((row: any) => {
@@ -518,7 +527,7 @@ export class SchemaStatements {
             type,
             null: row.is_nullable === "YES",
             default: row.column_default,
-            primaryKey: row.column_name === pk,
+            primaryKey: row.is_primary_key === true,
           };
         });
       }
@@ -591,7 +600,7 @@ export class SchemaStatements {
       }
       case "mysql": {
         const rows = await this.adapter.execute(
-          `SHOW INDEX FROM \`${tableName}\` WHERE Key_name != 'PRIMARY'`,
+          `SHOW INDEX FROM ${quoteIdentifier(tableName, "mysql")} WHERE Key_name != 'PRIMARY'`,
         );
         const indexMap = new Map<string, { unique: boolean; seqs: [number, string][] }>();
         for (const row of rows as any[]) {

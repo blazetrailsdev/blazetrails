@@ -424,4 +424,27 @@ describe("SchemaDumperAdapterTest", () => {
     expect(result).not.toContain("schema_migrations");
     expect(result).not.toContain("ar_internal_metadata");
   });
+
+  it("dumpWithVersion defaults to 0 when no versions recorded", async () => {
+    const { SchemaDumper: TopLevelDumper } = await import("./schema-dumper.js");
+    const { SchemaMigration } = await import("./schema-migration.js");
+    const sm = new SchemaMigration(adapter);
+    await sm.createTable();
+    await sm.deleteAllVersions();
+    const dumper = new TopLevelDumper(adapter);
+    const result = await dumper.dumpWithVersion();
+    expect(result).toContain("Schema version: 0");
+  });
+
+  it("dumpWithVersion includes latest migration version", async () => {
+    const { SchemaDumper: TopLevelDumper } = await import("./schema-dumper.js");
+    const { SchemaMigration } = await import("./schema-migration.js");
+    const sm = new SchemaMigration(adapter);
+    await sm.createTable();
+    await sm.recordVersion("20240101000000");
+    await sm.recordVersion("20240201000000");
+    const dumper = new TopLevelDumper(adapter);
+    const result = await dumper.dumpWithVersion();
+    expect(result).toContain("Schema version: 20240201000000");
+  });
 });

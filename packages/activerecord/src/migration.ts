@@ -652,9 +652,13 @@ export abstract class Migration {
       up: (f) => upFns.push(f),
       down: (f) => downFns.push(f),
     });
-    // In a forward migration, run up fns. In reverse, run down fns.
-    // We always run the up direction here; down is handled by _runChange
-    for (const f of upFns) await f();
+    if (this._recording) {
+      // During reversal recording, run the down fns
+      for (const f of downFns) await f();
+    } else {
+      // During forward migration, run the up fns
+      for (const f of upFns) await f();
+    }
   }
 
   /**
@@ -1450,6 +1454,7 @@ export class Migrator {
    * Mirrors: ActiveRecord::Tasks::DatabaseTasks.check_current_environment
    */
   async checkEnvironment(): Promise<void> {
+    if (process.env.DISABLE_DATABASE_ENVIRONMENT_CHECK === "1") return;
     await this._ensureSchemaTable();
     const stored = await this._internalMetadata.get("environment");
     if (stored !== null && stored !== this._environment) {

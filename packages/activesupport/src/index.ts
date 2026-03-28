@@ -145,10 +145,13 @@ export { classAttribute } from "./class-attribute.js";
 export { onLoad, runLoadHooks, resetLoadHooks } from "./lazy-load-hooks.js";
 export type { ClassAttributeOptions } from "./class-attribute.js";
 
-export { Logger, BroadcastLogger, taggedLogging } from "./logger.js";
+export { Logger, taggedLogging } from "./logger.js";
+export { BroadcastLogger } from "./broadcast-logger.js";
 export type { LogLevel, LoggerOutput, TaggedLogger } from "./logger.js";
 
-export { MemoryStore, NullStore, FileStore } from "./cache/stores.js";
+export { MemoryStore } from "./cache/memory-store.js";
+export { NullStore } from "./cache/null-store.js";
+export { FileStore } from "./cache/file-store.js";
 export type { CacheOptions, CacheStore } from "./cache/index.js";
 
 export { Deprecation, DeprecationError, deprecator } from "./deprecation.js";
@@ -182,8 +185,8 @@ export {
   CachingKeyGenerator,
   secureRandomBase58,
   secureRandomBase36,
-  BacktraceCleaner,
 } from "./key-generator.js";
+export { BacktraceCleaner } from "./backtrace-cleaner.js";
 export { OrderedHash } from "./ordered-hash.js";
 export { ErrorReporter } from "./error-reporter.js";
 export type {

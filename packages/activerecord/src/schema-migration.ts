@@ -50,7 +50,7 @@ export class SchemaMigration {
     const rows = await this._adapter.execute(
       `SELECT "version" FROM ${this._quotedTable} ORDER BY "version"`,
     );
-    return rows.map((row) => String(row.version));
+    return rows.map((row) => String(row.version).trim());
   }
 
   async count(): Promise<number> {
@@ -73,7 +73,7 @@ export class SchemaMigration {
     if (adapterName === "mysql") {
       sql = `INSERT IGNORE INTO ${this._quotedTable} ("version") VALUES (?)`;
     } else if (adapterName === "postgres") {
-      sql = `INSERT INTO ${this._quotedTable} ("version") VALUES ($1) ON CONFLICT DO NOTHING`;
+      sql = `INSERT INTO ${this._quotedTable} ("version") VALUES ($1) ON CONFLICT DO NOTHING RETURNING 1`;
     } else {
       sql = `INSERT OR IGNORE INTO ${this._quotedTable} ("version") VALUES (?)`;
     }

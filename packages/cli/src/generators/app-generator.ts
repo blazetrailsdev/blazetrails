@@ -91,7 +91,7 @@ dist/
     // Application entry
     this.createFile(
       "src/app.ts",
-      `// Rails-TS Application
+      `// Trails Application
 export const APP_NAME = "${name}";
 `,
     );

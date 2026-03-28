@@ -21,6 +21,7 @@ export class DevServer {
 
   async start(): Promise<void> {
     this.server = await createServer({
+      configFile: false,
       root: this.cwd,
       plugins: [trailsPlugin({ cwd: this.cwd })],
       server: {
@@ -28,8 +29,7 @@ export class DevServer {
         host: this.host,
         strictPort: false,
       },
-      // Suppress Vite's own console output in favor of trails-style logging
-      logLevel: "info",
+      logLevel: "warn",
       appType: "custom",
     });
 

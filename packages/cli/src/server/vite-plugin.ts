@@ -33,7 +33,12 @@ export function trailsPlugin(options: TrailsPluginOptions = {}): Plugin {
         server.middlewares.use(
           async (req: IncomingMessage, res: ServerResponse, next: (err?: unknown) => void) => {
             try {
-              const env = await buildRackEnv(req, server.config.server.port ?? 3000);
+              const address = server.httpServer?.address();
+              const actualPort =
+                address && typeof address === "object"
+                  ? address.port
+                  : (server.config.server.port ?? 3000);
+              const env = await buildRackEnv(req, actualPort);
               const [status, headers, body] = await app.call(env);
 
               res.writeHead(status, headers);
@@ -48,7 +53,7 @@ export function trailsPlugin(options: TrailsPluginOptions = {}): Plugin {
   };
 }
 
-async function buildRackEnv(req: IncomingMessage, port: number): Promise<RackEnv> {
+export async function buildRackEnv(req: IncomingMessage, port: number): Promise<RackEnv> {
   const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
 
   const env: RackEnv = {

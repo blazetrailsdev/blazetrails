@@ -30,10 +30,6 @@ export class TimeZoneConverter {
   }
 
   cast(value: unknown): unknown {
-    const result = this.subtype.cast(value);
-    if (result instanceof Date) {
-      return result;
-    }
-    return result;
+    return this.subtype.cast(value);
   }
 }

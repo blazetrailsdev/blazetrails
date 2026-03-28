@@ -1,0 +1,86 @@
+/**
+ * Vite plugin that bridges Vite's Connect-style middleware to the
+ * trails Rack application.  Every request that isn't handled by Vite's
+ * own asset pipeline (HMR websocket, /@vite/*, static files in /public)
+ * falls through to the Rack app — just like Puma sits behind Rack in Rails.
+ */
+
+import type { Plugin, ViteDevServer } from "vite";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { bodyToString } from "@blazetrails/rack";
+import type { RackEnv } from "@blazetrails/rack";
+import { Application } from "./application.js";
+
+export interface TrailsPluginOptions {
+  cwd?: string;
+}
+
+export function trailsPlugin(options: TrailsPluginOptions = {}): Plugin {
+  const cwd = options.cwd || process.cwd();
+  let app: Application;
+
+  return {
+    name: "trails",
+    enforce: "post",
+
+    async configureServer(server: ViteDevServer) {
+      app = new Application({ cwd });
+      await app.initialize();
+
+      // Return a function so this middleware runs *after* Vite's built-in
+      // middleware (static files, HMR, etc.) — unhandled requests hit Rack.
+      return () => {
+        server.middlewares.use(
+          async (req: IncomingMessage, res: ServerResponse, next: (err?: unknown) => void) => {
+            try {
+              const env = await buildRackEnv(req, server.config.server.port ?? 3000);
+              const [status, headers, body] = await app.call(env);
+
+              res.writeHead(status, headers);
+              res.end(await bodyToString(body));
+            } catch (err: any) {
+              next(err);
+            }
+          },
+        );
+      };
+    },
+  };
+}
+
+async function buildRackEnv(req: IncomingMessage, port: number): Promise<RackEnv> {
+  const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+
+  const env: RackEnv = {
+    REQUEST_METHOD: (req.method || "GET").toUpperCase(),
+    PATH_INFO: url.pathname,
+    QUERY_STRING: url.search?.slice(1) || "",
+    SERVER_NAME: url.hostname,
+    SERVER_PORT: String(url.port || port),
+    HTTP_HOST: req.headers.host || `localhost:${port}`,
+    REMOTE_ADDR: req.socket.remoteAddress || "127.0.0.1",
+    "rack.url_scheme": "http",
+    "rack.input": await readBody(req),
+  };
+
+  for (const [key, value] of Object.entries(req.headers)) {
+    if (key === "content-type") {
+      env["CONTENT_TYPE"] = value;
+    } else if (key === "content-length") {
+      env["CONTENT_LENGTH"] = value;
+    } else {
+      env["HTTP_" + key.toUpperCase().replace(/-/g, "_")] = value;
+    }
+  }
+
+  return env;
+}
+
+function readBody(req: IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk) => chunks.push(chunk));
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
+    req.on("error", reject);
+  });
+}

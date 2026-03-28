@@ -81,7 +81,7 @@ describe("AppGenerator", () => {
     expect(exists("src/app/views/layouts/mailer.text.ejs")).toBe(true);
     expect(exists("src/app/assets/stylesheets/application.css")).toBe(true);
     expect(exists("src/app/assets/images/.gitkeep")).toBe(true);
-    expect(exists("src/server.ts")).toBe(true);
+    expect(exists("vite.config.ts")).toBe(true);
 
     // Database
     expect(exists("db/migrations/.gitkeep")).toBe(true);
@@ -123,6 +123,7 @@ describe("AppGenerator", () => {
     expect(pkg.scripts["db:migrate"]).toBeDefined();
     expect(pkg.scripts["db:seed"]).toBeDefined();
     expect(pkg.scripts["db:setup"]).toBeDefined();
+    expect(pkg.devDependencies.vite).toBeDefined();
   });
 
   it("configures postgres database", async () => {
@@ -152,7 +153,12 @@ describe("AppGenerator", () => {
 
   it("skips docker files when --skip-docker", async () => {
     const gen = makeGen();
-    await gen.run("my-app", { database: "sqlite", skipGit: true, skipInstall: true, skipDocker: true });
+    await gen.run("my-app", {
+      database: "sqlite",
+      skipGit: true,
+      skipInstall: true,
+      skipDocker: true,
+    });
     expect(exists("Dockerfile")).toBe(false);
     expect(exists(".dockerignore")).toBe(false);
   });

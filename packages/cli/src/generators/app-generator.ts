@@ -92,6 +92,7 @@ export class AppGenerator extends GeneratorBase {
           },
           devDependencies: {
             typescript: "^5.7.0",
+            vite: "^7.0.0",
             vitest: "^3.0.0",
           },
         },
@@ -207,6 +208,29 @@ This application was generated with [trails](https://github.com/blazetrailsdev/b
       `import { app } from "./src/config/application.js";
 
 export default app;
+`,
+    );
+
+    // vite.config.ts — Vite dev server with trails Rack adapter
+    this.createFile(
+      "vite.config.ts",
+      `import { defineConfig } from "vite";
+import { trailsPlugin } from "@blazetrails/cli/vite";
+
+export default defineConfig({
+  plugins: [trailsPlugin()],
+  root: "src/app/assets",
+  publicDir: "../../../public",
+  build: {
+    outDir: "../../../public/assets",
+    manifest: true,
+    rollupOptions: {
+      input: {
+        application: "src/app/assets/stylesheets/application.css",
+      },
+    },
+  },
+});
 `,
     );
   }
@@ -586,36 +610,6 @@ export class ApplicationRecord extends ActiveRecord.Base {
     );
 
     this.createFile("src/app/assets/images/.gitkeep", "");
-
-    // Server entry
-    this.createFile(
-      "src/server.ts",
-      `import serverConfig from "./config/puma.js";
-
-const { port } = serverConfig;
-
-const server = Bun?.serve
-  ? Bun.serve({
-      port,
-      fetch(req: Request) {
-        return new Response("Hello from ${name}!");
-      },
-    })
-  : await startNodeServer(port);
-
-async function startNodeServer(port: number) {
-  const http = await import("node:http");
-  const srv = http.createServer(async (req, res) => {
-    res.writeHead(200, { "content-type": "text/plain" });
-    res.end("Hello from ${name}!");
-  });
-  srv.listen(port, () => {
-    console.log(\`${name} listening on http://localhost:\${port}\`);
-  });
-  return srv;
-}
-`,
-    );
   }
 
   private createDbFiles(name: string): void {
@@ -812,7 +806,7 @@ FROM base
 COPY --from=build /app /app
 
 EXPOSE 3000
-CMD ["node", "dist/server.js"]
+CMD ["npx", "trails", "server"]
 `,
     );
 

@@ -3530,24 +3530,35 @@ export class Base extends Model {
 // Mixin: attach extracted module functions directly to Base.prototype.
 // This is the TS equivalent of Ruby's `include Module` — the real
 // implementation lives in the module file, Base just wires it up.
+// Uses defineProperty to match class method behavior (non-enumerable).
 // ---------------------------------------------------------------------------
 
-// Core (inspect, isEqual, isPresent, isBlank)
-Base.prototype.inspect = _inspect;
-Base.prototype.attributeForInspect = _attributeForInspect;
-Base.prototype.isEqual = _isEqual;
-Base.prototype.isPresent = _isPresent;
-Base.prototype.isBlank = _isBlank;
+function mixin(target: object, methods: Record<string, Function>): void {
+  for (const [name, fn] of Object.entries(methods)) {
+    Object.defineProperty(target, name, {
+      value: fn,
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
+  }
+}
 
-// Integration (toParam, cacheKey, cacheVersion)
-Base.prototype.toParam = _toParam;
-Base.prototype.cacheKey = _cacheKey;
-Base.prototype.cacheKeyWithVersion = _cacheKeyWithVersion;
-Base.prototype.cacheVersion = _cacheVersion;
-
-// AttributeMethods (hasAttribute, attributePresent)
-Base.prototype.hasAttribute = _hasAttribute;
-Base.prototype.attributePresent = _attributePresent;
-
-// PrimaryKey (toKey)
-Base.prototype.toKey = _toKey;
+mixin(Base.prototype, {
+  // Core
+  inspect: _inspect,
+  attributeForInspect: _attributeForInspect,
+  isEqual: _isEqual,
+  isPresent: _isPresent,
+  isBlank: _isBlank,
+  // Integration
+  toParam: _toParam,
+  cacheKey: _cacheKey,
+  cacheKeyWithVersion: _cacheKeyWithVersion,
+  cacheVersion: _cacheVersion,
+  // AttributeMethods
+  hasAttribute: _hasAttribute,
+  attributePresent: _attributePresent,
+  // PrimaryKey
+  toKey: _toKey,
+});

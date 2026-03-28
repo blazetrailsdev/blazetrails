@@ -380,16 +380,19 @@ describe("SchemaDumperDefaultsTest", () => {
 
 describe("SchemaDumperAdapterTest", () => {
   let adapter: DatabaseAdapter;
+  let ctx: MigrationContext;
 
   beforeEach(() => {
     adapter = createTestAdapter();
+    ctx = new MigrationContext(adapter);
   });
 
   it("dumps schema from adapter introspection", async () => {
     const { SchemaDumper: TopLevelDumper } = await import("./schema-dumper.js");
-    await (adapter as any).executeMutation(
-      'CREATE TABLE "articles" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "title" VARCHAR(255) NOT NULL, "body" TEXT)',
-    );
+    await ctx.createTable("articles", {}, (t) => {
+      t.string("title", { null: false });
+      t.text("body");
+    });
     const result = await TopLevelDumper.dump(adapter);
     expect(result).toContain("articles");
     expect(result).toContain('"title"');
@@ -398,12 +401,10 @@ describe("SchemaDumperAdapterTest", () => {
 
   it("dumps schema with indexes from adapter", async () => {
     const { SchemaDumper: TopLevelDumper } = await import("./schema-dumper.js");
-    await (adapter as any).executeMutation(
-      'CREATE TABLE "comments" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "post_id" INTEGER)',
-    );
-    await (adapter as any).executeMutation(
-      'CREATE INDEX "index_comments_on_post_id" ON "comments" ("post_id")',
-    );
+    await ctx.createTable("comments", {}, (t) => {
+      t.integer("post_id");
+    });
+    await ctx.addIndex("comments", "post_id", { name: "index_comments_on_post_id" });
     const result = await TopLevelDumper.dump(adapter);
     expect(result).toContain("addIndex");
     expect(result).toContain("index_comments_on_post_id");
@@ -411,15 +412,13 @@ describe("SchemaDumperAdapterTest", () => {
 
   it("skips internal tables when dumping from adapter", async () => {
     const { SchemaDumper: TopLevelDumper } = await import("./schema-dumper.js");
-    await (adapter as any).executeMutation(
-      'CREATE TABLE "schema_migrations" ("version" VARCHAR(255) PRIMARY KEY)',
-    );
-    await (adapter as any).executeMutation(
-      'CREATE TABLE "ar_internal_metadata" ("key" VARCHAR(255) PRIMARY KEY)',
-    );
-    await (adapter as any).executeMutation(
-      'CREATE TABLE "products" ("id" INTEGER PRIMARY KEY AUTOINCREMENT)',
-    );
+    const { SchemaMigration } = await import("./schema-migration.js");
+    const { InternalMetadata } = await import("./internal-metadata.js");
+    await new SchemaMigration(adapter).createTable();
+    await new InternalMetadata(adapter).createTable();
+    await ctx.createTable("products", {}, (t) => {
+      t.string("name");
+    });
     const result = await TopLevelDumper.dump(adapter);
     expect(result).toContain("products");
     expect(result).not.toContain("schema_migrations");

@@ -482,7 +482,9 @@ export class SchemaStatements {
 
   async columns(
     tableName: string,
-  ): Promise<Array<{ name: string; type: string; null: boolean; default: unknown }>> {
+  ): Promise<
+    Array<{ name: string; type: string; null: boolean; default: unknown; primaryKey: boolean }>
+  > {
     switch (this.adapterName) {
       case "sqlite": {
         const rows = await this.adapter.execute(`PRAGMA table_info("${tableName}")`);
@@ -491,9 +493,11 @@ export class SchemaStatements {
           type: row.type,
           null: row.notnull === 0,
           default: row.dflt_value,
+          primaryKey: row.pk > 0,
         }));
       }
       case "postgres": {
+        const pk = await this.primaryKey(tableName);
         const rows = await this.adapter.execute(
           `SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = 'public' AND table_name = '${tableName}' ORDER BY ordinal_position`,
         );
@@ -502,17 +506,19 @@ export class SchemaStatements {
           type: row.data_type,
           null: row.is_nullable === "YES",
           default: row.column_default,
+          primaryKey: row.column_name === pk,
         }));
       }
       case "mysql": {
         const rows = await this.adapter.execute(
-          `SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '${tableName}' ORDER BY ordinal_position`,
+          `SELECT column_name, column_key, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = '${tableName}' ORDER BY ordinal_position`,
         );
         return rows.map((row: any) => ({
           name: row.COLUMN_NAME ?? row.column_name,
           type: row.DATA_TYPE ?? row.data_type,
           null: (row.IS_NULLABLE ?? row.is_nullable) === "YES",
           default: row.COLUMN_DEFAULT ?? row.column_default,
+          primaryKey: (row.COLUMN_KEY ?? row.column_key) === "PRI",
         }));
       }
     }

@@ -30,12 +30,10 @@ class AdapterSchemaSource implements SchemaSource {
 
   async columns(tableName: string): Promise<ColumnInfo[]> {
     const cols = await this._schema.columns(tableName);
-    const pk = await this._schema.primaryKey(tableName);
-
     return cols.map((col) => ({
       name: col.name,
       type: col.type,
-      primaryKey: col.name === pk,
+      primaryKey: col.primaryKey,
       null: col.null,
       default: col.default,
     }));
@@ -72,13 +70,11 @@ export class SchemaDumper {
   async dumpWithVersion(): Promise<string> {
     const schemaMigration = new SchemaMigration(this._adapter);
     let version = "0";
-    try {
+    if (await schemaMigration.tableExists()) {
       const versions = await schemaMigration.allVersions();
       if (versions.length > 0) {
         version = versions[versions.length - 1];
       }
-    } catch {
-      // schema_migrations table may not exist yet
     }
 
     const schema = await this.dump();

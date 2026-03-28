@@ -56,6 +56,10 @@ export function trailsPlugin(options: TrailsPluginOptions = {}): Plugin {
 export async function buildRackEnv(req: IncomingMessage, port: number): Promise<RackEnv> {
   const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
 
+  const isTLS = "encrypted" in req.socket && (req.socket as any).encrypted;
+  const forwardedProto = req.headers["x-forwarded-proto"];
+  const scheme = isTLS || forwardedProto === "https" ? "https" : "http";
+
   const env: RackEnv = {
     REQUEST_METHOD: (req.method || "GET").toUpperCase(),
     PATH_INFO: url.pathname,
@@ -64,7 +68,7 @@ export async function buildRackEnv(req: IncomingMessage, port: number): Promise<
     SERVER_PORT: String(url.port || port),
     HTTP_HOST: req.headers.host || `localhost:${port}`,
     REMOTE_ADDR: req.socket.remoteAddress || "127.0.0.1",
-    "rack.url_scheme": "http",
+    "rack.url_scheme": scheme,
     "rack.input": await readBody(req),
   };
 

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { IncomingMessage, ServerResponse } from "node:http";
 import { Socket } from "node:net";
 import { trailsPlugin, buildRackEnv } from "./vite-plugin.js";
+import * as applicationModule from "./application.js";
 
 function createMockReq(options: {
   method?: string;
@@ -50,34 +51,42 @@ describe("trailsPlugin", () => {
     expect(middlewares.length).toBe(1);
   });
 
-  it("calls next(err) when Application.call throws", async () => {
-    const plugin = trailsPlugin({ cwd: "/nonexistent" });
-    const middlewares: any[] = [];
-    const fakeServer = {
-      config: { server: { port: 3000 } },
-      httpServer: { address: () => ({ port: 3000 }) },
-      middlewares: { use: (fn: any) => middlewares.push(fn) },
-    };
+  it("calls next(err) when app.call throws", async () => {
+    const thrownError = new Error("boom");
+    const callSpy = vi
+      .spyOn(applicationModule.Application.prototype, "call")
+      .mockRejectedValue(thrownError);
+    const initSpy = vi
+      .spyOn(applicationModule.Application.prototype, "initialize")
+      .mockResolvedValue();
 
-    const registerFn = await (plugin as any).configureServer(fakeServer);
-    registerFn();
+    try {
+      const plugin = trailsPlugin({ cwd: "/test-error-path" });
+      const middlewares: any[] = [];
+      const fakeServer = {
+        config: { server: { port: 3000 } },
+        httpServer: { address: () => ({ port: 3000 }) },
+        middlewares: { use: (fn: any) => middlewares.push(fn) },
+      };
 
-    // Monkey-patch the app's call method to throw
-    const middleware = middlewares[0];
-    const originalPlugin = plugin as any;
+      const registerFn = await (plugin as any).configureServer(fakeServer);
+      registerFn();
 
-    const req = createMockReq({ url: "/explode" });
-    const socket = new Socket();
-    const res = new ServerResponse(new IncomingMessage(socket));
-    res.writeHead = vi.fn().mockReturnValue(res);
-    res.end = vi.fn().mockReturnValue(res);
-    const next = vi.fn();
+      const req = createMockReq({ url: "/explode" });
+      const socket = new Socket();
+      const res = new ServerResponse(new IncomingMessage(socket));
+      res.writeHead = vi.fn().mockReturnValue(res);
+      res.end = vi.fn().mockReturnValue(res);
+      const next = vi.fn();
 
-    await middleware(req, res, next);
+      await middlewares[0](req, res, next);
 
-    // The app either responds (writeHead called) or errors (next called)
-    // Since Application loads from /nonexistent, it will still respond with a Rack response
-    expect(res.writeHead).toHaveBeenCalled();
+      expect(next).toHaveBeenCalledWith(thrownError);
+      expect(res.writeHead).not.toHaveBeenCalled();
+    } finally {
+      callSpy.mockRestore();
+      initSpy.mockRestore();
+    }
   });
 });
 
@@ -136,10 +145,26 @@ describe("buildRackEnv", () => {
 
   it("skips undefined header values", async () => {
     const req = createMockReq({});
-    // Manually inject an undefined header
     req.headers["x-undefined"] = undefined as any;
     const env = await buildRackEnv(req, 3000);
 
     expect(env).not.toHaveProperty("HTTP_X_UNDEFINED");
+  });
+
+  it("sets rack.url_scheme to https when x-forwarded-proto is https", async () => {
+    const req = createMockReq({
+      headers: { "x-forwarded-proto": "https" },
+    });
+    const env = await buildRackEnv(req, 3000);
+
+    expect(env["rack.url_scheme"]).toBe("https");
+  });
+
+  it("sets rack.url_scheme to https for TLS sockets", async () => {
+    const req = createMockReq({});
+    (req.socket as any).encrypted = true;
+    const env = await buildRackEnv(req, 3000);
+
+    expect(env["rack.url_scheme"]).toBe("https");
   });
 });

@@ -1,3 +1,5 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { createServer, type ViteDevServer } from "vite";
 import { trailsPlugin } from "./vite-plugin.js";
 
@@ -20,10 +22,16 @@ export class DevServer {
   }
 
   async start(): Promise<void> {
+    const hasViteConfig =
+      fs.existsSync(path.join(this.cwd, "vite.config.ts")) ||
+      fs.existsSync(path.join(this.cwd, "vite.config.js"));
+
     this.server = await createServer({
-      configFile: false,
+      // If the project has its own vite.config, let Vite load it (which
+      // already registers trailsPlugin). Otherwise provide our own config.
+      ...(hasViteConfig ? {} : { configFile: false }),
       root: this.cwd,
-      plugins: [trailsPlugin({ cwd: this.cwd })],
+      plugins: hasViteConfig ? [] : [trailsPlugin({ cwd: this.cwd })],
       server: {
         port: this.port,
         host: this.host,

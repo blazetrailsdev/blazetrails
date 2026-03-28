@@ -377,3 +377,52 @@ describe("SchemaDumperDefaultsTest", () => {
     /* needs Infinity default handling */
   });
 });
+
+describe("SchemaDumperAdapterTest", () => {
+  let adapter: DatabaseAdapter;
+
+  beforeEach(() => {
+    adapter = createTestAdapter();
+  });
+
+  it("dumps schema from adapter introspection", async () => {
+    const { SchemaDumper: TopLevelDumper } = await import("./schema-dumper.js");
+    await (adapter as any).executeMutation(
+      'CREATE TABLE "articles" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "title" VARCHAR(255) NOT NULL, "body" TEXT)',
+    );
+    const result = await TopLevelDumper.dump(adapter);
+    expect(result).toContain("articles");
+    expect(result).toContain('"title"');
+    expect(result).toContain('"body"');
+  });
+
+  it("dumps schema with indexes from adapter", async () => {
+    const { SchemaDumper: TopLevelDumper } = await import("./schema-dumper.js");
+    await (adapter as any).executeMutation(
+      'CREATE TABLE "comments" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "post_id" INTEGER)',
+    );
+    await (adapter as any).executeMutation(
+      'CREATE INDEX "index_comments_on_post_id" ON "comments" ("post_id")',
+    );
+    const result = await TopLevelDumper.dump(adapter);
+    expect(result).toContain("addIndex");
+    expect(result).toContain("index_comments_on_post_id");
+  });
+
+  it("skips internal tables when dumping from adapter", async () => {
+    const { SchemaDumper: TopLevelDumper } = await import("./schema-dumper.js");
+    await (adapter as any).executeMutation(
+      'CREATE TABLE "schema_migrations" ("version" VARCHAR(255) PRIMARY KEY)',
+    );
+    await (adapter as any).executeMutation(
+      'CREATE TABLE "ar_internal_metadata" ("key" VARCHAR(255) PRIMARY KEY)',
+    );
+    await (adapter as any).executeMutation(
+      'CREATE TABLE "products" ("id" INTEGER PRIMARY KEY AUTOINCREMENT)',
+    );
+    const result = await TopLevelDumper.dump(adapter);
+    expect(result).toContain("products");
+    expect(result).not.toContain("schema_migrations");
+    expect(result).not.toContain("ar_internal_metadata");
+  });
+});

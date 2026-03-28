@@ -3,16 +3,16 @@ RUN corepack enable && corepack prepare pnpm@10.27.0 --activate
 WORKDIR /app
 
 # Copy workspace root files
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
 
-# Copy all package.json files for install
-COPY packages/activesupport/package.json packages/activesupport/
-COPY packages/arel/package.json packages/arel/
-COPY packages/activemodel/package.json packages/activemodel/
-COPY packages/activerecord/package.json packages/activerecord/
-COPY packages/rack/package.json packages/rack/
-COPY packages/actionpack/package.json packages/actionpack/
-COPY packages/cli/package.json packages/cli/
+# Copy all package.json and tsconfig files for install + build
+COPY packages/activesupport/package.json packages/activesupport/tsconfig.json packages/activesupport/
+COPY packages/arel/package.json packages/arel/tsconfig.json packages/arel/
+COPY packages/activemodel/package.json packages/activemodel/tsconfig.json packages/activemodel/
+COPY packages/activerecord/package.json packages/activerecord/tsconfig.json packages/activerecord/
+COPY packages/rack/package.json packages/rack/tsconfig.json packages/rack/
+COPY packages/actionpack/package.json packages/actionpack/tsconfig.json packages/actionpack/
+COPY packages/cli/package.json packages/cli/tsconfig.json packages/cli/
 COPY packages/website/package.json packages/website/
 
 # Install deps

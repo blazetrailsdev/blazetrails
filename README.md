@@ -132,6 +132,10 @@ packages/
   actionpack/       — ActionDispatch (routing, cookies, sessions) and ActionController
 ```
 
+## Disclaimer
+
+Trails is not affiliated with, endorsed by, or connected to Ruby on Rails or the Rails Core team. Rails is an inspiration and a guiding light for this project's API design, but Rails and its trademarks belong to their respective owners.
+
 ## License
 
 MIT

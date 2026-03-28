@@ -1457,7 +1457,12 @@ export class Migrator {
     if (process.env.DISABLE_DATABASE_ENVIRONMENT_CHECK === "1") return;
     await this._ensureSchemaTable();
     const stored = await this._internalMetadata.get("environment");
-    if (stored !== null && stored !== this._environment) {
+    if (stored === null) {
+      throw new NoEnvironmentInSchemaError(
+        "Environment data not found in the schema. Run migrations to initialize it.",
+      );
+    }
+    if (stored !== this._environment) {
       throw new EnvironmentMismatchError(
         `You are attempting to modify a database that was last used in the '${stored}' environment. ` +
           `You are running in the '${this._environment}' environment. ` +

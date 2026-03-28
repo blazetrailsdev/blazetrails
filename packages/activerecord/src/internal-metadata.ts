@@ -6,7 +6,7 @@
 
 import type { DatabaseAdapter } from "./adapter.js";
 import { detectAdapterName } from "./adapter-name.js";
-import { quoteIdentifier } from "./connection-adapters/abstract/quoting.js";
+import { quoteIdentifier, quoteTableName } from "./connection-adapters/abstract/quoting.js";
 
 export class NullInternalMetadata {
   async createTable(): Promise<void> {}
@@ -34,7 +34,7 @@ export class InternalMetadata {
   }
 
   private get _quotedTable(): string {
-    return this._q(InternalMetadata.TABLE_NAME);
+    return quoteTableName(InternalMetadata.TABLE_NAME, this._adapterName);
   }
 
   constructor(adapter: DatabaseAdapter) {

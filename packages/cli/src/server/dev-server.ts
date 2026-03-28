@@ -35,17 +35,20 @@ export class DevServer {
 
     await this.server.listen();
 
+    const address = this.server.httpServer?.address();
+    const actualPort = address && typeof address === "object" ? address.port : this.port;
+
     console.log(
-      `=> Trails application starting in development on http://${this.host}:${this.port}`,
+      `=> Trails application starting in development on http://${this.host}:${actualPort}`,
     );
     console.log(`=> Vite dev server with HMR enabled`);
     console.log(`=> Ctrl+C to stop`);
     console.log("");
   }
 
-  stop(): void {
+  async stop(): Promise<void> {
     if (this.server) {
-      this.server.close();
+      await this.server.close();
       this.server = null;
     }
   }

@@ -63,7 +63,9 @@ async function buildRackEnv(req: IncomingMessage, port: number): Promise<RackEnv
     "rack.input": await readBody(req),
   };
 
-  for (const [key, value] of Object.entries(req.headers)) {
+  for (const [key, rawValue] of Object.entries(req.headers)) {
+    if (rawValue === undefined) continue;
+    const value = Array.isArray(rawValue) ? rawValue.join(", ") : rawValue;
     if (key === "content-type") {
       env["CONTENT_TYPE"] = value;
     } else if (key === "content-length") {

@@ -179,7 +179,7 @@ This application was generated with [trails](https://github.com/blazetrailsdev/b
 
     cd ${name}
     pnpm install
-    trails db:setup
+    trails db setup
     trails server
 
 ## Commands
@@ -220,13 +220,14 @@ import { trailsPlugin } from "@blazetrails/cli/vite";
 export default defineConfig({
   plugins: [trailsPlugin()],
   root: "src/app/assets",
+  base: "/assets/",
   publicDir: "../../../public",
   build: {
     outDir: "../../../public/assets",
     manifest: true,
     rollupOptions: {
       input: {
-        application: "src/app/assets/stylesheets/application.css",
+        application: "stylesheets/application.css",
       },
     },
   },
@@ -245,6 +246,7 @@ import { createProgram } from "@blazetrails/cli";
 const program = createProgram();
 program.parse(process.argv);
 `,
+      { mode: 0o755 },
     );
 
     // bin/setup
@@ -262,13 +264,14 @@ console.log("== Installing dependencies ==");
 system("pnpm install");
 
 console.log("\\n== Preparing database ==");
-system("trails db:setup");
+system("trails db setup");
 
 console.log("\\n== Removing old logs and tempfiles ==");
 system("rm -rf log/* tmp/*");
 
 console.log("\\n== Done! ==");
 `,
+      { mode: 0o755 },
     );
 
     // bin/dev
@@ -279,6 +282,7 @@ import { execSync } from "node:child_process";
 
 execSync("trails server", { stdio: "inherit" });
 `,
+      { mode: 0o755 },
     );
   }
 
@@ -795,8 +799,8 @@ FROM base AS build
 
 RUN apt-get update -qq && apt-get install --no-install-recommends -y build-essential node-gyp pkg-config python-is-python3
 
-COPY package.json pnpm-lock.yaml ./
-RUN corepack enable pnpm && pnpm install --frozen-lockfile
+COPY package.json pnpm-lock.yaml* ./
+RUN corepack enable pnpm && pnpm install
 
 COPY . .
 RUN pnpm run build

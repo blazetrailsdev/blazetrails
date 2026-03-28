@@ -4348,7 +4348,7 @@ function wrapWithScopeProxy<T extends Base>(rel: Relation<T>): Relation<T> {
 // ---------------------------------------------------------------------------
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface Relation<T> extends CalculationMethods {}
+export interface Relation<T extends Base> extends CalculationMethods {}
 
 Object.defineProperties(Relation.prototype, {
   count: { value: performCount, writable: true, configurable: true, enumerable: false },

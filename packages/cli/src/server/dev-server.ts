@@ -26,10 +26,20 @@ export class DevServer {
       fs.existsSync(path.join(this.cwd, "vite.config.ts")) ||
       fs.existsSync(path.join(this.cwd, "vite.config.js"));
 
+    const configFile = hasViteConfig
+      ? path.join(
+          this.cwd,
+          fs.existsSync(path.join(this.cwd, "vite.config.ts"))
+            ? "vite.config.ts"
+            : "vite.config.js",
+        )
+      : false;
+
     this.server = await createServer({
-      // If the project has its own vite.config, let Vite load it (which
-      // already registers trailsPlugin). Otherwise provide our own config.
-      ...(hasViteConfig ? {} : { configFile: false, root: this.cwd }),
+      // Only set root when no config file — the project's vite.config
+      // defines its own root (e.g. "src/app/assets") which should win.
+      ...(hasViteConfig ? {} : { root: this.cwd }),
+      configFile,
       plugins: hasViteConfig ? [] : [trailsPlugin({ cwd: this.cwd })],
       server: {
         port: this.port,

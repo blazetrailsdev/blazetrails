@@ -37,18 +37,26 @@ describe("trailsPlugin", () => {
   });
 
   it("registers middleware via configureServer", async () => {
-    const plugin = trailsPlugin({ cwd: "/nonexistent" });
-    const middlewares: any[] = [];
-    const fakeServer = {
-      config: { server: { port: 3000 } },
-      httpServer: null,
-      middlewares: { use: (fn: any) => middlewares.push(fn) },
-    };
+    const initSpy = vi
+      .spyOn(applicationModule.Application.prototype, "initialize")
+      .mockResolvedValue();
 
-    const registerFn = await (plugin as any).configureServer(fakeServer);
-    expect(typeof registerFn).toBe("function");
-    registerFn();
-    expect(middlewares.length).toBe(1);
+    try {
+      const plugin = trailsPlugin({ cwd: "/nonexistent" });
+      const middlewares: any[] = [];
+      const fakeServer = {
+        config: { server: { port: 3000 } },
+        httpServer: null,
+        middlewares: { use: (fn: any) => middlewares.push(fn) },
+      };
+
+      const registerFn = await (plugin as any).configureServer(fakeServer);
+      expect(typeof registerFn).toBe("function");
+      registerFn();
+      expect(middlewares.length).toBe(1);
+    } finally {
+      initSpy.mockRestore();
+    }
   });
 
   it("calls next(err) when app.call throws", async () => {
@@ -85,6 +93,55 @@ describe("trailsPlugin", () => {
       expect(res.writeHead).not.toHaveBeenCalled();
     } finally {
       callSpy.mockRestore();
+      initSpy.mockRestore();
+    }
+  });
+
+  it("propagates body-too-large error via next()", async () => {
+    const initSpy = vi
+      .spyOn(applicationModule.Application.prototype, "initialize")
+      .mockResolvedValue();
+
+    try {
+      const plugin = trailsPlugin({ cwd: "/test-large-body" });
+      const middlewares: any[] = [];
+      const fakeServer = {
+        config: { server: { port: 3000 } },
+        httpServer: { address: () => ({ port: 3000 }) },
+        middlewares: { use: (fn: any) => middlewares.push(fn) },
+      };
+
+      const registerFn = await (plugin as any).configureServer(fakeServer);
+      registerFn();
+
+      // Create a request that streams > 10 MB
+      const socket = new Socket();
+      const req = new IncomingMessage(socket);
+      req.method = "POST";
+      req.url = "/upload";
+      req.headers = { host: "localhost:3000" };
+
+      const res = new ServerResponse(new IncomingMessage(new Socket()));
+      res.writeHead = vi.fn().mockReturnValue(res);
+      res.end = vi.fn().mockReturnValue(res);
+      const next = vi.fn();
+
+      // Push chunks that exceed the 10 MB limit
+      const chunk = Buffer.alloc(1024 * 1024); // 1 MB
+      process.nextTick(() => {
+        for (let i = 0; i < 11; i++) {
+          req.push(chunk);
+        }
+        req.push(null);
+      });
+
+      await middlewares[0](req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      const err = next.mock.calls[0][0];
+      expect(err).toBeInstanceOf(Error);
+      expect((err as Error).message).toContain("too large");
+    } finally {
       initSpy.mockRestore();
     }
   });
@@ -163,6 +220,15 @@ describe("buildRackEnv", () => {
   it("sets rack.url_scheme to https for TLS sockets", async () => {
     const req = createMockReq({});
     (req.socket as any).encrypted = true;
+    const env = await buildRackEnv(req, 3000);
+
+    expect(env["rack.url_scheme"]).toBe("https");
+  });
+
+  it("handles comma-separated x-forwarded-proto", async () => {
+    const req = createMockReq({
+      headers: { "x-forwarded-proto": "https, http" },
+    });
     const env = await buildRackEnv(req, 3000);
 
     expect(env["rack.url_scheme"]).toBe("https");

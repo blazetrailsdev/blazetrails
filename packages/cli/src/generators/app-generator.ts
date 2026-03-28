@@ -272,6 +272,7 @@ for (const dir of ["log", "tmp"]) {
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
 }
+mkdirSync("tmp/pids", { recursive: true });
 
 console.log("\\n== Done! ==");
 `,

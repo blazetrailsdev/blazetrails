@@ -16,7 +16,8 @@ interface PrimaryKeyRecord {
  */
 export function toKey(this: PrimaryKeyRecord): unknown[] | null {
   const pk = this.id;
-  return pk != null ? [pk] : null;
+  if (pk == null) return null;
+  return Array.isArray(pk) ? pk : [pk];
 }
 
 /**

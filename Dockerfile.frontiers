@@ -54,8 +54,8 @@ COPY --from=base /app/packages/actionpack/package.json packages/actionpack/
 COPY --from=base /app/packages/cli/package.json packages/cli/
 COPY --from=base /app/packages/website/package.json packages/website/
 
-# Install prod deps with native builds (better-sqlite3) but skip husky
-ENV HUSKY=0
+# Remove husky prepare script, then install prod deps with native builds
+RUN npm pkg delete scripts.prepare
 RUN pnpm install --frozen-lockfile --prod
 
 # Copy built artifacts

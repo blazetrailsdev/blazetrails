@@ -1384,11 +1384,13 @@ export class Migrator {
   private _validateTargetVersion(v: number | string): void {
     if (typeof v === "string") {
       if (!/^\d+$/.test(v)) {
-        throw new UnknownMigrationVersionError(v);
+        throw new MigrationError(
+          `Invalid target version: ${v}. Must be a non-negative numeric value.`,
+        );
       }
     } else {
       if (!Number.isInteger(v) || v < 0) {
-        throw new UnknownMigrationVersionError(v);
+        throw new MigrationError(`Invalid target version: ${v}. Must be a non-negative integer.`);
       }
     }
   }

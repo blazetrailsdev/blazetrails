@@ -7,18 +7,18 @@
 import type { DatabaseAdapter } from "./adapter.js";
 
 export class NullSchemaMigration {
-  createTable(): void {}
-  dropTable(): void {}
+  async createTable(): Promise<void> {}
+  async dropTable(): Promise<void> {}
 
-  get allVersions(): string[] {
+  async allVersions(): Promise<string[]> {
     return [];
   }
 
-  get count(): number {
+  async count(): Promise<number> {
     return 0;
   }
 
-  get tableExists(): boolean {
+  async tableExists(): Promise<boolean> {
     return false;
   }
 }

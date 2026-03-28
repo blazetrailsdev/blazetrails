@@ -7,14 +7,14 @@
 import type { DatabaseAdapter } from "./adapter.js";
 
 export class NullInternalMetadata {
-  createTable(): void {}
-  dropTable(): void {}
+  async createTable(): Promise<void> {}
+  async dropTable(): Promise<void> {}
 
-  get(key: string): string | null {
+  async get(key: string): Promise<string | null> {
     return null;
   }
 
-  get tableExists(): boolean {
+  async tableExists(): Promise<boolean> {
     return false;
   }
 }

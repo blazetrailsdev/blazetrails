@@ -4,7 +4,7 @@
  * Mirrors: ActiveRecord::Sanitization
  */
 
-import { quote } from "./quoting.js";
+import { quote } from "./connection-adapters/abstract/quoting.js";
 
 /**
  * Sanitize a SQL template with bind parameters.

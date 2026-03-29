@@ -35,6 +35,11 @@ export class ReflectionProxy {
 
 /**
  * Mirrors: ActiveRecord::FixtureSet::TableRow::HasManyThroughProxy
+ *
+ * NOTE: Join table row generation for has_many :through associations
+ * is not yet implemented. This class exists for API parity but passing
+ * it to _resolveAssociations will only resolve the foreign key like a
+ * regular belongs_to — it will not generate join table rows.
  */
 export class HasManyThroughProxy extends ReflectionProxy {
   readonly through: string;

@@ -6,10 +6,9 @@
  * Mirrors: ActiveRecord::Relation::QueryAttribute
  */
 
-interface CastType {
-  cast(value: unknown): unknown;
-  serialize?(value: unknown): unknown;
-}
+import type { Type } from "@blazetrails/activemodel";
+
+type CastType = Pick<Type, "cast" | "serialize">;
 
 export class QueryAttribute {
   readonly name: string;

@@ -98,10 +98,16 @@ describe("QueryAttribute", () => {
     expect(a.equals(c)).toBe(false);
     // Different name → not equal
     expect(a.equals(d)).toBe(false);
-    // Different type instances without equals() → not equal (reference semantics)
+    // Different instances of same Type class → equal (constructor-based)
     const intType2 = new IntType();
     const e = new QueryAttribute("age", "25", intType2);
-    expect(a.equals(e)).toBe(false);
+    expect(a.equals(e)).toBe(true);
+    // Plain objects with same shape → not equal (constructor is Object)
+    const plainType1 = { cast: (v: unknown) => v, serialize: (v: unknown) => v };
+    const plainType2 = { cast: (v: unknown) => v, serialize: (v: unknown) => v };
+    const f = new QueryAttribute("age", "25", plainType1);
+    const g = new QueryAttribute("age", "25", plainType2);
+    expect(f.equals(g)).toBe(false);
   });
 
   it("valueBeforeTypeCast preserves original value", () => {

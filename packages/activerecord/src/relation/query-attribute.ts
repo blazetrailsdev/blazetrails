@@ -79,6 +79,10 @@ export class QueryAttribute {
     if ("equals" in this.type && typeof (this.type as any).equals === "function") {
       return (this.type as any).equals(other.type);
     }
+    // Compare by constructor for proper Type classes (not plain objects)
+    const thisCtor = this.type.constructor;
+    const otherCtor = other.type.constructor;
+    if (thisCtor !== Object && thisCtor === otherCtor) return true;
     return false;
   }
 }

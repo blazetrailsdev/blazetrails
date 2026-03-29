@@ -3,10 +3,6 @@
  *
  * Mirrors: ActiveRecord::ConnectionAdapters
  */
-
-/**
- * Mirrors: ActiveRecord::ConnectionAdapters
- */
 export interface ConnectionAdapters {
   readonly AbstractAdapter: unknown;
 }

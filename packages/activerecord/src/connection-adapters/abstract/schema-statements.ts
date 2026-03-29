@@ -513,6 +513,8 @@ export class SchemaStatements {
           let sqlType: string = row.data_type;
           if (row.data_type === "ARRAY") {
             sqlType = `${row.udt_name.replace(/^_/, "")}[]`;
+          } else if (row.data_type === "USER-DEFINED") {
+            sqlType = row.udt_name;
           } else if (row.character_maximum_length) {
             sqlType = `${row.udt_name}(${row.character_maximum_length})`;
           } else if (

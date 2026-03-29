@@ -1,4 +1,4 @@
-import { readFileSync } from "fs";
+import { readFileSync } from "node:fs";
 import { parse as yamlParse } from "yaml";
 
 export class ConfigurationFile {

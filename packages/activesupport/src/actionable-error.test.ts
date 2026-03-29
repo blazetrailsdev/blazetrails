@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { beforeEach, describe, it, expect } from "vitest";
 import { ActionableError, NonActionable } from "./actionable-error.js";
 
 class TestError extends ActionableError {
@@ -6,6 +6,10 @@ class TestError extends ActionableError {
 }
 
 describe("ActionableErrorTest", () => {
+  beforeEach(() => {
+    TestError._actions = {};
+  });
+
   it("returns all action of an actionable error", () => {
     let called = false;
     TestError.action("Do something", () => {
@@ -22,7 +26,6 @@ describe("ActionableErrorTest", () => {
 
   it("dispatches actions from error and name", () => {
     let dispatched = false;
-    TestError._actions = {};
     TestError.action("Fix it", () => {
       dispatched = true;
     });
@@ -31,7 +34,6 @@ describe("ActionableErrorTest", () => {
   });
 
   it("cannot dispatch missing actions", () => {
-    TestError._actions = {};
     expect(() => {
       ActionableError.dispatch(new TestError(), "Nonexistent");
     }).toThrow(NonActionable);

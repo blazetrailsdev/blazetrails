@@ -49,15 +49,8 @@ export async function performFind(this: FinderRelation, ...ids: unknown[]): Prom
   const pk = this._modelClass.primaryKey;
   const isCpk = this._modelClass.compositePrimaryKey;
 
-  if (ids.length === 1 && !Array.isArray(ids[0])) {
-    if (isCpk) {
-      throw new RecordNotFound(
-        `Couldn't find ${this._modelClass.name} with a scalar id (composite PK requires an array)`,
-        this._modelClass.name,
-        String(pk),
-        ids[0],
-      );
-    }
+  // Simple PK, single scalar: find(1)
+  if (!isCpk && ids.length === 1 && !Array.isArray(ids[0])) {
     const records = await this.where({ [pk as string]: ids[0] })
       .limit(1)
       .toArray();
@@ -72,55 +65,67 @@ export async function performFind(this: FinderRelation, ...ids: unknown[]): Prom
     return records[0];
   }
 
-  const input = ids.length === 1 && Array.isArray(ids[0]) ? ids[0] : ids;
-
-  if (isCpk) {
-    // CPK: each id is a tuple like [shop_id, id]
-    const tuples = input as unknown[][];
-    if (tuples.length === 0) {
+  // Simple PK, multiple: find(1, 2, 3) or find([1, 2, 3])
+  if (!isCpk) {
+    const flatIds = ids.length === 1 && Array.isArray(ids[0]) ? ids[0] : ids;
+    if (flatIds.length === 0) {
       throw new RecordNotFound(
         `Couldn't find ${this._modelClass.name} with an empty list of ids`,
         this._modelClass.name,
-        String(pk),
+        pk as string,
         [],
       );
     }
-    const results: any[] = [];
-    for (const tuple of tuples) {
-      const conditions = buildPkWhere(this, tuple);
-      const records = await this.where(conditions).limit(1).toArray();
-      if (records.length === 0) {
-        throw new RecordNotFound(
-          `Couldn't find ${this._modelClass.name} with '${pk}'=${JSON.stringify(tuple)}`,
-          this._modelClass.name,
-          String(pk),
-          tuple,
-        );
-      }
-      results.push(records[0]);
+    const records = await this.where({ [pk as string]: flatIds }).toArray();
+    if (records.length !== flatIds.length) {
+      throw new RecordNotFound(
+        `Couldn't find all ${this._modelClass.name} with '${pk}': (${flatIds.join(", ")})`,
+        this._modelClass.name,
+        pk as string,
+        flatIds,
+      );
     }
-    return results.length === 1 ? results[0] : results;
+    return records;
   }
 
-  const flatIds = input.flat();
-  if (flatIds.length === 0) {
+  // CPK: find([shop_id, id]) — single tuple
+  // CPK: find([[shop_id, id], [shop_id2, id2]]) — array of tuples
+  // Distinguish by checking if first element is an array
+  const input = ids.length === 1 && Array.isArray(ids[0]) ? ids[0] : ids;
+  const isArrayOfTuples = Array.isArray(input[0]);
+  const tuples: unknown[][] = isArrayOfTuples ? (input as unknown[][]) : [input as unknown[]];
+
+  if (tuples.length === 0) {
     throw new RecordNotFound(
       `Couldn't find ${this._modelClass.name} with an empty list of ids`,
       this._modelClass.name,
-      pk as string,
+      String(pk),
       [],
     );
   }
-  const records = await this.where({ [pk as string]: flatIds }).toArray();
-  if (records.length !== flatIds.length) {
+
+  // Build OR conditions for all tuples in a single query
+  const orConditions = tuples.map((tuple) => buildPkWhere(this, tuple));
+  let rel: any = this._clone();
+  if (orConditions.length === 1) {
+    rel = this.where(orConditions[0]);
+  } else {
+    // Use whereAny if available, otherwise chain OR
+    rel = this.where(orConditions[0]);
+    for (let i = 1; i < orConditions.length; i++) {
+      rel = rel.or(this.where(orConditions[i]));
+    }
+  }
+  const records = await rel.toArray();
+  if (records.length !== tuples.length) {
     throw new RecordNotFound(
-      `Couldn't find all ${this._modelClass.name} with '${pk}': (${flatIds.join(", ")})`,
+      `Couldn't find all ${this._modelClass.name} with '${pk}': (${JSON.stringify(tuples)})`,
       this._modelClass.name,
-      pk as string,
-      flatIds,
+      String(pk),
+      tuples,
     );
   }
-  return records;
+  return isArrayOfTuples ? records : records[0];
 }
 
 export async function performFindBy(
@@ -174,11 +179,19 @@ export async function performFirstBang(this: FinderRelation): Promise<any> {
   return record;
 }
 
+function orderByPk(rel: FinderRelation, direction: "asc" | "desc"): any {
+  const pk = rel._modelClass.primaryKey;
+  if (Array.isArray(pk)) {
+    return rel.order(...pk.map((col: string) => ({ [col]: direction })));
+  }
+  return rel.order({ [pk]: direction });
+}
+
 export async function performLast(this: FinderRelation, n?: number): Promise<any> {
   if (this._isNone) return n !== undefined ? [] : null;
   let rel: any;
   if (!hasOrder(this)) {
-    rel = this.order({ [this._modelClass.primaryKey as string]: "desc" as const });
+    rel = orderByPk(this, "desc");
   } else {
     rel = this.reverseOrder();
   }
@@ -233,11 +246,11 @@ export async function performTakeBang(this: FinderRelation): Promise<any> {
 }
 
 async function findNthWithLimit(this: FinderRelation, index: number): Promise<any | null> {
-  const rel = this._clone();
+  let rel = this._clone();
   rel._limitValue = 1;
   rel._offsetValue = (this._offsetValue ?? 0) + index;
   if (!hasOrder(rel)) {
-    rel._orderClauses.push(this._modelClass.primaryKey as string);
+    rel = orderByPk(rel, "asc");
   }
   const records = await rel.toArray();
   return records[0] ?? null;
@@ -246,7 +259,7 @@ async function findNthWithLimit(this: FinderRelation, index: number): Promise<an
 async function findNthFromLast(this: FinderRelation, index: number): Promise<any | null> {
   let rel: any;
   if (!hasOrder(this)) {
-    rel = this.order({ [this._modelClass.primaryKey as string]: "desc" as const });
+    rel = orderByPk(this, "desc");
   } else {
     rel = this.reverseOrder();
   }

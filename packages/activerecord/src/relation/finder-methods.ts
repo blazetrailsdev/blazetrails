@@ -67,7 +67,7 @@ export async function performFind(this: FinderRelation, ...ids: unknown[]): Prom
 
   // Simple PK, multiple: find(1, 2, 3) or find([1, 2, 3])
   if (!isCpk) {
-    const flatIds = ids.length === 1 && Array.isArray(ids[0]) ? ids[0] : ids;
+    const flatIds = (ids as unknown[]).flat();
     if (flatIds.length === 0) {
       throw new RecordNotFound(
         `Couldn't find ${this._modelClass.name} with an empty list of ids`,

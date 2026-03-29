@@ -208,7 +208,6 @@ export { tryCall, tryWith, tryBang } from "./try.js";
 export { OrderedOptions, InheritableOptions } from "./ordered-options.js";
 export { Digest } from "./digest.js";
 export { SecurityUtils } from "./security-utils.js";
-export { DeepMergeable } from "./deep-mergeable.js";
 export { ConfigurationFile } from "./configuration-file.js";
 export { ActionableError, NonActionable } from "./actionable-error.js";
 export { NullLock } from "./concurrency/null-lock.js";

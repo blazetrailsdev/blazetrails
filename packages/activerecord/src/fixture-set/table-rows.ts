@@ -17,9 +17,9 @@ export class TableRows {
   ) {
     this.tableName = tableName;
     this._rows = [];
+    const defaults = fixtures["DEFAULTS"] ?? {};
     for (const [label, row] of Object.entries(fixtures)) {
       if (label === "DEFAULTS") continue;
-      const defaults = fixtures["DEFAULTS"] ?? {};
       this._rows.push(new TableRow(label, { ...defaults, ...row }, options));
     }
   }

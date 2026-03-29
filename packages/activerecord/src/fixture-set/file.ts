@@ -59,11 +59,6 @@ const CRC32_TABLE = (() => {
 })();
 
 /**
- * A set of fixtures loaded from data (typically parsed from YAML).
- *
- * Mirrors: ActiveRecord::FixtureSet
- */
-/**
  * Mirrors: ActiveRecord::FixtureSet::File
  *
  * Reads and parses fixture data from a file (YAML in Rails, JSON/objects in TS).
@@ -88,6 +83,11 @@ export class File {
   }
 }
 
+/**
+ * A set of fixtures loaded from data (typically parsed from YAML).
+ *
+ * Mirrors: ActiveRecord::FixtureSet
+ */
 export class FixtureSet {
   readonly tableName: string;
   private _fixtures: Map<string, Record<string, unknown>>;

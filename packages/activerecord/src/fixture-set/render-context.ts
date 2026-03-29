@@ -6,13 +6,13 @@
  */
 
 export class RenderContext {
-  private _helpers = new Map<string, (...args: unknown[]) => unknown>();
+  private _helpers = new Map<string, () => unknown>();
 
-  registerHelper(name: string, fn: (...args: unknown[]) => unknown): void {
+  registerHelper(name: string, fn: () => unknown): void {
     this._helpers.set(name, fn);
   }
 
-  getHelper(name: string): ((...args: unknown[]) => unknown) | undefined {
+  getHelper(name: string): (() => unknown) | undefined {
     return this._helpers.get(name);
   }
 

@@ -82,6 +82,11 @@ export class DelegateCache {
  * Wrap a Relation in a Proxy that delegates scope names
  * to the model's registered scopes.
  */
+/**
+ * Constraint: the target must have a _modelClass with _scopes.
+ * We use `object` here because Relation._modelClass is private;
+ * the internal cast to `any` handles access.
+ */
 export function wrapWithScopeProxy<T extends object>(rel: T): T {
   return new Proxy(rel, {
     get(target: any, prop: string | symbol, receiver: any) {

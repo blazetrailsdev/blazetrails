@@ -5,9 +5,14 @@ class TestError extends ActionableError {
   static override _actions: Record<string, () => void> = {};
 }
 
+class SiblingError extends ActionableError {
+  static override _actions: Record<string, () => void> = {};
+}
+
 describe("ActionableErrorTest", () => {
   beforeEach(() => {
     TestError._actions = {};
+    SiblingError._actions = {};
   });
 
   it("returns all action of an actionable error", () => {
@@ -37,5 +42,16 @@ describe("ActionableErrorTest", () => {
     expect(() => {
       ActionableError.dispatch(new TestError(), "Nonexistent");
     }).toThrow(NonActionable);
+  });
+
+  it("returns all action of an actionable error class", () => {
+    TestError.action("Do something", () => {});
+    const actions = ActionableError.actions(TestError);
+    expect(Object.keys(actions)).toContain("Do something");
+  });
+
+  it("subclass actions do not leak to sibling classes", () => {
+    TestError.action("Only on test", () => {});
+    expect(Object.keys(ActionableError.actions(new SiblingError()))).toHaveLength(0);
   });
 });

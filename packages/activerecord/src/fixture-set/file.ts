@@ -70,6 +70,12 @@ export class FixtureSet {
     this._renderContext = options.renderContext;
     this._encryptedAttributes = options.encryptedAttributes;
     this._encrypt = options.encrypt;
+    if ((this._encryptedAttributes != null) !== (this._encrypt != null)) {
+      throw new Error(
+        `Invalid encryption configuration for fixtures on "${tableName}": ` +
+          "`encryptedAttributes` and `encrypt` must be provided together.",
+      );
+    }
     this._fixtures = new Map();
     const defaults = data["DEFAULTS"] ?? {};
     for (const [label, attrs] of Object.entries(data)) {
@@ -145,17 +151,8 @@ export class FixtureSet {
     adapter: DatabaseAdapter,
     options: { primaryKey?: string; associations?: ReflectionProxy[] } = {},
   ): Promise<void> {
-    const data: Record<string, Record<string, unknown>> = {};
-    for (const [label, attrs] of this._fixtures) {
-      data[label] = attrs;
-    }
-    const tableRows = new TableRows(this.tableName, data, options);
-    let rows = tableRows.toRecords();
+    const { rows, joinRows } = this._buildRows(options);
     if (rows.length === 0) return;
-    if (this._encryptedAttributes && this._encrypt) {
-      rows = rows.map((row) => encryptFixtureData(row, this._encryptedAttributes!, this._encrypt!));
-    }
-    const joinRows = tableRows.joinRows();
     await adapter.beginTransaction();
     try {
       await this._insertRows(adapter, rows);
@@ -179,18 +176,37 @@ export class FixtureSet {
     adapter: DatabaseAdapter,
     options: { primaryKey?: string; associations?: ReflectionProxy[] } = {},
   ): Promise<void> {
-    const rows = this.toRows(options);
+    const { rows, joinRows } = this._buildRows(options);
     const adapterName = detectAdapterName(adapter);
     const quotedTable = quoteTableName(this.tableName, adapterName);
     await adapter.beginTransaction();
     try {
       await adapter.executeMutation(`DELETE FROM ${quotedTable}`);
       await this._insertRows(adapter, rows);
+      for (const jr of joinRows) {
+        await this._insertRows(adapter, [jr.row], jr.table);
+      }
       await adapter.commit();
     } catch (error) {
       await adapter.rollback();
       throw error;
     }
+  }
+
+  private _buildRows(options: { primaryKey?: string; associations?: ReflectionProxy[] } = {}): {
+    rows: Array<Record<string, unknown>>;
+    joinRows: import("./table-row.js").JoinRow[];
+  } {
+    const data: Record<string, Record<string, unknown>> = {};
+    for (const [label, attrs] of this._fixtures) {
+      data[label] = attrs;
+    }
+    const tableRows = new TableRows(this.tableName, data, options);
+    let rows = tableRows.toRecords();
+    if (this._encryptedAttributes && this._encrypt) {
+      rows = rows.map((row) => encryptFixtureData(row, this._encryptedAttributes!, this._encrypt!));
+    }
+    return { rows, joinRows: tableRows.joinRows() };
   }
 
   private async _insertRows(

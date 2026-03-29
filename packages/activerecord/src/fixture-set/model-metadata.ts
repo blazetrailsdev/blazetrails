@@ -15,8 +15,8 @@ export class ModelMetadata {
     this._className = className;
 
     const model = modelRegistry.get(className);
-    this._tableName = tableName ?? (model as any)?._tableName ?? className.toLowerCase() + "s";
-    this._primaryKeyName = primaryKeyName ?? (model as any)?._primaryKey ?? "id";
+    this._tableName = tableName ?? (model as any)?.tableName ?? className.toLowerCase() + "s";
+    this._primaryKeyName = primaryKeyName ?? (model as any)?.primaryKey ?? "id";
   }
 
   get className(): string {
@@ -38,7 +38,9 @@ export class ModelMetadata {
   static fromModel(className: string): ModelMetadata {
     const model = modelRegistry.get(className);
     if (!model) {
-      throw new Error(`Model "${className}" not found in registry`);
+      throw new Error(
+        `Model "${className}" not found in registry. Did you forget to call registerModel(${className})?`,
+      );
     }
     return new ModelMetadata(className);
   }

@@ -131,7 +131,7 @@ export class TableRow {
     if (!Array.isArray(value)) return;
 
     for (const label of value) {
-      if (typeof label !== "string") continue;
+      if (typeof label !== "string" || label === "") continue;
       this._joinRows.push({
         table: assoc.joinTable,
         row: {

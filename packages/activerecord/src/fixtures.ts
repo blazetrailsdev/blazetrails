@@ -4,17 +4,17 @@
  * Mirrors: ActiveRecord::Fixture and related error classes
  */
 
-export class FixtureClassNotFound extends Error {
-  constructor(className: string) {
-    super(`No model class found for fixture: ${className}`);
-    this.name = "FixtureClassNotFound";
-  }
-}
-
 export class FixtureError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "FixtureError";
+  }
+}
+
+export class FixtureClassNotFound extends FixtureError {
+  constructor(className: string) {
+    super(`No model class found for fixture: ${className}`);
+    this.name = "FixtureClassNotFound";
   }
 }
 

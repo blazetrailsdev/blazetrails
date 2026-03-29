@@ -8,6 +8,7 @@ export interface EncryptedFixtures {
   encryptFixtureData(
     data: Record<string, unknown>,
     encryptedAttributes: string[],
+    encrypt: (value: unknown) => unknown,
   ): Record<string, unknown>;
 }
 

@@ -155,19 +155,16 @@ export class FixtureSet {
   ): Promise<void> {
     if (rows.length === 0) return;
     const adapterName = detectAdapterName(adapter);
-    const columnsSet = new Set<string>();
-    for (const row of rows) {
-      for (const key of Object.keys(row)) columnsSet.add(key);
-    }
-    const columns = Array.from(columnsSet);
     const quotedTable = quoteTableName(this.tableName, adapterName);
-    const quotedCols = columns.map((c) => quoteIdentifier(c, adapterName)).join(", ");
 
     for (const row of rows) {
-      const values = columns.map((c) => (c in row ? row[c] : null));
-      const placeholders = columns
+      const rowColumns = Object.keys(row);
+      if (rowColumns.length === 0) continue;
+      const quotedCols = rowColumns.map((c) => quoteIdentifier(c, adapterName)).join(", ");
+      const placeholders = rowColumns
         .map((_, i) => (adapterName === "postgres" ? `$${i + 1}` : "?"))
         .join(", ");
+      const values = rowColumns.map((c) => row[c]);
       await adapter.executeMutation(
         `INSERT INTO ${quotedTable} (${quotedCols}) VALUES (${placeholders})`,
         values,

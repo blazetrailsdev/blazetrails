@@ -5,6 +5,7 @@
   import { initTranspiler, transpile } from "./transpiler.js";
   import type { CompiledCache } from "./compiled-cache.js";
   import blazetrailsDts from "./blazetrails.d.ts?raw";
+  import { SANDBOX_GLOBALS_DTS } from "./sandbox-globals.d.ts.js";
 
   let {
     filePath = $bindable(""),
@@ -157,41 +158,7 @@
     });
 
     monaco.languages.typescript.typescriptDefaults.addExtraLib(
-      `
-      declare const Base: any;
-      declare const Migration: any;
-      declare const MigrationRunner: any;
-      declare const Migrator: any;
-      declare const Schema: any;
-      declare const adapter: {
-        execute(sql: string, binds?: unknown[]): Promise<Record<string, unknown>[]>;
-        executeMutation(sql: string, binds?: unknown[]): Promise<number>;
-        execRaw(sql: string): Array<{ columns: string[]; values: unknown[][] }>;
-        getTables(): string[];
-        getColumns(table: string): Array<{ name: string; type: string; notnull: boolean; pk: boolean }>;
-      };
-      declare const runtime: {
-        vfs: {
-          list(): Array<{ path: string; content: string; language: string; created_at: string; updated_at: string }>;
-          read(path: string): { path: string; content: string; language: string } | null;
-          write(path: string, content: string): void;
-          delete(path: string): boolean;
-          rename(oldPath: string, newPath: string): boolean;
-          exists(path: string): boolean;
-        };
-        registerMigration(proxy: { version: string; name: string; migration: () => any }): void;
-        getMigrations(): Array<{ version: string; name: string }>;
-        clearMigrations(): void;
-        dbSetup(): Promise<{ success: boolean; message: string }>;
-        dbReset(): Promise<{ success: boolean; message: string }>;
-        dbMigrate(): Promise<{ success: boolean; message: string }>;
-        dbRollback(steps?: number): Promise<{ success: boolean; message: string }>;
-        dbMigrateStatus(): Promise<Array<{ status: "up" | "down"; version: string; name: string }>>;
-        dbSeed(code: string): Promise<{ success: boolean; message: string }>;
-        dbDrop(): { success: boolean; message: string };
-        dbSchema(): string;
-      };
-      `,
+      SANDBOX_GLOBALS_DTS,
       "blazetrails-globals.d.ts",
     );
 

@@ -96,7 +96,7 @@ export async function createRuntime(initialData?: Uint8Array): Promise<Runtime> 
 
   let db = initialData ? new sql.Database(initialData) : new sql.Database();
   let adapter = new SqlJsAdapter(db);
-  (Base as any).connection = adapter;
+  Base.adapter = adapter;
 
   let vfs = new VirtualFS(adapter);
   let compiled = new CompiledCache(adapter);
@@ -152,7 +152,7 @@ export async function createRuntime(initialData?: Uint8Array): Promise<Runtime> 
     db.close();
     db = newDb;
     adapter = new SqlJsAdapter(db);
-    (Base as any).connection = adapter;
+    Base.adapter = adapter;
     runtime.adapter = adapter;
     vfs = new VirtualFS(adapter);
     runtime.vfs = vfs;

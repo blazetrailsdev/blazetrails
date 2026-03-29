@@ -224,9 +224,13 @@ function generateModelFile(
       }
       return `    this.attribute("${c.name}", "${c.type}");`;
     })
+    .concat([
+      '    this.attribute("created_at", "datetime");',
+      '    this.attribute("updated_at", "datetime");',
+    ])
     .join("\n");
 
-  const staticBlock = attrLines ? `\n  static {\n${attrLines}\n  }\n` : "";
+  const staticBlock = `\n  static {\n${attrLines}\n  }\n`;
 
   const tableName = tableize(className);
   const content = `class ${className} extends Base {

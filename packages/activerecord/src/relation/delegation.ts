@@ -1,11 +1,10 @@
 /**
- * Delegation — delegates scope and query method calls from model
- * classes to Relation instances via a Proxy.
+ * Delegation — delegates named scope calls on Relations via a Proxy.
  *
- * In Rails, model classes delegate methods like where/order/limit to
- * an implicit Relation via method_missing. In our codebase, the
- * wrapWithScopeProxy function creates a Proxy that intercepts property
- * access and delegates named scopes to the model's scope registry.
+ * wrapWithScopeProxy creates a Proxy that intercepts missing property
+ * access and dispatches named scopes from the model's scope registry.
+ * Query methods (where/order/limit) are already defined on Relation
+ * and don't go through the Proxy.
  *
  * Mirrors: ActiveRecord::Delegation
  */
@@ -83,9 +82,11 @@ export class DelegateCache {
  * to the model's registered scopes.
  */
 /**
- * Constraint: the target must have a _modelClass with _scopes.
- * We use `object` here because Relation._modelClass is private;
- * the internal cast to `any` handles access.
+ * Wrap a Relation in a Proxy that delegates named scope lookups
+ * to the model's scope registry.
+ *
+ * Constrained to `object` because Relation._modelClass is private;
+ * internal access uses `any` casts.
  */
 export function wrapWithScopeProxy<T extends object>(rel: T): T {
   return new Proxy(rel, {

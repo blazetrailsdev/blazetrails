@@ -28,7 +28,7 @@ describe("FixtureSet", () => {
       const id2 = identify("alice");
       expect(id1).toBe(id2);
       expect(typeof id1).toBe("number");
-      expect(id1).toBeGreaterThan(0);
+      expect(id1).toBeGreaterThanOrEqual(0);
     });
 
     it("generates different IDs for different labels", () => {

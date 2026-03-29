@@ -161,9 +161,7 @@ export class FixtureSet {
       const rowColumns = Object.keys(row);
       if (rowColumns.length === 0) continue;
       const quotedCols = rowColumns.map((c) => quoteIdentifier(c, adapterName)).join(", ");
-      const placeholders = rowColumns
-        .map((_, i) => (adapterName === "postgres" ? `$${i + 1}` : "?"))
-        .join(", ");
+      const placeholders = rowColumns.map(() => "?").join(", ");
       const values = rowColumns.map((c) => row[c]);
       await adapter.executeMutation(
         `INSERT INTO ${quotedTable} (${quotedCols}) VALUES (${placeholders})`,

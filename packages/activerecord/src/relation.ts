@@ -1,7 +1,7 @@
 import { Table, SelectManager, Nodes, Visitors } from "@blazetrails/arel";
 import type { Base } from "./base.js";
 import { _setRelationCtor, _setScopeProxyWrapper, quoteSqlValue } from "./base.js";
-import { RecordNotFound, SoleRecordExceeded } from "./errors.js";
+import { RecordNotFound } from "./errors.js";
 import { modelRegistry } from "./associations.js";
 import { getInheritanceColumn, isStiSubclass } from "./inheritance.js";
 import {
@@ -26,14 +26,33 @@ import {
   type CalculationMethods,
 } from "./relation/calculations.js";
 import {
-  performFind, performFindBy, performFindByBang, performFindSoleBy,
-  performFirst, performFirstBang, performLast, performLastBang,
-  performSole, performTake, performTakeBang,
-  performSecond, performThird, performFourth, performFifth, performFortyTwo,
-  performSecondToLast, performThirdToLast,
-  performSecondBang, performThirdBang, performFourthBang, performFifthBang,
-  performFortyTwoBang, performSecondToLastBang, performThirdToLastBang,
-  performFindOrCreateByBang, performCreateOrFindByBang,
+  performFind,
+  performFindBy,
+  performFindByBang,
+  performFindSoleBy,
+  performFirst,
+  performFirstBang,
+  performLast,
+  performLastBang,
+  performSole,
+  performTake,
+  performTakeBang,
+  performSecond,
+  performThird,
+  performFourth,
+  performFifth,
+  performFortyTwo,
+  performSecondToLast,
+  performThirdToLast,
+  performSecondBang,
+  performThirdBang,
+  performFourthBang,
+  performFifthBang,
+  performFortyTwoBang,
+  performSecondToLastBang,
+  performThirdToLastBang,
+  performFindOrCreateByBang,
+  performCreateOrFindByBang,
   type FinderMethodsMixin,
 } from "./relation/finder-methods.js";
 import { FromClause } from "./relation/from-clause.js";
@@ -3966,7 +3985,6 @@ function wrapWithScopeProxy<T extends Base>(rel: Relation<T>): Relation<T> {
 // The prototype assignment wires the implementations from calculations.ts.
 // ---------------------------------------------------------------------------
 
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface Relation<T extends Base> extends CalculationMethods, FinderMethodsMixin {}
 
 const def = { writable: true, configurable: true, enumerable: false };

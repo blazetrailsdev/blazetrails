@@ -11,6 +11,7 @@ import type { DatabaseAdapter } from "../adapter.js";
 import { quoteIdentifier, quoteTableName } from "../connection-adapters/abstract/quoting.js";
 import { detectAdapterName } from "../adapter-name.js";
 import { type ReflectionProxy } from "./table-row.js";
+import { TableRows } from "./table-rows.js";
 
 const MAX_ID = 2 ** 30 - 1;
 
@@ -143,28 +144,12 @@ export class FixtureSet {
       associations?: ReflectionProxy[];
     } = {},
   ): Array<Record<string, unknown>> {
-    const pk = options.primaryKey ?? "id";
-    const associations = options.associations ?? [];
-    const rows: Array<Record<string, unknown>> = [];
+    const data: Record<string, Record<string, unknown>> = {};
     for (const [label, attrs] of this._fixtures) {
-      const row = { ...attrs };
-      if (row[pk] == null) {
-        row[pk] = identify(label);
-      }
-      for (const assoc of associations) {
-        const value = row[assoc.name];
-        if (typeof value === "string" && value !== "") {
-          if (!(assoc.foreignKey in row)) {
-            row[assoc.foreignKey] = identify(value);
-          }
-          if (assoc.name !== assoc.foreignKey) {
-            delete row[assoc.name];
-          }
-        }
-      }
-      rows.push(row);
+      data[label] = attrs;
     }
-    return rows;
+    const tableRows = new TableRows(this.tableName, data, options);
+    return tableRows.toRecords();
   }
 
   /**
@@ -189,15 +174,22 @@ export class FixtureSet {
     const quotedTable = quoteTableName(this.tableName, adapterName);
     const quotedCols = columns.map((c) => quoteIdentifier(c, adapterName)).join(", ");
 
-    for (const row of rows) {
-      const values = columns.map((c) => (c in row ? row[c] : null));
-      const placeholders = columns
-        .map((_, i) => (adapterName === "postgres" ? `$${i + 1}` : "?"))
-        .join(", ");
-      await adapter.executeMutation(
-        `INSERT INTO ${quotedTable} (${quotedCols}) VALUES (${placeholders})`,
-        values,
-      );
+    await adapter.beginTransaction();
+    try {
+      for (const row of rows) {
+        const values = columns.map((c) => (c in row ? row[c] : null));
+        const placeholders = columns
+          .map((_, i) => (adapterName === "postgres" ? `$${i + 1}` : "?"))
+          .join(", ");
+        await adapter.executeMutation(
+          `INSERT INTO ${quotedTable} (${quotedCols}) VALUES (${placeholders})`,
+          values,
+        );
+      }
+      await adapter.commit();
+    } catch (error) {
+      await adapter.rollback();
+      throw error;
     }
   }
 

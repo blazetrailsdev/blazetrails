@@ -92,9 +92,16 @@ describe("QueryAttribute", () => {
     const b = new QueryAttribute("age", "25", intType);
     const c = new QueryAttribute("age", "25", stringType);
     const d = new QueryAttribute("name", "25", intType);
+    // Same type instance → equal
     expect(a.equals(b)).toBe(true);
+    // Different type instance, different class → not equal
     expect(a.equals(c)).toBe(false);
+    // Different name → not equal
     expect(a.equals(d)).toBe(false);
+    // Different type instances without equals() → not equal (reference semantics)
+    const intType2 = new IntType();
+    const e = new QueryAttribute("age", "25", intType2);
+    expect(a.equals(e)).toBe(false);
   });
 
   it("valueBeforeTypeCast preserves original value", () => {

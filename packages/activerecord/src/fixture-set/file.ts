@@ -63,6 +63,31 @@ const CRC32_TABLE = (() => {
  *
  * Mirrors: ActiveRecord::FixtureSet
  */
+/**
+ * Mirrors: ActiveRecord::FixtureSet::File
+ *
+ * Reads and parses fixture data from a file (YAML in Rails, JSON/objects in TS).
+ */
+export class File {
+  private _data: Record<string, Record<string, unknown>>;
+
+  constructor(data: Record<string, Record<string, unknown>>) {
+    this._data = data;
+  }
+
+  get rows(): Array<[string, Record<string, unknown>]> {
+    return Object.entries(this._data);
+  }
+
+  get labels(): string[] {
+    return Object.keys(this._data);
+  }
+
+  static parse(data: Record<string, Record<string, unknown>>): File {
+    return new File(data);
+  }
+}
+
 export class FixtureSet {
   readonly tableName: string;
   private _fixtures: Map<string, Record<string, unknown>>;

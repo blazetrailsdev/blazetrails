@@ -62,7 +62,7 @@ export interface Assertions {
 export async function assertQueries(
   counter: SQLCounter,
   expected: number,
-  fn: () => Promise<void>,
+  fn: () => void | Promise<void>,
 ): Promise<void> {
   counter.start();
   try {
@@ -80,6 +80,9 @@ export async function assertQueries(
 /**
  * Assert that no queries are executed during `fn`.
  */
-export async function assertNoQueries(counter: SQLCounter, fn: () => Promise<void>): Promise<void> {
+export async function assertNoQueries(
+  counter: SQLCounter,
+  fn: () => void | Promise<void>,
+): Promise<void> {
   await assertQueries(counter, 0, fn);
 }

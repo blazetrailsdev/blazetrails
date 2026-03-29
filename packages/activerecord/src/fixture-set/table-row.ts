@@ -1,6 +1,6 @@
 /**
- * Table row — processes a single fixture row, resolving associations
- * and generating primary keys.
+ * Table row — processes a single fixture row and assigns a deterministic
+ * primary key when one is not provided.
  *
  * Mirrors: ActiveRecord::FixtureSet::TableRow
  */

@@ -98,11 +98,7 @@ export async function performFind(this: FinderRelation, ...ids: unknown[]): Prom
   // CPK: find([shop_id, id]) — single tuple
   // CPK: find([[shop_id, id], [shop_id2, id2]]) — array of tuples
   // Distinguish by checking if first element is an array
-  const input = ids.length === 1 && Array.isArray(ids[0]) ? ids[0] : ids;
-  const isArrayOfTuples = Array.isArray(input[0]);
-  const tuples: unknown[][] = isArrayOfTuples ? (input as unknown[][]) : [input as unknown[]];
-
-  if (tuples.length === 0) {
+  if (ids.length === 0) {
     throw new RecordNotFound(
       `Couldn't find ${this._modelClass.name} with an empty list of ids`,
       this._modelClass.name,
@@ -110,6 +106,17 @@ export async function performFind(this: FinderRelation, ...ids: unknown[]): Prom
       [],
     );
   }
+  const input = ids.length === 1 && Array.isArray(ids[0]) ? ids[0] : ids;
+  if (Array.isArray(input) && input.length === 0) {
+    throw new RecordNotFound(
+      `Couldn't find ${this._modelClass.name} with an empty list of ids`,
+      this._modelClass.name,
+      String(pk),
+      [],
+    );
+  }
+  const isArrayOfTuples = Array.isArray(input[0]);
+  const tuples: unknown[][] = isArrayOfTuples ? (input as unknown[][]) : [input as unknown[]];
 
   // Build OR conditions for all tuples in a single query
   const orConditions = tuples.map((tuple) => buildPkWhere(this, tuple));

@@ -110,7 +110,7 @@ export class TableRow {
     for (const assoc of associations) {
       const value = this._row[assoc.name];
       if (typeof value === "string" && value !== "") {
-        if (!(assoc.foreignKey in this._row)) {
+        if (!Object.prototype.hasOwnProperty.call(this._row, assoc.foreignKey)) {
           this._row[assoc.foreignKey] = identify(value);
         }
         if (assoc.name !== assoc.foreignKey) {

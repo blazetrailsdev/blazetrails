@@ -5,7 +5,7 @@
  * Mirrors: ActiveRecord::FixtureSet::TableRow
  */
 
-import { identify } from "./file.js";
+import { identify } from "./identify.js";
 
 export class PrimaryKeyError extends Error {
   constructor(message: string) {

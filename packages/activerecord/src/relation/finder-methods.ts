@@ -159,6 +159,13 @@ function hasOrder(rel: FinderRelation): boolean {
   return rel._orderClauses.length > 0 || rel._rawOrderClauses.length > 0;
 }
 
+function hasReversibleOrder(rel: FinderRelation): boolean {
+  // Only _orderClauses can be reversed by reverseOrder().
+  // _rawOrderClauses (e.g. from inOrderOf) contain arbitrary SQL
+  // that can't be reliably reversed.
+  return rel._orderClauses.length > 0;
+}
+
 export async function performFirst(this: FinderRelation, n?: number): Promise<any> {
   if (this._isNone) return n !== undefined ? [] : null;
   if (n !== undefined) {
@@ -191,7 +198,7 @@ function orderByPk(rel: FinderRelation, direction: "asc" | "desc"): any {
 export async function performLast(this: FinderRelation, n?: number): Promise<any> {
   if (this._isNone) return n !== undefined ? [] : null;
   let rel: any;
-  if (!hasOrder(this)) {
+  if (!hasReversibleOrder(this)) {
     rel = orderByPk(this, "desc");
   } else {
     rel = this.reverseOrder();
@@ -259,7 +266,7 @@ async function findNthWithLimit(this: FinderRelation, index: number): Promise<an
 
 async function findNthFromLast(this: FinderRelation, index: number): Promise<any | null> {
   let rel: any;
-  if (!hasOrder(this)) {
+  if (!hasReversibleOrder(this)) {
     rel = orderByPk(this, "desc");
   } else {
     rel = this.reverseOrder();

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "../activesupport/src/index.ts",
+    "../arel/src/index.ts",
+    "../activemodel/src/index.ts",
+    "../activerecord/src/index.ts",
+    "../rack/src/index.ts",
+    "../actionpack/src/index.ts"
+  ],
+  "entryPointStrategy": "expand",
+  "out": "static/docs",
+  "name": "BlazeTrails API",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "excludeExternals": true,
+  "tsconfig": "../activerecord/tsconfig.json",
+  "skipErrorChecking": true,
+  "hideGenerator": true,
+  "navigation": {
+    "includeCategories": true,
+    "includeGroups": true
+  },
+  "categorizeByGroup": true,
+  "sort": ["source-order"],
+  "visibilityFilters": {
+    "protected": true,
+    "@internal": false
+  }
+}

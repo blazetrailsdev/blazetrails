@@ -16,5 +16,6 @@ export default defineConfig({
   test: {
     globals: true,
     include: ["packages/*/src/**/*.test.ts"],
+    exclude: ["**/node_modules/**", "**/dist/**", "packages/website/**"],
   },
 });

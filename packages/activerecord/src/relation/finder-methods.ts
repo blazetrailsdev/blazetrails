@@ -37,7 +37,7 @@ function buildPkWhere(rel: FinderRelation, id: unknown): Record<string, unknown>
   if (Array.isArray(pk)) {
     if (!Array.isArray(id) || id.length !== pk.length) {
       throw new RecordNotFound(
-        `${rel._modelClass.name}: composite primary key requires a ${pk.length}-element array, got ${JSON.stringify(id)}`,
+        `${rel._modelClass.name}: composite primary key requires a ${pk.length}-element array, got ${String(id)}`,
         rel._modelClass.name,
         String(pk),
         id,
@@ -127,7 +127,7 @@ export async function performFind(this: FinderRelation, ...ids: unknown[]): Prom
   const records = await rel.toArray();
   if (records.length !== tuples.length) {
     throw new RecordNotFound(
-      `Couldn't find all ${this._modelClass.name} with '${pk}': (${JSON.stringify(tuples)})`,
+      `Couldn't find all ${this._modelClass.name} with '${pk}': (${String(tuples)})`,
       this._modelClass.name,
       String(pk),
       tuples,

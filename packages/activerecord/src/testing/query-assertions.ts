@@ -4,10 +4,13 @@
  * Mirrors: ActiveRecord::Assertions::QueryAssertions
  */
 
+import type { DatabaseAdapter } from "../adapter.js";
+
 /**
  * Mirrors: ActiveRecord::Assertions::QueryAssertions::SQLCounter
  *
- * Counts SQL queries executed during a block for assertion purposes.
+ * Counts SQL queries executed during a block. Wraps a DatabaseAdapter
+ * to intercept execute/executeMutation calls.
  */
 export class SQLCounter {
   private _queries: string[] = [];
@@ -38,6 +41,30 @@ export class SQLCounter {
 
   reset(): void {
     this._queries = [];
+  }
+
+  /**
+   * Wrap a DatabaseAdapter so all queries are recorded by this counter.
+   */
+  wrap(adapter: DatabaseAdapter): DatabaseAdapter {
+    const counter = this;
+    return {
+      async execute(sql: string, binds?: unknown[]) {
+        counter.record(sql);
+        return adapter.execute(sql, binds);
+      },
+      async executeMutation(sql: string, binds?: unknown[]) {
+        counter.record(sql);
+        return adapter.executeMutation(sql, binds);
+      },
+      beginTransaction: () => adapter.beginTransaction(),
+      commit: () => adapter.commit(),
+      rollback: () => adapter.rollback(),
+      createSavepoint: (name: string) => adapter.createSavepoint(name),
+      releaseSavepoint: (name: string) => adapter.releaseSavepoint(name),
+      rollbackToSavepoint: (name: string) => adapter.rollbackToSavepoint(name),
+      explain: adapter.explain?.bind(adapter),
+    };
   }
 }
 

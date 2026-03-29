@@ -7,6 +7,10 @@
  * (typically YAML/JSON) and load it into the database for tests.
  */
 
+import type { DatabaseAdapter } from "../adapter.js";
+import { quoteIdentifier } from "../connection-adapters/abstract/quoting.js";
+import { detectAdapterName } from "../adapter-name.js";
+
 const MAX_ID = 2 ** 30 - 1;
 
 /**
@@ -142,5 +146,43 @@ export class FixtureSet {
       rows.push(row);
     }
     return rows;
+  }
+
+  /**
+   * Insert all fixture rows into the database.
+   *
+   * Mirrors: ActiveRecord::FixtureSet#insert
+   */
+  async insertAll(adapter: DatabaseAdapter, options: { primaryKey?: string } = {}): Promise<void> {
+    const rows = this.toRows(options.primaryKey);
+    if (rows.length === 0) return;
+
+    const adapterName = detectAdapterName(adapter);
+    const columns = Object.keys(rows[0]);
+    const quotedTable = quoteIdentifier(this.tableName, adapterName);
+    const quotedCols = columns.map((c) => quoteIdentifier(c, adapterName)).join(", ");
+
+    for (const row of rows) {
+      const values = columns.map((c) => row[c]);
+      const placeholders = columns
+        .map((_, i) => (adapterName === "postgres" ? `$${i + 1}` : "?"))
+        .join(", ");
+      await adapter.executeMutation(
+        `INSERT INTO ${quotedTable} (${quotedCols}) VALUES (${placeholders})`,
+        values,
+      );
+    }
+  }
+
+  /**
+   * Delete all rows from the fixture's table, then insert fixtures.
+   *
+   * Mirrors: ActiveRecord::FixtureSet#create_fixtures (truncate + insert)
+   */
+  async loadInto(adapter: DatabaseAdapter, options: { primaryKey?: string } = {}): Promise<void> {
+    const adapterName = detectAdapterName(adapter);
+    const quotedTable = quoteIdentifier(this.tableName, adapterName);
+    await adapter.executeMutation(`DELETE FROM ${quotedTable}`);
+    await this.insertAll(adapter, options);
   }
 }

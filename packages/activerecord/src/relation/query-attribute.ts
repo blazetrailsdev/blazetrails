@@ -1,8 +1,7 @@
 /**
- * QueryAttribute — an attribute value used in query predicates.
+ * QueryAttribute — a value object for use when constructing query conditions.
  *
- * Wraps a value with its type for proper casting in WHERE clauses.
- * Used by the PredicateBuilder when constructing query conditions.
+ * Wraps a value with its type, memoizing cast and serialized values.
  *
  * Mirrors: ActiveRecord::Relation::QueryAttribute
  */
@@ -16,6 +15,10 @@ export class QueryAttribute {
   readonly name: string;
   readonly valueBeforeTypeCast: unknown;
   readonly type: CastType;
+  private _castValue: unknown = undefined;
+  private _hasCastValue = false;
+  private _serializedValue: unknown = undefined;
+  private _hasSerialized = false;
 
   constructor(name: string, value: unknown, type: CastType) {
     this.name = name;
@@ -23,8 +26,22 @@ export class QueryAttribute {
     this.type = type;
   }
 
+  /**
+   * Construct with an already-cast value (skips re-casting).
+   */
+  static withCastValue(name: string, value: unknown, type: CastType): QueryAttribute {
+    const attr = new QueryAttribute(name, value, type);
+    attr._castValue = value;
+    attr._hasCastValue = true;
+    return attr;
+  }
+
   get value(): unknown {
-    return this.type.cast(this.valueBeforeTypeCast);
+    if (!this._hasCastValue) {
+      this._castValue = this.type.cast(this.valueBeforeTypeCast);
+      this._hasCastValue = true;
+    }
+    return this._castValue;
   }
 
   typeCast(): unknown {
@@ -32,14 +49,15 @@ export class QueryAttribute {
   }
 
   valueForDatabase(): unknown {
-    if (this.type.serialize) {
-      return this.type.serialize(this.value);
+    if (!this._hasSerialized) {
+      this._serializedValue = this.type.serialize ? this.type.serialize(this.value) : this.value;
+      this._hasSerialized = true;
     }
-    return this.value;
+    return this._serializedValue;
   }
 
   withCastValue(value: unknown): QueryAttribute {
-    return new QueryAttribute(this.name, value, this.type);
+    return QueryAttribute.withCastValue(this.name, value, this.type);
   }
 
   isNil(): boolean {
@@ -56,6 +74,10 @@ export class QueryAttribute {
   }
 
   equals(other: QueryAttribute): boolean {
-    return this.name === other.name && this.valueBeforeTypeCast === other.valueBeforeTypeCast;
+    return (
+      this.name === other.name &&
+      this.valueBeforeTypeCast === other.valueBeforeTypeCast &&
+      this.type.constructor === other.type.constructor
+    );
   }
 }

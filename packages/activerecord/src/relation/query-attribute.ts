@@ -74,10 +74,12 @@ export class QueryAttribute {
   }
 
   equals(other: QueryAttribute): boolean {
-    return (
-      this.name === other.name &&
-      this.valueBeforeTypeCast === other.valueBeforeTypeCast &&
-      this.type.constructor === other.type.constructor
-    );
+    if (this.name !== other.name) return false;
+    if (this.valueBeforeTypeCast !== other.valueBeforeTypeCast) return false;
+    if (this.type === other.type) return true;
+    if ("equals" in this.type && typeof (this.type as any).equals === "function") {
+      return (this.type as any).equals(other.type);
+    }
+    return this.type.constructor === other.type.constructor;
   }
 }

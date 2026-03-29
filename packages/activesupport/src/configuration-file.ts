@@ -27,18 +27,20 @@ export class ConfigurationFile {
         return parsed as Record<string, unknown>;
       }
       return {};
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       throw new ConfigurationFile.FormatError(
         `YAML syntax error occurred while parsing ${this.contentPath}. ` +
           `Please note that YAML must be consistently indented using spaces. Tabs are not allowed. ` +
-          `Error: ${error.message}`,
+          `Error: ${errorMessage}`,
+        error,
       );
     }
   }
 
   static FormatError = class FormatError extends Error {
-    constructor(message: string) {
-      super(message);
+    constructor(message: string, cause?: unknown) {
+      super(message, cause !== undefined ? { cause } : undefined);
       this.name = "FormatError";
     }
   };

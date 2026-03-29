@@ -53,8 +53,9 @@ export class GeneratedRelationMethods {
 }
 
 /**
- * DelegateCache — caches delegation lookups per model class so scope
- * resolution doesn't repeat the prototype chain walk on every call.
+ * DelegateCache — helper for caching delegation lookups per model class.
+ * Currently provided to match the Rails module structure; not yet wired
+ * into the Proxy delegation path.
  *
  * Mirrors: ActiveRecord::Delegation::DelegateCache
  */
@@ -77,10 +78,6 @@ export class DelegateCache {
   }
 }
 
-/**
- * Wrap a Relation in a Proxy that delegates scope names
- * to the model's registered scopes.
- */
 /**
  * Wrap a Relation in a Proxy that delegates named scope lookups
  * to the model's scope registry.

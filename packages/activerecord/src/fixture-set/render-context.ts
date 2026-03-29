@@ -18,9 +18,15 @@ export class RenderContext {
 
   render(template: string, locals: Record<string, unknown> = {}): string {
     return template.replace(/\$\{(\w+)\}/g, (_match, key) => {
-      if (Object.prototype.hasOwnProperty.call(locals, key)) return String(locals[key]);
+      if (Object.prototype.hasOwnProperty.call(locals, key)) {
+        const value = locals[key];
+        return value == null ? "" : String(value);
+      }
       const helper = this._helpers.get(key);
-      if (helper) return String(helper());
+      if (helper) {
+        const value = helper();
+        return value == null ? "" : String(value);
+      }
       return "";
     });
   }

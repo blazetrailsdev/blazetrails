@@ -66,7 +66,7 @@ export class TableRow {
     this._row = { ...row };
     this._primaryKey = options.primaryKey ?? "id";
 
-    if (this._row[this._primaryKey] === undefined) {
+    if (this._row[this._primaryKey] == null) {
       this._row[this._primaryKey] = identify(label);
     }
   }

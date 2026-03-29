@@ -42,7 +42,7 @@ export class Fixture {
 
   constructor(name: string, fixture: Record<string, unknown>, modelClass: string | null = null) {
     this.name = name;
-    this._fixture = fixture;
+    this._fixture = { ...fixture };
     this.modelClass = modelClass;
   }
 

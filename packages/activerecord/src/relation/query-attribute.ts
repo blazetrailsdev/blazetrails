@@ -79,6 +79,6 @@ export class QueryAttribute {
     if ("equals" in this.type && typeof (this.type as any).equals === "function") {
       return (this.type as any).equals(other.type);
     }
-    return this.type.constructor === other.type.constructor;
+    return false;
   }
 }

@@ -82,7 +82,7 @@ export class DelegateCache {
  * Wrap a Relation in a Proxy that delegates scope names
  * to the model's registered scopes.
  */
-export function wrapWithScopeProxy<T extends Base>(rel: any): any {
+export function wrapWithScopeProxy<T extends object>(rel: T): T {
   return new Proxy(rel, {
     get(target: any, prop: string | symbol, receiver: any) {
       const value = Reflect.get(target, prop, receiver);

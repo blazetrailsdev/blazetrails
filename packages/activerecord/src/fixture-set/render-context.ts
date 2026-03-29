@@ -27,7 +27,7 @@ export class RenderContext {
         const value = helper();
         return value == null ? "" : String(value);
       }
-      return "";
+      throw new Error(`Unknown fixture placeholder: ${key}`);
     });
   }
 }

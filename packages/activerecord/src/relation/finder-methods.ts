@@ -113,15 +113,9 @@ export async function performFind(this: FinderRelation, ...ids: unknown[]): Prom
 
   // Build OR conditions for all tuples in a single query
   const orConditions = tuples.map((tuple) => buildPkWhere(this, tuple));
-  let rel: any = this._clone();
-  if (orConditions.length === 1) {
-    rel = this.where(orConditions[0]);
-  } else {
-    // Use whereAny if available, otherwise chain OR
-    rel = this.where(orConditions[0]);
-    for (let i = 1; i < orConditions.length; i++) {
-      rel = rel.or(this.where(orConditions[i]));
-    }
+  let rel: any = this.where(orConditions[0]);
+  for (let i = 1; i < orConditions.length; i++) {
+    rel = rel.or(this.where(orConditions[i]));
   }
   const records = await rel.toArray();
   if (records.length !== tuples.length) {

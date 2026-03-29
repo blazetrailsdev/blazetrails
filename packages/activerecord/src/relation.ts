@@ -3987,8 +3987,8 @@ function wrapWithScopeProxy<T extends Base>(rel: Relation<T>): Relation<T> {
 export interface Relation<T extends Base> extends CalculationMethods {
   // Finder methods — typed with T to preserve generics through the interface merge.
   // Implementations are in finder-methods.ts, wired via prototype assignment below.
-  find(id: unknown): Promise<T>;
   find(ids: unknown[]): Promise<T[]>;
+  find(id: unknown): Promise<T>;
   find(...ids: unknown[]): Promise<T | T[]>;
   findBy(conditions: Record<string, unknown>): Promise<T | null>;
   findByBang(conditions: Record<string, unknown>): Promise<T>;

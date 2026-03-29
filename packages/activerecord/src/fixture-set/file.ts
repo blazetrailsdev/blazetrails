@@ -151,13 +151,13 @@ export class FixtureSet {
     adapter: DatabaseAdapter,
     options: { primaryKey?: string; associations?: ReflectionProxy[] } = {},
   ): Promise<void> {
-    const { rows, joinRows } = this._buildRows(options);
+    const { rows, joinRowsByTable } = this._buildRows(options);
     if (rows.length === 0) return;
     await adapter.beginTransaction();
     try {
       await this._insertRows(adapter, rows);
-      for (const jr of joinRows) {
-        await this._insertRows(adapter, [jr.row], jr.table);
+      for (const [table, batch] of joinRowsByTable) {
+        await this._insertRows(adapter, batch, table);
       }
       await adapter.commit();
     } catch (error) {
@@ -176,15 +176,15 @@ export class FixtureSet {
     adapter: DatabaseAdapter,
     options: { primaryKey?: string; associations?: ReflectionProxy[] } = {},
   ): Promise<void> {
-    const { rows, joinRows } = this._buildRows(options);
+    const { rows, joinRowsByTable } = this._buildRows(options);
     const adapterName = detectAdapterName(adapter);
     const quotedTable = quoteTableName(this.tableName, adapterName);
     await adapter.beginTransaction();
     try {
       await adapter.executeMutation(`DELETE FROM ${quotedTable}`);
       await this._insertRows(adapter, rows);
-      for (const jr of joinRows) {
-        await this._insertRows(adapter, [jr.row], jr.table);
+      for (const [table, batch] of joinRowsByTable) {
+        await this._insertRows(adapter, batch, table);
       }
       await adapter.commit();
     } catch (error) {
@@ -195,7 +195,7 @@ export class FixtureSet {
 
   private _buildRows(options: { primaryKey?: string; associations?: ReflectionProxy[] } = {}): {
     rows: Array<Record<string, unknown>>;
-    joinRows: import("./table-row.js").JoinRow[];
+    joinRowsByTable: Map<string, Array<Record<string, unknown>>>;
   } {
     const data: Record<string, Record<string, unknown>> = {};
     for (const [label, attrs] of this._fixtures) {
@@ -206,7 +206,16 @@ export class FixtureSet {
     if (this._encryptedAttributes && this._encrypt) {
       rows = rows.map((row) => encryptFixtureData(row, this._encryptedAttributes!, this._encrypt!));
     }
-    return { rows, joinRows: tableRows.joinRows() };
+    const joinRowsByTable = new Map<string, Array<Record<string, unknown>>>();
+    for (const jr of tableRows.joinRows()) {
+      let batch = joinRowsByTable.get(jr.table);
+      if (!batch) {
+        batch = [];
+        joinRowsByTable.set(jr.table, batch);
+      }
+      batch.push(jr.row);
+    }
+    return { rows, joinRowsByTable };
   }
 
   private async _insertRows(

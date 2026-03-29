@@ -39,7 +39,7 @@ export class ModelMetadata {
     const model = modelRegistry.get(className);
     if (!model) {
       throw new Error(
-        `Model "${className}" not found in registry. Did you forget to call registerModel(${className})?`,
+        `Model "${className}" not found in registry. Did you forget to call registerModel("${className}")?`,
       );
     }
     return new ModelMetadata(className);

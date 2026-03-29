@@ -53,7 +53,6 @@ import {
   performThirdToLastBang,
   performFindOrCreateByBang,
   performCreateOrFindByBang,
-  type FinderMethodsMixin,
 } from "./relation/finder-methods.js";
 import { FromClause } from "./relation/from-clause.js";
 import { WhereClause } from "./relation/where-clause.js";
@@ -3985,7 +3984,48 @@ function wrapWithScopeProxy<T extends Base>(rel: Relation<T>): Relation<T> {
 // The prototype assignment wires the implementations from calculations.ts.
 // ---------------------------------------------------------------------------
 
-export interface Relation<T extends Base> extends CalculationMethods, FinderMethodsMixin {}
+export interface Relation<T extends Base> extends CalculationMethods {
+  // Finder methods — typed with T to preserve generics through the interface merge.
+  // Implementations are in finder-methods.ts, wired via prototype assignment below.
+  find(id: unknown): Promise<T>;
+  find(ids: unknown[]): Promise<T[]>;
+  find(...ids: unknown[]): Promise<T | T[]>;
+  findBy(conditions: Record<string, unknown>): Promise<T | null>;
+  findByBang(conditions: Record<string, unknown>): Promise<T>;
+  findSoleBy(conditions: Record<string, unknown>): Promise<T>;
+  first(): Promise<T | null>;
+  first(n: number): Promise<T[]>;
+  firstBang(): Promise<T>;
+  last(): Promise<T | null>;
+  last(n: number): Promise<T[]>;
+  lastBang(): Promise<T>;
+  sole(): Promise<T>;
+  take(): Promise<T | null>;
+  take(limit: number): Promise<T[]>;
+  takeBang(): Promise<T>;
+  second(): Promise<T | null>;
+  third(): Promise<T | null>;
+  fourth(): Promise<T | null>;
+  fifth(): Promise<T | null>;
+  fortyTwo(): Promise<T | null>;
+  secondToLast(): Promise<T | null>;
+  thirdToLast(): Promise<T | null>;
+  secondBang(): Promise<T>;
+  thirdBang(): Promise<T>;
+  fourthBang(): Promise<T>;
+  fifthBang(): Promise<T>;
+  fortyTwoBang(): Promise<T>;
+  secondToLastBang(): Promise<T>;
+  thirdToLastBang(): Promise<T>;
+  findOrCreateByBang(
+    conditions: Record<string, unknown>,
+    extra?: Record<string, unknown>,
+  ): Promise<T>;
+  createOrFindByBang(
+    conditions: Record<string, unknown>,
+    extra?: Record<string, unknown>,
+  ): Promise<T>;
+}
 
 const def = { writable: true, configurable: true, enumerable: false };
 Object.defineProperties(Relation.prototype, {

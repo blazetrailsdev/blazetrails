@@ -35,10 +35,17 @@ interface FinderRelation {
 function buildPkWhere(rel: FinderRelation, id: unknown): Record<string, unknown> {
   const pk = rel._modelClass.primaryKey;
   if (Array.isArray(pk)) {
-    const tuple = id as unknown[];
+    if (!Array.isArray(id) || id.length !== pk.length) {
+      throw new RecordNotFound(
+        `${rel._modelClass.name}: composite primary key requires a ${pk.length}-element array, got ${JSON.stringify(id)}`,
+        rel._modelClass.name,
+        String(pk),
+        id,
+      );
+    }
     const conditions: Record<string, unknown> = {};
     pk.forEach((col, i) => {
-      conditions[col] = tuple[i];
+      conditions[col] = id[i];
     });
     return conditions;
   }

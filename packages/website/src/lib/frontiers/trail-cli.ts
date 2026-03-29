@@ -228,9 +228,10 @@ function generateModelFile(
 
   const staticBlock = attrLines ? `\n  static {\n${attrLines}\n  }\n` : "";
 
-  const content = `// import { Base } from "@blazetrails/activerecord";
-
-class ${className} extends Base {${staticBlock}}
+  const tableName = tableize(className);
+  const content = `class ${className} extends Base {
+  static tableName = "${tableName}";
+${staticBlock}}
 `;
 
   return { filename, content };
@@ -277,32 +278,30 @@ return tables.length > 0
     {
       path: "config/routes.ts",
       content: `// Define your application routes here.
-// import { Router } from "@blazetrails/actionpack";
-//
 // Example:
-//   router.resources("posts");
-//   router.get("/", "home#index");
+//   app.drawRoutes((r) => {
+//     r.resources("posts");
+//     r.get("/", { to: "home#index" });
+//   });
 
 // routes
 `,
     },
     {
       path: "app/controllers/application-controller.ts",
-      content: `// Base controller — all controllers inherit from this.
-// import { ActionController } from "@blazetrails/actionpack";
-//
-// export class ApplicationController extends ActionController.Base {
-// }
+      content: `class ApplicationController extends ActionController.Base {
+  // Base controller — all controllers inherit from this.
+}
 `,
     },
     {
       path: "db/seeds.ts",
       content: `// Seed your database here.
-// Example:
-//   await adapter.executeMutation(
-//     'INSERT INTO "users" ("name", "email") VALUES (?, ?)',
-//     ["Admin", "admin@example.com"]
-//   );
+//
+// await adapter.executeMutation(
+//   'INSERT INTO "users" ("name", "email", "created_at", "updated_at") VALUES (?, ?, datetime("now"), datetime("now"))',
+//   ["Admin", "admin@example.com"]
+// );
 `,
     },
     {
@@ -572,9 +571,12 @@ export function createTrailCLI(runtime: Runtime) {
         runtime.vfs.write(migration.filename, migration.content);
         log(`      create  ${migration.filename}`);
 
-        // Controller — real ActionController, not commented out
+        // Controller — uses ActiveRecord model for queries
         const controllerFile = `app/controllers/${dasherize(resourceName)}-controller.ts`;
-        const _colJsonFields = columns.map((c) => `${c.name}: row.${c.name}`).join(", ");
+        const singular = underscore(className);
+        const colAssignments = columns
+          .map((c) => `      "${c.name}": this.params.get("${c.name}")`)
+          .join(",\n");
         runtime.vfs.write(
           controllerFile,
           `class ${className}Controller extends ActionController.Base {
@@ -587,22 +589,34 @@ export function createTrailCLI(runtime: Runtime) {
     const id = this.params.get("id");
     const rows = await adapter.execute('SELECT * FROM "${resourceName}" WHERE "id" = ?', [id]);
     if (rows.length === 0) {
-      this.render({ json: { error: "Not found" }, status: 404 });
+      this.render({ json: { error: "${className} not found" }, status: 404 });
     } else {
       this.render({ json: rows[0] });
     }
   }
 
   async create() {
+    const attrs = {
+${colAssignments}
+    };
+    const cols = Object.keys(attrs).map(k => \`"\${k}"\`).join(", ");
+    const vals = Object.values(attrs);
+    const placeholders = vals.map(() => "?").join(", ");
     const id = await adapter.executeMutation(
-      'INSERT INTO "${resourceName}" (${columns.map((c) => `"${c.name}"`).join(", ")}, "created_at", "updated_at") VALUES (${columns.map(() => "?").join(", ")}, datetime("now"), datetime("now"))',
-      [${columns.map((c) => `this.params.get("${c.name}")`).join(", ")}]
+      \`INSERT INTO "${resourceName}" (\${cols}, "created_at", "updated_at") VALUES (\${placeholders}, datetime("now"), datetime("now"))\`,
+      vals
     );
-    this.render({ json: { id }, status: "created" });
+    const ${singular} = await adapter.execute('SELECT * FROM "${resourceName}" WHERE "id" = ?', [id]);
+    this.render({ json: ${singular}[0] ?? { id }, status: "created" });
+  }
+
+  async destroy() {
+    const id = this.params.get("id");
+    await adapter.executeMutation('DELETE FROM "${resourceName}" WHERE "id" = ?', [id]);
+    this.render({ json: { deleted: true } });
   }
 }
 
-// Register the controller with the app server
 app.registerController("${resourceName}", ${className}Controller);
 `,
         );
@@ -617,6 +631,7 @@ app.registerController("${resourceName}", ${className}Controller);
   r.get("/${resourceName}", { to: "${resourceName}#index" });
   r.get("/${resourceName}/:id", { to: "${resourceName}#show" });
   r.post("/${resourceName}", { to: "${resourceName}#create" });
+  r.delete("/${resourceName}/:id", { to: "${resourceName}#destroy" });
 });
 // routes`,
           );
@@ -629,6 +644,8 @@ app.registerController("${resourceName}", ${className}Controller);
         log(`  Run: db:migrate`);
         log(`  Then: server`);
         log(`  Then: await request("GET", "/${resourceName}")`);
+        log(`        await request("GET", "/${resourceName}/1")`);
+        log(`        await request("POST", "/${resourceName}")`);
       },
 
       "db:migrate": async (_args, opts) => {
@@ -846,7 +863,22 @@ app.registerController("${resourceName}", ${className}Controller);
           log(`  Error loading routes: ${e.message}`);
         }
 
-        // Load all controller files
+        // Load all model files first
+        const modelFiles = runtime.vfs
+          .list()
+          .filter((f) => f.path.startsWith("app/models/") && f.path.endsWith(".ts"))
+          .sort((a, b) => a.path.localeCompare(b.path));
+
+        for (const file of modelFiles) {
+          log(`  Loading ${file.path}...`);
+          try {
+            await runtime.executeCode(file.content);
+          } catch (e: any) {
+            log(`  Error: ${e.message}`);
+          }
+        }
+
+        // Then load all controller files
         const controllerFiles = runtime.vfs
           .list()
           .filter((f) => f.path.startsWith("app/controllers/") && f.path.endsWith(".ts"))

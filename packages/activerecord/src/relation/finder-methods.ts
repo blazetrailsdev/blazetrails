@@ -8,10 +8,15 @@
  * Mirrors: ActiveRecord::FinderMethods
  */
 
-import { RecordNotFound, SoleRecordExceeded } from "../errors.js";
+import { RecordNotFound, RecordInvalid, SoleRecordExceeded } from "../errors.js";
 
 interface FinderRelation {
-  _modelClass: { name: string; primaryKey: string | string[]; createBang(attrs: any): Promise<any> };
+  _modelClass: {
+    name: string;
+    primaryKey: string | string[];
+    compositePrimaryKey: boolean;
+    createBang(attrs: any): Promise<any>;
+  };
   _isNone: boolean;
   _limitValue: number | null;
   _offsetValue: number | null;
@@ -27,10 +32,35 @@ interface FinderRelation {
   toArray(): Promise<any[]>;
 }
 
+function buildPkWhere(rel: FinderRelation, id: unknown): Record<string, unknown> {
+  const pk = rel._modelClass.primaryKey;
+  if (Array.isArray(pk)) {
+    const tuple = id as unknown[];
+    const conditions: Record<string, unknown> = {};
+    pk.forEach((col, i) => {
+      conditions[col] = tuple[i];
+    });
+    return conditions;
+  }
+  return { [pk]: id };
+}
+
 export async function performFind(this: FinderRelation, ...ids: unknown[]): Promise<any> {
   const pk = this._modelClass.primaryKey;
+  const isCpk = this._modelClass.compositePrimaryKey;
+
   if (ids.length === 1 && !Array.isArray(ids[0])) {
-    const records = await this.where({ [pk as string]: ids[0] }).limit(1).toArray();
+    if (isCpk) {
+      throw new RecordNotFound(
+        `Couldn't find ${this._modelClass.name} with a scalar id (composite PK requires an array)`,
+        this._modelClass.name,
+        String(pk),
+        ids[0],
+      );
+    }
+    const records = await this.where({ [pk as string]: ids[0] })
+      .limit(1)
+      .toArray();
     if (records.length === 0) {
       throw new RecordNotFound(
         `Couldn't find ${this._modelClass.name} with '${pk}'=${ids[0]}`,
@@ -41,7 +71,38 @@ export async function performFind(this: FinderRelation, ...ids: unknown[]): Prom
     }
     return records[0];
   }
-  const flatIds = ids.flat();
+
+  const input = ids.length === 1 && Array.isArray(ids[0]) ? ids[0] : ids;
+
+  if (isCpk) {
+    // CPK: each id is a tuple like [shop_id, id]
+    const tuples = input as unknown[][];
+    if (tuples.length === 0) {
+      throw new RecordNotFound(
+        `Couldn't find ${this._modelClass.name} with an empty list of ids`,
+        this._modelClass.name,
+        String(pk),
+        [],
+      );
+    }
+    const results: any[] = [];
+    for (const tuple of tuples) {
+      const conditions = buildPkWhere(this, tuple);
+      const records = await this.where(conditions).limit(1).toArray();
+      if (records.length === 0) {
+        throw new RecordNotFound(
+          `Couldn't find ${this._modelClass.name} with '${pk}'=${JSON.stringify(tuple)}`,
+          this._modelClass.name,
+          String(pk),
+          tuple,
+        );
+      }
+      results.push(records[0]);
+    }
+    return results.length === 1 ? results[0] : results;
+  }
+
+  const flatIds = input.flat();
   if (flatIds.length === 0) {
     throw new RecordNotFound(
       `Couldn't find ${this._modelClass.name} with an empty list of ids`,
@@ -88,6 +149,10 @@ export async function performFindSoleBy(
   return performSole.call(this.where(conditions));
 }
 
+function hasOrder(rel: FinderRelation): boolean {
+  return rel._orderClauses.length > 0 || rel._rawOrderClauses.length > 0;
+}
+
 export async function performFirst(this: FinderRelation, n?: number): Promise<any> {
   if (this._isNone) return n !== undefined ? [] : null;
   if (n !== undefined) {
@@ -112,7 +177,7 @@ export async function performFirstBang(this: FinderRelation): Promise<any> {
 export async function performLast(this: FinderRelation, n?: number): Promise<any> {
   if (this._isNone) return n !== undefined ? [] : null;
   let rel: any;
-  if (this._orderClauses.length === 0) {
+  if (!hasOrder(this)) {
     rel = this.order({ [this._modelClass.primaryKey as string]: "desc" as const });
   } else {
     rel = this.reverseOrder();
@@ -171,7 +236,7 @@ async function findNthWithLimit(this: FinderRelation, index: number): Promise<an
   const rel = this._clone();
   rel._limitValue = 1;
   rel._offsetValue = (this._offsetValue ?? 0) + index;
-  if (rel._orderClauses.length === 0 && rel._rawOrderClauses.length === 0) {
+  if (!hasOrder(rel)) {
     rel._orderClauses.push(this._modelClass.primaryKey as string);
   }
   const records = await rel.toArray();
@@ -180,7 +245,7 @@ async function findNthWithLimit(this: FinderRelation, index: number): Promise<an
 
 async function findNthFromLast(this: FinderRelation, index: number): Promise<any | null> {
   let rel: any;
-  if (this._orderClauses.length === 0 && this._rawOrderClauses.length === 0) {
+  if (!hasOrder(this)) {
     rel = this.order({ [this._modelClass.primaryKey as string]: "desc" as const });
   } else {
     rel = this.reverseOrder();
@@ -261,7 +326,8 @@ export async function performCreateOrFindByBang(
       ...conditions,
       ...extra,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof RecordInvalid) throw error;
     const records = await this.where(conditions).limit(1).toArray();
     if (records.length > 0) return records[0];
     throw new RecordNotFound(`${this._modelClass.name} not found`, this._modelClass.name);
@@ -270,6 +336,10 @@ export async function performCreateOrFindByBang(
 
 /**
  * Interface for the finder methods mixed into Relation.
+ * Uses `any` for return types because the generic T from Relation<T>
+ * can't flow through the interface merge without making the mixin
+ * itself generic, which creates circular complexity. The Relation class
+ * provides the generic typing at the call site.
  */
 export interface FinderMethodsMixin {
   find(...ids: unknown[]): Promise<any>;
@@ -297,6 +367,12 @@ export interface FinderMethodsMixin {
   fortyTwoBang(): Promise<any>;
   secondToLastBang(): Promise<any>;
   thirdToLastBang(): Promise<any>;
-  findOrCreateByBang(conditions: Record<string, unknown>, extra?: Record<string, unknown>): Promise<any>;
-  createOrFindByBang(conditions: Record<string, unknown>, extra?: Record<string, unknown>): Promise<any>;
+  findOrCreateByBang(
+    conditions: Record<string, unknown>,
+    extra?: Record<string, unknown>,
+  ): Promise<any>;
+  createOrFindByBang(
+    conditions: Record<string, unknown>,
+    extra?: Record<string, unknown>,
+  ): Promise<any>;
 }

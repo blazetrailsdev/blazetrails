@@ -7,7 +7,7 @@ export class ConfigurationFile {
 
   constructor(contentPath: string) {
     this.contentPath = contentPath;
-    this.content = readFileSync(contentPath, "utf-8");
+    this.content = readFileSync(contentPath, "utf8");
   }
 
   static parse(contentPath: string): Record<string, unknown> {

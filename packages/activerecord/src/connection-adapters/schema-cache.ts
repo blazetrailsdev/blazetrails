@@ -87,8 +87,8 @@ export class SchemaCache {
 /**
  * Mirrors: ActiveRecord::ConnectionAdapters::SchemaReflection
  *
- * Provides schema introspection methods that consult the cache first,
- * falling back to the database.
+ * Wraps a SchemaCache. Introspection methods that consult the cache
+ * and fall back to the database will be added as they are needed.
  */
 export class SchemaReflection {
   private _cache: SchemaCache;

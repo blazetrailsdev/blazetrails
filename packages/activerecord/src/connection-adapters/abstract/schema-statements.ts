@@ -510,10 +510,10 @@ export class SchemaStatements {
           [tableName],
         );
         return rows.map((row: any) => {
-          // Use udt_name for the type mapper (e.g. "varchar", "int4")
-          // but data_type for the full SQL type (e.g. "timestamp without time zone")
           let sqlType: string = row.data_type;
-          if (row.character_maximum_length) {
+          if (row.data_type === "ARRAY") {
+            sqlType = `${row.udt_name.replace(/^_/, "")}[]`;
+          } else if (row.character_maximum_length) {
             sqlType = `${row.udt_name}(${row.character_maximum_length})`;
           } else if (
             row.numeric_precision != null &&

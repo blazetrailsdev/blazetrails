@@ -1,6 +1,6 @@
 /**
- * Table row — processes a single fixture row and assigns a deterministic
- * primary key when one is not provided.
+ * Table row — processes a single fixture row, resolving association
+ * labels to foreign key IDs and assigning deterministic primary keys.
  *
  * Mirrors: ActiveRecord::FixtureSet::TableRow
  */
@@ -16,6 +16,10 @@ export class PrimaryKeyError extends Error {
 
 /**
  * Mirrors: ActiveRecord::FixtureSet::TableRow::ReflectionProxy
+ *
+ * Describes a belongs_to association for fixture resolution.
+ * When a fixture row has a key matching `name`, the value is
+ * treated as a fixture label and resolved to `foreignKey: identify(value)`.
  */
 export class ReflectionProxy {
   readonly name: string;
@@ -61,13 +65,24 @@ export class TableRow {
   private _row: Record<string, unknown>;
   private _primaryKey: string;
 
-  constructor(label: string, row: Record<string, unknown>, options: { primaryKey?: string } = {}) {
+  constructor(
+    label: string,
+    row: Record<string, unknown>,
+    options: {
+      primaryKey?: string;
+      associations?: ReflectionProxy[];
+    } = {},
+  ) {
     this.label = label;
     this._row = { ...row };
     this._primaryKey = options.primaryKey ?? "id";
 
     if (this._row[this._primaryKey] == null) {
       this._row[this._primaryKey] = identify(label);
+    }
+
+    if (options.associations) {
+      this._resolveAssociations(options.associations);
     }
   }
 
@@ -77,5 +92,33 @@ export class TableRow {
 
   get primaryKeyValue(): unknown {
     return this._row[this._primaryKey];
+  }
+
+  /**
+   * Resolve association labels to foreign key IDs.
+   *
+   * If a fixture row has a key matching an association name (e.g. "author")
+   * and the value is a string (a fixture label), replace it with the
+   * foreign key column set to the deterministic ID for that label.
+   *
+   * Example:
+   *   row: { title: "Hello", author: "alice" }
+   *   association: { name: "author", foreignKey: "author_id", className: "Author" }
+   *   result: { title: "Hello", author_id: identify("alice") }
+   */
+  private _resolveAssociations(associations: ReflectionProxy[]): void {
+    for (const assoc of associations) {
+      const value = this._row[assoc.name];
+      if (
+        typeof value === "string" &&
+        value !== "" &&
+        !(assoc.name in this._row && assoc.foreignKey in this._row)
+      ) {
+        this._row[assoc.foreignKey] = identify(value);
+        if (assoc.name !== assoc.foreignKey) {
+          delete this._row[assoc.name];
+        }
+      }
+    }
   }
 }

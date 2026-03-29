@@ -10,6 +10,7 @@
 import type { DatabaseAdapter } from "../adapter.js";
 import { quoteIdentifier } from "../connection-adapters/abstract/quoting.js";
 import { detectAdapterName } from "../adapter-name.js";
+import { type ReflectionProxy } from "./table-row.js";
 
 const MAX_ID = 2 ** 30 - 1;
 
@@ -136,12 +137,28 @@ export class FixtureSet {
    * If a fixture doesn't have a primary key value, one is generated
    * from the label using identify().
    */
-  toRows(primaryKey = "id"): Array<Record<string, unknown>> {
+  toRows(
+    options: {
+      primaryKey?: string;
+      associations?: ReflectionProxy[];
+    } = {},
+  ): Array<Record<string, unknown>> {
+    const pk = options.primaryKey ?? "id";
+    const associations = options.associations ?? [];
     const rows: Array<Record<string, unknown>> = [];
     for (const [label, attrs] of this._fixtures) {
       const row = { ...attrs };
-      if (row[primaryKey] === undefined) {
-        row[primaryKey] = identify(label);
+      if (row[pk] == null) {
+        row[pk] = identify(label);
+      }
+      for (const assoc of associations) {
+        const value = row[assoc.name];
+        if (typeof value === "string" && value !== "" && !(assoc.foreignKey in row)) {
+          row[assoc.foreignKey] = identify(value);
+          if (assoc.name !== assoc.foreignKey) {
+            delete row[assoc.name];
+          }
+        }
       }
       rows.push(row);
     }
@@ -150,11 +167,15 @@ export class FixtureSet {
 
   /**
    * Insert all fixture rows into the database.
+   * Resolves association labels to foreign key IDs if associations are provided.
    *
    * Mirrors: ActiveRecord::FixtureSet#insert
    */
-  async insertAll(adapter: DatabaseAdapter, options: { primaryKey?: string } = {}): Promise<void> {
-    const rows = this.toRows(options.primaryKey);
+  async insertAll(
+    adapter: DatabaseAdapter,
+    options: { primaryKey?: string; associations?: ReflectionProxy[] } = {},
+  ): Promise<void> {
+    const rows = this.toRows(options);
     if (rows.length === 0) return;
 
     const adapterName = detectAdapterName(adapter);
@@ -179,7 +200,10 @@ export class FixtureSet {
    *
    * Mirrors: ActiveRecord::FixtureSet#create_fixtures (truncate + insert)
    */
-  async loadInto(adapter: DatabaseAdapter, options: { primaryKey?: string } = {}): Promise<void> {
+  async loadInto(
+    adapter: DatabaseAdapter,
+    options: { primaryKey?: string; associations?: ReflectionProxy[] } = {},
+  ): Promise<void> {
     const adapterName = detectAdapterName(adapter);
     const quotedTable = quoteIdentifier(this.tableName, adapterName);
     await adapter.executeMutation(`DELETE FROM ${quotedTable}`);

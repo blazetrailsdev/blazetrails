@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { FixtureSet, identify } from "./file.js";
+import { ReflectionProxy } from "./table-row.js";
 import { createTestAdapter } from "../test-adapter.js";
 import { MigrationContext } from "../migration.js";
 import type { DatabaseAdapter } from "../adapter.js";
@@ -122,6 +123,73 @@ describe("FixtureSet", () => {
       const rows = await adapter.execute('SELECT "title" FROM "posts"');
       expect(rows.length).toBe(1);
       expect(rows[0].title).toBe("New");
+    });
+  });
+
+  describe("association resolution", () => {
+    it("resolves belongs_to labels to foreign key IDs", () => {
+      const associations = [new ReflectionProxy("author", "author_id", "Author")];
+      const fs = new FixtureSet("posts", {
+        first_post: { title: "Hello", author: "alice" },
+      });
+      const rows = fs.toRows({ associations });
+      expect(rows[0].author_id).toBe(identify("alice"));
+      expect(rows[0].author).toBeUndefined();
+      expect(rows[0].title).toBe("Hello");
+    });
+
+    it("does not overwrite explicit foreign key", () => {
+      const associations = [new ReflectionProxy("author", "author_id", "Author")];
+      const fs = new FixtureSet("posts", {
+        first_post: { title: "Hello", author: "alice", author_id: 99 },
+      });
+      const rows = fs.toRows({ associations });
+      expect(rows[0].author_id).toBe(99);
+    });
+
+    it("resolves multiple associations", () => {
+      const associations = [
+        new ReflectionProxy("author", "author_id", "Author"),
+        new ReflectionProxy("category", "category_id", "Category"),
+      ];
+      const fs = new FixtureSet("posts", {
+        first_post: { title: "Hello", author: "alice", category: "tech" },
+      });
+      const rows = fs.toRows({ associations });
+      expect(rows[0].author_id).toBe(identify("alice"));
+      expect(rows[0].category_id).toBe(identify("tech"));
+      expect(rows[0].author).toBeUndefined();
+      expect(rows[0].category).toBeUndefined();
+    });
+
+    it("insertAll with associations resolves labels to IDs", async () => {
+      const adapter = createTestAdapter();
+      const ctx = new MigrationContext(adapter);
+
+      await ctx.createTable("authors", {}, (t) => {
+        t.string("name");
+      });
+      await ctx.createTable("posts", {}, (t) => {
+        t.string("title");
+        t.integer("author_id");
+      });
+
+      const authors = new FixtureSet("authors", {
+        alice: { name: "Alice" },
+      });
+      await authors.insertAll(adapter);
+
+      const posts = new FixtureSet("posts", {
+        first_post: { title: "Hello", author: "alice" },
+      });
+      const associations = [new ReflectionProxy("author", "author_id", "Author")];
+      await posts.insertAll(adapter, { associations });
+
+      const postRows = await adapter.execute('SELECT "title", "author_id" FROM "posts"');
+      expect(postRows[0].author_id).toBe(identify("alice"));
+
+      const authorRows = await adapter.execute('SELECT "id" FROM "authors"');
+      expect(authorRows[0].id).toBe(identify("alice"));
     });
   });
 });

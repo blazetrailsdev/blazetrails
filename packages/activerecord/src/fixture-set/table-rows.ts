@@ -4,7 +4,7 @@
  * Mirrors: ActiveRecord::FixtureSet::TableRows
  */
 
-import { TableRow } from "./table-row.js";
+import { TableRow, type ReflectionProxy } from "./table-row.js";
 
 export class TableRows {
   readonly tableName: string;
@@ -13,7 +13,7 @@ export class TableRows {
   constructor(
     tableName: string,
     fixtures: Record<string, Record<string, unknown>>,
-    options: { primaryKey?: string } = {},
+    options: { primaryKey?: string; associations?: ReflectionProxy[] } = {},
   ) {
     this.tableName = tableName;
     this._rows = [];

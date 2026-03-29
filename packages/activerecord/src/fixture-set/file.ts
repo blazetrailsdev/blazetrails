@@ -8,7 +8,7 @@
  */
 
 import type { DatabaseAdapter } from "../adapter.js";
-import { quoteIdentifier } from "../connection-adapters/abstract/quoting.js";
+import { quoteIdentifier, quoteTableName } from "../connection-adapters/abstract/quoting.js";
 import { detectAdapterName } from "../adapter-name.js";
 import { type ReflectionProxy } from "./table-row.js";
 
@@ -179,12 +179,16 @@ export class FixtureSet {
     if (rows.length === 0) return;
 
     const adapterName = detectAdapterName(adapter);
-    const columns = Object.keys(rows[0]);
-    const quotedTable = quoteIdentifier(this.tableName, adapterName);
+    const columnsSet = new Set<string>();
+    for (const row of rows) {
+      for (const key of Object.keys(row)) columnsSet.add(key);
+    }
+    const columns = Array.from(columnsSet);
+    const quotedTable = quoteTableName(this.tableName, adapterName);
     const quotedCols = columns.map((c) => quoteIdentifier(c, adapterName)).join(", ");
 
     for (const row of rows) {
-      const values = columns.map((c) => row[c]);
+      const values = columns.map((c) => (c in row ? row[c] : null));
       const placeholders = columns
         .map((_, i) => (adapterName === "postgres" ? `$${i + 1}` : "?"))
         .join(", ");
@@ -205,7 +209,7 @@ export class FixtureSet {
     options: { primaryKey?: string; associations?: ReflectionProxy[] } = {},
   ): Promise<void> {
     const adapterName = detectAdapterName(adapter);
-    const quotedTable = quoteIdentifier(this.tableName, adapterName);
+    const quotedTable = quoteTableName(this.tableName, adapterName);
     await adapter.executeMutation(`DELETE FROM ${quotedTable}`);
     await this.insertAll(adapter, options);
   }

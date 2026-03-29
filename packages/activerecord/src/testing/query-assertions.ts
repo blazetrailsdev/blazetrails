@@ -48,23 +48,23 @@ export class SQLCounter {
    */
   wrap(adapter: DatabaseAdapter): DatabaseAdapter {
     const counter = this;
-    return {
-      async execute(sql: string, binds?: unknown[]) {
-        counter.record(sql);
-        return adapter.execute(sql, binds);
+    return new Proxy(adapter as object, {
+      get(target, prop, receiver) {
+        if (prop === "execute") {
+          return async (sql: string, binds?: unknown[]) => {
+            counter.record(sql);
+            return (target as DatabaseAdapter).execute(sql, binds);
+          };
+        }
+        if (prop === "executeMutation") {
+          return async (sql: string, binds?: unknown[]) => {
+            counter.record(sql);
+            return (target as DatabaseAdapter).executeMutation(sql, binds);
+          };
+        }
+        return Reflect.get(target, prop, receiver);
       },
-      async executeMutation(sql: string, binds?: unknown[]) {
-        counter.record(sql);
-        return adapter.executeMutation(sql, binds);
-      },
-      beginTransaction: () => adapter.beginTransaction(),
-      commit: () => adapter.commit(),
-      rollback: () => adapter.rollback(),
-      createSavepoint: (name: string) => adapter.createSavepoint(name),
-      releaseSavepoint: (name: string) => adapter.releaseSavepoint(name),
-      rollbackToSavepoint: (name: string) => adapter.rollbackToSavepoint(name),
-      explain: adapter.explain?.bind(adapter),
-    };
+    }) as DatabaseAdapter;
   }
 }
 

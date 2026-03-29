@@ -49,7 +49,7 @@ export class QueryAttribute {
 
   valueForDatabase(): unknown {
     if (!this._hasSerialized) {
-      this._serializedValue = this.type.serialize ? this.type.serialize(this.value) : this.value;
+      this._serializedValue = this.type.serialize(this.value);
       this._hasSerialized = true;
     }
     return this._serializedValue;

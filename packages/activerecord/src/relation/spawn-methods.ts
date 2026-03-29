@@ -7,7 +7,7 @@
 import { Merger } from "./merger.js";
 
 interface SpawnRelation {
-  _clone(): any;
+  _clone(): SpawnRelation;
 }
 
 /**
@@ -15,8 +15,8 @@ interface SpawnRelation {
  *
  * Mirrors: ActiveRecord::SpawnMethods#spawn
  */
-export function performSpawn(this: SpawnRelation): any {
-  return this._clone();
+export function performSpawn<T extends SpawnRelation>(this: T): T {
+  return this._clone() as T;
 }
 
 /**
@@ -24,6 +24,6 @@ export function performSpawn(this: SpawnRelation): any {
  *
  * Mirrors: ActiveRecord::SpawnMethods#merge
  */
-export function performMerge(this: SpawnRelation, other: any): any {
-  return new Merger(this, other).merge();
+export function performMerge<T extends SpawnRelation>(this: T, other: SpawnRelation): T {
+  return new Merger(this, other).merge() as T;
 }

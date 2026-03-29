@@ -153,8 +153,10 @@ export class FixtureSet {
       }
       for (const assoc of associations) {
         const value = row[assoc.name];
-        if (typeof value === "string" && value !== "" && !(assoc.foreignKey in row)) {
-          row[assoc.foreignKey] = identify(value);
+        if (typeof value === "string" && value !== "") {
+          if (!(assoc.foreignKey in row)) {
+            row[assoc.foreignKey] = identify(value);
+          }
           if (assoc.name !== assoc.foreignKey) {
             delete row[assoc.name];
           }

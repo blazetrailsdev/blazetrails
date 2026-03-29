@@ -72,8 +72,8 @@ export class SQLCounter {
  * Mirrors: ActiveRecord::Assertions::QueryAssertions
  */
 export interface QueryAssertions {
-  assertQueries(expected: number, fn: () => Promise<void>): Promise<void>;
-  assertNoQueries(fn: () => Promise<void>): Promise<void>;
+  assertQueries(expected: number, fn: () => void | Promise<void>): Promise<void>;
+  assertNoQueries(fn: () => void | Promise<void>): Promise<void>;
 }
 
 /**

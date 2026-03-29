@@ -109,12 +109,10 @@ export class TableRow {
   private _resolveAssociations(associations: ReflectionProxy[]): void {
     for (const assoc of associations) {
       const value = this._row[assoc.name];
-      if (
-        typeof value === "string" &&
-        value !== "" &&
-        !(assoc.name in this._row && assoc.foreignKey in this._row)
-      ) {
-        this._row[assoc.foreignKey] = identify(value);
+      if (typeof value === "string" && value !== "") {
+        if (!(assoc.foreignKey in this._row)) {
+          this._row[assoc.foreignKey] = identify(value);
+        }
         if (assoc.name !== assoc.foreignKey) {
           delete this._row[assoc.name];
         }

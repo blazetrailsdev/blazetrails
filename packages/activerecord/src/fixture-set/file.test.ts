@@ -138,13 +138,14 @@ describe("FixtureSet", () => {
       expect(rows[0].title).toBe("Hello");
     });
 
-    it("does not overwrite explicit foreign key", () => {
+    it("does not overwrite explicit foreign key but removes label", () => {
       const associations = [new ReflectionProxy("author", "author_id", "Author")];
       const fs = new FixtureSet("posts", {
         first_post: { title: "Hello", author: "alice", author_id: 99 },
       });
       const rows = fs.toRows({ associations });
       expect(rows[0].author_id).toBe(99);
+      expect(rows[0].author).toBeUndefined();
     });
 
     it("resolves multiple associations", () => {

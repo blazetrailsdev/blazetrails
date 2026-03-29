@@ -33,6 +33,7 @@ export class FormatError extends FixtureError {
  */
 export class Fixture {
   static readonly FixtureError = FixtureError;
+  static readonly FixtureClassNotFound = FixtureClassNotFound;
   static readonly FormatError = FormatError;
 
   readonly name: string;

@@ -12,6 +12,8 @@ import { quoteIdentifier, quoteTableName } from "../connection-adapters/abstract
 import { detectAdapterName } from "../adapter-name.js";
 import { type ReflectionProxy } from "./table-row.js";
 import { TableRows } from "./table-rows.js";
+import { RenderContext } from "./render-context.js";
+import { encryptFixtureData } from "../encryption/encrypted-fixtures.js";
 
 export { identify, compositeIdentify } from "./identify.js";
 
@@ -48,18 +50,48 @@ export class File {
 export class FixtureSet {
   readonly tableName: string;
   private _fixtures: Map<string, Record<string, unknown>>;
+  private _renderContext?: RenderContext;
+  private _encryptedAttributes?: string[];
+  private _encrypt?: (value: unknown) => unknown;
 
-  constructor(tableName: string, data: Record<string, Record<string, unknown>>) {
+  constructor(
+    tableName: string,
+    data: Record<string, Record<string, unknown>>,
+    options: {
+      renderContext?: RenderContext;
+      encryptedAttributes?: string[];
+      encrypt?: (value: unknown) => unknown;
+    } = {},
+  ) {
     if (!data || typeof data !== "object" || Array.isArray(data)) {
       throw new Error(`Invalid fixture data for "${tableName}": expected an object`);
     }
     this.tableName = tableName;
+    this._renderContext = options.renderContext;
+    this._encryptedAttributes = options.encryptedAttributes;
+    this._encrypt = options.encrypt;
     this._fixtures = new Map();
+    const defaults = data["DEFAULTS"] ?? {};
     for (const [label, attrs] of Object.entries(data)) {
       if (label === "DEFAULTS") continue;
-      const defaults = data["DEFAULTS"] ?? {};
-      this._fixtures.set(label, { ...defaults, ...attrs });
+      let row = { ...defaults, ...attrs };
+      if (this._renderContext) {
+        row = this._renderTemplates(row, label);
+      }
+      this._fixtures.set(label, row);
     }
+  }
+
+  private _renderTemplates(row: Record<string, unknown>, label: string): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(row)) {
+      if (typeof value === "string" && value.includes("${")) {
+        result[key] = this._renderContext!.render(value, { label });
+      } else {
+        result[key] = value;
+      }
+    }
+    return result;
   }
 
   get size(): number {
@@ -113,11 +145,23 @@ export class FixtureSet {
     adapter: DatabaseAdapter,
     options: { primaryKey?: string; associations?: ReflectionProxy[] } = {},
   ): Promise<void> {
-    const rows = this.toRows(options);
+    const data: Record<string, Record<string, unknown>> = {};
+    for (const [label, attrs] of this._fixtures) {
+      data[label] = attrs;
+    }
+    const tableRows = new TableRows(this.tableName, data, options);
+    let rows = tableRows.toRecords();
     if (rows.length === 0) return;
+    if (this._encryptedAttributes && this._encrypt) {
+      rows = rows.map((row) => encryptFixtureData(row, this._encryptedAttributes!, this._encrypt!));
+    }
+    const joinRows = tableRows.joinRows();
     await adapter.beginTransaction();
     try {
       await this._insertRows(adapter, rows);
+      for (const jr of joinRows) {
+        await this._insertRows(adapter, [jr.row], jr.table);
+      }
       await adapter.commit();
     } catch (error) {
       await adapter.rollback();
@@ -152,10 +196,11 @@ export class FixtureSet {
   private async _insertRows(
     adapter: DatabaseAdapter,
     rows: Array<Record<string, unknown>>,
+    tableName?: string,
   ): Promise<void> {
     if (rows.length === 0) return;
     const adapterName = detectAdapterName(adapter);
-    const quotedTable = quoteTableName(this.tableName, adapterName);
+    const quotedTable = quoteTableName(tableName ?? this.tableName, adapterName);
 
     for (const row of rows) {
       const rowColumns = Object.keys(row);

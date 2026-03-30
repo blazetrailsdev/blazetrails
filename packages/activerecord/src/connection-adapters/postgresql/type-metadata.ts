@@ -41,6 +41,6 @@ export class TypeMetadata {
   }
 
   hashKey(): string {
-    return JSON.stringify([this.sqlType, this.oid, this.fmod]);
+    return JSON.stringify([this.sqlType, this.type, this.oid, this.fmod]);
   }
 }

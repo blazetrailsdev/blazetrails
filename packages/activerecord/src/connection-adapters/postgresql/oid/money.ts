@@ -22,10 +22,16 @@ export class Money {
     if (typeof value === "number") return value;
     if (typeof value === "string") {
       if (value === "") return null;
-      const cleaned = value.replace(/[$,\s]/g, "");
+      let str = value.trim();
+      let negative = false;
+      if (str.startsWith("(") && str.endsWith(")")) {
+        negative = true;
+        str = str.slice(1, -1).trim();
+      }
+      const cleaned = str.replace(/[$,\s]/g, "");
       const parsed = parseFloat(cleaned);
       if (isNaN(parsed)) return null;
-      return parsed;
+      return negative ? -parsed : parsed;
     }
     return null;
   }

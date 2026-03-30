@@ -67,7 +67,7 @@ export function quoteColumnName(name: string): string {
 
 export function quoteString(value: string): string {
   if (value.includes("\\")) {
-    return ` E'${value.replace(/\\/g, "\\\\").replace(/'/g, "''")}'`;
+    return `E'${value.replace(/\\/g, "\\\\").replace(/'/g, "''")}'`;
   }
   return `'${value.replace(/'/g, "''")}'`;
 }
@@ -77,6 +77,9 @@ export function quoteBinaryColumn(value: Buffer): string {
 }
 
 export function checkIntegerRange(value: bigint | number): void {
+  if (typeof value === "number" && !Number.isInteger(value)) {
+    throw new IntegerOutOf64BitRange(value);
+  }
   const bigVal = typeof value === "bigint" ? value : BigInt(value);
   if (bigVal < PG_INT64_MIN || bigVal > PG_INT64_MAX) {
     throw new IntegerOutOf64BitRange(value);

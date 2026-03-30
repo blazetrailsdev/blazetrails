@@ -8,57 +8,22 @@
  */
 
 export { PostgreSQLAdapter } from "../adapters/postgresql-adapter.js";
-
-/**
- * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQLAdapter::StatementPool
- */
-export class StatementPool {
-  private statements: Map<string, string> = new Map();
-  readonly maxSize: number;
-
-  constructor(maxSize: number = 1000) {
-    this.maxSize = maxSize;
-  }
-
-  get length(): number {
-    return this.statements.size;
-  }
-
-  get(key: string): string | undefined {
-    return this.statements.get(key);
-  }
-
-  set(key: string, value: string): void {
-    if (this.statements.size >= this.maxSize) {
-      const firstKey = this.statements.keys().next().value;
-      if (firstKey !== undefined) {
-        this.statements.delete(firstKey);
-      }
-    }
-    this.statements.set(key, value);
-  }
-
-  delete(key: string): boolean {
-    return this.statements.delete(key);
-  }
-
-  clear(): void {
-    this.statements.clear();
-  }
-
-  has(key: string): boolean {
-    return this.statements.has(key);
-  }
-}
+export { StatementPool } from "./statement-pool.js";
 
 /**
  * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQLAdapter::MoneyDecoder
  */
 export class MoneyDecoder {
   static decode(value: string): number {
-    const cleaned = value.replace(/[$,\s()]/g, "");
-    const negative = value.includes("(") || value.startsWith("-");
+    let str = value.trim();
+    let negative = false;
+    if (str.startsWith("(") && str.endsWith(")")) {
+      negative = true;
+      str = str.slice(1, -1).trim();
+    }
+    const cleaned = str.replace(/[$,\s]/g, "");
     const num = parseFloat(cleaned);
-    return negative && num > 0 ? -num : num;
+    if (isNaN(num)) return NaN;
+    return negative ? -num : str.startsWith("-") ? num : num;
   }
 }

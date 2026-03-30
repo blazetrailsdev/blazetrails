@@ -5,6 +5,7 @@
  */
 
 import { SchemaCreation as AbstractSchemaCreation } from "../abstract/schema-creation.js";
+import { quoteIdentifier, quoteTableName } from "../abstract/quoting.js";
 
 export class SchemaCreation extends AbstractSchemaCreation {
   constructor() {
@@ -16,8 +17,8 @@ export class SchemaCreation extends AbstractSchemaCreation {
     const primaryKey = (options.primaryKey as string) ?? "id";
     const name = (options.name as string) ?? `fk_rails_${fromTable}_${column}`;
 
-    let sql = `ALTER TABLE "${fromTable}" ADD CONSTRAINT "${name}" `;
-    sql += `FOREIGN KEY ("${column}") REFERENCES "${toTable}" ("${primaryKey}")`;
+    let sql = `ALTER TABLE ${quoteTableName(fromTable, "postgres")} ADD CONSTRAINT ${quoteIdentifier(name, "postgres")} `;
+    sql += `FOREIGN KEY (${quoteIdentifier(column, "postgres")}) REFERENCES ${quoteTableName(toTable, "postgres")} (${quoteIdentifier(primaryKey, "postgres")})`;
 
     if (options.onDelete) {
       sql += ` ON DELETE ${(options.onDelete as string).toUpperCase().replace("_", " ")}`;

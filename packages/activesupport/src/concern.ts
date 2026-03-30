@@ -87,14 +87,14 @@ export namespace Concern {
   }
 
   export function setIncludedBlock(target: any, block: (base: any) => void): void {
-    if (target[INCLUDED_BLOCK]) {
+    if (Object.prototype.hasOwnProperty.call(target, INCLUDED_BLOCK)) {
       throw new MultipleIncludedBlocks();
     }
     target[INCLUDED_BLOCK] = block;
   }
 
   export function setPrependedBlock(target: any, block: (base: any) => void): void {
-    if (target[PREPENDED_BLOCK]) {
+    if (Object.prototype.hasOwnProperty.call(target, PREPENDED_BLOCK)) {
       throw new MultiplePrependBlocks();
     }
     target[PREPENDED_BLOCK] = block;

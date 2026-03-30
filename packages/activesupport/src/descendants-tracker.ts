@@ -1,4 +1,4 @@
-const _subclassMap = new globalThis.WeakMap<Function, Set<Function>>();
+const _subclassMap = new globalThis.WeakMap<Function, DescendantsTracker.WeakSet<Function>>();
 const _excludedDescendants = new globalThis.WeakSet<Function>();
 let _clearDisabled = false;
 
@@ -33,6 +33,11 @@ export namespace DescendantsTracker {
       return this._map.has(object);
     }
 
+    delete(object: T): void {
+      this._map.delete(object);
+      this._refs = this._refs.filter((ref) => ref.deref() !== object);
+    }
+
     toArray(): T[] {
       const result: T[] = [];
       const alive: WeakRef<T>[] = [];
@@ -49,12 +54,12 @@ export namespace DescendantsTracker {
   }
 
   export function registerSubclass(parent: Function, child: Function): void {
-    if (!_subclassMap.has(parent)) _subclassMap.set(parent, new Set());
+    if (!_subclassMap.has(parent)) _subclassMap.set(parent, new WeakSet<Function>());
     _subclassMap.get(parent)!.add(child);
   }
 
   export function subclasses(klass: Function): Function[] {
-    const subs = [...(_subclassMap.get(klass) ?? [])];
+    const subs = _subclassMap.get(klass)?.toArray() ?? [];
     return reject(subs);
   }
 

@@ -317,7 +317,7 @@ export class Fanout {
     }
   }
 
-  buildHandle(name: string, id: unknown, payload: Record<string, unknown>): FanoutHandle {
+  buildHandle(name: string, id: unknown, payload: Record<string, unknown>): Handle {
     const groups = this.groupsFor(name);
     return new FanoutHandle(groups, name, id, payload);
   }
@@ -380,18 +380,18 @@ export class Fanout {
   }
 }
 
-export class Evented {
+export class Evented<D = EventedListener> {
   readonly pattern: Matcher;
-  readonly delegate: EventedListener;
+  readonly delegate: D;
 
-  constructor(pattern: string | RegExp | null, delegate: EventedListener) {
+  constructor(pattern: string | RegExp | null, delegate: D) {
     this.pattern = wrapMatcher(pattern);
     this.delegate = delegate;
   }
 }
 
-export class Timed extends Evented {}
+export class Timed extends Evented<TimedCallback> {}
 export class MonotonicTimed extends Timed {}
-export class EventObject extends Evented {}
+export class EventObject extends Evented<EventObjectCallback> {}
 
 export const Subscribers = { Evented, Timed, MonotonicTimed, EventObject };

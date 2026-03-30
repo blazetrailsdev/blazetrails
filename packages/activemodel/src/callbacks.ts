@@ -2,6 +2,19 @@
 type AnyRecord = any;
 
 /**
+ * Callbacks mixin contract — defines model callback registration.
+ *
+ * Mirrors: ActiveModel::Callbacks
+ *
+ * In Rails, including ActiveModel::Callbacks gives the class
+ * define_model_callbacks which creates before/after/around hooks.
+ * Model already implements this via defineModelCallbacks().
+ */
+export interface Callbacks {
+  defineModelCallbacks(...eventNames: string[]): void;
+}
+
+/**
  * Callback types.
  */
 export type CallbackFn = (record: AnyRecord) => void | boolean | Promise<void | boolean>;

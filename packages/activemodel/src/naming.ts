@@ -1,9 +1,53 @@
-/**
- * ModelName — naming conventions for a model class.
- *
- * Mirrors: ActiveModel::Name
- */
 import { underscore, pluralize, humanize } from "@blazetrails/activesupport";
+
+/**
+ * Naming mixin — provides model_name on classes and naming helpers.
+ *
+ * Mirrors: ActiveModel::Naming
+ */
+export interface Naming {
+  readonly modelName: ModelName;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-namespace
+export namespace Naming {
+  export function plural(recordOrClass: { modelName: ModelName } | ModelName): string {
+    const mn = recordOrClass instanceof ModelName ? recordOrClass : recordOrClass.modelName;
+    return mn.plural;
+  }
+
+  export function singular(recordOrClass: { modelName: ModelName } | ModelName): string {
+    const mn = recordOrClass instanceof ModelName ? recordOrClass : recordOrClass.modelName;
+    return mn.singular;
+  }
+
+  export function isUncountable(recordOrClass: { modelName: ModelName } | ModelName): boolean {
+    const mn = recordOrClass instanceof ModelName ? recordOrClass : recordOrClass.modelName;
+    return mn.singular === mn.plural;
+  }
+
+  export function singularRouteKey(recordOrClass: { modelName: ModelName } | ModelName): string {
+    const mn = recordOrClass instanceof ModelName ? recordOrClass : recordOrClass.modelName;
+    return mn.singular;
+  }
+
+  export function routeKey(recordOrClass: { modelName: ModelName } | ModelName): string {
+    const mn = recordOrClass instanceof ModelName ? recordOrClass : recordOrClass.modelName;
+    return mn.routeKey;
+  }
+
+  export function paramKey(recordOrClass: { modelName: ModelName } | ModelName): string {
+    const mn = recordOrClass instanceof ModelName ? recordOrClass : recordOrClass.modelName;
+    return mn.paramKey;
+  }
+
+  export function modelNameFromRecordOrClass(
+    recordOrClass: { modelName: ModelName } | { constructor: { modelName: ModelName } },
+  ): ModelName {
+    if ("modelName" in recordOrClass) return recordOrClass.modelName;
+    return (recordOrClass.constructor as { modelName: ModelName }).modelName;
+  }
+}
 import { I18n } from "./i18n.js";
 
 interface ModelLike {
@@ -96,3 +140,11 @@ export class ModelName {
     return [scope, "models"];
   }
 }
+
+/**
+ * Mirrors: ActiveModel::Name
+ *
+ * Inherits from ModelName — matches the Rails class name exactly.
+ * ModelName remains the primary export for backwards compatibility.
+ */
+export class Name extends ModelName {}

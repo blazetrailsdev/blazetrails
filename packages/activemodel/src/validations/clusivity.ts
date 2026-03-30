@@ -1,0 +1,39 @@
+/**
+ * Clusivity — shared logic for inclusion/exclusion validators.
+ *
+ * Mirrors: ActiveModel::Validations::Clusivity
+ *
+ * In Rails, Clusivity is a module included by both InclusionValidator
+ * and ExclusionValidator. It provides check_validity! which ensures
+ * the :in option is an enumerable, and the include?/exclude? membership test.
+ */
+export interface Clusivity {
+  checkValidity(): void;
+}
+
+export function checkClusivityValidity(options: { in?: unknown }): void {
+  const collection = options.in;
+  if (collection === undefined || collection === null) {
+    throw new Error("An :in option must be supplied (either an Array, a Range, or a Proc)");
+  }
+  if (
+    !Array.isArray(collection) &&
+    typeof collection !== "function" &&
+    !(typeof collection === "object" && Symbol.iterator in (collection as object))
+  ) {
+    throw new Error("An :in option must be supplied (either an Array, a Range, or a Proc)");
+  }
+}
+
+export function isMember(
+  collection: unknown[] | (() => unknown[]) | Iterable<unknown>,
+  value: unknown,
+): boolean {
+  const list =
+    typeof collection === "function"
+      ? collection()
+      : Array.isArray(collection)
+        ? collection
+        : Array.from(collection as Iterable<unknown>);
+  return list.includes(value);
+}

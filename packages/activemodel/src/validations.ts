@@ -1,3 +1,41 @@
+import type { Errors } from "./errors.js";
+
+/**
+ * Validations mixin contract — provides the validation lifecycle.
+ *
+ * Mirrors: ActiveModel::Validations
+ *
+ * Model implements this interface: errors, isValid/isInvalid,
+ * validate, validateBang, validationContext, validatesWith.
+ */
+export interface Validations {
+  errors: Errors;
+  isValid(context?: string): boolean;
+  validate(context?: string): unknown;
+  isInvalid(): boolean;
+  validateBang(context?: string): boolean;
+  readonly validationContext: string | null;
+}
+
+/**
+ * Mirrors: ActiveModel::Validations::ClassMethods
+ */
+export interface ValidationsClassMethods {
+  validates(attribute: string, rules: Record<string, unknown>): void;
+  validate(
+    methodOrFn: string | ((record: unknown) => void),
+    options?: Record<string, unknown>,
+  ): void;
+  validatesWith(
+    validatorClass: {
+      new (options?: Record<string, unknown>): { validate(record: unknown): void };
+    },
+    options?: Record<string, unknown>,
+  ): void;
+  validators(): unknown[];
+  validatorsOn(attribute: string): unknown[];
+}
+
 /**
  * Raised by validateBang when validation fails.
  *

@@ -11,7 +11,8 @@ import { isMarkedForDestruction } from "../autosave-association.js";
 export class PresenceValidator extends BasePresenceValidator {
   validate(record: any, attribute: string, value: unknown, errors: any): void {
     if (isAssociation(record, attribute)) {
-      const filtered = filterDestroyed(value);
+      const resolved = resolveAssociation(record, attribute, value);
+      const filtered = filterDestroyed(resolved);
       super.validate(record, attribute, filtered, errors);
       return;
     }
@@ -22,6 +23,15 @@ export class PresenceValidator extends BasePresenceValidator {
 function isAssociation(record: any, attribute: string): boolean {
   const associations: any[] = record.constructor._associations ?? [];
   return associations.some((a: any) => a.name === attribute);
+}
+
+function resolveAssociation(record: any, attribute: string, fallback: unknown): unknown {
+  if (typeof record.association === "function") {
+    const assoc = record.association(attribute);
+    if (assoc?.target !== undefined) return assoc.target;
+  }
+  if (attribute in record) return record[attribute];
+  return fallback;
 }
 
 function filterDestroyed(value: unknown): unknown {

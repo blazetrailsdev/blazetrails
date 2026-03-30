@@ -17,7 +17,7 @@ export class AssociatedValidator extends EachValidator {
     if (associationValue == null) {
       if (typeof record.association === "function") {
         const assoc = record.association(attribute);
-        associationValue = assoc?.target ?? assoc;
+        associationValue = assoc?.target;
       } else if (attribute in record) {
         associationValue = record[attribute];
       }

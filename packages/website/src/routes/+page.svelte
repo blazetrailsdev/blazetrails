@@ -321,13 +321,6 @@ const users = await User.where({ name: "Alice" })
         <use href="#cedar" x="1558" y="492" width="42" height="105" />
       </g>
 
-      <!-- Winding river — wide entry from right, tapers into upper-right distance -->
-      <path d="M1600 700 Q1550 685 1500 672 Q1430 654 1360 642 Q1290 632 1220 630 Q1150 632 1100 640 Q1050 648 1020 645 Q985 635 965 618 Q948 600 942 580 Q940 558 948 540 Q960 522 980 510 Q1005 500 1035 498 Q1065 498 1090 505 Q1115 514 1130 525 Q1148 518 1162 506 Q1178 490 1188 472 Q1195 456 1198 440
-              L1202 440 Q1200 458 1194 476 Q1184 496 1170 510 Q1158 522 1142 530 Q1125 524 1102 512 Q1078 504 1050 502 Q1020 504 998 515 Q978 528 965 548 Q952 568 950 590 Q952 612 968 630 Q988 652 1020 658 Q1055 662 1100 656 Q1150 646 1220 640 Q1295 638 1370 650 Q1440 662 1510 682 Q1560 698 1600 718 Z" fill="#2a5a6a" opacity="0.55" />
-      <!-- River surface shimmer -->
-      <path d="M1590 710 Q1530 690 1460 672 Q1380 654 1300 644 Q1220 638 1160 644 Q1100 652 1060 652 Q1020 645 995 630 Q972 612 962 590 Q958 570 968 550 Q982 530 1005 518 Q1030 508 1060 506 Q1088 510 1110 520" stroke="#4a8a9a" stroke-width="3" fill="none" opacity="0.3" />
-      <path d="M1145 528 Q1160 518 1175 502 Q1188 484 1196 462" stroke="#5aa8b8" stroke-width="1.5" fill="none" opacity="0.25" />
-
       <!-- Foreground hills — earthy brown -->
       <path d="M0 730 Q200 690 400 710 Q600 680 800 705 Q1000 675 1200 700 Q1400 680 1600 710 L1600 900 L0 900Z" fill="#3a3020" />
 
@@ -355,13 +348,6 @@ const users = await User.where({ name: "Alice" })
         <use href="#pine" x="1498" y="668" width="48" height="152" />
         <use href="#oak" x="1555" y="660" width="65" height="140" />
       </g>
-
-      <!-- Dirt path — narrow in distance, very wide at bottom, spilling past viewport -->
-      <path d="M812 698 Q806 720 798 745 Q786 772 770 800 Q748 832 720 865 Q685 900 640 940 Q590 985 530 1030
-              L870 1030 Q830 985 795 940 Q765 900 742 865 Q722 832 808 800 Q824 772 834 745 Q840 720 842 698 Z" fill="#6a5a42" opacity="0.4" />
-      <!-- Path surface streaks -->
-      <path d="M828 700 Q820 725 810 752 Q796 782 778 812 Q755 845 728 880 Q698 915 662 955" stroke="#8a7a5a" stroke-width="2" fill="none" opacity="0.3" />
-      <path d="M820 700 Q812 725 802 752 Q788 782 770 812 Q748 845 720 880 Q690 915 655 955" stroke="#a09070" stroke-width="1" fill="none" opacity="0.2" />
 
       <!-- ===== BLAZETRAILS WORDMARK ===== -->
 

@@ -14,7 +14,7 @@ import { JoinPart } from "./join-part.js";
 
 export interface JoinReflection {
   name: string;
-  type: "belongsTo" | "hasOne" | "hasMany" | "hasAndBelongsToMany";
+  type: "belongsTo" | "hasOne" | "hasMany";
   foreignKey: string;
   primaryKey?: string;
   modelClass: typeof Base;

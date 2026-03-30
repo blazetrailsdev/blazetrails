@@ -12,10 +12,27 @@ import { EachValidator } from "@blazetrails/activemodel";
 
 export class AssociatedValidator extends EachValidator {
   validateEach(record: any, attribute: string, value: unknown): void {
-    const values = Array.isArray(value) ? value : value ? [value] : [];
+    // Fetch association value — readAttribute won't have it since
+    // associations aren't stored in the attributes hash.
+    let associationValue = value;
+    if (associationValue == null) {
+      if (typeof record.association === "function") {
+        const assoc = record.association(attribute);
+        associationValue = assoc?.target ?? assoc;
+      } else if (attribute in record) {
+        associationValue = record[attribute];
+      }
+    }
+
+    const values = Array.isArray(associationValue)
+      ? associationValue
+      : associationValue
+        ? [associationValue]
+        : [];
     for (const assoc of values) {
+      if (assoc?.markedForDestruction?.()) continue;
       if (typeof assoc?.isValid === "function" && !assoc.isValid()) {
-        record.errors.add(attribute, "invalid", { value });
+        record.errors.add(attribute, "invalid", { value: associationValue });
         return;
       }
     }

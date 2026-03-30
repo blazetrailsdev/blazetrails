@@ -27,9 +27,9 @@ const JSON_ESCAPE_PATTERN = /[&><\u2028\u2029]/g;
  * jsonEscape — escapes characters that would be unsafe to embed JSON in HTML.
  * Returns html_safe if input was html_safe.
  */
-export function jsonEscape(str: string | SafeBuffer): string | SafeBuffer {
-  const input = str instanceof SafeBuffer ? str.toString() : str;
-  const wasSafe = str instanceof SafeBuffer && str.htmlSafe;
+export function jsonEscape(value: unknown): string | SafeBuffer {
+  const wasSafe = value instanceof SafeBuffer && value.htmlSafe;
+  const input = value == null ? "" : String(value);
   const result = input.replace(JSON_ESCAPE_PATTERN, (c) => JSON_ESCAPE[c]);
   return wasSafe ? htmlSafe(result) : result;
 }

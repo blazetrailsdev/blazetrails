@@ -30,6 +30,11 @@ export function stripThenable<T extends object>(obj: T): T {
 }
 
 export function applyThenable(prototype: object, evaluationMethod: string = "toArray"): void {
+  if (typeof (prototype as any)[evaluationMethod] !== "function") {
+    const name = (prototype as any).constructor?.name ?? "unknown";
+    throw new Error(`applyThenable: ${name}.prototype.${evaluationMethod} is not a function`);
+  }
+
   const def = { writable: true, configurable: true, enumerable: false };
 
   Object.defineProperties(prototype, {

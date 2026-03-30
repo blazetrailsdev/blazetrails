@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { Base } from "../index.js";
 import { createTestAdapter } from "../test-adapter.js";
 import type { DatabaseAdapter } from "../adapter.js";
@@ -65,20 +65,16 @@ describe("Thenable", () => {
   it("does not eagerly evaluate on construction", async () => {
     await User.create({ name: "Alice", active: 1 });
 
-    let queryCount = 0;
-    const originalExecute = adapter.execute.bind(adapter);
-    adapter.execute = async (...args: any[]) => {
-      queryCount++;
-      return (originalExecute as any)(...args);
-    };
+    const spy = vi.spyOn(adapter, "execute");
+    spy.mockClear();
 
     const relation = User.where({ active: 1 });
-    expect(queryCount).toBe(0);
+    expect(spy).not.toHaveBeenCalled();
 
     await relation;
-    expect(queryCount).toBe(1);
+    expect(spy).toHaveBeenCalled();
 
-    adapter.execute = originalExecute;
+    spy.mockRestore();
   });
 
   it("Relation is not instanceof Promise", () => {

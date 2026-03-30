@@ -290,7 +290,7 @@ describe("FixtureSet", () => {
       const tagIds = new Set(joinRows.map((r) => r.tag_id));
       expect(tagIds.has(identify("ruby"))).toBe(true);
       expect(tagIds.has(identify("rails"))).toBe(true);
-      expect(joinRows[0].post_id).toBe(identify("first_post"));
+      expect(joinRows.every((r) => r.post_id === identify("first_post"))).toBe(true);
     });
   });
 });

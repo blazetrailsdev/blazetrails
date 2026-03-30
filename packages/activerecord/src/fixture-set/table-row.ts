@@ -127,10 +127,13 @@ export class TableRow {
   }
 
   private _resolveHasManyThrough(assoc: HasManyThroughProxy): void {
-    const value = this._row[assoc.name];
-    if (!Array.isArray(value)) return;
+    const raw = this._row[assoc.name];
+    if (raw === undefined) return;
 
-    for (const label of value) {
+    // Normalize to array: single string becomes [string]
+    const labels: unknown[] = typeof raw === "string" ? [raw] : Array.isArray(raw) ? raw : [];
+
+    for (const label of labels) {
       if (typeof label !== "string" || label === "") continue;
       this._joinRows.push({
         table: assoc.joinTable,

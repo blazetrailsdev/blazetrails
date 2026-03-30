@@ -1,65 +1,127 @@
-import { GeneratorBase, GeneratorOptions, classify, dasherize } from "./base.js";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { GeneratorBase, GeneratorOptions, classify, dasherize, underscore } from "./base.js";
+
+interface ControllerRunOptions {
+  skipHelper?: boolean;
+  skipRoutes?: boolean;
+  test?: boolean;
+  parent?: string;
+}
 
 export class ControllerGenerator extends GeneratorBase {
   constructor(options: GeneratorOptions) {
     super(options);
   }
 
-  run(name: string, actions: string[]): string[] {
-    const className = classify(name) + (name.endsWith("Controller") ? "" : "Controller");
-    const fileName = dasherize(name.replace(/Controller$/i, "")) + "-controller";
+  run(name: string, actions: string[], options: ControllerRunOptions = {}): string[] {
+    const { skipHelper = false, skipRoutes = false, test = true, parent } = options;
+
+    const stripped = name.replace(/[_-]?[Cc]ontroller$/, "");
+    const className = classify(stripped) + "Controller";
+    const fileName = dasherize(underscore(stripped)) + "-controller";
+    const viewDir = dasherize(underscore(stripped));
+    const parentClass = parent ? classify(parent) : "ActionController.Base";
 
     const ext = this.ext();
     const ts = this.isTypeScript();
     const returnType = ts ? ": Promise<void>" : "";
 
-    // Controller file
+    const importLine = parent
+      ? `import { ${classify(parent)} } from "./${dasherize(underscore(parent))}.js";`
+      : 'import { ActionController } from "@blazetrails/actionpack";';
+
+    // Handle namespace (admin/dashboard -> Admin::DashboardController)
+    const namespaceParts = stripped.split("/");
+    const controllerName =
+      namespaceParts.length > 1
+        ? namespaceParts.map((p) => classify(p)).join("::") + "Controller"
+        : className;
+    const controllerFile =
+      namespaceParts.length > 1
+        ? namespaceParts.map((p) => dasherize(underscore(p))).join("/") + "-controller"
+        : fileName;
+
     const actionMethods = actions
       .map((a) => `  async ${a}()${returnType} {\n    // TODO: implement\n  }`)
       .join("\n\n");
 
     this.createFile(
-      `src/app/controllers/${fileName}${ext}`,
-      `import { ActionController } from "@blazetrails/actionpack";
+      `src/app/controllers/${controllerFile}${ext}`,
+      `${importLine}
 
-export class ${className} extends ActionController.Base {
+export class ${controllerName} extends ${parentClass} {
 ${actionMethods}
 }
 `,
     );
 
-    // Test file
-    const actionTests = actions
-      .map((a) => `  it("${a}", () => {\n    // TODO: test ${a} action\n  });`)
-      .join("\n\n");
+    if (test) {
+      this.createFile(
+        `test/controllers/${controllerFile}.test${ext}`,
+        `import { describe, it, expect } from "vitest";
+import { ${controllerName.replace(/::/g, "")} } from "../../src/app/controllers/${controllerFile}.js";
 
-    this.createFile(
-      `test/controllers/${fileName}.test${ext}`,
-      `import { describe, it, expect } from "vitest";
-import { ${className} } from "../../src/app/controllers/${fileName}.js";
-
-describe("${className}", () => {
-${actionTests}
+describe("${controllerName}", () => {
+${actions.map((a) => `  it("${a}", () => {\n    // TODO: test ${a} action\n  });`).join("\n\n")}
 });
 `,
-    );
+      );
+    }
 
-    // Append routes
+    if (!skipHelper) {
+      this.createFile(
+        `src/app/helpers/${dasherize(underscore(namespaceParts[namespaceParts.length - 1]))}-helper${ext}`,
+        `export const ${classify(namespaceParts[namespaceParts.length - 1])}Helper = {
+};
+`,
+      );
+    }
+
+    // Create view templates for each action
+    const viewBase =
+      namespaceParts.length > 1
+        ? namespaceParts.map((p) => dasherize(underscore(p))).join("/")
+        : viewDir;
+    for (const action of actions) {
+      this.createFile(
+        `src/app/views/${viewBase}/${action}.html${ext === ".ts" ? ".ts" : ".js"}`,
+        "",
+      );
+    }
+    // Ensure view directory exists even with no actions
+    if (actions.length === 0) {
+      const viewDirPath = `src/app/views/${viewBase}`;
+      const fullPath = path.join(this.cwd, viewDirPath);
+      fs.mkdirSync(fullPath, { recursive: true });
+    }
+
+    if (!skipRoutes && actions.length > 0) {
+      this.addRoutes(namespaceParts, actions);
+    }
+
+    return this.getCreatedFiles();
+  }
+
+  private addRoutes(namespaceParts: string[], actions: string[]): void {
     const routesFile = this.fileExists("src/config/routes.ts")
       ? "src/config/routes.ts"
       : this.fileExists("src/config/routes.js")
         ? "src/config/routes.js"
         : null;
-    if (actions.length > 0 && routesFile) {
-      const routeLines = actions
-        .map((a) => {
-          const resource = dasherize(name.replace(/Controller$/i, ""));
-          return `  router.get("/${resource}/${a}", "${resource}#${a}");`;
-        })
-        .join("\n");
+
+    if (!routesFile) return;
+
+    const controllerName = dasherize(underscore(namespaceParts[namespaceParts.length - 1]));
+
+    if (namespaceParts.length > 1) {
+      const namespace = underscore(namespaceParts[0]);
+      const routeLines = actions.map((a) => `    get "${controllerName}/${a}"`).join("\n");
+      const block = `  namespace :${namespace} do\n${routeLines}\n  end`;
+      this.insertIntoFile(routesFile, "// routes", block + "\n");
+    } else {
+      const routeLines = actions.map((a) => `  get "${controllerName}/${a}"`).join("\n");
       this.insertIntoFile(routesFile, "// routes", routeLines + "\n");
     }
-
-    return this.getCreatedFiles();
   }
 }

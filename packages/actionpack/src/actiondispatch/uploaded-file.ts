@@ -91,10 +91,17 @@ export class UploadedFile {
     if (unlink && this._tempfile) {
       try {
         fs.unlinkSync(this._tempfile);
+        this._tempfile = null;
       } catch {
-        // Ignore errors when unlinking, e.g., missing file.
+        // Only clear the path if the file no longer exists.
+        try {
+          if (!fs.existsSync(this._tempfile)) {
+            this._tempfile = null;
+          }
+        } catch {
+          // Leave _tempfile as-is if existence check fails.
+        }
       }
-      this._tempfile = null;
     }
     this._closed = true;
   }

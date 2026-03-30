@@ -77,7 +77,7 @@ export class Session {
   }
 
   private loadData(): void {
-    if (!this.loaded) {
+    if (!this.loaded && !this.destroyed) {
       const [sessionId, data] = this.store.loadSession(this.env);
       this.id = sessionId;
       this.data = { ...data };
@@ -157,6 +157,7 @@ export class Session {
   destroy(): void {
     if (!this.existed && this.id == null) {
       this.data = {};
+      this.loaded = true;
       this.destroyed = true;
       return;
     }

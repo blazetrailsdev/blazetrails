@@ -178,7 +178,7 @@ async function tableExists(adapter: SQLite3Adapter, name: string): Promise<boole
 async function migrateDb(adapter: SQLite3Adapter) {
   const ctx = new MigrationContext(adapter);
 
-  if (await tableExists(adapter, "pull_requests")) return;
+  if (await tableExists(adapter, "sync_log")) return;
 
   await ctx.createTable("pull_requests", { id: false }, (t) => {
     t.integer("number", { primaryKey: true });
@@ -256,6 +256,7 @@ async function migrateDb(adapter: SQLite3Adapter) {
     t.string("run_started_at");
     t.integer("duration_seconds");
     t.string("workflow_name");
+    t.index(["head_sha"]);
   });
 
   await ctx.createTable("workflow_jobs", { id: false }, (t) => {
@@ -267,6 +268,7 @@ async function migrateDb(adapter: SQLite3Adapter) {
     t.string("started_at");
     t.string("completed_at");
     t.integer("duration_seconds");
+    t.index(["run_id", "name"]);
   });
 
   await ctx.createTable("test_compare_stats", {}, (t) => {
@@ -486,8 +488,10 @@ async function syncPrFiles() {
           })),
         );
       }
-    } catch {
-      console.warn(`  Failed to fetch files for PR #${number}`);
+    } catch (err) {
+      console.warn(
+        `  Failed to fetch files for PR #${number}: ${err instanceof Error ? err.message : err}`,
+      );
     }
   }
 }
@@ -519,8 +523,10 @@ async function syncPrCommits() {
         );
       }
       await PullRequest.where({ number }).updateAll({ commit_count: commits.length });
-    } catch {
-      console.warn(`  Failed to fetch commits for PR #${number}`);
+    } catch (err) {
+      console.warn(
+        `  Failed to fetch commits for PR #${number}: ${err instanceof Error ? err.message : err}`,
+      );
     }
   }
 }
@@ -600,8 +606,10 @@ async function syncPrComments() {
         comment_count: totalComments,
         review_count: reviews.length,
       });
-    } catch {
-      console.warn(`  Failed to fetch comments for PR #${number}`);
+    } catch (err) {
+      console.warn(
+        `  Failed to fetch comments for PR #${number}: ${err instanceof Error ? err.message : err}`,
+      );
     }
   }
 }
@@ -697,8 +705,10 @@ async function syncWorkflowRuns(): Promise<number> {
 
         synced++;
       }
-    } catch {
-      console.warn(`  Failed to fetch workflow runs for PR #${number} (${sha})`);
+    } catch (err) {
+      console.warn(
+        `  Failed to fetch workflow runs for PR #${number} (${sha}): ${err instanceof Error ? err.message : err}`,
+      );
     }
   }
 
@@ -776,7 +786,10 @@ async function syncCompareStats(): Promise<number> {
     JOIN workflow_jobs wj ON wj.run_id = wr.id
     WHERE wj.name = 'Rails API/Test Comparison'
     AND wj.conclusion = 'success'
-    AND wr.head_sha NOT IN (SELECT DISTINCT merge_commit_sha FROM test_compare_stats)
+    AND (
+      wr.head_sha NOT IN (SELECT DISTINCT merge_commit_sha FROM test_compare_stats)
+      OR wr.head_sha NOT IN (SELECT DISTINCT merge_commit_sha FROM api_compare_stats)
+    )
     ORDER BY wr.pr_number
   `);
 
@@ -846,8 +859,10 @@ async function syncCompareStats(): Promise<number> {
           `  PR #${prNumber}: ${testStats.size} test packages (${totalTests} matched), ${apiStats.size} api packages (${totalApi} matched)`,
         );
       }
-    } catch {
-      console.warn(`  Failed to fetch logs for job ${jobId} (PR #${prNumber})`);
+    } catch (err) {
+      console.warn(
+        `  Failed to fetch logs for job ${jobId} (PR #${prNumber}): ${err instanceof Error ? err.message : err}`,
+      );
     }
   }
 
@@ -930,34 +945,38 @@ async function main() {
   const adapter = new SQLite3Adapter(DB_PATH);
   Base.adapter = adapter;
 
-  await migrateDb(adapter);
+  try {
+    await migrateDb(adapter);
 
-  console.log("=== Syncing PR data ===");
-  const prsSynced = await syncPullRequests();
+    console.log("=== Syncing PR data ===");
+    const prsSynced = await syncPullRequests();
 
-  console.log("\n=== Syncing PR files ===");
-  await syncPrFiles();
+    console.log("\n=== Syncing PR files ===");
+    await syncPrFiles();
 
-  console.log("\n=== Syncing PR commits ===");
-  await syncPrCommits();
+    console.log("\n=== Syncing PR commits ===");
+    await syncPrCommits();
 
-  console.log("\n=== Syncing PR comments & reviews ===");
-  await syncPrComments();
+    console.log("\n=== Syncing PR comments & reviews ===");
+    await syncPrComments();
 
-  console.log("\n=== Syncing workflow runs ===");
-  const runsSynced = await syncWorkflowRuns();
+    console.log("\n=== Syncing workflow runs ===");
+    const runsSynced = await syncWorkflowRuns();
 
-  console.log("\n=== Syncing compare stats from CI logs ===");
-  const logsParsed = await syncCompareStats();
+    console.log("\n=== Syncing compare stats from CI logs ===");
+    const logsParsed = await syncCompareStats();
 
-  await SyncLog.create({
-    synced_at: new Date().toISOString(),
-    prs_synced: prsSynced,
-    runs_synced: runsSynced,
-    logs_parsed: logsParsed,
-  });
+    await SyncLog.create({
+      synced_at: new Date().toISOString(),
+      prs_synced: prsSynced,
+      runs_synced: runsSynced,
+      logs_parsed: logsParsed,
+    });
 
-  await printSummary();
+    await printSummary();
+  } finally {
+    adapter.close();
+  }
 }
 
 main().catch((err) => {

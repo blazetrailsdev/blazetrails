@@ -68,13 +68,13 @@ export namespace Concern {
       }
     }
 
-    const includedBlock = def.included ?? klass[INCLUDED_BLOCK];
+    const includedBlock = def.included ?? (mixin as any)[INCLUDED_BLOCK];
     if (includedBlock) {
       includedBlock(klass);
     }
 
     if (def.prepend) {
-      const prependedBlock = def.prepended ?? klass[PREPENDED_BLOCK];
+      const prependedBlock = def.prepended ?? (mixin as any)[PREPENDED_BLOCK];
       if (prependedBlock) {
         prependedBlock(klass);
       }

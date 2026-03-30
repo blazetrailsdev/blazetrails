@@ -4,6 +4,7 @@ import { Parameters } from "../../metal/strong-parameters.js";
 describe("LogOnUnpermittedParamsTest", () => {
   afterEach(() => {
     Parameters.actionOnUnpermittedParameters = false;
+    vi.restoreAllMocks();
   });
 
   it("logs on unexpected param", () => {
@@ -11,7 +12,6 @@ describe("LogOnUnpermittedParamsTest", () => {
     const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
     new Parameters({ name: "John", admin: true }).permit("name");
     expect(spy).toHaveBeenCalledWith(expect.stringContaining("admin"));
-    spy.mockRestore();
   });
 
   it("logs on unexpected params", () => {
@@ -19,7 +19,6 @@ describe("LogOnUnpermittedParamsTest", () => {
     const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
     new Parameters({ name: "John", admin: true, secret: "x" }).permit("name");
     expect(spy).toHaveBeenCalled();
-    spy.mockRestore();
   });
 
   it("logs on unexpected nested param", () => {
@@ -28,7 +27,6 @@ describe("LogOnUnpermittedParamsTest", () => {
     const inner = new Parameters({ title: "Hi", admin: true });
     new Parameters({ post: inner }).permit({ post: ["title"] });
     expect(spy).toHaveBeenCalled();
-    spy.mockRestore();
   });
 
   it("logs on unexpected nested params", () => {
@@ -37,7 +35,6 @@ describe("LogOnUnpermittedParamsTest", () => {
     const inner = new Parameters({ title: "Hi", admin: true, secret: "x" });
     new Parameters({ post: inner }).permit({ post: ["title"] });
     expect(spy).toHaveBeenCalled();
-    spy.mockRestore();
   });
 
   it("does not log on unexpected nested params with expect", () => {
@@ -47,7 +44,6 @@ describe("LogOnUnpermittedParamsTest", () => {
     const params = new Parameters({ post: inner });
     params.expect({ post: ["title"] });
     // expect uses the same permit internally, so it may log the top-level key
-    spy.mockRestore();
   });
 
   it("does not log on unexpected nested params with expect!", () => {
@@ -56,7 +52,6 @@ describe("LogOnUnpermittedParamsTest", () => {
     const inner = new Parameters({ title: "Hi", admin: true });
     const params = new Parameters({ post: inner });
     params.expectBang({ post: ["title"] });
-    spy.mockRestore();
   });
 
   it("logs on unexpected param with deep_dup", () => {
@@ -65,7 +60,6 @@ describe("LogOnUnpermittedParamsTest", () => {
     const params = new Parameters({ name: "John", admin: true });
     params.deepDup().permit("name");
     expect(spy).toHaveBeenCalled();
-    spy.mockRestore();
   });
 
   it("logs on unexpected params with slice", () => {
@@ -74,7 +68,6 @@ describe("LogOnUnpermittedParamsTest", () => {
     const params = new Parameters({ name: "John", admin: true }).slice("name", "admin");
     params.permit("name");
     expect(spy).toHaveBeenCalled();
-    spy.mockRestore();
   });
 
   it("logs on unexpected params with except", () => {
@@ -83,17 +76,15 @@ describe("LogOnUnpermittedParamsTest", () => {
     const params = new Parameters({ name: "John", admin: true, extra: "x" }).except("extra");
     params.permit("name");
     expect(spy).toHaveBeenCalled();
-    spy.mockRestore();
   });
 
   it("logs on unexpected params with extract!", () => {
     Parameters.actionOnUnpermittedParameters = "log";
     const spy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const params = new Parameters({ name: "John", admin: true });
-    const extracted = params.extract("admin");
+    const extracted = params.extractBang("admin");
     params.permit("name");
     expect(extracted.get("admin")).toBe(true);
-    spy.mockRestore();
   });
 
   it("logs on unexpected params with transform_values", () => {
@@ -102,7 +93,6 @@ describe("LogOnUnpermittedParamsTest", () => {
     const params = new Parameters({ name: "John", admin: true }).transformValues((v) => v);
     params.permit("name");
     expect(spy).toHaveBeenCalled();
-    spy.mockRestore();
   });
 
   it("logs on unexpected params with transform_keys", () => {
@@ -111,7 +101,6 @@ describe("LogOnUnpermittedParamsTest", () => {
     const params = new Parameters({ name: "John", admin: true }).transformKeys((k) => k);
     params.permit("name");
     expect(spy).toHaveBeenCalled();
-    spy.mockRestore();
   });
 
   it("logs on unexpected param with deep_transform_keys", () => {
@@ -120,7 +109,6 @@ describe("LogOnUnpermittedParamsTest", () => {
     const params = new Parameters({ name: "John", admin: true }).deepTransformKeys((k) => k);
     params.permit("name");
     expect(spy).toHaveBeenCalled();
-    spy.mockRestore();
   });
 
   it("logs on unexpected param with select", () => {
@@ -129,7 +117,6 @@ describe("LogOnUnpermittedParamsTest", () => {
     const params = new Parameters({ name: "John", admin: true }).select(() => true);
     params.permit("name");
     expect(spy).toHaveBeenCalled();
-    spy.mockRestore();
   });
 
   it("logs on unexpected params with reject", () => {
@@ -138,7 +125,6 @@ describe("LogOnUnpermittedParamsTest", () => {
     const params = new Parameters({ name: "John", admin: true }).reject(() => false);
     params.permit("name");
     expect(spy).toHaveBeenCalled();
-    spy.mockRestore();
   });
 
   it("logs on unexpected param with compact", () => {
@@ -147,7 +133,6 @@ describe("LogOnUnpermittedParamsTest", () => {
     const params = new Parameters({ name: "John", admin: true }).compact();
     params.permit("name");
     expect(spy).toHaveBeenCalled();
-    spy.mockRestore();
   });
 
   it("logs on unexpected param with merge", () => {
@@ -156,7 +141,6 @@ describe("LogOnUnpermittedParamsTest", () => {
     const params = new Parameters({ name: "John" }).merge({ admin: true });
     params.permit("name");
     expect(spy).toHaveBeenCalled();
-    spy.mockRestore();
   });
 
   it("logs on unexpected param with reverse_merge", () => {
@@ -165,6 +149,5 @@ describe("LogOnUnpermittedParamsTest", () => {
     const params = new Parameters({ name: "John" }).reverseMerge({ admin: true });
     params.permit("name");
     expect(spy).toHaveBeenCalled();
-    spy.mockRestore();
   });
 });

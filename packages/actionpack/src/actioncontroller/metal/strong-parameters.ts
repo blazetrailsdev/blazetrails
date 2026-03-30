@@ -240,6 +240,11 @@ export class Parameters {
   }
 
   extract(...keys: string[]): Parameters {
+    return this.slice(...keys);
+  }
+
+  /** Mutating extract! — removes and returns the key/value pairs. */
+  extractBang(...keys: string[]): Parameters {
     const result: Record<string, unknown> = {};
     for (const key of keys) {
       if (key in this._data) {
@@ -485,6 +490,9 @@ export class Parameters {
   }
 
   dig(...keys: string[]): unknown {
+    if (keys.length === 0) {
+      throw new Error("wrong number of arguments (given 0, expected 1+)");
+    }
     // Convert first key's value like Rails does
     this._convertHashesToParameters(keys[0], this._data[keys[0]]);
     let current: unknown = this._data;
@@ -496,7 +504,7 @@ export class Parameters {
         const obj = current as Record<string, unknown>;
         current = obj[key];
         if (isPlainObject(current)) {
-          current = new Parameters(current as Record<string, unknown>);
+          current = this._newWithInheritedPermitted(current as Record<string, unknown>);
           obj[key] = current;
         }
       } else {
@@ -725,7 +733,7 @@ export class Parameters {
       return value.map((v) => this._convertValueToParameters(v));
     }
     if (isPlainObject(value)) {
-      return new Parameters(value as Record<string, unknown>);
+      return this._newWithInheritedPermitted(value as Record<string, unknown>);
     }
     return value;
   }
@@ -781,12 +789,19 @@ function deepMergeObjects(
         result[k] as Record<string, unknown>,
         v as Record<string, unknown>,
       );
-    } else if (k in result && result[k] instanceof Parameters && v instanceof Parameters) {
-      const merged = deepMergeObjects(
-        (result[k] as Parameters)._toRawHash(),
-        (v as Parameters)._toRawHash(),
-      );
-      result[k] = new Parameters(merged);
+    } else if (
+      k in result &&
+      (result[k] instanceof Parameters || isPlainObject(result[k])) &&
+      (v instanceof Parameters || isPlainObject(v))
+    ) {
+      const leftRaw =
+        result[k] instanceof Parameters
+          ? (result[k] as Parameters)._toRawHash()
+          : (result[k] as Record<string, unknown>);
+      const rightRaw =
+        v instanceof Parameters ? (v as Parameters)._toRawHash() : (v as Record<string, unknown>);
+      const merged = deepMergeObjects(leftRaw, rightRaw);
+      result[k] = result[k] instanceof Parameters ? new Parameters(merged) : merged;
     } else {
       result[k] = v;
     }

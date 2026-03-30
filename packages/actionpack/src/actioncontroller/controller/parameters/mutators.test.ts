@@ -54,13 +54,13 @@ describe("ParametersMutatorsTest", () => {
 
   it("extract! retains permitted status", () => {
     const params = new Parameters({ a: "1", b: "2" }).permitAll();
-    const extracted = params.extract("a");
+    const extracted = params.extractBang("a");
     expect(extracted.permitted).toBe(true);
   });
 
   it("extract! retains unpermitted status", () => {
     const params = new Parameters({ a: "1", b: "2" });
-    const extracted = params.extract("a");
+    const extracted = params.extractBang("a");
     expect(extracted.permitted).toBe(false);
   });
 

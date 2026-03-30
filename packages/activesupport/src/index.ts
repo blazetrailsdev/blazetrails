@@ -172,7 +172,24 @@ export { Notifications } from "./notifications.js";
 export { Event as NotificationEvent } from "./notifications/instrumenter.js";
 export type { EventPayload } from "./notifications/instrumenter.js";
 export type { NotificationSubscriber } from "./notifications.js";
-export { Fanout, InstrumentationSubscriberError } from "./notifications/fanout.js";
+export {
+  Fanout,
+  InstrumentationSubscriberError,
+  BaseGroup,
+  BaseTimeGroup,
+  MonotonicTimedGroup,
+  TimedGroup,
+  EventedGroup,
+  EventObjectGroup,
+  Handle,
+  AllMessages,
+  Evented,
+  Timed,
+  MonotonicTimed,
+  EventObject,
+  Subscribers,
+} from "./notifications/fanout.js";
+export type { Matcher } from "./notifications/fanout.js";
 
 export { ParameterFilter } from "./parameter-filter.js";
 export {
@@ -223,16 +240,16 @@ export {
   Filters,
   Conditionals,
   CallTemplate,
-  _Before as Before,
-  _After as After,
-  _Around as Around,
-  _Value as Value,
-  _MethodCall as MethodCall,
-  _ObjectCall as ObjectCall,
-  _InstanceExec0 as InstanceExec0,
-  _InstanceExec1 as InstanceExec1,
-  _InstanceExec2 as InstanceExec2,
-  _ProcCall as ProcCall,
+  Before,
+  After,
+  Around,
+  Value,
+  MethodCall,
+  ObjectCall,
+  InstanceExec0,
+  InstanceExec1,
+  InstanceExec2,
+  ProcCall,
 } from "./callbacks.js";
 export type { ClassMethods } from "./callbacks.js";
 export { Concern, MultipleIncludedBlocks, MultiplePrependBlocks } from "./concern.js";

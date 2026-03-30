@@ -196,9 +196,9 @@ interface WorkflowJob {
 }
 
 function getLastSyncedPr(db: Database.Database): number {
-  const row = db
-    .prepare("SELECT MAX(number) as max_pr FROM pull_requests")
-    .get() as { max_pr: number | null };
+  const row = db.prepare("SELECT MAX(number) as max_pr FROM pull_requests").get() as {
+    max_pr: number | null;
+  };
   return row?.max_pr ?? 0;
 }
 
@@ -226,7 +226,7 @@ function syncPullRequests(db: Database.Database): number {
 
   // gh pr list auto-paginates — fetch all at once with a high limit
   const allPrs = ghJson<PrData[]>(
-    `pr list --repo ${REPO} --state merged --limit 1000 --json ${fields} --jq '[.[] | select(.number > ${lastSynced})]'`
+    `pr list --repo ${REPO} --state merged --limit 1000 --json ${fields} --jq '[.[] | select(.number > ${lastSynced})]'`,
   );
 
   console.log(`Found ${allPrs.length} new merged PRs to sync`);
@@ -264,7 +264,7 @@ function syncPullRequests(db: Database.Database): number {
       -1,
       -1,
       0,
-      timeOpenSeconds
+      timeOpenSeconds,
     );
   }
 
@@ -276,7 +276,7 @@ function syncPrFiles(db: Database.Database) {
     .prepare(
       `SELECT number FROM pull_requests
        WHERE number NOT IN (SELECT DISTINCT pr_number FROM pr_files)
-       ORDER BY number`
+       ORDER BY number`,
     )
     .all() as { number: number }[];
 
@@ -290,9 +290,7 @@ function syncPrFiles(db: Database.Database) {
 
   for (const { number } of prsWithoutFiles) {
     try {
-      const files = ghJson<PrFile[]>(
-        `api repos/${REPO}/pulls/${number}/files --paginate`
-      );
+      const files = ghJson<PrFile[]>(`api repos/${REPO}/pulls/${number}/files --paginate`);
       for (const f of files) {
         insertFile.run(
           number,
@@ -301,7 +299,7 @@ function syncPrFiles(db: Database.Database) {
           f.additions,
           f.deletions,
           f.changes,
-          f.patch ?? null
+          f.patch ?? null,
         );
       }
     } catch {
@@ -309,7 +307,6 @@ function syncPrFiles(db: Database.Database) {
     }
   }
 }
-
 
 interface PrCommit {
   sha: string;
@@ -324,7 +321,7 @@ function syncPrCommits(db: Database.Database) {
     .prepare(
       `SELECT number FROM pull_requests
        WHERE number NOT IN (SELECT DISTINCT pr_number FROM pr_commits)
-       ORDER BY number`
+       ORDER BY number`,
     )
     .all() as { number: number }[];
 
@@ -336,22 +333,18 @@ function syncPrCommits(db: Database.Database) {
     VALUES (?, ?, ?, ?, ?)
   `);
 
-  const updateCount = db.prepare(
-    `UPDATE pull_requests SET commit_count = ? WHERE number = ?`
-  );
+  const updateCount = db.prepare(`UPDATE pull_requests SET commit_count = ? WHERE number = ?`);
 
   for (const { number } of prsWithoutCommits) {
     try {
-      const commits = ghJson<PrCommit[]>(
-        `api repos/${REPO}/pulls/${number}/commits --paginate`
-      );
+      const commits = ghJson<PrCommit[]>(`api repos/${REPO}/pulls/${number}/commits --paginate`);
       for (const c of commits) {
         insertCommit.run(
           number,
           c.sha,
           c.commit.message,
           c.commit.author.name,
-          c.commit.author.date
+          c.commit.author.date,
         );
       }
       updateCount.run(commits.length, number);
@@ -393,7 +386,7 @@ function syncPrComments(db: Database.Database) {
     .prepare(
       `SELECT number FROM pull_requests
        WHERE review_count = -1
-       ORDER BY number`
+       ORDER BY number`,
     )
     .all() as { number: number }[];
 
@@ -412,11 +405,11 @@ function syncPrComments(db: Database.Database) {
   `);
 
   const updateCommentCount = db.prepare(
-    `UPDATE pull_requests SET comment_count = ? WHERE number = ?`
+    `UPDATE pull_requests SET comment_count = ? WHERE number = ?`,
   );
 
   const updateReviewCount = db.prepare(
-    `UPDATE pull_requests SET review_count = ? WHERE number = ?`
+    `UPDATE pull_requests SET review_count = ? WHERE number = ?`,
   );
 
   for (const { number } of prsWithoutComments) {
@@ -424,38 +417,48 @@ function syncPrComments(db: Database.Database) {
     try {
       // Issue comments (general PR comments)
       const issueComments = ghJson<IssueComment[]>(
-        `api repos/${REPO}/issues/${number}/comments --paginate`
+        `api repos/${REPO}/issues/${number}/comments --paginate`,
       );
       for (const c of issueComments) {
         insertComment.run(
-          c.id, number, c.user?.login ?? null, c.body,
-          c.created_at, c.updated_at, "issue", null, null, null
+          c.id,
+          number,
+          c.user?.login ?? null,
+          c.body,
+          c.created_at,
+          c.updated_at,
+          "issue",
+          null,
+          null,
+          null,
         );
       }
       totalComments += issueComments.length;
 
       // Review comments (inline code comments)
       const reviewComments = ghJson<ReviewComment[]>(
-        `api repos/${REPO}/pulls/${number}/comments --paginate`
+        `api repos/${REPO}/pulls/${number}/comments --paginate`,
       );
       for (const c of reviewComments) {
         insertComment.run(
-          c.id, number, c.user?.login ?? null, c.body,
-          c.created_at, c.updated_at, "review", c.path, c.diff_hunk,
-          c.in_reply_to_id ?? null
+          c.id,
+          number,
+          c.user?.login ?? null,
+          c.body,
+          c.created_at,
+          c.updated_at,
+          "review",
+          c.path,
+          c.diff_hunk,
+          c.in_reply_to_id ?? null,
         );
       }
       totalComments += reviewComments.length;
 
       // Reviews themselves
-      const reviews = ghJson<Review[]>(
-        `api repos/${REPO}/pulls/${number}/reviews --paginate`
-      );
+      const reviews = ghJson<Review[]>(`api repos/${REPO}/pulls/${number}/reviews --paginate`);
       for (const r of reviews) {
-        insertReview.run(
-          r.id, number, r.user?.login ?? null, r.state,
-          r.body, r.submitted_at
-        );
+        insertReview.run(r.id, number, r.user?.login ?? null, r.state, r.body, r.submitted_at);
       }
 
       updateCommentCount.run(totalComments, number);
@@ -473,7 +476,7 @@ function syncWorkflowRuns(db: Database.Database): number {
       `SELECT DISTINCT merge_commit_sha, number FROM pull_requests
        WHERE merge_commit_sha IS NOT NULL
        AND merge_commit_sha NOT IN (SELECT head_sha FROM workflow_runs)
-       ORDER BY number`
+       ORDER BY number`,
     )
     .all() as { merge_commit_sha: string; number: number }[];
 
@@ -482,9 +485,7 @@ function syncWorkflowRuns(db: Database.Database): number {
     return 0;
   }
 
-  console.log(
-    `Fetching workflow runs for ${missingRuns.length} merge commits...`
-  );
+  console.log(`Fetching workflow runs for ${missingRuns.length} merge commits...`);
 
   const insertRun = db.prepare(`
     INSERT OR REPLACE INTO workflow_runs
@@ -503,16 +504,15 @@ function syncWorkflowRuns(db: Database.Database): number {
   for (const { merge_commit_sha, number } of missingRuns) {
     try {
       const resp = ghJson<{ workflow_runs: WorkflowRun[] }>(
-        `api repos/${REPO}/actions/runs?head_sha=${merge_commit_sha}`
+        `api repos/${REPO}/actions/runs?head_sha=${merge_commit_sha}`,
       );
 
       for (const run of resp.workflow_runs) {
         const duration =
           run.run_started_at && run.updated_at
             ? Math.round(
-                (new Date(run.updated_at).getTime() -
-                  new Date(run.run_started_at).getTime()) /
-                  1000
+                (new Date(run.updated_at).getTime() - new Date(run.run_started_at).getTime()) /
+                  1000,
               )
             : null;
 
@@ -527,21 +527,20 @@ function syncWorkflowRuns(db: Database.Database): number {
           run.updated_at,
           run.run_started_at,
           duration,
-          run.name
+          run.name,
         );
 
         // Fetch jobs for this run
         const jobsResp = ghJson<{ jobs: WorkflowJob[] }>(
-          `api repos/${REPO}/actions/runs/${run.id}/jobs`
+          `api repos/${REPO}/actions/runs/${run.id}/jobs`,
         );
 
         for (const job of jobsResp.jobs) {
           const jobDuration =
             job.started_at && job.completed_at
               ? Math.round(
-                  (new Date(job.completed_at).getTime() -
-                    new Date(job.started_at).getTime()) /
-                    1000
+                  (new Date(job.completed_at).getTime() - new Date(job.started_at).getTime()) /
+                    1000,
                 )
               : null;
 
@@ -553,32 +552,23 @@ function syncWorkflowRuns(db: Database.Database): number {
             job.conclusion,
             job.started_at,
             job.completed_at,
-            jobDuration
+            jobDuration,
           );
         }
 
         synced++;
       }
     } catch {
-      console.warn(
-        `  Failed to fetch workflow runs for PR #${number} (${merge_commit_sha})`
-      );
+      console.warn(`  Failed to fetch workflow runs for PR #${number} (${merge_commit_sha})`);
     }
   }
 
   return synced;
 }
 
-function parseTestCompareFromLogs(logs: string): Map<string, {
-  matched: number;
-  total: number;
-  percent: number;
-  skipped: number;
-  filesMapped: number;
-  filesTotal: number;
-  misplaced: number;
-}> {
-  const results = new Map<string, {
+function parseTestCompareFromLogs(logs: string): Map<
+  string,
+  {
     matched: number;
     total: number;
     percent: number;
@@ -586,7 +576,20 @@ function parseTestCompareFromLogs(logs: string): Map<string, {
     filesMapped: number;
     filesTotal: number;
     misplaced: number;
-  }>();
+  }
+> {
+  const results = new Map<
+    string,
+    {
+      matched: number;
+      total: number;
+      percent: number;
+      skipped: number;
+      filesMapped: number;
+      filesTotal: number;
+      misplaced: number;
+    }
+  >();
 
   // Match lines like: "  arel  —  703/707 tests (99.4%)  |  59/59 files  |  0 misplaced"
   // Or with skipped: "  activerecord  —  5187/8385 tests (61.9%) (2960 skipped)  |  340/342 files  |  0 misplaced"
@@ -612,20 +615,26 @@ function parseTestCompareFromLogs(logs: string): Map<string, {
   return results;
 }
 
-function parseApiCompareFromLogs(logs: string): Map<string, {
-  matched: number;
-  total: number;
-  percent: number;
-  misplaced: number;
-  missing: number;
-}> {
-  const results = new Map<string, {
+function parseApiCompareFromLogs(logs: string): Map<
+  string,
+  {
     matched: number;
     total: number;
     percent: number;
     misplaced: number;
     missing: number;
-  }>();
+  }
+> {
+  const results = new Map<
+    string,
+    {
+      matched: number;
+      total: number;
+      percent: number;
+      misplaced: number;
+      missing: number;
+    }
+  >();
 
   // Match: "  arel  —  148/148 classes/modules (100%)  |  0 misplaced  |  0 missing"
   const apiRegex =
@@ -657,7 +666,7 @@ function syncCompareStats(db: Database.Database): number {
        WHERE wj.name = 'Rails API/Test Comparison'
        AND wj.conclusion = 'success'
        AND wr.head_sha NOT IN (SELECT DISTINCT merge_commit_sha FROM test_compare_stats)
-       ORDER BY wr.pr_number`
+       ORDER BY wr.pr_number`,
     )
     .all() as { run_id: number; head_sha: string; pr_number: number }[];
 
@@ -666,9 +675,7 @@ function syncCompareStats(db: Database.Database): number {
     return 0;
   }
 
-  console.log(
-    `Parsing CI logs for ${runsToProcess.length} workflow runs...`
-  );
+  console.log(`Parsing CI logs for ${runsToProcess.length} workflow runs...`);
 
   const insertTestStats = db.prepare(`
     INSERT OR REPLACE INTO test_compare_stats
@@ -688,7 +695,7 @@ function syncCompareStats(db: Database.Database): number {
     // Find the Rails comparison job ID
     const job = db
       .prepare(
-        `SELECT id FROM workflow_jobs WHERE run_id = ? AND name = 'Rails API/Test Comparison'`
+        `SELECT id FROM workflow_jobs WHERE run_id = ? AND name = 'Rails API/Test Comparison'`,
       )
       .get(run_id) as { id: number } | undefined;
 
@@ -709,7 +716,7 @@ function syncCompareStats(db: Database.Database): number {
           stats.skipped,
           stats.filesMapped,
           stats.filesTotal,
-          stats.misplaced
+          stats.misplaced,
         );
       }
 
@@ -723,22 +730,16 @@ function syncCompareStats(db: Database.Database): number {
           stats.total,
           stats.percent,
           stats.misplaced,
-          stats.missing
+          stats.missing,
         );
       }
 
       if (testStats.size > 0 || apiStats.size > 0) {
         parsed++;
-        const totalTests = [...testStats.values()].reduce(
-          (sum, s) => sum + s.matched,
-          0
-        );
-        const totalApi = [...apiStats.values()].reduce(
-          (sum, s) => sum + s.matched,
-          0
-        );
+        const totalTests = [...testStats.values()].reduce((sum, s) => sum + s.matched, 0);
+        const totalApi = [...apiStats.values()].reduce((sum, s) => sum + s.matched, 0);
         console.log(
-          `  PR #${pr_number}: ${testStats.size} test packages (${totalTests} matched), ${apiStats.size} api packages (${totalApi} matched)`
+          `  PR #${pr_number}: ${testStats.size} test packages (${totalTests} matched), ${apiStats.size} api packages (${totalApi} matched)`,
         );
       }
     } catch {
@@ -755,27 +756,22 @@ function printSummary(db: Database.Database) {
       cnt: number;
     }
   ).cnt;
-  const fileCount = (
-    db.prepare("SELECT COUNT(*) as cnt FROM pr_files").get() as { cnt: number }
-  ).cnt;
+  const fileCount = (db.prepare("SELECT COUNT(*) as cnt FROM pr_files").get() as { cnt: number })
+    .cnt;
   const runCount = (
     db.prepare("SELECT COUNT(*) as cnt FROM workflow_runs").get() as {
       cnt: number;
     }
   ).cnt;
   const testStatCount = (
-    db
-      .prepare(
-        "SELECT COUNT(DISTINCT merge_commit_sha) as cnt FROM test_compare_stats"
-      )
-      .get() as { cnt: number }
+    db.prepare("SELECT COUNT(DISTINCT merge_commit_sha) as cnt FROM test_compare_stats").get() as {
+      cnt: number;
+    }
   ).cnt;
   const apiStatCount = (
-    db
-      .prepare(
-        "SELECT COUNT(DISTINCT merge_commit_sha) as cnt FROM api_compare_stats"
-      )
-      .get() as { cnt: number }
+    db.prepare("SELECT COUNT(DISTINCT merge_commit_sha) as cnt FROM api_compare_stats").get() as {
+      cnt: number;
+    }
   ).cnt;
 
   const commentCount = (
@@ -808,7 +804,7 @@ function printSummary(db: Database.Database) {
          SELECT merge_commit_sha FROM test_compare_stats
          ORDER BY pr_number DESC LIMIT 1
        )
-       ORDER BY package`
+       ORDER BY package`,
     )
     .all() as {
     package: string;
@@ -822,9 +818,7 @@ function printSummary(db: Database.Database) {
     console.log("\n  Latest test:compare:");
     for (const row of latest) {
       const skipStr = row.skipped > 0 ? ` (${row.skipped} skipped)` : "";
-      console.log(
-        `    ${row.package}: ${row.matched}/${row.total} (${row.percent}%)${skipStr}`
-      );
+      console.log(`    ${row.package}: ${row.matched}/${row.total} (${row.percent}%)${skipStr}`);
     }
   }
 }
@@ -853,9 +847,11 @@ async function main() {
   const logsParsed = syncCompareStats(db);
 
   // Log this sync
-  db.prepare(
-    `INSERT INTO sync_log (prs_synced, runs_synced, logs_parsed) VALUES (?, ?, ?)`
-  ).run(prsSynced, runsSynced, logsParsed);
+  db.prepare(`INSERT INTO sync_log (prs_synced, runs_synced, logs_parsed) VALUES (?, ?, ?)`).run(
+    prsSynced,
+    runsSynced,
+    logsParsed,
+  );
 
   printSummary(db);
   db.close();

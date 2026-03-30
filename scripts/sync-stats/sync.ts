@@ -18,6 +18,7 @@ function ghJson<T>(args: string): T {
 
 function initDb(db: Database.Database) {
   db.pragma("journal_mode = WAL");
+  db.pragma("foreign_keys = ON");
   db.exec(`
     CREATE TABLE IF NOT EXISTS pull_requests (
       number INTEGER PRIMARY KEY,
@@ -37,7 +38,8 @@ function initDb(db: Database.Database) {
       review_count INTEGER,
       comment_count INTEGER,
       commit_count INTEGER,
-      time_open_seconds INTEGER
+      time_open_seconds INTEGER,
+      review_decision TEXT
     );
 
     CREATE TABLE IF NOT EXISTS pr_files (
@@ -235,8 +237,8 @@ function syncPullRequests(db: Database.Database): number {
     INSERT OR REPLACE INTO pull_requests
     (number, title, author, branch, base_branch, body, created_at, merged_at, closed_at,
      merge_commit_sha, additions, deletions, changed_files, labels,
-     review_count, comment_count, commit_count, time_open_seconds)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     review_count, comment_count, commit_count, time_open_seconds, review_decision)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   for (const pr of allPrs) {
@@ -265,6 +267,7 @@ function syncPullRequests(db: Database.Database): number {
       -1,
       0,
       timeOpenSeconds,
+      pr.reviewDecision ?? null,
     );
   }
 
@@ -274,15 +277,18 @@ function syncPullRequests(db: Database.Database): number {
 function syncPrFiles(db: Database.Database) {
   const prsWithoutFiles = db
     .prepare(
-      `SELECT number FROM pull_requests
-       WHERE number NOT IN (SELECT DISTINCT pr_number FROM pr_files)
-       ORDER BY number`,
+      `SELECT p.number FROM pull_requests p
+       LEFT JOIN (SELECT pr_number, COUNT(*) as cnt FROM pr_files GROUP BY pr_number) f
+         ON f.pr_number = p.number
+       WHERE f.cnt IS NULL OR f.cnt != p.changed_files
+       ORDER BY p.number`,
     )
     .all() as { number: number }[];
 
   if (prsWithoutFiles.length === 0) return;
   console.log(`Fetching file details for ${prsWithoutFiles.length} PRs...`);
 
+  const deleteFiles = db.prepare(`DELETE FROM pr_files WHERE pr_number = ?`);
   const insertFile = db.prepare(`
     INSERT OR IGNORE INTO pr_files (pr_number, filename, status, additions, deletions, changes, patch)
     VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -291,17 +297,21 @@ function syncPrFiles(db: Database.Database) {
   for (const { number } of prsWithoutFiles) {
     try {
       const files = ghJson<PrFile[]>(`api repos/${REPO}/pulls/${number}/files --paginate`);
-      for (const f of files) {
-        insertFile.run(
-          number,
-          f.filename,
-          f.status,
-          f.additions,
-          f.deletions,
-          f.changes,
-          f.patch ?? null,
-        );
-      }
+      const txn = db.transaction(() => {
+        deleteFiles.run(number);
+        for (const f of files) {
+          insertFile.run(
+            number,
+            f.filename,
+            f.status,
+            f.additions,
+            f.deletions,
+            f.changes,
+            f.patch ?? null,
+          );
+        }
+      });
+      txn();
     } catch {
       console.warn(`  Failed to fetch files for PR #${number}`);
     }
@@ -320,7 +330,7 @@ function syncPrCommits(db: Database.Database) {
   const prsWithoutCommits = db
     .prepare(
       `SELECT number FROM pull_requests
-       WHERE number NOT IN (SELECT DISTINCT pr_number FROM pr_commits)
+       WHERE commit_count = 0
        ORDER BY number`,
     )
     .all() as { number: number }[];
@@ -328,26 +338,30 @@ function syncPrCommits(db: Database.Database) {
   if (prsWithoutCommits.length === 0) return;
   console.log(`Fetching commits for ${prsWithoutCommits.length} PRs...`);
 
+  const deleteCommits = db.prepare(`DELETE FROM pr_commits WHERE pr_number = ?`);
   const insertCommit = db.prepare(`
     INSERT OR IGNORE INTO pr_commits (pr_number, sha, message, author, authored_at)
     VALUES (?, ?, ?, ?, ?)
   `);
-
   const updateCount = db.prepare(`UPDATE pull_requests SET commit_count = ? WHERE number = ?`);
 
   for (const { number } of prsWithoutCommits) {
     try {
       const commits = ghJson<PrCommit[]>(`api repos/${REPO}/pulls/${number}/commits --paginate`);
-      for (const c of commits) {
-        insertCommit.run(
-          number,
-          c.sha,
-          c.commit.message,
-          c.commit.author.name,
-          c.commit.author.date,
-        );
-      }
-      updateCount.run(commits.length, number);
+      const txn = db.transaction(() => {
+        deleteCommits.run(number);
+        for (const c of commits) {
+          insertCommit.run(
+            number,
+            c.sha,
+            c.commit.message,
+            c.commit.author.name,
+            c.commit.author.date,
+          );
+        }
+        updateCount.run(commits.length, number);
+      });
+      txn();
     } catch {
       console.warn(`  Failed to fetch commits for PR #${number}`);
     }
@@ -475,7 +489,15 @@ function syncWorkflowRuns(db: Database.Database): number {
     .prepare(
       `SELECT DISTINCT merge_commit_sha, number FROM pull_requests
        WHERE merge_commit_sha IS NOT NULL
-       AND merge_commit_sha NOT IN (SELECT head_sha FROM workflow_runs)
+       AND (
+         merge_commit_sha NOT IN (SELECT head_sha FROM workflow_runs)
+         OR EXISTS (
+           SELECT 1 FROM workflow_runs wr
+           LEFT JOIN workflow_jobs wj ON wj.run_id = wr.id
+           WHERE wr.head_sha = pull_requests.merge_commit_sha
+           GROUP BY wr.id HAVING COUNT(wj.id) = 0
+         )
+       )
        ORDER BY number`,
     )
     .all() as { merge_commit_sha: string; number: number }[];
@@ -594,7 +616,7 @@ function parseTestCompareFromLogs(logs: string): Map<
   // Match lines like: "  arel  —  703/707 tests (99.4%)  |  59/59 files  |  0 misplaced"
   // Or with skipped: "  activerecord  —  5187/8385 tests (61.9%) (2960 skipped)  |  340/342 files  |  0 misplaced"
   const testRegex =
-    /\s{2}(\w+)\s+—\s+(\d+)\/(\d+) tests \(([\d.]+)%\)(?:\s+\((\d+) skipped\))?\s+\|\s+(\d+)\/(\d+) files\s+\|\s+(\d+) misplaced/g;
+    /\s{2}(\w+)\s+—\s+(\d+)\/(\d+) tests \(([\d.]+)%\)(?:\s+\((\d+) skipped(?:,[^)]*)?\))?\s+\|\s+(\d+)\/(\d+) files\s+\|\s+(\d+) misplaced/g;
 
   let match;
   while ((match = testRegex.exec(logs)) !== null) {

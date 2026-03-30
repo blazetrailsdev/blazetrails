@@ -50,7 +50,7 @@ export class Builder {
   // config content (from files on disk), not user-supplied strings.
   static newFromString(content: string, file?: string): RackApp {
     const builder = new Builder();
-    let source = content;
+    let source = `"use strict";\n${content}`;
     if (file) {
       source += `\n//# sourceURL=${file.replace(/\\/g, "/").replace(/[\r\n\u2028\u2029]/g, "")}`;
     }

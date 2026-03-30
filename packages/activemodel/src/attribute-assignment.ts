@@ -20,10 +20,17 @@ export interface AttributeAssignment {
   attributeWriterMissing?(name: string, value: unknown): void;
 }
 
+function typeNameForError(value: unknown): string {
+  if (value === null) return "Null";
+  if (Array.isArray(value)) return "Array";
+  const t = typeof value;
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
 export function assignAttributes(model: AttributeAssignment, newAttributes: unknown): void {
   if (typeof newAttributes !== "object" || newAttributes === null || Array.isArray(newAttributes)) {
     throw new ArgumentError(
-      `When assigning attributes, you must pass a hash as an argument, ${typeof newAttributes} passed.`,
+      `When assigning attributes, you must pass a hash as an argument, ${typeNameForError(newAttributes)} passed.`,
     );
   }
 
@@ -38,7 +45,19 @@ export function assignAttributes(model: AttributeAssignment, newAttributes: unkn
 }
 
 function assignAttribute(model: AttributeAssignment, key: string, value: unknown): void {
-  model.writeAttribute(key, value);
+  try {
+    model.writeAttribute(key, value);
+  } catch (error) {
+    if (error instanceof UnknownAttributeError) {
+      if (typeof model.attributeWriterMissing === "function") {
+        model.attributeWriterMissing(key, value);
+      } else {
+        attributeWriterMissing(model, key, value);
+      }
+    } else {
+      throw error;
+    }
+  }
 }
 
 export function attributeWriterMissing(

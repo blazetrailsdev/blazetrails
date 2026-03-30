@@ -1363,7 +1363,8 @@ export class Model {
   }
 
   /**
-   * Hook invoked when assign_attributes encounters an unknown attribute.
+   * Hook invoked when assignAttributes encounters an unknown attribute
+   * that causes writeAttribute to throw UnknownAttributeError.
    * Override to customize behavior (e.g. log instead of raise).
    *
    * Mirrors: ActiveModel::AttributeAssignment#attribute_writer_missing

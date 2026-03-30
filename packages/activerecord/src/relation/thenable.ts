@@ -9,22 +9,24 @@
  */
 
 /**
- * Shadow `.then` on a specific instance so that `yield` in an async
- * generator or `resolve()` in a Promise does not unwrap it.
+ * Temporarily shadow `.then` on a specific instance so that `yield` in an
+ * async generator or `resolve()` in a Promise does not unwrap it.
  *
  * Async generators call `Await` on yielded values, which resolves
  * thenables. This prevents that for objects that should be yielded/resolved
  * as-is (e.g., Relation instances from inBatches, load, presence).
  *
- * The shadow is permanent for the instance — the prototype `.then` remains
- * available on fresh clones. Use this only on instances that are being
- * returned as "self" from methods like load/reload/presence.
+ * The shadow is removed via queueMicrotask so the instance regains
+ * awaitability after it has safely crossed the async boundary.
  */
 export function stripThenable<T extends object>(obj: T): T {
   Object.defineProperty(obj, "then", {
     value: undefined,
     writable: true,
     configurable: true,
+  });
+  queueMicrotask(() => {
+    delete (obj as any).then;
   });
   return obj;
 }

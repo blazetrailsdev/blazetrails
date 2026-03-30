@@ -184,9 +184,18 @@ function indexLines(table: string, columns: ParsedColumn[]): string {
 function removeIndexLines(table: string, columns: ParsedColumn[]): string {
   const lines: string[] = [];
   for (const col of columns) {
-    if (col.index || col.unique || col.token) {
-      lines.push(`    await this.removeIndex("${table}", { column: "${col.name}" });`);
+    if (!(col.index || col.unique || col.token)) continue;
+    let columnExpr: string;
+    if (isReference(col.type)) {
+      if (col.polymorphic) {
+        columnExpr = `["${col.name}_id", "${col.name}_type"]`;
+      } else {
+        columnExpr = `"${col.name}_id"`;
+      }
+    } else {
+      columnExpr = `"${col.name}"`;
     }
+    lines.push(`    await this.removeIndex("${table}", { column: ${columnExpr} });`);
   }
   return lines.join("\n");
 }
@@ -293,13 +302,10 @@ ${body}
       const upLines = realColumns
         .map((c) => {
           if (isReference(c.type)) {
-            const opts: string[] = [];
             if (c.polymorphic) {
-              opts.push("polymorphic: true");
-            } else {
-              opts.push("foreignKey: true");
+              return `    await this.removeReference("${table}", "${c.name}", { polymorphic: true });`;
             }
-            return `    await this.removeReference("${table}", "${c.name}", { ${opts.join(", ")} });`;
+            return `    await this.removeReference("${table}", "${c.name}");`;
           }
           return `    await this.removeColumn("${table}", "${c.name}");`;
         })
@@ -321,6 +327,11 @@ ${body}
       entries.push({ name, unique });
     }
 
+    if (entries.length !== 2) {
+      throw new Error(
+        `Join table migration requires exactly 2 table arguments, got ${entries.length}`,
+      );
+    }
     const [e1, e2] = entries;
     const t1Singular = singularize(e1.name);
     const t2Singular = singularize(e2.name);

@@ -119,9 +119,9 @@ describe("MigrationGeneratorTest", () => {
       "distributor:references{polymorphic}",
     ]);
     const content = readMigration(files);
-    expect(content).toMatch(/removeReference\("books", "author",.*foreignKey: true/);
-    expect(content).toContain('removeReference("books", "distributor"');
-    expect(content).not.toMatch(/removeReference\("books", "distributor",.*foreignKey: true/);
+    expect(content).toContain('removeReference("books", "author")');
+    expect(content).not.toMatch(/removeReference\("books", "author",.*foreignKey/);
+    expect(content).toMatch(/removeReference\("books", "distributor",.*polymorphic: true/);
   });
 
   it.skip("remove migration with references removes foreign keys when primary key uuid", () => {

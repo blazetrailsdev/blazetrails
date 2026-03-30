@@ -86,8 +86,8 @@ describe("ControllerGeneratorTest", () => {
     const gen = makeGen();
     gen.run("Account", ["foo", "bar"]);
     const routes = readFile("src/config/routes.ts");
-    expect(routes).toContain('router.get("/account/foo")');
-    expect(routes).toContain('router.get("/account/bar")');
+    expect(routes).toContain('router.get("/account/foo", "account#foo")');
+    expect(routes).toContain('router.get("/account/bar", "account#bar")');
   });
 
   it("skip routes", () => {
@@ -129,7 +129,7 @@ describe("ControllerGeneratorTest", () => {
     gen.run("admin/dashboard", ["index"]);
     const routes = readFile("src/config/routes.ts");
     expect(routes).toContain('router.namespace("admin"');
-    expect(routes).toContain('router.get("/admin/dashboard/index")');
+    expect(routes).toContain('router.get("/dashboard/index", "dashboard#index")');
   });
 
   it("namespaced routes with multiple actions are created in routes", () => {
@@ -137,8 +137,8 @@ describe("ControllerGeneratorTest", () => {
     gen.run("admin/dashboard", ["index", "show"]);
     const routes = readFile("src/config/routes.ts");
     expect(routes).toContain('router.namespace("admin"');
-    expect(routes).toContain('router.get("/admin/dashboard/index")');
-    expect(routes).toContain('router.get("/admin/dashboard/show")');
+    expect(routes).toContain('router.get("/dashboard/index", "dashboard#index")');
+    expect(routes).toContain('router.get("/dashboard/show", "dashboard#show")');
   });
 
   it("does not add routes when action is not specified", () => {

@@ -27,11 +27,12 @@ export class ControllerGenerator extends GeneratorBase {
     const ts = this.isTypeScript();
     const returnType = ts ? ": Promise<void>" : "";
 
-    const importLine = parent
-      ? `import { ${classify(parent)} } from "./${dasherize(underscore(parent))}.js";`
-      : 'import { ActionController } from "@blazetrails/actionpack";';
-
     const namespaceParts = stripped.split("/");
+    const depth = namespaceParts.length > 1 ? namespaceParts.length - 1 : 0;
+    const parentRelPrefix = depth > 0 ? "../".repeat(depth) : "./";
+    const importLine = parent
+      ? `import { ${classify(parent)} } from "${parentRelPrefix}${dasherize(underscore(parent))}.js";`
+      : 'import { ActionController } from "@blazetrails/actionpack";';
     // For TS class names, join namespace parts without :: (AdminDashboardController)
     const tsClassName =
       namespaceParts.length > 1
@@ -119,12 +120,14 @@ ${actions.map((a) => `  it("${a}", () => {\n    // TODO: test ${a} action\n  });
     if (namespaceParts.length > 1) {
       const namespace = underscore(namespaceParts[0]);
       const routeLines = actions
-        .map((a) => `    router.get("/${namespace}/${controllerName}/${a}")`)
+        .map((a) => `    router.get("/${controllerName}/${a}", "${controllerName}#${a}");`)
         .join("\n");
       const block = `  router.namespace("${namespace}", (router) => {\n${routeLines}\n  });`;
       this.insertIntoFile(routesFile, "// routes", block + "\n");
     } else {
-      const routeLines = actions.map((a) => `  router.get("/${controllerName}/${a}");`).join("\n");
+      const routeLines = actions
+        .map((a) => `  router.get("/${controllerName}/${a}", "${controllerName}#${a}");`)
+        .join("\n");
       this.insertIntoFile(routesFile, "// routes", routeLines + "\n");
     }
   }

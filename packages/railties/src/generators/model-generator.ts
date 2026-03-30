@@ -19,8 +19,6 @@ interface ModelOptions {
   primaryKeyType?: string;
 }
 
-const VIRTUAL_TYPES = new Set(["rich_text", "attachment", "attachments"]);
-
 function parseColumnsDefaultString(args: string[]): Array<{ name: string; type: ColumnType }> {
   const columns: Array<{ name: string; type: ColumnType }> = [];
   for (const arg of args) {

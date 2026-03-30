@@ -280,9 +280,12 @@ function tagOptions(options: Record<string, unknown> | undefined, escape: boolea
         output += prefixTagOption(key, k, processedValue, escape);
       }
     } else if (BOOLEAN_ATTRIBUTES.has(key)) {
-      if (value) {
+      if (value === true) {
         output += sep;
         output += booleanTagOption(key);
+      } else if (value !== null && value !== undefined && value !== false) {
+        output += sep;
+        output += tagOption(key, value, escape);
       }
     } else if (value !== null && value !== undefined) {
       output += sep;
@@ -490,7 +493,7 @@ function createTagBuilderProxy(): TagBuilder {
 
         // Void elements don't accept content
         if (VOID_ELEMENTS.has(tagName)) {
-          if (content !== undefined) {
+          if (content !== undefined || block) {
             throw new ArgumentError(`No content allowed for void element "${tagName}"`);
           }
           return selfClosingTagString(tagName, options, escape, ">");

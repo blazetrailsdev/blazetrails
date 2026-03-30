@@ -87,7 +87,7 @@ export function toSentence(array: unknown[], options: ToSentenceOptions = {}): S
     case 0:
       return htmlSafe("");
     case 1:
-      return htmlEscape(array[0]);
+      return unwrappedHtmlEscape(array[0]);
     case 2:
       return safeJoin([array[0], array[1]], twoWordsConnector as string | SafeBuffer);
     default: {

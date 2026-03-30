@@ -28,10 +28,10 @@ export interface SanitizerVendor {
 }
 
 /**
- * Default sanitizer placeholder.
+ * Default sanitizer using basic regex tag stripping.
  *
- * For security, this does not attempt regex-based HTML sanitization.
- * Configure a real HTML parser-based SanitizerVendor for production use.
+ * This is NOT safe for untrusted input — configure a real HTML
+ * parser-based SanitizerVendor (e.g. DOMPurify) for production use.
  */
 class DefaultFullSanitizer implements Sanitizer {
   sanitize(html: string): string {
@@ -135,8 +135,12 @@ class DefaultSafeListSanitizer implements Sanitizer {
         const attrName = attrMatch[1].toLowerCase();
         if (allowedAttrs.includes(attrName)) {
           const rawValue = attrMatch[2] ?? attrMatch[3] ?? attrMatch[4] ?? "";
-          // Reject dangerous URI schemes
-          if ((attrName === "href" || attrName === "src") && /^\s*javascript:/i.test(rawValue)) {
+          // Reject dangerous URI schemes (strip control chars to prevent obfuscation)
+          if (
+            (attrName === "href" || attrName === "src") &&
+            // eslint-disable-next-line no-control-regex -- intentionally stripping control chars
+            /^\s*(?:javascript|vbscript|data):/i.test(rawValue.replace(/[\x00-\x1f]/g, ""))
+          ) {
             continue;
           }
           const escaped = rawValue

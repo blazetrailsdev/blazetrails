@@ -371,7 +371,7 @@ export function tokenList(...args: unknown[]): SafeBuffer {
         .replace(/&#39;/g, "'");
       return unescaped.split(/\s+/);
     })
-    .filter((v, i, arr) => arr.indexOf(v) === i);
+    .filter((v, i, arr) => v !== "" && arr.indexOf(v) === i);
 
   return safeJoin(tokens, " ");
 }
@@ -421,6 +421,11 @@ function createTagBuilderProxy(): TagBuilder {
     get(target, prop, receiver) {
       if (typeof prop === "symbol") {
         return Reflect.get(target, prop, receiver);
+      }
+
+      // Prevent thenable assimilation (Promise/await duck-typing)
+      if (prop === "then" || prop === "catch" || prop === "finally") {
+        return undefined;
       }
 
       // Known own properties

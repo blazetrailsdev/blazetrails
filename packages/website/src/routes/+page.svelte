@@ -291,10 +291,14 @@ const users = await User.where({ name: "Alice" })
         <use href="#cedar" x="1558" y="492" width="42" height="105" />
       </g>
 
-      <!-- Winding river — starts distant left, snakes through the valley -->
-      <path d="M120 580 Q180 590 220 600 Q280 615 320 625 Q400 640 460 648 Q540 655 600 658 Q680 660 740 655 Q820 648 880 640 Q960 630 1020 628 Q1100 625 1160 630 Q1240 638 1300 648 Q1360 658 1420 665 Q1480 670 1540 668 Q1580 665 1600 660" stroke="#3a6a7a" stroke-width="12" fill="none" opacity="0.6" stroke-linecap="round" />
-      <path d="M120 580 Q180 590 220 600 Q280 615 320 625 Q400 640 460 648 Q540 655 600 658 Q680 660 740 655 Q820 648 880 640 Q960 630 1020 628 Q1100 625 1160 630 Q1240 638 1300 648 Q1360 658 1420 665 Q1480 670 1540 668 Q1580 665 1600 660" stroke="#4a8a9a" stroke-width="6" fill="none" opacity="0.4" stroke-linecap="round" />
-      <path d="M125 582 Q185 592 225 602 Q285 617 325 627 Q405 642 465 650 Q545 656 605 659 Q685 661 745 656 Q825 649 885 641 Q965 631 1025 629 Q1105 626 1165 631 Q1245 639 1305 649 Q1365 659 1425 666 Q1485 671 1545 669 Q1585 666 1600 662" stroke="#5aa0b0" stroke-width="2" fill="none" opacity="0.25" stroke-linecap="round" />
+      <!-- Winding river — enters from right, recedes toward upper-right distance -->
+      <!-- River is a filled shape that narrows as it goes into the distance -->
+      <path d="M1600 720 Q1560 710 1520 695 Q1460 672 1400 660 Q1340 650 1280 648 Q1220 648 1170 655 Q1130 662 1100 665 Q1060 660 1030 648 Q1010 638 1000 625 Q992 610 990 595 Q992 578 1000 565 Q1012 548 1030 538 Q1050 530 1080 528 Q1110 528 1135 532 Q1160 538 1175 545 Q1190 542 1200 535 Q1215 524 1225 510 Q1232 498 1235 485
+              L1238 485 Q1236 500 1230 514 Q1220 530 1208 540 Q1198 548 1185 552 Q1170 548 1148 540 Q1120 532 1088 532 Q1058 534 1038 542 Q1020 552 1008 568 Q998 585 997 600 Q998 618 1008 632 Q1022 648 1045 658 Q1070 665 1105 670 Q1140 668 1180 662 Q1225 654 1280 654 Q1340 656 1405 668 Q1465 680 1525 702 Q1565 716 1600 728 Z" fill="#2a5a6a" opacity="0.55" />
+      <!-- River highlight/shimmer -->
+      <path d="M1580 724 Q1520 705 1450 685 Q1380 668 1300 660 Q1230 658 1170 665 Q1120 670 1080 668 Q1040 658 1015 640 Q1002 622 1000 605 Q1002 585 1015 568 Q1035 548 1065 540 Q1095 536 1125 540 Q1155 546 1170 550" stroke="#4a8a9a" stroke-width="2" fill="none" opacity="0.35" />
+      <!-- Distant narrow part shimmer -->
+      <path d="M1185 548 Q1200 540 1215 528 Q1228 512 1234 495" stroke="#5aa8b8" stroke-width="1" fill="none" opacity="0.3" />
 
       <!-- Foreground hills — earthy brown -->
       <path d="M0 730 Q200 690 400 710 Q600 680 800 705 Q1000 675 1200 700 Q1400 680 1600 710 L1600 900 L0 900Z" fill="#3a3020" />
@@ -302,15 +306,13 @@ const users = await User.where({ name: "Alice" })
       <!-- Foreground ground — dark earth -->
       <path d="M0 790 Q400 760 800 775 Q1200 755 1600 770 L1600 900 L0 900Z" fill="#2a2218" />
 
-      <!-- Dirt path — winding from distant hills, widening toward viewer, spilling past bottom edge -->
-      <path d="M810 700 Q805 715 800 730 Q790 750 782 768 Q770 790 760 810 Q745 835 735 855 Q720 878 710 900 L710 920" stroke="#6a5a42" stroke-width="6" fill="none" opacity="0.6" stroke-linecap="round" />
-      <path d="M810 700 Q805 715 800 730 Q790 750 782 768 Q770 790 760 810 Q745 835 735 855 Q720 878 710 900 L710 920" stroke="#8a7a5a" stroke-width="14" fill="none" opacity="0.3" stroke-linecap="round" />
-      <!-- Path widens dramatically as it reaches the viewer -->
-      <path d="M735 855 Q720 878 700 905 Q680 935 650 970" stroke="#8a7a5a" stroke-width="30" fill="none" opacity="0.2" stroke-linecap="round" />
-      <path d="M735 855 Q725 875 715 900 Q705 925 690 955" stroke="#6a5a42" stroke-width="10" fill="none" opacity="0.35" stroke-linecap="round" />
-      <!-- Subtle path edge highlights -->
-      <path d="M814 702 Q808 718 803 733 Q793 752 786 770 Q774 792 764 812 Q750 838 740 858 Q726 880 716 905" stroke="#a09070" stroke-width="1.5" fill="none" opacity="0.2" stroke-linecap="round" />
-      <path d="M806 700 Q800 716 796 730 Q786 750 778 768 Q766 790 756 810 Q742 835 730 855 Q716 878 704 905" stroke="#a09070" stroke-width="1.5" fill="none" opacity="0.2" stroke-linecap="round" />
+      <!-- Dirt path — comes from distance, widens and spills past bottom edge -->
+      <!-- Filled shape that widens toward the viewer -->
+      <path d="M808 698 Q802 718 795 738 Q785 760 775 780 Q762 802 748 825 Q730 852 712 878 Q695 905 675 940
+              L720 940 Q738 908 755 878 Q772 850 788 825 Q802 800 812 778 Q822 756 828 738 Q834 718 836 698 Z" fill="#6a5a42" opacity="0.4" />
+      <!-- Path surface detail -->
+      <path d="M822 700 Q816 720 808 742 Q798 765 786 788 Q772 812 758 838 Q742 865 725 892 Q712 915 698 940" stroke="#8a7a5a" stroke-width="2" fill="none" opacity="0.3" />
+      <path d="M814 698 Q808 718 800 740 Q790 762 778 785 Q764 808 750 832 Q735 858 718 885 Q705 908 690 935" stroke="#a09070" stroke-width="1" fill="none" opacity="0.2" />
 
       <!-- ===== BLAZETRAILS WORDMARK ===== -->
 

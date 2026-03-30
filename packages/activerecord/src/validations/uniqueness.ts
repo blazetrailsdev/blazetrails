@@ -13,6 +13,7 @@
  * Options:
  *   scope      - Additional columns to scope the uniqueness check
  *   conditions - A callable that adds additional conditions to the query
+ *   message    - Custom error message
  */
 import { EachValidator } from "@blazetrails/activemodel";
 
@@ -27,7 +28,9 @@ export class UniquenessValidator extends EachValidator {
 
     if (record.isPersisted?.()) {
       const pk = modelClass.primaryKey ?? "id";
-      relation = relation.whereNot({ [pk]: record.readAttribute(pk) });
+      if (!Array.isArray(pk)) {
+        relation = relation.whereNot({ [pk]: record.readAttribute(pk) });
+      }
     }
 
     const opts = this.options as any;
@@ -43,17 +46,18 @@ export class UniquenessValidator extends EachValidator {
       if (conditioned) relation = conditioned;
     }
 
-    const asyncValidations = (record as any)._asyncValidations;
+    let asyncValidations = (record as any)._asyncValidations as Promise<unknown>[] | undefined;
     if (!Array.isArray(asyncValidations)) {
-      throw new Error(
-        "UniquenessValidator must be used via the async uniqueness validation API " +
-          "(e.g., Base.validatesUniqueness) so async validations can be tracked.",
-      );
+      asyncValidations = [];
+      (record as any)._asyncValidations = asyncValidations;
     }
+
+    const errorOpts: Record<string, unknown> = { value };
+    if (opts?.message != null) errorOpts.message = opts.message;
 
     const validationPromise = relation.exists().then((exists: boolean) => {
       if (exists) {
-        record.errors.add(attribute, "taken", { value });
+        record.errors.add(attribute, "taken", errorOpts);
       }
     });
     asyncValidations.push(validationPromise);

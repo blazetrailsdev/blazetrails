@@ -61,18 +61,19 @@ function getModelColumns(modelClass: any): string[] {
  * fast lookup from (node, column) to alias string.
  */
 export class Aliases {
-  private _tables: Array<{ node: JoinNode | null; columns: AliasMap[] }>;
   private _aliasCache: Map<JoinNode | null, Map<string, string>>;
   private _columnsCache: Map<JoinNode | null, AliasMap[]>;
+  private _allColumns: AliasMap[];
 
   constructor(tables: Array<{ node: JoinNode | null; columns: AliasMap[] }>) {
-    this._tables = tables;
     this._aliasCache = new Map();
     this._columnsCache = new Map();
+    this._allColumns = [];
     for (const table of tables) {
       const colMap = new Map<string, string>();
       for (const col of table.columns) {
         colMap.set(col.column, col.alias);
+        this._allColumns.push(col);
       }
       this._aliasCache.set(table.node, colMap);
       this._columnsCache.set(table.node, table.columns);
@@ -80,7 +81,7 @@ export class Aliases {
   }
 
   columns(): AliasMap[] {
-    return this._tables.flatMap((t) => t.columns);
+    return this._allColumns;
   }
 
   columnAliases(node: JoinNode | null): AliasMap[] {

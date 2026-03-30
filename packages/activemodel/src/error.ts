@@ -10,6 +10,8 @@ type AnyRecord = any;
  * Mirrors: ActiveModel::Error
  */
 export class Error {
+  static i18nCustomizeFullMessage: boolean = false;
+
   readonly base: AnyRecord;
   readonly attribute: string;
   readonly type: string;

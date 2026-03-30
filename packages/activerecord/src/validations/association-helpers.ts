@@ -6,10 +6,22 @@ export function isAssociation(record: any, attribute: string): boolean {
 }
 
 export function resolveAssociation(record: any, attribute: string, fallback: unknown): unknown {
+  // Check collection proxies first — includes in-memory records from build/push
+  const proxy = record._collectionProxies?.get?.(attribute);
+  if (proxy?.target !== undefined) return proxy.target;
+
+  // Check cached/preloaded associations
+  const cached = record._cachedAssociations?.get?.(attribute);
+  if (cached !== undefined) return cached;
+  const preloaded = record._preloadedAssociations?.get?.(attribute);
+  if (preloaded !== undefined) return preloaded;
+
+  // Only use association target when actually loaded
   if (typeof record.association === "function") {
     const assoc = record.association(attribute);
-    if (assoc?.target !== undefined) return assoc.target;
+    if (assoc?.loaded === true && assoc.target !== undefined) return assoc.target;
   }
+
   if (attribute in record) return record[attribute];
   return fallback;
 }

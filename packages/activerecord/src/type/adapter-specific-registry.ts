@@ -120,6 +120,9 @@ export class AdapterSpecificRegistry {
     options?: { adapter?: string; override?: boolean },
     block?: (...args: unknown[]) => Type,
   ): void {
+    if (!block && klass == null) {
+      throw new TypeError("register requires either a klass or a block");
+    }
     const factory = block ?? ((_symbol: unknown, ...args: unknown[]) => new klass!(...args));
     this._registrations.push(new Registration(typeName, factory, options));
   }
@@ -139,8 +142,8 @@ export class AdapterSpecificRegistry {
     const matching = this._registrations.filter((r) => r.matches(symbol, options));
     if (matching.length === 0) return undefined;
     return matching.reduce((best, current) => {
-      if (current.priority > best.priority) return current;
-      return best;
+      const cmp = best.compareTo(current);
+      return cmp < 0 ? current : best;
     });
   }
 }

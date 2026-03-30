@@ -3,7 +3,7 @@
  */
 import { Type, ValueType } from "@blazetrails/activemodel";
 
-export class TypeCasterConnection {
+export class Connection {
   private _klass: any;
   private _tableName: string;
 

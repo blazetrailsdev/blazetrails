@@ -3,7 +3,7 @@
  */
 import { Type } from "@blazetrails/activemodel";
 
-export class TypeCasterMap {
+export class Map {
   private _klass: any;
 
   constructor(klass: any) {

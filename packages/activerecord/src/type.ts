@@ -5,6 +5,7 @@
  * AR-specific types (Date, DateTime, Time with timezone, Text, Json, etc.).
  */
 import {
+  Type,
   BigIntegerType,
   BinaryType,
   BooleanType,
@@ -15,6 +16,7 @@ import {
   StringType,
   ValueType,
 } from "@blazetrails/activemodel";
+export { Type } from "@blazetrails/activemodel";
 import { AdapterSpecificRegistry } from "./type/adapter-specific-registry.js";
 import { Date } from "./type/date.js";
 import { DateTime } from "./type/date-time.js";
@@ -69,20 +71,17 @@ export { registry };
 
 export function register(
   typeName: string,
-  klass?: (new (...args: any[]) => InstanceType<typeof ValueType>) | null,
+  klass?: (new (...args: any[]) => Type) | null,
   options?: { adapter?: string; override?: boolean },
-  block?: (...args: unknown[]) => InstanceType<typeof ValueType>,
+  block?: (...args: unknown[]) => Type,
 ): void {
   registry.register(typeName, klass, options, block);
 }
 
-export function lookup(
-  symbol: string,
-  options?: { adapter?: string },
-): InstanceType<typeof ValueType> {
-  return registry.lookup(symbol, options) as InstanceType<typeof ValueType>;
+export function lookup(symbol: string, options?: { adapter?: string }): Type {
+  return registry.lookup(symbol, options);
 }
 
-export function defaultValue(): InstanceType<typeof ValueType> {
+export function defaultValue(): Type {
   return new ValueType();
 }

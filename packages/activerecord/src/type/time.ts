@@ -7,23 +7,9 @@
 import { TimeType as ActiveModelTime } from "@blazetrails/activemodel";
 import { isUtc, type TimezoneOptions } from "./internal/timezone.js";
 
-export class TimeValue {
-  readonly _value: globalThis.Date;
-
+export class TimeValue extends globalThis.Date {
   constructor(value: globalThis.Date) {
-    this._value = value;
-  }
-
-  getTime(): number {
-    return this._value.getTime();
-  }
-
-  toISOString(): string {
-    return this._value.toISOString();
-  }
-
-  valueOf(): number {
-    return this._value.valueOf();
+    super(value.getTime());
   }
 }
 

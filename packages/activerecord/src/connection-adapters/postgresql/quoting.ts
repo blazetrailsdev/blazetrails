@@ -1,0 +1,84 @@
+/**
+ * PostgreSQL quoting — PostgreSQL-specific value and identifier quoting.
+ *
+ * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::Quoting
+ */
+
+export class IntegerOutOf64BitRange extends RangeError {
+  constructor(value: bigint | number) {
+    super(
+      `${value} is out of range for PostgreSQL bigint (64-bit signed integer): ` +
+        `-9223372036854775808 to 9223372036854775807`,
+    );
+    this.name = "IntegerOutOf64BitRange";
+  }
+}
+
+const PG_INT64_MIN = BigInt("-9223372036854775808");
+const PG_INT64_MAX = BigInt("9223372036854775807");
+
+export interface Quoting {
+  quotedTrue(): string;
+  unquotedTrue(): boolean;
+  quotedFalse(): string;
+  unquotedFalse(): boolean;
+  quotedDate(date: Date): string;
+  quotedTimeUtc(date: Date): string;
+  quoteTableName(name: string): string;
+  quoteColumnName(name: string): string;
+  quoteString(value: string): string;
+  quoteBinaryColumn(value: Buffer): string;
+}
+
+export function quotedTrue(): string {
+  return "'t'";
+}
+
+export function unquotedTrue(): boolean {
+  return true;
+}
+
+export function quotedFalse(): string {
+  return "'f'";
+}
+
+export function unquotedFalse(): boolean {
+  return false;
+}
+
+export function quotedDate(date: Date): string {
+  return `'${date.toISOString().split("T")[0]}'`;
+}
+
+export function quotedTimeUtc(date: Date): string {
+  return `'${date.toISOString().replace("T", " ").replace("Z", "")}'`;
+}
+
+export function quoteTableName(name: string): string {
+  return name
+    .split(".")
+    .map((part) => `"${part.replace(/"/g, '""')}"`)
+    .join(".");
+}
+
+export function quoteColumnName(name: string): string {
+  return `"${name.replace(/"/g, '""')}"`;
+}
+
+export function quoteString(value: string): string {
+  if (value.includes("\\")) {
+    return ` E'${value.replace(/\\/g, "\\\\").replace(/'/g, "''")}'`;
+  }
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+export function quoteBinaryColumn(value: Buffer): string {
+  return `'\\x${value.toString("hex")}'`;
+}
+
+export function checkIntegerRange(value: bigint | number): void {
+  const bigVal = typeof value === "bigint" ? value : BigInt(value);
+  if (bigVal < PG_INT64_MIN || bigVal > PG_INT64_MAX) {
+    throw new IntegerOutOf64BitRange(value);
+  }
+}

@@ -12,6 +12,10 @@ import { CallbackChain, CallbackFn, AroundCallbackFn, CallbackConditions } from 
 import { serializableHash, SerializeOptions } from "./serialization.js";
 import { BlockValidator } from "./validator.js";
 import { AttributeMethodPattern } from "./attribute-methods.js";
+import {
+  assignAttributes as assignAttrs,
+  attributeWriterMissing as defaultAttributeWriterMissing,
+} from "./attribute-assignment.js";
 import type {
   ValidatorContract as Validator,
   ConditionalOptions,
@@ -1355,12 +1359,17 @@ export class Model {
    * Mirrors: ActiveModel::AttributeAssignment#assign_attributes
    */
   assignAttributes(attrs: Record<string, unknown>): void {
-    if (typeof attrs !== "object" || attrs === null) {
-      throw new Error("When assigning attributes, you must pass a hash as an argument");
-    }
-    for (const [key, value] of Object.entries(attrs)) {
-      this.writeAttribute(key, value);
-    }
+    assignAttrs(this, attrs);
+  }
+
+  /**
+   * Hook invoked when assign_attributes encounters an unknown attribute.
+   * Override to customize behavior (e.g. log instead of raise).
+   *
+   * Mirrors: ActiveModel::AttributeAssignment#attribute_writer_missing
+   */
+  attributeWriterMissing(name: string, value: unknown): void {
+    defaultAttributeWriterMissing(this, name, value);
   }
 
   toParam(): string | null {

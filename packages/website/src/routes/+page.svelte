@@ -99,6 +99,53 @@ const users = await User.where({ name: "Alice" })
         <filter id="haze">
           <feGaussianBlur stdDeviation="1.5" />
         </filter>
+
+        <!-- ===== TREE SYMBOLS ===== -->
+        <!-- 1. Tall Pine — narrow tiered triangle -->
+        <symbol id="pine" viewBox="0 0 40 100">
+          <rect x="17" y="70" width="6" height="30" fill="#4a3828" />
+          <polygon points="20,0 5,40 35,40" fill="currentColor" />
+          <polygon points="20,20 2,60 38,60" fill="currentColor" />
+          <polygon points="20,40 0,75 40,75" fill="currentColor" />
+        </symbol>
+
+        <!-- 2. Spruce — wide bottom, pointy top -->
+        <symbol id="spruce" viewBox="0 0 50 100">
+          <rect x="22" y="75" width="6" height="25" fill="#4a3828" />
+          <polygon points="25,0 10,35 40,35" fill="currentColor" />
+          <polygon points="25,18 5,55 45,55" fill="currentColor" />
+          <polygon points="25,38 0,80 50,80" fill="currentColor" />
+        </symbol>
+
+        <!-- 3. Oak — round deciduous canopy -->
+        <symbol id="oak" viewBox="0 0 60 90">
+          <rect x="26" y="55" width="8" height="35" fill="#5a4030" />
+          <ellipse cx="30" cy="35" rx="28" ry="30" fill="currentColor" />
+          <ellipse cx="18" cy="40" rx="18" ry="22" fill="currentColor" />
+          <ellipse cx="42" cy="40" rx="18" ry="22" fill="currentColor" />
+          <ellipse cx="30" cy="28" rx="20" ry="20" fill="currentColor" />
+        </symbol>
+
+        <!-- 4. Birch — slender with small leaf clusters -->
+        <symbol id="birch" viewBox="0 0 30 100">
+          <rect x="13" y="30" width="4" height="70" fill="#d4c8a8" />
+          <rect x="13.5" y="40" width="3" height="5" fill="#8a7a60" opacity="0.5" />
+          <rect x="13.5" y="55" width="3" height="4" fill="#8a7a60" opacity="0.5" />
+          <rect x="13.5" y="68" width="3" height="3" fill="#8a7a60" opacity="0.4" />
+          <ellipse cx="15" cy="22" rx="13" ry="18" fill="currentColor" />
+          <ellipse cx="8" cy="30" rx="9" ry="12" fill="currentColor" />
+          <ellipse cx="22" cy="30" rx="9" ry="12" fill="currentColor" />
+          <ellipse cx="15" cy="15" rx="10" ry="13" fill="currentColor" />
+        </symbol>
+
+        <!-- 5. Cedar — broad layered horizontal branches -->
+        <symbol id="cedar" viewBox="0 0 60 90">
+          <rect x="27" y="65" width="6" height="25" fill="#4a3828" />
+          <polygon points="30,0 15,25 45,25" fill="currentColor" />
+          <polygon points="30,12 8,40 52,40" fill="currentColor" />
+          <polygon points="30,28 3,55 57,55" fill="currentColor" />
+          <polygon points="30,42 0,70 60,70" fill="currentColor" />
+        </symbol>
       </defs>
 
       <!-- Sky -->
@@ -115,95 +162,121 @@ const users = await User.where({ name: "Alice" })
       <path d="M0 580 Q100 530 250 560 Q400 520 550 555 Q700 515 850 550 Q1000 520 1150 545 Q1300 510 1450 540 Q1550 525 1600 550 L1600 700 L0 700Z" fill="#3d5a35" />
 
       <!-- Forest tree line — back row (distant, smaller) -->
-      <g fill="#2d4a28" opacity="0.8">
-        <!-- Scattered conifers along back hills -->
-        <polygon points="80,560 90,510 100,560" />
-        <polygon points="120,555 132,498 144,555" />
-        <polygon points="170,565 180,520 190,565" />
-        <polygon points="230,550 243,488 256,550" />
-        <polygon points="280,558 290,510 300,558" />
-        <polygon points="340,548 352,490 364,548" />
-        <polygon points="400,555 412,505 424,555" />
-        <polygon points="460,545 473,483 486,545" />
-        <polygon points="520,552 530,502 540,552" />
-        <polygon points="590,540 603,478 616,540" />
-        <polygon points="660,548 670,500 680,548" />
-        <polygon points="730,538 743,476 756,538" />
-        <polygon points="800,545 810,495 820,545" />
-        <polygon points="870,535 883,475 896,535" />
-        <polygon points="940,542 950,492 960,542" />
-        <polygon points="1010,530 1023,470 1036,530" />
-        <polygon points="1080,538 1090,488 1100,538" />
-        <polygon points="1150,528 1163,468 1176,528" />
-        <polygon points="1220,535 1230,485 1240,535" />
-        <polygon points="1290,525 1303,465 1316,525" />
-        <polygon points="1360,532 1370,482 1380,532" />
-        <polygon points="1430,522 1443,462 1456,522" />
-        <polygon points="1510,530 1520,478 1530,530" />
-        <polygon points="1570,525 1583,470 1596,525" />
+      <g color="#2d4a28" opacity="0.8">
+        <use href="#pine" x="75" y="505" width="16" height="55" />
+        <use href="#spruce" x="110" y="492" width="20" height="63" />
+        <use href="#pine" x="155" y="510" width="14" height="50" />
+        <use href="#cedar" x="195" y="488" width="22" height="58" />
+        <use href="#oak" x="240" y="500" width="24" height="52" />
+        <use href="#pine" x="285" y="502" width="16" height="55" />
+        <use href="#birch" x="330" y="490" width="12" height="55" />
+        <use href="#spruce" x="365" y="495" width="20" height="60" />
+        <use href="#pine" x="415" y="500" width="14" height="50" />
+        <use href="#cedar" x="455" y="485" width="22" height="58" />
+        <use href="#oak" x="505" y="498" width="24" height="52" />
+        <use href="#spruce" x="555" y="480" width="20" height="60" />
+        <use href="#birch" x="600" y="488" width="12" height="55" />
+        <use href="#pine" x="640" y="492" width="16" height="55" />
+        <use href="#cedar" x="685" y="478" width="22" height="58" />
+        <use href="#pine" x="730" y="488" width="14" height="50" />
+        <use href="#oak" x="775" y="485" width="24" height="52" />
+        <use href="#spruce" x="825" y="475" width="20" height="60" />
+        <use href="#birch" x="870" y="482" width="12" height="55" />
+        <use href="#pine" x="910" y="485" width="16" height="55" />
+        <use href="#cedar" x="960" y="472" width="22" height="58" />
+        <use href="#spruce" x="1010" y="478" width="20" height="60" />
+        <use href="#pine" x="1060" y="482" width="14" height="50" />
+        <use href="#oak" x="1105" y="470" width="24" height="52" />
+        <use href="#birch" x="1150" y="475" width="12" height="55" />
+        <use href="#pine" x="1195" y="478" width="16" height="55" />
+        <use href="#spruce" x="1240" y="468" width="20" height="60" />
+        <use href="#cedar" x="1290" y="472" width="22" height="58" />
+        <use href="#pine" x="1340" y="475" width="14" height="50" />
+        <use href="#oak" x="1385" y="465" width="24" height="52" />
+        <use href="#pine" x="1435" y="470" width="16" height="55" />
+        <use href="#spruce" x="1485" y="472" width="20" height="60" />
+        <use href="#birch" x="1535" y="468" width="12" height="55" />
+        <use href="#cedar" x="1565" y="465" width="22" height="58" />
       </g>
 
       <!-- Rolling hills — mid layer -->
       <path d="M0 620 Q200 570 400 600 Q600 560 800 590 Q1000 555 1200 585 Q1400 560 1600 590 L1600 750 L0 750Z" fill="#4a6a3a" />
 
       <!-- Forest tree line — mid row -->
-      <g fill="#2a5022">
-        <polygon points="50,615 65,548 80,615" />
-        <polygon points="100,610 118,535 136,610" />
-        <polygon points="160,620 175,555 190,620" />
-        <polygon points="215,608 233,530 251,608" />
-        <polygon points="270,618 285,552 300,618" />
-        <polygon points="330,605 348,528 366,605" />
-        <polygon points="390,612 405,548 420,612" />
-        <polygon points="450,600 468,522 486,600" />
-        <polygon points="510,608 525,545 540,608" />
-        <polygon points="570,595 588,518 606,595" />
-        <polygon points="635,605 650,542 665,605" />
-        <polygon points="700,592 718,515 736,592" />
-        <polygon points="760,600 775,538 790,600" />
-        <polygon points="825,588 843,510 861,588" />
-        <polygon points="890,595 905,532 920,595" />
-        <polygon points="955,582 973,505 991,582" />
-        <polygon points="1020,590 1035,528 1050,590" />
-        <polygon points="1085,578 1103,500 1121,578" />
-        <polygon points="1150,585 1165,522 1180,585" />
-        <polygon points="1220,575 1238,498 1256,575" />
-        <polygon points="1290,582 1305,520 1320,582" />
-        <polygon points="1355,572 1373,495 1391,572" />
-        <polygon points="1420,580 1435,518 1450,580" />
-        <polygon points="1490,570 1508,492 1526,570" />
-        <polygon points="1560,578 1575,515 1590,578" />
+      <g color="#2a5022">
+        <use href="#spruce" x="35" y="538" width="28" height="78" />
+        <use href="#oak" x="75" y="540" width="34" height="68" />
+        <use href="#pine" x="130" y="542" width="22" height="75" />
+        <use href="#cedar" x="175" y="530" width="30" height="75" />
+        <use href="#birch" x="225" y="540" width="16" height="70" />
+        <use href="#pine" x="260" y="535" width="22" height="78" />
+        <use href="#spruce" x="305" y="525" width="28" height="78" />
+        <use href="#oak" x="350" y="535" width="34" height="68" />
+        <use href="#cedar" x="405" y="528" width="30" height="75" />
+        <use href="#birch" x="450" y="530" width="16" height="70" />
+        <use href="#pine" x="485" y="525" width="22" height="78" />
+        <use href="#spruce" x="530" y="518" width="28" height="78" />
+        <use href="#oak" x="575" y="522" width="34" height="68" />
+        <use href="#pine" x="630" y="520" width="22" height="75" />
+        <use href="#cedar" x="675" y="512" width="30" height="75" />
+        <use href="#birch" x="720" y="518" width="16" height="70" />
+        <use href="#spruce" x="755" y="515" width="28" height="78" />
+        <use href="#oak" x="800" y="510" width="34" height="68" />
+        <use href="#pine" x="855" y="512" width="22" height="78" />
+        <use href="#cedar" x="900" y="505" width="30" height="75" />
+        <use href="#birch" x="945" y="508" width="16" height="70" />
+        <use href="#spruce" x="980" y="502" width="28" height="78" />
+        <use href="#pine" x="1030" y="505" width="22" height="75" />
+        <use href="#oak" x="1075" y="498" width="34" height="68" />
+        <use href="#cedar" x="1130" y="500" width="30" height="75" />
+        <use href="#birch" x="1175" y="502" width="16" height="70" />
+        <use href="#pine" x="1210" y="498" width="22" height="78" />
+        <use href="#spruce" x="1260" y="492" width="28" height="78" />
+        <use href="#oak" x="1305" y="495" width="34" height="68" />
+        <use href="#cedar" x="1360" y="488" width="30" height="75" />
+        <use href="#pine" x="1410" y="492" width="22" height="75" />
+        <use href="#birch" x="1455" y="488" width="16" height="70" />
+        <use href="#spruce" x="1490" y="485" width="28" height="78" />
+        <use href="#pine" x="1545" y="488" width="22" height="75" />
+        <use href="#oak" x="1575" y="485" width="34" height="68" />
       </g>
 
       <!-- Rolling hills — front layer -->
       <path d="M0 670 Q150 630 350 655 Q550 620 750 645 Q950 615 1150 640 Q1350 620 1600 650 L1600 800 L0 800Z" fill="#3a5a2e" />
 
       <!-- Forest tree line — front row (closer, larger) -->
-      <g fill="#1e3a18">
-        <polygon points="20,668 42,575 64,668" />
-        <polygon points="80,660 105,558 130,660" />
-        <polygon points="155,670 175,580 195,670" />
-        <polygon points="220,658 245,555 270,658" />
-        <polygon points="295,665 315,575 335,665" />
-        <polygon points="360,652 385,548 410,652" />
-        <polygon points="430,660 450,570 470,660" />
-        <polygon points="495,648 520,545 545,648" />
-        <polygon points="565,655 585,565 605,655" />
-        <polygon points="630,642 655,540 680,642" />
-        <polygon points="700,650 720,560 740,650" />
-        <polygon points="765,638 790,535 815,638" />
-        <polygon points="835,645 855,555 875,645" />
-        <polygon points="900,632 925,530 950,632" />
-        <polygon points="970,640 990,550 1010,640" />
-        <polygon points="1035,628 1060,525 1085,628" />
-        <polygon points="1105,635 1125,545 1145,635" />
-        <polygon points="1170,622 1195,520 1220,622" />
-        <polygon points="1240,630 1260,540 1280,630" />
-        <polygon points="1305,618 1330,515 1355,618" />
-        <polygon points="1375,625 1395,535 1415,625" />
-        <polygon points="1440,615 1465,512 1490,615" />
-        <polygon points="1510,622 1530,530 1550,622" />
-        <polygon points="1565,618 1585,525 1605,618" />
+      <g color="#1e3a18">
+        <use href="#oak" x="5" y="560" width="48" height="95" />
+        <use href="#pine" x="60" y="555" width="32" height="105" />
+        <use href="#spruce" x="110" y="558" width="38" height="108" />
+        <use href="#birch" x="165" y="562" width="20" height="95" />
+        <use href="#cedar" x="200" y="548" width="42" height="105" />
+        <use href="#pine" x="260" y="552" width="32" height="108" />
+        <use href="#oak" x="310" y="548" width="48" height="95" />
+        <use href="#spruce" x="370" y="540" width="38" height="108" />
+        <use href="#birch" x="425" y="548" width="20" height="95" />
+        <use href="#cedar" x="460" y="535" width="42" height="105" />
+        <use href="#pine" x="520" y="540" width="32" height="108" />
+        <use href="#oak" x="570" y="532" width="48" height="95" />
+        <use href="#spruce" x="635" y="528" width="38" height="108" />
+        <use href="#birch" x="690" y="535" width="20" height="95" />
+        <use href="#pine" x="725" y="530" width="32" height="108" />
+        <use href="#cedar" x="775" y="522" width="42" height="105" />
+        <use href="#oak" x="835" y="525" width="48" height="95" />
+        <use href="#pine" x="900" y="520" width="32" height="108" />
+        <use href="#spruce" x="950" y="518" width="38" height="108" />
+        <use href="#birch" x="1005" y="522" width="20" height="95" />
+        <use href="#cedar" x="1040" y="512" width="42" height="105" />
+        <use href="#oak" x="1100" y="515" width="48" height="95" />
+        <use href="#pine" x="1165" y="510" width="32" height="108" />
+        <use href="#spruce" x="1215" y="508" width="38" height="108" />
+        <use href="#birch" x="1270" y="512" width="20" height="95" />
+        <use href="#cedar" x="1305" y="502" width="42" height="105" />
+        <use href="#pine" x="1365" y="505" width="32" height="108" />
+        <use href="#oak" x="1415" y="500" width="48" height="95" />
+        <use href="#spruce" x="1475" y="502" width="38" height="108" />
+        <use href="#birch" x="1530" y="505" width="20" height="95" />
+        <use href="#pine" x="1565" y="500" width="32" height="108" />
       </g>
 
       <!-- Foreground hills — earthy brown -->

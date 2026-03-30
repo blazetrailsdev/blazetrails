@@ -198,12 +198,14 @@ export class ProcCall {
 }
 
 export namespace CallTemplate {
-  export const Method = MethodCall;
-  export const Object = ObjectCall;
-  export const Exec0 = InstanceExec0;
-  export const Exec1 = InstanceExec1;
-  export const Exec2 = InstanceExec2;
-  export const Proc = ProcCall;
+  export const classes = {
+    MethodCall,
+    ObjectCall,
+    InstanceExec0,
+    InstanceExec1,
+    InstanceExec2,
+    ProcCall,
+  };
 }
 
 export class Value {
@@ -221,7 +223,7 @@ export class Value {
 }
 
 export namespace Conditionals {
-  export const Check = Value;
+  export const classes = { Value };
 }
 
 export class Before {
@@ -257,9 +259,7 @@ export class Around {
 }
 
 export namespace Filters {
-  export const BeforeFilter = Before;
-  export const AfterFilter = After;
-  export const AroundFilter = Around;
+  export const classes = { Before, After, Around };
 }
 
 export interface ClassMethods {

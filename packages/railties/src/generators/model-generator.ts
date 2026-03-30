@@ -67,9 +67,9 @@ export class ModelGenerator extends GeneratorBase {
     );
 
     const parentClass = parent ? classify(parent.replace(/::/g, "_").replace(/\//g, "_")) : "Base";
-    const parentFile = parent ? dasherize(parent.replace(/::/g, "/").split("/").pop()!) : null;
-    const importPath = parentFile
-      ? `import { ${parentClass} } from "./${parentFile}.js";`
+    const parentPath = parent ? dasherize(parent.replace(/::/g, "/")) : null;
+    const importPath = parentPath
+      ? `import { ${parentClass} } from "./${parentPath}.js";`
       : 'import { Base } from "@blazetrails/activerecord";';
 
     const bodyLines: string[] = [];

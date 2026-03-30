@@ -80,24 +80,24 @@ describe("MigrationGeneratorTest", () => {
     const gen = makeGen();
     const files = gen.run("remove_title_body_from_posts", ["title:string:index", "body:text"]);
     const content = readMigration(files);
-    expect(content).toContain('removeColumn("posts", "title", "string")');
-    expect(content).toContain('removeColumn("posts", "body", "text")');
-    expect(content).toContain('removeIndex("posts", "title")');
+    expect(content).toContain('removeColumn("posts", "title")');
+    expect(content).toContain('removeColumn("posts", "body")');
+    expect(content).toContain('removeIndex("posts", { column: "title" })');
   });
 
   it("remove migration with attributes", () => {
     const gen = makeGen();
     const files = gen.run("remove_title_body_from_posts", ["title:string", "body:text"]);
     const content = readMigration(files);
-    expect(content).toContain('removeColumn("posts", "title", "string")');
-    expect(content).toContain('removeColumn("posts", "body", "text")');
+    expect(content).toContain('removeColumn("posts", "title")');
+    expect(content).toContain('removeColumn("posts", "body")');
   });
 
   it("remove migration with table having to in title", () => {
     const gen = makeGen();
     const files = gen.run("remove_email_address_from_sent_to_user", ["email_address:string"]);
     const content = readMigration(files);
-    expect(content).toContain('removeColumn("sent_to_users", "email_address", "string")');
+    expect(content).toContain('removeColumn("sent_to_users", "email_address")');
   });
 
   it("remove migration with references options", () => {
@@ -167,10 +167,12 @@ describe("MigrationGeneratorTest", () => {
       "discount:decimal{3.4}:uniq",
     ]);
     const content = readMigration(files);
-    expect(content).toContain('addColumn("books", "title", "string", limit: 40)');
-    expect(content).toContain('addColumn("books", "content", "string", limit: 255)');
-    expect(content).toContain('addColumn("books", "price", "decimal", precision: 1, scale: 2)');
-    expect(content).toContain('addColumn("books", "discount", "decimal", precision: 3, scale: 4)');
+    expect(content).toContain('addColumn("books", "title", "string", { limit: 40 })');
+    expect(content).toContain('addColumn("books", "content", "string", { limit: 255 })');
+    expect(content).toContain('addColumn("books", "price", "decimal", { precision: 1, scale: 2 })');
+    expect(content).toContain(
+      'addColumn("books", "discount", "decimal", { precision: 3, scale: 4 })',
+    );
     expect(content).toContain('addIndex("books", "title")');
     expect(content).toContain('addIndex("books", "price")');
     expect(content).toMatch(/addIndex\("books", "discount", \{ unique: true \}/);
@@ -352,16 +354,16 @@ describe("MigrationGeneratorTest", () => {
     const files = gen.run("create_books", ["title:string!", "content:text!"]);
     const content = readMigration(files);
     expect(content).toContain('createTable("books"');
-    expect(content).toContain('t.string("title", null: false)');
-    expect(content).toContain('t.text("content", null: false)');
+    expect(content).toContain('t.string("title", { null: false })');
+    expect(content).toContain('t.text("content", { null: false })');
   });
 
   it("add migration with required attributes", () => {
     const gen = makeGen();
     const files = gen.run("add_title_body_to_posts", ["title:string!", "body:text!"]);
     const content = readMigration(files);
-    expect(content).toContain('addColumn("posts", "title", "string", null: false)');
-    expect(content).toContain('addColumn("posts", "body", "text", null: false)');
+    expect(content).toContain('addColumn("posts", "title", "string", { null: false })');
+    expect(content).toContain('addColumn("posts", "body", "text", { null: false })');
   });
 });
 

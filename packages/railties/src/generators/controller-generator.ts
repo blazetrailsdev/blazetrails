@@ -31,9 +31,14 @@ export class ControllerGenerator extends GeneratorBase {
       ? `import { ${classify(parent)} } from "./${dasherize(underscore(parent))}.js";`
       : 'import { ActionController } from "@blazetrails/actionpack";';
 
-    // Handle namespace (admin/dashboard -> Admin::DashboardController)
     const namespaceParts = stripped.split("/");
-    const controllerName =
+    // For TS class names, join namespace parts without :: (AdminDashboardController)
+    const tsClassName =
+      namespaceParts.length > 1
+        ? namespaceParts.map((p) => classify(p)).join("") + "Controller"
+        : className;
+    // For display/describe strings, use :: style (Admin::DashboardController)
+    const displayName =
       namespaceParts.length > 1
         ? namespaceParts.map((p) => classify(p)).join("::") + "Controller"
         : className;
@@ -50,7 +55,7 @@ export class ControllerGenerator extends GeneratorBase {
       `src/app/controllers/${controllerFile}${ext}`,
       `${importLine}
 
-export class ${controllerName} extends ${parentClass} {
+export class ${tsClassName} extends ${parentClass} {
 ${actionMethods}
 }
 `,
@@ -60,9 +65,9 @@ ${actionMethods}
       this.createFile(
         `test/controllers/${controllerFile}.test${ext}`,
         `import { describe, it, expect } from "vitest";
-import { ${controllerName.replace(/::/g, "")} } from "../../src/app/controllers/${controllerFile}.js";
+import { ${tsClassName} } from "../../src/app/controllers/${controllerFile}.js";
 
-describe("${controllerName}", () => {
+describe("${displayName}", () => {
 ${actions.map((a) => `  it("${a}", () => {\n    // TODO: test ${a} action\n  });`).join("\n\n")}
 });
 `,
@@ -84,10 +89,7 @@ ${actions.map((a) => `  it("${a}", () => {\n    // TODO: test ${a} action\n  });
         ? namespaceParts.map((p) => dasherize(underscore(p))).join("/")
         : viewDir;
     for (const action of actions) {
-      this.createFile(
-        `src/app/views/${viewBase}/${action}.html${ext === ".ts" ? ".ts" : ".js"}`,
-        "",
-      );
+      this.createFile(`src/app/views/${viewBase}/${action}.html.ejs`, "");
     }
     // Ensure view directory exists even with no actions
     if (actions.length === 0) {
@@ -116,11 +118,13 @@ ${actions.map((a) => `  it("${a}", () => {\n    // TODO: test ${a} action\n  });
 
     if (namespaceParts.length > 1) {
       const namespace = underscore(namespaceParts[0]);
-      const routeLines = actions.map((a) => `    get "${controllerName}/${a}"`).join("\n");
-      const block = `  namespace :${namespace} do\n${routeLines}\n  end`;
+      const routeLines = actions
+        .map((a) => `    router.get("/${namespace}/${controllerName}/${a}")`)
+        .join("\n");
+      const block = `  router.namespace("${namespace}", (router) => {\n${routeLines}\n  });`;
       this.insertIntoFile(routesFile, "// routes", block + "\n");
     } else {
-      const routeLines = actions.map((a) => `  get "${controllerName}/${a}"`).join("\n");
+      const routeLines = actions.map((a) => `  router.get("/${controllerName}/${a}");`).join("\n");
       this.insertIntoFile(routesFile, "// routes", routeLines + "\n");
     }
   }

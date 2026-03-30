@@ -198,9 +198,9 @@ describe("ModelGeneratorTest", () => {
     ]);
     const content = findMigration(files);
     expect(content).toContain('createTable("products"');
-    expect(content).toContain('t.string("title", limit: 40)');
-    expect(content).toContain('t.string("content", limit: 255)');
-    expect(content).toContain('t.decimal("price", precision: 5, scale: 2)');
+    expect(content).toContain('t.string("title", { limit: 40 })');
+    expect(content).toContain('t.string("content", { limit: 255 })');
+    expect(content).toContain('t.decimal("price", { precision: 5, scale: 2 })');
     expect(content).toMatch(/t\.references\("supplier",.*polymorphic: true/);
     expect(content).toContain('addIndex("products", "title")');
     expect(content).toContain('addIndex("products", "price")');

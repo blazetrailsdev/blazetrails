@@ -78,16 +78,16 @@ describe("ControllerGeneratorTest", () => {
   it("invokes default template engine", () => {
     const gen = makeGen();
     gen.run("Account", ["foo", "bar"]);
-    expect(fs.existsSync(path.join(tmpDir, "src/app/views/account/foo.html.ts"))).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, "src/app/views/account/bar.html.ts"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, "src/app/views/account/foo.html.ejs"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, "src/app/views/account/bar.html.ejs"))).toBe(true);
   });
 
   it("add routes", () => {
     const gen = makeGen();
     gen.run("Account", ["foo", "bar"]);
     const routes = readFile("src/config/routes.ts");
-    expect(routes).toContain('get "account/foo"');
-    expect(routes).toContain('get "account/bar"');
+    expect(routes).toContain('router.get("/account/foo")');
+    expect(routes).toContain('router.get("/account/bar")');
   });
 
   it("skip routes", () => {
@@ -128,30 +128,31 @@ describe("ControllerGeneratorTest", () => {
     const gen = makeGen();
     gen.run("admin/dashboard", ["index"]);
     const routes = readFile("src/config/routes.ts");
-    expect(routes).toMatch(/namespace :admin do\n\s+get "dashboard\/index"\n\s+end/);
+    expect(routes).toContain('router.namespace("admin"');
+    expect(routes).toContain('router.get("/admin/dashboard/index")');
   });
 
   it("namespaced routes with multiple actions are created in routes", () => {
     const gen = makeGen();
     gen.run("admin/dashboard", ["index", "show"]);
     const routes = readFile("src/config/routes.ts");
-    expect(routes).toMatch(/namespace :admin do/);
-    expect(routes).toContain('get "dashboard/index"');
-    expect(routes).toContain('get "dashboard/show"');
+    expect(routes).toContain('router.namespace("admin"');
+    expect(routes).toContain('router.get("/admin/dashboard/index")');
+    expect(routes).toContain('router.get("/admin/dashboard/show")');
   });
 
   it("does not add routes when action is not specified", () => {
     const gen = makeGen();
     gen.run("admin/dashboard", []);
     const routes = readFile("src/config/routes.ts");
-    expect(routes).not.toContain("namespace :admin");
+    expect(routes).not.toContain("namespace");
   });
 
   it("controller parent param", () => {
     const gen = makeGen();
     gen.run("admin/dashboard", ["index"], { parent: "admin_controller" });
     const content = readFile("src/app/controllers/admin/dashboard-controller.ts");
-    expect(content).toContain("class Admin::DashboardController extends AdminController");
+    expect(content).toContain("class AdminDashboardController extends AdminController");
   });
 
   it("controller suffix is not duplicated", () => {

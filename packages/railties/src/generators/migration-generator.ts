@@ -135,24 +135,21 @@ function isVirtual(type: string): boolean {
   return VIRTUAL_TYPES.has(type);
 }
 
-function columnOpts(col: ParsedColumn): string {
+function columnOptsObj(col: ParsedColumn): string {
   const opts: string[] = [];
   if (col.limit) opts.push(`limit: ${col.limit}`);
   if (col.precision != null) opts.push(`precision: ${col.precision}`);
   if (col.scale != null) opts.push(`scale: ${col.scale}`);
   if (col.required) opts.push("null: false");
-  return opts.length > 0 ? `, ${opts.join(", ")}` : "";
+  return opts.length > 0 ? `, { ${opts.join(", ")} }` : "";
 }
 
-function referenceOpts(col: ParsedColumn, options: { nullFalse?: boolean } = {}): string {
+function referenceOpts(col: ParsedColumn): string {
   const opts: string[] = [];
   if (col.polymorphic) {
     opts.push("polymorphic: true");
   } else {
     opts.push("foreignKey: true");
-  }
-  if (options.nullFalse) {
-    opts.push("null: false");
   }
   if (col.unique) {
     opts.push("index: false");
@@ -164,7 +161,7 @@ function columnLine(col: ParsedColumn): string {
   if (isReference(col.type)) {
     return `      t.references("${col.name}", ${referenceOpts(col)});`;
   }
-  return `      t.${col.type}("${col.name}"${columnOpts(col)});`;
+  return `      t.${col.type}("${col.name}"${columnOptsObj(col)});`;
 }
 
 function indexLines(table: string, columns: ParsedColumn[]): string {
@@ -188,7 +185,7 @@ function removeIndexLines(table: string, columns: ParsedColumn[]): string {
   const lines: string[] = [];
   for (const col of columns) {
     if (col.index || col.unique || col.token) {
-      lines.push(`    await this.removeIndex("${table}", "${col.name}");`);
+      lines.push(`    await this.removeIndex("${table}", { column: "${col.name}" });`);
     }
   }
   return lines.join("\n");
@@ -204,7 +201,7 @@ export class MigrationGenerator extends GeneratorBase {
   static exitOnFailure = true;
 
   run(name: string, args: string[], options: MigrationRunOptions = {}): string[] {
-    if (name.includes(":")) {
+    if (!/^\w+$/.test(name)) {
       throw new Error(
         `Illegal migration name: ${name} (only letters, numbers, and underscores allowed)`,
       );
@@ -281,7 +278,7 @@ ${body}
           if (isReference(c.type)) {
             return `    await this.addReference("${table}", "${c.name}", ${referenceOpts(c)});`;
           }
-          return `    await this.addColumn("${table}", "${c.name}", "${c.type}"${columnOpts(c)});`;
+          return `    await this.addColumn("${table}", "${c.name}", "${c.type}"${columnOptsObj(c)});`;
         })
         .join("\n");
       const idxLines = indexLines(table, realColumns);
@@ -302,10 +299,9 @@ ${body}
             } else {
               opts.push("foreignKey: true");
             }
-            const optsStr = opts.length > 0 ? `, { ${opts.join(", ")} }` : "";
-            return `    await this.removeReference("${table}", "${c.name}"${optsStr});`;
+            return `    await this.removeReference("${table}", "${c.name}", { ${opts.join(", ")} });`;
           }
-          return `    await this.removeColumn("${table}", "${c.name}", "${c.type}"${columnOpts(c)});`;
+          return `    await this.removeColumn("${table}", "${c.name}");`;
         })
         .join("\n");
       return rmIdxLines ? `${rmIdxLines}\n${upLines}` : upLines;
@@ -316,8 +312,6 @@ ${body}
   }
 
   private joinTableBody(rawArgs: string[]): string {
-    // Parse join table args: artist_id, musics:uniq
-    // Each arg is either a bare name_id or name:uniq
     const entries: Array<{ name: string; unique: boolean }> = [];
     for (const arg of rawArgs) {
       if (arg.startsWith("-")) continue;

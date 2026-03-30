@@ -181,132 +181,136 @@ async function migrateDb(adapter: SQLite3Adapter) {
   if (await tableExists(adapter, "sync_log")) return;
 
   await adapter.beginTransaction();
+  try {
+    await ctx.createTable("pull_requests", { id: false }, (t) => {
+      t.integer("number", { primaryKey: true });
+      t.string("title");
+      t.string("author");
+      t.string("branch");
+      t.string("base_branch");
+      t.text("body");
+      t.string("created_at");
+      t.string("merged_at");
+      t.string("closed_at");
+      t.string("merge_commit_sha");
+      t.integer("additions");
+      t.integer("deletions");
+      t.integer("changed_files");
+      t.text("labels");
+      t.integer("review_count", { default: -1 });
+      t.integer("comment_count", { default: -1 });
+      t.integer("commit_count", { default: 0 });
+      t.integer("time_open_seconds");
+      t.string("review_decision");
+    });
 
-  await ctx.createTable("pull_requests", { id: false }, (t) => {
-    t.integer("number", { primaryKey: true });
-    t.string("title");
-    t.string("author");
-    t.string("branch");
-    t.string("base_branch");
-    t.text("body");
-    t.string("created_at");
-    t.string("merged_at");
-    t.string("closed_at");
-    t.string("merge_commit_sha");
-    t.integer("additions");
-    t.integer("deletions");
-    t.integer("changed_files");
-    t.text("labels");
-    t.integer("review_count", { default: -1 });
-    t.integer("comment_count", { default: -1 });
-    t.integer("commit_count", { default: 0 });
-    t.integer("time_open_seconds");
-    t.string("review_decision");
-  });
+    await ctx.createTable("pr_files", {}, (t) => {
+      t.integer("pr_number");
+      t.string("filename");
+      t.string("status");
+      t.integer("additions");
+      t.integer("deletions");
+      t.integer("changes");
+      t.text("patch");
+      t.index(["pr_number", "filename"], { unique: true });
+    });
 
-  await ctx.createTable("pr_files", {}, (t) => {
-    t.integer("pr_number");
-    t.string("filename");
-    t.string("status");
-    t.integer("additions");
-    t.integer("deletions");
-    t.integer("changes");
-    t.text("patch");
-    t.index(["pr_number", "filename"], { unique: true });
-  });
+    await ctx.createTable("pr_commits", {}, (t) => {
+      t.integer("pr_number");
+      t.string("sha");
+      t.text("message");
+      t.string("author");
+      t.string("authored_at");
+      t.index(["pr_number", "sha"], { unique: true });
+    });
 
-  await ctx.createTable("pr_commits", {}, (t) => {
-    t.integer("pr_number");
-    t.string("sha");
-    t.text("message");
-    t.string("author");
-    t.string("authored_at");
-    t.index(["pr_number", "sha"], { unique: true });
-  });
+    await ctx.createTable("pr_comments", { id: false }, (t) => {
+      t.integer("id", { primaryKey: true });
+      t.integer("pr_number");
+      t.string("author");
+      t.text("body");
+      t.string("created_at");
+      t.string("updated_at");
+      t.string("comment_type");
+      t.string("path");
+      t.text("diff_hunk");
+      t.integer("in_reply_to_id");
+    });
 
-  await ctx.createTable("pr_comments", { id: false }, (t) => {
-    t.integer("id", { primaryKey: true });
-    t.integer("pr_number");
-    t.string("author");
-    t.text("body");
-    t.string("created_at");
-    t.string("updated_at");
-    t.string("comment_type");
-    t.string("path");
-    t.text("diff_hunk");
-    t.integer("in_reply_to_id");
-  });
+    await ctx.createTable("pr_reviews", { id: false }, (t) => {
+      t.integer("id", { primaryKey: true });
+      t.integer("pr_number");
+      t.string("author");
+      t.string("state");
+      t.text("body");
+      t.string("submitted_at");
+    });
 
-  await ctx.createTable("pr_reviews", { id: false }, (t) => {
-    t.integer("id", { primaryKey: true });
-    t.integer("pr_number");
-    t.string("author");
-    t.string("state");
-    t.text("body");
-    t.string("submitted_at");
-  });
+    await ctx.createTable("workflow_runs", { id: false }, (t) => {
+      t.integer("id", { primaryKey: true });
+      t.string("head_sha");
+      t.integer("pr_number");
+      t.string("event");
+      t.string("status");
+      t.string("conclusion");
+      t.string("created_at");
+      t.string("updated_at");
+      t.string("run_started_at");
+      t.integer("duration_seconds");
+      t.string("workflow_name");
+      t.index(["head_sha"]);
+    });
 
-  await ctx.createTable("workflow_runs", { id: false }, (t) => {
-    t.integer("id", { primaryKey: true });
-    t.string("head_sha");
-    t.integer("pr_number");
-    t.string("event");
-    t.string("status");
-    t.string("conclusion");
-    t.string("created_at");
-    t.string("updated_at");
-    t.string("run_started_at");
-    t.integer("duration_seconds");
-    t.string("workflow_name");
-    t.index(["head_sha"]);
-  });
+    await ctx.createTable("workflow_jobs", { id: false }, (t) => {
+      t.integer("id", { primaryKey: true });
+      t.integer("run_id");
+      t.string("name");
+      t.string("status");
+      t.string("conclusion");
+      t.string("started_at");
+      t.string("completed_at");
+      t.integer("duration_seconds");
+      t.index(["run_id", "name"]);
+    });
 
-  await ctx.createTable("workflow_jobs", { id: false }, (t) => {
-    t.integer("id", { primaryKey: true });
-    t.integer("run_id");
-    t.string("name");
-    t.string("status");
-    t.string("conclusion");
-    t.string("started_at");
-    t.string("completed_at");
-    t.integer("duration_seconds");
-    t.index(["run_id", "name"]);
-  });
+    await ctx.createTable("test_compare_stats", {}, (t) => {
+      t.string("merge_commit_sha");
+      t.integer("pr_number");
+      t.string("package");
+      t.integer("matched");
+      t.integer("total");
+      t.float("percent");
+      t.integer("skipped", { default: 0 });
+      t.integer("files_mapped", { default: 0 });
+      t.integer("files_total", { default: 0 });
+      t.integer("misplaced", { default: 0 });
+      t.index(["merge_commit_sha", "package"], { unique: true });
+    });
 
-  await ctx.createTable("test_compare_stats", {}, (t) => {
-    t.string("merge_commit_sha");
-    t.integer("pr_number");
-    t.string("package");
-    t.integer("matched");
-    t.integer("total");
-    t.float("percent");
-    t.integer("skipped", { default: 0 });
-    t.integer("files_mapped", { default: 0 });
-    t.integer("files_total", { default: 0 });
-    t.integer("misplaced", { default: 0 });
-    t.index(["merge_commit_sha", "package"], { unique: true });
-  });
+    await ctx.createTable("api_compare_stats", {}, (t) => {
+      t.string("merge_commit_sha");
+      t.integer("pr_number");
+      t.string("package");
+      t.integer("matched");
+      t.integer("total");
+      t.float("percent");
+      t.integer("misplaced", { default: 0 });
+      t.integer("missing", { default: 0 });
+      t.index(["merge_commit_sha", "package"], { unique: true });
+    });
 
-  await ctx.createTable("api_compare_stats", {}, (t) => {
-    t.string("merge_commit_sha");
-    t.integer("pr_number");
-    t.string("package");
-    t.integer("matched");
-    t.integer("total");
-    t.float("percent");
-    t.integer("misplaced", { default: 0 });
-    t.integer("missing", { default: 0 });
-    t.index(["merge_commit_sha", "package"], { unique: true });
-  });
+    await ctx.createTable("sync_log", {}, (t) => {
+      t.string("synced_at");
+      t.integer("prs_synced", { default: 0 });
+      t.integer("runs_synced", { default: 0 });
+      t.integer("logs_parsed", { default: 0 });
+    });
 
-  await ctx.createTable("sync_log", {}, (t) => {
-    t.string("synced_at");
-    t.integer("prs_synced", { default: 0 });
-    t.integer("runs_synced", { default: 0 });
-    t.integer("logs_parsed", { default: 0 });
-  });
-
-  await adapter.commit();
+    await adapter.commit();
+  } catch (err) {
+    await adapter.rollback();
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -328,7 +332,7 @@ interface GhPrData {
   headRefName: string;
   baseRefName: string;
   body: string;
-  reviewDecision: string;
+  reviewDecision: string | null;
 }
 
 interface GhPrFile {
@@ -813,7 +817,7 @@ async function syncCompareStats(): Promise<number> {
     const prNumber = row.readAttribute("pr_number") as number;
 
     const jobRows = await Base.adapter.execute(
-      `SELECT id FROM workflow_jobs WHERE run_id = ? AND name = ?`,
+      `SELECT id FROM workflow_jobs WHERE run_id = ? AND name = ? AND conclusion = 'success' ORDER BY completed_at DESC LIMIT 1`,
       [runId, "Rails API/Test Comparison"],
     );
     if (jobRows.length === 0) continue;

@@ -447,7 +447,7 @@ export class Parameters {
   }
 
   valuesAt(...keys: string[]): unknown[] {
-    return keys.map((k) => this._convertValueToParameters(this._data[k]));
+    return keys.map((k) => this.get(k));
   }
 
   // --- Iteration ---
@@ -481,7 +481,7 @@ export class Parameters {
 
   fetch(key: string, ...args: unknown[]): unknown {
     if (key in this._data) {
-      return this._convertValueToParameters(this._data[key]);
+      return this.get(key);
     }
     if (args.length > 0) {
       return this._convertValueToParameters(args[0]);

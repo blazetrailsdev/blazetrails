@@ -219,6 +219,7 @@ describe("ErrorsTest", () => {
   describe("i18nCustomizeFullMessage", () => {
     afterEach(() => {
       ActiveModelError.i18nCustomizeFullMessage = false;
+      I18n.reset();
     });
 
     it("falls back to default format when model-specific keys are missing", () => {

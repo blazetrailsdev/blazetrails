@@ -1,4 +1,4 @@
-import { humanize } from "@blazetrails/activesupport";
+import { humanize, underscore } from "@blazetrails/activesupport";
 import { I18n } from "./i18n.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -120,9 +120,9 @@ export class Error {
 
     let format: string;
     if (Error.i18nCustomizeFullMessage) {
-      const modelKey = modelClass?.name
-        ? modelClass.name.replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase()
-        : undefined;
+      const modelKey =
+        (modelClass as AnyRecord)?.modelName?.i18nKey ??
+        (modelClass?.name ? underscore(modelClass.name) : undefined);
       const defaults: string[] = [];
       if (modelKey) {
         defaults.push(`activemodel.errors.models.${modelKey}.attributes.${attribute}.format`);

@@ -5,13 +5,13 @@
  * Builds a query against the model's table to check for existing records
  * with the same value, optionally scoped to other columns.
  *
- *   class User extends Base {
- *     static { this.validatesUniqueness("email"); }
- *   }
+ * Note: this class exists for API parity. The primary uniqueness
+ * validation path is Base.validatesUniqueness() which registers async
+ * validators at the class level. Using this validator directly via
+ * validatesWith may not integrate with the async validation lifecycle.
  *
  * Options:
- *   scope    - Additional columns to scope the uniqueness check
- *   caseSensitive - Whether to perform case-sensitive comparison (default: true)
+ *   scope      - Additional columns to scope the uniqueness check
  *   conditions - A callable that adds additional conditions to the query
  */
 import { EachValidator } from "@blazetrails/activemodel";
@@ -39,7 +39,8 @@ export class UniquenessValidator extends EachValidator {
     }
 
     if (opts?.conditions && typeof opts.conditions === "function") {
-      relation = opts.conditions(relation);
+      const conditioned = opts.conditions.call(relation, relation);
+      if (conditioned) relation = conditioned;
     }
 
     const validationPromise = relation.exists().then((exists: boolean) => {

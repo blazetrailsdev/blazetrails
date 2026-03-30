@@ -68,6 +68,56 @@ export class TableDefinition extends AbstractTableDefinition {
     return this.pgColumn(name, "bigint" as ColumnType, "BIGSERIAL", options);
   }
 
+  serial(name: string, options: ColumnOptions = {}): this {
+    return this.pgColumn(name, "integer" as ColumnType, "SERIAL", options);
+  }
+
+  bit(name: string, options: ColumnOptions & { limit?: number } = {}): this {
+    const sqlType = options.limit ? `BIT(${options.limit})` : "BIT";
+    return this.pgColumn(name, "string" as ColumnType, sqlType, options);
+  }
+
+  bitVarying(name: string, options: ColumnOptions & { limit?: number } = {}): this {
+    const sqlType = options.limit ? `BIT VARYING(${options.limit})` : "BIT VARYING";
+    return this.pgColumn(name, "string" as ColumnType, sqlType, options);
+  }
+
+  uuid(name: string, options: ColumnOptions = {}): this {
+    return this.pgColumn(name, "uuid" as ColumnType, "UUID", options);
+  }
+
+  jsonb(name: string, options: ColumnOptions = {}): this {
+    return this.pgColumn(name, "jsonb" as ColumnType, "JSONB", options);
+  }
+
+  daterange(name: string, options: ColumnOptions = {}): this {
+    return this.pgColumn(name, "string" as ColumnType, "DATERANGE", options);
+  }
+
+  int4range(name: string, options: ColumnOptions = {}): this {
+    return this.pgColumn(name, "string" as ColumnType, "INT4RANGE", options);
+  }
+
+  int8range(name: string, options: ColumnOptions = {}): this {
+    return this.pgColumn(name, "string" as ColumnType, "INT8RANGE", options);
+  }
+
+  numrange(name: string, options: ColumnOptions = {}): this {
+    return this.pgColumn(name, "string" as ColumnType, "NUMRANGE", options);
+  }
+
+  tsrange(name: string, options: ColumnOptions = {}): this {
+    return this.pgColumn(name, "string" as ColumnType, "TSRANGE", options);
+  }
+
+  tstzrange(name: string, options: ColumnOptions = {}): this {
+    return this.pgColumn(name, "string" as ColumnType, "TSTZRANGE", options);
+  }
+
+  oid(name: string, options: ColumnOptions = {}): this {
+    return this.pgColumn(name, "integer" as ColumnType, "OID", options);
+  }
+
   cidr(name: string, options: ColumnOptions = {}): this {
     return this.pgColumn(name, "string" as ColumnType, "CIDR", options);
   }

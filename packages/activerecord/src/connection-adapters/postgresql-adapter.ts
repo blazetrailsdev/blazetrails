@@ -24,6 +24,6 @@ export class MoneyDecoder {
     const cleaned = str.replace(/[$,\s]/g, "");
     const num = parseFloat(cleaned);
     if (isNaN(num)) return NaN;
-    return negative ? -num : str.startsWith("-") ? num : num;
+    return negative ? -num : num;
   }
 }

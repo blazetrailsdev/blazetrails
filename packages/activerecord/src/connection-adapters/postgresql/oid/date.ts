@@ -14,7 +14,7 @@ export class Date {
     if (value instanceof globalThis.Date) return value;
     if (typeof value === "string") {
       if (value === "") return null;
-      const parsed = new globalThis.Date(value + "T00:00:00");
+      const parsed = new globalThis.Date(value + "T00:00:00Z");
       if (isNaN(parsed.getTime())) return null;
       return parsed;
     }

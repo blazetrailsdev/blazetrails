@@ -36,6 +36,7 @@ export class Array {
       const str = String(s);
       if (
         str === "" ||
+        str.toUpperCase() === "NULL" ||
         str.includes(this.delimiter) ||
         str.includes('"') ||
         str.includes("\\") ||

@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { FixtureSet, identify } from "./file.js";
 import { ReflectionProxy, HasManyThroughProxy } from "./table-row.js";
 import { RenderContext } from "./render-context.js";
+import { ModelMetadata } from "./model-metadata.js";
+import { modelRegistry } from "../associations.js";
 import { createTestAdapter } from "../test-adapter.js";
 import { MigrationContext } from "../migration.js";
 import type { DatabaseAdapter } from "../adapter.js";
@@ -291,6 +293,39 @@ describe("FixtureSet", () => {
       expect(tagIds.has(identify("ruby"))).toBe(true);
       expect(tagIds.has(identify("rails"))).toBe(true);
       expect(joinRows.every((r) => r.post_id === identify("first_post"))).toBe(true);
+    });
+  });
+
+  describe("ModelMetadata", () => {
+    it("resolves tableName and primaryKey from registered model", () => {
+      const fakeModel = { tableName: "widgets", primaryKey: "id" } as any;
+      modelRegistry.set("Widget", fakeModel);
+      try {
+        const meta = new ModelMetadata("Widget");
+        expect(meta.tableName).toBe("widgets");
+        expect(meta.primaryKeyName).toBe("id");
+        expect(meta.className).toBe("Widget");
+      } finally {
+        modelRegistry.delete("Widget");
+      }
+    });
+
+    it("fromModel throws when model not registered", () => {
+      expect(() => ModelMetadata.fromModel("NonExistent")).toThrow(
+        /not found in registry.*registerModel/,
+      );
+    });
+
+    it("uses explicit overrides over model values", () => {
+      const meta = new ModelMetadata("Anything", "custom_table", "uuid");
+      expect(meta.tableName).toBe("custom_table");
+      expect(meta.primaryKeyName).toBe("uuid");
+    });
+
+    it("falls back to className-based table name when no model", () => {
+      const meta = new ModelMetadata("User");
+      expect(meta.tableName).toBe("users");
+      expect(meta.primaryKeyName).toBe("id");
     });
   });
 });

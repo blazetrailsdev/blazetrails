@@ -1,3 +1,4 @@
+import { readFileSync } from "fs";
 import { URLMap } from "./urlmap.js";
 
 type RackApp = (env: Record<string, any>) => any;
@@ -19,6 +20,35 @@ export class Builder {
       // Check if it's a builder block (takes builder arg) vs an app (takes env)
       // Heuristic: if it looks like it's configuring a builder, treat as block
     }
+  }
+
+  static parseFile(path: string): RackApp {
+    let content = readFileSync(path, "utf-8");
+
+    if (content.charCodeAt(0) === 0xfeff) {
+      content = content.slice(1);
+    }
+
+    const firstLine = content.split("\n")[0];
+    if (firstLine.startsWith("#") && firstLine.includes("\\")) {
+      throw new Error(
+        "Parsing options from the first comment line is no longer supported, use a '#\\ -s RackServer' style option in your config file instead.",
+      );
+    }
+
+    const endIndex = content.indexOf("__END__");
+    if (endIndex !== -1) {
+      content = content.substring(0, endIndex);
+    }
+
+    return Builder.newFromString(content, path);
+  }
+
+  static newFromString(content: string, _file?: string): RackApp {
+    const builder = new Builder();
+    const configFn = new Function("builder", content);
+    configFn(builder);
+    return builder.toApp();
   }
 
   use(middleware: any, ...args: any[]): this {

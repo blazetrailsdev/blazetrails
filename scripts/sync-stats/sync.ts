@@ -22,6 +22,7 @@ function ghJson<T>(args: string): T {
 class PullRequest extends Base {
   static {
     this.tableName = "pull_requests";
+    this.primaryKey = "number";
     this.attribute("number", "integer");
     this.attribute("title", "string");
     this.attribute("author", "string");

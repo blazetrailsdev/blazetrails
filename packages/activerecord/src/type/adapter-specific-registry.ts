@@ -142,7 +142,7 @@ export class AdapterSpecificRegistry {
     if (matching.length === 0) return undefined;
     return matching.reduce((best, current) => {
       const cmp = best.compareTo(current);
-      return cmp < 0 ? current : best;
+      return cmp <= 0 ? current : best;
     });
   }
 }

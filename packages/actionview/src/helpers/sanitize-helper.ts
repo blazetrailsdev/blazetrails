@@ -8,7 +8,7 @@ import { SafeBuffer, htmlSafe } from "@blazetrails/activesupport";
  */
 
 export interface Sanitizer {
-  sanitize(html: string, options?: Record<string, unknown>): string;
+  sanitize(html: string | null | undefined, options?: Record<string, unknown>): string;
   sanitizeCss?(style: string): string;
 }
 
@@ -243,8 +243,11 @@ export function sanitizedAllowedAttributes(): string[] {
 /**
  * sanitize — sanitizes HTML input, stripping dangerous tags/attributes.
  */
-export function sanitize(html: string, options: Record<string, unknown> = {}): SafeBuffer {
-  const result = getSafeListSanitizer().sanitize(html, options);
+export function sanitize(
+  html: string | null | undefined,
+  options: Record<string, unknown> = {},
+): SafeBuffer {
+  const result = getSafeListSanitizer().sanitize(html ?? "", options);
   return htmlSafe(result ?? "");
 }
 
@@ -262,14 +265,14 @@ export function sanitizeCss(style: string): string {
 /**
  * stripTags — strips all HTML tags from the input.
  */
-export function stripTags(html: string): SafeBuffer {
-  const result = getFullSanitizer().sanitize(html);
+export function stripTags(html: string | null | undefined): SafeBuffer {
+  const result = getFullSanitizer().sanitize(html ?? "");
   return htmlSafe(result ?? "");
 }
 
 /**
  * stripLinks — strips all link tags, leaving link text.
  */
-export function stripLinks(html: string): string {
-  return getLinkSanitizer().sanitize(html);
+export function stripLinks(html: string | null | undefined): string {
+  return getLinkSanitizer().sanitize(html ?? "");
 }

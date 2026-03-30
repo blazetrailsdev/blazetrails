@@ -488,12 +488,6 @@ function createTagBuilderProxy(): TagBuilder {
 
         const hasOptions = Object.keys(options).length > 0;
 
-        // Wrap content in htmlSafe if it came from a block returning a SafeBuffer
-        function resolveContent(raw: unknown): unknown {
-          if (raw instanceof SafeBuffer) return raw;
-          return raw;
-        }
-
         // Void elements don't accept content
         if (VOID_ELEMENTS.has(tagName)) {
           if (content !== undefined) {
@@ -506,7 +500,7 @@ function createTagBuilderProxy(): TagBuilder {
         if (SELF_CLOSING_ELEMENTS.has(tagName) || SELF_CLOSING_ELEMENTS.has(methodName)) {
           const actualTagName = SELF_CLOSING_ELEMENTS.has(methodName) ? methodName : tagName;
           if (content !== undefined || block) {
-            const blockContent = block ? resolveContent(block(receiver)) : resolveContent(content);
+            const blockContent = block ? block(receiver) : content;
             return contentTagString(
               actualTagName,
               blockContent,
@@ -519,7 +513,7 @@ function createTagBuilderProxy(): TagBuilder {
 
         // Regular elements
         if (block) {
-          const blockContent = resolveContent(block(receiver));
+          const blockContent = block(receiver);
           return contentTagString(tagName, blockContent, hasOptions ? options : undefined, escape);
         }
 

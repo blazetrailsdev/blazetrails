@@ -40,8 +40,9 @@ export function htmlEscapeOnce(str: string): SafeBuffer {
 
 /**
  * xmlNameEscape — escapes characters that are unsafe in XML element/attribute names.
- * Follows the XML spec: https://www.w3.org/TR/REC-xml/#NT-Name
- * Start chars: @:A-Za-z_ and various Unicode ranges
+ * Based on the XML 1.0 Name production: https://www.w3.org/TR/REC-xml/#NT-Name
+ * Start chars: @:A-Za-z_ and various Unicode ranges (note: '@' is an intentional
+ * extension to support framework-style attributes like "@click", matching Rails)
  * Following chars: same + -.0-9 and more Unicode ranges
  */
 export function xmlNameEscape(name: string): string {

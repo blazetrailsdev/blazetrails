@@ -577,10 +577,7 @@ export class Parameters {
 
   equals(other: Parameters): boolean {
     if (!(other instanceof Parameters)) return false;
-    return (
-      this._permitted === other._permitted &&
-      JSON.stringify(this._data) === JSON.stringify(other._data)
-    );
+    return this._permitted === other._permitted && deepEqualValue(this._data, other._data);
   }
 
   eql(other: Parameters): boolean {
@@ -760,7 +757,14 @@ export class Parameters {
   private _convertValueToParameters(value: unknown): unknown {
     if (value instanceof Parameters) return value;
     if (Array.isArray(value)) {
-      return value.map((v) => this._convertValueToParameters(v));
+      for (let i = 0; i < value.length; i++) {
+        const original = value[i];
+        const converted = this._convertValueToParameters(original);
+        if (converted !== original) {
+          value[i] = converted;
+        }
+      }
+      return value;
     }
     if (isPlainObject(value)) {
       return this._newWithInheritedPermitted(value as Record<string, unknown>);
@@ -837,4 +841,41 @@ function deepMergeObjects(
     }
   }
   return result;
+}
+
+function deepEqualValue(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (typeof a !== typeof b) return false;
+  if (a === null || b === null) return false;
+
+  if (a instanceof Parameters && b instanceof Parameters) {
+    if (a.permitted !== b.permitted) return false;
+    return deepEqualValue(a._toRawHash(), b._toRawHash());
+  }
+
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (!deepEqualValue(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  if (Array.isArray(a) || Array.isArray(b)) return false;
+
+  if (typeof a === "object" && typeof b === "object") {
+    const objA = a as Record<string, unknown>;
+    const objB = b as Record<string, unknown>;
+    const keysA = Object.keys(objA).sort();
+    const keysB = Object.keys(objB).sort();
+    if (keysA.length !== keysB.length) return false;
+    for (let i = 0; i < keysA.length; i++) {
+      if (keysA[i] !== keysB[i]) return false;
+    }
+    for (const key of keysA) {
+      if (!deepEqualValue(objA[key], objB[key])) return false;
+    }
+    return true;
+  }
+
+  return false;
 }

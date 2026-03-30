@@ -106,7 +106,7 @@ const METHOD_TO_TAG_NAME: Record<string, string> = {
 };
 
 function ensureValidHtml5TagName(name: string): void {
-  if (!/^[a-zA-Z][^\s/>]*$/.test(name)) {
+  if (!/^[a-zA-Z][a-zA-Z0-9\-:.]*$/.test(name)) {
     throw new ArgumentError(`Invalid HTML5 tag name: ${JSON.stringify(name)}`);
   }
 }
@@ -436,6 +436,8 @@ function createTagBuilderProxy(): TagBuilder {
       // Return a function that builds the tag
       const methodName = String(prop);
       const tagName = METHOD_TO_TAG_NAME[methodName] ?? dasherize(methodName);
+
+      ensureValidHtml5TagName(tagName);
 
       return (contentOrOpts?: unknown, optsOrBlock?: Record<string, unknown> | (() => unknown)) => {
         // Parse arguments: tag.div("content", {opts}), tag.div({opts}), tag.div({opts}, block), tag.div(block), tag.div("content", block)

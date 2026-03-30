@@ -18,8 +18,11 @@ export function raw(stringish: unknown): SafeBuffer {
  * string value (for joining purposes). If value is already html_safe, returns as-is.
  */
 function unwrappedHtmlEscape(value: unknown): SafeBuffer {
-  if (value instanceof SafeBuffer && value.htmlSafe) {
-    return value;
+  if (value instanceof SafeBuffer) {
+    if (value.htmlSafe) {
+      return value;
+    }
+    return htmlEscape(value.toString());
   }
   return htmlEscape(value);
 }

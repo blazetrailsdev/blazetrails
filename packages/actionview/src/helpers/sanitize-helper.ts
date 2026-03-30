@@ -132,8 +132,17 @@ class DefaultSafeListSanitizer implements Sanitizer {
       while ((attrMatch = attrRegex.exec(match)) !== null) {
         const attrName = attrMatch[1].toLowerCase();
         if (allowedAttrs.includes(attrName)) {
-          const attrValue = attrMatch[2] ?? attrMatch[3] ?? attrMatch[4] ?? "";
-          attrs.push(`${attrName}="${attrValue}"`);
+          const rawValue = attrMatch[2] ?? attrMatch[3] ?? attrMatch[4] ?? "";
+          // Reject dangerous URI schemes
+          if ((attrName === "href" || attrName === "src") && /^\s*javascript:/i.test(rawValue)) {
+            continue;
+          }
+          const escaped = rawValue
+            .replace(/&/g, "&amp;")
+            .replace(/"/g, "&quot;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+          attrs.push(`${attrName}="${escaped}"`);
         }
       }
 

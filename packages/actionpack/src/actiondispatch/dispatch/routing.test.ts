@@ -322,7 +322,6 @@ describe("Router", () => {
   });
 });
 
-
 // ==========================================================================
 // dispatch/routing_test.rb (TestRoutingMapper)
 // ==========================================================================
@@ -1650,7 +1649,6 @@ describe("TestRoutingMapper", () => {
   });
 });
 
-
 // ==========================================================================
 // controller/routing_test.rb
 // ==========================================================================
@@ -1750,7 +1748,6 @@ describe("ActionController::Routing", () => {
     expect(m!.params.id).toBe("hello%20world");
   });
 });
-
 
 describe("TestAppendingRoutes", () => {
   it("goodbye should be available", () => {

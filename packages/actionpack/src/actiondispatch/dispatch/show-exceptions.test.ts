@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { ShowExceptions } from "../middleware/show-exceptions.js";
 import type { RackEnv, RackResponse } from "@blazetrails/rack";
-import { ExceptionWrapper } from "../exception-wrapper.js";
 
 class Boomer {
   async call(env: RackEnv): Promise<RackResponse> {
@@ -32,7 +31,7 @@ function publicExceptionsApp(env: RackEnv): Promise<RackResponse> {
 function buildApp(
   exceptionsApp: (env: RackEnv) => Promise<RackResponse> = publicExceptionsApp,
 ): ShowExceptions {
-  return new ShowExceptions((env) => new Boomer().call(env), exceptionsApp);
+  return new ShowExceptions((env: RackEnv) => new Boomer().call(env), exceptionsApp);
 }
 
 // ==========================================================================

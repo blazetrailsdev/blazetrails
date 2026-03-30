@@ -31,11 +31,12 @@ export class UploadedFile {
     this.contentType = options.type ?? "application/octet-stream";
     this.headers = options.head ?? "";
     this._tempfile = options.tempfile ?? null;
-    this._content = options.content != null
-      ? Buffer.isBuffer(options.content)
-        ? options.content
-        : Buffer.from(options.content)
-      : null;
+    this._content =
+      options.content != null
+        ? Buffer.isBuffer(options.content)
+          ? options.content
+          : Buffer.from(options.content)
+        : null;
   }
 
   /** The file extension (including dot). */

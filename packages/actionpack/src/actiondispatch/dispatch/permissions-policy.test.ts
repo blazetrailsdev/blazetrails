@@ -242,7 +242,6 @@ describe("PermissionsPolicyTest", () => {
     const policy = new PermissionsPolicy();
     expect(() => policy.allow("", "self")).toThrow();
   });
-
 });
 
 describe("PermissionsPolicyMiddlewareTest", () => {

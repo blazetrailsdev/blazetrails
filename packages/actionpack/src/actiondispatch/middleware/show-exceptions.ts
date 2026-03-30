@@ -58,10 +58,6 @@ export class ShowExceptions {
 
   private failsafeResponse(wrapper: ExceptionWrapper): RackResponse {
     const body = `${wrapper.statusCode} ${wrapper.statusText}\n`;
-    return [
-      500,
-      { "content-type": "text/plain; charset=utf-8" },
-      [body],
-    ];
+    return [500, { "content-type": "text/plain; charset=utf-8" }, [body]];
   }
 }

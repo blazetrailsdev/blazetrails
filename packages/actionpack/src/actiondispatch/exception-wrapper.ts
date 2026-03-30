@@ -104,8 +104,7 @@ export class ExceptionWrapper {
   /** Extract source fragments from the backtrace. */
   get sourceExtracts(): Array<{ code: string; line: number }> {
     return this.traces.map((trace) => {
-      const match =
-        trace.match(/\(([^:]+):(\d+):\d+\)/) ?? trace.match(/at\s+([^:]+):(\d+):\d+/);
+      const match = trace.match(/\(([^:]+):(\d+):\d+\)/) ?? trace.match(/at\s+([^:]+):(\d+):\d+/);
       if (!match) return { code: trace, line: 0 };
       return { code: match[1], line: parseInt(match[2], 10) };
     });

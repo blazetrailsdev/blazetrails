@@ -15,7 +15,8 @@ export class SchemaCreation extends AbstractSchemaCreation {
   }
 
   visitAddForeignKey(fromTable: string, toTable: string, options: Record<string, unknown>): string {
-    const column = (options.column as string) ?? `${singularize(toTable)}_id`;
+    const unqualifiedToTable = toTable.includes(".") ? toTable.split(".").pop()! : toTable;
+    const column = (options.column as string) ?? `${singularize(unqualifiedToTable)}_id`;
     const primaryKey = (options.primaryKey as string) ?? "id";
     const name = (options.name as string) ?? `fk_rails_${fromTable}_${column}`;
 

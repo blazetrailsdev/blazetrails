@@ -42,6 +42,9 @@ export class Name {
 export namespace Utils {
   export function extractSchemaQualifiedName(name: string): Name {
     const parts = splitQuotedIdentifier(name);
+    if (parts.length === 0) {
+      return new Name(null, "");
+    }
     if (parts.length === 2) {
       return new Name(parts[0], parts[1]);
     }
@@ -56,7 +59,7 @@ function unquoteIdentifier(name: string): string {
   return name;
 }
 
-function splitQuotedIdentifier(name: string): string[] {
+export function splitQuotedIdentifier(name: string): string[] {
   const parts: string[] = [];
   let i = 0;
   while (i < name.length) {

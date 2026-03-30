@@ -22,7 +22,7 @@ import type {
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace PostgreSQL {
-  export const ADAPTER_NAME = "postgresql" as const;
+  export const ADAPTER_NAME = "postgres" as const;
 }
 
 export interface ColumnMethods {

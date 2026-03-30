@@ -43,6 +43,10 @@ export class Column {
     this.array = options.array ?? this.sqlType?.endsWith("[]") ?? false;
   }
 
+  get type(): string {
+    return this.sqlType ?? "";
+  }
+
   get hasDefault(): boolean {
     return this.default != null || this.defaultFunction != null;
   }

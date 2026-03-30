@@ -20,21 +20,3 @@ let defaultTimezone: "utc" | "local" = "utc";
 export function isUtc(timezone?: "utc" | "local"): boolean {
   return (timezone ?? defaultTimezone) === "utc";
 }
-
-/**
- * Mirrors: ActiveRecord::Type::Internal::Timezone
- *
- * Provides shared timezone-awareness behavior that Date/DateTime/Time
- * AR types can use via subclassing or composition.
- */
-export class Timezone {
-  protected _timezone?: "utc" | "local";
-
-  get isUtc(): boolean {
-    return isUtc(this._timezone);
-  }
-
-  get defaultTimezone(): "utc" | "local" {
-    return this._timezone ?? defaultTimezone;
-  }
-}

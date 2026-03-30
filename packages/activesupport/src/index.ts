@@ -230,7 +230,8 @@ export {
   InstanceExec2,
   ProcCall,
 } from "./callbacks.js";
-export type { Filters, Conditionals, CallTemplate, ClassMethods } from "./callbacks.js";
+export { Filters, Conditionals, CallTemplate } from "./callbacks.js";
+export type { ClassMethods } from "./callbacks.js";
 export { Concern, MultipleIncludedBlocks, MultiplePrependBlocks } from "./concern.js";
 export { ClassAttribute } from "./class-attribute.js";
 

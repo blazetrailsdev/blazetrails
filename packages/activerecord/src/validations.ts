@@ -19,6 +19,6 @@ export { UniquenessValidator } from "./validations/uniqueness.js";
  * Mixed into Base to provide validates_presence_of, validates_uniqueness_of, etc.
  */
 export interface Validations {
-  validate(): Promise<boolean>;
-  validateBang(): Promise<void>;
+  validate(): this;
+  isValid(): boolean;
 }

@@ -1,9 +1,8 @@
 /**
  * Mirrors: ActiveRecord::Validations::LengthValidator
  *
- * Extends ActiveModel's LengthValidator. In ActiveRecord, this adds
- * awareness of serialized/encrypted attributes whose in-database
- * representation may differ in length from the in-memory value.
+ * Currently delegates to ActiveModel's LengthValidator. Exists for
+ * ActiveRecord namespace parity.
  */
 import { LengthValidator as BaseLengthValidator } from "@blazetrails/activemodel";
 

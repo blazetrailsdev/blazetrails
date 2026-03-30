@@ -6,7 +6,7 @@
  * with the same value, optionally scoped to other columns.
  *
  *   class User extends Base {
- *     static { this.validatesUniquenessOf("email"); }
+ *     static { this.validatesUniqueness("email"); }
  *   }
  *
  * Options:
@@ -18,12 +18,14 @@ import { EachValidator } from "@blazetrails/activemodel";
 
 export class UniquenessValidator extends EachValidator {
   validateEach(record: any, attribute: string, value: unknown): void {
+    if (value == null) return;
+
     const modelClass = record.constructor as any;
     if (!modelClass.where) return;
 
     let relation = modelClass.where({ [attribute]: value });
 
-    if (record.persisted?.()) {
+    if (record.isPersisted?.()) {
       const pk = modelClass.primaryKey ?? "id";
       relation = relation.whereNot({ [pk]: record.readAttribute(pk) });
     }
@@ -40,10 +42,15 @@ export class UniquenessValidator extends EachValidator {
       relation = opts.conditions(relation);
     }
 
-    relation.exists().then((exists: boolean) => {
+    const validationPromise = relation.exists().then((exists: boolean) => {
       if (exists) {
         record.errors.add(attribute, "taken", { value });
       }
     });
+
+    const asyncValidations = (record as any)._asyncValidations;
+    if (Array.isArray(asyncValidations)) {
+      asyncValidations.push(validationPromise);
+    }
   }
 }

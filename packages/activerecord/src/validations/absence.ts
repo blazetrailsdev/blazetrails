@@ -1,9 +1,9 @@
 /**
  * Mirrors: ActiveRecord::Validations::AbsenceValidator
  *
- * Extends ActiveModel's AbsenceValidator with association awareness —
- * if the attribute is an association, objects marked for destruction
- * are excluded from the presence check.
+ * Currently delegates to ActiveModel's AbsenceValidator. Exists for
+ * ActiveRecord namespace parity. Association-aware behavior (excluding
+ * records marked for destruction) should be added here in the future.
  */
 import { AbsenceValidator as BaseAbsenceValidator } from "@blazetrails/activemodel";
 

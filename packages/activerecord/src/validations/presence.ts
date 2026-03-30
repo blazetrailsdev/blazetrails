@@ -1,9 +1,9 @@
 /**
  * Mirrors: ActiveRecord::Validations::PresenceValidator
  *
- * Extends ActiveModel's PresenceValidator with association awareness —
- * if the attribute is an association, objects marked for destruction
- * are excluded from the presence check.
+ * Currently delegates to ActiveModel's PresenceValidator. Exists for
+ * ActiveRecord namespace parity. Association-aware behavior (excluding
+ * records marked for destruction) should be added here in the future.
  */
 import { PresenceValidator as BasePresenceValidator } from "@blazetrails/activemodel";
 

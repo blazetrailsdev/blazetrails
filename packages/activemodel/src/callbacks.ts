@@ -10,9 +10,11 @@ type AnyRecord = any;
  * define_model_callbacks which creates before/after/around hooks.
  * Model already implements this via defineModelCallbacks().
  */
-export interface Callbacks {
+export interface CallbacksClassMethods {
   defineModelCallbacks(...eventNames: string[]): void;
 }
+
+export type Callbacks = CallbacksClassMethods;
 
 /**
  * Callback types.

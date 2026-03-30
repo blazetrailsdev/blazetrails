@@ -29,11 +29,15 @@ export function isMember(
   collection: unknown[] | (() => unknown[]) | Iterable<unknown>,
   value: unknown,
 ): boolean {
-  const list =
-    typeof collection === "function"
-      ? collection()
-      : Array.isArray(collection)
-        ? collection
-        : Array.from(collection as Iterable<unknown>);
-  return list.includes(value);
+  const resolved = typeof collection === "function" ? collection() : collection;
+
+  if (Array.isArray(resolved)) return resolved.includes(value);
+
+  if (resolved instanceof Set) return resolved.has(value);
+
+  for (const item of resolved as Iterable<unknown>) {
+    if (item === value) return true;
+  }
+
+  return false;
 }

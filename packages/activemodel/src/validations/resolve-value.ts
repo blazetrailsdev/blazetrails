@@ -5,7 +5,7 @@
  *
  * In Rails, this module provides resolve_value which handles the
  * pattern where a validator option can be a literal, a Proc, or
- * a Symbol (method name on the record).
+ * a string (method name on the record).
  */
 export interface ResolveValue {
   resolveValue(record: unknown, value: unknown): unknown;

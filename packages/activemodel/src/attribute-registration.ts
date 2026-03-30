@@ -7,6 +7,8 @@
  * In Rails this is a module that handles the class-level attribute
  * declaration API. Model already implements this via Model.attribute().
  */
-export interface AttributeRegistration {
+export interface AttributeRegistrationClassMethods {
   attribute(name: string, typeName: string, options?: { default?: unknown }): void;
 }
+
+export type AttributeRegistration = AttributeRegistrationClassMethods;

@@ -67,7 +67,20 @@ export class AcceptsMultiparameterTime {
 
     const [year = 0, month = 1, day = 1, hour = 0, minute = 0, second = 0] = parts;
     if (year === 0 && month <= 1 && day <= 1) return null;
-    return this.type.cast(new Date(year, month - 1, day, hour, minute, second));
+
+    const date = new Date(year, month - 1, day, hour, minute, second);
+    if (
+      date.getFullYear() !== year ||
+      date.getMonth() !== month - 1 ||
+      date.getDate() !== day ||
+      date.getHours() !== hour ||
+      date.getMinutes() !== minute ||
+      date.getSeconds() !== second
+    ) {
+      return null;
+    }
+
+    return this.type.cast(date);
   }
 }
 

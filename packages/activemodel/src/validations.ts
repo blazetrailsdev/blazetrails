@@ -1,4 +1,5 @@
 import type { Errors } from "./errors.js";
+import type { ConditionalOptions } from "./validator.js";
 
 /**
  * Validations mixin contract — provides the validation lifecycle.
@@ -22,10 +23,7 @@ export interface Validations {
  */
 export interface ValidationsClassMethods {
   validates(attribute: string, rules: Record<string, unknown>): void;
-  validate(
-    methodOrFn: string | ((record: unknown) => void),
-    options?: Record<string, unknown>,
-  ): void;
+  validate(methodOrFn: string | ((record: unknown) => void), options?: ConditionalOptions): void;
   validatesWith(
     validatorClass: {
       new (options?: Record<string, unknown>): { validate(record: unknown): void };

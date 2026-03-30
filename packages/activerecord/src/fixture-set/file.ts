@@ -149,16 +149,9 @@ export class FixtureSet {
     const { rows: rawRows, joinRowsByTable } = this._buildRows(options);
     const rows = this._applyEncryption(rawRows);
     if (rows.length === 0) return;
-    await adapter.beginTransaction();
-    try {
-      await this._insertRows(adapter, rows);
-      for (const [table, batch] of joinRowsByTable) {
-        await this._insertRows(adapter, batch, table);
-      }
-      await adapter.commit();
-    } catch (error) {
-      await adapter.rollback();
-      throw error;
+    await this._insertRows(adapter, rows);
+    for (const [table, batch] of joinRowsByTable) {
+      await this._insertRows(adapter, batch, table);
     }
   }
 
@@ -184,20 +177,13 @@ export class FixtureSet {
         }
       }
     }
-    await adapter.beginTransaction();
-    try {
-      for (const table of [...joinTablesToClear].sort()) {
-        await adapter.executeMutation(`DELETE FROM ${quoteTableName(table, adapterName)}`);
-      }
-      await adapter.executeMutation(`DELETE FROM ${quotedTable}`);
-      await this._insertRows(adapter, rows);
-      for (const [table, batch] of joinRowsByTable) {
-        await this._insertRows(adapter, batch, table);
-      }
-      await adapter.commit();
-    } catch (error) {
-      await adapter.rollback();
-      throw error;
+    for (const table of [...joinTablesToClear].sort()) {
+      await adapter.executeMutation(`DELETE FROM ${quoteTableName(table, adapterName)}`);
+    }
+    await adapter.executeMutation(`DELETE FROM ${quotedTable}`);
+    await this._insertRows(adapter, rows);
+    for (const [table, batch] of joinRowsByTable) {
+      await this._insertRows(adapter, batch, table);
     }
   }
 

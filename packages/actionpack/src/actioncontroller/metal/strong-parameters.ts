@@ -21,7 +21,12 @@ export class ParameterMissing extends Error {
   }
 }
 
-export class ExpectedParameterMissing extends ParameterMissing {}
+export class ExpectedParameterMissing extends ParameterMissing {
+  constructor(param: string, keys: string[] | null = null) {
+    super(param, keys);
+    this.name = "ExpectedParameterMissing";
+  }
+}
 
 export class UnpermittedParameters extends Error {
   readonly params: string[];
@@ -128,17 +133,12 @@ export class Parameters {
 
   expect(...filters: (string | Record<string, (string | Record<string, unknown>)[]>)[]): unknown {
     const flatFilters = filters.flat();
-    // expect suppresses UnpermittedParameters — temporarily disable
-    const savedAction = Parameters.actionOnUnpermittedParameters;
-    Parameters.actionOnUnpermittedParameters = false;
-    try {
-      const params = this._permitFilters(flatFilters as (string | Record<string, unknown>)[]);
-      const keys = flatFilters.flatMap((f) => (typeof f === "string" ? [f] : Object.keys(f)));
-      const values = keys.map((k) => params.require(k));
-      return values.length === 1 ? values[0] : values;
-    } finally {
-      Parameters.actionOnUnpermittedParameters = savedAction;
-    }
+    const params = this._permitFilters(flatFilters as (string | Record<string, unknown>)[], {
+      suppressUnpermitted: true,
+    });
+    const keys = flatFilters.flatMap((f) => (typeof f === "string" ? [f] : Object.keys(f)));
+    const values = keys.map((k) => params.require(k));
+    return values.length === 1 ? values[0] : values;
   }
 
   expectBang(
@@ -559,7 +559,7 @@ export class Parameters {
   }
 
   toJSON(): Record<string, unknown> {
-    return { ...this._data };
+    return this.toUnsafeHash();
   }
 
   toUnsafeHash(): Record<string, unknown> {
@@ -618,7 +618,10 @@ export class Parameters {
 
   // --- Private helpers ---
 
-  private _permitFilters(filters: (string | Record<string, unknown>)[]): Parameters {
+  private _permitFilters(
+    filters: (string | Record<string, unknown>)[],
+    options: { suppressUnpermitted?: boolean } = {},
+  ): Parameters {
     const params = new Parameters();
     const flatFilters = filters.flat() as (string | Record<string, unknown>)[];
 
@@ -626,11 +629,13 @@ export class Parameters {
       if (typeof filter === "string") {
         this._permittedScalarFilter(params, filter);
       } else if (typeof filter === "object" && filter !== null) {
-        this._hashFilter(params, filter);
+        this._hashFilter(params, filter, options);
       }
     }
 
-    this._unpermittedParameters(params);
+    if (!options.suppressUnpermitted) {
+      this._unpermittedParameters(params);
+    }
     params._permitted = true;
     return params;
   }
@@ -641,14 +646,18 @@ export class Parameters {
     }
   }
 
-  private _hashFilter(params: Parameters, filter: Record<string, unknown>): void {
+  private _hashFilter(
+    params: Parameters,
+    filter: Record<string, unknown>,
+    options: { suppressUnpermitted?: boolean } = {},
+  ): void {
     for (const [k, v] of Object.entries(filter)) {
       if (!(k in this._data)) continue;
       const val = this._data[k];
 
       if (val instanceof Parameters) {
         if (Array.isArray(v)) {
-          params._data[k] = val._permitFilters(v as (string | Record<string, unknown>)[]);
+          params._data[k] = val._permitFilters(v as (string | Record<string, unknown>)[], options);
         } else {
           params._data[k] = val;
         }
@@ -658,11 +667,14 @@ export class Parameters {
         } else if (Array.isArray(v)) {
           params._data[k] = val.map((item) => {
             if (item instanceof Parameters) {
-              return item._permitFilters(v as (string | Record<string, unknown>)[]);
+              return item._permitFilters(v as (string | Record<string, unknown>)[], options);
             }
             if (isPlainObject(item)) {
               const nestedParams = new Parameters(item as Record<string, unknown>);
-              return nestedParams._permitFilters(v as (string | Record<string, unknown>)[]);
+              return nestedParams._permitFilters(
+                v as (string | Record<string, unknown>)[],
+                options,
+              );
             }
             return item;
           });
@@ -676,7 +688,10 @@ export class Parameters {
         } else if (Array.isArray(v)) {
           const nestedParams = new Parameters(val as Record<string, unknown>);
           nestedParams._permitted = this._permitted;
-          params._data[k] = nestedParams._permitFilters(v as (string | Record<string, unknown>)[]);
+          params._data[k] = nestedParams._permitFilters(
+            v as (string | Record<string, unknown>)[],
+            options,
+          );
         } else {
           params._data[k] = val;
         }
@@ -809,7 +824,7 @@ function deepMergeObjects(
       const rightRaw =
         v instanceof Parameters ? (v as Parameters)._toRawHash() : (v as Record<string, unknown>);
       const merged = deepMergeObjects(leftRaw, rightRaw);
-      result[k] = result[k] instanceof Parameters ? new Parameters(merged) : merged;
+      result[k] = merged;
     } else {
       result[k] = v;
     }

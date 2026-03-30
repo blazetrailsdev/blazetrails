@@ -31,8 +31,7 @@ describe("RailtieTest", () => {
   });
 
   it("i18n customize full message can be enabled", () => {
-    ActiveModelError.i18nCustomizeFullMessage = false;
-    ActiveModelError.i18nCustomizeFullMessage = true;
+    Railtie.initialize({ i18nCustomizeFullMessage: true });
     expect(ActiveModelError.i18nCustomizeFullMessage).toBe(true);
   });
 });

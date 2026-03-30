@@ -117,9 +117,27 @@ export class Error {
     const humanAttr = modelClass?.humanAttributeName
       ? modelClass.humanAttributeName(attribute)
       : humanize(attribute);
-    const format = I18n.t("activemodel.errors.format", {
-      defaultValue: "%{attribute} %{message}",
-    });
+
+    let format: string;
+    if (Error.i18nCustomizeFullMessage) {
+      const modelKey = modelClass?.name
+        ? modelClass.name.replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase()
+        : undefined;
+      const defaults: string[] = [];
+      if (modelKey) {
+        defaults.push(`activemodel.errors.models.${modelKey}.attributes.${attribute}.format`);
+        defaults.push(`activemodel.errors.models.${modelKey}.format`);
+      }
+      defaults.push("activemodel.errors.format");
+      format = I18n.t(defaults[0], {
+        defaultValue: "%{attribute} %{message}",
+      });
+    } else {
+      format = I18n.t("activemodel.errors.format", {
+        defaultValue: "%{attribute} %{message}",
+      });
+    }
+
     return format.replace("%{attribute}", humanAttr).replace("%{message}", message);
   }
 

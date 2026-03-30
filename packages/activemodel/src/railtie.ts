@@ -3,6 +3,7 @@ import { Error as ActiveModelError } from "./error.js";
 
 export interface RailtieConfig {
   env?: string;
+  i18nCustomizeFullMessage?: boolean;
 }
 
 /**
@@ -23,7 +24,7 @@ export class Railtie {
 
     SecurePassword.minCost = env === "test";
 
-    ActiveModelError.i18nCustomizeFullMessage = false;
+    ActiveModelError.i18nCustomizeFullMessage = config?.i18nCustomizeFullMessage ?? false;
   }
 
   private static detectEnv(): string {

@@ -486,7 +486,9 @@ export class Parameters {
     if (args.length > 0) {
       return this._convertValueToParameters(args[0]);
     }
-    throw new ParameterMissing(key, Object.keys(this._data));
+    const err = new Error(`key not found: "${key}"`);
+    err.name = "KeyError";
+    throw err;
   }
 
   dig(...keys: string[]): unknown {
@@ -757,14 +759,17 @@ export class Parameters {
   private _convertValueToParameters(value: unknown): unknown {
     if (value instanceof Parameters) return value;
     if (Array.isArray(value)) {
-      for (let i = 0; i < value.length; i++) {
-        const original = value[i];
+      let mutated = false;
+      const result = value.slice();
+      for (let i = 0; i < result.length; i++) {
+        const original = result[i];
         const converted = this._convertValueToParameters(original);
         if (converted !== original) {
-          value[i] = converted;
+          result[i] = converted;
+          mutated = true;
         }
       }
-      return value;
+      return mutated ? result : value;
     }
     if (isPlainObject(value)) {
       return this._newWithInheritedPermitted(value as Record<string, unknown>);

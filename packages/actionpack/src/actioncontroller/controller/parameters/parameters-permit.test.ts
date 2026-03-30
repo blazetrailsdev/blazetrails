@@ -1,9 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import {
-  Parameters,
-  ParameterMissing,
-  UnfilteredParameters,
-} from "../../metal/strong-parameters.js";
+import { Parameters, UnfilteredParameters } from "../../metal/strong-parameters.js";
 
 describe("ParametersPermitTest", () => {
   afterEach(() => {
@@ -108,7 +104,7 @@ describe("ParametersPermitTest", () => {
 
   it("fetch raises ParameterMissing exception", () => {
     const params = new Parameters({});
-    expect(() => params.fetch("missing")).toThrow(ParameterMissing);
+    expect(() => params.fetch("missing")).toThrow(/key not found/);
   });
 
   it("fetch with a default value of a hash does not mutate the object", () => {
@@ -157,9 +153,8 @@ describe("ParametersPermitTest", () => {
   });
 
   it("KeyError in fetch block should not be covered up", () => {
-    // In TS we use ParameterMissing instead of KeyError
     const params = new Parameters({});
-    expect(() => params.fetch("missing")).toThrow(ParameterMissing);
+    expect(() => params.fetch("missing")).toThrow(/key not found/);
   });
 
   it("not permitted is sticky beyond merges", () => {

@@ -50,6 +50,7 @@ export class Session {
     options: Record<string, unknown> = {},
   ): Session {
     const existing = req.env[ENV_SESSION_KEY] as Session | undefined;
+    req.env[ENV_SESSION_OPTIONS_KEY] = options;
     const session = new Session(store, req.env, options);
 
     if (existing && existing instanceof Session) {
@@ -63,7 +64,6 @@ export class Session {
     }
 
     req.env[ENV_SESSION_KEY] = session;
-    req.env[ENV_SESSION_OPTIONS_KEY] = options;
     return session;
   }
 

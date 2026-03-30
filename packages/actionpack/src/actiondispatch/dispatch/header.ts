@@ -46,11 +46,7 @@ export class Headers {
   }
 
   get env(): Record<string, unknown> {
-    const result: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(this._env)) {
-      result[key] = value;
-    }
-    return result;
+    return this._env;
   }
 
   get(key: string): unknown {

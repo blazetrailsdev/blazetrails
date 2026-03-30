@@ -23,7 +23,9 @@ export class ShowExceptions {
   }
 
   async call(env: RackEnv): Promise<RackResponse> {
-    const mode = (env["action_dispatch.show_exceptions"] as ShowExceptionsMode) ?? "none";
+    const rawMode = env["action_dispatch.show_exceptions"];
+    const mode: ShowExceptionsMode =
+      rawMode === "all" || rawMode === "rescuable" || rawMode === "none" ? rawMode : "none";
 
     try {
       return await this.app(env);

@@ -139,7 +139,12 @@ export class TableRow {
     const labels: unknown[] = typeof raw === "string" ? [raw] : raw;
 
     for (const label of labels) {
-      if (typeof label !== "string" || label === "") continue;
+      if (label === "") continue;
+      if (typeof label !== "string") {
+        throw new Error(
+          `Fixture "${this.label}": expected all entries for has_many :through association "${assoc.name}" to be strings, got ${typeof label}`,
+        );
+      }
       this._joinRows.push({
         table: assoc.joinTable,
         row: {

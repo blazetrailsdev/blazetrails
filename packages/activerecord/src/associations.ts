@@ -256,7 +256,10 @@ export async function loadBelongsTo(
 
   // Strict loading check: this is a lazy load
   if ((record as any)._strictLoading && !(record as any)._strictLoadingBypassCount) {
-    throw new StrictLoadingViolationError(record, assocName);
+    const model = (record as any)?.constructor?.name ?? "Record";
+    throw new StrictLoadingViolationError(
+      `${model} is marked for strict_loading. The ${assocName} association cannot be lazily loaded.`,
+    );
   }
 
   const defaultFk = `${underscore(assocName)}_id`;
@@ -339,7 +342,10 @@ export async function loadHasOne(
 
   // Strict loading check
   if ((record as any)._strictLoading && !(record as any)._strictLoadingBypassCount) {
-    throw new StrictLoadingViolationError(record, assocName);
+    const model = (record as any)?.constructor?.name ?? "Record";
+    throw new StrictLoadingViolationError(
+      `${model} is marked for strict_loading. The ${assocName} association cannot be lazily loaded.`,
+    );
   }
 
   // Handle has_one :through
@@ -495,7 +501,10 @@ export async function loadHasMany(
 
   // Strict loading check
   if ((record as any)._strictLoading && !(record as any)._strictLoadingBypassCount) {
-    throw new StrictLoadingViolationError(record, assocName);
+    const model = (record as any)?.constructor?.name ?? "Record";
+    throw new StrictLoadingViolationError(
+      `${model} is marked for strict_loading. The ${assocName} association cannot be lazily loaded.`,
+    );
   }
 
   // Handle through associations

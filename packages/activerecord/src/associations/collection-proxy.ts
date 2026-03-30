@@ -712,7 +712,10 @@ export class CollectionProxy {
   private async _resolveRecords(): Promise<Base[]> {
     if (this._loaded) return this._target;
     if (this._record._strictLoading && !this._record._strictLoadingBypassCount) {
-      throw new StrictLoadingViolationError(this._record, this._assocName);
+      const model = this._record?.constructor?.name ?? "Record";
+      throw new StrictLoadingViolationError(
+        `${model} is marked for strict_loading. The ${this._assocName} association cannot be lazily loaded.`,
+      );
     }
     // For through associations, scope() may not handle all cases (nested through).
     // Fall back to loading via the loader, filtering to persisted records only

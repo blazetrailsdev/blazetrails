@@ -2475,7 +2475,7 @@ export class Base extends Model {
       );
     }
     if (this._readonly) {
-      throw new ReadOnlyRecord(this);
+      throw new ReadOnlyRecord(`${this.constructor.name} is marked as readonly`);
     }
     const shouldValidate = options?.validate !== false;
     if (shouldValidate) {
@@ -2797,7 +2797,7 @@ export class Base extends Model {
    */
   async destroy(): Promise<this | false> {
     if (this._readonly) {
-      throw new ReadOnlyRecord(this);
+      throw new ReadOnlyRecord(`${this.constructor.name} is marked as readonly`);
     }
     const ctor = this.constructor as typeof Base;
 
@@ -3082,7 +3082,7 @@ export class Base extends Model {
    * Mirrors: ActiveRecord::Base#touch
    */
   async touch(...names: string[]): Promise<boolean> {
-    if (this._readonly) throw new ReadOnlyRecord(this);
+    if (this._readonly) throw new ReadOnlyRecord(`${this.constructor.name} is marked as readonly`);
     if (!this.isPersisted()) return false;
     const now = new Date();
     const attrs: Record<string, unknown> = {};
@@ -3135,7 +3135,7 @@ export class Base extends Model {
    * Mirrors: ActiveRecord::Base#update_columns
    */
   async updateColumns(attrs: Record<string, unknown>): Promise<void> {
-    if (this._readonly) throw new ReadOnlyRecord(this);
+    if (this._readonly) throw new ReadOnlyRecord(`${this.constructor.name} is marked as readonly`);
     if (!this.isPersisted()) {
       throw new Error("Cannot update columns on a new or destroyed record");
     }

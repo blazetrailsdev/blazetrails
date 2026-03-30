@@ -243,11 +243,11 @@ export abstract class Migration {
         await this.removeColumn(args[0] as string, args[1] as string);
         break;
       case "removeColumn": {
-        const [rcTable, rcCol, rcType] = args as [string, string, string?];
+        const [rcTable, rcCol, rcType] = args as [string, string, ColumnType?];
         if (!rcType) {
           throw new IrreversibleMigration("Cannot reverse removeColumn without type info");
         }
-        await this.addColumn(rcTable, rcCol, rcType as ColumnType);
+        await this.addColumn(rcTable, rcCol, rcType);
         break;
       }
       case "addIndex": {
@@ -341,7 +341,7 @@ export abstract class Migration {
   async createTable(
     name: string,
     optionsOrFn?:
-      | { id?: boolean | "uuid" | "bigint" | "integer"; force?: boolean; ifNotExists?: boolean }
+      | { id?: boolean | "uuid"; force?: boolean; ifNotExists?: boolean }
       | ((t: TableDefinition) => void),
     fn?: (t: TableDefinition) => void,
   ): Promise<void> {
@@ -376,7 +376,7 @@ export abstract class Migration {
   async removeColumn(
     tableName: string,
     columnName: string,
-    typeOrOptions?: string | { ifExists?: boolean },
+    typeOrOptions?: ColumnType | { ifExists?: boolean },
     options?: { ifExists?: boolean },
   ): Promise<void> {
     const type = typeof typeOrOptions === "string" ? typeOrOptions : undefined;
@@ -836,7 +836,7 @@ export class MigrationContext {
       primaryKey?: string | false;
       force?: boolean;
       ifNotExists?: boolean;
-      id?: boolean | "uuid" | "bigint" | "integer";
+      id?: boolean | "uuid";
     },
     fn?: (t: TableDefinition) => void,
   ): Promise<void> {

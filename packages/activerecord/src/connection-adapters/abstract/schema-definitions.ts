@@ -21,7 +21,7 @@ export type ColumnType =
   | "primary_key"
   | "uuid";
 
-export type PrimaryKeyType = "uuid" | "bigint" | "integer";
+export type PrimaryKeyType = "uuid";
 
 export type ReferentialAction = "cascade" | "nullify" | "restrict" | "no_action";
 

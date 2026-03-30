@@ -887,9 +887,16 @@ describe("Rails-guided: migrations", () => {
   });
 
   it("reversible removeColumn with type auto-reverses", async () => {
-    await adapter.executeMutation(
-      `CREATE TABLE "articles" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "title" VARCHAR(255), "body" TEXT)`,
-    );
+    class SetupArticles extends Migration {
+      async change() {
+        await this.createTable("articles", (t) => {
+          t.string("title");
+          t.text("body");
+        });
+      }
+    }
+    const setup = new SetupArticles();
+    await setup.run(adapter, "up");
 
     class RemoveBodyFromArticles extends Migration {
       async change() {
@@ -899,19 +906,27 @@ describe("Rails-guided: migrations", () => {
     const m = new RemoveBodyFromArticles();
     await m.run(adapter, "up");
 
-    const colsAfterUp = await adapter.execute(`SELECT name FROM pragma_table_info('articles')`);
-    expect(colsAfterUp.map((r: any) => r.name)).not.toContain("body");
+    const colsAfterUp = await m.schema.columnExists("articles", "body");
+    expect(colsAfterUp).toBe(false);
 
     await m.run(adapter, "down");
-    const colsAfterDown = await adapter.execute(`SELECT name FROM pragma_table_info('articles')`);
-    expect(colsAfterDown.map((r: any) => r.name)).toContain("body");
+    const colsAfterDown = await m.schema.columnExists("articles", "body");
+    expect(colsAfterDown).toBe(true);
+
+    await setup.run(adapter, "down");
   });
 
   it("reversible removeIndex with column auto-reverses", async () => {
-    await adapter.executeMutation(
-      `CREATE TABLE "products" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "sku" VARCHAR(255))`,
-    );
-    await adapter.executeMutation(`CREATE INDEX "index_products_on_sku" ON "products" ("sku")`);
+    class SetupProducts extends Migration {
+      async change() {
+        await this.createTable("products", (t) => {
+          t.string("sku");
+        });
+        await this.addIndex("products", "sku");
+      }
+    }
+    const setup = new SetupProducts();
+    await setup.run(adapter, "up");
 
     class RemoveSkuIndex extends Migration {
       async change() {
@@ -921,16 +936,14 @@ describe("Rails-guided: migrations", () => {
     const m = new RemoveSkuIndex();
     await m.run(adapter, "up");
 
-    const idxAfterUp = await adapter.execute(
-      `SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='products' AND name='index_products_on_sku'`,
-    );
-    expect(idxAfterUp).toHaveLength(0);
+    const idxAfterUp = await m.schema.indexExists("products", "sku");
+    expect(idxAfterUp).toBe(false);
 
     await m.run(adapter, "down");
-    const idxAfterDown = await adapter.execute(
-      `SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='products' AND name='index_products_on_sku'`,
-    );
-    expect(idxAfterDown).toHaveLength(1);
+    const idxAfterDown = await m.schema.indexExists("products", "sku");
+    expect(idxAfterDown).toBe(true);
+
+    await setup.run(adapter, "down");
   });
 
   it("MigrationRunner runs and rolls back", async () => {

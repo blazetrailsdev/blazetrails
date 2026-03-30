@@ -17,7 +17,7 @@ export function resolveAssociation(record: any, attribute: string, fallback: unk
   if (preloaded !== undefined) return preloaded;
 
   // Only use association target when actually loaded
-  if (typeof record.association === "function") {
+  if (typeof record.association === "function" && isAssociation(record, attribute)) {
     const assoc = record.association(attribute);
     if (assoc?.loaded === true && assoc.target !== undefined) return assoc.target;
   }

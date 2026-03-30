@@ -139,7 +139,7 @@ export function buildTagValues(...args: unknown[]): string[] {
       !(tagValue instanceof SafeBuffer)
     ) {
       for (const [key, val] of Object.entries(tagValue as Record<string, unknown>)) {
-        if (val && key !== "") {
+        if (key !== "" && val !== false && val !== null && val !== undefined) {
           tagValues.push(String(key));
         }
       }
@@ -173,7 +173,7 @@ function buildTagValuesPreservingSafety(value: unknown): Array<string | SafeBuff
       !(val instanceof RegExp)
     ) {
       for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
-        if (v && k !== "") {
+        if (k !== "" && v !== false && v !== null && v !== undefined) {
           result.push(String(k));
         }
       }
@@ -437,9 +437,8 @@ function createTagBuilderProxy(): TagBuilder {
       const methodName = String(prop);
       const tagName = METHOD_TO_TAG_NAME[methodName] ?? dasherize(methodName);
 
-      ensureValidHtml5TagName(tagName);
-
       return (contentOrOpts?: unknown, optsOrBlock?: Record<string, unknown> | (() => unknown)) => {
+        ensureValidHtml5TagName(tagName);
         // Parse arguments: tag.div("content", {opts}), tag.div({opts}), tag.div({opts}, block), tag.div(block), tag.div("content", block)
         let content: unknown = undefined;
         let options: Record<string, unknown> = {};

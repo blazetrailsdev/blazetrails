@@ -28,8 +28,10 @@ export interface SanitizerVendor {
 }
 
 /**
- * Default sanitizer that strips HTML tags using regex.
- * In production, you'd want a proper HTML parser (like DOMPurify).
+ * Default sanitizer placeholder.
+ *
+ * For security, this does not attempt regex-based HTML sanitization.
+ * Configure a real HTML parser-based SanitizerVendor for production use.
  */
 class DefaultFullSanitizer implements Sanitizer {
   sanitize(html: string): string {
@@ -111,9 +113,9 @@ class DefaultSafeListSanitizer implements Sanitizer {
   sanitize(html: string, options: Record<string, unknown> = {}): string {
     if (html === null || html === undefined) return "";
 
-    const allowedTags = (options.tags as string[]) || DefaultSafeListSanitizer.allowedTags;
-    const allowedAttrs =
-      (options.attributes as string[]) || DefaultSafeListSanitizer.allowedAttributes;
+    const ctor = this.constructor as typeof DefaultSafeListSanitizer;
+    const allowedTags = (options.tags as string[]) || ctor.allowedTags;
+    const allowedAttrs = (options.attributes as string[]) || ctor.allowedAttributes;
 
     return html.replace(/<\/?([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>/gi, (match, tagName) => {
       const lower = tagName.toLowerCase();

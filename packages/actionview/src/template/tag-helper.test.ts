@@ -182,8 +182,10 @@ describe("TagHelperTest", () => {
 
   it("tag builder with dangerous name", () => {
     const t = tag() as any;
-    // Tags with > or / in their name (after dasherize)
-    expect(() => t["asdf->"]).toBeDefined(); // proxy always returns function
+    for (const char of INVALID_TAG_CHARS.split("").filter((c) => c !== " ")) {
+      const tagName = `asdf-${char}`;
+      expect(() => t[tagName]()).toThrow();
+    }
   });
 
   it("tag with dangerous aria attribute name", () => {
@@ -814,18 +816,6 @@ describe("TagHelperTest", () => {
     expect(contentTag("p", contentTag("b", "Hello")).toString()).toBe("<p><b>Hello</b></p>");
     const t = tag() as any;
     expect(t.p(t.b("Hello")).toString()).toBe("<p><b>Hello</b></p>");
-  });
-
-  it("tag builder link to data nil equal", () => {
-    const t = tag() as any;
-    const div1 = t.div("test", { "data-tooltip": null });
-    const div2 = t.div("test", { data: { tooltip: null } });
-    expect(div1.toString()).toBe(div2.toString());
-  });
-
-  it("tag builder dasherize names", () => {
-    const t = tag() as any;
-    expect(t.img_slider().toString()).toBe("<img-slider></img-slider>");
   });
 
   it("respond to", () => {

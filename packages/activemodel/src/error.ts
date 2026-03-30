@@ -129,7 +129,10 @@ export class Error {
         defaults.push(`activemodel.errors.models.${modelKey}.format`);
       }
       defaults.push("activemodel.errors.format");
-      format = I18n.t(defaults[0], {
+      const primaryKey = defaults[0];
+      const fallbackDefaults = defaults.slice(1).map((key) => ({ key }));
+      format = I18n.t(primaryKey, {
+        defaults: fallbackDefaults,
         defaultValue: "%{attribute} %{message}",
       });
     } else {

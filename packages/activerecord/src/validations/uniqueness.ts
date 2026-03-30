@@ -43,15 +43,19 @@ export class UniquenessValidator extends EachValidator {
       if (conditioned) relation = conditioned;
     }
 
+    const asyncValidations = (record as any)._asyncValidations;
+    if (!Array.isArray(asyncValidations)) {
+      throw new Error(
+        "UniquenessValidator must be used via the async uniqueness validation API " +
+          "(e.g., Base.validatesUniqueness) so async validations can be tracked.",
+      );
+    }
+
     const validationPromise = relation.exists().then((exists: boolean) => {
       if (exists) {
         record.errors.add(attribute, "taken", { value });
       }
     });
-
-    const asyncValidations = (record as any)._asyncValidations;
-    if (Array.isArray(asyncValidations)) {
-      asyncValidations.push(validationPromise);
-    }
+    asyncValidations.push(validationPromise);
   }
 }

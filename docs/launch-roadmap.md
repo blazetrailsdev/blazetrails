@@ -15,6 +15,8 @@ rewritten in TypeScript" — backed by a working demo and rock-solid core packag
 | railties         | 93/2,411           | 3.9%     | Early                      |
 | **Overall**      | **10,296/21,890**  | **47%**  |                            |
 
+Overall includes completed packages (arel 100%, activemodel 100%, rack 100%).
+
 **Frontiers** (PR #281, draft): Interactive browser sandbox with WASM SQLite,
 Monaco editor, CLI, sample databases, project management, and auth. 246 tests
 across 15 files. Being split into mergeable chunks (see below).

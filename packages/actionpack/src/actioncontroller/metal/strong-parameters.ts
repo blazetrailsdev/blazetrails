@@ -101,8 +101,8 @@ export class Parameters {
   }
 
   permitAll(): Parameters {
-    const p = new Parameters({ ...this._data });
-    p._permitted = true;
+    const p = this.deepDup();
+    p.permitBang();
     return p;
   }
 

@@ -23,9 +23,7 @@ describe("RaiseOnUnpermittedParamsTest", () => {
     Parameters.actionOnUnpermittedParameters = "raise";
     const inner = new Parameters({ title: "Hi", admin: true });
     const params = new Parameters({ post: inner });
-    // expect internally calls permit, which triggers raise mode
-    // But in Rails, expect suppresses unpermitted param raises at the nested level
-    // Our implementation passes through — test that it at least works without crashing
+    // expect uses suppressUnpermitted to skip unpermitted-parameter checks
     expect(() => params.expect({ post: ["title"] })).not.toThrow(UnpermittedParameters);
   });
 

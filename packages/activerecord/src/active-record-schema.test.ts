@@ -125,6 +125,17 @@ describe("ActiveRecordSchemaTest", () => {
     expect(createdAt!.options.null).toBe(false);
   });
 
+  it("timestamps with custom options on create table", async () => {
+    const td = new TableDefinition("ts_custom");
+    td.timestamps({ null: true, precision: 6 });
+    const createdAt = td.columns.find((c) => c.name === "created_at");
+    const updatedAt = td.columns.find((c) => c.name === "updated_at");
+    expect(createdAt!.options.null).toBe(true);
+    expect(createdAt!.options.precision).toBe(6);
+    expect(updatedAt!.options.null).toBe(true);
+    expect(updatedAt!.options.precision).toBe(6);
+  });
+
   it("timestamps with implicit default on change table", async () => {
     class TsMig extends Migration {
       async up() {

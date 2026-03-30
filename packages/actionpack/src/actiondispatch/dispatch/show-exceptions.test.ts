@@ -169,6 +169,6 @@ describe("ShowExceptionsTest", () => {
       "action_dispatch.show_exceptions": "all",
     });
     expect(status).toBe(500);
-    expect(body[0]).toContain("500");
+    expect(body[0]).toContain("500 Internal Server Error");
   });
 });

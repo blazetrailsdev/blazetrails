@@ -91,7 +91,7 @@ export class ExceptionWrapper {
 
   /** Whether this exception has a registered rescue response. */
   static rescueResponse(exceptionName: string): boolean {
-    return exceptionName in STATUS_MAP && STATUS_MAP[exceptionName] !== 500;
+    return Object.hasOwn(STATUS_MAP, exceptionName) && STATUS_MAP[exceptionName] !== 500;
   }
 
   /** Whether this exception should be shown based on the show_exceptions mode. */
@@ -104,7 +104,7 @@ export class ExceptionWrapper {
   /** Extract source fragments from the backtrace. */
   get sourceExtracts(): Array<{ code: string; line: number }> {
     return this.traces.map((trace) => {
-      const match = trace.match(/\(([^:]+):(\d+):\d+\)/) ?? trace.match(/at\s+([^:]+):(\d+):\d+/);
+      const match = trace.match(/\((.+):(\d+):\d+\)/) ?? trace.match(/at\s+(.+):(\d+):\d+/);
       if (!match) return { code: trace, line: 0 };
       return { code: match[1], line: parseInt(match[2], 10) };
     });

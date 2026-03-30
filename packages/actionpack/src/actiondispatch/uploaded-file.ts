@@ -25,7 +25,7 @@ export class UploadedFile {
 
   constructor(options: UploadedFileOptions = {}) {
     if (!options.tempfile && options.content == null) {
-      throw new Error("ArgumentError: :tempfile is required");
+      throw new Error("ArgumentError: either :tempfile or :content is required");
     }
     this.originalFilename = options.filename ?? "";
     this.contentType = options.type ?? "application/octet-stream";

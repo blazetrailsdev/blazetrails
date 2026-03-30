@@ -56,8 +56,7 @@ export class ShowExceptions {
     }
   }
 
-  private failsafeResponse(wrapper: ExceptionWrapper): RackResponse {
-    const body = `${wrapper.statusCode} ${wrapper.statusText}\n`;
-    return [500, { "content-type": "text/plain; charset=utf-8" }, [body]];
+  private failsafeResponse(_wrapper: ExceptionWrapper): RackResponse {
+    return [500, { "content-type": "text/plain; charset=utf-8" }, ["500 Internal Server Error\n"]];
   }
 }

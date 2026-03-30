@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { ShowExceptions } from "../middleware/show-exceptions.js";
 import type { RackEnv, RackResponse } from "@blazetrails/rack";
+import { bodyFromString, bodyToString } from "@blazetrails/rack";
 
 class Boomer {
   async call(env: RackEnv): Promise<RackResponse> {
@@ -24,7 +25,7 @@ function publicExceptionsApp(env: RackEnv): Promise<RackResponse> {
   return Promise.resolve([
     status,
     { "content-type": "text/html; charset=utf-8" },
-    [`${status} error fixture\n`],
+    bodyFromString(`${status} error fixture\n`),
   ]);
 }
 
@@ -57,7 +58,7 @@ describe("ShowExceptionsTest", () => {
       "action_dispatch.show_exceptions": "all",
     });
     expect(status).toBe(500);
-    expect(body[0]).toContain("500");
+    expect(await bodyToString(body)).toContain("500");
 
     const [status2] = await app.call({
       REQUEST_METHOD: "GET",
@@ -82,7 +83,7 @@ describe("ShowExceptionsTest", () => {
       "action_dispatch.show_exceptions": "all",
     });
     expect(status).toBe(500);
-    expect(body[0]).toContain("500");
+    expect(await bodyToString(body)).toContain("500");
   });
 
   it("sets the HTTP charset parameter", async () => {
@@ -103,7 +104,7 @@ describe("ShowExceptionsTest", () => {
       "action_dispatch.show_exceptions": "all",
     });
     expect(status).toBe(404);
-    expect(body[0]).toContain("404");
+    expect(await bodyToString(body)).toContain("404");
   });
 
   it("calls custom exceptions app", async () => {
@@ -115,7 +116,7 @@ describe("ShowExceptionsTest", () => {
       receivedException = env["action_dispatch.exception"];
       receivedPath = env["PATH_INFO"];
       receivedOriginalPath = env["action_dispatch.original_path"];
-      return [404, { "content-type": "text/plain" }, ["YOU FAILED"]];
+      return [404, { "content-type": "text/plain" }, bodyFromString("YOU FAILED")];
     };
 
     const app = buildApp(customApp);
@@ -125,7 +126,7 @@ describe("ShowExceptionsTest", () => {
       "action_dispatch.show_exceptions": "all",
     });
     expect(status).toBe(404);
-    expect(body[0]).toBe("YOU FAILED");
+    expect(await bodyToString(body)).toBe("YOU FAILED");
     expect(receivedException).toBeInstanceOf(Error);
     expect(receivedPath).toBe("/404");
     expect(receivedOriginalPath).toBe("/not_found");
@@ -133,7 +134,7 @@ describe("ShowExceptionsTest", () => {
 
   it("returns an empty response if custom exceptions app returns x-cascade pass", async () => {
     const cascadeApp = async (): Promise<RackResponse> => {
-      return [404, { "x-cascade": "pass" }, []];
+      return [404, { "x-cascade": "pass" }, bodyFromString("")];
     };
 
     const app = buildApp(cascadeApp);
@@ -143,7 +144,7 @@ describe("ShowExceptionsTest", () => {
       "action_dispatch.show_exceptions": "all",
     });
     expect(status).toBe(404);
-    expect(body).toEqual([]);
+    expect(await bodyToString(body)).toBe("");
   });
 
   it("bad params exception is returned in the correct format", async () => {
@@ -169,6 +170,6 @@ describe("ShowExceptionsTest", () => {
       "action_dispatch.show_exceptions": "all",
     });
     expect(status).toBe(500);
-    expect(body[0]).toContain("500 Internal Server Error");
+    expect(await bodyToString(body)).toContain("500 Internal Server Error");
   });
 });

@@ -8,6 +8,7 @@
  */
 
 import type { RackApp, RackEnv, RackResponse } from "@blazetrails/rack";
+import { bodyFromString } from "@blazetrails/rack";
 import { ExceptionWrapper } from "../exception-wrapper.js";
 
 export type ShowExceptionsMode = "all" | "rescuable" | "none";
@@ -47,7 +48,7 @@ export class ShowExceptions {
         const response = await this.exceptionsApp(env);
         const cascade = response[1]["x-cascade"] ?? response[1]["X-Cascade"];
         if (cascade === "pass") {
-          return [wrapper.statusCode, { "content-type": "text/plain" }, []];
+          return [wrapper.statusCode, { "content-type": "text/plain" }, bodyFromString("")];
         }
         return response;
       } catch {
@@ -57,6 +58,10 @@ export class ShowExceptions {
   }
 
   private failsafeResponse(_wrapper: ExceptionWrapper): RackResponse {
-    return [500, { "content-type": "text/plain; charset=utf-8" }, ["500 Internal Server Error\n"]];
+    return [
+      500,
+      { "content-type": "text/plain; charset=utf-8" },
+      bodyFromString("500 Internal Server Error\n"),
+    ];
   }
 }

@@ -131,7 +131,7 @@ export class AdapterSpecificRegistry {
     if (registration) {
       return registration.call(this, symbol, options);
     }
-    throw new Error(`Unknown type ${String(symbol)}`);
+    throw new Error(`Unknown type: ${String(symbol)}`);
   }
 
   private _findRegistration(

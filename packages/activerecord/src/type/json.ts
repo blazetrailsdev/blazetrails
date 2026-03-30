@@ -31,7 +31,8 @@ export class Json extends Type<unknown> {
 
   serialize(value: unknown): string | null {
     if (value === null || value === undefined) return null;
-    return JSON.stringify(value);
+    const json = JSON.stringify(value);
+    return json === undefined ? null : json;
   }
 
   changedInPlace(rawOldValue: unknown, newValue: unknown): boolean {

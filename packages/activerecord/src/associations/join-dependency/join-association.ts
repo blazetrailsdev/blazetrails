@@ -9,9 +9,10 @@
  */
 
 import type { Base } from "../../base.js";
+import { quoteIdentifier } from "../../connection-adapters/abstract/quoting.js";
 import { JoinPart } from "./join-part.js";
 
-export interface AssociationReflection {
+export interface JoinReflection {
   name: string;
   type: "belongsTo" | "hasOne" | "hasMany" | "hasAndBelongsToMany";
   foreignKey: string;
@@ -20,14 +21,18 @@ export interface AssociationReflection {
   options?: Record<string, unknown>;
 }
 
+function qualifiedColumn(table: string, column: string): string {
+  return `${quoteIdentifier(table)}.${quoteIdentifier(column)}`;
+}
+
 export class JoinAssociation extends JoinPart {
-  readonly reflection: AssociationReflection;
+  readonly reflection: JoinReflection;
   private _table: string;
   readonly tables: string[] = [];
   private _readonly = false;
   private _strictLoading = false;
 
-  constructor(reflection: AssociationReflection, baseKlass: typeof Base, table: string) {
+  constructor(reflection: JoinReflection, baseKlass: typeof Base, table: string) {
     super(baseKlass);
     this.reflection = reflection;
     this._table = table;
@@ -40,6 +45,9 @@ export class JoinAssociation extends JoinPart {
 
   set table(value: string) {
     this._table = value;
+    if (!this.tables.includes(value)) {
+      this.tables.push(value);
+    }
   }
 
   isMatch(otherKlass: typeof Base): boolean {
@@ -48,13 +56,12 @@ export class JoinAssociation extends JoinPart {
 
   joinConstraints(parentTable: string, parentKlass: typeof Base): string {
     const fk = this.reflection.foreignKey;
-    const pk = this.reflection.primaryKey ?? "id";
-    const type = this.reflection.type;
+    const pk = this.reflection.primaryKey ?? (parentKlass.primaryKey as string) ?? "id";
 
-    if (type === "belongsTo") {
-      return `"${this._table}"."${pk}" = "${parentTable}"."${fk}"`;
+    if (this.reflection.type === "belongsTo") {
+      return `${qualifiedColumn(this._table, pk)} = ${qualifiedColumn(parentTable, fk)}`;
     }
-    return `"${this._table}"."${fk}" = "${parentTable}"."${pk}"`;
+    return `${qualifiedColumn(this._table, fk)} = ${qualifiedColumn(parentTable, pk)}`;
   }
 
   isReadonly(): boolean {

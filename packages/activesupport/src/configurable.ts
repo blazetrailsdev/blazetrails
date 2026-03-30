@@ -65,26 +65,21 @@ export namespace Configurable {
         enumerable: false,
       });
 
-      if (klass.prototype) {
-        if (addInstanceReader) {
-          Object.defineProperty(klass.prototype, name, {
-            get() {
-              return Configurable.getConfig(this.constructor).get(name);
-            },
-            set: addInstanceWriter
-              ? function (this: any, value: unknown) {
-                  if (!this._instanceConfig) {
-                    this._instanceConfig = new Configuration(
-                      Configurable.getConfig(this.constructor),
-                    );
-                  }
-                  this._instanceConfig.set(name, value);
-                }
-              : undefined,
-            configurable: true,
-            enumerable: false,
-          });
-        }
+      if (klass.prototype && (addInstanceReader || addInstanceWriter)) {
+        Object.defineProperty(klass.prototype, name, {
+          get: addInstanceReader
+            ? function (this: any) {
+                return Configurable.getInstanceConfig(this).get(name);
+              }
+            : undefined,
+          set: addInstanceWriter
+            ? function (this: any, value: unknown) {
+                Configurable.getInstanceConfig(this).set(name, value);
+              }
+            : undefined,
+          configurable: true,
+          enumerable: false,
+        });
       }
 
       if (options.default !== undefined) {

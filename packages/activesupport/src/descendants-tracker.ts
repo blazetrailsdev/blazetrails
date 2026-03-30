@@ -2,42 +2,42 @@ const _subclassMap = new globalThis.WeakMap<Function, Set<Function>>();
 const _excludedDescendants = new globalThis.WeakSet<Function>();
 let _clearDisabled = false;
 
-export class WeakSet<T extends object> {
-  private _map = new WeakMap<T, boolean>();
-  private _refs: WeakRef<T>[] = [];
-
-  add(object: T): void {
-    if (!this._map.has(object)) {
-      this._map.set(object, true);
-      this._refs.push(new WeakRef(object));
-    }
-  }
-
-  has(object: T): boolean {
-    return this._map.has(object);
-  }
-
-  toArray(): T[] {
-    const result: T[] = [];
-    const alive: WeakRef<T>[] = [];
-    for (const ref of this._refs) {
-      const obj = ref.deref();
-      if (obj !== undefined) {
-        alive.push(ref);
-        result.push(obj);
-      }
-    }
-    this._refs = alive;
-    return result;
-  }
-}
-
 export interface ReloadedClassesFiltering {
   subclasses(): Function[];
   descendants(): Function[];
 }
 
 export namespace DescendantsTracker {
+  export class WeakSet<T extends object> {
+    private _map = new globalThis.WeakMap<T, boolean>();
+    private _refs: WeakRef<T>[] = [];
+
+    add(object: T): void {
+      if (!this._map.has(object)) {
+        this._map.set(object, true);
+        this._refs.push(new WeakRef(object));
+      }
+    }
+
+    has(object: T): boolean {
+      return this._map.has(object);
+    }
+
+    toArray(): T[] {
+      const result: T[] = [];
+      const alive: WeakRef<T>[] = [];
+      for (const ref of this._refs) {
+        const obj = ref.deref();
+        if (obj !== undefined) {
+          alive.push(ref);
+          result.push(obj);
+        }
+      }
+      this._refs = alive;
+      return result;
+    }
+  }
+
   export function registerSubclass(parent: Function, child: Function): void {
     if (!_subclassMap.has(parent)) _subclassMap.set(parent, new Set());
     _subclassMap.get(parent)!.add(child);

@@ -71,6 +71,10 @@ export namespace Concern {
     if (def.included) {
       def.included(klass);
     }
+
+    if (def.prepend && def.prepended) {
+      def.prepended(klass);
+    }
   }
 
   export function hasConcern(klass: any, mixin: ConcernMixin): boolean {

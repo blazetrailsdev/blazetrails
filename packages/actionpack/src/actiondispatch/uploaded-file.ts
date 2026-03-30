@@ -87,7 +87,15 @@ export class UploadedFile {
   }
 
   /** Close the file handle. */
-  close(_unlink?: boolean): void {
+  close(unlink?: boolean): void {
+    if (unlink && this._tempfile) {
+      try {
+        fs.unlinkSync(this._tempfile);
+      } catch {
+        // Ignore errors when unlinking, e.g., missing file.
+      }
+      this._tempfile = null;
+    }
     this._closed = true;
   }
 

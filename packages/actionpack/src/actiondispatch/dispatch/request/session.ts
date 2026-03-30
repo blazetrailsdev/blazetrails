@@ -39,8 +39,11 @@ export class Session {
     this.options = options;
     this.existed = store.sessionExists(env);
     if (this.existed) {
-      const [sessionId] = store.loadSession(env);
+      const [sessionId, data] = store.loadSession(env);
       this._idWas = sessionId;
+      this.id = sessionId;
+      this.data = { ...data };
+      this.loaded = true;
     }
   }
 
@@ -152,8 +155,17 @@ export class Session {
   }
 
   destroy(): void {
-    this.loadData();
-    this.store.deleteSession(this.env, this.id, this.options);
+    if (!this.existed && this.id == null) {
+      this.data = {};
+      this.destroyed = true;
+      return;
+    }
+    if (!this.loaded) {
+      this.loadData();
+    }
+    if (this.id != null) {
+      this.store.deleteSession(this.env, this.id, this.options);
+    }
     this.data = {};
     this.destroyed = true;
   }

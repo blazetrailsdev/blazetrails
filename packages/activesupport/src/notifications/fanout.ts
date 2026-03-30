@@ -5,9 +5,11 @@ export class InstrumentationSubscriberError extends Error {
 
   constructor(exceptions: Error[]) {
     const names = exceptions.map((e) => e.constructor.name);
-    super(`Exception(s) occurred within instrumentation subscribers: ${names.join(", ")}`);
+    super(`Exception(s) occurred within instrumentation subscribers: ${names.join(", ")}`, {
+      cause: exceptions[0],
+    });
+    this.name = "InstrumentationSubscriberError";
     this.exceptions = exceptions;
-    this.cause = exceptions[0];
   }
 }
 
@@ -293,7 +295,7 @@ export class Fanout {
     };
   }
 
-  allListenersFor(name: string): Subscriber[] {
+  private allListenersFor(name: string): Subscriber[] {
     let cached = this.listenersCache.get(name);
     if (cached) return cached;
 

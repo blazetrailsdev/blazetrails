@@ -333,9 +333,10 @@ export class TableDefinition {
     return this;
   }
 
-  timestamps(): this {
-    this.datetime("created_at", { null: false });
-    this.datetime("updated_at", { null: false });
+  timestamps(options: ColumnOptions = {}): this {
+    const opts = { null: false, ...options };
+    this.datetime("created_at", opts);
+    this.datetime("updated_at", opts);
     return this;
   }
 

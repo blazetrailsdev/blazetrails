@@ -8,13 +8,13 @@ The goal is to be **100% API compatible with Rails**, matching behavior **test f
 
 **Active focus** — these packages are where development effort is concentrated:
 
-| Package                      | Rails Equivalent                                                        | API        | Tests      | Description                                                |
-| ---------------------------- | ----------------------------------------------------------------------- | ---------- | ---------- | ---------------------------------------------------------- |
-| `@blazetrails/activerecord`  | [ActiveRecord](https://api.rubyonrails.org/classes/ActiveRecord.html)   | **47.6%**  | **61.9%**  | ORM — persistence, querying, associations, migrations      |
-| `@blazetrails/activesupport` | [ActiveSupport](https://api.rubyonrails.org/classes/ActiveSupport.html) | **17.3%**  | **75.6%**  | Core utilities, inflection, caching, notifications         |
-| `@blazetrails/arel`          | [Arel](https://api.rubyonrails.org/classes/Arel.html)                   | **100%**   | **99.4%**  | SQL AST builder and query generation                       |
-| `@blazetrails/activemodel`   | [ActiveModel](https://api.rubyonrails.org/classes/ActiveModel.html)     | **94.5%**  | **100%**   | Attributes, validations, callbacks, dirty tracking, i18n   |
-| `@blazetrails/rack`          | [Rack](https://rack.github.io/)                                         | —          | **100%**   | Modular web server interface, request/response, middleware |
+| Package                      | Rails Equivalent                                                        | API       | Tests     | Description                                                |
+| ---------------------------- | ----------------------------------------------------------------------- | --------- | --------- | ---------------------------------------------------------- |
+| `@blazetrails/activerecord`  | [ActiveRecord](https://api.rubyonrails.org/classes/ActiveRecord.html)   | **47.6%** | **61.9%** | ORM — persistence, querying, associations, migrations      |
+| `@blazetrails/activesupport` | [ActiveSupport](https://api.rubyonrails.org/classes/ActiveSupport.html) | **17.3%** | **75.6%** | Core utilities, inflection, caching, notifications         |
+| `@blazetrails/arel`          | [Arel](https://api.rubyonrails.org/classes/Arel.html)                   | **100%**  | **99.4%** | SQL AST builder and query generation                       |
+| `@blazetrails/activemodel`   | [ActiveModel](https://api.rubyonrails.org/classes/ActiveModel.html)     | **94.5%** | **100%**  | Attributes, validations, callbacks, dirty tracking, i18n   |
+| `@blazetrails/rack`          | [Rack](https://rack.github.io/)                                         | —         | **100%**  | Modular web server interface, request/response, middleware |
 
 **Data Layer Parity** (ActiveRecord + Arel + ActiveModel + ActiveSupport): **50.1% API** | **69.8% Tests**
 

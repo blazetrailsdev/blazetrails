@@ -5,15 +5,15 @@ rewritten in TypeScript" — backed by a working demo and rock-solid core packag
 
 ## Current State (2026-03-30)
 
-| Package          | Tests              | Coverage | Status                     |
-| ---------------- | ------------------ | -------- | -------------------------- |
-| activerecord     | 5,187/8,385        | 61.9%    | In progress                |
-| activesupport    | 2,164/2,862        | 75.6%    | In progress                |
-| actiondispatch   | 406/1,432          | 28.4%    | In progress (27 misplaced) |
-| actioncontroller | 7/1,860            | 0.4%     | Early (229 misplaced)      |
-| actionview       | 0/2,497            | 0%       | Not started                |
-| railties         | 93/2,411           | 3.9%     | Early                      |
-| **Overall**      | **10,296/21,890**  | **47%**  |                            |
+| Package          | Tests             | Coverage | Status                     |
+| ---------------- | ----------------- | -------- | -------------------------- |
+| activerecord     | 5,187/8,385       | 61.9%    | In progress                |
+| activesupport    | 2,164/2,862       | 75.6%    | In progress                |
+| actiondispatch   | 406/1,432         | 28.4%    | In progress (27 misplaced) |
+| actioncontroller | 7/1,860           | 0.4%     | Early (229 misplaced)      |
+| actionview       | 0/2,497           | 0%       | Not started                |
+| railties         | 93/2,411          | 3.9%     | Early                      |
+| **Overall**      | **10,296/21,890** | **47%**  |                            |
 
 Overall includes completed packages (arel 100%, activemodel 100%, rack 100%).
 

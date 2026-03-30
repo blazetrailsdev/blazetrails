@@ -16,7 +16,11 @@ export interface SchemaStatements {
   createEnum(name: string, values: string[]): Promise<void>;
   dropEnum(name: string, options?: { ifExists?: boolean }): Promise<void>;
   renameEnum(name: string, newName: string): Promise<void>;
-  addEnumValue(name: string, value: string, options?: { before?: string; after?: string; ifNotExists?: boolean }): Promise<void>;
+  addEnumValue(
+    name: string,
+    value: string,
+    options?: { before?: string; after?: string; ifNotExists?: boolean },
+  ): Promise<void>;
   renameEnumValue(name: string, existingValue: string, newValue: string): Promise<void>;
   enumTypes(): Promise<Record<string, string[]>>;
   columns(tableName: string): Promise<unknown[]>;

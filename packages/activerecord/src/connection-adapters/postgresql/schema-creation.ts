@@ -11,15 +11,10 @@ export class SchemaCreation extends AbstractSchemaCreation {
     super("postgres");
   }
 
-  visitAddForeignKey(
-    fromTable: string,
-    toTable: string,
-    options: Record<string, unknown>,
-  ): string {
+  visitAddForeignKey(fromTable: string, toTable: string, options: Record<string, unknown>): string {
     const column = (options.column as string) ?? `${toTable.replace(/s$/, "")}_id`;
     const primaryKey = (options.primaryKey as string) ?? "id";
-    const name =
-      (options.name as string) ?? `fk_rails_${fromTable}_${column}`;
+    const name = (options.name as string) ?? `fk_rails_${fromTable}_${column}`;
 
     let sql = `ALTER TABLE "${fromTable}" ADD CONSTRAINT "${name}" `;
     sql += `FOREIGN KEY ("${column}") REFERENCES "${toTable}" ("${primaryKey}")`;

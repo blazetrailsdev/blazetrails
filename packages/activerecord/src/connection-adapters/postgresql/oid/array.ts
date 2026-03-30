@@ -34,7 +34,15 @@ export class Array {
       const s = this.subtype.serialize(v);
       if (s == null) return "NULL";
       const str = String(s);
-      if (str === "" || str.includes(this.delimiter) || str.includes('"') || str.includes("\\") || str.includes("{") || str.includes("}") || /\s/.test(str)) {
+      if (
+        str === "" ||
+        str.includes(this.delimiter) ||
+        str.includes('"') ||
+        str.includes("\\") ||
+        str.includes("{") ||
+        str.includes("}") ||
+        /\s/.test(str)
+      ) {
         return `"${str.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
       }
       return str;
@@ -78,7 +86,7 @@ export class Array {
         i += 4;
       } else if (inner[i] === "{") {
         let depth = 1;
-        let start = i;
+        const start = i;
         i++;
         while (i < inner.length && depth > 0) {
           if (inner[i] === "{") depth++;

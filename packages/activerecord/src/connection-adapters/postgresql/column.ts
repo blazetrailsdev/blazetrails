@@ -40,7 +40,7 @@ export class Column {
     this.serial = options.serial ?? false;
     this.oid = sqlTypeMetadata.oid ?? null;
     this.fmod = sqlTypeMetadata.fmod ?? null;
-    this.array = options.array ?? (this.sqlType?.endsWith("[]") ?? false);
+    this.array = options.array ?? this.sqlType?.endsWith("[]") ?? false;
   }
 
   get hasDefault(): boolean {
@@ -48,6 +48,9 @@ export class Column {
   }
 
   get isSerial(): boolean {
-    return this.serial || (typeof this.defaultFunction === "string" && this.defaultFunction.startsWith("nextval("));
+    return (
+      this.serial ||
+      (typeof this.defaultFunction === "string" && this.defaultFunction.startsWith("nextval("))
+    );
   }
 }

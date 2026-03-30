@@ -36,6 +36,8 @@ export class Builder {
       );
     }
 
+    content = content.replace(/^#(?!\\)[^\n]*\n/gm, "\n");
+
     const endMatch = content.match(/^__END__\s*$/m);
     if (endMatch && typeof endMatch.index === "number") {
       content = content.substring(0, endMatch.index);
@@ -52,8 +54,19 @@ export class Builder {
     if (file) {
       source += `\n//# sourceURL=${file.replace(/\\/g, "/").replace(/[\r\n\u2028\u2029]/g, "")}`;
     }
-    const configFn = new Function("builder", source);
-    configFn(builder);
+    let configFn: (b: Builder) => void;
+    try {
+      configFn = new Function("builder", source) as (b: Builder) => void;
+    } catch (err) {
+      const msg = file ? `Error parsing config from ${file}` : "Error parsing config string";
+      throw new Error(`${msg}: ${(err as Error).message}`, { cause: err });
+    }
+    try {
+      configFn(builder);
+    } catch (err) {
+      const msg = file ? `Error evaluating config from ${file}` : "Error evaluating config string";
+      throw new Error(`${msg}: ${(err as Error).message}`, { cause: err });
+    }
     return builder.toApp();
   }
 

@@ -332,10 +332,12 @@ export function contentTag(
   const esc = escape !== undefined ? escape : true;
 
   if (block) {
-    const opts =
-      typeof contentOrOptions === "object" && contentOrOptions !== null
-        ? (contentOrOptions as Record<string, unknown>)
-        : options;
+    const isPlainOpts =
+      typeof contentOrOptions === "object" &&
+      contentOrOptions !== null &&
+      !(contentOrOptions instanceof SafeBuffer) &&
+      !Array.isArray(contentOrOptions);
+    const opts = isPlainOpts ? (contentOrOptions as Record<string, unknown>) : options;
     return contentTagString(name, block(), opts ?? undefined, esc);
   }
 

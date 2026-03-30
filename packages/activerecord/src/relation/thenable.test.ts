@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
-import { Base, Relation } from "../index.js";
+import { Base, Relation, association, registerModel } from "../index.js";
 import { createTestAdapter } from "../test-adapter.js";
 import type { DatabaseAdapter } from "../adapter.js";
 
@@ -138,5 +138,60 @@ describe("Thenable", () => {
     const users = await rel;
     expect(Array.isArray(users)).toBe(true);
     expect(users).toHaveLength(1);
+  });
+
+  describe("CollectionProxy", () => {
+    let ThenablePost: typeof Base;
+    let ThenableComment: typeof Base;
+
+    beforeEach(() => {
+      ThenablePost = class ThenablePost extends Base {
+        static {
+          this.attribute("id", "integer");
+          this.attribute("title", "string");
+          this.adapter = adapter;
+        }
+      };
+      ThenableComment = class ThenableComment extends Base {
+        static {
+          this.attribute("id", "integer");
+          this.attribute("body", "string");
+          this.attribute("thenable_post_id", "integer");
+          this.adapter = adapter;
+        }
+      };
+      registerModel(ThenablePost);
+      registerModel(ThenableComment);
+      (ThenablePost as any)._associations = [
+        {
+          type: "hasMany",
+          name: "thenableComments",
+          options: { className: "ThenableComment", foreignKey: "thenable_post_id" },
+        },
+      ];
+    });
+
+    it("CollectionProxy is directly awaitable", async () => {
+      const post = await ThenablePost.create({ title: "Hello" });
+      await ThenableComment.create({ body: "Great", thenable_post_id: post.id });
+      await ThenableComment.create({ body: "Nice", thenable_post_id: post.id });
+
+      const proxy = association(post, "thenableComments");
+      const comments = await proxy;
+      expect(Array.isArray(comments)).toBe(true);
+      expect(comments).toHaveLength(2);
+    });
+  });
+
+  describe("BatchEnumerator", () => {
+    it("BatchEnumerator is directly awaitable", async () => {
+      for (let i = 0; i < 5; i++) {
+        await ThenableUser.create({ name: `User${i}`, active: 1 });
+      }
+
+      const batches = await ThenableUser.all().inBatches({ batchSize: 2 });
+      expect(Array.isArray(batches)).toBe(true);
+      expect(batches.length).toBeGreaterThan(0);
+    });
   });
 });

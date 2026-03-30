@@ -20,13 +20,18 @@
  * awaitability after it has safely crossed the async boundary.
  */
 export function stripThenable<T extends object>(obj: T): T {
+  const sentinel = {};
   Object.defineProperty(obj, "then", {
-    value: undefined,
+    value: sentinel,
     writable: true,
     configurable: true,
   });
   queueMicrotask(() => {
-    delete (obj as any).then;
+    // Only restore if the property is still our sentinel
+    const desc = Object.getOwnPropertyDescriptor(obj, "then");
+    if (desc && desc.value === sentinel) {
+      delete (obj as any).then;
+    }
   });
   return obj;
 }

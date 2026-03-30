@@ -31,7 +31,7 @@ A standalone mixin function in `packages/activerecord/src/relation/thenable.ts`.
 It patches `.then()`, `.catch()`, and `.finally()` onto any prototype,
 delegating to the specified evaluation method (default: `toArray`).
 
-Uses `Object.defineProperty` with `enumerable: false` to keep protocol
+Uses `Object.defineProperties` with `enumerable: false` to keep protocol
 methods out of `Object.keys()` and `for...in` loops.
 
 ## The `stripThenable` Escape Hatch

@@ -56,12 +56,18 @@ export class JoinAssociation extends JoinPart {
 
   joinConstraints(parentTable: string, parentKlass: typeof Base): string {
     const fk = this.reflection.foreignKey;
-    const pk = this.reflection.primaryKey ?? (parentKlass.primaryKey as string) ?? "id";
 
     if (this.reflection.type === "belongsTo") {
-      return `${qualifiedColumn(this._table, pk)} = ${qualifiedColumn(parentTable, fk)}`;
+      // For belongsTo, the foreign key is on the parent table and the
+      // primary key is on the associated (joined) table
+      const associatedPk =
+        this.reflection.primaryKey ?? (this.reflection.modelClass.primaryKey as string) ?? "id";
+      return `${qualifiedColumn(this._table, associatedPk)} = ${qualifiedColumn(parentTable, fk)}`;
     }
-    return `${qualifiedColumn(this._table, fk)} = ${qualifiedColumn(parentTable, pk)}`;
+    // For hasOne/hasMany, the foreign key is on the joined table and
+    // the primary key is on the parent table
+    const parentPk = this.reflection.primaryKey ?? (parentKlass.primaryKey as string) ?? "id";
+    return `${qualifiedColumn(this._table, fk)} = ${qualifiedColumn(parentTable, parentPk)}`;
   }
 
   isReadonly(): boolean {

@@ -39,31 +39,33 @@ export abstract class JoinPart {
 
   extractRecord(row: Record<string, unknown>, columnAlias: string): Record<string, unknown> {
     const record: Record<string, unknown> = {};
-    const prefix = `${columnAlias}_`;
 
-    // Primary: keys in the form `${columnAlias}_<attr>`
-    let matched = false;
-    for (const [key, value] of Object.entries(row)) {
-      if (key.startsWith(prefix)) {
-        record[key.slice(prefix.length)] = value;
-        matched = true;
-      }
-    }
-    if (matched) return record;
-
-    // Fallback: keys in the form `t{tableIndex}_r{columnIndex}` used by
-    // the existing JoinDependency eager-load implementation
+    // Check for JoinDependency-style aliases (t{n}_r{n}) first, since
+    // the prefix `t1_` would falsely match generic prefix matching
     const indexMatch = columnAlias.match(/^t(\d+)$/);
     if (indexMatch) {
       const pattern = new RegExp(`^t${indexMatch[1]}_r(\\d+)$`);
-      const columns = this.baseKlass.columnNames();
+      const baseColumns = this.baseKlass.columnNames();
+      const pk = this.baseKlass.primaryKey as string;
+      const columns = pk && !baseColumns.includes(pk) ? [pk, ...baseColumns] : baseColumns;
+      let matched = false;
       for (const [key, value] of Object.entries(row)) {
         const m = key.match(pattern);
         if (m) {
           const colIndex = Number(m[1]);
           const colName = columns[colIndex] ?? `r${m[1]}`;
           record[colName] = value;
+          matched = true;
         }
+      }
+      if (matched) return record;
+    }
+
+    // Generic prefix matching: keys in the form `${columnAlias}_<attr>`
+    const prefix = `${columnAlias}_`;
+    for (const [key, value] of Object.entries(row)) {
+      if (key.startsWith(prefix)) {
+        record[key.slice(prefix.length)] = value;
       }
     }
 

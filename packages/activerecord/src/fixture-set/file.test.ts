@@ -299,6 +299,7 @@ describe("FixtureSet", () => {
   describe("ModelMetadata", () => {
     it("resolves tableName and primaryKey from registered model", () => {
       const fakeModel = { tableName: "widgets", primaryKey: "id" } as any;
+      const prev = modelRegistry.get("Widget");
       modelRegistry.set("Widget", fakeModel);
       try {
         const meta = new ModelMetadata("Widget");
@@ -306,7 +307,11 @@ describe("FixtureSet", () => {
         expect(meta.primaryKeyName).toBe("id");
         expect(meta.className).toBe("Widget");
       } finally {
-        modelRegistry.delete("Widget");
+        if (prev) {
+          modelRegistry.set("Widget", prev);
+        } else {
+          modelRegistry.delete("Widget");
+        }
       }
     });
 

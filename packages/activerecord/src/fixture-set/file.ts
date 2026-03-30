@@ -149,24 +149,15 @@ export class FixtureSet {
     const { rows: rawRows, joinRowsByTable } = this._buildRows(options);
     const rows = this._applyEncryption(rawRows);
     if (rows.length === 0) return;
-    // Trigger any adapter setup (e.g. SchemaAdapter DDL) before the transaction
-    await adapter.execute("SELECT 1");
-    await adapter.beginTransaction();
-    try {
-      await this._insertRows(adapter, rows);
-      for (const [table, batch] of joinRowsByTable) {
-        await this._insertRows(adapter, batch, table);
-      }
-      await adapter.commit();
-    } catch (error) {
-      await adapter.rollback();
-      throw error;
+    await this._insertRows(adapter, rows);
+    for (const [table, batch] of joinRowsByTable) {
+      await this._insertRows(adapter, batch, table);
     }
   }
 
   /**
    * Delete all rows from the fixture's table, then insert fixtures.
-   * Runs as a single atomic transaction.
+   * Callers should wrap in a transaction if atomicity is needed.
    *
    * Mirrors: ActiveRecord::FixtureSet#create_fixtures (truncate + insert)
    */
@@ -186,22 +177,13 @@ export class FixtureSet {
         }
       }
     }
-    // Trigger any adapter setup (e.g. SchemaAdapter DDL) before the transaction
-    await adapter.execute("SELECT 1");
-    await adapter.beginTransaction();
-    try {
-      for (const table of [...joinTablesToClear].sort()) {
-        await adapter.executeMutation(`DELETE FROM ${quoteTableName(table, adapterName)}`);
-      }
-      await adapter.executeMutation(`DELETE FROM ${quotedTable}`);
-      await this._insertRows(adapter, rows);
-      for (const [table, batch] of joinRowsByTable) {
-        await this._insertRows(adapter, batch, table);
-      }
-      await adapter.commit();
-    } catch (error) {
-      await adapter.rollback();
-      throw error;
+    for (const table of [...joinTablesToClear].sort()) {
+      await adapter.executeMutation(`DELETE FROM ${quoteTableName(table, adapterName)}`);
+    }
+    await adapter.executeMutation(`DELETE FROM ${quotedTable}`);
+    await this._insertRows(adapter, rows);
+    for (const [table, batch] of joinRowsByTable) {
+      await this._insertRows(adapter, batch, table);
     }
   }
 

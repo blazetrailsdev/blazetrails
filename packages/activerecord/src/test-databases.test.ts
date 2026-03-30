@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { createAndMigrate, eachDatabase } from "./test-databases.js";
 import { createTestAdapter } from "./test-adapter.js";
+import { SchemaStatements } from "./connection-adapters/abstract/schema-statements.js";
 import type { DatabaseAdapter } from "./adapter.js";
 import type { MigrationProxy } from "./migration.js";
 
@@ -10,9 +11,10 @@ function makeMigration(version: string, name: string): MigrationProxy {
     name,
     migration: () => ({
       up: async (adapter: DatabaseAdapter) => {
-        await adapter.executeMutation(
-          `CREATE TABLE IF NOT EXISTS "${name.toLowerCase()}" ("id" INTEGER PRIMARY KEY)`,
-        );
+        const schema = new SchemaStatements(adapter);
+        await schema.createTable(name.toLowerCase(), {}, (t) => {
+          t.string("label");
+        });
       },
       down: async () => {},
     }),
@@ -30,10 +32,9 @@ describe("TestDatabasesTest", () => {
 
     await createAndMigrate([adapter], migrations);
 
-    const rows = await adapter.execute(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='users'",
-    );
-    expect(rows.length).toBe(1);
+    const schema = new SchemaStatements(adapter);
+    const tables = await schema.tables();
+    expect(tables).toContain("users");
   });
 
   it("eachDatabase iterates all adapters", async () => {

@@ -146,7 +146,8 @@ export class FixtureSet {
     adapter: DatabaseAdapter,
     options: { primaryKey?: string; associations?: ReflectionProxy[] } = {},
   ): Promise<void> {
-    const { rows, joinRowsByTable } = this._buildRows(options);
+    const { rows: rawRows, joinRowsByTable } = this._buildRows(options);
+    const rows = this._applyEncryption(rawRows);
     if (rows.length === 0) return;
     await adapter.beginTransaction();
     try {
@@ -171,7 +172,8 @@ export class FixtureSet {
     adapter: DatabaseAdapter,
     options: { primaryKey?: string; associations?: ReflectionProxy[] } = {},
   ): Promise<void> {
-    const { rows, joinRowsByTable } = this._buildRows(options);
+    const { rows: rawRows, joinRowsByTable } = this._buildRows(options);
+    const rows = this._applyEncryption(rawRows);
     const adapterName = detectAdapterName(adapter);
     const quotedTable = quoteTableName(this.tableName, adapterName);
     const joinTablesToClear = new Set(joinRowsByTable.keys());
@@ -208,10 +210,7 @@ export class FixtureSet {
       data[label] = attrs;
     }
     const tableRows = new TableRows(this.tableName, data, options);
-    let rows = tableRows.toRecords();
-    if (this._encryptedAttributes && this._encrypt) {
-      rows = rows.map((row) => encryptFixtureData(row, this._encryptedAttributes!, this._encrypt!));
-    }
+    const rows = tableRows.toRecords();
     const joinRowsByTable = new Map<string, Array<Record<string, unknown>>>();
     for (const jr of tableRows.joinRows()) {
       let batch = joinRowsByTable.get(jr.table);
@@ -222,6 +221,13 @@ export class FixtureSet {
       batch.push(jr.row);
     }
     return { rows, joinRowsByTable };
+  }
+
+  private _applyEncryption(rows: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+    if (this._encryptedAttributes && this._encrypt) {
+      return rows.map((row) => encryptFixtureData(row, this._encryptedAttributes!, this._encrypt!));
+    }
+    return rows;
   }
 
   private async _insertRows(

@@ -24,11 +24,14 @@ export class UploadedFile {
   private _closed: boolean = false;
 
   constructor(options: UploadedFileOptions = {}) {
+    if (!options.tempfile && options.content == null) {
+      throw new Error("ArgumentError: :tempfile is required");
+    }
     this.originalFilename = options.filename ?? "";
     this.contentType = options.type ?? "application/octet-stream";
     this.headers = options.head ?? "";
     this._tempfile = options.tempfile ?? null;
-    this._content = options.content
+    this._content = options.content != null
       ? Buffer.isBuffer(options.content)
         ? options.content
         : Buffer.from(options.content)
@@ -83,7 +86,7 @@ export class UploadedFile {
   }
 
   /** Close the file handle. */
-  close(): void {
+  close(_unlink?: boolean): void {
     this._closed = true;
   }
 

@@ -238,7 +238,7 @@ export class SQLite3Adapter implements DatabaseAdapter {
       if (/bigint/i.test(lookupKey)) return new BigIntegerType();
       return new IntegerType();
     });
-    map.registerType(/char|clob|text/i, undefined, () => new StringType());
+    map.registerType(/char|clob/i, undefined, () => new StringType());
     map.registerType(/blob/i, undefined, () => new BinaryType());
     map.registerType(/real|floa|doub/i, undefined, () => new FloatType());
     return map;

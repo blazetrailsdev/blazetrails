@@ -10,7 +10,7 @@
 import type { DatabaseAdapter } from "../adapter.js";
 import { quoteIdentifier, quoteTableName } from "../connection-adapters/abstract/quoting.js";
 import { detectAdapterName } from "../adapter-name.js";
-import { type ReflectionProxy } from "./table-row.js";
+import { type ReflectionProxy, HasManyThroughProxy } from "./table-row.js";
 import { TableRows } from "./table-rows.js";
 import { RenderContext } from "./render-context.js";
 import { encryptFixtureData } from "../encryption/encrypted-fixtures.js";
@@ -133,12 +133,7 @@ export class FixtureSet {
       associations?: ReflectionProxy[];
     } = {},
   ): Array<Record<string, unknown>> {
-    const data: Record<string, Record<string, unknown>> = {};
-    for (const [label, attrs] of this._fixtures) {
-      data[label] = attrs;
-    }
-    const tableRows = new TableRows(this.tableName, data, options);
-    return tableRows.toRecords();
+    return this._buildRows(options).rows;
   }
 
   /**
@@ -182,8 +177,8 @@ export class FixtureSet {
     const joinTablesToClear = new Set(joinRowsByTable.keys());
     if (options.associations) {
       for (const assoc of options.associations) {
-        if ("joinTable" in assoc && typeof (assoc as any).joinTable === "string") {
-          joinTablesToClear.add((assoc as any).joinTable);
+        if (assoc instanceof HasManyThroughProxy) {
+          joinTablesToClear.add(assoc.joinTable);
         }
       }
     }

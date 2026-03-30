@@ -9,7 +9,7 @@ import type { MigrationProxy } from "./migration.js";
 import { Migrator } from "./migration.js";
 
 /**
- * Create test databases and run migrations on each.
+ * Run migrations on each test database adapter.
  *
  * Mirrors: ActiveRecord::TestDatabases.create_and_migrate
  */

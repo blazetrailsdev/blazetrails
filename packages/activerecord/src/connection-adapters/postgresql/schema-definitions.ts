@@ -14,8 +14,13 @@ import {
   Table as AbstractTable,
   AlterTable as AbstractAlterTable,
 } from "../abstract/schema-definitions.js";
-import type { ColumnOptions, ColumnType, SchemaStatementsLike } from "../abstract/schema-definitions.js";
+import type {
+  ColumnOptions,
+  ColumnType,
+  SchemaStatementsLike,
+} from "../abstract/schema-definitions.js";
 
+// eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace PostgreSQL {
   export const ADAPTER_NAME = "postgresql" as const;
 }

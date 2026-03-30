@@ -38,6 +38,7 @@ export class Name {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace Utils {
   export function extractSchemaQualifiedName(name: string): Name {
     const parts = splitQuotedIdentifier(name);

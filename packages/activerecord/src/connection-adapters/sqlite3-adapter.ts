@@ -210,11 +210,7 @@ export class SQLite3Adapter implements DatabaseAdapter {
    * Mirrors: ActiveRecord::ConnectionAdapters::SQLite3Adapter#lookup_cast_type
    */
   lookupCastType(sqlType: string): import("@blazetrails/activemodel").Type {
-    const normalized = sqlType
-      .toLowerCase()
-      .replace(/\(.*\)/, "")
-      .trim();
-    return this._nativeTypeMap.lookup(normalized);
+    return this._nativeTypeMap.lookup(sqlType.toLowerCase().trim());
   }
 
   get nativeTypeMap(): TypeMap {

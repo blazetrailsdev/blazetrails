@@ -26,7 +26,7 @@ export class Registration {
     this.name = name;
     this._block = block;
     this.adapter = options?.adapter;
-    this._override = options?.override;
+    this._override = options?.override ?? false;
   }
 
   call(_registry: AdapterSpecificRegistry, ..._args: unknown[]): Type {
@@ -49,8 +49,7 @@ export class Registration {
     const otherPriorityNoAdapter = other.priority & ~1;
     if (
       myPriorityNoAdapter === otherPriorityNoAdapter &&
-      ((this._override === undefined && other.adapter) ||
-        (this.adapter && other._override === undefined))
+      ((!this._override && other.adapter) || (this.adapter && !other._override))
     ) {
       throw new TypeConflictError(
         `Type ${this.name} was registered for all adapters, but shadows a native type with the same name for ${this.adapter ?? other.adapter}`,

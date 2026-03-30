@@ -30,7 +30,6 @@ export { DateTime } from "./type/date-time.js";
 export { Time, TimeValue } from "./type/time.js";
 export { Text } from "./type/text.js";
 export { Json } from "./type/json.js";
-export { Serialized } from "./type/serialized.js";
 export { DecimalWithoutScale } from "./type/decimal-without-scale.js";
 export { TypeMap } from "./type/type-map.js";
 export {
@@ -52,19 +51,19 @@ export const Value = ValueType;
 
 const registry = new AdapterSpecificRegistry();
 
-registry.register("big_integer", BigIntegerType, { override: false });
-registry.register("binary", BinaryType, { override: false });
-registry.register("boolean", BooleanType, { override: false });
-registry.register("date", Date, { override: false });
-registry.register("datetime", DateTime, { override: false });
-registry.register("decimal", DecimalType, { override: false });
-registry.register("float", FloatType, { override: false });
-registry.register("integer", IntegerType, { override: false });
-registry.register("immutable_string", ImmutableStringType, { override: false });
-registry.register("json", Json, { override: false });
-registry.register("string", StringType, { override: false });
-registry.register("text", Text, { override: false });
-registry.register("time", Time, { override: false });
+registry.register("big_integer", BigIntegerType);
+registry.register("binary", BinaryType);
+registry.register("boolean", BooleanType);
+registry.register("date", Date);
+registry.register("datetime", DateTime);
+registry.register("decimal", DecimalType);
+registry.register("float", FloatType);
+registry.register("integer", IntegerType);
+registry.register("immutable_string", ImmutableStringType);
+registry.register("json", Json);
+registry.register("string", StringType);
+registry.register("text", Text);
+registry.register("time", Time);
 
 export { registry };
 

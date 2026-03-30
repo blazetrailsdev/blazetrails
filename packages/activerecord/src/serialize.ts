@@ -1,7 +1,5 @@
 import type { Base } from "./base.js";
 import { Json } from "./type/json.js";
-import { Serialized, type Coder as SerializedCoder } from "./type/serialized.js";
-import { StringType } from "@blazetrails/activemodel";
 
 interface Coder {
   dump(value: unknown): string;
@@ -83,22 +81,11 @@ export function serialize(
     coder = options.coder;
   }
 
-  // Build a Serialized type wrapping the underlying string type with this coder
-  const serializedType = new Serialized(new StringType(), coder as SerializedCoder);
-
   // Store the coder config on the class
   if (!(modelClass as any)._serializedAttributes) {
     (modelClass as any)._serializedAttributes = new Map();
   }
   (modelClass as any)._serializedAttributes.set(attribute, coder);
-  // Also store the Serialized type for use by the type system
-  if (!(modelClass as any)._serializedTypes) {
-    (modelClass as any)._serializedTypes = new Map();
-  }
-  (modelClass as any)._serializedTypes.set(attribute, serializedType);
-
-  // Override writeAttribute to serialize before storing
-  const originalWrite = modelClass.prototype.writeAttribute;
   const originalRead = modelClass.prototype.readAttribute;
 
   // Wrap the readAttribute to deserialize

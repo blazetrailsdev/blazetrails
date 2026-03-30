@@ -35,7 +35,10 @@ export namespace DescendantsTracker {
 
     delete(object: T): void {
       this._map.delete(object);
-      this._refs = this._refs.filter((ref) => ref.deref() !== object);
+      this._refs = this._refs.filter((ref) => {
+        const obj = ref.deref();
+        return obj !== undefined && obj !== object;
+      });
     }
 
     toArray(): T[] {

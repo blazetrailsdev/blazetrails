@@ -30,20 +30,22 @@ export class Builder {
     }
 
     const firstLine = content.split("\n")[0];
-    if (firstLine.startsWith("#") && firstLine.includes("\\")) {
+    if (firstLine.startsWith("#\\")) {
       throw new Error(
-        "Parsing options from the first comment line is no longer supported, use a '#\\ -s RackServer' style option in your config file instead.",
+        "Parsing options from the first comment line is no longer supported. Remove the '#\\ ...' line or configure server options elsewhere.",
       );
     }
 
-    const endIndex = content.indexOf("__END__");
-    if (endIndex !== -1) {
-      content = content.substring(0, endIndex);
+    const endMatch = content.match(/^__END__\s*$/m);
+    if (endMatch && typeof endMatch.index === "number") {
+      content = content.substring(0, endMatch.index);
     }
 
     return Builder.newFromString(content, path);
   }
 
+  // Mirrors Rack::Builder.new_from_string which uses eval. Input must be trusted
+  // config content (from files on disk), not user-supplied strings.
   static newFromString(content: string, _file?: string): RackApp {
     const builder = new Builder();
     const configFn = new Function("builder", content);

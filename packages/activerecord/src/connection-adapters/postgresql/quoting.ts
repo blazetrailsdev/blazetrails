@@ -57,10 +57,11 @@ export function quotedTimeUtc(date: Date): string {
 export function quoteTableName(name: string): string {
   return splitSchemaQualifiedName(name)
     .map((part) => {
-      if (part.startsWith('"') && part.endsWith('"') && part.length >= 2) {
-        return part;
-      }
-      return `"${part.replace(/"/g, '""')}"`;
+      const unquoted =
+        part.startsWith('"') && part.endsWith('"') && part.length >= 2
+          ? part.slice(1, -1).replace(/""/g, '"')
+          : part;
+      return `"${unquoted.replace(/"/g, '""')}"`;
     })
     .join(".");
 }

@@ -34,16 +34,17 @@ delegating to the specified evaluation method (default: `toArray`).
 Uses `Object.defineProperties` with `enumerable: false` to keep protocol
 methods out of `Object.keys()` and `for...in` loops.
 
-## The `stripThenable` Escape Hatch
+## `stripThenable` — Internal Escape Hatch
 
-Async generators `yield` and `Promise.resolve()` both unwrap thenables.
-This causes problems when a method intentionally returns a relation
-instance (e.g., `load()`, `reload()`, `presence()`, `inBatches()`).
+JavaScript unwraps thenables everywhere in async contexts: `yield` in async
+generators, `return` from async functions, `Promise.resolve()`. This causes
+problems when a method intentionally returns a relation instance rather than
+evaluating it (e.g., `load()`, `reload()`, `presence()`, `inBatches()`).
 
-`stripThenable(obj)` shadows `.then` with a non-callable sentinel object on
-the instance, preventing unwrapping while preserving all other methods. A
-`queueMicrotask` callback restores awaitability after the async boundary
-(only if the property is still the sentinel). Used in:
+`stripThenable(obj)` shadows `.then` with `undefined` on the instance,
+preventing unwrapping. This is permanent — the instance is no longer
+directly awaitable, but all other methods (`.toArray()`, `.where()`, etc.)
+still work. Used internally in:
 
 - `Relation.load()` / `Relation.reload()` — return `this` without unwrapping
 - `Relation.presence()` — return `this` without unwrapping
@@ -57,13 +58,6 @@ the instance, preventing unwrapping while preserving all other methods. A
 | `Relation<T>`        | `T[]`       | `toArray()`       |
 | `CollectionProxy`    | `Base[]`    | `toArray()`       |
 | `BatchEnumerator<T>` | `T[]`       | `toArray()`       |
-
-## Caveat: Thenable Detection
-
-Any code that checks `typeof x.then === "function"` to detect async values
-will now treat relations as thenables. This is generally harmless but worth
-knowing about. If a relation is passed to an API that must not await it,
-call `stripThenable(relation)` before passing.
 
 ## Key Behaviors
 

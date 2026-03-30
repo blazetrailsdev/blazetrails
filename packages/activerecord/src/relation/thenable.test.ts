@@ -123,19 +123,6 @@ describe("Thenable", () => {
     expect(present).toBeNull();
   });
 
-  it("relation remains awaitable after load()", async () => {
-    await ThenableUser.create({ name: "Alice", active: 1 });
-
-    const rel = ThenableUser.where({ active: 1 });
-    await rel.load();
-
-    // After queueMicrotask restores .then, the relation should be awaitable again
-    await new Promise<void>((r) => queueMicrotask(r));
-    const users = await rel;
-    expect(Array.isArray(users)).toBe(true);
-    expect(users).toHaveLength(1);
-  });
-
   describe("CollectionProxy", () => {
     let ThenablePost: typeof Base;
     let ThenableComment: typeof Base;

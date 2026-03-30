@@ -39,7 +39,6 @@ export {
   touchBelongsToParents,
 } from "./associations.js";
 export { CollectionProxy } from "./associations/collection-proxy.js";
-export { stripThenable } from "./relation/thenable.js";
 export type { AssociationOptions } from "./associations.js";
 export { Transaction } from "./connection-adapters/abstract/transaction.js";
 export { transaction, savepoint, currentTransaction } from "./transactions.js";

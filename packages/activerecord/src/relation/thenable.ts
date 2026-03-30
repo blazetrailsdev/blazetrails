@@ -6,36 +6,22 @@
  * the PromiseLike protocol so `await relation` triggers evaluation.
  *
  * Mirrors how Rails relations implicitly evaluate when iterated.
- *
- * Caveat: any generic `typeof x.then === "function"` checks will treat
- * these objects as thenables. Use {@link stripThenable} to opt an instance
- * out before passing it to APIs that must not await it.
  */
 
 /**
- * Temporarily shadow `.then` on a specific instance so that `yield` in an
- * async generator or `resolve()` in a Promise does not unwrap it.
+ * Shadow `.then` on a specific instance so that `yield` in an async
+ * generator or `resolve()` in a Promise does not unwrap it.
  *
- * Async generators call `Await` on yielded values, which resolves
- * thenables. This prevents that for objects that should be yielded/resolved
- * as-is (e.g., Relation instances from inBatches, load, presence).
- *
- * The shadow is removed via queueMicrotask so the instance regains
- * awaitability after it has safely crossed the async boundary.
+ * JavaScript unwraps thenables everywhere in async contexts — yield,
+ * return from async functions, Promise.resolve(). This shadows `.then`
+ * with `undefined` on the instance to prevent that for objects returned
+ * as `this` (load, reload, presence) or yielded (inBatches).
  */
 export function stripThenable<T extends object>(obj: T): T {
-  const sentinel = {};
   Object.defineProperty(obj, "then", {
-    value: sentinel,
+    value: undefined,
     writable: true,
     configurable: true,
-  });
-  queueMicrotask(() => {
-    // Only restore if the property is still our sentinel
-    const desc = Object.getOwnPropertyDescriptor(obj, "then");
-    if (desc && desc.value === sentinel) {
-      delete (obj as any).then;
-    }
   });
   return obj;
 }

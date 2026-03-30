@@ -43,18 +43,23 @@ export class ShowExceptions {
       }
 
       env["action_dispatch.exception"] = err;
-      env["action_dispatch.original_path"] = env["PATH_INFO"];
+      const originalPath = env["PATH_INFO"];
+      env["action_dispatch.original_path"] = originalPath;
       env["PATH_INFO"] = `/${wrapper.statusCode}`;
 
       try {
-        const response = await this.exceptionsApp(env);
-        const cascade = response[1]["x-cascade"] ?? response[1]["X-Cascade"];
-        if (cascade === "pass") {
-          return [wrapper.statusCode, { "content-type": "text/plain" }, bodyFromString("")];
+        try {
+          const response = await this.exceptionsApp(env);
+          const cascade = response[1]["x-cascade"] ?? response[1]["X-Cascade"];
+          if (cascade === "pass") {
+            return [wrapper.statusCode, { "content-type": "text/plain" }, bodyFromString("")];
+          }
+          return response;
+        } catch {
+          return this.failsafeResponse(wrapper);
         }
-        return response;
-      } catch {
-        return this.failsafeResponse(wrapper);
+      } finally {
+        env["PATH_INFO"] = originalPath;
       }
     }
   }

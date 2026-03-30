@@ -101,12 +101,12 @@ export class ExceptionWrapper {
     return ExceptionWrapper.rescueResponse(this.exceptionName);
   }
 
-  /** Extract source fragments from the backtrace. */
-  get sourceExtracts(): Array<{ code: string; line: number }> {
+  /** Extract file paths and line numbers from the backtrace. */
+  get sourceExtracts(): Array<{ file: string; line: number }> {
     return this.traces.map((trace) => {
       const match = trace.match(/\((.+):(\d+):\d+\)/) ?? trace.match(/at\s+(.+):(\d+):\d+/);
-      if (!match) return { code: trace, line: 0 };
-      return { code: match[1], line: parseInt(match[2], 10) };
+      if (!match) return { file: trace, line: 0 };
+      return { file: match[1], line: parseInt(match[2], 10) };
     });
   }
 

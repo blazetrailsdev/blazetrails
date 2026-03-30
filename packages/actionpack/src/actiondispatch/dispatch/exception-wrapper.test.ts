@@ -11,7 +11,7 @@ describe("ExceptionWrapperTest", () => {
     const extracts = wrapper.sourceExtracts;
     expect(extracts.length).toBeGreaterThan(0);
     for (const extract of extracts) {
-      expect(extract).toHaveProperty("code");
+      expect(extract).toHaveProperty("file");
       expect(extract).toHaveProperty("line");
     }
   });

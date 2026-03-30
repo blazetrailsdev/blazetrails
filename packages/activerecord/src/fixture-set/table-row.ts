@@ -131,7 +131,12 @@ export class TableRow {
     if (raw === undefined) return;
 
     // Normalize to array: single string becomes [string]
-    const labels: unknown[] = typeof raw === "string" ? [raw] : Array.isArray(raw) ? raw : [];
+    if (typeof raw !== "string" && !Array.isArray(raw)) {
+      throw new Error(
+        `Fixture "${this.label}": expected string or array for has_many :through association "${assoc.name}", got ${typeof raw}`,
+      );
+    }
+    const labels: unknown[] = typeof raw === "string" ? [raw] : raw;
 
     for (const label of labels) {
       if (typeof label !== "string" || label === "") continue;

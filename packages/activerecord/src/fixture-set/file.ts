@@ -181,10 +181,10 @@ export class FixtureSet {
     const quotedTable = quoteTableName(this.tableName, adapterName);
     await adapter.beginTransaction();
     try {
-      await adapter.executeMutation(`DELETE FROM ${quotedTable}`);
-      for (const [table] of joinRowsByTable) {
+      for (const table of [...joinRowsByTable.keys()].sort()) {
         await adapter.executeMutation(`DELETE FROM ${quoteTableName(table, adapterName)}`);
       }
+      await adapter.executeMutation(`DELETE FROM ${quotedTable}`);
       await this._insertRows(adapter, rows);
       for (const [table, batch] of joinRowsByTable) {
         await this._insertRows(adapter, batch, table);

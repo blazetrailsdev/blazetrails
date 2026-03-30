@@ -219,18 +219,20 @@ export {
   CallbackChain,
   CallbackSequence,
   Callbacks,
-  Before,
-  After,
-  Around,
-  Value,
-  MethodCall,
-  ObjectCall,
-  InstanceExec0,
-  InstanceExec1,
-  InstanceExec2,
-  ProcCall,
+  Filters,
+  Conditionals,
+  CallTemplate,
+  _Before as Before,
+  _After as After,
+  _Around as Around,
+  _Value as Value,
+  _MethodCall as MethodCall,
+  _ObjectCall as ObjectCall,
+  _InstanceExec0 as InstanceExec0,
+  _InstanceExec1 as InstanceExec1,
+  _InstanceExec2 as InstanceExec2,
+  _ProcCall as ProcCall,
 } from "./callbacks.js";
-export { Filters, Conditionals, CallTemplate } from "./callbacks.js";
 export type { ClassMethods } from "./callbacks.js";
 export { Concern, MultipleIncludedBlocks, MultiplePrependBlocks } from "./concern.js";
 export { ClassAttribute } from "./class-attribute.js";

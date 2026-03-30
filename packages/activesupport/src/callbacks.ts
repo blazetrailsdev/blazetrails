@@ -41,13 +41,19 @@ export class Callback {
     return true;
   }
 
-  apply(target: any): boolean {
+  apply(target: any, block?: () => void): boolean {
     if (!Conditionals.Value.check(this.options, target)) return true;
 
     if (this.kind === "before") {
       return (this.filter as BeforeCallback)(target) !== false;
     } else if (this.kind === "after") {
       (this.filter as AfterCallback)(target);
+      return true;
+    } else if (this.kind === "around") {
+      if (!block) {
+        throw new Error("Around callbacks require a block/next function");
+      }
+      (this.filter as AroundCallback)(target, block);
       return true;
     }
     return true;

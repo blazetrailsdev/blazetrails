@@ -11,12 +11,22 @@ export namespace DescendantsTracker {
   export class WeakSet<T extends object> {
     private _map = new globalThis.WeakMap<T, boolean>();
     private _refs: WeakRef<T>[] = [];
+    private _addsSinceCompact = 0;
 
     add(object: T): void {
       if (!this._map.has(object)) {
         this._map.set(object, true);
         this._refs.push(new WeakRef(object));
+        this._addsSinceCompact++;
+        if (this._addsSinceCompact >= 100) {
+          this._compact();
+        }
       }
+    }
+
+    private _compact(): void {
+      this._refs = this._refs.filter((ref) => ref.deref() !== undefined);
+      this._addsSinceCompact = 0;
     }
 
     has(object: T): boolean {

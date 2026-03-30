@@ -36,7 +36,7 @@ export namespace Concern {
   }
 
   export function include(klass: any, mixin: ConcernMixin): void {
-    if (!klass[INCLUDED_CONCERNS]) {
+    if (!Object.prototype.hasOwnProperty.call(klass, INCLUDED_CONCERNS)) {
       klass[INCLUDED_CONCERNS] = new Set<ConcernMixin>();
     }
     const included: Set<ConcernMixin> = klass[INCLUDED_CONCERNS];
@@ -68,12 +68,16 @@ export namespace Concern {
       }
     }
 
-    if (def.included) {
-      def.included(klass);
+    const includedBlock = def.included ?? klass[INCLUDED_BLOCK];
+    if (includedBlock) {
+      includedBlock(klass);
     }
 
-    if (def.prepend && def.prepended) {
-      def.prepended(klass);
+    if (def.prepend) {
+      const prependedBlock = def.prepended ?? klass[PREPENDED_BLOCK];
+      if (prependedBlock) {
+        prependedBlock(klass);
+      }
     }
   }
 

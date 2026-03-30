@@ -374,6 +374,14 @@ describe("Migrations", () => {
       expect(sql).not.toContain("AUTOINCREMENT");
     });
 
+    it("supports id: uuid option for mysql", () => {
+      const td = new TableDefinition("accounts", { id: "uuid", adapterName: "mysql" });
+      td.string("name");
+      const sql = td.toSql();
+      expect(sql).toContain("CHAR(36) PRIMARY KEY");
+      expect(sql).not.toContain("AUTO_INCREMENT");
+    });
+
     it("supports id: false option", () => {
       const td = new TableDefinition("join_table", { id: false });
       td.integer("user_id");

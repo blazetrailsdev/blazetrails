@@ -147,6 +147,7 @@ describe("ControllerGeneratorTest", () => {
     const routes = readFile("src/config/routes.ts");
     expect(routes).toContain('router.namespace("admin"');
     expect(routes).toContain('router.namespace("api"');
+    expect(routes).toMatch(/router\.namespace\("admin"[\s\S]*router\.namespace\("api"/);
     expect(routes).toContain('router.get("/dashboard/index", "dashboard#index")');
   });
 

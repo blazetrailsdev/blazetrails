@@ -350,12 +350,9 @@ const users = await User.where({ name: "Alice" })
       </g>
 
       <!-- ===== BLAZETRAILS WORDMARK ===== -->
-
-      <!-- "Blaze" — fiery -->
-      <text x="580" y="380" font-family="Inter, system-ui, sans-serif" font-size="108" font-weight="800" letter-spacing="-2" fill="url(#fireGrad)" filter="url(#fireGlow)">Blaze</text>
-
-      <!-- "Trails" — forest green -->
-      <text x="925" y="380" font-family="Inter, system-ui, sans-serif" font-size="108" font-weight="800" letter-spacing="-2" fill="#6b9e50">Trails</text>
+      <text x="800" y="380" font-family="Inter, system-ui, sans-serif" font-size="108" font-weight="800" letter-spacing="-2" text-anchor="middle">
+        <tspan fill="url(#fireGrad)" filter="url(#fireGlow)">Blaze</tspan><tspan fill="#6b9e50">Trails</tspan>
+      </text>
 
       <!-- Tagline -->
       <text x="800" y="430" font-family="Inter, system-ui, sans-serif" font-size="22" font-weight="500" fill="#c8b890" text-anchor="middle" opacity="0.9">The Rails API, in TypeScript.</text>

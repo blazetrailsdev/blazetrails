@@ -30,7 +30,12 @@ function getStore(target: any): AttrStore {
  * Reads walk the prototype chain; writes are local to the class/instance.
  */
 export namespace ClassAttribute {
-  export function redefine(owner: any, name: string, namespacedName: string, value: unknown): void {
+  export function redefine(
+    owner: any,
+    _name: string,
+    namespacedName: string,
+    value: unknown,
+  ): void {
     const store = getStore(owner);
     store.values.set(namespacedName, value);
   }

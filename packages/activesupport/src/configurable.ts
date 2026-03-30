@@ -51,7 +51,9 @@ export namespace Configurable {
 
     for (const name of names) {
       if (!VALID_NAME.test(name)) {
-        throw new Error("invalid config attribute name");
+        throw new Error(
+          `invalid config attribute name: "${name}". Expected name to match ${VALID_NAME.toString()}`,
+        );
       }
 
       Object.defineProperty(klass, name, {
@@ -65,21 +67,35 @@ export namespace Configurable {
         enumerable: false,
       });
 
-      if (klass.prototype && (addInstanceReader || addInstanceWriter)) {
-        Object.defineProperty(klass.prototype, name, {
-          get: addInstanceReader
-            ? function (this: any) {
-                return Configurable.getInstanceConfig(this).get(name);
-              }
-            : undefined,
-          set: addInstanceWriter
-            ? function (this: any, value: unknown) {
-                Configurable.getInstanceConfig(this).set(name, value);
-              }
-            : undefined,
-          configurable: true,
-          enumerable: false,
-        });
+      if (klass.prototype) {
+        if (addInstanceReader && addInstanceWriter) {
+          Object.defineProperty(klass.prototype, name, {
+            get() {
+              return Configurable.getInstanceConfig(this).get(name);
+            },
+            set(value: unknown) {
+              Configurable.getInstanceConfig(this).set(name, value);
+            },
+            configurable: true,
+            enumerable: false,
+          });
+        } else if (addInstanceReader) {
+          Object.defineProperty(klass.prototype, name, {
+            get() {
+              return Configurable.getInstanceConfig(this).get(name);
+            },
+            configurable: true,
+            enumerable: false,
+          });
+        } else if (addInstanceWriter) {
+          Object.defineProperty(klass.prototype, `${name}=`, {
+            value(this: any, value: unknown) {
+              Configurable.getInstanceConfig(this).set(name, value);
+            },
+            configurable: true,
+            enumerable: false,
+          });
+        }
       }
 
       if ("default" in options) {

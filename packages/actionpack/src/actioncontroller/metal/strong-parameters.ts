@@ -660,6 +660,10 @@ export class Parameters {
             if (item instanceof Parameters) {
               return item._permitFilters(v as (string | Record<string, unknown>)[]);
             }
+            if (isPlainObject(item)) {
+              const nestedParams = new Parameters(item as Record<string, unknown>);
+              return nestedParams._permitFilters(v as (string | Record<string, unknown>)[]);
+            }
             return item;
           });
         } else {
@@ -669,6 +673,10 @@ export class Parameters {
         if (Array.isArray(v) && v.length === 0) {
           // empty hash spec — permit arbitrary hash
           params._data[k] = val;
+        } else if (Array.isArray(v)) {
+          const nestedParams = new Parameters(val as Record<string, unknown>);
+          nestedParams._permitted = this._permitted;
+          params._data[k] = nestedParams._permitFilters(v as (string | Record<string, unknown>)[]);
         } else {
           params._data[k] = val;
         }

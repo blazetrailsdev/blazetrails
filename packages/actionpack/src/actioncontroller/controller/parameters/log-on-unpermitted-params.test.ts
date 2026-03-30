@@ -43,7 +43,7 @@ describe("LogOnUnpermittedParamsTest", () => {
     const inner = new Parameters({ title: "Hi", admin: true });
     const params = new Parameters({ post: inner });
     params.expect({ post: ["title"] });
-    // expect uses the same permit internally, so it may log the top-level key
+    expect(spy).not.toHaveBeenCalledWith(expect.stringContaining("admin"));
   });
 
   it("does not log on unexpected nested params with expect!", () => {
@@ -52,6 +52,7 @@ describe("LogOnUnpermittedParamsTest", () => {
     const inner = new Parameters({ title: "Hi", admin: true });
     const params = new Parameters({ post: inner });
     params.expectBang({ post: ["title"] });
+    expect(spy).not.toHaveBeenCalled();
   });
 
   it("logs on unexpected param with deep_dup", () => {

@@ -66,7 +66,7 @@ function isBlank(value: unknown): boolean {
   if (typeof value === "string" && value.trim() === "") return true;
   if (Array.isArray(value) && value.length === 0) return true;
   if (value instanceof Parameters) return value.empty;
-  if (typeof value === "object" && value !== null && Object.keys(value).length === 0) return true;
+  if (isPlainObject(value) && Object.keys(value).length === 0) return true;
   return false;
 }
 

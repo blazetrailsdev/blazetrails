@@ -57,9 +57,10 @@ const XML_NAME_FOLLOWING =
 export function xmlNameEscape(name: string): string {
   if (!name || name.length === 0) return "";
 
-  const chars: string[] = [XML_NAME_START.test(name[0]) ? name[0] : "_"];
-  for (let i = 1; i < name.length; i++) {
-    chars.push(XML_NAME_FOLLOWING.test(name[i]) ? name[i] : "_");
+  const codePoints = [...name];
+  const chars: string[] = [XML_NAME_START.test(codePoints[0]) ? codePoints[0] : "_"];
+  for (let i = 1; i < codePoints.length; i++) {
+    chars.push(XML_NAME_FOLLOWING.test(codePoints[i]) ? codePoints[i] : "_");
   }
   return chars.join("");
 }

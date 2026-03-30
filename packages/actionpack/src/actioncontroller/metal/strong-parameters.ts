@@ -867,17 +867,15 @@ function deepEqualValue(a: unknown, b: unknown): boolean {
   }
   if (Array.isArray(a) || Array.isArray(b)) return false;
 
-  if (typeof a === "object" && typeof b === "object") {
-    const objA = a as Record<string, unknown>;
-    const objB = b as Record<string, unknown>;
-    const keysA = Object.keys(objA).sort();
-    const keysB = Object.keys(objB).sort();
+  if (isPlainObject(a) && isPlainObject(b)) {
+    const keysA = Object.keys(a).sort();
+    const keysB = Object.keys(b).sort();
     if (keysA.length !== keysB.length) return false;
     for (let i = 0; i < keysA.length; i++) {
       if (keysA[i] !== keysB[i]) return false;
     }
     for (const key of keysA) {
-      if (!deepEqualValue(objA[key], objB[key])) return false;
+      if (!deepEqualValue(a[key], b[key])) return false;
     }
     return true;
   }

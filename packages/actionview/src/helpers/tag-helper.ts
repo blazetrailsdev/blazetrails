@@ -238,8 +238,19 @@ function tagOption(key: string, value: unknown, escape: boolean): string {
 
 function prefixTagOption(prefix: string, key: string, value: unknown, escape: boolean): string {
   const dasherizedKey = `${prefix}-${dasherize(String(key))}`;
-  if (typeof value !== "string" && !(value instanceof SafeBuffer) && typeof value !== "symbol") {
-    value = JSON.stringify(value);
+  if (typeof value === "string" || value instanceof SafeBuffer || typeof value === "symbol") {
+    // Pass through as-is
+  } else if (
+    Array.isArray(value) ||
+    (typeof value === "object" && value !== null && !(value instanceof RegExp))
+  ) {
+    try {
+      value = JSON.stringify(value);
+    } catch {
+      value = String(value);
+    }
+  } else {
+    value = String(value);
   }
   return tagOption(dasherizedKey, value, escape);
 }

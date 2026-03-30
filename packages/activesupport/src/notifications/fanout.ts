@@ -68,9 +68,11 @@ class RegExpMatcher implements Matcher {
   private exclusions = new Set<string>();
   constructor(readonly pattern: RegExp) {}
   matches(name: string): boolean {
+    this.pattern.lastIndex = 0;
     return this.pattern.test(name) && !this.exclusions.has(name);
   }
   unsubscribe(name: string): void {
+    this.pattern.lastIndex = 0;
     if (this.pattern.test(name)) {
       this.exclusions.add(name);
     }

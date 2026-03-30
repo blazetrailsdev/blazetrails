@@ -12,5 +12,5 @@ import type { SerializeOptions } from "../serialization.js";
  */
 export interface JSON {
   asJson(options?: SerializeOptions): Record<string, unknown>;
-  fromJson(json: string, includeRoot?: boolean): unknown;
+  fromJson(json: string, includeRoot?: boolean): this;
 }

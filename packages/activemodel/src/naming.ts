@@ -11,41 +11,40 @@ export interface Naming {
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace Naming {
-  export function plural(recordOrClass: { modelName: ModelName } | ModelName): string {
-    const mn = recordOrClass instanceof ModelName ? recordOrClass : recordOrClass.modelName;
-    return mn.plural;
+  type RecordOrClass =
+    | ModelName
+    | { modelName: ModelName }
+    | { constructor: { modelName: ModelName } };
+
+  export function modelNameFromRecordOrClass(recordOrClass: RecordOrClass): ModelName {
+    if (recordOrClass instanceof ModelName) return recordOrClass;
+    if ("modelName" in recordOrClass) return recordOrClass.modelName;
+    return (recordOrClass.constructor as { modelName: ModelName }).modelName;
   }
 
-  export function singular(recordOrClass: { modelName: ModelName } | ModelName): string {
-    const mn = recordOrClass instanceof ModelName ? recordOrClass : recordOrClass.modelName;
-    return mn.singular;
+  export function plural(recordOrClass: RecordOrClass): string {
+    return modelNameFromRecordOrClass(recordOrClass).plural;
   }
 
-  export function isUncountable(recordOrClass: { modelName: ModelName } | ModelName): boolean {
-    const mn = recordOrClass instanceof ModelName ? recordOrClass : recordOrClass.modelName;
+  export function singular(recordOrClass: RecordOrClass): string {
+    return modelNameFromRecordOrClass(recordOrClass).singular;
+  }
+
+  export function isUncountable(recordOrClass: RecordOrClass): boolean {
+    const mn = modelNameFromRecordOrClass(recordOrClass);
     return mn.singular === mn.plural;
   }
 
-  export function singularRouteKey(recordOrClass: { modelName: ModelName } | ModelName): string {
-    const mn = recordOrClass instanceof ModelName ? recordOrClass : recordOrClass.modelName;
-    return mn.singular;
+  export function singularRouteKey(recordOrClass: RecordOrClass): string {
+    return modelNameFromRecordOrClass(recordOrClass).singular;
   }
 
-  export function routeKey(recordOrClass: { modelName: ModelName } | ModelName): string {
-    const mn = recordOrClass instanceof ModelName ? recordOrClass : recordOrClass.modelName;
-    return mn.routeKey;
+  export function routeKey(recordOrClass: RecordOrClass): string {
+    return modelNameFromRecordOrClass(recordOrClass).routeKey;
   }
 
-  export function paramKey(recordOrClass: { modelName: ModelName } | ModelName): string {
-    const mn = recordOrClass instanceof ModelName ? recordOrClass : recordOrClass.modelName;
-    return mn.paramKey;
-  }
-
-  export function modelNameFromRecordOrClass(
-    recordOrClass: { modelName: ModelName } | { constructor: { modelName: ModelName } },
-  ): ModelName {
-    if ("modelName" in recordOrClass) return recordOrClass.modelName;
-    return (recordOrClass.constructor as { modelName: ModelName }).modelName;
+  export function paramKey(recordOrClass: RecordOrClass): string {
+    return modelNameFromRecordOrClass(recordOrClass).paramKey;
   }
 }
 import { I18n } from "./i18n.js";

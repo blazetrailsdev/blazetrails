@@ -42,7 +42,6 @@ export const deprecator = new Deprecator();
  * In Rails, ActiveModel.deprecator is defined in deprecator.rb,
  * so the Ruby API extractor assigns the ActiveModel module to this file.
  */
-// eslint-disable-next-line @typescript-eslint/no-namespace
-export namespace ActiveModel {
-  export const dep = deprecator;
+export interface ActiveModel {
+  readonly deprecator: Deprecator;
 }

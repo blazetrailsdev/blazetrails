@@ -39,11 +39,15 @@ export namespace AttrNames {
     writer: boolean = false,
   ): { methodName: string; attrNameRef: string } {
     const methodName = writer ? `${attrName}=` : attrName;
-    // eslint-disable-next-line no-control-regex
-    if (/^[\x00-\x7F]*$/.test(attrName) && DEF_SAFE_NAME.test(attrName)) {
+    if (DEF_SAFE_NAME.test(attrName)) {
       return { methodName, attrNameRef: `'${attrName}'` };
     }
-    return { methodName, attrNameRef: `'${attrName}'` };
+    const escaped = attrName
+      .replace(/\\/g, "\\\\")
+      .replace(/'/g, "\\'")
+      .replace(/\r/g, "\\r")
+      .replace(/\n/g, "\\n");
+    return { methodName, attrNameRef: `'${escaped}'` };
   }
 }
 

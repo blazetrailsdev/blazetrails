@@ -57,7 +57,13 @@ export class AcceptsMultiparameterTime {
   private castFromMultiparameter(hash: Record<string, unknown>): unknown {
     const parts = Object.keys(hash)
       .sort((a, b) => Number(a) - Number(b))
-      .map((k) => Number(hash[k]) || 0);
+      .map((k) => {
+        const v = hash[k];
+        if (v === undefined || v === null || v === "") return 0;
+        return typeof v === "number" ? v : Number(v);
+      });
+
+    if (parts.some((p) => Number.isNaN(p))) return null;
 
     const [year = 0, month = 1, day = 1, hour = 0, minute = 0, second = 0] = parts;
     if (year === 0 && month <= 1 && day <= 1) return null;

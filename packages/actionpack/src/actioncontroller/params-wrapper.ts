@@ -99,7 +99,7 @@ export function applyParamsWrapper(
 
   // Collect wrappable keys
   const wrapped: Record<string, unknown> = {};
-  const original = params._toRawHash();
+  const original = params.toUnsafeHash();
 
   for (const [k, v] of Object.entries(original)) {
     if (config.exclude.has(k)) continue;

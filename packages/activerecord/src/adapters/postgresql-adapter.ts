@@ -687,7 +687,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
   async createTable(
     tableName: string,
     callback: (t: SimpleTableBuilder) => void,
-    options: { id?: boolean | string } = {},
+    options: { id?: boolean | "uuid" | "bigint" | "integer" } = {},
   ): Promise<void> {
     const table = new SimpleTableBuilder();
     if (options.id !== false) {

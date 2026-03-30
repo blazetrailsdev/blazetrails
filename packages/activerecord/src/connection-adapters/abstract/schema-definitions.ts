@@ -21,6 +21,8 @@ export type ColumnType =
   | "primary_key"
   | "uuid";
 
+export type PrimaryKeyType = "uuid" | "bigint" | "integer";
+
 export type ReferentialAction = "cascade" | "nullify" | "restrict" | "no_action";
 
 /**
@@ -240,12 +242,12 @@ export class TableDefinition {
   readonly tableName: string;
   readonly columns: ColumnDefinition[] = [];
   readonly indexes: IndexDefinition[] = [];
-  private _id: boolean | string;
+  private _id: boolean | PrimaryKeyType;
   private _adapterName: "sqlite" | "postgres" | "mysql";
 
   constructor(
     tableName: string,
-    options: { id?: boolean | string; adapterName?: "sqlite" | "postgres" | "mysql" } = {},
+    options: { id?: boolean | PrimaryKeyType; adapterName?: "sqlite" | "postgres" | "mysql" } = {},
   ) {
     this.tableName = tableName;
     this._adapterName = options.adapterName ?? "sqlite";

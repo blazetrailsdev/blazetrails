@@ -886,6 +886,53 @@ describe("Rails-guided: migrations", () => {
     expect(await adapter.execute(`SELECT * FROM "widgets"`)).toHaveLength(0);
   });
 
+  it("reversible removeColumn with type auto-reverses", async () => {
+    await adapter.executeMutation(
+      `CREATE TABLE "articles" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "title" VARCHAR(255), "body" TEXT)`,
+    );
+
+    class RemoveBodyFromArticles extends Migration {
+      async change() {
+        await this.removeColumn("articles", "body", "text");
+      }
+    }
+    const m = new RemoveBodyFromArticles();
+    await m.run(adapter, "up");
+
+    const colsAfterUp = await adapter.execute(`SELECT name FROM pragma_table_info('articles')`);
+    expect(colsAfterUp.map((r: any) => r.name)).not.toContain("body");
+
+    await m.run(adapter, "down");
+    const colsAfterDown = await adapter.execute(`SELECT name FROM pragma_table_info('articles')`);
+    expect(colsAfterDown.map((r: any) => r.name)).toContain("body");
+  });
+
+  it("reversible removeIndex with column auto-reverses", async () => {
+    await adapter.executeMutation(
+      `CREATE TABLE "products" ("id" INTEGER PRIMARY KEY AUTOINCREMENT, "sku" VARCHAR(255))`,
+    );
+    await adapter.executeMutation(`CREATE INDEX "index_products_on_sku" ON "products" ("sku")`);
+
+    class RemoveSkuIndex extends Migration {
+      async change() {
+        await this.removeIndex("products", { column: "sku" });
+      }
+    }
+    const m = new RemoveSkuIndex();
+    await m.run(adapter, "up");
+
+    const idxAfterUp = await adapter.execute(
+      `SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='products' AND name='index_products_on_sku'`,
+    );
+    expect(idxAfterUp).toHaveLength(0);
+
+    await m.run(adapter, "down");
+    const idxAfterDown = await adapter.execute(
+      `SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='products' AND name='index_products_on_sku'`,
+    );
+    expect(idxAfterDown).toHaveLength(1);
+  });
+
   it("MigrationRunner runs and rolls back", async () => {
     class CreateUsers extends Migration {
       static version = "20240101";

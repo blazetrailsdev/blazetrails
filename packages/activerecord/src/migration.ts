@@ -260,11 +260,15 @@ export abstract class Migration {
         break;
       }
       case "removeIndex": {
-        const riOpts = args[1] as { column?: string | string[] } | undefined;
+        const riOpts = args[1] as { column?: string | string[]; name?: string } | undefined;
         if (!riOpts?.column) {
           throw new IrreversibleMigration("Cannot reverse removeIndex without column info");
         }
-        await this.addIndex(args[0] as string, riOpts.column);
+        if (riOpts.name) {
+          await this.addIndex(args[0] as string, riOpts.column, { name: riOpts.name });
+        } else {
+          await this.addIndex(args[0] as string, riOpts.column);
+        }
         break;
       }
       case "renameColumn":
@@ -337,7 +341,7 @@ export abstract class Migration {
   async createTable(
     name: string,
     optionsOrFn?:
-      | { id?: boolean | string; force?: boolean; ifNotExists?: boolean }
+      | { id?: boolean | "uuid" | "bigint" | "integer"; force?: boolean; ifNotExists?: boolean }
       | ((t: TableDefinition) => void),
     fn?: (t: TableDefinition) => void,
   ): Promise<void> {
@@ -832,7 +836,7 @@ export class MigrationContext {
       primaryKey?: string | false;
       force?: boolean;
       ifNotExists?: boolean;
-      id?: boolean | string;
+      id?: boolean | "uuid" | "bigint" | "integer";
     },
     fn?: (t: TableDefinition) => void,
   ): Promise<void> {

@@ -31,17 +31,34 @@ export function htmlEscape(value: unknown): SafeBuffer {
  * htmlEscapeOnce — escapes HTML entities but does not double-escape already-escaped sequences.
  */
 export function htmlEscapeOnce(str: string): SafeBuffer {
-  const escaped = str.replace(/&(?!amp;|lt;|gt;|quot;|#39;)|[<>"']/g, (c) =>
-    c === "&" ? "&amp;" : HTML_ESCAPE[c],
+  const escaped = str.replace(
+    /&(?!amp;|lt;|gt;|quot;|#39;|#[xX][0-9a-fA-F]+;|#\d+;)|[<>"']/g,
+    (c) => (c === "&" ? "&amp;" : HTML_ESCAPE[c]),
   );
   return new SafeBuffer(escaped, true);
 }
 
 /**
  * xmlNameEscape — escapes characters that are unsafe in XML element/attribute names.
+ * Follows the XML spec: https://www.w3.org/TR/REC-xml/#NT-Name
+ * Start chars: @:A-Za-z_ and various Unicode ranges
+ * Following chars: same + -.0-9 and more Unicode ranges
  */
-export function xmlNameEscape(str: string): string {
-  return str.replace(/[^a-zA-Z0-9_\-.:]/g, "_");
+export function xmlNameEscape(name: string): string {
+  if (!name || name.length === 0) return "";
+  // Start character: @, :, A-Z, _, a-z, \xC0-\xD6, \xD8-\xF6, \xF8-\u02FF, etc.
+  /* eslint-disable no-misleading-character-class -- XML spec character ranges */
+  const VALID_START =
+    /[@:A-Z_a-z\xC0-\xD6\xD8-\xF6\u00F8-\u02FF\u0370-\u037D\u037F-\u1FFF\u200C-\u200D\u2070-\u218F\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD]/;
+  const VALID_FOLLOWING =
+    /[@:A-Z_a-z\xC0-\xD6\xD8-\xF6\u00F8-\u02FF\u0370-\u037D\u037F-\u1FFF\u200C-\u200D\u2070-\u218F\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD\-.0-9\xB7\u0300-\u036F\u203F-\u2040]/;
+  /* eslint-enable no-misleading-character-class */
+
+  let result = VALID_START.test(name[0]) ? name[0] : "_";
+  for (let i = 1; i < name.length; i++) {
+    result += VALID_FOLLOWING.test(name[i]) ? name[i] : "_";
+  }
+  return result;
 }
 
 /**

@@ -23,7 +23,7 @@ const JSON_ESCAPE_TEST_CASES: [string, string][] = [
   ['{"name":"d\u2028h\u2029h"}', '{"name":"d\\u2028h\\u2029h"}'],
 ];
 
-describe("ErbUtilTest", () => {
+describe("EjsUtilTest", () => {
   it("html escape", () => {
     for (const [raw, expected] of HTML_ESCAPE_TEST_CASES) {
       expect(htmlEscape(raw).toString()).toBe(expected);

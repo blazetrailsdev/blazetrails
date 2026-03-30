@@ -73,8 +73,13 @@ function normalize(s: string): string {
   return s.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
+// Rails uses ERB; we use EJS — normalize class/test names to match
+function normalizeErb(s: string): string {
+  return normalize(s).replace(/erb/g, "ejs");
+}
+
 function normPath(ancestors: string[], description: string): string {
-  return [...ancestors, description].map(normalize).join(" > ");
+  return [...ancestors, description].map(normalizeErb).join(" > ");
 }
 
 /** Increment a counter in a Map. */

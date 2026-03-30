@@ -219,10 +219,18 @@ export {
   CallbackChain,
   CallbackSequence,
   Callbacks,
-  Filters,
-  Conditionals,
-  CallTemplate,
+  Before,
+  After,
+  Around,
+  Value,
+  MethodCall,
+  ObjectCall,
+  InstanceExec0,
+  InstanceExec1,
+  InstanceExec2,
+  ProcCall,
 } from "./callbacks.js";
+export type { Filters, Conditionals, CallTemplate, ClassMethods } from "./callbacks.js";
 export { Concern, MultipleIncludedBlocks, MultiplePrependBlocks } from "./concern.js";
 export { ClassAttribute } from "./class-attribute.js";
 

@@ -42,7 +42,7 @@ export class Callback {
   }
 
   apply(target: any, block?: () => void): boolean {
-    if (!Conditionals.Value.check(this.options, target)) return true;
+    if (!Value.check(this.options, target)) return true;
 
     if (this.kind === "before") {
       return (this.filter as BeforeCallback)(target) !== false;
@@ -116,7 +116,7 @@ export class CallbackSequence {
     const arounds = entries.filter((e) => e.kind === "around");
 
     for (const entry of befores) {
-      if (!Conditionals.Value.check(entry.options, target)) continue;
+      if (!Value.check(entry.options, target)) continue;
       const result = (entry.filter as BeforeCallback)(target);
       if (terminator && result === false) return false;
     }
@@ -128,7 +128,7 @@ export class CallbackSequence {
     for (let i = arounds.length - 1; i >= 0; i--) {
       const entry = arounds[i];
       const inner = core;
-      if (!Conditionals.Value.check(entry.options, target)) continue;
+      if (!Value.check(entry.options, target)) continue;
       core = () => {
         (entry.filter as AroundCallback)(target, inner);
       };
@@ -138,7 +138,7 @@ export class CallbackSequence {
 
     for (let i = afters.length - 1; i >= 0; i--) {
       const entry = afters[i];
-      if (!Conditionals.Value.check(entry.options, target)) continue;
+      if (!Value.check(entry.options, target)) continue;
       (entry.filter as AfterCallback)(target);
     }
 
@@ -146,107 +146,132 @@ export class CallbackSequence {
   }
 }
 
+export class MethodCall {
+  constructor(readonly methodName: string) {}
+
+  make(target: any, _value: any): any {
+    return target[this.methodName]?.call(target);
+  }
+}
+
+export class ObjectCall {
+  constructor(
+    readonly target: any,
+    readonly methodName: string,
+  ) {}
+
+  make(instance: any, _value: any): any {
+    return this.target[this.methodName]?.call(this.target, instance);
+  }
+}
+
+export class InstanceExec0 {
+  constructor(readonly fn: () => any) {}
+
+  make(target: any, _value: any): any {
+    return this.fn.call(target);
+  }
+}
+
+export class InstanceExec1 {
+  constructor(readonly fn: (target: any) => any) {}
+
+  make(target: any, _value: any): any {
+    return this.fn(target);
+  }
+}
+
+export class InstanceExec2 {
+  constructor(readonly fn: (target: any, value: any) => any) {}
+
+  make(target: any, value: any): any {
+    return this.fn(target, value);
+  }
+}
+
+export class ProcCall {
+  constructor(readonly fn: (...args: any[]) => any) {}
+
+  make(target: any, _value: any): any {
+    return this.fn(target);
+  }
+}
+
 export namespace CallTemplate {
-  export class MethodCall {
-    constructor(readonly methodName: string) {}
+  export type MethodCallType = MethodCall;
+  export type ObjectCallType = ObjectCall;
+  export type InstanceExec0Type = InstanceExec0;
+  export type InstanceExec1Type = InstanceExec1;
+  export type InstanceExec2Type = InstanceExec2;
+  export type ProcCallType = ProcCall;
+}
 
-    make(target: any, _value: any): any {
-      return target[this.methodName]?.call(target);
+export class Value {
+  static check(options: CallbackOptions, target: any): boolean {
+    if (options.if) {
+      const conditions = Array.isArray(options.if) ? options.if : [options.if];
+      if (!conditions.every((cond) => cond(target))) return false;
     }
-  }
-
-  export class ObjectCall {
-    constructor(
-      readonly target: any,
-      readonly methodName: string,
-    ) {}
-
-    make(instance: any, _value: any): any {
-      return this.target[this.methodName]?.call(this.target, instance);
+    if (options.unless) {
+      const conditions = Array.isArray(options.unless) ? options.unless : [options.unless];
+      if (conditions.some((cond) => cond(target))) return false;
     }
-  }
-
-  export class InstanceExec0 {
-    constructor(readonly fn: () => any) {}
-
-    make(target: any, _value: any): any {
-      return this.fn.call(target);
-    }
-  }
-
-  export class InstanceExec1 {
-    constructor(readonly fn: (target: any) => any) {}
-
-    make(target: any, _value: any): any {
-      return this.fn(target);
-    }
-  }
-
-  export class InstanceExec2 {
-    constructor(readonly fn: (target: any, value: any) => any) {}
-
-    make(target: any, value: any): any {
-      return this.fn(target, value);
-    }
-  }
-
-  export class ProcCall {
-    constructor(readonly fn: (...args: any[]) => any) {}
-
-    make(target: any, _value: any): any {
-      return this.fn(target);
-    }
+    return true;
   }
 }
 
 export namespace Conditionals {
-  export class Value {
-    static check(options: CallbackOptions, target: any): boolean {
-      if (options.if) {
-        const conditions = Array.isArray(options.if) ? options.if : [options.if];
-        if (!conditions.every((cond) => cond(target))) return false;
+  export type ValueType = Value;
+}
+
+export class Before {
+  static build(callback: Callback, _options: DefineCallbacksOptions): (target: any) => boolean {
+    const terminator = _options.terminator !== false;
+    return (target: any) => {
+      if (!Value.check(callback.options, target)) return true;
+      const result = (callback.filter as BeforeCallback)(target);
+      return !(terminator && result === false);
+    };
+  }
+}
+
+export class After {
+  static build(callback: Callback): (target: any) => void {
+    return (target: any) => {
+      if (!Value.check(callback.options, target)) return;
+      (callback.filter as AfterCallback)(target);
+    };
+  }
+}
+
+export class Around {
+  static build(callback: Callback): (target: any, block: () => void) => void {
+    return (target: any, block: () => void) => {
+      if (!Value.check(callback.options, target)) {
+        block();
+        return;
       }
-      if (options.unless) {
-        const conditions = Array.isArray(options.unless) ? options.unless : [options.unless];
-        if (conditions.some((cond) => cond(target))) return false;
-      }
-      return true;
-    }
+      (callback.filter as AroundCallback)(target, block);
+    };
   }
 }
 
 export namespace Filters {
-  export class Before {
-    static build(callback: Callback, _options: DefineCallbacksOptions): (target: any) => boolean {
-      const terminator = _options.terminator !== false;
-      return (target: any) => {
-        if (!Conditionals.Value.check(callback.options, target)) return true;
-        const result = (callback.filter as BeforeCallback)(target);
-        return !(terminator && result === false);
-      };
-    }
-  }
+  export type BeforeType = Before;
+  export type AfterType = After;
+  export type AroundType = Around;
+}
 
-  export class After {
-    static build(callback: Callback): (target: any) => void {
-      return (target: any) => {
-        if (!Conditionals.Value.check(callback.options, target)) return;
-        (callback.filter as AfterCallback)(target);
-      };
-    }
-  }
-
-  export class Around {
-    static build(callback: Callback): (target: any, block: () => void) => void {
-      return (target: any, block: () => void) => {
-        if (!Conditionals.Value.check(callback.options, target)) {
-          block();
-          return;
-        }
-        (callback.filter as AroundCallback)(target, block);
-      };
-    }
-  }
+export interface ClassMethods {
+  defineCallbacks(name: string, options?: DefineCallbacksOptions): void;
+  setCallback(
+    name: string,
+    kind: CallbackKind,
+    callback: AnyCallback,
+    options?: CallbackOptions,
+  ): void;
+  skipCallback(name: string, kind: CallbackKind, callback?: AnyCallback): void;
+  resetCallbacks(name: string): void;
 }
 
 const CALLBACKS = Symbol("callbacks");

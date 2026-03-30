@@ -46,9 +46,13 @@ export class Builder {
 
   // Mirrors Rack::Builder.new_from_string which uses eval. Input must be trusted
   // config content (from files on disk), not user-supplied strings.
-  static newFromString(content: string, _file?: string): RackApp {
+  static newFromString(content: string, file?: string): RackApp {
     const builder = new Builder();
-    const configFn = new Function("builder", content);
+    let source = content;
+    if (file) {
+      source += `\n//# sourceURL=${file.replace(/\\/g, "/")}`;
+    }
+    const configFn = new Function("builder", source);
     configFn(builder);
     return builder.toApp();
   }

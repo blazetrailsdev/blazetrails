@@ -37,7 +37,8 @@ export namespace Concern {
 
   export function include(klass: any, mixin: ConcernMixin): void {
     if (!Object.prototype.hasOwnProperty.call(klass, INCLUDED_CONCERNS)) {
-      klass[INCLUDED_CONCERNS] = new Set<ConcernMixin>();
+      const inherited: Set<ConcernMixin> | undefined = klass[INCLUDED_CONCERNS];
+      klass[INCLUDED_CONCERNS] = inherited ? new Set(inherited) : new Set<ConcernMixin>();
     }
     const included: Set<ConcernMixin> = klass[INCLUDED_CONCERNS];
 

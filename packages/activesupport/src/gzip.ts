@@ -55,7 +55,7 @@ export namespace Gzip {
     source: string,
     level: number = constants.Z_DEFAULT_COMPRESSION,
     strategy: number = constants.Z_DEFAULT_STRATEGY,
-  ): Buffer {
-    return gzipSync(source, { level, strategy });
+  ): string {
+    return gzipSync(source, { level, strategy }).toString("latin1");
   }
 }

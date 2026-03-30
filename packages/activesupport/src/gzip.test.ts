@@ -12,7 +12,7 @@ describe("GzipTest", () => {
 
   it("compress should return a binary string", () => {
     const compressed = Gzip.compress("compress me!");
-    expect(Buffer.isBuffer(compressed)).toBe(true);
+    expect(typeof compressed).toBe("string");
     expect(compressed.length).toBeGreaterThan(0);
   });
 
@@ -37,8 +37,8 @@ describe("GzipTest", () => {
 
   it("decompress checks crc", () => {
     const compressed = Gzip.compress("test");
-    const corrupted = Buffer.from(compressed);
-    corrupted[corrupted.length - 1] ^= 0xff;
-    expect(() => Gzip.decompress(corrupted)).toThrow();
+    const buf = Buffer.from(compressed, "latin1");
+    buf[buf.length - 1] ^= 0xff;
+    expect(() => Gzip.decompress(buf.toString("latin1"))).toThrow();
   });
 });

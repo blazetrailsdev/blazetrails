@@ -158,6 +158,36 @@ const users = await User.where({ name: "Alice" })
       <!-- Mid mountains — green-brown -->
       <path d="M0 540 Q150 440 300 500 Q420 460 550 510 Q680 440 800 490 Q930 450 1050 500 Q1200 440 1350 480 Q1480 460 1600 500 L1600 650 L0 650Z" fill="#4a6648" opacity="0.7" />
 
+      <!-- Very distant tree line — tiny, on the mid mountains -->
+      <g color="#3a5540" opacity="0.5">
+        <use href="#pine" x="60" y="488" width="10" height="35" />
+        <use href="#spruce" x="105" y="478" width="12" height="38" />
+        <use href="#pine" x="148" y="485" width="9" height="32" />
+        <use href="#pine" x="210" y="470" width="11" height="36" />
+        <use href="#cedar" x="268" y="476" width="14" height="34" />
+        <use href="#pine" x="340" y="468" width="10" height="35" />
+        <use href="#spruce" x="395" y="462" width="12" height="38" />
+        <use href="#pine" x="435" y="470" width="9" height="32" />
+        <use href="#oak" x="510" y="458" width="16" height="30" />
+        <use href="#pine" x="575" y="452" width="11" height="36" />
+        <use href="#spruce" x="622" y="448" width="12" height="38" />
+        <use href="#pine" x="688" y="445" width="10" height="34" />
+        <use href="#cedar" x="745" y="450" width="14" height="34" />
+        <use href="#pine" x="818" y="442" width="9" height="32" />
+        <use href="#spruce" x="870" y="448" width="12" height="38" />
+        <use href="#pine" x="938" y="440" width="11" height="36" />
+        <use href="#oak" x="998" y="445" width="16" height="30" />
+        <use href="#pine" x="1065" y="438" width="10" height="35" />
+        <use href="#pine" x="1120" y="442" width="9" height="32" />
+        <use href="#spruce" x="1188" y="435" width="12" height="38" />
+        <use href="#cedar" x="1255" y="440" width="14" height="34" />
+        <use href="#pine" x="1330" y="438" width="10" height="35" />
+        <use href="#pine" x="1388" y="442" width="11" height="36" />
+        <use href="#spruce" x="1450" y="436" width="12" height="38" />
+        <use href="#pine" x="1525" y="440" width="9" height="32" />
+        <use href="#oak" x="1568" y="438" width="16" height="30" />
+      </g>
+
       <!-- Rolling hills — back layer -->
       <path d="M0 580 Q100 530 250 560 Q400 520 550 555 Q700 515 850 550 Q1000 520 1150 545 Q1300 510 1450 540 Q1550 525 1600 550 L1600 700 L0 700Z" fill="#3d5a35" />
 
@@ -291,14 +321,12 @@ const users = await User.where({ name: "Alice" })
         <use href="#cedar" x="1558" y="492" width="42" height="105" />
       </g>
 
-      <!-- Winding river — enters from right, recedes toward upper-right distance -->
-      <!-- River is a filled shape that narrows as it goes into the distance -->
-      <path d="M1600 720 Q1560 710 1520 695 Q1460 672 1400 660 Q1340 650 1280 648 Q1220 648 1170 655 Q1130 662 1100 665 Q1060 660 1030 648 Q1010 638 1000 625 Q992 610 990 595 Q992 578 1000 565 Q1012 548 1030 538 Q1050 530 1080 528 Q1110 528 1135 532 Q1160 538 1175 545 Q1190 542 1200 535 Q1215 524 1225 510 Q1232 498 1235 485
-              L1238 485 Q1236 500 1230 514 Q1220 530 1208 540 Q1198 548 1185 552 Q1170 548 1148 540 Q1120 532 1088 532 Q1058 534 1038 542 Q1020 552 1008 568 Q998 585 997 600 Q998 618 1008 632 Q1022 648 1045 658 Q1070 665 1105 670 Q1140 668 1180 662 Q1225 654 1280 654 Q1340 656 1405 668 Q1465 680 1525 702 Q1565 716 1600 728 Z" fill="#2a5a6a" opacity="0.55" />
-      <!-- River highlight/shimmer -->
-      <path d="M1580 724 Q1520 705 1450 685 Q1380 668 1300 660 Q1230 658 1170 665 Q1120 670 1080 668 Q1040 658 1015 640 Q1002 622 1000 605 Q1002 585 1015 568 Q1035 548 1065 540 Q1095 536 1125 540 Q1155 546 1170 550" stroke="#4a8a9a" stroke-width="2" fill="none" opacity="0.35" />
-      <!-- Distant narrow part shimmer -->
-      <path d="M1185 548 Q1200 540 1215 528 Q1228 512 1234 495" stroke="#5aa8b8" stroke-width="1" fill="none" opacity="0.3" />
+      <!-- Winding river — wide entry from right, tapers into upper-right distance -->
+      <path d="M1600 700 Q1550 685 1500 672 Q1430 654 1360 642 Q1290 632 1220 630 Q1150 632 1100 640 Q1050 648 1020 645 Q985 635 965 618 Q948 600 942 580 Q940 558 948 540 Q960 522 980 510 Q1005 500 1035 498 Q1065 498 1090 505 Q1115 514 1130 525 Q1148 518 1162 506 Q1178 490 1188 472 Q1195 456 1198 440
+              L1202 440 Q1200 458 1194 476 Q1184 496 1170 510 Q1158 522 1142 530 Q1125 524 1102 512 Q1078 504 1050 502 Q1020 504 998 515 Q978 528 965 548 Q952 568 950 590 Q952 612 968 630 Q988 652 1020 658 Q1055 662 1100 656 Q1150 646 1220 640 Q1295 638 1370 650 Q1440 662 1510 682 Q1560 698 1600 718 Z" fill="#2a5a6a" opacity="0.55" />
+      <!-- River surface shimmer -->
+      <path d="M1590 710 Q1530 690 1460 672 Q1380 654 1300 644 Q1220 638 1160 644 Q1100 652 1060 652 Q1020 645 995 630 Q972 612 962 590 Q958 570 968 550 Q982 530 1005 518 Q1030 508 1060 506 Q1088 510 1110 520" stroke="#4a8a9a" stroke-width="3" fill="none" opacity="0.3" />
+      <path d="M1145 528 Q1160 518 1175 502 Q1188 484 1196 462" stroke="#5aa8b8" stroke-width="1.5" fill="none" opacity="0.25" />
 
       <!-- Foreground hills — earthy brown -->
       <path d="M0 730 Q200 690 400 710 Q600 680 800 705 Q1000 675 1200 700 Q1400 680 1600 710 L1600 900 L0 900Z" fill="#3a3020" />
@@ -306,13 +334,34 @@ const users = await User.where({ name: "Alice" })
       <!-- Foreground ground — dark earth -->
       <path d="M0 790 Q400 760 800 775 Q1200 755 1600 770 L1600 900 L0 900Z" fill="#2a2218" />
 
-      <!-- Dirt path — comes from distance, widens and spills past bottom edge -->
-      <!-- Filled shape that widens toward the viewer -->
-      <path d="M808 698 Q802 718 795 738 Q785 760 775 780 Q762 802 748 825 Q730 852 712 878 Q695 905 675 940
-              L720 940 Q738 908 755 878 Q772 850 788 825 Q802 800 812 778 Q822 756 828 738 Q834 718 836 698 Z" fill="#6a5a42" opacity="0.4" />
-      <!-- Path surface detail -->
-      <path d="M822 700 Q816 720 808 742 Q798 765 786 788 Q772 812 758 838 Q742 865 725 892 Q712 915 698 940" stroke="#8a7a5a" stroke-width="2" fill="none" opacity="0.3" />
-      <path d="M814 698 Q808 718 800 740 Q790 762 778 785 Q764 808 750 832 Q735 858 718 885 Q705 908 690 935" stroke="#a09070" stroke-width="1" fill="none" opacity="0.2" />
+      <!-- Foreground tree row — very close, large, some clipped by bottom edge -->
+      <g color="#152e12">
+        <use href="#oak" x="-30" y="680" width="70" height="140" />
+        <use href="#pine" x="55" y="690" width="45" height="150" />
+        <use href="#spruce" x="140" y="685" width="52" height="155" />
+        <use href="#cedar" x="260" y="678" width="58" height="150" />
+        <use href="#birch" x="365" y="688" width="25" height="130" />
+        <use href="#pine" x="430" y="675" width="48" height="155" />
+        <use href="#oak" x="520" y="682" width="65" height="138" />
+        <use href="#spruce" x="640" y="672" width="52" height="155" />
+        <use href="#pine" x="735" y="678" width="45" height="150" />
+        <use href="#cedar" x="855" y="670" width="58" height="152" />
+        <use href="#birch" x="960" y="675" width="25" height="130" />
+        <use href="#oak" x="1020" y="668" width="68" height="140" />
+        <use href="#pine" x="1135" y="672" width="48" height="155" />
+        <use href="#spruce" x="1230" y="665" width="55" height="158" />
+        <use href="#birch" x="1338" y="670" width="25" height="130" />
+        <use href="#cedar" x="1395" y="662" width="58" height="155" />
+        <use href="#pine" x="1498" y="668" width="48" height="152" />
+        <use href="#oak" x="1555" y="660" width="65" height="140" />
+      </g>
+
+      <!-- Dirt path — narrow in distance, very wide at bottom, spilling past viewport -->
+      <path d="M812 698 Q806 720 798 745 Q786 772 770 800 Q748 832 720 865 Q685 900 640 940 Q590 985 530 1030
+              L870 1030 Q830 985 795 940 Q765 900 742 865 Q722 832 808 800 Q824 772 834 745 Q840 720 842 698 Z" fill="#6a5a42" opacity="0.4" />
+      <!-- Path surface streaks -->
+      <path d="M828 700 Q820 725 810 752 Q796 782 778 812 Q755 845 728 880 Q698 915 662 955" stroke="#8a7a5a" stroke-width="2" fill="none" opacity="0.3" />
+      <path d="M820 700 Q812 725 802 752 Q788 782 770 812 Q748 845 720 880 Q690 915 655 955" stroke="#a09070" stroke-width="1" fill="none" opacity="0.2" />
 
       <!-- ===== BLAZETRAILS WORDMARK ===== -->
 

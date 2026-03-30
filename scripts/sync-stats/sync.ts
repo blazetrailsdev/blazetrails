@@ -180,6 +180,8 @@ async function migrateDb(adapter: SQLite3Adapter) {
 
   if (await tableExists(adapter, "sync_log")) return;
 
+  await adapter.beginTransaction();
+
   await ctx.createTable("pull_requests", { id: false }, (t) => {
     t.integer("number", { primaryKey: true });
     t.string("title");
@@ -303,6 +305,8 @@ async function migrateDb(adapter: SQLite3Adapter) {
     t.integer("runs_synced", { default: 0 });
     t.integer("logs_parsed", { default: 0 });
   });
+
+  await adapter.commit();
 }
 
 // ---------------------------------------------------------------------------
@@ -447,7 +451,7 @@ async function syncPullRequests(): Promise<number> {
           review_count: -1,
           comment_count: -1,
           commit_count: 0,
-          time_open_seconds: timeOpenMs ? Math.round(timeOpenMs / 1000) : null,
+          time_open_seconds: timeOpenMs !== null ? Math.round(timeOpenMs / 1000) : null,
           review_decision: pr.reviewDecision ?? null,
         };
       }),
@@ -643,7 +647,7 @@ async function syncWorkflowRuns(): Promise<number> {
     const number = row.readAttribute("number") as number;
     try {
       const resp = ghJson<{ workflow_runs: GhWorkflowRun[] }>(
-        `api repos/${REPO}/actions/runs?head_sha=${sha}`,
+        `api repos/${REPO}/actions/runs?head_sha=${sha}&per_page=100`,
       );
 
       for (const run of resp.workflow_runs) {
@@ -734,15 +738,17 @@ function parseTestCompareFromLogs(logs: string) {
   >();
 
   const re =
-    /\s{2}(\w+)\s+—\s+(\d+)\/(\d+) tests \(([\d.]+)%\)(?:\s+\((\d+) skipped(?:,[^)]*)?\))?\s+\|\s+(\d+)\/(\d+) files\s+\|\s+(\d+) misplaced/g;
+    /\s{2}(\w+)\s+—\s+(\d+)\/(\d+) tests \(([\d.]+)%\)(?:\s+\(([^)]*)\))?\s+\|\s+(\d+)\/(\d+) files\s+\|\s+(\d+) misplaced/g;
   let m;
   while ((m = re.exec(logs)) !== null) {
     if (m[1] === "Overall") continue;
+    const details = m[5] ?? "";
+    const skippedMatch = /(\d+)\s+skipped/.exec(details);
     results.set(m[1], {
       matched: parseInt(m[2]),
       total: parseInt(m[3]),
       percent: parseFloat(m[4]),
-      skipped: m[5] ? parseInt(m[5]) : 0,
+      skipped: skippedMatch ? parseInt(skippedMatch[1]) : 0,
       filesMapped: parseInt(m[6]),
       filesTotal: parseInt(m[7]),
       misplaced: parseInt(m[8]),
@@ -806,11 +812,12 @@ async function syncCompareStats(): Promise<number> {
     const headSha = row.readAttribute("head_sha") as string;
     const prNumber = row.readAttribute("pr_number") as number;
 
-    const jobs = await WorkflowJob.findBySql(
-      `SELECT id FROM workflow_jobs WHERE run_id = ${runId} AND name = 'Rails API/Test Comparison'`,
+    const jobRows = await Base.adapter.execute(
+      `SELECT id FROM workflow_jobs WHERE run_id = ? AND name = ?`,
+      [runId, "Rails API/Test Comparison"],
     );
-    if (jobs.length === 0) continue;
-    const jobId = jobs[0].readAttribute("id") as number;
+    if (jobRows.length === 0) continue;
+    const jobId = jobRows[0].id as number;
 
     try {
       const logs = gh(`api repos/${REPO}/actions/jobs/${jobId}/logs`);

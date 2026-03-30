@@ -15,6 +15,7 @@ import { AttributeMethodPattern } from "./attribute-methods.js";
 import {
   assignAttributes as assignAttrs,
   attributeWriterMissing as defaultAttributeWriterMissing,
+  ArgumentError,
 } from "./attribute-assignment.js";
 import type {
   ValidatorContract as Validator,
@@ -1495,12 +1496,5 @@ function _validateOnCondition(on: string | string[]): void {
 function _rejectOnOption(conditions?: CallbackConditions): void {
   if (conditions && "on" in conditions) {
     throw new ArgumentError("Unknown key: :on. Valid keys are: :if, :unless, :prepend");
-  }
-}
-
-class ArgumentError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ArgumentError";
   }
 }

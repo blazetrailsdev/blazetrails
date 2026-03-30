@@ -161,123 +161,140 @@ const users = await User.where({ name: "Alice" })
       <!-- Rolling hills — back layer -->
       <path d="M0 580 Q100 530 250 560 Q400 520 550 555 Q700 515 850 550 Q1000 520 1150 545 Q1300 510 1450 540 Q1550 525 1600 550 L1600 700 L0 700Z" fill="#3d5a35" />
 
-      <!-- Forest tree line — back row (distant, smaller) -->
+      <!-- Forest tree line — back row (distant, smaller, irregular spacing) -->
       <g color="#2d4a28" opacity="0.8">
-        <use href="#pine" x="75" y="505" width="16" height="55" />
-        <use href="#spruce" x="110" y="492" width="20" height="63" />
-        <use href="#pine" x="155" y="510" width="14" height="50" />
-        <use href="#cedar" x="195" y="488" width="22" height="58" />
-        <use href="#oak" x="240" y="500" width="24" height="52" />
-        <use href="#pine" x="285" y="502" width="16" height="55" />
-        <use href="#birch" x="330" y="490" width="12" height="55" />
-        <use href="#spruce" x="365" y="495" width="20" height="60" />
-        <use href="#pine" x="415" y="500" width="14" height="50" />
-        <use href="#cedar" x="455" y="485" width="22" height="58" />
-        <use href="#oak" x="505" y="498" width="24" height="52" />
-        <use href="#spruce" x="555" y="480" width="20" height="60" />
-        <use href="#birch" x="600" y="488" width="12" height="55" />
-        <use href="#pine" x="640" y="492" width="16" height="55" />
-        <use href="#cedar" x="685" y="478" width="22" height="58" />
-        <use href="#pine" x="730" y="488" width="14" height="50" />
-        <use href="#oak" x="775" y="485" width="24" height="52" />
-        <use href="#spruce" x="825" y="475" width="20" height="60" />
-        <use href="#birch" x="870" y="482" width="12" height="55" />
-        <use href="#pine" x="910" y="485" width="16" height="55" />
-        <use href="#cedar" x="960" y="472" width="22" height="58" />
-        <use href="#spruce" x="1010" y="478" width="20" height="60" />
-        <use href="#pine" x="1060" y="482" width="14" height="50" />
-        <use href="#oak" x="1105" y="470" width="24" height="52" />
-        <use href="#birch" x="1150" y="475" width="12" height="55" />
-        <use href="#pine" x="1195" y="478" width="16" height="55" />
-        <use href="#spruce" x="1240" y="468" width="20" height="60" />
-        <use href="#cedar" x="1290" y="472" width="22" height="58" />
-        <use href="#pine" x="1340" y="475" width="14" height="50" />
-        <use href="#oak" x="1385" y="465" width="24" height="52" />
-        <use href="#pine" x="1435" y="470" width="16" height="55" />
-        <use href="#spruce" x="1485" y="472" width="20" height="60" />
-        <use href="#birch" x="1535" y="468" width="12" height="55" />
-        <use href="#cedar" x="1565" y="465" width="22" height="58" />
+        <use href="#pine" x="30" y="508" width="14" height="48" />
+        <use href="#spruce" x="58" y="500" width="18" height="58" />
+        <use href="#pine" x="105" y="512" width="13" height="45" />
+        <use href="#pine" x="118" y="506" width="16" height="52" />
+        <use href="#cedar" x="168" y="494" width="20" height="54" />
+        <use href="#oak" x="230" y="498" width="22" height="48" />
+        <use href="#pine" x="295" y="504" width="15" height="50" />
+        <use href="#birch" x="312" y="496" width="11" height="52" />
+        <use href="#spruce" x="380" y="490" width="19" height="62" />
+        <use href="#pine" x="420" y="502" width="13" height="46" />
+        <use href="#pine" x="438" y="494" width="17" height="55" />
+        <use href="#cedar" x="490" y="486" width="21" height="56" />
+        <use href="#oak" x="548" y="482" width="23" height="50" />
+        <use href="#pine" x="610" y="490" width="14" height="48" />
+        <use href="#spruce" x="632" y="484" width="20" height="60" />
+        <use href="#birch" x="695" y="480" width="12" height="54" />
+        <use href="#pine" x="742" y="486" width="16" height="52" />
+        <use href="#cedar" x="790" y="478" width="22" height="58" />
+        <use href="#pine" x="855" y="482" width="13" height="46" />
+        <use href="#oak" x="878" y="476" width="24" height="50" />
+        <use href="#spruce" x="945" y="474" width="18" height="58" />
+        <use href="#pine" x="985" y="480" width="15" height="50" />
+        <use href="#pine" x="1030" y="476" width="17" height="54" />
+        <use href="#birch" x="1068" y="472" width="11" height="52" />
+        <use href="#cedar" x="1125" y="468" width="20" height="56" />
+        <use href="#pine" x="1182" y="474" width="14" height="48" />
+        <use href="#oak" x="1210" y="466" width="22" height="50" />
+        <use href="#spruce" x="1278" y="470" width="19" height="58" />
+        <use href="#pine" x="1340" y="472" width="16" height="52" />
+        <use href="#pine" x="1358" y="466" width="13" height="46" />
+        <use href="#cedar" x="1418" y="464" width="21" height="55" />
+        <use href="#birch" x="1470" y="468" width="12" height="52" />
+        <use href="#spruce" x="1520" y="466" width="18" height="58" />
+        <use href="#pine" x="1572" y="462" width="15" height="50" />
       </g>
 
       <!-- Rolling hills — mid layer -->
       <path d="M0 620 Q200 570 400 600 Q600 560 800 590 Q1000 555 1200 585 Q1400 560 1600 590 L1600 750 L0 750Z" fill="#4a6a3a" />
 
-      <!-- Forest tree line — mid row -->
+      <!-- Forest tree line — mid row (clustered irregularly) -->
       <g color="#2a5022">
-        <use href="#spruce" x="35" y="538" width="28" height="78" />
-        <use href="#oak" x="75" y="540" width="34" height="68" />
-        <use href="#pine" x="130" y="542" width="22" height="75" />
-        <use href="#cedar" x="175" y="530" width="30" height="75" />
-        <use href="#birch" x="225" y="540" width="16" height="70" />
-        <use href="#pine" x="260" y="535" width="22" height="78" />
-        <use href="#spruce" x="305" y="525" width="28" height="78" />
-        <use href="#oak" x="350" y="535" width="34" height="68" />
-        <use href="#cedar" x="405" y="528" width="30" height="75" />
-        <use href="#birch" x="450" y="530" width="16" height="70" />
-        <use href="#pine" x="485" y="525" width="22" height="78" />
-        <use href="#spruce" x="530" y="518" width="28" height="78" />
-        <use href="#oak" x="575" y="522" width="34" height="68" />
-        <use href="#pine" x="630" y="520" width="22" height="75" />
-        <use href="#cedar" x="675" y="512" width="30" height="75" />
-        <use href="#birch" x="720" y="518" width="16" height="70" />
-        <use href="#spruce" x="755" y="515" width="28" height="78" />
-        <use href="#oak" x="800" y="510" width="34" height="68" />
-        <use href="#pine" x="855" y="512" width="22" height="78" />
-        <use href="#cedar" x="900" y="505" width="30" height="75" />
-        <use href="#birch" x="945" y="508" width="16" height="70" />
-        <use href="#spruce" x="980" y="502" width="28" height="78" />
-        <use href="#pine" x="1030" y="505" width="22" height="75" />
-        <use href="#oak" x="1075" y="498" width="34" height="68" />
-        <use href="#cedar" x="1130" y="500" width="30" height="75" />
-        <use href="#birch" x="1175" y="502" width="16" height="70" />
-        <use href="#pine" x="1210" y="498" width="22" height="78" />
-        <use href="#spruce" x="1260" y="492" width="28" height="78" />
-        <use href="#oak" x="1305" y="495" width="34" height="68" />
-        <use href="#cedar" x="1360" y="488" width="30" height="75" />
-        <use href="#pine" x="1410" y="492" width="22" height="75" />
-        <use href="#birch" x="1455" y="488" width="16" height="70" />
-        <use href="#spruce" x="1490" y="485" width="28" height="78" />
-        <use href="#pine" x="1545" y="488" width="22" height="75" />
-        <use href="#oak" x="1575" y="485" width="34" height="68" />
+        <use href="#spruce" x="15" y="542" width="26" height="74" />
+        <use href="#pine" x="48" y="538" width="20" height="72" />
+        <use href="#oak" x="90" y="536" width="32" height="65" />
+        <use href="#pine" x="145" y="540" width="21" height="70" />
+        <use href="#cedar" x="162" y="532" width="28" height="72" />
+        <use href="#birch" x="232" y="536" width="15" height="68" />
+        <use href="#spruce" x="275" y="528" width="30" height="80" />
+        <use href="#pine" x="310" y="534" width="20" height="70" />
+        <use href="#pine" x="328" y="530" width="24" height="76" />
+        <use href="#oak" x="395" y="526" width="36" height="70" />
+        <use href="#cedar" x="448" y="524" width="28" height="72" />
+        <use href="#pine" x="510" y="522" width="22" height="76" />
+        <use href="#birch" x="538" y="520" width="14" height="66" />
+        <use href="#spruce" x="585" y="516" width="26" height="78" />
+        <use href="#pine" x="648" y="518" width="20" height="70" />
+        <use href="#oak" x="672" y="514" width="34" height="68" />
+        <use href="#cedar" x="745" y="510" width="30" height="74" />
+        <use href="#pine" x="792" y="514" width="22" height="72" />
+        <use href="#spruce" x="838" y="508" width="28" height="78" />
+        <use href="#birch" x="895" y="510" width="15" height="66" />
+        <use href="#pine" x="928" y="506" width="24" height="76" />
+        <use href="#pine" x="978" y="504" width="20" height="70" />
+        <use href="#oak" x="1015" y="500" width="36" height="68" />
+        <use href="#cedar" x="1088" y="498" width="28" height="72" />
+        <use href="#spruce" x="1135" y="496" width="26" height="78" />
+        <use href="#pine" x="1195" y="498" width="22" height="74" />
+        <use href="#birch" x="1218" y="494" width="14" height="66" />
+        <use href="#pine" x="1275" y="492" width="24" height="76" />
+        <use href="#oak" x="1320" y="490" width="34" height="68" />
+        <use href="#cedar" x="1395" y="488" width="30" height="72" />
+        <use href="#spruce" x="1438" y="486" width="26" height="78" />
+        <use href="#pine" x="1498" y="488" width="22" height="72" />
+        <use href="#birch" x="1530" y="484" width="15" height="66" />
+        <use href="#pine" x="1575" y="486" width="20" height="70" />
       </g>
 
       <!-- Rolling hills — front layer -->
       <path d="M0 670 Q150 630 350 655 Q550 620 750 645 Q950 615 1150 640 Q1350 620 1600 650 L1600 800 L0 800Z" fill="#3a5a2e" />
 
-      <!-- Forest tree line — front row (closer, larger) -->
+      <!-- Forest tree line — front row (closer, larger, clustered with gaps) -->
       <g color="#1e3a18">
-        <use href="#oak" x="5" y="560" width="48" height="95" />
-        <use href="#pine" x="60" y="555" width="32" height="105" />
-        <use href="#spruce" x="110" y="558" width="38" height="108" />
-        <use href="#birch" x="165" y="562" width="20" height="95" />
-        <use href="#cedar" x="200" y="548" width="42" height="105" />
-        <use href="#pine" x="260" y="552" width="32" height="108" />
-        <use href="#oak" x="310" y="548" width="48" height="95" />
-        <use href="#spruce" x="370" y="540" width="38" height="108" />
-        <use href="#birch" x="425" y="548" width="20" height="95" />
-        <use href="#cedar" x="460" y="535" width="42" height="105" />
-        <use href="#pine" x="520" y="540" width="32" height="108" />
-        <use href="#oak" x="570" y="532" width="48" height="95" />
-        <use href="#spruce" x="635" y="528" width="38" height="108" />
-        <use href="#birch" x="690" y="535" width="20" height="95" />
-        <use href="#pine" x="725" y="530" width="32" height="108" />
-        <use href="#cedar" x="775" y="522" width="42" height="105" />
-        <use href="#oak" x="835" y="525" width="48" height="95" />
-        <use href="#pine" x="900" y="520" width="32" height="108" />
-        <use href="#spruce" x="950" y="518" width="38" height="108" />
-        <use href="#birch" x="1005" y="522" width="20" height="95" />
-        <use href="#cedar" x="1040" y="512" width="42" height="105" />
-        <use href="#oak" x="1100" y="515" width="48" height="95" />
-        <use href="#pine" x="1165" y="510" width="32" height="108" />
-        <use href="#spruce" x="1215" y="508" width="38" height="108" />
-        <use href="#birch" x="1270" y="512" width="20" height="95" />
-        <use href="#cedar" x="1305" y="502" width="42" height="105" />
-        <use href="#pine" x="1365" y="505" width="32" height="108" />
-        <use href="#oak" x="1415" y="500" width="48" height="95" />
-        <use href="#spruce" x="1475" y="502" width="38" height="108" />
-        <use href="#birch" x="1530" y="505" width="20" height="95" />
-        <use href="#pine" x="1565" y="500" width="32" height="108" />
+        <!-- dense cluster left -->
+        <use href="#pine" x="-8" y="558" width="30" height="100" />
+        <use href="#oak" x="18" y="554" width="50" height="98" />
+        <use href="#spruce" x="62" y="560" width="36" height="105" />
+        <use href="#pine" x="88" y="552" width="28" height="108" />
+        <!-- sparse gap -->
+        <use href="#birch" x="175" y="558" width="18" height="90" />
+        <!-- cluster -->
+        <use href="#cedar" x="240" y="545" width="44" height="108" />
+        <use href="#pine" x="278" y="550" width="30" height="102" />
+        <use href="#spruce" x="302" y="542" width="40" height="110" />
+        <use href="#oak" x="348" y="546" width="46" height="95" />
+        <use href="#pine" x="385" y="540" width="28" height="105" />
+        <!-- gap with lone birch -->
+        <use href="#birch" x="462" y="542" width="18" height="92" />
+        <!-- dense cluster mid-left -->
+        <use href="#cedar" x="525" y="532" width="42" height="108" />
+        <use href="#pine" x="558" y="536" width="32" height="105" />
+        <use href="#pine" x="582" y="530" width="28" height="100" />
+        <use href="#oak" x="622" y="528" width="52" height="98" />
+        <!-- sparse -->
+        <use href="#spruce" x="718" y="526" width="36" height="108" />
+        <!-- cluster right of center -->
+        <use href="#pine" x="798" y="522" width="32" height="108" />
+        <use href="#cedar" x="825" y="518" width="44" height="105" />
+        <use href="#oak" x="880" y="520" width="48" height="96" />
+        <use href="#birch" x="932" y="518" width="18" height="90" />
+        <use href="#pine" x="955" y="514" width="30" height="105" />
+        <!-- gap -->
+        <use href="#spruce" x="1050" y="510" width="38" height="110" />
+        <!-- big cluster right -->
+        <use href="#pine" x="1118" y="508" width="28" height="102" />
+        <use href="#oak" x="1142" y="504" width="50" height="98" />
+        <use href="#cedar" x="1198" y="506" width="42" height="105" />
+        <use href="#pine" x="1238" y="502" width="34" height="108" />
+        <use href="#spruce" x="1265" y="498" width="36" height="108" />
+        <!-- sparse -->
+        <use href="#birch" x="1348" y="502" width="18" height="90" />
+        <use href="#pine" x="1395" y="498" width="30" height="105" />
+        <!-- tight cluster far right -->
+        <use href="#oak" x="1448" y="496" width="48" height="96" />
+        <use href="#spruce" x="1492" y="498" width="38" height="108" />
+        <use href="#pine" x="1535" y="494" width="28" height="102" />
+        <use href="#cedar" x="1558" y="492" width="42" height="105" />
       </g>
+
+      <!-- Winding river — starts distant left, snakes through the valley -->
+      <path d="M120 580 Q180 590 220 600 Q280 615 320 625 Q400 640 460 648 Q540 655 600 658 Q680 660 740 655 Q820 648 880 640 Q960 630 1020 628 Q1100 625 1160 630 Q1240 638 1300 648 Q1360 658 1420 665 Q1480 670 1540 668 Q1580 665 1600 660" stroke="#3a6a7a" stroke-width="12" fill="none" opacity="0.6" stroke-linecap="round" />
+      <path d="M120 580 Q180 590 220 600 Q280 615 320 625 Q400 640 460 648 Q540 655 600 658 Q680 660 740 655 Q820 648 880 640 Q960 630 1020 628 Q1100 625 1160 630 Q1240 638 1300 648 Q1360 658 1420 665 Q1480 670 1540 668 Q1580 665 1600 660" stroke="#4a8a9a" stroke-width="6" fill="none" opacity="0.4" stroke-linecap="round" />
+      <path d="M125 582 Q185 592 225 602 Q285 617 325 627 Q405 642 465 650 Q545 656 605 659 Q685 661 745 656 Q825 649 885 641 Q965 631 1025 629 Q1105 626 1165 631 Q1245 639 1305 649 Q1365 659 1425 666 Q1485 671 1545 669 Q1585 666 1600 662" stroke="#5aa0b0" stroke-width="2" fill="none" opacity="0.25" stroke-linecap="round" />
 
       <!-- Foreground hills — earthy brown -->
       <path d="M0 730 Q200 690 400 710 Q600 680 800 705 Q1000 675 1200 700 Q1400 680 1600 710 L1600 900 L0 900Z" fill="#3a3020" />
@@ -285,9 +302,15 @@ const users = await User.where({ name: "Alice" })
       <!-- Foreground ground — dark earth -->
       <path d="M0 790 Q400 760 800 775 Q1200 755 1600 770 L1600 900 L0 900Z" fill="#2a2218" />
 
-      <!-- A winding trail/path through the foreground -->
-      <path d="M720 900 Q740 850 760 810 Q780 780 790 750 Q800 720 810 700" stroke="#8a7a60" stroke-width="4" fill="none" opacity="0.5" stroke-linecap="round" />
-      <path d="M722 900 Q742 848 762 808 Q782 778 792 748 Q802 718 812 698" stroke="#a09070" stroke-width="2" fill="none" opacity="0.3" stroke-linecap="round" />
+      <!-- Dirt path — winding from distant hills, widening toward viewer, spilling past bottom edge -->
+      <path d="M810 700 Q805 715 800 730 Q790 750 782 768 Q770 790 760 810 Q745 835 735 855 Q720 878 710 900 L710 920" stroke="#6a5a42" stroke-width="6" fill="none" opacity="0.6" stroke-linecap="round" />
+      <path d="M810 700 Q805 715 800 730 Q790 750 782 768 Q770 790 760 810 Q745 835 735 855 Q720 878 710 900 L710 920" stroke="#8a7a5a" stroke-width="14" fill="none" opacity="0.3" stroke-linecap="round" />
+      <!-- Path widens dramatically as it reaches the viewer -->
+      <path d="M735 855 Q720 878 700 905 Q680 935 650 970" stroke="#8a7a5a" stroke-width="30" fill="none" opacity="0.2" stroke-linecap="round" />
+      <path d="M735 855 Q725 875 715 900 Q705 925 690 955" stroke="#6a5a42" stroke-width="10" fill="none" opacity="0.35" stroke-linecap="round" />
+      <!-- Subtle path edge highlights -->
+      <path d="M814 702 Q808 718 803 733 Q793 752 786 770 Q774 792 764 812 Q750 838 740 858 Q726 880 716 905" stroke="#a09070" stroke-width="1.5" fill="none" opacity="0.2" stroke-linecap="round" />
+      <path d="M806 700 Q800 716 796 730 Q786 750 778 768 Q766 790 756 810 Q742 835 730 855 Q716 878 704 905" stroke="#a09070" stroke-width="1.5" fill="none" opacity="0.2" stroke-linecap="round" />
 
       <!-- ===== BLAZETRAILS WORDMARK ===== -->
 

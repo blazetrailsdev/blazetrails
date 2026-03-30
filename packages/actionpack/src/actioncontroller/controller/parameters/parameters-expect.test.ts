@@ -19,12 +19,13 @@ describe("ParametersExpectTest", () => {
   });
 
   it("key to empty hash: permits all params", () => {
-    const prefs = new Parameters({ theme: "dark" });
+    const prefs = new Parameters({ theme: "dark", locale: "en" });
     const params = new Parameters({ prefs });
     // empty hash in array spec permits arbitrary hash keys
-    const result = params.expect({ prefs: ["theme"] });
+    const result = params.expect({ prefs: [{}] });
     expect(result).toBeInstanceOf(Parameters);
     expect((result as Parameters).get("theme")).toBe("dark");
+    expect((result as Parameters).get("locale")).toBe("en");
   });
 
   it("keys to arrays: returns permitted params in hash key order", () => {

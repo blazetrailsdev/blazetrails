@@ -629,7 +629,14 @@ export class Parameters {
       if (typeof filter === "string") {
         this._permittedScalarFilter(params, filter);
       } else if (typeof filter === "object" && filter !== null) {
-        this._hashFilter(params, filter, options);
+        if (Object.keys(filter).length === 0) {
+          // Empty hash spec {} means permit all keys
+          for (const [ek, ev] of Object.entries(this._data)) {
+            params._data[ek] = ev;
+          }
+        } else {
+          this._hashFilter(params, filter, options);
+        }
       }
     }
 

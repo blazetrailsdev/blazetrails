@@ -9,11 +9,10 @@
  *   }
  */
 import { EachValidator } from "@blazetrails/activemodel";
+import { isMarkedForDestruction } from "../autosave-association.js";
 
 export class AssociatedValidator extends EachValidator {
   validateEach(record: any, attribute: string, value: unknown): void {
-    // Fetch association value — readAttribute won't have it since
-    // associations aren't stored in the attributes hash.
     let associationValue = value;
     if (associationValue == null) {
       if (typeof record.association === "function") {
@@ -30,7 +29,7 @@ export class AssociatedValidator extends EachValidator {
         ? [associationValue]
         : [];
     for (const assoc of values) {
-      if (assoc?.markedForDestruction?.()) continue;
+      if (isMarkedForDestruction(assoc)) continue;
       if (typeof assoc?.isValid === "function" && !assoc.isValid()) {
         record.errors.add(attribute, "invalid", { value: associationValue });
         return;

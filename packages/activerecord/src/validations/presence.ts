@@ -6,19 +6,13 @@
  * are excluded from the presence check.
  */
 import { PresenceValidator as BasePresenceValidator } from "@blazetrails/activemodel";
+import { isMarkedForDestruction } from "../autosave-association.js";
 
 export class PresenceValidator extends BasePresenceValidator {
   validate(record: any, attribute: string, value: unknown, errors: any): void {
     if (isAssociation(record, attribute)) {
       const filtered = filterDestroyed(value);
-      if (
-        filtered === null ||
-        filtered === undefined ||
-        (Array.isArray(filtered) && filtered.length === 0)
-      ) {
-        errors.add(attribute, "blank");
-        return;
-      }
+      super.validate(record, attribute, filtered, errors);
       return;
     }
     super.validate(record, attribute, value, errors);
@@ -32,13 +26,10 @@ function isAssociation(record: any, attribute: string): boolean {
 
 function filterDestroyed(value: unknown): unknown {
   if (Array.isArray(value)) {
-    return value.filter((v: any) => !v?.markedForDestruction?.());
+    const filtered = value.filter((v: any) => !isMarkedForDestruction(v));
+    return filtered.length > 0 ? filtered : null;
   }
-  if (
-    value &&
-    typeof (value as any).markedForDestruction === "function" &&
-    (value as any).markedForDestruction()
-  ) {
+  if (value && isMarkedForDestruction(value as any)) {
     return null;
   }
   return value;

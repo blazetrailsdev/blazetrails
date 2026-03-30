@@ -242,8 +242,14 @@ export abstract class Migration {
       case "addColumn":
         await this.removeColumn(args[0] as string, args[1] as string);
         break;
-      case "removeColumn":
-        throw new IrreversibleMigration("Cannot reverse removeColumn without type info");
+      case "removeColumn": {
+        const [rcTable, rcCol, rcType] = args as [string, string, string?];
+        if (!rcType) {
+          throw new IrreversibleMigration("Cannot reverse removeColumn without type info");
+        }
+        await this.addColumn(rcTable, rcCol, rcType as ColumnType);
+        break;
+      }
       case "addIndex": {
         const idxOpts: { column: string | string[]; name?: string } = {
           column: args[1] as string | string[],
@@ -253,8 +259,14 @@ export abstract class Migration {
         await this.removeIndex(args[0] as string, idxOpts);
         break;
       }
-      case "removeIndex":
-        throw new IrreversibleMigration("Cannot reverse removeIndex without column info");
+      case "removeIndex": {
+        const riOpts = args[1] as { column?: string | string[] } | undefined;
+        if (!riOpts?.column) {
+          throw new IrreversibleMigration("Cannot reverse removeIndex without column info");
+        }
+        await this.addIndex(args[0] as string, riOpts.column);
+        break;
+      }
       case "renameColumn":
         await this.renameColumn(args[0] as string, args[2] as string, args[1] as string);
         break;
@@ -271,6 +283,20 @@ export abstract class Migration {
         await this.removeForeignKey(args[0] as string, fkOpts ?? (args[1] as string));
         break;
       }
+      case "addReference":
+        await this.removeReference(
+          args[0] as string,
+          args[1] as string,
+          args[2] as { polymorphic?: boolean } | undefined,
+        );
+        break;
+      case "removeReference":
+        await this.addReference(
+          args[0] as string,
+          args[1] as string,
+          args[2] as { polymorphic?: boolean; foreignKey?: boolean } | undefined,
+        );
+        break;
       case "createJoinTable":
         await this.dropJoinTable(
           args[0] as string,
@@ -311,7 +337,7 @@ export abstract class Migration {
   async createTable(
     name: string,
     optionsOrFn?:
-      | { id?: boolean; force?: boolean; ifNotExists?: boolean }
+      | { id?: boolean | string; force?: boolean; ifNotExists?: boolean }
       | ((t: TableDefinition) => void),
     fn?: (t: TableDefinition) => void,
   ): Promise<void> {
@@ -799,7 +825,12 @@ export class MigrationContext {
 
   async createTable(
     name: string,
-    options?: { primaryKey?: string | false; force?: boolean; ifNotExists?: boolean; id?: boolean },
+    options?: {
+      primaryKey?: string | false;
+      force?: boolean;
+      ifNotExists?: boolean;
+      id?: boolean | string;
+    },
     fn?: (t: TableDefinition) => void,
   ): Promise<void> {
     if (name.length > 64) {

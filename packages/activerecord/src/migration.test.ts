@@ -358,6 +358,22 @@ describe("Migrations", () => {
       expect(sql).toContain('"active" BOOLEAN DEFAULT TRUE');
     });
 
+    it("supports id: uuid option", () => {
+      const td = new TableDefinition("accounts", { id: "uuid", adapterName: "postgres" });
+      td.string("name");
+      const sql = td.toSql();
+      expect(sql).toContain("UUID DEFAULT gen_random_uuid() PRIMARY KEY");
+      expect(sql).not.toContain("SERIAL");
+    });
+
+    it("supports id: uuid option for sqlite", () => {
+      const td = new TableDefinition("accounts", { id: "uuid" });
+      td.string("name");
+      const sql = td.toSql();
+      expect(sql).toContain("VARCHAR(36) PRIMARY KEY");
+      expect(sql).not.toContain("AUTOINCREMENT");
+    });
+
     it("supports id: false option", () => {
       const td = new TableDefinition("join_table", { id: false });
       td.integer("user_id");

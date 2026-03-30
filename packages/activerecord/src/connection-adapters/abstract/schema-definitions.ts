@@ -18,7 +18,8 @@ export type ColumnType =
   | "json"
   | "jsonb"
   | "char"
-  | "primary_key";
+  | "primary_key"
+  | "uuid";
 
 export type ReferentialAction = "cascade" | "nullify" | "restrict" | "no_action";
 
@@ -239,19 +240,20 @@ export class TableDefinition {
   readonly tableName: string;
   readonly columns: ColumnDefinition[] = [];
   readonly indexes: IndexDefinition[] = [];
-  private _id: boolean;
+  private _id: boolean | string;
   private _adapterName: "sqlite" | "postgres" | "mysql";
 
   constructor(
     tableName: string,
-    options: { id?: boolean; adapterName?: "sqlite" | "postgres" | "mysql" } = {},
+    options: { id?: boolean | string; adapterName?: "sqlite" | "postgres" | "mysql" } = {},
   ) {
     this.tableName = tableName;
     this._adapterName = options.adapterName ?? "sqlite";
-    this._id = options.id !== false;
+    this._id = options.id ?? true;
 
-    if (this._id) {
-      this.columns.push(new ColumnDefinition("id", "primary_key", { primaryKey: true }));
+    if (this._id !== false) {
+      const pkType = (typeof this._id === "string" ? this._id : "primary_key") as ColumnType;
+      this.columns.push(new ColumnDefinition("id", pkType, { primaryKey: true }));
     }
   }
 
@@ -377,6 +379,15 @@ export class TableDefinition {
             parts.push("INT AUTO_INCREMENT PRIMARY KEY");
           } else {
             parts.push("INTEGER PRIMARY KEY AUTOINCREMENT");
+          }
+          break;
+        case "uuid":
+          if (this._adapterName === "postgres") {
+            parts.push("UUID DEFAULT gen_random_uuid() PRIMARY KEY");
+          } else if (this._adapterName === "mysql") {
+            parts.push("CHAR(36) PRIMARY KEY");
+          } else {
+            parts.push("VARCHAR(36) PRIMARY KEY");
           }
           break;
         case "string":

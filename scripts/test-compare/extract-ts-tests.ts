@@ -9,7 +9,15 @@ const ROOT_DIR = path.resolve(SCRIPT_DIR, "../..");
 const OUTPUT_DIR = path.join(SCRIPT_DIR, "output");
 
 function getPackageTestFiles(): Record<string, string[]> {
-  const packages = ["arel", "activemodel", "activerecord", "activesupport", "rack", "actionview", "railties"];
+  const packages = [
+    "arel",
+    "activemodel",
+    "activerecord",
+    "activesupport",
+    "rack",
+    "actionview",
+    "railties",
+  ];
   const packageAliases: Record<string, string> = {};
   const result: Record<string, string[]> = {};
 

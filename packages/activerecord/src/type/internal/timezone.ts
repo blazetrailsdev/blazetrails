@@ -23,6 +23,9 @@ export function isUtc(timezone?: "utc" | "local"): boolean {
 
 /**
  * Mirrors: ActiveRecord::Type::Internal::Timezone
+ *
+ * In Rails this is a module mixed into Date/DateTime/Time types.
+ * The Date, DateTime, and Time AR types extend this to gain timezone awareness.
  */
 export class Timezone {
   protected _timezone?: "utc" | "local";

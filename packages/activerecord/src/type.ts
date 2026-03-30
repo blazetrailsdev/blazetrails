@@ -15,6 +15,7 @@ import {
   ImmutableStringType,
   StringType,
   ValueType,
+  typeRegistry,
 } from "@blazetrails/activemodel";
 export { Type } from "@blazetrails/activemodel";
 import { AdapterSpecificRegistry } from "./type/adapter-specific-registry.js";
@@ -31,9 +32,7 @@ export { Text } from "./type/text.js";
 export { Json } from "./type/json.js";
 export { Serialized } from "./type/serialized.js";
 export { DecimalWithoutScale } from "./type/decimal-without-scale.js";
-export { UnsignedInteger } from "./type/unsigned-integer.js";
 export { TypeMap } from "./type/type-map.js";
-export { HashLookupTypeMap } from "./type/hash-lookup-type-map.js";
 export {
   AdapterSpecificRegistry,
   Registration,
@@ -85,3 +84,12 @@ export function lookup(symbol: string, options?: { adapter?: string }): Type {
 export function defaultValue(): Type {
   return new ValueType();
 }
+
+// Override ActiveModel's type registry with AR-specific types so that
+// Model.attribute() calls resolve to timezone-aware Date/DateTime/Time,
+// AR's Text, Json, etc.
+typeRegistry.register("date", () => new Date());
+typeRegistry.register("datetime", () => new DateTime());
+typeRegistry.register("time", () => new Time());
+typeRegistry.register("text", () => new Text());
+typeRegistry.register("json", () => new Json());

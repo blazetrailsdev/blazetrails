@@ -53,7 +53,7 @@ export class Registration {
         (this.adapter && other._override === undefined))
     ) {
       throw new TypeConflictError(
-        `Type ${this.name} was registered for all adapters, but shadows a native type with the same name for ${other.adapter}`,
+        `Type ${this.name} was registered for all adapters, but shadows a native type with the same name for ${this.adapter ?? other.adapter}`,
       );
     }
     return this.priority - other.priority;

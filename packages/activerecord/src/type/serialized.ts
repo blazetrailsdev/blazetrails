@@ -17,10 +17,13 @@ export class Serialized extends Type<unknown> {
   readonly subtype: Type<unknown>;
   readonly coder: Coder;
 
+  private _defaultValue: unknown;
+
   constructor(subtype: Type<unknown>, coder: Coder) {
     super();
     this.subtype = subtype;
     this.coder = coder;
+    this._defaultValue = coder.load(null);
   }
 
   cast(value: unknown): unknown {
@@ -59,7 +62,7 @@ export class Serialized extends Type<unknown> {
   }
 
   private _isDefault(value: unknown): boolean {
-    return value === this.coder.load(null);
+    return value === this._defaultValue;
   }
 
   private _encoded(value: unknown): unknown {

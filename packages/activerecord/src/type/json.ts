@@ -35,6 +35,6 @@ export class Json extends Type<unknown> {
   }
 
   changedInPlace(rawOldValue: unknown, newValue: unknown): boolean {
-    return this.deserialize(rawOldValue) !== newValue;
+    return this.serialize(this.deserialize(rawOldValue)) !== this.serialize(newValue);
   }
 }

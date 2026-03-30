@@ -44,9 +44,9 @@ export class TypeMap {
   protected _performFetch(lookupKey: string, fallback?: (key: string) => Type): Type {
     const entries = [...this._mapping.entries()].reverse();
     for (const [key, factory] of entries) {
-      if (typeof key === "string" ? key === lookupKey : key.test(lookupKey)) {
-        return factory(lookupKey);
-      }
+      const matches =
+        typeof key === "string" ? key === lookupKey : ((key.lastIndex = 0), key.test(lookupKey));
+      if (matches) return factory(lookupKey);
     }
     if (this._parent) {
       return this._parent._performFetch(lookupKey, fallback);

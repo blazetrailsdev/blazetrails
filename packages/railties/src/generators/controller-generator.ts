@@ -142,7 +142,7 @@ ${actions.map((a) => `  it("${a}", () => {\n    // TODO: test ${a} action\n  });
       }
 
       for (let i = namespaces.length; i > 0; i--) {
-        lines.push(`${"  ".repeat(i)}})`);
+        lines.push(`${"  ".repeat(i)}});`);
       }
 
       this.insertIntoFile(routesFile, "// routes", lines.join("\n") + "\n");

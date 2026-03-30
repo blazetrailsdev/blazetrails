@@ -372,13 +372,16 @@ export abstract class Migration {
   async removeColumn(
     tableName: string,
     columnName: string,
-    options: { ifExists?: boolean } = {},
+    typeOrOptions?: string | { ifExists?: boolean },
+    options?: { ifExists?: boolean },
   ): Promise<void> {
+    const type = typeof typeOrOptions === "string" ? typeOrOptions : undefined;
+    const opts = typeof typeOrOptions === "object" ? typeOrOptions : (options ?? {});
     if (this._recording) {
-      this._recorder.record("removeColumn", [tableName, columnName, options]);
+      this._recorder.record("removeColumn", [tableName, columnName, type, opts]);
       return;
     }
-    await this.schema.removeColumn(tableName, columnName, options);
+    await this.schema.removeColumn(tableName, columnName, opts);
   }
 
   async renameColumn(tableName: string, oldName: string, newName: string): Promise<void> {
@@ -869,7 +872,8 @@ export class MigrationContext {
       }
     >();
     if (options?.id !== false) {
-      meta.set("id", { type: "integer", primaryKey: true });
+      const idType = typeof options?.id === "string" ? options.id : "integer";
+      meta.set("id", { type: idType, primaryKey: true });
     }
     for (const col of td.columns) {
       if (col.name === "id" && meta.has("id")) continue;

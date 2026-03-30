@@ -381,15 +381,22 @@ export class TableDefinition {
             parts.push("INTEGER PRIMARY KEY AUTOINCREMENT");
           }
           break;
-        case "uuid":
+        case "uuid": {
           if (this._adapterName === "postgres") {
-            parts.push("UUID DEFAULT gen_random_uuid() PRIMARY KEY");
+            parts.push("UUID");
           } else if (this._adapterName === "mysql") {
-            parts.push("CHAR(36) PRIMARY KEY");
+            parts.push("CHAR(36)");
           } else {
-            parts.push("VARCHAR(36) PRIMARY KEY");
+            parts.push("VARCHAR(36)");
+          }
+          if (col.options.primaryKey) {
+            if (this._adapterName === "postgres" && col.options.default === undefined) {
+              parts.push("DEFAULT gen_random_uuid()");
+            }
+            parts.push("PRIMARY KEY");
           }
           break;
+        }
         case "string":
           parts.push(`VARCHAR(${col.options.limit ?? 255})`);
           break;
@@ -430,6 +437,11 @@ export class TableDefinition {
         case "char":
           parts.push(`CHAR(${col.options.limit ?? 1})`);
           break;
+      }
+
+      // For types that don't handle PRIMARY KEY internally, append it if requested
+      if (col.options.primaryKey && col.type !== "primary_key" && col.type !== "uuid") {
+        parts.push("PRIMARY KEY");
       }
 
       if (col.options.array && col.type !== "primary_key") {

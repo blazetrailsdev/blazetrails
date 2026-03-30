@@ -41,11 +41,12 @@ export class AdapterError extends ActiveRecordError {
 }
 
 export class ConnectionNotEstablished extends AdapterError {
-  private _poolSet = false;
+  private _poolSet: boolean;
 
   constructor(message?: string, options?: { connectionPool?: unknown; cause?: unknown }) {
     super(message, options);
     this.name = "ConnectionNotEstablished";
+    this._poolSet = options?.connectionPool !== undefined;
   }
 
   setPool(connectionPool: unknown): this {
@@ -143,6 +144,7 @@ export class StatementInvalid extends AdapterError {
     this.name = "StatementInvalid";
     this.sql = options?.sql;
     this.binds = options?.binds;
+    this._querySet = options?.sql !== undefined || options?.binds !== undefined;
   }
 
   setQuery(sql: string, binds: unknown[]): this {
@@ -230,6 +232,13 @@ export class StrictLoadingViolationError extends ActiveRecordError {
   constructor(message?: string, options?: ErrorOptions) {
     super(message, options);
     this.name = "StrictLoadingViolationError";
+  }
+
+  static forAssociation(record: any, associationName: string): StrictLoadingViolationError {
+    const model = record?.constructor?.name ?? "Record";
+    return new StrictLoadingViolationError(
+      `${model} is marked for strict_loading. The ${associationName} association cannot be lazily loaded.`,
+    );
   }
 }
 

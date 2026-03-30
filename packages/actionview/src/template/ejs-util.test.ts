@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { htmlEscape, h, htmlEscapeOnce, jsonEscape } from "../helpers/erb-util.js";
+import { htmlEscape, h, htmlEscapeOnce, jsonEscape } from "../helpers/ejs-util.js";
 import { htmlSafe, SafeBuffer } from "@blazetrails/activesupport";
 
 const HTML_ESCAPE_TEST_CASES: [string, string][] = [

@@ -59,9 +59,14 @@ function rubyToConventionTs(rubyFile: string, pkg: string): string {
   const kebab = base.replace(/_/g, "-");
   const tsFile = kebab + ".test.ts";
 
-  if (dir === ".") return tsFile;
-  const tsDir = dir.replace(/_/g, "-");
-  return path.join(tsDir, tsFile);
+  let tsDir = dir === "." ? "" : dir.replace(/_/g, "-");
+
+  // Rails uses ERB; we use EJS — map erb paths to ejs
+  tsDir = tsDir.replace(/\berb\b/g, "ejs");
+  const mappedTsFile = tsFile.replace(/\berb\b/g, "ejs");
+
+  if (!tsDir) return mappedTsFile;
+  return path.join(tsDir, mappedTsFile);
 }
 
 function normalize(s: string): string {

@@ -159,6 +159,7 @@ export class ConnectionPool {
     }
     throw new ConnectionTimeoutError(
       `Could not obtain a connection from the pool. All ${this.size} connections are in use.`,
+      { connectionPool: this },
     );
   }
 

@@ -189,17 +189,18 @@ export class SQLite3Adapter implements DatabaseAdapter {
   private _translateException(e: unknown, sql: string, binds: unknown[]): Error {
     const msg = e instanceof Error ? e.message : String(e);
     const code = (e as any)?.code as string | undefined;
+    const cause = e;
 
     if (code?.includes("CONSTRAINT_UNIQUE") || msg.includes("UNIQUE constraint failed")) {
-      return new RecordNotUnique(msg, { sql, binds });
+      return new RecordNotUnique(msg, { sql, binds, cause });
     }
     if (code?.includes("CONSTRAINT_FOREIGNKEY") || msg.includes("FOREIGN KEY constraint failed")) {
-      return new InvalidForeignKey(msg, { sql, binds });
+      return new InvalidForeignKey(msg, { sql, binds, cause });
     }
     if (code?.includes("CONSTRAINT_NOTNULL") || msg.includes("NOT NULL constraint failed")) {
-      return new NotNullViolation(msg, { sql, binds });
+      return new NotNullViolation(msg, { sql, binds, cause });
     }
-    return new StatementInvalid(msg, { sql, binds });
+    return new StatementInvalid(msg, { sql, binds, cause });
   }
 }
 

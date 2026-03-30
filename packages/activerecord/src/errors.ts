@@ -1,27 +1,27 @@
 export class ActiveRecordError extends Error {
-  constructor(message?: string) {
-    super(message);
+  constructor(message?: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "ActiveRecordError";
   }
 }
 
 export class SubclassNotFound extends ActiveRecordError {
-  constructor(message?: string) {
-    super(message);
+  constructor(message?: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "SubclassNotFound";
   }
 }
 
 export class AdapterNotSpecified extends ActiveRecordError {
-  constructor(message?: string) {
-    super(message);
+  constructor(message?: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "AdapterNotSpecified";
   }
 }
 
 export class AdapterNotFound extends ActiveRecordError {
-  constructor(message?: string) {
-    super(message);
+  constructor(message?: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "AdapterNotFound";
   }
 }
@@ -33,8 +33,8 @@ export class AdapterError extends ActiveRecordError {
     return this._connectionPool;
   }
 
-  constructor(message?: string, options?: { connectionPool?: unknown }) {
-    super(message);
+  constructor(message?: string, options?: { connectionPool?: unknown; cause?: unknown }) {
+    super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "AdapterError";
     this._connectionPool = options?.connectionPool;
   }
@@ -43,7 +43,7 @@ export class AdapterError extends ActiveRecordError {
 export class ConnectionNotEstablished extends AdapterError {
   private _poolSet = false;
 
-  constructor(message?: string, options?: { connectionPool?: unknown }) {
+  constructor(message?: string, options?: { connectionPool?: unknown; cause?: unknown }) {
     super(message, options);
     this.name = "ConnectionNotEstablished";
   }
@@ -58,15 +58,15 @@ export class ConnectionNotEstablished extends AdapterError {
 }
 
 export class ConnectionTimeoutError extends ConnectionNotEstablished {
-  constructor(message?: string, options?: { connectionPool?: unknown }) {
+  constructor(message?: string, options?: { connectionPool?: unknown; cause?: unknown }) {
     super(message, options);
     this.name = "ConnectionTimeoutError";
   }
 }
 
 export class ReadOnlyError extends ActiveRecordError {
-  constructor(message?: string) {
-    super(message);
+  constructor(message?: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "ReadOnlyError";
   }
 }
@@ -121,12 +121,12 @@ export class RecordInvalid extends ActiveRecordError {
 }
 
 export class SoleRecordExceeded extends ActiveRecordError {
-  readonly record?: any;
+  readonly model?: any;
 
-  constructor(record?: any) {
-    super(`Wanted only one ${record?.name ?? "record"}`);
+  constructor(model?: any) {
+    super(`Wanted only one ${model?.name ?? "record"}`);
     this.name = "SoleRecordExceeded";
-    this.record = record;
+    this.model = model;
   }
 }
 
@@ -137,9 +137,9 @@ export class StatementInvalid extends AdapterError {
 
   constructor(
     message?: string,
-    options?: { sql?: string; binds?: unknown[]; connectionPool?: unknown },
+    options?: { sql?: string; binds?: unknown[]; connectionPool?: unknown; cause?: unknown },
   ) {
-    super(message, { connectionPool: options?.connectionPool });
+    super(message, { connectionPool: options?.connectionPool, cause: options?.cause });
     this.name = "StatementInvalid";
     this.sql = options?.sql;
     this.binds = options?.binds;
@@ -158,7 +158,7 @@ export class StatementInvalid extends AdapterError {
 export class WrappedDatabaseException extends StatementInvalid {
   constructor(
     message?: string,
-    options?: { sql?: string; binds?: unknown[]; connectionPool?: unknown },
+    options?: { sql?: string; binds?: unknown[]; connectionPool?: unknown; cause?: unknown },
   ) {
     super(message, options);
     this.name = "WrappedDatabaseException";
@@ -168,7 +168,7 @@ export class WrappedDatabaseException extends StatementInvalid {
 export class RecordNotUnique extends WrappedDatabaseException {
   constructor(
     message?: string,
-    options?: { sql?: string; binds?: unknown[]; connectionPool?: unknown },
+    options?: { sql?: string; binds?: unknown[]; connectionPool?: unknown; cause?: unknown },
   ) {
     super(message, options);
     this.name = "RecordNotUnique";
@@ -178,7 +178,7 @@ export class RecordNotUnique extends WrappedDatabaseException {
 export class InvalidForeignKey extends WrappedDatabaseException {
   constructor(
     message?: string,
-    options?: { sql?: string; binds?: unknown[]; connectionPool?: unknown },
+    options?: { sql?: string; binds?: unknown[]; connectionPool?: unknown; cause?: unknown },
   ) {
     super(message, options);
     this.name = "InvalidForeignKey";
@@ -188,7 +188,7 @@ export class InvalidForeignKey extends WrappedDatabaseException {
 export class NotNullViolation extends StatementInvalid {
   constructor(
     message?: string,
-    options?: { sql?: string; binds?: unknown[]; connectionPool?: unknown },
+    options?: { sql?: string; binds?: unknown[]; connectionPool?: unknown; cause?: unknown },
   ) {
     super(message, options);
     this.name = "NotNullViolation";
@@ -213,22 +213,22 @@ export class StaleObjectError extends ActiveRecordError {
 }
 
 export class ConfigurationError extends ActiveRecordError {
-  constructor(message?: string) {
-    super(message);
+  constructor(message?: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "ConfigurationError";
   }
 }
 
 export class ReadOnlyRecord extends ActiveRecordError {
-  constructor(message?: string) {
-    super(message);
+  constructor(message?: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "ReadOnlyRecord";
   }
 }
 
 export class StrictLoadingViolationError extends ActiveRecordError {
-  constructor(message?: string) {
-    super(message);
+  constructor(message?: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "StrictLoadingViolationError";
   }
 }
@@ -241,8 +241,8 @@ export class Rollback extends ActiveRecordError {
 }
 
 export class DangerousAttributeError extends ActiveRecordError {
-  constructor(message?: string) {
-    super(message);
+  constructor(message?: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = "DangerousAttributeError";
   }
 }

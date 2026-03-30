@@ -658,6 +658,7 @@ export class Base extends Model {
       }
       throw new ConfigurationError(
         `Failed to load database config at ${configPath}: ${(error as Error).message}`,
+        { cause: error },
       );
     }
   }

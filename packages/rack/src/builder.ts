@@ -50,7 +50,7 @@ export class Builder {
     const builder = new Builder();
     let source = content;
     if (file) {
-      source += `\n//# sourceURL=${file.replace(/\\/g, "/")}`;
+      source += `\n//# sourceURL=${file.replace(/\\/g, "/").replace(/[\r\n\u2028\u2029]/g, "")}`;
     }
     const configFn = new Function("builder", source);
     configFn(builder);

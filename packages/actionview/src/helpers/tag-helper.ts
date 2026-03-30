@@ -380,9 +380,18 @@ export function tokenList(...args: unknown[]): SafeBuffer {
         .replace(/&#39;/g, "'");
       return unescaped.split(/\s+/);
     })
-    .filter((v, i, arr) => v !== "" && arr.indexOf(v) === i);
+    .filter((v) => v !== "");
 
-  return safeJoin(tokens, " ");
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const t of tokens) {
+    if (!seen.has(t)) {
+      seen.add(t);
+      unique.push(t);
+    }
+  }
+
+  return safeJoin(unique, " ");
 }
 
 export const classNames = tokenList;
@@ -484,8 +493,8 @@ function createTagBuilderProxy(): TagBuilder {
         }
 
         // Extract escape option
-        if ("escape" in options) {
-          escape = options.escape as boolean;
+        if (typeof options.escape === "boolean") {
+          escape = options.escape;
           delete options.escape;
         }
 

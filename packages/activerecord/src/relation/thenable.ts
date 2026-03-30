@@ -6,6 +6,10 @@
  * the PromiseLike protocol so `await relation` triggers evaluation.
  *
  * Mirrors how Rails relations implicitly evaluate when iterated.
+ *
+ * Caveat: any generic `typeof x.then === "function"` checks will treat
+ * these objects as thenables. Use {@link stripThenable} to opt an instance
+ * out before passing it to APIs that must not await it.
  */
 
 /**

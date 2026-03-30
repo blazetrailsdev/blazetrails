@@ -71,15 +71,11 @@ describe("Thenable", () => {
 
     const spy = vi.spyOn(adapter, "execute");
 
-    try {
-      const relation = ThenableUser.where({ active: 1 });
-      expect(spy).not.toHaveBeenCalled();
+    const relation = ThenableUser.where({ active: 1 });
+    expect(spy).not.toHaveBeenCalled();
 
-      await relation;
-      expect(spy).toHaveBeenCalled();
-    } finally {
-      spy.mockRestore();
-    }
+    await relation;
+    expect(spy).toHaveBeenCalled();
   });
 
   it("Relation is not instanceof Promise", () => {

@@ -40,8 +40,10 @@ Async generators `yield` and `Promise.resolve()` both unwrap thenables.
 This causes problems when a method intentionally returns a relation
 instance (e.g., `load()`, `reload()`, `presence()`, `inBatches()`).
 
-`stripThenable(obj)` shadows `.then` with `undefined` on a specific instance,
-preventing unwrapping while preserving all other methods. Used in:
+`stripThenable(obj)` shadows `.then` with a non-callable sentinel object on
+the instance, preventing unwrapping while preserving all other methods. A
+`queueMicrotask` callback restores awaitability after the async boundary
+(only if the property is still the sentinel). Used in:
 
 - `Relation.load()` / `Relation.reload()` — return `this` without unwrapping
 - `Relation.presence()` — return `this` without unwrapping
@@ -55,6 +57,13 @@ preventing unwrapping while preserving all other methods. Used in:
 | `Relation<T>`        | `T[]`       | `toArray()`       |
 | `CollectionProxy`    | `Base[]`    | `toArray()`       |
 | `BatchEnumerator<T>` | `T[]`       | `toArray()`       |
+
+## Caveat: Thenable Detection
+
+Any code that checks `typeof x.then === "function"` to detect async values
+will now treat relations as thenables. This is generally harmless but worth
+knowing about. If a relation is passed to an API that must not await it,
+call `stripThenable(relation)` before passing.
 
 ## Key Behaviors
 

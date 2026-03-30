@@ -3,38 +3,14 @@
  *
  * Mirrors: ActiveModel.deprecator (ActiveSupport::Deprecation instance)
  *
- * In Rails, each framework has its own deprecator instance. This provides
- * the same pattern for @blazetrails/activemodel.
+ * In Rails, each framework has its own deprecator instance. We reuse
+ * the ActiveSupport Deprecation class, just like Rails does.
  */
-export class Deprecator {
-  private _silenced = false;
+import { Deprecation } from "@blazetrails/activesupport";
 
-  warn(message: string, callerId?: string): void {
-    if (this._silenced) return;
-    const prefix = callerId ? `[${callerId}] ` : "";
-    console.warn(`DEPRECATION WARNING: ${prefix}${message}`);
-  }
+export { Deprecation as Deprecator };
 
-  get silenced(): boolean {
-    return this._silenced;
-  }
-
-  set silenced(value: boolean) {
-    this._silenced = value;
-  }
-
-  silence<T>(fn: () => T): T {
-    const prev = this._silenced;
-    this._silenced = true;
-    try {
-      return fn();
-    } finally {
-      this._silenced = prev;
-    }
-  }
-}
-
-export const deprecator = new Deprecator();
+export const deprecator = new Deprecation({ gem: "activemodel" });
 
 /**
  * Mirrors: ActiveModel (the root module that exposes .deprecator)
@@ -43,5 +19,5 @@ export const deprecator = new Deprecator();
  * so the Ruby API extractor assigns the ActiveModel module to this file.
  */
 export interface ActiveModel {
-  readonly deprecator: Deprecator;
+  readonly deprecator: Deprecation;
 }

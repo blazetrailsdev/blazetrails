@@ -10,11 +10,11 @@ import type { Errors } from "./errors.js";
  */
 export interface Validations {
   errors: Errors;
-  isValid(context?: string): boolean;
-  validate(context?: string): unknown;
+  isValid(context?: string | ValidationContext): boolean;
+  validate(context?: string | ValidationContext): this;
   isInvalid(): boolean;
-  validateBang(context?: string): boolean;
-  readonly validationContext: string | null;
+  validateBang(context?: string | ValidationContext): boolean;
+  readonly validationContext: string | ValidationContext | null;
 }
 
 /**

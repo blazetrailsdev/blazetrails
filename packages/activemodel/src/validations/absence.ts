@@ -22,13 +22,11 @@ export interface AbsenceOptions extends ConditionalOptions {
 export interface HelperMethods {
   validatesAbsenceOf(...attributes: string[]): void;
   validatesAcceptanceOf(...attributes: string[]): void;
-  validatesComparisonOf(attribute: string, options: Record<string, unknown>): void;
   validatesConfirmationOf(...attributes: string[]): void;
   validatesExclusionOf(attribute: string, options: Record<string, unknown>): void;
   validatesFormatOf(attribute: string, options: Record<string, unknown>): void;
   validatesInclusionOf(attribute: string, options: Record<string, unknown>): void;
   validatesLengthOf(attribute: string, options: Record<string, unknown>): void;
-  validatesSizeOf(attribute: string, options: Record<string, unknown>): void;
   validatesNumericalityOf(attribute: string, options?: Record<string, unknown> | boolean): void;
   validatesPresenceOf(...attributes: string[]): void;
 }

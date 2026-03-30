@@ -8,9 +8,11 @@
  * humanAttributeName, lookupAncestors) are on the Model constructor; we
  * express the contract here as an interface for the static side.
  */
-export interface Translation {
-  raiseOnMissingTranslations: boolean;
+export interface TranslationClassMethods {
+  raiseOnMissingTranslations?: boolean;
   readonly i18nScope: string;
   lookupAncestors(): unknown[];
   humanAttributeName(attr: string): string;
 }
+
+export type Translation = TranslationClassMethods;

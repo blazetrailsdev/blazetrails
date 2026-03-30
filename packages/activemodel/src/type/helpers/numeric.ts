@@ -28,7 +28,8 @@ export const NumericMixin = {
   },
 
   numericChanged(oldValue: unknown, newValue: unknown, _rawNewValue: unknown): boolean {
-    if (oldValue === null && newValue === null) return false;
-    return oldValue !== newValue;
+    const oldNum = NumericMixin.castNumeric(oldValue);
+    const newNum = NumericMixin.castNumeric(newValue);
+    return oldNum !== newNum;
   },
 };

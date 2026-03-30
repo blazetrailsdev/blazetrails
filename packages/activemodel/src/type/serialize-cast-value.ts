@@ -12,23 +12,26 @@ export interface SerializeCastValue {
   itselfIfSerializeCastValueCompatible(): unknown;
 }
 
-/**
- * Mirrors: ActiveModel::Type::SerializeCastValue::ClassMethods
- *
- * Provides serialize_cast_value_compatible? which checks if a type
- * has overridden serialize_cast_value.
- */
-export interface ClassMethods {
-  serializeCastValueCompatible(): boolean;
-}
+// eslint-disable-next-line @typescript-eslint/no-namespace
+export namespace SerializeCastValue {
+  /**
+   * Mirrors: ActiveModel::Type::SerializeCastValue::ClassMethods
+   *
+   * Provides serialize_cast_value_compatible? which checks if a type
+   * has overridden serialize_cast_value.
+   */
+  export interface ClassMethods {
+    serializeCastValueCompatible(): boolean;
+  }
 
-/**
- * Mirrors: ActiveModel::Type::SerializeCastValue::DefaultImplementation
- *
- * Fallback serialize_cast_value that delegates to serialize.
- */
-export interface DefaultImplementation {
-  serializeCastValue(value: unknown): unknown;
+  /**
+   * Mirrors: ActiveModel::Type::SerializeCastValue::DefaultImplementation
+   *
+   * Fallback serialize_cast_value that delegates to serialize.
+   */
+  export interface DefaultImplementation {
+    serializeCastValue(value: unknown): unknown;
+  }
 }
 
 export function itselfIfSerializeCastValueCompatible(type: {

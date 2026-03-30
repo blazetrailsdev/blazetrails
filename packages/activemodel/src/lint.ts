@@ -18,6 +18,15 @@ export namespace Tests {
     if (key !== null && !Array.isArray(key)) {
       throw new Error("toKey must return null or an array");
     }
+
+    const persisted = model.isPersisted();
+    if (typeof persisted !== "boolean") {
+      throw new Error("isPersisted must return a boolean");
+    }
+
+    if (persisted && key === null) {
+      throw new Error("toKey must not return null when the model is persisted");
+    }
   }
 
   export function testToParam(model: {

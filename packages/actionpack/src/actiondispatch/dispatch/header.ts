@@ -71,7 +71,7 @@ export class Headers {
     const strValue = String(value);
     const existing = this._env[envKey];
     if (existing != null) {
-      this._env[envKey] = existing + "," + strValue;
+      this._env[envKey] = String(existing) + "," + strValue;
     } else {
       this._env[envKey] = strValue;
     }

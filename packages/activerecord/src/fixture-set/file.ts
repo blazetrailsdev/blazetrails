@@ -179,9 +179,17 @@ export class FixtureSet {
     const { rows, joinRowsByTable } = this._buildRows(options);
     const adapterName = detectAdapterName(adapter);
     const quotedTable = quoteTableName(this.tableName, adapterName);
+    const joinTablesToClear = new Set(joinRowsByTable.keys());
+    if (options.associations) {
+      for (const assoc of options.associations) {
+        if ("joinTable" in assoc && typeof (assoc as any).joinTable === "string") {
+          joinTablesToClear.add((assoc as any).joinTable);
+        }
+      }
+    }
     await adapter.beginTransaction();
     try {
-      for (const table of [...joinRowsByTable.keys()].sort()) {
+      for (const table of [...joinTablesToClear].sort()) {
         await adapter.executeMutation(`DELETE FROM ${quoteTableName(table, adapterName)}`);
       }
       await adapter.executeMutation(`DELETE FROM ${quotedTable}`);

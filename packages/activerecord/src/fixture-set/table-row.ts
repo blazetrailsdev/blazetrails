@@ -114,8 +114,8 @@ export class TableRow {
         this._resolveHasManyThrough(assoc);
       } else {
         const value = this._row[assoc.name];
-        if (typeof value === "string" && value !== "") {
-          if (!Object.prototype.hasOwnProperty.call(this._row, assoc.foreignKey)) {
+        if (typeof value === "string") {
+          if (value !== "" && !Object.prototype.hasOwnProperty.call(this._row, assoc.foreignKey)) {
             this._row[assoc.foreignKey] = identify(value);
           }
           if (assoc.name !== assoc.foreignKey) {

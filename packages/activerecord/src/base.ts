@@ -2450,13 +2450,15 @@ export class Base extends Model {
       }
     }
 
-    // Await per-instance async validations (pushed by UniquenessValidator.validateEach)
-    const instancePromises = (this as any)._asyncValidations as Promise<unknown>[] | undefined;
+    // Await per-instance async validation promises (pushed by UniquenessValidator.validateEach)
+    const instancePromises = (this as any)._asyncValidationPromises as
+      | Promise<unknown>[]
+      | undefined;
     if (instancePromises?.length) {
       try {
         await Promise.all(instancePromises);
       } finally {
-        (this as any)._asyncValidations = [];
+        (this as any)._asyncValidationPromises = [];
       }
     }
 

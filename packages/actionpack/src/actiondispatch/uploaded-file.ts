@@ -89,13 +89,13 @@ export class UploadedFile {
   /** Close the file handle. */
   close(unlink?: boolean): void {
     if (unlink && this._tempfile) {
+      const tempPath = this._tempfile;
       try {
-        fs.unlinkSync(this._tempfile);
+        fs.unlinkSync(tempPath);
         this._tempfile = null;
       } catch {
-        // Only clear the path if the file no longer exists.
         try {
-          if (!fs.existsSync(this._tempfile)) {
+          if (!fs.existsSync(tempPath)) {
             this._tempfile = null;
           }
         } catch {

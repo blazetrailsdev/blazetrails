@@ -35,6 +35,8 @@ export class Vector {
   private parseVector(str: string): number[] | null {
     const cleaned = str.replace(/[[\]]/g, "").trim();
     if (cleaned === "") return [];
-    return cleaned.split(",").map((s) => parseFloat(s.trim()));
+    const values = cleaned.split(",").map((s) => parseFloat(s.trim()));
+    if (values.some((v) => !Number.isFinite(v))) return null;
+    return values;
   }
 }

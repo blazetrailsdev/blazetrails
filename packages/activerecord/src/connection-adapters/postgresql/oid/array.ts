@@ -81,7 +81,10 @@ export class Array {
         }
         i++; // closing quote
         elements.push(this.subtype.cast(val));
-      } else if (inner.substring(i, i + 4).toUpperCase() === "NULL") {
+      } else if (
+        inner.substring(i, i + 4).toUpperCase() === "NULL" &&
+        (i + 4 >= inner.length || inner[i + 4] === this.delimiter || inner[i + 4] === "}")
+      ) {
         elements.push(null);
         i += 4;
       } else if (inner[i] === "{") {

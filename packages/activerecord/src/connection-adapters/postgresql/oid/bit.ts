@@ -26,7 +26,8 @@ export class Data {
   }
 
   toHexString(): string {
-    if (/^[0-9a-fA-F]+$/.test(this.value)) return this.value;
+    const isBinaryOnly = /^[01]+$/.test(this.value);
+    if (!isBinaryOnly && /^[0-9a-fA-F]+$/.test(this.value)) return this.value;
     let hex = "";
     for (let i = 0; i < this.value.length; i += 4) {
       const chunk = this.value.substring(i, i + 4).padEnd(4, "0");

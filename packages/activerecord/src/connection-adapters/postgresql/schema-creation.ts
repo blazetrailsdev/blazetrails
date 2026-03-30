@@ -7,7 +7,8 @@
 import { SchemaCreation as AbstractSchemaCreation } from "../abstract/schema-creation.js";
 import type { ReferentialAction } from "../abstract/schema-definitions.js";
 import { quoteIdentifier, quoteTableName } from "../abstract/quoting.js";
-import { singularize } from "@blazetrails/activesupport";
+import { singularize, underscore } from "@blazetrails/activesupport";
+import { Utils } from "./utils.js";
 
 export class SchemaCreation extends AbstractSchemaCreation {
   constructor() {
@@ -15,10 +16,11 @@ export class SchemaCreation extends AbstractSchemaCreation {
   }
 
   visitAddForeignKey(fromTable: string, toTable: string, options: Record<string, unknown>): string {
-    const unqualifiedToTable = toTable.includes(".") ? toTable.split(".").pop()! : toTable;
-    const column = (options.column as string) ?? `${singularize(unqualifiedToTable)}_id`;
+    const fromName = Utils.extractSchemaQualifiedName(fromTable);
+    const toName = Utils.extractSchemaQualifiedName(toTable);
+    const column = (options.column as string) ?? `${underscore(singularize(toName.identifier))}_id`;
     const primaryKey = (options.primaryKey as string) ?? "id";
-    const name = (options.name as string) ?? `fk_rails_${fromTable}_${column}`;
+    const name = (options.name as string) ?? `fk_rails_${fromName.identifier}_${column}`;
 
     let sql = `ALTER TABLE ${quoteTableName(fromTable, "postgres")} ADD CONSTRAINT ${quoteIdentifier(name, "postgres")} `;
     sql += `FOREIGN KEY (${quoteIdentifier(column, "postgres")}) REFERENCES ${quoteTableName(toTable, "postgres")} (${quoteIdentifier(primaryKey, "postgres")})`;

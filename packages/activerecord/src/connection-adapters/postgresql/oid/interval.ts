@@ -39,13 +39,12 @@ export class Interval {
       if (v.years) parts.push(`${v.years} years`);
       if (v.months) parts.push(`${v.months} months`);
       if (v.days) parts.push(`${v.days} days`);
-      const timeParts: string[] = [];
-      if (v.hours) timeParts.push(String(v.hours).padStart(2, "0"));
-      else if (v.minutes || v.seconds) timeParts.push("00");
-      if (v.minutes) timeParts.push(String(v.minutes).padStart(2, "0"));
-      else if (timeParts.length > 0 && v.seconds) timeParts.push("00");
-      if (v.seconds) timeParts.push(String(v.seconds).padStart(2, "0"));
-      if (timeParts.length > 0) parts.push(timeParts.join(":"));
+      if (v.hours || v.minutes || v.seconds) {
+        const h = String(v.hours ?? 0).padStart(2, "0");
+        const m = String(v.minutes ?? 0).padStart(2, "0");
+        const s = String(v.seconds ?? 0).padStart(2, "0");
+        parts.push(`${h}:${m}:${s}`);
+      }
       return parts.join(" ") || "00:00:00";
     }
     return null;

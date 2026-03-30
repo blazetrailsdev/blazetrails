@@ -11,7 +11,7 @@ export class Oid {
 
   cast(value: unknown): number | null {
     if (value == null) return null;
-    if (typeof value === "number") return Math.floor(value);
+    if (typeof value === "number") return Math.trunc(value);
     if (typeof value === "string") {
       if (value === "") return null;
       const parsed = parseInt(value, 10);

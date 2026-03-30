@@ -251,13 +251,19 @@ function tagOptions(options: Record<string, unknown> | undefined, escape: boolea
   const sep = " ";
 
   for (const [key, value] of Object.entries(options)) {
-    if (DATA_PREFIXES.has(key) && typeof value === "object" && value !== null) {
+    const isPlainObject =
+      typeof value === "object" &&
+      value !== null &&
+      !Array.isArray(value) &&
+      !(value instanceof SafeBuffer) &&
+      !(value instanceof RegExp);
+    if (DATA_PREFIXES.has(key) && isPlainObject) {
       for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
         if (v === null || v === undefined) continue;
         output += sep;
         output += prefixTagOption(key, k, v, escape);
       }
-    } else if (ARIA_PREFIXES.has(key) && typeof value === "object" && value !== null) {
+    } else if (ARIA_PREFIXES.has(key) && isPlainObject) {
       for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
         if (v === null || v === undefined) continue;
 
@@ -317,7 +323,7 @@ export function contentTag(
   contentOrOptions?: unknown,
   options?: Record<string, unknown> | null,
   escape?: boolean,
-  block?: () => string,
+  block?: () => unknown,
 ): SafeBuffer {
   ensureValidHtml5TagName(name);
   const esc = escape !== undefined ? escape : true;

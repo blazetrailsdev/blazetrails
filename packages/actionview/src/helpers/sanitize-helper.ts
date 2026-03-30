@@ -43,7 +43,7 @@ class DefaultFullSanitizer implements Sanitizer {
 class DefaultLinkSanitizer implements Sanitizer {
   sanitize(html: string): string {
     if (html === null || html === undefined) return "";
-    return html.replace(/<\/?a[^>]*>/gi, "");
+    return html.replace(/<\/?a\b[^>]*>/gi, "");
   }
 }
 
@@ -117,7 +117,7 @@ class DefaultSafeListSanitizer implements Sanitizer {
     const allowedTags = (options.tags as string[]) || ctor.allowedTags;
     const allowedAttrs = (options.attributes as string[]) || ctor.allowedAttributes;
 
-    return html.replace(/<\/?([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>/gi, (match, tagName) => {
+    return html.replace(/<\/?([a-zA-Z][a-zA-Z0-9:-]*)\b[^>]*>/gi, (match, tagName) => {
       const lower = tagName.toLowerCase();
       if (!allowedTags.includes(lower)) {
         return "";
@@ -128,7 +128,7 @@ class DefaultSafeListSanitizer implements Sanitizer {
         return `</${lower}>`;
       }
 
-      const attrRegex = /\s+([a-zA-Z][\w-]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+)))?/g;
+      const attrRegex = /\s+([a-zA-Z][\w:-]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|(\S+)))?/g;
       let attrMatch;
       const attrs: string[] = [];
       while ((attrMatch = attrRegex.exec(match)) !== null) {

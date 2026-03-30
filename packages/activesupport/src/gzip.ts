@@ -9,7 +9,11 @@ export class Stream {
     this._position = 0;
   }
 
-  get string(): Buffer {
+  get string(): string {
+    return this._buffer.toString("binary");
+  }
+
+  get buffer(): Buffer {
     return this._buffer;
   }
 

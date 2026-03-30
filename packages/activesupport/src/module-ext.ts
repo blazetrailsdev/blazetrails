@@ -1,3 +1,5 @@
+import { DescendantsTracker } from "./descendants-tracker.js";
+
 /**
  * Module extensions mirroring Rails ActiveSupport module/class extensions.
  * Covers delegate, mattr_accessor, cattr_accessor, attr_internal, and helpers.
@@ -239,8 +241,6 @@ export function suppress<T>(
 }
 
 // ── Descendants tracking ──────────────────────────────────────────────────────
-
-import { DescendantsTracker } from "./descendants-tracker.js";
 
 export function registerSubclass(parent: Function, child: Function): void {
   DescendantsTracker.registerSubclass(parent, child);

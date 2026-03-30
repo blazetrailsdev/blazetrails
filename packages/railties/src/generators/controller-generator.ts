@@ -21,7 +21,9 @@ export class ControllerGenerator extends GeneratorBase {
     const className = classify(stripped) + "Controller";
     const fileName = dasherize(underscore(stripped)) + "-controller";
     const viewDir = dasherize(underscore(stripped));
-    const parentClass = parent ? classify(parent) : "ActionController.Base";
+    const parentClass = parent
+      ? classify(parent.replace(/::/g, "_").replace(/\//g, "_"))
+      : "ActionController.Base";
 
     const ext = this.ext();
     const ts = this.isTypeScript();
@@ -30,8 +32,11 @@ export class ControllerGenerator extends GeneratorBase {
     const namespaceParts = stripped.split("/");
     const depth = namespaceParts.length > 1 ? namespaceParts.length - 1 : 0;
     const parentRelPrefix = depth > 0 ? "../".repeat(depth) : "./";
+    const parentPath = parent
+      ? dasherize(underscore(parent.replace(/::/g, "_").replace(/\//g, "_")))
+      : null;
     const importLine = parent
-      ? `import { ${classify(parent)} } from "${parentRelPrefix}${dasherize(underscore(parent))}.js";`
+      ? `import { ${parentClass} } from "${parentRelPrefix}${parentPath}.js";`
       : 'import { ActionController } from "@blazetrails/actionpack";';
     // For TS class names, join namespace parts without :: (AdminDashboardController)
     const tsClassName =
@@ -63,10 +68,11 @@ ${actionMethods}
     );
 
     if (test) {
+      const testImportPrefix = "../".repeat(depth + 2);
       this.createFile(
         `test/controllers/${controllerFile}.test${ext}`,
         `import { describe, it, expect } from "vitest";
-import { ${tsClassName} } from "../../src/app/controllers/${controllerFile}.js";
+import { ${tsClassName} } from "${testImportPrefix}src/app/controllers/${controllerFile}.js";
 
 describe("${displayName}", () => {
 ${actions.map((a) => `  it("${a}", () => {\n    // TODO: test ${a} action\n  });`).join("\n\n")}

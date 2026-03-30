@@ -18,7 +18,7 @@ export namespace Configurable {
   }
 
   export function getConfig(target: any): Configuration {
-    if (!target._config) {
+    if (!Object.prototype.hasOwnProperty.call(target, "_config") || !target._config) {
       const parent = Object.getPrototypeOf(target);
       if (parent && parent._config) {
         target._config = new Configuration(parent._config);
@@ -82,14 +82,16 @@ export namespace Configurable {
         });
       }
 
-      if (options.default !== undefined) {
-        klass[name] = options.default;
+      if ("default" in options) {
+        const defaultValue =
+          typeof options.default === "function" ? options.default() : options.default;
+        klass[name] = defaultValue;
       }
     }
   }
 
   export function getInstanceConfig(instance: any): Configuration {
-    if (!instance._instanceConfig) {
+    if (!Object.prototype.hasOwnProperty.call(instance, "_instanceConfig")) {
       instance._instanceConfig = new Configuration(getConfig(instance.constructor));
     }
     return instance._instanceConfig;

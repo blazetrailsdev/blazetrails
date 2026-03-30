@@ -5,7 +5,11 @@ export class Stream {
   private _position: number;
 
   constructor(data?: Buffer | string) {
-    this._buffer = data ? Buffer.from(data) : Buffer.alloc(0);
+    this._buffer = data
+      ? Buffer.isBuffer(data)
+        ? data
+        : Buffer.from(data, "binary")
+      : Buffer.alloc(0);
     this._position = 0;
   }
 
@@ -18,7 +22,7 @@ export class Stream {
   }
 
   write(data: Buffer | string): number {
-    const buf = Buffer.from(data);
+    const buf = Buffer.isBuffer(data) ? data : Buffer.from(data, "binary");
     this._buffer = Buffer.concat([this._buffer, buf]);
     this._position = this._buffer.length;
     return buf.length;

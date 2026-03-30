@@ -246,8 +246,18 @@ export namespace Filters {
 const CALLBACKS = Symbol("callbacks");
 
 function getCallbackChains(target: any): Map<string, CallbackChain> {
-  if (!target[CALLBACKS]) {
-    target[CALLBACKS] = new Map<string, CallbackChain>();
+  if (!Object.prototype.hasOwnProperty.call(target, CALLBACKS)) {
+    const parent: Map<string, CallbackChain> | undefined = target[CALLBACKS];
+    const own = new Map<string, CallbackChain>();
+    if (parent) {
+      for (const [name, chain] of parent) {
+        own.set(name, new CallbackChain(chain.name, chain.config));
+        for (const entry of chain.entries) {
+          own.get(name)!.append(new Callback(entry.name, entry.filter, entry.kind, entry.options));
+        }
+      }
+    }
+    target[CALLBACKS] = own;
   }
   return target[CALLBACKS];
 }

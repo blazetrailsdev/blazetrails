@@ -190,3 +190,37 @@ describe("ScaffoldGeneratorTest", () => {
     // Needs engine support
   });
 });
+
+describe("ScaffoldGeneratorTest (JavaScript project)", () => {
+  let jsTmpDir: string;
+  let jsLines: string[];
+
+  beforeEach(() => {
+    jsTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "trails-js-test-"));
+    jsLines = [];
+  });
+
+  afterEach(() => {
+    fs.rmSync(jsTmpDir, { recursive: true, force: true });
+  });
+
+  it("generates .js controller and model files", () => {
+    const gen = new ScaffoldGenerator({ cwd: jsTmpDir, output: (m) => jsLines.push(m) });
+    const files = gen.run("Post", ["title:string"]);
+    expect(files).toContain("src/app/controllers/posts-controller.js");
+    expect(files).toContain("src/app/models/post.js");
+    const migFile = files.find((f) => f.startsWith("db/migrations/"));
+    expect(migFile).toMatch(/\.js$/);
+  });
+
+  it("omits TypeScript annotations in controller", () => {
+    const gen = new ScaffoldGenerator({ cwd: jsTmpDir, output: (m) => jsLines.push(m) });
+    gen.run("Post", ["title:string"]);
+    const content = fs.readFileSync(
+      path.join(jsTmpDir, "src/app/controllers/posts-controller.js"),
+      "utf-8",
+    );
+    expect(content).not.toContain("Promise<void>");
+    expect(content).toContain("export class PostsController");
+  });
+});

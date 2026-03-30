@@ -8,7 +8,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const DB_PATH = join(__dirname, "stats.db");
 
 function gh(args: string): string {
-  return execSync(`gh ${args}`, { encoding: "utf-8", maxBuffer: 10_000_000 });
+  return execSync(`gh ${args}`, { encoding: "utf-8", maxBuffer: 50_000_000 });
 }
 
 function ghJson<T>(args: string): T {

@@ -33,7 +33,7 @@ Tutorials control which panes are visible per step, introducing them progressive
 | SQL | `SqlConsole.svelte` | Docs Step 6 |
 | Results | `ResultsPanel.svelte` | Docs Step 7 |
 | REPL | `Repl.svelte` | Finances Step 6 |
-| Preview | `PreviewPanel.svelte` | Music Step 8 |
+| Preview | `PreviewPanel.svelte` | TBD |
 
 ## Persistence
 

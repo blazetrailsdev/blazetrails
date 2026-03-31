@@ -2,7 +2,7 @@
 
 ## Dependencies
 - Base: `worktree-frontiers` branch
-- Client-side only — backend serves static `.sqlite` files, no dynamic API
+- Client-side only — Frontiers host backend only serves static `.sqlite` files (no dynamic API); tutorial app controllers/routes run entirely inside the in-browser runtime
 
 ## Approach
 TDD throughout. Every PR starts with tests that define the contract. Tutorial content has automated replay tests that run in CI.

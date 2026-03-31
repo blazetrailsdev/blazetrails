@@ -182,7 +182,7 @@ PR 1 ──→ PR 2 ──→ PR 3
 (1–5)    (6–10)   (.sqlite)
 ```
 
-Sequential within WS2 (content builds on itself), but **WS2 runs in parallel with WS3** — they share no files except `registry.ts` (which just adds an entry).
+Sequential within WS2 (content builds on itself), but **WS2 runs in parallel with WS3** — they share `registry.ts` and `scripts/build-tutorial-snapshots.ts`. To avoid merge conflicts, WS1 pre-stubs the Music and Finances entries in those shared files so WS2/WS3 PRs only fill in per-tutorial modules.
 
 ---
 

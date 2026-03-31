@@ -21,7 +21,7 @@ src/lib/frontiers/tutorials/finances/
                             Step 2: exec("generate model Account ..."),
                                     exec("generate model Category ..."),
                                     exec("db:migrate"),
-                                    assert tables account + categories exist
+                                    assert tables accounts + categories exist
                                     Validate: decimal columns present in schema
                             Step 3: exec("generate model Transaction ..."),
                                     exec("db:migrate"),
@@ -35,9 +35,9 @@ src/lib/frontiers/tutorials/finances/
                             Step 5: applyDiff for seeds.ts, exec("db:seed"),
                                     assert row counts (transactions 50+, budgets 10+)
                                     Validate seed data:
-                                    - All transaction.account_id → valid account
-                                    - All transaction.category_id → valid category
-                                    - All budget.category_id → valid category
+                                    - All transactions.account_id → valid account
+                                    - All transactions.category_id → valid category
+                                    - All budgets.category_id → valid category
                                     - Transaction dates are valid YYYY-MM-DD
                                     - Budget months are valid YYYY-MM
                                     - Account balances are reasonable decimals
@@ -226,7 +226,7 @@ src/lib/frontiers/tutorials/finances/steps/
                           Diffs: 3 controllers:
                             accounts-controller.ts — index with computed balances
                             transactions-controller.ts — index with month/category filters
-                            reports-controller.ts — spending, monthly, budget_status actions
+                            reports-controller.ts — spending, monthly, budget actions
                           Diff: config/routes.ts with /api/ prefix
                           CLI: server
                           Diagram: flow — API namespace (6 endpoints grouped by resource)
@@ -259,7 +259,7 @@ PR 1 ──→ PR 2 ──→ PR 3 ──→ PR 4
 (1–5)    (6–8)    (9–10)   (.sqlite)
 ```
 
-Sequential within WS3, but **runs in parallel with WS2**.
+Sequential within WS3, but **runs in parallel with WS2**. Shared files (`registry.ts`, `scripts/build-tutorial-snapshots.ts`) are pre-stubbed in WS1 to avoid merge conflicts.
 
 ---
 

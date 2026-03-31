@@ -33,7 +33,9 @@ export function urlFor(
 
   let url = `${protocol}://${host}`;
   const portNum = port ? Number(port) : undefined;
-  if (portNum && portNum !== 80 && portNum !== 443) {
+  const isDefaultPort =
+    (protocol === "http" && portNum === 80) || (protocol === "https" && portNum === 443);
+  if (portNum && !isDefaultPort) {
     url += `:${portNum}`;
   }
   url += path;

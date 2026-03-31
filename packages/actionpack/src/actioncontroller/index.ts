@@ -63,3 +63,19 @@ export { BasicAuth, TokenAuth, DigestAuth } from "./metal/http-authentication.js
 export { Renderer } from "./renderer.js";
 export { Deprecator, deprecator } from "./deprecator.js";
 export { TestRequest, LiveTestResponse, TestSession } from "./test-case.js";
+export { fragmentCacheKey } from "./caching.js";
+export {
+  setDefaultFormBuilder,
+  getDefaultFormBuilder,
+  resolveFormBuilder,
+} from "./form-builder.js";
+export { Railtie } from "./railtie.js";
+export { assertTemplate } from "./template-assertions.js";
+export { LogSubscriber } from "./log-subscriber.js";
+export { renderForApi } from "./api/api-rendering.js";
+export { resolveHelperPath, inheritedWithHelpers } from "./railties/helpers.js";
+export { RescueRegistry } from "./metal/rescue.js";
+export { FlashTypeRegistry } from "./metal/flash.js";
+export { HelperRegistry } from "./metal/helpers.js";
+export { ParameterEncodingRegistry } from "./metal/parameter-encoding.js";
+export { MemoryRateLimitStore, isRateLimited } from "./metal/rate-limiting.js";

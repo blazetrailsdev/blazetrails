@@ -21,8 +21,7 @@ function deepMergeObjects(
   const result: Record<string, unknown> = createLike(a);
 
   for (const key of Object.keys(a)) {
-    const value = a[key];
-    result[key] = isPlainObject(value) ? deepMergeObjects(value, createLike(value)) : value;
+    result[key] = a[key];
   }
 
   for (const key of Object.keys(b)) {

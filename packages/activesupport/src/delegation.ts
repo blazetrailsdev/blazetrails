@@ -66,6 +66,7 @@ export namespace Delegation {
     delegateTo: string,
     options: { allowNil?: boolean } = {},
   ): T {
+    const boundCache = new Map<string | symbol, Function>();
     return new Proxy(target, {
       get(obj, prop, receiver) {
         if (prop in obj || typeof prop === "symbol") {
@@ -78,7 +79,11 @@ export namespace Delegation {
         }
         const val = (delegate as Record<string, unknown>)[globalThis.String(prop)];
         if (typeof val === "function") {
-          return val.bind(delegate);
+          const cached = boundCache.get(prop);
+          if (cached) return cached;
+          const bound = val.bind(delegate) as Function;
+          boundCache.set(prop, bound);
+          return bound;
         }
         return val;
       },

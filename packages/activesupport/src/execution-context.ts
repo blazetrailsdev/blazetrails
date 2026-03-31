@@ -8,25 +8,48 @@
  */
 const _store = new Map<string, unknown>();
 
+function saveAndApply(
+  attrs: Record<string, unknown>,
+): Map<string, { hadKey: boolean; value: unknown }> {
+  const saved = new Map<string, { hadKey: boolean; value: unknown }>();
+  for (const key of Object.keys(attrs)) {
+    saved.set(key, { hadKey: _store.has(key), value: _store.get(key) });
+    _store.set(key, attrs[key]);
+  }
+  return saved;
+}
+
+function restore(saved: Map<string, { hadKey: boolean; value: unknown }>): void {
+  for (const [key, entry] of saved) {
+    if (entry.hadKey) {
+      _store.set(key, entry.value);
+    } else {
+      _store.delete(key);
+    }
+  }
+}
+
 export const ExecutionContext = {
-  set(attrs: Record<string, unknown>, fn?: () => void): void {
+  set(attrs: Record<string, unknown>, fn?: () => void | Promise<void>): void | Promise<void> {
     if (fn) {
-      const saved = new Map<string, { hadKey: boolean; value: unknown }>();
-      for (const key of Object.keys(attrs)) {
-        saved.set(key, { hadKey: _store.has(key), value: _store.get(key) });
-        _store.set(key, attrs[key]);
-      }
+      const saved = saveAndApply(attrs);
+      let result: void | Promise<void>;
       try {
-        fn();
-      } finally {
-        for (const [key, entry] of saved) {
-          if (entry.hadKey) {
-            _store.set(key, entry.value);
-          } else {
-            _store.delete(key);
-          }
-        }
+        result = fn();
+      } catch (e) {
+        restore(saved);
+        throw e;
       }
+      if (result && typeof (result as Promise<void>).then === "function") {
+        return (result as Promise<void>).then(
+          () => restore(saved),
+          (e) => {
+            restore(saved);
+            throw e;
+          },
+        );
+      }
+      restore(saved);
     } else {
       for (const key of Object.keys(attrs)) {
         _store.set(key, attrs[key]);

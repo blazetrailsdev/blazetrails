@@ -46,18 +46,16 @@ export class EncryptedUniquenessValidator {
 
     // Validate against each previous scheme by temporarily swapping
     // typeForAttribute so the query layer uses the previous type
-    const originalTypeForAttribute = klass.typeForAttribute?.bind(klass);
+    const originalTypeForAttribute = klass.typeForAttribute;
     for (const prevType of type.previousTypes) {
       klass.typeForAttribute = (attr: string) => {
         if (attr === attribute) return prevType;
-        return originalTypeForAttribute?.(attr);
+        return originalTypeForAttribute ? originalTypeForAttribute.call(klass, attr) : undefined;
       };
       try {
         originalValidate(record, attribute, value);
       } finally {
-        if (originalTypeForAttribute) {
-          klass.typeForAttribute = originalTypeForAttribute;
-        }
+        klass.typeForAttribute = originalTypeForAttribute;
       }
     }
   }

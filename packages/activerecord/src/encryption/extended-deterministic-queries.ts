@@ -86,8 +86,10 @@ export class EncryptedQuery {
     for (const prev of type.previousTypes) {
       results.push(new AdditionalValue(plaintext, prev));
     }
-    // Include plaintext for support_unencrypted_data migration
-    results.push(plaintext);
+    // Include plaintext only when support_unencrypted_data is enabled
+    if ((type as any).supportUnencryptedData) {
+      results.push(plaintext);
+    }
     return results;
   }
 }

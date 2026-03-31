@@ -7,7 +7,7 @@
 export class Base extends Error {
   constructor(message?: string) {
     super(message);
-    this.name = "Encryption::Base";
+    this.name = "EncryptionError";
   }
 }
 

@@ -1,6 +1,6 @@
 import { Type, StringType } from "@blazetrails/activemodel";
 import type { Scheme } from "./scheme.js";
-import { Encryptor } from "./encryptor.js";
+import type { Encryptor } from "./encryptor.js";
 import { isEncryptionDisabled, isProtectedMode } from "./context.js";
 
 /**
@@ -30,7 +30,7 @@ export class EncryptedAttributeType extends Type {
     this.castType = options.castType ?? new StringType();
     this._previousType = options.previousType ?? false;
     this._default = options.default;
-    this._encryptor = new Encryptor();
+    this._encryptor = options.scheme.encryptor;
   }
 
   cast(value: unknown): unknown {
@@ -40,6 +40,7 @@ export class EncryptedAttributeType extends Type {
   deserialize(value: unknown): unknown {
     if (value === null || value === undefined) return value;
     if (isEncryptionDisabled()) return value;
+    if (isProtectedMode()) return value;
     const decrypted = this.decrypt(value);
     return this.castType.deserialize?.(decrypted) ?? decrypted;
   }

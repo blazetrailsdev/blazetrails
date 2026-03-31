@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { Notifications } from "./notifications.js";
-import { Event, Instrumenter } from "./notifications/instrumenter.js";
+import { Event, Instrumenter, LegacyHandle, Wrapper } from "./notifications/instrumenter.js";
 
 beforeEach(() => {
   Notifications.unsubscribeAll();
@@ -630,5 +630,31 @@ describe("Instrumenter", () => {
       }),
     ).rejects.toThrow("async boom");
     expect(published).toHaveLength(1);
+  });
+});
+
+describe("LegacyHandle", () => {
+  it("finish publishes the event", () => {
+    const published: Event[] = [];
+    const notifier = {
+      publish(_name: string, event: Event) {
+        published.push(event);
+      },
+    };
+    const event = new Event("legacy.event", new Date());
+    const handle = new LegacyHandle(event, notifier);
+    handle.finish();
+    expect(published).toHaveLength(1);
+    expect(published[0].name).toBe("legacy.event");
+    expect(published[0].end).not.toBeNull();
+  });
+});
+
+describe("Wrapper", () => {
+  it("returns a stable Instrumenter instance", () => {
+    const notifier = { publish() {} };
+    const wrapper = new Wrapper(notifier);
+    expect(wrapper.instrumenter).toBeInstanceOf(Instrumenter);
+    expect(wrapper.instrumenter).toBe(wrapper.instrumenter);
   });
 });

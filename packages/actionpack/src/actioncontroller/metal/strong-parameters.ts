@@ -577,8 +577,8 @@ export class Parameters {
     return parts.join("&");
   }
 
-  toParam(prefix?: string): string {
-    return this.toQuery(prefix);
+  toParam(): string {
+    return this.toQuery();
   }
 
   equals(other: Parameters): boolean {

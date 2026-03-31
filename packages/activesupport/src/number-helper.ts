@@ -368,12 +368,12 @@ export function numberToHuman(number: unknown, options: NumberToHumanOptions = {
   return rounded;
 }
 
-export const NumberHelper = {
-  numberToPhone,
-  numberToCurrency,
-  numberToPercentage,
-  numberWithDelimiter,
-  numberToRounded,
-  numberToHumanSize,
-  numberToHuman,
-};
+export namespace NumberHelper {
+  export const toPhone = numberToPhone;
+  export const toCurrency = numberToCurrency;
+  export const toPercentage = numberToPercentage;
+  export const withDelimiter = numberWithDelimiter;
+  export const toRounded = numberToRounded;
+  export const toHumanSize = numberToHumanSize;
+  export const toHuman = numberToHuman;
+}

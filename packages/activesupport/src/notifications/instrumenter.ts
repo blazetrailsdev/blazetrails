@@ -40,3 +40,66 @@ export class Event {
     this.end = endTime ?? new Date();
   }
 }
+
+export class Instrumenter {
+  private _notifier: { publish(name: string, event: Event): void };
+  readonly id: string;
+
+  constructor(notifier: { publish(name: string, event: Event): void }) {
+    this._notifier = notifier;
+    this.id = generateTransactionId();
+  }
+
+  instrument(name: string, payload: EventPayload = {}, fn?: (event: Event) => void): Event {
+    const event = new Event(name, new Date(), payload, this.id);
+    try {
+      fn?.(event);
+    } finally {
+      event.finish();
+    }
+    this._notifier.publish(name, event);
+    return event;
+  }
+
+  async instrumentAsync(
+    name: string,
+    payload: EventPayload = {},
+    fn?: (event: Event) => Promise<void>,
+  ): Promise<Event> {
+    const event = new Event(name, new Date(), payload, this.id);
+    try {
+      await fn?.(event);
+    } finally {
+      event.finish();
+    }
+    this._notifier.publish(name, event);
+    return event;
+  }
+}
+
+export class LegacyHandle {
+  private _event: Event;
+  private _notifier: { publish(name: string, event: Event): void };
+
+  constructor(event: Event, notifier: { publish(name: string, event: Event): void }) {
+    this._event = event;
+    this._notifier = notifier;
+  }
+
+  finish(): void {
+    this._event.finish();
+    this._notifier.publish(this._event.name, this._event);
+  }
+}
+
+export class Wrapper {
+  private _instrumenter: Instrumenter;
+
+  constructor(notifier: { publish(name: string, event: Event): void }) {
+    this._instrumenter = new Instrumenter(notifier);
+  }
+
+  get instrumenter(): Instrumenter {
+    return this._instrumenter;
+  }
+}

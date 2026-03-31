@@ -403,3 +403,9 @@ taggedLogging.logger = function (output: LoggerOutput): TaggedLogger {
   const logger = new Logger(output);
   return taggedLogging(logger);
 };
+
+export class SimpleFormatter {
+  call(_severity: string, _timestamp: Date, _progname: string | null, msg: unknown): string {
+    return `${typeof msg === "string" ? msg : JSON.stringify(msg)}\n`;
+  }
+}

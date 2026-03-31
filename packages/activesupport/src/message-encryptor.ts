@@ -175,3 +175,12 @@ export class MessageEncryptor {
     return 16;
   }
 }
+
+export namespace NullSerializer {
+  export function dump(value: unknown): unknown {
+    return value;
+  }
+  export function load(value: unknown): unknown {
+    return value;
+  }
+}

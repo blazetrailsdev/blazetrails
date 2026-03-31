@@ -36,8 +36,7 @@ export class PredicateBuilder {
 
   /**
    * Register association mappings so that where({ author: record }) can
-   * be expanded to where({ author_id: record.id }). Called by Relation
-   * when the model's association metadata is available.
+   * be expanded to where({ author_id: record.id }).
    */
   setAssociationMap(map: Map<string, AssociationMapping>): void {
     this.associationMap = map;
@@ -58,10 +57,25 @@ export class PredicateBuilder {
     const nodes: Nodes.Node[] = [];
     for (const [key, value] of Object.entries(conditions)) {
       const assoc = this.associationMap.get(key);
-      if (assoc && this.isAssociationValue(value)) {
+      if (assoc) {
         const expandedConditions = this.expandAssociationCondition(assoc, value);
+        if (expandedConditions.length === 0) continue;
+
+        // Each expanded condition is an AND group; combine groups with OR
+        const groups: Nodes.Node[] = [];
         for (const cond of expandedConditions) {
-          nodes.push(...this.buildFromHashInternal(cond, negated));
+          const groupNodes = this.buildFromHashInternal(cond, negated);
+          if (groupNodes.length === 0) continue;
+          groups.push(groupNodes.length === 1 ? groupNodes[0] : new Nodes.And(groupNodes));
+        }
+        if (groups.length === 1) {
+          nodes.push(groups[0]);
+        } else if (groups.length > 1) {
+          let combined: Nodes.Node = groups[0];
+          for (let i = 1; i < groups.length; i++) {
+            combined = new Nodes.Grouping(new Nodes.Or(combined, groups[i]));
+          }
+          nodes.push(combined);
         }
       } else {
         const attr = this.resolveColumn(key);
@@ -71,24 +85,13 @@ export class PredicateBuilder {
     return nodes;
   }
 
-  private isAssociationValue(value: unknown): boolean {
-    if (value === null) return true;
-    if (Array.isArray(value)) {
-      return value.length === 0 || value.some((v) => this.isModelInstance(v));
-    }
-    return this.isModelInstance(value);
-  }
-
-  private isModelInstance(value: unknown): boolean {
-    return typeof value === "object" && value !== null && "id" in value && "constructor" in value;
-  }
-
   private expandAssociationCondition(
     assoc: AssociationMapping,
     value: unknown,
   ): Record<string, unknown>[] {
-    if (assoc.foreignType && Array.isArray(value)) {
-      return new PolymorphicArrayValue(assoc.foreignKey, assoc.foreignType, value).queries();
+    if (assoc.foreignType) {
+      const arrayValue = Array.isArray(value) ? value : [value];
+      return new PolymorphicArrayValue(assoc.foreignKey, assoc.foreignType, arrayValue).queries();
     }
     return new AssociationQueryValue(assoc.foreignKey, value).queries();
   }
@@ -119,7 +122,7 @@ export class PredicateBuilder {
   }
 
   private buildNegatedArray(attribute: Nodes.Attribute, value: unknown[]): Nodes.Node {
-    if (value.length === 0) return attribute.isNotNull().or(attribute.isNull());
+    if (value.length === 0) return attribute.notIn([]);
 
     const values: unknown[] = [];
     let hasNull = false;
@@ -134,8 +137,7 @@ export class PredicateBuilder {
       }
     }
 
-    let predicate: Nodes.Node =
-      values.length > 0 ? attribute.notIn(values) : attribute.isNotNull().or(attribute.isNull());
+    let predicate: Nodes.Node = values.length > 0 ? attribute.notIn(values) : attribute.notIn([]);
 
     if (hasNull) {
       predicate = new Nodes.And([predicate, attribute.isNotNull()]);

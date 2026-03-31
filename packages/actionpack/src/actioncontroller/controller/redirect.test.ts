@@ -338,8 +338,8 @@ describe("RedirectTest", () => {
   });
 
   it("redirect to url with stringlike", () => {
-    const stringlike = { toString: () => "http://example.com/path" };
-    const result = redirectTo(stringlike);
+    const url = new URL("http://example.com/path");
+    const result = redirectTo(url);
     expect(result.location).toBe("http://example.com/path");
   });
 

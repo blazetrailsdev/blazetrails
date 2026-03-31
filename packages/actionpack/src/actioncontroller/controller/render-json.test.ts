@@ -69,6 +69,19 @@ describe("RenderJsonTest", () => {
     expect(c.contentType).toContain("text/javascript");
   });
 
+  it("render json with invalid callback falls back to json", async () => {
+    class C extends Base {
+      async action() {
+        this.render({ json: { a: 1 }, callback: "foo);alert(1);//" });
+      }
+    }
+    const c = new C();
+    await c.dispatch("action", makeRequest(), makeResponse());
+    expect(c.body).not.toContain("alert");
+    expect(c.contentType).toContain("application/json");
+    expect(JSON.parse(c.body)).toEqual({ a: 1 });
+  });
+
   it("render json with custom content type", async () => {
     class C extends Base {
       async action() {

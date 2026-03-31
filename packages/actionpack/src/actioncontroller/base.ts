@@ -89,11 +89,8 @@ export class Base extends Metal {
       const jsonStr =
         typeof options.json === "string" ? options.json : JSON.stringify(options.json);
       if (options.callback) {
-        const CALLBACK_NAME_RE = /^[a-zA-Z_$][0-9a-zA-Z_$]*(?:\.[a-zA-Z_$][0-9a-zA-Z_$]*)*$/;
-        const safeJson = jsonStr.replace(/\u2028|\u2029/g, (c) =>
-          c === "\u2028" ? "\\u2028" : "\\u2029",
-        );
-        if (CALLBACK_NAME_RE.test(options.callback)) {
+        const safeJson = escapeJsonForJs(jsonStr);
+        if (JSONP_CALLBACK_RE.test(options.callback)) {
           this.contentType = options.contentType ?? "text/javascript; charset=utf-8";
           this.body = `/**/\n${options.callback}(${safeJson})`;
         } else {
@@ -513,6 +510,12 @@ export class DoubleRenderError extends Error {
     super(message);
     this.name = "DoubleRenderError";
   }
+}
+
+const JSONP_CALLBACK_RE = /^[a-zA-Z_$][0-9a-zA-Z_$]*(?:\.[a-zA-Z_$][0-9a-zA-Z_$]*)*$/;
+
+function escapeJsonForJs(json: string): string {
+  return json.replace(/\u2028|\u2029/g, (c) => (c === "\u2028" ? "\\u2028" : "\\u2029"));
 }
 
 const SEND_FILE_MIME_TYPES: Record<string, string> = {

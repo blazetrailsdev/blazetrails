@@ -11,13 +11,13 @@ export interface RedirectResult {
 }
 
 export function redirectTo(
-  url: string | { toString(): string } | null | undefined,
+  url: string | URL | null | undefined,
   options: { status?: number } = {},
 ): RedirectResult {
   if (url == null) {
     throw new Error("Cannot redirect to nil!");
   }
-  const urlStr = typeof url === "string" ? url : String(url);
+  const urlStr = url instanceof URL ? url.toString() : url;
   const status = options.status ?? 302;
   const location = sanitizeUrl(urlStr);
   return {

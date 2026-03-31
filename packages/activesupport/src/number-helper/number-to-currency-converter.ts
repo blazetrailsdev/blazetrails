@@ -14,7 +14,7 @@ export class NumberToCurrencyConverter extends NumberConverter<NumberToCurrencyO
     const userFormat = this.opts.format;
 
     const num = Number(this.number);
-    if (isNaN(num)) return String(this.number);
+    if (!Number.isFinite(num)) return String(this.number);
 
     const isNegative = num < 0;
     const abs = Math.abs(num);

@@ -41,7 +41,7 @@ export interface ProtectionMethods {
   handleUnverifiedRequest(): void;
 }
 
-export class NullSession {
+export class NullSession implements ProtectionMethods {
   constructor(_controller: unknown) {}
   handleUnverifiedRequest(): void {}
 }
@@ -62,12 +62,12 @@ export class NullCookieJar extends Map<string, string> {
   }
 }
 
-export class ResetSession {
+export class ResetSession implements ProtectionMethods {
   constructor(_controller: unknown) {}
   handleUnverifiedRequest(): void {}
 }
 
-export class Exception {
+export class Exception implements ProtectionMethods {
   constructor(_controller: unknown) {}
   handleUnverifiedRequest(): void {
     throw new InvalidAuthenticityToken();

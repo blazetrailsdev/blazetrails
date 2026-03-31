@@ -4,7 +4,7 @@
 
 | Metric              | Value                                                 |
 | ------------------- | ----------------------------------------------------- |
-| API classes/modules | **79 / 306** (25.8%) — 3 misplaced, 224 missing       |
+| API classes/modules | **116 / 306** (37.9%) — 3 misplaced, 187 missing      |
 | Test coverage       | **2,229 / 2,862** (77.9%) — 549 skipped, 12 misplaced |
 
 The primary measure is `api:compare`, which checks that every Rails class and module has a corresponding TypeScript export. `test:compare` tracks behavior coverage.

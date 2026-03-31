@@ -1,6 +1,6 @@
 # ActiveRecord: Road to 100%
 
-Current state: **61.7%** tests (5,172 / 8,385). **11.1%** API (66/597 classes/modules). 5 misplaced.
+Current state: **61.9%** tests (5,190 / 8,385). **70.8%** API (393/555 classes/modules). 5 misplaced.
 
 ```bash
 pnpm run test:compare -- --package activerecord

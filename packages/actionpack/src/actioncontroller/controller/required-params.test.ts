@@ -55,7 +55,7 @@ describe("ParametersRequireTest", () => {
 
   it("to_param works like in a Hash", () => {
     const params = new Parameters({ foo: "bar", baz: "qux" });
-    const query = params.toQuery();
+    const query = params.toParam();
     expect(query).toContain("foo=bar");
     expect(query).toContain("baz=qux");
   });

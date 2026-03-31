@@ -88,17 +88,15 @@ export class Base extends Metal {
     if (options.json !== undefined) {
       const jsonStr =
         typeof options.json === "string" ? options.json : JSON.stringify(options.json);
-      if (options.callback) {
+      if (options.callback && JSONP_CALLBACK_RE.test(options.callback)) {
         const jsonPayload =
           typeof options.json === "string" ? JSON.stringify(options.json) : jsonStr;
         const safeJson = escapeJsonForJs(jsonPayload);
-        if (JSONP_CALLBACK_RE.test(options.callback)) {
-          this.contentType = options.contentType ?? "text/javascript; charset=utf-8";
-          this.body = `/**/\n${options.callback}(${safeJson})`;
-        } else {
-          this.contentType = options.contentType ?? "application/json; charset=utf-8";
-          this.body = safeJson;
-        }
+        this.contentType = options.contentType ?? "text/javascript; charset=utf-8";
+        this.body = `/**/\n${options.callback}(${safeJson})`;
+      } else if (options.callback) {
+        this.contentType = options.contentType ?? "application/json; charset=utf-8";
+        this.body = jsonStr;
       } else {
         this.contentType = options.contentType ?? "application/json; charset=utf-8";
         this.body = jsonStr;

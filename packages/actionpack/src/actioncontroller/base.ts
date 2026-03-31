@@ -335,23 +335,19 @@ export class Base extends Metal {
       const blocker = new BrowserBlocker(userAgent, versions);
       if (!blocker.blocked) return true;
 
-      let result: unknown;
-      Notifications.instrument(
+      await Notifications.instrumentAsync(
         "browser_block.action_controller",
         { request: base.request, versions },
-        () => {
+        async () => {
           if (typeof block === "function") {
-            result = block.call(base);
+            await block.call(base);
           } else if (typeof block === "string" && typeof (base as any)[block] === "function") {
-            result = (base as any)[block].call(base);
+            await (base as any)[block].call(base);
           } else {
             base.head(406);
           }
         },
       );
-      if (result && typeof (result as any).then === "function") {
-        await (result as Promise<unknown>);
-      }
       return false;
     }, callbackOptions);
   }

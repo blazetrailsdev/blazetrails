@@ -74,27 +74,41 @@ export class AbstractController {
     "inspect",
   ]);
 
+  private static _actionMethodCache?: Set<string>;
+
   /** Returns the set of public action methods defined on this controller. */
   static actionMethods(): string[] {
-    const internal = AbstractController._internalMethods;
-    const methods: string[] = [];
-    let current: object | null = this.prototype;
-    while (current && current !== AbstractController.prototype && current !== Object.prototype) {
-      for (const name of Object.getOwnPropertyNames(current)) {
-        if (name.startsWith("_") || internal.has(name)) continue;
-        const descriptor = Object.getOwnPropertyDescriptor(current, name);
-        if (descriptor && typeof descriptor.value === "function") {
-          methods.push(name);
+    if (
+      !Object.prototype.hasOwnProperty.call(this, "_actionMethodCache") ||
+      !this._actionMethodCache
+    ) {
+      const internal = AbstractController._internalMethods;
+      const methods: string[] = [];
+      let current: object | null = this.prototype;
+      while (current && current !== AbstractController.prototype && current !== Object.prototype) {
+        for (const name of Object.getOwnPropertyNames(current)) {
+          if (name.startsWith("_") || internal.has(name)) continue;
+          const descriptor = Object.getOwnPropertyDescriptor(current, name);
+          if (descriptor && typeof descriptor.value === "function") {
+            methods.push(name);
+          }
         }
+        current = Object.getPrototypeOf(current);
       }
-      current = Object.getPrototypeOf(current);
+      this._actionMethodCache = new Set(methods);
     }
-    return [...new Set(methods)];
+    return [...this._actionMethodCache];
   }
 
   /** Check if an action exists. */
   static hasAction(action: string): boolean {
-    return this.actionMethods().includes(action);
+    if (
+      !Object.prototype.hasOwnProperty.call(this, "_actionMethodCache") ||
+      !this._actionMethodCache
+    ) {
+      this.actionMethods();
+    }
+    return this._actionMethodCache!.has(action);
   }
 
   /** Register a before_action callback. */

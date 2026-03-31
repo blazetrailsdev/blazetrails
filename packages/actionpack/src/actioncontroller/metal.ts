@@ -73,7 +73,7 @@ export class Metal extends AbstractController {
     return (this.constructor as typeof Metal).controllerPath;
   }
 
-  get controllerName(): string {
+  controllerName(): string {
     return (this.constructor as typeof Metal).controllerName();
   }
 

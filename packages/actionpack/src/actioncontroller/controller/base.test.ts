@@ -592,9 +592,11 @@ describe("ControllerClassTests", () => {
   it("controller name", () => {
     class EmptyController extends Base {}
     expect(EmptyController.controllerName()).toBe("empty");
+    expect(new EmptyController().controllerName()).toBe("empty");
 
     class SuperAdminController extends Base {}
     expect(SuperAdminController.controllerName()).toBe("super_admin");
+    expect(new SuperAdminController().controllerName()).toBe("super_admin");
   });
 });
 

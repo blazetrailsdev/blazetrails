@@ -93,9 +93,18 @@ export class ConnectionNotDefined extends ConnectionNotEstablished {
 
   constructor(
     message?: string,
-    options?: { connectionName?: string; role?: string; shard?: string },
+    options?: {
+      connectionName?: string;
+      role?: string;
+      shard?: string;
+      connectionPool?: unknown;
+      cause?: unknown;
+    },
   ) {
-    super(message);
+    super(message, {
+      connectionPool: options?.connectionPool,
+      cause: options?.cause,
+    });
     this.name = "ConnectionNotDefined";
     this.connectionName = options?.connectionName;
     this.role = options?.role;
@@ -104,8 +113,8 @@ export class ConnectionNotDefined extends ConnectionNotEstablished {
 }
 
 export class DatabaseConnectionError extends ConnectionNotEstablished {
-  constructor(message?: string) {
-    super(message ?? "Database connection error");
+  constructor(message?: string, options?: { connectionPool?: unknown; cause?: unknown }) {
+    super(message ?? "Database connection error", options);
     this.name = "DatabaseConnectionError";
   }
 
@@ -317,6 +326,7 @@ export class RangeError extends StatementInvalid {
     this.name = "RangeError";
   }
 }
+export { RangeError as ActiveRecordRangeError };
 
 export class SQLWarning extends AdapterError {
   readonly code?: string;
@@ -442,7 +452,7 @@ export class AttributeAssignmentError extends ActiveRecordError {
   readonly attribute?: string;
 
   constructor(message?: string, exception?: Error, attribute?: string) {
-    super(message);
+    super(message, exception ? { cause: exception } : undefined);
     this.name = "AttributeAssignmentError";
     this.exception = exception;
     this.attribute = attribute;

@@ -19,7 +19,7 @@ const RENDERERS = new Set<string>();
 export class Renderers {
   private static _registry = new Map<string, RendererProc>();
 
-  static get RENDERERS(): Set<string> {
+  static get RENDERERS(): ReadonlySet<string> {
     return RENDERERS;
   }
 

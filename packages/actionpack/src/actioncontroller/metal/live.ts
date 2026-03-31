@@ -15,11 +15,11 @@ export class ClientDisconnected extends Error {
 export class SSE {
   private _stream: Buffer;
 
-  constructor(stream: Buffer, options: { retry?: number; event?: string } = {}) {
+  constructor(stream: Buffer, _options: { retry?: number; event?: string } = {}) {
     this._stream = stream;
   }
 
-  write(object: unknown, options: { event?: string; id?: string; retry?: number } = {}): void {
+  write(_object: unknown, _options: { event?: string; id?: string; retry?: number } = {}): void {
     // SSE write implementation
   }
 

@@ -496,8 +496,6 @@ export class DoubleRenderError extends Error {
   }
 }
 
-export { API } from "./api.js";
-
 const SEND_FILE_MIME_TYPES: Record<string, string> = {
   ".html": "text/html",
   ".txt": "text/plain",

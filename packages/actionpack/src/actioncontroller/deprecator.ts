@@ -10,7 +10,7 @@ export interface ActionController {
 }
 
 export class Deprecator {
-  warn(message: string, callStack?: string[]): void {
+  warn(message: string, _callStack?: string[]): void {
     console.warn(`DEPRECATION WARNING: ${message}`);
   }
 }

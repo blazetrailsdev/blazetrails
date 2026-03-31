@@ -63,6 +63,10 @@ export class Middleware {
   }
 
   build(app: unknown): unknown {
+    if (typeof this.klass === "function") {
+      const MiddlewareClass = this.klass as new (app: unknown, ...args: unknown[]) => unknown;
+      return new MiddlewareClass(app, ...this.args);
+    }
     return app;
   }
 }

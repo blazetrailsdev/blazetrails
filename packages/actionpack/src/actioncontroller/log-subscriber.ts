@@ -6,27 +6,27 @@
  */
 
 export class LogSubscriber {
-  startProcessing(event: { payload: Record<string, unknown> }): void {
+  startProcessing(_event: { payload: Record<string, unknown> }): void {
     // Log start of processing
   }
 
-  processAction(event: { payload: Record<string, unknown>; duration: number }): void {
+  processAction(_event: { payload: Record<string, unknown>; duration: number }): void {
     // Log action processing
   }
 
-  halted(event: { payload: Record<string, unknown> }): void {
+  halted(_event: { payload: Record<string, unknown> }): void {
     // Log halted callback
   }
 
-  sendFile(event: { payload: Record<string, unknown> }): void {
+  sendFile(_event: { payload: Record<string, unknown> }): void {
     // Log send_file
   }
 
-  sendData(event: { payload: Record<string, unknown> }): void {
+  sendData(_event: { payload: Record<string, unknown> }): void {
     // Log send_data
   }
 
-  redirect(event: { payload: Record<string, unknown> }): void {
+  redirect(_event: { payload: Record<string, unknown> }): void {
     // Log redirect
   }
 }

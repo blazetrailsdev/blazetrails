@@ -22,7 +22,7 @@ export class Renderer {
     return new Renderer(this._controller, { ...this._defaults, ...env });
   }
 
-  render(...args: unknown[]): unknown {
+  render(..._args: unknown[]): unknown {
     return null;
   }
 

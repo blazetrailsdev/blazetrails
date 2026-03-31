@@ -121,7 +121,7 @@ export class SafeBuffer {
   /** safeConcat — appends without escaping. Raises if this buffer is not safe. */
   safeConcat(other: string | SafeBuffer): SafeBuffer {
     if (!this._safe) {
-      throw new Error("Safe concat called on unsafe buffer");
+      throw new SafeConcatError();
     }
     const otherStr = other instanceof SafeBuffer ? other.toString() : String(other);
     return new SafeBuffer(this._value + otherStr, true);

@@ -15,7 +15,9 @@ export class TagStack {
 
   pushTags(tags: (string | string[] | null | undefined)[]): string[] {
     this._tagsString = null;
-    const flat = tags.flat().filter((t): t is string => !isBlank(t));
+    const flat = (tags as unknown[])
+      .flat(Infinity)
+      .filter((t): t is string => typeof t === "string" && !isBlank(t));
     this._tags.push(...flat);
     return flat;
   }

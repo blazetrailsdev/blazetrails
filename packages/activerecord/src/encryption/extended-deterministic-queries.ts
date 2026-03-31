@@ -57,30 +57,37 @@ export class EncryptedQuery {
 
   private static processEncryptedQueryArgument(
     value: unknown,
-    checkForAdditionalValues: boolean,
+    _checkForAdditionalValues: boolean,
     type: EncryptedAttributeType,
   ): unknown {
     if (typeof value === "string") {
-      const additionalCiphertexts = type.previousTypes
-        .map((t) => t.serialize(value))
-        .filter((v): v is string => typeof v === "string");
-      return [value, ...additionalCiphertexts];
+      return this.allCiphertextsFor(value, type);
     }
     if (Array.isArray(value)) {
-      if (checkForAdditionalValues && value.some((v) => v instanceof AdditionalValue)) {
-        return value;
-      }
       const expanded = value.flatMap((v) => {
         if (typeof v === "string") {
-          return type.previousTypes
-            .map((t) => t.serialize(v))
-            .filter((c): c is string => typeof c === "string");
+          return this.allCiphertextsFor(v, type);
         }
-        return [];
+        return [v];
       });
-      return [...value, ...expanded];
+      return expanded;
     }
     return value;
+  }
+
+  private static allCiphertextsFor(plaintext: string, type: EncryptedAttributeType): string[] {
+    const results: string[] = [];
+    // Current scheme ciphertext
+    const current = type.serialize(plaintext);
+    if (typeof current === "string") results.push(current);
+    // Previous scheme ciphertexts
+    for (const prev of type.previousTypes) {
+      const ct = prev.serialize(plaintext);
+      if (typeof ct === "string") results.push(ct);
+    }
+    // Include plaintext for support_unencrypted_data migration
+    if (!results.includes(plaintext)) results.push(plaintext);
+    return results;
   }
 }
 

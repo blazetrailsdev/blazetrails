@@ -35,18 +35,24 @@ export class EncryptedUniquenessValidator {
     value: unknown,
     originalValidate: (record: any, attribute: string, value: unknown) => void,
   ): void {
-    originalValidate(record, attribute, value);
-
     const klass = record.constructor;
     const type = klass.typeForAttribute?.(attribute);
-    if (!(type instanceof EncryptedAttributeType)) return;
-    if (!type.deterministic) return;
-    if (!type.previousTypes.length) return;
+    if (!(type instanceof EncryptedAttributeType) || !type.deterministic) {
+      originalValidate(record, attribute, value);
+      return;
+    }
 
+    // Validate against current ciphertext
+    const currentCiphertext = type.serialize(value);
+    Contexts.withoutEncryption(() => {
+      originalValidate(record, attribute, currentCiphertext);
+    });
+
+    // Validate against previous scheme ciphertexts
     for (const prevType of type.previousTypes) {
-      const ciphertext = prevType.serialize(value);
+      const previousCiphertext = prevType.serialize(value);
       Contexts.withoutEncryption(() => {
-        originalValidate(record, attribute, ciphertext);
+        originalValidate(record, attribute, previousCiphertext);
       });
     }
   }

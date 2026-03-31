@@ -65,7 +65,7 @@ export class EncryptedAttributeType extends Type {
   }
 
   get previousTypes(): EncryptedAttributeType[] {
-    return ((this.scheme as any).previousSchemes ?? []).map(
+    return (this.scheme.previousSchemes ?? []).map(
       (s: Scheme) =>
         new EncryptedAttributeType({
           scheme: s,
@@ -80,21 +80,31 @@ export class EncryptedAttributeType extends Type {
     if (value === null || value === undefined) return value;
     if (this._default !== undefined && this._default === value) return value;
 
-    // If supporting unencrypted data, check format first
     if (this.supportUnencryptedData && !this.encrypted(value)) {
       return value;
     }
 
-    return this._encryptor.decrypt(String(value), {
-      keyProvider: this.scheme.keyProvider as any,
-    });
+    return this._encryptor.decrypt(String(value), this.decryptionOptions());
   }
 
   private encrypt(value: string): string {
-    return this._encryptor.encrypt(value, {
-      keyProvider: this.scheme.keyProvider as any,
+    return this._encryptor.encrypt(value, this.encryptionOptions());
+  }
+
+  private encryptionOptions(): Record<string, unknown> {
+    const opts: Record<string, unknown> = {
       deterministic: this.scheme.deterministic,
-    });
+    };
+    if (this.scheme.keyProvider) opts.keyProvider = this.scheme.keyProvider;
+    if (this.scheme.key) opts.key = this.scheme.key;
+    return opts;
+  }
+
+  private decryptionOptions(): Record<string, unknown> {
+    const opts: Record<string, unknown> = {};
+    if (this.scheme.keyProvider) opts.keyProvider = this.scheme.keyProvider;
+    if (this.scheme.key) opts.key = this.scheme.key;
+    return opts;
   }
 
   private get supportUnencryptedData(): boolean {

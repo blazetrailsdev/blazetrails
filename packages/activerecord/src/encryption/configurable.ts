@@ -1,5 +1,4 @@
 import { Config } from "./config.js";
-import { Contexts } from "./contexts.js";
 
 let _sharedConfig: Config | null = null;
 const _listeners: Array<(klass: any, name: string) => void> = [];
@@ -31,15 +30,13 @@ export class Configurable {
       config.keyDerivationSalt = options.keyDerivationSalt;
 
     for (const [key, value] of Object.entries(options)) {
-      if (key !== "primaryKey" && key !== "deterministicKey" && key !== "keyDerivationSalt") {
-        if (key in config) {
-          (config as any)[key] = value;
-        }
+      if (key === "primaryKey" || key === "deterministicKey" || key === "keyDerivationSalt") {
+        continue;
+      }
+      if (Object.prototype.hasOwnProperty.call(config, key)) {
+        (config as any)[key] = value;
       }
     }
-
-    // Reset context after reconfiguring keys
-    Contexts.withEncryptionContext({}, () => {});
   }
 
   static onEncryptedAttributeDeclared(callback: (klass: any, name: string) => void): void {

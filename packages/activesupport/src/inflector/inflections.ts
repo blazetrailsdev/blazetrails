@@ -95,7 +95,10 @@ export class Inflections {
       this.acronymsCamelizeRegex = /^\w/;
       this.acronymsUnderscoreRegex = /(?=a)b/;
     } else {
-      const acronymValues = Array.from(this.acronyms.values()).join("|");
+      const escaped = Array.from(this.acronyms.values())
+        .sort((a, b) => b.length - a.length)
+        .map((v) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+      const acronymValues = escaped.join("|");
       this.acronymRegex = new RegExp(acronymValues);
       this.acronymsCamelizeRegex = new RegExp(`^(?:${acronymValues}(?=\\b|[A-Z_])|\\w)`);
       this.acronymsUnderscoreRegex = new RegExp(

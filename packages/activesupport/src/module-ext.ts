@@ -187,6 +187,10 @@ export function setAttrInternalNamingFormat(format: string): void {
   if (format.startsWith("@")) {
     throw new Error("invalid attribute storage format");
   }
+  const count = (format.match(/%s/g) || []).length;
+  if (count !== 1) {
+    throw new Error("naming format must contain exactly one %s placeholder");
+  }
   _attrInternalNamingFormat = format;
 }
 

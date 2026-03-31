@@ -1,6 +1,10 @@
 /**
  * ExecutionContext — per-request key/value store.
  * Mirrors ActiveSupport::ExecutionContext.
+ *
+ * Note: This uses a process-global Map. In production with concurrent async
+ * requests, consider integrating with AsyncLocalStorage for isolation.
+ * Rails itself resets ExecutionContext via executor hooks per request.
  */
 const _store = new Map<string, unknown>();
 
@@ -9,7 +13,7 @@ export const ExecutionContext = {
     if (fn) {
       const saved = new Map<string, unknown>();
       for (const key of Object.keys(attrs)) {
-        saved.set(key, _store.get(key));
+        saved.set(key, _store.has(key) ? _store.get(key) : undefined);
         _store.set(key, attrs[key]);
       }
       try {

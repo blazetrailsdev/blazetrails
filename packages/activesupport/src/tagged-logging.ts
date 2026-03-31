@@ -62,7 +62,7 @@ export namespace Formatter {
     return tagStack.formatMessage(msg);
   }
 
-  export function tagged(tagStack: TagStack, tags: string[], fn: () => void): void {
+  export function tagged(tagStack: TagStack, tags: unknown[], fn: () => void): void {
     const pushed = tagStack.pushTags(tags);
     try {
       fn();
@@ -71,7 +71,7 @@ export namespace Formatter {
     }
   }
 
-  export function pushTags(tagStack: TagStack, tags: (string | string[])[]): string[] {
+  export function pushTags(tagStack: TagStack, tags: unknown[]): string[] {
     return tagStack.pushTags(tags);
   }
 

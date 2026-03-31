@@ -169,23 +169,20 @@ describe("NumberHelperTest", () => {
 });
 
 describe("NumberConverter subclasses", () => {
-  it("NumberToPhoneConverter delegates correctly", async () => {
+  it("NumberToPhoneConverter.convert works", async () => {
     const { NumberToPhoneConverter } = await import("./number-helper/number-to-phone-converter.js");
-    const converter = new NumberToPhoneConverter(5551234567, { areaCode: true });
-    expect(converter.convert()).toBe("(555) 123-4567");
+    expect(NumberToPhoneConverter.convert(5551234567, { areaCode: true })).toBe("(555) 123-4567");
   });
 
-  it("NumberToCurrencyConverter delegates correctly", async () => {
+  it("NumberToCurrencyConverter.convert works", async () => {
     const { NumberToCurrencyConverter } =
       await import("./number-helper/number-to-currency-converter.js");
-    const converter = new NumberToCurrencyConverter(1234.56);
-    expect(converter.convert()).toBe("$1,234.56");
+    expect(NumberToCurrencyConverter.convert(1234.56)).toBe("$1,234.56");
   });
 
-  it("NumberToHumanConverter delegates correctly", async () => {
+  it("NumberToHumanConverter.convert works", async () => {
     const { NumberToHumanConverter } = await import("./number-helper/number-to-human-converter.js");
-    const converter = new NumberToHumanConverter(1234567);
-    expect(converter.convert()).toBe("1.23 Million");
+    expect(NumberToHumanConverter.convert(1234567)).toBe("1.23 Million");
   });
 });
 

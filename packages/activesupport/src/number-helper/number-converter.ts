@@ -1,22 +1,34 @@
 export abstract class NumberConverter<TOptions = Record<string, unknown>> {
   protected number: unknown;
-  protected options: TOptions;
+  protected opts: TOptions;
+
+  static convert(number: unknown, options?: any): string {
+    return new (this as any)(number, options ?? {}).execute();
+  }
 
   constructor(number: unknown, options: TOptions = {} as TOptions) {
     this.number = number;
-    this.options = options;
+    this.opts = options;
   }
 
-  abstract convert(): string;
+  execute(): string {
+    if (this.number === null || this.number === undefined) return String(this.number);
+    if (this.validateFloat && !this.isValidFloat()) return String(this.number);
+    return this.convert();
+  }
 
-  protected validFloat(number: unknown): number {
-    if (typeof number === "number") return number;
-    if (typeof number === "string") {
-      const trimmed = number.trim();
-      if (trimmed === "") return NaN;
-      const parsed = Number(trimmed);
-      if (Number.isFinite(parsed)) return parsed;
-    }
-    return NaN;
+  protected abstract convert(): string;
+
+  protected get validateFloat(): boolean {
+    return false;
+  }
+
+  protected isValidFloat(): boolean {
+    const n = Number(this.number);
+    return !isNaN(n) && isFinite(n);
+  }
+
+  protected numberAsFloat(): number {
+    return Number(this.number);
   }
 }

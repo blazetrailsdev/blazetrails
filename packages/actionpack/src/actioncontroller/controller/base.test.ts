@@ -584,11 +584,17 @@ describe("ControllerClassTests", () => {
     class EmptyController extends Base {}
     expect(EmptyController.controllerPath).toBe("empty");
     expect(new EmptyController().controllerPath).toBe("empty");
+
+    class SuperAdminController extends Base {}
+    expect(SuperAdminController.controllerPath).toBe("super_admin");
   });
 
   it("controller name", () => {
     class EmptyController extends Base {}
     expect(EmptyController.controllerName()).toBe("empty");
+
+    class SuperAdminController extends Base {}
+    expect(SuperAdminController.controllerName()).toBe("super_admin");
   });
 });
 

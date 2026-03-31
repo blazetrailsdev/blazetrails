@@ -47,14 +47,42 @@ export class AbstractController {
   }> = [];
 
   /** Available actions. Override in subclasses. */
+  /** Internal methods that should not be exposed as routable actions. */
+  static internalMethods = new Set([
+    "constructor",
+    "processAction",
+    "availableActions",
+    "actionMissing",
+    "dispatch",
+    "head",
+    "setHeader",
+    "getHeader",
+    "toRackResponse",
+    "render",
+    "renderAsync",
+    "renderToString",
+    "redirectTo",
+    "redirectBack",
+    "respondTo",
+    "freshWhen",
+    "stale",
+    "expiresIn",
+    "expiresNow",
+    "sendFile",
+    "sendData",
+    "verifyAuthenticityToken",
+    "formAuthenticityToken",
+    "markPerformed",
+    "inspect",
+  ]);
+
   static actionMethods(): string[] {
-    const proto = this.prototype;
+    const internal = (this as typeof AbstractController).internalMethods;
     const methods: string[] = [];
-    const excluded = new Set(["constructor", "processAction", "availableActions"]);
-    let current = proto;
-    while (current && current !== Object.prototype) {
+    let current: object | null = this.prototype;
+    while (current && current !== AbstractController.prototype && current !== Object.prototype) {
       for (const name of Object.getOwnPropertyNames(current)) {
-        if (name.startsWith("_") || excluded.has(name)) continue;
+        if (name.startsWith("_") || internal.has(name)) continue;
         const descriptor = Object.getOwnPropertyDescriptor(current, name);
         if (descriptor && typeof descriptor.value === "function") {
           methods.push(name);

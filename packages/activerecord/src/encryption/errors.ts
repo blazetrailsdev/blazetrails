@@ -12,7 +12,12 @@ export class Base extends Error {
 }
 
 /** @deprecated Use Base instead */
-export { Base as EncryptionError };
+export class EncryptionError extends Base {
+  constructor(message?: string) {
+    super(message);
+    this.name = "EncryptionError";
+  }
+}
 
 export class Encoding extends Base {
   constructor(message?: string) {
@@ -27,7 +32,12 @@ export class Decryption extends Base {
 }
 
 /** @deprecated Use Decryption instead */
-export { Decryption as DecryptionError };
+export class DecryptionError extends Decryption {
+  constructor(message?: string) {
+    super(message);
+    this.name = "DecryptionError";
+  }
+}
 
 export class Encryption extends Base {
   constructor(message?: string) {
@@ -42,7 +52,12 @@ export class Configuration extends Base {
 }
 
 /** @deprecated Use Configuration instead */
-export { Configuration as ConfigError };
+export class ConfigError extends Configuration {
+  constructor(message?: string) {
+    super(message);
+    this.name = "ConfigError";
+  }
+}
 
 export class ForbiddenClass extends Base {
   constructor(message?: string) {

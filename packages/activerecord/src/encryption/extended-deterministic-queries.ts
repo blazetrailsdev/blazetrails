@@ -136,6 +136,22 @@ export class AdditionalValue {
     this.type = type;
     this.value = type.serialize(value);
   }
+
+  toString(): string {
+    return String(this.value);
+  }
+
+  valueOf(): unknown {
+    return this.value;
+  }
+
+  [Symbol.toPrimitive](hint: string): string | number {
+    if (hint === "number") {
+      const n = Number(this.value);
+      return Number.isNaN(n) ? 0 : n;
+    }
+    return String(this.value);
+  }
 }
 
 /**

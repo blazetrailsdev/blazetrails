@@ -29,10 +29,20 @@ function stableStringify(obj: unknown): string {
     return json === undefined ? String(obj) : json;
   }
   if (Array.isArray(obj)) return `[${obj.map(stableStringify).join(",")}]`;
-  const sorted = Object.keys(obj as Record<string, unknown>).sort();
-  const pairs = sorted.map(
-    (k) => `${JSON.stringify(k)}:${stableStringify((obj as Record<string, unknown>)[k])}`,
-  );
+  if (obj instanceof Date) return JSON.stringify(obj.toISOString());
+
+  const record = obj as Record<string, unknown>;
+  const keys = Object.keys(record);
+
+  if (keys.length === 0) {
+    const toJSON = (record as { toJSON?: () => unknown }).toJSON;
+    if (typeof toJSON === "function") return JSON.stringify(toJSON.call(obj));
+    const proto = Object.getPrototypeOf(obj);
+    if (proto && proto !== Object.prototype) return JSON.stringify(String(obj));
+  }
+
+  const sorted = keys.sort();
+  const pairs = sorted.map((k) => `${JSON.stringify(k)}:${stableStringify(record[k])}`);
   return `{${pairs.join(",")}}`;
 }
 

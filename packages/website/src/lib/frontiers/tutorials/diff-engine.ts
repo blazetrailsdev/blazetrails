@@ -58,10 +58,22 @@ interface HunkResult {
 }
 
 function applyHunk(lines: string[], hunk: DiffHunk): HunkResult {
-  const anchorIndex = lines.findIndex((line) => line.includes(hunk.anchor));
-  if (anchorIndex === -1) {
+  const matchingIndices: number[] = [];
+  lines.forEach((line, index) => {
+    if (line.includes(hunk.anchor)) matchingIndices.push(index);
+  });
+
+  if (matchingIndices.length === 0) {
     return { success: false, error: `Anchor not found: "${hunk.anchor}"` };
   }
+  if (matchingIndices.length > 1) {
+    return {
+      success: false,
+      error: `Anchor "${hunk.anchor}" matched ${matchingIndices.length} lines; make the anchor more specific`,
+    };
+  }
+
+  const anchorIndex = matchingIndices[0];
 
   if (hunk.position === "after") {
     const newLines = [...lines];
@@ -86,7 +98,7 @@ export function isDiffApplied(vfs: VirtualFS, diff: FileDiff): boolean {
   if (diff.operation === "create") {
     const file = vfs.read(diff.path);
     if (!file) return false;
-    if (diff.content === undefined) return true;
+    if (diff.content === undefined) return false;
     return file.content === diff.content;
   }
 
@@ -148,11 +160,14 @@ export function runCheck(vfs: VirtualFS, adapter: SqlJsAdapter, check: CheckSpec
     }
 
     case "file_contains": {
+      if (check.value === undefined) {
+        return { check, passed: false, error: "No expected content provided" };
+      }
       const file = vfs.read(check.target);
       if (!file) {
         return { check, passed: false, error: `File "${check.target}" does not exist` };
       }
-      const passed = check.value !== undefined && file.content.includes(check.value);
+      const passed = file.content.includes(check.value);
       return {
         check,
         passed,
@@ -226,11 +241,13 @@ export function computeHighlightRanges(fileContent: string, diff: FileDiff): Hig
         endLine: startLine + hunk.insertLines.length - 1,
       });
     } else if (hunk.position === "before") {
-      const startLine = anchorIndex + 1; // 1-based, the anchor shifts down
-      ranges.push({
-        startLine: startLine - hunk.insertLines.length,
-        endLine: startLine - 1,
-      });
+      const anchorLine = anchorIndex + 1; // 1-based, the anchor shifts down
+      const rawStart = anchorLine - hunk.insertLines.length;
+      const rawEnd = anchorLine - 1;
+      const clampedStart = Math.max(1, rawStart);
+      if (rawEnd >= clampedStart) {
+        ranges.push({ startLine: clampedStart, endLine: rawEnd });
+      }
     } else {
       // replace — highlight the replacement lines
       const startLine = anchorIndex + 1; // 1-based

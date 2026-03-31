@@ -34,13 +34,13 @@ export class SqlJsAdapter implements DatabaseAdapter {
     this.db.run("ROLLBACK");
   }
   async createSavepoint(name: string) {
-    this.db.run(`SAVEPOINT "${name}"`);
+    this.db.run(`SAVEPOINT "${name.replace(/"/g, '""')}"`);
   }
   async releaseSavepoint(name: string) {
-    this.db.run(`RELEASE SAVEPOINT "${name}"`);
+    this.db.run(`RELEASE SAVEPOINT "${name.replace(/"/g, '""')}"`);
   }
   async rollbackToSavepoint(name: string) {
-    this.db.run(`ROLLBACK TO SAVEPOINT "${name}"`);
+    this.db.run(`ROLLBACK TO SAVEPOINT "${name.replace(/"/g, '""')}"`);
   }
 
   async explain(sql: string): Promise<string> {
@@ -56,7 +56,8 @@ export class SqlJsAdapter implements DatabaseAdapter {
   }
 
   getColumns(table: string): Array<{ name: string; type: string; notnull: boolean; pk: boolean }> {
-    const results = this.db.exec(`PRAGMA table_info("${table}")`);
+    const escapedTable = table.replace(/"/g, '""');
+    const results = this.db.exec(`PRAGMA table_info("${escapedTable}")`);
     return (
       results[0]?.values.map((r) => ({
         name: r[1] as string,

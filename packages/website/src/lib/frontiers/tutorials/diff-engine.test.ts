@@ -152,6 +152,34 @@ describe("applyDiff", () => {
     expect(lines[1]).toContain('this.attribute("name"');
   });
 
+  it("returns error when anchor matches multiple lines", () => {
+    vfs.write(
+      "app/models/user.ts",
+      [
+        "class User extends Base {",
+        '  this.attribute("name", "string");',
+        '  this.attribute("email", "string");',
+        "}",
+      ].join("\n"),
+    );
+
+    const diff: FileDiff = {
+      path: "app/models/user.ts",
+      operation: "modify",
+      hunks: [
+        {
+          anchor: "this.attribute(",
+          position: "after",
+          insertLines: ["  // new line"],
+        },
+      ],
+    };
+
+    const result = applyDiff(vfs, diff);
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/matched.*2.*lines/i);
+  });
+
   it("returns error when anchor is not found", () => {
     vfs.write("app/models/user.ts", "class User {}");
 

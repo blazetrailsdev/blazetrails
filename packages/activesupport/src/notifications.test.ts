@@ -599,4 +599,36 @@ describe("Instrumenter", () => {
     expect(parentEvent!.children).toHaveLength(1);
     expect(parentEvent!.children[0].name).toBe("child");
   });
+
+  it("instrumentAsync publishes after promise resolves", async () => {
+    const published: Event[] = [];
+    const notifier = {
+      publish(_name: string, event: Event) {
+        published.push(event);
+      },
+    };
+    const inst = new Instrumenter(notifier);
+    const result = await inst.instrumentAsync("async.event", {}, async () => {
+      return 99;
+    });
+    expect(result).toBe(99);
+    expect(published).toHaveLength(1);
+    expect(published[0].end).not.toBeNull();
+  });
+
+  it("instrumentAsync publishes on rejection", async () => {
+    const published: Event[] = [];
+    const notifier = {
+      publish(_name: string, event: Event) {
+        published.push(event);
+      },
+    };
+    const inst = new Instrumenter(notifier);
+    await expect(
+      inst.instrumentAsync("async.fail", {}, async () => {
+        throw new Error("async boom");
+      }),
+    ).rejects.toThrow("async boom");
+    expect(published).toHaveLength(1);
+  });
 });

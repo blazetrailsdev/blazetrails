@@ -66,7 +66,6 @@ export namespace Delegation {
     delegateTo: string,
     options: { allowNil?: boolean } = {},
   ): T {
-    const boundCache = new WeakMap<object, Map<string | symbol, Function>>();
     return new Proxy(target, {
       get(obj, prop, receiver) {
         if (prop in obj || typeof prop === "symbol") {
@@ -77,19 +76,9 @@ export namespace Delegation {
           if (options.allowNil) return undefined;
           throw DelegationError.nilTarget(globalThis.String(prop), delegateTo);
         }
-        const delegateObj = delegate as object;
-        const val = (delegateObj as Record<string, unknown>)[globalThis.String(prop)];
+        const val = (delegate as Record<string, unknown>)[globalThis.String(prop)];
         if (typeof val === "function") {
-          let perDelegate = boundCache.get(delegateObj);
-          if (!perDelegate) {
-            perDelegate = new Map();
-            boundCache.set(delegateObj, perDelegate);
-          }
-          const cached = perDelegate.get(prop);
-          if (cached) return cached;
-          const bound = val.bind(delegateObj) as Function;
-          perDelegate.set(prop, bound);
-          return bound;
+          return val.bind(delegate);
         }
         return val;
       },

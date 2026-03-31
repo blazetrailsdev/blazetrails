@@ -36,22 +36,30 @@ export class Connection {
   }
 
   private resolveColumn(attrName: string): unknown | undefined {
-    // Try adapter.schemaCache (connection-level)
-    const adapter = this._klass.adapter;
-    const schemaCache = adapter?.schemaCache ?? adapter?.pool?.schemaCache;
-    if (schemaCache) {
-      const columns = schemaCache.columnsHash?.(this._tableName);
-      return columns?.get?.(attrName) ?? columns?.[attrName];
+    if (!this._klass) return undefined;
+
+    // Use model's columnsHash (the most reliable path in this codebase)
+    const columnsHash =
+      typeof this._klass.columnsHash === "function"
+        ? this._klass.columnsHash()
+        : this._klass.columnsHash;
+    if (columnsHash) {
+      return columnsHash instanceof globalThis.Map
+        ? columnsHash.get(attrName)
+        : columnsHash[attrName];
     }
 
-    // Try connection handler pool config
+    // Fallback: try connection handler pool config schema cache
     const handler = this._klass._connectionHandler;
     if (handler) {
-      const pool = handler.retrieveConnectionPool?.(this._klass);
-      const poolCache = pool?.schemaCache;
-      if (poolCache) {
-        const columns = poolCache.columnsHash?.(this._tableName);
-        return columns?.get?.(attrName) ?? columns?.[attrName];
+      const pool = handler.retrieveConnectionPool?.(this._klass.name);
+      const poolConfig = pool?.poolConfig;
+      const schemaCache = poolConfig?.schemaCache;
+      if (schemaCache) {
+        const columns = schemaCache.columnsHash?.(this._tableName);
+        if (columns) {
+          return columns instanceof globalThis.Map ? columns.get(attrName) : columns[attrName];
+        }
       }
     }
 

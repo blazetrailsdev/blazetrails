@@ -20,11 +20,15 @@ export interface LeveledLogger {
   log(level: LogLevel, message: string): void;
 }
 
-export function logAt(logger: LeveledLogger, level: LogLevel, fn: () => void): void {
+export async function logAt(
+  logger: LeveledLogger,
+  level: LogLevel,
+  fn: () => void | Promise<void>,
+): Promise<void> {
   const previousLevel = logger.level;
   logger.level = level;
   try {
-    fn();
+    await fn();
   } finally {
     logger.level = previousLevel;
   }
@@ -32,12 +36,12 @@ export function logAt(logger: LeveledLogger, level: LogLevel, fn: () => void): v
 
 export function createLogAtFilter(
   level: LogLevel,
-): (controller: { logger?: LeveledLogger }, action: () => void) => void {
-  return (controller, action) => {
+): (controller: { logger?: LeveledLogger }, action: () => void | Promise<void>) => Promise<void> {
+  return async (controller, action) => {
     if (controller.logger) {
-      logAt(controller.logger, level, action);
+      await logAt(controller.logger, level, action);
     } else {
-      action();
+      await action();
     }
   };
 }

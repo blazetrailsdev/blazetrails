@@ -41,6 +41,11 @@ export class RescueRegistry {
   }
 }
 
-export function showDetailedExceptions(): boolean {
+export function showDetailedExceptions(options?: {
+  considerAllRequestsLocal?: boolean;
+  requestLocal?: boolean;
+}): boolean {
+  if (options?.considerAllRequestsLocal) return true;
+  if (options?.requestLocal) return true;
   return false;
 }

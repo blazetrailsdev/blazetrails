@@ -12,13 +12,14 @@ export { urlFor, type UrlOptions } from "../../actiondispatch/url-for.js";
 export function urlOptionsFromRequest(request: {
   host?: string;
   port?: number | string;
+  scheme?: string;
   protocol?: string;
   pathParameters?: Record<string, string>;
 }): Record<string, unknown> {
   return {
     host: request.host ?? "localhost",
     port: request.port,
-    protocol: request.protocol ?? "http",
+    protocol: request.scheme ?? request.protocol ?? "http",
     _recall: request.pathParameters ?? {},
   };
 }

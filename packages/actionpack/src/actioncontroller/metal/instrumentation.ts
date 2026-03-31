@@ -28,22 +28,26 @@ export function instrumentAction(
     format: request.format,
   };
 
-  notifier?.instrument("start_processing.action_controller", payload);
+  notifier?.instrument("start_processing.action_controller", { ...payload });
 
   return Promise.resolve()
     .then(fn)
     .then(
       (result) => {
-        payload.status = deriveStatus(result, 200);
-        payload.duration = now() - start;
-        notifier?.instrument("process_action.action_controller", payload);
+        notifier?.instrument("process_action.action_controller", {
+          ...payload,
+          status: deriveStatus(result, 200),
+          duration: now() - start,
+        });
         return result;
       },
       (error) => {
-        payload.status = deriveStatus(error, 500);
-        payload.exception = error instanceof Error ? [error.name, error.message] : String(error);
-        payload.duration = now() - start;
-        notifier?.instrument("process_action.action_controller", payload);
+        notifier?.instrument("process_action.action_controller", {
+          ...payload,
+          status: deriveStatus(error, 500),
+          exception: error instanceof Error ? [error.name, error.message] : String(error),
+          duration: now() - start,
+        });
         throw error;
       },
     );

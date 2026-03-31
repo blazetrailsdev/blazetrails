@@ -1,5 +1,6 @@
 import { EncryptedAttributeType } from "./encrypted-attribute-type.js";
 import { getAttributeType } from "./encryptable-record.js";
+import { AdditionalValue } from "./extended-deterministic-queries.js";
 
 /**
  * Extends uniqueness validation for deterministic encrypted attributes.
@@ -39,15 +40,11 @@ export class EncryptedUniquenessValidator {
       return [value];
     }
 
-    const results: unknown[] = [];
-    const current = type.serialize(value);
-    if (current !== null && current !== undefined) results.push(current);
+    const results: Array<unknown | AdditionalValue> = [];
+    results.push(new AdditionalValue(value, type));
 
     for (const prevType of type.previousTypes) {
-      const ct = prevType.serialize(value);
-      if (ct !== null && ct !== undefined && !results.includes(ct)) {
-        results.push(ct);
-      }
+      results.push(new AdditionalValue(value, prevType));
     }
 
     return results;

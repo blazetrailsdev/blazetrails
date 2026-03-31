@@ -61,26 +61,18 @@ export class EncryptedQuery {
     _checkForAdditionalValues: boolean,
     type: EncryptedAttributeType,
   ): unknown {
-    if (typeof value === "string") {
-      return this.allCiphertextsFor(value, type);
-    }
+    if (value === null) return value;
     if (Array.isArray(value)) {
-      const expanded = value.flatMap((v) => {
-        if (typeof v === "string") {
-          return this.allCiphertextsFor(v, type);
-        }
-        return [v];
-      });
-      return expanded;
+      return value.flatMap((v) => (v === null ? [v] : this.allCiphertextsFor(v, type)));
     }
-    return value;
+    return this.allCiphertextsFor(value, type);
   }
 
   private static allCiphertextsFor(
-    plaintext: string,
+    plaintext: unknown,
     type: EncryptedAttributeType,
-  ): Array<string | AdditionalValue> {
-    const results: Array<string | AdditionalValue> = [];
+  ): Array<unknown | AdditionalValue> {
+    const results: Array<unknown | AdditionalValue> = [];
     // Current scheme ciphertext (wrapped to prevent re-encryption)
     results.push(new AdditionalValue(plaintext, type));
     // Previous scheme ciphertexts (also wrapped)

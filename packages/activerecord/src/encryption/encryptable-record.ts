@@ -39,9 +39,13 @@ export class EncryptableRecord {
     for (const name of names) {
       modelClass._encryptedAttributes.add(name);
 
-      // Get existing cast type from attribute definitions if available
+      // Get existing cast type from attribute definitions if available.
+      // If already encrypted, unwrap to avoid double-encryption.
       const existingDef = modelClass._attributeDefinitions?.get?.(name);
-      const castType = existingDef?.type;
+      let castType = existingDef?.type;
+      if (castType instanceof EncryptedAttributeType) {
+        castType = castType.castType;
+      }
 
       const encryptedType = new EncryptedAttributeType({
         scheme,

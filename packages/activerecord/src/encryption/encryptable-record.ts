@@ -1,5 +1,6 @@
 import { Scheme, type SchemeOptions } from "./scheme.js";
 import { EncryptedAttributeType } from "./encrypted-attribute-type.js";
+import { Configurable } from "./configurable.js";
 
 /**
  * Provides the `encrypts` declaration for model classes, enabling
@@ -44,6 +45,8 @@ export class EncryptableRecord {
       if (modelClass.attribute) {
         modelClass.attribute(name, type);
       }
+
+      Configurable.encryptedAttributeWasDeclared(modelClass, name);
     }
   }
 

@@ -7,9 +7,14 @@ import type { EncryptedAttributeType } from "./encrypted-attribute-type.js";
  * Mirrors: ActiveRecord::Encryption::ExtendedDeterministicQueries
  */
 export class ExtendedDeterministicQueries {
+  private static _installed = false;
+
   static installSupport(): void {
-    // In Rails, this patches Relation and Base to intercept where/find_by.
-    // Our implementation hooks into the predicate builder instead.
+    this._installed = true;
+  }
+
+  static get installed(): boolean {
+    return this._installed;
   }
 }
 
@@ -34,14 +39,18 @@ export class EncryptedQuery {
     if (typeof options !== "object" || options === null) return args;
 
     const result = { ...options } as Record<string, unknown>;
+    let modified = false;
+
     for (const attrName of deterministicAttrs) {
       const type = model.typeForAttribute?.(attrName) as EncryptedAttributeType | undefined;
       if (!type?.previousTypes?.length) continue;
       const value = result[attrName];
       if (value === undefined) continue;
       result[attrName] = this.processEncryptedQueryArgument(value, checkForAdditionalValues, type);
+      modified = true;
     }
-    args[0] = result;
+
+    if (modified) args[0] = result;
     return args;
   }
 
@@ -71,22 +80,35 @@ export class EncryptedQuery {
 }
 
 /**
- * Patches Relation query methods to expand encrypted arguments.
+ * Mixin that patches Relation#where and Relation#exists? to expand
+ * encrypted query arguments via EncryptedQuery.processArguments.
  *
  * Mirrors: ActiveRecord::Encryption::ExtendedDeterministicQueries::RelationQueries
  */
-export class RelationQueries {}
+export class RelationQueries {
+  static patchWhere(originalWhere: Function, relation: any, args: unknown[]): unknown {
+    return originalWhere.call(relation, ...EncryptedQuery.processArguments(relation, args, true));
+  }
+
+  static patchExists(originalExists: Function, relation: any, args: unknown[]): unknown {
+    return originalExists.call(relation, ...EncryptedQuery.processArguments(relation, args, true));
+  }
+}
 
 /**
- * Patches Base class methods (find_by) to expand encrypted arguments.
+ * Mixin that patches Base.findBy to expand encrypted query arguments.
  *
  * Mirrors: ActiveRecord::Encryption::ExtendedDeterministicQueries::CoreQueries
  */
-export class CoreQueries {}
+export class CoreQueries {
+  static patchFindBy(originalFindBy: Function, klass: any, args: unknown[]): unknown {
+    return originalFindBy.call(klass, ...EncryptedQuery.processArguments(klass, args, false));
+  }
+}
 
 /**
  * Wraps a value encrypted with a previous scheme so it can be
- * included in query expansion.
+ * included in query expansion without re-encryption.
  *
  * Mirrors: ActiveRecord::Encryption::ExtendedDeterministicQueries::AdditionalValue
  */
@@ -101,8 +123,16 @@ export class AdditionalValue {
 }
 
 /**
- * Patches EncryptedAttributeType to handle AdditionalValue in serialize.
+ * Patches EncryptedAttributeType#serialize to pass through
+ * AdditionalValue instances without re-encrypting.
  *
  * Mirrors: ActiveRecord::Encryption::ExtendedDeterministicQueries::ExtendedEncryptableType
  */
-export class ExtendedEncryptableType {}
+export class ExtendedEncryptableType {
+  static serialize(originalSerialize: (data: unknown) => unknown, data: unknown): unknown {
+    if (data instanceof AdditionalValue) {
+      return data.value;
+    }
+    return originalSerialize(data);
+  }
+}

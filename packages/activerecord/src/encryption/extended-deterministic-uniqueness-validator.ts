@@ -1,22 +1,29 @@
 import type { EncryptedAttributeType } from "./encrypted-attribute-type.js";
+import { Contexts } from "./contexts.js";
 
 /**
  * Extends uniqueness validation for deterministic encrypted attributes.
- * When an attribute is encrypted with deterministic encryption and has
- * previous schemes, this validates uniqueness against all scheme versions.
+ * When validating uniqueness, also checks against values encrypted with
+ * previous schemes to prevent duplicates across migration periods.
  *
  * Mirrors: ActiveRecord::Encryption::ExtendedDeterministicUniquenessValidator
  */
 export class ExtendedDeterministicUniquenessValidator {
+  private static _installed = false;
+
   static installSupport(): void {
-    // In Rails, this prepends to UniquenessValidator.
-    // Our implementation hooks into the validation pipeline.
+    this._installed = true;
+  }
+
+  static get installed(): boolean {
+    return this._installed;
   }
 }
 
 /**
- * Mixin for UniquenessValidator that checks encrypted values against
- * all previous encryption schemes.
+ * Performs uniqueness validation across all encryption scheme versions.
+ * For each previous encryption type, serializes the value and validates
+ * uniqueness with encryption disabled (comparing raw ciphertexts).
  *
  * Mirrors: ActiveRecord::Encryption::ExtendedDeterministicUniquenessValidator::EncryptedUniquenessValidator
  */
@@ -38,7 +45,9 @@ export class EncryptedUniquenessValidator {
 
     for (const prevType of type.previousTypes) {
       const encryptedValue = prevType.serialize(value);
-      originalValidate(record, attribute, encryptedValue);
+      Contexts.withoutEncryption(() => {
+        originalValidate(record, attribute, encryptedValue);
+      });
     }
   }
 }

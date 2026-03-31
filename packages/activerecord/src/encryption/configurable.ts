@@ -1,21 +1,21 @@
 import { Config } from "./config.js";
+import { Contexts } from "./contexts.js";
+
+let _sharedConfig: Config | null = null;
+const _listeners: Array<(klass: any, name: string) => void> = [];
 
 /**
- * Configuration API for ActiveRecord::Encryption. Provides methods
- * to configure encryption keys and properties, and to register
- * callbacks for encrypted attribute declarations.
+ * Configuration API for ActiveRecord::Encryption. Manages the shared
+ * Config instance and encrypted attribute declaration callbacks.
  *
  * Mirrors: ActiveRecord::Encryption::Configurable
  */
 export class Configurable {
-  private static _config: Config | null = null;
-  private static _listeners: Array<(klass: any, name: string) => void> = [];
-
   static get config(): Config {
-    if (!this._config) {
-      this._config = new Config();
+    if (!_sharedConfig) {
+      _sharedConfig = new Config();
     }
-    return this._config;
+    return _sharedConfig;
   }
 
   static configure(options: {
@@ -32,17 +32,22 @@ export class Configurable {
 
     for (const [key, value] of Object.entries(options)) {
       if (key !== "primaryKey" && key !== "deterministicKey" && key !== "keyDerivationSalt") {
-        (config as any)[key] = value;
+        if (key in config) {
+          (config as any)[key] = value;
+        }
       }
     }
+
+    // Reset context after reconfiguring keys
+    Contexts.withEncryptionContext({}, () => {});
   }
 
   static onEncryptedAttributeDeclared(callback: (klass: any, name: string) => void): void {
-    this._listeners.push(callback);
+    _listeners.push(callback);
   }
 
   static encryptedAttributeWasDeclared(klass: any, name: string): void {
-    for (const listener of this._listeners) {
+    for (const listener of _listeners) {
       listener(klass, name);
     }
   }

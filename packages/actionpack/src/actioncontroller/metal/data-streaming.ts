@@ -67,8 +67,18 @@ function buildContentDisposition(disposition: string, filename: string): string 
 }
 
 export function readFileForSend(filePath: string): globalThis.Buffer {
-  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+  try {
+    const stats = fs.statSync(filePath);
+    if (!stats.isFile()) {
+      throw new MissingFile(`Cannot read file ${filePath}`);
+    }
+  } catch (e) {
+    if (e instanceof MissingFile) throw e;
     throw new MissingFile(`Cannot read file ${filePath}`);
   }
-  return fs.readFileSync(filePath);
+  try {
+    return fs.readFileSync(filePath);
+  } catch {
+    throw new MissingFile(`Cannot read file ${filePath}`);
+  }
 }

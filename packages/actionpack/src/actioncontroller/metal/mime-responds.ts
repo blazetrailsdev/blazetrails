@@ -103,7 +103,10 @@ function parseAccept(header: string): Array<{ mime: string; q: number }> {
       let q = 1;
       for (const param of params) {
         const [key, val] = param.trim().split("=");
-        if (key === "q" && val) q = parseFloat(val);
+        if (key === "q" && val) {
+          const parsed = parseFloat(val);
+          q = Number.isNaN(parsed) ? 0 : parsed;
+        }
       }
       return { mime: mime.trim(), q };
     })

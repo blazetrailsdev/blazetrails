@@ -4,7 +4,7 @@ import { FlashHash } from "../../actiondispatch/flash.js";
 // ==========================================================================
 // controller/flash_test.rb
 // ==========================================================================
-describe("ActionDispatch::Flash", () => {
+describe("FlashTest", () => {
   it("flash", () => {
     const flash = new FlashHash();
     flash.set("notice", "hello");
@@ -82,11 +82,17 @@ describe("ActionDispatch::Flash", () => {
     expect(flash.get("custom")).toBe("value");
   });
 
+  it("from session value nil returns empty", () => {
+    const flash = FlashHash.fromSessionValue(null);
+    expect(flash.empty).toBe(true);
+  });
+});
+
+describe("FlashIntegrationTest", () => {
   it("setting flash does not raise in following requests", () => {
     const flash = new FlashHash();
     flash.set("notice", "hello");
     flash.sweep();
-    // Should not throw
     expect(flash.get("notice")).toBe("hello");
   });
 
@@ -94,10 +100,5 @@ describe("ActionDispatch::Flash", () => {
     const flash = new FlashHash();
     flash.now("notice", "now");
     expect(flash.get("notice")).toBe("now");
-  });
-
-  it("from session value nil returns empty", () => {
-    const flash = FlashHash.fromSessionValue(null);
-    expect(flash.empty).toBe(true);
   });
 });

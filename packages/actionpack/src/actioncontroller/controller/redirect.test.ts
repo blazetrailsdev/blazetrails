@@ -164,7 +164,7 @@ describe("RedirectTest", () => {
 // ==========================================================================
 // Redirect utility tests (from controller/redirect_test.rb)
 // ==========================================================================
-describe("ActionController::Redirect", () => {
+describe("RedirectTest", () => {
   it("simple redirect", () => {
     const result = redirectTo("http://example.com/posts");
     expect(result.status).toBe(302);

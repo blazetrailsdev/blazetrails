@@ -4,7 +4,7 @@ import { FlashHash } from "../../actiondispatch/flash.js";
 // ==========================================================================
 // controller/flash_hash_test.rb
 // ==========================================================================
-describe("ActionDispatch::Flash::FlashHash", () => {
+describe("FlashHashTest", () => {
   it("set get", () => {
     const flash = new FlashHash();
     flash.set("notice", "hello");

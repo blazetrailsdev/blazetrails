@@ -147,7 +147,7 @@ describe("AssociationValidationTest", () => {
         this.validatesAssociated("replies");
       }
     }
-    registerModel("TopicWAD", TopicWAD);
+    registerModel("TopicWAD_without_destruction", TopicWAD);
     const t = new TopicWAD({ title: "test" });
     (t as any).replies = [new FakeReply()];
     expect(t.isValid()).toBe(true);

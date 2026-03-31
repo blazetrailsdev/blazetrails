@@ -266,6 +266,7 @@ that reads ProjectStore for the project list.
 - Tutorial cards link to correct learn URLs
 - Feature showcase describes each Frontiers tool
 - Projects list loads from ProjectStore (empty state handled)
+- Mobile-friendly: single-column stack below 768px, 44px minimum tap targets
 
 ---
 
@@ -389,7 +390,7 @@ src/routes/frontiers/learn/
 - Pane visibility changes between steps (e.g., step 1 has no Database tab, step 2 does)
 - Runtime persists across step navigation (no re-init)
 - Invalid slugs/steps handled gracefully
-- Responsive: stacks vertically below 768px
+- Mobile-friendly: stacks vertically below 768px, sandbox panes as collapsible accordions, step nav sticky at bottom on mobile
 
 ---
 

@@ -81,6 +81,15 @@ Each tutorial has a replay test: boot `createRuntime()`, execute every action, a
 
 Each step declares a `panes` array. The tutorial layout only renders those components. When a pane is introduced for the first time, the step's prose includes a callout explaining the tool.
 
+### Mobile-First Layout
+
+Frontiers must be usable on phones and tablets. The landing page, tutorial listing, and tutorial step pages must all be mobile-friendly.
+
+- **Landing page** (`/frontiers`): Single-column stack on mobile. Tutorial cards, feature showcase, and CTAs should be touch-friendly with minimum 44px tap targets.
+- **Tutorial step page** (`/frontiers/learn/[tutorial]/[step]`): Below 768px, stack vertically — tutorial content on top, sandbox panes below as collapsible accordion sections. Step navigation must be thumb-reachable (bottom of screen or sticky).
+- **Sandbox IDE** (`/frontiers/project`): Not required to be mobile-friendly — this is a power-user tool. Show a "best on desktop" notice on small screens.
+- **CLI actions and diffs**: Full-width on mobile. Code blocks horizontally scroll. Apply/Run buttons span full width.
+
 ### Terminal
 
 The terminal (Ghostty WASM or xterm.js) is a standalone enhancement, not on the critical path. Tutorials use `CliAction.svelte` for CLI commands. Terminal can land in any PR without blocking content.

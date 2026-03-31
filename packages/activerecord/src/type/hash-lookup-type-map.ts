@@ -58,7 +58,7 @@ export class HashLookupTypeMap {
     key: string,
     value?: Type | ((lookupKey: string, ...args: unknown[]) => Type),
   ): void {
-    if (value === undefined) throw new Error("registerType requires a value or block");
+    if (value == null) throw new Error("registerType requires a value or block");
     if (typeof value === "function") {
       this._mapping.set(key, value as (...args: unknown[]) => Type);
     } else {

@@ -6,13 +6,16 @@ export class SqlJsAdapter implements DatabaseAdapter {
 
   async execute(sql: string, binds: unknown[] = []): Promise<Record<string, unknown>[]> {
     const stmt = this.db.prepare(sql);
-    if (binds.length) stmt.bind(binds as any[]);
-    const rows: Record<string, unknown>[] = [];
-    while (stmt.step()) {
-      rows.push(stmt.getAsObject() as Record<string, unknown>);
+    try {
+      if (binds.length) stmt.bind(binds as any[]);
+      const rows: Record<string, unknown>[] = [];
+      while (stmt.step()) {
+        rows.push(stmt.getAsObject() as Record<string, unknown>);
+      }
+      return rows;
+    } finally {
+      stmt.free();
     }
-    stmt.free();
-    return rows;
   }
 
   async executeMutation(sql: string, binds: unknown[] = []): Promise<number> {

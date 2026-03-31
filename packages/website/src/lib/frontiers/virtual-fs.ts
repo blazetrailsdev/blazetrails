@@ -75,7 +75,7 @@ export class VirtualFS {
 
   write(path: string, content: string, language?: string): void {
     const existing = this.read(path);
-    const lang = language ?? this._inferLanguage(path);
+    const lang = language ?? existing?.language ?? this._inferLanguage(path);
     if (existing) {
       this.adapter.execRaw(
         `UPDATE "_vfs_files" SET "content" = '${this._escape(content)}', "language" = '${this._escape(lang)}', "updated_at" = datetime('now') WHERE "path" = '${this._escape(path)}'`,

@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import initSqlJs from "sql.js";
+import { describe, it, expect, beforeAll, beforeEach } from "vitest";
+import initSqlJs, { type SqlJsStatic } from "sql.js";
 import { SqlJsAdapter } from "../sql-js-adapter.js";
 import { VirtualFS } from "../virtual-fs.js";
 import {
@@ -11,11 +11,15 @@ import {
 } from "./diff-engine.js";
 import type { FileDiff, CheckSpec } from "./types.js";
 
+let SQL: SqlJsStatic;
 let adapter: SqlJsAdapter;
 let vfs: VirtualFS;
 
-beforeEach(async () => {
-  const SQL = await initSqlJs();
+beforeAll(async () => {
+  SQL = await initSqlJs();
+});
+
+beforeEach(() => {
   adapter = new SqlJsAdapter(new SQL.Database());
   vfs = new VirtualFS(adapter);
 });

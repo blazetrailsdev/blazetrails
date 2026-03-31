@@ -114,27 +114,38 @@ export function isDiffApplied(vfs: VirtualFS, diff: FileDiff): boolean {
   return diff.hunks.every((hunk) => isHunkApplied(lines, hunk));
 }
 
+function linesMatch(actual: string, expected: string): boolean {
+  const normalize = (line: string) => line.replace(/\s+$/, "");
+  return normalize(actual) === normalize(expected);
+}
+
 function isHunkApplied(lines: string[], hunk: DiffHunk): boolean {
-  const anchorIndex = lines.findIndex((line) => line.includes(hunk.anchor));
-  if (anchorIndex === -1) return false;
+  const matchingIndices: number[] = [];
+  lines.forEach((line, index) => {
+    if (line.includes(hunk.anchor)) matchingIndices.push(index);
+  });
+
+  if (matchingIndices.length !== 1) return false;
+
+  const anchorIndex = matchingIndices[0];
 
   if (hunk.position === "after") {
     const start = anchorIndex + 1;
     return hunk.insertLines.every(
-      (insertLine, i) => start + i < lines.length && lines[start + i].includes(insertLine.trim()),
+      (insertLine, i) => start + i < lines.length && linesMatch(lines[start + i], insertLine),
     );
   }
 
   if (hunk.position === "before") {
     const start = anchorIndex - hunk.insertLines.length;
     if (start < 0) return false;
-    return hunk.insertLines.every((insertLine, i) => lines[start + i].includes(insertLine.trim()));
+    return hunk.insertLines.every((insertLine, i) => linesMatch(lines[start + i], insertLine));
   }
 
   // position === "replace"
   return hunk.insertLines.every(
     (insertLine, i) =>
-      anchorIndex + i < lines.length && lines[anchorIndex + i].includes(insertLine.trim()),
+      anchorIndex + i < lines.length && linesMatch(lines[anchorIndex + i], insertLine),
   );
 }
 
@@ -207,6 +218,14 @@ export function runCheck(vfs: VirtualFS, adapter: SqlJsAdapter, check: CheckSpec
         check,
         passed: false,
         error: "route_responds checks require an app server (not yet available)",
+      };
+    }
+
+    default: {
+      return {
+        check,
+        passed: false,
+        error: `Unknown check type: ${String((check as CheckSpec).type)}`,
       };
     }
   }

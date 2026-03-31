@@ -7,6 +7,8 @@ import {
   RecordNotUnique,
   InvalidForeignKey,
   NotNullViolation,
+  ValueTooLong,
+  NoDatabaseError,
 } from "../errors.js";
 import { TypeMap } from "../type/type-map.js";
 import { Date as DateType } from "../type/date.js";
@@ -263,6 +265,12 @@ export class SQLite3Adapter implements DatabaseAdapter {
     }
     if (code?.includes("CONSTRAINT_NOTNULL") || msg.includes("NOT NULL constraint failed")) {
       return new NotNullViolation(msg, { sql, binds, cause });
+    }
+    if (msg.includes("String or BLOB exceeded size limit")) {
+      return new ValueTooLong(msg, { sql, binds, cause });
+    }
+    if (code === "SQLITE_CANTOPEN" || msg.includes("unable to open database file")) {
+      return new NoDatabaseError(msg);
     }
     return new StatementInvalid(msg, { sql, binds, cause });
   }

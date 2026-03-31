@@ -6,9 +6,7 @@
  * @see https://api.rubyonrails.org/classes/ActionController/Instrumentation.html
  */
 
-import { performance as perfHooks } from "perf_hooks";
-
-const now = (): number => globalThis.performance?.now() ?? perfHooks?.now() ?? Date.now();
+const now = (): number => globalThis.performance?.now() ?? Date.now();
 
 export interface Notifier {
   instrument(event: string, payload: Record<string, unknown>, block?: () => unknown): void;

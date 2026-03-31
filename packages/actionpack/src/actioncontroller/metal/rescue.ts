@@ -25,7 +25,7 @@ export class RescueRegistry {
     return null;
   }
 
-  async processWithRescue(fn: () => Promise<void>): Promise<void> {
+  async processWithRescue(fn: () => void | Promise<void>): Promise<void> {
     try {
       await fn();
     } catch (error) {

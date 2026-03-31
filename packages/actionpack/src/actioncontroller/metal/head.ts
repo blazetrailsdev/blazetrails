@@ -19,10 +19,7 @@ export function headResponse(
   if (options) {
     for (const [key, value] of Object.entries(options)) {
       if (key === "location" || key === "content_type") continue;
-      const headerName = key
-        .split(/[-_]/)
-        .map((v) => v.charAt(0).toUpperCase() + v.slice(1))
-        .join("-");
+      const headerName = key.replace(/_/g, "-").toLowerCase();
       headers[headerName] = String(value);
     }
   }

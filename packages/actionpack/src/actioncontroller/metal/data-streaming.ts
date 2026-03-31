@@ -47,13 +47,23 @@ export function buildSendFileHeaders(options: {
 
   const disposition = options.disposition ?? DEFAULT_SEND_FILE_DISPOSITION;
   if (disposition && options.filename) {
-    headers["content-disposition"] = `${disposition}; filename="${options.filename}"`;
+    headers["content-disposition"] = buildContentDisposition(disposition, options.filename);
   } else if (disposition) {
     headers["content-disposition"] = disposition;
   }
 
   headers["content-transfer-encoding"] = "binary";
   return headers;
+}
+
+function buildContentDisposition(disposition: string, filename: string): string {
+  const sanitized = filename.replace(/[\r\n]/g, "");
+  const hasNonAscii = /[^\x20-\x7E]/.test(sanitized);
+  if (hasNonAscii) {
+    const encoded = encodeURIComponent(sanitized);
+    return `${disposition}; filename*=UTF-8''${encoded}`;
+  }
+  return `${disposition}; filename="${sanitized.replace(/"/g, '\\"')}"`;
 }
 
 export function readFileForSend(filePath: string): globalThis.Buffer {

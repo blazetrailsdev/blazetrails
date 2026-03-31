@@ -7,7 +7,13 @@
  */
 
 export function resolveHelperPath(controllerName: string): string {
-  return controllerName.replace(/Controller$/, "").toLowerCase() + "_helper";
+  const base = controllerName.replace(/Controller$/, "");
+  const underscored = base
+    .replace(/::/g, "/")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
+    .replace(/([a-z\d])([A-Z])/g, "$1_$2")
+    .toLowerCase();
+  return underscored + "_helper";
 }
 
 export function inheritedWithHelpers(

@@ -28,7 +28,12 @@ export function assertTemplate(
       throw new Error(`Expected template "${expected}" but got "${templates.join(", ")}"`);
     }
   } else {
-    if (!templates.some((t) => expected.test(t))) {
+    if (
+      !templates.some((t) => {
+        expected.lastIndex = 0;
+        return expected.test(t);
+      })
+    ) {
       throw new Error(`Expected template matching ${expected} but got "${templates.join(", ")}"`);
     }
   }

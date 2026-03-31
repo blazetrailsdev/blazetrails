@@ -1,6 +1,6 @@
 # ActionController: Road to 100% Test Coverage
 
-**API surface: 93/93 classes/modules (100%)** — all ActionController classes and modules are now exported.
+**API surface: 65/93 classes/modules (69.9%)** — real implementations only, no stubs.
 
 Test coverage: **0.4%** (7 matched / 1,860 total Rails tests). 8/91 files matched, 229 misplaced, 0 wrong describes.
 

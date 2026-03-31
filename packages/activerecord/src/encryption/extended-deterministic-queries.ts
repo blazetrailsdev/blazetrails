@@ -1,4 +1,4 @@
-import type { EncryptedAttributeType } from "./encrypted-attribute-type.js";
+import { EncryptedAttributeType } from "./encrypted-attribute-type.js";
 
 /**
  * Automatically expands encrypted arguments to support querying both
@@ -19,8 +19,8 @@ export class ExtendedDeterministicQueries {
 }
 
 /**
- * Processes query arguments, expanding encrypted values to include
- * ciphertexts from previous encryption schemes.
+ * Processes query arguments, expanding deterministic encrypted values
+ * to include ciphertexts from previous encryption schemes.
  *
  * Mirrors: ActiveRecord::Encryption::ExtendedDeterministicQueries::EncryptedQuery
  */
@@ -31,8 +31,8 @@ export class EncryptedQuery {
     checkForAdditionalValues: boolean,
   ): unknown[] {
     const model = owner._modelClass ?? owner;
-    const deterministicAttrs = model._encryptedAttributes;
-    if (!deterministicAttrs?.size) return args;
+    const encryptedAttrs = model._encryptedAttributes as Set<string> | undefined;
+    if (!encryptedAttrs?.size) return args;
 
     if (!Array.isArray(args) || args.length === 0) return args;
     const options = args[0];
@@ -41,17 +41,18 @@ export class EncryptedQuery {
     const result = { ...options } as Record<string, unknown>;
     let modified = false;
 
-    for (const attrName of deterministicAttrs) {
-      const type = model.typeForAttribute?.(attrName) as EncryptedAttributeType | undefined;
-      if (!type?.previousTypes?.length) continue;
+    for (const attrName of encryptedAttrs) {
+      const type = model.typeForAttribute?.(attrName);
+      if (!(type instanceof EncryptedAttributeType)) continue;
+      if (!type.deterministic) continue;
+      if (!type.previousTypes.length) continue;
       const value = result[attrName];
       if (value === undefined) continue;
       result[attrName] = this.processEncryptedQueryArgument(value, checkForAdditionalValues, type);
       modified = true;
     }
 
-    if (modified) args[0] = result;
-    return args;
+    return modified ? [result, ...args.slice(1)] : args;
   }
 
   private static processEncryptedQueryArgument(
@@ -60,8 +61,10 @@ export class EncryptedQuery {
     type: EncryptedAttributeType,
   ): unknown {
     if (typeof value === "string") {
-      const additional = type.previousTypes.map((t) => new AdditionalValue(value, t));
-      return [value, ...additional];
+      const additionalCiphertexts = type.previousTypes
+        .map((t) => t.serialize(value))
+        .filter((v): v is string => typeof v === "string");
+      return [value, ...additionalCiphertexts];
     }
     if (Array.isArray(value)) {
       if (checkForAdditionalValues && value.some((v) => v instanceof AdditionalValue)) {
@@ -69,7 +72,9 @@ export class EncryptedQuery {
       }
       const expanded = value.flatMap((v) => {
         if (typeof v === "string") {
-          return type.previousTypes.map((t) => new AdditionalValue(v, t));
+          return type.previousTypes
+            .map((t) => t.serialize(v))
+            .filter((c): c is string => typeof c === "string");
         }
         return [];
       });
@@ -107,8 +112,8 @@ export class CoreQueries {
 }
 
 /**
- * Wraps a value encrypted with a previous scheme so it can be
- * included in query expansion without re-encryption.
+ * Wraps a value encrypted with a previous scheme. Used as a marker
+ * during query expansion to track which values are already encrypted.
  *
  * Mirrors: ActiveRecord::Encryption::ExtendedDeterministicQueries::AdditionalValue
  */

@@ -1,4 +1,4 @@
-import type { EncryptedAttributeType } from "./encrypted-attribute-type.js";
+import { EncryptedAttributeType } from "./encrypted-attribute-type.js";
 import { Contexts } from "./contexts.js";
 
 /**
@@ -22,8 +22,9 @@ export class ExtendedDeterministicUniquenessValidator {
 
 /**
  * Performs uniqueness validation across all encryption scheme versions.
- * For each previous encryption type, serializes the value and validates
- * uniqueness with encryption disabled (comparing raw ciphertexts).
+ * For each previous encryption type, serializes the value to its
+ * ciphertext and validates uniqueness against the raw ciphertext
+ * (with encryption disabled so the query doesn't double-encrypt).
  *
  * Mirrors: ActiveRecord::Encryption::ExtendedDeterministicUniquenessValidator::EncryptedUniquenessValidator
  */
@@ -37,16 +38,15 @@ export class EncryptedUniquenessValidator {
     originalValidate(record, attribute, value);
 
     const klass = record.constructor;
-    const deterministicAttrs = klass._encryptedAttributes;
-    if (!deterministicAttrs?.has(attribute)) return;
-
-    const type = klass.typeForAttribute?.(attribute) as EncryptedAttributeType | undefined;
-    if (!type?.previousTypes?.length) return;
+    const type = klass.typeForAttribute?.(attribute);
+    if (!(type instanceof EncryptedAttributeType)) return;
+    if (!type.deterministic) return;
+    if (!type.previousTypes.length) return;
 
     for (const prevType of type.previousTypes) {
-      const encryptedValue = prevType.serialize(value);
+      const ciphertext = prevType.serialize(value);
       Contexts.withoutEncryption(() => {
-        originalValidate(record, attribute, encryptedValue);
+        originalValidate(record, attribute, ciphertext);
       });
     }
   }

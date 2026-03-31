@@ -15,6 +15,7 @@ export class AutoFilteredParameters {
 
   enable(): void {
     this.applyCollectedAttributes();
+    this._attributesByClass.clear();
     this._collecting = false;
   }
 

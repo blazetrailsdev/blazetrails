@@ -2,13 +2,16 @@ import { Message } from "./message.js";
 import { MessageSerializer } from "./message-serializer.js";
 
 /**
- * A message serializer using a compact binary-like format. In Rails,
- * this uses MessagePack for smaller payloads. Our implementation
- * currently delegates to JSON-based MessageSerializer, producing
- * functionally equivalent output at larger size.
+ * A message serializer that mirrors Rails'
+ * ActiveRecord::Encryption::MessagePackMessageSerializer API but
+ * currently delegates entirely to the JSON-based MessageSerializer.
  *
- * TODO: Integrate a real MessagePack library (e.g. @msgpack/msgpack)
- * for compact binary serialization.
+ * This implementation does not yet use MessagePack or any binary
+ * serialization format; it exists as a compatibility layer so callers
+ * can rely on the same interface as Rails while we remain JSON-only.
+ *
+ * TODO: Optionally integrate a real MessagePack library (e.g.
+ * @msgpack/msgpack) in the future for compact binary serialization.
  *
  * Mirrors: ActiveRecord::Encryption::MessagePackMessageSerializer
  */

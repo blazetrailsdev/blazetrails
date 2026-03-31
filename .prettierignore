@@ -1,5 +1,7 @@
 dist
+build
 node_modules
+.svelte-kit
 **/output/**
 **/.turbo/**
 coverage

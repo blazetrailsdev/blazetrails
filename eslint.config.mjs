@@ -8,7 +8,13 @@ import vitest from "@vitest/eslint-plugin";
 
 export default defineConfig(
   {
-    ignores: ["vendor/**", "scripts/**", "**/dist/**", "packages/website/static/**", "packages/website/build/**"],
+    ignores: [
+      "vendor/**",
+      "scripts/**",
+      "**/dist/**",
+      "packages/website/static/**",
+      "packages/website/build/**",
+    ],
   },
   eslint.configs.recommended,
   tseslint.configs.recommended,

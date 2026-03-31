@@ -11,19 +11,19 @@ const _store = new Map<string, unknown>();
 export const ExecutionContext = {
   set(attrs: Record<string, unknown>, fn?: () => void): void {
     if (fn) {
-      const saved = new Map<string, unknown>();
+      const saved = new Map<string, { hadKey: boolean; value: unknown }>();
       for (const key of Object.keys(attrs)) {
-        saved.set(key, _store.has(key) ? _store.get(key) : undefined);
+        saved.set(key, { hadKey: _store.has(key), value: _store.get(key) });
         _store.set(key, attrs[key]);
       }
       try {
         fn();
       } finally {
-        for (const [key, value] of saved) {
-          if (value === undefined) {
-            _store.delete(key);
+        for (const [key, entry] of saved) {
+          if (entry.hadKey) {
+            _store.set(key, entry.value);
           } else {
-            _store.set(key, value);
+            _store.delete(key);
           }
         }
       }

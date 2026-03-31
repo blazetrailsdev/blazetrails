@@ -203,11 +203,12 @@ function internalStorageKey(name: string): string {
  */
 export function attrInternalReader(target: object, ...names: string[]): void {
   for (const name of names) {
+    const storageKey = internalStorageKey(name);
     Object.defineProperty(target, name, {
       configurable: true,
       enumerable: false,
       get(this: Record<string, unknown>) {
-        return this[internalStorageKey(name)];
+        return this[storageKey];
       },
     });
   }
@@ -218,11 +219,12 @@ export function attrInternalReader(target: object, ...names: string[]): void {
  */
 export function attrInternalWriter(target: object, ...names: string[]): void {
   for (const name of names) {
+    const storageKey = internalStorageKey(name);
     Object.defineProperty(target, name, {
       configurable: true,
       enumerable: false,
       set(this: Record<string, unknown>, value: unknown) {
-        this[internalStorageKey(name)] = value;
+        this[storageKey] = value;
       },
     });
   }
@@ -234,14 +236,15 @@ export function attrInternalWriter(target: object, ...names: string[]): void {
  */
 export function attrInternal(target: object, ...names: string[]): void {
   for (const name of names) {
+    const storageKey = internalStorageKey(name);
     Object.defineProperty(target, name, {
       configurable: true,
       enumerable: false,
       get(this: Record<string, unknown>) {
-        return this[internalStorageKey(name)];
+        return this[storageKey];
       },
       set(this: Record<string, unknown>, value: unknown) {
-        this[internalStorageKey(name)] = value;
+        this[storageKey] = value;
       },
     });
 
@@ -249,7 +252,7 @@ export function attrInternal(target: object, ...names: string[]): void {
       configurable: true,
       enumerable: false,
       value(this: Record<string, unknown>, value: unknown) {
-        this[internalStorageKey(name)] = value;
+        this[storageKey] = value;
       },
     });
   }

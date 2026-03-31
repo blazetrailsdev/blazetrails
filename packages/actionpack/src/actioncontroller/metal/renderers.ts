@@ -39,7 +39,7 @@ export class Renderers {
 }
 
 export interface All {
-  _renderers: ReadonlySet<string>;
+  readonly RENDERERS: ReadonlySet<string>;
 }
 
 export interface ClassMethods {

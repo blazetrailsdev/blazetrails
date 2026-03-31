@@ -85,6 +85,4 @@ export interface ConditionalGet {
   stale(options: Record<string, unknown>): boolean;
   expiresIn(seconds: number, options?: Record<string, unknown>): void;
   expiresNow(): void;
-  httpCacheForever(options?: { public?: boolean }, block?: () => void): void;
-  noStore(): void;
 }

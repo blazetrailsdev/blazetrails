@@ -43,13 +43,10 @@ export function processRenderOptions(options: Record<string, unknown>): {
 }
 
 export interface ClassMethods {
-  render(...args: unknown[]): unknown;
   renderer: unknown;
-  setupRenderer(): void;
 }
 
 export interface Rendering {
-  render(...args: unknown[]): void;
-  renderToString(...args: unknown[]): string;
-  renderToBody(options?: Record<string, unknown>): unknown;
+  render(options?: Record<string, unknown>): void;
+  renderToString(options?: Record<string, unknown>): string;
 }

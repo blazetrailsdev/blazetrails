@@ -20,6 +20,4 @@ export interface Redirecting {
     status?: number | string;
     allow_other_host?: boolean;
   }): void;
-  redirectBackOrTo(fallbackLocation: string, options?: { allow_other_host?: boolean }): void;
-  urlFrom(location: string): string | null;
 }

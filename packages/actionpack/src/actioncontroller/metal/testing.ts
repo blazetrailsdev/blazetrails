@@ -25,7 +25,7 @@ export function clearInstanceVariablesBetweenRequests(
 }
 
 export interface Functional {
-  clearInstanceVariablesBetweenRequests(): void;
+  clearInstanceVariablesBetweenRequests(trackedVars: Set<string>): Set<string>;
   recycle(): void;
 }
 

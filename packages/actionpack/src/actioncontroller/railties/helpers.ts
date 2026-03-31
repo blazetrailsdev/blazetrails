@@ -26,5 +26,5 @@ export interface Railties {
 }
 
 export interface Helpers {
-  inheritedWithHelpers(klass: unknown): void;
+  inheritedWithHelpers(klass: { name: string }, helperLoader?: (path: string) => unknown): void;
 }

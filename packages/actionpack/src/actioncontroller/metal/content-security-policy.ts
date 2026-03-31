@@ -37,5 +37,5 @@ export interface ClassMethods {
 }
 
 export interface ContentSecurityPolicy {
-  contentSecurityPolicyNonce(): string;
+  contentSecurityPolicy: boolean;
 }

@@ -346,6 +346,19 @@ describe("TagStack", () => {
     expect(stack.tags).toEqual([]);
   });
 
+  it("pushTags stringifies non-string values", () => {
+    const stack = new TagStack();
+    stack.pushTags([42, true, { toString: () => "obj" }] as unknown[]);
+    expect(stack.tags).toEqual(["42", "true", "obj"]);
+  });
+
+  it("pushTags filters null and undefined after stringification", () => {
+    const stack = new TagStack();
+    stack.pushTags([null, undefined, 0, false] as unknown[]);
+    // "0" and "false" are non-blank strings; null/undefined become "" and are filtered
+    expect(stack.tags).toEqual(["0", "false"]);
+  });
+
   it("formatMessage with no tags returns message unchanged", () => {
     const stack = new TagStack();
     expect(stack.formatMessage("hello")).toBe("hello");

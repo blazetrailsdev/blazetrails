@@ -45,7 +45,7 @@ export namespace Delegation {
         get() {
           const receiver = (this as Record<string, unknown>)[to];
           if (receiver == null) {
-            if (allowNil) return undefined;
+            if (allowNil) return () => undefined;
             throw DelegationError.nilTarget(methodName, to);
           }
           const fn = (receiver as Record<string, unknown>)[method];

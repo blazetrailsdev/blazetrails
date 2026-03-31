@@ -3,8 +3,6 @@
  * Mirrors ActiveSupport::TaggedLogging.
  */
 
-import { isBlank } from "./string-utils.js";
-
 export class TagStack {
   private _tags: string[] = [];
   private _tagsString: string | null = null;
@@ -13,11 +11,12 @@ export class TagStack {
     return [...this._tags];
   }
 
-  pushTags(tags: (string | string[] | null | undefined)[]): string[] {
+  pushTags(tags: unknown[]): string[] {
     this._tagsString = null;
     const flat = (tags as unknown[])
       .flat(Infinity)
-      .filter((t): t is string => typeof t === "string" && !isBlank(t));
+      .map((t) => (t == null ? "" : globalThis.String(t).trim()))
+      .filter((t) => t.length > 0);
     this._tags.push(...flat);
     return flat;
   }

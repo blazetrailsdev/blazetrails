@@ -320,7 +320,7 @@ export class Base extends Metal {
 
   static allowBrowser(options: {
     versions: BrowserVersions;
-    block?: ((this: Base) => void) | string;
+    block?: ((this: Base) => void | Promise<void>) | string;
     only?: string[];
     except?: string[];
   }): void {
@@ -376,9 +376,9 @@ export class Base extends Metal {
       }
     } catch (error) {
       if (error instanceof Error) {
-        const handler = this._findRescueHandler(error);
-        if (handler) {
-          await handler.call(this, error);
+        const match = this._findRescueHandler(error);
+        if (match) {
+          await match.handler.call(this, match.error);
           return;
         }
       }
@@ -498,7 +498,7 @@ export class Base extends Metal {
     }
   }
 
-  private _findRescueHandler(error: Error): RescueHandler | null {
+  private _findRescueHandler(error: Error): { handler: RescueHandler; error: Error } | null {
     const hierarchy: Array<typeof Base> = [];
     let klass = this.constructor as typeof Base;
     while (klass && klass !== (Object as unknown)) {
@@ -528,7 +528,7 @@ export class Base extends Metal {
       if (seen.has(current)) break;
       seen.add(current);
       const handler = matchHandler(current);
-      if (handler) return handler;
+      if (handler) return { handler, error: current };
       current = (current as any).cause instanceof Error ? (current as any).cause : undefined;
     }
 

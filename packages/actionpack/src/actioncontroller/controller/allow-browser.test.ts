@@ -184,21 +184,23 @@ describe("AllowBrowserTest", () => {
       },
     );
 
-    const C = createController(
-      "modern",
-      function (this: Base) {
-        this.head(426);
-      },
-      { only: ["modern"] },
-    );
-    const c = new C();
-    await c.dispatch("modern", makeRequest(CHROME_118), makeResponse());
+    try {
+      const C = createController(
+        "modern",
+        function (this: Base) {
+          this.head(426);
+        },
+        { only: ["modern"] },
+      );
+      const c = new C();
+      await c.dispatch("modern", makeRequest(CHROME_118), makeResponse());
 
-    Notifications.unsubscribe(sub);
-
-    expect(events.length).toBe(1);
-    expect(events[0].name).toBe("browser_block.action_controller");
-    expect(events[0].payload.versions).toBe("modern");
-    expect(c.status).toBe(426);
+      expect(events.length).toBe(1);
+      expect(events[0].name).toBe("browser_block.action_controller");
+      expect(events[0].payload.versions).toBe("modern");
+      expect(c.status).toBe(426);
+    } finally {
+      Notifications.unsubscribe(sub);
+    }
   });
 });

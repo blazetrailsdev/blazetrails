@@ -30,7 +30,7 @@ export namespace Delegation {
 
     if (!to) {
       throw new Error(
-        "Delegation needs a target. Supply a keyword argument 'to' (e.g. delegate('hello', { to: 'greeter' })).",
+        "Delegation needs a target. Supply a 'to' option (e.g. Delegation.generate(target, ['hello'], { to: 'greeter' })).",
       );
     }
 

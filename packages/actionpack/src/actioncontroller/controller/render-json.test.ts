@@ -59,13 +59,13 @@ describe("RenderJsonTest", () => {
   it("render json with callback", async () => {
     class C extends Base {
       async action() {
-        const data = JSON.stringify({ hello: "world" });
-        this.render({ plain: `/**/foo(${data})`, contentType: "text/javascript" });
+        this.render({ json: { hello: "world" }, callback: "foo" });
       }
     }
     const c = new C();
     await c.dispatch("action", makeRequest(), makeResponse());
     expect(c.body).toContain("foo(");
+    expect(c.body).toContain('"hello"');
     expect(c.contentType).toContain("text/javascript");
   });
 

@@ -344,7 +344,7 @@ describe("RedirectTest", () => {
   });
 
   it("redirect to nil", () => {
-    expect(() => redirectTo(null as any)).toThrow();
+    expect(() => redirectTo(null as any)).toThrow("Cannot redirect to nil!");
   });
 
   it("redirect to params", () => {

@@ -36,6 +36,8 @@ export type RenderOptions = {
   collection?: unknown[];
   /** Variable name for each collection item */
   as?: string;
+  /** JSONP callback function name */
+  callback?: string;
   status?: number | string;
   contentType?: string;
   layout?: boolean | string;
@@ -84,8 +86,15 @@ export class Base extends Metal {
     }
 
     if (options.json !== undefined) {
-      this.contentType = options.contentType ?? "application/json; charset=utf-8";
-      this.body = typeof options.json === "string" ? options.json : JSON.stringify(options.json);
+      const jsonStr =
+        typeof options.json === "string" ? options.json : JSON.stringify(options.json);
+      if (options.callback) {
+        this.contentType = options.contentType ?? "text/javascript; charset=utf-8";
+        this.body = `/**/\n${options.callback}(${jsonStr})`;
+      } else {
+        this.contentType = options.contentType ?? "application/json; charset=utf-8";
+        this.body = jsonStr;
+      }
     } else if (options.plain !== undefined) {
       this.contentType = options.contentType ?? "text/plain; charset=utf-8";
       this.body = options.plain;

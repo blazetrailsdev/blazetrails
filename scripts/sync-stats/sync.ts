@@ -684,7 +684,7 @@ async function syncWorkflowRuns(): Promise<number> {
         );
 
         const jobsResp = ghJson<{ jobs: GhWorkflowJob[] }>(
-          `api --paginate repos/${REPO}/actions/runs/${run.id}/jobs`,
+          `api repos/${REPO}/actions/runs/${run.id}/jobs?per_page=100`,
         );
 
         if (jobsResp.jobs.length > 0) {

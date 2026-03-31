@@ -128,14 +128,25 @@ export {
   DeleteRestrictionError,
 } from "./associations/errors.js";
 export {
+  AbstractReflection,
+  MacroReflection,
+  AggregateReflection,
   AssociationReflection,
+  HasManyReflection,
+  HasOneReflection,
+  BelongsToReflection,
+  HasAndBelongsToManyReflection,
   ThroughReflection,
+  PolymorphicReflection,
   ColumnReflection,
   columns,
   columnNames,
   contentColumns,
   reflectOnAssociation,
   reflectOnAllAssociations,
+  reflectOnAllAggregations,
+  reflectOnAggregation,
+  reflectOnAllAutosaveAssociations,
 } from "./reflection.js";
 export { acceptsNestedAttributesFor, assignNestedAttributes } from "./nested-attributes.js";
 export { hasSecureToken } from "./secure-token.js";

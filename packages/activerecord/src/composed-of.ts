@@ -1,4 +1,5 @@
 import type { Base } from "./base.js";
+import { AggregateReflection } from "./reflection.js";
 
 interface ComposedOfOptions {
   className: new (...args: any[]) => any;
@@ -27,6 +28,20 @@ export function composedOf(
   name: string,
   options: ComposedOfOptions,
 ): void {
+  // Store aggregate reflection for reflect_on_all_aggregations
+  if (!(modelClass as any)._aggregateReflections) {
+    (modelClass as any)._aggregateReflections = new Map();
+  }
+  (modelClass as any)._aggregateReflections.set(
+    name,
+    new AggregateReflection(
+      name,
+      null,
+      { className: options.className.name, mapping: options.mapping },
+      modelClass,
+    ),
+  );
+
   // Getter: read mapped attributes and instantiate the value object
   Object.defineProperty(modelClass.prototype, name, {
     get(this: Base): unknown {

@@ -359,7 +359,7 @@ export class TestCase {
 }
 
 export class TestRequest extends Request {
-  constructor(env: Record<string, unknown> = {}) {
+  constructor(env: import("@blazetrails/rack").RackEnv = {}) {
     super({
       REQUEST_METHOD: "GET",
       PATH_INFO: "/",

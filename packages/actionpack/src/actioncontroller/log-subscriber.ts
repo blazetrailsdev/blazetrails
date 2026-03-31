@@ -6,6 +6,12 @@
  * @see https://api.rubyonrails.org/classes/ActionController/LogSubscriber.html
  */
 
+export interface Event {
+  name: string;
+  payload: Record<string, unknown>;
+  duration: number;
+}
+
 export class LogSubscriber {
   private _logger: { info(msg: string): void; debug?(msg: string): void } | null;
 
@@ -13,32 +19,32 @@ export class LogSubscriber {
     this._logger = logger ?? null;
   }
 
-  startProcessing(event: { payload: Record<string, unknown> }): void {
+  startProcessing(event: Event): void {
     const { controller, action, format } = event.payload;
     this._logger?.info(`Processing by ${controller}#${action} as ${format ?? "*/*"}`);
   }
 
-  processAction(event: { payload: Record<string, unknown>; duration: number }): void {
+  processAction(event: Event): void {
     const { status } = event.payload;
     this._logger?.info(`Completed ${status} in ${event.duration.toFixed(1)}ms`);
   }
 
-  halted(event: { payload: Record<string, unknown> }): void {
+  halted(event: Event): void {
     const { filter } = event.payload;
     this._logger?.info(`Filter chain halted as ${filter} rendered or redirected`);
   }
 
-  sendFile(event: { payload: Record<string, unknown> }): void {
+  sendFile(event: Event): void {
     const { path } = event.payload;
     this._logger?.info(`Sent file ${path}`);
   }
 
-  sendData(event: { payload: Record<string, unknown> }): void {
+  sendData(event: Event): void {
     const { filename } = event.payload;
     this._logger?.info(`Sent data ${filename ?? "(inline)"}`);
   }
 
-  redirect(event: { payload: Record<string, unknown> }): void {
+  redirect(event: Event): void {
     const { status, location } = event.payload;
     this._logger?.info(`Redirected to ${location} (${status})`);
   }

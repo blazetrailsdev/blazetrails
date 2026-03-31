@@ -6,6 +6,8 @@
  * @see https://api.rubyonrails.org/classes/ActionController/Rendering.html
  */
 
+import { Metal } from "../metal.js";
+
 export const RENDER_FORMATS_IN_PRIORITY = ["body", "plain", "html"] as const;
 
 export function renderInPriorities(options: Record<string, unknown>): unknown | null {
@@ -18,19 +20,8 @@ export function renderInPriorities(options: Record<string, unknown>): unknown | 
 export function normalizeRenderOptions(options: Record<string, unknown>): Record<string, unknown> {
   const normalized = { ...options };
 
-  if (normalized.status && typeof normalized.status === "string") {
-    const STATUS_CODES: Record<string, number> = {
-      ok: 200,
-      created: 201,
-      no_content: 204,
-      bad_request: 400,
-      unauthorized: 401,
-      forbidden: 403,
-      not_found: 404,
-      unprocessable_entity: 422,
-      internal_server_error: 500,
-    };
-    normalized.status = STATUS_CODES[normalized.status as string] ?? normalized.status;
+  if (normalized.status !== undefined && normalized.status !== null) {
+    normalized.status = Metal.resolveStatus(normalized.status as number | string);
   }
 
   return normalized;
@@ -42,7 +33,9 @@ export function processRenderOptions(options: Record<string, unknown>): {
   location?: string;
 } {
   const result: { status?: number; contentType?: string; location?: string } = {};
-  if (options.status) result.status = options.status as number;
+  if (options.status !== undefined && options.status !== null) {
+    result.status = Metal.resolveStatus(options.status as number | string);
+  }
   if (options.contentType || options.content_type)
     result.contentType = (options.contentType ?? options.content_type) as string;
   if (options.location) result.location = options.location as string;

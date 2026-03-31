@@ -6,14 +6,11 @@
  * @see https://api.rubyonrails.org/classes/ActionController/Railties/Helpers.html
  */
 
+import { underscore } from "@blazetrails/activesupport";
+
 export function resolveHelperPath(controllerName: string): string {
   const base = controllerName.replace(/Controller$/, "");
-  const underscored = base
-    .replace(/::/g, "/")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
-    .replace(/([a-z\d])([A-Z])/g, "$1_$2")
-    .toLowerCase();
-  return underscored + "_helper";
+  return underscore(base).replace(/::/g, "/") + "_helper";
 }
 
 export function inheritedWithHelpers(

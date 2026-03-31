@@ -9,7 +9,9 @@
 const _defaultHeaders: Record<string, string> = {};
 
 export function setDefaultHeaders(headers: Record<string, string>): void {
-  Object.assign(_defaultHeaders, headers);
+  for (const [key, value] of Object.entries(headers)) {
+    _defaultHeaders[key.toLowerCase()] = value;
+  }
 }
 
 export function getDefaultHeaders(): Record<string, string> {
@@ -23,8 +25,9 @@ export function clearDefaultHeaders(): void {
 }
 
 export function applyDefaultHeaders(responseHeaders: Record<string, string>): void {
+  const existing = new Set(Object.keys(responseHeaders).map((k) => k.toLowerCase()));
   for (const [key, value] of Object.entries(_defaultHeaders)) {
-    if (!(key in responseHeaders)) {
+    if (!existing.has(key)) {
       responseHeaders[key] = value;
     }
   }

@@ -19,9 +19,21 @@ export class Map {
   }
 
   typeForAttribute(name: string): Type {
-    if (this._klass.typeForAttribute) {
-      return this._klass.typeForAttribute(name) ?? new ValueType();
+    const klass = this._klass;
+
+    // Class-level attribute type lookup (ActiveRecord::Base.attributeTypes)
+    const attributeTypes = klass.attributeTypes ?? klass._attributeDefinitions;
+    if (attributeTypes) {
+      const type =
+        attributeTypes instanceof globalThis.Map ? attributeTypes.get(name) : attributeTypes[name];
+      if (type) return type as Type;
     }
+
+    // Instance-level lookup fallback
+    if (typeof klass.typeForAttribute === "function") {
+      return klass.typeForAttribute(name) ?? new ValueType();
+    }
+
     return new ValueType();
   }
 }

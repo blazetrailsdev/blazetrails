@@ -30,6 +30,10 @@ export class Connection {
         if (adapter?.lookupCastTypeFromColumn) {
           return adapter.lookupCastTypeFromColumn(column);
         }
+        if (adapter?.lookupCastType && (column as any).sqlType) {
+          const castType = adapter.lookupCastType((column as any).sqlType);
+          if (castType) return castType;
+        }
       }
     }
     return new ValueType();

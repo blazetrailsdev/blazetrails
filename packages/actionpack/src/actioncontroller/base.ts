@@ -89,7 +89,9 @@ export class Base extends Metal {
       const jsonStr =
         typeof options.json === "string" ? options.json : JSON.stringify(options.json);
       if (options.callback) {
-        const safeJson = escapeJsonForJs(jsonStr);
+        const jsonPayload =
+          typeof options.json === "string" ? JSON.stringify(options.json) : jsonStr;
+        const safeJson = escapeJsonForJs(jsonPayload);
         if (JSONP_CALLBACK_RE.test(options.callback)) {
           this.contentType = options.contentType ?? "text/javascript; charset=utf-8";
           this.body = `/**/\n${options.callback}(${safeJson})`;

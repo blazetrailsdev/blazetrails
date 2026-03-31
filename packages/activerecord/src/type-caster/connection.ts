@@ -17,7 +17,7 @@ export class Connection {
 
   typeCastForDatabase(attrName: string, value: unknown): unknown {
     const type = this.typeForAttribute(attrName);
-    return type.serialize ? type.serialize(value) : value;
+    return type.serialize(value);
   }
 
   typeForAttribute(attrName: string): Type {

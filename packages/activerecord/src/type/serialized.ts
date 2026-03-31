@@ -35,7 +35,7 @@ export class Serialized extends Type {
   }
 
   cast(value: unknown): unknown {
-    return value;
+    return this.deserialize(value);
   }
 
   serialize(value: unknown): unknown {

@@ -15,9 +15,16 @@ export class HashLookupTypeMap {
   }
 
   fetch(lookupKey: string, ...rest: unknown[]): Type {
-    const fallback =
-      typeof rest[rest.length - 1] === "function" ? (rest.pop() as () => Type) : undefined;
-    const args = rest;
+    let fallback: (() => Type) | undefined;
+    let args: unknown[];
+
+    // Last arg is the fallback if it's a function
+    if (rest.length > 0 && typeof rest[rest.length - 1] === "function") {
+      fallback = rest[rest.length - 1] as () => Type;
+      args = rest.slice(0, -1);
+    } else {
+      args = rest;
+    }
     const argsKey = args
       .map((a) => {
         if (a === undefined) return "\x00undef";
@@ -65,9 +72,9 @@ export class HashLookupTypeMap {
     this._cache.clear();
   }
 
-  aliasType(type: string, aliasType: string): void {
+  aliasType(type: string, targetType: string): void {
     this.registerType(type, (_lookupKey: unknown, ...args: unknown[]) =>
-      this.lookup(aliasType, ...args),
+      this.lookup(targetType, ...args),
     );
   }
 

@@ -41,7 +41,7 @@ export class NumberToHumanConverter extends NumberConverter<NumberToHumanOptions
       if (abs >= threshold) {
         const value = num / threshold;
         const rounded = NumberToRoundedConverter.convert(value, roundOpts);
-        return format.replace("%n", rounded).replace("%u", label);
+        return format.replaceAll("%n", rounded).replaceAll("%u", label);
       }
     }
 
@@ -69,13 +69,13 @@ export class NumberToHumanConverter extends NumberConverter<NumberToHumanOptions
       if (abs >= threshold && units[key] !== undefined) {
         const value = num / threshold;
         const rounded = NumberToRoundedConverter.convert(value, roundOpts);
-        return format.replace("%n", rounded).replace("%u", units[key]);
+        return format.replaceAll("%n", rounded).replaceAll("%u", units[key]);
       }
     }
 
     if (units["unit"] !== undefined) {
       const rounded = NumberToRoundedConverter.convert(num, roundOpts);
-      return format.replace("%n", rounded).replace("%u", units["unit"]).trim();
+      return format.replaceAll("%n", rounded).replaceAll("%u", units["unit"]).trim();
     }
 
     return NumberToRoundedConverter.convert(num, roundOpts);

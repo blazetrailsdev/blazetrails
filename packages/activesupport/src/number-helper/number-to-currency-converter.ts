@@ -27,10 +27,10 @@ export class NumberToCurrencyConverter extends NumberConverter<NumberToCurrencyO
 
     if (userFormat !== undefined) {
       const numStr = isNegative ? `-${numberStr}` : numberStr;
-      return userFormat.replace("%u", unit).replace("%n", numStr);
+      return userFormat.replaceAll("%u", unit).replaceAll("%n", numStr);
     }
 
     const format = isNegative ? negativeFormat : "%u%n";
-    return format.replace("%u", unit).replace("%n", numberStr);
+    return format.replaceAll("%u", unit).replaceAll("%n", numberStr);
   }
 }

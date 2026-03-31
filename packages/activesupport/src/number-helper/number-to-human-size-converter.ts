@@ -53,6 +53,6 @@ export class NumberToHumanSizeConverter extends NumberConverter<NumberToHumanSiz
   private exponent(abs: number): number {
     const max = STORAGE_UNITS.length - 1;
     const exp = Math.floor(Math.log(abs) / Math.log(BASE));
-    return Math.min(exp, max);
+    return Math.max(0, Math.min(exp, max));
   }
 }

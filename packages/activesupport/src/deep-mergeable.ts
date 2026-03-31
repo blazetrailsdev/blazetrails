@@ -1,16 +1,15 @@
 /**
  * DeepMergeable — mixin that provides deep_merge and deep_merge! methods.
  * Mirrors ActiveSupport::DeepMergeable.
+ *
+ * Reuses isPlainObject from hash-utils to keep plain-object detection
+ * consistent across the package.
  */
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== "object" || value === null) return false;
-  const proto = Object.getPrototypeOf(value);
-  return proto === Object.prototype || proto === null;
-}
+import { isPlainObject } from "./hash-utils.js";
 
 function createLike(source: Record<string, unknown>): Record<string, unknown> {
-  return Object.create(Object.getPrototypeOf(source));
+  return Object.create(Object.getPrototypeOf(source)) as Record<string, unknown>;
 }
 
 function deepMergeObjects(

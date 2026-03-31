@@ -37,6 +37,36 @@ const STATUS_CODES: Record<string, number> = {
   service_unavailable: 503,
 };
 
+export class MiddlewareStack {
+  private _middlewares: Middleware[] = [];
+
+  use(middleware: unknown, ...args: unknown[]): void {
+    this._middlewares.push(new Middleware(middleware, args));
+  }
+
+  get size(): number {
+    return this._middlewares.length;
+  }
+
+  build(app: unknown): unknown {
+    return this._middlewares.reduceRight((next, mw) => mw.build(next), app);
+  }
+}
+
+export class Middleware {
+  klass: unknown;
+  args: unknown[];
+
+  constructor(klass: unknown, args: unknown[] = []) {
+    this.klass = klass;
+    this.args = args;
+  }
+
+  build(app: unknown): unknown {
+    return app;
+  }
+}
+
 export class Metal extends AbstractController {
   request!: Request;
   response!: Response;

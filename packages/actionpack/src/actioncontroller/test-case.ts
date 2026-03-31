@@ -358,6 +358,67 @@ export class TestCase {
   }
 }
 
+export class TestRequest extends Request {
+  constructor(env: Record<string, unknown> = {}) {
+    super({
+      REQUEST_METHOD: "GET",
+      PATH_INFO: "/",
+      HTTP_HOST: "test.host",
+      SERVER_NAME: "test.host",
+      SERVER_PORT: "80",
+      ...env,
+    });
+  }
+}
+
+export class LiveTestResponse extends Response {
+  constructor() {
+    super();
+  }
+}
+
+export class TestSession {
+  private _data: Record<string, unknown> = {};
+
+  get(key: string): unknown {
+    return this._data[key];
+  }
+
+  set(key: string, value: unknown): void {
+    this._data[key] = value;
+  }
+
+  has(key: string): boolean {
+    return key in this._data;
+  }
+
+  delete(key: string): void {
+    delete this._data[key];
+  }
+
+  clear(): void {
+    this._data = {};
+  }
+
+  toObject(): Record<string, unknown> {
+    return { ...this._data };
+  }
+}
+
+export interface Behavior {
+  get(action: string, options?: RequestOptions): Promise<void>;
+  post(action: string, options?: RequestOptions): Promise<void>;
+  put(action: string, options?: RequestOptions): Promise<void>;
+  patch(action: string, options?: RequestOptions): Promise<void>;
+  delete(action: string, options?: RequestOptions): Promise<void>;
+  head(action: string, options?: RequestOptions): Promise<void>;
+  assertResponse(expected: number | string): void;
+  assertRedirectedTo(expected: string | RegExp): void;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface ClassMethods {}
+
 function formatToMime(format: string): string {
   const MIMES: Record<string, string> = {
     json: "application/json",

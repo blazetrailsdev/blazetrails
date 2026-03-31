@@ -496,43 +496,7 @@ export class DoubleRenderError extends Error {
   }
 }
 
-export class API extends Metal {
-  /** Render JSON (API controllers only render JSON/plain). */
-  render(options: RenderOptions = {}): void {
-    if (this.performed) {
-      throw new DoubleRenderError();
-    }
-
-    if (options.status) {
-      this.status = options.status;
-    }
-
-    if (options.json !== undefined) {
-      this.contentType = options.contentType ?? "application/json; charset=utf-8";
-      this.body = typeof options.json === "string" ? options.json : JSON.stringify(options.json);
-    } else if (options.plain !== undefined) {
-      this.contentType = options.contentType ?? "text/plain; charset=utf-8";
-      this.body = options.plain;
-    } else if (options.body !== undefined) {
-      this.body = options.body;
-    }
-
-    this.markPerformed();
-  }
-
-  /** Redirect to a URL. */
-  redirectTo(url: string, options: { status?: number | string } = {}): void {
-    if (this.performed) {
-      throw new DoubleRenderError();
-    }
-
-    const status = options.status ? Metal.resolveStatus(options.status) : 302;
-    this.status = status;
-    this.setHeader("location", url);
-    this.body = "";
-    this.markPerformed();
-  }
-}
+export { API } from "./api.js";
 
 const SEND_FILE_MIME_TYPES: Record<string, string> = {
   ".html": "text/html",

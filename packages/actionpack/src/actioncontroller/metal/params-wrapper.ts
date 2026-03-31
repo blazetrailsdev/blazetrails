@@ -1,0 +1,36 @@
+/**
+ * ActionController::ParamsWrapper
+ *
+ * Wraps the parameters hash into a nested hash, allowing clients to
+ * submit requests without specifying root elements.
+ * @see https://api.rubyonrails.org/classes/ActionController/ParamsWrapper.html
+ */
+
+export interface ParamsWrapper {
+  _wrapParameters(): void;
+}
+
+export class Options {
+  name: string | null;
+  format: string[] | null;
+  include: string[] | null;
+  exclude: string[] | null;
+  klass: unknown;
+  model: unknown;
+
+  constructor(
+    name: string | null = null,
+    format: string[] | null = null,
+    include: string[] | null = null,
+    exclude: string[] | null = null,
+    klass: unknown = null,
+    model: unknown = null,
+  ) {
+    this.name = name;
+    this.format = format;
+    this.include = include;
+    this.exclude = exclude;
+    this.klass = klass;
+    this.model = model;
+  }
+}

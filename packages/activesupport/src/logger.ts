@@ -409,3 +409,13 @@ export class SimpleFormatter {
     return `${msg}\n`;
   }
 }
+
+export function simpleFormatter(): (
+  severity: string,
+  timestamp: Date,
+  progname: string | null,
+  msg: string,
+) => string {
+  const fmt = new SimpleFormatter();
+  return fmt.call.bind(fmt);
+}

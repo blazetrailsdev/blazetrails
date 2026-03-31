@@ -33,13 +33,6 @@ export class AdapterNotSpecified extends ActiveRecordError {
   }
 }
 
-export class TableNotSpecified extends ActiveRecordError {
-  constructor(message?: string, options?: ErrorOptions) {
-    super(message, options);
-    this.name = "TableNotSpecified";
-  }
-}
-
 export class AdapterNotFound extends ActiveRecordError {
   constructor(message?: string, options?: ErrorOptions) {
     super(message, options);
@@ -253,43 +246,6 @@ export class InvalidForeignKey extends WrappedDatabaseException {
   }
 }
 
-export class MismatchedForeignKey extends StatementInvalid {
-  constructor(
-    message?: string,
-    options?: {
-      sql?: string;
-      binds?: unknown[];
-      table?: string;
-      foreignKey?: string;
-      targetTable?: string;
-      primaryKey?: string;
-      connectionPool?: unknown;
-      cause?: unknown;
-    },
-  ) {
-    let msg: string;
-    if (options?.table && options?.foreignKey && options?.targetTable && options?.primaryKey) {
-      msg =
-        `Column \`${options.foreignKey}\` on table \`${options.table}\` does not match column \`${options.primaryKey}\` on \`${options.targetTable}\`. ` +
-        `To resolve this issue, change the type of the \`${options.foreignKey}\` column on \`${options.table}\` to match.`;
-    } else {
-      msg =
-        "There is a mismatch between the foreign key and primary key column types. " +
-        "Verify that the foreign key column type and the primary key of the associated table match types.";
-    }
-    if (message) {
-      msg += `\nOriginal message: ${message}`;
-    }
-    super(msg, {
-      sql: options?.sql,
-      binds: options?.binds,
-      connectionPool: options?.connectionPool,
-      cause: options?.cause,
-    });
-    this.name = "MismatchedForeignKey";
-  }
-}
-
 export class NotNullViolation extends StatementInvalid {
   constructor(
     message?: string,
@@ -309,17 +265,6 @@ export class ValueTooLong extends StatementInvalid {
     this.name = "ValueTooLong";
   }
 }
-
-export class ActiveRecordRangeError extends StatementInvalid {
-  constructor(
-    message?: string,
-    options?: { sql?: string; binds?: unknown[]; connectionPool?: unknown; cause?: unknown },
-  ) {
-    super(message, options);
-    this.name = "RangeError";
-  }
-}
-export { ActiveRecordRangeError as RangeError };
 
 export class PreparedStatementInvalid extends ActiveRecordError {
   constructor(message?: string, options?: ErrorOptions) {

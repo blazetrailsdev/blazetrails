@@ -10,8 +10,6 @@ import {
   ValueTooLong,
   NoDatabaseError,
   DatabaseConnectionError,
-  MismatchedForeignKey,
-  ActiveRecordRangeError,
 } from "../errors.js";
 import { TypeMap } from "../type/type-map.js";
 import { Date as DateType } from "../type/date.js";
@@ -271,9 +269,6 @@ export class SQLite3Adapter implements DatabaseAdapter {
       return new RecordNotUnique(msg, { sql, binds, cause });
     }
     if (code?.includes("CONSTRAINT_FOREIGNKEY") || msg.includes("FOREIGN KEY constraint failed")) {
-      if (msg.includes("datatype mismatch")) {
-        return new MismatchedForeignKey(msg, { sql, binds, cause });
-      }
       return new InvalidForeignKey(msg, { sql, binds, cause });
     }
     if (code?.includes("CONSTRAINT_NOTNULL") || msg.includes("NOT NULL constraint failed")) {
@@ -284,13 +279,6 @@ export class SQLite3Adapter implements DatabaseAdapter {
     }
     if (code === "SQLITE_CANTOPEN" || msg.includes("unable to open database file")) {
       return new NoDatabaseError(msg, { sql, binds, cause });
-    }
-    if (
-      code === "SQLITE_RANGE" ||
-      msg.includes("column index out of range") ||
-      msg.includes("integer overflow")
-    ) {
-      return new ActiveRecordRangeError(msg, { sql, binds, cause });
     }
     return new StatementInvalid(msg, { sql, binds, cause });
   }

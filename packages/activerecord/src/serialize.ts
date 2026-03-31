@@ -108,35 +108,40 @@ export function serialize(
       const serializedAttrs: Map<string, Coder> | undefined = (this.constructor as any)
         ._serializedAttributes;
       if (serializedAttrs?.has(name)) {
-        const loaded = serializedAttrs.get(name)!.load(raw);
         const expected: string | undefined = (
           this.constructor as any
         )._serializedExpectedTypes?.get(name);
-        if (expected && loaded !== null && loaded !== undefined) {
-          if (expected === "Array" && !Array.isArray(loaded)) {
-            let repr: string;
+        if (expected && raw !== null && raw !== undefined) {
+          // Validate the raw parsed value BEFORE the coder coerces it.
+          // The coders silently coerce (e.g. ARRAY_CODER returns [] for non-arrays),
+          // so checking after load() would be dead code.
+          let parsed: unknown = raw;
+          if (typeof raw === "string") {
             try {
-              repr = JSON.stringify(loaded);
+              parsed = JSON.parse(raw);
             } catch {
-              repr = String(loaded);
+              // unparseable string — let the coder handle it
             }
-            throw new SerializationTypeMismatch(
-              `Attribute was supposed to be an Array, but was a ${typeof loaded}. -- ${repr}`,
-            );
           }
-          if (expected === "Hash" && (typeof loaded !== "object" || Array.isArray(loaded))) {
-            let repr: string;
-            try {
-              repr = JSON.stringify(loaded);
-            } catch {
-              repr = String(loaded);
+          if (parsed !== null && parsed !== undefined) {
+            const actualType = Array.isArray(parsed)
+              ? "Array"
+              : typeof parsed === "object"
+                ? "Hash"
+                : typeof parsed;
+            if (expected === "Array" && !Array.isArray(parsed)) {
+              throw new SerializationTypeMismatch(
+                `Attribute was supposed to be a Array, but was a ${actualType}.`,
+              );
             }
-            throw new SerializationTypeMismatch(
-              `Attribute was supposed to be a Hash, but was a ${Array.isArray(loaded) ? "Array" : typeof loaded}. -- ${repr}`,
-            );
+            if (expected === "Hash" && (typeof parsed !== "object" || Array.isArray(parsed))) {
+              throw new SerializationTypeMismatch(
+                `Attribute was supposed to be a Hash, but was a ${actualType}.`,
+              );
+            }
           }
         }
-        return loaded;
+        return serializedAttrs.get(name)!.load(raw);
       }
       return raw;
     };

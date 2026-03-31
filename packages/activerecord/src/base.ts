@@ -27,7 +27,6 @@ import {
   ConnectionNotDefined,
   ConfigurationError,
   DangerousAttributeError,
-  TableNotSpecified,
   AttributeAssignmentError,
 } from "./errors.js";
 import { encrypts as _encrypts, getEncryptor } from "./encryption.js";
@@ -246,12 +245,6 @@ export class Base extends Model {
     // STI subclasses inherit the base class's table name
     if (isStiSubclass(this)) {
       return getStiBase(this).tableName;
-    }
-    if (this.abstractClass) {
-      throw new TableNotSpecified(
-        `${this.name} is an abstract class and has no table name. ` +
-          `Set tableName explicitly or define a non-abstract subclass.`,
-      );
     }
     const inferred = pluralize(underscore(this.name));
     return `${this._tableNamePrefix}${inferred}${this._tableNameSuffix}`;

@@ -31,6 +31,10 @@ export class RelationHandler {
         throw new Error(`Cannot map composite primary key ${pk.join(", ")} to ${attribute.name}`);
       }
       relation = relation.select(pk);
+    } else if (relation.selectValues.length !== 1) {
+      throw new Error(
+        `Expected subquery for ${attribute.name} to select a single column, but it selects ${relation.selectValues.length} columns.`,
+      );
     }
 
     return relation;

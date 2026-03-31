@@ -61,21 +61,30 @@ export class PredicateBuilder {
         const expandedConditions = this.expandAssociationCondition(assoc, value);
         if (expandedConditions.length === 0) continue;
 
-        // Each expanded condition is an AND group; combine groups with OR
+        // Always build association groups positively; apply negation at group level
         const groups: Nodes.Node[] = [];
         for (const cond of expandedConditions) {
-          const groupNodes = this.buildFromHashInternal(cond, negated);
+          const groupNodes = this.buildFromHashInternal(cond, false);
           if (groupNodes.length === 0) continue;
           groups.push(groupNodes.length === 1 ? groupNodes[0] : new Nodes.And(groupNodes));
         }
-        if (groups.length === 1) {
-          nodes.push(groups[0]);
-        } else if (groups.length > 1) {
-          let combined: Nodes.Node = groups[0];
-          for (let i = 1; i < groups.length; i++) {
-            combined = new Nodes.Grouping(new Nodes.Or(combined, groups[i]));
+        if (groups.length === 0) continue;
+
+        if (!negated) {
+          if (groups.length === 1) {
+            nodes.push(groups[0]);
+          } else {
+            let combined: Nodes.Node = groups[0];
+            for (let i = 1; i < groups.length; i++) {
+              combined = new Nodes.Grouping(new Nodes.Or(combined, groups[i]));
+            }
+            nodes.push(combined);
           }
-          nodes.push(combined);
+        } else {
+          // NOT(g1 OR g2 OR ...) == NOT g1 AND NOT g2 AND ...
+          for (const g of groups) {
+            nodes.push(new Nodes.Not(new Nodes.Grouping(g)));
+          }
         }
       } else {
         const attr = this.resolveColumn(key);
@@ -109,6 +118,10 @@ export class PredicateBuilder {
       }
       if (endVal === null || endVal === undefined) {
         return attribute.lt(beginVal);
+      }
+      if (value.excludeEnd) {
+        // Negation of (>= begin AND < end) is (< begin OR >= end)
+        return new Nodes.Grouping(new Nodes.Or(attribute.lt(beginVal), attribute.gteq(endVal)));
       }
       return attribute.notBetween(beginVal, endVal);
     }

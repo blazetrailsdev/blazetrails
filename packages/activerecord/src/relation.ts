@@ -2790,45 +2790,8 @@ export class Relation<T extends Base> {
         manager.where(new Nodes.Grouping(combined));
       }
     } else {
-      for (const clause of this._whereClause.conditions) {
-        for (const [key, value] of Object.entries(clause)) {
-          const attr = this._resolveColumn(table, key);
-          if (value === null) {
-            manager.where(attr.isNull());
-          } else if (value instanceof Range) {
-            if (value.excludeEnd) {
-              manager.where(attr.gteq(value.begin));
-              manager.where(attr.lt(value.end));
-            } else {
-              manager.where(attr.between(value.begin, value.end));
-            }
-          } else if (Array.isArray(value)) {
-            manager.where(attr.in(value));
-          } else {
-            manager.where(attr.eq(value));
-          }
-        }
-      }
-      for (const clause of this._whereClause.notConditions) {
-        for (const [key, value] of Object.entries(clause)) {
-          const attr = this._resolveColumn(table, key);
-          if (value === null) {
-            manager.where(attr.isNotNull());
-          } else if (value instanceof Range) {
-            manager.where(attr.notBetween(value.begin, value.end));
-          } else if (Array.isArray(value)) {
-            manager.where(attr.notIn(value));
-          } else {
-            manager.where(attr.notEq(value));
-          }
-        }
-      }
-      // Raw SQL WHERE clauses
-      for (const rawClause of this._whereClause.rawClauses) {
-        manager.where(new Nodes.SqlLiteral(rawClause));
-      }
-      // Arel node WHERE clauses
-      for (const node of this._whereClause.arelNodes) {
+      const allNodes = this._collectAllWhereNodes(table, this);
+      for (const node of allNodes) {
         manager.where(node);
       }
     }

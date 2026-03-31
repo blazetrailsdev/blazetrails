@@ -54,6 +54,9 @@
     "onlyBuiltDependencies": [
       "better-sqlite3",
       "esbuild"
-    ]
+    ],
+    "overrides": {
+      "vite": "^6.4.1"
+    }
   }
 }

@@ -1,0 +1,77 @@
+FROM node:22-slim AS base
+RUN corepack enable && corepack prepare pnpm@10.27.0 --activate
+WORKDIR /app
+
+# Copy workspace root files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
+
+# Copy all package.json and tsconfig files for install + build
+COPY packages/activesupport/package.json packages/activesupport/tsconfig.json packages/activesupport/
+COPY packages/arel/package.json packages/arel/tsconfig.json packages/arel/
+COPY packages/activemodel/package.json packages/activemodel/tsconfig.json packages/activemodel/
+COPY packages/activerecord/package.json packages/activerecord/tsconfig.json packages/activerecord/
+COPY packages/rack/package.json packages/rack/tsconfig.json packages/rack/
+COPY packages/actionpack/package.json packages/actionpack/tsconfig.json packages/actionpack/
+COPY packages/cli/package.json packages/cli/tsconfig.json packages/cli/
+COPY packages/website/package.json packages/website/
+
+# Install deps
+RUN pnpm install --frozen-lockfile
+
+# Copy source
+COPY packages/activesupport/ packages/activesupport/
+COPY packages/arel/ packages/arel/
+COPY packages/activemodel/ packages/activemodel/
+COPY packages/activerecord/ packages/activerecord/
+COPY packages/rack/ packages/rack/
+COPY packages/actionpack/ packages/actionpack/
+COPY packages/cli/ packages/cli/
+COPY packages/website/ packages/website/
+
+# Build all packages (tsc)
+RUN pnpm build
+
+# Build website static files
+WORKDIR /app/packages/website
+RUN pnpm run prepare:wasm
+RUN pnpm run prepare:types
+RUN pnpm run docs:generate || true
+RUN pnpm run build
+
+# Production image
+FROM node:22-slim
+RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
+RUN corepack enable && corepack prepare pnpm@10.27.0 --activate
+WORKDIR /app
+
+COPY --from=base /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
+COPY --from=base /app/packages/activesupport/package.json packages/activesupport/
+COPY --from=base /app/packages/arel/package.json packages/arel/
+COPY --from=base /app/packages/activemodel/package.json packages/activemodel/
+COPY --from=base /app/packages/activerecord/package.json packages/activerecord/
+COPY --from=base /app/packages/rack/package.json packages/rack/
+COPY --from=base /app/packages/actionpack/package.json packages/actionpack/
+COPY --from=base /app/packages/cli/package.json packages/cli/
+COPY --from=base /app/packages/website/package.json packages/website/
+
+# Remove husky prepare script, then install prod deps with native builds
+RUN npm pkg delete scripts.prepare
+RUN pnpm install --frozen-lockfile --prod
+
+# Copy built artifacts
+COPY --from=base /app/packages/activesupport/dist/ packages/activesupport/dist/
+COPY --from=base /app/packages/arel/dist/ packages/arel/dist/
+COPY --from=base /app/packages/activemodel/dist/ packages/activemodel/dist/
+COPY --from=base /app/packages/activerecord/dist/ packages/activerecord/dist/
+COPY --from=base /app/packages/rack/dist/ packages/rack/dist/
+COPY --from=base /app/packages/actionpack/dist/ packages/actionpack/dist/
+COPY --from=base /app/packages/cli/dist/ packages/cli/dist/
+COPY --from=base /app/packages/website/server/ packages/website/server/
+COPY --from=base /app/packages/website/build/ packages/website/build/
+
+ENV PORT=5000
+ENV NODE_ENV=production
+EXPOSE 5000
+
+WORKDIR /app/packages/website
+CMD ["npx", "tsx", "server/api.ts"]

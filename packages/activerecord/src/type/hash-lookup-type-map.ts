@@ -50,7 +50,9 @@ export class HashLookupTypeMap {
   }
 
   aliasType(type: string, aliasType: string): void {
-    this.registerType(type, (...args: unknown[]) => this.lookup(aliasType, ...args));
+    this.registerType(type, (_lookupKey: unknown, ...args: unknown[]) =>
+      this.lookup(aliasType, ...args),
+    );
   }
 
   has(key: string): boolean {

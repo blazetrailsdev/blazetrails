@@ -24,7 +24,7 @@ export class Connection {
     const schemaCache = this._klass.schemaCache;
     if (schemaCache?.dataSourceExists?.(this._tableName)) {
       const columns = schemaCache.columnsHash?.(this._tableName);
-      const column = columns?.[attrName];
+      const column = columns?.get?.(attrName) ?? columns?.[attrName];
       if (column) {
         const adapter = this._klass.adapter;
         if (adapter?.lookupCastTypeFromColumn) {

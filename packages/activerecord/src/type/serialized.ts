@@ -19,10 +19,13 @@ export class Serialized extends Type {
   readonly subtype: Type;
   readonly coder: Coder;
 
+  private _defaultValue: unknown;
+
   constructor(subtype: Type, coder: Coder) {
     super();
     this.subtype = subtype;
     this.coder = coder;
+    this._defaultValue = coder.load(null);
   }
 
   deserialize(value: unknown): unknown {
@@ -65,6 +68,16 @@ export class Serialized extends Type {
   }
 
   private isDefaultValue(value: unknown): boolean {
-    return value === this.coder.load(null);
+    if (value === this._defaultValue) return true;
+    if (value === null || value === undefined)
+      return this._defaultValue === null || this._defaultValue === undefined;
+    if (
+      typeof value === "object" &&
+      typeof this._defaultValue === "object" &&
+      this._defaultValue !== null
+    ) {
+      return JSON.stringify(value) === JSON.stringify(this._defaultValue);
+    }
+    return false;
   }
 }

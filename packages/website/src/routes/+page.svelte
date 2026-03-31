@@ -5,7 +5,8 @@
     { name: "ActiveSupport", path: "activesupport", desc: "Inflection, caching, notifications, encryption", coverage: "38%" },
     { name: "Arel", path: "arel", desc: "SQL AST builder and query generation", coverage: "100%" },
     { name: "Rack", path: "rack", desc: "Web server interface, middleware, request/response", coverage: "100%" },
-    { name: "ActionPack", path: "actionpack", desc: "Controllers, routing, views, sessions, CSRF", coverage: "26%" },
+    { name: "ActionDispatch", path: "actionpack", desc: "Routing, middleware, cookies, sessions, security", coverage: "5%" },
+    { name: "ActionController", path: "actionpack", desc: "Controllers, rendering, filters, parameters", coverage: "74%" },
   ];
 
   const codeExample = `import { Base, Schema } from "@blazetrails/activerecord";

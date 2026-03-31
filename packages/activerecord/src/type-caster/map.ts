@@ -20,7 +20,7 @@ export class Map {
 
   typeForAttribute(name: string): Type {
     if (this._klass.typeForAttribute) {
-      return this._klass.typeForAttribute(name);
+      return this._klass.typeForAttribute(name) ?? new ValueType();
     }
     return new ValueType();
   }

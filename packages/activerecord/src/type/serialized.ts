@@ -40,7 +40,7 @@ export class Serialized extends Type {
 
   serialize(value: unknown): unknown {
     if (value === null || value === undefined) return null;
-    if (this.isDefaultValue(value)) return undefined;
+    if (this.isDefaultValue(value)) return null;
     const dumped = this.coder.dump(value);
     return this.subtype.serialize?.(dumped) ?? dumped;
   }

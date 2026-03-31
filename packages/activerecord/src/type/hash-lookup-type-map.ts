@@ -7,7 +7,7 @@ import { Type, ValueType } from "@blazetrails/activemodel";
  * Mirrors: ActiveRecord::Type::HashLookupTypeMap
  */
 export class HashLookupTypeMap {
-  private _mapping: Map<string, (...args: unknown[]) => Type> = new Map();
+  private _mapping: Map<string, (lookupKey: string, ...args: unknown[]) => Type> = new Map();
   private _cache: Map<string, Map<string, Type>> = new Map();
 
   lookup(lookupKey: string, ...args: unknown[]): Type {
@@ -19,7 +19,15 @@ export class HashLookupTypeMap {
       typeof rest[rest.length - 1] === "function" ? (rest.pop() as () => Type) : undefined;
     const args = rest;
     const argsKey = args
-      .map((a) => (a === undefined ? "\x00undef" : JSON.stringify(a)))
+      .map((a) => {
+        if (a === undefined) return "\x00undef";
+        if (a === null) return "\x00null";
+        try {
+          return JSON.stringify(a);
+        } catch {
+          return `\x00ref:${typeof a}`;
+        }
+      })
       .join("\x01");
 
     let keyCache = this._cache.get(lookupKey);
@@ -36,7 +44,10 @@ export class HashLookupTypeMap {
     return result;
   }
 
-  registerType(key: string, value?: Type | ((...args: unknown[]) => Type)): void {
+  registerType(
+    key: string,
+    value?: Type | ((lookupKey: string, ...args: unknown[]) => Type),
+  ): void {
     if (value === undefined) throw new Error("registerType requires a value or block");
     if (typeof value === "function") {
       this._mapping.set(key, value as (...args: unknown[]) => Type);

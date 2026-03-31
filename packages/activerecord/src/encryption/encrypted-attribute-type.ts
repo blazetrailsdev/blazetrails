@@ -2,6 +2,7 @@ import { Type, StringType } from "@blazetrails/activemodel";
 import type { Scheme } from "./scheme.js";
 import type { Encryptor } from "./encryptor.js";
 import { isEncryptionDisabled, isProtectedMode } from "./context.js";
+import { Configurable } from "./configurable.js";
 
 /**
  * An ActiveModel type that encrypts/decrypts attribute values. This is
@@ -118,7 +119,8 @@ export class EncryptedAttributeType extends Type {
     return opts;
   }
 
-  private get supportUnencryptedData(): boolean {
-    return !this._previousType;
+  get supportUnencryptedData(): boolean {
+    if (this._previousType) return false;
+    return Configurable.config.supportUnencryptedData ?? false;
   }
 }

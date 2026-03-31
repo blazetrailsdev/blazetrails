@@ -18,7 +18,7 @@ export class Configurable {
   }
 
   static configure(options: {
-    primaryKey?: string;
+    primaryKey?: string | string[];
     deterministicKey?: string;
     keyDerivationSalt?: string;
     [key: string]: unknown;

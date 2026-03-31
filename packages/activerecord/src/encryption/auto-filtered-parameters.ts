@@ -1,3 +1,5 @@
+import { underscore } from "@blazetrails/activesupport";
+
 /**
  * Automatically adds encrypted attribute names to the application's
  * filter_parameters list, preventing them from appearing in logs.
@@ -43,7 +45,7 @@ export class AutoFilteredParameters {
   }
 
   private applyFilter(klass: any, attribute: string): void {
-    const prefix = klass.name ? klass.name.toLowerCase() : "";
+    const prefix = klass.name ? underscore(klass.name) : "";
     const filter = prefix ? `${prefix}.${attribute}` : attribute;
     if (!this._filterParameters.includes(filter)) {
       this._filterParameters.push(filter);

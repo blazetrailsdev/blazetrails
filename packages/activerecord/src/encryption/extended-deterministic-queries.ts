@@ -87,7 +87,7 @@ export class EncryptedQuery {
       results.push(new AdditionalValue(plaintext, prev));
     }
     // Include plaintext only when support_unencrypted_data is enabled
-    if ((type as any).supportUnencryptedData) {
+    if (type.supportUnencryptedData) {
       results.push(plaintext);
     }
     return results;

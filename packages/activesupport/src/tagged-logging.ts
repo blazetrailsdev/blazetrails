@@ -1,6 +1,6 @@
 /**
- * TaggedLogging — wraps a Logger to prepend tags to messages.
- * Mirrors ActiveSupport::TaggedLogging.
+ * Tagged logging primitives (TagStack, Formatter, LocalTagStorage, TaggedLogging helpers).
+ * Mirrors ActiveSupport::TaggedLogging; logger-wrapping logic lives in `logger.ts` (`taggedLogging`).
  */
 
 export class TagStack {

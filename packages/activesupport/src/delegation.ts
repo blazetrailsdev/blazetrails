@@ -42,15 +42,16 @@ export namespace Delegation {
       Object.defineProperty(target, methodName, {
         configurable: true,
         enumerable: false,
-        get() {
+        writable: true,
+        value(...args: unknown[]) {
           const receiver = (this as Record<string, unknown>)[to];
           if (receiver == null) {
-            if (allowNil) return () => undefined;
+            if (allowNil) return undefined;
             throw DelegationError.nilTarget(methodName, to);
           }
           const fn = (receiver as Record<string, unknown>)[method];
           if (typeof fn === "function") {
-            return fn.bind(receiver);
+            return fn.apply(receiver, args);
           }
           return fn;
         },

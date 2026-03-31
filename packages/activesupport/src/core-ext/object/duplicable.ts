@@ -10,8 +10,8 @@ export function isDuplicable(value: unknown): boolean {
   if (value === null || value === undefined) return false;
   if (typeof value === "function") return false;
   if (typeof value === "symbol") return false;
-  if (value instanceof WeakMap || value instanceof WeakSet || value instanceof WeakRef)
-    return false;
+  if (value instanceof WeakMap || value instanceof WeakSet) return false;
+  if (typeof WeakRef !== "undefined" && value instanceof WeakRef) return false;
   return true;
 }
 

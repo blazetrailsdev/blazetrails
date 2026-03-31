@@ -29,7 +29,7 @@ export namespace DeepMergeable {
       const otherVal = other[key];
 
       if (isPlainObject(thisVal) && isPlainObject(otherVal)) {
-        target[key] = deepMerge(thisVal, otherVal, block);
+        deepMergeInPlace(thisVal, otherVal, block);
       } else if (block && Object.hasOwn(target, key)) {
         target[key] = block(key, thisVal, otherVal);
       } else {

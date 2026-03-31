@@ -35,8 +35,8 @@ describe("Delegation.generate", () => {
       greeter: null = null;
     }
     Delegation.generate(Person.prototype, ["greet"], { to: "greeter" });
-    const p = new Person() as Person & { greet: unknown };
-    expect(() => p.greet).toThrow(DelegationError);
+    const p = new Person() as Person & { greet: () => unknown };
+    expect(() => p.greet()).toThrow(DelegationError);
   });
 
   it("returns undefined when target is nil and allowNil is true", () => {

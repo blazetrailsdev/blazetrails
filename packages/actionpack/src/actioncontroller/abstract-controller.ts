@@ -72,6 +72,8 @@ export class AbstractController {
     "formAuthenticityToken",
     "markPerformed",
     "inspect",
+    "controllerPath",
+    "controllerName",
   ]);
 
   private static _actionMethodCache?: Set<string>;

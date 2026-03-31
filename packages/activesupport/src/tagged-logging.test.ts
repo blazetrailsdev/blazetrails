@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { Logger, taggedLogging } from "./logger.js";
 import { BroadcastLogger } from "./broadcast-logger.js";
+import { TagStack, Formatter } from "./tagged-logging.js";
 
 function makeBuffer() {
   const lines: string[] = [];
@@ -307,5 +308,82 @@ describe("TaggedLoggingWithoutBlockTest", () => {
     tagged.info("msg");
     expect(output.lines[0]).toContain("[42]");
     expect(output.lines[0]).toContain("[true]");
+  });
+});
+
+describe("TagStack", () => {
+  it("pushTags adds tags and returns them", () => {
+    const stack = new TagStack();
+    const pushed = stack.pushTags(["A", "B"]);
+    expect(pushed).toEqual(["A", "B"]);
+    expect(stack.tags).toEqual(["A", "B"]);
+  });
+
+  it("pushTags filters blank and null values", () => {
+    const stack = new TagStack();
+    stack.pushTags([null, "", "X", undefined, "  ", "Y"]);
+    expect(stack.tags).toEqual(["X", "Y"]);
+  });
+
+  it("pushTags flattens deeply nested arrays", () => {
+    const stack = new TagStack();
+    stack.pushTags(["A", [["B", ["C"]]] as any]);
+    expect(stack.tags).toEqual(["A", "B", "C"]);
+  });
+
+  it("popTags removes and returns tags from the end", () => {
+    const stack = new TagStack();
+    stack.pushTags(["A", "B", "C"]);
+    const popped = stack.popTags(2);
+    expect(popped).toEqual(["B", "C"]);
+    expect(stack.tags).toEqual(["A"]);
+  });
+
+  it("clear removes all tags", () => {
+    const stack = new TagStack();
+    stack.pushTags(["A", "B"]);
+    stack.clear();
+    expect(stack.tags).toEqual([]);
+  });
+
+  it("formatMessage with no tags returns message unchanged", () => {
+    const stack = new TagStack();
+    expect(stack.formatMessage("hello")).toBe("hello");
+  });
+
+  it("formatMessage with one tag", () => {
+    const stack = new TagStack();
+    stack.pushTags(["BCX"]);
+    expect(stack.formatMessage("Funky time")).toBe("[BCX] Funky time");
+  });
+
+  it("formatMessage with multiple tags", () => {
+    const stack = new TagStack();
+    stack.pushTags(["BCX", "Jason"]);
+    expect(stack.formatMessage("Funky time")).toBe("[BCX] [Jason] Funky time");
+  });
+});
+
+describe("Formatter", () => {
+  it("tagged pushes and pops tags around block", () => {
+    const stack = new TagStack();
+    let captured: string[] = [];
+    Formatter.tagged(stack, ["A", "B"], () => {
+      captured = stack.tags;
+    });
+    expect(captured).toEqual(["A", "B"]);
+    expect(stack.tags).toEqual([]);
+  });
+
+  it("tagged restores tags on error", () => {
+    const stack = new TagStack();
+    try {
+      Formatter.tagged(stack, ["X"], () => {
+        throw new Error("boom");
+      });
+    } catch {
+      /* expected */
+    }
+    expect(stack.tags).toEqual([]);
   });
 });

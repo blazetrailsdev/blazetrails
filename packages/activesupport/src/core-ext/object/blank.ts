@@ -38,11 +38,12 @@ export class TrueClass {
 }
 
 export class Symbol {
-  static isBlank(value: string): boolean {
-    return value.length === 0;
+  static isBlank(value: string | symbol): boolean {
+    const str = typeof value === "symbol" ? (value.description ?? "") : value;
+    return str.length === 0;
   }
-  static isPresent(value: string): boolean {
-    return value.length > 0;
+  static isPresent(value: string | symbol): boolean {
+    return !Symbol.isBlank(value);
   }
 }
 

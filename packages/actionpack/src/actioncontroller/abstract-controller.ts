@@ -46,9 +46,7 @@ export class AbstractController {
     options: CallbackOptions;
   }> = [];
 
-  /** Available actions. Override in subclasses. */
-  /** Internal methods that should not be exposed as routable actions. */
-  static internalMethods = new Set([
+  private static readonly _internalMethods: ReadonlySet<string> = new Set([
     "constructor",
     "processAction",
     "availableActions",
@@ -76,8 +74,9 @@ export class AbstractController {
     "inspect",
   ]);
 
+  /** Returns the set of public action methods defined on this controller. */
   static actionMethods(): string[] {
-    const internal = (this as typeof AbstractController).internalMethods;
+    const internal = AbstractController._internalMethods;
     const methods: string[] = [];
     let current: object | null = this.prototype;
     while (current && current !== AbstractController.prototype && current !== Object.prototype) {

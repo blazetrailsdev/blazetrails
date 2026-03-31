@@ -18,13 +18,19 @@ export function hasContentSecurityPolicy(response: {
   return response.getHeader("content-security-policy") !== undefined;
 }
 
+function deleteHeaderCaseInsensitive(headers: Record<string, string>, name: string): void {
+  const lower = name.toLowerCase();
+  for (const key of Object.keys(headers)) {
+    if (key.toLowerCase() === lower) delete headers[key];
+  }
+}
+
 export function applyContentSecurityPolicy(
   headers: Record<string, string>,
   policy: string | false,
 ): void {
-  if (policy === false) {
-    delete headers["content-security-policy"];
-  } else {
+  deleteHeaderCaseInsensitive(headers, "content-security-policy");
+  if (policy !== false) {
     headers["content-security-policy"] = policy;
   }
 }

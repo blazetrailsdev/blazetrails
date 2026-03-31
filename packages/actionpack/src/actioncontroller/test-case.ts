@@ -396,8 +396,16 @@ export class TestSession {
     this._data.clear();
   }
 
-  toObject(): Record<string, unknown> {
+  toHash(): Record<string, unknown> {
     return Object.fromEntries(this._data);
+  }
+
+  toH(): Record<string, unknown> {
+    return this.toHash();
+  }
+
+  toObject(): Record<string, unknown> {
+    return this.toHash();
   }
 }
 

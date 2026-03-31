@@ -1,9 +1,13 @@
-import { describe, it, expect } from "vitest";
+import { afterEach, describe, it, expect } from "vitest";
 import { Base } from "../base.js";
 import { Request } from "../../actiondispatch/request.js";
 import { Response } from "../../actiondispatch/response.js";
 import { Notifications } from "@blazetrails/activesupport";
 import type { BrowserVersions } from "../metal/allow-browser.js";
+
+afterEach(() => {
+  Notifications.unsubscribeAll();
+});
 
 const CHROME_118 =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118 Safari/537.36";
@@ -177,30 +181,26 @@ describe("AllowBrowserTest", () => {
 
   it("a blocked request instruments a browser_block.action_controller event", async () => {
     const events: Array<{ name: string; payload: Record<string, unknown> }> = [];
-    const sub = Notifications.subscribe(
+    Notifications.subscribe(
       "browser_block.action_controller",
       (event: { name: string; payload: Record<string, unknown> }) => {
         events.push(event);
       },
     );
 
-    try {
-      const C = createController(
-        "modern",
-        function (this: Base) {
-          this.head(426);
-        },
-        { only: ["modern"] },
-      );
-      const c = new C();
-      await c.dispatch("modern", makeRequest(CHROME_118), makeResponse());
+    const C = createController(
+      "modern",
+      function (this: Base) {
+        this.head(426);
+      },
+      { only: ["modern"] },
+    );
+    const c = new C();
+    await c.dispatch("modern", makeRequest(CHROME_118), makeResponse());
 
-      expect(events.length).toBe(1);
-      expect(events[0].name).toBe("browser_block.action_controller");
-      expect(events[0].payload.versions).toBe("modern");
-      expect(c.status).toBe(426);
-    } finally {
-      Notifications.unsubscribe(sub);
-    }
+    expect(events.length).toBe(1);
+    expect(events[0].name).toBe("browser_block.action_controller");
+    expect(events[0].payload.versions).toBe("modern");
+    expect(c.status).toBe(426);
   });
 });

@@ -36,11 +36,22 @@ export class TypeMetadata {
       this.sqlType === other.sqlType &&
       this.type === other.type &&
       this.oid === other.oid &&
-      this.fmod === other.fmod
+      this.fmod === other.fmod &&
+      this.limit === other.limit &&
+      this.precision === other.precision &&
+      this.scale === other.scale
     );
   }
 
   hashKey(): string {
-    return JSON.stringify([this.sqlType, this.type, this.oid, this.fmod]);
+    return JSON.stringify([
+      this.sqlType,
+      this.type,
+      this.oid,
+      this.fmod,
+      this.limit,
+      this.precision,
+      this.scale,
+    ]);
   }
 }

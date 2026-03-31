@@ -258,9 +258,14 @@ runtime. These are ordered by impact:
    raw numbers. Wrapping them in `TypeMetadata` instances gives downstream
    code a structured way to compare and hash column types.
 
-4. **Build an OID type registry** — The biggest remaining piece. Currently
-   22 of 25 OID types (all except `hstore`, `range`, `uuid`) are not imported
-   anywhere. Wiring them in means:
+4. **Build an OID type registry** — The biggest remaining piece. There are
+   26 OID type modules under `connection-adapters/postgresql/oid/`. Of these,
+   only 3 are consumed at runtime (`hstore`, `range`, `uuid`). The other 23
+   (array, bit, bit-varying, bytea, cidr, date, date-time, decimal, enum,
+   inet, interval, jsonb, legacy-point, macaddr, money, oid, point,
+   specialized-string, timestamp, timestamp-with-time-zone,
+   type-map-initializer, vector, xml) exist for API surface matching but
+   are not wired into query result deserialization. Wiring them in means:
    - Create a type map that maps PG OID numbers → type caster instances
    - Use `TypeMapInitializer` to populate it from `pg_type` rows on connect
    - Run query results through the type map to auto-cast values (e.g.,

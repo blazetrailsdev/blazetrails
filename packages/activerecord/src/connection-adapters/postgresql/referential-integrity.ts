@@ -4,7 +4,7 @@
  * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::ReferentialIntegrity
  */
 
-import { quoteTableName } from "../abstract/quoting.js";
+import { quoteTableName } from "./quoting.js";
 
 export interface ReferentialIntegrity {
   disableReferentialIntegrity(): Promise<void>;
@@ -12,9 +12,9 @@ export interface ReferentialIntegrity {
 }
 
 export function disableReferentialIntegritySql(tables: string[]): string[] {
-  return tables.map((t) => `ALTER TABLE ${quoteTableName(t, "postgres")} DISABLE TRIGGER ALL`);
+  return tables.map((t) => `ALTER TABLE ${quoteTableName(t)} DISABLE TRIGGER ALL`);
 }
 
 export function enableReferentialIntegritySql(tables: string[]): string[] {
-  return tables.map((t) => `ALTER TABLE ${quoteTableName(t, "postgres")} ENABLE TRIGGER ALL`);
+  return tables.map((t) => `ALTER TABLE ${quoteTableName(t)} ENABLE TRIGGER ALL`);
 }

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   RequestForgeryProtection,
   InvalidAuthenticityToken,
-} from "./request-forgery-protection.js";
+} from "../../actiondispatch/request-forgery-protection.js";
 
 // ==========================================================================
 // controller/request_forgery_protection_test.rb

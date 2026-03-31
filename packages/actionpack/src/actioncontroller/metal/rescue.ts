@@ -51,5 +51,8 @@ export function showDetailedExceptions(options?: {
 }
 
 export interface Rescue {
-  showDetailedExceptions(): boolean;
+  showDetailedExceptions(options?: {
+    considerAllRequestsLocal?: boolean;
+    requestLocal?: boolean;
+  }): boolean;
 }

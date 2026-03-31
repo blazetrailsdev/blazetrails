@@ -25,7 +25,7 @@ export class InvalidCrossOriginRequest extends ActionControllerError {
 
 export interface RequestForgeryProtection {
   verifyAuthenticityToken(): void;
-  formAuthenticityToken(formOptions?: Record<string, unknown>): string;
+  formAuthenticityToken(): string;
   protectAgainstForgery(): boolean;
 }
 

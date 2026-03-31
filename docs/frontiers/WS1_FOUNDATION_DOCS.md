@@ -2,7 +2,7 @@
 
 ## Dependencies
 
-- Base: `worktree-frontiers` branch
+- Base: `main` branch
 - Client-side only — Frontiers host backend only serves static `.sqlite` files (no dynamic API); tutorial app controllers/routes run entirely inside the in-browser runtime
 
 ## Approach
@@ -15,16 +15,7 @@ TDD throughout. Every PR starts with tests that define the contract. Tutorial co
 
 ### Anchor-based diffs, not line numbers
 
-Diffs use a context anchor string to locate insertion points. A hunk says "insert after the line matching `this.attribute("email")`" rather than "insert at line 5." Survives generator changes, user edits, blank line differences.
-
-```typescript
-interface DiffHunk {
-  anchor: string; // text to match in the file
-  position: "after" | "before" | "replace";
-  deleteCount?: number; // lines to remove (for "replace")
-  insertLines: string[];
-}
-```
+See [Anchor-based diffs in the Frontiers README](./README.md#anchor-based-diffs-not-line-numbers) for the canonical explanation and `DiffHunk` interface definition.
 
 ### Generator output fixtures
 

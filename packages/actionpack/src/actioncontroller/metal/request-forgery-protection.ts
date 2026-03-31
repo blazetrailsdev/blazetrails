@@ -1,8 +1,9 @@
 /**
  * ActionController::RequestForgeryProtection
  *
- * CSRF protection error classes. These are raised when an invalid
- * authenticity token or cross-origin request is detected.
+ * CSRF protection error classes defined in the ActionController namespace.
+ * These will be raised by the CSRF verification flow once fully wired;
+ * currently the ActionDispatch verifier throws its own version.
  * @see https://api.rubyonrails.org/classes/ActionController/InvalidAuthenticityToken.html
  */
 

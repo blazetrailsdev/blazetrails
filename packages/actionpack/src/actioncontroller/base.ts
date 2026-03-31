@@ -10,7 +10,7 @@ import * as path from "path";
 import { Metal } from "./metal.js";
 import { FlashHash } from "../actiondispatch/flash.js";
 import { RequestForgeryProtection } from "../actiondispatch/request-forgery-protection.js";
-import { Collector } from "../actiondispatch/respond-to.js";
+import { Collector } from "./metal/mime-responds.js";
 import { UnknownFormat } from "./metal/exceptions.js";
 import type { ActionCallback, AroundCallback, CallbackOptions } from "./abstract-controller.js";
 import { LookupContext } from "@blazetrails/actionview";

@@ -2735,6 +2735,8 @@ export class Relation<T extends Base> {
       for (const assoc of associations) {
         if (assoc.type === "belongsTo") {
           const fk = assoc.options?.foreignKey ?? `${_toUnderscore(assoc.name)}_id`;
+          // Skip composite foreign keys — association expansion only supports single-column FKs
+          if (Array.isArray(fk)) continue;
           const ft =
             assoc.options?.foreignType ??
             (assoc.options?.polymorphic ? `${_toUnderscore(assoc.name)}_type` : undefined);

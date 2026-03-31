@@ -41,4 +41,24 @@ describe("ExecutionContextTest", () => {
     context.foo = 43;
     expect(ExecutionContext.toH().foo).toBe(42);
   });
+
+  it("#set restores after async callback resolves", async () => {
+    ExecutionContext.setKey("before", "yes");
+    const result = ExecutionContext.set({ async_key: "during" }, async () => {
+      expect(ExecutionContext.toH().async_key).toBe("during");
+      return 99;
+    });
+    await result;
+    expect(ExecutionContext.toH().async_key).toBeUndefined();
+    expect(ExecutionContext.toH().before).toBe("yes");
+  });
+
+  it("#set restores after async callback rejects", async () => {
+    await expect(
+      ExecutionContext.set({ fail_key: "temp" }, async () => {
+        throw new Error("async error");
+      }),
+    ).rejects.toThrow("async error");
+    expect(ExecutionContext.toH().fail_key).toBeUndefined();
+  });
 });

@@ -7,11 +7,18 @@
  */
 
 export function flashEtagger(request: {
-  flash?: { empty?: boolean; toJSON?(): unknown };
+  flash?: {
+    empty?: boolean;
+    toJSON?(): unknown;
+    toSessionValue?(): unknown;
+    toHash?(): unknown;
+  };
 }): unknown | undefined {
   const flash = request.flash;
-  if (flash && !flash.empty) {
-    return flash.toJSON ? flash.toJSON() : flash;
-  }
-  return undefined;
+  if (!flash || flash.empty) return undefined;
+
+  if (flash.toJSON) return flash.toJSON();
+  if (flash.toSessionValue) return flash.toSessionValue();
+  if (flash.toHash) return flash.toHash();
+  return flash;
 }

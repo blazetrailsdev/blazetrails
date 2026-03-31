@@ -5,6 +5,18 @@
  * @see https://api.rubyonrails.org/classes/ActionController/MimeResponds.html
  */
 
+const MIME_TO_SYMBOL: Record<string, string> = {
+  "text/html": "html",
+  "application/json": "json",
+  "application/xml": "xml",
+  "text/xml": "xml",
+  "text/javascript": "js",
+  "application/javascript": "js",
+  "text/plain": "text",
+  "text/csv": "csv",
+  "*/*": "*/*",
+};
+
 export class Collector {
   private _responses = new Map<string, () => void>();
   private _order: string[] = [];
@@ -26,27 +38,27 @@ export class Collector {
   }
 
   html(handler: () => void): void {
-    this.on("text/html", handler);
+    this.on("html", handler);
   }
 
   json(handler: () => void): void {
-    this.on("application/json", handler);
+    this.on("json", handler);
   }
 
   xml(handler: () => void): void {
-    this.on("application/xml", handler);
+    this.on("xml", handler);
   }
 
   js(handler: () => void): void {
-    this.on("text/javascript", handler);
+    this.on("js", handler);
   }
 
   text(handler: () => void): void {
-    this.on("text/plain", handler);
+    this.on("text", handler);
   }
 
   csv(handler: () => void): void {
-    this.on("text/csv", handler);
+    this.on("csv", handler);
   }
 
   negotiate(options: { format?: string; accept?: string }): { handler: () => void } | null {
@@ -63,6 +75,11 @@ export class Collector {
           const first = this._order.find((r) => r !== "*/*") ?? this._order[0];
           if (first) return { handler: this._responses.get(first)! };
           continue;
+        }
+        const symbol = MIME_TO_SYMBOL[mime];
+        if (symbol) {
+          const handler = this._responses.get(symbol);
+          if (handler) return { handler };
         }
         const exact = this._responses.get(mime);
         if (exact) return { handler: exact };

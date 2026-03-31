@@ -5,7 +5,7 @@ describe("AlwaysPermittedParametersTest", () => {
   const originalAlways = [...Parameters.alwaysPermittedParameters];
 
   afterEach(() => {
-    Parameters.alwaysPermittedParameters = originalAlways;
+    Parameters.alwaysPermittedParameters = [...originalAlways];
     Parameters.actionOnUnpermittedParameters = false;
   });
 

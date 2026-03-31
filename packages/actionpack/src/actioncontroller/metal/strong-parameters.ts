@@ -628,14 +628,7 @@ export class Parameters {
       if (typeof filter === "string") {
         this._permittedScalarFilter(params, filter);
       } else if (typeof filter === "object" && filter !== null) {
-        if (Object.keys(filter).length === 0) {
-          // Empty hash spec {} means permit all keys
-          for (const [ek, ev] of Object.entries(this._data)) {
-            params._data[ek] = ev;
-          }
-        } else {
-          this._hashFilter(params, filter, options);
-        }
+        this._hashFilter(params, filter, options);
       }
     }
 
@@ -657,6 +650,13 @@ export class Parameters {
     filter: Record<string, unknown>,
     options: { suppressUnpermitted?: boolean } = {},
   ): void {
+    // Empty hash {} as a nested filter spec means "permit all keys"
+    if (Object.keys(filter).length === 0) {
+      for (const [ek, ev] of Object.entries(this._data)) {
+        params._data[ek] = ev;
+      }
+      return;
+    }
     for (const [k, v] of Object.entries(filter)) {
       if (!(k in this._data)) continue;
       const val = this._data[k];

@@ -25,7 +25,20 @@ export interface ProtectionMethods {
   handleUnverifiedRequest(): void;
 }
 
-export class NullSessionHash extends Map<string, unknown> {
+export class NullSessionHash {
+  private _data = Object.create(null) as Record<string, unknown>;
+
+  get(key: string): unknown {
+    return undefined;
+  }
+  set(key: string, _value: unknown): void {}
+  has(key: string): boolean {
+    return false;
+  }
+  delete(key: string): boolean {
+    return false;
+  }
+  clear(): void {}
   exists(): boolean {
     return false;
   }
@@ -33,11 +46,20 @@ export class NullSessionHash extends Map<string, unknown> {
     return false;
   }
   destroy(): void {}
+
+  [key: string]: unknown;
 }
 
-export class NullCookieJar extends Map<string, string> {
-  constructor() {
-    super();
+export class NullCookieJar {
+  get(_key: string): undefined {
+    return undefined;
+  }
+  set(_key: string, _value: string): void {}
+  has(_key: string): boolean {
+    return false;
+  }
+  delete(_key: string): boolean {
+    return false;
   }
   get signed(): NullCookieJar {
     return this;
@@ -45,6 +67,8 @@ export class NullCookieJar extends Map<string, string> {
   get encrypted(): NullCookieJar {
     return this;
   }
+
+  [key: string]: unknown;
 }
 
 type Controller = Record<string, unknown>;
@@ -55,10 +79,10 @@ export class NullSession implements ProtectionMethods {
     this._controller = controller;
   }
   handleUnverifiedRequest(): void {
-    this._controller.session = new NullSessionHash();
+    this._controller.session = Object.create(null);
     this._controller.cookies = new NullCookieJar();
     if (this._controller.flash !== undefined) {
-      this._controller.flash = new NullSessionHash();
+      this._controller.flash = Object.create(null);
     }
   }
 }
@@ -80,15 +104,19 @@ export class Exception implements ProtectionMethods {
   }
 }
 
-const TOKEN_KEY = "_csrf_token";
+const DEFAULT_TOKEN_KEY = "_csrf_token";
 
 export class SessionStore {
+  private _tokenKey: string;
+  constructor(tokenKey: string = DEFAULT_TOKEN_KEY) {
+    this._tokenKey = tokenKey;
+  }
   read(session: Record<string, unknown>): string | null {
-    const token = session[TOKEN_KEY];
+    const token = session[this._tokenKey];
     return typeof token === "string" ? token : null;
   }
   write(session: Record<string, unknown>, token: string): void {
-    session[TOKEN_KEY] = token;
+    session[this._tokenKey] = token;
   }
 }
 

@@ -27,8 +27,9 @@ export class Connection {
       if (adapter?.lookupCastTypeFromColumn) {
         return adapter.lookupCastTypeFromColumn(column);
       }
-      if (adapter?.lookupCastType && (column as any).sqlType) {
-        const castType = adapter.lookupCastType((column as any).sqlType);
+      const sqlType = (column as any).sqlType ?? (column as any).type;
+      if (adapter?.lookupCastType && sqlType) {
+        const castType = adapter.lookupCastType(sqlType);
         if (castType) return castType;
       }
     }

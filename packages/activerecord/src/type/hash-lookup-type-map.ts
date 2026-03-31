@@ -25,20 +25,42 @@ export class HashLookupTypeMap {
     } else {
       args = rest;
     }
-    const argsKey = args
-      .map((a) => {
-        if (a === undefined) return "\x00undef";
-        if (a === null) return "\x00null";
-        if (typeof a === "bigint") return `\x00bigint:${a}`;
-        if (typeof a === "symbol") return `\x00symbol:${a.toString()}`;
-        if (typeof a === "function") return `\x00fn:${a.name || "anon"}`;
-        try {
-          return JSON.stringify(a) ?? `\x00${typeof a}`;
-        } catch {
-          return `\x00obj:${String(a)}`;
-        }
-      })
-      .join("\x01");
+    let cacheable = true;
+    const parts: string[] = [];
+    for (const a of args) {
+      if (a === undefined) {
+        parts.push("\x00undef");
+        continue;
+      }
+      if (a === null) {
+        parts.push("\x00null");
+        continue;
+      }
+      if (typeof a === "bigint") {
+        parts.push(`\x00bigint:${a}`);
+        continue;
+      }
+      if (typeof a === "symbol") {
+        parts.push(`\x00symbol:${a.toString()}`);
+        continue;
+      }
+      if (typeof a === "function") {
+        parts.push(`\x00fn:${a.name || "anon"}`);
+        continue;
+      }
+      try {
+        parts.push(JSON.stringify(a) ?? `\x00${typeof a}`);
+      } catch {
+        cacheable = false;
+        break;
+      }
+    }
+
+    if (!cacheable) {
+      return this._performFetch(lookupKey, args, fallback);
+    }
+
+    const argsKey = parts.join("\x01");
 
     let keyCache = this._cache.get(lookupKey);
     if (!keyCache) {

@@ -18,7 +18,9 @@ export class HashLookupTypeMap {
     const fallback =
       typeof rest[rest.length - 1] === "function" ? (rest.pop() as () => Type) : undefined;
     const args = rest;
-    const argsKey = JSON.stringify(args);
+    const argsKey = args
+      .map((a) => (a === undefined ? "\x00undef" : JSON.stringify(a)))
+      .join("\x01");
 
     let keyCache = this._cache.get(lookupKey);
     if (!keyCache) {
@@ -36,7 +38,7 @@ export class HashLookupTypeMap {
 
   registerType(key: string, value?: Type | ((...args: unknown[]) => Type)): void {
     if (value === undefined) throw new Error("registerType requires a value or block");
-    if (typeof value === "function" && !(value instanceof ValueType)) {
+    if (typeof value === "function") {
       this._mapping.set(key, value as (...args: unknown[]) => Type);
     } else {
       this._mapping.set(key, () => value as Type);

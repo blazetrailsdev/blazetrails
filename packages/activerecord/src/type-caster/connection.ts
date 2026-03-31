@@ -22,7 +22,7 @@ export class Connection {
 
   typeForAttribute(attrName: string): Type {
     const schemaCache = this._klass.schemaCache;
-    if (schemaCache?.dataSourceExists?.(this._tableName)) {
+    if (schemaCache) {
       const columns = schemaCache.columnsHash?.(this._tableName);
       const column = columns?.get?.(attrName) ?? columns?.[attrName];
       if (column) {

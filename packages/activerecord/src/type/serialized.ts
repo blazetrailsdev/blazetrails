@@ -76,7 +76,11 @@ export class Serialized extends Type {
       typeof this._defaultValue === "object" &&
       this._defaultValue !== null
     ) {
-      return JSON.stringify(value) === JSON.stringify(this._defaultValue);
+      try {
+        return JSON.stringify(value) === JSON.stringify(this._defaultValue);
+      } catch {
+        return false;
+      }
     }
     return false;
   }

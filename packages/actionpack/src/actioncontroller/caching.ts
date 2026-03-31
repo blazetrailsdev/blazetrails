@@ -5,6 +5,14 @@
  * @see https://api.rubyonrails.org/classes/ActionController/Caching.html
  */
 
+function serializeValue(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return JSON.stringify(value);
+}
+
 export function fragmentCacheKey(
   key: string | string[] | Record<string, unknown>,
   controller?: string,
@@ -18,7 +26,7 @@ export function fragmentCacheKey(
   }
   const sorted = Object.keys(key)
     .sort()
-    .map((k) => `${k}=${key[k]}`)
+    .map((k) => `${k}=${serializeValue(key[k])}`)
     .join("/");
   return controller ? `${controller}/${sorted}` : sorted;
 }

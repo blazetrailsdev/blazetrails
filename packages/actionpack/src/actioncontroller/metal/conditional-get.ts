@@ -31,7 +31,10 @@ export function isFresh(
   const lastModified = response.getHeader("last-modified");
 
   if (ifNoneMatch && etag) {
-    return ifNoneMatch === etag;
+    if (ifNoneMatch === "*") return true;
+    const clientTags = ifNoneMatch.split(",").map((t) => t.trim());
+    const normalizedEtag = etag.replace(/^W\//, "");
+    return clientTags.some((t) => t === etag || t.replace(/^W\//, "") === normalizedEtag);
   }
   if (ifModifiedSince && lastModified) {
     return new Date(ifModifiedSince) >= new Date(lastModified);

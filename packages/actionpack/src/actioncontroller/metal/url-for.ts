@@ -26,10 +26,12 @@ export function urlFor(
 ): string {
   if (typeof options === "string") return options;
 
-  const protocol = (options.protocol ?? urlOptions.protocol ?? "http") as string;
+  const rawProtocol = (options.protocol ?? urlOptions.protocol ?? "http") as string;
+  const protocol = rawProtocol.replace(/:\/\/$/, "");
   const host = (options.host ?? urlOptions.host ?? "localhost") as string;
   const port = options.port ?? urlOptions.port;
-  const path = (options.path ?? "/") as string;
+  const rawPath = (options.path ?? "/") as string;
+  const path = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
 
   let url = `${protocol}://${host}`;
   const portNum = port ? Number(port) : undefined;

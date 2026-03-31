@@ -11,7 +11,8 @@ export function isStreamingRequest(options: Record<string, unknown>): boolean {
 }
 
 export function prepareStreamingHeaders(headers: Record<string, string>): void {
-  if (!headers["cache-control"]) {
+  const hasCC = Object.keys(headers).some((k) => k.toLowerCase() === "cache-control");
+  if (!hasCC) {
     headers["cache-control"] = "no-cache";
   }
 }

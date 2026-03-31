@@ -22,42 +22,34 @@ export class ExtendedDeterministicUniquenessValidator {
 
 /**
  * Performs uniqueness validation across all encryption scheme versions.
- * For each previous encryption type, temporarily swaps typeForAttribute
- * so the query builder uses the previous scheme's serialize, then
- * restores the original.
+ * Computes ciphertexts for current and previous schemes and checks
+ * uniqueness against all of them in a single query using IN (...).
  *
  * Mirrors: ActiveRecord::Encryption::ExtendedDeterministicUniquenessValidator::EncryptedUniquenessValidator
  */
 export class EncryptedUniquenessValidator {
-  static validateEncryptedUniqueness(
-    record: any,
-    attribute: string,
-    value: unknown,
-    originalValidate: (record: any, attribute: string, value: unknown) => void,
-  ): void {
-    const klass = record.constructor;
+  /**
+   * Returns all ciphertext variants for a value across current and
+   * previous encryption schemes. Used by uniqueness validation to
+   * check for duplicates across scheme migrations.
+   */
+  static allCiphertextsFor(klass: any, attribute: string, value: unknown): unknown[] {
     const type = getAttributeType(klass, attribute);
     if (!(type instanceof EncryptedAttributeType) || !type.deterministic) {
-      originalValidate(record, attribute, value);
-      return;
+      return [value];
     }
 
-    // Validate with current encryption scheme
-    originalValidate(record, attribute, value);
+    const results: unknown[] = [];
+    const current = type.serialize(value);
+    if (current !== null && current !== undefined) results.push(current);
 
-    // Validate against each previous scheme by temporarily swapping
-    // typeForAttribute so the query layer uses the previous type
-    const originalTypeForAttribute = klass.typeForAttribute;
     for (const prevType of type.previousTypes) {
-      klass.typeForAttribute = (attr: string) => {
-        if (attr === attribute) return prevType;
-        return originalTypeForAttribute ? originalTypeForAttribute.call(klass, attr) : undefined;
-      };
-      try {
-        originalValidate(record, attribute, value);
-      } finally {
-        klass.typeForAttribute = originalTypeForAttribute;
+      const ct = prevType.serialize(value);
+      if (ct !== null && ct !== undefined && !results.includes(ct)) {
+        results.push(ct);
       }
     }
+
+    return results;
   }
 }

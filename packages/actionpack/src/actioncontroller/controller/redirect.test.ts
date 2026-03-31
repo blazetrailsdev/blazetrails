@@ -159,12 +159,7 @@ describe("RedirectTest", () => {
     expect(c.getHeader("location")).toBe("/login");
     expect(log).toEqual([]);
   });
-});
 
-// ==========================================================================
-// Redirect utility tests (from controller/redirect_test.rb)
-// ==========================================================================
-describe("RedirectTest", () => {
   it("simple redirect", () => {
     const result = redirectTo("http://example.com/posts");
     expect(result.status).toBe(302);

@@ -242,9 +242,8 @@ export class RequestForgeryProtection {
         }
         break;
       case "null_session":
-        for (const key of Object.keys(session)) {
-          delete session[key];
-        }
+        // Caller is responsible for using an empty session for the
+        // remainder of the request; we don't clear the underlying store.
         break;
     }
   }

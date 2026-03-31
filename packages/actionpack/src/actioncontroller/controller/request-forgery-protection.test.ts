@@ -414,7 +414,7 @@ describe("RequestForgeryProtectionControllerUsingNullSessionTest", () => {
     const csrf = new RequestForgeryProtection({ strategy: "null_session" });
     const session: Record<string, unknown> = { user_id: 1, _csrf_token: "abc" };
     csrf.handleUnverified(session);
-    expect(Object.keys(session).length).toBe(0);
+    expect(session.user_id).toBe(1);
   });
 });
 

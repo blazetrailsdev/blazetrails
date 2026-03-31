@@ -11,7 +11,7 @@ export interface RedirectResult {
 }
 
 export function redirectTo(
-  url: string | { toString(): string },
+  url: string | { toString(): string } | null | undefined,
   options: { status?: number } = {},
 ): RedirectResult {
   if (url == null) {

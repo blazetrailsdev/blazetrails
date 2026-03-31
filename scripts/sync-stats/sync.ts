@@ -236,6 +236,7 @@ async function migrateDb(adapter: SQLite3Adapter) {
       t.string("path");
       t.text("diff_hunk");
       t.integer("in_reply_to_id");
+      t.index(["pr_number"]);
     });
 
     await ctx.createTable("pr_reviews", { id: false }, (t) => {
@@ -245,6 +246,7 @@ async function migrateDb(adapter: SQLite3Adapter) {
       t.string("state");
       t.text("body");
       t.string("submitted_at");
+      t.index(["pr_number"]);
     });
 
     await ctx.createTable("workflow_runs", { id: false }, (t) => {

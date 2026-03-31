@@ -20,7 +20,7 @@ export class Renderers {
   private static _registry = new Map<string, RendererProc>();
 
   static get RENDERERS(): ReadonlySet<string> {
-    return RENDERERS;
+    return new Set(RENDERERS);
   }
 
   static add(key: string, block: RendererProc): void {

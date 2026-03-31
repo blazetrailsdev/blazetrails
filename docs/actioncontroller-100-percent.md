@@ -25,7 +25,7 @@ AbstractController::Base → ActionController::Metal → ActionController::Base
 | `actioncontroller/api.ts`                     | API controller (JSON-only variant of Base)                                                                                                                                               |
 | `actioncontroller/metal/exceptions.ts`        | 13 error classes: ActionControllerError, BadRequest, RenderError, RoutingError, UrlGenerationError, MethodNotAllowed, etc.                                                               |
 | `actioncontroller/metal/strong-parameters.ts` | Parameters, ParameterMissing, UnpermittedParameters, UnfilteredParameters, InvalidParameterKey, StrongParameters                                                                         |
-| `actioncontroller/metal/*.ts`                 | 30 metal modules: redirecting, rendering, renderers, head, mime-responds, conditional-get, data-streaming, flash, rescue, cookies, etc.                                                  |
+| `actioncontroller/metal/*.ts`                 | Metal modules with real implementations: redirecting, renderers, mime-responds, request-forgery-protection, params-wrapper, allow-browser, http-authentication, live/SSE, exceptions     |
 | `actioncontroller/index.ts`                   | Package exports                                                                                                                                                                          |
 
 ### Test files (263 tests, all passing)

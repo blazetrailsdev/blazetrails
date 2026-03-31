@@ -25,6 +25,16 @@ export class Collector {
       const handler = this._responses.get(options.format);
       if (handler) return { handler };
     }
+    if (options.accept) {
+      const accepted = options.accept.split(",").map((t) => t.split(";")[0].trim());
+      for (const mime of accepted) {
+        for (const [registered] of this._responses) {
+          if (registered === mime || registered === "*/*" || mime === "*/*") {
+            return { handler: this._responses.get(registered)! };
+          }
+        }
+      }
+    }
     const first = this._order[0];
     if (first) {
       return { handler: this._responses.get(first)! };

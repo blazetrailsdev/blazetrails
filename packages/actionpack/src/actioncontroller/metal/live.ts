@@ -32,13 +32,33 @@ export class Buffer {
 
 export class SSE {
   private _stream: Buffer;
+  private _retry?: number;
+  private _event?: string;
 
-  constructor(stream: Buffer, _options: { retry?: number; event?: string } = {}) {
+  constructor(stream: Buffer, options: { retry?: number; event?: string } = {}) {
     this._stream = stream;
+    this._retry = options.retry;
+    this._event = options.event;
   }
 
-  write(_object: unknown, _options: { event?: string; id?: string; retry?: number } = {}): void {
-    // SSE write implementation
+  write(object: unknown, options: { event?: string; id?: string; retry?: number } = {}): void {
+    const event = options.event ?? this._event;
+    const retry = options.retry ?? this._retry;
+    const id = options.id;
+
+    const data = typeof object === "string" ? object : JSON.stringify(object);
+
+    let payload = "";
+    if (id !== undefined) payload += `id: ${id}\n`;
+    if (event !== undefined) payload += `event: ${event}\n`;
+    if (retry !== undefined) payload += `retry: ${retry}\n`;
+
+    for (const line of data.split(/\r?\n/)) {
+      payload += `data: ${line}\n`;
+    }
+    payload += "\n";
+
+    this._stream.write(payload);
   }
 
   close(): void {
@@ -50,8 +70,4 @@ export class Response {
   headers: Record<string, string> = {};
   stream: Buffer = new Buffer();
   status: number = 200;
-}
-
-export interface Live {
-  response: Response;
 }

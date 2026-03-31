@@ -23,7 +23,10 @@ export class Renderer {
   }
 
   render(..._args: unknown[]): unknown {
-    return null;
+    throw new Error(
+      "ActionController::Renderer#render is not yet implemented. " +
+        "Use controller actions with render() instead.",
+    );
   }
 
   get defaults(): Record<string, unknown> {

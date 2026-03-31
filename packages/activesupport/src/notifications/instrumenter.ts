@@ -51,14 +51,25 @@ export class Instrumenter {
     this.id = generateTransactionId();
   }
 
-  instrument<T = void>(name: string, payload: EventPayload = {}, fn?: (event: Event) => T): T {
+  instrument<T = void>(
+    name: string,
+    payloadOrFn?: EventPayload | ((event: Event) => T),
+    fn?: (event: Event) => T,
+  ): T {
+    let payload: EventPayload = {};
+    let callback = fn;
+    if (typeof payloadOrFn === "function") {
+      callback = payloadOrFn;
+    } else if (payloadOrFn) {
+      payload = payloadOrFn;
+    }
     const event = new Event(name, new Date(), payload, this.id);
     const parent = this._stack[this._stack.length - 1];
     if (parent) parent.children.push(event);
     this._stack.push(event);
 
     try {
-      if (fn) return fn(event);
+      if (callback) return callback(event);
       return undefined as unknown as T;
     } finally {
       this._stack.pop();
@@ -69,16 +80,23 @@ export class Instrumenter {
 
   async instrumentAsync<T = void>(
     name: string,
-    payload: EventPayload = {},
+    payloadOrFn?: EventPayload | ((event: Event) => Promise<T>),
     fn?: (event: Event) => Promise<T>,
   ): Promise<T> {
+    let payload: EventPayload = {};
+    let callback = fn;
+    if (typeof payloadOrFn === "function") {
+      callback = payloadOrFn;
+    } else if (payloadOrFn) {
+      payload = payloadOrFn;
+    }
     const event = new Event(name, new Date(), payload, this.id);
     const parent = this._stack[this._stack.length - 1];
     if (parent) parent.children.push(event);
     this._stack.push(event);
 
     try {
-      if (fn) return await fn(event);
+      if (callback) return await callback(event);
       return undefined as unknown as T;
     } finally {
       this._stack.pop();

@@ -13,10 +13,10 @@ export abstract class NumberConverter<TOptions = Record<string, unknown>> {
     if (typeof number === "number") return number;
     if (typeof number === "string") {
       const trimmed = number.trim();
-      if (trimmed === "") return 0;
+      if (trimmed === "") return NaN;
       const parsed = Number(trimmed);
       if (Number.isFinite(parsed)) return parsed;
     }
-    return 0;
+    return NaN;
   }
 }

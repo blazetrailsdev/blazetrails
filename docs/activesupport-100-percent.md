@@ -14,7 +14,7 @@ pnpm run api:compare -- --package activesupport   # API surface
 pnpm run test:compare -- --package activesupport   # test parity
 ```
 
-## API parity: what's missing (224 classes/modules)
+## API parity: what's missing (187 classes/modules)
 
 ### Highest impact (4+ missing classes per file)
 
@@ -64,7 +64,7 @@ The remaining ~130 missing are single-class files. Major categories:
 - **Concurrency** (2 files): ShareLock, LoadInterlockAwareMonitor
 - **Cache stores** (2 files): MemCacheStore, RedisCacheStore
 
-## API parity: what's done (79 classes/modules)
+## API parity: what's done (116 classes/modules)
 
 31 files fully matched (✓):
 

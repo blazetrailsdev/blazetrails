@@ -28,7 +28,7 @@ AbstractController::Base → ActionController::Metal → ActionController::Base
 | `actioncontroller/metal/*.ts`                 | Metal modules with real implementations: redirecting, renderers, mime-responds, request-forgery-protection, params-wrapper, allow-browser, http-authentication, live/SSE, exceptions     |
 | `actioncontroller/index.ts`                   | Package exports                                                                                                                                                                          |
 
-### Test files (263 tests, all passing)
+### Test files (888 tests, all passing)
 
 | File                          | Tests | Coverage area                                                                                   |
 | ----------------------------- | ----- | ----------------------------------------------------------------------------------------------- |

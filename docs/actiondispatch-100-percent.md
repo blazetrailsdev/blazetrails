@@ -24,6 +24,10 @@ We already have 23 test files and 30 source files covering:
 
 ## Summary by feature area
 
+Note: this table is from an earlier manual analysis of all ActionPack tests
+(including ActionController tests that live in the actionpack gem). The
+headline `test:compare` number (534/1,432) counts only ActionDispatch tests.
+
 | #   | Feature Area         | Missing   | Matched | Key Blocker                    |
 | --- | -------------------- | --------- | ------- | ------------------------------ |
 | 1   | Controller Core      | 814       | 158     | Needs ActionController         |

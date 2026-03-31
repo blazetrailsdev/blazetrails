@@ -50,13 +50,13 @@ export class EncryptedAttributeType extends Type {
   serialize(value: unknown): unknown {
     if (value === null || value === undefined) return null;
     if (isEncryptionDisabled()) return this.castType.serialize?.(value) ?? value;
-    if (isProtectedMode()) {
+    if (isProtectedMode() && !this.deterministic) {
       throw new EncryptionError("Can't write encrypted attribute in protected mode");
     }
     const casted = this.castType.serialize?.(value) ?? value;
     if (casted === null || casted === undefined) return null;
     const str = typeof casted === "string" ? casted : String(casted);
-    const toEncrypt = this.scheme.downcase ? str.toLowerCase() : str;
+    const toEncrypt = this.scheme.downcase || this.scheme.ignoreCase ? str.toLowerCase() : str;
     return this.encrypt(toEncrypt);
   }
 

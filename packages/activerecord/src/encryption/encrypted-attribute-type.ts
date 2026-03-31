@@ -3,6 +3,7 @@ import type { Scheme } from "./scheme.js";
 import type { Encryptor } from "./encryptor.js";
 import { isEncryptionDisabled, isProtectedMode } from "./context.js";
 import { Configurable } from "./configurable.js";
+import { Encryption as EncryptionError } from "./errors.js";
 
 /**
  * An ActiveModel type that encrypts/decrypts attribute values. This is
@@ -50,7 +51,7 @@ export class EncryptedAttributeType extends Type {
     if (value === null || value === undefined) return null;
     if (isEncryptionDisabled()) return this.castType.serialize?.(value) ?? value;
     if (isProtectedMode()) {
-      throw new Error("Can't write encrypted attribute in protected mode");
+      throw new EncryptionError("Can't write encrypted attribute in protected mode");
     }
     const casted = this.castType.serialize?.(value) ?? value;
     if (casted === null || casted === undefined) return null;

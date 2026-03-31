@@ -1,4 +1,5 @@
 import { EncryptedAttributeType } from "./encrypted-attribute-type.js";
+import { getAttributeType } from "./encryptable-record.js";
 
 /**
  * Extends uniqueness validation for deterministic encrypted attributes.
@@ -35,7 +36,7 @@ export class EncryptedUniquenessValidator {
     originalValidate: (record: any, attribute: string, value: unknown) => void,
   ): void {
     const klass = record.constructor;
-    const type = klass.typeForAttribute?.(attribute);
+    const type = getAttributeType(klass, attribute);
     if (!(type instanceof EncryptedAttributeType) || !type.deterministic) {
       originalValidate(record, attribute, value);
       return;

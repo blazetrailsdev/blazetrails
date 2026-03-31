@@ -1,4 +1,5 @@
 import { EncryptedAttributeType } from "./encrypted-attribute-type.js";
+import { getAttributeType } from "./encryptable-record.js";
 
 /**
  * Automatically expands encrypted arguments to support querying both
@@ -42,7 +43,7 @@ export class EncryptedQuery {
     let modified = false;
 
     for (const attrName of encryptedAttrs) {
-      const type = model.typeForAttribute?.(attrName);
+      const type = getAttributeType(model, attrName);
       if (!(type instanceof EncryptedAttributeType)) continue;
       if (!type.deterministic) continue;
       if (!type.previousTypes.length) continue;

@@ -4,7 +4,8 @@ import { Configurable } from "./configurable.js";
 
 /**
  * Provides the `encrypts` declaration for model classes, enabling
- * transparent attribute encryption/decryption.
+ * transparent attribute encryption/decryption. This is wired into
+ * Base.encrypts() via the encryption.ts module.
  *
  * Mirrors: ActiveRecord::Encryption::EncryptableRecord
  *
@@ -14,7 +15,8 @@ import { Configurable } from "./configurable.js";
 export class EncryptableRecord {
   /**
    * Declare that attributes should be encrypted. Registers an
-   * EncryptedAttributeType for each named attribute.
+   * EncryptedAttributeType for each named attribute directly into
+   * _attributeDefinitions and notifies Configurable listeners.
    */
   static encrypts(modelClass: any, ...namesAndOptions: unknown[]): void {
     let options: SchemeOptions = {};
@@ -37,44 +39,53 @@ export class EncryptableRecord {
     for (const name of names) {
       modelClass._encryptedAttributes.add(name);
 
-      const type = new EncryptedAttributeType({
+      // Get existing cast type from attribute definitions if available
+      const existingDef = modelClass._attributeDefinitions?.get?.(name);
+      const castType = existingDef?.type;
+
+      const encryptedType = new EncryptedAttributeType({
         scheme,
-        castType: modelClass.typeForAttribute?.(name),
+        castType,
       });
 
-      if (modelClass.attribute) {
-        modelClass.attribute(name, type);
+      // Register directly into _attributeDefinitions (not via attribute()
+      // which expects a string type name)
+      if (modelClass._attributeDefinitions?.set) {
+        modelClass._attributeDefinitions.set(name, {
+          name,
+          type: encryptedType,
+          defaultValue: existingDef?.defaultValue ?? null,
+        });
       }
 
       Configurable.encryptedAttributeWasDeclared(modelClass, name);
     }
   }
 
-  /**
-   * Check if a model class has any encrypted attributes declared.
-   */
   static hasEncryptedAttributes(modelClass: any): boolean {
     return (modelClass._encryptedAttributes?.size ?? 0) > 0;
   }
 
-  /**
-   * Get the set of encrypted attribute names for a model class.
-   */
   static encryptedAttributes(modelClass: any): Set<string> {
     return modelClass._encryptedAttributes ?? new Set();
   }
 
-  /**
-   * Get the set of deterministic encrypted attribute names.
-   */
   static deterministicEncryptedAttributes(modelClass: any): Set<string> {
     const result = new Set<string>();
     for (const name of this.encryptedAttributes(modelClass)) {
-      const type = modelClass.typeForAttribute?.(name);
+      const type = getAttributeType(modelClass, name);
       if (type instanceof EncryptedAttributeType && type.deterministic) {
         result.add(name);
       }
     }
     return result;
   }
+}
+
+/**
+ * Get the attribute type from a model class's _attributeDefinitions.
+ */
+export function getAttributeType(klass: any, name: string): unknown {
+  const def = klass._attributeDefinitions?.get?.(name);
+  return def?.type;
 }

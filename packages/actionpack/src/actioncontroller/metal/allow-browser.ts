@@ -17,12 +17,16 @@ const SETS: Record<string, Record<string, string | false>> = {
 export class BrowserBlocker {
   private _versions: Record<string, string | false>;
   private _userAgent: string;
-  private _parser: UAParser;
+  private _parser?: UAParser;
 
   constructor(userAgentString: string, versions: BrowserVersions) {
     this._userAgent = userAgentString;
     this._versions = typeof versions === "string" ? (SETS[versions] ?? {}) : versions;
-    this._parser = new UAParser(userAgentString);
+  }
+
+  private get parser(): UAParser {
+    this._parser ??= new UAParser(this._userAgent);
+    return this._parser;
   }
 
   get blocked(): boolean {
@@ -33,7 +37,7 @@ export class BrowserBlocker {
     if (minimum === undefined) return false;
     if (minimum === false) return true;
 
-    const browser = this._parser.getBrowser();
+    const browser = this.parser.getBrowser();
     if (!browser.version) return false;
     return this._compareVersions(browser.version, minimum) < 0;
   }
@@ -47,7 +51,7 @@ export class BrowserBlocker {
   }
 
   private _normalizedBrowserName(): string {
-    const browser = this._parser.getBrowser();
+    const browser = this.parser.getBrowser();
     const name = (browser.name ?? "").toLowerCase();
     if (name === "internet explorer" || name === "ie") return "ie";
     if (name === "mobile chrome") return "chrome";

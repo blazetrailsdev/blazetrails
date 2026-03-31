@@ -437,10 +437,7 @@ describe("RescueControllerTest", () => {
     class CauseError extends Error {}
     class C extends Base {
       async action() {
-        const cause = new CauseError("cause");
-        const wrapper = new WrapperError("wrapper");
-        (wrapper as any).cause = cause;
-        throw wrapper;
+        throw new WrapperError("wrapper", { cause: new CauseError("cause") });
       }
     }
     C.rescueFrom(CauseError, function (this: Base) {
@@ -459,10 +456,7 @@ describe("RescueControllerTest", () => {
     class SpecificCause extends Error {}
     class C extends Base {
       async action() {
-        const cause = new SpecificCause("specific");
-        const wrapper = new GenericError("generic");
-        (wrapper as any).cause = cause;
-        throw wrapper;
+        throw new GenericError("generic", { cause: new SpecificCause("specific") });
       }
     }
     C.rescueFrom(GenericError, function (this: Base) {
@@ -481,10 +475,7 @@ describe("RescueControllerTest", () => {
     class HandledCause extends Error {}
     class C extends Base {
       async action() {
-        const cause = new HandledCause("cause");
-        const wrapper = new UnhandledWrapper("wrapper");
-        (wrapper as any).cause = cause;
-        throw wrapper;
+        throw new UnhandledWrapper("wrapper", { cause: new HandledCause("cause") });
       }
     }
     C.rescueFrom(HandledCause, function (this: Base) {

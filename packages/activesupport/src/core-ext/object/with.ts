@@ -2,9 +2,9 @@
  * Temporarily sets attributes on an object, executes a block, then restores
  * the original values. Mirrors Ruby's Object#with from ActiveSupport.
  */
-export function objectWith<T extends Record<string, unknown>, R>(
+export function objectWith<T extends object, R>(
   obj: T,
-  attrs: Partial<T>,
+  attrs: Partial<Record<Extract<keyof T, string>, unknown>>,
   fn: (obj: T) => R,
 ): R {
   const saved: Partial<T> = {};

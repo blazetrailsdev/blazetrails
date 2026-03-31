@@ -15,4 +15,8 @@ export class EnvironmentInquirer extends StringInquirer {
   isLocal(): boolean {
     return LOCAL_ENVIRONMENTS.has(this.toString());
   }
+
+  "local?"(): boolean {
+    return this.isLocal();
+  }
 }

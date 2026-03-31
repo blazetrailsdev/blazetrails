@@ -30,31 +30,38 @@ function restore(saved: Map<string, { hadKey: boolean; value: unknown }>): void 
 }
 
 export const ExecutionContext = {
-  set(attrs: Record<string, unknown>, fn?: () => void | Promise<void>): void | Promise<void> {
-    if (fn) {
-      const saved = saveAndApply(attrs);
-      let result: void | Promise<void>;
-      try {
-        result = fn();
-      } catch (e) {
-        restore(saved);
-        throw e;
-      }
-      if (result && typeof (result as Promise<void>).then === "function") {
-        return (result as Promise<void>).then(
-          () => restore(saved),
-          (e) => {
-            restore(saved);
-            throw e;
-          },
-        );
-      }
-      restore(saved);
-    } else {
+  set<T = void>(attrs: Record<string, unknown>, fn?: () => T): T | void {
+    if (!fn) {
       for (const key of Object.keys(attrs)) {
         _store.set(key, attrs[key]);
       }
+      return;
     }
+
+    const saved = saveAndApply(attrs);
+    let result: T;
+    try {
+      result = fn();
+    } catch (e) {
+      restore(saved);
+      throw e;
+    }
+
+    if (result && typeof (result as unknown as Promise<unknown>).then === "function") {
+      return (result as unknown as Promise<unknown>).then(
+        (val) => {
+          restore(saved);
+          return val;
+        },
+        (e) => {
+          restore(saved);
+          throw e;
+        },
+      ) as unknown as T;
+    }
+
+    restore(saved);
+    return result;
   },
 
   get(key: string): unknown {

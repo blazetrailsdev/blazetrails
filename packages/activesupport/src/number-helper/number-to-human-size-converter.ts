@@ -29,7 +29,13 @@ export class NumberToHumanSizeConverter extends NumberConverter<NumberToHumanSiz
     const unit = STORAGE_UNITS[exponent];
 
     if (exponent === 0) {
-      return `${Math.round(num)} ${unit}`;
+      const numberStr = NumberToRoundedConverter.convert(num, {
+        precision: 0,
+        separator,
+        delimiter,
+        stripInsignificantZeros: true,
+      });
+      return `${numberStr} ${unit}`;
     }
 
     const humanSize = num / Math.pow(BASE, exponent);

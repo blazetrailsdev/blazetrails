@@ -26,7 +26,7 @@ export class NumberToPhoneConverter extends NumberConverter<NumberToPhoneOptions
     if (match) {
       return `(${match[1]}) ${match[2]}${this.delimiter}${match[3]}`;
     }
-    return number;
+    return this.convertWithoutAreaCode(number);
   }
 
   private convertWithoutAreaCode(number: string): string {

@@ -90,6 +90,46 @@ Frontiers must be usable on phones and tablets. The landing page, tutorial listi
 - **Sandbox IDE** (`/frontiers/project`): Not required to be mobile-friendly — this is a power-user tool. Show a "best on desktop" notice on small screens.
 - **CLI actions and diffs**: Full-width on mobile. Code blocks horizontally scroll. Apply/Run buttons span full width.
 
+### Error Handling and Edge Cases
+
+**Runtime crash mid-tutorial:**
+
+- Catch unhandled errors from `createRuntime()` and `exec()` at the step page level
+- Show an inline error banner (Clay/Brick) with the error message and a "Reset this step" button
+- "Reset this step" re-runs the current step's actions from the last checkpoint's known-good state. If no checkpoint has passed yet, reset to the tutorial's initial state (fresh `createRuntime()` or reload from the static `.sqlite` snapshot)
+- Never silently swallow errors — if something breaks, the user should see it
+
+**IndexedDB full or unavailable:**
+
+- `ProjectStore` operations (`save`, `load`, `list`) must catch `QuotaExceededError` and storage access errors
+- On save failure: show a warning banner — "Could not save your progress. Your work is still in memory but won't persist if you close the tab." Include a "Download .sqlite" fallback button that exports via `runtime.exportDB()`
+- On load failure: fall back to a fresh runtime and show a notice — "Previous progress could not be loaded. Starting fresh."
+- Private browsing / disabled storage: detect on page load via a test write, show a persistent notice
+
+**Navigation away with unsaved changes:**
+
+- Listen for `beforeunload` when the runtime has changes since last `ProjectStore.save()`
+- Auto-save on step navigation (debounced, as noted in PR 5d)
+- No confirmation dialog on step-to-step navigation within the same tutorial — auto-save handles it
+- `beforeunload` prompt only fires when leaving Frontiers entirely (closing tab, navigating to `/` etc.)
+
+**Anchor resolution failure during diff apply:**
+
+- Already specified in PR 1: `applyDiff` returns `{ success: false, error }` when an anchor isn't found
+- The DiffViewer should show the error inline with the failing hunk highlighted, not a generic toast
+- Suggest the user check if they've already applied the diff or modified the file manually
+
+**WASM SQLite initialization failure:**
+
+- sql.js WASM binary may fail to fetch (network) or initialize (browser compatibility)
+- Show a full-page error on the tutorial step page: "Could not load the database engine. Check your connection and try refreshing." No partial UI — the tutorial is non-functional without SQLite.
+
+**Stale project from a previous tutorial version:**
+
+- If the tutorial content changes (new steps, modified generators), a saved `tutorial-{slug}` project in IndexedDB may be out of sync
+- Store a `tutorialVersion` number in the project metadata. On load, compare against the current registry version.
+- If mismatched: show a notice — "This tutorial has been updated since your last visit. You can continue where you left off or start fresh." Offer both options.
+
 ### Terminal
 
 The terminal (Ghostty WASM or xterm.js) is a standalone enhancement, not on the critical path. Tutorials use `CliAction.svelte` for CLI commands. Terminal can land in any PR without blocking content.
@@ -106,3 +146,12 @@ Replace the text-input CLI (`TasksPanel.svelte`) with a real terminal emulator.
 - Fallback: xterm.js + xterm-addon-fit (established, used by VS Code web)
 - Integration: render in splitpane, dispatch to `trail-cli.ts` `exec()`, ANSI colors
 - Add ANSI escape codes to `trail-cli.ts` output (backwards-compatible)
+
+## Followups
+
+These are out of scope for WS1–WS3 but should be addressed before public launch:
+
+- **Performance budget:** Define bundle size targets and lazy loading strategy. WASM SQLite + Monaco + Mermaid is a heavy payload. Need to measure and set caps for initial load, per-route chunks, and time-to-interactive — especially on mobile.
+- **Deployment and CDN:** The current plan is a Dockerfile and nothing else. Need to define static asset caching strategy, CDN configuration, and how `.sqlite` snapshots are served at scale.
+- **Offline support:** The app is nearly offline-capable (WASM SQLite, client-side runtime). A service worker with cache-first strategy for static assets and WASM binaries would make tutorials usable on flaky connections.
+- **WS2/WS3 PR breakdowns:** Currently just content outlines. Once WS1 proves the pattern, mirror its PR structure (parallelization graph, test specs, review criteria) for Music and Finances.

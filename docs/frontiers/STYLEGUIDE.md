@@ -200,6 +200,47 @@ Tutorial and feature cards use `bg-surface-raised` with `border-border`, `rounde
 
 ---
 
+## Accessibility
+
+### Target
+
+WCAG 2.1 AA compliance. Not AAA — the earth-tone palette makes AAA impractical for accent colors without losing the visual identity.
+
+### Color Contrast
+
+Already covered above — all text/background pairs meet 4.5:1. Non-text elements (icons, borders, focus rings) must meet 3:1 against their background.
+
+### Keyboard Navigation
+
+- All interactive elements must be reachable via Tab in logical order
+- Visible focus indicator: 2px `border-focus` (Fern) outline with 2px offset. Never remove outlines without replacing them.
+- Tutorial step navigation: arrow keys for prev/next step, Escape to close accordion panes on mobile
+- Modal dialogs (CommandPalette, ConfirmDialog): trap focus while open, restore on close
+- Monaco editor handles its own keyboard nav — don't interfere
+
+### Screen Readers
+
+- Tutorial prose sections: use semantic HTML (`<h2>`, `<p>`, `<ol>`, `<code>`) — not divs with classes
+- CLI output: wrap in `role="log"` with `aria-live="polite"` so new output is announced without interrupting
+- Checkpoint results: `aria-live="assertive"` for pass/fail announcements
+- Accordion panes on mobile: `aria-expanded`, `aria-controls`, proper `button` triggers
+- Step navigation: `aria-current="step"` on the active dot
+- Diagrams (Mermaid): include `aria-label` with a text description of the diagram. Content authors must provide this in the step definition.
+
+### Reduced Motion
+
+Respect `prefers-reduced-motion: reduce`:
+
+- Disable accordion animations
+- Disable splitter hover transitions
+- Keep spinner (functional, not decorative) but slow it to 2s
+
+### Skip Links
+
+Add a "Skip to tutorial content" link as the first focusable element on the step page — keyboard users shouldn't have to tab through the entire sandbox nav to reach the prose.
+
+---
+
 ## Naming
 
 Colors are named after natural elements — forest, earth, water:

@@ -136,9 +136,6 @@ describe("AssociationValidationTest", () => {
   });
   it("validates associated without marked for destruction", () => {
     class FakeReply {
-      valid() {
-        return true;
-      }
       isValid() {
         return true;
       }
@@ -147,12 +144,12 @@ describe("AssociationValidationTest", () => {
       static {
         this.attribute("title", "string");
         this.adapter = adapter;
+        this.validatesAssociated("replies");
       }
     }
     registerModel("TopicWAD", TopicWAD);
     const t = new TopicWAD({ title: "test" });
     (t as any).replies = [new FakeReply()];
-    // With a valid reply, the topic should be valid
     expect(t.isValid()).toBe(true);
   });
   it.skip("validates associated with custom message using quotes", () => {

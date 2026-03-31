@@ -32,6 +32,7 @@ export class BrowserBlocker {
   }
 
   get blocked(): boolean {
+    if (!this._userAgent) return false;
     const ua = this._userAgent.toLowerCase();
     if (this._isBot(ua)) return false;
 

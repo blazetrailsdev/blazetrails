@@ -317,7 +317,7 @@ export class ValueTooLong extends StatementInvalid {
   }
 }
 
-export class RangeError extends StatementInvalid {
+export class ActiveRecordRangeError extends StatementInvalid {
   constructor(
     message?: string,
     options?: { sql?: string; binds?: unknown[]; connectionPool?: unknown; cause?: unknown },
@@ -326,7 +326,7 @@ export class RangeError extends StatementInvalid {
     this.name = "RangeError";
   }
 }
-export { RangeError as ActiveRecordRangeError };
+export { ActiveRecordRangeError as RangeError };
 
 export class SQLWarning extends AdapterError {
   readonly code?: string;
@@ -474,7 +474,11 @@ export class UnknownPrimaryKey extends ActiveRecordError {
 
   constructor(model?: any, description?: string) {
     if (model) {
-      let message = `Unknown primary key for table ${model.tableName} in model ${model}.`;
+      const modelName =
+        typeof model === "function"
+          ? model.name || "UnknownModel"
+          : model.constructor?.name || "UnknownModel";
+      let message = `Unknown primary key for table ${model.tableName} in model ${modelName}.`;
       if (description) message += `\n${description}`;
       super(message);
     } else {

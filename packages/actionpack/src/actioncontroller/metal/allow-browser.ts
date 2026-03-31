@@ -26,35 +26,20 @@ export class BrowserBlocker {
   }
 
   get blocked(): boolean {
-    return this._userAgentVersionReported() && this._unsupportedBrowser();
-  }
-
-  private _userAgentVersionReported(): boolean {
     if (!this._userAgent) return false;
-    const browser = this._parser.getBrowser();
-    return !!browser.version;
-  }
+    if (this._bot()) return false;
 
-  private _unsupportedBrowser(): boolean {
-    return this._versionGuardedBrowser() && this._versionBelowMinimum() && !this._bot();
-  }
-
-  private _versionGuardedBrowser(): boolean {
-    return this._minimumVersionForBrowser() !== undefined;
-  }
-
-  private _bot(): boolean {
-    return /bot|crawl|spider|slurp/i.test(this._userAgent);
-  }
-
-  private _versionBelowMinimum(): boolean {
     const minimum = this._minimumVersionForBrowser();
-    if (minimum === false) return true;
     if (minimum === undefined) return false;
+    if (minimum === false) return true;
 
     const browser = this._parser.getBrowser();
     if (!browser.version) return false;
     return this._compareVersions(browser.version, minimum) < 0;
+  }
+
+  private _bot(): boolean {
+    return /bot|crawl|spider|slurp/i.test(this._userAgent);
   }
 
   private _minimumVersionForBrowser(): string | false | undefined {

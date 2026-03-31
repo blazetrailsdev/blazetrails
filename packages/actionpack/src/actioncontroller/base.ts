@@ -337,7 +337,12 @@ export class Base extends Metal {
 
       await Notifications.instrumentAsync(
         "browser_block.action_controller",
-        { request: base.request, versions },
+        {
+          user_agent: userAgent,
+          method: base.request?.method ?? "GET",
+          path: base.request?.path ?? "/",
+          versions,
+        },
         async () => {
           if (typeof block === "function") {
             await block.call(base);

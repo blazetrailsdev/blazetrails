@@ -201,6 +201,8 @@ describe("AllowBrowserTest", () => {
     expect(events.length).toBe(1);
     expect(events[0].name).toBe("browser_block.action_controller");
     expect(events[0].payload.versions).toBe("modern");
+    expect(events[0].payload.user_agent).toBe(CHROME_118);
+    expect(events[0].payload.method).toBe("GET");
     expect(c.status).toBe(426);
   });
 });

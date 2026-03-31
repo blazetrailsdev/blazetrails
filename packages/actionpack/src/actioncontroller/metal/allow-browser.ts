@@ -1,63 +1,74 @@
 /**
  * ActionController::AllowBrowser
  *
- * Minimum browser version enforcement.
+ * Minimum browser version enforcement using `ua-parser-js` for
+ * user agent parsing (matching Rails' use of the `useragent` gem).
  * @see https://api.rubyonrails.org/classes/ActionController/AllowBrowser.html
  */
 
+import { UAParser } from "ua-parser-js";
+
 export type BrowserVersions = "modern" | Record<string, string | false>;
 
-const MODERN_MINIMUM_VERSIONS: Record<string, string> = {
-  safari: "17.2",
-  chrome: "120",
-  firefox: "121",
-  opera: "106",
-};
-
-const BROWSER_PATTERNS: Record<string, RegExp> = {
-  ie: /(?:msie |trident.*rv:)(\d+(?:\.\d+)*)/,
-  safari: /version\/(\d+(?:\.\d+)*)/,
-  chrome: /chrome\/(\d+(?:\.\d+)*)/,
-  firefox: /firefox\/(\d+(?:\.\d+)*)/,
-  opera: /opr\/(\d+(?:\.\d+)*)/,
+const SETS: Record<string, Record<string, string | false>> = {
+  modern: { safari: "17.2", chrome: "120", firefox: "121", opera: "106" },
 };
 
 export class BrowserBlocker {
   private _versions: Record<string, string | false>;
   private _userAgent: string;
+  private _parser: UAParser;
 
-  constructor(userAgent: string, versions: BrowserVersions) {
-    this._userAgent = userAgent;
-    this._versions = versions === "modern" ? MODERN_MINIMUM_VERSIONS : versions;
+  constructor(userAgentString: string, versions: BrowserVersions) {
+    this._userAgent = userAgentString;
+    this._versions = typeof versions === "string" ? (SETS[versions] ?? {}) : versions;
+    this._parser = new UAParser(userAgentString);
   }
 
   get blocked(): boolean {
+    return this._userAgentVersionReported() && this._unsupportedBrowser();
+  }
+
+  private _userAgentVersionReported(): boolean {
     if (!this._userAgent) return false;
-    const ua = this._userAgent.toLowerCase();
-    if (this._isBot(ua)) return false;
-
-    for (const [browser, minVersion] of Object.entries(this._versions)) {
-      if (minVersion === false) {
-        if (this._detectVersion(browser, ua) !== null) return true;
-        continue;
-      }
-      const version = this._detectVersion(browser, ua);
-      if (version !== null && this._compareVersions(version, minVersion) < 0) {
-        return true;
-      }
-    }
-    return false;
+    const browser = this._parser.getBrowser();
+    return !!browser.version;
   }
 
-  private _isBot(ua: string): boolean {
-    return /bot|crawl|spider|slurp|googlebot/i.test(ua);
+  private _unsupportedBrowser(): boolean {
+    return this._versionGuardedBrowser() && this._versionBelowMinimum() && !this._bot();
   }
 
-  private _detectVersion(browser: string, ua: string): string | null {
-    const pattern = BROWSER_PATTERNS[browser.toLowerCase()];
-    if (!pattern) return null;
-    const match = ua.match(pattern);
-    return match ? match[1] : null;
+  private _versionGuardedBrowser(): boolean {
+    return this._minimumVersionForBrowser() !== undefined;
+  }
+
+  private _bot(): boolean {
+    return /bot|crawl|spider|slurp/i.test(this._userAgent);
+  }
+
+  private _versionBelowMinimum(): boolean {
+    const minimum = this._minimumVersionForBrowser();
+    if (minimum === false) return true;
+    if (minimum === undefined) return false;
+
+    const browser = this._parser.getBrowser();
+    if (!browser.version) return false;
+    return this._compareVersions(browser.version, minimum) < 0;
+  }
+
+  private _minimumVersionForBrowser(): string | false | undefined {
+    return this._versions[this._normalizedBrowserName()];
+  }
+
+  private _normalizedBrowserName(): string {
+    const browser = this._parser.getBrowser();
+    const name = (browser.name ?? "").toLowerCase();
+    if (name === "internet explorer" || name === "ie") return "ie";
+    if (name === "mobile chrome") return "chrome";
+    if (name === "mobile safari") return "safari";
+    if (name === "mobile firefox") return "firefox";
+    return name;
   }
 
   private _compareVersions(a: string, b: string): number {

@@ -31,7 +31,17 @@ export class RelationHandler {
         throw new Error(`Cannot map composite primary key ${pk.join(", ")} to ${attribute.name}`);
       }
       relation = relation.select(pk);
-    } else if (relation.selectValues.length !== 1) {
+    } else if (relation.selectValues.length === 1) {
+      const selectValue = relation.selectValues[0];
+      if (typeof selectValue === "string") {
+        const trimmed = selectValue.trim();
+        if (trimmed === "*" || /\.\*$/.test(trimmed) || trimmed.includes(",")) {
+          throw new Error(
+            `Expected subquery for ${attribute.name} to select a single column, but got ambiguous projection: ${trimmed}`,
+          );
+        }
+      }
+    } else {
       throw new Error(
         `Expected subquery for ${attribute.name} to select a single column, but it selects ${relation.selectValues.length} columns.`,
       );

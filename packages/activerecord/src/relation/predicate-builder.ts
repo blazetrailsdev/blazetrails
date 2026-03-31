@@ -137,9 +137,10 @@ export class PredicateBuilder {
   private buildNegatedArray(attribute: Nodes.Attribute, value: unknown[]): Nodes.Node {
     if (value.length === 0) return attribute.notIn([]);
 
-    const values: unknown[] = [];
+    const scalarValues: unknown[] = [];
     let hasNull = false;
     const ranges: Range[] = [];
+    const nonScalarValues: unknown[] = [];
 
     for (const item of value) {
       if (item === null || item === undefined) {
@@ -147,16 +148,18 @@ export class PredicateBuilder {
       } else if (item instanceof Range) {
         ranges.push(item);
       } else if (typeof item === "object" && item !== null && "id" in item) {
-        values.push((item as any).id);
+        scalarValues.push((item as any).id);
+      } else if (typeof item === "object" || typeof item === "function") {
+        nonScalarValues.push(item);
       } else {
-        values.push(item);
+        scalarValues.push(item);
       }
     }
 
     const parts: Nodes.Node[] = [];
 
-    if (values.length > 0) {
-      parts.push(attribute.notIn(values));
+    if (scalarValues.length > 0) {
+      parts.push(attribute.notIn(scalarValues));
     }
 
     if (hasNull) {
@@ -165,6 +168,10 @@ export class PredicateBuilder {
 
     for (const range of ranges) {
       parts.push(this.buildNegated(attribute, range));
+    }
+
+    for (const v of nonScalarValues) {
+      parts.push(this.buildNegated(attribute, v));
     }
 
     if (parts.length === 0) return attribute.notIn([]);

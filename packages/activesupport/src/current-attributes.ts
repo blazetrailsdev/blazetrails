@@ -50,13 +50,15 @@ export abstract class CurrentAttributes {
     if (!Object.prototype.hasOwnProperty.call(ctor, "_definitions")) {
       ctor._definitions = new Map(ctor._definitions);
     }
-    const options: AttributeDefinition =
-      rest.length === 1 && typeof rest[0] === "object" && rest[0] !== null
-        ? (rest[0] as AttributeDefinition)
-        : {};
-
-    // Collect all names (could be multiple string args)
-    const allNames = options === rest[0] ? [name] : [name, ...(rest as string[])];
+    const lastArg = rest[rest.length - 1];
+    const hasOptions =
+      lastArg !== undefined &&
+      typeof lastArg === "object" &&
+      lastArg !== null &&
+      !Array.isArray(lastArg);
+    const options: AttributeDefinition = hasOptions ? (lastArg as AttributeDefinition) : {};
+    const extraNames = hasOptions ? rest.slice(0, -1) : rest;
+    const allNames = [name, ...(extraNames as string[])];
     const restricted = allNames.filter((n) => CurrentAttributes.RESTRICTED_NAMES.has(n));
     if (restricted.length > 0) {
       throw new Error(`Restricted attribute names: ${restricted.join(", ")}`);

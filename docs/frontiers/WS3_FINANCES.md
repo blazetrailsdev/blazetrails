@@ -141,6 +141,7 @@ src/lib/frontiers/tutorials/finances/steps/
                             committing to a file
                           Diff: data/import-sample.csv (15 transaction rows)
                           Diff: lib/csv-importer.ts:
+                            - Simple CSV format (no quoting, no commas in values)
                             - Split on newlines, skip header
                             - Split each line on commas
                             - Lookup category_id by name via SQL
@@ -246,7 +247,7 @@ src/lib/frontiers/tutorials/finances/steps/
 
 **Size:** 1 static file. Tiny. **Depends on PR 3.**
 
-Extend `scripts/build-tutorial-snapshots.ts` to include Finances. Run full replay, export to `static/tutorials/finances.sqlite`.
+Extend `scripts/build-tutorial-snapshots.ts` to include Finances. Run full replay, export to `packages/website/static/tutorials/finances.sqlite`.
 
 **Test:** Replay test already validates the final state.
 

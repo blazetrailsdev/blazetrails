@@ -169,7 +169,7 @@ src/lib/frontiers/tutorials/music/steps/
 
 **Size:** 1 static file. Tiny. **Depends on PR 2.**
 
-Extend `scripts/build-tutorial-snapshots.ts` to include Music. Run full replay, export to `static/tutorials/music.sqlite`.
+Extend `scripts/build-tutorial-snapshots.ts` to include Music. Run full replay, export to `packages/website/static/tutorials/music.sqlite`.
 
 **Test:** Replay test already validates the final state. The snapshot builder reuses it.
 

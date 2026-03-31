@@ -481,8 +481,8 @@ src/lib/frontiers/tutorials/
 ```
 scripts/
   build-tutorial-snapshots.ts — Runs replay for each tutorial,
-                                 exports runtime.exportDB() to static/tutorials/{slug}.sqlite
-static/tutorials/
+                                 exports runtime.exportDB() to packages/website/static/tutorials/{slug}.sqlite
+packages/website/static/tutorials/
   docs.sqlite                 — Pre-built completed Docs tutorial
 ```
 

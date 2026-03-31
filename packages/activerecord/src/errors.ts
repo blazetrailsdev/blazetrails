@@ -478,7 +478,11 @@ export class UnknownPrimaryKey extends ActiveRecordError {
         typeof model === "function"
           ? model.name || "UnknownModel"
           : model.constructor?.name || "UnknownModel";
-      let message = `Unknown primary key for table ${model.tableName} in model ${modelName}.`;
+      const tableName =
+        typeof model === "function"
+          ? ((model as any).tableName ?? "unknown_table")
+          : (model.constructor?.tableName ?? "unknown_table");
+      let message = `Unknown primary key for table ${tableName} in model ${modelName}.`;
       if (description) message += `\n${description}`;
       super(message);
     } else {

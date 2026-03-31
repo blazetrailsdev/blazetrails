@@ -22,10 +22,13 @@ export class HashLookupTypeMap {
       .map((a) => {
         if (a === undefined) return "\x00undef";
         if (a === null) return "\x00null";
+        if (typeof a === "bigint") return `\x00bigint:${a}`;
+        if (typeof a === "symbol") return `\x00symbol:${a.toString()}`;
+        if (typeof a === "function") return `\x00fn:${a.name || "anon"}`;
         try {
-          return JSON.stringify(a);
+          return JSON.stringify(a) ?? `\x00${typeof a}`;
         } catch {
-          return `\x00ref:${typeof a}`;
+          return `\x00obj:${String(a)}`;
         }
       })
       .join("\x01");

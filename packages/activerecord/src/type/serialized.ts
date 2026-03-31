@@ -46,11 +46,9 @@ export class Serialized extends Type {
   }
 
   changedInPlace(rawOldValue: unknown, value: unknown): boolean {
-    if (value === null || value === undefined) return false;
-    const rawNewValue = this.coder.dump(value);
-    if (rawOldValue === null && rawNewValue !== null) return true;
-    if (rawOldValue !== null && rawNewValue === null) return true;
-    return rawOldValue !== rawNewValue;
+    const oldSerialized = this.serialize(this.deserialize(rawOldValue));
+    const newSerialized = this.serialize(value);
+    return oldSerialized !== newSerialized;
   }
 
   assertValidValue(value: unknown): void {

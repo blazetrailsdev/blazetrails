@@ -172,6 +172,13 @@ export class MemoryStore implements CacheStore {
   }
 }
 
+function isJsonSafe(value: unknown): boolean {
+  if (Array.isArray(value)) return true;
+  if (typeof value !== "object" || value === null) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
 export namespace DupCoder {
   export function dump(entry: unknown): unknown {
     if (entry === null || entry === undefined) return entry;
@@ -179,11 +186,14 @@ export namespace DupCoder {
     try {
       return structuredClone(entry);
     } catch {
-      try {
-        return JSON.parse(JSON.stringify(entry));
-      } catch {
-        return entry;
+      if (isJsonSafe(entry)) {
+        try {
+          return JSON.parse(JSON.stringify(entry));
+        } catch {
+          return entry;
+        }
       }
+      return entry;
     }
   }
 

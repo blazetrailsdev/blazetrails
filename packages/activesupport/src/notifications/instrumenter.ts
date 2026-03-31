@@ -57,31 +57,14 @@ export class Instrumenter {
     if (parent) parent.children.push(event);
     this._stack.push(event);
 
-    const cleanup = () => {
+    try {
+      if (fn) return fn(event);
+      return undefined as unknown as T;
+    } finally {
+      this._stack.pop();
       event.finish();
       this._notifier.publish(name, event);
-      this._stack.pop();
-    };
-
-    if (!fn) {
-      cleanup();
-      return undefined as unknown as T;
     }
-
-    let result: T;
-    try {
-      result = fn(event);
-    } catch (error) {
-      cleanup();
-      throw error;
-    }
-
-    if (result && typeof (result as unknown as { then?: unknown }).then === "function") {
-      return (result as unknown as Promise<unknown>).finally(cleanup) as unknown as T;
-    }
-
-    cleanup();
-    return result;
   }
 
   async instrumentAsync<T = void>(
@@ -98,9 +81,9 @@ export class Instrumenter {
       if (fn) return await fn(event);
       return undefined as unknown as T;
     } finally {
+      this._stack.pop();
       event.finish();
       this._notifier.publish(name, event);
-      this._stack.pop();
     }
   }
 }

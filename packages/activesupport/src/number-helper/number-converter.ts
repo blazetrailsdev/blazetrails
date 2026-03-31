@@ -12,8 +12,10 @@ export abstract class NumberConverter<TOptions = Record<string, unknown>> {
   protected validFloat(number: unknown): number {
     if (typeof number === "number") return number;
     if (typeof number === "string") {
-      const parsed = parseFloat(number);
-      if (!isNaN(parsed)) return parsed;
+      const trimmed = number.trim();
+      if (trimmed === "") return 0;
+      const parsed = Number(trimmed);
+      if (Number.isFinite(parsed)) return parsed;
     }
     return 0;
   }

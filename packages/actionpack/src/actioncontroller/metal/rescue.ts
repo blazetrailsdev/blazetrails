@@ -49,3 +49,7 @@ export function showDetailedExceptions(options?: {
   if (options?.requestLocal) return true;
   return false;
 }
+
+export interface Rescue {
+  showDetailedExceptions(): boolean;
+}

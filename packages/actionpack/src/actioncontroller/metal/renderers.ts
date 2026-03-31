@@ -37,3 +37,12 @@ export class Renderers {
     return this._registry.get(key);
   }
 }
+
+export interface All {
+  _renderers: ReadonlySet<string>;
+}
+
+export interface ClassMethods {
+  useRenderers(...args: string[]): void;
+  useRenderer(...args: string[]): void;
+}

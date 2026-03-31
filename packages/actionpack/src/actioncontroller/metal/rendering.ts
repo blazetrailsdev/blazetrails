@@ -41,3 +41,15 @@ export function processRenderOptions(options: Record<string, unknown>): {
   if (options.location) result.location = options.location as string;
   return result;
 }
+
+export interface ClassMethods {
+  render(...args: unknown[]): unknown;
+  renderer: unknown;
+  setupRenderer(): void;
+}
+
+export interface Rendering {
+  render(...args: unknown[]): void;
+  renderToString(...args: unknown[]): string;
+  renderToBody(options?: Record<string, unknown>): unknown;
+}

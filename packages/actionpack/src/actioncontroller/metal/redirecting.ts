@@ -12,3 +12,14 @@ export class UnsafeRedirectError extends Error {
     this.name = "UnsafeRedirectError";
   }
 }
+
+export interface Redirecting {
+  redirectTo(url: string, options?: { status?: number | string; allow_other_host?: boolean }): void;
+  redirectBack(options: {
+    fallbackLocation: string;
+    status?: number | string;
+    allow_other_host?: boolean;
+  }): void;
+  redirectBackOrTo(fallbackLocation: string, options?: { allow_other_host?: boolean }): void;
+  urlFrom(location: string): string | null;
+}

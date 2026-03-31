@@ -422,3 +422,17 @@ function formatToMime(format: string): string {
   };
   return MIMES[format] ?? format;
 }
+
+export interface Behavior {
+  get(action: string, options?: RequestOptions): Promise<void>;
+  post(action: string, options?: RequestOptions): Promise<void>;
+  put(action: string, options?: RequestOptions): Promise<void>;
+  patch(action: string, options?: RequestOptions): Promise<void>;
+  delete(action: string, options?: RequestOptions): Promise<void>;
+  head(action: string, options?: RequestOptions): Promise<void>;
+}
+
+export interface ClassMethods {
+  tests: unknown;
+  controllerClass: unknown;
+}

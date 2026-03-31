@@ -72,3 +72,11 @@ export function instrumentRender(
   notifier?.instrument("render.action_controller", { duration: viewRuntime });
   return { result, viewRuntime };
 }
+
+export interface Instrumentation {
+  viewRuntime: number | null;
+}
+
+export interface ClassMethods {
+  withoutDetailedExceptions(): void;
+}

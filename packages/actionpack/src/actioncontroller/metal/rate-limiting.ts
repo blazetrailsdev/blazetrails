@@ -47,3 +47,11 @@ export class MemoryRateLimitStore implements RateLimitStore {
 export function isRateLimited(count: number, limit: number): boolean {
   return count > limit;
 }
+
+export interface RateLimiting {
+  rateLimit(options: RateLimitOptions): void;
+}
+
+export interface ClassMethods {
+  rateLimit(options: RateLimitOptions): void;
+}

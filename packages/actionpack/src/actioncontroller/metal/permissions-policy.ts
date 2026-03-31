@@ -25,3 +25,11 @@ export function buildPermissionsPolicy(directives: Record<string, string | strin
   }
   return parts.join(", ");
 }
+
+export interface ClassMethods {
+  permissionsPolicy(options?: Record<string, unknown>, block?: (policy: unknown) => void): void;
+}
+
+export interface PermissionsPolicy {
+  permissionsPolicy(options?: Record<string, unknown>, block?: (policy: unknown) => void): void;
+}

@@ -30,3 +30,12 @@ export class ParameterEncodingRegistry {
     return encodings?.has("*") ?? false;
   }
 }
+
+export interface ParameterEncoding {
+  readonly parameterEncodings: ParameterEncodingRegistry;
+}
+
+export interface ClassMethods {
+  skipParameterEncoding(action: string): void;
+  paramEncoding(action: string, param: string, encoding: string): void;
+}

@@ -30,3 +30,14 @@ export class Options {
     this.model = model;
   }
 }
+
+export interface ParamsWrapper {
+  _wrapParameters(): void;
+}
+
+export interface ClassMethods {
+  wrapParameters(
+    nameOrModelOrOptions: string | Record<string, unknown>,
+    options?: Record<string, unknown>,
+  ): void;
+}

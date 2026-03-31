@@ -49,3 +49,11 @@ export function createLogAtFilter(
 export function shouldLog(currentLevel: LogLevel, messageLevel: LogLevel): boolean {
   return LOG_LEVEL_ORDER[messageLevel] >= LOG_LEVEL_ORDER[currentLevel];
 }
+
+export interface Logging {
+  logger?: LeveledLogger;
+}
+
+export interface ClassMethods {
+  logAt(level: LogLevel, options?: Record<string, unknown>): void;
+}

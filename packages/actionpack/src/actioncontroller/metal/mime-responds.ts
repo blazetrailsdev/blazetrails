@@ -7,7 +7,14 @@
  * @see https://api.rubyonrails.org/classes/ActionController/MimeResponds.html
  */
 
-export { Collector, respondTo, type FormatHandler } from "../../actiondispatch/respond-to.js";
+import {
+  Collector as DispatchCollector,
+  respondTo,
+  type FormatHandler,
+} from "../../actiondispatch/respond-to.js";
+export { respondTo, type FormatHandler };
+
+export class Collector extends DispatchCollector {}
 
 export class VariantCollector {
   private _variants = new Map<string, () => void>();
@@ -19,4 +26,8 @@ export class VariantCollector {
   get(name: string): (() => void) | undefined {
     return this._variants.get(name);
   }
+}
+
+export interface MimeResponds {
+  respondTo(...mimes: string[]): void;
 }

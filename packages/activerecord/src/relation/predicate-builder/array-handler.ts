@@ -63,15 +63,15 @@ export class ArrayHandler {
       valuesPredicate = attribute.in(values);
     }
 
-    // Fold in NULL
+    // Fold in NULL with Grouping to preserve precedence
     if (hasNull) {
       valuesPredicate =
         valuesPredicate === NullPredicate
           ? attribute.isNull()
-          : new Nodes.Or(valuesPredicate as Nodes.Node, attribute.isNull());
+          : groupedOr(valuesPredicate as Nodes.Node, attribute.isNull());
     }
 
-    // Fold in ranges
+    // Fold in ranges with Grouping to preserve precedence
     if (ranges.length === 0) {
       return valuesPredicate === NullPredicate ? attribute.in([]) : (valuesPredicate as Nodes.Node);
     }
@@ -79,8 +79,12 @@ export class ArrayHandler {
     const rangePreds = ranges.map((r) => this.predicateBuilder.buildRangePredicate(attribute, r));
     let result: Nodes.Node | typeof NullPredicate = valuesPredicate;
     for (const rp of rangePreds) {
-      result = result === NullPredicate ? rp : new Nodes.Or(result as Nodes.Node, rp);
+      result = result === NullPredicate ? rp : groupedOr(result as Nodes.Node, rp);
     }
     return result as Nodes.Node;
   }
+}
+
+function groupedOr(left: Nodes.Node, right: Nodes.Node): Nodes.Grouping {
+  return new Nodes.Grouping(new Nodes.Or(left, right));
 }

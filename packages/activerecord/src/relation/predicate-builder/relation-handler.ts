@@ -12,6 +12,16 @@ import { Nodes } from "@blazetrails/arel";
  */
 export class RelationHandler {
   call(attribute: Nodes.Attribute, value: any): Nodes.Node {
+    const relation = this.ensureSingleColumnSelect(attribute, value);
+    return attribute.in(relation.toArel());
+  }
+
+  callNegated(attribute: Nodes.Attribute, value: any): Nodes.Node {
+    const relation = this.ensureSingleColumnSelect(attribute, value);
+    return attribute.notIn(relation.toArel());
+  }
+
+  private ensureSingleColumnSelect(attribute: Nodes.Attribute, value: any): any {
     let relation = value;
 
     if (relation.selectValues.length === 0) {
@@ -23,6 +33,6 @@ export class RelationHandler {
       relation = relation.select(pk);
     }
 
-    return attribute.in(relation.toArel());
+    return relation;
   }
 }

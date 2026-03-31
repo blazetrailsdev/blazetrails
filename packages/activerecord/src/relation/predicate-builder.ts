@@ -24,29 +24,48 @@ export class PredicateBuilder {
   private rangeHandler: RangeHandler;
   private basicObjectHandler: BasicObjectHandler;
   private relationHandler: RelationHandler;
-  private associationMap: Map<string, AssociationMapping>;
+  private associationMap: Map<string, AssociationMapping> = new Map();
 
-  constructor(table: Table, associationMap?: Map<string, AssociationMapping>) {
+  constructor(table: Table) {
     this.table = table;
     this.arrayHandler = new ArrayHandler(this);
     this.rangeHandler = new RangeHandler();
     this.basicObjectHandler = new BasicObjectHandler();
     this.relationHandler = new RelationHandler();
-    this.associationMap = associationMap ?? new Map();
+  }
+
+  /**
+   * Register association mappings so that where({ author: record }) can
+   * be expanded to where({ author_id: record.id }). Called by Relation
+   * when the model's association metadata is available.
+   */
+  setAssociationMap(map: Map<string, AssociationMapping>): void {
+    this.associationMap = map;
   }
 
   buildFromHash(conditions: Record<string, unknown>): Nodes.Node[] {
+    return this.buildFromHashInternal(conditions, false);
+  }
+
+  buildNegatedFromHash(conditions: Record<string, unknown>): Nodes.Node[] {
+    return this.buildFromHashInternal(conditions, true);
+  }
+
+  private buildFromHashInternal(
+    conditions: Record<string, unknown>,
+    negated: boolean,
+  ): Nodes.Node[] {
     const nodes: Nodes.Node[] = [];
     for (const [key, value] of Object.entries(conditions)) {
       const assoc = this.associationMap.get(key);
       if (assoc && this.isAssociationValue(value)) {
         const expandedConditions = this.expandAssociationCondition(assoc, value);
         for (const cond of expandedConditions) {
-          nodes.push(...this.buildFromHash(cond));
+          nodes.push(...this.buildFromHashInternal(cond, negated));
         }
       } else {
         const attr = this.resolveColumn(key);
-        nodes.push(this.build(attr, value));
+        nodes.push(negated ? this.buildNegated(attr, value) : this.build(attr, value));
       }
     }
     return nodes;
@@ -74,15 +93,6 @@ export class PredicateBuilder {
     return new AssociationQueryValue(assoc.foreignKey, value).queries();
   }
 
-  buildNegatedFromHash(conditions: Record<string, unknown>): Nodes.Node[] {
-    const nodes: Nodes.Node[] = [];
-    for (const [key, value] of Object.entries(conditions)) {
-      const attr = this.resolveColumn(key);
-      nodes.push(this.buildNegated(attr, value));
-    }
-    return nodes;
-  }
-
   buildNegated(attribute: Nodes.Attribute, value: unknown): Nodes.Node {
     if (value === null || value === undefined) {
       return attribute.isNotNull();
@@ -103,7 +113,7 @@ export class PredicateBuilder {
       return this.buildNegatedArray(attribute, value);
     }
     if (this.isRelation(value)) {
-      return attribute.notIn((value as any).toArel());
+      return this.relationHandler.callNegated(attribute, value);
     }
     return attribute.notEq(value);
   }

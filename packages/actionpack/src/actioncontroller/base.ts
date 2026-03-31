@@ -17,6 +17,7 @@ import { LookupContext } from "@blazetrails/actionview";
 import type { RouteHelpersMap } from "../actiondispatch/routing/route-helpers.js";
 import { createHash } from "crypto";
 import { BrowserBlocker, type BrowserVersions } from "./metal/allow-browser.js";
+import { Notifications } from "@blazetrails/activesupport";
 
 // Re-export callback registration
 export { type ActionCallback, type AroundCallback, type CallbackOptions };
@@ -328,20 +329,28 @@ export class Base extends Metal {
     if (options.only) callbackOptions.only = options.only;
     if (options.except) callbackOptions.except = options.except;
 
-    this.beforeAction(function (controller) {
+    this.beforeAction(async function (controller): Promise<boolean> {
       const base = controller as Base;
       const userAgent = base.request?.getHeader("user-agent") ?? "";
       const blocker = new BrowserBlocker(userAgent, versions);
-      if (blocker.blocked) {
-        if (typeof block === "function") {
-          block.call(base);
-        } else if (typeof block === "string" && typeof (base as any)[block] === "function") {
-          (base as any)[block].call(base);
-        } else {
-          base.head(406);
-        }
-        return false;
+      if (!blocker.blocked) return true;
+
+      Notifications.instrument("browser_block.action_controller", {
+        request: base.request,
+        versions,
+      });
+      let result: unknown;
+      if (typeof block === "function") {
+        result = block.call(base);
+      } else if (typeof block === "string" && typeof (base as any)[block] === "function") {
+        result = (base as any)[block].call(base);
+      } else {
+        base.head(406);
       }
+      if (result && typeof (result as any).then === "function") {
+        await (result as Promise<unknown>);
+      }
+      return false;
     }, callbackOptions);
   }
 

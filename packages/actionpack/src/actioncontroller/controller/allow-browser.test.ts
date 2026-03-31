@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Base } from "../base.js";
 import { Request } from "../../actiondispatch/request.js";
 import { Response } from "../../actiondispatch/response.js";
+import { Notifications } from "@blazetrails/activesupport";
 import type { BrowserVersions } from "../metal/allow-browser.js";
 
 const CHROME_118 =
@@ -175,18 +176,29 @@ describe("AllowBrowserTest", () => {
   });
 
   it("a blocked request instruments a browser_block.action_controller event", async () => {
-    let blockCalled = false;
+    const events: Array<{ name: string; payload: Record<string, unknown> }> = [];
+    const sub = Notifications.subscribe(
+      "browser_block.action_controller",
+      (event: { name: string; payload: Record<string, unknown> }) => {
+        events.push(event);
+      },
+    );
+
     const C = createController(
       "modern",
       function (this: Base) {
-        blockCalled = true;
         this.head(426);
       },
       { only: ["modern"] },
     );
     const c = new C();
     await c.dispatch("modern", makeRequest(CHROME_118), makeResponse());
-    expect(blockCalled).toBe(true);
+
+    Notifications.unsubscribe(sub);
+
+    expect(events.length).toBe(1);
+    expect(events[0].name).toBe("browser_block.action_controller");
+    expect(events[0].payload.versions).toBe("modern");
     expect(c.status).toBe(426);
   });
 });

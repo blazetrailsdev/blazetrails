@@ -8,7 +8,7 @@ export {
   type CallbackOptions,
 } from "./abstract-controller.js";
 
-export { Metal } from "./metal.js";
+export { Metal, MiddlewareStack, Middleware } from "./metal.js";
 
 export { Base, DoubleRenderError, type RenderOptions, type RescueHandler } from "./base.js";
 export { API } from "./api.js";
@@ -59,8 +59,6 @@ export {
   InvalidCrossOriginRequest,
 } from "./metal/request-forgery-protection.js";
 export { SSE, ClientDisconnected } from "./metal/live.js";
-export { LogSubscriber } from "./log-subscriber.js";
 export { Renderer } from "./renderer.js";
-export { Railtie } from "./railtie.js";
-export { Deprecator } from "./deprecator.js";
+export { Deprecator, deprecator } from "./deprecator.js";
 export { TestRequest, LiveTestResponse, TestSession } from "./test-case.js";

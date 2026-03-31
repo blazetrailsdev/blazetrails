@@ -6,10 +6,6 @@
  * @see https://api.rubyonrails.org/classes/ActionController/ParamsWrapper.html
  */
 
-export interface ParamsWrapper {
-  _wrapParameters(): void;
-}
-
 export class Options {
   name: string | null;
   format: string[] | null;

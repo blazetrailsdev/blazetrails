@@ -11,7 +11,3 @@ import { Deprecation } from "@blazetrails/activesupport";
 export { Deprecation as Deprecator };
 
 export const deprecator = new Deprecation({ gem: "actionpack" });
-
-export interface ActionController {
-  readonly deprecator: Deprecation;
-}

@@ -37,37 +37,20 @@ const STATUS_CODES: Record<string, number> = {
   service_unavailable: 503,
 };
 
-export class MiddlewareStack {
-  private _middlewares: Middleware[] = [];
+import {
+  MiddlewareStack as DispatchMiddlewareStack,
+  type MiddlewareEntry,
+} from "../actiondispatch/middleware/stack.js";
 
-  use(middleware: unknown, ...args: unknown[]): void {
-    this._middlewares.push(new Middleware(middleware, args));
-  }
-
-  get size(): number {
-    return this._middlewares.length;
-  }
-
-  build(app: unknown): unknown {
-    return this._middlewares.reduceRight((next, mw) => mw.build(next), app);
-  }
-}
+export class MiddlewareStack extends DispatchMiddlewareStack {}
 
 export class Middleware {
-  klass: unknown;
-  args: unknown[];
+  readonly klass: MiddlewareEntry["klass"];
+  readonly args: unknown[];
 
-  constructor(klass: unknown, args: unknown[] = []) {
+  constructor(klass: MiddlewareEntry["klass"], args: unknown[] = []) {
     this.klass = klass;
     this.args = args;
-  }
-
-  build(app: unknown): unknown {
-    if (typeof this.klass === "function") {
-      const MiddlewareClass = this.klass as new (app: unknown, ...args: unknown[]) => unknown;
-      return new MiddlewareClass(app, ...this.args);
-    }
-    return app;
   }
 }
 

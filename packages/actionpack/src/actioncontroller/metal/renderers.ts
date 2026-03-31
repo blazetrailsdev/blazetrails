@@ -37,12 +37,3 @@ export class Renderers {
     return this._registry.get(key);
   }
 }
-
-export interface All {
-  _renderers: Set<string>;
-}
-
-export interface ClassMethods {
-  use_renderers(...args: string[]): void;
-  use_renderer(...args: string[]): void;
-}

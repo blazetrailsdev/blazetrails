@@ -5,10 +5,6 @@
  * @see https://api.rubyonrails.org/classes/ActionController/MimeResponds.html
  */
 
-export interface MimeResponds {
-  respondTo(block: (collector: Collector) => void): void;
-}
-
 export class Collector {
   private _responses = new Map<string, () => void>();
   private _order: string[] = [];

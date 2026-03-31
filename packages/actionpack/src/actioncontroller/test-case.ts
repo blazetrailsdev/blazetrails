@@ -405,20 +405,6 @@ export class TestSession {
   }
 }
 
-export interface Behavior {
-  get(action: string, options?: RequestOptions): Promise<void>;
-  post(action: string, options?: RequestOptions): Promise<void>;
-  put(action: string, options?: RequestOptions): Promise<void>;
-  patch(action: string, options?: RequestOptions): Promise<void>;
-  delete(action: string, options?: RequestOptions): Promise<void>;
-  head(action: string, options?: RequestOptions): Promise<void>;
-  assertResponse(expected: number | string): void;
-  assertRedirectedTo(expected: string | RegExp): void;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface ClassMethods {}
-
 function formatToMime(format: string): string {
   const MIMES: Record<string, string> = {
     json: "application/json",

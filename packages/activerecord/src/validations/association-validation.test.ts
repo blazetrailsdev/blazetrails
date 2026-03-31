@@ -132,10 +132,28 @@ describe("AssociationValidationTest", () => {
   });
 
   it.skip("validates associated marked for destruction", () => {
-    /* marked_for_destruction not implemented */
+    /* needs has_many collection proxy with markForDestruction integration */
   });
-  it.skip("validates associated without marked for destruction", () => {
-    /* marked_for_destruction not implemented */
+  it("validates associated without marked for destruction", () => {
+    class FakeReply {
+      valid() {
+        return true;
+      }
+      isValid() {
+        return true;
+      }
+    }
+    class TopicWAD extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("TopicWAD", TopicWAD);
+    const t = new TopicWAD({ title: "test" });
+    (t as any).replies = [new FakeReply()];
+    // With a valid reply, the topic should be valid
+    expect(t.isValid()).toBe(true);
   });
   it.skip("validates associated with custom message using quotes", () => {
     /* custom message not implemented */

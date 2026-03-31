@@ -18,8 +18,8 @@ export class TagStack {
     this._tagsString = null;
     const flat = (tags as unknown[])
       .flat(Infinity)
-      .map((t) => (t == null ? "" : globalThis.String(t).trim()))
-      .filter((t) => t.length > 0);
+      .map((t) => (t == null ? "" : globalThis.String(t)))
+      .filter((t) => t.length > 0 && !/^\s*$/.test(t));
     this._tags.push(...flat);
     return flat;
   }

@@ -22,11 +22,27 @@ export class Map {
     const klass = this._klass;
 
     // Class-level attribute type lookup (ActiveRecord::Base.attributeTypes)
-    const attributeTypes = klass.attributeTypes ?? klass._attributeDefinitions;
+    const attributeTypes = klass.attributeTypes;
     if (attributeTypes) {
       const type =
         attributeTypes instanceof globalThis.Map ? attributeTypes.get(name) : attributeTypes[name];
       if (type) return type as Type;
+    }
+
+    // Fallback to attribute definitions (ActiveModel stores definitions with .type)
+    const attributeDefinitions = klass._attributeDefinitions;
+    if (attributeDefinitions) {
+      const definition =
+        attributeDefinitions instanceof globalThis.Map
+          ? attributeDefinitions.get(name)
+          : attributeDefinitions?.[name];
+      if (definition) {
+        const type =
+          definition && typeof definition === "object" && "type" in definition
+            ? (definition as any).type
+            : definition;
+        if (type) return type as Type;
+      }
     }
 
     // Instance-level lookup fallback

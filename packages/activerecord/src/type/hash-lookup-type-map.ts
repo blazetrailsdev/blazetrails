@@ -15,12 +15,12 @@ export class HashLookupTypeMap {
   }
 
   fetch(lookupKey: string, ...rest: unknown[]): Type {
-    let fallback: (() => Type) | undefined;
+    let fallback: ((lookupKey: string, ...args: unknown[]) => Type) | undefined;
     let args: unknown[];
 
     // Last arg is the fallback if it's a function
     if (rest.length > 0 && typeof rest[rest.length - 1] === "function") {
-      fallback = rest[rest.length - 1] as () => Type;
+      fallback = rest[rest.length - 1] as (lookupKey: string, ...a: unknown[]) => Type;
       args = rest.slice(0, -1);
     } else {
       args = rest;
@@ -86,10 +86,14 @@ export class HashLookupTypeMap {
     return [...this._mapping.keys()];
   }
 
-  private _performFetch(type: string, args: unknown[], fallback?: () => Type): Type {
+  private _performFetch(
+    type: string,
+    args: unknown[],
+    fallback?: (lookupKey: string, ...args: unknown[]) => Type,
+  ): Type {
     const factory = this._mapping.get(type);
     if (factory) return factory(type, ...args);
-    if (fallback) return fallback();
+    if (fallback) return fallback(type, ...args);
     return new ValueType();
   }
 }

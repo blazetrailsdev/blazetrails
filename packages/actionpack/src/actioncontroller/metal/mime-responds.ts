@@ -110,6 +110,7 @@ function parseAccept(header: string): Array<{ mime: string; q: number }> {
       }
       return { mime: mime.trim(), q };
     })
+    .filter(({ mime, q }) => mime.length > 0 && q > 0)
     .sort((a, b) => b.q - a.q);
 }
 

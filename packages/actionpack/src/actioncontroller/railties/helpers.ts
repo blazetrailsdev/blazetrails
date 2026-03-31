@@ -10,7 +10,7 @@ import { underscore } from "@blazetrails/activesupport";
 
 export function resolveHelperPath(controllerName: string): string {
   const base = controllerName.replace(/Controller$/, "");
-  return underscore(base).replace(/::/g, "/") + "_helper";
+  return underscore(base) + "_helper";
 }
 
 export function inheritedWithHelpers(

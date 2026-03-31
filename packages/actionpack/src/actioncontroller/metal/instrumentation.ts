@@ -30,19 +30,28 @@ export function instrumentAction(
 
   return fn().then(
     (result) => {
-      payload.status = 200;
+      payload.status = deriveStatus(result, 200);
       payload.duration = performance.now() - start;
       notifier?.instrument("process_action.action_controller", payload);
       return result;
     },
     (error) => {
-      payload.status = 500;
+      payload.status = deriveStatus(error, 500);
       payload.exception = error instanceof Error ? [error.name, error.message] : String(error);
       payload.duration = performance.now() - start;
       notifier?.instrument("process_action.action_controller", payload);
       throw error;
     },
   );
+}
+
+function deriveStatus(obj: unknown, fallback: number): number {
+  if (obj && typeof obj === "object") {
+    const any = obj as Record<string, unknown>;
+    if (typeof any.status === "number") return any.status;
+    if (typeof any.statusCode === "number") return any.statusCode;
+  }
+  return fallback;
 }
 
 export function instrumentRender(

@@ -34,8 +34,8 @@ export class FlashTypeRegistry {
         delete remaining[type];
       }
     }
-    if (remaining.flash && typeof remaining.flash === "object") {
-      Object.assign(flash, remaining.flash);
+    if (remaining.flash && typeof remaining.flash === "object" && !Array.isArray(remaining.flash)) {
+      Object.assign(flash, remaining.flash as Record<string, unknown>);
       delete remaining.flash;
     }
     return remaining;

@@ -50,7 +50,11 @@ export class PolymorphicArrayValue {
     if (value === null || value === undefined) return null;
     if (typeof value === "object" && value !== null) {
       const ctor = (value as any).constructor;
-      if (ctor?.name) return ctor.name;
+      if (!ctor) return null;
+      // For STI, use baseClass name (Rails stores the base class in the type column)
+      const baseClass = (ctor as any).baseClass;
+      if (baseClass?.name) return baseClass.name;
+      if (ctor.name) return ctor.name;
     }
     return null;
   }

@@ -1,10 +1,12 @@
 # WS1: Foundation + Docs Tutorial
 
 ## Dependencies
+
 - Base: `worktree-frontiers` branch
 - Client-side only — Frontiers host backend only serves static `.sqlite` files (no dynamic API); tutorial app controllers/routes run entirely inside the in-browser runtime
 
 ## Approach
+
 TDD throughout. Every PR starts with tests that define the contract. Tutorial content has automated replay tests that run in CI.
 
 ---
@@ -12,24 +14,28 @@ TDD throughout. Every PR starts with tests that define the contract. Tutorial co
 ## Key Design Decisions
 
 ### Anchor-based diffs, not line numbers
+
 Diffs use a context anchor string to locate insertion points. A hunk says "insert after the line matching `this.attribute("email")`" rather than "insert at line 5." Survives generator changes, user edits, blank line differences.
 
 ```typescript
 interface DiffHunk {
-  anchor: string;        // text to match in the file
+  anchor: string; // text to match in the file
   position: "after" | "before" | "replace";
-  deleteCount?: number;  // lines to remove (for "replace")
+  deleteCount?: number; // lines to remove (for "replace")
   insertLines: string[];
 }
 ```
 
 ### Generator output fixtures
+
 Snapshot tests capture every generator command's output. Content authors write anchors against these. Generator changes break the snapshot first.
 
 ### Automated tutorial replay
+
 Each tutorial has a replay test: boot `createRuntime()`, execute every action, assert every checkpoint. Runs in CI.
 
 ### Terminal is decoupled
+
 Tutorials use `CliAction.svelte` (Run button → `runtime.exec()`). Terminal enhancement is a separate non-blocking PR.
 
 ---
@@ -60,6 +66,7 @@ Tutorials use `CliAction.svelte` (Run button → `runtime.exec()`). Terminal enh
 ```
 
 **Five independent tracks can start simultaneously:**
+
 - **Track A:** PR 1 (diff engine) → PR 3 (UI components that import it)
 - **Track B:** PR 2 (generator fixtures) — only needs existing `runtime.exec()`
 - **Track C:** PR 4 (diagram renderer) — standalone
@@ -67,16 +74,19 @@ Tutorials use `CliAction.svelte` (Run button → `runtime.exec()`). Terminal enh
 - **Track E:** PR 5a (move sandbox)
 
 **After PR 5a, three pages can parallel:**
+
 - PR 5b (landing page) — no runtime, just links and feature showcase
 - PR 5c (create page) — loads .sqlite / runs generators, saves to ProjectStore
 - PR 5d (tutorial step page) — the complex one, also needs PR 3 + PR 4
 
 **All tracks merge for content:**
+
 - PR 7 (docs 1–4) needs PR 1 + PR 2 + PR 3 + PR 5d
 - PR 8 (docs 5–8) needs PR 7
 - PR 10 (static .sqlite) needs PR 8
 
 **Non-blocking:**
+
 - PR 9 (terminal) can land anytime after PR 5a
 
 ---
@@ -88,12 +98,14 @@ Tutorials use `CliAction.svelte` (Run button → `runtime.exec()`). Terminal enh
 **Size:** ~3 files. Small.
 
 **Write tests first:**
+
 ```
 src/lib/frontiers/tutorials/
   diff-engine.test.ts
 ```
 
 Tests define the contract:
+
 - `applyDiff` with `operation: "create"` — writes new file to VFS
 - `applyDiff` with `operation: "delete"` — removes file
 - `applyDiff` with `operation: "modify"` and anchor hunks:
@@ -109,6 +121,7 @@ Tests define the contract:
 - `computeHighlightRanges` — returns line ranges for Monaco
 
 **Then implement:**
+
 ```
 src/lib/frontiers/tutorials/
   types.ts
@@ -124,12 +137,14 @@ Tests use real `SqlJsAdapter` + `VirtualFS` + `createRuntime()`. No mocks.
 **Size:** ~2 files. Small. **Parallel with PR 1.**
 
 **Write tests first:**
+
 ```
 src/lib/frontiers/tutorials/
   generator-fixtures.test.ts
 ```
 
 Snapshots every generator command used in any tutorial:
+
 - `new docs` → file paths + content
 - `generate model User name:string email:string` → model + migration content
 - `generate model Folder name:string user_id:integer parent_id:integer`
@@ -138,10 +153,12 @@ Snapshots every generator command used in any tutorial:
 - All Finances generators (Account, Category, Transaction, Budget)
 
 Each test boots a runtime, runs `exec()`, asserts:
+
 - Expected files created (by path pattern, timestamps ignored)
 - Content matches snapshot (structure exact, timestamps placeholder)
 
 **Then implement:**
+
 ```
 src/lib/frontiers/tutorials/
   generator-fixtures.ts   — Exported fixtures for content authors
@@ -154,6 +171,7 @@ src/lib/frontiers/tutorials/
 **Size:** 7 components + 3 test files. Medium. **Depends on PR 1.**
 
 **Write tests first:**
+
 ```
 src/lib/frontiers/components/tutorial/
   DiffViewer.test.ts
@@ -162,6 +180,7 @@ src/lib/frontiers/components/tutorial/
 ```
 
 **Then implement:**
+
 ```
 src/lib/frontiers/components/tutorial/
   StepContent.svelte      — Prose blocks, actions, checkpoint, feature tags
@@ -183,12 +202,14 @@ DiffViewer reads the target file from VFS and shows 2 lines of context around th
 **Size:** 2 files. Tiny. **Parallel with PR 1.**
 
 **Write tests first:**
+
 ```
 src/lib/frontiers/tutorials/
   diagram-renderer.test.ts
 ```
 
 **Then implement:**
+
 ```
 src/lib/frontiers/tutorials/
   diagram-renderer.ts
@@ -203,6 +224,7 @@ Lazy mermaid import, earth-tone theme variables, error handling.
 **Size:** File moves + 1 new stub page. Small. **Parallel with PR 1.**
 
 Move the existing `/frontiers` sandbox:
+
 ```
 src/routes/frontiers/+page.svelte    → src/routes/frontiers/project/+page.svelte
 src/routes/frontiers/+page.ts        → src/routes/frontiers/project/+page.ts
@@ -211,6 +233,7 @@ src/routes/frontiers/+page.ts        → src/routes/frontiers/project/+page.ts
 Replace `/frontiers/+page.svelte` with a temporary redirect to `/frontiers/project` so nothing breaks during development. The real landing page comes in PR 5b.
 
 **Review criteria:**
+
 - `/frontiers/project` loads the full sandbox IDE
 - `/frontiers` redirects to `/frontiers/project` (temporary)
 - No functional changes to the sandbox itself
@@ -222,6 +245,7 @@ Replace `/frontiers/+page.svelte` with a temporary redirect to `/frontiers/proje
 **Size:** 1 page. Small. **Depends on PR 5a.**
 
 **Write tests first:**
+
 ```
 src/routes/frontiers/
   landing.test.ts         — /frontiers renders landing content
@@ -232,6 +256,7 @@ src/routes/frontiers/
 ```
 
 **Then implement:**
+
 ```
 src/routes/frontiers/
   +page.svelte              ← /frontiers — Landing page:
@@ -245,6 +270,7 @@ Replaces the temporary redirect from PR 5a. No runtime loaded — this is a stat
 that reads ProjectStore for the project list.
 
 **Review criteria:**
+
 - Landing test passes
 - Tutorial cards link to correct learn URLs
 - Feature showcase describes each Frontiers tool
@@ -258,6 +284,7 @@ that reads ProjectStore for the project list.
 **Can parallel with PR 5b** (no shared files).
 
 **Write tests first:**
+
 ```
 src/routes/frontiers/new/
   new.test.ts             — /frontiers/new renders create form
@@ -275,6 +302,7 @@ src/routes/frontiers/new/
 ```
 
 **Then implement:**
+
 ```
 src/routes/frontiers/new/
   +page.ts                  ← SSR disabled
@@ -290,6 +318,7 @@ src/routes/frontiers/new/
 ```
 
 **Review criteria:**
+
 - New test passes
 - New app flow creates project and redirects
 - Tutorial fork fetches .sqlite, loads it, saves to ProjectStore
@@ -305,6 +334,7 @@ src/routes/frontiers/new/
 This is the most complex page — the two-column tutorial layout with pane visibility.
 
 **Write tests first:**
+
 ```
 src/routes/frontiers/learn/
   learn.test.ts           — /frontiers/learn renders 3 tutorial cards
@@ -319,6 +349,7 @@ src/routes/frontiers/learn/
 ```
 
 **Then implement:**
+
 ```
 src/routes/frontiers/learn/
   +page.ts                  ← SSR disabled
@@ -341,6 +372,7 @@ src/routes/frontiers/learn/
 ```
 
 **Step page layout:**
+
 ```
 +----------------------------------------------------------+
 | StepNav: Learn / Docs / Step 3   ●●●○○○○○   [Prev][Next] |
@@ -359,6 +391,7 @@ src/routes/frontiers/learn/
 ```
 
 **Review criteria:**
+
 - Learn tests pass
 - Tutorial listing shows 3 cards
 - Step page renders content and sandbox side by side
@@ -374,12 +407,14 @@ src/routes/frontiers/learn/
 **Size:** 1 file change + test. Small. **Parallel with PR 1.**
 
 **Write tests first:**
+
 ```
 src/lib/frontiers/
   Monaco.test.ts
 ```
 
 **Then implement:**
+
 - Add `highlights` prop to `Monaco.svelte`
 - Apply `IModelDeltaDecoration` with green/yellow gutter + background
 - Clear on file change or highlights change
@@ -393,6 +428,7 @@ src/lib/frontiers/
 **Depends on:** PR 1, PR 2, PR 3, PR 5d.
 
 **Write tests first:**
+
 ```
 src/lib/frontiers/tutorials/docs/
   docs-replay.test.ts     — Boots createRuntime(), replays steps 1–4:
@@ -408,6 +444,7 @@ src/lib/frontiers/tutorials/docs/
 ```
 
 **Then implement:**
+
 ```
 src/lib/frontiers/tutorials/
   registry.ts               — All 3 tutorials (Music/Finances stubs)
@@ -426,6 +463,7 @@ src/lib/frontiers/tutorials/
 **Size:** 4 step files + extend replay test. Medium. **Depends on PR 7.**
 
 **Write tests first — extend replay:**
+
 ```
 docs-replay.test.ts       — Steps 5–8:
                             Seed SQL valid, query SQL returns rows,
@@ -434,6 +472,7 @@ docs-replay.test.ts       — Steps 5–8:
 ```
 
 **Then implement:**
+
 ```
 steps/step-05.ts            — "Seeding Data"
 steps/step-06.ts            — "Querying Your Data"
@@ -450,12 +489,14 @@ steps/step-08.ts            — "Putting It All Together"
 Research Ghostty WASM → if unavailable, use xterm.js.
 
 **Write tests first:**
+
 ```
 src/lib/frontiers/components/
   Terminal.test.ts
 ```
 
 **Then implement:**
+
 ```
 src/lib/frontiers/components/
   Terminal.svelte
@@ -470,6 +511,7 @@ src/lib/frontiers/
 **Size:** Build script + 1 static file (docs.sqlite). Small. **Depends on PR 8.**
 
 **Write tests first:**
+
 ```
 src/lib/frontiers/tutorials/
   snapshot-builder.test.ts  — Runs full docs replay, exports DB,
@@ -478,6 +520,7 @@ src/lib/frontiers/tutorials/
 ```
 
 **Then implement:**
+
 ```
 scripts/
   build-tutorial-snapshots.ts — Runs replay for each tutorial,
@@ -492,21 +535,21 @@ The `/frontiers/new` page fetches these via `fetch("/tutorials/docs.sqlite")`, l
 
 ## Test Summary
 
-| PR | Tests | Parallel? |
-|----|-------|-----------|
-| 1 | `diff-engine.test.ts` | Start immediately |
-| 2 | `generator-fixtures.test.ts` | Start immediately |
-| 4 | `diagram-renderer.test.ts` | Start immediately |
-| 6 | `Monaco.test.ts` | Start immediately |
-| 5a | (manual verification) | Start immediately |
-| 3 | Component `.test.ts` files | After PR 1 |
-| 5b | `landing.test.ts` | After PR 5a |
-| 5c | `new.test.ts` | After PR 5a (parallel with 5b) |
-| 5d | `learn.test.ts` | After PR 5a + PR 3 + PR 4 |
-| 7 | `docs-replay.test.ts` (1–4) | After PR 1+2+3+5d |
-| 8 | `docs-replay.test.ts` (5–8) | After PR 7 |
-| 9 | `Terminal.test.ts` | Anytime after PR 5a |
-| 10 | `snapshot-builder.test.ts` | After PR 8 |
+| PR  | Tests                        | Parallel?                      |
+| --- | ---------------------------- | ------------------------------ |
+| 1   | `diff-engine.test.ts`        | Start immediately              |
+| 2   | `generator-fixtures.test.ts` | Start immediately              |
+| 4   | `diagram-renderer.test.ts`   | Start immediately              |
+| 6   | `Monaco.test.ts`             | Start immediately              |
+| 5a  | (manual verification)        | Start immediately              |
+| 3   | Component `.test.ts` files   | After PR 1                     |
+| 5b  | `landing.test.ts`            | After PR 5a                    |
+| 5c  | `new.test.ts`                | After PR 5a (parallel with 5b) |
+| 5d  | `learn.test.ts`              | After PR 5a + PR 3 + PR 4      |
+| 7   | `docs-replay.test.ts` (1–4)  | After PR 1+2+3+5d              |
+| 8   | `docs-replay.test.ts` (5–8)  | After PR 7                     |
+| 9   | `Terminal.test.ts`           | Anytime after PR 5a            |
+| 10  | `snapshot-builder.test.ts`   | After PR 8                     |
 
 **5 PRs can start day one in parallel: PR 1, PR 2, PR 4, PR 5a, PR 6.**
 **After PR 5a: PRs 5b, 5c, 5d can parallel (5d waits on PR 3 + PR 4 too).**

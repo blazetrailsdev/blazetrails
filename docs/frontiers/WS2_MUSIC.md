@@ -1,10 +1,12 @@
 # WS2: Music Tutorial
 
 ## Dependencies
+
 - WS1 PRs 1–6 merged (types, diff engine, fixtures, UI components, routes, Monaco)
 - Can run in parallel with WS3
 
 ## Approach
+
 TDD. Content is validated by automated replay tests that boot a runtime, execute every action, and assert every checkpoint. Tests run in CI — a change to `trail-cli.ts` or `activerecord` that breaks the Music tutorial fails the build.
 
 ---
@@ -14,6 +16,7 @@ TDD. Content is validated by automated replay tests that boot a runtime, execute
 ### PR 1: Music steps 1–5 (data modeling)
 
 **Write tests first:**
+
 ```
 src/lib/frontiers/tutorials/music/
   music-replay.test.ts  — Boots createRuntime(), replays steps 1–5:
@@ -42,6 +45,7 @@ src/lib/frontiers/tutorials/music/
 ```
 
 **Then implement:**
+
 ```
 src/lib/frontiers/tutorials/
   registry.ts           — Update Music entry with real stepCount, wire loadSteps
@@ -74,6 +78,7 @@ src/lib/frontiers/tutorials/
 ```
 
 **Anchor examples for step 5:**
+
 ```typescript
 // In app/models/artist.ts, after the last attribute line:
 {
@@ -87,6 +92,7 @@ src/lib/frontiers/tutorials/
 ```
 
 **Review criteria:**
+
 - `music-replay.test.ts` passes for steps 1–5
 - Rule of threes enforced by test
 - Anchors validated against generator fixtures from WS1 PR 2
@@ -97,6 +103,7 @@ src/lib/frontiers/tutorials/
 ### PR 2: Music steps 6–10 (seeds, controllers, API)
 
 **Write tests first — extend replay test:**
+
 ```
 src/lib/frontiers/tutorials/music/
   music-replay.test.ts  — Extend to replay steps 6–10 after 1–5:
@@ -116,6 +123,7 @@ src/lib/frontiers/tutorials/music/
 ```
 
 **Then implement:**
+
 ```
 src/lib/frontiers/tutorials/music/steps/
   step-06.ts            — "Seeding a Music Library"
@@ -150,6 +158,7 @@ src/lib/frontiers/tutorials/music/steps/
 ```
 
 **Seed data quality (enforced by test):**
+
 - Artist/album/track names are realistic (not "Artist 1")
 - Duration values are reasonable (120–400 seconds)
 - Foreign keys form valid chains (album.artist_id → existing artist, etc.)
@@ -157,6 +166,7 @@ src/lib/frontiers/tutorials/music/steps/
 - Genre assignments cover multiple genres per track
 
 **Review criteria:**
+
 - Full 10-step replay test passes
 - Seed data FK integrity validated by test
 - Search uses parameterized `LIKE '%' || ? || '%'` (SQLite safe)
@@ -188,10 +198,10 @@ Sequential within WS2 (content builds on itself), but **WS2 runs in parallel wit
 
 ## Test Summary
 
-| PR | Tests | What they verify |
-|----|-------|-----------------|
-| 1 | `music-replay.test.ts` (1–5) | Generator output, anchors resolve, tables created, associations declared |
-| 2 | `music-replay.test.ts` (6–10) | Seed FK integrity, SQL validity, API responses, search, full replay |
-| 3 | (reuses replay) | Snapshot loads and final state checks pass |
+| PR  | Tests                         | What they verify                                                         |
+| --- | ----------------------------- | ------------------------------------------------------------------------ |
+| 1   | `music-replay.test.ts` (1–5)  | Generator output, anchors resolve, tables created, associations declared |
+| 2   | `music-replay.test.ts` (6–10) | Seed FK integrity, SQL validity, API responses, search, full replay      |
+| 3   | (reuses replay)               | Snapshot loads and final state checks pass                               |
 
 The replay test is the single source of truth. If it passes, the tutorial works.

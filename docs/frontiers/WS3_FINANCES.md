@@ -1,10 +1,12 @@
 # WS3: Finances Tutorial
 
 ## Dependencies
+
 - WS1 PRs 1–6 merged (types, diff engine, fixtures, UI components, routes, Monaco)
 - Can run in parallel with WS2
 
 ## Approach
+
 TDD. Every SQL query, every CSV parse, every diff anchor is validated by automated replay tests. The Finances tutorial has the most complex SQL — the replay test actually executes every query and asserts it returns meaningful results against the seeded data.
 
 ---
@@ -14,6 +16,7 @@ TDD. Every SQL query, every CSV parse, every diff anchor is validated by automat
 ### PR 1: Finances steps 1–5 (data model + seeds)
 
 **Write tests first:**
+
 ```
 src/lib/frontiers/tutorials/finances/
   finances-replay.test.ts — Boots createRuntime(), replays steps 1–5:
@@ -52,6 +55,7 @@ src/lib/frontiers/tutorials/finances/
 ```
 
 **Then implement:**
+
 ```
 src/lib/frontiers/tutorials/
   registry.ts           — Update Finances entry
@@ -92,6 +96,7 @@ src/lib/frontiers/tutorials/
 ```
 
 **Review criteria:**
+
 - Replay test passes for steps 1–5
 - Seed data is financially coherent (tested assertions listed above)
 - Transaction descriptions are realistic ("Whole Foods", "Electric bill", etc.)
@@ -102,6 +107,7 @@ src/lib/frontiers/tutorials/
 ### PR 2: Finances steps 6–8 (CSV import + analytical SQL)
 
 **Write tests first — extend replay test:**
+
 ```
 src/lib/frontiers/tutorials/finances/
   finances-replay.test.ts — Extend to replay steps 6–8:
@@ -132,6 +138,7 @@ src/lib/frontiers/tutorials/finances/
 ```
 
 **Then implement:**
+
 ```
 src/lib/frontiers/tutorials/finances/steps/
   step-06.ts            — "CSV Import"
@@ -168,6 +175,7 @@ src/lib/frontiers/tutorials/finances/steps/
 ```
 
 **SQL quality (enforced by test):**
+
 - Every SQL query executes without error against the seeded database
 - Every query returns at least 1 row
 - Aggregate values are numerically reasonable
@@ -175,6 +183,7 @@ src/lib/frontiers/tutorials/finances/steps/
 - All SQL is valid SQLite (no Postgres-only syntax)
 
 **Review criteria:**
+
 - Replay test passes for steps 6–8
 - CSV importer uses parameterized queries (no SQL injection)
 - SQL queries are readable (aliased columns, formatted)
@@ -186,6 +195,7 @@ src/lib/frontiers/tutorials/finances/steps/
 ### PR 3: Finances steps 9–10 (advanced queries + API)
 
 **Write tests first — extend replay test:**
+
 ```
 src/lib/frontiers/tutorials/finances/
   finances-replay.test.ts — Extend to replay steps 9–10:
@@ -211,6 +221,7 @@ src/lib/frontiers/tutorials/finances/
 ```
 
 **Then implement:**
+
 ```
 src/lib/frontiers/tutorials/finances/steps/
   step-09.ts            — "Advanced Queries"
@@ -234,6 +245,7 @@ src/lib/frontiers/tutorials/finances/steps/
 ```
 
 **Review criteria:**
+
 - Full 10-step replay test passes
 - Window function queries use SQLite-compatible syntax
 - Recursive CTE correctly traverses category parent→child relationships
@@ -266,11 +278,11 @@ Sequential within WS3, but **runs in parallel with WS2**. Shared files (`registr
 
 ## Test Summary
 
-| PR | Tests | What they verify |
-|----|-------|-----------------|
-| 1 | `finances-replay.test.ts` (1–5) | Model generation, seed data FK integrity, decimal/date columns |
-| 2 | `finances-replay.test.ts` (6–8) | CSV parser, SQL query validity + results, LEFT JOIN correctness |
-| 3 | `finances-replay.test.ts` (9–10) | Window functions, CTEs, API responses, full 10-step replay |
-| 4 | (reuses replay) | Snapshot loads and final state checks pass |
+| PR  | Tests                            | What they verify                                                |
+| --- | -------------------------------- | --------------------------------------------------------------- |
+| 1   | `finances-replay.test.ts` (1–5)  | Model generation, seed data FK integrity, decimal/date columns  |
+| 2   | `finances-replay.test.ts` (6–8)  | CSV parser, SQL query validity + results, LEFT JOIN correctness |
+| 3   | `finances-replay.test.ts` (9–10) | Window functions, CTEs, API responses, full 10-step replay      |
+| 4   | (reuses replay)                  | Snapshot loads and final state checks pass                      |
 
 Every SQL query is tested against real data. Every diff anchor is validated. A generator change that breaks an anchor fails CI before it ships.

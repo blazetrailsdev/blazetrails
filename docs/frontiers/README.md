@@ -23,17 +23,17 @@ Frontiers is both a development environment and a learning platform for Trails. 
 
 Tutorials control which panes are visible per step, introducing them progressively.
 
-| Pane | Component | First introduced |
-|------|-----------|-----------------|
-| Terminal | `Terminal.svelte` (or `TasksPanel.svelte`) | Docs Step 1 |
-| File Tree | `FileTree.svelte` | Docs Step 1 |
-| Editor | `Monaco.svelte` | Docs Step 1 |
-| Console | `ConsolePanel.svelte` | Docs Step 1 |
-| Database | `DatabaseBrowser.svelte` | Docs Step 2 |
-| SQL | `SqlConsole.svelte` | Docs Step 6 |
-| Results | `ResultsPanel.svelte` | Docs Step 7 |
-| REPL | `Repl.svelte` | Finances Step 6 |
-| Preview | `PreviewPanel.svelte` | TBD |
+| Pane      | Component                                  | First introduced |
+| --------- | ------------------------------------------ | ---------------- |
+| Terminal  | `Terminal.svelte` (or `TasksPanel.svelte`) | Docs Step 1      |
+| File Tree | `FileTree.svelte`                          | Docs Step 1      |
+| Editor    | `Monaco.svelte`                            | Docs Step 1      |
+| Console   | `ConsolePanel.svelte`                      | Docs Step 1      |
+| Database  | `DatabaseBrowser.svelte`                   | Docs Step 2      |
+| SQL       | `SqlConsole.svelte`                        | Docs Step 6      |
+| Results   | `ResultsPanel.svelte`                      | Docs Step 7      |
+| REPL      | `Repl.svelte`                              | Finances Step 6  |
+| Preview   | `PreviewPanel.svelte`                      | TBD              |
 
 ## Persistence
 
@@ -47,12 +47,15 @@ SQLite is the single source of truth. No separate progress store.
 ## Design Principles
 
 ### Rule of Threes
+
 Every tutorial step must contain: **description**, **diagram**, and **code**. No exceptions.
 
 ### Dual Teaching
+
 Every step teaches both a Trails concept and a Frontiers tool. The prose weaves them together naturally — "Now that you've created the migration, let's use the Database Browser to verify it worked."
 
 ### Anchor-Based Diffs
+
 Diffs use context anchor strings, not line numbers. A hunk says "insert after the line matching `this.attribute("email")`" rather than "insert at line 5." Survives generator changes, user edits, and blank line differences.
 
 ```typescript
@@ -67,23 +70,29 @@ interface DiffHunk {
 The DiffViewer shows the anchor line plus surrounding context from the actual file.
 
 ### Generator Fixtures
+
 Snapshot tests capture every generator command's output. Content authors write anchors against these fixtures. Generator changes break the snapshot test first, forcing explicit updates to both fixtures and content.
 
 ### Automated Tutorial Replay
+
 Each tutorial has a replay test: boot `createRuntime()`, execute every action, assert every checkpoint passes. Validates rule-of-threes, anchor resolution, SQL validity, seed FK integrity, and API responses. Runs in CI.
 
 ### Pane Visibility
+
 Each step declares a `panes` array. The tutorial layout only renders those components. When a pane is introduced for the first time, the step's prose includes a callout explaining the tool.
 
 ### Terminal
+
 The terminal (Ghostty WASM or xterm.js) is a standalone enhancement, not on the critical path. Tutorials use `CliAction.svelte` for CLI commands. Terminal can land in any PR without blocking content.
 
 ## Ghostty WASM Terminal
 
 ### Goal
+
 Replace the text-input CLI (`TasksPanel.svelte`) with a real terminal emulator.
 
 ### Research
+
 - Check Ghostty WASM availability (https://github.com/ghostty-org/ghostty)
 - Fallback: xterm.js + xterm-addon-fit (established, used by VS Code web)
 - Integration: render in splitpane, dispatch to `trail-cli.ts` `exec()`, ANSI colors

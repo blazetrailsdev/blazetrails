@@ -339,7 +339,7 @@ describe("RedirectTest", () => {
 
   it("redirect to url with stringlike", () => {
     const stringlike = { toString: () => "http://example.com/path" };
-    const result = redirectTo(String(stringlike));
+    const result = redirectTo(stringlike);
     expect(result.location).toBe("http://example.com/path");
   });
 
@@ -375,16 +375,13 @@ describe("RedirectTest", () => {
   it("redirect to external with rescue", async () => {
     class C extends Base {
       async action() {
-        try {
-          this.redirectTo("http://external.com");
-        } catch {
-          this.render({ plain: "rescued" });
-        }
+        this.redirectTo("http://external.com");
       }
     }
     const c = new C();
     await c.dispatch("action", makeRequest(), makeResponse());
     expect(c.getHeader("location")).toBe("http://external.com");
+    expect(c.status).toBe(302);
   });
 });
 

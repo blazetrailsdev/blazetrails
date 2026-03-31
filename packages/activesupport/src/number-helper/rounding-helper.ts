@@ -24,14 +24,14 @@ export class RoundingHelper {
   }
 
   private roundPrecision(number: number): number {
-    if (this.precision <= 0) return this.rubyRound(number);
+    if (this.precision === 0) return this.rubyRound(number);
     const factor = Math.pow(10, this.precision);
     return this.rubyRound(number * factor) / factor;
   }
 
   private roundSignificant(number: number): number {
     if (number === 0) return 0;
-    if (this.precision <= 0) return this.rubyRound(number);
+    if (this.precision === 0) return this.rubyRound(number);
     const d = Math.ceil(Math.log10(Math.abs(number)));
     const power = this.precision - d;
     const magnitude = Math.pow(10, power);

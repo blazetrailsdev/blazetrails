@@ -40,7 +40,9 @@ export class Renderer {
 
     if (merged.json !== undefined) {
       this._lastContentType = explicitContentType ?? "application/json; charset=utf-8";
-      return typeof merged.json === "string" ? merged.json : JSON.stringify(merged.json);
+      return typeof merged.json === "string"
+        ? merged.json
+        : (JSON.stringify(merged.json) ?? "null");
     }
     if (merged.plain !== undefined) {
       this._lastContentType = explicitContentType ?? "text/plain; charset=utf-8";

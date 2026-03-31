@@ -46,7 +46,7 @@ export class SSE {
     const retry = options.retry ?? this._retry;
     const id = options.id;
 
-    const data = typeof object === "string" ? object : JSON.stringify(object);
+    const data = typeof object === "string" ? object : (JSON.stringify(object) ?? "null");
 
     let payload = "";
     if (id !== undefined) payload += `id: ${id}\n`;

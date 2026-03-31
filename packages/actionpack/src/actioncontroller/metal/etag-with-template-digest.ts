@@ -26,5 +26,5 @@ export function templateEtagger(
     return lookupContext.digestFor(templateName) ?? undefined;
   }
 
-  return templateDigest(templateName);
+  return undefined;
 }

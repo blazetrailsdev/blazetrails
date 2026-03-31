@@ -19,7 +19,8 @@ export function renderForApi(options: Record<string, unknown>): {
   contentType: string;
 } {
   if (options.json !== undefined) {
-    const body = typeof options.json === "string" ? options.json : JSON.stringify(options.json);
+    const body =
+      typeof options.json === "string" ? options.json : (JSON.stringify(options.json) ?? "null");
     return { body, contentType: resolveContentType(options, "application/json; charset=utf-8") };
   }
   if (options.plain !== undefined) {

@@ -51,7 +51,7 @@ function buildContentDisposition(disposition: string, filename: string): string 
   return `${disposition}; filename="${sanitized.replace(/"/g, '\\"')}"`;
 }
 
-export function readFileForSend(filePath: string): globalThis.Buffer {
+export function readFileForSend(filePath: string): Buffer {
   try {
     const stats = fs.statSync(filePath);
     if (!stats.isFile()) {

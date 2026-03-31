@@ -7,6 +7,7 @@
 
 import { Metal } from "./metal.js";
 import { DoubleRenderError, type RenderOptions } from "./base.js";
+import { renderForApi } from "./api/api-rendering.js";
 
 export class API extends Metal {
   static withoutModules<T extends typeof API>(this: T, ..._modules: unknown[]): T {
@@ -22,16 +23,9 @@ export class API extends Metal {
       this.status = options.status;
     }
 
-    if (options.json !== undefined) {
-      this.contentType = options.contentType ?? "application/json; charset=utf-8";
-      this.body = typeof options.json === "string" ? options.json : JSON.stringify(options.json);
-    } else if (options.plain !== undefined) {
-      this.contentType = options.contentType ?? "text/plain; charset=utf-8";
-      this.body = options.plain;
-    } else if (options.body !== undefined) {
-      this.body = options.body;
-    }
-
+    const result = renderForApi(options as Record<string, unknown>);
+    this.contentType = result.contentType;
+    this.body = result.body;
     this.markPerformed();
   }
 

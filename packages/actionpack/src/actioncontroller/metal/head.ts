@@ -48,7 +48,14 @@ export function headResponse(
   const headers: Record<string, string> = {};
   if (options) {
     for (const [key, value] of Object.entries(options)) {
-      if (key === "location" || key === "content_type") continue;
+      if (key === "location") {
+        headers["location"] = String(value);
+        continue;
+      }
+      if (key === "content_type") {
+        headers["content-type"] = String(value);
+        continue;
+      }
       const headerName = key.replace(/_/g, "-").toLowerCase();
       headers[headerName] = String(value);
     }

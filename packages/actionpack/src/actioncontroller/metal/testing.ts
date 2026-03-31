@@ -18,7 +18,7 @@ export function clearInstanceVariablesBetweenRequests(
 ): Set<string> {
   const currentVars = new Set(Object.keys(controller));
   for (const key of currentVars) {
-    if (!trackedVars.has(key) && key.startsWith("_")) {
+    if (!trackedVars.has(key)) {
       delete controller[key];
     }
   }

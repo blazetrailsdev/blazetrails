@@ -20,6 +20,35 @@ export class Collector {
     this.any(handler);
   }
 
+  on(format: string, handler: () => void): void {
+    this._responses.set(format, handler);
+    this._order.push(format);
+  }
+
+  html(handler: () => void): void {
+    this.on("text/html", handler);
+  }
+
+  json(handler: () => void): void {
+    this.on("application/json", handler);
+  }
+
+  xml(handler: () => void): void {
+    this.on("application/xml", handler);
+  }
+
+  js(handler: () => void): void {
+    this.on("text/javascript", handler);
+  }
+
+  text(handler: () => void): void {
+    this.on("text/plain", handler);
+  }
+
+  csv(handler: () => void): void {
+    this.on("text/csv", handler);
+  }
+
   negotiate(options: { format?: string; accept?: string }): { handler: () => void } | null {
     if (options.format) {
       const handler = this._responses.get(options.format);

@@ -19,7 +19,7 @@ export class API extends Metal {
       throw new DoubleRenderError();
     }
 
-    if (options.status) {
+    if (options.status !== undefined && options.status !== null) {
       this.status = options.status;
     }
 

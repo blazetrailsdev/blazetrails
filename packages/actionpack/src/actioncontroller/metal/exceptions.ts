@@ -7,7 +7,7 @@
 
 export class ActionControllerError extends Error {
   constructor(message?: string) {
-    super(message);
+    super(message ?? "");
     this.name = "ActionControllerError";
   }
 }

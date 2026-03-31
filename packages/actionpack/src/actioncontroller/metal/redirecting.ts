@@ -8,7 +8,7 @@
 
 export class UnsafeRedirectError extends Error {
   constructor(message?: string) {
-    super(message);
+    super(message ?? "Unsafe redirect");
     this.name = "UnsafeRedirectError";
   }
 }

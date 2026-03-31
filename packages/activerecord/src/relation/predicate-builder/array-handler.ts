@@ -3,16 +3,12 @@ import type { PredicateBuilder } from "../predicate-builder.js";
 import { Range } from "../../connection-adapters/postgresql/oid/range.js";
 
 /**
- * Null-object used when no scalar values exist in an array condition.
- * Its `or()` returns the other operand, acting as an identity for OR chains.
+ * Sentinel used when no scalar values exist in an array condition.
+ * Acts as an identity element for the OR-folding chain.
  *
  * Mirrors: ActiveRecord::PredicateBuilder::ArrayHandler::NullPredicate
  */
-export class NullPredicate {
-  static or(other: Nodes.Node): Nodes.Node {
-    return other;
-  }
-}
+export class NullPredicate {}
 
 /**
  * Handles array values in where conditions by splitting them into
@@ -37,9 +33,10 @@ export class ArrayHandler {
       return attribute.in([]);
     }
 
-    const values: unknown[] = [];
+    const scalarValues: unknown[] = [];
     let hasNull = false;
     const ranges: Range[] = [];
+    const nonScalarValues: unknown[] = [];
 
     for (const item of value) {
       if (item === null || item === undefined) {
@@ -47,20 +44,29 @@ export class ArrayHandler {
       } else if (item instanceof Range) {
         ranges.push(item);
       } else if (typeof item === "object" && item !== null && "id" in item) {
-        values.push((item as any).id);
+        scalarValues.push((item as any).id);
+      } else if (typeof item === "object" || typeof item === "function") {
+        nonScalarValues.push(item);
       } else {
-        values.push(item);
+        scalarValues.push(item);
       }
     }
 
-    // Build the scalar values predicate, using NullPredicate as identity
+    // Build the scalar values predicate, using NullPredicate as sentinel
     let valuesPredicate: Nodes.Node | typeof NullPredicate;
-    if (values.length === 0) {
+    if (scalarValues.length === 0) {
       valuesPredicate = NullPredicate;
-    } else if (values.length === 1) {
-      valuesPredicate = this.predicateBuilder.build(attribute, values[0]);
+    } else if (scalarValues.length === 1) {
+      valuesPredicate = this.predicateBuilder.build(attribute, scalarValues[0]);
     } else {
-      valuesPredicate = attribute.in(values);
+      valuesPredicate = attribute.in(scalarValues);
+    }
+
+    // Fold in non-scalar values (e.g. Relations → subqueries) via PredicateBuilder
+    for (const v of nonScalarValues) {
+      const pred = this.predicateBuilder.build(attribute, v);
+      valuesPredicate =
+        valuesPredicate === NullPredicate ? pred : groupedOr(valuesPredicate as Nodes.Node, pred);
     }
 
     // Fold in NULL with Grouping to preserve precedence

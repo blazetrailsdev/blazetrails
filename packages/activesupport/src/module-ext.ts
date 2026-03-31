@@ -177,21 +177,67 @@ export function configAccessor(target: any, ...namesAndOptions: (string | MattrO
   mattrAccessor(target, ...namesAndOptions);
 }
 
+let _attrInternalNamingFormat = "_%s_";
+
+export function getAttrInternalNamingFormat(): string {
+  return _attrInternalNamingFormat;
+}
+
+export function setAttrInternalNamingFormat(format: string): void {
+  if (format.startsWith("@")) {
+    throw new Error("invalid attribute storage format");
+  }
+  _attrInternalNamingFormat = format;
+}
+
+function internalStorageKey(name: string): string {
+  return _attrInternalNamingFormat.replace("%s", name);
+}
+
+/**
+ * attrInternalReader — defines a reader for an attribute stored in a prefixed key.
+ */
+export function attrInternalReader(target: object, ...names: string[]): void {
+  for (const name of names) {
+    Object.defineProperty(target, name, {
+      configurable: true,
+      enumerable: false,
+      get(this: Record<string, unknown>) {
+        return this[internalStorageKey(name)];
+      },
+    });
+  }
+}
+
+/**
+ * attrInternalWriter — defines a writer for an attribute stored in a prefixed key.
+ */
+export function attrInternalWriter(target: object, ...names: string[]): void {
+  for (const name of names) {
+    Object.defineProperty(target, name, {
+      configurable: true,
+      enumerable: false,
+      set(this: Record<string, unknown>, value: unknown) {
+        this[internalStorageKey(name)] = value;
+      },
+    });
+  }
+}
+
 /**
  * attrInternal — defines instance-level attribute with underscore-prefixed storage.
  * Mirrors Rails Module#attr_internal_accessor.
  */
 export function attrInternal(target: object, ...names: string[]): void {
   for (const name of names) {
-    const storageKey = `_${name}_`;
     Object.defineProperty(target, name, {
       configurable: true,
       enumerable: false,
       get(this: Record<string, unknown>) {
-        return this[storageKey];
+        return this[internalStorageKey(name)];
       },
       set(this: Record<string, unknown>, value: unknown) {
-        this[storageKey] = value;
+        this[internalStorageKey(name)] = value;
       },
     });
 
@@ -199,7 +245,7 @@ export function attrInternal(target: object, ...names: string[]): void {
       configurable: true,
       enumerable: false,
       value(this: Record<string, unknown>, value: unknown) {
-        this[storageKey] = value;
+        this[internalStorageKey(name)] = value;
       },
     });
   }

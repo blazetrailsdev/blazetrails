@@ -41,6 +41,8 @@ export abstract class CurrentAttributes {
    * static { this.attribute("user", "account"); }
    * ```
    */
+  private static readonly RESTRICTED_NAMES = new Set(["reset", "set"]);
+
   static attribute(...names: string[]): void;
   static attribute(name: string, options: AttributeDefinition): void;
   static attribute(name: string, ...rest: unknown[]): void {
@@ -52,19 +54,28 @@ export abstract class CurrentAttributes {
       rest.length === 1 && typeof rest[0] === "object" && rest[0] !== null
         ? (rest[0] as AttributeDefinition)
         : {};
-    ctor._definitions.set(name, options);
-    // Define accessor on the prototype
-    const proto = ctor.prototype as unknown as Record<string, unknown>;
-    if (!(name in proto)) {
-      Object.defineProperty(proto, name, {
-        get(this: CurrentAttributes) {
-          return this._get(name);
-        },
-        set(this: CurrentAttributes, v: unknown) {
-          this._set(name, v);
-        },
-        configurable: true,
-      });
+
+    // Collect all names (could be multiple string args)
+    const allNames = options === rest[0] ? [name] : [name, ...(rest as string[])];
+    const restricted = allNames.filter((n) => CurrentAttributes.RESTRICTED_NAMES.has(n));
+    if (restricted.length > 0) {
+      throw new Error(`Restricted attribute names: ${restricted.join(", ")}`);
+    }
+
+    for (const n of allNames) {
+      ctor._definitions.set(n, options);
+      const proto = ctor.prototype as unknown as Record<string, unknown>;
+      if (!(n in proto)) {
+        Object.defineProperty(proto, n, {
+          get(this: CurrentAttributes) {
+            return this._get(n);
+          },
+          set(this: CurrentAttributes, v: unknown) {
+            this._set(n, v);
+          },
+          configurable: true,
+        });
+      }
     }
   }
 

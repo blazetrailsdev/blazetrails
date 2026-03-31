@@ -139,10 +139,13 @@ export class PredicateBuilder {
 
     const values: unknown[] = [];
     let hasNull = false;
+    const ranges: Range[] = [];
 
     for (const item of value) {
       if (item === null || item === undefined) {
         hasNull = true;
+      } else if (item instanceof Range) {
+        ranges.push(item);
       } else if (typeof item === "object" && item !== null && "id" in item) {
         values.push((item as any).id);
       } else {
@@ -150,13 +153,23 @@ export class PredicateBuilder {
       }
     }
 
-    let predicate: Nodes.Node = values.length > 0 ? attribute.notIn(values) : attribute.notIn([]);
+    const parts: Nodes.Node[] = [];
 
-    if (hasNull) {
-      predicate = new Nodes.And([predicate, attribute.isNotNull()]);
+    if (values.length > 0) {
+      parts.push(attribute.notIn(values));
     }
 
-    return predicate;
+    if (hasNull) {
+      parts.push(attribute.isNotNull());
+    }
+
+    for (const range of ranges) {
+      parts.push(this.buildNegated(attribute, range));
+    }
+
+    if (parts.length === 0) return attribute.notIn([]);
+    if (parts.length === 1) return parts[0];
+    return new Nodes.And(parts);
   }
 
   build(attribute: Nodes.Attribute, value: unknown): Nodes.Node {

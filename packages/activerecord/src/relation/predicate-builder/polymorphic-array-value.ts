@@ -39,9 +39,7 @@ export class PolymorphicArrayValue {
     const result: Record<string, unknown>[] = [];
     for (const [type, ids] of typeToIds) {
       const query: Record<string, unknown> = {};
-      if (type !== null) {
-        query[this.foreignType] = type;
-      }
+      query[this.foreignType] = type;
       query[this.foreignKey] = ids.length === 1 ? ids[0] : ids;
       result.push(query);
     }

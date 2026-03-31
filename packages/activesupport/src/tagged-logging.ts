@@ -3,6 +3,9 @@
  * Mirrors ActiveSupport::TaggedLogging; logger-wrapping logic lives in `logger.ts` (`taggedLogging`).
  */
 
+import { Logger, taggedLogging as _taggedLogging } from "./logger.js";
+import type { TaggedLogger } from "./logger.js";
+
 export class TagStack {
   private _tags: string[] = [];
   private _tagsString: string | null = null;
@@ -87,9 +90,6 @@ export namespace LocalTagStorage {
     return { tagStack: new TagStack() };
   }
 }
-
-import { Logger, taggedLogging as _taggedLogging } from "./logger.js";
-import type { TaggedLogger } from "./logger.js";
 
 export namespace TaggedLogging {
   export function create(logger: Logger): TaggedLogger {

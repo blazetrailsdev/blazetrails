@@ -81,6 +81,15 @@ describe("DeepMergeable namespace", () => {
     expect(result).toEqual({ a: 100, b: 450, c: { c1: 300 } });
   });
 
+  it("deepMerge does not mutate inputs", () => {
+    const a = { x: { y: 1 }, z: 2 };
+    const b = { x: { w: 3 } };
+    const result = DeepMergeable.deepMerge(a, b);
+    expect(result).toEqual({ x: { y: 1, w: 3 }, z: 2 });
+    expect(a).toEqual({ x: { y: 1 }, z: 2 });
+    expect(b).toEqual({ x: { w: 3 } });
+  });
+
   it("isDeepMergeable returns true for plain objects", () => {
     expect(DeepMergeable.isDeepMergeable({})).toBe(true);
     expect(DeepMergeable.isDeepMergeable(null)).toBe(false);

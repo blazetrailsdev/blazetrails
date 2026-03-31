@@ -2,23 +2,16 @@
  * Deprecator — handles deprecation warnings for ActionController.
  *
  * Mirrors: ActionController.deprecator (ActiveSupport::Deprecation instance)
- * @see https://api.rubyonrails.org/classes/ActionController.html
+ *
+ * In Rails, each framework has its own deprecator instance. We reuse
+ * the ActiveSupport Deprecation class, just like Rails does.
  */
+import { Deprecation } from "@blazetrails/activesupport";
 
-export class Deprecator {
-  readonly gem: string;
+export { Deprecation as Deprecator };
 
-  constructor(gem = "actionpack") {
-    this.gem = gem;
-  }
-
-  warn(message: string, _callStack?: string[]): void {
-    process.stderr.write(`DEPRECATION WARNING: ${message} (from ${this.gem})\n`);
-  }
-}
-
-export const deprecator = new Deprecator();
+export const deprecator = new Deprecation({ gem: "actionpack" });
 
 export interface ActionController {
-  readonly deprecator: Deprecator;
+  readonly deprecator: Deprecation;
 }

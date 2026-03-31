@@ -515,7 +515,22 @@ export class DoubleRenderError extends Error {
 const JSONP_CALLBACK_RE = /^[a-zA-Z_$][0-9a-zA-Z_$]*(?:\.[a-zA-Z_$][0-9a-zA-Z_$]*)*$/;
 
 function escapeJsonForJs(json: string): string {
-  return json.replace(/\u2028|\u2029/g, (c) => (c === "\u2028" ? "\\u2028" : "\\u2029"));
+  return json.replace(/[<>&\u2028\u2029]/g, (c) => {
+    switch (c) {
+      case "<":
+        return "\\u003c";
+      case ">":
+        return "\\u003e";
+      case "&":
+        return "\\u0026";
+      case "\u2028":
+        return "\\u2028";
+      case "\u2029":
+        return "\\u2029";
+      default:
+        return c;
+    }
+  });
 }
 
 const SEND_FILE_MIME_TYPES: Record<string, string> = {

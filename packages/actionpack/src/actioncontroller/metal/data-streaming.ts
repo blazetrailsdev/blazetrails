@@ -8,30 +8,15 @@
 import * as fs from "fs";
 import * as path from "path";
 import { MissingFile } from "./exceptions.js";
+import { MimeType } from "../../actiondispatch/mime-type.js";
 
 export const DEFAULT_SEND_FILE_TYPE = "application/octet-stream";
 export const DEFAULT_SEND_FILE_DISPOSITION = "attachment";
 
-const MIME_TYPES: Record<string, string> = {
-  ".html": "text/html",
-  ".txt": "text/plain",
-  ".css": "text/css",
-  ".js": "text/javascript",
-  ".json": "application/json",
-  ".xml": "application/xml",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".gif": "image/gif",
-  ".pdf": "application/pdf",
-  ".zip": "application/zip",
-  ".csv": "text/csv",
-};
-
 export function inferContentType(filename: string): string {
-  const ext = path.extname(filename).toLowerCase();
-  return MIME_TYPES[ext] ?? DEFAULT_SEND_FILE_TYPE;
+  const ext = path.extname(filename).toLowerCase().replace(/^\./, "");
+  const mime = MimeType.lookupByExtension(ext);
+  return mime?.string ?? DEFAULT_SEND_FILE_TYPE;
 }
 
 export function buildSendFileHeaders(options: {

@@ -9,7 +9,7 @@ import { Metal } from "./metal.js";
 import { DoubleRenderError, type RenderOptions } from "./base.js";
 
 export class API extends Metal {
-  static withoutModules(..._modules: unknown[]): typeof API {
+  static withoutModules<T extends typeof API>(this: T, ..._modules: unknown[]): T {
     return this;
   }
 

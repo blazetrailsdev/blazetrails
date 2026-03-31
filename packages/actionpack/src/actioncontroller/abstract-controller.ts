@@ -211,9 +211,11 @@ export class AbstractController {
       if (this._performed) return;
 
       // Execute the action (only if it's a recognized action method)
-      const method = (this as any)[action];
-      if (Constructor.hasAction(action) && typeof method === "function") {
-        await method.call(this);
+      if (Constructor.hasAction(action)) {
+        const method = (this as any)[action];
+        if (typeof method === "function") {
+          await method.call(this);
+        }
       } else if (typeof (this as any).actionMissing === "function") {
         await (this as any).actionMissing(action);
       } else {

@@ -44,8 +44,5 @@ export class VariantCollector {
 }
 
 export interface MimeResponds {
-  respondTo(
-    block: (collector: Collector) => void,
-    options?: { accept?: string; format?: string; variant?: string },
-  ): unknown;
+  respondTo(block: (collector: Collector) => void): void;
 }

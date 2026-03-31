@@ -94,9 +94,6 @@ export class Base extends Metal {
         const safeJson = escapeJsonForJs(jsonPayload);
         this.contentType = options.contentType ?? "text/javascript; charset=utf-8";
         this.body = `/**/\n${options.callback}(${safeJson})`;
-      } else if (options.callback) {
-        this.contentType = options.contentType ?? "application/json; charset=utf-8";
-        this.body = jsonStr;
       } else {
         this.contentType = options.contentType ?? "application/json; charset=utf-8";
         this.body = jsonStr;

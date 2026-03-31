@@ -229,6 +229,14 @@ export function attrInternalWriter(target: object, ...names: string[]): void {
         this[storageKey] = value;
       },
     });
+
+    Object.defineProperty(target, `${name}=`, {
+      configurable: true,
+      enumerable: false,
+      value(this: Record<string, unknown>, value: unknown) {
+        this[storageKey] = value;
+      },
+    });
   }
 }
 

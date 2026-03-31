@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { BrowserBlocker, type BrowserVersions } from "../metal/allow-browser.js";
+import { Base } from "../base.js";
+import { Request } from "../../actiondispatch/request.js";
+import { Response } from "../../actiondispatch/response.js";
+import type { BrowserVersions } from "../metal/allow-browser.js";
 
 const CHROME_118 =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118 Safari/537.36";
@@ -23,45 +26,167 @@ const SPECIFIC_VERSIONS: BrowserVersions = {
   ie: false,
 };
 
+function makeRequest(userAgent: string): Request {
+  return new Request({
+    REQUEST_METHOD: "GET",
+    PATH_INFO: "/hello",
+    HTTP_HOST: "localhost",
+    HTTP_USER_AGENT: userAgent,
+  });
+}
+
+function makeResponse(): Response {
+  return new Response();
+}
+
+function createController(
+  versions: BrowserVersions,
+  blockOption?: ((this: Base) => void) | string,
+  actionFilter?: { only?: string[] },
+) {
+  class AllowBrowserController extends Base {
+    async hello() {
+      this.head(200);
+    }
+
+    async helloMethodName() {
+      this.head(200);
+    }
+
+    async modern() {
+      this.head(200);
+    }
+
+    private headUpgradeRequired() {
+      this.head(426);
+    }
+  }
+
+  AllowBrowserController.allowBrowser({
+    versions,
+    block: blockOption,
+    ...actionFilter,
+  });
+
+  return AllowBrowserController;
+}
+
 // ==========================================================================
 // controller/allow_browser_test.rb
 // ==========================================================================
 describe("AllowBrowserTest", () => {
-  it("blocked browser below version limit with callable", () => {
-    const blocker = new BrowserBlocker(FIREFOX_114, SPECIFIC_VERSIONS);
-    expect(blocker.blocked).toBe(true);
+  it("blocked browser below version limit with callable", async () => {
+    const C = createController(
+      SPECIFIC_VERSIONS,
+      function (this: Base) {
+        this.head(426);
+      },
+      { only: ["hello"] },
+    );
+    const c = new C();
+    await c.dispatch("hello", makeRequest(FIREFOX_114), makeResponse());
+    expect(c.status).toBe(426);
   });
 
-  it("blocked browser below version limit with method name", () => {
-    const blocker = new BrowserBlocker(FIREFOX_114, SPECIFIC_VERSIONS);
-    expect(blocker.blocked).toBe(true);
+  it("blocked browser below version limit with method name", async () => {
+    const C = createController(SPECIFIC_VERSIONS, "headUpgradeRequired", {
+      only: ["helloMethodName"],
+    });
+    const c = new C();
+    await c.dispatch("helloMethodName", makeRequest(FIREFOX_114), makeResponse());
+    expect(c.status).toBe(426);
   });
 
-  it("blocked browser by name", () => {
-    const blocker = new BrowserBlocker(IE_11, SPECIFIC_VERSIONS);
-    expect(blocker.blocked).toBe(true);
+  it("blocked browser by name", async () => {
+    const C = createController(
+      SPECIFIC_VERSIONS,
+      function (this: Base) {
+        this.head(426);
+      },
+      { only: ["hello"] },
+    );
+    const c = new C();
+    await c.dispatch("hello", makeRequest(IE_11), makeResponse());
+    expect(c.status).toBe(426);
   });
 
-  it("allowed browsers above specific version limit", () => {
-    expect(new BrowserBlocker(SAFARI_17_2_0, SPECIFIC_VERSIONS).blocked).toBe(false);
-    expect(new BrowserBlocker(CHROME_120, SPECIFIC_VERSIONS).blocked).toBe(false);
-    expect(new BrowserBlocker(OPERA_106, SPECIFIC_VERSIONS).blocked).toBe(false);
+  it("allowed browsers above specific version limit", async () => {
+    const C = createController(
+      SPECIFIC_VERSIONS,
+      function (this: Base) {
+        this.head(426);
+      },
+      { only: ["hello"] },
+    );
+
+    for (const ua of [SAFARI_17_2_0, CHROME_120, OPERA_106]) {
+      const c = new C();
+      await c.dispatch("hello", makeRequest(ua), makeResponse());
+      expect(c.status).toBe(200);
+    }
   });
 
-  it("browsers against modern limit", () => {
-    expect(new BrowserBlocker(SAFARI_17_2_0, "modern").blocked).toBe(false);
-    expect(new BrowserBlocker(CHROME_118, "modern").blocked).toBe(true);
-    expect(new BrowserBlocker(CHROME_120, "modern").blocked).toBe(false);
-    expect(new BrowserBlocker(OPERA_106, "modern").blocked).toBe(false);
+  it("browsers against modern limit", async () => {
+    const C = createController(
+      "modern",
+      function (this: Base) {
+        this.head(426);
+      },
+      { only: ["modern"] },
+    );
+
+    const allowed = [SAFARI_17_2_0, CHROME_120, OPERA_106];
+    for (const ua of allowed) {
+      const c = new C();
+      await c.dispatch("modern", makeRequest(ua), makeResponse());
+      expect(c.status).toBe(200);
+    }
+
+    const blocked = [CHROME_118];
+    for (const ua of blocked) {
+      const c = new C();
+      await c.dispatch("modern", makeRequest(ua), makeResponse());
+      expect(c.status).toBe(426);
+    }
   });
 
-  it("bots", () => {
-    expect(new BrowserBlocker(GOOGLE_BOT, SPECIFIC_VERSIONS).blocked).toBe(false);
-    expect(new BrowserBlocker(GOOGLE_BOT, "modern").blocked).toBe(false);
+  it("bots", async () => {
+    const C = createController(
+      SPECIFIC_VERSIONS,
+      function (this: Base) {
+        this.head(426);
+      },
+      { only: ["hello"] },
+    );
+    const c = new C();
+    await c.dispatch("hello", makeRequest(GOOGLE_BOT), makeResponse());
+    expect(c.status).toBe(200);
+
+    const C2 = createController(
+      "modern",
+      function (this: Base) {
+        this.head(426);
+      },
+      { only: ["modern"] },
+    );
+    const c2 = new C2();
+    await c2.dispatch("modern", makeRequest(GOOGLE_BOT), makeResponse());
+    expect(c2.status).toBe(200);
   });
 
-  it("a blocked request instruments a browser_block.action_controller event", () => {
-    const blocker = new BrowserBlocker(CHROME_118, "modern");
-    expect(blocker.blocked).toBe(true);
+  it("a blocked request instruments a browser_block.action_controller event", async () => {
+    let blockCalled = false;
+    const C = createController(
+      "modern",
+      function (this: Base) {
+        blockCalled = true;
+        this.head(426);
+      },
+      { only: ["modern"] },
+    );
+    const c = new C();
+    await c.dispatch("modern", makeRequest(CHROME_118), makeResponse());
+    expect(blockCalled).toBe(true);
+    expect(c.status).toBe(426);
   });
 });

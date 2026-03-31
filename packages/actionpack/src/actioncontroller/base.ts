@@ -16,6 +16,7 @@ import type { ActionCallback, AroundCallback, CallbackOptions } from "./abstract
 import { LookupContext } from "@blazetrails/actionview";
 import type { RouteHelpersMap } from "../actiondispatch/routing/route-helpers.js";
 import { createHash } from "crypto";
+import { BrowserBlocker, type BrowserVersions } from "./metal/allow-browser.js";
 
 // Re-export callback registration
 export { type ActionCallback, type AroundCallback, type CallbackOptions };
@@ -312,6 +313,36 @@ export class Base extends Metal {
     if (!csrf) return "";
     const realToken = csrf.getRealToken(this.session);
     return csrf.maskToken(realToken);
+  }
+
+  // --- Allow Browser ---
+
+  static allowBrowser(options: {
+    versions: BrowserVersions;
+    block?: ((this: Base) => void) | string;
+    only?: string[];
+    except?: string[];
+  }): void {
+    const { versions, block } = options;
+    const callbackOptions: CallbackOptions = {};
+    if (options.only) callbackOptions.only = options.only;
+    if (options.except) callbackOptions.except = options.except;
+
+    this.beforeAction(function (controller) {
+      const base = controller as Base;
+      const userAgent = base.request?.getHeader("user-agent") ?? "";
+      const blocker = new BrowserBlocker(userAgent, versions);
+      if (blocker.blocked) {
+        if (typeof block === "function") {
+          block.call(base);
+        } else if (typeof block === "string" && typeof (base as any)[block] === "function") {
+          (base as any)[block].call(base);
+        } else {
+          base.head(406);
+        }
+        return false;
+      }
+    }, callbackOptions);
   }
 
   // --- Rescue ---

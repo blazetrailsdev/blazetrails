@@ -50,10 +50,12 @@ export namespace Delegation {
             throw DelegationError.nilTarget(methodName, to);
           }
           const fn = (receiver as Record<string, unknown>)[method];
-          if (typeof fn === "function") {
-            return fn.apply(receiver, args);
+          if (typeof fn !== "function") {
+            throw new DelegationError(
+              `${methodName} delegated to ${to}, but ${to}.${globalThis.String(method)} is not a function`,
+            );
           }
-          return fn;
+          return fn.apply(receiver, args);
         },
       });
     }

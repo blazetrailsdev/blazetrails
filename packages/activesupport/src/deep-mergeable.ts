@@ -9,16 +9,20 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return proto === Object.prototype || proto === null;
 }
 
+function createLike(source: Record<string, unknown>): Record<string, unknown> {
+  return Object.create(Object.getPrototypeOf(source));
+}
+
 function deepMergeObjects(
   a: Record<string, unknown>,
   b: Record<string, unknown>,
   block?: (key: string, thisVal: unknown, otherVal: unknown) => unknown,
 ): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
+  const result: Record<string, unknown> = createLike(a);
 
   for (const key of Object.keys(a)) {
     const value = a[key];
-    result[key] = isPlainObject(value) ? deepMergeObjects(value, {}) : value;
+    result[key] = isPlainObject(value) ? deepMergeObjects(value, createLike(value)) : value;
   }
 
   for (const key of Object.keys(b)) {

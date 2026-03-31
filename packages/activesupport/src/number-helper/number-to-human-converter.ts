@@ -28,9 +28,8 @@ export class NumberToHumanConverter extends NumberConverter<NumberToHumanOptions
     } = this.opts;
 
     let num = this.numberAsFloat();
-    const abs = Math.abs(num);
-
     num = new RoundingHelper({ precision, significant }).round(num);
+    const abs = Math.abs(num);
 
     const roundOpts = { precision, separator, delimiter, significant, stripInsignificantZeros };
 

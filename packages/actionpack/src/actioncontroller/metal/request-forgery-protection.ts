@@ -26,16 +26,14 @@ export interface ProtectionMethods {
 }
 
 export class NullSessionHash {
-  private _data = Object.create(null) as Record<string, unknown>;
-
-  get(key: string): unknown {
+  get(_key: string): unknown {
     return undefined;
   }
-  set(key: string, _value: unknown): void {}
-  has(key: string): boolean {
+  set(_key: string, _value: unknown): void {}
+  has(_key: string): boolean {
     return false;
   }
-  delete(key: string): boolean {
+  delete(_key: string): boolean {
     return false;
   }
   clear(): void {}
@@ -81,8 +79,13 @@ export class NullSession implements ProtectionMethods {
   handleUnverifiedRequest(): void {
     this._controller.session = Object.create(null);
     this._controller.cookies = new NullCookieJar();
-    if (this._controller.flash !== undefined) {
-      this._controller.flash = Object.create(null);
+    const flash = this._controller.flash;
+    if (
+      flash &&
+      typeof flash === "object" &&
+      typeof (flash as Record<string, unknown>).clear === "function"
+    ) {
+      (flash as { clear(): void }).clear();
     }
   }
 }
@@ -93,7 +96,14 @@ export class ResetSession implements ProtectionMethods {
     this._controller = controller;
   }
   handleUnverifiedRequest(): void {
-    this._controller.session = {};
+    const session = this._controller.session;
+    if (session && typeof session === "object") {
+      for (const key of Object.keys(session as Record<string, unknown>)) {
+        delete (session as Record<string, unknown>)[key];
+      }
+    } else {
+      this._controller.session = {};
+    }
   }
 }
 

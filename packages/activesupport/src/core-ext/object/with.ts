@@ -14,11 +14,9 @@ export function objectWith<T extends object, R>(
 
   try {
     for (const [key, value] of Object.entries(attrs)) {
-      const hadKey = Object.prototype.hasOwnProperty.call(obj, key);
+      const hadKey = key in obj;
       existed[key] = hadKey;
-      if (hadKey) {
-        saved[key as keyof T] = obj[key as keyof T];
-      }
+      saved[key as keyof T] = obj[key as keyof T];
       obj[key as keyof T] = value as T[keyof T];
       applied.push(key);
     }

@@ -650,7 +650,7 @@ export class Parameters {
     filter: Record<string, unknown>,
     options: { suppressUnpermitted?: boolean } = {},
   ): void {
-    // Empty hash {} as a nested filter spec means "permit all keys"
+    // Empty filter object {} permits all keys on this Parameters
     if (Object.keys(filter).length === 0) {
       for (const [ek, ev] of Object.entries(this._data)) {
         params._data[ek] = ev;
@@ -689,7 +689,7 @@ export class Parameters {
         }
       } else if (isPlainObject(val)) {
         if (Array.isArray(v) && v.length === 0) {
-          // empty hash spec — permit arbitrary hash
+          // empty array filter for a hash — permit arbitrary hash
           params._data[k] = val;
         } else if (Array.isArray(v)) {
           const nestedParams = new Parameters(val as Record<string, unknown>);

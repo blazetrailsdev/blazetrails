@@ -21,21 +21,40 @@ export class Connection {
   }
 
   typeForAttribute(attrName: string): Type {
-    const schemaCache = this._klass.schemaCache;
-    if (schemaCache) {
-      const columns = schemaCache.columnsHash?.(this._tableName);
-      const column = columns?.get?.(attrName) ?? columns?.[attrName];
-      if (column) {
-        const adapter = this._klass.adapter;
-        if (adapter?.lookupCastTypeFromColumn) {
-          return adapter.lookupCastTypeFromColumn(column);
-        }
-        if (adapter?.lookupCastType && (column as any).sqlType) {
-          const castType = adapter.lookupCastType((column as any).sqlType);
-          if (castType) return castType;
-        }
+    const column = this.resolveColumn(attrName);
+    if (column) {
+      const adapter = this._klass.adapter;
+      if (adapter?.lookupCastTypeFromColumn) {
+        return adapter.lookupCastTypeFromColumn(column);
+      }
+      if (adapter?.lookupCastType && (column as any).sqlType) {
+        const castType = adapter.lookupCastType((column as any).sqlType);
+        if (castType) return castType;
       }
     }
     return new ValueType();
+  }
+
+  private resolveColumn(attrName: string): unknown | undefined {
+    // Try adapter.schemaCache (connection-level)
+    const adapter = this._klass.adapter;
+    const schemaCache = adapter?.schemaCache ?? adapter?.pool?.schemaCache;
+    if (schemaCache) {
+      const columns = schemaCache.columnsHash?.(this._tableName);
+      return columns?.get?.(attrName) ?? columns?.[attrName];
+    }
+
+    // Try connection handler pool config
+    const handler = this._klass._connectionHandler;
+    if (handler) {
+      const pool = handler.retrieveConnectionPool?.(this._klass);
+      const poolCache = pool?.schemaCache;
+      if (poolCache) {
+        const columns = poolCache.columnsHash?.(this._tableName);
+        return columns?.get?.(attrName) ?? columns?.[attrName];
+      }
+    }
+
+    return undefined;
   }
 }

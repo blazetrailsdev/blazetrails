@@ -1,20 +1,24 @@
 /**
- * ActionController::Deprecator
+ * Deprecator — handles deprecation warnings for ActionController.
  *
- * Deprecation helper for ActionController.
+ * Mirrors: ActionController.deprecator (ActiveSupport::Deprecation instance)
  * @see https://api.rubyonrails.org/classes/ActionController.html
  */
 
-export interface ActionController {
-  deprecator(): Deprecator;
-}
-
 export class Deprecator {
+  readonly gem: string;
+
+  constructor(gem = "actionpack") {
+    this.gem = gem;
+  }
+
   warn(message: string, _callStack?: string[]): void {
-    console.warn(`DEPRECATION WARNING: ${message}`);
+    process.stderr.write(`DEPRECATION WARNING: ${message} (from ${this.gem})\n`);
   }
 }
 
-export function deprecator(): Deprecator {
-  return new Deprecator();
+export const deprecator = new Deprecator();
+
+export interface ActionController {
+  readonly deprecator: Deprecator;
 }

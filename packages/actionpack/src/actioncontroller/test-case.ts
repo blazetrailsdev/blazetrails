@@ -378,30 +378,30 @@ export class LiveTestResponse extends Response {
 }
 
 export class TestSession {
-  private _data: Record<string, unknown> = {};
+  private _data = new Map<string, unknown>();
 
   get(key: string): unknown {
-    return this._data[key];
+    return this._data.get(key);
   }
 
   set(key: string, value: unknown): void {
-    this._data[key] = value;
+    this._data.set(key, value);
   }
 
   has(key: string): boolean {
-    return key in this._data;
+    return this._data.has(key);
   }
 
   delete(key: string): void {
-    delete this._data[key];
+    this._data.delete(key);
   }
 
   clear(): void {
-    this._data = {};
+    this._data.clear();
   }
 
   toObject(): Record<string, unknown> {
-    return { ...this._data };
+    return Object.fromEntries(this._data);
   }
 }
 

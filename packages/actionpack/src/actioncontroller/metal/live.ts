@@ -12,22 +12,6 @@ export class ClientDisconnected extends Error {
   }
 }
 
-export class SSE {
-  private _stream: Buffer;
-
-  constructor(stream: Buffer, _options: { retry?: number; event?: string } = {}) {
-    this._stream = stream;
-  }
-
-  write(_object: unknown, _options: { event?: string; id?: string; retry?: number } = {}): void {
-    // SSE write implementation
-  }
-
-  close(): void {
-    // Close the SSE stream
-  }
-}
-
 export class Buffer {
   private _data: string[] = [];
   private _closed = false;
@@ -43,6 +27,22 @@ export class Buffer {
 
   get closed(): boolean {
     return this._closed;
+  }
+}
+
+export class SSE {
+  private _stream: Buffer;
+
+  constructor(stream: Buffer, _options: { retry?: number; event?: string } = {}) {
+    this._stream = stream;
+  }
+
+  write(_object: unknown, _options: { event?: string; id?: string; retry?: number } = {}): void {
+    // SSE write implementation
+  }
+
+  close(): void {
+    this._stream.close();
   }
 }
 

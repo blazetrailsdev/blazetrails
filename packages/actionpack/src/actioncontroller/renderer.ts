@@ -18,18 +18,33 @@ export class Renderer {
     return new Renderer(controller, defaults);
   }
 
-  newRenderer(env: Record<string, unknown> = {}): Renderer {
+  /** Derive a new Renderer with updated env (Rails: Renderer#new). */
+  new(env: Record<string, unknown> = {}): Renderer {
     return new Renderer(this._controller, { ...this._defaults, ...env });
   }
 
-  render(..._args: unknown[]): unknown {
-    throw new Error(
-      "ActionController::Renderer#render is not yet implemented. " +
-        "Use controller actions with render() instead.",
-    );
+  render(options: Record<string, unknown> = {}): Record<string, unknown> {
+    const merged = { ...this._defaults, ...options };
+
+    if (merged.json !== undefined) {
+      const body = typeof merged.json === "string" ? merged.json : JSON.stringify(merged.json);
+      return { status: 200, contentType: "application/json; charset=utf-8", body };
+    }
+    if (merged.plain !== undefined) {
+      return { status: 200, contentType: "text/plain; charset=utf-8", body: String(merged.plain) };
+    }
+    if (merged.html !== undefined) {
+      return { status: 200, contentType: "text/html; charset=utf-8", body: String(merged.html) };
+    }
+
+    return { status: 200, contentType: "text/html; charset=utf-8", body: "", ...merged };
   }
 
   get defaults(): Record<string, unknown> {
     return { ...this._defaults };
+  }
+
+  get controller(): unknown {
+    return this._controller;
   }
 }

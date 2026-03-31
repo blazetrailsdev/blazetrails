@@ -11,6 +11,10 @@ import { Response } from "../actiondispatch/response.js";
 import { Parameters } from "./metal/strong-parameters.js";
 import type { RackResponse } from "@blazetrails/rack";
 import { bodyFromString } from "@blazetrails/rack";
+import {
+  MiddlewareStack as DispatchMiddlewareStack,
+  type MiddlewareEntry,
+} from "../actiondispatch/middleware/stack.js";
 
 const STATUS_CODES: Record<string, number> = {
   ok: 200,
@@ -36,11 +40,6 @@ const STATUS_CODES: Record<string, number> = {
   bad_gateway: 502,
   service_unavailable: 503,
 };
-
-import {
-  MiddlewareStack as DispatchMiddlewareStack,
-  type MiddlewareEntry,
-} from "../actiondispatch/middleware/stack.js";
 
 export class MiddlewareStack extends DispatchMiddlewareStack {}
 

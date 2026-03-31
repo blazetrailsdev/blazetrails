@@ -62,9 +62,9 @@ export class MethodNotAllowed extends ActionControllerError {
   }
 }
 
-export class NotImplemented extends MethodNotAllowed {
-  constructor(...allowedMethods: string[]) {
-    super(...allowedMethods);
+export class NotImplemented extends ActionControllerError {
+  constructor(message?: string) {
+    super(message ?? "Not Implemented");
     this.name = "NotImplemented";
   }
 }
@@ -95,7 +95,7 @@ export class UnknownHttpMethod extends ActionControllerError {
 
 export class UnknownFormat extends ActionControllerError {
   constructor(message?: string) {
-    super(message);
+    super(message ?? "Unknown format");
     this.name = "UnknownFormat";
   }
 }

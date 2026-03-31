@@ -1,7 +1,8 @@
 /**
  * ActionController::Renderer
  *
- * Allows rendering templates outside of controller actions.
+ * Renders json, plain text, or HTML outside of controller actions.
+ * Template/partial rendering requires integration with LookupContext.
  * @see https://api.rubyonrails.org/classes/ActionController/Renderer.html
  */
 

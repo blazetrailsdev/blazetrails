@@ -14,42 +14,46 @@ export class Collector {
 
   [key: string]: unknown;
 
-  any(handler: () => void): void {
-    this._responses.set("*/*", handler);
+  private static _noop = (): void => {};
+
+  any(handler?: () => void): this {
+    this._responses.set("*/*", handler ?? Collector._noop);
     this._order.push("*/*");
+    return this;
   }
 
-  all(handler: () => void): void {
-    this.any(handler);
+  all(handler?: () => void): this {
+    return this.any(handler);
   }
 
-  on(format: string, handler: () => void): void {
-    this._responses.set(format, handler);
+  on(format: string, handler?: () => void): this {
+    this._responses.set(format, handler ?? Collector._noop);
     this._order.push(format);
+    return this;
   }
 
-  html(handler: () => void): void {
-    this.on("html", handler);
+  html(handler?: () => void): this {
+    return this.on("html", handler);
   }
 
-  json(handler: () => void): void {
-    this.on("json", handler);
+  json(handler?: () => void): this {
+    return this.on("json", handler);
   }
 
-  xml(handler: () => void): void {
-    this.on("xml", handler);
+  xml(handler?: () => void): this {
+    return this.on("xml", handler);
   }
 
-  js(handler: () => void): void {
-    this.on("js", handler);
+  js(handler?: () => void): this {
+    return this.on("js", handler);
   }
 
-  text(handler: () => void): void {
-    this.on("text", handler);
+  text(handler?: () => void): this {
+    return this.on("text", handler);
   }
 
-  csv(handler: () => void): void {
-    this.on("csv", handler);
+  csv(handler?: () => void): this {
+    return this.on("csv", handler);
   }
 
   negotiate(options: { format?: string; accept?: string }): { handler: () => void } | null {

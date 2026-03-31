@@ -59,8 +59,9 @@ export class VirtualFS {
   }
 
   read(path: string): VfsFile | null {
-    const results = this.adapter.execRaw(
-      `SELECT "path", "content", "language", "created_at", "updated_at" FROM "_vfs_files" WHERE "path" = '${this._escape(path)}'`,
+    const results = this.adapter.query(
+      `SELECT "path", "content", "language", "created_at", "updated_at" FROM "_vfs_files" WHERE "path" = ?`,
+      [path],
     );
     if (!results.length || !results[0].values.length) return null;
     const row = results[0].values[0];
@@ -77,12 +78,14 @@ export class VirtualFS {
     const existing = this.read(path);
     const lang = language ?? existing?.language ?? this._inferLanguage(path);
     if (existing) {
-      this.adapter.execRaw(
-        `UPDATE "_vfs_files" SET "content" = '${this._escape(content)}', "language" = '${this._escape(lang)}', "updated_at" = datetime('now') WHERE "path" = '${this._escape(path)}'`,
+      this.adapter.runSql(
+        `UPDATE "_vfs_files" SET "content" = ?, "language" = ?, "updated_at" = datetime('now') WHERE "path" = ?`,
+        [content, lang, path],
       );
     } else {
-      this.adapter.execRaw(
-        `INSERT INTO "_vfs_files" ("path", "content", "language") VALUES ('${this._escape(path)}', '${this._escape(content)}', '${this._escape(lang)}')`,
+      this.adapter.runSql(
+        `INSERT INTO "_vfs_files" ("path", "content", "language") VALUES (?, ?, ?)`,
+        [path, content, lang],
       );
     }
     this._notify();
@@ -91,7 +94,7 @@ export class VirtualFS {
   delete(path: string): boolean {
     const existing = this.read(path);
     if (!existing) return false;
-    this.adapter.execRaw(`DELETE FROM "_vfs_files" WHERE "path" = '${this._escape(path)}'`);
+    this.adapter.runSql(`DELETE FROM "_vfs_files" WHERE "path" = ?`, [path]);
     this._notify();
     return true;
   }
@@ -100,8 +103,9 @@ export class VirtualFS {
     const existing = this.read(oldPath);
     if (!existing) return false;
     if (this.exists(newPath)) return false;
-    this.adapter.execRaw(
-      `UPDATE "_vfs_files" SET "path" = '${this._escape(newPath)}', "language" = '${this._escape(this._inferLanguage(newPath))}', "updated_at" = datetime('now') WHERE "path" = '${this._escape(oldPath)}'`,
+    this.adapter.runSql(
+      `UPDATE "_vfs_files" SET "path" = ?, "language" = ?, "updated_at" = datetime('now') WHERE "path" = ?`,
+      [newPath, this._inferLanguage(newPath), oldPath],
     );
     this._notify();
     return true;
@@ -117,10 +121,6 @@ export class VirtualFS {
     for (const f of files) {
       this.write(f.path, f.content);
     }
-  }
-
-  private _escape(s: string): string {
-    return s.replace(/'/g, "''");
   }
 
   private _inferLanguage(path: string): string {

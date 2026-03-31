@@ -74,4 +74,12 @@ export class SqlJsAdapter implements DatabaseAdapter {
   execRaw(sql: string): Array<{ columns: string[]; values: unknown[][] }> {
     return this.db.exec(sql);
   }
+
+  query(sql: string, params: unknown[] = []): Array<{ columns: string[]; values: unknown[][] }> {
+    return this.db.exec(sql, params as any[]);
+  }
+
+  runSql(sql: string, params: unknown[] = []): void {
+    this.db.run(sql, params as any[]);
+  }
 }

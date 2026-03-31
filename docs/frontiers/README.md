@@ -153,5 +153,4 @@ These are out of scope for WS1–WS3 but should be addressed before public launc
 
 - **Performance budget:** Define bundle size targets and lazy loading strategy. WASM SQLite + Monaco + Mermaid is a heavy payload. Need to measure and set caps for initial load, per-route chunks, and time-to-interactive — especially on mobile.
 - **Deployment and CDN:** The current plan is a Dockerfile and nothing else. Need to define static asset caching strategy, CDN configuration, and how `.sqlite` snapshots are served at scale.
-- **Offline support:** The app is nearly offline-capable (WASM SQLite, client-side runtime). A service worker with cache-first strategy for static assets and WASM binaries would make tutorials usable on flaky connections.
 - **WS2/WS3 PR breakdowns:** Currently just content outlines. Once WS1 proves the pattern, mirror its PR structure (parallelization graph, test specs, review criteria) for Music and Finances.

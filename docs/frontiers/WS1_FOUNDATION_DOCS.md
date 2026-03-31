@@ -54,6 +54,7 @@ Tutorials use `CliAction.svelte` (Run button → `runtime.exec()`). Terminal enh
            (monaco)
 
          PR 9 (terminal) — anytime, non-blocking
+         PR 11 (service worker) — anytime after PR 10
 ```
 
 **Five independent tracks can start simultaneously:**
@@ -525,6 +526,54 @@ The `/frontiers/new` page fetches these via `fetch("/tutorials/docs.sqlite")`, l
 
 ---
 
+### PR 11: Service worker for offline support
+
+**Size:** 1 file + test. Small. **Depends on PR 10** (needs static assets to be finalized).
+
+The app already runs entirely client-side — this PR caches the assets so it works without a network connection after first visit.
+
+**Write tests first:**
+
+```
+src/
+  service-worker.test.ts    — SW registers on page load
+                              Static assets cached on install (app shell, WASM, Monaco, Mermaid, fonts)
+                              Cached pages served when offline
+                              Tutorial .sqlite snapshots cached on first fetch
+                              Cache invalidated when tutorialVersion changes
+                              Stale app shell triggers background update + "Refresh for updates" banner
+```
+
+**Then implement:**
+
+```
+src/
+  service-worker.ts         — SvelteKit service worker using $service-worker module
+```
+
+Caching strategy:
+
+| Asset                         | Strategy               | Notes                                         |
+| ----------------------------- | ---------------------- | --------------------------------------------- |
+| App shell (HTML/JS/CSS)       | Stale-while-revalidate | Background update, notify user on new version |
+| sql.js WASM binary            | Cache-first            | Versioned filename, ~1MB                      |
+| Monaco workers + languages    | Cache-first            | Versioned, ~2-3MB                             |
+| Mermaid                       | Cache-first            | Lazy loaded, ~500KB                           |
+| Fonts (JetBrains Mono, Inter) | Cache-first, immutable | ~200KB                                        |
+| Tutorial `.sqlite` snapshots  | Cache-first            | Refetch when `tutorialVersion` changes        |
+
+On version mismatch (new deploy), show a non-blocking banner: "A new version is available. Refresh to update." Don't force-reload — the user may be mid-tutorial.
+
+**Review criteria:**
+
+- Service worker test passes
+- First visit caches all required assets
+- Second visit with network disabled loads the full tutorial flow
+- New deploy triggers background update + user notification
+- Tutorial `.sqlite` cache respects version changes
+
+---
+
 ## Test Summary
 
 | PR  | Tests                        | Parallel?                      |
@@ -542,6 +591,7 @@ The `/frontiers/new` page fetches these via `fetch("/tutorials/docs.sqlite")`, l
 | 8   | `docs-replay.test.ts` (5–8)  | After PR 7                     |
 | 9   | `Terminal.test.ts`           | Anytime after PR 5a            |
 | 10  | `snapshot-builder.test.ts`   | After PR 8                     |
+| 11  | `service-worker.test.ts`     | After PR 10                    |
 
 **5 PRs can start day one in parallel: PR 1, PR 2, PR 4, PR 5a, PR 6.**
 **After PR 5a: PRs 5b, 5c, 5d can parallel (5d waits on PR 3 + PR 4 too).**

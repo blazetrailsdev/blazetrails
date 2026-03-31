@@ -15,24 +15,27 @@ in JS/TS, the filename is the module and static methods live on the class.
 
 ---
 
-## Completed Areas (✅)
+## Fully Matched Areas (✅)
 
-These workstreams are fully matched — no missing classes.
+These workstreams have zero missing classes.
 
 - **Associations** — all 42 classes including builders, join dependency, preloader, errors
 - **Attribute Methods** — all 12 sub-modules (dirty, read, write, query, PK, before_type_cast, serialization, time zone, composite PK, attributes)
-- **Abstract Adapter Layer** — 38 classes (connection pool, transaction, query cache, schema definitions, etc.)
+- **Abstract Adapter Layer** — all 38 classes (connection pool, transaction, query cache, schema definitions, etc.)
 - **SQLite3 Adapter** — all 12 classes (adapter, column, statements, quoting, schema)
 - **PostgreSQL Adapter** — all 35 classes including 26 OID types, schema, quoting, utils
 - **Fixtures & Testing** — all 12 classes (FixtureSet, File, TableRow, TableRows, TestFixtures, QueryAssertions)
 - **Scoping** — all 5 classes (default, named, ScopeRegistry)
 - **Validations** — all 7 classes (absence, associated, length, numericality, presence, uniqueness)
-- **Relation Query Layer** — 22 of 25 classes (query methods, finder methods, delegation, predicate builder with all handlers, batches, merger, where/from clauses)
-- **Types** — all 16 classes (date, time, datetime, json, text, serialized, type map, decimal without scale, unsigned integer, timezone, adapter specific registry, type caster)
-- **Migrations** — 22 of 40 classes (Migration, CommandRecorder, Schema, SchemaDumper, InternalMetadata, strategies)
+- **Types** — all 16 classes (date, time, datetime, json, text, serialized, type map, etc.)
 - **Other Adapter Infrastructure** — all 8 classes (Column, Deduplicable, PoolConfig, PoolManager, SchemaCache, SqlTypeMetadata, StatementPool)
-- **Encryption** — 28 of 30 classes (encryptor, key providers, config, contexts, deterministic queries, errors, message serializers)
 - **Core/Base** — Core, Base, Callbacks, Inheritance, NoTouching, Sanitization, SchemaMigration, Suppressor, Integration, Transactions, SecurePassword
+
+## Nearly Complete Areas
+
+- **Encryption** — 28 of 30 classes (2 missing: top-level module export, Cipher misplaced)
+- **Relation Query Layer** — 22 of 25 classes (3 missing: 2 Relation internals, 1 Calculations class)
+- **Migrations** — 22 of 40 classes (18 missing are all version compatibility classes: V7.2, V7.1, V7.0, etc.)
 
 ---
 

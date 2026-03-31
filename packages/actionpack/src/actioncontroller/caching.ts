@@ -10,8 +10,11 @@ function serializeValue(value: unknown): string {
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
     return String(value);
   }
-  if (typeof value === "object" && value !== null && "toParam" in value) {
-    return String((value as { toParam(): string }).toParam());
+  if (typeof value === "object" && value !== null) {
+    const toParam = (value as Record<string, unknown>).toParam;
+    if (typeof toParam === "function") {
+      return String(toParam.call(value));
+    }
   }
   try {
     return stableStringify(value);
@@ -21,7 +24,10 @@ function serializeValue(value: unknown): string {
 }
 
 function stableStringify(obj: unknown): string {
-  if (obj === null || typeof obj !== "object") return JSON.stringify(obj);
+  if (obj === null || typeof obj !== "object") {
+    const json = JSON.stringify(obj);
+    return json === undefined ? String(obj) : json;
+  }
   if (Array.isArray(obj)) return `[${obj.map(stableStringify).join(",")}]`;
   const sorted = Object.keys(obj as Record<string, unknown>).sort();
   const pairs = sorted.map(

@@ -14,7 +14,7 @@ export class RelationHandler {
   call(attribute: Nodes.Attribute, value: any): Nodes.Node {
     let relation = value;
 
-    if (relation._selectColumns.length === 0) {
+    if (relation.selectValues.length === 0) {
       const model = relation._modelClass;
       const pk = model?.primaryKey ?? "id";
       if (Array.isArray(pk)) {

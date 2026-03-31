@@ -3,17 +3,6 @@ import type { PredicateBuilder } from "../predicate-builder.js";
 import { Range } from "../../connection-adapters/postgresql/oid/range.js";
 
 /**
- * Handles array values in where conditions by splitting them into
- * scalar values, nils, and ranges, then combining with OR predicates.
- *
- * Mirrors: ActiveRecord::PredicateBuilder::ArrayHandler
- *
- * Examples:
- *   where({ id: [1, 2, 3] })          → id IN (1, 2, 3)
- *   where({ id: [1, null, 3] })       → id IN (1, 3) OR id IS NULL
- *   where({ age: [18, new Range(25, 30)] }) → age IN (18) OR age BETWEEN 25 AND 30
- */
-/**
  * Null-object used when no scalar values exist in an array condition.
  * Its `or()` returns the other operand, acting as an identity for OR chains.
  *
@@ -25,6 +14,17 @@ export class NullPredicate {
   }
 }
 
+/**
+ * Handles array values in where conditions by splitting them into
+ * scalar values, nils, and ranges, then combining with OR predicates.
+ *
+ * Mirrors: ActiveRecord::PredicateBuilder::ArrayHandler
+ *
+ * Examples:
+ *   where({ id: [1, 2, 3] })          → id IN (1, 2, 3)
+ *   where({ id: [1, null, 3] })       → id IN (1, 3) OR id IS NULL
+ *   where({ age: [18, new Range(25, 30)] }) → age IN (18) OR age BETWEEN 25 AND 30
+ */
 export class ArrayHandler {
   private predicateBuilder: PredicateBuilder;
 
@@ -53,24 +53,34 @@ export class ArrayHandler {
       }
     }
 
-    let predicate: Nodes.Node | null = null;
-
-    if (values.length === 1) {
-      predicate = attribute.eq(values[0]);
-    } else if (values.length > 1) {
-      predicate = attribute.in(values);
+    // Build the scalar values predicate, using NullPredicate as identity
+    let valuesPredicate: Nodes.Node | typeof NullPredicate;
+    if (values.length === 0) {
+      valuesPredicate = NullPredicate;
+    } else if (values.length === 1) {
+      valuesPredicate = this.predicateBuilder.build(attribute, values[0]);
+    } else {
+      valuesPredicate = attribute.in(values);
     }
 
+    // Fold in NULL
     if (hasNull) {
-      const nullPred = attribute.isNull();
-      predicate = predicate ? new Nodes.Or(predicate, nullPred) : nullPred;
+      valuesPredicate =
+        valuesPredicate === NullPredicate
+          ? attribute.isNull()
+          : new Nodes.Or(valuesPredicate as Nodes.Node, attribute.isNull());
     }
 
-    for (const range of ranges) {
-      const rangePred = this.predicateBuilder.buildRangePredicate(attribute, range);
-      predicate = predicate ? new Nodes.Or(predicate, rangePred) : rangePred;
+    // Fold in ranges
+    if (ranges.length === 0) {
+      return valuesPredicate === NullPredicate ? attribute.in([]) : (valuesPredicate as Nodes.Node);
     }
 
-    return predicate ?? attribute.in([]);
+    const rangePreds = ranges.map((r) => this.predicateBuilder.buildRangePredicate(attribute, r));
+    let result: Nodes.Node | typeof NullPredicate = valuesPredicate;
+    for (const rp of rangePreds) {
+      result = result === NullPredicate ? rp : new Nodes.Or(result as Nodes.Node, rp);
+    }
+    return result as Nodes.Node;
   }
 }

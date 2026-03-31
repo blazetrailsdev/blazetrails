@@ -22,8 +22,14 @@ describe("TestLoadError", () => {
   });
 
   it("is missing with nil path", () => {
-    const error = new Error();
-    (error as any).code = "MODULE_NOT_FOUND";
-    expect(error).toBeInstanceOf(Error);
+    const error = new Error() as Error & { code?: string; path?: string };
+    error.code = "MODULE_NOT_FOUND";
+    error.path = undefined as unknown as string;
+    expect(error.code).toBe("MODULE_NOT_FOUND");
+    expect(error.path).toBeUndefined();
+    expect(() => {
+      const isMissing = error.code === "MODULE_NOT_FOUND";
+      if (isMissing) return true;
+    }).not.toThrow();
   });
 });

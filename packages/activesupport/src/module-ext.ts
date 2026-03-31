@@ -203,6 +203,7 @@ function internalStorageKey(name: string): string {
  */
 export function attrInternalReader(target: object, ...names: string[]): void {
   for (const name of names) {
+    assertValidAttrName(name);
     const storageKey = internalStorageKey(name);
     Object.defineProperty(target, name, {
       configurable: true,
@@ -219,6 +220,7 @@ export function attrInternalReader(target: object, ...names: string[]): void {
  */
 export function attrInternalWriter(target: object, ...names: string[]): void {
   for (const name of names) {
+    assertValidAttrName(name);
     const storageKey = internalStorageKey(name);
     Object.defineProperty(target, name, {
       configurable: true,
@@ -236,6 +238,7 @@ export function attrInternalWriter(target: object, ...names: string[]): void {
  */
 export function attrInternal(target: object, ...names: string[]): void {
   for (const name of names) {
+    assertValidAttrName(name);
     const storageKey = internalStorageKey(name);
     Object.defineProperty(target, name, {
       configurable: true,

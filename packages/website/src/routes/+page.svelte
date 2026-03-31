@@ -390,21 +390,21 @@ const users = await User.where({ name: "Alice" })
     <div class="mx-auto max-w-5xl px-6">
       <div class="grid gap-12 lg:grid-cols-2">
         <div>
-          <h2 class="mb-4 text-2xl font-bold text-text">Feels familiar.<br />Runs in the browser.</h2>
+          <h2 class="mb-4 text-2xl font-bold text-text">Feels familiar.<br />Types make it better.</h2>
           <p class="mb-6 text-text-muted leading-relaxed">
             BlazeTrails isn't a reimagination of Rails. It's a faithful port.
             ActiveRecord, ActiveModel, Arel, Rack — they're all here, with the same
-            class hierarchy and the same call signatures. And it all runs right
-            in your browser with WASM SQLite.
+            class hierarchy and the same call signatures. TypeScript adds the safety
+            that Ruby can't.
           </p>
           <ul class="space-y-3 text-sm text-text-muted">
             <li class="flex items-start gap-2">
               <span class="mt-0.5 text-accent">--</span>
-              <span>Full ORM, migrations, and queries — no server required</span>
+              <span>Typed column references, not magic strings</span>
             </li>
             <li class="flex items-start gap-2">
               <span class="mt-0.5 text-accent">--</span>
-              <span>Interactive sandbox with Monaco editor and CLI</span>
+              <span>Async/await instead of synchronous blocking</span>
             </li>
             <li class="flex items-start gap-2">
               <span class="mt-0.5 text-accent">--</span>

@@ -1,8 +1,3 @@
-# Generated
-static/docs/
-static/sql-wasm.wasm
-static/sql-wasm-sw.js
-src/lib/frontiers/blazetrails.d.ts
 .svelte-kit/
 build/
 node_modules/

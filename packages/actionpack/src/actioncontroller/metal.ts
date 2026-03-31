@@ -59,18 +59,18 @@ export class Metal extends AbstractController {
   response!: Response;
   params: Parameters = new Parameters({});
 
-  static get controllerPath(): string {
+  static controllerPath(): string {
     return underscore(this.name.replace(/Controller$/, ""));
   }
 
   static controllerName(): string {
-    const path = this.controllerPath;
+    const path = this.controllerPath();
     const lastSlash = path.lastIndexOf("/");
     return lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
   }
 
-  get controllerPath(): string {
-    return (this.constructor as typeof Metal).controllerPath;
+  controllerPath(): string {
+    return (this.constructor as typeof Metal).controllerPath();
   }
 
   controllerName(): string {

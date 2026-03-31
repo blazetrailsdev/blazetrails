@@ -179,7 +179,7 @@ export class Base extends Metal {
 
   /** Derive controller name from class name. */
   private _controllerName(): string {
-    return this.constructor.name.replace(/Controller$/, "").toLowerCase();
+    return this.controllerName();
   }
 
   /** Render to string without committing the response. */
@@ -441,7 +441,7 @@ export class Base extends Metal {
     const resolver = (this.constructor as typeof Base).templateResolver;
     if (!resolver) return;
 
-    const controllerName = this.constructor.name.replace(/Controller$/, "").toLowerCase();
+    const controllerName = this.controllerName();
     const format = this.request?.format ?? "html";
     const template = resolver(controllerName, action, format);
     if (template) {

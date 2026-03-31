@@ -582,11 +582,11 @@ describe("DoubleRenderError", () => {
 describe("ControllerClassTests", () => {
   it("controller path", () => {
     class EmptyController extends Base {}
-    expect(EmptyController.controllerPath).toBe("empty");
-    expect(new EmptyController().controllerPath).toBe("empty");
+    expect(EmptyController.controllerPath()).toBe("empty");
+    expect(new EmptyController().controllerPath()).toBe("empty");
 
     class SuperAdminController extends Base {}
-    expect(SuperAdminController.controllerPath).toBe("super_admin");
+    expect(SuperAdminController.controllerPath()).toBe("super_admin");
   });
 
   it("controller name", () => {

@@ -137,7 +137,6 @@ export {
   BelongsToReflection,
   HasAndBelongsToManyReflection,
   ThroughReflection,
-  PolymorphicReflection,
   ColumnReflection,
   columns,
   columnNames,

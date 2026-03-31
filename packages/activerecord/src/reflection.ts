@@ -491,46 +491,6 @@ export class ThroughReflection extends AbstractReflection {
   }
 }
 
-/**
- * Wraps a reflection to add polymorphic type constraints.
- *
- * Mirrors: ActiveRecord::Reflection::PolymorphicReflection
- */
-export class PolymorphicReflection extends AbstractReflection {
-  private _delegate: AbstractReflection;
-  private _previousReflection: AbstractReflection;
-
-  constructor(delegate: AbstractReflection, previousReflection: AbstractReflection) {
-    super();
-    this._delegate = delegate;
-    this._previousReflection = previousReflection;
-  }
-
-  get name(): string {
-    return (this._delegate as any).name;
-  }
-
-  get klass(): typeof Base {
-    return (this._previousReflection as any).klass;
-  }
-
-  get scope(): ((...args: any[]) => any) | null {
-    return (this._delegate as any).scope ?? null;
-  }
-
-  get pluralName(): string {
-    return (this._delegate as any).pluralName ?? pluralize(this.name);
-  }
-
-  get macro(): MacroType {
-    return (this._delegate as any).macro;
-  }
-
-  isPolymorphic(): boolean {
-    return true;
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Column reflection (unchanged from before)
 // ---------------------------------------------------------------------------

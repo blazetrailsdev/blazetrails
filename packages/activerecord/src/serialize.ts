@@ -1,5 +1,6 @@
 import type { Base } from "./base.js";
 import { Json } from "./type/json.js";
+import { SerializationTypeMismatch } from "./errors.js";
 
 interface Coder {
   dump(value: unknown): string;
@@ -68,7 +69,7 @@ const HASH_CODER: Coder = {
 export function serialize(
   modelClass: typeof Base,
   attribute: string,
-  options: { coder?: "json" | "array" | "hash" | Coder } = {},
+  options: { coder?: "json" | "array" | "hash" | Coder; type?: "Array" | "Hash" } = {},
 ): void {
   let coder: Coder;
   if (!options.coder || options.coder === "json") {
@@ -81,11 +82,21 @@ export function serialize(
     coder = options.coder;
   }
 
+  const expectedType =
+    options.type ??
+    (options.coder === "array" ? "Array" : options.coder === "hash" ? "Hash" : undefined);
+
   // Store the coder config on the class
   if (!(modelClass as any)._serializedAttributes) {
     (modelClass as any)._serializedAttributes = new Map();
   }
+  if (!(modelClass as any)._serializedExpectedTypes) {
+    (modelClass as any)._serializedExpectedTypes = new Map();
+  }
   (modelClass as any)._serializedAttributes.set(attribute, coder);
+  if (expectedType) {
+    (modelClass as any)._serializedExpectedTypes.set(attribute, expectedType);
+  }
   if (!(modelClass as any)._serializeWrapped) {
     (modelClass as any)._serializeWrapped = true;
     const originalRead = modelClass.prototype.readAttribute;
@@ -95,7 +106,23 @@ export function serialize(
       const serializedAttrs: Map<string, Coder> | undefined = (this.constructor as any)
         ._serializedAttributes;
       if (serializedAttrs?.has(name)) {
-        return serializedAttrs.get(name)!.load(raw);
+        const loaded = serializedAttrs.get(name)!.load(raw);
+        const expected: string | undefined = (
+          this.constructor as any
+        )._serializedExpectedTypes?.get(name);
+        if (expected && loaded !== null && loaded !== undefined) {
+          if (expected === "Array" && !Array.isArray(loaded)) {
+            throw new SerializationTypeMismatch(
+              `Attribute was supposed to be an Array, but was a ${typeof loaded}. -- ${JSON.stringify(loaded)}`,
+            );
+          }
+          if (expected === "Hash" && (typeof loaded !== "object" || Array.isArray(loaded))) {
+            throw new SerializationTypeMismatch(
+              `Attribute was supposed to be a Hash, but was a ${Array.isArray(loaded) ? "Array" : typeof loaded}. -- ${JSON.stringify(loaded)}`,
+            );
+          }
+        }
+        return loaded;
       }
       return raw;
     };

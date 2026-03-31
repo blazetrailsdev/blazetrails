@@ -131,13 +131,6 @@ export class DatabaseConnectionError extends ConnectionNotEstablished {
   }
 }
 
-export class ExclusiveConnectionTimeoutError extends ConnectionTimeoutError {
-  constructor(message?: string, options?: { connectionPool?: unknown; cause?: unknown }) {
-    super(message, options);
-    this.name = "ExclusiveConnectionTimeoutError";
-  }
-}
-
 export class ReadOnlyError extends ActiveRecordError {
   constructor(message?: string, options?: ErrorOptions) {
     super(message, options);
@@ -328,26 +321,6 @@ export class ActiveRecordRangeError extends StatementInvalid {
 }
 export { ActiveRecordRangeError as RangeError };
 
-export class SQLWarning extends AdapterError {
-  readonly code?: string;
-  readonly level?: string;
-  sql?: string;
-
-  constructor(
-    message?: string,
-    code?: string,
-    level?: string,
-    sql?: string,
-    connectionPool?: unknown,
-  ) {
-    super(message, { connectionPool });
-    this.name = "SQLWarning";
-    this.code = code;
-    this.level = level;
-    this.sql = sql;
-  }
-}
-
 export class PreparedStatementInvalid extends ActiveRecordError {
   constructor(message?: string, options?: ErrorOptions) {
     super(message, options);
@@ -368,26 +341,6 @@ export class NoDatabaseError extends StatementInvalid {
     return new NoDatabaseError(
       `We could not find your database: ${dbName}. Available database configurations can be found in config/database.yml.`,
     );
-  }
-}
-
-export class DatabaseAlreadyExists extends StatementInvalid {
-  constructor(
-    message?: string,
-    options?: { sql?: string; binds?: unknown[]; connectionPool?: unknown; cause?: unknown },
-  ) {
-    super(message, options);
-    this.name = "DatabaseAlreadyExists";
-  }
-}
-
-export class PreparedStatementCacheExpired extends StatementInvalid {
-  constructor(
-    message?: string,
-    options?: { sql?: string; binds?: unknown[]; connectionPool?: unknown; cause?: unknown },
-  ) {
-    super(message, options);
-    this.name = "PreparedStatementCacheExpired";
   }
 }
 
@@ -462,16 +415,6 @@ export class AttributeAssignmentError extends ActiveRecordError {
   }
 }
 
-export class MultiparameterAssignmentErrors extends ActiveRecordError {
-  readonly errors: AttributeAssignmentError[];
-
-  constructor(errors?: AttributeAssignmentError[]) {
-    super();
-    this.name = "MultiparameterAssignmentErrors";
-    this.errors = errors ?? [];
-  }
-}
-
 export class UnknownPrimaryKey extends ActiveRecordError {
   readonly model?: any;
 
@@ -496,13 +439,6 @@ export class UnknownPrimaryKey extends ActiveRecordError {
   }
 }
 
-export class UnmodifiableRelation extends ActiveRecordError {
-  constructor(message?: string, options?: ErrorOptions) {
-    super(message, options);
-    this.name = "UnmodifiableRelation";
-  }
-}
-
 export class TransactionIsolationError extends ActiveRecordError {
   constructor(message?: string, options?: ErrorOptions) {
     super(message, options);
@@ -517,13 +453,6 @@ export class TransactionRollbackError extends StatementInvalid {
   ) {
     super(message, options);
     this.name = "TransactionRollbackError";
-  }
-}
-
-export class AsynchronousQueryInsideTransactionError extends ActiveRecordError {
-  constructor(message?: string, options?: ErrorOptions) {
-    super(message, options);
-    this.name = "AsynchronousQueryInsideTransactionError";
   }
 }
 
@@ -611,20 +540,6 @@ export class ConnectionFailed extends QueryAborted {
   ) {
     super(message, options);
     this.name = "ConnectionFailed";
-  }
-}
-
-export class UnknownAttributeReference extends ActiveRecordError {
-  constructor(message?: string, options?: ErrorOptions) {
-    super(message, options);
-    this.name = "UnknownAttributeReference";
-  }
-}
-
-export class DatabaseVersionError extends ActiveRecordError {
-  constructor(message?: string, options?: ErrorOptions) {
-    super(message, options);
-    this.name = "DatabaseVersionError";
   }
 }
 

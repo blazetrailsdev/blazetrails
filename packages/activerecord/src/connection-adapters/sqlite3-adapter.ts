@@ -9,6 +9,9 @@ import {
   NotNullViolation,
   ValueTooLong,
   NoDatabaseError,
+  DatabaseConnectionError,
+  MismatchedForeignKey,
+  ActiveRecordRangeError,
 } from "../errors.js";
 import { TypeMap } from "../type/type-map.js";
 import { Date as DateType } from "../type/date.js";
@@ -42,7 +45,14 @@ export class SQLite3Adapter implements DatabaseAdapter {
 
   constructor(filename: string | ":memory:" = ":memory:", options?: { readonly?: boolean }) {
     this._readonly = options?.readonly ?? false;
-    this.db = new Database(filename, { readonly: this._readonly });
+    try {
+      this.db = new Database(filename, { readonly: this._readonly });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new DatabaseConnectionError(`Unable to open database '${filename}': ${msg}`, {
+        cause: e,
+      });
+    }
     if (!this._readonly) {
       // Enable WAL mode for better concurrent read performance
       this.db.pragma("journal_mode = WAL");
@@ -261,6 +271,9 @@ export class SQLite3Adapter implements DatabaseAdapter {
       return new RecordNotUnique(msg, { sql, binds, cause });
     }
     if (code?.includes("CONSTRAINT_FOREIGNKEY") || msg.includes("FOREIGN KEY constraint failed")) {
+      if (msg.includes("datatype mismatch")) {
+        return new MismatchedForeignKey(msg, { sql, binds, cause });
+      }
       return new InvalidForeignKey(msg, { sql, binds, cause });
     }
     if (code?.includes("CONSTRAINT_NOTNULL") || msg.includes("NOT NULL constraint failed")) {
@@ -271,6 +284,13 @@ export class SQLite3Adapter implements DatabaseAdapter {
     }
     if (code === "SQLITE_CANTOPEN" || msg.includes("unable to open database file")) {
       return new NoDatabaseError(msg, { sql, binds, cause });
+    }
+    if (
+      code === "SQLITE_RANGE" ||
+      msg.includes("column index out of range") ||
+      msg.includes("integer overflow")
+    ) {
+      return new ActiveRecordRangeError(msg, { sql, binds, cause });
     }
     return new StatementInvalid(msg, { sql, binds, cause });
   }

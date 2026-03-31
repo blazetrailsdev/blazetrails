@@ -24,8 +24,11 @@ import {
   AdapterNotFound,
   AdapterNotSpecified,
   ConnectionNotEstablished,
+  ConnectionNotDefined,
   ConfigurationError,
   DangerousAttributeError,
+  TableNotSpecified,
+  AttributeAssignmentError,
 } from "./errors.js";
 import { encrypts as _encrypts, getEncryptor } from "./encryption.js";
 import { Association as AssociationInstance } from "./associations/association.js";
@@ -244,6 +247,12 @@ export class Base extends Model {
     if (isStiSubclass(this)) {
       return getStiBase(this).tableName;
     }
+    if (this.abstractClass) {
+      throw new TableNotSpecified(
+        `${this.name} is an abstract class and has no table name. ` +
+          `Set tableName explicitly or define a non-abstract subclass.`,
+      );
+    }
     const inferred = pluralize(underscore(this.name));
     return `${this._tableNamePrefix}${inferred}${this._tableNameSuffix}`;
   }
@@ -458,9 +467,10 @@ export class Base extends Model {
       return Base._adapter;
     }
 
-    throw new ConnectionNotEstablished(
-      `No database configuration found for ${this.name}. ` +
+    throw new ConnectionNotDefined(
+      `No connection pool for '${this.name}' found. ` +
         `Call await ${this.name}.establishConnection() or set ${this.name}.adapter directly`,
+      { connectionName: this.name },
     );
   }
 
@@ -3090,7 +3100,15 @@ export class Base extends Model {
    */
   assignAttributes(attrs: Record<string, unknown>): void {
     for (const [key, value] of Object.entries(attrs)) {
-      this.writeAttribute(key, value);
+      try {
+        this.writeAttribute(key, value);
+      } catch (e) {
+        throw new AttributeAssignmentError(
+          `error on assignment ${JSON.stringify(value)} to ${key} (${e instanceof Error ? e.message : String(e)})`,
+          e instanceof Error ? e : undefined,
+          key,
+        );
+      }
     }
   }
 

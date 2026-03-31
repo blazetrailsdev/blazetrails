@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { Notifications } from "./notifications.js";
-import { Event } from "./notifications/instrumenter.js";
+import { Event, Instrumenter } from "./notifications/instrumenter.js";
 
 beforeEach(() => {
   Notifications.unsubscribeAll();
@@ -547,5 +547,56 @@ describe("ActiveSupport::Notifications", () => {
       expect(() => Notifications.instrument("safe")).not.toThrow();
       expect(events).toHaveLength(1);
     });
+  });
+});
+
+describe("Instrumenter", () => {
+  it("publishes an event", () => {
+    const published: Event[] = [];
+    const notifier = {
+      publish(_name: string, event: Event) {
+        published.push(event);
+      },
+    };
+    const inst = new Instrumenter(notifier);
+    inst.instrument("test.event");
+    expect(published).toHaveLength(1);
+    expect(published[0].name).toBe("test.event");
+    expect(published[0].end).not.toBeNull();
+  });
+
+  it("returns the block's return value", () => {
+    const notifier = { publish() {} };
+    const inst = new Instrumenter(notifier);
+    const result = inst.instrument("test.event", {}, () => 42);
+    expect(result).toBe(42);
+  });
+
+  it("publishes even when callback throws", () => {
+    const published: Event[] = [];
+    const notifier = {
+      publish(_name: string, event: Event) {
+        published.push(event);
+      },
+    };
+    const inst = new Instrumenter(notifier);
+    expect(() =>
+      inst.instrument("test.event", {}, () => {
+        throw new Error("boom");
+      }),
+    ).toThrow("boom");
+    expect(published).toHaveLength(1);
+  });
+
+  it("tracks children for nested instrumentation", () => {
+    const notifier = { publish() {} };
+    const inst = new Instrumenter(notifier);
+    let parentEvent: Event | undefined;
+    inst.instrument("parent", {}, (parent) => {
+      parentEvent = parent;
+      inst.instrument("child", {});
+    });
+    expect(parentEvent!.children).toHaveLength(1);
+    expect(parentEvent!.children[0].name).toBe("child");
   });
 });

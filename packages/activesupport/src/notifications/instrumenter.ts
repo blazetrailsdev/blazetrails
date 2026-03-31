@@ -43,6 +43,7 @@ export class Event {
 
 export class Instrumenter {
   private _notifier: { publish(name: string, event: Event): void };
+  private _stack: Event[] = [];
   readonly id: string;
 
   constructor(notifier: { publish(name: string, event: Event): void }) {
@@ -50,30 +51,40 @@ export class Instrumenter {
     this.id = generateTransactionId();
   }
 
-  instrument(name: string, payload: EventPayload = {}, fn?: (event: Event) => void): Event {
+  instrument<T = void>(name: string, payload: EventPayload = {}, fn?: (event: Event) => T): T {
     const event = new Event(name, new Date(), payload, this.id);
+    const parent = this._stack[this._stack.length - 1];
+    if (parent) parent.children.push(event);
+    this._stack.push(event);
+
     try {
-      fn?.(event);
+      if (fn) return fn(event);
+      return undefined as unknown as T;
     } finally {
       event.finish();
       this._notifier.publish(name, event);
+      this._stack.pop();
     }
-    return event;
   }
 
-  async instrumentAsync(
+  async instrumentAsync<T = void>(
     name: string,
     payload: EventPayload = {},
-    fn?: (event: Event) => Promise<void>,
-  ): Promise<Event> {
+    fn?: (event: Event) => Promise<T>,
+  ): Promise<T> {
     const event = new Event(name, new Date(), payload, this.id);
+    const parent = this._stack[this._stack.length - 1];
+    if (parent) parent.children.push(event);
+    this._stack.push(event);
+
     try {
-      await fn?.(event);
+      if (fn) return await fn(event);
+      return undefined as unknown as T;
     } finally {
       event.finish();
       this._notifier.publish(name, event);
+      this._stack.pop();
     }
-    return event;
   }
 }
 

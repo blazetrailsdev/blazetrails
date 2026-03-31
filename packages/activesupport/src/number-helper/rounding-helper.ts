@@ -22,6 +22,7 @@ export class RoundingHelper {
 
   private roundSignificant(number: number): number {
     if (number === 0) return 0;
+    if (this.precision <= 0) return Math.round(number);
     const d = Math.ceil(Math.log10(Math.abs(number)));
     const power = this.precision - d;
     const magnitude = Math.pow(10, power);

@@ -5,12 +5,7 @@
  * @see https://api.rubyonrails.org/classes/ActionController/PermissionsPolicy.html
  */
 
-function deleteHeaderCaseInsensitive(headers: Record<string, string>, name: string): void {
-  const lower = name.toLowerCase();
-  for (const key of Object.keys(headers)) {
-    if (key.toLowerCase() === lower) delete headers[key];
-  }
-}
+import { deleteHeaderCaseInsensitive } from "./header-utils.js";
 
 export function applyPermissionsPolicy(
   headers: Record<string, string>,

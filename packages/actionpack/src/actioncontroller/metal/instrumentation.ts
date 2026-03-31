@@ -32,21 +32,23 @@ export function instrumentAction(
 
   notifier?.instrument("start_processing.action_controller", payload);
 
-  return fn().then(
-    (result) => {
-      payload.status = deriveStatus(result, 200);
-      payload.duration = now() - start;
-      notifier?.instrument("process_action.action_controller", payload);
-      return result;
-    },
-    (error) => {
-      payload.status = deriveStatus(error, 500);
-      payload.exception = error instanceof Error ? [error.name, error.message] : String(error);
-      payload.duration = now() - start;
-      notifier?.instrument("process_action.action_controller", payload);
-      throw error;
-    },
-  );
+  return Promise.resolve()
+    .then(fn)
+    .then(
+      (result) => {
+        payload.status = deriveStatus(result, 200);
+        payload.duration = now() - start;
+        notifier?.instrument("process_action.action_controller", payload);
+        return result;
+      },
+      (error) => {
+        payload.status = deriveStatus(error, 500);
+        payload.exception = error instanceof Error ? [error.name, error.message] : String(error);
+        payload.duration = now() - start;
+        notifier?.instrument("process_action.action_controller", payload);
+        throw error;
+      },
+    );
 }
 
 function deriveStatus(obj: unknown, fallback: number): number {

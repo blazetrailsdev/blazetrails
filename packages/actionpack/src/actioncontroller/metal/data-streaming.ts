@@ -1,69 +1,16 @@
 /**
  * ActionController::DataStreaming
  *
- * Methods for sending arbitrary data and for streaming files to the browser.
+ * Re-exports send_file/send_data helpers from ActionDispatch.
  * @see https://api.rubyonrails.org/classes/ActionController/DataStreaming.html
  */
 
-import * as fs from "fs";
-import * as path from "path";
-import { MissingFile } from "./exceptions.js";
-import { MimeType } from "../../actiondispatch/mime-type.js";
+export {
+  sendFile,
+  sendData,
+  type SendFileOptions,
+  type SendDataOptions,
+} from "../../actiondispatch/send-file.js";
 
 export const DEFAULT_SEND_FILE_TYPE = "application/octet-stream";
 export const DEFAULT_SEND_FILE_DISPOSITION = "attachment";
-
-export function inferContentType(filename: string): string {
-  const ext = path.extname(filename).toLowerCase().replace(/^\./, "");
-  const mime = MimeType.lookupByExtension(ext);
-  return mime?.string ?? DEFAULT_SEND_FILE_TYPE;
-}
-
-export function buildSendFileHeaders(options: {
-  filename?: string;
-  type?: string;
-  disposition?: string;
-}): Record<string, string> {
-  const headers: Record<string, string> = {};
-  const contentType =
-    options.type ??
-    (options.filename ? inferContentType(options.filename) : DEFAULT_SEND_FILE_TYPE);
-  headers["content-type"] = contentType;
-
-  const disposition = options.disposition ?? DEFAULT_SEND_FILE_DISPOSITION;
-  if (disposition && options.filename) {
-    headers["content-disposition"] = buildContentDisposition(disposition, options.filename);
-  } else if (disposition) {
-    headers["content-disposition"] = disposition;
-  }
-
-  headers["content-transfer-encoding"] = "binary";
-  return headers;
-}
-
-function buildContentDisposition(disposition: string, filename: string): string {
-  const sanitized = filename.replace(/[\r\n]/g, "");
-  const hasNonAscii = /[^\x20-\x7E]/.test(sanitized);
-  if (hasNonAscii) {
-    const encoded = encodeURIComponent(sanitized);
-    return `${disposition}; filename*=UTF-8''${encoded}`;
-  }
-  return `${disposition}; filename="${sanitized.replace(/"/g, '\\"')}"`;
-}
-
-export function readFileForSend(filePath: string): Buffer {
-  try {
-    const stats = fs.statSync(filePath);
-    if (!stats.isFile()) {
-      throw new MissingFile(`Cannot read file ${filePath}`);
-    }
-  } catch (e) {
-    if (e instanceof MissingFile) throw e;
-    throw new MissingFile(`Cannot read file ${filePath}`);
-  }
-  try {
-    return fs.readFileSync(filePath);
-  } catch {
-    throw new MissingFile(`Cannot read file ${filePath}`);
-  }
-}

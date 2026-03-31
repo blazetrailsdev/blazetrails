@@ -1,21 +1,12 @@
 /**
  * ActionController::MimeResponds
  *
- * Content negotiation via respond_to blocks.
+ * Content negotiation via respond_to blocks. Delegates MIME resolution
+ * to ActionDispatch::MimeType.lookup for custom/vendor type support.
  * @see https://api.rubyonrails.org/classes/ActionController/MimeResponds.html
  */
 
-const MIME_TO_SYMBOL: Record<string, string> = {
-  "text/html": "html",
-  "application/json": "json",
-  "application/xml": "xml",
-  "text/xml": "xml",
-  "text/javascript": "js",
-  "application/javascript": "js",
-  "text/plain": "text",
-  "text/csv": "csv",
-  "*/*": "*/*",
-};
+import { MimeType } from "../../actiondispatch/mime-type.js";
 
 export class Collector {
   private _responses = new Map<string, () => void>();
@@ -76,7 +67,8 @@ export class Collector {
           if (first) return { handler: this._responses.get(first)! };
           continue;
         }
-        const symbol = MIME_TO_SYMBOL[mime];
+        const resolved = MimeType.lookup(mime);
+        const symbol = resolved?.symbol;
         if (symbol) {
           const handler = this._responses.get(symbol);
           if (handler) return { handler };

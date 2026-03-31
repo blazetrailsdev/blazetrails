@@ -431,6 +431,89 @@ describe("RescueControllerTest", () => {
     await c.dispatch("action", makeRequest(), makeResponse());
     expect(c.body).toBe("ResourceUnavailableStr");
   });
+
+  it("rescue when wrapper has more specific handler than cause", async () => {
+    class WrapperError extends Error {}
+    class CauseError extends Error {}
+    class C extends Base {
+      async action() {
+        const cause = new CauseError("cause");
+        const wrapper = new WrapperError("wrapper");
+        (wrapper as any).cause = cause;
+        throw wrapper;
+      }
+    }
+    C.rescueFrom(CauseError, function (this: Base) {
+      this.head(422);
+    });
+    C.rescueFrom(WrapperError, function (this: Base) {
+      this.head(403);
+    });
+    const c = new C();
+    await c.dispatch("action", makeRequest(), makeResponse());
+    expect(c.status).toBe(403);
+  });
+
+  it("rescue when cause has more specific handler than wrapper", async () => {
+    class GenericError extends Error {}
+    class SpecificCause extends Error {}
+    class C extends Base {
+      async action() {
+        const cause = new SpecificCause("specific");
+        const wrapper = new GenericError("generic");
+        (wrapper as any).cause = cause;
+        throw wrapper;
+      }
+    }
+    C.rescueFrom(GenericError, function (this: Base) {
+      this.head(403);
+    });
+    C.rescueFrom(SpecificCause, function (this: Base) {
+      this.head(422);
+    });
+    const c = new C();
+    await c.dispatch("action", makeRequest(), makeResponse());
+    expect(c.status).toBe(403);
+  });
+
+  it("rescue when cause has handler, but wrapper doesn't", async () => {
+    class UnhandledWrapper extends Error {}
+    class HandledCause extends Error {}
+    class C extends Base {
+      async action() {
+        const cause = new HandledCause("cause");
+        const wrapper = new UnhandledWrapper("wrapper");
+        (wrapper as any).cause = cause;
+        throw wrapper;
+      }
+    }
+    C.rescueFrom(HandledCause, function (this: Base) {
+      this.head(422);
+    });
+    const c = new C();
+    await c.dispatch("action", makeRequest(), makeResponse());
+    expect(c.status).toBe(422);
+  });
+
+  it("can rescue a ParseError", async () => {
+    class ParseError extends SyntaxError {
+      constructor() {
+        super("unexpected token");
+      }
+    }
+    class C extends Base {
+      async action() {
+        throw new ParseError();
+      }
+    }
+    C.rescueFrom(ParseError, function (this: Base) {
+      this.render({ plain: "parse error", status: 400 });
+    });
+    const c = new C();
+    await c.dispatch("action", makeRequest(), makeResponse());
+    expect(c.status).toBe(400);
+    expect(c.body).toBe("parse error");
+  });
 });
 
 describe("ExceptionInheritanceRescueControllerTest", () => {

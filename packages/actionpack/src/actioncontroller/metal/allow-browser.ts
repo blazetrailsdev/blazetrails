@@ -5,7 +5,7 @@
  * @see https://api.rubyonrails.org/classes/ActionController/AllowBrowser.html
  */
 
-export type BrowserVersions = "modern" | Record<string, string>;
+export type BrowserVersions = "modern" | Record<string, string | false>;
 
 const MODERN_MINIMUM_VERSIONS: Record<string, string> = {
   safari: "17.2",
@@ -14,8 +14,16 @@ const MODERN_MINIMUM_VERSIONS: Record<string, string> = {
   opera: "106",
 };
 
+const BROWSER_PATTERNS: Record<string, RegExp> = {
+  ie: /(?:msie |trident.*rv:)(\d+(?:\.\d+)*)/,
+  safari: /version\/(\d+(?:\.\d+)*)/,
+  chrome: /chrome\/(\d+(?:\.\d+)*)/,
+  firefox: /firefox\/(\d+(?:\.\d+)*)/,
+  opera: /opr\/(\d+(?:\.\d+)*)/,
+};
+
 export class BrowserBlocker {
-  private _versions: Record<string, string>;
+  private _versions: Record<string, string | false>;
   private _userAgent: string;
 
   constructor(userAgent: string, versions: BrowserVersions) {
@@ -24,8 +32,15 @@ export class BrowserBlocker {
   }
 
   get blocked(): boolean {
+    const ua = this._userAgent.toLowerCase();
+    if (this._isBot(ua)) return false;
+
     for (const [browser, minVersion] of Object.entries(this._versions)) {
-      const version = this._detectVersion(browser);
+      if (minVersion === false) {
+        if (this._detectVersion(browser, ua) !== null) return true;
+        continue;
+      }
+      const version = this._detectVersion(browser, ua);
       if (version !== null && this._compareVersions(version, minVersion) < 0) {
         return true;
       }
@@ -33,15 +48,12 @@ export class BrowserBlocker {
     return false;
   }
 
-  private _detectVersion(browser: string): string | null {
-    const ua = this._userAgent.toLowerCase();
-    const patterns: Record<string, RegExp> = {
-      safari: /version\/(\d+(?:\.\d+)*)/,
-      chrome: /chrome\/(\d+(?:\.\d+)*)/,
-      firefox: /firefox\/(\d+(?:\.\d+)*)/,
-      opera: /opr\/(\d+(?:\.\d+)*)/,
-    };
-    const pattern = patterns[browser.toLowerCase()];
+  private _isBot(ua: string): boolean {
+    return /bot|crawl|spider|slurp|googlebot/i.test(ua);
+  }
+
+  private _detectVersion(browser: string, ua: string): string | null {
+    const pattern = BROWSER_PATTERNS[browser.toLowerCase()];
     if (!pattern) return null;
     const match = ua.match(pattern);
     return match ? match[1] : null;

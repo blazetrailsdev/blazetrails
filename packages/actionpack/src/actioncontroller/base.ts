@@ -466,17 +466,29 @@ export class Base extends Metal {
       klass = Object.getPrototypeOf(klass);
     }
 
-    for (const k of hierarchy.reverse()) {
-      if (Object.prototype.hasOwnProperty.call(k, "_rescueHandlers")) {
-        const handlers = (k as any)._rescueHandlers as Array<{
-          errorClass: new (...args: any[]) => Error;
-          handler: RescueHandler;
-        }>;
-        for (const { errorClass, handler } of handlers.reverse()) {
-          if (error instanceof errorClass) return handler;
+    const matchHandler = (err: Error): RescueHandler | null => {
+      for (const k of hierarchy.reverse()) {
+        if (Object.prototype.hasOwnProperty.call(k, "_rescueHandlers")) {
+          const handlers = (k as any)._rescueHandlers as Array<{
+            errorClass: new (...args: any[]) => Error;
+            handler: RescueHandler;
+          }>;
+          for (const { errorClass, handler } of handlers.reverse()) {
+            if (err instanceof errorClass) return handler;
+          }
         }
       }
+      return null;
+    };
+
+    const handler = matchHandler(error);
+    if (handler) return handler;
+
+    const cause = (error as any).cause;
+    if (cause instanceof Error) {
+      return matchHandler(cause);
     }
+
     return null;
   }
 

@@ -3103,8 +3103,14 @@ export class Base extends Model {
       try {
         this.writeAttribute(key, value);
       } catch (e) {
+        let repr: string;
+        try {
+          repr = JSON.stringify(value);
+        } catch {
+          repr = String(value);
+        }
         throw new AttributeAssignmentError(
-          `error on assignment ${JSON.stringify(value)} to ${key} (${e instanceof Error ? e.message : String(e)})`,
+          `error on assignment ${repr} to ${key} (${e instanceof Error ? e.message : String(e)})`,
           e instanceof Error ? e : undefined,
           key,
         );

@@ -96,6 +96,8 @@ export function serialize(
   (modelClass as any)._serializedAttributes.set(attribute, coder);
   if (expectedType) {
     (modelClass as any)._serializedExpectedTypes.set(attribute, expectedType);
+  } else {
+    (modelClass as any)._serializedExpectedTypes.delete(attribute);
   }
   if (!(modelClass as any)._serializeWrapped) {
     (modelClass as any)._serializeWrapped = true;
@@ -112,13 +114,25 @@ export function serialize(
         )._serializedExpectedTypes?.get(name);
         if (expected && loaded !== null && loaded !== undefined) {
           if (expected === "Array" && !Array.isArray(loaded)) {
+            let repr: string;
+            try {
+              repr = JSON.stringify(loaded);
+            } catch {
+              repr = String(loaded);
+            }
             throw new SerializationTypeMismatch(
-              `Attribute was supposed to be an Array, but was a ${typeof loaded}. -- ${JSON.stringify(loaded)}`,
+              `Attribute was supposed to be an Array, but was a ${typeof loaded}. -- ${repr}`,
             );
           }
           if (expected === "Hash" && (typeof loaded !== "object" || Array.isArray(loaded))) {
+            let repr: string;
+            try {
+              repr = JSON.stringify(loaded);
+            } catch {
+              repr = String(loaded);
+            }
             throw new SerializationTypeMismatch(
-              `Attribute was supposed to be a Hash, but was a ${Array.isArray(loaded) ? "Array" : typeof loaded}. -- ${JSON.stringify(loaded)}`,
+              `Attribute was supposed to be a Hash, but was a ${Array.isArray(loaded) ? "Array" : typeof loaded}. -- ${repr}`,
             );
           }
         }

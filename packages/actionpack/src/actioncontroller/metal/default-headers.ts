@@ -32,11 +32,3 @@ export function applyDefaultHeaders(responseHeaders: Record<string, string>): vo
     }
   }
 }
-
-export interface ClassMethods {
-  makeResponse(request: unknown): unknown;
-}
-
-export interface DefaultHeaders {
-  defaultHeaders?: Record<string, string>;
-}

@@ -75,14 +75,3 @@ export function buildCacheControl(options: {
 
   return parts.join(", ");
 }
-
-export interface ClassMethods {
-  etag(etagger: () => unknown): void;
-}
-
-export interface ConditionalGet {
-  freshWhen(options: Record<string, unknown>): void;
-  stale(options: Record<string, unknown>): boolean;
-  expiresIn(seconds: number, options?: Record<string, unknown>): void;
-  expiresNow(): void;
-}

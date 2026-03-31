@@ -28,14 +28,3 @@ export function applyContentSecurityPolicy(
     headers["content-security-policy"] = policy;
   }
 }
-
-export interface ClassMethods {
-  contentSecurityPolicy(
-    enabled?: boolean | ((policy: unknown) => void),
-    options?: Record<string, unknown>,
-  ): void;
-}
-
-export interface ContentSecurityPolicy {
-  contentSecurityPolicy: boolean;
-}

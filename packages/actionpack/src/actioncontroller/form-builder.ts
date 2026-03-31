@@ -19,11 +19,3 @@ export function getDefaultFormBuilder(controllerName: string): unknown | undefin
 export function resolveFormBuilder(controllerName: string, fallback?: unknown): unknown {
   return _registry.get(controllerName) ?? fallback;
 }
-
-export interface ClassMethods {
-  defaultFormBuilder: unknown;
-}
-
-export interface FormBuilder {
-  defaultFormBuilder: unknown;
-}

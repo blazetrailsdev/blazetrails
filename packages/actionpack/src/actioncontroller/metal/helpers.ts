@@ -34,12 +34,3 @@ export class HelperRegistry {
     return helpers;
   }
 }
-
-export interface Helpers {
-  helpers: Record<string, unknown>;
-}
-
-export interface ClassMethods {
-  helperAttr(...attrs: string[]): void;
-  helper(...args: unknown[]): void;
-}

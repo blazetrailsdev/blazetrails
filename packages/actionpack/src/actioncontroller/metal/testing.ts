@@ -23,12 +23,3 @@ export function clearInstanceVariablesBetweenRequests(
   }
   return new Set(Object.keys(controller));
 }
-
-export interface Functional {
-  clearInstanceVariablesBetweenRequests(trackedVars: Set<string>): Set<string>;
-  recycle(): void;
-}
-
-export interface Testing {
-  recycle(): void;
-}

@@ -20,11 +20,3 @@ export function inheritedWithHelpers(
   const path = resolveHelperPath(klass.name);
   helperLoader?.(path);
 }
-
-export interface Railties {
-  readonly helpers: Helpers;
-}
-
-export interface Helpers {
-  inheritedWithHelpers(klass: { name: string }, helperLoader?: (path: string) => unknown): void;
-}

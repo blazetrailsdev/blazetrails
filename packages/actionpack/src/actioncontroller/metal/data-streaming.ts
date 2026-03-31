@@ -14,8 +14,3 @@ export {
 
 export const DEFAULT_SEND_FILE_TYPE = "application/octet-stream";
 export const DEFAULT_SEND_FILE_DISPOSITION = "attachment";
-
-export interface DataStreaming {
-  sendFile(path: string, options?: Record<string, unknown>): void;
-  sendData(data: string | Buffer, options?: Record<string, unknown>): void;
-}

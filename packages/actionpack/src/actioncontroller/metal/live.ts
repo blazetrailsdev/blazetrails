@@ -71,11 +71,3 @@ export class Response {
   stream: Buffer = new Buffer();
   status: number = 200;
 }
-
-export interface Live {
-  response: Response;
-}
-
-export interface ClassMethods {
-  makeResponse(request: unknown): Response;
-}

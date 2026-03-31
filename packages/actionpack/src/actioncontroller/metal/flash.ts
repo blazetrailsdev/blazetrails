@@ -41,11 +41,3 @@ export class FlashTypeRegistry {
     return remaining;
   }
 }
-
-export interface Flash {
-  flash: Record<string, unknown>;
-}
-
-export interface ClassMethods {
-  addFlashTypes(...types: string[]): void;
-}

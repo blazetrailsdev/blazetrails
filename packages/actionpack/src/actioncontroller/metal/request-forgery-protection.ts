@@ -1,10 +1,8 @@
 /**
  * ActionController::RequestForgeryProtection
  *
- * CSRF protection error classes defined in the ActionController namespace.
- * These will be raised by the CSRF verification flow once fully wired;
- * currently the ActionDispatch verifier throws its own version.
- * @see https://api.rubyonrails.org/classes/ActionController/InvalidAuthenticityToken.html
+ * CSRF protection error classes and strategy implementations.
+ * @see https://api.rubyonrails.org/classes/ActionController/RequestForgeryProtection.html
  */
 
 import { ActionControllerError } from "./exceptions.js";
@@ -23,26 +21,8 @@ export class InvalidCrossOriginRequest extends ActionControllerError {
   }
 }
 
-export interface RequestForgeryProtection {
-  verifyAuthenticityToken(): void;
-  formAuthenticityToken(): string;
-}
-
-export interface ClassMethods {
-  protectFromForgery(options?: {
-    with?: "exception" | "reset_session" | "null_session";
-    prepend?: boolean;
-  }): void;
-  skipForgeryProtection(options?: Record<string, unknown>): void;
-}
-
 export interface ProtectionMethods {
   handleUnverifiedRequest(): void;
-}
-
-export class NullSession implements ProtectionMethods {
-  constructor(_controller: unknown) {}
-  handleUnverifiedRequest(): void {}
 }
 
 export class NullSessionHash extends Map<string, unknown> {
@@ -59,30 +39,68 @@ export class NullCookieJar extends Map<string, string> {
   constructor() {
     super();
   }
+  get signed(): NullCookieJar {
+    return this;
+  }
+  get encrypted(): NullCookieJar {
+    return this;
+  }
+}
+
+type Controller = Record<string, unknown>;
+
+export class NullSession implements ProtectionMethods {
+  private _controller: Controller;
+  constructor(controller: Controller) {
+    this._controller = controller;
+  }
+  handleUnverifiedRequest(): void {
+    this._controller.session = new NullSessionHash();
+    this._controller.cookies = new NullCookieJar();
+    if (this._controller.flash !== undefined) {
+      this._controller.flash = new NullSessionHash();
+    }
+  }
 }
 
 export class ResetSession implements ProtectionMethods {
-  constructor(_controller: unknown) {}
-  handleUnverifiedRequest(): void {}
+  private _controller: Controller;
+  constructor(controller: Controller) {
+    this._controller = controller;
+  }
+  handleUnverifiedRequest(): void {
+    this._controller.session = {};
+  }
 }
 
 export class Exception implements ProtectionMethods {
-  constructor(_controller: unknown) {}
+  constructor(_controller: Controller) {}
   handleUnverifiedRequest(): void {
     throw new InvalidAuthenticityToken();
   }
 }
 
+const TOKEN_KEY = "_csrf_token";
+
 export class SessionStore {
-  read(_session: unknown): string | null {
-    return null;
+  read(session: Record<string, unknown>): string | null {
+    const token = session[TOKEN_KEY];
+    return typeof token === "string" ? token : null;
   }
-  write(_session: unknown, _token: string): void {}
+  write(session: Record<string, unknown>, token: string): void {
+    session[TOKEN_KEY] = token;
+  }
 }
 
 export class CookieStore {
-  read(_cookies: unknown): string | null {
-    return null;
+  private _cookieName: string;
+  constructor(cookieName = "csrf_token") {
+    this._cookieName = cookieName;
   }
-  write(_cookies: unknown, _token: string): void {}
+  read(cookies: Record<string, string>): string | null {
+    return cookies[this._cookieName] ?? null;
+  }
+  write(cookies: Record<string, string>, token: string): void {
+    cookies[this._cookieName] = token;
+  }
 }

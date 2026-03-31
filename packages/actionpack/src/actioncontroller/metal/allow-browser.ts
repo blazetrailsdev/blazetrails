@@ -59,10 +59,3 @@ export class BrowserBlocker {
     return 0;
   }
 }
-
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface AllowBrowser extends ClassMethods {}
-
-export interface ClassMethods {
-  allowBrowser(options: { versions: "modern" | Record<string, string> }): void;
-}

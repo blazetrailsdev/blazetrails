@@ -431,8 +431,3 @@ export interface Behavior {
   delete(action: string, options?: RequestOptions): Promise<void>;
   head(action: string, options?: RequestOptions): Promise<void>;
 }
-
-export interface ClassMethods {
-  tests: unknown;
-  controllerClass: unknown;
-}

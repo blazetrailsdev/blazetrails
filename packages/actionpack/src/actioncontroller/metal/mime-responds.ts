@@ -42,7 +42,3 @@ export class VariantCollector {
     return this._variants.get(name);
   }
 }
-
-export interface MimeResponds {
-  respondTo(block: (collector: Collector) => void): void;
-}

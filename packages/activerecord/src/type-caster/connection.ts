@@ -49,20 +49,6 @@ export class Connection {
         : columnsHash[attrName];
     }
 
-    // Fallback: try connection handler pool config schema cache
-    const handler = this._klass._connectionHandler;
-    if (handler) {
-      const pool = handler.retrieveConnectionPool?.(this._klass.name);
-      const poolConfig = pool?.poolConfig;
-      const schemaCache = poolConfig?.schemaCache;
-      if (schemaCache) {
-        const columns = schemaCache.columnsHash?.(this._tableName);
-        if (columns) {
-          return columns instanceof globalThis.Map ? columns.get(attrName) : columns[attrName];
-        }
-      }
-    }
-
     return undefined;
   }
 }

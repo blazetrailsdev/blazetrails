@@ -270,7 +270,7 @@ export class SQLite3Adapter implements DatabaseAdapter {
       return new ValueTooLong(msg, { sql, binds, cause });
     }
     if (code === "SQLITE_CANTOPEN" || msg.includes("unable to open database file")) {
-      return new NoDatabaseError(msg);
+      return new NoDatabaseError(msg, { sql, binds, cause });
     }
     return new StatementInvalid(msg, { sql, binds, cause });
   }

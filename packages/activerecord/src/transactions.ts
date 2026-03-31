@@ -35,6 +35,9 @@ export async function transaction<T>(
         "Setting transaction isolation level is not supported inside a nested transaction",
       );
     }
+    throw new TransactionIsolationError(
+      `Transaction isolation level '${options.isolation}' is not yet supported`,
+    );
   }
 
   const tx = new Transaction(adapter);

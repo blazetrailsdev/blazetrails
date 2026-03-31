@@ -356,8 +356,11 @@ export class PreparedStatementInvalid extends ActiveRecordError {
 }
 
 export class NoDatabaseError extends StatementInvalid {
-  constructor(message?: string, options?: { connectionPool?: unknown }) {
-    super(message ?? "Database not found", { connectionPool: options?.connectionPool });
+  constructor(
+    message?: string,
+    options?: { sql?: string; binds?: unknown[]; connectionPool?: unknown; cause?: unknown },
+  ) {
+    super(message ?? "Database not found", options);
     this.name = "NoDatabaseError";
   }
 

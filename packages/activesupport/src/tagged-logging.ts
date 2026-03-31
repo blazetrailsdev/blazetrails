@@ -25,8 +25,11 @@ export class TagStack {
   }
 
   popTags(count: number = 1): string[] {
+    if (count <= 0) return [];
     this._tagsString = null;
-    return this._tags.splice(-count, count);
+    const n = Math.min(Math.trunc(count), this._tags.length);
+    if (n <= 0) return [];
+    return this._tags.splice(-n, n);
   }
 
   clear(): void {

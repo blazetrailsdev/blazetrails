@@ -3,7 +3,7 @@
  * Mirrors Rails' core_ext/object/duplicable.rb.
  *
  * In JS, most values are duplicable (via structuredClone or spread).
- * Functions and WeakRef/WeakMap are notable exceptions.
+ * Notable exceptions include functions, symbols, WeakRef, WeakMap, and WeakSet.
  */
 
 export function isDuplicable(value: unknown): boolean {

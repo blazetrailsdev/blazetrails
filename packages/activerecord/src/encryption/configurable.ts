@@ -33,7 +33,7 @@ export class Configurable {
       if (key === "primaryKey" || key === "deterministicKey" || key === "keyDerivationSalt") {
         continue;
       }
-      if (Object.prototype.hasOwnProperty.call(config, key)) {
+      if (key in config) {
         (config as any)[key] = value;
       }
     }

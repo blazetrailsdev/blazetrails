@@ -1,6 +1,7 @@
 import { Type, StringType } from "@blazetrails/activemodel";
 import type { Scheme } from "./scheme.js";
 import { Encryptor } from "./encryptor.js";
+import { isEncryptionDisabled, isProtectedMode } from "./context.js";
 
 /**
  * An ActiveModel type that encrypts/decrypts attribute values. This is
@@ -16,6 +17,7 @@ export class EncryptedAttributeType extends Type {
   private _previousType: boolean;
   private _default?: unknown;
   private _encryptor: Encryptor;
+  private _previousTypes?: EncryptedAttributeType[];
 
   constructor(options: {
     scheme: Scheme;
@@ -37,12 +39,17 @@ export class EncryptedAttributeType extends Type {
 
   deserialize(value: unknown): unknown {
     if (value === null || value === undefined) return value;
+    if (isEncryptionDisabled()) return value;
     const decrypted = this.decrypt(value);
     return this.castType.deserialize?.(decrypted) ?? decrypted;
   }
 
   serialize(value: unknown): unknown {
     if (value === null || value === undefined) return null;
+    if (isEncryptionDisabled()) return this.castType.serialize?.(value) ?? value;
+    if (isProtectedMode()) {
+      throw new Error("Can't write encrypted attribute in protected mode");
+    }
     const casted = this.castType.serialize?.(value) ?? value;
     if (casted === null || casted === undefined) return null;
     const str = typeof casted === "string" ? casted : String(casted);
@@ -65,15 +72,18 @@ export class EncryptedAttributeType extends Type {
   }
 
   get previousTypes(): EncryptedAttributeType[] {
-    return (this.scheme.previousSchemes ?? []).map(
-      (s: Scheme) =>
-        new EncryptedAttributeType({
-          scheme: s,
-          castType: this.castType,
-          previousType: true,
-          default: this._default,
-        }),
-    );
+    if (!this._previousTypes) {
+      this._previousTypes = (this.scheme.previousSchemes ?? []).map(
+        (s: Scheme) =>
+          new EncryptedAttributeType({
+            scheme: s,
+            castType: this.castType,
+            previousType: true,
+            default: this._default,
+          }),
+      );
+    }
+    return this._previousTypes;
   }
 
   private decrypt(value: unknown): unknown {

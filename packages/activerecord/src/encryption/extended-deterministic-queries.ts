@@ -75,18 +75,19 @@ export class EncryptedQuery {
     return value;
   }
 
-  private static allCiphertextsFor(plaintext: string, type: EncryptedAttributeType): string[] {
-    const results: string[] = [];
-    // Current scheme ciphertext
-    const current = type.serialize(plaintext);
-    if (typeof current === "string") results.push(current);
-    // Previous scheme ciphertexts
+  private static allCiphertextsFor(
+    plaintext: string,
+    type: EncryptedAttributeType,
+  ): Array<string | AdditionalValue> {
+    const results: Array<string | AdditionalValue> = [];
+    // Current scheme ciphertext (wrapped to prevent re-encryption)
+    results.push(new AdditionalValue(plaintext, type));
+    // Previous scheme ciphertexts (also wrapped)
     for (const prev of type.previousTypes) {
-      const ct = prev.serialize(plaintext);
-      if (typeof ct === "string") results.push(ct);
+      results.push(new AdditionalValue(plaintext, prev));
     }
     // Include plaintext for support_unencrypted_data migration
-    if (!results.includes(plaintext)) results.push(plaintext);
+    results.push(plaintext);
     return results;
   }
 }

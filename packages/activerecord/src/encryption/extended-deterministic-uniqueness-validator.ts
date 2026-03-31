@@ -1,5 +1,4 @@
 import { EncryptedAttributeType } from "./encrypted-attribute-type.js";
-import { Contexts } from "./contexts.js";
 
 /**
  * Extends uniqueness validation for deterministic encrypted attributes.
@@ -22,9 +21,9 @@ export class ExtendedDeterministicUniquenessValidator {
 
 /**
  * Performs uniqueness validation across all encryption scheme versions.
- * For each previous encryption type, serializes the value to its
- * ciphertext and validates uniqueness against the raw ciphertext
- * (with encryption disabled so the query doesn't double-encrypt).
+ * For each previous encryption type, temporarily swaps typeForAttribute
+ * so the query builder uses the previous scheme's serialize, then
+ * restores the original.
  *
  * Mirrors: ActiveRecord::Encryption::ExtendedDeterministicUniquenessValidator::EncryptedUniquenessValidator
  */
@@ -42,18 +41,24 @@ export class EncryptedUniquenessValidator {
       return;
     }
 
-    // Validate against current ciphertext
-    const currentCiphertext = type.serialize(value);
-    Contexts.withoutEncryption(() => {
-      originalValidate(record, attribute, currentCiphertext);
-    });
+    // Validate with current encryption scheme
+    originalValidate(record, attribute, value);
 
-    // Validate against previous scheme ciphertexts
+    // Validate against each previous scheme by temporarily swapping
+    // typeForAttribute so the query layer uses the previous type
+    const originalTypeForAttribute = klass.typeForAttribute?.bind(klass);
     for (const prevType of type.previousTypes) {
-      const previousCiphertext = prevType.serialize(value);
-      Contexts.withoutEncryption(() => {
-        originalValidate(record, attribute, previousCiphertext);
-      });
+      klass.typeForAttribute = (attr: string) => {
+        if (attr === attribute) return prevType;
+        return originalTypeForAttribute?.(attr);
+      };
+      try {
+        originalValidate(record, attribute, value);
+      } finally {
+        if (originalTypeForAttribute) {
+          klass.typeForAttribute = originalTypeForAttribute;
+        }
+      }
     }
   }
 }

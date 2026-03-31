@@ -135,7 +135,7 @@ src/lib/frontiers/tutorials/finances/
 ```
 src/lib/frontiers/tutorials/finances/steps/
   step-06.ts            — "CSV Import"
-                          Panes: file-tree, editor, repl, database, console
+                          Panes: terminal, file-tree, editor, repl, database, console
                           Introduces: REPL — dedicated callout explaining interactive
                             evaluation, access to adapter/runtime, prototyping before
                             committing to a file
@@ -151,7 +151,7 @@ src/lib/frontiers/tutorials/finances/steps/
                           CLI: run lib/csv-importer.ts
                           Diagram: flow — CSV → parse → validate → lookup → INSERT
   step-07.ts            — "GROUP BY and Aggregation"
-                          Panes: file-tree, editor, sql, database, console
+                          Panes: terminal, file-tree, editor, sql, database, console
                           Concept: GROUP BY, aggregate functions, HAVING
                           Diffs: 3 SQL query files:
                             spending-by-category.sql (GROUP BY + SUM + COUNT)
@@ -160,7 +160,7 @@ src/lib/frontiers/tutorials/finances/steps/
                           CLI: sql queries/finances/spending-by-category.sql
                           Diagram: flow — transactions → GROUP BY → summaries
   step-08.ts            — "Budget vs. Actual"
-                          Panes: file-tree, editor, sql, database, console
+                          Panes: terminal, file-tree, editor, sql, database, console
                           Concept: LEFT JOIN, COALESCE, CASE expressions
                           Diffs: budget-variance.sql, lib/budget-report.ts
                           CLI: run lib/budget-report.ts

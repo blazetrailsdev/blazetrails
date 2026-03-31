@@ -400,7 +400,7 @@ describe("RequestForgeryProtectionControllerUsingExceptionTest", () => {
 
 describe("RequestForgeryProtectionControllerUsingResetSessionTest", () => {
   it("should emit a csrf-param meta tag and a csrf-token meta tag", () => {
-    const csrf = new RequestForgeryProtection();
+    const csrf = new RequestForgeryProtection({ strategy: "reset_session" });
     const session: Record<string, unknown> = {};
     const meta = csrf.csrfMetaTag(session);
     expect(meta.param).toBe("authenticity_token");
@@ -411,7 +411,7 @@ describe("RequestForgeryProtectionControllerUsingResetSessionTest", () => {
 
 describe("RequestForgeryProtectionControllerUsingNullSessionTest", () => {
   it("should allow reset_session", () => {
-    const csrf = new RequestForgeryProtection({ strategy: "reset_session" });
+    const csrf = new RequestForgeryProtection({ strategy: "null_session" });
     const session: Record<string, unknown> = { user_id: 1, _csrf_token: "abc" };
     csrf.handleUnverified(session);
     expect(Object.keys(session).length).toBe(0);

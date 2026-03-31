@@ -242,7 +242,9 @@ export class RequestForgeryProtection {
         }
         break;
       case "null_session":
-        // Return a null session (caller should use an empty proxy)
+        for (const key of Object.keys(session)) {
+          delete session[key];
+        }
         break;
     }
   }

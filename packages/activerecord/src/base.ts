@@ -3447,7 +3447,6 @@ export class Base extends Model {
    * Mirrors: ActiveRecord::Validations#valid?
    */
   override isValid(context?: string): boolean {
-    (this as any)._asyncValidationPromises = [];
     const effectiveContext = context ?? this._validationContext ?? undefined;
     const result = super.isValid(effectiveContext);
     if (_validateAssociationsFn) {

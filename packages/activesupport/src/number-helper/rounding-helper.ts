@@ -15,8 +15,9 @@ export class RoundingHelper {
   }
 
   private roundPrecision(number: number): number {
+    if (this.precision <= 0) return Math.round(number);
     const factor = Math.pow(10, this.precision);
-    return Math.round(number * factor) / factor;
+    return Math.round((number + Number.EPSILON) * factor) / factor;
   }
 
   private roundSignificant(number: number): number {
@@ -24,6 +25,6 @@ export class RoundingHelper {
     const d = Math.ceil(Math.log10(Math.abs(number)));
     const power = this.precision - d;
     const magnitude = Math.pow(10, power);
-    return Math.round(number * magnitude) / magnitude;
+    return Math.round((number + Number.EPSILON) * magnitude) / magnitude;
   }
 }

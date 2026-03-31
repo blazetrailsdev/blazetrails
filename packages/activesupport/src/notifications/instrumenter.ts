@@ -56,8 +56,8 @@ export class Instrumenter {
       fn?.(event);
     } finally {
       event.finish();
+      this._notifier.publish(name, event);
     }
-    this._notifier.publish(name, event);
     return event;
   }
 
@@ -71,8 +71,8 @@ export class Instrumenter {
       await fn?.(event);
     } finally {
       event.finish();
+      this._notifier.publish(name, event);
     }
-    this._notifier.publish(name, event);
     return event;
   }
 }

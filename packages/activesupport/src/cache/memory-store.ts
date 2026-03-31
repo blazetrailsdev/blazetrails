@@ -179,7 +179,11 @@ export namespace DupCoder {
     try {
       return structuredClone(entry);
     } catch {
-      return JSON.parse(JSON.stringify(entry));
+      try {
+        return JSON.parse(JSON.stringify(entry));
+      } catch {
+        return entry;
+      }
     }
   }
 

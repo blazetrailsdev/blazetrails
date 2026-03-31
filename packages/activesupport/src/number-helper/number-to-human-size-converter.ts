@@ -1,7 +1,7 @@
 import { NumberConverter } from "./number-converter.js";
-import { numberToHumanSize } from "../number-helper.js";
+import { numberToHumanSize, type NumberToHumanSizeOptions } from "../number-helper.js";
 
-export class NumberToHumanSizeConverter extends NumberConverter {
+export class NumberToHumanSizeConverter extends NumberConverter<NumberToHumanSizeOptions> {
   convert(): string {
     return numberToHumanSize(this.number, this.options);
   }

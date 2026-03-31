@@ -167,3 +167,24 @@ describe("NumberHelperTest", () => {
     expect(numberToHumanSize("x")).toBe("x");
   });
 });
+
+describe("NumberConverter subclasses", () => {
+  it("NumberToPhoneConverter delegates correctly", async () => {
+    const { NumberToPhoneConverter } = await import("./number-helper/number-to-phone-converter.js");
+    const converter = new NumberToPhoneConverter(5551234567, { areaCode: true });
+    expect(converter.convert()).toBe("(555) 123-4567");
+  });
+
+  it("NumberToCurrencyConverter delegates correctly", async () => {
+    const { NumberToCurrencyConverter } =
+      await import("./number-helper/number-to-currency-converter.js");
+    const converter = new NumberToCurrencyConverter(1234.56);
+    expect(converter.convert()).toBe("$1,234.56");
+  });
+
+  it("NumberToHumanConverter delegates correctly", async () => {
+    const { NumberToHumanConverter } = await import("./number-helper/number-to-human-converter.js");
+    const converter = new NumberToHumanConverter(1234567);
+    expect(converter.convert()).toBe("1.23 Million");
+  });
+});

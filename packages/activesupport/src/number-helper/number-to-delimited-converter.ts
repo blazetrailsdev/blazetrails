@@ -1,7 +1,7 @@
 import { NumberConverter } from "./number-converter.js";
-import { numberWithDelimiter } from "../number-helper.js";
+import { numberWithDelimiter, type NumberWithDelimiterOptions } from "../number-helper.js";
 
-export class NumberToDelimitedConverter extends NumberConverter {
+export class NumberToDelimitedConverter extends NumberConverter<NumberWithDelimiterOptions> {
   convert(): string {
     return numberWithDelimiter(this.number, this.options);
   }

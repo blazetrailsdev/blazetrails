@@ -1,8 +1,8 @@
-export abstract class NumberConverter {
+export abstract class NumberConverter<TOptions = Record<string, unknown>> {
   protected number: unknown;
-  protected options: Record<string, unknown>;
+  protected options: TOptions;
 
-  constructor(number: unknown, options: Record<string, unknown> = {}) {
+  constructor(number: unknown, options: TOptions = {} as TOptions) {
     this.number = number;
     this.options = options;
   }

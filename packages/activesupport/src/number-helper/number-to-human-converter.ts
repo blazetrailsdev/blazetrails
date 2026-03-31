@@ -1,7 +1,7 @@
 import { NumberConverter } from "./number-converter.js";
-import { numberToHuman } from "../number-helper.js";
+import { numberToHuman, type NumberToHumanOptions } from "../number-helper.js";
 
-export class NumberToHumanConverter extends NumberConverter {
+export class NumberToHumanConverter extends NumberConverter<NumberToHumanOptions> {
   convert(): string {
     return numberToHuman(this.number, this.options);
   }

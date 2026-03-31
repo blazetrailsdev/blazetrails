@@ -406,6 +406,12 @@ taggedLogging.logger = function (output: LoggerOutput): TaggedLogger {
 
 export class SimpleFormatter {
   call(_severity: string, _timestamp: Date, _progname: string | null, msg: unknown): string {
-    return `${typeof msg === "string" ? msg : JSON.stringify(msg)}\n`;
+    if (typeof msg === "string") return `${msg}\n`;
+    if (msg instanceof Error) return `${msg.stack || msg.message || globalThis.String(msg)}\n`;
+    try {
+      return `${JSON.stringify(msg)}\n`;
+    } catch {
+      return `${globalThis.String(msg)}\n`;
+    }
   }
 }

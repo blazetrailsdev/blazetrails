@@ -1,7 +1,7 @@
 import { NumberConverter } from "./number-converter.js";
-import { numberToRounded } from "../number-helper.js";
+import { numberToRounded, type NumberToRoundedOptions } from "../number-helper.js";
 
-export class NumberToRoundedConverter extends NumberConverter {
+export class NumberToRoundedConverter extends NumberConverter<NumberToRoundedOptions> {
   convert(): string {
     return numberToRounded(this.number, this.options);
   }

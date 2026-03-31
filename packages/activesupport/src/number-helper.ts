@@ -368,12 +368,22 @@ export function numberToHuman(number: unknown, options: NumberToHumanOptions = {
   return rounded;
 }
 
+const _helpers = {
+  numberToPhone,
+  numberToCurrency,
+  numberToPercentage,
+  numberWithDelimiter,
+  numberToRounded,
+  numberToHumanSize,
+  numberToHuman,
+};
+
 export namespace NumberHelper {
-  export const toPhone = numberToPhone;
-  export const toCurrency = numberToCurrency;
-  export const toPercentage = numberToPercentage;
-  export const withDelimiter = numberWithDelimiter;
-  export const toRounded = numberToRounded;
-  export const toHumanSize = numberToHumanSize;
-  export const toHuman = numberToHuman;
+  export const numberToPhone = _helpers.numberToPhone;
+  export const numberToCurrency = _helpers.numberToCurrency;
+  export const numberToPercentage = _helpers.numberToPercentage;
+  export const numberWithDelimiter = _helpers.numberWithDelimiter;
+  export const numberToRounded = _helpers.numberToRounded;
+  export const numberToHumanSize = _helpers.numberToHumanSize;
+  export const numberToHuman = _helpers.numberToHuman;
 }

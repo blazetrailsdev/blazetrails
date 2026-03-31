@@ -129,6 +129,30 @@ describe("applyDiff", () => {
     expect(lines[1]).toContain('root("posts#index")');
   });
 
+  it("replaces lines and removes anchor text entirely", () => {
+    vfs.write("config/routes.ts", ["// Routes", "legacy_root;", "// End"].join("\n"));
+
+    const diff: FileDiff = {
+      path: "config/routes.ts",
+      operation: "modify",
+      hunks: [
+        {
+          anchor: "legacy_root;",
+          position: "replace",
+          deleteCount: 1,
+          insertLines: ['get("health");'],
+        },
+      ],
+    };
+
+    const result = applyDiff(vfs, diff);
+    expect(result.success).toBe(true);
+
+    const lines = vfs.read("config/routes.ts")!.content.split("\n");
+    expect(lines[1]).toBe('get("health");');
+    expect(lines.join("\n")).not.toContain("legacy_root;");
+  });
+
   it("replaces multiple lines with deleteCount > 1", () => {
     vfs.write(
       "app/models/user.ts",
@@ -331,6 +355,25 @@ describe("isDiffApplied", () => {
     };
 
     expect(isDiffApplied(vfs, diff)).toBe(false);
+  });
+
+  it("detects replace hunk as applied even when anchor text was removed", () => {
+    vfs.write("config/routes.ts", ["// Routes", 'get("health");', "// End"].join("\n"));
+
+    const diff: FileDiff = {
+      path: "config/routes.ts",
+      operation: "modify",
+      hunks: [
+        {
+          anchor: "legacy_root;",
+          position: "replace",
+          deleteCount: 1,
+          insertLines: ['get("health");'],
+        },
+      ],
+    };
+
+    expect(isDiffApplied(vfs, diff)).toBe(true);
   });
 });
 

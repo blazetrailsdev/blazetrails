@@ -119,16 +119,17 @@ function linesMatch(actual: string, expected: string): boolean {
   return normalize(actual) === normalize(expected);
 }
 
-function isHunkApplied(lines: string[], hunk: DiffHunk): boolean {
-  const matchingIndices: number[] = [];
-  lines.forEach((line, index) => {
-    if (line.includes(hunk.anchor)) matchingIndices.push(index);
-  });
+function sequenceExists(lines: string[], sequence: string[]): boolean {
+  if (sequence.length === 0) return true;
+  const lastStart = lines.length - sequence.length;
+  if (lastStart < 0) return false;
+  for (let start = 0; start <= lastStart; start++) {
+    if (sequence.every((expected, i) => linesMatch(lines[start + i], expected))) return true;
+  }
+  return false;
+}
 
-  if (matchingIndices.length !== 1) return false;
-
-  const anchorIndex = matchingIndices[0];
-
+function checkAtAnchor(lines: string[], hunk: DiffHunk, anchorIndex: number): boolean {
   if (hunk.position === "after") {
     const start = anchorIndex + 1;
     return hunk.insertLines.every(
@@ -147,6 +148,24 @@ function isHunkApplied(lines: string[], hunk: DiffHunk): boolean {
     (insertLine, i) =>
       anchorIndex + i < lines.length && linesMatch(lines[anchorIndex + i], insertLine),
   );
+}
+
+function isHunkApplied(lines: string[], hunk: DiffHunk): boolean {
+  const matchingIndices: number[] = [];
+  lines.forEach((line, index) => {
+    if (line.includes(hunk.anchor)) matchingIndices.push(index);
+  });
+
+  if (hunk.position === "replace") {
+    for (const anchorIndex of matchingIndices) {
+      if (checkAtAnchor(lines, hunk, anchorIndex)) return true;
+    }
+    return sequenceExists(lines, hunk.insertLines);
+  }
+
+  // For before/after, require exactly one anchor match
+  if (matchingIndices.length !== 1) return false;
+  return checkAtAnchor(lines, hunk, matchingIndices[0]);
 }
 
 export function runCheck(vfs: VirtualFS, adapter: SqlJsAdapter, check: CheckSpec): CheckResult {

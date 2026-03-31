@@ -99,6 +99,7 @@ export class VirtualFS {
   rename(oldPath: string, newPath: string): boolean {
     const existing = this.read(oldPath);
     if (!existing) return false;
+    if (this.exists(newPath)) return false;
     this.adapter.execRaw(
       `UPDATE "_vfs_files" SET "path" = '${this._escape(newPath)}', "language" = '${this._escape(this._inferLanguage(newPath))}', "updated_at" = datetime('now') WHERE "path" = '${this._escape(oldPath)}'`,
     );

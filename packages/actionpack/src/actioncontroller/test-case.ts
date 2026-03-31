@@ -371,11 +371,7 @@ export class TestRequest extends Request {
   }
 }
 
-export class LiveTestResponse extends Response {
-  constructor() {
-    super();
-  }
-}
+export class LiveTestResponse extends Response {}
 
 export class TestSession {
   private _data = new Map<string, unknown>();

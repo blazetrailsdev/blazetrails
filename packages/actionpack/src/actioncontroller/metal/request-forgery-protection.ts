@@ -1,8 +1,9 @@
 /**
  * ActionController::RequestForgeryProtection
  *
- * CSRF protection strategies for controllers.
- * @see https://api.rubyonrails.org/classes/ActionController/RequestForgeryProtection.html
+ * CSRF protection error classes. These are raised when an invalid
+ * authenticity token or cross-origin request is detected.
+ * @see https://api.rubyonrails.org/classes/ActionController/InvalidAuthenticityToken.html
  */
 
 import { ActionControllerError } from "./exceptions.js";

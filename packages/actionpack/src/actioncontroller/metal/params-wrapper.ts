@@ -1,8 +1,8 @@
 /**
- * ActionController::ParamsWrapper
+ * ActionController::ParamsWrapper::Options
  *
- * Wraps the parameters hash into a nested hash, allowing clients to
- * submit requests without specifying root elements.
+ * Configuration data container for parameter wrapping. The wrapping
+ * logic itself lives in actioncontroller/params-wrapper.ts.
  * @see https://api.rubyonrails.org/classes/ActionController/ParamsWrapper.html
  */
 

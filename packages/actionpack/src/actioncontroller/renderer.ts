@@ -25,19 +25,33 @@ export class Renderer {
 
   render(options: Record<string, unknown> = {}): Record<string, unknown> {
     const merged = { ...this._defaults, ...options };
+    const status = (merged.status as number) ?? 200;
+    const explicitContentType = merged.contentType as string | undefined;
 
     if (merged.json !== undefined) {
       const body = typeof merged.json === "string" ? merged.json : JSON.stringify(merged.json);
-      return { status: 200, contentType: "application/json; charset=utf-8", body };
+      return {
+        status,
+        contentType: explicitContentType ?? "application/json; charset=utf-8",
+        body,
+      };
     }
     if (merged.plain !== undefined) {
-      return { status: 200, contentType: "text/plain; charset=utf-8", body: String(merged.plain) };
+      return {
+        status,
+        contentType: explicitContentType ?? "text/plain; charset=utf-8",
+        body: String(merged.plain),
+      };
     }
     if (merged.html !== undefined) {
-      return { status: 200, contentType: "text/html; charset=utf-8", body: String(merged.html) };
+      return {
+        status,
+        contentType: explicitContentType ?? "text/html; charset=utf-8",
+        body: String(merged.html),
+      };
     }
 
-    return { status: 200, contentType: "text/html; charset=utf-8", body: "", ...merged };
+    return { status, contentType: explicitContentType ?? "text/html; charset=utf-8", body: "" };
   }
 
   get defaults(): Record<string, unknown> {

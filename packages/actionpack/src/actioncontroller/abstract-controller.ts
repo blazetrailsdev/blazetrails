@@ -54,11 +54,9 @@ export class AbstractController {
     let current = proto;
     while (current && current !== Object.prototype) {
       for (const name of Object.getOwnPropertyNames(current)) {
-        if (
-          typeof (current as any)[name] === "function" &&
-          !name.startsWith("_") &&
-          !excluded.has(name)
-        ) {
+        if (name.startsWith("_") || excluded.has(name)) continue;
+        const descriptor = Object.getOwnPropertyDescriptor(current, name);
+        if (descriptor && typeof descriptor.value === "function") {
           methods.push(name);
         }
       }
@@ -173,6 +171,8 @@ export class AbstractController {
       const method = (this as any)[action];
       if (typeof method === "function") {
         await method.call(this);
+      } else if (typeof (this as any).actionMissing === "function") {
+        await (this as any).actionMissing(action);
       } else {
         throw new ActionNotFound(
           `The action '${action}' could not be found for ${this.constructor.name}`,

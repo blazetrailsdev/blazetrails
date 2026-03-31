@@ -58,6 +58,26 @@ export class Metal extends AbstractController {
   response!: Response;
   params: Parameters = new Parameters({});
 
+  static get controllerPath(): string {
+    return this.controllerName();
+  }
+
+  static controllerName(): string {
+    return this.name.replace(/Controller$/, "").toLowerCase();
+  }
+
+  get controllerPath(): string {
+    return (this.constructor as typeof Metal).controllerPath;
+  }
+
+  get controllerName(): string {
+    return (this.constructor as typeof Metal).controllerName();
+  }
+
+  inspect(): string {
+    return `#<${this.constructor.name}>`;
+  }
+
   private _status: number = 200;
   private _headers: Record<string, string> = {};
   private _body: string = "";

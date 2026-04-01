@@ -1,8 +1,6 @@
-# ActionController: Road to 100% Test Coverage
+# ActionController: Road to 100%
 
-**API surface: 138/290 methods (47.6%)** — method-level coverage, not class/module wrappers.
-
-Test coverage: **28.3%** (527 matched / 1,860 total Rails tests). 29/91 files matched, 26 misplaced.
+**47.6%** API (138 / 290 methods). **28.3%** tests (527 / 1,860 matched).
 
 In Rails, ActionController lives inside the ActionPack gem alongside ActionDispatch. The package has been restructured so that `packages/actionpack/` contains both `actioncontroller/` and `actiondispatch/` side by side.
 

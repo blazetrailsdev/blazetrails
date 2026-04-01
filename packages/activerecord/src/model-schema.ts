@@ -56,9 +56,16 @@ export function quoteValue(val: unknown): string {
 export function buildPkWhere(modelClass: typeof Base, idValue: unknown): string {
   const pk = modelClass.primaryKey;
   if (Array.isArray(pk)) {
-    const values = idValue as unknown[];
-    return pk.map((col, i) => `${quoteIdentifier(col)} = ${quote(values[i])}`).join(" AND ");
+    if (!Array.isArray(idValue) || idValue.length !== pk.length) return "1=0";
+    const conditions: string[] = [];
+    for (let i = 0; i < pk.length; i++) {
+      const v = idValue[i];
+      if (v === undefined || v === null) return "1=0";
+      conditions.push(`${quoteIdentifier(pk[i])} = ${quote(v)}`);
+    }
+    return conditions.join(" AND ");
   }
+  if (idValue === undefined || idValue === null) return "1=0";
   return `${quoteIdentifier(pk as string)} = ${quote(idValue)}`;
 }
 

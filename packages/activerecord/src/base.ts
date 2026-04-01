@@ -881,8 +881,9 @@ export class Base extends Model {
             [],
           );
         }
-        const whereParts = tuples.map((tuple) => `(${ModelSchema.buildPkWhere(this, tuple)})`);
-        const records = await this.all().where(whereParts.join(" OR ")).toArray();
+        const whereNodes = tuples.map((tuple) => ModelSchema.buildPkWhereNode(this, tuple));
+        const orCondition = whereNodes.reduce((left, right) => new Nodes.Or(left, right));
+        const records = await this.all().where(orCondition).toArray();
         if (records.length !== tuples.length) {
           throw new RecordNotFound(
             `${this.name}: couldn't find all with composite primary key`,

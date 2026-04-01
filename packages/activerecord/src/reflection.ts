@@ -1,5 +1,11 @@
 import type { Base } from "./base.js";
-import { underscore, pluralize, singularize, camelize } from "@blazetrails/activesupport";
+import {
+  underscore,
+  pluralize,
+  singularize,
+  camelize,
+  foreignKey as deriveForeignKey,
+} from "@blazetrails/activesupport";
 import { modelRegistry } from "./associations.js";
 
 type MacroType = "belongsTo" | "hasOne" | "hasMany" | "hasAndBelongsToMany" | "composedOf";
@@ -158,6 +164,10 @@ export class AggregateReflection extends MacroReflection {
     return "composedOf";
   }
 
+  get tableName(): string {
+    return this.activeRecord.tableName;
+  }
+
   get klass(): any {
     if (this.options.anonymousClass) return this.options.anonymousClass;
     return super.klass;
@@ -216,14 +226,14 @@ export class AssociationReflection extends MacroReflection {
     return this.options.inverseOf !== undefined && this.options.inverseOf !== false;
   }
 
-  inverseOf(): AssociationReflection | null {
+  inverseOf(): AssociationReflection | ThroughReflection | null {
     if (this.options.inverseOf === false) return null;
     const inverseName = this.options.inverseOf as string | undefined;
     if (!inverseName) return null;
     const targetAssocs: any[] = (this.klass as any)._associations ?? [];
     const assocDef = targetAssocs.find((a: any) => a.name === inverseName);
     if (!assocDef) return null;
-    return createReflection(assocDef, this.klass) as AssociationReflection;
+    return createReflection(assocDef, this.klass);
   }
 
   get associationPrimaryKey(): string | string[] {
@@ -243,7 +253,7 @@ export class AssociationReflection extends MacroReflection {
     if (this.options.associationForeignKey) {
       return this.options.associationForeignKey as string;
     }
-    return `${underscore(singularize(this.className))}_id`;
+    return deriveForeignKey(this.className);
   }
 
   get type(): string | null {
@@ -435,11 +445,12 @@ export class ThroughReflection extends AbstractReflection {
     return this._delegate.isCollection() ? singularize(this.name) : this.name;
   }
 
-  get sourceReflection(): AssociationReflection | null {
+  get sourceReflection(): AssociationReflection | ThroughReflection | null {
     const throughRef = this.throughReflection;
     if (!throughRef) return null;
     try {
-      const throughKlass = throughRef.klass;
+      const throughKlass =
+        throughRef instanceof ThroughReflection ? throughRef.klass : throughRef.klass;
       const throughAssocs: any[] = (throughKlass as any)._associations ?? [];
       // Rails tries: explicit source option, then singular(name), then name itself
       const candidates = this.options.source
@@ -447,7 +458,7 @@ export class ThroughReflection extends AbstractReflection {
         : [singularize(this.name), this.name];
       for (const candidate of candidates) {
         const sourceDef = throughAssocs.find((a: any) => a.name === candidate);
-        if (sourceDef) return createReflection(sourceDef, throughKlass) as AssociationReflection;
+        if (sourceDef) return createReflection(sourceDef, throughKlass);
       }
       return null;
     } catch {
@@ -455,11 +466,11 @@ export class ThroughReflection extends AbstractReflection {
     }
   }
 
-  get throughReflection(): AssociationReflection | null {
+  get throughReflection(): AssociationReflection | ThroughReflection | null {
     const ownerAssocs: any[] = (this.activeRecord as any)._associations ?? [];
     const throughDef = ownerAssocs.find((a: any) => a.name === this.through);
     if (!throughDef) return null;
-    return createReflection(throughDef, this.activeRecord) as AssociationReflection;
+    return createReflection(throughDef, this.activeRecord);
   }
 
   get joinTable(): string | null {
@@ -467,16 +478,13 @@ export class ThroughReflection extends AbstractReflection {
   }
 
   protected collectJoinChain(): AbstractReflection[] {
-    const chain: AbstractReflection[] = [this];
+    const result: AbstractReflection[] = [this];
     const through = this.throughReflection;
     if (through) {
-      if (through.isThroughReflection()) {
-        chain.push(...(through as any).collectJoinChain());
-      } else {
-        chain.push(through);
-      }
+      // through.chain recursively builds the chain for nested through associations
+      result.push(...through.chain);
     }
-    return chain;
+    return result;
   }
 
   get associationPrimaryKey(): string | string[] {
@@ -495,7 +503,7 @@ export class ThroughReflection extends AbstractReflection {
     return this._delegate.hasInverse();
   }
 
-  inverseOf(): AssociationReflection | null {
+  inverseOf(): AssociationReflection | ThroughReflection | null {
     return this._delegate.inverseOf();
   }
 }

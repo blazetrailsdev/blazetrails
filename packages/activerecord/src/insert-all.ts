@@ -73,6 +73,7 @@ export class InsertAll {
       this.keys.add(key);
     }
 
+    this._verifyAttributes();
     this._configureDuplicateLogic(options.onDuplicate);
   }
 
@@ -143,6 +144,16 @@ export class InsertAll {
     return this._keysIncludingTimestamps;
   }
 
+  private _verifyAttributes(): void {
+    if (this.inserts.length <= 1) return;
+    for (const row of this.inserts.slice(1)) {
+      const rowKeys = new Set([...Object.keys(row), ...Object.keys(this._scopeAttributes)]);
+      if (rowKeys.size !== this.keys.size || ![...this.keys].every((k) => rowKeys.has(k))) {
+        throw new Error("All objects being inserted must have the same keys");
+      }
+    }
+  }
+
   private _configureDuplicateLogic(onDuplicate: InsertAllOptions["onDuplicate"]): void {
     if (onDuplicate instanceof Nodes.SqlLiteral && this.updateOnly !== undefined) {
       throw new Error(
@@ -206,6 +217,9 @@ export class Builder {
     const tableName = quoteTableName(this.model.arelTable.name, this._dialect);
     const keys = [...this._insertAll.keysIncludingTimestamps()];
     if (keys.length === 0) {
+      if (this._insertAll.inserts.length > 1) {
+        throw new Error("Bulk insert with no explicit columns is not supported");
+      }
       return `INTO ${tableName} DEFAULT VALUES`;
     }
     const columnsList = keys.map((k) => quoteIdentifier(k, this._dialect)).join(", ");

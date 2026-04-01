@@ -43,7 +43,7 @@ export class Column {
   }
 
   get hasDefault(): boolean {
-    return this.default !== null || this.defaultFunction !== null;
+    return this.default != null || this.defaultFunction != null;
   }
 
   isUnsigned(): boolean {

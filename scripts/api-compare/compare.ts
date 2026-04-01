@@ -139,7 +139,7 @@ const SKIP = new Set([
  * Returns multiple candidates for predicates where both forms are common:
  *   has_attribute? → ["hasAttribute", "isHasAttribute"]
  *   supports_savepoints? → ["supportsSavepoints", "isSupportsSavepoints"]
- *   valid? → ["isValid"]
+ *   valid? → ["isValid", "valid"]
  */
 function rubyMethodToTs(name: string): string[] | null {
   if (OPERATORS.has(name)) return null;
@@ -390,10 +390,12 @@ function main() {
       moduleFqnByShort.set(short, list);
     }
 
-    // For each Ruby module, find the TS files of classes that include it.
-    // If a module's methods aren't in the module's own file, they may be
-    // implemented directly on the including class (common TS pattern).
-    const moduleIncluderFiles = new Map<string, Set<string>>();
+    // For each Ruby module, find the TS files of classes/modules that include it.
+    // Resolved transitively: if Base includes Scoping and Scoping includes Named,
+    // Named's methods should also be checked against base.ts.
+
+    // Step 1: build direct include/extend graph (module FQN → includer FQNs)
+    const moduleIncluderFqns = new Map<string, Set<string>>();
     const allClassesAndModules = [
       ...Object.entries(rubyPkg.classes).map(([fqn, info]) => ({
         fqn,
@@ -404,18 +406,46 @@ function main() {
         info: info as unknown as ClassInfo,
       })),
     ];
-    for (const { info } of allClassesAndModules) {
-      if (!info.file) continue;
-      const includerTsFile = rubyFileToTs(info.file);
+    const fqnToFile = new Map<string, string>();
+    for (const { fqn, info } of allClassesAndModules) {
+      if (info.file) fqnToFile.set(fqn, info.file);
       for (const inc of [...(info.includes || []), ...(info.extends || [])]) {
-        // Resolve short name to FQN(s)
-        const fqns = moduleFqnByShort.get(inc) || [inc];
-        for (const fqn of fqns) {
-          const files = moduleIncluderFiles.get(fqn) || new Set();
-          files.add(includerTsFile);
-          moduleIncluderFiles.set(fqn, files);
+        const resolved = moduleFqnByShort.get(inc) || [inc];
+        for (const modFqn of resolved) {
+          const includers = moduleIncluderFqns.get(modFqn) || new Set();
+          includers.add(fqn);
+          moduleIncluderFqns.set(modFqn, includers);
         }
       }
+    }
+
+    // Step 2: transitively resolve includer files (DFS with memoization)
+    const moduleIncluderFiles = new Map<string, Set<string>>();
+    const resolveIncluderFiles = (modFqn: string, visited: Set<string>): Set<string> => {
+      const cached = moduleIncluderFiles.get(modFqn);
+      if (cached) return cached;
+      if (visited.has(modFqn)) return new Set();
+      visited.add(modFqn);
+
+      const files = new Set<string>();
+      const includers = moduleIncluderFqns.get(modFqn);
+      if (includers) {
+        for (const incFqn of includers) {
+          const file = fqnToFile.get(incFqn);
+          if (file) files.add(rubyFileToTs(file));
+          // Transitively: if incFqn is also a module, its includers count too
+          for (const f of resolveIncluderFiles(incFqn, visited)) {
+            files.add(f);
+          }
+        }
+      }
+
+      moduleIncluderFiles.set(modFqn, files);
+      return files;
+    };
+
+    for (const [fqn] of Object.entries(rubyPkg.modules)) {
+      resolveIncluderFiles(fqn, new Set());
     }
 
     // Group by Ruby file
@@ -495,17 +525,17 @@ function main() {
       }
 
       const total = fileMatched + fileMissing;
-      if (total > 0) {
-        fileResults.push({
-          rubyFile,
-          expectedTsFile: expectedTs,
-          tsFileExists,
-          matched: fileMatched,
-          missing: fileMissing,
-          total,
-          missingMethods,
-        });
-      }
+      if (total === 0) continue;
+
+      fileResults.push({
+        rubyFile,
+        expectedTsFile: expectedTs,
+        tsFileExists,
+        matched: fileMatched,
+        missing: fileMissing,
+        total,
+        missingMethods,
+      });
 
       totalMatched += fileMatched;
       totalMissing += fileMissing;

@@ -10,24 +10,24 @@ The goal is to be **100% API compatible with Rails**, matching behavior **test f
 
 | Package                      | Rails Equivalent                                                        | API       | Tests     | Description                                                |
 | ---------------------------- | ----------------------------------------------------------------------- | --------- | --------- | ---------------------------------------------------------- |
-| `@blazetrails/activerecord`  | [ActiveRecord](https://api.rubyonrails.org/classes/ActiveRecord.html)   | **35.8%** | **61.9%** | ORM — persistence, querying, associations, migrations      |
-| `@blazetrails/activesupport` | [ActiveSupport](https://api.rubyonrails.org/classes/ActiveSupport.html) | **23.3%** | **77.9%** | Core utilities, inflection, caching, notifications         |
-| `@blazetrails/arel`          | [Arel](https://api.rubyonrails.org/classes/Arel.html)                   | **78.1%** | **99.4%** | SQL AST builder and query generation                       |
-| `@blazetrails/activemodel`   | [ActiveModel](https://api.rubyonrails.org/classes/ActiveModel.html)     | **63.1%** | **100%**  | Attributes, validations, callbacks, dirty tracking, i18n   |
+| `@blazetrails/activerecord`  | [ActiveRecord](https://api.rubyonrails.org/classes/ActiveRecord.html)   | **39.5%** | **61.9%** | ORM — persistence, querying, associations, migrations      |
+| `@blazetrails/activesupport` | [ActiveSupport](https://api.rubyonrails.org/classes/ActiveSupport.html) | **23.8%** | **77.9%** | Core utilities, inflection, caching, notifications         |
+| `@blazetrails/arel`          | [Arel](https://api.rubyonrails.org/classes/Arel.html)                   | **77.9%** | **99.4%** | SQL AST builder and query generation                       |
+| `@blazetrails/activemodel`   | [ActiveModel](https://api.rubyonrails.org/classes/ActiveModel.html)     | **64.5%** | **100%**  | Attributes, validations, callbacks, dirty tracking, i18n   |
 | `@blazetrails/rack`          | [Rack](https://rack.github.io/)                                         | —         | **100%**  | Modular web server interface, request/response, middleware |
 
-**Data Layer Parity** (ActiveRecord + Arel + ActiveModel + ActiveSupport): **37.1% API** | **70.3% Tests**
+**Data Layer Parity** (ActiveRecord + Arel + ActiveModel + ActiveSupport): **39.4% API** | **70.3% Tests**
 
 **ActionPack** — started but not the current priority:
 
 | Package                         | Rails Equivalent                                                              | API       | Tests     | Description                                            |
 | ------------------------------- | ----------------------------------------------------------------------------- | --------- | --------- | ------------------------------------------------------ |
-| `@blazetrails/actiondispatch`   | [ActionDispatch](https://api.rubyonrails.org/classes/ActionDispatch.html)     | **5.3%**  | **37.3%** | Routing, middleware stack, cookies, sessions, security |
-| `@blazetrails/actioncontroller` | [ActionController](https://api.rubyonrails.org/classes/ActionController.html) | **47.6%** | **28.3%** | Controller layer, rendering, filters, parameters       |
+| `@blazetrails/actiondispatch`   | [ActionDispatch](https://api.rubyonrails.org/classes/ActionDispatch.html)     | **6.1%**  | **37.3%** | Routing, middleware stack, cookies, sessions, security |
+| `@blazetrails/actioncontroller` | [ActionController](https://api.rubyonrails.org/classes/ActionController.html) | **47.9%** | **28.3%** | Controller layer, rendering, filters, parameters       |
 
 **Tests** = `test:compare` — matches our test names against the Rails test suite. **API** = `api:compare` — matches individual public methods against Rails source (method-level, not class/module wrappers). Rack doesn't have API comparison yet (it's not a Rails gem).
 
-**26.7%** overall API coverage (2,075 of 7,761 unique methods) | **50.9%** test coverage (11,140 of 21,890 tests). CI runs both comparisons on every push.
+**29%** overall API coverage (2,154 / 7,427 methods) | **50.9%** test coverage (11,140 / 21,890 tests). CI runs both comparisons on every push.
 
 ## Quick Example
 

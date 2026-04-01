@@ -289,8 +289,11 @@ export class ToSql implements NodeVisitor<SQLString> {
     if (node.values.length > 0) {
       this.collector.append(" SET ");
       this._inUpdateSet = true;
-      this.visitArray(node.values, ", ");
-      this._inUpdateSet = false;
+      try {
+        this.visitArray(node.values, ", ");
+      } finally {
+        this._inUpdateSet = false;
+      }
     }
 
     if (node.wheres.length > 0) {

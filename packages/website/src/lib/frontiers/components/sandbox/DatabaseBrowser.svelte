@@ -39,9 +39,13 @@
       }
       return { name, rowCount, columns };
     });
-    if (expandedTable && !tableNames.includes(expandedTable)) {
-      expandedTable = null;
-      previewRows = null;
+    if (expandedTable) {
+      if (!tableNames.includes(expandedTable)) {
+        expandedTable = null;
+        previewRows = null;
+      } else {
+        loadPreview(expandedTable);
+      }
     }
   }
 

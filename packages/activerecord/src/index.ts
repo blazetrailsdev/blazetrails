@@ -58,9 +58,7 @@ export {
   storeAccessor,
   storedAttributes,
   HashAccessor,
-  StringKeyedHashAccessor,
   IndifferentHashAccessor,
-  IndifferentCoder,
 } from "./store.js";
 export { SQLite3Adapter } from "./connection-adapters/sqlite3-adapter.js";
 export { PostgreSQLAdapter } from "./adapters/postgresql-adapter.js";

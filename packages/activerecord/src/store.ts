@@ -65,21 +65,6 @@ export class HashAccessor {
 }
 
 /**
- * HashAccessor that coerces keys to strings.
- *
- * Mirrors: ActiveRecord::Store::StringKeyedHashAccessor
- */
-export class StringKeyedHashAccessor extends HashAccessor {
-  static override read(object: Base, attribute: string, key: string): unknown {
-    return HashAccessor.read(object, attribute, String(key));
-  }
-
-  static override write(object: Base, attribute: string, key: string, value: unknown): void {
-    HashAccessor.write(object, attribute, String(key), value);
-  }
-}
-
-/**
  * HashAccessor that ensures the store value is an indifferent-access hash
  * (plain object with string keys, accessible by string or symbol).
  *
@@ -97,55 +82,6 @@ export class IndifferentHashAccessor extends HashAccessor {
         object.writeAttribute(attribute, {});
       }
     }
-  }
-}
-
-/**
- * Coder that wraps serialized store data, ensuring values are loaded
- * as plain objects with string keys (indifferent access).
- *
- * Mirrors: ActiveRecord::Store::IndifferentCoder
- */
-export class IndifferentCoder {
-  private _coder: { dump(obj: unknown): string; load(raw: unknown): unknown };
-
-  constructor(
-    _attrName: string,
-    coder?: { dump(obj: unknown): string; load(raw: unknown): unknown },
-  ) {
-    this._coder = coder ?? {
-      dump(obj: unknown): string {
-        return JSON.stringify(obj);
-      },
-      load(raw: unknown): unknown {
-        if (raw === null || raw === undefined) return {};
-        if (typeof raw === "string") {
-          try {
-            return JSON.parse(raw);
-          } catch {
-            return {};
-          }
-        }
-        return raw;
-      },
-    };
-  }
-
-  dump(obj: unknown): string {
-    const hash = obj !== null && obj !== undefined && typeof obj === "object" ? { ...obj } : {};
-    return this._coder.dump(hash);
-  }
-
-  load(raw: unknown): Record<string, unknown> {
-    const loaded = this._coder.load(raw ?? "");
-    return IndifferentCoder.asIndifferentHash(loaded);
-  }
-
-  static asIndifferentHash(obj: unknown): Record<string, unknown> {
-    if (obj !== null && obj !== undefined && typeof obj === "object" && !Array.isArray(obj)) {
-      return obj as Record<string, unknown>;
-    }
-    return {};
   }
 }
 

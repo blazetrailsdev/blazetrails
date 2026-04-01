@@ -54,7 +54,13 @@ export class HashAccessor {
 
   protected static _writeHash(data: unknown): Record<string, unknown> {
     if (data === null || data === undefined) return {};
-    if (typeof data === "string") return JSON.parse(data);
+    if (typeof data === "string") {
+      const parsed = JSON.parse(data);
+      if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return { ...parsed };
+      }
+      return {};
+    }
     if (typeof data === "object" && !Array.isArray(data)) {
       return { ...(data as Record<string, unknown>) };
     }

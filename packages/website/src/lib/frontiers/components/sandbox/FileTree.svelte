@@ -190,7 +190,7 @@
 
   function commitRename() {
     const trimmed = renameValue.trim();
-    if (!renaming || !trimmed || trimmed.includes("/")) {
+    if (!renaming || !trimmed || trimmed.includes("/") || trimmed === "." || trimmed === "..") {
       renaming = null;
       return;
     }
@@ -201,10 +201,6 @@
       const node = findNode(root, renaming);
       if (node?.isDir) {
         const prefix = renaming + "/";
-        if (newPath.startsWith(prefix)) {
-          renaming = null;
-          return;
-        }
         const allFiles = vfs.list();
         const filesToMove = allFiles.filter((f) => f.path.startsWith(prefix));
         const newPaths = filesToMove.map((f) => newPath + "/" + f.path.slice(prefix.length));
@@ -545,33 +541,20 @@
     data-testid={node.isDir ? "tree-dir" : "tree-file"}
     data-path={node.path}
   >
-    <button
-      type="button"
-      tabindex="-1"
-      class="flex w-full items-center gap-1 py-1.5 text-left hover:text-accent md:py-1
-             {node.path === selectedPath ? 'bg-surface-overlay text-text' : 'text-text-muted'}
-             {node.path === focusedPath ? 'outline outline-1 outline-border-focus' : ''}"
-      style="padding-left: {depth * 16 + 12}px"
-      onmousedown={(e) => e.preventDefault()}
-      onclick={(e) => {
-        focusedPath = node.path;
-        if (node.isDir && node.children.length > 0) toggleCollapse(node.path);
-        else if (!node.isDir) selectFile(node.path);
-        (e.currentTarget as HTMLElement).closest('[role="tree"]')?.focus();
-      }}
-      oncontextmenu={(e) => showContextMenu(e, node.path, node.isDir)}
-    >
-      {#if node.isDir && node.children.length > 0}
-        <span class="w-3 text-[10px] text-text-muted" aria-hidden="true">
-          {collapsed.has(node.path) ? "▶" : "▼"}
-        </span>
-      {:else if node.isDir}
-        <span class="w-3 text-[10px]" aria-hidden="true"></span>
-      {:else}
-        <span class="w-3 text-[10px]" aria-hidden="true">{fileIcon(node.name)}</span>
-      {/if}
-
-      {#if renaming === node.path}
+    {#if renaming === node.path}
+      <div
+        class="flex w-full items-center gap-1 py-1.5 md:py-1"
+        style="padding-left: {depth * 16 + 12}px"
+      >
+        {#if node.isDir && node.children.length > 0}
+          <span class="w-3 text-[10px] text-text-muted" aria-hidden="true">
+            {collapsed.has(node.path) ? "▶" : "▼"}
+          </span>
+        {:else if node.isDir}
+          <span class="w-3 text-[10px]" aria-hidden="true"></span>
+        {:else}
+          <span class="w-3 text-[10px]" aria-hidden="true">{fileIcon(node.name)}</span>
+        {/if}
         <input
           class="flex-1 rounded border border-border-focus bg-surface px-1 py-0 text-xs text-text outline-none"
           bind:value={renameValue}
@@ -585,10 +568,36 @@
           aria-label={node.isDir ? "Rename folder" : "Rename file"}
           autofocus
         />
-      {:else}
+      </div>
+    {:else}
+      <button
+        type="button"
+        tabindex="-1"
+        class="flex w-full items-center gap-1 py-1.5 text-left hover:text-accent md:py-1
+               {node.path === selectedPath ? 'bg-surface-overlay text-text' : 'text-text-muted'}
+               {node.path === focusedPath ? 'outline outline-1 outline-border-focus' : ''}"
+        style="padding-left: {depth * 16 + 12}px"
+        onmousedown={(e) => e.preventDefault()}
+        onclick={(e) => {
+          focusedPath = node.path;
+          if (node.isDir && node.children.length > 0) toggleCollapse(node.path);
+          else if (!node.isDir) selectFile(node.path);
+          (e.currentTarget as HTMLElement).closest('[role="tree"]')?.focus();
+        }}
+        oncontextmenu={(e) => showContextMenu(e, node.path, node.isDir)}
+      >
+        {#if node.isDir && node.children.length > 0}
+          <span class="w-3 text-[10px] text-text-muted" aria-hidden="true">
+            {collapsed.has(node.path) ? "▶" : "▼"}
+          </span>
+        {:else if node.isDir}
+          <span class="w-3 text-[10px]" aria-hidden="true"></span>
+        {:else}
+          <span class="w-3 text-[10px]" aria-hidden="true">{fileIcon(node.name)}</span>
+        {/if}
         <span class="truncate">{node.name}</span>
-      {/if}
-    </button>
+      </button>
+    {/if}
 
     {#if node.isDir && !collapsed.has(node.path)}
       <div role="group">

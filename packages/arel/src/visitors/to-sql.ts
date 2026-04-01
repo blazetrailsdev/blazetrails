@@ -1105,12 +1105,6 @@ export class ToSql implements NodeVisitor<SQLString> {
       this.collector.append(this.quote(v));
     } else if (typeof v === "bigint") {
       this.collector.append(v.toString());
-    } else if (v instanceof Date) {
-      // Format as 'YYYY-MM-DD'
-      const y = v.getFullYear();
-      const m = String(v.getMonth() + 1).padStart(2, "0");
-      const d = String(v.getDate()).padStart(2, "0");
-      this.collector.append(`'${y}-${m}-${d}'`);
     } else if (
       typeof v === "object" &&
       v !== null &&

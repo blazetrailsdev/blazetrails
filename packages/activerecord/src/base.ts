@@ -345,12 +345,14 @@ export class Base extends Model {
       const conditions = pk.map((col, i) => {
         const attr = table.get(col);
         const v = values[i];
-        return v === undefined || v === null ? attr.isNull() : attr.eq(v);
+        if (v === undefined || v === null) return arelSql("1=0");
+        return attr.eq(v);
       });
       return new Nodes.And(conditions);
     }
     const attr = table.get(pk as string);
-    return idValue === undefined || idValue === null ? attr.isNull() : attr.eq(idValue);
+    if (idValue === undefined || idValue === null) return arelSql("1=0");
+    return attr.eq(idValue);
   }
 
   /**

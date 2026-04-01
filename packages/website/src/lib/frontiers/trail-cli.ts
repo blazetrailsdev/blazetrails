@@ -3,6 +3,7 @@ import type { SqlJsAdapter } from "./sql-js-adapter.js";
 import { VfsModelGenerator, VfsMigrationGenerator, VfsAppGenerator } from "./vfs-generator.js";
 import type { MigrationProxy, MigrationLike } from "@blazetrails/activerecord";
 import { Migrator } from "@blazetrails/activerecord";
+import { camelize } from "@blazetrails/activesupport";
 
 export interface CliResult {
   success: boolean;
@@ -54,7 +55,7 @@ function discoverMigrations(
       return [
         {
           version: match[1],
-          name: match[2],
+          name: camelize(match[2].replace(/-/g, "_")),
           filename: file.path,
           migration: (): MigrationLike => ({
             async up(adapter) {
@@ -124,6 +125,10 @@ export function createTrailCLI(deps: TrailCliDeps) {
         }
 
         for (const f of vfs.list()) vfs.delete(f.path);
+        const tables = deps.getTables().filter((t) => !t.startsWith("_vfs_"));
+        for (const table of tables) {
+          adapter.execRaw(`DROP TABLE IF EXISTS "${table.replace(/"/g, '""')}"`);
+        }
         deps.clearMigrations();
 
         const gen = new VfsAppGenerator({ vfs, output: log });

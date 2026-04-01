@@ -7,26 +7,35 @@ export interface VfsGeneratorOptions {
   output: (msg: string) => void;
 }
 
-export class VfsMigrationGenerator extends MigrationGenerator {
-  private _vfs: VirtualFS;
+function applyVfsOverrides(
+  instance: MigrationGenerator | ModelGenerator | AppGenerator,
+  vfs: VirtualFS,
+): void {
+  Object.defineProperties(instance, {
+    isTypeScript: {
+      value() {
+        return true;
+      },
+    },
+    createFile: {
+      value(relativePath: string, content: string) {
+        vfs.write(relativePath, content);
+        this.createdFiles.push(relativePath);
+        this.output(`      create  ${relativePath}`);
+      },
+    },
+    fileExists: {
+      value(relativePath: string) {
+        return vfs.exists(relativePath);
+      },
+    },
+  });
+}
 
+export class VfsMigrationGenerator extends MigrationGenerator {
   constructor(options: VfsGeneratorOptions) {
     super({ cwd: "/", output: options.output });
-    this._vfs = options.vfs;
-  }
-
-  protected override isTypeScript(): boolean {
-    return true;
-  }
-
-  protected override createFile(relativePath: string, content: string): void {
-    this._vfs.write(relativePath, content);
-    this.createdFiles.push(relativePath);
-    this.output(`      create  ${relativePath}`);
-  }
-
-  protected override fileExists(relativePath: string): boolean {
-    return this._vfs.exists(relativePath);
+    applyVfsOverrides(this, options.vfs);
   }
 }
 
@@ -38,20 +47,7 @@ export class VfsModelGenerator extends ModelGenerator {
     super({ cwd: "/", output: options.output });
     this._vfs = options.vfs;
     this._vfsOutput = options.output;
-  }
-
-  protected override isTypeScript(): boolean {
-    return true;
-  }
-
-  protected override createFile(relativePath: string, content: string): void {
-    this._vfs.write(relativePath, content);
-    this.createdFiles.push(relativePath);
-    this.output(`      create  ${relativePath}`);
-  }
-
-  protected override fileExists(relativePath: string): boolean {
-    return this._vfs.exists(relativePath);
+    applyVfsOverrides(this, options.vfs);
   }
 
   protected override createMigrationGenerator(): MigrationGenerator {
@@ -60,25 +56,9 @@ export class VfsModelGenerator extends ModelGenerator {
 }
 
 export class VfsAppGenerator extends AppGenerator {
-  private _vfs: VirtualFS;
-
   constructor(options: VfsGeneratorOptions) {
     super({ cwd: "/", output: options.output });
-    this._vfs = options.vfs;
-  }
-
-  protected override isTypeScript(): boolean {
-    return true;
-  }
-
-  protected override createFile(relativePath: string, content: string): void {
-    this._vfs.write(relativePath, content);
-    this.createdFiles.push(relativePath);
-    this.output(`      create  ${relativePath}`);
-  }
-
-  protected override fileExists(relativePath: string): boolean {
-    return this._vfs.exists(relativePath);
+    applyVfsOverrides(this, options.vfs);
   }
 
   override async run(name: string, options: AppOptions): Promise<string[]> {

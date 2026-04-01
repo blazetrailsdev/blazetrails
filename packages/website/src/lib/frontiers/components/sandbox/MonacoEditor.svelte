@@ -117,7 +117,7 @@
       editor.setValue(file.content);
       editor.revealLineInCenter(1);
       currentPath = file.path;
-      decorationIds = [];
+      decorationIds = editor.deltaDecorations(decorationIds, []);
     } else {
       const current = editor.getValue();
       if (current !== file.content) {
@@ -136,6 +136,8 @@
       editor.updateOptions({ readOnly: readonly });
     }
   });
+
+  let destroyed = false;
 
   onMount(async () => {
     // Configure workers for language services
@@ -177,6 +179,7 @@
     };
 
     monaco = await import("monaco-editor");
+    if (destroyed) return;
     defineTheme(monaco);
 
     editor = monaco.editor.create(container, {
@@ -215,6 +218,7 @@
   });
 
   onDestroy(() => {
+    destroyed = true;
     editor?.dispose();
   });
 </script>

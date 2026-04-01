@@ -118,6 +118,13 @@ export class AbstractReflection {
     const primaryKeys = this._arrayWrap((this as any).joinPrimaryKey);
     const foreignKeys = this._arrayWrap((this as any).joinForeignKey);
 
+    if (primaryKeys.length !== foreignKeys.length) {
+      throw new Error(
+        `joinScope: joinPrimaryKey and joinForeignKey must have the same number of columns ` +
+          `(got ${primaryKeys.length} primary key column(s) and ${foreignKeys.length} foreign key column(s))`,
+      );
+    }
+
     for (let i = 0; i < primaryKeys.length; i++) {
       scope = scope.where(table.get(primaryKeys[i]).eq(foreignTable.get(foreignKeys[i])));
     }

@@ -354,7 +354,10 @@ export class Builder {
 
   private _firstColumn(): string | undefined {
     const keys = [...this._insertAll.keysIncludingTimestamps()];
-    return keys.length > 0 ? `"${keys[0]}"` : undefined;
+    if (keys.length > 0) return `"${keys[0]}"`;
+    const pk = this._insertAll.primaryKeys();
+    if (pk.length > 0) return `"${pk[0]}"`;
+    return undefined;
   }
 
   private _arrayColumnSet(): Set<string> {

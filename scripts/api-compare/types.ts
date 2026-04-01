@@ -30,6 +30,7 @@ export interface ClassInfo {
 export interface PackageInfo {
   classes: Record<string, ClassInfo>;
   modules: Record<string, ClassInfo>;
+  fileFunctions: Record<string, MethodInfo[]>;
 }
 
 export interface ApiManifest {

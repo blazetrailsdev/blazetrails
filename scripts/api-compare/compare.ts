@@ -1,19 +1,17 @@
 #!/usr/bin/env npx tsx
 /**
- * Convention-based API comparison.
+ * Method-centric API comparison.
  *
- * Compares Ruby Rails API surface with our TypeScript API using only naming
- * conventions — no manual mappings.
+ * Compares Ruby Rails API surface with our TypeScript API by matching
+ * individual methods, not class/module wrappers. The file IS the module —
+ * if Ruby's `Sanitization` module defines `sanitize_sql`, we look for
+ * `sanitizeSql` anywhere in the expected TS file, regardless of whether
+ * there's a `Sanitization` class/interface wrapping it.
  *
- * For each Ruby class/module, derives the expected TS class name and file
- * location from conventions:
- *   - Class name: short name (last segment of FQN)
- *   - File path: Ruby path with .rb → .ts, snake_case → kebab-case
- *
- * Reports: found (correct file), found (misplaced), missing.
+ * This prevents agents from gaming the metric with empty interfaces.
  *
  * Usage:
- *   npx tsx scripts/api-compare/compare.ts [--package activerecord] [--methods] [--missing]
+ *   npx tsx scripts/api-compare/compare.ts [--package activerecord] [--missing] [--files]
  */
 
 import * as fs from "fs";
@@ -46,7 +44,6 @@ function rubyFileToTs(rubyFile: string): string {
   const dir = path.dirname(rubyFile);
   const base = path.basename(rubyFile, ".rb");
   const kebab = base.replace(/_/g, "-");
-  // Rails uses ERB; we use EJS
   const tsFile = kebab.replace(/\berb\b/g, "ejs") + ".ts";
   if (dir === ".") return tsFile;
   const tsDir = dir
@@ -54,32 +51,6 @@ function rubyFileToTs(rubyFile: string): string {
     .map((d) => d.replace(/_/g, "-").replace(/\berb\b/g, "ejs"))
     .join("/");
   return path.join(tsDir, tsFile);
-}
-
-/** FQN → short class name */
-function shortName(fqn: string): string {
-  const parts = fqn.split("::");
-  return parts[parts.length - 1];
-}
-
-/**
- * FQN → candidate TS class names to try matching.
- * For `Arel::Visitors::Dot::Node`, returns ["Node", "DotNode", "NodeDot"]
- * For `ActiveModel::Type::String`, returns ["String", "TypeString", "StringType"]
- * so inner classes like Dot::Node can match DotNode in TS.
- */
-function candidateNames(fqn: string): string[] {
-  const parts = fqn.split("::");
-  const name = parts[parts.length - 1];
-  const candidates = [name];
-  if (parts.length >= 2) {
-    const parent = parts[parts.length - 2];
-    // ParentName — e.g., Dot::Node → DotNode
-    candidates.push(parent + name);
-    // NameParent — e.g., Type::String → StringType
-    candidates.push(name + parent);
-  }
-  return candidates;
 }
 
 const OPERATORS = new Set([
@@ -151,29 +122,23 @@ const SKIP = new Set([
 function rubyMethodToTs(name: string): string | null {
   if (OPERATORS.has(name)) return null;
   if (SKIP.has(name)) return null;
-
-  // Skip _-prefixed
   if (name.startsWith("_")) return null;
 
-  // Special conversions
   if (name === "initialize") return "constructor";
   if (name === "to_s" || name === "to_str") return "toString";
   if (name === "to_json") return "toJSON";
   if (name === "to_sql") return "toSql";
 
-  // Predicate: foo? → isFoo
   if (name.endsWith("?")) {
     const base = name.slice(0, -1);
     return "is" + snakeToCamel(base).replace(/^./, (c) => c.toUpperCase());
   }
 
-  // Bang: foo! → fooBang
   if (name.endsWith("!")) {
     const base = name.slice(0, -1);
     return snakeToCamel(base) + "Bang";
   }
 
-  // Setter: foo= → foo (camelCase)
   if (name.endsWith("=")) {
     const base = name.slice(0, -1);
     return snakeToCamel(base);
@@ -186,37 +151,26 @@ function rubyMethodToTs(name: string): string | null {
 // Types
 // ---------------------------------------------------------------------------
 
-type ClassStatus = "found" | "misplaced" | "missing";
-
-interface ClassResult {
-  rubyFqn: string;
-  rubyShortName: string;
-  rubyFile: string;
-  expectedTsFile: string;
-  actualTsFile: string | null;
-  kind: "class" | "module";
-  status: ClassStatus;
-  methodsMatched: number;
-  methodsMissing: number;
-  methodsExtra: number;
-  missingMethods: string[];
+interface MethodResult {
+  rubyName: string;
+  tsName: string;
+  rubyModule: string;
 }
 
 interface FileResult {
   rubyFile: string;
   expectedTsFile: string;
   tsFileExists: boolean;
-  classes: ClassResult[];
-  found: number;
-  misplaced: number;
+  matched: number;
   missing: number;
+  total: number;
+  missingMethods: MethodResult[];
 }
 
 interface PackageResult {
   package: string;
-  totalClasses: number;
-  found: number;
-  misplaced: number;
+  totalMethods: number;
+  matched: number;
   missing: number;
   percent: number;
   files: FileResult[];
@@ -238,8 +192,8 @@ function main() {
     }
     filterPkg = value;
   }
-  const showMethods = args.includes("--methods");
   const showMissing = args.includes("--missing");
+  const showFiles = args.includes("--files");
 
   const rubyPath = path.join(OUTPUT_DIR, "rails-api.json");
   const tsPath = path.join(OUTPUT_DIR, "ts-api.json");
@@ -263,52 +217,45 @@ function main() {
 
     const tsPkg = ts.packages[pkg];
 
-    // Build TS lookup: shortName → { file, classInfo }[]
-    // Includes both classes and modules (interfaces/namespaces)
-    const tsClassesByName = new Map<string, { file: string; info: ClassInfo }[]>();
+    // Build per-file method index from TS: file → Set<methodName>
+    const tsMethodsByFile = new Map<string, Set<string>>();
+
     if (tsPkg) {
-      for (const [_key, cls] of Object.entries(tsPkg.classes)) {
-        const entries = tsClassesByName.get(cls.name) || [];
-        entries.push({ file: cls.file || "", info: cls });
-        tsClassesByName.set(cls.name, entries);
-      }
-      for (const [_key, mod] of Object.entries(tsPkg.modules)) {
-        const entries = tsClassesByName.get(mod.name) || [];
-        entries.push({ file: mod.file || "", info: mod });
-        tsClassesByName.set(mod.name, entries);
+      const addMethods = (cls: ClassInfo) => {
+        const file = cls.file || "";
+        const methods = tsMethodsByFile.get(file) || new Set();
+        for (const m of [...cls.instanceMethods, ...cls.classMethods]) {
+          methods.add(m.name);
+        }
+        tsMethodsByFile.set(file, methods);
+      };
+
+      for (const cls of Object.values(tsPkg.classes)) addMethods(cls);
+      for (const mod of Object.values(tsPkg.modules)) addMethods(mod);
+
+      // Include file-level functions (top-level exports not in any class/interface)
+      if (tsPkg.fileFunctions) {
+        for (const [file, fns] of Object.entries(tsPkg.fileFunctions)) {
+          const methods = tsMethodsByFile.get(file) || new Set();
+          for (const fn of fns) {
+            methods.add(fn.name);
+          }
+          tsMethodsByFile.set(file, methods);
+        }
       }
     }
 
-    // Build set of all TS files in this package
-    const tsFileSet = new Set<string>();
-    if (tsPkg) {
-      for (const cls of Object.values(tsPkg.classes)) {
-        if (cls.file) tsFileSet.add(cls.file);
-      }
-      for (const mod of Object.values(tsPkg.modules)) {
-        if (mod.file) tsFileSet.add(mod.file);
-      }
-    }
-
-    // Collect all Ruby classes and modules
+    // Collect all Ruby classes and modules with their methods
     const allRuby: {
       fqn: string;
       info: ClassInfo;
-      kind: "class" | "module";
     }[] = [];
+
     for (const [fqn, info] of Object.entries(rubyPkg.classes)) {
-      allRuby.push({
-        fqn,
-        info: info as unknown as ClassInfo,
-        kind: "class",
-      });
+      allRuby.push({ fqn, info: info as unknown as ClassInfo });
     }
 
-    // Ruby's `module ClassMethods` pattern (from ActiveSupport::Concern) defines
-    // methods that get mixed into the including class as class-level (static)
-    // methods. In TypeScript, these are just static methods on the class or
-    // exported functions from the file — there's no separate ClassMethods wrapper.
-    // Fold ClassMethods instance methods into the parent module as classMethods.
+    // Fold ClassMethods into parent module
     const classMethodModuleFqns = new Set<string>();
     for (const [fqn, info] of Object.entries(rubyPkg.modules)) {
       if (!fqn.endsWith("::ClassMethods")) continue;
@@ -316,7 +263,6 @@ function main() {
       const parentMod = rubyPkg.modules[parentFqn] as unknown as ClassInfo | undefined;
       if (parentMod) {
         const mod = info as unknown as ClassInfo;
-        // Move ClassMethods instance methods → parent's classMethods
         for (const m of mod.instanceMethods) {
           if (!parentMod.classMethods.some((pm: MethodInfo) => pm.name === m.name)) {
             parentMod.classMethods.push(m);
@@ -328,10 +274,7 @@ function main() {
 
     for (const [fqn, info] of Object.entries(rubyPkg.modules)) {
       const mod = info as unknown as ClassInfo;
-      // Skip ClassMethods modules — their methods were folded into the parent
       if (classMethodModuleFqns.has(fqn)) continue;
-      // Skip pure namespace modules (no methods, no includes, no extends)
-      // — these are just Ruby's `module Foo; end` containers that map to directories in TS
       if (
         mod.instanceMethods.length === 0 &&
         mod.classMethods.length === 0 &&
@@ -340,11 +283,43 @@ function main() {
       ) {
         continue;
       }
-      allRuby.push({
-        fqn,
-        info: mod,
-        kind: "module",
-      });
+      allRuby.push({ fqn, info: mod });
+    }
+
+    // Build module FQN → short name mapping for include resolution.
+    // Ruby `include Predications` uses the short name, but the module FQN
+    // might be `Arel::Predications`. Build both short and full lookups.
+    const moduleFqnByShort = new Map<string, string[]>();
+    const moduleFileByFqn = new Map<string, string>();
+    for (const [fqn, info] of Object.entries(rubyPkg.modules)) {
+      const mod = info as unknown as ClassInfo;
+      if (mod.file) moduleFileByFqn.set(fqn, mod.file);
+      const short = fqn.split("::").pop()!;
+      const list = moduleFqnByShort.get(short) || [];
+      list.push(fqn);
+      moduleFqnByShort.set(short, list);
+    }
+
+    // For each Ruby module, find the TS files of classes that include it.
+    // If a module's methods aren't in the module's own file, they may be
+    // implemented directly on the including class (common TS pattern).
+    const moduleIncluderFiles = new Map<string, Set<string>>();
+    const allClassesAndModules = [
+      ...Object.entries(rubyPkg.classes).map(([fqn, info]) => ({ fqn, info: info as unknown as ClassInfo })),
+      ...Object.entries(rubyPkg.modules).map(([fqn, info]) => ({ fqn, info: info as unknown as ClassInfo })),
+    ];
+    for (const { info } of allClassesAndModules) {
+      if (!info.file) continue;
+      const includerTsFile = rubyFileToTs(info.file);
+      for (const inc of [...(info.includes || []), ...(info.extends || [])]) {
+        // Resolve short name to FQN(s)
+        const fqns = moduleFqnByShort.get(inc) || [inc];
+        for (const fqn of fqns) {
+          const files = moduleIncluderFiles.get(fqn) || new Set();
+          files.add(includerTsFile);
+          moduleIncluderFiles.set(fqn, files);
+        }
+      }
     }
 
     // Group by Ruby file
@@ -356,192 +331,76 @@ function main() {
       byFile.set(file, list);
     }
 
-    // Two-pass matching to avoid false "misplaced" reports when multiple Ruby
-    // classes share the same short name (e.g., Associations::Association vs
-    // Preloader::Association). Pass 1 claims exact-file matches; pass 2 does
-    // fallback (misplaced) matching on what remains.
-    const consumedTs = new Set<string>(); // "name:file" keys
-
-    // Pre-compute per-item: expected TS file + candidate names
-    interface ItemWithMeta {
-      item: (typeof allRuby)[0];
-      rubyFile: string;
-      expectedTs: string;
-      candidates: string[];
-    }
-    const allItems: ItemWithMeta[] = [];
-    const itemToMeta = new Map<object, ItemWithMeta>();
-    for (const [rubyFile, items] of byFile.entries()) {
-      const expectedTs = rubyFileToTs(rubyFile);
-      for (const item of items) {
-        const meta: ItemWithMeta = {
-          item,
-          rubyFile,
-          expectedTs,
-          candidates: candidateNames(item.fqn),
-        };
-        allItems.push(meta);
-        itemToMeta.set(item, meta);
-      }
-    }
-
-    // Pass 1: exact-file matches only
-    const matchResults = new Map<
-      ItemWithMeta,
-      {
-        status: ClassStatus;
-        matchedName: string;
-        actualFile: string | null;
-        tsClass: ClassInfo | null;
-      }
-    >();
-
-    for (const meta of allItems) {
-      let matched = false;
-      for (const candidate of meta.candidates) {
-        const entries = tsClassesByName.get(candidate) || [];
-        const inExpected = entries.find(
-          (e) => e.file === meta.expectedTs && !consumedTs.has(`${candidate}:${e.file}`),
-        );
-        if (inExpected) {
-          consumedTs.add(`${candidate}:${meta.expectedTs}`);
-          matchResults.set(meta, {
-            status: "found",
-            matchedName: candidate,
-            actualFile: meta.expectedTs,
-            tsClass: inExpected.info,
-          });
-          matched = true;
-          break;
-        }
-      }
-      if (!matched) {
-        matchResults.set(meta, {
-          status: "missing",
-          matchedName: "",
-          actualFile: null,
-          tsClass: null,
-        });
-      }
-    }
-
-    // Pass 2: for still-unmatched items, try fallback (misplaced) matching
-    for (const meta of allItems) {
-      const result = matchResults.get(meta)!;
-      if (result.status !== "missing") continue;
-
-      for (const candidate of meta.candidates) {
-        const entries = tsClassesByName.get(candidate) || [];
-        const inAny = entries.find((e) => !consumedTs.has(`${candidate}:${e.file}`));
-        if (inAny) {
-          consumedTs.add(`${candidate}:${inAny.file}`);
-          result.status = "misplaced";
-          result.matchedName = candidate;
-          result.actualFile = inAny.file;
-          result.tsClass = inAny.info;
-          break;
-        }
-      }
-    }
-
-    // Aggregate results by file
-    let totalFound = 0;
-    let totalMisplaced = 0;
+    // Compare methods per file
+    let totalMatched = 0;
     let totalMissing = 0;
     const fileResults: FileResult[] = [];
 
     for (const [rubyFile, items] of [...byFile.entries()].sort(([a], [b]) => a.localeCompare(b))) {
       const expectedTs = rubyFileToTs(rubyFile);
-      const tsFileExists = tsFileSet.has(expectedTs);
-      const classResults: ClassResult[] = [];
-      let fileFound = 0;
-      let fileMisplaced = 0;
+      const tsMethods = tsMethodsByFile.get(expectedTs) || new Set<string>();
+      const tsFileExists = tsMethodsByFile.has(expectedTs);
+      const missingMethods: MethodResult[] = [];
+      let fileMatched = 0;
       let fileMissing = 0;
 
       for (const item of items) {
-        const meta = itemToMeta.get(item)!;
-        const result = matchResults.get(meta)!;
-        const { status, matchedName, actualFile, tsClass } = result;
-
-        if (status === "found") {
-          fileFound++;
-          totalFound++;
-        } else if (status === "misplaced") {
-          fileMisplaced++;
-          totalMisplaced++;
-        } else {
-          fileMissing++;
-          totalMissing++;
-        }
-
-        // Method comparison for found/misplaced classes
-        let methodsMatched = 0;
-        let methodsMissing = 0;
-        let methodsExtra = 0;
-        const missingMethods: string[] = [];
-
-        if (tsClass) {
-          const tsMethodNames = new Set<string>();
-          for (const m of [...tsClass.instanceMethods, ...tsClass.classMethods]) {
-            tsMethodNames.add(m.name);
-          }
-
-          const rubyMethods = [...item.info.instanceMethods, ...item.info.classMethods];
-          const mappedTsNames = new Set<string>();
-
-          for (const rm of rubyMethods) {
-            const tsName = rubyMethodToTs(rm.name);
-            if (tsName === null) continue;
-            mappedTsNames.add(tsName);
-            if (tsMethodNames.has(tsName)) {
-              methodsMatched++;
-            } else {
-              methodsMissing++;
-              missingMethods.push(`${rm.name} → ${tsName}`);
-            }
-          }
-
-          for (const tsName of tsMethodNames) {
-            if (!mappedTsNames.has(tsName) && tsName !== "constructor") {
-              methodsExtra++;
-            }
+        // For modules, also check files of classes that include this module
+        const includerFiles = moduleIncluderFiles.get(item.fqn);
+        const includerMethodSets: Set<string>[] = [];
+        if (includerFiles) {
+          for (const f of includerFiles) {
+            const methods = tsMethodsByFile.get(f);
+            if (methods) includerMethodSets.push(methods);
           }
         }
 
-        classResults.push({
-          rubyFqn: item.fqn,
-          rubyShortName: shortName(item.fqn),
+        const rubyMethods = [...item.info.instanceMethods, ...item.info.classMethods];
+
+        for (const rm of rubyMethods) {
+          const tsName = rubyMethodToTs(rm.name);
+          if (tsName === null) continue;
+
+          if (tsMethods.has(tsName)) {
+            fileMatched++;
+          } else if (includerMethodSets.some((s) => s.has(tsName))) {
+            // Found on an including class — counts as matched
+            fileMatched++;
+          } else {
+            fileMissing++;
+            missingMethods.push({
+              rubyName: rm.name,
+              tsName,
+              rubyModule: item.fqn,
+            });
+          }
+        }
+      }
+
+      const total = fileMatched + fileMissing;
+      if (total > 0) {
+        fileResults.push({
           rubyFile,
           expectedTsFile: expectedTs,
-          actualTsFile: actualFile,
-          kind: item.kind,
-          status,
-          methodsMatched,
-          methodsMissing,
-          methodsExtra,
+          tsFileExists,
+          matched: fileMatched,
+          missing: fileMissing,
+          total,
           missingMethods,
         });
       }
 
-      fileResults.push({
-        rubyFile,
-        expectedTsFile: expectedTs,
-        tsFileExists,
-        classes: classResults,
-        found: fileFound,
-        misplaced: fileMisplaced,
-        missing: fileMissing,
-      });
+      totalMatched += fileMatched;
+      totalMissing += fileMissing;
     }
 
-    const total = totalFound + totalMisplaced + totalMissing;
-    const pct = total > 0 ? Math.round((totalFound / total) * 1000) / 10 : 0;
+    const totalMethods = totalMatched + totalMissing;
+    const pct = totalMethods > 0 ? Math.round((totalMatched / totalMethods) * 1000) / 10 : 0;
 
     results.push({
       package: pkg,
-      totalClasses: total,
-      found: totalFound,
-      misplaced: totalMisplaced,
+      totalMethods,
+      matched: totalMatched,
       missing: totalMissing,
       percent: pct,
       files: fileResults,
@@ -555,7 +414,7 @@ function main() {
     JSON.stringify({ generatedAt: new Date().toISOString(), results }, null, 2),
   );
 
-  printReport(results, showMethods, showMissing, filterPkg);
+  printReport(results, showMissing, showFiles, filterPkg);
 }
 
 // ---------------------------------------------------------------------------
@@ -564,102 +423,56 @@ function main() {
 
 function printReport(
   results: PackageResult[],
-  showMethods: boolean,
   showMissing: boolean,
+  showFiles: boolean,
   filterPkg: string | null,
 ) {
   let grandTotal = 0;
-  let grandFound = 0;
-  let grandMisplaced = 0;
+  let grandMatched = 0;
 
   for (const pkg of results) {
-    grandTotal += pkg.totalClasses;
-    grandFound += pkg.found;
-    grandMisplaced += pkg.misplaced;
+    grandTotal += pkg.totalMethods;
+    grandMatched += pkg.matched;
 
     console.log(`\n${"=".repeat(100)}`);
     console.log(
-      `  ${pkg.package}  —  ${pkg.found}/${pkg.totalClasses} classes/modules (${pkg.percent}%)  |  ${pkg.misplaced} misplaced  |  ${pkg.missing} missing`,
+      `  ${pkg.package}  —  ${pkg.matched}/${pkg.totalMethods} methods (${pkg.percent}%)  |  ${pkg.missing} missing`,
     );
     console.log(`${"=".repeat(100)}`);
 
-    // Misplaced classes summary
-    const misplaced = pkg.files.flatMap((f) => f.classes.filter((c) => c.status === "misplaced"));
-    if (misplaced.length > 0) {
-      console.log(`\n  MISPLACED (need to move):`);
-      console.log(`  ${"-".repeat(96)}`);
-
-      const moves = new Map<string, { items: string[]; from: string; to: string }>();
-      for (const c of misplaced) {
-        const key = `${c.actualTsFile} → ${c.expectedTsFile}`;
-        if (!moves.has(key))
-          moves.set(key, {
-            items: [],
-            from: c.actualTsFile!,
-            to: c.expectedTsFile,
-          });
-        moves.get(key)!.items.push(`${c.rubyShortName} (${c.kind})`);
-      }
-
-      for (const [, move] of moves) {
-        console.log(`\n  ${move.from}  →  ${move.to}  (${move.items.length})`);
-        for (const item of move.items) {
-          console.log(`    - ${item}`);
-        }
-      }
-      console.log("");
-    }
-
     // Per-file table (only for detail packages or when filtered)
-    if (DETAIL_PACKAGES.has(pkg.package) || filterPkg) {
+    if (DETAIL_PACKAGES.has(pkg.package) || filterPkg || showFiles) {
       console.log(
-        `\n  ${"Ruby file".padEnd(55)} ${"Convention TS".padEnd(40)} ${"OK".padStart(4)} ${"Move".padStart(4)} ${"Miss".padStart(4)} ${"Tot".padStart(4)}`,
+        `\n  ${"Ruby file".padEnd(55)} ${"Expected TS file".padEnd(40)} ${"Match".padStart(6)} ${"Miss".padStart(6)} ${"Tot".padStart(6)}  %`,
       );
       console.log(
-        `  ${"-".repeat(55)} ${"-".repeat(40)} ${"-".repeat(4)} ${"-".repeat(4)} ${"-".repeat(4)} ${"-".repeat(4)}`,
+        `  ${"-".repeat(55)} ${"-".repeat(40)} ${"-".repeat(6)} ${"-".repeat(6)} ${"-".repeat(6)} ${"-".repeat(4)}`,
       );
 
       for (const f of pkg.files) {
-        const total = f.found + f.misplaced + f.missing;
-        const marker = !f.tsFileExists ? " \u2717" : f.found === total ? " \u2713" : "";
+        const pct = f.total > 0 ? Math.round((f.matched / f.total) * 100) : 0;
+        const marker = !f.tsFileExists ? " \u2717" : f.matched === f.total ? " \u2713" : "";
         console.log(
-          `  ${f.rubyFile.padEnd(55)} ${f.expectedTsFile.padEnd(40)} ${String(f.found).padStart(4)} ${String(f.misplaced).padStart(4)} ${String(f.missing).padStart(4)} ${String(total).padStart(4)}${marker}`,
+          `  ${f.rubyFile.padEnd(55)} ${f.expectedTsFile.padEnd(40)} ${String(f.matched).padStart(6)} ${String(f.missing).padStart(6)} ${String(f.total).padStart(6)} ${String(pct).padStart(3)}%${marker}`,
         );
 
         if (showMissing) {
-          for (const c of f.classes) {
-            if (c.status === "missing") {
-              console.log(`      - ${c.rubyFqn} (${c.kind})`);
-            }
+          for (const m of f.missingMethods.slice(0, 10)) {
+            console.log(`      - ${m.rubyName} → ${m.tsName}`);
           }
-        }
-
-        if (showMethods) {
-          for (const c of f.classes) {
-            if (c.status !== "missing" && (c.methodsMatched > 0 || c.methodsMissing > 0)) {
-              const methodTotal = c.methodsMatched + c.methodsMissing;
-              const pct = methodTotal > 0 ? Math.round((c.methodsMatched / methodTotal) * 100) : 0;
-              console.log(
-                `      ${c.rubyShortName}: ${c.methodsMatched}/${methodTotal} methods (${pct}%)`,
-              );
-              for (const m of c.missingMethods.slice(0, 10)) {
-                console.log(`        - ${m}`);
-              }
-              if (c.missingMethods.length > 10) {
-                console.log(`        ... and ${c.missingMethods.length - 10} more`);
-              }
-            }
+          if (f.missingMethods.length > 10) {
+            console.log(`      ... and ${f.missingMethods.length - 10} more`);
           }
         }
       }
     }
   }
 
-  const grandPct = grandTotal > 0 ? Math.round((grandFound / grandTotal) * 1000) / 10 : 0;
-  const grandMissing = grandTotal - grandFound - grandMisplaced;
+  const grandPct = grandTotal > 0 ? Math.round((grandMatched / grandTotal) * 1000) / 10 : 0;
+  const grandMissing = grandTotal - grandMatched;
   console.log(`\n${"=".repeat(100)}`);
   console.log(
-    `  Overall: ${grandFound}/${grandTotal} classes/modules (${grandPct}%)  |  ${grandMisplaced} misplaced  |  ${grandMissing} missing`,
+    `  Overall: ${grandMatched}/${grandTotal} methods (${grandPct}%)  |  ${grandMissing} missing`,
   );
   console.log(`${"=".repeat(100)}\n`);
 }

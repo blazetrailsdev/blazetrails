@@ -74,7 +74,7 @@ function main() {
 
 function extractPackage(pkgName: string, srcDir: string): PackageInfo {
   const files = getAllTsFiles(srcDir);
-  const info: PackageInfo = { classes: {}, modules: {} };
+  const info: PackageInfo = { classes: {}, modules: {}, fileFunctions: {} };
 
   // Create a TypeScript program
   const dirName = PACKAGE_DIR_OVERRIDES[pkgName] ?? pkgName;
@@ -182,37 +182,39 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
 
     // Also capture functions exported via `export { foo, bar }` (named export lists).
     // Resolve aliases so ExportSpecifier nodes reach the underlying FunctionDeclaration.
-    if (!fileHasClassOrModule) {
-      const moduleSymbol = checker.getSymbolAtLocation(sourceFile);
-      if (moduleSymbol) {
-        const exports = checker.getExportsOfModule(moduleSymbol);
-        for (const sym of exports) {
-          if (sym.name.startsWith("_")) continue;
-          if (fileFunctions.some((f) => f.name === sym.name)) continue;
-          const resolved = sym.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym) : sym;
-          const decl = resolved.valueDeclaration ?? resolved.declarations?.[0];
-          if (decl && ts.isFunctionDeclaration(decl) && decl.getSourceFile() === sourceFile) {
-            const line =
-              decl.getSourceFile().getLineAndCharacterOfPosition(decl.getStart()).line + 1;
-            fileFunctions.push({
-              name: sym.name,
-              visibility: "public",
-              params: extractParameters(decl.parameters),
-              isStatic: false,
-              line,
-              file: relPath,
-            });
-          }
+    const moduleSymbol = checker.getSymbolAtLocation(sourceFile);
+    if (moduleSymbol) {
+      const exports = checker.getExportsOfModule(moduleSymbol);
+      for (const sym of exports) {
+        if (sym.name.startsWith("_")) continue;
+        if (fileFunctions.some((f) => f.name === sym.name)) continue;
+        const resolved = sym.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym) : sym;
+        const decl = resolved.valueDeclaration ?? resolved.declarations?.[0];
+        if (decl && ts.isFunctionDeclaration(decl) && decl.getSourceFile() === sourceFile) {
+          const line =
+            decl.getSourceFile().getLineAndCharacterOfPosition(decl.getStart()).line + 1;
+          fileFunctions.push({
+            name: sym.name,
+            visibility: "public",
+            params: extractParameters(decl.parameters),
+            isStatic: false,
+            line,
+            file: relPath,
+          });
         }
       }
     }
 
+    // Always record file-level functions so compare.ts can match methods
+    // against the file regardless of whether a class/interface wrapper exists.
+    if (fileFunctions.length > 0) {
+      info.fileFunctions[relPath] = fileFunctions;
+    }
+
     // If a file has exported functions but no class/interface/namespace,
-    // create a module entry from the file name. This matches Rails' pattern
-    // where modules like Enum, Sanitization, etc. contain methods.
+    // also create a module entry from the file name for backward compat.
     if (!fileHasClassOrModule && fileFunctions.length > 0) {
       const baseName = path.basename(relPath, ".ts");
-      // Convert kebab-case to PascalCase: "secure-password" → "SecurePassword"
       const moduleName = baseName
         .split("-")
         .map((part) => part.charAt(0).toUpperCase() + part.slice(1))

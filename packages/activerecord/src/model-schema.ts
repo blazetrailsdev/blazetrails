@@ -81,14 +81,15 @@ export function buildPkWhereNode(
   const table = new Table(resolveTableName(modelClass));
   const pk = modelClass.primaryKey;
   if (Array.isArray(pk)) {
-    if (!Array.isArray(idValue)) return arelSql("1=0");
+    if (!Array.isArray(idValue) || idValue.length !== pk.length) return arelSql("1=0");
     const values = idValue;
-    const conditions = pk.map((col, i) => {
-      const attr = table.get(col);
+    const conditions: InstanceType<typeof Nodes.Node>[] = [];
+    for (let i = 0; i < pk.length; i++) {
+      const attr = table.get(pk[i]);
       const v = values[i];
       if (v === undefined || v === null) return arelSql("1=0");
-      return attr.eq(v);
-    });
+      conditions.push(attr.eq(v));
+    }
     return new Nodes.And(conditions);
   }
   const attr = table.get(pk as string);
@@ -267,7 +268,7 @@ export async function createTable(modelClass: typeof Base): Promise<void> {
   } else {
     for (const pk of pks) {
       const pkDef = modelClass._attributeDefinitions.get(pk);
-      const pkType = pkDef ? sqlTypeFor(pkDef.type?.name || "integer", adapterName) : "INTEGER";
+      const pkType = sqlTypeFor(pkDef?.type?.name || "integer", adapterName);
       colDefs.push(`${quoteIdentifier(pk, adapterName)} ${pkType} NOT NULL`);
     }
   }

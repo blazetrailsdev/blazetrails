@@ -12,41 +12,123 @@ InsertManager, UpdateManager, DeleteManager, Nodes).
 
 ### relation.ts
 
-| Lines      | Pattern                                                            | What It Does                                                         |
-| ---------- | ------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| ~277, ~317 | `"${sourceTable}"."${pk}" IN (SELECT ...)`                         | `whereAssociated` / `whereMissing` builds subquery as string         |
-| ~2229–2326 | `INSERT INTO "${table.name}" (${colList}) VALUES ...`              | `insertAll` builds full INSERT (+ ON DUPLICATE KEY UPDATE) as string |
-| ~2704      | `sql.replace(/^SELECT/, SELECT ${hints})`                          | Optimizer hints injected via regex replace on finished SQL           |
-| ~3548      | `SELECT "${ownerFk}", "${targetFk}" FROM "${joinTable}" WHERE ...` | HABTM eager-load query built as string                               |
-| ~3775      | `DELETE FROM "${table.name}" WHERE "${pk}" = ${quoted}`            | Single-record delete as raw SQL                                      |
+**whereAssociated / whereMissing** (lines 277, 317) — subqueries as strings:
+
+```typescript
+// line 277
+`"${sourceTable}"."${pk}" IN (SELECT "${targetTable}"."${foreignKey}" FROM "${targetTable}"${whereClause ? " " + whereClause : ""})`
+// line 317
+`"${sourceTable}"."${pk}" NOT IN (SELECT "${targetTable}"."${foreignKey}" FROM "${targetTable}"${whereClause ? " " + whereClause : ""})`;
+```
+
+**Optimizer hints** (lines 1745, 2704) — regex-replacing finished SQL:
+
+```typescript
+sql = sql.replace(/^SELECT/, `SELECT ${hints}`);
+```
+
+**updateAll** (line 2032) — UPDATE as string:
+
+```typescript
+let sql = `UPDATE "${table.name}" SET ${setClauses}`;
+```
+
+**deleteAll** (line 2064) — DELETE as string:
+
+```typescript
+`DELETE FROM "${table.name}"`;
+```
+
+**insertAll** (lines 2229–2326) — full INSERT with ON CONFLICT/DUPLICATE KEY:
+
+```typescript
+`INSERT INTO "${table.name}" (${colList}) VALUES ${valueRows.join(", ")}`;
+// plus MySQL ON DUPLICATE KEY UPDATE variants (lines 2290–2298)
+// plus PostgreSQL ON CONFLICT variants (lines 2293–2326)
+```
+
+**HABTM eager-load** (line 3548) — join table query as string:
+
+```typescript
+`SELECT "${ownerFk}", "${targetFk}" FROM "${joinTable}" WHERE "${ownerFk}" IN (${pkList})`;
+```
+
+**Single-record delete** (line 3775):
+
+```typescript
+`DELETE FROM "${table.name}" WHERE "${pk}" = ${quoted}`;
+```
 
 ### base.ts
 
-| Lines               | Pattern                                                        | What It Does                                      |
-| ------------------- | -------------------------------------------------------------- | ------------------------------------------------- |
-| ~2008, ~2057, ~2062 | `UPDATE "${table.name}" SET "${attribute}" = COALESCE(...)`    | `increment` / `decrement` builds UPDATE as string |
-| ~2707–2710          | `INSERT INTO "${table.name}" (${colList}) VALUES (${valList})` | `create` builds INSERT as string                  |
-| ~2773               | `UPDATE ... SET ... WHERE ...`                                 | `updateAll` builds UPDATE as string               |
-| ~2846, ~2915, ~2930 | `DELETE FROM "${table.name}" WHERE ...`                        | `destroy` / `delete` builds DELETE as string      |
-| ~2942, ~2978        | `SELECT * FROM "${ctor.tableName}" WHERE ...`                  | `reload` builds SELECT as string                  |
-| ~3202               | `UPDATE ...`                                                   | `save` builds UPDATE as string                    |
+**incrementCounter / updateCounters** (lines 2008, 2057, 2062):
+
+```typescript
+// line 2008
+`UPDATE "${table.name}" SET "${attribute}" = COALESCE("${attribute}", 0) + ${by}${touchClause} WHERE ${this._buildPkWhere(id)}`
+// line 2057
+`UPDATE "${table.name}" SET ${setClause} WHERE ${whereParts.join(" OR ")}`
+// line 2062
+`UPDATE "${table.name}" SET ${setClause} WHERE "${this.primaryKey}" IN (${idList})`;
+```
+
+**create** (lines 2707–2710):
+
+```typescript
+// line 2707 (MySQL empty insert)
+`INSERT INTO "${table.name}" () VALUES ()`
+// line 2708 (PostgreSQL/SQLite empty insert)
+`INSERT INTO "${table.name}" DEFAULT VALUES`
+// line 2710
+`INSERT INTO "${table.name}" (${colList}) VALUES (${valList})`;
+```
+
+**destroy / delete** (lines 2846, 2915, 2930):
+
+```typescript
+// line 2846 (destroy with pessimistic lock)
+`DELETE FROM "${table.name}" WHERE ${ctor._buildPkWhere(pk)}${lockClause}`
+// line 2915 (destroySilently)
+`DELETE FROM "${table.name}" WHERE ${ctor._buildPkWhere(pk)}`
+// line 2930 (static delete)
+`DELETE FROM "${table.name}" WHERE ${this._buildPkWhere(id)}`;
+```
+
+**reload / lock!** (lines 2942, 2978):
+
+```typescript
+// line 2942
+`SELECT * FROM "${ctor.tableName}" WHERE ${ctor._buildPkWhere(this.id)}`
+// line 2978
+`SELECT * FROM "${ctor.tableName}" WHERE ${ctor._buildPkWhere(this.id)} ${lockClause}`;
+```
+
+**save (\_performUpdate)** (line 3202):
+
+```typescript
+`UPDATE "${table.name}" SET ${setClauses} WHERE ${ctor._buildPkWhere(this.id)}`;
+```
 
 ### nested-attributes.ts
 
-| Lines | Pattern                                           | What It Does                                     |
-| ----- | ------------------------------------------------- | ------------------------------------------------ |
-| ~225  | `UPDATE "${tableName}" SET "${foreignKey}" = ...` | Updates foreign key after creating nested record |
+**Foreign key update** (line 225):
+
+```typescript
+`UPDATE "${tableName}" SET "${foreignKey}" = ${created.id} WHERE "${pk}" = ${pkVal}`;
+```
 
 ### associations/join-dependency.ts
 
-| Lines | Pattern                                 | What It Does                                           |
-| ----- | --------------------------------------- | ------------------------------------------------------ |
-| ~547  | `${throughJoinSql} LEFT OUTER JOIN ...` | Through-association join clause concatenated as string |
+**Through-association join** (line 547):
 
-### internal-metadata.ts / schema-migration.ts / migration-runner.ts
+```typescript
+`${throughJoinSql} LEFT OUTER JOIN "${targetTable}" "${targetAlias}" ON ${targetJoinOn}`;
+```
 
-These system-level files also use raw SQL for CREATE TABLE, SELECT, INSERT,
-DELETE on internal tables (`schema_migrations`, `ar_internal_metadata`). Lower
+### Lower priority: infrastructure files
+
+`internal-metadata.ts`, `schema-migration.ts`, and `migration-runner.ts` also
+use raw SQL for CREATE TABLE, SELECT, INSERT, DELETE on internal tables. Lower
 priority since they're infrastructure, but Rails uses Arel here too.
 
 ---
@@ -58,73 +140,144 @@ ActiveSupport exports: `pluralize`, `singularize`, `camelize`, `underscore`,
 
 ### relation.ts — reimplements functions it already imports
 
-The file imports `underscore`, `camelize`, `singularize`, `pluralize` from
-`@blazetrails/activesupport` at lines 9–13, but then defines local copies:
+The file imports from activesupport at lines 9–13:
 
-| Lines      | Function         | Notes                                |
-| ---------- | ---------------- | ------------------------------------ |
-| ~3059–3064 | `singularize()`  | Only handles basic `-ies`/`-s` cases |
-| ~3065–3069 | `camelize()`     | Manual regex                         |
-| ~3070–3074 | `underscore()`   | Manual regex                         |
-| ~3075–3086 | `pluralize()`    | Only handles basic cases             |
-| ~3316–3320 | `underscore()`   | Duplicate of above                   |
-| ~3321–3325 | `camelize()`     | Duplicate of above                   |
-| ~3326–3330 | `singularize()`  | Duplicate of above                   |
-| ~3375–3386 | `pluralizeHot()` | Another inline pluralize             |
+```typescript
+import {
+  underscore as _toUnderscore,
+  camelize as _camelize,
+  singularize as _singularize,
+  pluralize as _pluralize,
+} from "@blazetrails/activesupport";
+```
 
-These are used in eager-loading association resolution. The imported functions
-should be used directly.
+Then defines local copies three separate times with incomplete implementations:
 
-### nested-attributes.ts — reimplements inflection from scratch
+**First set** (lines 3059–3086):
 
-| Lines    | Function        | Notes                                     |
-| -------- | --------------- | ----------------------------------------- |
-| ~129–134 | `singularize()` | Incomplete: only `-ies` → `-y`, `-s` trim |
-| ~135–139 | `camelize()`    | Manual regex                              |
-| ~150–154 | `underscore()`  | Manual regex                              |
+```typescript
+const singularize = (w: string) => {
+  if (w.endsWith("ies")) return w.slice(0, -3) + "y";
+  if (w.endsWith("ses") || w.endsWith("xes") || w.endsWith("zes")) return w.slice(0, -2);
+  if (w.endsWith("s") && !w.endsWith("ss")) return w.slice(0, -1);
+  return w;
+};
+const camelize = (n: string) =>
+  n
+    .split("_")
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join("");
+const underscore = (n: string) =>
+  n
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
+    .replace(/([a-z\d])([A-Z])/g, "$1_$2")
+    .toLowerCase();
+const pluralize = (w: string) => {
+  /* basic -y, -s, -es rules */
+};
+```
 
+**Second set** (lines 3316–3331) — duplicate of the above.
+
+**Third set** (lines 3375–3386) — `pluralizeHot()`, another inline pluralize.
+
+These incomplete implementations will fail on irregular words (e.g. "person" →
+"people", "axis" → "axes") that the activesupport versions handle correctly.
+
+### nested-attributes.ts — reimplements from scratch with no import
+
+Lines 129–154 define `singularize`, `camelize`, and `underscore` inline.
 No import from activesupport exists in this file at all.
+
+```typescript
+// line 129
+const singularize = (w: string) => {
+  if (w.endsWith("ies")) return w.slice(0, -3) + "y";
+  if (w.endsWith("ses") || w.endsWith("xes") || w.endsWith("zes")) return w.slice(0, -2);
+  if (w.endsWith("s") && !w.endsWith("ss")) return w.slice(0, -1);
+  return w;
+};
+// line 135
+const camelize = (n: string) =>
+  n
+    .split("_")
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join("");
+// line 150
+const underscore = (n: string) =>
+  n
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
+    .replace(/([a-z\d])([A-Z])/g, "$1_$2")
+    .toLowerCase();
+```
 
 ### delegated-type.ts
 
-| Lines  | Pattern                                              | Should Use     |
-| ------ | ---------------------------------------------------- | -------------- |
-| ~82–83 | `lowerName.replace(/([A-Z])/g, "_$1").toLowerCase()` | `underscore()` |
+Lines 82–83 — manual `underscore()`:
+
+```typescript
+const lowerName = typeName.charAt(0).toLowerCase() + typeName.slice(1);
+const snakeName = lowerName.replace(/([A-Z])/g, "_$1").toLowerCase();
+```
 
 ### enum.ts
 
-| Lines | Pattern                                             | Should Use                   |
-| ----- | --------------------------------------------------- | ---------------------------- |
-| ~92   | `s.replace(/_([a-z])/g, (_, c) => c.toUpperCase())` | `camelize()`                 |
-| ~103  | `charAt(0).toUpperCase() + slice(1)`                | `camelize()` or `classify()` |
+Line 92 — manual `camelize()`:
+
+```typescript
+const toCamel = (s: string) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+```
+
+Line 103 — manual capitalize:
+
+```typescript
+const capitalizedFullName = fullName.charAt(0).toUpperCase() + fullName.slice(1);
+```
 
 ### delegate.ts
 
-| Lines  | Pattern                                            | Should Use   |
-| ------ | -------------------------------------------------- | ------------ |
-| ~25–26 | `method.charAt(0).toUpperCase() + method.slice(1)` | `camelize()` |
+Lines 25–26 — manual capitalize:
 
-### reflection.ts — inconsistent: imports some, inlines others
+```typescript
+? `${options.prefix}${method.charAt(0).toUpperCase() + method.slice(1)}`
+: `${assocName}${method.charAt(0).toUpperCase() + method.slice(1)}`
+```
+
+### reflection.ts — imports some, inlines others
 
 The file imports `underscore`, `pluralize`, `singularize` from activesupport
-(line 2), but still does manual capitalization:
+(line 2), but still does manual capitalization at lines 33 and 35:
 
-| Lines    | Pattern                                                | Should Use                      |
-| -------- | ------------------------------------------------------ | ------------------------------- |
-| ~33, ~35 | `singular.charAt(0).toUpperCase() + singular.slice(1)` | `classify()` from activesupport |
+```typescript
+this.className = singular.charAt(0).toUpperCase() + singular.slice(1);
+this.className = name.charAt(0).toUpperCase() + name.slice(1);
+```
+
+Should use `classify()` from activesupport.
 
 ---
 
 ## 3. ActiveSupport Utilities Not Used
 
-ActiveSupport exports many utilities that activerecord reimplements or ignores.
-
 ### blank / present checks
 
-| File                 | Lines    | Pattern                                                     | Should Use                  |
-| -------------------- | -------- | ----------------------------------------------------------- | --------------------------- |
-| attribute-methods.ts | ~38–42   | `value === null \|\| value === undefined` + `trim() === ""` | `isBlank()` / `isPresent()` |
-| core.ts              | ~115–127 | `isPresent()` / `isBlank()` wrappers                        | `isBlank()` / `isPresent()` |
+**attribute-methods.ts** (lines 38–42) — inline blank check:
+
+```typescript
+export function attributePresent(this: AttributeRecord, name: string): boolean {
+  const value = this.readAttribute(name);
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string" && value.trim() === "") return false;
+  return true;
+}
+```
+
+Should use `isBlank()` / `isPresent()` from activesupport.
+
+**core.ts** (lines 115–127) — `isPresent` / `isBlank` that check persistence
+rather than value blankness. These are semantically different from
+activesupport's `isBlank` (they check `isPersisted()`), so this may be
+intentional — but it's worth noting the naming collision.
 
 ### Other available but unused ActiveSupport features
 
@@ -143,41 +296,40 @@ yet wired up in our implementation:
 
 ---
 
-## 4. ActiveModel Integration Gaps
+## 4. ActiveModel Integration Status
 
-ActiveModel integration is generally good — validators extend base classes,
-the type system is shared. A few gaps remain:
+ActiveModel integration is generally solid. Verified status:
 
-### Callbacks
-
-| File         | Notes                                                                                                  |
-| ------------ | ------------------------------------------------------------------------------------------------------ |
-| callbacks.ts | Verify this delegates to `@blazetrails/activemodel` callback infrastructure rather than reimplementing |
-
-### Dirty tracking
-
-| File                       | Notes                                                                                     |
-| -------------------------- | ----------------------------------------------------------------------------------------- |
-| attribute-methods/dirty.ts | Verify this uses `@blazetrails/activemodel`'s `DirtyTracker` / `AttributeMutationTracker` |
-
-### Errors
-
-| File      | Notes                                                                                         |
-| --------- | --------------------------------------------------------------------------------------------- |
-| errors.ts | Check whether AR errors delegate to `@blazetrails/activemodel`'s `Errors` class as Rails does |
+- **Validators** — properly extend base classes from activemodel
+  (`PresenceValidator`, `AbsenceValidator`, `LengthValidator`,
+  `NumericalityValidator`, `EachValidator`)
+- **Type system** — shared with activemodel (`Type`, `ValueType`,
+  `StringType`, `IntegerType`, `BooleanType`, etc.)
+- **Callbacks** — delegates to activemodel. `Base` extends `Model` from
+  activemodel (base.ts line 154), which provides the callback chain.
+  `callbacks.ts` registers AR-specific callbacks (beforeSave, afterSave, etc.)
+  on that inherited chain.
+- **Dirty tracking** — delegates to activemodel. `attribute-methods/dirty.ts`
+  adds persistence-aware methods (`savedChangeToAttribute`,
+  `attributeBeforeLastSave`) that read from activemodel's `previousChanges`
+  and `changes` properties.
+- **Errors** — `errors.ts` defines AR-specific error classes (`RecordNotFound`,
+  `RecordInvalid`, `StatementInvalid`, etc.). This is correct — Rails does the
+  same. AR error classes are distinct from `ActiveModel::Errors` (which tracks
+  validation error messages on a record).
 
 ---
 
 ## Priority Order
 
 1. **relation.ts inline inflection** — Already imports the functions but doesn't
-   use them. Pure waste + correctness risk (incomplete implementations).
-2. **base.ts raw SQL** — Core CRUD operations should use Arel managers.
-3. **relation.ts raw SQL** — Query building is Arel's entire purpose.
-4. **nested-attributes.ts** — Both raw SQL and inline inflection.
+   use them. Pure waste + correctness risk from incomplete implementations.
+2. **base.ts raw SQL** — Core CRUD operations (create, update, delete, reload)
+   should use Arel InsertManager, UpdateManager, DeleteManager, SelectManager.
+3. **relation.ts raw SQL** — updateAll, deleteAll, insertAll, whereAssociated,
+   whereMissing, optimizer hints — query building is Arel's entire purpose.
+4. **nested-attributes.ts** — Both raw SQL and inline inflection need fixing.
 5. **delegated-type.ts / enum.ts / delegate.ts / reflection.ts** — Inline
    string manipulation instead of activesupport.
 6. **ActiveSupport utilities** (blank/present, notifications, encryption) —
    Alignment with how Rails wires its internals.
-7. **ActiveModel integration verification** — Confirm callbacks, dirty, errors
-   delegate properly.

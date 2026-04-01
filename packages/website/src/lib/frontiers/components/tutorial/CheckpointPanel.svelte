@@ -17,6 +17,7 @@
 
   async function verify() {
     checking = true;
+    await new Promise((r) => setTimeout(r, 0));
     try {
       result = runCheckpoint(vfs, adapter, checks);
     } finally {

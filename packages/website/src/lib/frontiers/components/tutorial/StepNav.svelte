@@ -15,8 +15,10 @@
     if ((e.target as HTMLElement)?.isContentEditable) return;
 
     if (e.key === "ArrowLeft" && currentStep > 1) {
+      e.preventDefault();
       onnavigate(currentStep - 1);
     } else if (e.key === "ArrowRight" && currentStep < totalSteps) {
+      e.preventDefault();
       onnavigate(currentStep + 1);
     }
   }

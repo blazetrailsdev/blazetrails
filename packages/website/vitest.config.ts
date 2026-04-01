@@ -20,7 +20,7 @@ const aliases = {
   $frontiers: path.resolve(__dirname, "src/lib/frontiers"),
 };
 
-const sqlJsNodePath = path.resolve(__dirname, "node_modules/sql.js/dist/sql-wasm.js");
+const sqlJsWasmPath = path.resolve(__dirname, "node_modules/sql.js/dist/sql-wasm.js");
 
 export default defineConfig({
   resolve: { alias: aliases },
@@ -38,7 +38,7 @@ export default defineConfig({
       {
         plugins: [svelte({ hot: false })],
         resolve: {
-          alias: { ...aliases, "sql.js": sqlJsNodePath },
+          alias: { ...aliases, "sql.js": sqlJsWasmPath },
           conditions: ["browser"],
         },
         test: {

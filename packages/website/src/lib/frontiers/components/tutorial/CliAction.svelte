@@ -24,8 +24,9 @@
       error = !result.success;
       hasRun = true;
       onoutput?.(result.output);
-    } catch (e: any) {
-      output = [`Error: ${e.message}`];
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      output = [`Error: ${message}`];
       error = true;
       hasRun = true;
     } finally {

@@ -310,6 +310,9 @@
     } else {
       vfs.delete(path);
     }
+    if (focusedPath === path || (isDir && focusedPath?.startsWith(path + "/"))) {
+      focusedPath = null;
+    }
     confirmDelete = null;
   }
 
@@ -482,6 +485,7 @@
     role="dialog"
     aria-modal="true"
     aria-labelledby="delete-confirm-title"
+    onkeydown={(e) => { if (e.key === "Escape") confirmDelete = null; }}
   >
     <div class="rounded border border-border bg-surface-overlay p-4 shadow-lg">
       <p id="delete-confirm-title" class="text-sm text-text">
@@ -493,6 +497,7 @@
           class="rounded border border-border px-3 py-1 text-xs text-text hover:border-accent"
           onclick={() => confirmDelete = null}
           data-testid="delete-cancel"
+          autofocus
         >Cancel</button>
         <button
           type="button"
@@ -516,6 +521,7 @@
   >
     <button
       type="button"
+      tabindex="-1"
       class="flex w-full items-center gap-1 py-1.5 text-left hover:text-accent md:py-1
              {node.path === selectedPath ? 'bg-surface-overlay text-text' : 'text-text-muted'}
              {node.path === focusedPath ? 'outline outline-1 outline-border-focus' : ''}"

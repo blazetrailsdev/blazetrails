@@ -201,7 +201,7 @@ describe("FileTree", () => {
   });
 
   describe("delete", () => {
-    it("deletes a file via context menu", async () => {
+    it("shows confirmation dialog before deleting", async () => {
       vfs.write("doomed.ts", "content");
       render(FileTree, { props: { vfs } });
       await waitFor(() => expect(screen.getByTestId("tree-file")).toBeTruthy());
@@ -210,10 +210,28 @@ describe("FileTree", () => {
       await fireEvent.contextMenu(button);
       await fireEvent.click(screen.getByText("Delete"));
 
+      expect(screen.getByTestId("delete-confirm")).toBeTruthy();
+      expect(vfs.exists("doomed.ts")).toBe(true);
+
+      await fireEvent.click(screen.getByTestId("delete-confirm-button"));
       expect(vfs.exists("doomed.ts")).toBe(false);
     });
 
-    it("deletes a directory and its contents", async () => {
+    it("cancels delete on Cancel button", async () => {
+      vfs.write("safe.ts", "content");
+      render(FileTree, { props: { vfs } });
+      await waitFor(() => expect(screen.getByTestId("tree-file")).toBeTruthy());
+
+      const button = screen.getByTestId("tree-file").querySelector("button")!;
+      await fireEvent.contextMenu(button);
+      await fireEvent.click(screen.getByText("Delete"));
+      await fireEvent.click(screen.getByTestId("delete-cancel"));
+
+      expect(vfs.exists("safe.ts")).toBe(true);
+      expect(screen.queryByTestId("delete-confirm")).toBeNull();
+    });
+
+    it("deletes directory and contents after confirmation", async () => {
       vfs.write("dir/a.ts", "a");
       vfs.write("dir/b.ts", "b");
       render(FileTree, { props: { vfs } });
@@ -225,6 +243,7 @@ describe("FileTree", () => {
       const button = dirNode!.querySelector("button")!;
       await fireEvent.contextMenu(button);
       await fireEvent.click(screen.getByText("Delete"));
+      await fireEvent.click(screen.getByTestId("delete-confirm-button"));
 
       expect(vfs.exists("dir/a.ts")).toBe(false);
       expect(vfs.exists("dir/b.ts")).toBe(false);

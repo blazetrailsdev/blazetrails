@@ -26,6 +26,7 @@
   let creating = $state<{ parentDir: string; isDir: boolean } | null>(null);
   let createValue = $state("");
   let focusedPath = $state<string | null>(null);
+  let confirmDelete = $state<{ path: string; isDir: boolean } | null>(null);
 
   function buildTree(paths: string[]): TreeNode[] {
     const nodeMap = new Map<string, TreeNode>();
@@ -189,7 +190,10 @@
     const name = createValue.trim();
     const fullPath = dir ? `${dir}/${name}` : name;
     if (creating.isDir) {
-      vfs.write(`${fullPath}/.gitkeep`, "");
+      // Directories are virtual in VFS — start a nested file create
+      creating = { parentDir: fullPath, isDir: false };
+      createValue = "";
+      return;
     } else {
       vfs.write(fullPath, "");
       onselect?.(fullPath);
@@ -197,14 +201,21 @@
     creating = null;
   }
 
-  function deleteNode(path: string, isDir: boolean) {
+  function requestDelete(path: string, isDir: boolean) {
     closeContextMenu();
+    confirmDelete = { path, isDir };
+  }
+
+  function executeDelete() {
+    if (!confirmDelete) return;
+    const { path, isDir } = confirmDelete;
     if (isDir) {
       const files = vfs.list().filter((f) => f.path.startsWith(path + "/"));
       for (const f of files) vfs.delete(f.path);
     } else {
       vfs.delete(path);
     }
+    confirmDelete = null;
   }
 
   function getAllVisiblePaths(): string[] {
@@ -257,7 +268,10 @@
     } else if ((e.key === "Delete" || e.key === "Backspace") && focusedPath && !readonly) {
       e.preventDefault();
       const node = findNode(root, focusedPath);
-      if (node) deleteNode(focusedPath, node.isDir);
+      if (node) requestDelete(focusedPath, node.isDir);
+    } else if (e.key === "Escape") {
+      if (confirmDelete) confirmDelete = null;
+      else if (contextMenu) closeContextMenu();
     }
   }
 
@@ -355,9 +369,36 @@
     <button
       type="button"
       class="block w-full px-3 py-1 text-left text-xs text-error hover:bg-surface"
-      onclick={() => deleteNode(contextMenu!.path, contextMenu!.isDir)}
+      onclick={() => requestDelete(contextMenu!.path, contextMenu!.isDir)}
       role="menuitem"
     >Delete</button>
+  </div>
+{/if}
+
+{#if confirmDelete}
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+    data-testid="delete-confirm"
+  >
+    <div class="rounded border border-border bg-surface-overlay p-4 shadow-lg">
+      <p class="text-sm text-text">
+        Delete <code class="text-accent">{confirmDelete.path}</code>{confirmDelete.isDir ? " and all its contents" : ""}?
+      </p>
+      <div class="mt-3 flex justify-end gap-2">
+        <button
+          type="button"
+          class="rounded border border-border px-3 py-1 text-xs text-text hover:border-accent"
+          onclick={() => confirmDelete = null}
+          data-testid="delete-cancel"
+        >Cancel</button>
+        <button
+          type="button"
+          class="rounded bg-error px-3 py-1 text-xs text-surface"
+          onclick={executeDelete}
+          data-testid="delete-confirm-button"
+        >Delete</button>
+      </div>
+    </div>
   </div>
 {/if}
 
@@ -371,7 +412,7 @@
   >
     <button
       type="button"
-      class="flex w-full items-center gap-1 py-1 text-left hover:text-accent
+      class="flex w-full items-center gap-1 py-1.5 text-left hover:text-accent md:py-1
              {node.path === selectedPath ? 'bg-surface-overlay text-text' : 'text-text-muted'}
              {node.path === focusedPath ? 'outline outline-1 outline-border-focus' : ''}"
       style="padding-left: {depth * 16 + 12}px"

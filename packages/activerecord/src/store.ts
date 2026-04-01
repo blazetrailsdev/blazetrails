@@ -22,7 +22,7 @@ export class HashAccessor {
   static read(object: Base, attribute: string, key: string): unknown {
     const data = object.readAttribute(attribute);
     if (data === null || data === undefined) return null;
-    const obj = this._toHash(data);
+    const obj = this._readHash(data);
     return obj[key] ?? null;
   }
 
@@ -31,7 +31,7 @@ export class HashAccessor {
     if (value !== current) {
       this.prepare(object, attribute);
       const raw = object.readAttribute(attribute);
-      const obj = this._toHash(raw);
+      const obj = this._writeHash(raw);
       obj[key] = value;
       const isStringColumn = typeof raw === "string" || raw === null || raw === undefined;
       object.writeAttribute(attribute, isStringColumn ? JSON.stringify(obj) : obj);
@@ -45,11 +45,16 @@ export class HashAccessor {
     }
   }
 
-  protected static _toHash(data: unknown): Record<string, unknown> {
+  protected static _readHash(data: unknown): Readonly<Record<string, unknown>> {
     if (data === null || data === undefined) return {};
-    if (typeof data === "string") {
-      return JSON.parse(data);
-    }
+    if (typeof data === "string") return JSON.parse(data);
+    if (typeof data === "object" && !Array.isArray(data)) return data as Record<string, unknown>;
+    return {};
+  }
+
+  protected static _writeHash(data: unknown): Record<string, unknown> {
+    if (data === null || data === undefined) return {};
+    if (typeof data === "string") return JSON.parse(data);
     if (typeof data === "object" && !Array.isArray(data)) {
       return { ...(data as Record<string, unknown>) };
     }

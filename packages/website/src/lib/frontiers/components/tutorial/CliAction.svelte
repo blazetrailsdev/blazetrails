@@ -39,6 +39,7 @@
     <span class="text-accent text-xs">$</span>
     <code class="flex-1 text-xs text-text">{command}</code>
     <button
+      type="button"
       onclick={run}
       disabled={running}
       class="rounded bg-accent px-3 py-1.5 text-xs font-medium text-surface

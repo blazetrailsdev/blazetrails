@@ -32,6 +32,7 @@
   <div class="mb-2 flex items-center justify-between">
     <h4 class="text-xs font-medium text-text">Checkpoint</h4>
     <button
+      type="button"
       onclick={verify}
       disabled={checking}
       class="rounded bg-accent px-3 py-1.5 text-xs font-medium text-surface

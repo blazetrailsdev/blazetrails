@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { TutorialStep, FileDiff } from "../../tutorials/types.js";
+  import type { TutorialStep } from "../../tutorials/types.js";
   import type { CliResult } from "../../trail-cli.js";
   import type { VirtualFS } from "../../virtual-fs.js";
   import type { SqlJsAdapter } from "../../sql-js-adapter.js";

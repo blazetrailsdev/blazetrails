@@ -23,7 +23,6 @@ const aliases = {
 const sqlJsNodePath = path.resolve(__dirname, "node_modules/sql.js/dist/sql-wasm.js");
 
 export default defineConfig({
-  plugins: [svelte({ hot: false })],
   resolve: { alias: aliases },
   test: {
     globals: true,

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount, onDestroy } from "svelte";
   import type { FileDiff } from "../../tutorials/types.js";
   import type { VirtualFS } from "../../virtual-fs.js";
   import { applyDiff, isDiffApplied } from "../../tutorials/diff-engine.js";
@@ -12,9 +13,16 @@
 
   let { diff, vfs, onfileclick, onapplied }: Props = $props();
 
+  let vfsVersion = $state(0);
   let manuallyApplied = $state(false);
   let applied = $derived(manuallyApplied || isDiffApplied(vfs, diff));
   let error = $state<string | null>(null);
+
+  let unsubscribe: (() => void) | undefined;
+  onMount(() => {
+    unsubscribe = vfs.onChange(() => { vfsVersion++; });
+  });
+  onDestroy(() => unsubscribe?.());
 
   function apply() {
     error = null;
@@ -28,6 +36,7 @@
   }
 
   function getContext(): { before: string[]; anchor: string; after: string[] } | null {
+    void vfsVersion;
     if (diff.operation !== "modify" || !diff.hunks?.length) return null;
     const file = vfs.read(diff.path);
     if (!file) return null;
@@ -52,6 +61,7 @@
 <div class="rounded border border-border bg-surface-overlay p-3" data-testid="diff-viewer">
   <div class="mb-2 flex items-center justify-between">
     <button
+      type="button"
       class="text-xs text-info hover:underline"
       onclick={() => onfileclick?.(diff.path)}
       data-testid="file-link"
@@ -83,6 +93,7 @@
 
   <div class="mt-2 flex justify-end">
     <button
+      type="button"
       onclick={apply}
       disabled={applied}
       class="rounded px-3 py-1.5 text-xs font-medium md:py-1

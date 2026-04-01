@@ -32,21 +32,25 @@
     <span class="text-text">Step {currentStep}</span>
   </div>
 
-  <div class="flex items-center gap-1" role="group" aria-label="Step indicators">
+  <div class="flex items-center gap-0.5" role="group" aria-label="Step indicators">
     {#each Array(totalSteps) as _, i}
       <button
+        type="button"
         onclick={() => onnavigate(i + 1)}
-        class="h-2 w-2 rounded-full transition-colors
-               {i + 1 === currentStep ? 'bg-accent' : 'bg-border hover:bg-text-muted'}"
+        class="flex h-6 w-6 items-center justify-center"
         aria-label="Step {i + 1}"
         aria-current={i + 1 === currentStep ? "step" : undefined}
         data-testid="step-dot"
-      ></button>
+      >
+        <span class="block h-2 w-2 rounded-full transition-colors
+                     {i + 1 === currentStep ? 'bg-accent' : 'bg-border'}"></span>
+      </button>
     {/each}
   </div>
 
   <div class="flex gap-2">
     <button
+      type="button"
       onclick={() => onnavigate(currentStep - 1)}
       disabled={currentStep <= 1}
       class="rounded border border-border px-2 py-1 text-xs text-text
@@ -57,6 +61,7 @@
       Prev
     </button>
     <button
+      type="button"
       onclick={() => onnavigate(currentStep + 1)}
       disabled={currentStep >= totalSteps}
       class="rounded border border-border px-2 py-1 text-xs text-text

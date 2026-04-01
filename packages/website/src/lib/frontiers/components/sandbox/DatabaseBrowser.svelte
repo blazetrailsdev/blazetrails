@@ -137,7 +137,7 @@
           onclick={(e) => {
             focusedIndex = i;
             toggleTable(table.name);
-            (e.currentTarget as HTMLElement).closest('[role="tree"]')?.focus();
+            (e.currentTarget as HTMLElement).closest('[role="listbox"]')?.focus();
           }}
         >
           <span class="w-3 text-[10px] text-text-muted" aria-hidden="true">

@@ -153,7 +153,7 @@ export function createTrailCLI(deps: TrailCliDeps) {
           const gen = new VfsMigrationGenerator({ vfs, output: log });
           gen.run(name, columnArgs);
         } else {
-          log(`Unknown generator: ${type}. Available: model, migration`);
+          throw new Error(`Unknown generator: ${type}. Available: model, migration`);
         }
       },
 

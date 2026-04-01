@@ -284,6 +284,32 @@ function main() {
       }
 
       const entityKey = (e: ClassInfo) => `${e.file}:${e.name}`;
+
+      // When multiple entities share a name, pick the best parent by
+      // file path proximity (most shared directory segments).
+      const resolveParent = (name: string, childFile: string): ClassInfo | null => {
+        const candidates = entitiesByName.get(name) || [];
+        if (candidates.length === 0) return null;
+        if (candidates.length === 1) return candidates[0];
+        const childParts = (childFile || "").split("/");
+        let best: ClassInfo | null = null;
+        let bestScore = -1;
+        for (const c of candidates) {
+          if (c.file === childFile) continue; // skip self
+          const parts = (c.file || "").split("/");
+          let shared = 0;
+          for (let i = 0; i < Math.min(childParts.length, parts.length); i++) {
+            if (childParts[i] === parts[i]) shared++;
+            else break;
+          }
+          if (shared > bestScore) {
+            bestScore = shared;
+            best = c;
+          }
+        }
+        return best ?? candidates[0];
+      };
+
       const inheritedCache = new Map<string, Set<string>>();
       const getInherited = (entity: ClassInfo, visited: Set<string>): Set<string> => {
         const key = entityKey(entity);
@@ -297,18 +323,16 @@ function main() {
           methods.add(m.name);
         }
 
-        // Follow superclass (classes)
         if (entity.superclass) {
-          const parents = entitiesByName.get(entity.superclass) || [];
-          for (const parent of parents) {
+          const parent = resolveParent(entity.superclass, entity.file || "");
+          if (parent) {
             for (const m of getInherited(parent, visited)) methods.add(m);
           }
         }
 
-        // Follow extends (interfaces/modules)
         for (const ext of entity.extends || []) {
-          const parents = entitiesByName.get(ext) || [];
-          for (const parent of parents) {
+          const parent = resolveParent(ext, entity.file || "");
+          if (parent) {
             for (const m of getInherited(parent, visited)) methods.add(m);
           }
         }

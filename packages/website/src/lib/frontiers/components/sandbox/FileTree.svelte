@@ -222,13 +222,22 @@
         if (selectedPath?.startsWith(prefix)) {
           onselect?.(newPath + "/" + selectedPath.slice(prefix.length));
         }
+        if (focusedPath === renaming) focusedPath = newPath;
+        else if (focusedPath?.startsWith(prefix)) {
+          focusedPath = newPath + "/" + focusedPath.slice(prefix.length);
+        }
       } else {
+        if (vfs.list().some((f) => f.path.startsWith(newPath + "/"))) {
+          renaming = null;
+          return;
+        }
         const renamed = vfs.rename(renaming, newPath);
         if (!renamed) {
           renaming = null;
           return;
         }
         if (selectedPath === renaming) onselect?.(newPath);
+        if (focusedPath === renaming) focusedPath = newPath;
       }
     }
     renaming = null;

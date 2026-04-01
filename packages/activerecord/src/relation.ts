@@ -1,4 +1,12 @@
-import { Table, SelectManager, Nodes, Visitors } from "@blazetrails/arel";
+import {
+  Table,
+  SelectManager,
+  Nodes,
+  Visitors,
+  UpdateManager,
+  DeleteManager,
+  sql as arelSql,
+} from "@blazetrails/arel";
 import type { Base } from "./base.js";
 import { _setRelationCtor, _setScopeProxyWrapper, quoteSqlValue } from "./base.js";
 import { RecordNotFound, IrreversibleOrderError } from "./errors.js";
@@ -271,11 +279,12 @@ export class Relation<T extends Base> {
         );
         const sourceTable = modelClass.tableName;
         const pk = (assocDef.options.primaryKey ?? modelClass.primaryKey) as string;
-        const whereClause = typeClause ? `WHERE ${typeClause}` : "";
+        const srcTable = new Table(sourceTable);
+        const tgtTable = new Table(targetTable);
+        const subquery = tgtTable.project(tgtTable.get(foreignKey));
+        if (typeClause) subquery.where(arelSql(typeClause));
         const cloned = rel._clone();
-        cloned._whereClause.rawClauses.push(
-          `"${sourceTable}"."${pk}" IN (SELECT "${targetTable}"."${foreignKey}" FROM "${targetTable}"${whereClause ? " " + whereClause : ""})`,
-        );
+        cloned._whereClause.arelNodes.push(srcTable.get(pk).in(subquery));
         rel = cloned;
       }
     }
@@ -311,11 +320,12 @@ export class Relation<T extends Base> {
         );
         const sourceTable = modelClass.tableName;
         const pk = (assocDef.options.primaryKey ?? modelClass.primaryKey) as string;
-        const whereClause = typeClause ? `WHERE ${typeClause}` : "";
+        const srcTable = new Table(sourceTable);
+        const tgtTable = new Table(targetTable);
+        const subquery = tgtTable.project(tgtTable.get(foreignKey));
+        if (typeClause) subquery.where(arelSql(typeClause));
         const cloned = rel._clone();
-        cloned._whereClause.rawClauses.push(
-          `"${sourceTable}"."${pk}" NOT IN (SELECT "${targetTable}"."${foreignKey}" FROM "${targetTable}"${whereClause ? " " + whereClause : ""})`,
-        );
+        cloned._whereClause.arelNodes.push(srcTable.get(pk).notIn(subquery));
         rel = cloned;
       }
     }
@@ -1739,11 +1749,10 @@ export class Relation<T extends Base> {
       if (this._offsetValue !== null) manager.skip(this._offsetValue);
     }
 
-    let sql = manager.toSql();
     if (this._optimizerHints.length > 0) {
-      const hints = `/*+ ${this._optimizerHints.join(" ")} */`;
-      sql = sql.replace(/^SELECT/, `SELECT ${hints}`);
+      manager.optimizerHints(...this._optimizerHints);
     }
+    let sql = manager.toSql();
     if (this._annotations.length > 0) {
       const comments = this._annotations.map((c) => `/* ${c} */`).join(" ");
       sql = `${sql} ${comments}`;
@@ -2020,23 +2029,15 @@ export class Relation<T extends Base> {
     if (this._isNone) return 0;
 
     const table = this._modelClass.arelTable;
-    const setClauses = Object.entries(updates)
-      .map(([key, val]) => {
-        if (val === null) return `"${key}" = NULL`;
-        if (typeof val === "number") return `"${key}" = ${val}`;
-        if (typeof val === "boolean") return `"${key}" = ${val ? "TRUE" : "FALSE"}`;
-        return `"${key}" = '${String(val).replace(/'/g, "''")}'`;
-      })
-      .join(", ");
-
-    let sql = `UPDATE "${table.name}" SET ${setClauses}`;
-
-    const whereConditions = this._buildWhereStrings(table);
-    if (whereConditions.length > 0) {
-      sql += ` WHERE ${whereConditions.join(" AND ")}`;
+    const updateValues: [InstanceType<typeof Nodes.Node>, unknown][] = Object.entries(updates).map(
+      ([key, val]) => [table.get(key), val],
+    );
+    const um = new UpdateManager().table(table).set(updateValues);
+    for (const cond of this._buildWhereStrings(table)) {
+      um.where(arelSql(cond));
     }
 
-    return this._modelClass.adapter.executeMutation(sql);
+    return this._modelClass.adapter.executeMutation(um.toSql());
   }
 
   /**
@@ -2061,14 +2062,12 @@ export class Relation<T extends Base> {
     if (this._isNone) return 0;
 
     const table = this._modelClass.arelTable;
-    let sql = `DELETE FROM "${table.name}"`;
-
-    const whereConditions = this._buildWhereStrings(table);
-    if (whereConditions.length > 0) {
-      sql += ` WHERE ${whereConditions.join(" AND ")}`;
+    const dm = new DeleteManager().from(table);
+    for (const cond of this._buildWhereStrings(table)) {
+      dm.where(arelSql(cond));
     }
 
-    return this._modelClass.adapter.executeMutation(sql);
+    return this._modelClass.adapter.executeMutation(dm.toSql());
   }
 
   /**
@@ -2093,18 +2092,15 @@ export class Relation<T extends Base> {
     if (Object.keys(updates).length === 0) return 0;
 
     const table = this._modelClass.arelTable;
-    const setClauses = Object.entries(updates)
-      .map(([key, val]) => `"${key}" = ${val}`)
-      .join(", ");
-
-    let sql = `UPDATE "${table.name}" SET ${setClauses}`;
-
-    const whereConditions = this._buildWhereStrings(table);
-    if (whereConditions.length > 0) {
-      sql += ` WHERE ${whereConditions.join(" AND ")}`;
+    const updateValues: [InstanceType<typeof Nodes.Node>, unknown][] = Object.entries(updates).map(
+      ([key, val]) => [table.get(key), arelSql(val as string)],
+    );
+    const um = new UpdateManager().table(table).set(updateValues);
+    for (const cond of this._buildWhereStrings(table)) {
+      um.where(arelSql(cond));
     }
 
-    return this._modelClass.adapter.executeMutation(sql);
+    return this._modelClass.adapter.executeMutation(um.toSql());
   }
 
   /**
@@ -2691,17 +2687,15 @@ export class Relation<T extends Base> {
       manager.lock(this._lockValue);
     }
 
+    if (this._optimizerHints.length > 0) {
+      manager.optimizerHints(...this._optimizerHints);
+    }
+
     let sql = manager.toSql();
 
     // Replace FROM clause if from() was used
     if (!this._fromClause.isEmpty()) {
       sql = sql.replace(/FROM\s+"[^"]+"/, `FROM ${this._fromClause.value}`);
-    }
-
-    // Insert optimizer hints after SELECT
-    if (this._optimizerHints.length > 0) {
-      const hints = `/*+ ${this._optimizerHints.join(" ")} */`;
-      sql = sql.replace(/^SELECT/, `SELECT ${hints}`);
     }
 
     // Append SQL comments from annotate()
@@ -3484,12 +3478,11 @@ export class Relation<T extends Base> {
         const targetFk = `${_toUnderscore(_singularize(assocName))}_id`;
 
         // Query join table for all owner PKs
-        const pkList = pkValues
-          .map((v) => (typeof v === "number" ? String(v) : `'${String(v).replace(/'/g, "''")}'`))
-          .join(", ");
-        const joinRows = await modelClass.adapter.execute(
-          `SELECT "${ownerFk}", "${targetFk}" FROM "${joinTable}" WHERE "${ownerFk}" IN (${pkList})`,
-        );
+        const jt = new Table(joinTable);
+        const joinQuery = jt
+          .project(jt.get(ownerFk), jt.get(targetFk))
+          .where(jt.get(ownerFk).in(pkValues));
+        const joinRows = await modelClass.adapter.execute(joinQuery.toSql());
 
         // Collect target IDs and build owner->targetIds map
         const ownerToTargetIds = new Map<unknown, unknown[]>();
@@ -3694,15 +3687,14 @@ export class Relation<T extends Base> {
   async updateCounters(counters: Record<string, number>): Promise<number> {
     if (this._isNone) return 0;
     const table = this._modelClass.arelTable;
-    const setClauses = Object.entries(counters)
-      .map(([key, val]) => `"${key}" = COALESCE("${key}", 0) + ${val}`)
-      .join(", ");
-    let sql = `UPDATE "${table.name}" SET ${setClauses}`;
-    const whereConditions = this._buildWhereStrings(table);
-    if (whereConditions.length > 0) {
-      sql += ` WHERE ${whereConditions.join(" AND ")}`;
+    const updateValues: [InstanceType<typeof Nodes.Node>, unknown][] = Object.entries(counters).map(
+      ([key, val]) => [table.get(key), arelSql(`COALESCE("${key}", 0) + ${val}`)],
+    );
+    const um = new UpdateManager().table(table).set(updateValues);
+    for (const cond of this._buildWhereStrings(table)) {
+      um.where(arelSql(cond));
     }
-    return this._modelClass.adapter.executeMutation(sql);
+    return this._modelClass.adapter.executeMutation(um.toSql());
   }
 
   /**
@@ -3712,11 +3704,9 @@ export class Relation<T extends Base> {
    */
   async delete(id: unknown): Promise<number> {
     const table = this._modelClass.arelTable;
-    const pk = this._modelClass.primaryKey;
-    const quoted = typeof id === "number" ? String(id) : `'${String(id).replace(/'/g, "''")}'`;
-    return this._modelClass.adapter.executeMutation(
-      `DELETE FROM "${table.name}" WHERE "${pk}" = ${quoted}`,
-    );
+    const pk = this._modelClass.primaryKey as string;
+    const dm = new DeleteManager().from(table).where(table.get(pk).eq(id));
+    return this._modelClass.adapter.executeMutation(dm.toSql());
   }
 
   /**

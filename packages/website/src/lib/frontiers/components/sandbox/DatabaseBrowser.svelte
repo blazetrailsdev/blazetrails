@@ -115,6 +115,7 @@
         <button
           type="button"
           tabindex="-1"
+          aria-expanded={expandedTable === table.name}
           class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:text-accent md:py-1
                  {expandedTable === table.name ? 'bg-surface-overlay text-text' : 'text-text-muted'}
                  {focusedIndex === i ? 'outline outline-1 outline-border-focus' : ''}"

@@ -22,7 +22,8 @@
   }
 
   function handleTabKeydown(e: KeyboardEvent) {
-    const idx = tabs.findIndex((t) => t.id === activeTab);
+    if (tabs.length === 0) return;
+    const idx = Math.max(0, tabs.findIndex((t) => t.id === activeTab));
     if (e.key === "ArrowRight") {
       e.preventDefault();
       const next = tabs[(idx + 1) % tabs.length];

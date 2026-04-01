@@ -58,24 +58,26 @@ export function quoteColumnName(name: string): string {
 }
 
 // eslint-disable-next-line no-control-regex
-const MYSQL_ESCAPE_RE = /[\\\x00\n\r\x1a']/g;
+const MYSQL_ESCAPE_RE = /[\\\x00\n\r\x1a]/g;
 const MYSQL_ESCAPE_MAP: Record<string, string> = {
   "\\": "\\\\",
   "\0": "\\0",
   "\n": "\\n",
   "\r": "\\r",
   "\x1a": "\\Z",
-  "'": "\\'",
 };
 
 /**
- * Quote a string value for use in SQL. MySQL uses backslash escaping
- * (not single-quote doubling) when NO_BACKSLASH_ESCAPES is not set
- * (the default). NUL, newline, carriage return, and Ctrl-Z are also
- * escaped for safe transport across protocols.
+ * Quote a string value for use in SQL. Single quotes are escaped using
+ * SQL-standard quote doubling (''), which is safe regardless of
+ * NO_BACKSLASH_ESCAPES. Backslash and control characters (NUL, newline,
+ * carriage return, Ctrl-Z) are escaped with backslashes for safe
+ * transport across protocols.
  */
 export function quoteString(value: string): string {
-  return `'${value.replace(MYSQL_ESCAPE_RE, (ch) => MYSQL_ESCAPE_MAP[ch] ?? ch)}'`;
+  const withDoubledQuotes = value.replace(/'/g, "''");
+  const escaped = withDoubledQuotes.replace(MYSQL_ESCAPE_RE, (ch) => MYSQL_ESCAPE_MAP[ch] ?? ch);
+  return `'${escaped}'`;
 }
 
 export function quotedBinaryString(value: Buffer): string {

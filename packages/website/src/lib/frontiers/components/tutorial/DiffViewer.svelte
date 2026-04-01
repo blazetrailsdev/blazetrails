@@ -43,8 +43,12 @@
 
     const lines = file.content.split("\n");
     const hunk = diff.hunks[0];
-    const anchorIdx = lines.findIndex((l) => l.includes(hunk.anchor));
-    if (anchorIdx === -1) return null;
+    const anchorMatches: number[] = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].includes(hunk.anchor)) anchorMatches.push(i);
+    }
+    if (anchorMatches.length !== 1) return null;
+    const anchorIdx = anchorMatches[0];
 
     const start = Math.max(0, anchorIdx - 2);
     const end = Math.min(lines.length, anchorIdx + 3);

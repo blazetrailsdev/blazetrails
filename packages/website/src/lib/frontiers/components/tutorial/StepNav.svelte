@@ -9,6 +9,11 @@
   let { tutorial, currentStep, totalSteps, onnavigate }: Props = $props();
 
   function handleKeydown(e: KeyboardEvent) {
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+    const tag = (e.target as HTMLElement)?.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    if ((e.target as HTMLElement)?.isContentEditable) return;
+
     if (e.key === "ArrowLeft" && currentStep > 1) {
       onnavigate(currentStep - 1);
     } else if (e.key === "ArrowRight" && currentStep < totalSteps) {

@@ -42,6 +42,9 @@ import { Association as AssociationInstance } from "./associations/association.j
 import { ConnectionHandler } from "./connection-adapters/abstract/connection-handler.js";
 import * as ConnectionHandling from "./connection-handling.js";
 import * as ModelSchema from "./model-schema.js";
+import * as SignedIdModule from "./signed-id.js";
+import * as LockingOptimistic from "./locking/optimistic.js";
+import * as Translation from "./translation.js";
 import { sanitizeSqlArray, sanitizeSqlLike } from "./sanitization.js";
 import {
   hasAttribute as _hasAttribute,
@@ -130,19 +133,11 @@ export function _setOnAdapterSetHook(hook: ((modelClass: any) => void) | null): 
  */
 export class Base extends Model {
   static get i18nScope(): string {
-    return "activerecord";
+    return Translation.i18nScope(this);
   }
 
   static lookupAncestors(): Array<typeof Base> {
-    const ancestors: Array<typeof Base> = [];
-    let klass: typeof Base | null = this;
-    while (klass && klass !== Base) {
-      ancestors.push(klass);
-      const parent = Object.getPrototypeOf(klass);
-      klass = parent && parent !== Model && parent.prototype ? parent : null;
-    }
-    if (ancestors.length === 0) ancestors.push(this);
-    return ancestors;
+    return Translation.lookupAncestors(this);
   }
 
   // -- Class-level configuration --
@@ -250,18 +245,15 @@ export class Base extends Model {
    * Mirrors: ActiveRecord::Locking::Optimistic.locking_column
    */
   static get lockingColumn(): string {
-    return this._lockingColumn;
+    return LockingOptimistic.lockingColumn(this);
   }
 
   static set lockingColumn(col: string) {
-    this._lockingColumn = col;
+    LockingOptimistic.setLockingColumn(this, col);
   }
 
-  /**
-   * Whether this model uses optimistic locking.
-   */
   static get lockingEnabled(): boolean {
-    return this._attributeDefinitions.has(this._lockingColumn);
+    return LockingOptimistic.lockingEnabled(this);
   }
 
   /**
@@ -2974,17 +2966,7 @@ export class Base extends Model {
    * Mirrors: ActiveRecord::SignedId#signed_id
    */
   signedId(options?: { purpose?: string; expiresIn?: number }): string {
-    if (!this.isPersisted()) {
-      throw new Error("Cannot generate a signed_id for a new record");
-    }
-    const payload: Record<string, unknown> = { id: this.id };
-    if (options?.purpose) payload.purpose = options.purpose;
-    if (options?.expiresIn) payload.expiresAt = Date.now() + options.expiresIn;
-    const json = JSON.stringify(payload);
-    if (typeof btoa === "function") {
-      return btoa(json);
-    }
-    return Buffer.from(json).toString("base64");
+    return SignedIdModule.signedId(this, options);
   }
 
   /**
@@ -2993,27 +2975,7 @@ export class Base extends Model {
    * Mirrors: ActiveRecord::SignedId.find_signed
    */
   static async findSigned(signedId: string, options?: { purpose?: string }): Promise<Base | null> {
-    try {
-      let json: string;
-      if (typeof atob === "function") {
-        json = atob(signedId);
-      } else {
-        json = Buffer.from(signedId, "base64").toString("utf-8");
-      }
-      const payload = JSON.parse(json);
-      if (options?.purpose && payload.purpose !== options.purpose) return null;
-      if (payload.expiresAt && Date.now() > payload.expiresAt) return null;
-      if (Array.isArray(this.primaryKey)) {
-        const conditions: Record<string, unknown> = {};
-        (this.primaryKey as string[]).forEach((col, i) => {
-          conditions[col] = payload.id[i];
-        });
-        return this.findBy(conditions);
-      }
-      return this.findBy({ [this.primaryKey as string]: payload.id });
-    } catch {
-      return null;
-    }
+    return SignedIdModule.findSigned(this, signedId, options);
   }
 
   /**
@@ -3022,11 +2984,7 @@ export class Base extends Model {
    * Mirrors: ActiveRecord::SignedId.find_signed!
    */
   static async findSignedBang(signedId: string, options?: { purpose?: string }): Promise<Base> {
-    const record = await this.findSigned(signedId, options);
-    if (!record) {
-      throw new RecordNotFound(`${this.name} not found with signed id`, this.name);
-    }
-    return record;
+    return SignedIdModule.findSignedBang(this, signedId, options);
   }
 
   /**

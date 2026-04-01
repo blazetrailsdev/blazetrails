@@ -26,13 +26,17 @@ describe("createRuntime", () => {
 });
 
 describe("exec: new", () => {
-  it("creates app scaffold files", async () => {
+  it("creates app scaffold files via railties AppGenerator", async () => {
     const result = await runtime.exec("new myapp");
     expect(result.success).toBe(true);
-    expect(result.output.join("\n")).toContain("create  app/main.ts");
-    expect(runtime.vfs.exists("app/main.ts")).toBe(true);
-    expect(runtime.vfs.exists("config/routes.ts")).toBe(true);
+    expect(result.output.join("\n")).toContain("create  src/config/routes.ts");
+    expect(runtime.vfs.exists("package.json")).toBe(true);
+    expect(runtime.vfs.exists("src/config/routes.ts")).toBe(true);
+    expect(runtime.vfs.exists("src/config/application.ts")).toBe(true);
+    expect(runtime.vfs.exists("src/app/models/application-record.ts")).toBe(true);
+    expect(runtime.vfs.exists("src/app/controllers/application-controller.ts")).toBe(true);
     expect(runtime.vfs.exists("db/seeds.ts")).toBe(true);
+    expect(runtime.vfs.exists("db/migrations/.gitkeep")).toBe(true);
   });
 
   it("clears existing files", async () => {

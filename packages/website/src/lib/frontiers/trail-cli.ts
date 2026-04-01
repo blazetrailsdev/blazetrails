@@ -1,6 +1,6 @@
 import type { VirtualFS } from "./virtual-fs.js";
 import type { SqlJsAdapter } from "./sql-js-adapter.js";
-import { VfsModelGenerator, VfsMigrationGenerator } from "./vfs-generator.js";
+import { VfsModelGenerator, VfsMigrationGenerator, VfsAppGenerator } from "./vfs-generator.js";
 import type { MigrationProxy, MigrationLike } from "@blazetrails/activerecord";
 import { Migrator } from "@blazetrails/activerecord";
 
@@ -87,27 +87,6 @@ function discoverMigrations(
     });
 }
 
-function generateAppScaffold(name: string): Array<{ path: string; content: string }> {
-  return [
-    {
-      path: "app/main.ts",
-      content: `// ${name} — main entry point\nexport default "${name} is ready. Run: generate model User name:string email:string";\n`,
-    },
-    {
-      path: "config/routes.ts",
-      content: `// Define your application routes here.\n// routes\n`,
-    },
-    {
-      path: "app/controllers/application-controller.ts",
-      content: `class ApplicationController extends ActionController.Base {\n}\n`,
-    },
-    {
-      path: "db/seeds.ts",
-      content: `// Seed your database here.\n`,
-    },
-  ];
-}
-
 export interface TrailCliDeps {
   vfs: VirtualFS;
   adapter: SqlJsAdapter;
@@ -127,12 +106,19 @@ export function createTrailCLI(deps: TrailCliDeps) {
   }
 
   async function withMigrator(fn: (migrator: Migrator) => Promise<void>): Promise<void> {
-    await deps.runAllInDir("db/migrations");
-    const proxies = discoverMigrations(vfs, deps.executeCode, deps.getMigrations);
-    if (proxies.length === 0) {
+    const hasMigrationFiles = vfs
+      .list()
+      .some(
+        (f) =>
+          f.path.startsWith("db/migrations/") &&
+          MIGRATION_FILE_PATTERN.test(f.path.split("/").pop() ?? ""),
+      );
+    if (!hasMigrationFiles) {
       log("No migrations found in db/migrations/.");
       return;
     }
+    await deps.runAllInDir("db/migrations");
+    const proxies = discoverMigrations(vfs, deps.executeCode, deps.getMigrations);
     const migrator = new Migrator(adapter, proxies);
     await fn(migrator);
   }
@@ -146,21 +132,11 @@ export function createTrailCLI(deps: TrailCliDeps) {
           return;
         }
 
-        log(`Creating new trails application: ${name}`);
-        log("");
-
         for (const f of vfs.list()) vfs.delete(f.path);
         deps.clearMigrations();
 
-        const files = generateAppScaffold(name);
-        for (const f of files) {
-          vfs.write(f.path, f.content);
-          log(`      create  ${f.path}`);
-        }
-
-        log("");
-        log(`  Done! Your app "${name}" is ready.`);
-        log("  Run 'generate model User name:string email:string' to add a model.");
+        const gen = new VfsAppGenerator({ vfs, output: log });
+        await gen.run(name, { database: "sqlite", skipGit: true, skipInstall: true });
       },
 
       generate: async (args) => {
@@ -266,7 +242,7 @@ export function createTrailCLI(deps: TrailCliDeps) {
         const sqlText = file ? file.content : fileOrSql;
 
         const statements = sqlText
-          .split(/;\s*\n/)
+          .split(/;\s*(?:\n|$)/)
           .map((s: string) => s.trim())
           .filter((s: string) => s && !s.startsWith("--"));
 

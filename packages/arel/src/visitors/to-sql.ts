@@ -254,6 +254,11 @@ export class ToSql implements NodeVisitor<SQLString> {
       this.visitArray(node.windows, ", ");
     }
 
+    if (node.comment) {
+      this.collector.append(" ");
+      this.visit(node.comment);
+    }
+
     return this.collector;
   }
 

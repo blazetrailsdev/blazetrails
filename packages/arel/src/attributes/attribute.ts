@@ -515,6 +515,10 @@ export class Attribute extends Node {
    *
    * Mirrors: `OVER` support on Arel expressions.
    */
+  quotedArray(others: unknown[]): Node[] {
+    return others.map((v) => buildQuoted(v));
+  }
+
   over(window?: Window | NamedWindow | string | null): Over {
     if (!window) return new Over(this, null);
     if (typeof window === "string") return new Over(this, new SqlLiteral(window));

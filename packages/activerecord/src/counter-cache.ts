@@ -22,8 +22,9 @@ export async function incrementCounter(
   const table = modelClass.arelTable;
   const touchClause = buildTouchClause(options?.touch);
   const quotedAttr = quoteIdentifier(attribute);
-  const sql = `UPDATE ${quoteIdentifier(table.name)} SET ${quotedAttr} = COALESCE(${quotedAttr}, 0) + ${by}${touchClause} WHERE ${(modelClass as any)._buildPkWhere(id)}`;
-  return modelClass.adapter.executeMutation(sql);
+  const binds: unknown[] = [by, id];
+  const sql = `UPDATE ${quoteIdentifier(table.name)} SET ${quotedAttr} = COALESCE(${quotedAttr}, 0) + ?${touchClause} WHERE ${buildPkPlaceholder(modelClass)}`;
+  return modelClass.adapter.executeMutation(sql, binds);
 }
 
 /**
@@ -54,27 +55,41 @@ export async function updateCounters(
 ): Promise<number> {
   const table = modelClass.arelTable;
   const touchClause = buildTouchClause(options?.touch);
+  const binds: unknown[] = [];
   const setClause =
     Object.entries(counters)
       .map(([attr, amount]) => {
         const q = quoteIdentifier(attr);
-        return `${q} = COALESCE(${q}, 0) + ${amount}`;
+        binds.push(amount);
+        return `${q} = COALESCE(${q}, 0) + ?`;
       })
       .join(", ") + touchClause;
   const tableName = quoteIdentifier(table.name);
-  if (Array.isArray(modelClass.primaryKey)) {
-    const tuples =
-      Array.isArray(id) && Array.isArray(id[0]) ? (id as unknown[][]) : [id as unknown[]];
-    const whereParts = tuples.map((t) => `(${(modelClass as any)._buildPkWhere(t)})`);
-    const sql = `UPDATE ${tableName} SET ${setClause} WHERE ${whereParts.join(" OR ")}`;
-    return modelClass.adapter.executeMutation(sql);
-  }
+
   const ids = Array.isArray(id) ? id : [id];
-  const idList = ids
-    .map((i) => (typeof i === "number" ? String(i) : `'${String(i).replace(/'/g, "''")}'`))
+  if (Array.isArray(modelClass.primaryKey)) {
+    const tuples = Array.isArray(ids[0]) ? (ids as unknown[][]) : [ids as unknown[]];
+    const whereParts = tuples.map((t) => {
+      const pk = modelClass.primaryKey as string[];
+      return `(${pk
+        .map((col) => {
+          binds.push(t[pk.indexOf(col)]);
+          return `${quoteIdentifier(col)} = ?`;
+        })
+        .join(" AND ")})`;
+    });
+    const sql = `UPDATE ${tableName} SET ${setClause} WHERE ${whereParts.join(" OR ")}`;
+    return modelClass.adapter.executeMutation(sql, binds);
+  }
+
+  const placeholders = ids
+    .map(() => {
+      return "?";
+    })
     .join(", ");
-  const sql = `UPDATE ${tableName} SET ${setClause} WHERE ${quoteIdentifier(modelClass.primaryKey as string)} IN (${idList})`;
-  return modelClass.adapter.executeMutation(sql);
+  binds.push(...ids);
+  const sql = `UPDATE ${tableName} SET ${setClause} WHERE ${quoteIdentifier(modelClass.primaryKey as string)} IN (${placeholders})`;
+  return modelClass.adapter.executeMutation(sql, binds);
 }
 
 /**
@@ -123,6 +138,14 @@ export async function resetCounters(
     const count = await countHasMany(record, assoc.name, assoc.options);
     await record.updateColumn(counterColumn, count);
   }
+}
+
+function buildPkPlaceholder(modelClass: typeof Base): string {
+  const pk = modelClass.primaryKey;
+  if (Array.isArray(pk)) {
+    return pk.map((col) => `${quoteIdentifier(col)} = ?`).join(" AND ");
+  }
+  return `${quoteIdentifier(pk)} = ?`;
 }
 
 function buildTouchClause(touch?: boolean | string | string[]): string {

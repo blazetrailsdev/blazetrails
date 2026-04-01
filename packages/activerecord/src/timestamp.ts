@@ -15,7 +15,7 @@ import { ReadOnlyRecord } from "./errors.js";
  * Mirrors: ActiveRecord::Timestamp#touch
  */
 export async function touch(instance: Base, ...names: string[]): Promise<boolean> {
-  if ((instance as any)._readonly) {
+  if (instance.isReadonly()) {
     throw new ReadOnlyRecord(`${instance.constructor.name} is marked as readonly`);
   }
   if (!instance.isPersisted()) return false;

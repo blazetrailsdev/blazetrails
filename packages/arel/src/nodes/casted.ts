@@ -20,7 +20,7 @@ export class Casted extends Node {
     this.attribute = attribute;
   }
 
-  get valueBeforeTypeCast(): unknown {
+  valueBeforeTypeCast(): unknown {
     return this.value;
   }
 
@@ -53,11 +53,11 @@ export class Quoted extends Node {
     this.value = value;
   }
 
-  get valueForDatabase(): unknown {
+  valueForDatabase(): unknown {
     return this.value;
   }
 
-  get valueBeforeTypeCast(): unknown {
+  valueBeforeTypeCast(): unknown {
     return this.value;
   }
 

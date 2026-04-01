@@ -1,5 +1,5 @@
 import type { Base } from "./base.js";
-import { Table, Nodes, sql as arelSql } from "@blazetrails/arel";
+import { Nodes, sql as arelSql } from "@blazetrails/arel";
 import { pluralize, underscore } from "@blazetrails/activesupport";
 import { isStiSubclass, getStiBase } from "./inheritance.js";
 import { quote, quoteIdentifier, quoteTableName } from "./connection-adapters/abstract/quoting.js";
@@ -45,18 +45,19 @@ export function resolveTableName(modelClass: typeof Base): string {
  */
 export function buildPkWhere(modelClass: typeof Base, idValue: unknown): string {
   const pk = modelClass.primaryKey;
+  const adapter = detectAdapterName(modelClass.adapter);
   if (Array.isArray(pk)) {
     if (!Array.isArray(idValue) || idValue.length !== pk.length) return "1=0";
     const conditions: string[] = [];
     for (let i = 0; i < pk.length; i++) {
       const v = idValue[i];
       if (v === undefined || v === null) return "1=0";
-      conditions.push(`${quoteIdentifier(pk[i])} = ${quote(v)}`);
+      conditions.push(`${quoteIdentifier(pk[i], adapter)} = ${quote(v)}`);
     }
     return conditions.join(" AND ");
   }
   if (idValue === undefined || idValue === null) return "1=0";
-  return `${quoteIdentifier(pk as string)} = ${quote(idValue)}`;
+  return `${quoteIdentifier(pk as string, adapter)} = ${quote(idValue)}`;
 }
 
 /**
@@ -68,7 +69,7 @@ export function buildPkWhereNode(
   modelClass: typeof Base,
   idValue: unknown,
 ): InstanceType<typeof Nodes.Node> {
-  const table = new Table(resolveTableName(modelClass));
+  const table = modelClass.arelTable;
   const pk = modelClass.primaryKey;
   if (Array.isArray(pk)) {
     if (!Array.isArray(idValue) || idValue.length !== pk.length) return arelSql("1=0");

@@ -16,19 +16,20 @@ export function i18nScope(_modelClass: typeof Base): string {
 }
 
 /**
- * Return the ancestor chain for i18n lookup, stopping before Base.
+ * Return the ancestor chain for i18n lookup, stopping at the
+ * ActiveRecord Base class (the first class whose parent prototype
+ * does not have _attributeDefinitions, indicating it's Model, not Base).
  *
  * Mirrors: ActiveRecord::Translation#lookup_ancestors
  */
 export function lookupAncestors(modelClass: typeof Base): Array<typeof Base> {
   const ancestors: Array<typeof Base> = [];
-  let klass: typeof Base | null = modelClass;
+  let klass: any = modelClass;
   while (klass) {
-    if (klass.name === "Base") break;
     ancestors.push(klass);
     const parent = Object.getPrototypeOf(klass);
-    klass = parent?.prototype ? parent : null;
+    if (!parent?.prototype || !("_attributeDefinitions" in parent)) break;
+    klass = parent;
   }
-  if (ancestors.length === 0) ancestors.push(modelClass);
   return ancestors;
 }

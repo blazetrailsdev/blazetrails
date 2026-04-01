@@ -44,6 +44,7 @@ import * as ConnectionHandling from "./connection-handling.js";
 import * as ModelSchema from "./model-schema.js";
 import * as SignedIdModule from "./signed-id.js";
 import * as LockingOptimistic from "./locking/optimistic.js";
+import * as LockingPessimistic from "./locking/pessimistic.js";
 import * as Translation from "./translation.js";
 import { sanitizeSqlArray, sanitizeSqlLike } from "./sanitization.js";
 import {
@@ -2632,65 +2633,17 @@ export class Base extends Model {
    * Mirrors: ActiveRecord::Base#lock!
    */
   async lockBang(lockClause: string = "FOR UPDATE"): Promise<this> {
-    if (this.changed) {
-      const dirtyAttrs = this.changedAttributes.map((a) => `"${a}"`).join(", ");
-      throw new Error(
-        `Locking a record with unpersisted changes is not supported. Changed attributes: ${dirtyAttrs}. Use save to persist the changes, or reload to discard them explicitly.`,
-      );
-    }
-    const ctor = this.constructor as typeof Base;
-    const sm = ctor.arelTable
-      .project(arelStar)
-      .where(ctor._buildPkWhereNode(this.id))
-      .lock(lockClause);
-    const rows = await ctor.adapter.execute(sm.toSql());
-
-    if (rows.length === 0) {
-      throw new RecordNotFound(
-        `${ctor.name} with ${ctor.primaryKey}=${this.id} not found`,
-        ctor.name,
-        ctor.primaryKey as string,
-        this.id,
-      );
-    }
-
-    for (const [key, value] of Object.entries(rows[0])) {
-      this._attributes.set(key, value);
-    }
-    (this as any)._dirty.snapshot(this._attributes);
+    await LockingPessimistic.lockBang(this, lockClause);
     return this;
   }
 
-  /**
-   * Wraps the passed block in a transaction, reloading the record with a lock.
-   *
-   * Mirrors: ActiveRecord::Base#with_lock
-   */
   async withLock(lock: string, fn: (record: this) => Promise<void> | void): Promise<void>;
   async withLock(fn: (record: this) => Promise<void> | void): Promise<void>;
   async withLock(
     lockOrFn?: string | ((record: this) => Promise<void> | void),
     fn?: (record: this) => Promise<void> | void,
   ): Promise<void> {
-    let lockClause = "FOR UPDATE";
-    let callback = fn;
-
-    if (typeof lockOrFn === "function") {
-      callback = lockOrFn;
-    } else if (typeof lockOrFn === "string") {
-      lockClause = lockOrFn;
-    }
-
-    if (!callback) {
-      throw new Error("withLock requires a callback block");
-    }
-
-    const cb = callback;
-    const { transaction } = await import("./transactions.js");
-    await transaction(this.constructor as typeof Base, async () => {
-      await this.lockBang(lockClause);
-      await cb(this);
-    });
+    return LockingPessimistic.withLock(this, lockOrFn as any, fn as any);
   }
 
   declare toParam: () => string | null;

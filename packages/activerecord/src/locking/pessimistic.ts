@@ -1,5 +1,6 @@
 import type { Base } from "../base.js";
 import { RecordNotFound } from "../errors.js";
+import { star as arelStar } from "@blazetrails/arel";
 
 /**
  * Pessimistic locking support for ActiveRecord models.
@@ -21,8 +22,11 @@ export async function lockBang(instance: Base, lockClause: string = "FOR UPDATE"
     );
   }
   const ctor = instance.constructor as typeof Base;
-  const sql = `SELECT * FROM "${ctor.tableName}" WHERE ${(ctor as any)._buildPkWhere(instance.id)} ${lockClause}`;
-  const rows = await ctor.adapter.execute(sql);
+  const sm = ctor.arelTable
+    .project(arelStar)
+    .where((ctor as any)._buildPkWhereNode(instance.id))
+    .lock(lockClause);
+  const rows = await ctor.adapter.execute(sm.toSql());
 
   if (rows.length === 0) {
     throw new RecordNotFound(

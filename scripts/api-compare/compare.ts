@@ -262,25 +262,47 @@ function main() {
       }
     }
 
-    // Propagate inherited methods: if class B extends A, B's file should
-    // also include all of A's methods for matching purposes.
+    // Propagate inherited methods transitively: if C extends B extends A,
+    // C's file should include methods from both B and A.
     if (tsPkg) {
       const classByName = new Map<string, ClassInfo>();
       for (const cls of Object.values(tsPkg.classes)) {
         classByName.set(cls.name, cls);
       }
 
-      for (const cls of Object.values(tsPkg.classes)) {
-        if (!cls.superclass || !cls.file) continue;
-        const parent = classByName.get(cls.superclass);
-        if (!parent?.file) continue;
-        const parentMethods = tsMethodsByFile.get(parent.file);
-        if (!parentMethods) continue;
-        const childMethods = tsMethodsByFile.get(cls.file) || new Set();
-        for (const m of parentMethods) {
-          childMethods.add(m);
+      const inheritedCache = new Map<string, Set<string>>();
+      const getInherited = (cls: ClassInfo, visited: Set<string>): Set<string> => {
+        const cached = inheritedCache.get(cls.name);
+        if (cached) return cached;
+        if (visited.has(cls.name)) return new Set();
+
+        const methods = new Set<string>();
+        for (const m of [...cls.instanceMethods, ...cls.classMethods]) {
+          methods.add(m.name);
         }
-        tsMethodsByFile.set(cls.file, childMethods);
+
+        if (cls.superclass) {
+          const parent = classByName.get(cls.superclass);
+          if (parent) {
+            visited.add(cls.name);
+            for (const m of getInherited(parent, visited)) {
+              methods.add(m);
+            }
+          }
+        }
+
+        inheritedCache.set(cls.name, methods);
+        return methods;
+      };
+
+      for (const cls of Object.values(tsPkg.classes)) {
+        if (!cls.file) continue;
+        const allMethods = getInherited(cls, new Set());
+        const fileMethods = tsMethodsByFile.get(cls.file) || new Set();
+        for (const m of allMethods) {
+          fileMethods.add(m);
+        }
+        tsMethodsByFile.set(cls.file, fileMethods);
       }
     }
 

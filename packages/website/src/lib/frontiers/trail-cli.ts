@@ -98,6 +98,14 @@ export interface TrailCliDeps {
   getTables: () => string[];
 }
 
+export function dropUserTables(adapter: SqlJsAdapter, getTables: () => string[]): number {
+  const tables = getTables().filter((t) => !t.startsWith("_vfs_"));
+  for (const table of tables) {
+    adapter.execRaw(`DROP TABLE IF EXISTS "${table.replace(/"/g, '""')}"`);
+  }
+  return tables.length;
+}
+
 export function createTrailCLI(deps: TrailCliDeps) {
   const { vfs, adapter } = deps;
   const output: string[] = [];
@@ -125,10 +133,7 @@ export function createTrailCLI(deps: TrailCliDeps) {
         }
 
         for (const f of vfs.list()) vfs.delete(f.path);
-        const tables = deps.getTables().filter((t) => !t.startsWith("_vfs_"));
-        for (const table of tables) {
-          adapter.execRaw(`DROP TABLE IF EXISTS "${table.replace(/"/g, '""')}"`);
-        }
+        dropUserTables(adapter, deps.getTables);
         deps.clearMigrations();
 
         const gen = new VfsAppGenerator({ vfs, output: log });
@@ -175,7 +180,7 @@ export function createTrailCLI(deps: TrailCliDeps) {
       },
 
       "db:rollback": async (_args, opts) => {
-        const step = parseInt(opts.step ?? "1", 10);
+        const step = parseInt(opts.step ?? "1", 10) || 1;
         await withMigrator(async (migrator) => {
           await migrator.rollback(step);
           for (const line of migrator.output) log(line);
@@ -219,11 +224,8 @@ export function createTrailCLI(deps: TrailCliDeps) {
       },
 
       "db:drop": async () => {
-        const tables = deps.getTables().filter((t) => !t.startsWith("_vfs_"));
-        for (const table of tables) {
-          adapter.execRaw(`DROP TABLE IF EXISTS "${table.replace(/"/g, '""')}"`);
-        }
-        log(`Dropped ${tables.length} table(s).`);
+        const count = dropUserTables(adapter, deps.getTables);
+        log(`Dropped ${count} table(s).`);
       },
 
       sql: async (args) => {

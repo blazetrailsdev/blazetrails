@@ -1,7 +1,7 @@
 import type { SqlJsStatic } from "sql.js";
 import { SqlJsAdapter } from "./sql-js-adapter.js";
 import { VirtualFS } from "./virtual-fs.js";
-import { createTrailCLI, type CliResult } from "./trail-cli.js";
+import { createTrailCLI, dropUserTables, type CliResult } from "./trail-cli.js";
 import type { MigrationProxy } from "@blazetrails/activerecord";
 
 export type { VirtualFS, VfsFile } from "./virtual-fs.js";
@@ -92,10 +92,7 @@ export async function createRuntime(SQL: SqlJsStatic): Promise<Runtime> {
 
     reset: () => {
       for (const f of vfs.list()) vfs.delete(f.path);
-      const tables = adapter.getTables().filter((t) => !t.startsWith("_vfs_"));
-      for (const table of tables) {
-        adapter.execRaw(`DROP TABLE IF EXISTS "${table.replace(/"/g, '""')}"`);
-      }
+      dropUserTables(adapter, () => adapter.getTables());
       migrations = [];
     },
   };

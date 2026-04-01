@@ -41,8 +41,8 @@ export function signedIdVerifier(modelClass: typeof Base): MessageVerifier {
   const secret = _signedIdVerifierSecret;
   if (!secret) {
     throw new Error(
-      "You must set signedIdVerifierSecret to use signed IDs. " +
-        "Call setSignedIdVerifierSecret('your-secret-key') before using signed IDs.",
+      "You must configure a signed ID verifier secret before using signed IDs. " +
+        "Call setSignedIdVerifierSecret('your-secret-key') before generating or verifying signed IDs.",
     );
   }
 

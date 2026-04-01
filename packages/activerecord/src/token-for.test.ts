@@ -17,7 +17,7 @@ describe("TokenForTest", () => {
   let adapter: DatabaseAdapter;
   beforeEach(() => {
     adapter = freshAdapter();
-    setSignedIdVerifierSecret("test-secret-key-for-token-for");
+    setSignedIdVerifierSecret("blazetrails-test-secret");
   });
 
   function makeModel() {

@@ -108,7 +108,7 @@
     const files = vfs.list();
     const paths = files.map((f) => f.path);
     root = buildTree(paths, new Set(
-      paths.filter((p) => p.endsWith("/.gitkeep")).map((p) => p),
+      paths.filter((p) => p === ".gitkeep" || p.endsWith("/.gitkeep")),
     ));
   }
 
@@ -180,17 +180,31 @@
       const node = findNode(root, renaming);
       if (node?.isDir) {
         const prefix = renaming + "/";
-        const files = vfs.list().filter((f) => f.path.startsWith(prefix));
-        for (const f of files) {
-          const newFilePath = newPath + "/" + f.path.slice(prefix.length);
-          vfs.write(newFilePath, f.content);
+        const allFiles = vfs.list();
+        const filesToMove = allFiles.filter((f) => f.path.startsWith(prefix));
+        const newPaths = filesToMove.map((f) => newPath + "/" + f.path.slice(prefix.length));
+        const hasConflict = newPaths.some((np) =>
+          allFiles.some((f) => f.path === np && !f.path.startsWith(prefix)),
+        );
+        if (hasConflict) {
+          renaming = null;
+          return;
+        }
+        for (let i = 0; i < filesToMove.length; i++) {
+          vfs.write(newPaths[i], filesToMove[i].content);
+        }
+        for (const f of filesToMove) {
           vfs.delete(f.path);
         }
         if (selectedPath?.startsWith(prefix)) {
           onselect?.(newPath + "/" + selectedPath.slice(prefix.length));
         }
       } else {
-        vfs.rename(renaming, newPath);
+        const renamed = vfs.rename(renaming, newPath);
+        if (!renamed) {
+          renaming = null;
+          return;
+        }
         if (selectedPath === renaming) onselect?.(newPath);
       }
     }
@@ -321,6 +335,7 @@
   data-testid="file-tree"
   role="tree"
   aria-label="File explorer"
+  aria-activedescendant={focusedPath ? `tree-item-${focusedPath.replace(/\//g, "-")}` : undefined}
   tabindex="0"
   onkeydown={handleKeydown}
 >
@@ -333,6 +348,7 @@
           class="text-text-muted hover:text-accent"
           onclick={() => startCreate("", false)}
           title="New File"
+          aria-label="New File"
           data-testid="new-file-button"
         >+</button>
         <button
@@ -340,6 +356,7 @@
           class="text-text-muted hover:text-accent"
           onclick={() => startCreate("", true)}
           title="New Folder"
+          aria-label="New Folder"
           data-testid="new-folder-button"
         >📁</button>
       </div>
@@ -352,6 +369,7 @@
         class="w-full rounded border border-border-focus bg-surface px-1 py-0.5 text-xs text-text outline-none"
         bind:value={createValue}
         onkeydown={(e) => {
+          e.stopPropagation();
           if (e.key === "Enter") commitCreate();
           if (e.key === "Escape") creating = null;
         }}
@@ -431,6 +449,7 @@
 
 {#snippet treeNode(node: TreeNode, depth: number)}
   <div
+    id={`tree-item-${node.path.replace(/\//g, "-")}`}
     role="treeitem"
     aria-expanded={node.isDir ? !collapsed.has(node.path) : undefined}
     aria-selected={node.path === selectedPath}
@@ -463,6 +482,7 @@
           class="flex-1 rounded border border-border-focus bg-surface px-1 py-0 text-xs text-text outline-none"
           bind:value={renameValue}
           onkeydown={(e) => {
+            e.stopPropagation();
             if (e.key === "Enter") commitRename();
             if (e.key === "Escape") renaming = null;
           }}
@@ -482,6 +502,7 @@
             class="w-full rounded border border-border-focus bg-surface px-1 py-0.5 text-xs text-text outline-none"
             bind:value={createValue}
             onkeydown={(e) => {
+              e.stopPropagation();
               if (e.key === "Enter") commitCreate();
               if (e.key === "Escape") creating = null;
             }}

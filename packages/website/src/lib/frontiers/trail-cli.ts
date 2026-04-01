@@ -47,7 +47,6 @@ function discoverMigrations(
   return vfs
     .list()
     .filter((f) => f.path.startsWith("db/migrations/"))
-    .sort((a, b) => a.path.localeCompare(b.path))
     .flatMap((file) => {
       const basename = file.path.split("/").pop() ?? "";
       const match = basename.match(MIGRATION_FILE_PATTERN);
@@ -132,7 +131,7 @@ export function createTrailCLI(deps: TrailCliDeps) {
           return;
         }
 
-        for (const f of vfs.list()) vfs.delete(f.path);
+        vfs.clear();
         dropUserTables(adapter, deps.getTables);
         deps.clearMigrations();
 
@@ -247,6 +246,7 @@ export function createTrailCLI(deps: TrailCliDeps) {
           .map((s: string) => s.trim())
           .filter((s: string) => s.length > 0);
 
+        let hasError = false;
         for (const stmt of statements) {
           try {
             const results = adapter.execRaw(stmt);
@@ -280,8 +280,10 @@ export function createTrailCLI(deps: TrailCliDeps) {
             }
           } catch (e: any) {
             log(`ERROR: ${e.message}`);
+            hasError = true;
           }
         }
+        if (hasError) throw new Error("One or more SQL statements failed");
       },
     };
 

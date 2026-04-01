@@ -121,9 +121,9 @@ describe("exec: sql", () => {
     expect(result.success).toBe(true);
   });
 
-  it("reports SQL errors", async () => {
+  it("reports SQL errors with failure status", async () => {
     const result = await runtime.exec("sql SELECT * FROM nonexistent");
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
     expect(result.output.join("\n")).toContain("ERROR");
   });
 });

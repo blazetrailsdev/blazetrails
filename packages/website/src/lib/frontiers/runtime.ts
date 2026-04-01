@@ -38,7 +38,7 @@ function createMigrationRegistry() {
         migrations.push(proxy);
       }
     },
-    getAll: () => migrations,
+    getAll: () => [...migrations],
     clear() {
       migrations = [];
     },
@@ -97,7 +97,7 @@ export async function createRuntime(SQL: SqlJsStatic): Promise<Runtime> {
     },
 
     reset: () => {
-      for (const f of vfs.list()) vfs.delete(f.path);
+      vfs.clear();
       dropUserTables(adapter, () => adapter.getTables());
       registry.clear();
     },

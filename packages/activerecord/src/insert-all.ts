@@ -1,5 +1,6 @@
 import { InsertManager, Nodes } from "@blazetrails/arel";
 import type { Base } from "./base.js";
+import { quoteSqlValue } from "./base.js";
 import type { Relation } from "./relation.js";
 
 type ModelClass = typeof Base;
@@ -9,7 +10,6 @@ const TIMESTAMP_COLUMNS = ["created_at", "updated_at"] as const;
 export interface InsertAllOptions {
   onDuplicate?: "skip" | "update" | Nodes.SqlLiteral;
   updateOnly?: string | string[];
-  returning?: boolean | string | string[];
   uniqueBy?: string | string[];
   recordTimestamps?: boolean;
 }
@@ -19,7 +19,6 @@ export class InsertAll {
   readonly connection: ModelClass["adapter"];
   readonly inserts: Record<string, unknown>[];
   readonly keys: Set<string>;
-  readonly returning: boolean | string | string[] | undefined;
   readonly uniqueBy: string | string[] | undefined;
 
   onDuplicate: "skip" | "update" | undefined;
@@ -51,7 +50,6 @@ export class InsertAll {
     this.connection = connection;
     this.inserts = inserts.map((r) => ({ ...r }));
     this.updateOnly = options.updateOnly;
-    this.returning = options.returning;
     this.uniqueBy = options.uniqueBy;
     this._recordTimestamps = options.recordTimestamps ?? this.model.recordTimestamps;
     this.updateSql = undefined;
@@ -101,10 +99,10 @@ export class InsertAll {
   }
 
   mapKeyWithValue(fn: (key: string, value: unknown) => unknown): unknown[][] {
+    const now = this.recordTimestamps() ? new Date() : undefined;
     return this.inserts.map((row) => {
       const merged = { ...this._scopeAttributes, ...row };
-      if (this.recordTimestamps()) {
-        const now = new Date();
+      if (now) {
         for (const col of TIMESTAMP_COLUMNS) {
           if (this.model._attributeDefinitions.has(col) && merged[col] === undefined) {
             merged[col] = now;
@@ -169,6 +167,16 @@ export class InsertAll {
   }
 }
 
+/**
+ * Builds SQL fragments for InsertAll operations.
+ *
+ * Mirrors: ActiveRecord::InsertAll::Builder
+ *
+ * In Rails, each adapter overrides `build_insert_sql(builder)` to assemble
+ * adapter-specific SQL from the builder's fragments. Here we replicate that
+ * pattern: `toSql()` dispatches to adapter-specific assembly using the same
+ * fragment methods that Rails' adapters call.
+ */
 export class Builder {
   readonly model: ModelClass;
   private _insertAll: InsertAll;
@@ -178,30 +186,35 @@ export class Builder {
     this.model = insertAll.model;
   }
 
+  /**
+   * Assemble the full SQL statement, dispatching to adapter-specific logic.
+   *
+   * Mirrors how Rails calls connection.build_insert_sql(builder) where each
+   * adapter (SQLite3, PostgreSQL, MySQL) overrides the method.
+   */
   toSql(): string {
-    const baseSql = this._buildInsertSql();
-    const conflictSql = this._buildConflictSql();
-    return conflictSql ? `${baseSql} ${conflictSql}` : baseSql;
+    const isMysql = !!process.env.MYSQL_TEST_URL;
+    return isMysql ? this._buildMysqlSql() : this._buildStandardSql();
   }
 
   into(): string {
-    return `INTO "${this.model.arelTable.name}" (${this._columnsList()})`;
+    const table = this.model.arelTable;
+    const keys = [...this._insertAll.keysIncludingTimestamps()];
+    const mgr = new InsertManager(table);
+    mgr.ast.columns = keys.map((k) => table.get(k));
+    mgr.values(this.valuesList());
+    const full = mgr.toSql();
+    // Extract "INTO ..." portion (everything after "INSERT ")
+    return full.slice("INSERT ".length);
   }
 
   valuesList(): Nodes.ValuesList {
-    const rows = this._insertAll.mapKeyWithValue((_key, value) => {
+    const arrayCols = this._arrayColumnSet();
+    const rows = this._insertAll.mapKeyWithValue((key, value) => {
       if (value instanceof Nodes.SqlLiteral) return value;
-      return new Nodes.Quoted(value);
+      return new Nodes.SqlLiteral(quoteSqlValue(value, arrayCols.has(key)));
     });
     return new Nodes.ValuesList(rows as Nodes.Node[][]);
-  }
-
-  returning(): string | undefined {
-    const ret = this._insertAll.returning;
-    if (!ret) return undefined;
-    if (typeof ret === "string") return `"${ret}"`;
-    if (Array.isArray(ret)) return ret.map((c) => `"${c}"`).join(", ");
-    return undefined;
   }
 
   conflictTarget(): string {
@@ -242,57 +255,69 @@ export class Builder {
     return this._insertAll.updateSql;
   }
 
-  private _buildInsertSql(): string {
-    const table = this.model.arelTable;
-    const keys = [...this._insertAll.keysIncludingTimestamps()];
+  /**
+   * SQLite3/PostgreSQL: ON CONFLICT based syntax.
+   * Mirrors: sqlite3_adapter.rb#build_insert_sql / postgresql_adapter.rb#build_insert_sql
+   */
+  private _buildStandardSql(): string {
+    let sql = `INSERT ${this.into()}`;
 
-    const mgr = new InsertManager(table);
-    mgr.ast.columns = keys.map((k) => table.get(k));
-    mgr.values(this.valuesList());
-    return mgr.toSql();
-  }
-
-  private _buildConflictSql(): string | undefined {
-    const isMysql = !!process.env.MYSQL_TEST_URL;
-    const ia = this._insertAll;
-
-    if (ia.skipDuplicates()) {
-      if (isMysql) return undefined; // MySQL uses INSERT IGNORE (handled separately)
-      return `ON CONFLICT ${this.conflictTarget()} DO NOTHING`;
-    }
-
-    if (ia.updateSql) {
-      if (isMysql) {
-        return `ON DUPLICATE KEY UPDATE ${ia.updateSql.value}`;
+    if (this._insertAll.skipDuplicates()) {
+      sql += ` ON CONFLICT ${this.conflictTarget()} DO NOTHING`;
+    } else if (this._insertAll.updateDuplicates()) {
+      sql += ` ON CONFLICT ${this.conflictTarget()} DO UPDATE SET `;
+      if (this._insertAll.updateSql) {
+        sql += this._insertAll.updateSql.value;
+      } else {
+        sql += this.touchModelTimestampsUnless((column) => `${column} IS excluded.${column}`);
+        sql += this.updatableColumns()
+          .map((c) => `${c}=excluded.${c}`)
+          .join(",");
       }
-      return `ON CONFLICT ${this.conflictTarget()} DO UPDATE SET ${ia.updateSql.value}`;
     }
 
-    if (ia.updateDuplicates()) {
-      const updateCols = this.updatableColumns();
-      if (isMysql) {
-        const clause =
-          updateCols.length > 0
-            ? updateCols.map((c) => `${c} = VALUES(${c})`).join(", ")
-            : `${this._firstColumn()} = VALUES(${this._firstColumn()})`;
-        return `ON DUPLICATE KEY UPDATE ${clause}`;
+    return sql;
+  }
+
+  /**
+   * MySQL: ON DUPLICATE KEY UPDATE based syntax.
+   * Mirrors: abstract_mysql_adapter.rb#build_insert_sql (non-alias branch)
+   */
+  private _buildMysqlSql(): string {
+    let sql = `INSERT ${this.into()}`;
+    const noOpColumn = this._firstColumn();
+
+    if (this._insertAll.skipDuplicates()) {
+      if (noOpColumn) {
+        sql += ` ON DUPLICATE KEY UPDATE ${noOpColumn}=${noOpColumn}`;
       }
-      const clause =
-        updateCols.length > 0
-          ? updateCols.map((c) => `${c} = EXCLUDED.${c}`).join(", ")
-          : `${this._firstColumn()} = EXCLUDED.${this._firstColumn()}`;
-      return `ON CONFLICT ${this.conflictTarget()} DO UPDATE SET ${clause}`;
+    } else if (this._insertAll.updateDuplicates()) {
+      if (this._insertAll.updateSql) {
+        sql += ` ON DUPLICATE KEY UPDATE ${this._insertAll.updateSql.value}`;
+      } else {
+        sql += " ON DUPLICATE KEY UPDATE ";
+        sql += this.touchModelTimestampsUnless((column) => `${column}<=>VALUES(${column})`);
+        sql += this.updatableColumns()
+          .map((c) => `${c}=VALUES(${c})`)
+          .join(",");
+      }
     }
 
-    return undefined;
+    return sql;
   }
 
-  private _columnsList(): string {
-    return [...this._insertAll.keysIncludingTimestamps()].map((c) => `"${c}"`).join(", ");
-  }
-
-  private _firstColumn(): string {
+  private _firstColumn(): string | undefined {
     const keys = [...this._insertAll.keysIncludingTimestamps()];
-    return `"${keys[0]}"`;
+    return keys.length > 0 ? `"${keys[0]}"` : undefined;
+  }
+
+  private _arrayColumnSet(): Set<string> {
+    const keys = [...this._insertAll.keysIncludingTimestamps()];
+    return new Set(
+      keys.filter((c) => {
+        const def = this.model._attributeDefinitions.get(c);
+        return def?.type?.name === "array";
+      }),
+    );
   }
 }

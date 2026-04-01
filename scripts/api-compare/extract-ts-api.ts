@@ -104,7 +104,7 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
         if (!isExported(node)) return;
         const name = node.name.text;
         const modKey = `${relPath}:${name}`;
-        info.modules[modKey] = extractNamespace(node, relPath);
+        info.modules[modKey] = extractNamespace(node, checker, relPath);
         fileHasClassOrModule = true;
       } else if (ts.isExportDeclaration(node)) {
         // Handle `export * as Foo from "./bar.js"` — namespace re-exports
@@ -386,7 +386,11 @@ function extractInterface(node: ts.InterfaceDeclaration, file: string): ClassInf
   };
 }
 
-function extractNamespace(node: ts.ModuleDeclaration, file: string): ClassInfo {
+function extractNamespace(
+  node: ts.ModuleDeclaration,
+  checker: ts.TypeChecker,
+  file: string,
+): ClassInfo {
   const name = node.name.text;
   const instanceMethods: MethodInfo[] = [];
 
@@ -401,6 +405,37 @@ function extractNamespace(node: ts.ModuleDeclaration, file: string): ClassInfo {
           line,
           file,
         });
+      } else if (ts.isVariableStatement(stmt) && isExported(stmt)) {
+        const line = stmt.getSourceFile().getLineAndCharacterOfPosition(stmt.getStart()).line + 1;
+        for (const decl of stmt.declarationList.declarations) {
+          if (!ts.isIdentifier(decl.name)) continue;
+          const init = decl.initializer;
+          let params: ParamInfo[] = [];
+          let isFunctionLike = false;
+          if (init && (ts.isArrowFunction(init) || ts.isFunctionExpression(init))) {
+            isFunctionLike = true;
+            params = extractParameters(init.parameters);
+          } else if (init) {
+            const type = checker.getTypeAtLocation(init);
+            const signatures = type.getCallSignatures();
+            if (signatures.length > 0) {
+              isFunctionLike = true;
+              const sigDecl = signatures[0].declaration;
+              if (sigDecl && ts.isFunctionLike(sigDecl)) {
+                params = extractParameters(sigDecl.parameters);
+              }
+            }
+          }
+          if (isFunctionLike) {
+            instanceMethods.push({
+              name: decl.name.text,
+              visibility: "public",
+              params,
+              line,
+              file,
+            });
+          }
+        }
       }
     }
   }

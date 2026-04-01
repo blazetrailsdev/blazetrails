@@ -271,47 +271,59 @@ function main() {
       }
     }
 
-    // Propagate inherited methods transitively: if C extends B extends A,
-    // C's file should include methods from both B and A.
+    // Propagate inherited methods transitively: follows both class `superclass`
+    // and interface/module `extends` chains.
     if (tsPkg) {
-      const classByName = new Map<string, ClassInfo>();
+      const entityByName = new Map<string, ClassInfo>();
       for (const cls of Object.values(tsPkg.classes)) {
-        classByName.set(cls.name, cls);
+        entityByName.set(cls.name, cls);
+      }
+      for (const mod of Object.values(tsPkg.modules)) {
+        if (!entityByName.has(mod.name)) {
+          entityByName.set(mod.name, mod);
+        }
       }
 
       const inheritedCache = new Map<string, Set<string>>();
-      const getInherited = (cls: ClassInfo, visited: Set<string>): Set<string> => {
-        const cached = inheritedCache.get(cls.name);
+      const getInherited = (entity: ClassInfo, visited: Set<string>): Set<string> => {
+        const cached = inheritedCache.get(entity.name);
         if (cached) return cached;
-        if (visited.has(cls.name)) return new Set();
+        if (visited.has(entity.name)) return new Set();
+        visited.add(entity.name);
 
         const methods = new Set<string>();
-        for (const m of [...cls.instanceMethods, ...cls.classMethods]) {
+        for (const m of [...entity.instanceMethods, ...entity.classMethods]) {
           methods.add(m.name);
         }
 
-        if (cls.superclass) {
-          const parent = classByName.get(cls.superclass);
+        // Follow superclass (classes)
+        if (entity.superclass) {
+          const parent = entityByName.get(entity.superclass);
           if (parent) {
-            visited.add(cls.name);
-            for (const m of getInherited(parent, visited)) {
-              methods.add(m);
-            }
+            for (const m of getInherited(parent, visited)) methods.add(m);
           }
         }
 
-        inheritedCache.set(cls.name, methods);
+        // Follow extends (interfaces/modules)
+        for (const ext of entity.extends || []) {
+          const parent = entityByName.get(ext);
+          if (parent) {
+            for (const m of getInherited(parent, visited)) methods.add(m);
+          }
+        }
+
+        inheritedCache.set(entity.name, methods);
         return methods;
       };
 
-      for (const cls of Object.values(tsPkg.classes)) {
-        if (!cls.file) continue;
-        const allMethods = getInherited(cls, new Set());
-        const fileMethods = tsMethodsByFile.get(cls.file) || new Set();
+      for (const entity of [...Object.values(tsPkg.classes), ...Object.values(tsPkg.modules)]) {
+        if (!entity.file) continue;
+        const allMethods = getInherited(entity, new Set());
+        const fileMethods = tsMethodsByFile.get(entity.file) || new Set();
         for (const m of allMethods) {
           fileMethods.add(m);
         }
-        tsMethodsByFile.set(cls.file, fileMethods);
+        tsMethodsByFile.set(entity.file, fileMethods);
       }
     }
 

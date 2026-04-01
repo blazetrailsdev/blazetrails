@@ -325,8 +325,27 @@ function main() {
       info: ClassInfo;
     }[] = [];
 
+    // Skip nested classes that share a file with a shorter-named parent.
+    // e.g., Preloader::Association::LoaderQuery in preloader/association.rb
+    // is an implementation detail — its methods shouldn't inflate the parent's count.
+    const primaryClassPerFile = new Map<string, string>();
     for (const [fqn, info] of Object.entries(rubyPkg.classes)) {
-      allRuby.push({ fqn, info: info as unknown as ClassInfo });
+      const cls = info as unknown as ClassInfo;
+      if (!cls.file) continue;
+      const existing = primaryClassPerFile.get(cls.file);
+      if (!existing || fqn.split("::").length < existing.split("::").length) {
+        primaryClassPerFile.set(cls.file, fqn);
+      }
+    }
+
+    for (const [fqn, info] of Object.entries(rubyPkg.classes)) {
+      const cls = info as unknown as ClassInfo;
+      // Skip nested classes in same file as a shorter-named parent
+      if (cls.file) {
+        const primary = primaryClassPerFile.get(cls.file);
+        if (primary && primary !== fqn && fqn.startsWith(primary + "::")) continue;
+      }
+      allRuby.push({ fqn, info: cls });
     }
 
     // Fold ClassMethods into parent module

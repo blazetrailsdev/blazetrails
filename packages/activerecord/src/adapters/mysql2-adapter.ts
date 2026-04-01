@@ -43,12 +43,12 @@ export class Mysql2Adapter implements DatabaseAdapter {
   /**
    * Convert double-quoted identifiers to backtick-quoted for MySQL/MariaDB.
    *
-   * CONVENTION: All SQL throughout the codebase uses standard double-quoted
-   * identifiers ("table"."column"). Arel's ToSql visitor, Relation, InsertAll,
-   * and all other SQL builders emit double quotes. This method converts them to
-   * backticks at execution time, so MySQL-specific quoting is handled in one
-   * place rather than threaded through every SQL builder. Do NOT use backticks
-   * or quoteIdentifier(..., "mysql") when constructing SQL — just use "name".
+   * CONVENTION: Arel-generated DML and SQL builders (Relation, InsertAll, etc.)
+   * use standard double-quoted identifiers ("table"."column"). This method
+   * converts them to backticks at execution time, so MySQL-specific quoting is
+   * handled in one place rather than threaded through every SQL builder.
+   * Adapter-specific DDL or raw SQL fragments may still use backticks or
+   * quoteIdentifier(..., "mysql") directly where appropriate.
    */
   private mysqlQuote(sql: string): string {
     // Replace "identifier" with `identifier`, but not inside single-quoted strings.

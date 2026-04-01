@@ -31,6 +31,10 @@ const DETAIL_PACKAGES = new Set([
   "actionview",
 ]);
 
+// Ruby files to exclude from comparison — these are features that don't apply
+// pre-1.0 (migration compatibility layers, legacy adapters, etc.)
+const SKIP_FILES = ["migration/compatibility"];
+
 // ---------------------------------------------------------------------------
 // Conventions
 // ---------------------------------------------------------------------------
@@ -118,33 +122,46 @@ const SKIP = new Set([
   "to_c",
 ]);
 
-/** Convert Ruby method name → expected TS name (null = skip) */
-function rubyMethodToTs(name: string): string | null {
+/**
+ * Convert Ruby method name → candidate TS names to try matching.
+ * Returns null if the method should be skipped entirely.
+ * Returns multiple candidates for predicates where both forms are common:
+ *   has_attribute? → ["hasAttribute", "isHasAttribute"]
+ *   supports_savepoints? → ["supportsSavepoints", "isSupportsSavepoints"]
+ *   valid? → ["isValid"]
+ */
+function rubyMethodToTs(name: string): string[] | null {
   if (OPERATORS.has(name)) return null;
   if (SKIP.has(name)) return null;
   if (name.startsWith("_")) return null;
 
-  if (name === "initialize") return "constructor";
-  if (name === "to_s" || name === "to_str") return "toString";
-  if (name === "to_json") return "toJSON";
-  if (name === "to_sql") return "toSql";
+  if (name === "initialize") return ["constructor"];
+  if (name === "to_s" || name === "to_str") return ["toString"];
+  if (name === "to_json") return ["toJSON"];
+  if (name === "to_sql") return ["toSql"];
 
   if (name.endsWith("?")) {
     const base = name.slice(0, -1);
-    return "is" + snakeToCamel(base).replace(/^./, (c) => c.toUpperCase());
+    const camel = snakeToCamel(base);
+    const isPrefixed = "is" + camel.replace(/^./, (c) => c.toUpperCase());
+    // If base already starts with a predicate word, try without "is" prefix first
+    if (/^(has|supports|can|should|needs|includes|responds|allows|uses)/.test(camel)) {
+      return [camel, isPrefixed];
+    }
+    return [isPrefixed, camel];
   }
 
   if (name.endsWith("!")) {
     const base = name.slice(0, -1);
-    return snakeToCamel(base) + "Bang";
+    return [snakeToCamel(base) + "Bang"];
   }
 
   if (name.endsWith("=")) {
     const base = name.slice(0, -1);
-    return snakeToCamel(base);
+    return [snakeToCamel(base)];
   }
 
-  return snakeToCamel(name);
+  return [snakeToCamel(name)];
 }
 
 // ---------------------------------------------------------------------------
@@ -329,6 +346,7 @@ function main() {
     const byFile = new Map<string, typeof allRuby>();
     for (const item of allRuby) {
       const file = item.info.file || "unknown.rb";
+      if (SKIP_FILES.some((pattern) => file.includes(pattern))) continue;
       const list = byFile.get(file) || [];
       list.push(item);
       byFile.set(file, list);
@@ -361,19 +379,20 @@ function main() {
         const rubyMethods = [...item.info.instanceMethods, ...item.info.classMethods];
 
         for (const rm of rubyMethods) {
-          const tsName = rubyMethodToTs(rm.name);
-          if (tsName === null) continue;
+          const tsCandidates = rubyMethodToTs(rm.name);
+          if (tsCandidates === null) continue;
 
-          if (tsMethods.has(tsName)) {
-            fileMatched++;
-          } else if (includerMethodSets.some((s) => s.has(tsName))) {
-            // Found on an including class — counts as matched
+          const matched =
+            tsCandidates.some((c) => tsMethods.has(c)) ||
+            tsCandidates.some((c) => includerMethodSets.some((s) => s.has(c)));
+
+          if (matched) {
             fileMatched++;
           } else {
             fileMissing++;
             missingMethods.push({
               rubyName: rm.name,
-              tsName,
+              tsName: tsCandidates[0],
               rubyModule: item.fqn,
             });
           }

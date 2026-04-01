@@ -1,6 +1,6 @@
 # ActiveModel API Compare: Road to 100%
 
-Current state: **58.3%** (243 / 417 methods). **100%** tests (963/963). Target: 100% API.
+Current state: **65.2%** (272 / 417 methods). **100%** tests (963/963). Target: 100% API.
 
 ```bash
 pnpm run api:compare -- --package activemodel

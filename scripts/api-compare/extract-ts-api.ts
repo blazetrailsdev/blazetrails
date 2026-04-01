@@ -134,14 +134,7 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
         if (!isExported(node)) return;
         const name = node.name.text;
         const modKey = `${relPath}:${name}`;
-        info.modules[modKey] = {
-          name,
-          file: relPath,
-          includes: [],
-          extends: [],
-          instanceMethods: [],
-          classMethods: [],
-        };
+        info.modules[modKey] = extractNamespace(node, relPath);
         fileHasClassOrModule = true;
       } else if (ts.isExportDeclaration(node)) {
         // Handle `export * as Foo from "./bar.js"` — namespace re-exports
@@ -382,14 +375,6 @@ function extractInterface(node: ts.InterfaceDeclaration, file: string): ClassInf
         line,
         file,
       });
-    } else if (ts.isPropertySignature(member)) {
-      instanceMethods.push({
-        name: memberName,
-        visibility: "public",
-        params: [],
-        line,
-        file,
-      });
     }
   }
 
@@ -398,6 +383,35 @@ function extractInterface(node: ts.InterfaceDeclaration, file: string): ClassInf
     file,
     includes: [],
     extends: extendsArr,
+    instanceMethods,
+    classMethods: [],
+  };
+}
+
+function extractNamespace(node: ts.ModuleDeclaration, file: string): ClassInfo {
+  const name = node.name.text;
+  const instanceMethods: MethodInfo[] = [];
+
+  if (node.body && ts.isModuleBlock(node.body)) {
+    for (const stmt of node.body.statements) {
+      if (ts.isFunctionDeclaration(stmt) && stmt.name && isExported(stmt)) {
+        const line = stmt.getSourceFile().getLineAndCharacterOfPosition(stmt.getStart()).line + 1;
+        instanceMethods.push({
+          name: stmt.name.text,
+          visibility: "public",
+          params: extractParameters(stmt.parameters),
+          line,
+          file,
+        });
+      }
+    }
+  }
+
+  return {
+    name,
+    file,
+    includes: [],
+    extends: [],
     instanceMethods,
     classMethods: [],
   };

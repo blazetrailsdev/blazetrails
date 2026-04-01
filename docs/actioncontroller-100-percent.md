@@ -1,6 +1,6 @@
 # ActionController: Road to 100% Test Coverage
 
-**API surface: 148/340 methods (43.5%)** — method-level coverage, not class/module wrappers.
+**API surface: 159/340 methods (46.8%)** — method-level coverage, not class/module wrappers.
 
 Test coverage: **28.3%** (527 matched / 1,860 total Rails tests). 29/91 files matched, 26 misplaced.
 

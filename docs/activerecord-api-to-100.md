@@ -1,6 +1,6 @@
 # ActiveRecord API Compare: Road to 100%
 
-Current state: **35%** (1,176 / 3,356 methods). Target: 100%.
+Current state: **37.7%** (1,247 / 3,312 methods). Target: 100%.
 
 ```bash
 pnpm run api:compare -- --package activerecord
@@ -16,7 +16,7 @@ they still count as matched.
 
 ## Fully Matched Areas (✅)
 
-These workstreams have zero missing classes.
+These workstreams are fully matched.
 
 - **Associations** — all 42 classes including builders, join dependency, preloader, errors
 - **Attribute Methods** — all 12 sub-modules (dirty, read, write, query, PK, before_type_cast, serialization, time zone, composite PK, attributes)

@@ -33,7 +33,7 @@ export const fixtures = {
         "db/migrations/*-create-documents.ts",
       ],
     },
-  ] as GeneratorFixture[],
+  ] satisfies GeneratorFixture[],
 
   music: [
     {
@@ -73,7 +73,7 @@ export const fixtures = {
         "db/migrations/*-create-genres.ts",
       ],
     },
-  ] as GeneratorFixture[],
+  ] satisfies GeneratorFixture[],
 
   finances: [
     {
@@ -114,5 +114,5 @@ export const fixtures = {
         "db/migrations/*-create-budgets.ts",
       ],
     },
-  ] as GeneratorFixture[],
+  ] satisfies GeneratorFixture[],
 };

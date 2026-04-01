@@ -159,18 +159,28 @@ describe("generator fixtures", () => {
     let trackFiles: string[];
     let genreFiles: string[];
 
+    function findMigration(files: string[], pattern: RegExp): string {
+      const migFile = files.find((f) => pattern.test(f));
+      expect(migFile).toBeDefined();
+      return readFile(migFile!);
+    }
+
     beforeAll(() => {
       output = [];
-      const gen = makeModelGen(appDir());
-      artistFiles = gen.run("Artist", ["name:string", "bio:text"]);
-      albumFiles = gen.run("Album", ["title:string", "artist_id:integer", "release_date:date"]);
-      trackFiles = gen.run("Track", [
+      const cwd = appDir();
+      artistFiles = makeModelGen(cwd).run("Artist", ["name:string", "bio:text"]);
+      albumFiles = makeModelGen(cwd).run("Album", [
+        "title:string",
+        "artist_id:integer",
+        "release_date:date",
+      ]);
+      trackFiles = makeModelGen(cwd).run("Track", [
         "title:string",
         "album_id:integer",
         "track_number:integer",
         "duration:integer",
       ]);
-      genreFiles = gen.run("Genre", ["name:string"]);
+      genreFiles = makeModelGen(cwd).run("Genre", ["name:string"]);
     });
 
     it("creates Artist model and migration", () => {
@@ -179,6 +189,10 @@ describe("generator fixtures", () => {
       expect(content).toContain("class Artist extends Base");
       expect(content).toContain('this.attribute("name", "string")');
       expect(content).toContain('this.attribute("bio", "text")');
+
+      const mig = findMigration(artistFiles, /db\/migrations\/.+-create-artists\.ts$/);
+      expect(mig).toContain('t.string("name")');
+      expect(mig).toContain('t.text("bio")');
     });
 
     it("creates Album model and migration", () => {
@@ -187,6 +201,10 @@ describe("generator fixtures", () => {
       expect(content).toContain("class Album extends Base");
       expect(content).toContain('this.attribute("artist_id", "integer")');
       expect(content).toContain('this.attribute("release_date", "date")');
+
+      const mig = findMigration(albumFiles, /db\/migrations\/.+-create-albums\.ts$/);
+      expect(mig).toContain('t.integer("artist_id")');
+      expect(mig).toContain('t.date("release_date")');
     });
 
     it("creates Track model and migration", () => {
@@ -195,12 +213,19 @@ describe("generator fixtures", () => {
       expect(content).toContain("class Track extends Base");
       expect(content).toContain('this.attribute("track_number", "integer")');
       expect(content).toContain('this.attribute("duration", "integer")');
+
+      const mig = findMigration(trackFiles, /db\/migrations\/.+-create-tracks\.ts$/);
+      expect(mig).toContain('t.integer("track_number")');
+      expect(mig).toContain('t.integer("duration")');
     });
 
     it("creates Genre model and migration", () => {
       expect(genreFiles).toContain("src/app/models/genre.ts");
       const content = readFile("src/app/models/genre.ts");
       expect(content).toContain("class Genre extends Base");
+
+      const mig = findMigration(genreFiles, /db\/migrations\/.+-create-genres\.ts$/);
+      expect(mig).toContain('t.string("name")');
     });
   });
 
@@ -210,19 +235,25 @@ describe("generator fixtures", () => {
     let transactionFiles: string[];
     let budgetFiles: string[];
 
+    function findMigration(files: string[], pattern: RegExp): string {
+      const migFile = files.find((f) => pattern.test(f));
+      expect(migFile).toBeDefined();
+      return readFile(migFile!);
+    }
+
     beforeAll(() => {
       output = [];
-      const gen = makeModelGen(appDir());
-      accountFiles = gen.run("Account", ["name:string", "balance:decimal"]);
-      categoryFiles = gen.run("Category", ["name:string", "parent_id:integer"]);
-      transactionFiles = gen.run("Transaction", [
+      const cwd = appDir();
+      accountFiles = makeModelGen(cwd).run("Account", ["name:string", "balance:decimal"]);
+      categoryFiles = makeModelGen(cwd).run("Category", ["name:string", "parent_id:integer"]);
+      transactionFiles = makeModelGen(cwd).run("Transaction", [
         "description:string",
         "amount:decimal",
         "account_id:integer",
         "category_id:integer",
         "date:date",
       ]);
-      budgetFiles = gen.run("Budget", [
+      budgetFiles = makeModelGen(cwd).run("Budget", [
         "category_id:integer",
         "amount:decimal",
         "period_start:date",
@@ -235,6 +266,9 @@ describe("generator fixtures", () => {
       const content = readFile("src/app/models/account.ts");
       expect(content).toContain("class Account extends Base");
       expect(content).toContain('this.attribute("balance", "decimal")');
+
+      const mig = findMigration(accountFiles, /db\/migrations\/.+-create-accounts\.ts$/);
+      expect(mig).toContain('t.decimal("balance")');
     });
 
     it("creates Category model with self-referential parent_id", () => {
@@ -242,6 +276,9 @@ describe("generator fixtures", () => {
       const content = readFile("src/app/models/category.ts");
       expect(content).toContain("class Category extends Base");
       expect(content).toContain('this.attribute("parent_id", "integer")');
+
+      const mig = findMigration(categoryFiles, /db\/migrations\/.+-create-categories\.ts$/);
+      expect(mig).toContain('t.integer("parent_id")');
     });
 
     it("creates Transaction model and migration", () => {
@@ -251,6 +288,11 @@ describe("generator fixtures", () => {
       expect(content).toContain('this.attribute("amount", "decimal")');
       expect(content).toContain('this.attribute("account_id", "integer")');
       expect(content).toContain('this.attribute("category_id", "integer")');
+
+      const mig = findMigration(transactionFiles, /db\/migrations\/.+-create-transactions\.ts$/);
+      expect(mig).toContain('t.decimal("amount")');
+      expect(mig).toContain('t.integer("account_id")');
+      expect(mig).toContain('t.date("date")');
     });
 
     it("creates Budget model and migration", () => {
@@ -259,6 +301,10 @@ describe("generator fixtures", () => {
       expect(content).toContain("class Budget extends Base");
       expect(content).toContain('this.attribute("period_start", "date")');
       expect(content).toContain('this.attribute("period_end", "date")');
+
+      const mig = findMigration(budgetFiles, /db\/migrations\/.+-create-budgets\.ts$/);
+      expect(mig).toContain('t.date("period_start")');
+      expect(mig).toContain('t.date("period_end")');
     });
   });
 });

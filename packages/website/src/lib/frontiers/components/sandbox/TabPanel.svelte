@@ -21,17 +21,27 @@
     onchange?.(id);
   }
 
-  function handleKeydown(e: KeyboardEvent) {
+  function handleTabKeydown(e: KeyboardEvent) {
     const idx = tabs.findIndex((t) => t.id === activeTab);
     if (e.key === "ArrowRight") {
       e.preventDefault();
       const next = tabs[(idx + 1) % tabs.length];
       selectTab(next.id);
+      focusActiveTab(e.currentTarget as HTMLElement);
     } else if (e.key === "ArrowLeft") {
       e.preventDefault();
       const prev = tabs[(idx - 1 + tabs.length) % tabs.length];
       selectTab(prev.id);
+      focusActiveTab(e.currentTarget as HTMLElement);
     }
+  }
+
+  function focusActiveTab(currentButton: HTMLElement) {
+    requestAnimationFrame(() => {
+      const tablist = currentButton.closest('[role="tablist"]');
+      const active = tablist?.querySelector('[aria-selected="true"]') as HTMLElement | null;
+      active?.focus();
+    });
   }
 </script>
 
@@ -40,20 +50,21 @@
     class="flex overflow-x-auto border-b border-border bg-surface-raised"
     role="tablist"
     aria-label="Sandbox panes"
-    tabindex="0"
-    onkeydown={handleKeydown}
   >
     {#each tabs as tab (tab.id)}
       <button
         type="button"
         role="tab"
+        id={`tab-${tab.id}`}
         aria-selected={tab.id === activeTab}
+        aria-controls={`tabpanel-${tab.id}`}
         tabindex={tab.id === activeTab ? 0 : -1}
         class="whitespace-nowrap px-3 py-1.5 text-xs transition-colors md:py-1
                {tab.id === activeTab
                  ? 'border-b-2 border-accent text-text font-medium'
                  : 'text-text-muted hover:text-accent'}"
         onclick={() => selectTab(tab.id)}
+        onkeydown={handleTabKeydown}
         data-testid="tab-button"
         data-tab={tab.id}
       >
@@ -65,7 +76,8 @@
   <div
     class="flex-1 overflow-auto"
     role="tabpanel"
-    aria-labelledby={activeTab}
+    id={`tabpanel-${activeTab}`}
+    aria-labelledby={`tab-${activeTab}`}
     data-testid="tab-content"
   >
     {@render children(activeTab)}

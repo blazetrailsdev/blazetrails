@@ -105,4 +105,46 @@ describe("DatabaseBrowser", () => {
     const names = screen.getAllByTestId("db-table").map((t) => t.getAttribute("data-table"));
     expect(names).toEqual(["accounts", "posts", "zebras"]);
   });
+
+  it("excludes schema_migrations table", async () => {
+    adapter.execRaw("CREATE TABLE users (id INTEGER PRIMARY KEY)");
+    adapter.execRaw("CREATE TABLE schema_migrations (version TEXT PRIMARY KEY)");
+
+    render(DatabaseBrowser, { props: { adapter, vfs } });
+    await waitFor(() => expect(screen.getAllByTestId("db-table").length).toBe(1));
+
+    const names = screen.getAllByTestId("db-table").map((t) => t.getAttribute("data-table"));
+    expect(names).not.toContain("schema_migrations");
+  });
+
+  it("shows data preview when table is expanded", async () => {
+    adapter.execRaw("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)");
+    adapter.execRaw("INSERT INTO users (name) VALUES ('Alice')");
+    adapter.execRaw("INSERT INTO users (name) VALUES ('Bob')");
+
+    render(DatabaseBrowser, { props: { adapter, vfs } });
+    await waitFor(() => expect(screen.getByTestId("db-table")).toBeTruthy());
+
+    const button = screen.getByTestId("db-table").querySelector("button")!;
+    await fireEvent.click(button);
+
+    await waitFor(() => expect(screen.getByTestId("db-preview")).toBeTruthy());
+    expect(screen.getByTestId("db-preview").textContent).toContain("Alice");
+    expect(screen.getByTestId("db-preview").textContent).toContain("Bob");
+  });
+
+  it("navigates tables with keyboard", async () => {
+    adapter.execRaw("CREATE TABLE accounts (id INTEGER PRIMARY KEY)");
+    adapter.execRaw("CREATE TABLE users (id INTEGER PRIMARY KEY)");
+
+    render(DatabaseBrowser, { props: { adapter, vfs } });
+    await waitFor(() => expect(screen.getAllByTestId("db-table").length).toBe(2));
+
+    const browser = screen.getByTestId("database-browser");
+    await fireEvent.keyDown(browser, { key: "ArrowDown" });
+    await fireEvent.keyDown(browser, { key: "ArrowDown" });
+    await fireEvent.keyDown(browser, { key: "Enter" });
+
+    await waitFor(() => expect(screen.getAllByTestId("db-column").length).toBeGreaterThan(0));
+  });
 });

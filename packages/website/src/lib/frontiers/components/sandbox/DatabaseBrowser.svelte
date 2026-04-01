@@ -18,11 +18,13 @@
 
   let tables = $state<TableInfo[]>([]);
   let expandedTable = $state<string | null>(null);
+  let focusedIndex = $state(-1);
+  let previewRows = $state<{ columns: string[]; rows: unknown[][] } | null>(null);
 
   function refresh() {
     const tableNames = adapter
       .getTables()
-      .filter((t) => !t.startsWith("_vfs_"))
+      .filter((t) => !t.startsWith("_vfs_") && t !== "schema_migrations")
       .sort();
     tables = tableNames.map((name) => {
       const columns = adapter.getColumns(name);
@@ -37,6 +39,10 @@
       }
       return { name, rowCount, columns };
     });
+    if (expandedTable && !tableNames.includes(expandedTable)) {
+      expandedTable = null;
+      previewRows = null;
+    }
   }
 
   let unsubscribe: (() => void) | undefined;
@@ -47,13 +53,51 @@
   onDestroy(() => unsubscribe?.());
 
   function toggleTable(name: string) {
-    expandedTable = expandedTable === name ? null : name;
+    if (expandedTable === name) {
+      expandedTable = null;
+      previewRows = null;
+    } else {
+      expandedTable = name;
+      loadPreview(name);
+    }
+  }
+
+  function loadPreview(name: string) {
+    try {
+      const escaped = name.replace(/"/g, '""');
+      const result = adapter.execRaw(`SELECT * FROM "${escaped}" LIMIT 3`);
+      if (result.length > 0) {
+        previewRows = { columns: result[0].columns, rows: result[0].values };
+      } else {
+        previewRows = null;
+      }
+    } catch {
+      previewRows = null;
+    }
+  }
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (tables.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      focusedIndex = Math.min(focusedIndex + 1, tables.length - 1);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      focusedIndex = Math.max(focusedIndex - 1, 0);
+    } else if (e.key === "Enter" && focusedIndex >= 0) {
+      e.preventDefault();
+      toggleTable(tables[focusedIndex].name);
+    }
   }
 </script>
 
 <div
   class="flex h-full flex-col overflow-auto text-xs"
   data-testid="database-browser"
+  tabindex="0"
+  role="tree"
+  aria-label="Database browser"
+  onkeydown={handleKeydown}
 >
   <div class="border-b border-border px-3 py-1.5">
     <span class="text-[10px] font-medium uppercase tracking-wider text-text-muted">Database</span>
@@ -64,14 +108,22 @@
       No tables yet. Run a migration to create tables.
     </div>
   {:else}
-    {#each tables as table (table.name)}
-      <div data-testid="db-table" data-table={table.name}>
+    {#each tables as table, i (table.name)}
+      <div data-testid="db-table" data-table={table.name} role="treeitem"
+           aria-expanded={expandedTable === table.name}
+           aria-selected={focusedIndex === i}>
         <button
           type="button"
           tabindex="-1"
           class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:text-accent md:py-1
-                 {expandedTable === table.name ? 'bg-surface-overlay text-text' : 'text-text-muted'}"
-          onclick={() => toggleTable(table.name)}
+                 {expandedTable === table.name ? 'bg-surface-overlay text-text' : 'text-text-muted'}
+                 {focusedIndex === i ? 'outline outline-1 outline-border-focus' : ''}"
+          onmousedown={(e) => e.preventDefault()}
+          onclick={(e) => {
+            focusedIndex = i;
+            toggleTable(table.name);
+            (e.currentTarget as HTMLElement).closest('[role="tree"]')?.focus();
+          }}
         >
           <span class="w-3 text-[10px] text-text-muted" aria-hidden="true">
             {expandedTable === table.name ? "▼" : "▶"}
@@ -81,7 +133,7 @@
         </button>
 
         {#if expandedTable === table.name}
-          <div class="border-b border-border pb-1">
+          <div class="border-b border-border pb-1" role="group">
             {#each table.columns as col}
               <div
                 class="flex items-center gap-2 px-3 py-0.5"
@@ -98,6 +150,29 @@
                 {/if}
               </div>
             {/each}
+
+            {#if previewRows && previewRows.rows.length > 0}
+              <div class="mx-3 mt-1 overflow-x-auto rounded bg-surface p-1" data-testid="db-preview">
+                <table class="w-full text-[10px]">
+                  <thead>
+                    <tr>
+                      {#each previewRows.columns as col}
+                        <th class="px-1 py-0.5 text-left text-text-muted font-normal">{col}</th>
+                      {/each}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {#each previewRows.rows as row}
+                      <tr>
+                        {#each row as cell}
+                          <td class="px-1 py-0.5 text-text">{cell ?? "NULL"}</td>
+                        {/each}
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
+            {/if}
           </div>
         {/if}
       </div>

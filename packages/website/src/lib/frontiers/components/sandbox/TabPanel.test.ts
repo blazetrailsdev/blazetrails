@@ -55,16 +55,15 @@ describe("TabPanel", () => {
     render(TabPanel, {
       props: { tabs, children: (_tab: string) => {} },
     });
-    const tablist = screen.getByRole("tablist");
-
-    await fireEvent.keyDown(tablist, { key: "ArrowRight" });
     const buttons = screen.getAllByTestId("tab-button");
+
+    await fireEvent.keyDown(buttons[0], { key: "ArrowRight" });
     expect(buttons[1].getAttribute("aria-selected")).toBe("true");
 
-    await fireEvent.keyDown(tablist, { key: "ArrowRight" });
+    await fireEvent.keyDown(buttons[1], { key: "ArrowRight" });
     expect(buttons[2].getAttribute("aria-selected")).toBe("true");
 
-    await fireEvent.keyDown(tablist, { key: "ArrowRight" });
+    await fireEvent.keyDown(buttons[2], { key: "ArrowRight" });
     expect(buttons[0].getAttribute("aria-selected")).toBe("true");
   });
 
@@ -72,9 +71,8 @@ describe("TabPanel", () => {
     render(TabPanel, {
       props: { tabs, children: (_tab: string) => {} },
     });
-    const tablist = screen.getByRole("tablist");
-    await fireEvent.keyDown(tablist, { key: "ArrowLeft" });
     const buttons = screen.getAllByTestId("tab-button");
+    await fireEvent.keyDown(buttons[0], { key: "ArrowLeft" });
     expect(buttons[2].getAttribute("aria-selected")).toBe("true");
   });
 

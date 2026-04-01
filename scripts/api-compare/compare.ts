@@ -274,22 +274,23 @@ function main() {
     // Propagate inherited methods transitively: follows both class `superclass`
     // and interface/module `extends` chains.
     if (tsPkg) {
-      const entityByName = new Map<string, ClassInfo>();
-      for (const cls of Object.values(tsPkg.classes)) {
-        entityByName.set(cls.name, cls);
-      }
-      for (const mod of Object.values(tsPkg.modules)) {
-        if (!entityByName.has(mod.name)) {
-          entityByName.set(mod.name, mod);
-        }
+      // Key by short name → entity for superclass/extends resolution.
+      // Multiple entities can share a name; store all and resolve by context.
+      const entitiesByName = new Map<string, ClassInfo[]>();
+      for (const entity of [...Object.values(tsPkg.classes), ...Object.values(tsPkg.modules)]) {
+        const list = entitiesByName.get(entity.name) || [];
+        list.push(entity);
+        entitiesByName.set(entity.name, list);
       }
 
+      const entityKey = (e: ClassInfo) => `${e.file}:${e.name}`;
       const inheritedCache = new Map<string, Set<string>>();
       const getInherited = (entity: ClassInfo, visited: Set<string>): Set<string> => {
-        const cached = inheritedCache.get(entity.name);
+        const key = entityKey(entity);
+        const cached = inheritedCache.get(key);
         if (cached) return cached;
-        if (visited.has(entity.name)) return new Set();
-        visited.add(entity.name);
+        if (visited.has(key)) return new Set();
+        visited.add(key);
 
         const methods = new Set<string>();
         for (const m of [...entity.instanceMethods, ...entity.classMethods]) {
@@ -298,21 +299,21 @@ function main() {
 
         // Follow superclass (classes)
         if (entity.superclass) {
-          const parent = entityByName.get(entity.superclass);
-          if (parent) {
+          const parents = entitiesByName.get(entity.superclass) || [];
+          for (const parent of parents) {
             for (const m of getInherited(parent, visited)) methods.add(m);
           }
         }
 
         // Follow extends (interfaces/modules)
         for (const ext of entity.extends || []) {
-          const parent = entityByName.get(ext);
-          if (parent) {
+          const parents = entitiesByName.get(ext) || [];
+          for (const parent of parents) {
             for (const m of getInherited(parent, visited)) methods.add(m);
           }
         }
 
-        inheritedCache.set(entity.name, methods);
+        inheritedCache.set(key, methods);
         return methods;
       };
 
@@ -514,21 +515,24 @@ function main() {
         }
       }
 
-      for (const [tsName, { rubyName, rubyModule }] of seen) {
+      for (const [_dedupeKey, { rubyName, rubyModule }] of seen) {
         const tsCandidates = rubyMethodToTs(rubyName)!;
 
-        // Check direct match first
-        if (tsCandidates.some((c) => tsMethods.has(c))) {
+        // Check direct match first — find which candidate matched
+        const directMatch = tsCandidates.find((c) => tsMethods.has(c));
+        if (directMatch) {
           fileMatched++;
           continue;
         }
 
-        // Check include chain — track which file has it
+        // Check include chain — track which candidate and file matched
         let foundViaInclude: string | null = null;
+        let matchedCandidate: string | null = null;
         for (const candidate of tsCandidates) {
           for (const { file, methods } of allIncluderMethodSets) {
             if (methods.has(candidate)) {
               foundViaInclude = file;
+              matchedCandidate = candidate;
               break;
             }
           }
@@ -538,7 +542,7 @@ function main() {
         if (foundViaInclude) {
           fileMatched++;
           moves.push({
-            tsName,
+            tsName: matchedCandidate!,
             rubyName,
             rubyModule,
             expectedFile: expectedTs,
@@ -546,7 +550,7 @@ function main() {
           });
         } else {
           fileMissing++;
-          missingMethods.push({ rubyName, tsName, rubyModule });
+          missingMethods.push({ rubyName, tsName: tsCandidates[0], rubyModule });
         }
       }
 

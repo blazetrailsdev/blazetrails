@@ -180,7 +180,8 @@ export function createTrailCLI(deps: TrailCliDeps) {
       },
 
       "db:rollback": async (_args, opts) => {
-        const step = parseInt(opts.step ?? "1", 10) || 1;
+        const parsed = parseInt(opts.step ?? "1", 10);
+        const step = Number.isNaN(parsed) ? 1 : parsed;
         await withMigrator(async (migrator) => {
           await migrator.rollback(step);
           for (const line of migrator.output) log(line);

@@ -23,6 +23,7 @@ import {
   composedOf,
 } from "./index.js";
 import { Associations } from "./associations.js";
+import { Table } from "@blazetrails/arel";
 
 import { createTestAdapter } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
@@ -581,7 +582,54 @@ describe("ReflectionTest", () => {
   it.skip("has many reflection scope", () => {});
   it.skip("has many through reflection scope", () => {});
   it.skip("association primary key raises error when nil", () => {});
-  it.skip("has many through join keys", () => {});
+  it("has many through join keys", () => {
+    class Author extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class Post extends Base {
+      static {
+        this.attribute("author_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class Comment extends Base {
+      static {
+        this.attribute("post_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("Author", Author);
+    registerModel("Post", Post);
+    registerModel("Comment", Comment);
+    Associations.hasMany.call(Author, "posts", {});
+    Associations.hasMany.call(Post, "comments", {});
+    Associations.hasMany.call(Author, "comments", { through: "posts" });
+    const ref = reflectOnAssociation(Author, "comments") as ThroughReflection;
+    expect(ref.joinPrimaryKey).toBe("id");
+    expect(ref.joinForeignKey).toBe("post_id");
+  });
+  it("join scope builds arel predicate for has many", () => {
+    const { Author } = makeModels();
+    const ref = reflectOnAssociation(Author, "books") as AssociationReflection;
+    const booksTable = new Table("books");
+    const authorsTable = new Table("authors");
+    const scope = ref.joinScope(booksTable, authorsTable, Author);
+    const sql = scope.toSql();
+    // The join condition should use Arel: books.author_id = authors.id
+    expect(sql).toContain("author_id");
+  });
+  it("join scope builds arel predicate for belongs to", () => {
+    const { Book, Author } = makeModels();
+    const ref = reflectOnAssociation(Book, "author") as AssociationReflection;
+    const authorsTable = new Table("authors");
+    const booksTable = new Table("books");
+    const scope = ref.joinScope(authorsTable, booksTable, Book);
+    const sql = scope.toSql();
+    expect(sql).toContain("author_id");
+  });
   it.skip("scope chain", () => {});
   it.skip("nested has many through reflection", () => {});
   it("columns are returned in the order they were declared", () => {

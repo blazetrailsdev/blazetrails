@@ -6,6 +6,7 @@ import {
   camelize,
   foreignKey as deriveForeignKey,
 } from "@blazetrails/activesupport";
+import { Table } from "@blazetrails/arel";
 import { modelRegistry } from "./associations.js";
 
 type MacroType = "belongsTo" | "hasOne" | "hasMany" | "hasAndBelongsToMany" | "composedOf";
@@ -82,6 +83,75 @@ export class AbstractReflection {
 
   protected collectJoinChain(): AbstractReflection[] {
     return [this];
+  }
+
+  /**
+   * Build a base Relation for the associated class.
+   *
+   * Mirrors: ActiveRecord::Reflection::AbstractReflection#build_scope
+   */
+  buildScope(_table?: Table): any {
+    return (this.klass as any).all();
+  }
+
+  /**
+   * Build a Relation with the join condition between two Arel tables.
+   * Uses Arel nodes (table[pk].eq(foreignTable[fk])) for the join predicate.
+   *
+   * Mirrors: ActiveRecord::Reflection::AbstractReflection#join_scope
+   */
+  joinScope(table: Table, foreignTable: Table, foreignKlass: typeof Base): any {
+    let scope = this.klassJoinScope(table);
+
+    // Polymorphic type constraint
+    const typeCol = (this as any).type;
+    if (typeCol) {
+      scope = scope.where({ [typeCol]: foreignKlass.name });
+    }
+
+    // Merge scope chain items
+    for (const chainScope of this.joinScopes(table)) {
+      scope = scope.merge(chainScope);
+    }
+
+    // Primary/foreign key join condition using Arel
+    const primaryKeys = this._arrayWrap((this as any).joinPrimaryKey);
+    const foreignKeys = this._arrayWrap((this as any).joinForeignKey);
+
+    for (let i = 0; i < primaryKeys.length; i++) {
+      scope = scope.where(table.get(primaryKeys[i]).eq(foreignTable.get(foreignKeys[i])));
+    }
+
+    return scope;
+  }
+
+  /**
+   * Returns scopes to apply when joining this association.
+   *
+   * Mirrors: ActiveRecord::Reflection::AbstractReflection#join_scopes
+   */
+  joinScopes(table: Table): any[] {
+    if (this.scope) {
+      const rel = this.buildScope(table);
+      const result = this.scope.call(null, rel);
+      return [result || rel];
+    }
+    return [];
+  }
+
+  /**
+   * Build a scope for the associated class, applying default scopes.
+   *
+   * Mirrors: ActiveRecord::Reflection::AbstractReflection#klass_join_scope
+   */
+  klassJoinScope(_table?: Table): any {
+    return this.buildScope(_table);
+  }
+
+  private _arrayWrap(value: unknown): string[] {
+    if (Array.isArray(value)) return value;
+    if (typeof value === "string") return [value];
+    return [];
   }
 }
 
@@ -255,6 +325,24 @@ export class AssociationReflection extends MacroReflection {
     return this.foreignType;
   }
 
+  /**
+   * The primary key column on the associated table used for joins.
+   *
+   * Mirrors: ActiveRecord::Reflection::AssociationReflection#join_primary_key
+   */
+  get joinPrimaryKey(): string | string[] {
+    return this.associationPrimaryKey;
+  }
+
+  /**
+   * The foreign key column on the owner table used for joins.
+   *
+   * Mirrors: ActiveRecord::Reflection::AssociationReflection#join_foreign_key
+   */
+  get joinForeignKey(): string | string[] {
+    return this.foreignKey;
+  }
+
   protected computeClass(name: string): typeof Base {
     if (this.isPolymorphic()) {
       throw new Error("Polymorphic associations do not support computing the class.");
@@ -316,6 +404,14 @@ export class BelongsToReflection extends AssociationReflection {
   get associationPrimaryKey(): string | string[] {
     if (this.options.primaryKey) return this.options.primaryKey as string | string[];
     return this.klass.primaryKey ?? "id";
+  }
+
+  get joinPrimaryKey(): string | string[] {
+    return this.associationPrimaryKey;
+  }
+
+  get joinForeignKey(): string | string[] {
+    return this.foreignKey;
   }
 }
 
@@ -465,6 +561,19 @@ export class ThroughReflection extends AbstractReflection {
 
   get joinTable(): string | null {
     return this._delegate.joinTable;
+  }
+
+  get joinPrimaryKey(): string | string[] {
+    return this.sourceReflection?.joinPrimaryKey ?? this._delegate.joinPrimaryKey;
+  }
+
+  get joinForeignKey(): string | string[] {
+    return this.sourceReflection?.joinForeignKey ?? this._delegate.joinForeignKey;
+  }
+
+  joinScopes(table: Table): any[] {
+    const sourceScopes = this.sourceReflection?.joinScopes(table) ?? [];
+    return [...sourceScopes, ...super.joinScopes(table)];
   }
 
   protected collectJoinChain(): AbstractReflection[] {

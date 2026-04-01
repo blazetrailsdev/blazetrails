@@ -86,9 +86,16 @@ export {
 export { lockBang, withLock } from "./locking/pessimistic.js";
 export { i18nScope, lookupAncestors } from "./translation.js";
 export {
+  resolveTableName,
+  quoteValue,
+  buildPkWhere,
+  buildPkWhereNode,
   columnNames as schemaColumnNames,
   columnsHash as schemaColumnsHash,
   contentColumns as schemaContentColumns,
+  hasAttributeDefinition,
+  sqlTypeFor,
+  createTable as schemaCreateTable,
 } from "./model-schema.js";
 export {
   store,

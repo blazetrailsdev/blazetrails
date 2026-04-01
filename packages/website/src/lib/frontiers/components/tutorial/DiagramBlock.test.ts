@@ -5,6 +5,10 @@ vi.mock("../../tutorials/diagram-renderer.js", () => ({
   renderDiagram: vi.fn(),
 }));
 
+vi.mock("dompurify", () => ({
+  default: { sanitize: (html: string) => html },
+}));
+
 import DiagramBlock from "./DiagramBlock.svelte";
 import { renderDiagram } from "../../tutorials/diagram-renderer.js";
 
@@ -46,21 +50,19 @@ describe("DiagramBlock", () => {
     expect(screen.getByTestId("diagram-error").textContent).toContain("graph TD; broken");
   });
 
-  it("passes aria-label and role=img from label prop", async () => {
-    mockRenderDiagram.mockResolvedValue({ success: true, svg: "<svg/>" });
+  it("applies role=img and aria-label to SVG container when label is provided", async () => {
+    mockRenderDiagram.mockResolvedValue({ success: true, svg: "<svg>test</svg>" });
     render(DiagramBlock, { props: { source: "graph TD; A-->B", label: "User flow diagram" } });
-    await waitFor(() => expect(screen.getByTestId("diagram-block")).toBeTruthy());
-    expect(screen.getByTestId("diagram-block").getAttribute("aria-label")).toBe(
-      "User flow diagram",
-    );
-    expect(screen.getByTestId("diagram-block").getAttribute("role")).toBe("img");
+    await waitFor(() => expect(screen.getByTestId("diagram-svg")).toBeTruthy());
+    expect(screen.getByTestId("diagram-svg").getAttribute("aria-label")).toBe("User flow diagram");
+    expect(screen.getByTestId("diagram-svg").getAttribute("role")).toBe("img");
   });
 
-  it("omits role when no label", async () => {
-    mockRenderDiagram.mockResolvedValue({ success: true, svg: "<svg/>" });
+  it("omits role on SVG container when no label", async () => {
+    mockRenderDiagram.mockResolvedValue({ success: true, svg: "<svg>test</svg>" });
     render(DiagramBlock, { props: { source: "graph TD; A-->B" } });
-    await waitFor(() => expect(screen.getByTestId("diagram-block")).toBeTruthy());
-    expect(screen.getByTestId("diagram-block").getAttribute("role")).toBeNull();
+    await waitFor(() => expect(screen.getByTestId("diagram-svg")).toBeTruthy());
+    expect(screen.getByTestId("diagram-svg").getAttribute("role")).toBeNull();
   });
 
   it("calls renderDiagram with source", async () => {

@@ -22,7 +22,8 @@ export async function incrementCounter(
   const table = modelClass.arelTable;
   const touchClause = buildTouchClause(options?.touch);
   const quotedAttr = quoteIdentifier(attribute);
-  const binds: unknown[] = [by, id];
+  const idBinds = Array.isArray(id) ? id : [id];
+  const binds: unknown[] = [by, ...idBinds];
   const sql = `UPDATE ${quoteIdentifier(table.name)} SET ${quotedAttr} = COALESCE(${quotedAttr}, 0) + ?${touchClause} WHERE ${buildPkPlaceholder(modelClass)}`;
   return modelClass.adapter.executeMutation(sql, binds);
 }

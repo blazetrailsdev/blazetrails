@@ -1149,8 +1149,14 @@ export class ToSql implements NodeVisitor<SQLString> {
       const hasCustomToString =
         proto === Object.prototype && value.toString !== Object.prototype.toString;
       if ((proto === Object.prototype || proto === null) && !hasCustomToString) {
-        const json = JSON.stringify(value).replace(/'/g, "''");
-        return `'${json}'`;
+        try {
+          const json = JSON.stringify(value);
+          if (json !== undefined) {
+            return `'${json.replace(/'/g, "''")}'`;
+          }
+        } catch {
+          // circular references, BigInt, etc. — fall through to String()
+        }
       }
     }
     const escaped = String(value).replace(/'/g, "''");

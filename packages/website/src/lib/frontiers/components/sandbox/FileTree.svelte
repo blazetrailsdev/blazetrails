@@ -276,7 +276,7 @@
 
   function commitCreate() {
     const name = createValue.trim();
-    if (!creating || !name || name.includes("/")) {
+    if (!creating || !name || name.includes("/") || name === "." || name === ".." || name === ".gitkeep") {
       creating = null;
       return;
     }

@@ -21,7 +21,7 @@ import { registerBinaryInversions } from "./nodes/binary.js";
 import { Equality } from "./nodes/equality.js";
 import { In } from "./nodes/in.js";
 
-registerNodeDeps({ Not, Grouping, Or, And, ToSql: ToSql as never });
+registerNodeDeps({ Not, Grouping, Or, And, ToSql });
 registerBinaryInversions({ Equality, In });
 
 /**

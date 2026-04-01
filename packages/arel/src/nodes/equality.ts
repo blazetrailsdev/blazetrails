@@ -1,6 +1,5 @@
-import { Binary, NotEqual } from "./binary.js";
+import { Binary, NotEqual, fetchAttributeFromBinary } from "./binary.js";
 import type { Node } from "./node.js";
-import type { Attribute } from "../attributes/attribute.js";
 
 export class Equality extends Binary {
   isEquality(): boolean {
@@ -12,14 +11,6 @@ export class Equality extends Binary {
   }
 
   fetchAttribute(block: (attr: Node) => unknown): unknown {
-    if (isAttribute(this.left)) return block(this.left as Node);
-    if (isAttribute(this.right)) return block(this.right as Node);
-    return undefined;
+    return fetchAttributeFromBinary(this.left, this.right, block);
   }
-}
-
-function isAttribute(node: unknown): node is Attribute {
-  if (!node || typeof node !== "object") return false;
-  const obj = node as Record<string, unknown>;
-  return "relation" in obj && "name" in obj && typeof obj.name === "string";
 }

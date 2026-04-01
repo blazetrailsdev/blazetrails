@@ -91,7 +91,8 @@ export function registerNodeDeps(deps: {
   Grouping: new (expr: Node) => Node;
   Or: new (children: Node[]) => Node;
   And: new (children: Node[]) => Node;
-  ToSql: new () => { compile(node: Node): string };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ToSql: new (...args: any[]) => { compile(node: Node): string };
 }): void {
   _registry.Not = deps.Not;
   _registry.Grouping = deps.Grouping;

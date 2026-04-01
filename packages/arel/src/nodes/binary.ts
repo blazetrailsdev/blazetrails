@@ -14,7 +14,7 @@ function isAttribute(node: unknown): boolean {
   return "relation" in obj && "name" in obj && typeof obj.name === "string";
 }
 
-function fetchAttributeFromBinary(
+export function fetchAttributeFromBinary(
   left: NodeOrValue,
   right: NodeOrValue,
   block: (attr: Node) => unknown,

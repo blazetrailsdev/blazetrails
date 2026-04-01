@@ -4,9 +4,6 @@
  * Mirrors: ActiveRecord::ConnectionAdapters::MySQL::Column
  */
 
-// eslint-disable-next-line @typescript-eslint/no-namespace
-export namespace MySQL {}
-
 export class Column {
   readonly name: string;
   readonly sqlType: string | null;

@@ -8,9 +8,6 @@
  * type (Mysql2::Result) rather than the generic ActiveRecord::Result.
  */
 
-// eslint-disable-next-line @typescript-eslint/no-namespace
-export namespace Mysql2 {}
-
 export interface DatabaseStatements {
   execQuery(
     sql: string,

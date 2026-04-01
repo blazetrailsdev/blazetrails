@@ -8,9 +8,6 @@
  * differently from mysql2.
  */
 
-// eslint-disable-next-line @typescript-eslint/no-namespace
-export namespace Trilogy {}
-
 export interface DatabaseStatements {
   execQuery(
     sql: string,

@@ -398,6 +398,7 @@
           if (e.key === "Escape") creating = null;
         }}
         placeholder={creating.isDir ? "folder name" : "filename"}
+        aria-label={creating.isDir ? "New folder name" : "New file name"}
         data-testid="create-input"
         autofocus
       />
@@ -488,15 +489,17 @@
       style="padding-left: {depth * 16 + 12}px"
       onclick={() => {
         focusedPath = node.path;
-        if (node.isDir) toggleCollapse(node.path);
-        else selectFile(node.path);
+        if (node.isDir && node.children.length > 0) toggleCollapse(node.path);
+        else if (!node.isDir) selectFile(node.path);
       }}
       oncontextmenu={(e) => showContextMenu(e, node.path, node.isDir)}
     >
-      {#if node.isDir}
+      {#if node.isDir && node.children.length > 0}
         <span class="w-3 text-[10px] text-text-muted" aria-hidden="true">
           {collapsed.has(node.path) ? "▶" : "▼"}
         </span>
+      {:else if node.isDir}
+        <span class="w-3 text-[10px]" aria-hidden="true"></span>
       {:else}
         <span class="w-3 text-[10px]" aria-hidden="true">{fileIcon(node.name)}</span>
       {/if}
@@ -512,6 +515,7 @@
           }}
           onblur={commitRename}
           data-testid="rename-input"
+          aria-label={node.isDir ? "Rename folder" : "Rename file"}
           autofocus
         />
       {:else}
@@ -532,6 +536,7 @@
                 if (e.key === "Escape") creating = null;
               }}
               placeholder={creating.isDir ? "folder name" : "filename"}
+        aria-label={creating.isDir ? "New folder name" : "New file name"}
               data-testid="create-input"
               autofocus
             />

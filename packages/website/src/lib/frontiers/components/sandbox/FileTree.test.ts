@@ -6,7 +6,6 @@ import { SqlJsAdapter } from "../../sql-js-adapter.js";
 import { VirtualFS } from "../../virtual-fs.js";
 
 let SQL: SqlJsStatic;
-let adapter: SqlJsAdapter;
 let vfs: VirtualFS;
 
 beforeAll(async () => {
@@ -14,8 +13,7 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
-  adapter = new SqlJsAdapter(new SQL.Database());
-  vfs = new VirtualFS(adapter);
+  vfs = new VirtualFS(new SqlJsAdapter(new SQL.Database()));
 });
 
 afterEach(() => cleanup());

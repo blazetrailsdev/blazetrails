@@ -171,6 +171,9 @@ function isHunkApplied(lines: string[], hunk: DiffHunk): boolean {
 export function runCheck(vfs: VirtualFS, adapter: SqlJsAdapter, check: CheckSpec): CheckResult {
   switch (check.type) {
     case "table_exists": {
+      if (!check.target) {
+        return { check, passed: false, error: "No target table name provided" };
+      }
       const tables = adapter.getTables();
       const passed = tables.includes(check.target);
       return {
@@ -181,6 +184,9 @@ export function runCheck(vfs: VirtualFS, adapter: SqlJsAdapter, check: CheckSpec
     }
 
     case "file_exists": {
+      if (!check.target) {
+        return { check, passed: false, error: "No target file path provided" };
+      }
       const passed = vfs.exists(check.target);
       return {
         check,
@@ -190,6 +196,9 @@ export function runCheck(vfs: VirtualFS, adapter: SqlJsAdapter, check: CheckSpec
     }
 
     case "file_contains": {
+      if (!check.target) {
+        return { check, passed: false, error: "No target file path provided" };
+      }
       if (check.value === undefined) {
         return { check, passed: false, error: "No expected content provided" };
       }
@@ -269,16 +278,19 @@ export function computeHighlightRanges(fileContent: string, diff: FileDiff): Hig
   const ranges: HighlightRange[] = [];
 
   for (const hunk of diff.hunks) {
+    if (hunk.insertLines.length === 0) continue;
+
     const anchorIndex = lines.findIndex((line) => line.includes(hunk.anchor));
-    if (anchorIndex === -1) continue;
 
     if (hunk.position === "after") {
+      if (anchorIndex === -1) continue;
       const startLine = anchorIndex + 2; // 1-based, after anchor
       ranges.push({
         startLine,
         endLine: startLine + hunk.insertLines.length - 1,
       });
     } else if (hunk.position === "before") {
+      if (anchorIndex === -1) continue;
       const anchorLine = anchorIndex + 1; // 1-based, the anchor shifts down
       const rawStart = anchorLine - hunk.insertLines.length;
       const rawEnd = anchorLine - 1;
@@ -287,12 +299,22 @@ export function computeHighlightRanges(fileContent: string, diff: FileDiff): Hig
         ranges.push({ startLine: clampedStart, endLine: rawEnd });
       }
     } else {
-      // replace — highlight the replacement lines
-      const startLine = anchorIndex + 1; // 1-based
-      ranges.push({
-        startLine,
-        endLine: startLine + hunk.insertLines.length - 1,
-      });
+      // replace — find inserted lines by anchor or by sequence search
+      if (anchorIndex !== -1) {
+        const startLine = anchorIndex + 1; // 1-based
+        ranges.push({
+          startLine,
+          endLine: startLine + hunk.insertLines.length - 1,
+        });
+      } else {
+        // Anchor was removed by replacement — find the inserted sequence
+        for (let i = 0; i <= lines.length - hunk.insertLines.length; i++) {
+          if (hunk.insertLines.every((expected, j) => linesMatch(lines[i + j], expected))) {
+            ranges.push({ startLine: i + 1, endLine: i + hunk.insertLines.length });
+            break;
+          }
+        }
+      }
     }
   }
 

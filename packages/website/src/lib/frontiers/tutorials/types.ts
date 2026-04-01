@@ -27,8 +27,8 @@ export type CheckType =
 
 export interface CheckSpec {
   type: CheckType;
-  /** Table name for table_exists, file path for file_*/
-  target: string;
+  /** Table name for table_exists, file path for file_exists/file_contains */
+  target?: string;
   /** Expected content substring for file_contains, SQL for query_returns, HTTP method for route_responds */
   value?: string;
   /** Expected result for query_returns (row count or specific values) */

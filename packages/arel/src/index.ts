@@ -17,8 +17,12 @@ import { Grouping } from "./nodes/grouping.js";
 import { Or } from "./nodes/or.js";
 import { And } from "./nodes/and.js";
 import { ToSql } from "./visitors/to-sql.js";
+import { registerBinaryInversions } from "./nodes/binary.js";
+import { Equality } from "./nodes/equality.js";
+import { In } from "./nodes/in.js";
 
 registerNodeDeps({ Not, Grouping, Or, And, ToSql: ToSql as never });
+registerBinaryInversions({ Equality, In });
 
 /**
  * Arel.sql() — escape hatch for raw SQL.

@@ -273,7 +273,10 @@ export class ToSql implements NodeVisitor<SQLString> {
       this.collector.append(")");
     }
 
-    if (node.values) {
+    if (node.select) {
+      this.collector.append(" ");
+      this.visit(node.select);
+    } else if (node.values) {
       this.collector.append(" ");
       this.visit(node.values);
     }
@@ -539,9 +542,9 @@ export class ToSql implements NodeVisitor<SQLString> {
   }
 
   private visitOr(node: Nodes.Or): SQLString {
-    this.visit(node.left);
+    this.visit(node.left!);
     this.collector.append(" OR ");
-    this.visit(node.right);
+    this.visit(node.right!);
     return this.collector;
   }
 

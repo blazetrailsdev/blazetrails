@@ -2,6 +2,13 @@ import { Node, NodeVisitor } from "./node.js";
 import { SqlLiteral } from "./sql-literal.js";
 import { Cte } from "./cte.js";
 
+interface TypeCastable {
+  name?: string;
+  typeCastForDatabase?: (attrName: string, value: unknown) => unknown;
+  typeForAttribute?: (name: string) => unknown;
+  isAbleToTypeCast?: () => boolean;
+}
+
 export class TableAlias extends Node {
   readonly relation: Node;
   readonly name: string;
@@ -17,45 +24,23 @@ export class TableAlias extends Node {
   }
 
   get tableName(): string {
-    if (this.relation && typeof (this.relation as unknown as { name: string }).name === "string") {
-      return (this.relation as unknown as { name: string }).name;
-    }
-    return this.name;
+    const rel = this.relation as TypeCastable;
+    return typeof rel?.name === "string" ? rel.name : this.name;
   }
 
   typeCastForDatabase(attrName: string, value: unknown): unknown {
-    if (
-      typeof (this.relation as unknown as { typeCastForDatabase: (...args: unknown[]) => unknown })
-        .typeCastForDatabase === "function"
-    ) {
-      return (
-        this.relation as unknown as { typeCastForDatabase: (a: string, v: unknown) => unknown }
-      ).typeCastForDatabase(attrName, value);
-    }
-    return value;
+    const rel = this.relation as TypeCastable;
+    return rel?.typeCastForDatabase ? rel.typeCastForDatabase(attrName, value) : value;
   }
 
   typeForAttribute(name: string): unknown {
-    if (
-      typeof (this.relation as unknown as { typeForAttribute: (n: string) => unknown })
-        .typeForAttribute === "function"
-    ) {
-      return (
-        this.relation as unknown as { typeForAttribute: (n: string) => unknown }
-      ).typeForAttribute(name);
-    }
-    return undefined;
+    const rel = this.relation as TypeCastable;
+    return rel?.typeForAttribute ? rel.typeForAttribute(name) : undefined;
   }
 
   isAbleToTypeCast(): boolean {
-    if (
-      this.relation &&
-      typeof (this.relation as unknown as { isAbleToTypeCast: () => boolean }).isAbleToTypeCast ===
-        "function"
-    ) {
-      return (this.relation as unknown as { isAbleToTypeCast: () => boolean }).isAbleToTypeCast();
-    }
-    return false;
+    const rel = this.relation as TypeCastable;
+    return typeof rel?.isAbleToTypeCast === "function" ? rel.isAbleToTypeCast() : false;
   }
 
   toCte(): Cte {

@@ -11,7 +11,7 @@ export abstract class Node {
   }
 
   or(right: Node): Node {
-    return new _registry.Grouping!(new _registry.Or!(this, right));
+    return new _registry.Grouping!(new _registry.Or!([this, right]));
   }
 
   and(right: Node): Node {
@@ -75,7 +75,7 @@ const _registry: Record<string, (new (...args: any[]) => any) | undefined> = {};
 export function registerNodeDeps(deps: {
   Not: new (expr: Node) => Node;
   Grouping: new (expr: Node) => Node;
-  Or: new (left: Node, right: Node) => Node;
+  Or: new (children: Node[]) => Node;
   And: new (children: Node[]) => Node;
   ToSql: new () => { compile(node: Node): string };
 }): void {

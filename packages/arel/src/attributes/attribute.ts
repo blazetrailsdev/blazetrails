@@ -48,7 +48,7 @@ function buildQuoted(value: unknown): Node {
  * Combines multiple nodes with OR, wrapped in a Grouping.
  */
 function groupedAny(nodes: Node[]): Grouping {
-  const combined = nodes.reduce((left, right) => new Or(left, right));
+  const combined = nodes.reduce((left, right) => new Or([left, right]));
   return new Grouping(combined);
 }
 
@@ -81,41 +81,20 @@ export class Attribute extends Node {
   }
 
   get typeCaster(): unknown {
-    if (
-      this.relation &&
-      typeof (this.relation as unknown as { typeForAttribute: (n: string) => unknown })
-        .typeForAttribute === "function"
-    ) {
-      return (
-        this.relation as unknown as { typeForAttribute: (n: string) => unknown }
-      ).typeForAttribute(this.name);
-    }
-    return undefined;
+    const rel = this.relation as unknown as { typeForAttribute?: (n: string) => unknown };
+    return rel?.typeForAttribute ? rel.typeForAttribute(this.name) : undefined;
   }
 
   typeCastForDatabase(value: unknown): unknown {
-    if (
-      this.relation &&
-      typeof (
-        this.relation as unknown as { typeCastForDatabase: (n: string, v: unknown) => unknown }
-      ).typeCastForDatabase === "function"
-    ) {
-      return (
-        this.relation as unknown as { typeCastForDatabase: (n: string, v: unknown) => unknown }
-      ).typeCastForDatabase(this.name, value);
-    }
-    return value;
+    const rel = this.relation as unknown as {
+      typeCastForDatabase?: (n: string, v: unknown) => unknown;
+    };
+    return rel?.typeCastForDatabase ? rel.typeCastForDatabase(this.name, value) : value;
   }
 
   isAbleToTypeCast(): boolean {
-    if (
-      this.relation &&
-      typeof (this.relation as unknown as { isAbleToTypeCast: () => boolean }).isAbleToTypeCast ===
-        "function"
-    ) {
-      return (this.relation as unknown as { isAbleToTypeCast: () => boolean }).isAbleToTypeCast();
-    }
-    return false;
+    const rel = this.relation as unknown as { isAbleToTypeCast?: () => boolean };
+    return typeof rel?.isAbleToTypeCast === "function" ? rel.isAbleToTypeCast() : false;
   }
 
   private castValue(value: unknown): unknown {

@@ -8,6 +8,22 @@ import { Cte } from "./cte.js";
 
 export type NodeOrValue = Node | string | number | boolean | bigint | Date | null | undefined;
 
+function isAttribute(node: unknown): boolean {
+  if (!node || typeof node !== "object") return false;
+  const obj = node as Record<string, unknown>;
+  return "relation" in obj && "name" in obj && typeof obj.name === "string";
+}
+
+function fetchAttributeFromBinary(
+  left: NodeOrValue,
+  right: NodeOrValue,
+  block: (attr: Node) => unknown,
+): unknown {
+  if (isAttribute(left)) return block(left as Node);
+  if (isAttribute(right)) return block(right as Node);
+  return undefined;
+}
+
 export class Binary extends Node {
   left: NodeOrValue;
   right: NodeOrValue;
@@ -27,7 +43,7 @@ export class Binary extends Node {
   }
 
   or(other: Node): Grouping {
-    return new Grouping(new Or(this, other));
+    return new Grouping(new Or([this, other]));
   }
 
   not(): Not {
@@ -49,26 +65,99 @@ export class As extends Binary {
   }
 }
 
-export class Between extends Binary {}
-export class NotEqual extends Binary {}
-export class GreaterThan extends Binary {}
-export class GreaterThanOrEqual extends Binary {}
-export class LessThan extends Binary {}
-export class LessThanOrEqual extends Binary {}
+export class Between extends Binary {
+  fetchAttribute(block: (attr: Node) => unknown): unknown {
+    return fetchAttributeFromBinary(this.left, this.right, block);
+  }
+}
+
+export class NotEqual extends Binary {
+  invert(): Node {
+    return new (_invertRegistry.Equality ?? NotEqual)(this.left, this.right);
+  }
+
+  fetchAttribute(block: (attr: Node) => unknown): unknown {
+    return fetchAttributeFromBinary(this.left, this.right, block);
+  }
+}
+
+export class GreaterThan extends Binary {
+  invert(): Node {
+    return new LessThanOrEqual(this.left, this.right);
+  }
+
+  fetchAttribute(block: (attr: Node) => unknown): unknown {
+    return fetchAttributeFromBinary(this.left, this.right, block);
+  }
+}
+
+export class GreaterThanOrEqual extends Binary {
+  invert(): Node {
+    return new LessThan(this.left, this.right);
+  }
+
+  fetchAttribute(block: (attr: Node) => unknown): unknown {
+    return fetchAttributeFromBinary(this.left, this.right, block);
+  }
+}
+
+export class LessThan extends Binary {
+  invert(): Node {
+    return new GreaterThanOrEqual(this.left, this.right);
+  }
+
+  fetchAttribute(block: (attr: Node) => unknown): unknown {
+    return fetchAttributeFromBinary(this.left, this.right, block);
+  }
+}
+
+export class LessThanOrEqual extends Binary {
+  invert(): Node {
+    return new GreaterThan(this.left, this.right);
+  }
+
+  fetchAttribute(block: (attr: Node) => unknown): unknown {
+    return fetchAttributeFromBinary(this.left, this.right, block);
+  }
+}
 
 export class IsDistinctFrom extends Binary {
+  invert(): Node {
+    return new IsNotDistinctFrom(this.left, this.right);
+  }
+
+  fetchAttribute(block: (attr: Node) => unknown): unknown {
+    return fetchAttributeFromBinary(this.left, this.right, block);
+  }
+
   accept<T>(visitor: NodeVisitor<T>): T {
     return visitor.visit(this);
   }
 }
 
 export class IsNotDistinctFrom extends Binary {
+  invert(): Node {
+    return new IsDistinctFrom(this.left, this.right);
+  }
+
+  fetchAttribute(block: (attr: Node) => unknown): unknown {
+    return fetchAttributeFromBinary(this.left, this.right, block);
+  }
+
   accept<T>(visitor: NodeVisitor<T>): T {
     return visitor.visit(this);
   }
 }
 
-export class NotIn extends Binary {}
+export class NotIn extends Binary {
+  invert(): Node {
+    return new (_invertRegistry.In ?? NotIn)(this.left, this.right);
+  }
+
+  fetchAttribute(block: (attr: Node) => unknown): unknown {
+    return fetchAttributeFromBinary(this.left, this.right, block);
+  }
+}
 
 /** Join base class — Rails defines via const_set in binary.rb */
 export abstract class Join extends Node {
@@ -132,6 +221,20 @@ export class Intersect extends Node {
   accept<T>(visitor: NodeVisitor<T>): T {
     return visitor.visit(this);
   }
+}
+
+// Registry for breaking circular deps (Equality→Binary, In→Binary)
+const _invertRegistry: {
+  Equality?: new (left: NodeOrValue, right: NodeOrValue) => Binary;
+  In?: new (left: NodeOrValue, right: NodeOrValue) => Binary;
+} = {};
+
+export function registerBinaryInversions(deps: {
+  Equality: new (left: NodeOrValue, right: NodeOrValue) => Binary;
+  In: new (left: NodeOrValue, right: NodeOrValue) => Binary;
+}): void {
+  _invertRegistry.Equality = deps.Equality;
+  _invertRegistry.In = deps.In;
 }
 
 export interface FetchAttribute {

@@ -14,39 +14,18 @@ export class BindParam extends Node {
   }
 
   valueBeforeTypeCast(): unknown {
-    if (
-      this.value &&
-      typeof this.value === "object" &&
-      "valueBeforeTypeCast" in this.value &&
-      typeof (this.value as Record<string, unknown>).valueBeforeTypeCast === "function"
-    ) {
-      return (this.value as { valueBeforeTypeCast(): unknown }).valueBeforeTypeCast();
-    }
-    return this.value;
+    const v = this.value as { valueBeforeTypeCast?: () => unknown } | null | undefined;
+    return typeof v?.valueBeforeTypeCast === "function" ? v.valueBeforeTypeCast() : this.value;
   }
 
   isInfinite(): number | null {
-    if (
-      this.value &&
-      typeof this.value === "object" &&
-      "isInfinite" in this.value &&
-      typeof (this.value as Record<string, unknown>).isInfinite === "function"
-    ) {
-      return (this.value as { isInfinite(): number | null }).isInfinite();
-    }
-    return null;
+    const v = this.value as { isInfinite?: () => number | null } | null | undefined;
+    return typeof v?.isInfinite === "function" ? v.isInfinite() : null;
   }
 
   isUnboundable(): boolean {
-    if (
-      this.value &&
-      typeof this.value === "object" &&
-      "isUnboundable" in this.value &&
-      typeof (this.value as Record<string, unknown>).isUnboundable === "function"
-    ) {
-      return (this.value as { isUnboundable(): boolean }).isUnboundable();
-    }
-    return false;
+    const v = this.value as { isUnboundable?: () => boolean } | null | undefined;
+    return typeof v?.isUnboundable === "function" ? v.isUnboundable() : false;
   }
 
   accept<T>(visitor: NodeVisitor<T>): T {

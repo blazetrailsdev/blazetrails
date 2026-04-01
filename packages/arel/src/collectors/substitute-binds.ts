@@ -1,3 +1,15 @@
+function extractValue(bind: unknown): unknown {
+  if (
+    bind &&
+    typeof bind === "object" &&
+    "valueForDatabase" in bind &&
+    typeof (bind as Record<string, unknown>).valueForDatabase === "function"
+  ) {
+    return (bind as { valueForDatabase(): unknown }).valueForDatabase();
+  }
+  return bind;
+}
+
 export class SubstituteBinds {
   private quoter: { quote(value: unknown): string };
   private delegate: { append(str: string): unknown; value: string };
@@ -18,18 +30,15 @@ export class SubstituteBinds {
   }
 
   addBind(bind: unknown): this {
-    const value =
-      bind &&
-      typeof bind === "object" &&
-      "valueForDatabase" in bind &&
-      typeof (bind as Record<string, unknown>).valueForDatabase === "function"
-        ? (bind as { valueForDatabase(): unknown }).valueForDatabase()
-        : bind;
-    return this.append(this.quoter.quote(value));
+    return this.append(this.quoter.quote(extractValue(bind)));
   }
 
-  addBinds(binds: unknown[], _procForBinds?: ((v: unknown) => unknown) | null): this {
-    this.append(binds.map((bind) => this.quoter.quote(bind)).join(", "));
+  addBinds(binds: unknown[], procForBinds?: ((v: unknown) => unknown) | null): this {
+    const quoted = binds.map((bind) => {
+      const value = procForBinds ? procForBinds(bind) : bind;
+      return this.quoter.quote(extractValue(value));
+    });
+    this.append(quoted.join(", "));
     return this;
   }
 

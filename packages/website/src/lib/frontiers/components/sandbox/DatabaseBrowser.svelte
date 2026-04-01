@@ -97,6 +97,7 @@
   tabindex="0"
   role="tree"
   aria-label="Database browser"
+  aria-activedescendant={focusedIndex >= 0 && tables[focusedIndex] ? `db-item-${encodeURIComponent(tables[focusedIndex].name)}` : undefined}
   onkeydown={handleKeydown}
 >
   <div class="border-b border-border px-3 py-1.5">
@@ -109,7 +110,8 @@
     </div>
   {:else}
     {#each tables as table, i (table.name)}
-      <div data-testid="db-table" data-table={table.name} role="treeitem"
+      <div id={`db-item-${encodeURIComponent(table.name)}`}
+           data-testid="db-table" data-table={table.name} role="treeitem"
            aria-expanded={expandedTable === table.name}
            aria-selected={focusedIndex === i}>
         <button

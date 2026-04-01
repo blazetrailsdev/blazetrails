@@ -8,13 +8,7 @@
     children: Snippet<[string]>;
   }
 
-  let { tabs, activeTab = $bindable(""), onchange, children }: Props = $props();
-
-  $effect(() => {
-    if (!activeTab && tabs.length > 0) {
-      activeTab = tabs[0].id;
-    }
-  });
+  let { tabs, activeTab = $bindable(tabs[0]?.id ?? ""), onchange, children }: Props = $props();
 
   function selectTab(id: string) {
     activeTab = id;
@@ -74,13 +68,18 @@
     {/each}
   </div>
 
-  <div
-    class="flex-1 overflow-auto"
-    role="tabpanel"
-    id={`tabpanel-${activeTab}`}
-    aria-labelledby={`tab-${activeTab}`}
-    data-testid="tab-content"
-  >
-    {@render children(activeTab)}
-  </div>
+  {#each tabs as tab (tab.id)}
+    <div
+      class="flex-1 overflow-auto {tab.id === activeTab ? '' : 'hidden'}"
+      role="tabpanel"
+      id={`tabpanel-${tab.id}`}
+      aria-labelledby={`tab-${tab.id}`}
+      data-testid={tab.id === activeTab ? "tab-content" : undefined}
+      hidden={tab.id !== activeTab}
+    >
+      {#if tab.id === activeTab}
+        {@render children(activeTab)}
+      {/if}
+    </div>
+  {/each}
 </div>

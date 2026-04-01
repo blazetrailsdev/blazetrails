@@ -247,6 +247,13 @@
         else if (focusedPath?.startsWith(prefix)) {
           focusedPath = newPath + "/" + focusedPath.slice(prefix.length);
         }
+        const newCollapsed = new Set<string>();
+        for (const p of collapsed) {
+          if (p === renaming) newCollapsed.add(newPath);
+          else if (p.startsWith(prefix)) newCollapsed.add(newPath + "/" + p.slice(prefix.length));
+          else newCollapsed.add(p);
+        }
+        collapsed = newCollapsed;
       } else {
         if (vfs.list().some((f) => f.path.startsWith(newPath + "/"))) {
           renaming = null;
@@ -545,10 +552,12 @@
              {node.path === selectedPath ? 'bg-surface-overlay text-text' : 'text-text-muted'}
              {node.path === focusedPath ? 'outline outline-1 outline-border-focus' : ''}"
       style="padding-left: {depth * 16 + 12}px"
-      onclick={() => {
+      onmousedown={(e) => e.preventDefault()}
+      onclick={(e) => {
         focusedPath = node.path;
         if (node.isDir && node.children.length > 0) toggleCollapse(node.path);
         else if (!node.isDir) selectFile(node.path);
+        (e.currentTarget as HTMLElement).closest('[role="tree"]')?.focus();
       }}
       oncontextmenu={(e) => showContextMenu(e, node.path, node.isDir)}
     >

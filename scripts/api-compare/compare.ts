@@ -19,7 +19,18 @@ import * as path from "path";
 import type { ApiManifest, ClassInfo, MethodInfo } from "./types.js";
 
 const SCRIPT_DIR = __dirname;
+const ROOT_DIR = path.resolve(SCRIPT_DIR, "../..");
 const OUTPUT_DIR = path.join(SCRIPT_DIR, "output");
+
+const PACKAGE_DIR_OVERRIDES: Record<string, string> = {
+  actiondispatch: "actionpack",
+  actioncontroller: "actionpack",
+};
+
+const PACKAGE_SRC_SUBDIR: Record<string, string> = {
+  actiondispatch: "actiondispatch",
+  actioncontroller: "actioncontroller",
+};
 
 const DETAIL_PACKAGES = new Set([
   "arel",
@@ -190,6 +201,8 @@ interface PackageResult {
   matched: number;
   missing: number;
   percent: number;
+  totalFiles: number;
+  filesExist: number;
   files: FileResult[];
 }
 
@@ -396,15 +409,24 @@ function main() {
       byFile.set(file, list);
     }
 
+    // Resolve package src directory for file existence checks
+    const dirName = PACKAGE_DIR_OVERRIDES[pkg] ?? pkg;
+    const subDir = PACKAGE_SRC_SUBDIR[pkg];
+    const pkgSrcDir = subDir
+      ? path.join(ROOT_DIR, "packages", dirName, "src", subDir)
+      : path.join(ROOT_DIR, "packages", dirName, "src");
+
     // Compare methods per file
     let totalMatched = 0;
     let totalMissing = 0;
+    let totalFiles = 0;
+    let filesExist = 0;
     const fileResults: FileResult[] = [];
 
     for (const [rubyFile, items] of [...byFile.entries()].sort(([a], [b]) => a.localeCompare(b))) {
       const expectedTs = rubyFileToTs(rubyFile);
       const tsMethods = tsMethodsByFile.get(expectedTs) || new Set<string>();
-      const tsFileExists = tsMethodsByFile.has(expectedTs);
+      const tsFileExists = fs.existsSync(path.join(pkgSrcDir, expectedTs));
       const missingMethods: MethodResult[] = [];
       let fileMatched = 0;
       let fileMissing = 0;
@@ -468,6 +490,8 @@ function main() {
 
       totalMatched += fileMatched;
       totalMissing += fileMissing;
+      totalFiles++;
+      if (tsFileExists) filesExist++;
     }
 
     const totalMethods = totalMatched + totalMissing;
@@ -479,6 +503,8 @@ function main() {
       matched: totalMatched,
       missing: totalMissing,
       percent: pct,
+      totalFiles,
+      filesExist,
       files: fileResults,
     });
   }
@@ -505,14 +531,18 @@ function printReport(
 ) {
   let grandTotal = 0;
   let grandMatched = 0;
+  let grandFiles = 0;
+  let grandFilesExist = 0;
 
   for (const pkg of results) {
     grandTotal += pkg.totalMethods;
     grandMatched += pkg.matched;
+    grandFiles += pkg.totalFiles;
+    grandFilesExist += pkg.filesExist;
 
     console.log(`\n${"=".repeat(100)}`);
     console.log(
-      `  ${pkg.package}  —  ${pkg.matched}/${pkg.totalMethods} methods (${pkg.percent}%)  |  ${pkg.missing} missing`,
+      `  ${pkg.package}  —  ${pkg.matched}/${pkg.totalMethods} methods (${pkg.percent}%)  |  files: ${pkg.filesExist}/${pkg.totalFiles}`,
     );
     console.log(`${"=".repeat(100)}`);
 
@@ -548,7 +578,7 @@ function printReport(
   const grandMissing = grandTotal - grandMatched;
   console.log(`\n${"=".repeat(100)}`);
   console.log(
-    `  Overall: ${grandMatched}/${grandTotal} methods (${grandPct}%)  |  ${grandMissing} missing`,
+    `  Overall: ${grandMatched}/${grandTotal} methods (${grandPct}%)  |  files: ${grandFilesExist}/${grandFiles}`,
   );
   console.log(`${"=".repeat(100)}\n`);
 }

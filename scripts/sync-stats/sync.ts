@@ -776,8 +776,8 @@ function parseApiCompareFromLogs(logs: string) {
     }
   >();
 
-  // Match new method-centric format: "  arel  —  335/442 methods (75.8%)  |  107 missing"
-  const reNew = /\s{2}(\w+)\s+—\s+(\d+)\/(\d+) methods \(([\d.]+)%\)\s+\|\s+(\d+) missing/g;
+  // Match new method-centric format: "  arel  —  335/442 methods (75.8%)  |  files: 50/80"
+  const reNew = /\s{2}(\w+)\s+—\s+(\d+)\/(\d+) methods \(([\d.]+)%\)\s+\|\s+files: (\d+)\/(\d+)/g;
   // Also match old format for parsing historical CI logs
   const reOld =
     /\s{2}(\w+)\s+—\s+(\d+)\/(\d+) classes\/modules \(([\d.]+)%\)\s+\|\s+(\d+) misplaced\s+\|\s+(\d+) missing/g;
@@ -790,7 +790,7 @@ function parseApiCompareFromLogs(logs: string) {
       total: parseInt(m[3]),
       percent: parseFloat(m[4]),
       misplaced: 0,
-      missing: parseInt(m[5]),
+      missing: parseInt(m[3]) - parseInt(m[2]),
     });
   }
   // Fall back to old format if no new-format matches found

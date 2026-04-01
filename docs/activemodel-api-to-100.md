@@ -1,12 +1,11 @@
 # ActiveModel API Compare: Road to 100%
 
-Current state: **94.5%** (86/91 classes/modules). **100%** tests (963/963). Target: 100% API.
+Current state: **58.3%** (243 / 417 methods). **100%** tests (963/963). Target: 100% API.
 
 ```bash
 pnpm run api:compare -- --package activemodel
+pnpm run api:compare -- --package activemodel --missing  # show missing methods per file
 ```
-
-Only 5 classes/modules remain. Zero misplaced.
 
 ---
 

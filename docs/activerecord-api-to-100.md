@@ -1,17 +1,16 @@
 # ActiveRecord API Compare: Road to 100%
 
-Current state: **70.8%** (393/555 classes/modules). Target: 100%.
+Current state: **35%** (1,176 / 3,356 methods). Target: 100%.
 
 ```bash
 pnpm run api:compare -- --package activerecord
+pnpm run api:compare -- --package activerecord --missing  # show missing methods per file
 ```
 
-Note: The compare script folds Ruby's `ClassMethods` concern pattern into the
-parent module (their methods become static/class methods on the parent). This
-avoids inflating the count with namespace wrappers that have no TS equivalent —
-in JS/TS, the filename is the module and static methods live on the class.
-
-162 classes/modules remain. 5 are misplaced (exist but in the wrong file).
+The compare script matches individual public methods against the Rails source.
+It folds Ruby's `ClassMethods` concern pattern into the parent module and follows
+`include` chains — if a module's methods are implemented on the including class,
+they still count as matched.
 
 ---
 

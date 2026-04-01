@@ -128,14 +128,7 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
         if (!isExported(node)) return;
         const name = node.name.text;
         const modKey = `${relPath}:${name}`;
-        info.modules[modKey] = {
-          name,
-          file: relPath,
-          includes: [],
-          extends: [],
-          instanceMethods: [],
-          classMethods: [],
-        };
+        info.modules[modKey] = extractInterface(node, relPath);
         fileHasClassOrModule = true;
       } else if (ts.isModuleDeclaration(node) && node.name) {
         if (!isExported(node)) return;
@@ -191,8 +184,7 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
         const resolved = sym.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym) : sym;
         const decl = resolved.valueDeclaration ?? resolved.declarations?.[0];
         if (decl && ts.isFunctionDeclaration(decl) && decl.getSourceFile() === sourceFile) {
-          const line =
-            decl.getSourceFile().getLineAndCharacterOfPosition(decl.getStart()).line + 1;
+          const line = decl.getSourceFile().getLineAndCharacterOfPosition(decl.getStart()).line + 1;
           fileFunctions.push({
             name: sym.name,
             visibility: "public",
@@ -358,6 +350,56 @@ function extractClass(
     extends: extendsArr,
     instanceMethods,
     classMethods,
+  };
+}
+
+function extractInterface(node: ts.InterfaceDeclaration, file: string): ClassInfo {
+  const name = node.name.text;
+  const instanceMethods: MethodInfo[] = [];
+  const extendsArr: string[] = [];
+
+  if (node.heritageClauses) {
+    for (const clause of node.heritageClauses) {
+      if (clause.token === ts.SyntaxKind.ExtendsKeyword) {
+        for (const type of clause.types) {
+          extendsArr.push(type.expression.getText());
+        }
+      }
+    }
+  }
+
+  for (const member of node.members) {
+    const memberName = member.name && ts.isIdentifier(member.name) ? member.name.text : undefined;
+    if (!memberName || memberName.startsWith("_")) continue;
+
+    const line = member.getSourceFile().getLineAndCharacterOfPosition(member.getStart()).line + 1;
+
+    if (ts.isMethodSignature(member)) {
+      instanceMethods.push({
+        name: memberName,
+        visibility: "public",
+        params: member.parameters ? extractParameters(member.parameters) : [],
+        line,
+        file,
+      });
+    } else if (ts.isPropertySignature(member)) {
+      instanceMethods.push({
+        name: memberName,
+        visibility: "public",
+        params: [],
+        line,
+        file,
+      });
+    }
+  }
+
+  return {
+    name,
+    file,
+    includes: [],
+    extends: extendsArr,
+    instanceMethods,
+    classMethods: [],
   };
 }
 

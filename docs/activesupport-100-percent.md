@@ -2,19 +2,19 @@
 
 ## Current state
 
-| Metric              | Value                                                 |
-| ------------------- | ----------------------------------------------------- |
-| API classes/modules | **116 / 306** (37.9%) — 3 misplaced, 187 missing      |
-| Test coverage       | **2,229 / 2,862** (77.9%) — 549 skipped, 12 misplaced |
+| Metric        | Value                                                 |
+| ------------- | ----------------------------------------------------- |
+| API methods   | **374 / 1,662** (22.5%) — 1,288 missing               |
+| Test coverage | **2,229 / 2,862** (77.9%) — 549 skipped, 12 misplaced |
 
-The primary measure is `api:compare`, which checks that every Rails class and module has a corresponding TypeScript export. `test:compare` tracks behavior coverage.
+The primary measure is `api:compare`, which matches individual public methods against the Rails source. `test:compare` tracks behavior coverage.
 
 ```bash
 pnpm run api:compare -- --package activesupport   # API surface
 pnpm run test:compare -- --package activesupport   # test parity
 ```
 
-## API parity: what's missing (187 classes/modules)
+## API parity: what's missing (1,288 methods)
 
 ### Highest impact (4+ missing classes per file)
 
@@ -64,7 +64,7 @@ The remaining ~130 missing are single-class files. Major categories:
 - **Concurrency** (2 files): ShareLock, LoadInterlockAwareMonitor
 - **Cache stores** (2 files): MemCacheStore, RedisCacheStore
 
-## API parity: what's done (116 classes/modules)
+## API parity: what's done (374 methods)
 
 31 files fully matched (✓):
 

@@ -8,26 +8,26 @@ The goal is to be **100% API compatible with Rails**, matching behavior **test f
 
 **Active focus** — these packages are where development effort is concentrated:
 
-| Package                      | Rails Equivalent                                                        | API        | Tests     | Description                                                |
-| ---------------------------- | ----------------------------------------------------------------------- | ---------- | --------- | ---------------------------------------------------------- |
-| `@blazetrails/activerecord`  | [ActiveRecord](https://api.rubyonrails.org/classes/ActiveRecord.html)   | **32.8%**  | **61.9%** | ORM — persistence, querying, associations, migrations      |
-| `@blazetrails/activesupport` | [ActiveSupport](https://api.rubyonrails.org/classes/ActiveSupport.html) | **21.8%**  | **77.9%** | Core utilities, inflection, caching, notifications         |
-| `@blazetrails/arel`          | [Arel](https://api.rubyonrails.org/classes/Arel.html)                   | **75.8%**  | **99.4%** | SQL AST builder and query generation                       |
-| `@blazetrails/activemodel`   | [ActiveModel](https://api.rubyonrails.org/classes/ActiveModel.html)     | **46%**    | **100%**  | Attributes, validations, callbacks, dirty tracking, i18n   |
-| `@blazetrails/rack`          | [Rack](https://rack.github.io/)                                         | —          | **100%**  | Modular web server interface, request/response, middleware |
+| Package                      | Rails Equivalent                                                        | API       | Tests     | Description                                                |
+| ---------------------------- | ----------------------------------------------------------------------- | --------- | --------- | ---------------------------------------------------------- |
+| `@blazetrails/activerecord`  | [ActiveRecord](https://api.rubyonrails.org/classes/ActiveRecord.html)   | **35%**   | **61.9%** | ORM — persistence, querying, associations, migrations      |
+| `@blazetrails/activesupport` | [ActiveSupport](https://api.rubyonrails.org/classes/ActiveSupport.html) | **22.5%** | **77.9%** | Core utilities, inflection, caching, notifications         |
+| `@blazetrails/arel`          | [Arel](https://api.rubyonrails.org/classes/Arel.html)                   | **77.6%** | **99.4%** | SQL AST builder and query generation                       |
+| `@blazetrails/activemodel`   | [ActiveModel](https://api.rubyonrails.org/classes/ActiveModel.html)     | **58.3%** | **100%**  | Attributes, validations, callbacks, dirty tracking, i18n   |
+| `@blazetrails/rack`          | [Rack](https://rack.github.io/)                                         | —         | **100%**  | Modular web server interface, request/response, middleware |
 
-**Data Layer Parity** (ActiveRecord + Arel + ActiveModel + ActiveSupport): **33.9% API** | **70.3% Tests**
+**Data Layer Parity** (ActiveRecord + Arel + ActiveModel + ActiveSupport): **36.3% API** | **70.3% Tests**
 
 **ActionPack** — started but not the current priority:
 
-| Package                         | Rails Equivalent                                                              | API        | Tests     | Description                                            |
-| ------------------------------- | ----------------------------------------------------------------------------- | ---------- | --------- | ------------------------------------------------------ |
-| `@blazetrails/actiondispatch`   | [ActionDispatch](https://api.rubyonrails.org/classes/ActionDispatch.html)     | **5.1%**   | **37.3%** | Routing, middleware stack, cookies, sessions, security |
-| `@blazetrails/actioncontroller` | [ActionController](https://api.rubyonrails.org/classes/ActionController.html) | **43.5%**  | **28.3%** | Controller layer, rendering, filters, parameters       |
+| Package                         | Rails Equivalent                                                              | API       | Tests     | Description                                            |
+| ------------------------------- | ----------------------------------------------------------------------------- | --------- | --------- | ------------------------------------------------------ |
+| `@blazetrails/actiondispatch`   | [ActionDispatch](https://api.rubyonrails.org/classes/ActionDispatch.html)     | **5.7%**  | **37.3%** | Routing, middleware stack, cookies, sessions, security |
+| `@blazetrails/actioncontroller` | [ActionController](https://api.rubyonrails.org/classes/ActionController.html) | **43.5%** | **28.3%** | Controller layer, rendering, filters, parameters       |
 
 **Tests** = `test:compare` — matches our test names against the Rails test suite. **API** = `api:compare` — matches individual public methods against Rails source (method-level, not class/module wrappers). Rack doesn't have API comparison yet (it's not a Rails gem).
 
-**24.2%** overall API coverage (2,223 of 9,168 methods) | **50.9%** test coverage (11,140 of 21,890 tests). CI runs both comparisons on every push.
+**26%** overall API coverage (2,383 of 9,168 methods) | **50.9%** test coverage (11,140 of 21,890 tests). CI runs both comparisons on every push.
 
 ## Quick Example
 

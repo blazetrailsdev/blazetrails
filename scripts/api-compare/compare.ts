@@ -290,10 +290,7 @@ function main() {
     // Ruby `include Predications` uses the short name, but the module FQN
     // might be `Arel::Predications`. Build both short and full lookups.
     const moduleFqnByShort = new Map<string, string[]>();
-    const moduleFileByFqn = new Map<string, string>();
-    for (const [fqn, info] of Object.entries(rubyPkg.modules)) {
-      const mod = info as unknown as ClassInfo;
-      if (mod.file) moduleFileByFqn.set(fqn, mod.file);
+    for (const [fqn] of Object.entries(rubyPkg.modules)) {
       const short = fqn.split("::").pop()!;
       const list = moduleFqnByShort.get(short) || [];
       list.push(fqn);
@@ -305,8 +302,14 @@ function main() {
     // implemented directly on the including class (common TS pattern).
     const moduleIncluderFiles = new Map<string, Set<string>>();
     const allClassesAndModules = [
-      ...Object.entries(rubyPkg.classes).map(([fqn, info]) => ({ fqn, info: info as unknown as ClassInfo })),
-      ...Object.entries(rubyPkg.modules).map(([fqn, info]) => ({ fqn, info: info as unknown as ClassInfo })),
+      ...Object.entries(rubyPkg.classes).map(([fqn, info]) => ({
+        fqn,
+        info: info as unknown as ClassInfo,
+      })),
+      ...Object.entries(rubyPkg.modules).map(([fqn, info]) => ({
+        fqn,
+        info: info as unknown as ClassInfo,
+      })),
     ];
     for (const { info } of allClassesAndModules) {
       if (!info.file) continue;

@@ -1,6 +1,6 @@
 # ActiveRecord: Road to 100%
 
-Current state: **61.9%** tests (5,190 / 8,385 matched, 2,957 skipped). **70.8%** API (393/555 classes/modules). 5 misplaced. 0 misplaced tests.
+Current state: **61.9%** tests (5,190 / 8,385 matched, 2,957 skipped). **35%** API (1,176 / 3,356 methods).
 
 ```bash
 pnpm run test:compare -- --package activerecord
@@ -18,8 +18,8 @@ The test names tell you what behavior to implement, but the Rails source tells
 you how.
 
 **Measuring progress**: `test:compare` matches our `it()` test descriptions
-against Rails test names. `api:compare` checks class/module existence by file
-path. Both matter — tests prove behavior, API proves structure.
+against Rails test names. `api:compare` matches individual public methods
+against the Rails source. Both matter — tests prove behavior, API proves structure.
 
 ---
 

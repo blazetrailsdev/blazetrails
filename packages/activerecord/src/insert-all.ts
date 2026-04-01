@@ -1,9 +1,8 @@
-import { Nodes } from "@blazetrails/arel";
+import { Nodes, Visitors } from "@blazetrails/arel";
 import type { Base } from "./base.js";
 import { quoteSqlValue } from "./base.js";
 import type { Relation } from "./relation.js";
 import { detectAdapterName } from "./adapter-name.js";
-import { quoteIdentifier, quoteTableName } from "./connection-adapters/abstract/quoting.js";
 
 type ModelClass = typeof Base;
 type AdapterDialect = "sqlite" | "postgres" | "mysql";
@@ -194,10 +193,9 @@ export class InsertAll {
  *
  * Mirrors: ActiveRecord::InsertAll::Builder
  *
- * In Rails, each adapter overrides `build_insert_sql(builder)` to assemble
- * adapter-specific SQL from the builder's fragments. Here we replicate that
- * pattern: `toSql()` dispatches to adapter-specific assembly using the same
- * fragment methods that Rails' adapters call.
+ * All identifiers use double quotes (standard SQL). The MySQL adapter
+ * converts them to backticks at execution time via mysqlQuote(), matching
+ * how the rest of the codebase works with Arel-generated SQL.
  */
 export class Builder {
   readonly model: ModelClass;
@@ -215,7 +213,7 @@ export class Builder {
   }
 
   into(): string {
-    const tableName = quoteTableName(this.model.arelTable.name, this._dialect);
+    const tableName = `"${this.model.arelTable.name}"`;
     const keys = [...this._insertAll.keysIncludingTimestamps()];
     if (keys.length === 0) {
       if (this._insertAll.inserts.length > 1) {
@@ -226,8 +224,9 @@ export class Builder {
       }
       return `INTO ${tableName} DEFAULT VALUES`;
     }
-    const columnsList = keys.map((k) => quoteIdentifier(k, this._dialect)).join(", ");
-    return `INTO ${tableName} (${columnsList}) ${this._valuesClause()}`;
+    const columnsList = keys.map((k) => `"${k}"`).join(", ");
+    const compiledValues = this._visitor().compile(this.valuesList());
+    return `INTO ${tableName} (${columnsList}) ${compiledValues}`;
   }
 
   valuesList(): Nodes.ValuesList {
@@ -240,11 +239,11 @@ export class Builder {
         ? this._insertAll.uniqueBy
         : [this._insertAll.uniqueBy]
       : this._insertAll.primaryKeys();
-    return `(${cols.map((c) => this._quoteCol(c)).join(", ")})`;
+    return `(${cols.map((c) => `"${c}"`).join(", ")})`;
   }
 
   updatableColumns(): string[] {
-    return this._insertAll.updatableColumns().map((c) => this._quoteCol(c));
+    return this._insertAll.updatableColumns().map((c) => `"${c}"`);
   }
 
   touchModelTimestampsUnless(block: (col: string) => string): string {
@@ -255,11 +254,11 @@ export class Builder {
     if (quotedUpdatable.length === 0) return "";
     const updatable = this._insertAll.updatableColumns();
     const parts: string[] = [];
-    const tableName = quoteTableName(this.model.arelTable.name, this._dialect);
+    const tableName = `"${this.model.arelTable.name}"`;
     const conditions = quotedUpdatable.map(block).join(" AND ");
     for (const col of UPDATE_TIMESTAMP_COLUMNS) {
       if (this.model._attributeDefinitions.has(col) && !updatable.includes(col)) {
-        const qcol = this._quoteCol(col);
+        const qcol = `"${col}"`;
         parts.push(
           `${qcol}=(CASE WHEN (${conditions}) THEN ${tableName}.${qcol} ELSE CURRENT_TIMESTAMP END)`,
         );
@@ -272,10 +271,6 @@ export class Builder {
     return this._insertAll.updateSql;
   }
 
-  /**
-   * SQLite3/PostgreSQL: ON CONFLICT based syntax.
-   * Mirrors: sqlite3_adapter.rb#build_insert_sql / postgresql_adapter.rb#build_insert_sql
-   */
   private _buildStandardSql(): string {
     let sql = `INSERT ${this.into()}`;
 
@@ -301,10 +296,6 @@ export class Builder {
     return sql;
   }
 
-  /**
-   * MySQL: ON DUPLICATE KEY UPDATE based syntax.
-   * Mirrors: abstract_mysql_adapter.rb#build_insert_sql (non-alias branch)
-   */
   private _buildMysqlSql(): string {
     let sql = `INSERT ${this.into()}`;
     const noOpColumn = this._firstColumn();
@@ -329,10 +320,6 @@ export class Builder {
     return sql;
   }
 
-  /**
-   * Build the combined list of timestamp touch + column update assignments.
-   * Ensures correct comma separation between touch and column parts.
-   */
   private _updateAssignments(
     touchCondition: (col: string) => string,
     updateExpr: (col: string) => string,
@@ -359,22 +346,15 @@ export class Builder {
     });
   }
 
-  private _valuesClause(): string {
-    const rows = this._valuesRows();
-    const rendered = rows.map(
-      (row) =>
-        `(${row.map((n) => (n instanceof Nodes.SqlLiteral ? n.value : String(n))).join(", ")})`,
-    );
-    return `VALUES ${rendered.join(", ")}`;
-  }
-
-  private _quoteCol(name: string): string {
-    return quoteIdentifier(name, this._dialect);
+  private _visitor(): Visitors.ToSql {
+    if (this._dialect === "mysql") return new Visitors.MySQL();
+    if (this._dialect === "postgres") return new Visitors.PostgreSQL();
+    return new Visitors.SQLite();
   }
 
   private _firstColumn(): string | undefined {
     const keys = [...this._insertAll.keysIncludingTimestamps()];
-    return keys.length > 0 ? this._quoteCol(keys[0]) : undefined;
+    return keys.length > 0 ? `"${keys[0]}"` : undefined;
   }
 
   private _arrayColumnSet(): Set<string> {

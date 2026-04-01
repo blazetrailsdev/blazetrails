@@ -13,6 +13,15 @@ export class Function extends Node {
     this.distinct = false;
   }
 
+  as(aliasName: string): Function {
+    const fn = new (this.constructor as new (
+      expressions: Node[],
+      alias: string | null,
+    ) => Function)(this.expressions, aliasName);
+    fn.distinct = this.distinct;
+    return fn;
+  }
+
   accept<T>(visitor: NodeVisitor<T>): T {
     return visitor.visit(this);
   }

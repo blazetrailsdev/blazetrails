@@ -20,6 +20,26 @@ export class Casted extends Node {
     this.attribute = attribute;
   }
 
+  get valueBeforeTypeCast(): unknown {
+    return this.value;
+  }
+
+  valueForDatabase(): unknown {
+    if (
+      this.attribute &&
+      typeof (this.attribute as unknown as { isAbleToTypeCast: () => boolean }).isAbleToTypeCast ===
+        "function" &&
+      (this.attribute as unknown as { isAbleToTypeCast: () => boolean }).isAbleToTypeCast() &&
+      typeof (this.attribute as unknown as { typeCastForDatabase: (v: unknown) => unknown })
+        .typeCastForDatabase === "function"
+    ) {
+      return (
+        this.attribute as unknown as { typeCastForDatabase: (v: unknown) => unknown }
+      ).typeCastForDatabase(this.value);
+    }
+    return this.value;
+  }
+
   accept<T>(visitor: NodeVisitor<T>): T {
     return visitor.visit(this);
   }
@@ -36,6 +56,20 @@ export class Quoted extends Node {
   constructor(value: unknown) {
     super();
     this.value = value;
+  }
+
+  get valueForDatabase(): unknown {
+    return this.value;
+  }
+
+  get valueBeforeTypeCast(): unknown {
+    return this.value;
+  }
+
+  isInfinite(): number | null {
+    if (this.value === Infinity) return 1;
+    if (this.value === -Infinity) return -1;
+    return null;
   }
 
   accept<T>(visitor: NodeVisitor<T>): T {

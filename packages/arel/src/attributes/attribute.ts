@@ -80,6 +80,44 @@ export class Attribute extends Node {
     this.caster = caster;
   }
 
+  get typeCaster(): unknown {
+    if (
+      this.relation &&
+      typeof (this.relation as unknown as { typeForAttribute: (n: string) => unknown })
+        .typeForAttribute === "function"
+    ) {
+      return (
+        this.relation as unknown as { typeForAttribute: (n: string) => unknown }
+      ).typeForAttribute(this.name);
+    }
+    return undefined;
+  }
+
+  typeCastForDatabase(value: unknown): unknown {
+    if (
+      this.relation &&
+      typeof (
+        this.relation as unknown as { typeCastForDatabase: (n: string, v: unknown) => unknown }
+      ).typeCastForDatabase === "function"
+    ) {
+      return (
+        this.relation as unknown as { typeCastForDatabase: (n: string, v: unknown) => unknown }
+      ).typeCastForDatabase(this.name, value);
+    }
+    return value;
+  }
+
+  isAbleToTypeCast(): boolean {
+    if (
+      this.relation &&
+      typeof (this.relation as unknown as { isAbleToTypeCast: () => boolean }).isAbleToTypeCast ===
+        "function"
+    ) {
+      return (this.relation as unknown as { isAbleToTypeCast: () => boolean }).isAbleToTypeCast();
+    }
+    return false;
+  }
+
   private castValue(value: unknown): unknown {
     if (value instanceof SqlLiteral) return value;
     if (value instanceof Node) return value;

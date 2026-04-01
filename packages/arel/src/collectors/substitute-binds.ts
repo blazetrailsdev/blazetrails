@@ -1,6 +1,8 @@
 export class SubstituteBinds {
   private quoter: { quote(value: unknown): string };
   private delegate: { append(str: string): unknown; value: string };
+  preparable = false;
+  retryable = true;
 
   constructor(
     quoter: { quote(value: unknown): string },
@@ -24,6 +26,11 @@ export class SubstituteBinds {
         ? (bind as { valueForDatabase(): unknown }).valueForDatabase()
         : bind;
     return this.append(this.quoter.quote(value));
+  }
+
+  addBinds(binds: unknown[], _procForBinds?: ((v: unknown) => unknown) | null): this {
+    this.append(binds.map((bind) => this.quoter.quote(bind)).join(", "));
+    return this;
   }
 
   get value(): string {

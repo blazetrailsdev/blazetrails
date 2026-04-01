@@ -684,9 +684,9 @@ export class ToSql implements NodeVisitor<SQLString> {
       this.collector.append("ORDER BY ");
       this.visitArray(node.orders, ", ");
     }
-    if (node.framingNode) {
+    if (node.framing) {
       this.collector.append(" ");
-      this.visit(node.framingNode);
+      this.visit(node.framing);
     }
     this.collector.append(")");
     return this.collector;
@@ -755,9 +755,9 @@ export class ToSql implements NodeVisitor<SQLString> {
 
   private visitCase(node: Nodes.Case): SQLString {
     this.collector.append("CASE");
-    if (node.operand) {
+    if (node.case) {
       this.collector.append(" ");
-      this.visit(node.operand);
+      this.visit(node.case);
     }
     for (const cond of node.conditions) {
       this.collector.append(" WHEN ");
@@ -765,9 +765,9 @@ export class ToSql implements NodeVisitor<SQLString> {
       this.collector.append(" THEN ");
       this.visit(cond.then);
     }
-    if (node.defaultValue) {
+    if (node.default) {
       this.collector.append(" ELSE ");
-      this.visit(node.defaultValue);
+      this.visit(node.default);
     }
     this.collector.append(" END");
     return this.collector;

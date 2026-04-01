@@ -2030,7 +2030,11 @@ export class Relation<T extends Base> {
 
     const table = this._modelClass.arelTable;
     const updateValues: [InstanceType<typeof Nodes.Node>, unknown][] = Object.entries(updates).map(
-      ([key, val]) => [table.get(key), val],
+      ([key, val]) => {
+        const def = this._modelClass._attributeDefinitions.get(key);
+        const isArray = def?.type?.name === "array";
+        return [table.get(key), isArray ? arelSql(quoteSqlValue(val, true)) : val];
+      },
     );
     const um = new UpdateManager().table(table).set(updateValues);
     for (const cond of this._buildWhereStrings(table)) {

@@ -206,8 +206,12 @@ export class ToSql implements NodeVisitor<SQLString> {
     this.collector.append("SELECT");
 
     if (node.optimizerHints.length > 0) {
-      const hints = node.optimizerHints.join(" ");
-      this.collector.append(` /*+ ${hints} */`);
+      const sanitized = node.optimizerHints
+        .map((h) => this.sanitizeHint(h))
+        .filter((h) => h.length > 0);
+      if (sanitized.length > 0) {
+        this.collector.append(` /*+ ${sanitized.join(" ")} */`);
+      }
     }
 
     if (node.setQuantifier) {
@@ -1129,12 +1133,6 @@ export class ToSql implements NodeVisitor<SQLString> {
     if (typeof value === "number") return String(value);
     if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
     if (typeof value === "bigint") return value.toString();
-    if (value instanceof Date) {
-      const y = value.getFullYear();
-      const m = String(value.getMonth() + 1).padStart(2, "0");
-      const d = String(value.getDate()).padStart(2, "0");
-      return `'${y}-${m}-${d}'`;
-    }
     if (
       typeof value === "object" &&
       value !== null &&
@@ -1143,7 +1141,26 @@ export class ToSql implements NodeVisitor<SQLString> {
     ) {
       return `'${(value as { toISOString: () => string }).toISOString()}'`;
     }
+    if (typeof value === "object" && value !== null) {
+      const proto = Object.getPrototypeOf(value);
+      const hasCustomToString =
+        proto === Object.prototype && value.toString !== Object.prototype.toString;
+      if ((proto === Object.prototype || proto === null) && !hasCustomToString) {
+        const json = JSON.stringify(value).replace(/'/g, "''");
+        return `'${json}'`;
+      }
+    }
     const escaped = String(value).replace(/'/g, "''");
     return `'${escaped}'`;
+  }
+
+  private sanitizeHint(hint: string): string {
+    return hint
+      .replace(/[\r\n]+/g, " ")
+      .replace(/\/\*/g, "")
+      .replace(/\*\//g, "")
+      .replace(/--/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
   }
 }

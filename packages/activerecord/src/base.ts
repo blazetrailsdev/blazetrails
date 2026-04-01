@@ -342,10 +342,15 @@ export class Base extends Model {
     const pk = this.primaryKey;
     if (Array.isArray(pk)) {
       const values = idValue as unknown[];
-      const conditions = pk.map((col, i) => table.get(col).eq(values[i]));
+      const conditions = pk.map((col, i) => {
+        const attr = table.get(col);
+        const v = values[i];
+        return v === undefined || v === null ? attr.isNull() : attr.eq(v);
+      });
       return new Nodes.And(conditions);
     }
-    return table.get(pk as string).eq(idValue);
+    const attr = table.get(pk as string);
+    return idValue === undefined || idValue === null ? attr.isNull() : attr.eq(idValue);
   }
 
   /**
@@ -2646,7 +2651,8 @@ export class Base extends Model {
       const insertValues: [InstanceType<typeof Nodes.Node>, unknown][] = columns.map((c, i) => {
         const def = ctor._attributeDefinitions.get(c);
         const isArray = def?.type?.name === "array";
-        return [table.get(c), arelSql(quoteSqlValue(values[i], isArray))];
+        const val = isArray ? arelSql(quoteSqlValue(values[i], true)) : values[i];
+        return [table.get(c), val];
       });
       im.insert(insertValues);
       sql = im.toSql();
@@ -2689,7 +2695,7 @@ export class Base extends Model {
       const val = this.readAttribute(key);
       const def = ctor._attributeDefinitions.get(key);
       const isArray = def?.type?.name === "array";
-      return [table.get(key), arelSql(quoteSqlValue(val, isArray))];
+      return [table.get(key), isArray ? arelSql(quoteSqlValue(val, true)) : val];
     });
 
     // Optimistic locking: include lock column in WHERE and increment it

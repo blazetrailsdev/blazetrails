@@ -29,8 +29,10 @@ export function composedOf(
   options: ComposedOfOptions,
 ): void {
   // Store aggregate reflection for reflect_on_all_aggregations
-  if (!(modelClass as any)._aggregateReflections) {
-    (modelClass as any)._aggregateReflections = new Map();
+  if (!Object.prototype.hasOwnProperty.call(modelClass, "_aggregateReflections")) {
+    const parent: Map<string, AggregateReflection> | undefined = (modelClass as any)
+      ._aggregateReflections;
+    (modelClass as any)._aggregateReflections = parent ? new Map(parent) : new Map();
   }
   (modelClass as any)._aggregateReflections.set(
     name,

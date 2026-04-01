@@ -191,8 +191,8 @@ export class AssociationReflection extends MacroReflection {
     throw new Error("Subclass must implement macro");
   }
 
-  get foreignKey(): string {
-    if (this.options.foreignKey) return this.options.foreignKey as string;
+  get foreignKey(): string | string[] {
+    if (this.options.foreignKey) return this.options.foreignKey as string | string[];
     if (this.belongsTo()) return `${underscore(this.name)}_id`;
     if (this.options.as) return `${underscore(this.options.as as string)}_id`;
     return `${underscore(this.activeRecord.name)}_id`;
@@ -376,7 +376,7 @@ export class ThroughReflection extends AbstractReflection {
     return this._delegate.pluralName;
   }
 
-  get foreignKey(): string {
+  get foreignKey(): string | string[] {
     return this.sourceReflection?.foreignKey ?? this._delegate.foreignKey;
   }
 
@@ -449,8 +449,7 @@ export class ThroughReflection extends AbstractReflection {
     const throughRef = this.throughReflection;
     if (!throughRef) return null;
     try {
-      const throughKlass =
-        throughRef instanceof ThroughReflection ? throughRef.klass : throughRef.klass;
+      const throughKlass = throughRef.klass;
       const throughAssocs: any[] = (throughKlass as any)._associations ?? [];
       // Rails tries: explicit source option, then singular(name), then name itself
       const candidates = this.options.source
@@ -566,7 +565,15 @@ export function createReflection(
         : assocDef.type;
 
   const ReflectionClass = reflectionClassFor(normalizedType);
-  const reflection = new ReflectionClass(assocDef.name, null, assocDef.options, ownerClass);
+  const { scope: assocScope, ...restOptions } = assocDef.options as {
+    scope?: (...args: any[]) => any;
+  } & Record<string, unknown>;
+  const reflection = new ReflectionClass(
+    assocDef.name,
+    assocScope ?? null,
+    restOptions,
+    ownerClass,
+  );
 
   if (
     assocDef.type !== "hasAndBelongsToMany" &&

@@ -232,13 +232,15 @@ export class Builder {
     if (!this._insertAll.updateDuplicates() || !this._insertAll.recordTimestamps()) {
       return "";
     }
+    const quotedUpdatable = this.updatableColumns();
+    if (quotedUpdatable.length === 0) return "";
     const updatable = this._insertAll.updatableColumns();
     const parts: string[] = [];
     const tableName = quoteIdentifier(this.model.arelTable.name, this._dialect);
+    const conditions = quotedUpdatable.map(block).join(" AND ");
     for (const col of TIMESTAMP_COLUMNS) {
       if (this.model._attributeDefinitions.has(col) && !updatable.includes(col)) {
         const qcol = this._quoteCol(col);
-        const conditions = this.updatableColumns().map(block).join(" AND ");
         parts.push(
           `${qcol}=(CASE WHEN (${conditions}) THEN ${tableName}.${qcol} ELSE CURRENT_TIMESTAMP END)`,
         );
@@ -265,8 +267,12 @@ export class Builder {
       if (this._insertAll.updateSql) {
         sql += this._insertAll.updateSql.value;
       } else {
+        const touchCondition =
+          this._dialect === "postgres"
+            ? (col: string) => `${col} IS NOT DISTINCT FROM excluded.${col}`
+            : (col: string) => `${col} IS excluded.${col}`;
         const assignments = this._updateAssignments(
-          (col) => `${col} IS excluded.${col}`,
+          touchCondition,
           (col) => `${col}=excluded.${col}`,
         );
         sql += assignments.join(",");

@@ -20,16 +20,22 @@
     loading = true;
     svg = null;
     error = null;
-    const result = await renderDiagram(src);
-    if (token !== renderToken || !mounted) return;
-    if (result.success) {
-      const { default: DOMPurify } = await import("dompurify");
+    try {
+      const result = await renderDiagram(src);
       if (token !== renderToken || !mounted) return;
-      svg = DOMPurify.sanitize(result.svg!, { USE_PROFILES: { svg: true } });
-    } else {
-      error = result.error ?? "Failed to render diagram";
+      if (result.success) {
+        const { default: DOMPurify } = await import("dompurify");
+        if (token !== renderToken || !mounted) return;
+        svg = DOMPurify.sanitize(result.svg!, { USE_PROFILES: { svg: true } });
+      } else {
+        error = result.error ?? "Failed to render diagram";
+      }
+    } catch (e) {
+      if (token !== renderToken || !mounted) return;
+      error = e instanceof Error ? e.message : "Failed to render diagram";
+    } finally {
+      if (token === renderToken && mounted) loading = false;
     }
-    loading = false;
   }
 
   onMount(() => {

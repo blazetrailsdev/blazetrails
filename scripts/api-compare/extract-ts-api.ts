@@ -9,33 +9,7 @@ import * as ts from "typescript";
 import * as path from "path";
 import * as fs from "fs";
 import type { ApiManifest, PackageInfo, ClassInfo, MethodInfo, ParamInfo } from "./types.js";
-
-const SCRIPT_DIR = __dirname;
-const ROOT_DIR = path.resolve(SCRIPT_DIR, "../..");
-const OUTPUT_DIR = path.join(SCRIPT_DIR, "output");
-
-const PACKAGES = [
-  "arel",
-  "activemodel",
-  "activerecord",
-  "activesupport",
-  "actiondispatch",
-  "actioncontroller",
-  "actionview",
-  "railties",
-];
-
-/** Override package → directory mapping when they differ */
-const PACKAGE_DIR_OVERRIDES: Record<string, string> = {
-  actiondispatch: "actionpack",
-  actioncontroller: "actionpack",
-};
-
-/** Override package → src subdirectory when package shares a dir */
-const PACKAGE_SRC_SUBDIR: Record<string, string> = {
-  actiondispatch: "actiondispatch",
-  actioncontroller: "actioncontroller",
-};
+import { ROOT_DIR, OUTPUT_DIR, PACKAGES, PACKAGE_DIR_OVERRIDES, packageSrcDir } from "./config.js";
 
 function main() {
   const manifest: ApiManifest = {
@@ -45,11 +19,7 @@ function main() {
   };
 
   for (const pkg of PACKAGES) {
-    const dirName = PACKAGE_DIR_OVERRIDES[pkg] ?? pkg;
-    const subDir = PACKAGE_SRC_SUBDIR[pkg];
-    const pkgDir = subDir
-      ? path.join(ROOT_DIR, "packages", dirName, "src", subDir)
-      : path.join(ROOT_DIR, "packages", dirName, "src");
+    const pkgDir = packageSrcDir(pkg);
     manifest.packages[pkg] = extractPackage(pkg, pkgDir);
   }
 

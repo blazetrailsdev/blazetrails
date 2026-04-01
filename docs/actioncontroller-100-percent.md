@@ -1,6 +1,6 @@
 # ActionController: Road to 100%
 
-**47.6%** API (138 / 290 methods). **28.3%** tests (527 / 1,860 matched).
+**47.9%** API (138 / 288 methods). **28.3%** tests (527 / 1,860 matched).
 
 In Rails, ActionController lives inside the ActionPack gem alongside ActionDispatch. The package has been restructured so that `packages/actionpack/` contains both `actioncontroller/` and `actiondispatch/` side by side.
 

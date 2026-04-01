@@ -1,6 +1,6 @@
 # ActiveRecord: Road to 100%
 
-Current state: **61.9%** tests (5,190 / 8,385 matched). **35.8%** API (1,039 / 2,901 methods).
+Current state: **61.9%** tests (5,190 / 8,385 matched). **39.5%** API (1,121 / 2,839 methods).
 
 ```bash
 pnpm run test:compare -- --package activerecord

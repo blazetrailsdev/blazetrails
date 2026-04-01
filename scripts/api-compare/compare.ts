@@ -17,20 +17,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import type { ApiManifest, ClassInfo, MethodInfo } from "./types.js";
-
-const SCRIPT_DIR = __dirname;
-const ROOT_DIR = path.resolve(SCRIPT_DIR, "../..");
-const OUTPUT_DIR = path.join(SCRIPT_DIR, "output");
-
-const PACKAGE_DIR_OVERRIDES: Record<string, string> = {
-  actiondispatch: "actionpack",
-  actioncontroller: "actionpack",
-};
-
-const PACKAGE_SRC_SUBDIR: Record<string, string> = {
-  actiondispatch: "actiondispatch",
-  actioncontroller: "actioncontroller",
-};
+import { OUTPUT_DIR, packageSrcDir } from "./config.js";
 
 const DETAIL_PACKAGES = new Set([
   "arel",
@@ -459,11 +446,7 @@ function main() {
     }
 
     // Resolve package src directory for file existence checks
-    const dirName = PACKAGE_DIR_OVERRIDES[pkg] ?? pkg;
-    const subDir = PACKAGE_SRC_SUBDIR[pkg];
-    const pkgSrcDir = subDir
-      ? path.join(ROOT_DIR, "packages", dirName, "src", subDir)
-      : path.join(ROOT_DIR, "packages", dirName, "src");
+    const pkgSrcDir = packageSrcDir(pkg);
 
     // Compare methods per file
     let totalMatched = 0;
@@ -623,9 +606,29 @@ function printReport(
     }
   }
 
+  // Data layer summary (arel + activemodel + activerecord + activesupport)
+  const DATA_LAYER = new Set(["arel", "activemodel", "activerecord", "activesupport"]);
+  let dataTotal = 0;
+  let dataMatched = 0;
+  let dataFiles = 0;
+  let dataFilesExist = 0;
+  for (const pkg of results) {
+    if (DATA_LAYER.has(pkg.package)) {
+      dataTotal += pkg.totalMethods;
+      dataMatched += pkg.matched;
+      dataFiles += pkg.totalFiles;
+      dataFilesExist += pkg.filesExist;
+    }
+  }
+
   const grandPct = grandTotal > 0 ? Math.round((grandMatched / grandTotal) * 1000) / 10 : 0;
-  const grandMissing = grandTotal - grandMatched;
+  const dataPct = dataTotal > 0 ? Math.round((dataMatched / dataTotal) * 1000) / 10 : 0;
   console.log(`\n${"=".repeat(100)}`);
+  if (dataTotal > 0 && dataTotal !== grandTotal) {
+    console.log(
+      `  Data layer: ${dataMatched}/${dataTotal} methods (${dataPct}%)  |  files: ${dataFilesExist}/${dataFiles}`,
+    );
+  }
   console.log(
     `  Overall: ${grandMatched}/${grandTotal} methods (${grandPct}%)  |  files: ${grandFilesExist}/${grandFiles}`,
   );

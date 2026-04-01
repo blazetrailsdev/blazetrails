@@ -26,7 +26,7 @@ export class AbstractReflection {
   }
 
   get className(): string {
-    return "";
+    throw new Error("Subclass must implement className");
   }
 
   get klass(): typeof Base {
@@ -455,6 +455,10 @@ export class HasAndBelongsToManyReflection extends AssociationReflection {
  */
 export class ThroughReflection extends AbstractReflection {
   private _delegate: AssociationReflection;
+  private _sourceReflection: AssociationReflection | ThroughReflection | null | undefined =
+    undefined;
+  private _throughReflection: AssociationReflection | ThroughReflection | null | undefined =
+    undefined;
 
   constructor(delegate: AssociationReflection) {
     super();
@@ -551,30 +555,43 @@ export class ThroughReflection extends AbstractReflection {
   }
 
   get sourceReflection(): AssociationReflection | ThroughReflection | null {
+    if (this._sourceReflection !== undefined) return this._sourceReflection;
     const throughRef = this.throughReflection;
-    if (!throughRef) return null;
+    if (!throughRef) {
+      this._sourceReflection = null;
+      return null;
+    }
     try {
       const throughKlass = throughRef.klass;
       const throughAssocs: any[] = (throughKlass as any)._associations ?? [];
-      // Rails tries: explicit source option, then singular(name), then name itself
       const candidates = this.options.source
         ? [this.options.source as string]
         : [singularize(this.name), this.name];
       for (const candidate of candidates) {
         const sourceDef = throughAssocs.find((a: any) => a.name === candidate);
-        if (sourceDef) return createReflection(sourceDef, throughKlass);
+        if (sourceDef) {
+          this._sourceReflection = createReflection(sourceDef, throughKlass);
+          return this._sourceReflection;
+        }
       }
+      this._sourceReflection = null;
       return null;
     } catch {
+      this._sourceReflection = null;
       return null;
     }
   }
 
   get throughReflection(): AssociationReflection | ThroughReflection | null {
+    if (this._throughReflection !== undefined) return this._throughReflection;
     const ownerAssocs: any[] = (this.activeRecord as any)._associations ?? [];
     const throughDef = ownerAssocs.find((a: any) => a.name === this.through);
-    if (!throughDef) return null;
-    return createReflection(throughDef, this.activeRecord);
+    if (!throughDef) {
+      this._throughReflection = null;
+      return null;
+    }
+    this._throughReflection = createReflection(throughDef, this.activeRecord);
+    return this._throughReflection;
   }
 
   get joinTable(): string | null {

@@ -265,27 +265,31 @@ describe("generator fixtures", () => {
 });
 
 describe("exported fixtures", () => {
-  it("has docs fixtures", () => {
-    expect(fixtures.docs).toBeDefined();
-    expect(fixtures.docs.length).toBeGreaterThan(0);
-  });
+  function matchesPattern(dir: string, pattern: string): boolean {
+    if (!pattern.includes("*")) {
+      return fs.existsSync(path.join(dir, pattern));
+    }
+    const lastSlash = pattern.lastIndexOf("/");
+    const dirPart = lastSlash === -1 ? "" : pattern.slice(0, lastSlash);
+    const filePattern = lastSlash === -1 ? pattern : pattern.slice(lastSlash + 1);
+    const fullDir = path.join(dir, dirPart);
+    if (!fs.existsSync(fullDir) || !fs.statSync(fullDir).isDirectory()) return false;
+    const [prefix, suffix] = filePattern.split("*");
+    return fs
+      .readdirSync(fullDir)
+      .some((entry) => entry.startsWith(prefix) && entry.endsWith(suffix));
+  }
 
-  it("has music fixtures", () => {
-    expect(fixtures.music).toBeDefined();
-    expect(fixtures.music.length).toBeGreaterThan(0);
-  });
-
-  it("has finances fixtures", () => {
-    expect(fixtures.finances).toBeDefined();
-    expect(fixtures.finances.length).toBeGreaterThan(0);
-  });
-
-  it("each fixture has name, command, and expectedFiles", () => {
+  it("each fixture's expectedFiles match actual generator output", () => {
     const allFixtures = [...fixtures.docs, ...fixtures.music, ...fixtures.finances];
     for (const fixture of allFixtures) {
       expect(fixture.name).toBeTruthy();
       expect(fixture.command).toBeTruthy();
       expect(fixture.expectedFiles.length).toBeGreaterThan(0);
+
+      for (const expectedFile of fixture.expectedFiles) {
+        expect(matchesPattern(appDir(), expectedFile)).toBe(true);
+      }
     }
   });
 });

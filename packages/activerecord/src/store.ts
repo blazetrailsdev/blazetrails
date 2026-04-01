@@ -20,28 +20,25 @@ export function storedAttributes(modelClass: typeof Base): Record<string, string
  */
 export class HashAccessor {
   static read(object: Base, attribute: string, key: string): unknown {
-    HashAccessor.prepare(object, attribute);
     const data = object.readAttribute(attribute);
     if (data === null || data === undefined) return null;
-    const obj = HashAccessor._toHash(data);
+    const obj = this._toHash(data);
     return obj[key] ?? null;
   }
 
   static write(object: Base, attribute: string, key: string, value: unknown): void {
-    HashAccessor.prepare(object, attribute);
-    const current = HashAccessor.read(object, attribute, key);
+    this.prepare(object, attribute);
+    const current = this.read(object, attribute, key);
     if (value !== current) {
       const raw = object.readAttribute(attribute);
-      const obj = HashAccessor._toHash(raw);
+      const obj = this._toHash(raw);
       obj[key] = value;
-      // Serialize back to JSON string for string columns, keep as object for json columns
       const isStringColumn = typeof raw === "string" || raw === null || raw === undefined;
       object.writeAttribute(attribute, isStringColumn ? JSON.stringify(obj) : obj);
     }
   }
 
   static prepare(object: Base, attribute: string): void {
-    // Don't overwrite existing values — just ensure non-null
     const val = object.readAttribute(attribute);
     if (val === null || val === undefined) {
       object.writeAttribute(attribute, "{}");
@@ -51,11 +48,7 @@ export class HashAccessor {
   protected static _toHash(data: unknown): Record<string, unknown> {
     if (data === null || data === undefined) return {};
     if (typeof data === "string") {
-      try {
-        return JSON.parse(data);
-      } catch {
-        return {};
-      }
+      return JSON.parse(data);
     }
     if (typeof data === "object" && !Array.isArray(data)) {
       return { ...(data as Record<string, unknown>) };
@@ -70,20 +63,7 @@ export class HashAccessor {
  *
  * Mirrors: ActiveRecord::Store::IndifferentHashAccessor
  */
-export class IndifferentHashAccessor extends HashAccessor {
-  static override prepare(object: Base, attribute: string): void {
-    const value = object.readAttribute(attribute);
-    if (value === null || value === undefined) {
-      object.writeAttribute(attribute, {});
-    } else if (typeof value === "string") {
-      try {
-        object.writeAttribute(attribute, JSON.parse(value));
-      } catch {
-        object.writeAttribute(attribute, {});
-      }
-    }
-  }
-}
+export class IndifferentHashAccessor extends HashAccessor {}
 
 /**
  * Store — JSON-backed attribute accessors.

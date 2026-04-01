@@ -34,14 +34,17 @@ export async function createRuntime(SQL: SqlJsStatic): Promise<Runtime> {
   let migrations: MigrationProxy[] = [];
 
   function executeCode(_code: string): Promise<unknown> {
-    // executeCode requires a sandboxed eval context (Function constructor or
-    // iframe). This will be implemented when db:migrate support is needed.
-    // For now, the generate and new commands work without it.
-    return Promise.resolve(undefined);
+    throw new Error(
+      "Code execution is not yet supported in this runtime. " +
+        "db:migrate, db:rollback, and db:seed require a sandboxed eval context.",
+    );
   }
 
   async function runAllInDir(_dir: string): Promise<void> {
-    // Depends on executeCode — stubbed for same reason.
+    throw new Error(
+      "Code execution is not yet supported in this runtime. " +
+        "db:migrate, db:rollback, and db:seed require a sandboxed eval context.",
+    );
   }
 
   function buildCli() {

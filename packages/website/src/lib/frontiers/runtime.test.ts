@@ -117,6 +117,22 @@ describe("exec: sql", () => {
   });
 });
 
+describe("exec: db:migrate (not yet supported)", () => {
+  it("errors explicitly when code execution is not available", async () => {
+    await runtime.exec("generate model User name:string email:string");
+    const result = await runtime.exec("db:migrate");
+    expect(result.success).toBe(false);
+    expect(result.output.join("\n")).toMatch(/not.*supported|sandboxed/i);
+  });
+
+  it("db:seed errors explicitly", async () => {
+    runtime.vfs.write("db/seeds.ts", "// seed data");
+    const result = await runtime.exec("db:seed");
+    expect(result.success).toBe(false);
+    expect(result.output.join("\n")).toMatch(/not.*supported|sandboxed/i);
+  });
+});
+
 describe("exec: db:drop", () => {
   it("drops all tables", async () => {
     runtime.adapter.execRaw("CREATE TABLE users (id INTEGER PRIMARY KEY)");

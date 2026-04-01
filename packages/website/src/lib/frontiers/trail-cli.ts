@@ -91,7 +91,7 @@ function generateAppScaffold(name: string): Array<{ path: string; content: strin
   return [
     {
       path: "app/main.ts",
-      content: `// ${name} — main entry point\nreturn "${name} is ready. Run: generate model User name:string email:string";\n`,
+      content: `// ${name} — main entry point\nexport default "${name} is ready. Run: generate model User name:string email:string";\n`,
     },
     {
       path: "config/routes.ts",

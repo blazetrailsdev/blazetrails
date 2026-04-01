@@ -39,16 +39,6 @@ export function resolveTableName(modelClass: typeof Base): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Quote a single value for use in SQL.
- * Delegates to the adapter-aware quote() from the quoting module.
- *
- * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#quote
- */
-export function quoteValue(val: unknown): string {
-  return quote(val);
-}
-
-/**
  * Build a WHERE clause string for the primary key of a given record.
  *
  * Mirrors: used throughout ActiveRecord persistence internals

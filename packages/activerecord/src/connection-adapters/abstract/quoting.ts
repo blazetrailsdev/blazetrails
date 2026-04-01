@@ -31,7 +31,11 @@ export function quoteTableName(name: string, adapter?: "sqlite" | "postgres" | "
 export function quote(value: unknown): string {
   if (value === null || value === undefined) return "NULL";
   if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
-  if (typeof value === "number") return String(value);
+  if (typeof value === "number" || typeof value === "bigint") return String(value);
+  if (value instanceof Date) return `'${value.toISOString()}'`;
+  if (typeof value === "string" || typeof value === "symbol") {
+    return `'${String(value).replace(/'/g, "''")}'`;
+  }
   return `'${String(value).replace(/'/g, "''")}'`;
 }
 

@@ -190,7 +190,9 @@ describe("SignedIdTest", () => {
     }
     const u = await UserShort.create({ name: "Jake" });
     const token = u.signedId({ expiresAt: new Date(Date.now() - 1000) });
-    await expect(UserShort.findSignedBang(token)).rejects.toThrow();
+    await expect(UserShort.findSignedBang(token)).rejects.toThrow(
+      /Expired message|InvalidSignature/,
+    );
   });
 
   it.skip("fail to work without a signed_id_verifier_secret", () => {

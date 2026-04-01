@@ -2913,8 +2913,8 @@ export class Base extends Model {
   }
 
   /**
-   * Generate a signed ID for this record using base64-encoded JSON with HMAC.
-   * The purpose parameter scopes the signed ID.
+   * Generate a signed ID for this record using HMAC-SHA256 via MessageVerifier.
+   * The purpose parameter scopes the signed ID. expiresIn is in seconds.
    *
    * Mirrors: ActiveRecord::SignedId#signed_id
    */
@@ -2932,7 +2932,8 @@ export class Base extends Model {
   }
 
   /**
-   * Find a record by its signed ID, or throw RecordNotFound.
+   * Find a record by its signed ID, or throw.
+   * Throws InvalidSignature if tampered/expired, RecordNotFound if not found.
    *
    * Mirrors: ActiveRecord::SignedId.find_signed!
    */

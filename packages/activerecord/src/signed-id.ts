@@ -11,15 +11,20 @@ import { underscore } from "@blazetrails/activesupport";
  */
 
 let _signedIdVerifierSecret: string | (() => string) | null = null;
+const _cachedVerifierClasses = new Set<any>();
 
 /**
  * Set the secret used for signed ID verification.
- * Within a Rails-like app, this comes from the application key generator.
+ * Clears any cached verifiers so they pick up the new secret.
  *
  * Mirrors: ActiveRecord::Base.signed_id_verifier_secret=
  */
 export function setSignedIdVerifierSecret(secret: string | (() => string)): void {
   _signedIdVerifierSecret = secret;
+  for (const cls of _cachedVerifierClasses) {
+    cls._signedIdVerifier = null;
+  }
+  _cachedVerifierClasses.clear();
 }
 
 /**
@@ -47,6 +52,7 @@ export function signedIdVerifier(modelClass: typeof Base): MessageVerifier {
     url_safe: true,
   });
   (modelClass as any)._signedIdVerifier = verifier;
+  _cachedVerifierClasses.add(modelClass);
   return verifier;
 }
 

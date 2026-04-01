@@ -53,11 +53,18 @@
   }
 
   let unsubscribe: (() => void) | undefined;
+  let refreshTimer: ReturnType<typeof setTimeout> | undefined;
   onMount(() => {
     refresh();
-    unsubscribe = vfs.onChange(() => refresh());
+    unsubscribe = vfs.onChange(() => {
+      clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(refresh, 100);
+    });
   });
-  onDestroy(() => unsubscribe?.());
+  onDestroy(() => {
+    unsubscribe?.();
+    clearTimeout(refreshTimer);
+  });
 
   function toggleTable(name: string) {
     if (expandedTable === name) {
@@ -102,7 +109,7 @@
   class="flex h-full flex-col overflow-auto text-xs"
   data-testid="database-browser"
   tabindex="0"
-  role="tree"
+  role="listbox"
   aria-label="Database browser"
   aria-activedescendant={focusedIndex >= 0 && tables[focusedIndex] ? `db-item-${encodeURIComponent(tables[focusedIndex].name)}` : undefined}
   onkeydown={handleKeydown}
@@ -118,13 +125,11 @@
   {:else}
     {#each tables as table, i (table.name)}
       <div id={`db-item-${encodeURIComponent(table.name)}`}
-           data-testid="db-table" data-table={table.name} role="treeitem"
-           aria-expanded={expandedTable === table.name}
+           data-testid="db-table" data-table={table.name} role="option"
            aria-selected={focusedIndex === i}>
         <button
           type="button"
           tabindex="-1"
-          aria-expanded={expandedTable === table.name}
           class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:text-accent md:py-1
                  {expandedTable === table.name ? 'bg-surface-overlay text-text' : 'text-text-muted'}
                  {focusedIndex === i ? 'outline outline-1 outline-border-focus' : ''}"

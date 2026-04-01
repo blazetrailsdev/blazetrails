@@ -28,7 +28,7 @@
   let focusedPath = $state<string | null>(null);
   let confirmDelete = $state<{ path: string; isDir: boolean } | null>(null);
 
-  function buildTree(paths: string[]): TreeNode[] {
+  function buildTree(paths: string[], hiddenPaths: Set<string> = new Set()): TreeNode[] {
     const nodeMap = new Map<string, TreeNode>();
 
     function ensureDir(dirPath: string): TreeNode {
@@ -54,6 +54,12 @@
 
     for (const filePath of paths) {
       const parts = filePath.split("/");
+
+      if (hiddenPaths.has(filePath)) {
+        if (parts.length > 1) ensureDir(parts.slice(0, -1).join("/"));
+        continue;
+      }
+
       const fileName = parts[parts.length - 1];
       const fileNode: TreeNode = {
         name: fileName,
@@ -100,7 +106,10 @@
 
   function refresh() {
     const files = vfs.list();
-    root = buildTree(files.map((f) => f.path));
+    const paths = files.map((f) => f.path);
+    root = buildTree(paths, new Set(
+      paths.filter((p) => p.endsWith("/.gitkeep")).map((p) => p),
+    ));
   }
 
   let unsubscribe: (() => void) | undefined;
@@ -168,8 +177,22 @@
     parts[parts.length - 1] = renameValue.trim();
     const newPath = parts.join("/");
     if (newPath !== renaming) {
-      vfs.rename(renaming, newPath);
-      if (selectedPath === renaming) onselect?.(newPath);
+      const node = findNode(root, renaming);
+      if (node?.isDir) {
+        const prefix = renaming + "/";
+        const files = vfs.list().filter((f) => f.path.startsWith(prefix));
+        for (const f of files) {
+          const newFilePath = newPath + "/" + f.path.slice(prefix.length);
+          vfs.write(newFilePath, f.content);
+          vfs.delete(f.path);
+        }
+        if (selectedPath?.startsWith(prefix)) {
+          onselect?.(newPath + "/" + selectedPath.slice(prefix.length));
+        }
+      } else {
+        vfs.rename(renaming, newPath);
+        if (selectedPath === renaming) onselect?.(newPath);
+      }
     }
     renaming = null;
   }
@@ -195,6 +218,10 @@
       createValue = "";
       return;
     } else {
+      if (vfs.exists(fullPath)) {
+        creating = null;
+        return;
+      }
       vfs.write(fullPath, "");
       onselect?.(fullPath);
     }

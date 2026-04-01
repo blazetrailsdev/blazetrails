@@ -67,6 +67,16 @@ describe("FileTree", () => {
       expect(screen.getByTestId("tree-file").getAttribute("aria-selected")).toBe("true");
     });
 
+    it("hides .gitkeep files but shows their parent directories", async () => {
+      vfs.write("src/.gitkeep", "");
+      vfs.write("src/app/.gitkeep", "");
+      vfs.write("test.ts", "content");
+      render(FileTree, { props: { vfs } });
+      await waitFor(() => expect(screen.getByText("src")).toBeTruthy());
+      expect(screen.getByText("app")).toBeTruthy();
+      expect(screen.queryByText(".gitkeep")).toBeNull();
+    });
+
     it("shows file header", async () => {
       vfs.write("test.ts", "content");
       render(FileTree, { props: { vfs } });
@@ -157,6 +167,20 @@ describe("FileTree", () => {
       expect(vfs.exists("hello.ts")).toBe(true);
     });
 
+    it("does not overwrite existing file on create", async () => {
+      vfs.write("existing.ts", "original content");
+      render(FileTree, { props: { vfs } });
+      await waitFor(() => expect(screen.getByTestId("new-file-button")).toBeTruthy());
+
+      await fireEvent.click(screen.getByTestId("new-file-button"));
+      const input = screen.getByTestId("create-input") as HTMLInputElement;
+      input.value = "existing.ts";
+      await fireEvent.input(input, { target: { value: "existing.ts" } });
+      await fireEvent.keyDown(input, { key: "Enter" });
+
+      expect(vfs.read("existing.ts")!.content).toBe("original content");
+    });
+
     it("cancels create on Escape", async () => {
       render(FileTree, { props: { vfs } });
       await waitFor(() => expect(screen.getByTestId("new-file-button")).toBeTruthy());
@@ -197,6 +221,30 @@ describe("FileTree", () => {
 
       expect(vfs.exists("new.ts")).toBe(true);
       expect(vfs.exists("old.ts")).toBe(false);
+    });
+
+    it("renames a directory and updates all child paths", async () => {
+      vfs.write("src/a.ts", "a");
+      vfs.write("src/b.ts", "b");
+      render(FileTree, { props: { vfs } });
+      await waitFor(() => expect(screen.getAllByTestId("tree-dir").length).toBeGreaterThan(0));
+
+      const srcDir = screen
+        .getAllByTestId("tree-dir")
+        .find((el) => el.getAttribute("data-path") === "src");
+      const button = srcDir!.querySelector("button")!;
+      await fireEvent.contextMenu(button);
+      await fireEvent.click(screen.getByText("Rename"));
+
+      const input = screen.getByTestId("rename-input") as HTMLInputElement;
+      input.value = "lib";
+      await fireEvent.input(input, { target: { value: "lib" } });
+      await fireEvent.keyDown(input, { key: "Enter" });
+
+      expect(vfs.exists("lib/a.ts")).toBe(true);
+      expect(vfs.exists("lib/b.ts")).toBe(true);
+      expect(vfs.exists("src/a.ts")).toBe(false);
+      expect(vfs.exists("src/b.ts")).toBe(false);
     });
   });
 

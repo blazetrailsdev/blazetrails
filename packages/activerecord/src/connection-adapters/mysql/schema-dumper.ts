@@ -8,6 +8,6 @@ import { SchemaDumper as AbstractSchemaDumper } from "../abstract/schema-dumper.
 
 export class SchemaDumper extends AbstractSchemaDumper {
   defaultPrimaryKeyType(): string {
-    return "int";
+    return "bigint";
   }
 }

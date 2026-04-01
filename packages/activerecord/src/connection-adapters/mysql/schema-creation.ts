@@ -6,6 +6,7 @@
 
 import { SchemaCreation as AbstractSchemaCreation } from "../abstract/schema-creation.js";
 import type { ReferentialAction } from "../abstract/schema-definitions.js";
+import { singularize, underscore } from "@blazetrails/activesupport";
 import { quoteColumnName, quoteTableName } from "./quoting.js";
 
 export class SchemaCreation extends AbstractSchemaCreation {
@@ -14,9 +15,11 @@ export class SchemaCreation extends AbstractSchemaCreation {
   }
 
   visitAddForeignKey(fromTable: string, toTable: string, options: Record<string, unknown>): string {
-    const column = (options.column as string) ?? `${toTable.replace(/s$/, "")}_id`;
+    const toIdentifier = toTable.includes(".") ? toTable.split(".").pop()! : toTable;
+    const column = (options.column as string) ?? `${underscore(singularize(toIdentifier))}_id`;
     const primaryKey = (options.primaryKey as string) ?? "id";
-    const name = (options.name as string) ?? `fk_rails_${fromTable}_${column}`;
+    const fromIdentifier = fromTable.includes(".") ? fromTable.split(".").pop()! : fromTable;
+    const name = (options.name as string) ?? `fk_rails_${fromIdentifier}_${column}`;
 
     let sql = `ALTER TABLE ${quoteTableName(fromTable)} ADD CONSTRAINT ${quoteColumnName(name)} `;
     sql += `FOREIGN KEY (${quoteColumnName(column)}) REFERENCES ${quoteTableName(toTable)} (${quoteColumnName(primaryKey)})`;

@@ -10,6 +10,7 @@
 
 import { AbstractAdapter, Version } from "./abstract-adapter.js";
 import { StatementPool as ConnectionStatementPool } from "./statement-pool.js";
+import { quoteString as mysqlQuoteString } from "./mysql/quoting.js";
 
 const NATIVE_DATABASE_TYPES: Record<string, { name: string; limit?: number }> = {
   primary_key: { name: "bigint auto_increment PRIMARY KEY" },
@@ -418,17 +419,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
   checkVersion(): void {}
 
   quoteString(string: string): string {
-    // eslint-disable-next-line no-control-regex
-    const MYSQL_ESCAPE_RE = /[\\\x00\n\r\x1a']/g;
-    const ESCAPE_MAP: Record<string, string> = {
-      "\\": "\\\\",
-      "\0": "\\0",
-      "\n": "\\n",
-      "\r": "\\r",
-      "\x1a": "\\Z",
-      "'": "\\'",
-    };
-    return `'${string.replace(MYSQL_ESCAPE_RE, (ch) => ESCAPE_MAP[ch] ?? ch)}'`;
+    return mysqlQuoteString(string);
   }
 
   static dbconsole(

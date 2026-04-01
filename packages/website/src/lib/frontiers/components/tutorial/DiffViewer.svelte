@@ -12,18 +12,15 @@
 
   let { diff, vfs, onfileclick, onapplied }: Props = $props();
 
-  let applied = $state(false);
+  let manuallyApplied = $state(false);
+  let applied = $derived(manuallyApplied || isDiffApplied(vfs, diff));
   let error = $state<string | null>(null);
-
-  $effect(() => {
-    applied = isDiffApplied(vfs, diff);
-  });
 
   function apply() {
     error = null;
     const result = applyDiff(vfs, diff);
     if (result.success) {
-      applied = true;
+      manuallyApplied = true;
       onapplied?.();
     } else {
       error = result.error ?? "Unknown error";

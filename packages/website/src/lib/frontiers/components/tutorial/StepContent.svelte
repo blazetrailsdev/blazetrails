@@ -19,7 +19,13 @@
 </script>
 
 <div class="flex flex-col gap-4 p-4" data-testid="step-content">
-  <h2 class="text-lg font-bold text-accent">{step.title}</h2>
+  <a
+    href="#tutorial-content"
+    class="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:rounded focus:bg-accent focus:px-3 focus:py-1 focus:text-surface"
+  >
+    Skip to tutorial content
+  </a>
+  <h2 id="tutorial-content" class="text-lg font-bold text-accent">{step.title}</h2>
 
   {#each step.description as paragraph}
     <p class="text-sm leading-relaxed text-text">{paragraph}</p>

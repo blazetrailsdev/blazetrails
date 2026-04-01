@@ -7,7 +7,17 @@
   }
 
   let { tutorial, currentStep, totalSteps, onnavigate }: Props = $props();
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (e.key === "ArrowLeft" && currentStep > 1) {
+      onnavigate(currentStep - 1);
+    } else if (e.key === "ArrowRight" && currentStep < totalSteps) {
+      onnavigate(currentStep + 1);
+    }
+  }
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <nav
   class="flex items-center justify-between border-b border-border bg-surface-raised px-4 py-2"

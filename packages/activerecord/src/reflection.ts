@@ -237,15 +237,10 @@ export class AssociationReflection extends MacroReflection {
   }
 
   get associationPrimaryKey(): string | string[] {
-    if (this.options.primaryKey) return this.options.primaryKey as string;
-    const pk = this.klass.primaryKey;
-    return pk;
+    return this.klass.primaryKey;
   }
 
   get activeRecordPrimaryKey(): string | string[] {
-    if (this.options.primaryKey && !this.belongsTo()) {
-      return this.options.primaryKey as string;
-    }
     return this.activeRecord.primaryKey;
   }
 
@@ -319,12 +314,8 @@ export class BelongsToReflection extends AssociationReflection {
   }
 
   get associationPrimaryKey(): string | string[] {
-    if (this.options.primaryKey) return this.options.primaryKey as string;
-    try {
-      return this.klass.primaryKey;
-    } catch {
-      return "id";
-    }
+    if (this.options.primaryKey) return this.options.primaryKey as string | string[];
+    return this.klass.primaryKey ?? "id";
   }
 }
 

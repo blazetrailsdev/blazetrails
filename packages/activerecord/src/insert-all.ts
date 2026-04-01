@@ -2,8 +2,11 @@ import { InsertManager, Nodes } from "@blazetrails/arel";
 import type { Base } from "./base.js";
 import { quoteSqlValue } from "./base.js";
 import type { Relation } from "./relation.js";
+import { detectAdapterName } from "./adapter-name.js";
+import { quoteIdentifier } from "./connection-adapters/abstract/quoting.js";
 
 type ModelClass = typeof Base;
+type AdapterDialect = "sqlite" | "postgres" | "mysql";
 
 const TIMESTAMP_COLUMNS = ["created_at", "updated_at"] as const;
 
@@ -74,7 +77,8 @@ export class InsertAll {
 
   async execute(): Promise<number> {
     if (this.inserts.length === 0) return 0;
-    const builder = new Builder(this);
+    const dialect = detectAdapterName(this.connection);
+    const builder = new Builder(this, dialect);
     return this.connection.executeMutation(builder.toSql());
   }
 
@@ -180,21 +184,16 @@ export class InsertAll {
 export class Builder {
   readonly model: ModelClass;
   private _insertAll: InsertAll;
+  private _dialect: AdapterDialect;
 
-  constructor(insertAll: InsertAll) {
+  constructor(insertAll: InsertAll, dialect: AdapterDialect = "sqlite") {
     this._insertAll = insertAll;
     this.model = insertAll.model;
+    this._dialect = dialect;
   }
 
-  /**
-   * Assemble the full SQL statement, dispatching to adapter-specific logic.
-   *
-   * Mirrors how Rails calls connection.build_insert_sql(builder) where each
-   * adapter (SQLite3, PostgreSQL, MySQL) overrides the method.
-   */
   toSql(): string {
-    const isMysql = !!process.env.MYSQL_TEST_URL;
-    return isMysql ? this._buildMysqlSql() : this._buildStandardSql();
+    return this._dialect === "mysql" ? this._buildMysqlSql() : this._buildStandardSql();
   }
 
   into(): string {
@@ -204,7 +203,6 @@ export class Builder {
     mgr.ast.columns = keys.map((k) => table.get(k));
     mgr.values(this.valuesList());
     const full = mgr.toSql();
-    // Extract "INTO ..." portion (everything after "INSERT ")
     return full.slice("INSERT ".length);
   }
 
@@ -218,20 +216,16 @@ export class Builder {
   }
 
   conflictTarget(): string {
-    if (this._insertAll.uniqueBy) {
-      const cols = Array.isArray(this._insertAll.uniqueBy)
+    const cols = this._insertAll.uniqueBy
+      ? Array.isArray(this._insertAll.uniqueBy)
         ? this._insertAll.uniqueBy
-        : [this._insertAll.uniqueBy];
-      return `(${cols.map((c) => `"${c}"`).join(", ")})`;
-    }
-    return `(${this._insertAll
-      .primaryKeys()
-      .map((c) => `"${c}"`)
-      .join(", ")})`;
+        : [this._insertAll.uniqueBy]
+      : this._insertAll.primaryKeys();
+    return `(${cols.map((c) => this._quoteCol(c)).join(", ")})`;
   }
 
   updatableColumns(): string[] {
-    return this._insertAll.updatableColumns().map((c) => `"${c}"`);
+    return this._insertAll.updatableColumns().map((c) => this._quoteCol(c));
   }
 
   touchModelTimestampsUnless(block: (col: string) => string): string {
@@ -240,11 +234,13 @@ export class Builder {
     }
     const updatable = this._insertAll.updatableColumns();
     const parts: string[] = [];
+    const tableName = quoteIdentifier(this.model.arelTable.name, this._dialect);
     for (const col of TIMESTAMP_COLUMNS) {
       if (this.model._attributeDefinitions.has(col) && !updatable.includes(col)) {
+        const qcol = this._quoteCol(col);
         const conditions = this.updatableColumns().map(block).join(" AND ");
         parts.push(
-          `"${col}"=(CASE WHEN (${conditions}) THEN "${this.model.arelTable.name}"."${col}" ELSE CURRENT_TIMESTAMP END)`,
+          `${qcol}=(CASE WHEN (${conditions}) THEN ${tableName}.${qcol} ELSE CURRENT_TIMESTAMP END)`,
         );
       }
     }
@@ -269,10 +265,11 @@ export class Builder {
       if (this._insertAll.updateSql) {
         sql += this._insertAll.updateSql.value;
       } else {
-        sql += this.touchModelTimestampsUnless((column) => `${column} IS excluded.${column}`);
-        sql += this.updatableColumns()
-          .map((c) => `${c}=excluded.${c}`)
-          .join(",");
+        const assignments = this._updateAssignments(
+          (col) => `${col} IS excluded.${col}`,
+          (col) => `${col}=excluded.${col}`,
+        );
+        sql += assignments.join(",");
       }
     }
 
@@ -296,19 +293,46 @@ export class Builder {
         sql += ` ON DUPLICATE KEY UPDATE ${this._insertAll.updateSql.value}`;
       } else {
         sql += " ON DUPLICATE KEY UPDATE ";
-        sql += this.touchModelTimestampsUnless((column) => `${column}<=>VALUES(${column})`);
-        sql += this.updatableColumns()
-          .map((c) => `${c}=VALUES(${c})`)
-          .join(",");
+        const assignments = this._updateAssignments(
+          (col) => `${col}<=>VALUES(${col})`,
+          (col) => `${col}=VALUES(${col})`,
+        );
+        sql += assignments.join(",");
       }
     }
 
     return sql;
   }
 
+  /**
+   * Build the combined list of timestamp touch + column update assignments.
+   * Ensures correct comma separation between touch and column parts.
+   */
+  private _updateAssignments(
+    touchCondition: (col: string) => string,
+    updateExpr: (col: string) => string,
+  ): string[] {
+    const assignments: string[] = [];
+
+    const touch = this.touchModelTimestampsUnless(touchCondition);
+    if (touch) {
+      assignments.push(touch);
+    }
+
+    for (const col of this.updatableColumns()) {
+      assignments.push(updateExpr(col));
+    }
+
+    return assignments;
+  }
+
+  private _quoteCol(name: string): string {
+    return quoteIdentifier(name, this._dialect);
+  }
+
   private _firstColumn(): string | undefined {
     const keys = [...this._insertAll.keysIncludingTimestamps()];
-    return keys.length > 0 ? `"${keys[0]}"` : undefined;
+    return keys.length > 0 ? this._quoteCol(keys[0]) : undefined;
   }
 
   private _arrayColumnSet(): Set<string> {

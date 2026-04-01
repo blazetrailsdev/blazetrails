@@ -1,6 +1,5 @@
-import { Nodes } from "@blazetrails/arel";
+import { InsertManager, Nodes } from "@blazetrails/arel";
 import type { Base } from "./base.js";
-import { quoteSqlValue } from "./base.js";
 import type { Relation } from "./relation.js";
 
 type ModelClass = typeof Base;
@@ -78,7 +77,7 @@ export class InsertAll {
   async execute(): Promise<number> {
     if (this.inserts.length === 0) return 0;
     const builder = new Builder(this);
-    return this.connection.executeMutation(this._toSql(builder));
+    return this.connection.executeMutation(builder.toSql());
   }
 
   updatableColumns(): string[] {
@@ -136,47 +135,6 @@ export class InsertAll {
     return this._keysIncludingTimestamps;
   }
 
-  private _toSql(builder: Builder): string {
-    const into = builder.into();
-    const values = builder.valuesList();
-    const isMysql = !!process.env.MYSQL_TEST_URL;
-
-    if (this.skipDuplicates()) {
-      if (isMysql) {
-        return `INSERT IGNORE ${into} VALUES ${values}`;
-      }
-      const target = builder.conflictTarget();
-      return `INSERT ${into} VALUES ${values} ON CONFLICT ${target} DO NOTHING`;
-    }
-
-    if (this.updateSql) {
-      if (isMysql) {
-        return `INSERT ${into} VALUES ${values} ON DUPLICATE KEY UPDATE ${this.updateSql.value}`;
-      }
-      const target = builder.conflictTarget();
-      return `INSERT ${into} VALUES ${values} ON CONFLICT ${target} DO UPDATE SET ${this.updateSql.value}`;
-    }
-
-    if (this.updateDuplicates()) {
-      const updateCols = builder.updatableColumns();
-      if (isMysql) {
-        const clause =
-          updateCols.length > 0
-            ? updateCols.map((c) => `${c} = VALUES(${c})`).join(", ")
-            : `${builder.firstColumn()} = VALUES(${builder.firstColumn()})`;
-        return `INSERT ${into} VALUES ${values} ON DUPLICATE KEY UPDATE ${clause}`;
-      }
-      const clause =
-        updateCols.length > 0
-          ? updateCols.map((c) => `${c} = EXCLUDED.${c}`).join(", ")
-          : `${builder.firstColumn()} = EXCLUDED.${builder.firstColumn()}`;
-      const target = builder.conflictTarget();
-      return `INSERT ${into} VALUES ${values} ON CONFLICT ${target} DO UPDATE SET ${clause}`;
-    }
-
-    return `INSERT ${into} VALUES ${values}`;
-  }
-
   private _configureDuplicateLogic(onDuplicate: InsertAllOptions["onDuplicate"]): void {
     if (onDuplicate instanceof Nodes.SqlLiteral && this.updateOnly !== undefined) {
       throw new Error(
@@ -220,17 +178,22 @@ export class Builder {
     this.model = insertAll.model;
   }
 
+  toSql(): string {
+    const baseSql = this._buildInsertSql();
+    const conflictSql = this._buildConflictSql();
+    return conflictSql ? `${baseSql} ${conflictSql}` : baseSql;
+  }
+
   into(): string {
     return `INTO "${this.model.arelTable.name}" (${this._columnsList()})`;
   }
 
-  valuesList(): string {
-    const arrayCols = this._arrayColumnSet();
-    const rows = this._insertAll.mapKeyWithValue((key, value) => {
-      if (value instanceof Nodes.SqlLiteral) return value.value;
-      return quoteSqlValue(value, arrayCols.has(key));
+  valuesList(): Nodes.ValuesList {
+    const rows = this._insertAll.mapKeyWithValue((_key, value) => {
+      if (value instanceof Nodes.SqlLiteral) return value;
+      return new Nodes.Quoted(value);
     });
-    return rows.map((row) => `(${(row as unknown[]).join(", ")})`).join(", ");
+    return new Nodes.ValuesList(rows as Nodes.Node[][]);
   }
 
   returning(): string | undefined {
@@ -258,11 +221,6 @@ export class Builder {
     return this._insertAll.updatableColumns().map((c) => `"${c}"`);
   }
 
-  firstColumn(): string {
-    const keys = [...this._insertAll.keysIncludingTimestamps()];
-    return `"${keys[0]}"`;
-  }
-
   touchModelTimestampsUnless(block: (col: string) => string): string {
     if (!this._insertAll.updateDuplicates() || !this._insertAll.recordTimestamps()) {
       return "";
@@ -284,17 +242,57 @@ export class Builder {
     return this._insertAll.updateSql;
   }
 
+  private _buildInsertSql(): string {
+    const table = this.model.arelTable;
+    const keys = [...this._insertAll.keysIncludingTimestamps()];
+
+    const mgr = new InsertManager(table);
+    mgr.ast.columns = keys.map((k) => table.get(k));
+    mgr.values(this.valuesList());
+    return mgr.toSql();
+  }
+
+  private _buildConflictSql(): string | undefined {
+    const isMysql = !!process.env.MYSQL_TEST_URL;
+    const ia = this._insertAll;
+
+    if (ia.skipDuplicates()) {
+      if (isMysql) return undefined; // MySQL uses INSERT IGNORE (handled separately)
+      return `ON CONFLICT ${this.conflictTarget()} DO NOTHING`;
+    }
+
+    if (ia.updateSql) {
+      if (isMysql) {
+        return `ON DUPLICATE KEY UPDATE ${ia.updateSql.value}`;
+      }
+      return `ON CONFLICT ${this.conflictTarget()} DO UPDATE SET ${ia.updateSql.value}`;
+    }
+
+    if (ia.updateDuplicates()) {
+      const updateCols = this.updatableColumns();
+      if (isMysql) {
+        const clause =
+          updateCols.length > 0
+            ? updateCols.map((c) => `${c} = VALUES(${c})`).join(", ")
+            : `${this._firstColumn()} = VALUES(${this._firstColumn()})`;
+        return `ON DUPLICATE KEY UPDATE ${clause}`;
+      }
+      const clause =
+        updateCols.length > 0
+          ? updateCols.map((c) => `${c} = EXCLUDED.${c}`).join(", ")
+          : `${this._firstColumn()} = EXCLUDED.${this._firstColumn()}`;
+      return `ON CONFLICT ${this.conflictTarget()} DO UPDATE SET ${clause}`;
+    }
+
+    return undefined;
+  }
+
   private _columnsList(): string {
     return [...this._insertAll.keysIncludingTimestamps()].map((c) => `"${c}"`).join(", ");
   }
 
-  private _arrayColumnSet(): Set<string> {
+  private _firstColumn(): string {
     const keys = [...this._insertAll.keysIncludingTimestamps()];
-    return new Set(
-      keys.filter((c) => {
-        const def = this.model._attributeDefinitions.get(c);
-        return def?.type?.name === "array";
-      }),
-    );
+    return `"${keys[0]}"`;
   }
 }

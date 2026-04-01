@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { renderDiagram } from "../../tutorials/diagram-renderer.js";
 
   interface Props {
@@ -12,21 +11,33 @@
   let svg = $state<string | null>(null);
   let error = $state<string | null>(null);
   let loading = $state(true);
+  let lastSource = "";
 
-  onMount(async () => {
-    const result = await renderDiagram(source);
+  async function render(src: string) {
+    if (src === lastSource && !loading) return;
+    lastSource = src;
+    loading = true;
+    svg = null;
+    error = null;
+    const result = await renderDiagram(src);
+    if (src !== lastSource) return;
     if (result.success) {
       svg = result.svg!;
     } else {
       error = result.error ?? "Failed to render diagram";
     }
     loading = false;
+  }
+
+  $effect(() => {
+    render(source);
   });
 </script>
 
 <div
   class="rounded border border-border bg-surface-overlay p-3"
   data-testid="diagram-block"
+  role={label ? "img" : undefined}
   aria-label={label}
 >
   {#if loading}

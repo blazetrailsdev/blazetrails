@@ -42,14 +42,21 @@ async function ensureInit(): Promise<typeof import("mermaid").default> {
 
   if (!initPromise) {
     initPromise = (async () => {
-      const mod = await import("mermaid");
-      mermaidInstance = mod.default;
-      mermaidInstance.initialize({
-        startOnLoad: false,
-        ...EARTH_THEME,
-        fontFamily: '"JetBrains Mono", "Fira Code", ui-monospace, monospace',
-        fontSize: 12,
-      });
+      try {
+        const mod = await import("mermaid");
+        mermaidInstance = mod.default;
+        mermaidInstance.initialize({
+          startOnLoad: false,
+          securityLevel: "strict",
+          ...EARTH_THEME,
+          fontFamily: '"JetBrains Mono", "Fira Code", ui-monospace, monospace',
+          fontSize: 12,
+        });
+      } catch (e) {
+        mermaidInstance = null;
+        initPromise = null;
+        throw e;
+      }
     })();
   }
 
@@ -72,7 +79,16 @@ export async function renderDiagram(source: string): Promise<DiagramResult> {
     const { svg } = await mermaid.render(id, source);
     return { success: true, svg };
   } catch (e: unknown) {
-    const message = e instanceof Error ? e.message : String(e);
+    let message: string;
+    if (e instanceof Error) {
+      message = e.message;
+    } else if (typeof e === "string") {
+      message = e;
+    } else if (e && typeof e === "object" && "message" in e) {
+      message = String((e as { message: unknown }).message);
+    } else {
+      message = "Unknown diagram rendering error";
+    }
     return { success: false, error: message };
   }
 }

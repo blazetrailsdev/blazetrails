@@ -188,9 +188,15 @@
         const allFiles = vfs.list();
         const filesToMove = allFiles.filter((f) => f.path.startsWith(prefix));
         const newPaths = filesToMove.map((f) => newPath + "/" + f.path.slice(prefix.length));
-        const hasConflict = newPaths.some((np) =>
-          allFiles.some((f) => f.path === np && !f.path.startsWith(prefix)),
-        );
+        const hasConflict =
+          allFiles.some(
+            (f) =>
+              !f.path.startsWith(prefix) &&
+              (f.path === newPath || f.path.startsWith(newPath + "/")),
+          ) ||
+          newPaths.some((np) =>
+            allFiles.some((f) => f.path === np && !f.path.startsWith(prefix)),
+          );
         if (hasConflict) {
           renaming = null;
           return;
@@ -221,27 +227,22 @@
   }
 
   function commitCreate() {
-    if (!creating || !createValue.trim()) {
+    const name = createValue.trim();
+    if (!creating || !name || name.includes("/")) {
       creating = null;
       return;
     }
     const dir = creating.parentDir;
-    const name = createValue.trim();
     const fullPath = dir ? `${dir}/${name}` : name;
+    if (vfs.exists(fullPath) || vfs.list().some((f) => f.path.startsWith(fullPath + "/"))) {
+      creating = null;
+      return;
+    }
     if (creating.isDir) {
-      const markerPath = `${fullPath}/.gitkeep`;
-      if (vfs.list().some((f) => f.path.startsWith(fullPath + "/")) || vfs.exists(markerPath)) {
-        creating = null;
-        return;
-      }
-      vfs.write(markerPath, "");
+      vfs.write(`${fullPath}/.gitkeep`, "");
       creating = null;
       return;
     } else {
-      if (vfs.exists(fullPath)) {
-        creating = null;
-        return;
-      }
       vfs.write(fullPath, "");
       onselect?.(fullPath);
     }
@@ -341,7 +342,7 @@
   data-testid="file-tree"
   role="tree"
   aria-label="File explorer"
-  aria-activedescendant={focusedPath ? `tree-item-${focusedPath.replace(/\//g, "-")}` : undefined}
+  aria-activedescendant={focusedPath ? `tree-item-${encodeURIComponent(focusedPath)}` : undefined}
   tabindex="0"
   onkeydown={handleKeydown}
 >
@@ -455,7 +456,7 @@
 
 {#snippet treeNode(node: TreeNode, depth: number)}
   <div
-    id={`tree-item-${node.path.replace(/\//g, "-")}`}
+    id={`tree-item-${encodeURIComponent(node.path)}`}
     role="treeitem"
     aria-expanded={node.isDir ? !collapsed.has(node.path) : undefined}
     aria-selected={node.path === selectedPath}

@@ -323,16 +323,35 @@ describe("FileTree", () => {
   });
 
   describe("keyboard navigation", () => {
-    it("navigates with arrow keys", async () => {
+    it("navigates with arrow keys and selects on Enter", async () => {
       vfs.write("a.ts", "a");
       vfs.write("b.ts", "b");
-      render(FileTree, { props: { vfs } });
+      const onselect = vi.fn();
+      render(FileTree, { props: { vfs, onselect } });
       await waitFor(() => expect(screen.getAllByTestId("tree-file").length).toBe(2));
 
       const tree = screen.getByTestId("file-tree");
       await fireEvent.keyDown(tree, { key: "ArrowDown" });
       await fireEvent.keyDown(tree, { key: "ArrowDown" });
       await fireEvent.keyDown(tree, { key: "Enter" });
+
+      expect(onselect).toHaveBeenCalledWith("b.ts");
+    });
+
+    it("arrow down then up returns to first item", async () => {
+      vfs.write("a.ts", "a");
+      vfs.write("b.ts", "b");
+      const onselect = vi.fn();
+      render(FileTree, { props: { vfs, onselect } });
+      await waitFor(() => expect(screen.getAllByTestId("tree-file").length).toBe(2));
+
+      const tree = screen.getByTestId("file-tree");
+      await fireEvent.keyDown(tree, { key: "ArrowDown" });
+      await fireEvent.keyDown(tree, { key: "ArrowDown" });
+      await fireEvent.keyDown(tree, { key: "ArrowUp" });
+      await fireEvent.keyDown(tree, { key: "Enter" });
+
+      expect(onselect).toHaveBeenCalledWith("a.ts");
     });
   });
 });

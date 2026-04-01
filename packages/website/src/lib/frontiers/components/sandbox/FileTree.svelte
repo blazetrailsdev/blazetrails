@@ -313,6 +313,9 @@
     if (focusedPath === path || (isDir && focusedPath?.startsWith(path + "/"))) {
       focusedPath = null;
     }
+    if (selectedPath === path || (isDir && selectedPath?.startsWith(path + "/"))) {
+      onselect?.("");
+    }
     confirmDelete = null;
   }
 
@@ -345,21 +348,21 @@
       if (prev) focusedPath = prev;
     } else if (e.key === "ArrowRight" && focusedPath) {
       const node = findNode(root, focusedPath);
-      if (node?.isDir && collapsed.has(focusedPath)) {
+      if (node?.isDir && node.children.length > 0 && collapsed.has(focusedPath)) {
         e.preventDefault();
         toggleCollapse(focusedPath);
       }
     } else if (e.key === "ArrowLeft" && focusedPath) {
       const node = findNode(root, focusedPath);
-      if (node?.isDir && !collapsed.has(focusedPath)) {
+      if (node?.isDir && node.children.length > 0 && !collapsed.has(focusedPath)) {
         e.preventDefault();
         toggleCollapse(focusedPath);
       }
     } else if (e.key === "Enter" && focusedPath) {
       e.preventDefault();
       const node = findNode(root, focusedPath);
-      if (node?.isDir) toggleCollapse(focusedPath);
-      else selectFile(focusedPath);
+      if (node?.isDir && node.children.length > 0) toggleCollapse(focusedPath);
+      else if (!node?.isDir) selectFile(focusedPath);
     } else if (e.key === "F2" && focusedPath && !readonly) {
       e.preventDefault();
       startRename(focusedPath);
@@ -448,32 +451,27 @@
     class="fixed z-50 rounded border border-border bg-surface-overlay py-1 shadow-lg"
     style="left: {contextMenu.x}px; top: {contextMenu.y}px"
     data-testid="context-menu"
-    role="menu"
   >
     <button
       type="button"
       class="block w-full px-3 py-1 text-left text-xs text-text hover:bg-surface hover:text-accent"
       onclick={() => startCreate(contextTargetDir(), false)}
-      role="menuitem"
     >New File</button>
     <button
       type="button"
       class="block w-full px-3 py-1 text-left text-xs text-text hover:bg-surface hover:text-accent"
       onclick={() => startCreate(contextTargetDir(), true)}
-      role="menuitem"
     >New Folder</button>
     <hr class="my-1 border-border" />
     <button
       type="button"
       class="block w-full px-3 py-1 text-left text-xs text-text hover:bg-surface hover:text-accent"
       onclick={() => startRename(contextMenu!.path)}
-      role="menuitem"
     >Rename</button>
     <button
       type="button"
       class="block w-full px-3 py-1 text-left text-xs text-error hover:bg-surface"
       onclick={() => requestDelete(contextMenu!.path, contextMenu!.isDir)}
-      role="menuitem"
     >Delete</button>
   </div>
 {/if}

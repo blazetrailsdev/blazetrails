@@ -73,7 +73,12 @@ export class Between extends Binary {
 
 export class NotEqual extends Binary {
   invert(): Node {
-    return new (_invertRegistry.Equality ?? NotEqual)(this.left, this.right);
+    if (!_invertRegistry.Equality) {
+      throw new Error(
+        'NotEqual.invert() requires the inversion registry. Import from "@blazetrails/arel" instead of deep-importing node classes.',
+      );
+    }
+    return new _invertRegistry.Equality(this.left, this.right);
   }
 
   fetchAttribute(block: (attr: Node) => unknown): unknown {
@@ -151,7 +156,12 @@ export class IsNotDistinctFrom extends Binary {
 
 export class NotIn extends Binary {
   invert(): Node {
-    return new (_invertRegistry.In ?? NotIn)(this.left, this.right);
+    if (!_invertRegistry.In) {
+      throw new Error(
+        'NotIn.invert() requires the inversion registry. Import from "@blazetrails/arel" instead of deep-importing node classes.',
+      );
+    }
+    return new _invertRegistry.In(this.left, this.right);
   }
 
   fetchAttribute(block: (attr: Node) => unknown): unknown {

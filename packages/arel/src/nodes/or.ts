@@ -4,16 +4,22 @@ import { Nary } from "./nary.js";
 /**
  * OR node — represents a disjunction.
  * In Rails, Or = Class.new(Nary), so it stores children[].
- * Accepts either `new Or([a, b])` (Rails-style) or `new Or(a, b)` for compat.
  *
  * Mirrors: Arel::Nodes::Or
  */
 export class Or extends Nary {
+  constructor(children: Node[]);
+  constructor(left: Node, right: Node);
   constructor(childrenOrLeft: Node[] | Node, right?: Node) {
     if (Array.isArray(childrenOrLeft)) {
       super(childrenOrLeft);
     } else {
-      super([childrenOrLeft, right!]);
+      if (right === undefined) {
+        throw new TypeError(
+          "Or requires both left and right when constructed with individual arguments",
+        );
+      }
+      super([childrenOrLeft, right]);
     }
   }
 }

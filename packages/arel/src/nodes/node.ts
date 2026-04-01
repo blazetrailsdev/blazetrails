@@ -7,22 +7,28 @@ export abstract class Node {
   abstract accept<T>(visitor: NodeVisitor<T>): T;
 
   not(): Node {
+    assertRegistered("Not");
     return new _registry.Not!(this);
   }
 
   or(right: Node): Node {
+    assertRegistered("Grouping");
+    assertRegistered("Or");
     return new _registry.Grouping!(new _registry.Or!([this, right]));
   }
 
   and(right: Node): Node {
+    assertRegistered("And");
     return new _registry.And!([this, right]);
   }
 
   invert(): Node {
+    assertRegistered("Not");
     return new _registry.Not!(this);
   }
 
   toSql(): string {
+    assertRegistered("ToSql");
     const visitor = new _registry.ToSql!();
     return (visitor as unknown as { compile(node: Node): string }).compile(this);
   }
@@ -71,6 +77,14 @@ export interface NodeVisitor<T> {
 // Populated by the index module after all classes are loaded.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const _registry: Record<string, (new (...args: any[]) => any) | undefined> = {};
+
+function assertRegistered(name: string): void {
+  if (!_registry[name]) {
+    throw new Error(
+      `Node.${name} requires the arel registry. Import from "@blazetrails/arel" instead of deep-importing node classes.`,
+    );
+  }
+}
 
 export function registerNodeDeps(deps: {
   Not: new (expr: Node) => Node;

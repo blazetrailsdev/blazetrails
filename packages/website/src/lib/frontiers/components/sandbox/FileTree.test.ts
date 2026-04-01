@@ -351,5 +351,72 @@ describe("FileTree", () => {
 
       expect(onselect).toHaveBeenCalledWith("a.ts");
     });
+
+    it("F2 opens rename input on focused file", async () => {
+      vfs.write("test.ts", "content");
+      render(FileTree, { props: { vfs } });
+      await waitFor(() => expect(screen.getByTestId("tree-file")).toBeTruthy());
+
+      const tree = screen.getByTestId("file-tree");
+      await fireEvent.keyDown(tree, { key: "ArrowDown" });
+      await fireEvent.keyDown(tree, { key: "F2" });
+
+      expect(screen.getByTestId("rename-input")).toBeTruthy();
+    });
+
+    it("Delete key opens confirmation dialog on focused file", async () => {
+      vfs.write("test.ts", "content");
+      render(FileTree, { props: { vfs } });
+      await waitFor(() => expect(screen.getByTestId("tree-file")).toBeTruthy());
+
+      const tree = screen.getByTestId("file-tree");
+      await fireEvent.keyDown(tree, { key: "ArrowDown" });
+      await fireEvent.keyDown(tree, { key: "Delete" });
+
+      expect(screen.getByTestId("delete-confirm")).toBeTruthy();
+    });
+
+    it("F2 and Delete are blocked in readonly mode", async () => {
+      vfs.write("test.ts", "content");
+      render(FileTree, { props: { vfs, readonly: true } });
+      await waitFor(() => expect(screen.getByTestId("tree-file")).toBeTruthy());
+
+      const tree = screen.getByTestId("file-tree");
+      await fireEvent.keyDown(tree, { key: "ArrowDown" });
+      await fireEvent.keyDown(tree, { key: "F2" });
+      expect(screen.queryByTestId("rename-input")).toBeNull();
+
+      await fireEvent.keyDown(tree, { key: "Delete" });
+      expect(screen.queryByTestId("delete-confirm")).toBeNull();
+    });
+  });
+
+  describe("create folder", () => {
+    it("creates a folder via header button (writes .gitkeep)", async () => {
+      render(FileTree, { props: { vfs } });
+      await waitFor(() => expect(screen.getByTestId("new-folder-button")).toBeTruthy());
+
+      await fireEvent.click(screen.getByTestId("new-folder-button"));
+      const input = screen.getByTestId("create-input") as HTMLInputElement;
+      input.value = "newfolder";
+      await fireEvent.input(input, { target: { value: "newfolder" } });
+      await fireEvent.keyDown(input, { key: "Enter" });
+
+      expect(vfs.exists("newfolder/.gitkeep")).toBe(true);
+    });
+
+    it("shows folder in tree but hides .gitkeep", async () => {
+      render(FileTree, { props: { vfs } });
+      await waitFor(() => expect(screen.getByTestId("new-folder-button")).toBeTruthy());
+
+      await fireEvent.click(screen.getByTestId("new-folder-button"));
+      const input = screen.getByTestId("create-input") as HTMLInputElement;
+      input.value = "myfolder";
+      await fireEvent.input(input, { target: { value: "myfolder" } });
+      await fireEvent.keyDown(input, { key: "Enter" });
+
+      await waitFor(() => expect(screen.getByText("myfolder")).toBeTruthy());
+      expect(screen.queryByText(".gitkeep")).toBeNull();
+    });
   });
 });

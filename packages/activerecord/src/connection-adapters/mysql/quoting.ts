@@ -59,8 +59,9 @@ export function quoteColumnName(name: string): string {
 
 /**
  * Quote a string value for use in SQL. MySQL uses backslash escaping
- * in addition to single-quote doubling when NO_BACKSLASH_ESCAPES is
- * not set (the default).
+ * (not single-quote doubling) when NO_BACKSLASH_ESCAPES is not set
+ * (the default). NUL, newline, carriage return, and Ctrl-Z are also
+ * escaped for safe transport across protocols.
  */
 export function quoteString(value: string): string {
   // eslint-disable-next-line no-control-regex

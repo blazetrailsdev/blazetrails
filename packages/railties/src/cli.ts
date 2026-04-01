@@ -8,14 +8,6 @@ import { routesCommand } from "./commands/routes.js";
 import { consoleCommand } from "./commands/console.js";
 import { destroyCommand } from "./commands/destroy.js";
 
-export { AppGenerator } from "./generators/app-generator.js";
-export { ModelGenerator } from "./generators/model-generator.js";
-export { MigrationGenerator } from "./generators/migration-generator.js";
-export { ControllerGenerator } from "./generators/controller-generator.js";
-export { ScaffoldGenerator } from "./generators/scaffold-generator.js";
-export { GeneratorBase } from "./generators/base.js";
-export type { GeneratorOptions } from "./generators/base.js";
-
 export function createProgram(): Command {
   const program = new Command();
 

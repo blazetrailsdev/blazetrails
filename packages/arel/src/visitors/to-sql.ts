@@ -542,9 +542,10 @@ export class ToSql implements NodeVisitor<SQLString> {
   }
 
   private visitOr(node: Nodes.Or): SQLString {
-    this.visit(node.left!);
-    this.collector.append(" OR ");
-    this.visit(node.right!);
+    for (let i = 0; i < node.children.length; i++) {
+      if (i > 0) this.collector.append(" OR ");
+      this.visit(node.children[i]);
+    }
     return this.collector;
   }
 

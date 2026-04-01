@@ -111,6 +111,7 @@ export class InsertAll {
 
   mapKeyWithValue<T>(fn: (key: string, value: unknown) => T): T[][] {
     const now = this.recordTimestamps() ? new Date() : undefined;
+    const keysList = [...this.keysIncludingTimestamps()];
     return this.inserts.map((row) => {
       const merged = { ...this._scopeAttributes, ...row };
       if (now) {
@@ -120,7 +121,7 @@ export class InsertAll {
           }
         }
       }
-      return [...this.keysIncludingTimestamps()].map((key) => fn(key, merged[key]));
+      return keysList.map((key) => fn(key, merged[key]));
     });
   }
 
@@ -219,6 +220,9 @@ export class Builder {
     if (keys.length === 0) {
       if (this._insertAll.inserts.length > 1) {
         throw new Error("Bulk insert with no explicit columns is not supported");
+      }
+      if (this._dialect === "mysql") {
+        return `INTO ${tableName} () VALUES ()`;
       }
       return `INTO ${tableName} DEFAULT VALUES`;
     }

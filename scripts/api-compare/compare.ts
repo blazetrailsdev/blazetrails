@@ -135,7 +135,7 @@ function rubyMethodToTs(name: string): string[] | null {
   if (SKIP.has(name)) return null;
   if (name.startsWith("_")) return null;
 
-  if (name === "initialize") return ["constructor"];
+  if (name === "initialize" || name === "new") return ["constructor"];
   if (name === "to_s" || name === "to_str") return ["toString"];
   if (name === "to_json") return ["toJSON"];
   if (name === "to_sql") return ["toSql"];
@@ -262,6 +262,28 @@ function main() {
       }
     }
 
+    // Propagate inherited methods: if class B extends A, B's file should
+    // also include all of A's methods for matching purposes.
+    if (tsPkg) {
+      const classByName = new Map<string, ClassInfo>();
+      for (const cls of Object.values(tsPkg.classes)) {
+        classByName.set(cls.name, cls);
+      }
+
+      for (const cls of Object.values(tsPkg.classes)) {
+        if (!cls.superclass || !cls.file) continue;
+        const parent = classByName.get(cls.superclass);
+        if (!parent?.file) continue;
+        const parentMethods = tsMethodsByFile.get(parent.file);
+        if (!parentMethods) continue;
+        const childMethods = tsMethodsByFile.get(cls.file) || new Set();
+        for (const m of parentMethods) {
+          childMethods.add(m);
+        }
+        tsMethodsByFile.set(cls.file, childMethods);
+      }
+    }
+
     // Collect all Ruby classes and modules with their methods
     const allRuby: {
       fqn: string;
@@ -365,37 +387,47 @@ function main() {
       let fileMatched = 0;
       let fileMissing = 0;
 
+      // Collect all includer method sets for modules in this file
+      const allIncluderMethodSets: Set<string>[] = [];
       for (const item of items) {
-        // For modules, also check files of classes that include this module
         const includerFiles = moduleIncluderFiles.get(item.fqn);
-        const includerMethodSets: Set<string>[] = [];
         if (includerFiles) {
           for (const f of includerFiles) {
             const methods = tsMethodsByFile.get(f);
-            if (methods) includerMethodSets.push(methods);
+            if (methods) allIncluderMethodSets.push(methods);
           }
         }
+      }
 
+      // Deduplicate: collect all unique TS method names expected from this file.
+      // Multiple Ruby classes in the same file often define the same method
+      // (e.g., 8 subclasses in binary.rb each override `invert`). Count once.
+      const seen = new Map<string, { rubyName: string; rubyModule: string }>();
+      for (const item of items) {
         const rubyMethods = [...item.info.instanceMethods, ...item.info.classMethods];
-
         for (const rm of rubyMethods) {
           const tsCandidates = rubyMethodToTs(rm.name);
           if (tsCandidates === null) continue;
-
-          const matched =
-            tsCandidates.some((c) => tsMethods.has(c)) ||
-            tsCandidates.some((c) => includerMethodSets.some((s) => s.has(c)));
-
-          if (matched) {
-            fileMatched++;
-          } else {
-            fileMissing++;
-            missingMethods.push({
-              rubyName: rm.name,
-              tsName: tsCandidates[0],
-              rubyModule: item.fqn,
-            });
+          const key = tsCandidates[0];
+          if (!seen.has(key)) {
+            seen.set(key, { rubyName: rm.name, rubyModule: item.fqn });
           }
+        }
+      }
+
+      for (const [tsName, { rubyName, rubyModule }] of seen) {
+        // Re-derive full candidates from the ruby name for multi-candidate matching
+        const tsCandidates = rubyMethodToTs(rubyName)!;
+
+        const matched =
+          tsCandidates.some((c) => tsMethods.has(c)) ||
+          tsCandidates.some((c) => allIncluderMethodSets.some((s) => s.has(c)));
+
+        if (matched) {
+          fileMatched++;
+        } else {
+          fileMissing++;
+          missingMethods.push({ rubyName, tsName, rubyModule });
         }
       }
 

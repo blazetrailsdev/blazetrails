@@ -1,6 +1,6 @@
 # ActiveRecord API Compare: Road to 100%
 
-Current state: **37.7%** (1,247 / 3,312 methods). Target: 100%.
+Current state: **35.8%** (1,039 / 2,901 methods). Target: 100%.
 
 ```bash
 pnpm run api:compare -- --package activerecord

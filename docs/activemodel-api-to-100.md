@@ -1,6 +1,6 @@
 # ActiveModel API Compare: Road to 100%
 
-Current state: **65.2%** (272 / 417 methods). **100%** tests (963/963). Target: 100% API.
+Current state: **63.1%** (221 / 350 methods). **100%** tests (963/963). Target: 100% API.
 
 ```bash
 pnpm run api:compare -- --package activemodel
@@ -9,19 +9,11 @@ pnpm run api:compare -- --package activemodel --missing  # show missing methods 
 
 ---
 
-## Remaining (5 missing)
+## Remaining (129 missing methods)
 
-| Rails file                     | Missing | Notes                                                         |
-| ------------------------------ | ------- | ------------------------------------------------------------- |
-| `attribute_registration.rb`    | 1       | AttributeRegistration module — attribute lifecycle hooks      |
-| `callbacks.rb`                 | 1       | Callbacks top-level module export (implementation exists)     |
-| `translation.rb`               | 1       | Translation module — i18n integration for model names         |
-| `type/serialize_cast_value.rb` | 1       | SerializeCastValue (1 of 2 matched)                           |
-| `validations/callbacks.rb`     | 1       | Validations::Callbacks module — before/after validation hooks |
-
-Most of these are likely already implemented but not exported from the
-correct file path. Check if the functionality exists in `base.ts` or
-similar and just needs a re-export.
+Run `pnpm run api:compare -- --package activemodel --missing` to see the
+full per-file breakdown. The largest gaps are in types, validations, and
+serialization.
 
 ---
 

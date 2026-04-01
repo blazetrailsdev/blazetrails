@@ -4,7 +4,7 @@
 
 | Metric        | Value                                                 |
 | ------------- | ----------------------------------------------------- |
-| API methods   | **402 / 1,662** (24.2%) — 1,260 missing               |
+| API methods   | **335 / 1,435** (23.3%) — 1,100 missing               |
 | Test coverage | **2,229 / 2,862** (77.9%) — 549 skipped, 12 misplaced |
 
 The primary measure is `api:compare`, which matches individual public methods against the Rails source. `test:compare` tracks behavior coverage.
@@ -14,7 +14,7 @@ pnpm run api:compare -- --package activesupport   # API surface
 pnpm run test:compare -- --package activesupport   # test parity
 ```
 
-## API parity: what's missing (1,260 methods)
+## API parity: what's missing (1,100 methods)
 
 ### Highest impact (4+ missing methods per file)
 
@@ -54,7 +54,7 @@ pnpm run test:compare -- --package activesupport   # test parity
 
 ### Single missing methods (1 each, 100+ files)
 
-The remaining ~130 missing are single-class files. Major categories:
+The remaining gaps are predominantly single-method misses across 100+ files. Major categories:
 
 - **Number helpers** (9 files): NumberConverter and 8 format-specific converters
 - **Message infrastructure** (6 files): Rotator, RotationCoordinator, Metadata, Codec, etc.
@@ -64,7 +64,7 @@ The remaining ~130 missing are single-class files. Major categories:
 - **Concurrency** (2 files): ShareLock, LoadInterlockAwareMonitor
 - **Cache stores** (2 files): MemCacheStore, RedisCacheStore
 
-## API parity: what's done (402 methods)
+## API parity: what's done (335 methods)
 
 31 files fully matched (✓):
 

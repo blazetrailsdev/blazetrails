@@ -126,7 +126,7 @@
     {#each tables as table, i (table.name)}
       <div id={`db-item-${encodeURIComponent(table.name)}`}
            data-testid="db-table" data-table={table.name} role="option"
-           aria-selected={focusedIndex === i}>
+           aria-selected={expandedTable === table.name}>
         <button
           type="button"
           tabindex="-1"

@@ -166,8 +166,9 @@ export function createTrailCLI(deps: TrailCliDeps) {
       },
 
       "db:migrate": async (_args, opts) => {
+        const version = opts.version && opts.version !== "true" ? opts.version : null;
         await withMigrator(async (migrator) => {
-          await migrator.migrate(opts.version ?? null);
+          await migrator.migrate(version);
           for (const line of migrator.output) log(line);
           const pending = await migrator.pendingMigrations();
           log(

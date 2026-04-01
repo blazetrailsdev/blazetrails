@@ -13,7 +13,7 @@ import type { Base } from "./base.js";
  * Mirrors: ActiveRecord::ModelSchema::ClassMethods#column_names
  */
 export function columnNames(modelClass: typeof Base): string[] {
-  const ignored = new Set((modelClass as any)._ignoredColumns ?? []);
+  const ignored = new Set(modelClass.ignoredColumns ?? []);
   return Array.from(modelClass._attributeDefinitions.keys()).filter((name) => !ignored.has(name));
 }
 

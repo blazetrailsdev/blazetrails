@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import initSqlJs from "sql.js";
+  import wasmUrl from "sql.js/dist/sql-wasm.wasm?url";
   import { SqlJsAdapter } from "$lib/frontiers/sql-js-adapter.js";
   import { VirtualFS } from "$lib/frontiers/virtual-fs.js";
   import FileTree from "$lib/frontiers/components/sandbox/FileTree.svelte";
@@ -9,7 +10,7 @@
   let selectedPath = $state("");
 
   onMount(async () => {
-    const SQL = await initSqlJs({ locateFile: () => "/sql-wasm.wasm" });
+    const SQL = await initSqlJs({ locateFile: () => wasmUrl });
     const adapter = new SqlJsAdapter(new SQL.Database());
     const v = new VirtualFS(adapter);
 

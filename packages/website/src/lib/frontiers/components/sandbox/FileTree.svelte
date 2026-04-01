@@ -169,17 +169,22 @@
   }
 
   function commitRename() {
-    if (!renaming || !renameValue.trim()) {
+    const trimmed = renameValue.trim();
+    if (!renaming || !trimmed || trimmed.includes("/")) {
       renaming = null;
       return;
     }
     const parts = renaming.split("/");
-    parts[parts.length - 1] = renameValue.trim();
+    parts[parts.length - 1] = trimmed;
     const newPath = parts.join("/");
     if (newPath !== renaming) {
       const node = findNode(root, renaming);
       if (node?.isDir) {
         const prefix = renaming + "/";
+        if (newPath.startsWith(prefix)) {
+          renaming = null;
+          return;
+        }
         const allFiles = vfs.list();
         const filesToMove = allFiles.filter((f) => f.path.startsWith(prefix));
         const newPaths = filesToMove.map((f) => newPath + "/" + f.path.slice(prefix.length));
@@ -191,10 +196,7 @@
           return;
         }
         for (let i = 0; i < filesToMove.length; i++) {
-          vfs.write(newPaths[i], filesToMove[i].content);
-        }
-        for (const f of filesToMove) {
-          vfs.delete(f.path);
+          vfs.rename(filesToMove[i].path, newPaths[i]);
         }
         if (selectedPath?.startsWith(prefix)) {
           onselect?.(newPath + "/" + selectedPath.slice(prefix.length));
@@ -227,9 +229,13 @@
     const name = createValue.trim();
     const fullPath = dir ? `${dir}/${name}` : name;
     if (creating.isDir) {
-      // Directories are virtual in VFS — start a nested file create
-      creating = { parentDir: fullPath, isDir: false };
-      createValue = "";
+      const markerPath = `${fullPath}/.gitkeep`;
+      if (vfs.list().some((f) => f.path.startsWith(fullPath + "/")) || vfs.exists(markerPath)) {
+        creating = null;
+        return;
+      }
+      vfs.write(markerPath, "");
+      creating = null;
       return;
     } else {
       if (vfs.exists(fullPath)) {

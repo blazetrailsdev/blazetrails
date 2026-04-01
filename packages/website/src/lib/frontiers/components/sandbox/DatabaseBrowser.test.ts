@@ -56,7 +56,7 @@ describe("DatabaseBrowser", () => {
     render(DatabaseBrowser, { props: { adapter, vfs } });
     await waitFor(() => expect(screen.getByTestId("db-table")).toBeTruthy());
 
-    const button = screen.getByTestId("db-table").querySelector("button")!;
+    const button = screen.getByTestId("db-table");
     await fireEvent.click(button);
 
     const columns = screen.getAllByTestId("db-column");
@@ -76,7 +76,7 @@ describe("DatabaseBrowser", () => {
     render(DatabaseBrowser, { props: { adapter, vfs } });
     await waitFor(() => expect(screen.getByTestId("db-table")).toBeTruthy());
 
-    const button = screen.getByTestId("db-table").querySelector("button")!;
+    const button = screen.getByTestId("db-table");
     await fireEvent.click(button);
     expect(screen.getAllByTestId("db-column").length).toBeGreaterThan(0);
 
@@ -125,7 +125,7 @@ describe("DatabaseBrowser", () => {
     render(DatabaseBrowser, { props: { adapter, vfs } });
     await waitFor(() => expect(screen.getByTestId("db-table")).toBeTruthy());
 
-    const button = screen.getByTestId("db-table").querySelector("button")!;
+    const button = screen.getByTestId("db-table");
     await fireEvent.click(button);
 
     await waitFor(() => expect(screen.getByTestId("db-preview")).toBeTruthy());

@@ -124,28 +124,28 @@
     </div>
   {:else}
     {#each tables as table, i (table.name)}
-      <div id={`db-item-${encodeURIComponent(table.name)}`}
-           data-testid="db-table" data-table={table.name} role="option"
-           aria-selected={expandedTable === table.name}>
-        <button
-          type="button"
-          tabindex="-1"
-          class="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:text-accent md:py-1
-                 {expandedTable === table.name ? 'bg-surface-overlay text-text' : 'text-text-muted'}
-                 {focusedIndex === i ? 'outline outline-1 outline-border-focus' : ''}"
-          onmousedown={(e) => e.preventDefault()}
-          onclick={(e) => {
-            focusedIndex = i;
-            toggleTable(table.name);
-            (e.currentTarget as HTMLElement).closest('[role="listbox"]')?.focus();
-          }}
-        >
-          <span class="w-3 text-[10px] text-text-muted" aria-hidden="true">
-            {expandedTable === table.name ? "▼" : "▶"}
-          </span>
-          <span class="flex-1 truncate font-medium">{table.name}</span>
-          <span class="text-[10px] text-text-muted">{table.rowCount} {table.rowCount === 1 ? "row" : "rows"}</span>
-        </button>
+      <div
+        id={`db-item-${encodeURIComponent(table.name)}`}
+        data-testid="db-table"
+        data-table={table.name}
+        role="option"
+        aria-selected={expandedTable === table.name}
+        class="flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left hover:text-accent md:py-1
+               {expandedTable === table.name ? 'bg-surface-overlay text-text' : 'text-text-muted'}
+               {focusedIndex === i ? 'outline outline-1 outline-border-focus' : ''}"
+        onmousedown={(e) => e.preventDefault()}
+        onclick={(e) => {
+          focusedIndex = i;
+          toggleTable(table.name);
+          (e.currentTarget as HTMLElement).closest('[role="listbox"]')?.focus();
+        }}
+      >
+        <span class="w-3 text-[10px] text-text-muted" aria-hidden="true">
+          {expandedTable === table.name ? "▼" : "▶"}
+        </span>
+        <span class="flex-1 truncate font-medium">{table.name}</span>
+        <span class="text-[10px] text-text-muted">{table.rowCount} {table.rowCount === 1 ? "row" : "rows"}</span>
+      </div>
 
         {#if expandedTable === table.name}
           <div class="border-b border-border pb-1">
@@ -190,7 +190,6 @@
             {/if}
           </div>
         {/if}
-      </div>
     {/each}
   {/if}
 </div>

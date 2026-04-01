@@ -10,6 +10,16 @@
 
   let { tabs, activeTab = $bindable(tabs[0]?.id ?? ""), onchange, children }: Props = $props();
 
+  $effect(() => {
+    if (activeTab && !tabs.some((t) => t.id === activeTab) && tabs.length > 0) {
+      activeTab = tabs[0].id;
+    }
+  });
+
+  function safeId(id: string): string {
+    return encodeURIComponent(id);
+  }
+
   function selectTab(id: string) {
     if (id === activeTab) return;
     activeTab = id;
@@ -51,9 +61,9 @@
       <button
         type="button"
         role="tab"
-        id={`tab-${tab.id}`}
+        id={`tab-${safeId(tab.id)}`}
         aria-selected={tab.id === activeTab}
-        aria-controls={`tabpanel-${tab.id}`}
+        aria-controls={`tabpanel-${safeId(tab.id)}`}
         tabindex={tab.id === activeTab ? 0 : -1}
         class="whitespace-nowrap px-3 py-1.5 text-xs transition-colors md:py-1
                {tab.id === activeTab
@@ -73,8 +83,8 @@
     <div
       class="flex-1 overflow-auto {tab.id === activeTab ? '' : 'hidden'}"
       role="tabpanel"
-      id={`tabpanel-${tab.id}`}
-      aria-labelledby={`tab-${tab.id}`}
+      id={`tabpanel-${safeId(tab.id)}`}
+      aria-labelledby={`tab-${safeId(tab.id)}`}
       data-testid={tab.id === activeTab ? "tab-content" : undefined}
       hidden={tab.id !== activeTab}
     >

@@ -139,7 +139,7 @@
             {expandedTable === table.name ? "▼" : "▶"}
           </span>
           <span class="flex-1 truncate font-medium">{table.name}</span>
-          <span class="text-[10px] text-text-muted">{table.rowCount} rows</span>
+          <span class="text-[10px] text-text-muted">{table.rowCount} {table.rowCount === 1 ? "row" : "rows"}</span>
         </button>
 
         {#if expandedTable === table.name}

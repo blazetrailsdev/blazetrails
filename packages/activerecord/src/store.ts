@@ -58,8 +58,10 @@ export class HashAccessor {
 }
 
 /**
- * HashAccessor that ensures the store value is an indifferent-access-style hash
- * (plain object with string keys).
+ * In Rails, IndifferentHashAccessor ensures the store value is a
+ * HashWithIndifferentAccess. In TypeScript, JS objects already use
+ * string keys natively, so no additional behavior is needed beyond
+ * HashAccessor. Kept as a distinct class for Rails API parity.
  *
  * Mirrors: ActiveRecord::Store::IndifferentHashAccessor
  */

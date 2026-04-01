@@ -104,6 +104,9 @@ export class TableDefinition extends AbstractTableDefinition {
   }
 
   unsignedDecimal(name: string, options: ColumnOptions = {}): this {
+    if (options.scale !== undefined && options.precision === undefined) {
+      throw new Error("Error adding decimal column: precision is required if scale is specified");
+    }
     const precision = options.precision ?? 10;
     const scale = options.scale ?? 0;
     return this.mysqlColumn(

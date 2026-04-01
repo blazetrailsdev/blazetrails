@@ -14,12 +14,4 @@ export class TrilogyAdapter extends AbstractMysqlAdapter {
   override get adapterName(): string {
     return "Trilogy";
   }
-
-  supportsSavepoints(): boolean {
-    return true;
-  }
-
-  supportsLazyTransactions(): boolean {
-    return true;
-  }
 }

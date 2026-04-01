@@ -57,6 +57,17 @@ export function quoteColumnName(name: string): string {
   return `\`${name.replace(/`/g, "``")}\``;
 }
 
+// eslint-disable-next-line no-control-regex
+const MYSQL_ESCAPE_RE = /[\\\x00\n\r\x1a']/g;
+const MYSQL_ESCAPE_MAP: Record<string, string> = {
+  "\\": "\\\\",
+  "\0": "\\0",
+  "\n": "\\n",
+  "\r": "\\r",
+  "\x1a": "\\Z",
+  "'": "\\'",
+};
+
 /**
  * Quote a string value for use in SQL. MySQL uses backslash escaping
  * (not single-quote doubling) when NO_BACKSLASH_ESCAPES is not set
@@ -64,18 +75,7 @@ export function quoteColumnName(name: string): string {
  * escaped for safe transport across protocols.
  */
 export function quoteString(value: string): string {
-  // eslint-disable-next-line no-control-regex
-  const MYSQL_ESCAPE_RE = /[\\\x00\n\r\x1a']/g;
-  const ESCAPE_MAP: Record<string, string> = {
-    "\\": "\\\\",
-    "\0": "\\0",
-    "\n": "\\n",
-    "\r": "\\r",
-    "\x1a": "\\Z",
-    "'": "\\'",
-  };
-  const escaped = value.replace(MYSQL_ESCAPE_RE, (ch) => ESCAPE_MAP[ch] ?? ch);
-  return `'${escaped}'`;
+  return `'${value.replace(MYSQL_ESCAPE_RE, (ch) => MYSQL_ESCAPE_MAP[ch] ?? ch)}'`;
 }
 
 export function quotedBinaryString(value: Buffer): string {

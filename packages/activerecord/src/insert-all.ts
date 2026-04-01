@@ -3,7 +3,7 @@ import type { Base } from "./base.js";
 import { quoteSqlValue } from "./base.js";
 import type { Relation } from "./relation.js";
 import { detectAdapterName } from "./adapter-name.js";
-import { quoteIdentifier } from "./connection-adapters/abstract/quoting.js";
+import { quoteIdentifier, quoteTableName } from "./connection-adapters/abstract/quoting.js";
 
 type ModelClass = typeof Base;
 type AdapterDialect = "sqlite" | "postgres" | "mysql";
@@ -160,7 +160,7 @@ export class InsertAll {
 
     if (this.updateOnly !== undefined) {
       this._updatableColumns = Array.isArray(this.updateOnly) ? this.updateOnly : [this.updateOnly];
-      this.onDuplicate = "update";
+      this.onDuplicate = this._updatableColumns.length === 0 ? "skip" : "update";
     } else if (onDuplicate instanceof Nodes.SqlLiteral) {
       this.updateSql = onDuplicate;
       this.onDuplicate = "update";
@@ -203,8 +203,11 @@ export class Builder {
   }
 
   into(): string {
-    const tableName = quoteIdentifier(this.model.arelTable.name, this._dialect);
+    const tableName = quoteTableName(this.model.arelTable.name, this._dialect);
     const keys = [...this._insertAll.keysIncludingTimestamps()];
+    if (keys.length === 0) {
+      return `INTO ${tableName} DEFAULT VALUES`;
+    }
     const columnsList = keys.map((k) => quoteIdentifier(k, this._dialect)).join(", ");
     return `INTO ${tableName} (${columnsList}) ${this._valuesClause()}`;
   }
@@ -234,7 +237,7 @@ export class Builder {
     if (quotedUpdatable.length === 0) return "";
     const updatable = this._insertAll.updatableColumns();
     const parts: string[] = [];
-    const tableName = quoteIdentifier(this.model.arelTable.name, this._dialect);
+    const tableName = quoteTableName(this.model.arelTable.name, this._dialect);
     const conditions = quotedUpdatable.map(block).join(" AND ");
     for (const col of UPDATE_TIMESTAMP_COLUMNS) {
       if (this.model._attributeDefinitions.has(col) && !updatable.includes(col)) {

@@ -38,6 +38,6 @@ export abstract class TreeManager {
   }
 
   get wheres(): Node[] {
-    return (this.ast as unknown as { wheres: Node[] }).wheres;
+    return (this.ast as unknown as { wheres?: Node[] }).wheres ?? [];
   }
 }

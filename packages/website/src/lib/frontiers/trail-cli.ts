@@ -37,7 +37,7 @@ function parseInput(input: string): ParsedInput {
   return { command, args, opts };
 }
 
-const MIGRATION_FILE_PATTERN = /^(\d+)[-_](.+)\.ts$/;
+const MIGRATION_FILE_PATTERN = /^(\d+)[-_](.+)\.(?:ts|js)$/;
 
 function discoverMigrations(
   vfs: VirtualFS,

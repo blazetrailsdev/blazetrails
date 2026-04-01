@@ -249,8 +249,12 @@ export class AggregateReflection extends MacroReflection {
   mapping(): [string, string][] {
     const m = this.options.mapping;
     if (!m) return [[this.name, this.name]];
-    if (Array.isArray(m) && Array.isArray(m[0])) return m as [string, string][];
-    return [m as unknown as [string, string]];
+    if (Array.isArray(m)) {
+      if (m.length === 0) return [];
+      if (Array.isArray(m[0])) return m as [string, string][];
+      return [m as unknown as [string, string]];
+    }
+    return [[this.name, this.name]];
   }
 }
 
@@ -789,10 +793,17 @@ export function reflectOnAggregation(
 
 export function reflectOnAllAutosaveAssociations(
   modelClass: typeof Base,
-): Array<AssociationReflection | ThroughReflection> {
+): AssociationLikeReflection[] {
   return reflectOnAllAssociations(modelClass).filter((ref) => {
     const opts =
       ref instanceof ThroughReflection ? ref.options : (ref as AssociationReflection).options;
     return !!opts.autosave;
   });
 }
+
+/**
+ * Union type for reflections returned by the public API.
+ * Both AssociationReflection and ThroughReflection can be returned
+ * from reflectOnAssociation / reflectOnAllAssociations.
+ */
+export type AssociationLikeReflection = AssociationReflection | ThroughReflection;

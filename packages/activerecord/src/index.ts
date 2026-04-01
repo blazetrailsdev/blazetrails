@@ -146,6 +146,7 @@ export {
   reflectOnAllAggregations,
   reflectOnAggregation,
   reflectOnAllAutosaveAssociations,
+  type AssociationLikeReflection,
 } from "./reflection.js";
 export { acceptsNestedAttributesFor, assignNestedAttributes } from "./nested-attributes.js";
 export { hasSecureToken } from "./secure-token.js";

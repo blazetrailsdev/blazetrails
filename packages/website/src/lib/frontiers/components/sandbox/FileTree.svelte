@@ -451,26 +451,47 @@
     class="fixed z-50 rounded border border-border bg-surface-overlay py-1 shadow-lg"
     style="left: {contextMenu.x}px; top: {contextMenu.y}px"
     data-testid="context-menu"
+    role="menu"
+    onkeydown={(e) => {
+      const items = Array.from(
+        (e.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
+      );
+      const idx = items.indexOf(document.activeElement as HTMLButtonElement);
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        items[(idx + 1) % items.length]?.focus();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        items[(idx - 1 + items.length) % items.length]?.focus();
+      } else if (e.key === "Escape") {
+        closeContextMenu();
+      }
+    }}
   >
     <button
       type="button"
-      class="block w-full px-3 py-1 text-left text-xs text-text hover:bg-surface hover:text-accent"
+      role="menuitem"
+      class="block w-full px-3 py-1 text-left text-xs text-text hover:bg-surface hover:text-accent focus:bg-surface focus:text-accent focus:outline-none"
       onclick={() => startCreate(contextTargetDir(), false)}
+      autofocus
     >New File</button>
     <button
       type="button"
-      class="block w-full px-3 py-1 text-left text-xs text-text hover:bg-surface hover:text-accent"
+      role="menuitem"
+      class="block w-full px-3 py-1 text-left text-xs text-text hover:bg-surface hover:text-accent focus:bg-surface focus:text-accent focus:outline-none"
       onclick={() => startCreate(contextTargetDir(), true)}
     >New Folder</button>
     <hr class="my-1 border-border" />
     <button
       type="button"
-      class="block w-full px-3 py-1 text-left text-xs text-text hover:bg-surface hover:text-accent"
+      role="menuitem"
+      class="block w-full px-3 py-1 text-left text-xs text-text hover:bg-surface hover:text-accent focus:bg-surface focus:text-accent focus:outline-none"
       onclick={() => startRename(contextMenu!.path)}
     >Rename</button>
     <button
       type="button"
-      class="block w-full px-3 py-1 text-left text-xs text-error hover:bg-surface"
+      role="menuitem"
+      class="block w-full px-3 py-1 text-left text-xs text-error hover:bg-surface focus:bg-surface focus:outline-none"
       onclick={() => requestDelete(contextMenu!.path, contextMenu!.isDir)}
     >Delete</button>
   </div>

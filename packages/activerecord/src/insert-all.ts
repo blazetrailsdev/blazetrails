@@ -9,6 +9,7 @@ type ModelClass = typeof Base;
 type AdapterDialect = "sqlite" | "postgres" | "mysql";
 
 const TIMESTAMP_COLUMNS = ["created_at", "updated_at"] as const;
+const UPDATE_TIMESTAMP_COLUMNS = ["updated_at"] as const;
 
 export interface InsertAllOptions {
   onDuplicate?: "skip" | "update" | Nodes.SqlLiteral;
@@ -85,6 +86,11 @@ export class InsertAll {
   updatableColumns(): string[] {
     if (this._updatableColumns) return this._updatableColumns;
     const exclude = new Set([...this.primaryKeys(), ...this._uniqueByColumns()]);
+    if (this.recordTimestamps() && !this.updateOnly && !this.updateSql) {
+      for (const col of TIMESTAMP_COLUMNS) {
+        exclude.add(col);
+      }
+    }
     this._updatableColumns = [...this.keys].filter((k) => !exclude.has(k));
     return this._updatableColumns;
   }
@@ -108,7 +114,7 @@ export class InsertAll {
       const merged = { ...this._scopeAttributes, ...row };
       if (now) {
         for (const col of TIMESTAMP_COLUMNS) {
-          if (this.model._attributeDefinitions.has(col) && merged[col] === undefined) {
+          if (this.model._attributeDefinitions.has(col) && merged[col] == null) {
             merged[col] = now;
           }
         }
@@ -238,7 +244,7 @@ export class Builder {
     const parts: string[] = [];
     const tableName = quoteIdentifier(this.model.arelTable.name, this._dialect);
     const conditions = quotedUpdatable.map(block).join(" AND ");
-    for (const col of TIMESTAMP_COLUMNS) {
+    for (const col of UPDATE_TIMESTAMP_COLUMNS) {
       if (this.model._attributeDefinitions.has(col) && !updatable.includes(col)) {
         const qcol = this._quoteCol(col);
         parts.push(

@@ -102,7 +102,7 @@ export class InsertAll {
     return this.onDuplicate === "update";
   }
 
-  mapKeyWithValue(fn: (key: string, value: unknown) => unknown): unknown[][] {
+  mapKeyWithValue<T>(fn: (key: string, value: unknown) => T): T[][] {
     const now = this.recordTimestamps() ? new Date() : undefined;
     return this.inserts.map((row) => {
       const merged = { ...this._scopeAttributes, ...row };
@@ -208,11 +208,11 @@ export class Builder {
 
   valuesList(): Nodes.ValuesList {
     const arrayCols = this._arrayColumnSet();
-    const rows = this._insertAll.mapKeyWithValue((key, value) => {
+    const rows = this._insertAll.mapKeyWithValue<Nodes.Node>((key, value) => {
       if (value instanceof Nodes.SqlLiteral) return value;
       return new Nodes.SqlLiteral(quoteSqlValue(value, arrayCols.has(key)));
     });
-    return new Nodes.ValuesList(rows as Nodes.Node[][]);
+    return new Nodes.ValuesList(rows);
   }
 
   conflictTarget(): string {

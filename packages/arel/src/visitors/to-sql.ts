@@ -24,6 +24,7 @@ export class NotImplementedError extends Error {
  */
 export class ToSql implements NodeVisitor<SQLString> {
   protected collector!: SQLString;
+  private _inUpdateSet = false;
 
   compile(node: Node): string {
     this.collector = new SQLString();
@@ -204,6 +205,11 @@ export class ToSql implements NodeVisitor<SQLString> {
   protected visitSelectCore(node: Nodes.SelectCore): SQLString {
     this.collector.append("SELECT");
 
+    if (node.optimizerHints.length > 0) {
+      const hints = node.optimizerHints.join(" ");
+      this.collector.append(` /*+ ${hints} */`);
+    }
+
     if (node.setQuantifier) {
       this.collector.append(" ");
       this.visit(node.setQuantifier);
@@ -275,7 +281,9 @@ export class ToSql implements NodeVisitor<SQLString> {
 
     if (node.values.length > 0) {
       this.collector.append(" SET ");
+      this._inUpdateSet = true;
       this.visitArray(node.values, ", ");
+      this._inUpdateSet = false;
     }
 
     if (node.wheres.length > 0) {
@@ -493,7 +501,11 @@ export class ToSql implements NodeVisitor<SQLString> {
   }
 
   private visitAssignment(node: Nodes.Assignment): SQLString {
-    this.visitNodeOrValue(node.left);
+    if (this._inUpdateSet && node.left instanceof Nodes.Attribute) {
+      this.collector.append(`"${node.left.name}"`);
+    } else {
+      this.visitNodeOrValue(node.left);
+    }
     this.collector.append(" = ");
     this.visitNodeOrValue(node.right);
     return this.collector;

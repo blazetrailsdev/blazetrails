@@ -172,6 +172,14 @@ interface MethodResult {
   rubyModule: string;
 }
 
+interface MoveResult {
+  tsName: string;
+  rubyName: string;
+  rubyModule: string;
+  expectedFile: string;
+  actualFile: string;
+}
+
 interface FileResult {
   rubyFile: string;
   expectedTsFile: string;
@@ -180,6 +188,7 @@ interface FileResult {
   missing: number;
   total: number;
   missingMethods: MethodResult[];
+  moves: MoveResult[];
 }
 
 interface PackageResult {
@@ -460,17 +469,19 @@ function main() {
       const tsMethods = tsMethodsByFile.get(expectedTs) || new Set<string>();
       const tsFileExists = fs.existsSync(path.join(pkgSrcDir, expectedTs));
       const missingMethods: MethodResult[] = [];
+      const moves: MoveResult[] = [];
       let fileMatched = 0;
       let fileMissing = 0;
 
-      // Collect all includer method sets for modules in this file
-      const allIncluderMethodSets: Set<string>[] = [];
+      // Collect all includer method sets for modules in this file,
+      // tracking which file each set came from (for move detection)
+      const allIncluderMethodSets: { file: string; methods: Set<string> }[] = [];
       for (const item of items) {
         const includerFiles = moduleIncluderFiles.get(item.fqn);
         if (includerFiles) {
           for (const f of includerFiles) {
             const methods = tsMethodsByFile.get(f);
-            if (methods) allIncluderMethodSets.push(methods);
+            if (methods) allIncluderMethodSets.push({ file: f, methods });
           }
         }
       }
@@ -492,15 +503,35 @@ function main() {
       }
 
       for (const [tsName, { rubyName, rubyModule }] of seen) {
-        // Re-derive full candidates from the ruby name for multi-candidate matching
         const tsCandidates = rubyMethodToTs(rubyName)!;
 
-        const matched =
-          tsCandidates.some((c) => tsMethods.has(c)) ||
-          tsCandidates.some((c) => allIncluderMethodSets.some((s) => s.has(c)));
-
-        if (matched) {
+        // Check direct match first
+        if (tsCandidates.some((c) => tsMethods.has(c))) {
           fileMatched++;
+          continue;
+        }
+
+        // Check include chain — track which file has it
+        let foundViaInclude: string | null = null;
+        for (const candidate of tsCandidates) {
+          for (const { file, methods } of allIncluderMethodSets) {
+            if (methods.has(candidate)) {
+              foundViaInclude = file;
+              break;
+            }
+          }
+          if (foundViaInclude) break;
+        }
+
+        if (foundViaInclude) {
+          fileMatched++;
+          moves.push({
+            tsName,
+            rubyName,
+            rubyModule,
+            expectedFile: expectedTs,
+            actualFile: foundViaInclude,
+          });
         } else {
           fileMissing++;
           missingMethods.push({ rubyName, tsName, rubyModule });
@@ -518,6 +549,7 @@ function main() {
         missing: fileMissing,
         total,
         missingMethods,
+        moves,
       });
 
       totalMatched += fileMatched;

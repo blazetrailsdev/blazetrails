@@ -881,11 +881,7 @@ export class Base extends Model {
             [],
           );
         }
-        const pk = this.primaryKey as string[];
-        const whereParts = tuples.map(
-          (tuple) =>
-            `(${pk.map((col, i) => `"${col}" = ${ModelSchema.quoteValue(tuple[i])}`).join(" AND ")})`,
-        );
+        const whereParts = tuples.map((tuple) => `(${ModelSchema.buildPkWhere(this, tuple)})`);
         const records = await this.all().where(whereParts.join(" OR ")).toArray();
         if (records.length !== tuples.length) {
           throw new RecordNotFound(

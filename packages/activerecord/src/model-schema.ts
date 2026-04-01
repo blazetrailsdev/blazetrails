@@ -2,7 +2,7 @@ import type { Base } from "./base.js";
 import { Table, Nodes, sql as arelSql } from "@blazetrails/arel";
 import { pluralize, underscore } from "@blazetrails/activesupport";
 import { isStiSubclass, getStiBase } from "./inheritance.js";
-import { quoteIdentifier, quoteTableName } from "./connection-adapters/abstract/quoting.js";
+import { quote, quoteIdentifier, quoteTableName } from "./connection-adapters/abstract/quoting.js";
 import { detectAdapterName } from "./adapter-name.js";
 
 /**
@@ -40,13 +40,12 @@ export function resolveTableName(modelClass: typeof Base): string {
 
 /**
  * Quote a single value for use in SQL.
+ * Delegates to the adapter-aware quote() from the quoting module.
+ *
+ * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#quote
  */
 export function quoteValue(val: unknown): string {
-  if (val === null) return "NULL";
-  if (typeof val === "number") return String(val);
-  if (typeof val === "boolean") return val ? "TRUE" : "FALSE";
-  if (val instanceof Date) return `'${val.toISOString()}'`;
-  return `'${String(val).replace(/'/g, "''")}'`;
+  return quote(val);
 }
 
 /**
@@ -58,9 +57,9 @@ export function buildPkWhere(modelClass: typeof Base, idValue: unknown): string 
   const pk = modelClass.primaryKey;
   if (Array.isArray(pk)) {
     const values = idValue as unknown[];
-    return pk.map((col, i) => `"${col}" = ${quoteValue(values[i])}`).join(" AND ");
+    return pk.map((col, i) => `${quoteIdentifier(col)} = ${quote(values[i])}`).join(" AND ");
   }
-  return `"${pk}" = ${quoteValue(idValue)}`;
+  return `${quoteIdentifier(pk as string)} = ${quote(idValue)}`;
 }
 
 /**
@@ -152,8 +151,61 @@ export function contentColumns(modelClass: typeof Base): string[] {
 
 /**
  * Map ActiveModel type names to SQL column types.
+ * Adapter-aware: PostgreSQL uses native types, MySQL uses its own,
+ * SQLite uses affinity types.
+ *
+ * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter#native_database_types
  */
-export function sqlTypeFor(typeName: string): string {
+export function sqlTypeFor(typeName: string, adapterName?: string): string {
+  if (adapterName === "postgres") {
+    switch (typeName) {
+      case "integer":
+        return "integer";
+      case "big_integer":
+        return "bigint";
+      case "float":
+        return "float";
+      case "decimal":
+        return "decimal";
+      case "boolean":
+        return "boolean";
+      case "binary":
+        return "bytea";
+      case "text":
+        return "text";
+      case "json":
+        return "jsonb";
+      case "datetime":
+        return "timestamp";
+      default:
+        return "varchar";
+    }
+  }
+  if (adapterName === "mysql") {
+    switch (typeName) {
+      case "integer":
+        return "int";
+      case "big_integer":
+        return "bigint";
+      case "float":
+        return "float";
+      case "decimal":
+        return "decimal";
+      case "boolean":
+        return "tinyint(1)";
+      case "binary":
+        return "blob";
+      case "text":
+        return "text";
+      case "json":
+        return "json";
+      case "datetime":
+        return "datetime";
+      default:
+        return "varchar(255)";
+    }
+  }
+  // SQLite (default) — uses type affinity
   switch (typeName) {
     case "integer":
     case "big_integer":
@@ -208,14 +260,14 @@ export async function createTable(modelClass: typeof Base): Promise<void> {
   } else {
     for (const pk of pks) {
       const pkDef = modelClass._attributeDefinitions.get(pk);
-      const pkType = pkDef ? sqlTypeFor(pkDef.type?.name || "integer") : "INTEGER";
+      const pkType = pkDef ? sqlTypeFor(pkDef.type?.name || "integer", adapterName) : "INTEGER";
       colDefs.push(`${quoteIdentifier(pk, adapterName)} ${pkType} NOT NULL`);
     }
   }
 
   for (const [name, def] of modelClass._attributeDefinitions) {
     if (pkSet.has(name)) continue;
-    const sqlType = sqlTypeFor(def.type?.name || "string");
+    const sqlType = sqlTypeFor(def.type?.name || "string", adapterName);
     colDefs.push(`${quoteIdentifier(name, adapterName)} ${sqlType}`);
   }
 

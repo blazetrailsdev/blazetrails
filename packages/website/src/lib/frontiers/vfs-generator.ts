@@ -82,9 +82,16 @@ export class VfsAppGenerator extends AppGenerator {
   }
 
   override async run(name: string, options: AppOptions): Promise<string[]> {
-    // AppGenerator.run() sets this.cwd to a subdirectory — we don't want that
-    // in VFS since all paths are relative. Override to skip git/install and
-    // keep paths at root level.
-    return super.run(name, { ...options, skipGit: true, skipInstall: true, skipDocker: true });
+    const originalCwd = this.cwd;
+    try {
+      return await super.run(name, {
+        ...options,
+        skipGit: true,
+        skipInstall: true,
+        skipDocker: true,
+      });
+    } finally {
+      this.cwd = originalCwd;
+    }
   }
 }

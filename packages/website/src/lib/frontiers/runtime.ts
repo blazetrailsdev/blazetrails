@@ -96,7 +96,6 @@ export async function createRuntime(SQL: SqlJsStatic): Promise<Runtime> {
       for (const table of tables) {
         adapter.execRaw(`DROP TABLE IF EXISTS "${table.replace(/"/g, '""')}"`);
       }
-      adapter.execRaw('DROP TABLE IF EXISTS "schema_migrations"');
       migrations = [];
     },
   };

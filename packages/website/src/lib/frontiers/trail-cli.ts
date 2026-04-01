@@ -218,7 +218,6 @@ export function createTrailCLI(deps: TrailCliDeps) {
         for (const table of tables) {
           adapter.execRaw(`DROP TABLE IF EXISTS "${table.replace(/"/g, '""')}"`);
         }
-        adapter.execRaw('DROP TABLE IF EXISTS "schema_migrations"');
         log(`Dropped ${tables.length} table(s).`);
       },
 
@@ -243,10 +242,11 @@ export function createTrailCLI(deps: TrailCliDeps) {
             if (results.length > 0) {
               for (const result of results) {
                 const widths = result.columns.map((c, i) => {
-                  const maxVal = Math.max(
-                    ...result.values.map((r) => String(r[i] ?? "NULL").length),
-                    c.length,
-                  );
+                  let maxVal = c.length;
+                  for (const row of result.values) {
+                    const len = String(row[i] ?? "NULL").length;
+                    if (len > maxVal) maxVal = len;
+                  }
                   return Math.min(maxVal, 30);
                 });
                 log(result.columns.map((c, i) => c.padEnd(widths[i])).join(" | "));

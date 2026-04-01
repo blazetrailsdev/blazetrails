@@ -32,10 +32,6 @@ export class AbstractReflection {
     throw new Error("Subclass must implement klass");
   }
 
-  buildAssociation(attributes: Record<string, unknown> = {}): InstanceType<typeof Base> {
-    return new (this.klass as any)(attributes);
-  }
-
   get scopes(): Array<(...args: any[]) => any> {
     return this.scope ? [this.scope] : [];
   }
@@ -189,6 +185,10 @@ export class AggregateReflection extends MacroReflection {
 export class AssociationReflection extends MacroReflection {
   get macro(): MacroType {
     throw new Error("Subclass must implement macro");
+  }
+
+  buildAssociation(attributes: Record<string, unknown> = {}): InstanceType<typeof Base> {
+    return new (this.klass as any)(attributes);
   }
 
   get foreignKey(): string | string[] {

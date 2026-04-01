@@ -45,8 +45,8 @@ const ER_TABLE_EXISTS = 1050;
 export class AbstractMysqlAdapter extends AbstractAdapter {
   static readonly Version = Version;
 
-  private _mariadb = false;
-  private _databaseVersion: Version | null = null;
+  protected _mariadb = false;
+  protected _databaseVersion: Version | null = null;
 
   get adapterName(): string {
     return "Mysql2";
@@ -66,7 +66,8 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
   }
 
   supportsIndexSortOrder(): boolean {
-    return !this._mariadb || this._databaseVersion?.gte("10.8") === true;
+    if (this._mariadb) return this._databaseVersion?.gte("10.8") === true;
+    return this._databaseVersion?.gte("8.0") === true;
   }
 
   supportsExpressionIndex(): boolean {
@@ -95,7 +96,8 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
   }
 
   supportsCheckConstraints(): boolean {
-    return true;
+    if (this._mariadb) return this._databaseVersion?.gte("10.2.1") === true;
+    return this._databaseVersion?.gte("8.0.16") === true;
   }
 
   supportsViews(): boolean {

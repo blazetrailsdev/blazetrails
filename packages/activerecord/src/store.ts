@@ -27,9 +27,9 @@ export class HashAccessor {
   }
 
   static write(object: Base, attribute: string, key: string, value: unknown): void {
-    this.prepare(object, attribute);
     const current = this.read(object, attribute, key);
     if (value !== current) {
+      this.prepare(object, attribute);
       const raw = object.readAttribute(attribute);
       const obj = this._toHash(raw);
       obj[key] = value;
@@ -58,8 +58,8 @@ export class HashAccessor {
 }
 
 /**
- * HashAccessor that ensures the store value is an indifferent-access hash
- * (plain object with string keys, accessible by string or symbol).
+ * HashAccessor that ensures the store value is an indifferent-access-style hash
+ * (plain object with string keys).
  *
  * Mirrors: ActiveRecord::Store::IndifferentHashAccessor
  */

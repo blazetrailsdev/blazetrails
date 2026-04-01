@@ -2,6 +2,7 @@ import type { Base } from "./base.js";
 import { modelRegistry } from "./associations.js";
 import { UnknownAttributeError } from "./errors.js";
 import { singularize, camelize, underscore } from "@blazetrails/activesupport";
+import { Table, UpdateManager } from "@blazetrails/arel";
 
 interface NestedAttributeOptions {
   allowDestroy?: boolean;
@@ -201,12 +202,14 @@ async function processNestedAttributes(record: Base): Promise<void> {
         if (created && created.id != null) {
           // Use writeAttribute + direct save to avoid re-triggering nested attributes
           record.writeAttribute(foreignKey, created.id);
-          const tableName = (ctor as any).tableName;
+          const arelTable = new Table((ctor as any).tableName);
           const pk = (ctor as any).primaryKey || "id";
           const pkVal = record.readAttribute(pk);
-          await (ctor as any).adapter.executeMutation(
-            `UPDATE "${tableName}" SET "${foreignKey}" = ${created.id} WHERE "${pk}" = ${pkVal}`,
-          );
+          const um = new UpdateManager()
+            .table(arelTable)
+            .set([[arelTable.get(foreignKey), created.id]])
+            .where(arelTable.get(pk).eq(pkVal));
+          await (ctor as any).adapter.executeMutation(um.toSql());
         }
       } else {
         // For hasMany/hasOne, set FK on the child record

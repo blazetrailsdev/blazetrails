@@ -39,6 +39,9 @@
       }
       return { name, rowCount, columns };
     });
+    if (focusedIndex >= tables.length) {
+      focusedIndex = tables.length - 1;
+    }
     if (expandedTable) {
       if (!tableNames.includes(expandedTable)) {
         expandedTable = null;
@@ -88,7 +91,7 @@
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       focusedIndex = Math.max(focusedIndex - 1, 0);
-    } else if (e.key === "Enter" && focusedIndex >= 0) {
+    } else if (e.key === "Enter" && focusedIndex >= 0 && focusedIndex < tables.length) {
       e.preventDefault();
       toggleTable(tables[focusedIndex].name);
     }
@@ -140,7 +143,7 @@
         </button>
 
         {#if expandedTable === table.name}
-          <div class="border-b border-border pb-1" role="group">
+          <div class="border-b border-border pb-1">
             {#each table.columns as col}
               <div
                 class="flex items-center gap-2 px-3 py-0.5"

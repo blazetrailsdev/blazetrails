@@ -45,3 +45,4 @@ Associations (join dependency, nested error, preloader batch), attribute methods
 ## Known architectural gaps
 
 - **ScopeRegistry needs AsyncLocalStorage**: uses a process-global WeakMap, which means concurrent async scoping blocks can race. Rails uses thread-local storage; the TS equivalent is `AsyncLocalStorage`.
+- **Reflection foreignKey + CPK**: `foreignKey` derivation does not yet handle composite primary keys or `queryConstraints`. Associations with CPK will report incorrect foreign keys in reflection.

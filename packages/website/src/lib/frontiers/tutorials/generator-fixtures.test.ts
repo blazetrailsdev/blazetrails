@@ -22,7 +22,7 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
+  if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
 function appDir() {
@@ -265,6 +265,8 @@ describe("generator fixtures", () => {
 });
 
 describe("exported fixtures", () => {
+  let fixtureDir: string;
+
   function matchesPattern(dir: string, pattern: string): boolean {
     if (!pattern.includes("*")) {
       return fs.existsSync(path.join(dir, pattern));
@@ -280,15 +282,37 @@ describe("exported fixtures", () => {
       .some((entry) => entry.startsWith(prefix) && entry.endsWith(suffix));
   }
 
-  it("each fixture's expectedFiles match actual generator output", () => {
+  function runFixtureCommand(cwd: string, command: string): string[] {
+    const parts = command.split(/\s+/);
+    if (parts[0] !== "generate" || parts[1] !== "model") {
+      throw new Error(`Unsupported fixture command: ${command}`);
+    }
+    const name = parts[2];
+    const args = parts.slice(3);
+    const gen = new ModelGenerator({ cwd, output: () => {} });
+    return gen.run(name, args);
+  }
+
+  beforeAll(async () => {
+    fixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), "trails-fixture-validation-"));
+    fs.writeFileSync(path.join(fixtureDir, "tsconfig.json"), "{}");
+    fs.mkdirSync(path.join(fixtureDir, "db/migrations"), { recursive: true });
+
     const allFixtures = [...fixtures.docs, ...fixtures.music, ...fixtures.finances];
     for (const fixture of allFixtures) {
-      expect(fixture.name).toBeTruthy();
-      expect(fixture.command).toBeTruthy();
-      expect(fixture.expectedFiles.length).toBeGreaterThan(0);
+      runFixtureCommand(fixtureDir, fixture.command);
+    }
+  });
 
+  afterAll(() => {
+    if (fixtureDir) fs.rmSync(fixtureDir, { recursive: true, force: true });
+  });
+
+  it("each fixture command produces its expectedFiles", () => {
+    const allFixtures = [...fixtures.docs, ...fixtures.music, ...fixtures.finances];
+    for (const fixture of allFixtures) {
       for (const expectedFile of fixture.expectedFiles) {
-        expect(matchesPattern(appDir(), expectedFile)).toBe(true);
+        expect(matchesPattern(fixtureDir, expectedFile)).toBe(true);
       }
     }
   });

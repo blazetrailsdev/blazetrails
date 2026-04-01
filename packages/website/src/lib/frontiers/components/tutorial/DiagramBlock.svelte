@@ -13,7 +13,7 @@
   let error = $state<string | null>(null);
   let loading = $state(true);
   let renderToken = 0;
-  let mounted = false;
+  let mounted = $state(false);
 
   async function render(src: string) {
     const token = ++renderToken;

@@ -202,13 +202,11 @@ async function processNestedAttributes(record: Base): Promise<void> {
         if (created && created.id != null) {
           // Use writeAttribute + direct save to avoid re-triggering nested attributes
           record.writeAttribute(foreignKey, created.id);
-          const arelTable = new Table((ctor as any).tableName);
-          const pk = (ctor as any).primaryKey || "id";
-          const pkVal = record.readAttribute(pk);
+          const arelTable = (ctor as any).arelTable as Table;
           const um = new UpdateManager()
             .table(arelTable)
             .set([[arelTable.get(foreignKey), created.id]])
-            .where(arelTable.get(pk).eq(pkVal));
+            .where((ctor as any)._buildPkWhereNode(record.id));
           await (ctor as any).adapter.executeMutation(um.toSql());
         }
       } else {

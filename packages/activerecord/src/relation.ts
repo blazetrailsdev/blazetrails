@@ -272,7 +272,7 @@ export class Relation<T extends Base> {
         const foreignKey = assocDef.options.foreignKey ?? `${_toUnderscore(assocName)}_id`;
         rel = rel.whereNot({ [foreignKey]: null });
       } else if (assocDef.type === "hasMany" || assocDef.type === "hasOne") {
-        const { targetTable, foreignKey, typeClause } = this._resolveHasManySubquery(
+        const { targetTable, foreignKey, typeNodes } = this._resolveHasManySubquery(
           modelClass,
           assocDef,
           assocName,
@@ -282,7 +282,7 @@ export class Relation<T extends Base> {
         const srcTable = new Table(sourceTable);
         const tgtTable = new Table(targetTable);
         const subquery = tgtTable.project(tgtTable.get(foreignKey));
-        if (typeClause) subquery.where(arelSql(typeClause));
+        for (const node of typeNodes) subquery.where(node);
         const cloned = rel._clone();
         cloned._whereClause.arelNodes.push(srcTable.get(pk).in(subquery));
         rel = cloned;
@@ -313,7 +313,7 @@ export class Relation<T extends Base> {
         const foreignKey = assocDef.options.foreignKey ?? `${_toUnderscore(assocName)}_id`;
         rel = rel.where({ [foreignKey]: null });
       } else if (assocDef.type === "hasMany" || assocDef.type === "hasOne") {
-        const { targetTable, foreignKey, typeClause } = this._resolveHasManySubquery(
+        const { targetTable, foreignKey, typeNodes } = this._resolveHasManySubquery(
           modelClass,
           assocDef,
           assocName,
@@ -323,7 +323,7 @@ export class Relation<T extends Base> {
         const srcTable = new Table(sourceTable);
         const tgtTable = new Table(targetTable);
         const subquery = tgtTable.project(tgtTable.get(foreignKey));
-        if (typeClause) subquery.where(arelSql(typeClause));
+        for (const node of typeNodes) subquery.where(node);
         const cloned = rel._clone();
         cloned._whereClause.arelNodes.push(srcTable.get(pk).notIn(subquery));
         rel = cloned;
@@ -336,7 +336,11 @@ export class Relation<T extends Base> {
     modelClass: any,
     assocDef: any,
     assocName: string,
-  ): { targetTable: string; foreignKey: string; typeClause: string | null } {
+  ): {
+    targetTable: string;
+    foreignKey: string;
+    typeNodes: InstanceType<typeof Nodes.Node>[];
+  } {
     const targetClassName = assocDef.options.className ?? _camelize(_singularize(assocName));
     const targetModel = modelRegistry.get(targetClassName);
     if (!targetModel) {
@@ -345,12 +349,13 @@ export class Relation<T extends Base> {
       );
     }
     const targetTable = targetModel.tableName;
+    const tgtTable = new Table(targetTable);
     let foreignKey: string;
-    let typeClause: string | null = null;
+    const typeNodes: InstanceType<typeof Nodes.Node>[] = [];
     if (assocDef.options.as) {
       foreignKey = assocDef.options.foreignKey ?? `${_toUnderscore(assocDef.options.as)}_id`;
       const typeCol = `${_toUnderscore(assocDef.options.as)}_type`;
-      typeClause = `"${targetTable}"."${typeCol}" = '${modelClass.name}'`;
+      typeNodes.push(tgtTable.get(typeCol).eq(modelClass.name));
     } else {
       foreignKey = assocDef.options.foreignKey ?? `${_toUnderscore(modelClass.name)}_id`;
     }
@@ -360,11 +365,9 @@ export class Relation<T extends Base> {
         targetModel.name,
         ...(targetModel.descendants ?? []).map((d: any) => d.name),
       ];
-      const inList = stiNames.map((n: string) => `'${n}'`).join(", ");
-      const stiClause = `"${targetTable}"."${inheritanceCol}" IN (${inList})`;
-      typeClause = typeClause ? `${typeClause} AND ${stiClause}` : stiClause;
+      typeNodes.push(tgtTable.get(inheritanceCol).in(stiNames));
     }
-    return { targetTable, foreignKey, typeClause };
+    return { targetTable, foreignKey, typeNodes };
   }
 
   private _resolveHasManyJoin(
@@ -3692,7 +3695,11 @@ export class Relation<T extends Base> {
     if (this._isNone) return 0;
     const table = this._modelClass.arelTable;
     const updateValues: [InstanceType<typeof Nodes.Node>, unknown][] = Object.entries(counters).map(
-      ([key, val]) => [table.get(key), arelSql(`COALESCE("${key}", 0) + ${val}`)],
+      ([key, val]) => {
+        const col = table.get(key);
+        const coalesced = new Nodes.NamedFunction("COALESCE", [col, new Nodes.Quoted(0)]);
+        return [col, new Nodes.Addition(coalesced, new Nodes.Quoted(val))];
+      },
     );
     const um = new UpdateManager().table(table).set(updateValues);
     for (const cond of this._buildWhereStrings(table)) {

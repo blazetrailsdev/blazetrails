@@ -202,17 +202,20 @@ export class ToSql implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
+  protected emitOptimizerHints(node: Nodes.SelectCore): void {
+    if (node.optimizerHints.length === 0) return;
+    const sanitized = node.optimizerHints
+      .map((h) => this.sanitizeHint(h))
+      .filter((h) => h.length > 0);
+    if (sanitized.length > 0) {
+      this.collector.append(` /*+ ${sanitized.join(" ")} */`);
+    }
+  }
+
   protected visitSelectCore(node: Nodes.SelectCore): SQLString {
     this.collector.append("SELECT");
 
-    if (node.optimizerHints.length > 0) {
-      const sanitized = node.optimizerHints
-        .map((h) => this.sanitizeHint(h))
-        .filter((h) => h.length > 0);
-      if (sanitized.length > 0) {
-        this.collector.append(` /*+ ${sanitized.join(" ")} */`);
-      }
-    }
+    this.emitOptimizerHints(node);
 
     if (node.setQuantifier) {
       this.collector.append(" ");

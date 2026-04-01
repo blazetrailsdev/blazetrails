@@ -11,7 +11,7 @@
   let { tabs, activeTab = $bindable(tabs[0]?.id ?? ""), onchange, children }: Props = $props();
 
   $effect(() => {
-    if (activeTab && !tabs.some((t) => t.id === activeTab) && tabs.length > 0) {
+    if (tabs.length > 0 && !tabs.some((t) => t.id === activeTab)) {
       activeTab = tabs[0].id;
     }
   });

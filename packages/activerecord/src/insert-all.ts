@@ -1,4 +1,4 @@
-import { InsertManager, Nodes } from "@blazetrails/arel";
+import { Nodes } from "@blazetrails/arel";
 import type { Base } from "./base.js";
 import { quoteSqlValue } from "./base.js";
 import type { Relation } from "./relation.js";
@@ -203,22 +203,14 @@ export class Builder {
   }
 
   into(): string {
-    const table = this.model.arelTable;
+    const tableName = quoteIdentifier(this.model.arelTable.name, this._dialect);
     const keys = [...this._insertAll.keysIncludingTimestamps()];
-    const mgr = new InsertManager(table);
-    mgr.ast.columns = keys.map((k) => table.get(k));
-    mgr.values(this.valuesList());
-    const full = mgr.toSql();
-    return full.slice("INSERT ".length);
+    const columnsList = keys.map((k) => quoteIdentifier(k, this._dialect)).join(", ");
+    return `INTO ${tableName} (${columnsList}) ${this._valuesClause()}`;
   }
 
   valuesList(): Nodes.ValuesList {
-    const arrayCols = this._arrayColumnSet();
-    const rows = this._insertAll.mapKeyWithValue<Nodes.Node>((key, value) => {
-      if (value instanceof Nodes.SqlLiteral) return value;
-      return new Nodes.SqlLiteral(quoteSqlValue(value, arrayCols.has(key)));
-    });
-    return new Nodes.ValuesList(rows);
+    return new Nodes.ValuesList(this._valuesRows());
   }
 
   conflictTarget(): string {
@@ -336,6 +328,23 @@ export class Builder {
     }
 
     return assignments;
+  }
+
+  private _valuesRows(): Nodes.Node[][] {
+    const arrayCols = this._arrayColumnSet();
+    return this._insertAll.mapKeyWithValue<Nodes.Node>((key, value) => {
+      if (value instanceof Nodes.SqlLiteral) return value;
+      return new Nodes.SqlLiteral(quoteSqlValue(value, arrayCols.has(key)));
+    });
+  }
+
+  private _valuesClause(): string {
+    const rows = this._valuesRows();
+    const rendered = rows.map(
+      (row) =>
+        `(${row.map((n) => (n instanceof Nodes.SqlLiteral ? n.value : String(n))).join(", ")})`,
+    );
+    return `VALUES ${rendered.join(", ")}`;
   }
 
   private _quoteCol(name: string): string {

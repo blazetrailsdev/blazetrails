@@ -8,6 +8,7 @@ import {
   LessThanOrEqual,
   Between,
   As,
+  ATTRIBUTE_BRAND,
 } from "../nodes/binary.js";
 import { Equality } from "../nodes/equality.js";
 import { Matches, DoesNotMatch } from "../nodes/matches.js";
@@ -69,6 +70,7 @@ export interface TypeCaster {
 }
 
 export class Attribute extends Node {
+  readonly [ATTRIBUTE_BRAND] = true;
   readonly relation: Table;
   readonly name: string;
   readonly caster?: TypeCaster;

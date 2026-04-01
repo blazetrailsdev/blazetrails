@@ -8,9 +8,11 @@ import { Cte } from "./cte.js";
 
 export type NodeOrValue = Node | string | number | boolean | bigint | Date | null | undefined;
 
+export const ATTRIBUTE_BRAND = Symbol.for("arel.Attribute");
+
 function isAttribute(node: unknown): boolean {
   if (!node || typeof node !== "object") return false;
-  return (node as { constructor?: { name?: string } }).constructor?.name === "Attribute";
+  return (node as Record<symbol, unknown>)[ATTRIBUTE_BRAND] === true;
 }
 
 export function fetchAttributeFromBinary(

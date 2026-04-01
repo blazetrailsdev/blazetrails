@@ -104,12 +104,25 @@
     return sortRecursive(topLevel);
   }
 
+  let refreshSuspended = false;
+
   function refresh() {
+    if (refreshSuspended) return;
     const files = vfs.list();
     const paths = files.map((f) => f.path);
     root = buildTree(paths, new Set(
       paths.filter((p) => p === ".gitkeep" || p.endsWith("/.gitkeep")),
     ));
+  }
+
+  function batchVfs(fn: () => void) {
+    refreshSuspended = true;
+    try {
+      fn();
+    } finally {
+      refreshSuspended = false;
+      refresh();
+    }
   }
 
   let unsubscribe: (() => void) | undefined;
@@ -201,9 +214,11 @@
           renaming = null;
           return;
         }
-        for (let i = 0; i < filesToMove.length; i++) {
-          vfs.rename(filesToMove[i].path, newPaths[i]);
-        }
+        batchVfs(() => {
+          for (let i = 0; i < filesToMove.length; i++) {
+            vfs.rename(filesToMove[i].path, newPaths[i]);
+          }
+        });
         if (selectedPath?.startsWith(prefix)) {
           onselect?.(newPath + "/" + selectedPath.slice(prefix.length));
         }
@@ -258,8 +273,10 @@
     if (!confirmDelete) return;
     const { path, isDir } = confirmDelete;
     if (isDir) {
-      const files = vfs.list().filter((f) => f.path.startsWith(path + "/"));
-      for (const f of files) vfs.delete(f.path);
+      batchVfs(() => {
+        const files = vfs.list().filter((f) => f.path.startsWith(path + "/"));
+        for (const f of files) vfs.delete(f.path);
+      });
     } else {
       vfs.delete(path);
     }
@@ -458,7 +475,7 @@
   <div
     id={`tree-item-${encodeURIComponent(node.path)}`}
     role="treeitem"
-    aria-expanded={node.isDir ? !collapsed.has(node.path) : undefined}
+    aria-expanded={node.isDir && node.children.length > 0 ? !collapsed.has(node.path) : undefined}
     aria-selected={node.path === selectedPath}
     data-testid={node.isDir ? "tree-dir" : "tree-file"}
     data-path={node.path}
@@ -477,11 +494,11 @@
       oncontextmenu={(e) => showContextMenu(e, node.path, node.isDir)}
     >
       {#if node.isDir}
-        <span class="w-3 text-[10px] text-text-muted">
+        <span class="w-3 text-[10px] text-text-muted" aria-hidden="true">
           {collapsed.has(node.path) ? "▶" : "▼"}
         </span>
       {:else}
-        <span class="w-3 text-[10px]">{fileIcon(node.name)}</span>
+        <span class="w-3 text-[10px]" aria-hidden="true">{fileIcon(node.name)}</span>
       {/if}
 
       {#if renaming === node.path}
@@ -503,25 +520,27 @@
     </button>
 
     {#if node.isDir && !collapsed.has(node.path)}
-      {#if creating && creating.parentDir === node.path}
-        <div class="flex items-center gap-1 py-1" style="padding-left: {(depth + 1) * 16 + 12}px">
-          <input
-            class="w-full rounded border border-border-focus bg-surface px-1 py-0.5 text-xs text-text outline-none"
-            bind:value={createValue}
-            onkeydown={(e) => {
-              e.stopPropagation();
-              if (e.key === "Enter") commitCreate();
-              if (e.key === "Escape") creating = null;
-            }}
-            placeholder={creating.isDir ? "folder name" : "filename"}
-            data-testid="create-input"
-            autofocus
-          />
-        </div>
-      {/if}
-      {#each node.children as child (child.path)}
-        {@render treeNode(child, depth + 1)}
-      {/each}
+      <div role="group">
+        {#if creating && creating.parentDir === node.path}
+          <div class="flex items-center gap-1 py-1" style="padding-left: {(depth + 1) * 16 + 12}px">
+            <input
+              class="w-full rounded border border-border-focus bg-surface px-1 py-0.5 text-xs text-text outline-none"
+              bind:value={createValue}
+              onkeydown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Enter") commitCreate();
+                if (e.key === "Escape") creating = null;
+              }}
+              placeholder={creating.isDir ? "folder name" : "filename"}
+              data-testid="create-input"
+              autofocus
+            />
+          </div>
+        {/if}
+        {#each node.children as child (child.path)}
+          {@render treeNode(child, depth + 1)}
+        {/each}
+      </div>
     {/if}
   </div>
 {/snippet}

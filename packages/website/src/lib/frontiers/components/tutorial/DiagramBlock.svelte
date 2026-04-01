@@ -12,16 +12,15 @@
   let svg = $state<string | null>(null);
   let error = $state<string | null>(null);
   let loading = $state(true);
-  let lastSource = "";
+  let renderToken = 0;
 
   async function render(src: string) {
-    if (src === lastSource && !loading) return;
-    lastSource = src;
+    const token = ++renderToken;
     loading = true;
     svg = null;
     error = null;
     const result = await renderDiagram(src);
-    if (src !== lastSource) return;
+    if (token !== renderToken) return;
     if (result.success) {
       svg = DOMPurify.sanitize(result.svg!, { USE_PROFILES: { svg: true } });
     } else {

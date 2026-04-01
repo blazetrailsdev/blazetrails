@@ -175,6 +175,13 @@
     contextMenu = null;
   }
 
+  function contextTargetDir(): string {
+    if (!contextMenu) return "";
+    return contextMenu.isDir
+      ? contextMenu.path
+      : contextMenu.path.split("/").slice(0, -1).join("/");
+  }
+
   function startRename(path: string) {
     renaming = path;
     renameValue = path.split("/").pop() ?? "";
@@ -214,11 +221,25 @@
           renaming = null;
           return;
         }
+        let success = true;
         batchVfs(() => {
+          const done: number[] = [];
           for (let i = 0; i < filesToMove.length; i++) {
-            vfs.rename(filesToMove[i].path, newPaths[i]);
+            if (vfs.rename(filesToMove[i].path, newPaths[i])) {
+              done.push(i);
+            } else {
+              for (let j = done.length - 1; j >= 0; j--) {
+                vfs.rename(newPaths[done[j]], filesToMove[done[j]].path);
+              }
+              success = false;
+              break;
+            }
           }
         });
+        if (!success) {
+          renaming = null;
+          return;
+        }
         if (selectedPath?.startsWith(prefix)) {
           onselect?.(newPath + "/" + selectedPath.slice(prefix.length));
         }
@@ -429,13 +450,13 @@
     <button
       type="button"
       class="block w-full px-3 py-1 text-left text-xs text-text hover:bg-surface hover:text-accent"
-      onclick={() => startCreate(contextMenu?.isDir ? contextMenu.path : contextMenu?.path.split("/").slice(0, -1).join("/") ?? "", false)}
+      onclick={() => startCreate(contextTargetDir(), false)}
       role="menuitem"
     >New File</button>
     <button
       type="button"
       class="block w-full px-3 py-1 text-left text-xs text-text hover:bg-surface hover:text-accent"
-      onclick={() => startCreate(contextMenu?.isDir ? contextMenu.path : contextMenu?.path.split("/").slice(0, -1).join("/") ?? "", true)}
+      onclick={() => startCreate(contextTargetDir(), true)}
       role="menuitem"
     >New Folder</button>
     <hr class="my-1 border-border" />
@@ -458,9 +479,12 @@
   <div
     class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
     data-testid="delete-confirm"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="delete-confirm-title"
   >
     <div class="rounded border border-border bg-surface-overlay p-4 shadow-lg">
-      <p class="text-sm text-text">
+      <p id="delete-confirm-title" class="text-sm text-text">
         Delete <code class="text-accent">{confirmDelete.path}</code>{confirmDelete.isDir ? " and all its contents" : ""}?
       </p>
       <div class="mt-3 flex justify-end gap-2">

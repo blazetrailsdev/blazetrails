@@ -14,14 +14,6 @@ export default defineConfig({
       "@blazetrails/activerecord": path.resolve(__dirname, "../activerecord/src/index.ts"),
       "@blazetrails/rack": path.resolve(__dirname, "../rack/src/index.ts"),
       "@blazetrails/actionpack": path.resolve(__dirname, "../actionpack/src/index.ts"),
-      "@blazetrails/railties/generators/app-generator": path.resolve(
-        __dirname,
-        "../railties/src/generators/app-generator.ts",
-      ),
-      "@blazetrails/railties/generators/model-generator": path.resolve(
-        __dirname,
-        "../railties/src/generators/model-generator.ts",
-      ),
       "@blazetrails/railties": path.resolve(__dirname, "../railties/src/cli.ts"),
       $frontiers: path.resolve(__dirname, "src/lib/frontiers"),
     },

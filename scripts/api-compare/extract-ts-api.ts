@@ -158,6 +158,17 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
             if (ts.isArrowFunction(init) || ts.isFunctionExpression(init)) {
               isFunctionLike = true;
               params = extractParameters(init.parameters);
+            } else {
+              // Handle `export const foo = existingFunction` aliases
+              const type = checker.getTypeAtLocation(init);
+              const signatures = type.getCallSignatures();
+              if (signatures.length > 0) {
+                isFunctionLike = true;
+                const sigDecl = signatures[0].declaration;
+                if (sigDecl && ts.isFunctionLike(sigDecl)) {
+                  params = extractParameters(sigDecl.parameters);
+                }
+              }
             }
           }
 

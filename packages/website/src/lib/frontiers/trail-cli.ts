@@ -236,10 +236,14 @@ export function createTrailCLI(deps: TrailCliDeps) {
         const file = vfs.read(fileOrSql) ?? vfs.read(fileOrSql + ".sql");
         const sqlText = file ? file.content : fileOrSql;
 
-        const statements = sqlText
+        const cleanedSql = sqlText
+          .split("\n")
+          .filter((line) => !line.trim().startsWith("--"))
+          .join("\n");
+        const statements = cleanedSql
           .split(/;/)
           .map((s: string) => s.trim())
-          .filter((s: string) => s && !s.startsWith("--"));
+          .filter((s: string) => s.length > 0);
 
         for (const stmt of statements) {
           try {

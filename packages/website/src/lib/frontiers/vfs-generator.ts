@@ -18,7 +18,7 @@ function applyVfsOverrides(
       },
     },
     createFile: {
-      value(relativePath: string, content: string) {
+      value(relativePath: string, content: string, _options?: { mode?: number }) {
         vfs.write(relativePath, content);
         this.createdFiles.push(relativePath);
         this.output(`      create  ${relativePath}`);

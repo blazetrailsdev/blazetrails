@@ -18,7 +18,7 @@ import type {
 } from "../abstract/schema-definitions.js";
 
 /**
- * MySQL-specific column type methods mixed into TableDefinition and Table.
+ * MySQL-specific column type methods mixed into TableDefinition.
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::MySQL::ColumnMethods
  */

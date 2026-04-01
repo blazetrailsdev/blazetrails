@@ -10,8 +10,7 @@ export type NodeOrValue = Node | string | number | boolean | bigint | Date | nul
 
 function isAttribute(node: unknown): boolean {
   if (!node || typeof node !== "object") return false;
-  const obj = node as Record<string, unknown>;
-  return "relation" in obj && "name" in obj && typeof obj.name === "string";
+  return (node as { constructor?: { name?: string } }).constructor?.name === "Attribute";
 }
 
 export function fetchAttributeFromBinary(

@@ -608,8 +608,10 @@ describe("ReflectionTest", () => {
     Associations.hasMany.call(Post, "comments", {});
     Associations.hasMany.call(Author, "comments", { through: "posts" });
     const ref = reflectOnAssociation(Author, "comments") as ThroughReflection;
-    expect(ref.joinPrimaryKey).toBe("id");
-    expect(ref.joinForeignKey).toBe("post_id");
+    // Through association: source is comments on Post, so
+    // joinPrimaryKey = source FK (post_id), joinForeignKey = source owner PK (id)
+    expect(ref.joinPrimaryKey).toBe("post_id");
+    expect(ref.joinForeignKey).toBe("id");
   });
   it("join scope builds arel predicate for has many", () => {
     const { Author } = makeModels();
@@ -618,8 +620,8 @@ describe("ReflectionTest", () => {
     const authorsTable = new Table("authors");
     const scope = ref.joinScope(booksTable, authorsTable, Author);
     const sql = scope.toSql();
-    // The join condition should use Arel: books.author_id = authors.id
-    expect(sql).toContain("author_id");
+    // has_many: books.author_id = authors.id
+    expect(sql).toMatch(/"books"\."author_id" = "authors"\."id"/);
   });
   it("join scope builds arel predicate for belongs to", () => {
     const { Book, Author } = makeModels();
@@ -628,7 +630,8 @@ describe("ReflectionTest", () => {
     const booksTable = new Table("books");
     const scope = ref.joinScope(authorsTable, booksTable, Book);
     const sql = scope.toSql();
-    expect(sql).toContain("author_id");
+    // belongs_to: authors.id = books.author_id
+    expect(sql).toMatch(/"authors"\."id" = "books"\."author_id"/);
   });
   it.skip("scope chain", () => {});
   it.skip("nested has many through reflection", () => {});

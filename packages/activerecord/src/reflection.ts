@@ -310,10 +310,6 @@ export class AssociationReflection extends MacroReflection {
     return this.klass.primaryKey;
   }
 
-  get activeRecordPrimaryKey(): string | string[] {
-    return this.activeRecord.primaryKey;
-  }
-
   get associationForeignKey(): string {
     if (this.options.associationForeignKey) {
       return this.options.associationForeignKey as string;
@@ -326,21 +322,32 @@ export class AssociationReflection extends MacroReflection {
   }
 
   /**
-   * The primary key column on the associated table used for joins.
+   * The column on the associated table used for joins.
+   * For has_many/has_one: the foreign key column on the associated table.
+   * For belongs_to: the primary key on the associated table.
    *
    * Mirrors: ActiveRecord::Reflection::AssociationReflection#join_primary_key
    */
   get joinPrimaryKey(): string | string[] {
-    return this.associationPrimaryKey;
+    return this.foreignKey;
   }
 
   /**
-   * The foreign key column on the owner table used for joins.
+   * The column on the owner table used for joins.
+   * For has_many/has_one: the primary key on the owner table.
+   * For belongs_to: the foreign key on the owner table.
    *
    * Mirrors: ActiveRecord::Reflection::AssociationReflection#join_foreign_key
    */
   get joinForeignKey(): string | string[] {
-    return this.foreignKey;
+    return this.activeRecordPrimaryKey;
+  }
+
+  get activeRecordPrimaryKey(): string | string[] {
+    if (this.options.primaryKey !== undefined) {
+      return this.options.primaryKey as string | string[];
+    }
+    return this.activeRecord.primaryKey;
   }
 
   protected computeClass(name: string): typeof Base {
@@ -412,6 +419,10 @@ export class BelongsToReflection extends AssociationReflection {
 
   get joinForeignKey(): string | string[] {
     return this.foreignKey;
+  }
+
+  get activeRecordPrimaryKey(): string | string[] {
+    return this.activeRecord.primaryKey;
   }
 }
 

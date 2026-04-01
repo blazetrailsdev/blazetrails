@@ -69,8 +69,20 @@ export {
   parseSqliteUrl,
   adapterNameFromUrl,
 } from "./connection-handling.js";
-export { signedId, findSigned, findSignedBang } from "./signed-id.js";
-export { lockingColumn, setLockingColumn, lockingEnabled } from "./locking/optimistic.js";
+export {
+  signedId,
+  findSigned,
+  findSignedBang,
+  setSignedIdVerifierSecret,
+  signedIdVerifier,
+  setSignedIdVerifier,
+} from "./signed-id.js";
+export {
+  lockingColumn,
+  setLockingColumn,
+  lockingEnabled,
+  LockingType,
+} from "./locking/optimistic.js";
 export { lockBang, withLock } from "./locking/pessimistic.js";
 export { i18nScope, lookupAncestors } from "./translation.js";
 export {

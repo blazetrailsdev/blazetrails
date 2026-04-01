@@ -1,4 +1,5 @@
 import type { Base } from "../base.js";
+import { Type } from "@blazetrails/activemodel";
 
 /**
  * Optimistic locking support for ActiveRecord models.
@@ -31,4 +32,41 @@ export function setLockingColumn(modelClass: typeof Base, column: string): void 
  */
 export function lockingEnabled(modelClass: typeof Base): boolean {
   return modelClass._attributeDefinitions.has(lockingColumn(modelClass));
+}
+
+/**
+ * Type wrapper for the lock_version column that ensures values are
+ * always coerced to integers on serialize and deserialize.
+ *
+ * Mirrors: ActiveRecord::Locking::LockingType
+ */
+export class LockingType extends Type {
+  private _subtype: Type;
+
+  constructor(subtype: Type) {
+    super();
+    this._subtype = subtype;
+  }
+
+  get name(): string {
+    return this._subtype.name;
+  }
+
+  cast(value: unknown): number {
+    return toInt(this._subtype.cast(value));
+  }
+
+  deserialize(value: unknown): number {
+    return toInt(this._subtype.deserialize(value));
+  }
+
+  serialize(value: unknown): number {
+    return toInt(this._subtype.serialize(value));
+  }
+}
+
+function toInt(value: unknown): number {
+  if (value === null || value === undefined) return 0;
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.trunc(n) : 0;
 }

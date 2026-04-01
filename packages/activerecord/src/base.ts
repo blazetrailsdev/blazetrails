@@ -2918,7 +2918,7 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::SignedId#signed_id
    */
-  signedId(options?: { purpose?: string; expiresIn?: number }): string {
+  signedId(options?: { purpose?: string; expiresIn?: number; expiresAt?: Date }): string {
     return SignedIdModule.signedId(this, options);
   }
 

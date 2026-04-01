@@ -154,6 +154,15 @@ export class MacroReflection extends AbstractReflection {
  * Mirrors: ActiveRecord::Reflection::AggregateReflection
  */
 export class AggregateReflection extends MacroReflection {
+  get macro(): MacroType {
+    return "composedOf";
+  }
+
+  get klass(): any {
+    if (this.options.anonymousClass) return this.options.anonymousClass;
+    return super.klass;
+  }
+
   mapping(): [string, string][] {
     const m = this.options.mapping;
     if (!m) return [[this.name, this.name]];
@@ -552,9 +561,10 @@ export function createReflection(
   const reflection = new ReflectionClass(assocDef.name, null, assocDef.options, ownerClass);
 
   if (
-    assocDef.options.through ||
-    assocDef.type === "hasManyThrough" ||
-    assocDef.type === "hasOneThrough"
+    assocDef.type !== "hasAndBelongsToMany" &&
+    (assocDef.options.through ||
+      assocDef.type === "hasManyThrough" ||
+      assocDef.type === "hasOneThrough")
   ) {
     return new ThroughReflection(reflection);
   }

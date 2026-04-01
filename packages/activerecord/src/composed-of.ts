@@ -37,7 +37,11 @@ export function composedOf(
     new AggregateReflection(
       name,
       null,
-      { className: options.className.name, mapping: options.mapping },
+      {
+        className: options.className.name,
+        mapping: options.mapping,
+        anonymousClass: options.className,
+      },
       modelClass,
     ),
   );

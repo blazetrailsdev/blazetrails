@@ -81,7 +81,7 @@
 
   {#each tabs as tab (tab.id)}
     <div
-      class="flex-1 overflow-auto {tab.id === activeTab ? '' : 'hidden'}"
+      class="flex-1 overflow-auto"
       role="tabpanel"
       id={`tabpanel-${safeId(tab.id)}`}
       aria-labelledby={`tab-${safeId(tab.id)}`}

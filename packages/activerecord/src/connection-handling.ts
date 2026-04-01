@@ -18,22 +18,24 @@ import {
  * Mirrors: ActiveRecord::ConnectionHandling
  */
 
+const _adapterCache: Record<string, new (...args: any[]) => DatabaseAdapter> = {};
+
 async function _loadAdapter(normalized: string): Promise<new (...args: any[]) => DatabaseAdapter> {
+  if (_adapterCache[normalized]) return _adapterCache[normalized];
+  let Cls: new (...args: any[]) => DatabaseAdapter;
   if (normalized === "sqlite") {
-    const mod = await import("./connection-adapters/sqlite3-adapter.js");
-    return mod.SQLite3Adapter;
+    Cls = (await import("./connection-adapters/sqlite3-adapter.js")).SQLite3Adapter;
+  } else if (normalized === "postgresql") {
+    Cls = (await import("./adapters/postgresql-adapter.js")).PostgreSQLAdapter;
+  } else if (normalized === "mysql") {
+    Cls = (await import("./adapters/mysql2-adapter.js")).Mysql2Adapter;
+  } else {
+    throw new AdapterNotFound(
+      `Unknown database adapter "${normalized}". Supported adapters: postgresql, mysql, sqlite`,
+    );
   }
-  if (normalized === "postgresql") {
-    const mod = await import("./adapters/postgresql-adapter.js");
-    return mod.PostgreSQLAdapter;
-  }
-  if (normalized === "mysql") {
-    const mod = await import("./adapters/mysql2-adapter.js");
-    return mod.Mysql2Adapter;
-  }
-  throw new AdapterNotFound(
-    `Unknown database adapter "${normalized}". Supported adapters: postgresql, mysql, sqlite`,
-  );
+  _adapterCache[normalized] = Cls;
+  return Cls;
 }
 
 export async function establishConnection(
@@ -51,12 +53,17 @@ export async function establishConnection(
         [key: string]: unknown;
       },
 ): Promise<void> {
-  (modelClass as any)._adapter = null;
-  const BaseClass = Object.getPrototypeOf(modelClass.prototype)?.constructor as
-    | typeof Base
-    | undefined;
-  if (BaseClass && "_adapter" in BaseClass) {
-    (BaseClass as any)._adapter = null;
+  // Clear cached adapters up the prototype chain (Base → ApplicationRecord → Model)
+  let current: any = modelClass;
+  while (current && typeof current === "function") {
+    if ("_adapter" in current) {
+      current._adapter = null;
+    }
+    const proto = Object.getPrototypeOf(current.prototype);
+    if (!proto) break;
+    const parent = proto.constructor;
+    if (!parent || parent === current) break;
+    current = parent;
   }
 
   if (config === undefined) {

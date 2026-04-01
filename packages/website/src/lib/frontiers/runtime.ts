@@ -1,0 +1,103 @@
+import type { SqlJsStatic } from "sql.js";
+import { SqlJsAdapter } from "./sql-js-adapter.js";
+import { VirtualFS } from "./virtual-fs.js";
+import { createTrailCLI, type CliResult } from "./trail-cli.js";
+import type { MigrationProxy } from "@blazetrails/activerecord";
+
+export type { VirtualFS, VfsFile } from "./virtual-fs.js";
+
+export interface Runtime {
+  adapter: SqlJsAdapter;
+  vfs: VirtualFS;
+
+  executeSQL: (sql: string) => Array<{ columns: string[]; values: unknown[][] }>;
+  getTables: () => string[];
+
+  registerMigration: (proxy: MigrationProxy) => void;
+  getMigrations: () => MigrationProxy[];
+  clearMigrations: () => void;
+
+  exec: (command: string) => Promise<CliResult>;
+
+  exportDB: () => Uint8Array;
+  loadDB: (data: Uint8Array) => void;
+
+  reset: () => void;
+}
+
+export async function createRuntime(SQL: SqlJsStatic): Promise<Runtime> {
+  const db = new SQL.Database();
+  const adapter = new SqlJsAdapter(db);
+  const vfs = new VirtualFS(adapter);
+
+  let migrations: MigrationProxy[] = [];
+
+  function executeCode(_code: string): Promise<unknown> {
+    // Minimal stub — full executeCode needs a sandboxed eval context.
+    // For now, migrations register themselves via runtime.registerMigration().
+    return Promise.resolve(undefined);
+  }
+
+  async function runAllInDir(dir: string): Promise<void> {
+    const files = vfs
+      .list()
+      .filter((f) => f.path.startsWith(dir) && f.path.endsWith(".ts"))
+      .sort((a, b) => a.path.localeCompare(b.path));
+    for (const file of files) {
+      await executeCode(file.content);
+    }
+  }
+
+  const cli = createTrailCLI({
+    vfs,
+    adapter,
+    executeCode,
+    getMigrations: () => migrations,
+    registerMigration: (proxy) => {
+      if (!migrations.find((m) => m.version === proxy.version)) {
+        migrations.push(proxy);
+      }
+    },
+    clearMigrations: () => {
+      migrations = [];
+    },
+    getTables: () => adapter.getTables(),
+    runAllInDir,
+  });
+
+  const runtime: Runtime = {
+    adapter,
+    vfs,
+
+    executeSQL: (sql) => adapter.execRaw(sql),
+    getTables: () => adapter.getTables(),
+
+    registerMigration: (proxy) => {
+      if (!migrations.find((m) => m.version === proxy.version)) {
+        migrations.push(proxy);
+      }
+    },
+    getMigrations: () => migrations,
+    clearMigrations: () => {
+      migrations = [];
+    },
+
+    exec: (command) => cli.exec(command),
+
+    exportDB: () => db.export(),
+    loadDB: (data) => {
+      const newDb = new SQL.Database(data);
+      Object.assign(adapter, new SqlJsAdapter(newDb));
+    },
+
+    reset: () => {
+      for (const f of vfs.list()) vfs.delete(f.path);
+      const tables = adapter.getTables().filter((t) => !t.startsWith("_vfs_"));
+      for (const table of tables) adapter.execRaw(`DROP TABLE IF EXISTS "${table}"`);
+      adapter.execRaw('DROP TABLE IF EXISTS "schema_migrations"');
+      migrations = [];
+    },
+  };
+
+  return runtime;
+}

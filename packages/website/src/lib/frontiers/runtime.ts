@@ -26,12 +26,30 @@ export interface Runtime {
   reset: () => void;
 }
 
+function createMigrationRegistry() {
+  let migrations: MigrationProxy[] = [];
+
+  return {
+    register(proxy: MigrationProxy) {
+      const idx = migrations.findIndex((m) => m.version === proxy.version);
+      if (idx >= 0) {
+        migrations[idx] = proxy;
+      } else {
+        migrations.push(proxy);
+      }
+    },
+    getAll: () => migrations,
+    clear() {
+      migrations = [];
+    },
+  };
+}
+
 export async function createRuntime(SQL: SqlJsStatic): Promise<Runtime> {
   let db = new SQL.Database();
   let adapter = new SqlJsAdapter(db);
   let vfs = new VirtualFS(adapter);
-
-  let migrations: MigrationProxy[] = [];
+  const registry = createMigrationRegistry();
 
   function executeCode(_code: string): Promise<unknown> {
     throw new Error(
@@ -45,15 +63,9 @@ export async function createRuntime(SQL: SqlJsStatic): Promise<Runtime> {
       vfs,
       adapter,
       executeCode,
-      getMigrations: () => migrations,
-      registerMigration: (proxy) => {
-        if (!migrations.find((m) => m.version === proxy.version)) {
-          migrations.push(proxy);
-        }
-      },
-      clearMigrations: () => {
-        migrations = [];
-      },
+      getMigrations: registry.getAll,
+      registerMigration: registry.register,
+      clearMigrations: registry.clear,
       getTables: () => adapter.getTables(),
     });
   }
@@ -67,15 +79,9 @@ export async function createRuntime(SQL: SqlJsStatic): Promise<Runtime> {
     executeSQL: (sql) => adapter.execRaw(sql),
     getTables: () => adapter.getTables(),
 
-    registerMigration: (proxy) => {
-      if (!migrations.find((m) => m.version === proxy.version)) {
-        migrations.push(proxy);
-      }
-    },
-    getMigrations: () => migrations,
-    clearMigrations: () => {
-      migrations = [];
-    },
+    registerMigration: registry.register,
+    getMigrations: registry.getAll,
+    clearMigrations: registry.clear,
 
     exec: (command) => cli.exec(command),
 
@@ -87,13 +93,13 @@ export async function createRuntime(SQL: SqlJsStatic): Promise<Runtime> {
       runtime.adapter = adapter;
       runtime.vfs = vfs;
       cli = buildCli();
-      migrations = [];
+      registry.clear();
     },
 
     reset: () => {
       for (const f of vfs.list()) vfs.delete(f.path);
       dropUserTables(adapter, () => adapter.getTables());
-      migrations = [];
+      registry.clear();
     },
   };
 

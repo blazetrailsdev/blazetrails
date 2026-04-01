@@ -61,7 +61,7 @@ export class AbstractReflection {
   }
 
   isHasMany(): boolean {
-    return this.isCollection() && !this.belongsTo();
+    return (this as any).macro === "hasMany";
   }
 
   isCollection(): boolean {

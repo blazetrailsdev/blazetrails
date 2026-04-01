@@ -21,6 +21,8 @@ export interface Runtime {
   exec: (command: string) => Promise<CliResult>;
 
   exportDB: () => Uint8Array;
+  /** Replaces the database. Callers must re-read runtime.adapter/runtime.vfs
+   * after calling — previous references become stale. */
   loadDB: (data: Uint8Array) => void;
 
   reset: () => void;

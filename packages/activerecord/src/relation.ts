@@ -3056,41 +3056,12 @@ export class Relation<T extends Base> {
           }
         }
       } else if (assocDef.type === "hasMany") {
-        const singularize = (w: string) => {
-          if (w.endsWith("ies")) return w.slice(0, -3) + "y";
-          if (w.endsWith("ses") || w.endsWith("xes") || w.endsWith("zes")) return w.slice(0, -2);
-          if (w.endsWith("s") && !w.endsWith("ss")) return w.slice(0, -1);
-          return w;
-        };
-        const camelize = (n: string) =>
-          n
-            .split("_")
-            .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-            .join("");
-        const underscore = (n: string) =>
-          n
-            .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
-            .replace(/([a-z\d])([A-Z])/g, "$1_$2")
-            .toLowerCase();
-        const pluralize = (w: string) => {
-          if (w.endsWith("y") && !/[aeiou]y$/.test(w)) return w.slice(0, -1) + "ies";
-          if (
-            w.endsWith("s") ||
-            w.endsWith("x") ||
-            w.endsWith("z") ||
-            w.endsWith("ch") ||
-            w.endsWith("sh")
-          )
-            return w + "es";
-          return w + "s";
-        };
-
-        const className = assocDef.options.className ?? camelize(singularize(assocName));
+        const className = assocDef.options.className ?? _camelize(_singularize(assocName));
         const asName = assocDef.options.as;
         const foreignKey = asName
-          ? (assocDef.options.foreignKey ?? `${underscore(asName)}_id`)
-          : (assocDef.options.foreignKey ?? `${underscore(modelClass.name)}_id`);
-        const typeCol = asName ? `${underscore(asName)}_type` : null;
+          ? (assocDef.options.foreignKey ?? `${_toUnderscore(asName)}_id`)
+          : (assocDef.options.foreignKey ?? `${_toUnderscore(modelClass.name)}_id`);
+        const typeCol = asName ? `${_toUnderscore(asName)}_type` : null;
         const primaryKey = assocDef.options.primaryKey ?? modelClass.primaryKey;
 
         // Handle through associations
@@ -3101,32 +3072,32 @@ export class Relation<T extends Base> {
           if (!throughAssocDef) continue;
 
           const throughClassName =
-            throughAssocDef.options.className ?? camelize(singularize(throughAssocDef.name));
+            throughAssocDef.options.className ?? _camelize(_singularize(throughAssocDef.name));
           const throughModel = _mr.get(throughClassName);
           if (!throughModel) continue;
 
           // Determine FK for loading through records
           const throughAsName = throughAssocDef.options.as;
           const throughFk = throughAsName
-            ? (throughAssocDef.options.foreignKey ?? `${underscore(throughAsName)}_id`)
-            : (throughAssocDef.options.foreignKey ?? `${underscore(modelClass.name)}_id`);
+            ? (throughAssocDef.options.foreignKey ?? `${_toUnderscore(throughAsName)}_id`)
+            : (throughAssocDef.options.foreignKey ?? `${_toUnderscore(modelClass.name)}_id`);
           const pkValues = [
             ...new Set(records.map((r) => r.readAttribute(primaryKey)).filter((v) => v != null)),
           ];
           if (pkValues.length === 0) continue;
 
-          const sourceName = assocDef.options.source ?? singularize(assocName);
+          const sourceName = assocDef.options.source ?? _singularize(assocName);
 
           // Look up the source association on the through model (try singular and plural)
           const throughModelAssociations: any[] = (throughModel as any)._associations ?? [];
           const sourceAssocDef =
             throughModelAssociations.find((a: any) => a.name === sourceName) ??
-            throughModelAssociations.find((a: any) => a.name === pluralize(sourceName));
+            throughModelAssociations.find((a: any) => a.name === _pluralize(sourceName));
           const sourceAssocKind = sourceAssocDef?.type ?? "belongsTo";
 
           const throughWhereConditions: Record<string, unknown> = { [throughFk]: pkValues };
           if (throughAsName)
-            throughWhereConditions[`${underscore(throughAsName)}_type`] = modelClass.name;
+            throughWhereConditions[`${_toUnderscore(throughAsName)}_type`] = modelClass.name;
 
           // Push sourceType filter into the DB query instead of filtering in-memory
           if (
@@ -3135,7 +3106,7 @@ export class Relation<T extends Base> {
             sourceAssocKind === "belongsTo"
           ) {
             const resolvedSourceName = sourceAssocDef?.name ?? sourceName;
-            const sourceTypeCol = `${underscore(resolvedSourceName)}_type`;
+            const sourceTypeCol = `${_toUnderscore(resolvedSourceName)}_type`;
             throughWhereConditions[sourceTypeCol] = assocDef.options.sourceType;
           }
 
@@ -3221,7 +3192,8 @@ export class Relation<T extends Base> {
 
           if (sourceAssocKind === "belongsTo") {
             // Through record has FK pointing to target (e.g., tagging.tag_id -> tag.id)
-            const targetFk = sourceAssocDef?.options?.foreignKey ?? `${underscore(sourceName)}_id`;
+            const targetFk =
+              sourceAssocDef?.options?.foreignKey ?? `${_toUnderscore(sourceName)}_id`;
             const targetPk =
               sourceAssocDef?.options?.primaryKey ?? (targetModel as any).primaryKey ?? "id";
 
@@ -3245,8 +3217,8 @@ export class Relation<T extends Base> {
             // Source is has_many/has_one: target has FK pointing to through record
             const sourceAsName = sourceAssocDef?.options?.as;
             const sourceFk = sourceAsName
-              ? (sourceAssocDef?.options?.foreignKey ?? `${underscore(sourceAsName)}_id`)
-              : (sourceAssocDef?.options?.foreignKey ?? `${underscore(throughClassName)}_id`);
+              ? (sourceAssocDef?.options?.foreignKey ?? `${_toUnderscore(sourceAsName)}_id`)
+              : (sourceAssocDef?.options?.foreignKey ?? `${_toUnderscore(throughClassName)}_id`);
             const throughIds = [
               ...new Set(
                 throughRecords.map((r: any) => r.readAttribute("id")).filter((v: any) => v != null),
@@ -3254,7 +3226,7 @@ export class Relation<T extends Base> {
             ];
             const sourceWhereConditions: Record<string, unknown> = { [sourceFk]: throughIds };
             if (sourceAsName)
-              sourceWhereConditions[`${underscore(sourceAsName)}_type`] = throughClassName;
+              sourceWhereConditions[`${_toUnderscore(sourceAsName)}_type`] = throughClassName;
             let sourceRel = (targetModel as any)._allForPreload().where(sourceWhereConditions);
             if (assocDef.options.scope) sourceRel = assocDef.options.scope(sourceRel);
             targetRecords = throughIds.length > 0 ? await sourceRel.toArray() : [];
@@ -3313,24 +3285,7 @@ export class Relation<T extends Base> {
           }
         }
       } else if (assocDef.type === "hasOne") {
-        const underscore = (n: string) =>
-          n
-            .replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2")
-            .replace(/([a-z\d])([A-Z])/g, "$1_$2")
-            .toLowerCase();
-        const camelize = (n: string) =>
-          n
-            .split("_")
-            .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-            .join("");
-        const singularize = (w: string) => {
-          if (w.endsWith("ies")) return w.slice(0, -3) + "y";
-          if (w.endsWith("ses") || w.endsWith("xes") || w.endsWith("zes")) return w.slice(0, -2);
-          if (w.endsWith("s") && !w.endsWith("ss")) return w.slice(0, -1);
-          return w;
-        };
-
-        const className = assocDef.options.className ?? camelize(assocName);
+        const className = assocDef.options.className ?? _camelize(assocName);
         const primaryKey = assocDef.options.primaryKey ?? modelClass.primaryKey;
         const hasOneAsName = assocDef.options.as;
 
@@ -3344,15 +3299,15 @@ export class Relation<T extends Base> {
           const throughClassName =
             throughAssocDef.options.className ??
             (throughAssocDef.type === "hasMany"
-              ? camelize(singularize(throughAssocDef.name))
-              : camelize(throughAssocDef.name));
+              ? _camelize(_singularize(throughAssocDef.name))
+              : _camelize(throughAssocDef.name));
           const throughModel = _mr.get(throughClassName);
           if (!throughModel) continue;
 
           const throughAsName = throughAssocDef.options.as;
           const throughFk = throughAsName
-            ? (throughAssocDef.options.foreignKey ?? `${underscore(throughAsName)}_id`)
-            : (throughAssocDef.options.foreignKey ?? `${underscore(modelClass.name)}_id`);
+            ? (throughAssocDef.options.foreignKey ?? `${_toUnderscore(throughAsName)}_id`)
+            : (throughAssocDef.options.foreignKey ?? `${_toUnderscore(modelClass.name)}_id`);
           const pkValues = [
             ...new Set(records.map((r) => r.readAttribute(primaryKey)).filter((v) => v != null)),
           ];
@@ -3360,7 +3315,7 @@ export class Relation<T extends Base> {
 
           const throughWhereConditions: Record<string, unknown> = { [throughFk]: pkValues };
           if (throughAsName)
-            throughWhereConditions[`${underscore(throughAsName)}_type`] = modelClass.name;
+            throughWhereConditions[`${_toUnderscore(throughAsName)}_type`] = modelClass.name;
           const throughRecords = await (throughModel as any)
             ._allForPreload()
             .where(throughWhereConditions)
@@ -3372,21 +3327,9 @@ export class Relation<T extends Base> {
 
           // Look up source association on through model
           const throughModelAssociations: any[] = (throughModel as any)._associations ?? [];
-          const pluralizeHot = (w: string) => {
-            if (w.endsWith("y") && !/[aeiou]y$/.test(w)) return w.slice(0, -1) + "ies";
-            if (
-              w.endsWith("s") ||
-              w.endsWith("x") ||
-              w.endsWith("z") ||
-              w.endsWith("ch") ||
-              w.endsWith("sh")
-            )
-              return w + "es";
-            return w + "s";
-          };
           const sourceAssocDef =
             throughModelAssociations.find((a: any) => a.name === sourceName) ??
-            throughModelAssociations.find((a: any) => a.name === pluralizeHot(sourceName));
+            throughModelAssociations.find((a: any) => a.name === _pluralize(sourceName));
 
           // Recursive through: if source association is itself a through, preload recursively
           if (sourceAssocDef?.options?.through) {
@@ -3451,7 +3394,7 @@ export class Relation<T extends Base> {
             continue;
           }
 
-          const targetFk = sourceAssocDef?.options?.foreignKey ?? `${underscore(sourceName)}_id`;
+          const targetFk = sourceAssocDef?.options?.foreignKey ?? `${_toUnderscore(sourceName)}_id`;
           const targetIds = [
             ...new Set(
               throughRecords
@@ -3481,9 +3424,9 @@ export class Relation<T extends Base> {
         }
 
         const foreignKey = hasOneAsName
-          ? (assocDef.options.foreignKey ?? `${underscore(hasOneAsName)}_id`)
-          : (assocDef.options.foreignKey ?? `${underscore(modelClass.name)}_id`);
-        const hasOneTypeCol = hasOneAsName ? `${underscore(hasOneAsName)}_type` : null;
+          ? (assocDef.options.foreignKey ?? `${_toUnderscore(hasOneAsName)}_id`)
+          : (assocDef.options.foreignKey ?? `${_toUnderscore(modelClass.name)}_id`);
+        const hasOneTypeCol = hasOneAsName ? `${_toUnderscore(hasOneAsName)}_type` : null;
 
         const pkValues = [
           ...new Set(records.map((r) => r.readAttribute(primaryKey)).filter((v) => v != null)),

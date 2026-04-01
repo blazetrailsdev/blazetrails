@@ -39,6 +39,11 @@ function parseInput(input: string): ParsedInput {
 
 const MIGRATION_FILE_PATTERN = /^(\d+)[-_](.+)\.(?:ts|js)$/;
 
+// NOTE: The up/down implementations assume executeCode will register migrations
+// via deps.registerMigration. When executeCode is implemented, it must either:
+// (a) evaluate the file in a sandbox that exposes registerMigration, or
+// (b) be changed to return the migration class directly so we can build the
+//     proxy without the registry lookup.
 function discoverMigrations(
   vfs: VirtualFS,
   executeCode: (code: string) => Promise<unknown>,

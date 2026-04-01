@@ -114,6 +114,13 @@ describe("exec: sql", () => {
     expect(result.output.join("\n")).toContain("Bob");
   });
 
+  it("handles multiple statements on one line", async () => {
+    runtime.adapter.execRaw("CREATE TABLE t1 (id INTEGER PRIMARY KEY)");
+    runtime.adapter.execRaw("CREATE TABLE t2 (id INTEGER PRIMARY KEY)");
+    const result = await runtime.exec("sql SELECT * FROM t1; SELECT * FROM t2");
+    expect(result.success).toBe(true);
+  });
+
   it("reports SQL errors", async () => {
     const result = await runtime.exec("sql SELECT * FROM nonexistent");
     expect(result.success).toBe(true);
@@ -146,6 +153,20 @@ describe("exec: db:drop", () => {
     const result = await runtime.exec("db:drop");
     expect(result.success).toBe(true);
     expect(runtime.getTables().filter((t) => !t.startsWith("_vfs_"))).toHaveLength(0);
+  });
+});
+
+describe("exec: empty input", () => {
+  it("returns success with no output", async () => {
+    const result = await runtime.exec("");
+    expect(result.success).toBe(true);
+    expect(result.output).toHaveLength(0);
+  });
+
+  it("handles whitespace-only input", async () => {
+    const result = await runtime.exec("   ");
+    expect(result.success).toBe(true);
+    expect(result.output).toHaveLength(0);
   });
 });
 

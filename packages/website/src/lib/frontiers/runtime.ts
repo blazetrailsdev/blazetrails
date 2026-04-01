@@ -40,13 +40,6 @@ export async function createRuntime(SQL: SqlJsStatic): Promise<Runtime> {
     );
   }
 
-  async function runAllInDir(_dir: string): Promise<void> {
-    throw new Error(
-      "Code execution is not yet supported in this runtime. " +
-        "db:migrate, db:rollback, and db:seed require a sandboxed eval context.",
-    );
-  }
-
   function buildCli() {
     return createTrailCLI({
       vfs,
@@ -62,7 +55,6 @@ export async function createRuntime(SQL: SqlJsStatic): Promise<Runtime> {
         migrations = [];
       },
       getTables: () => adapter.getTables(),
-      runAllInDir,
     });
   }
 

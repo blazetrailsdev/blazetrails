@@ -95,7 +95,6 @@ export interface TrailCliDeps {
   registerMigration: (proxy: MigrationProxy) => void;
   clearMigrations: () => void;
   getTables: () => string[];
-  runAllInDir: (dir: string) => Promise<void>;
 }
 
 export function createTrailCLI(deps: TrailCliDeps) {
@@ -106,19 +105,11 @@ export function createTrailCLI(deps: TrailCliDeps) {
   }
 
   async function withMigrator(fn: (migrator: Migrator) => Promise<void>): Promise<void> {
-    const hasMigrationFiles = vfs
-      .list()
-      .some(
-        (f) =>
-          f.path.startsWith("db/migrations/") &&
-          MIGRATION_FILE_PATTERN.test(f.path.split("/").pop() ?? ""),
-      );
-    if (!hasMigrationFiles) {
+    const proxies = discoverMigrations(vfs, deps.executeCode, deps.getMigrations);
+    if (proxies.length === 0) {
       log("No migrations found in db/migrations/.");
       return;
     }
-    await deps.runAllInDir("db/migrations");
-    const proxies = discoverMigrations(vfs, deps.executeCode, deps.getMigrations);
     const migrator = new Migrator(adapter, proxies);
     await fn(migrator);
   }
@@ -161,8 +152,8 @@ export function createTrailCLI(deps: TrailCliDeps) {
         }
       },
 
-      g: async (args) => {
-        await commands["generate"](args, {});
+      g: async (args, opts) => {
+        await commands["generate"](args, opts);
       },
 
       "db:migrate": async (_args, opts) => {
@@ -242,7 +233,7 @@ export function createTrailCLI(deps: TrailCliDeps) {
         const sqlText = file ? file.content : fileOrSql;
 
         const statements = sqlText
-          .split(/;\s*(?:\n|$)/)
+          .split(/;/)
           .map((s: string) => s.trim())
           .filter((s: string) => s && !s.startsWith("--"));
 
@@ -286,6 +277,9 @@ export function createTrailCLI(deps: TrailCliDeps) {
   return {
     async exec(input: string): Promise<CliResult> {
       output.length = 0;
+      if (!input.trim()) {
+        return { success: true, output: [], exitCode: 0 };
+      }
       const { command, args, opts } = parseInput(input);
 
       const handler = commands[command];

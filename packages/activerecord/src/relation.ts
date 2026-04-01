@@ -3715,8 +3715,7 @@ export class Relation<T extends Base> {
    */
   async delete(id: unknown): Promise<number> {
     const table = this._modelClass.arelTable;
-    const pk = this._modelClass.primaryKey as string;
-    const dm = new DeleteManager().from(table).where(table.get(pk).eq(id));
+    const dm = new DeleteManager().from(table).where(this._modelClass._buildPkWhereNode(id));
     return this._modelClass.adapter.executeMutation(dm.toSql());
   }
 

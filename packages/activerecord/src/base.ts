@@ -341,7 +341,8 @@ export class Base extends Model {
     const table = this.arelTable;
     const pk = this.primaryKey;
     if (Array.isArray(pk)) {
-      const values = idValue as unknown[];
+      if (!Array.isArray(idValue)) return arelSql("1=0");
+      const values = idValue;
       const conditions = pk.map((col, i) => {
         const attr = table.get(col);
         const v = values[i];

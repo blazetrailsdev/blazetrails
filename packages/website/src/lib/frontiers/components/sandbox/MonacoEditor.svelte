@@ -84,15 +84,16 @@
     });
   }
 
-  function updateHighlights() {
+  function applyHighlights() {
     if (!editor || !monaco) return;
+    const ranges = highlights ?? [];
     const decorations: import("monaco-editor").editor.IModelDeltaDecoration[] =
-      (highlights ?? []).map((h) => ({
+      ranges.map((h) => ({
         range: new monaco!.Range(h.startLine, 1, h.endLine, 1),
         options: {
           isWholeLine: true,
-          className: "highlight-line",
-          glyphMarginClassName: "highlight-glyph",
+          className: "bt-highlight-line",
+          glyphMarginClassName: "bt-highlight-glyph",
           overviewRuler: {
             color: "#6B9E50",
             position: monaco!.editor.OverviewRulerLane.Left,
@@ -100,9 +101,12 @@
         },
       }));
     decorationIds = editor.deltaDecorations(decorationIds, decorations);
+    if (ranges.length > 0) {
+      editor.revealLineInCenter(ranges[0].startLine);
+    }
   }
 
-  function updateFile() {
+  $effect(() => {
     if (!editor || !monaco || !file) return;
     if (file.path !== currentPath) {
       const lang = inferLanguage(file.path);
@@ -120,19 +124,58 @@
         editor.setValue(file.content);
       }
     }
-    updateHighlights();
-  }
-
-  $effect(() => {
-    updateFile();
   });
 
   $effect(() => {
     void highlights;
-    updateHighlights();
+    applyHighlights();
+  });
+
+  $effect(() => {
+    if (editor) {
+      editor.updateOptions({ readOnly: readonly });
+    }
   });
 
   onMount(async () => {
+    // Configure workers for language services
+    (globalThis as any).MonacoEnvironment = {
+      getWorker(_workerId: string, label: string) {
+        switch (label) {
+          case "typescript":
+          case "javascript":
+            return new Worker(
+              new URL("monaco-editor/esm/vs/language/typescript/ts.worker.js", import.meta.url),
+              { type: "module" },
+            );
+          case "json":
+            return new Worker(
+              new URL("monaco-editor/esm/vs/language/json/json.worker.js", import.meta.url),
+              { type: "module" },
+            );
+          case "css":
+          case "scss":
+          case "less":
+            return new Worker(
+              new URL("monaco-editor/esm/vs/language/css/css.worker.js", import.meta.url),
+              { type: "module" },
+            );
+          case "html":
+          case "handlebars":
+          case "razor":
+            return new Worker(
+              new URL("monaco-editor/esm/vs/language/html/html.worker.js", import.meta.url),
+              { type: "module" },
+            );
+          default:
+            return new Worker(
+              new URL("monaco-editor/esm/vs/editor/editor.worker.js", import.meta.url),
+              { type: "module" },
+            );
+        }
+      },
+    };
+
     monaco = await import("monaco-editor");
     defineTheme(monaco);
 
@@ -148,6 +191,7 @@
       lineNumbers: "on",
       renderLineHighlight: "line",
       automaticLayout: true,
+      glyphMargin: true,
       padding: { top: 8, bottom: 8 },
       overviewRulerBorder: false,
       scrollbar: {
@@ -167,7 +211,7 @@
       }
     });
 
-    updateHighlights();
+    applyHighlights();
   });
 
   onDestroy(() => {
@@ -176,18 +220,26 @@
 </script>
 
 <style>
-  :global(.highlight-line) {
+  :global(.bt-highlight-line) {
     background-color: rgba(107, 158, 80, 0.15);
   }
-  :global(.highlight-glyph) {
-    background-color: #6B9E50;
+  :global(.bt-highlight-glyph) {
+    background-color: #6b9e50;
     width: 3px !important;
     margin-left: 3px;
   }
 </style>
 
+{#if !file}
+  <div
+    class="flex h-full w-full items-center justify-center text-sm text-text-muted"
+    data-testid="monaco-empty"
+  >
+    Select a file to view
+  </div>
+{/if}
 <div
-  class="h-full w-full"
+  class="h-full w-full {file ? '' : 'hidden'}"
   data-testid="monaco-editor"
   bind:this={container}
 ></div>

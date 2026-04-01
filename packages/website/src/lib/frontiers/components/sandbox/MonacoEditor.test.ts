@@ -136,4 +136,18 @@ describe("MonacoEditor", () => {
       expect(opts.fontFamily).toContain("JetBrains Mono");
     });
   });
+
+  it("shows empty state when no file", () => {
+    render(MonacoEditor, { props: {} });
+    expect(screen.getByTestId("monaco-empty")).toBeTruthy();
+    expect(screen.getByTestId("monaco-empty").textContent).toContain("Select a file");
+  });
+
+  it("enables glyph margin for highlight decorations", async () => {
+    render(MonacoEditor, { props: { file: { path: "test.ts", content: "" } } });
+    await vi.waitFor(() => {
+      const opts = mockCreate.mock.calls[0][1];
+      expect(opts.glyphMargin).toBe(true);
+    });
+  });
 });

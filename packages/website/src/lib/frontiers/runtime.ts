@@ -5,6 +5,7 @@ import { createTrailCLI, type CliResult } from "./trail-cli.js";
 import type { MigrationProxy } from "@blazetrails/activerecord";
 
 export type { VirtualFS, VfsFile } from "./virtual-fs.js";
+export type { CliResult } from "./trail-cli.js";
 
 export interface Runtime {
   adapter: SqlJsAdapter;
@@ -26,44 +27,43 @@ export interface Runtime {
 }
 
 export async function createRuntime(SQL: SqlJsStatic): Promise<Runtime> {
-  const db = new SQL.Database();
-  const adapter = new SqlJsAdapter(db);
-  const vfs = new VirtualFS(adapter);
+  let db = new SQL.Database();
+  let adapter = new SqlJsAdapter(db);
+  let vfs = new VirtualFS(adapter);
 
   let migrations: MigrationProxy[] = [];
 
   function executeCode(_code: string): Promise<unknown> {
-    // Minimal stub — full executeCode needs a sandboxed eval context.
-    // For now, migrations register themselves via runtime.registerMigration().
+    // executeCode requires a sandboxed eval context (Function constructor or
+    // iframe). This will be implemented when db:migrate support is needed.
+    // For now, the generate and new commands work without it.
     return Promise.resolve(undefined);
   }
 
-  async function runAllInDir(dir: string): Promise<void> {
-    const files = vfs
-      .list()
-      .filter((f) => f.path.startsWith(dir) && f.path.endsWith(".ts"))
-      .sort((a, b) => a.path.localeCompare(b.path));
-    for (const file of files) {
-      await executeCode(file.content);
-    }
+  async function runAllInDir(_dir: string): Promise<void> {
+    // Depends on executeCode — stubbed for same reason.
   }
 
-  const cli = createTrailCLI({
-    vfs,
-    adapter,
-    executeCode,
-    getMigrations: () => migrations,
-    registerMigration: (proxy) => {
-      if (!migrations.find((m) => m.version === proxy.version)) {
-        migrations.push(proxy);
-      }
-    },
-    clearMigrations: () => {
-      migrations = [];
-    },
-    getTables: () => adapter.getTables(),
-    runAllInDir,
-  });
+  function buildCli() {
+    return createTrailCLI({
+      vfs,
+      adapter,
+      executeCode,
+      getMigrations: () => migrations,
+      registerMigration: (proxy) => {
+        if (!migrations.find((m) => m.version === proxy.version)) {
+          migrations.push(proxy);
+        }
+      },
+      clearMigrations: () => {
+        migrations = [];
+      },
+      getTables: () => adapter.getTables(),
+      runAllInDir,
+    });
+  }
+
+  let cli = buildCli();
 
   const runtime: Runtime = {
     adapter,
@@ -86,14 +86,21 @@ export async function createRuntime(SQL: SqlJsStatic): Promise<Runtime> {
 
     exportDB: () => db.export(),
     loadDB: (data) => {
-      const newDb = new SQL.Database(data);
-      Object.assign(adapter, new SqlJsAdapter(newDb));
+      db = new SQL.Database(data);
+      adapter = new SqlJsAdapter(db);
+      vfs = new VirtualFS(adapter);
+      runtime.adapter = adapter;
+      runtime.vfs = vfs;
+      cli = buildCli();
+      migrations = [];
     },
 
     reset: () => {
       for (const f of vfs.list()) vfs.delete(f.path);
       const tables = adapter.getTables().filter((t) => !t.startsWith("_vfs_"));
-      for (const table of tables) adapter.execRaw(`DROP TABLE IF EXISTS "${table}"`);
+      for (const table of tables) {
+        adapter.execRaw(`DROP TABLE IF EXISTS "${table.replace(/"/g, '""')}"`);
+      }
       adapter.execRaw('DROP TABLE IF EXISTS "schema_migrations"');
       migrations = [];
     },

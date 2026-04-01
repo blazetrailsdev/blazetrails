@@ -43,31 +43,50 @@ describe("exec: new", () => {
 });
 
 describe("exec: generate model", () => {
-  it("creates model and migration files", async () => {
-    await runtime.exec("new myapp");
+  it("creates model and migration files via railties generators", async () => {
     const result = await runtime.exec("generate model User name:string email:string");
     expect(result.success).toBe(true);
 
-    const modelFile = runtime.vfs.read("app/models/user.ts");
+    // Model uses railties format (src/app/models/ path, import from @blazetrails)
+    const modelFile = runtime.vfs.read("src/app/models/user.ts");
     expect(modelFile).not.toBeNull();
     expect(modelFile!.content).toContain("class User extends Base");
     expect(modelFile!.content).toContain('this.attribute("name", "string")');
     expect(modelFile!.content).toContain('this.attribute("email", "string")');
+    expect(modelFile!.content).toContain('import { Base } from "@blazetrails/activerecord"');
 
+    // Migration uses railties format
     const migFiles = runtime.vfs
       .list()
       .filter((f) => f.path.startsWith("db/migrations/") && f.path.includes("create-users"));
     expect(migFiles.length).toBe(1);
-    expect(migFiles[0].content).toContain("CreateUsers");
+    expect(migFiles[0].content).toContain("class CreateUsers extends Migration");
     expect(migFiles[0].content).toContain('t.string("name")');
     expect(migFiles[0].content).toContain('t.string("email")');
+    expect(migFiles[0].content).toContain("t.timestamps()");
+  });
+
+  it("creates test file alongside model", async () => {
+    await runtime.exec("generate model Post title:string body:text");
+    expect(runtime.vfs.exists("test/models/post.test.ts")).toBe(true);
   });
 
   it("g is an alias for generate", async () => {
-    await runtime.exec("new myapp");
     const result = await runtime.exec("g model Post title:string");
     expect(result.success).toBe(true);
-    expect(runtime.vfs.exists("app/models/post.ts")).toBe(true);
+    expect(runtime.vfs.exists("src/app/models/post.ts")).toBe(true);
+  });
+});
+
+describe("exec: generate migration", () => {
+  it("creates a standalone migration file", async () => {
+    const result = await runtime.exec("generate migration AddAgeToUsers age:integer");
+    expect(result.success).toBe(true);
+    const migFiles = runtime.vfs
+      .list()
+      .filter((f) => f.path.startsWith("db/migrations/") && f.path.includes("add-age-to-users"));
+    expect(migFiles.length).toBe(1);
+    expect(migFiles[0].content).toContain("AddAgeToUsers");
   });
 });
 
@@ -89,6 +108,12 @@ describe("exec: sql", () => {
     const result = await runtime.exec("sql queries/test.sql");
     expect(result.success).toBe(true);
     expect(result.output.join("\n")).toContain("Bob");
+  });
+
+  it("reports SQL errors", async () => {
+    const result = await runtime.exec("sql SELECT * FROM nonexistent");
+    expect(result.success).toBe(true);
+    expect(result.output.join("\n")).toContain("ERROR");
   });
 });
 
@@ -131,5 +156,26 @@ describe("runtime utilities", () => {
     runtime.reset();
     expect(runtime.getTables().filter((t) => !t.startsWith("_vfs_"))).toHaveLength(0);
     expect(runtime.vfs.list()).toHaveLength(0);
+  });
+
+  it("exportDB returns a Uint8Array", () => {
+    runtime.adapter.execRaw("CREATE TABLE users (id INTEGER)");
+    const data = runtime.exportDB();
+    expect(data).toBeInstanceOf(Uint8Array);
+    expect(data.length).toBeGreaterThan(0);
+  });
+
+  it("loadDB replaces the database", async () => {
+    runtime.adapter.execRaw("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)");
+    runtime.adapter.execRaw("INSERT INTO users (name) VALUES ('Alice')");
+    const snapshot = runtime.exportDB();
+
+    runtime.reset();
+    expect(runtime.getTables().filter((t) => !t.startsWith("_vfs_"))).toHaveLength(0);
+
+    runtime.loadDB(snapshot);
+    expect(runtime.getTables()).toContain("users");
+    const results = runtime.executeSQL("SELECT name FROM users");
+    expect(results[0].values[0][0]).toBe("Alice");
   });
 });

@@ -1,10 +1,8 @@
 import type { VirtualFS } from "./virtual-fs.js";
 import type { SqlJsAdapter } from "./sql-js-adapter.js";
-import { VfsGeneratorBase, type VfsGeneratorOptions } from "./vfs-generator.js";
-import { ModelGenerator } from "@blazetrails/railties/generators";
+import { VfsModelGenerator, VfsMigrationGenerator } from "./vfs-generator.js";
 import type { MigrationProxy, MigrationLike } from "@blazetrails/activerecord";
 import { Migrator } from "@blazetrails/activerecord";
-import { underscore, camelize, tableize, dasherize } from "@blazetrails/activesupport";
 
 export interface CliResult {
   success: boolean;
@@ -64,104 +62,29 @@ function discoverMigrations(
               if (!content) throw new Error(`File not found: ${file.path}`);
               await executeCode(content);
               const reg = getMigrations().find((m) => m.version === match![1]);
-              if (reg) await reg.migration().up(adapter);
+              if (!reg) {
+                throw new Error(
+                  `Migration ${match![1]} from ${file.path} did not register after execution`,
+                );
+              }
+              await reg.migration().up(adapter);
             },
             async down(adapter) {
               const content = vfs.read(file.path)?.content;
               if (!content) throw new Error(`File not found: ${file.path}`);
               await executeCode(content);
               const reg = getMigrations().find((m) => m.version === match![1]);
-              if (reg) await reg.migration().down(adapter);
+              if (!reg) {
+                throw new Error(
+                  `Migration ${match![1]} from ${file.path} did not register after execution`,
+                );
+              }
+              await reg.migration().down(adapter);
             },
           }),
         },
       ];
     });
-}
-
-class VfsModelGenerator extends VfsGeneratorBase {
-  private delegate: ModelGenerator;
-
-  constructor(options: VfsGeneratorOptions) {
-    super(options);
-    this.delegate = new ModelGenerator({ cwd: "/", output: options.output });
-  }
-
-  run(name: string, args: string[]): string[] {
-    // Intercept: use delegate's logic but write to VFS via our overridden createFile
-    // We can't directly call delegate.run() because it uses node:fs.
-    // Instead, replicate the generator output pattern writing to VFS.
-    const singularName = underscore(name).replace(/s$/, "");
-    const className = camelize(singularName.replace(/-/g, "_"));
-    const fileName = dasherize(singularName);
-    const columns = args
-      .filter((a) => !a.startsWith("-") && a.includes(":"))
-      .map((a) => {
-        const [colName, rawType] = a.split(":");
-        return { name: colName, type: rawType.replace(/\{[^}]*\}/, "") };
-      });
-
-    const bodyLines: string[] = [];
-    for (const col of columns) {
-      if (col.type === "references" || col.type === "belongs_to") {
-        bodyLines.push(`    this.belongsTo("${col.name}");`);
-      } else {
-        bodyLines.push(`    this.attribute("${col.name}", "${col.type}");`);
-      }
-    }
-    bodyLines.push('    this.attribute("created_at", "datetime");');
-    bodyLines.push('    this.attribute("updated_at", "datetime");');
-
-    const staticBlock = `\n  static {\n${bodyLines.join("\n")}\n  }\n`;
-    const tableName = tableize(className);
-
-    this.createFile(
-      `app/models/${fileName}.ts`,
-      `class ${className} extends Base {\n  static tableName = "${tableName}";${staticBlock}}\n`,
-    );
-
-    // Migration
-    const timestamp = Date.now().toString();
-    const migClassName = `Create${camelize(tableName)}`;
-    const colLines = columns
-      .map((c) => {
-        if (c.type === "references" || c.type === "belongs_to") {
-          return `      t.references("${c.name}", { foreignKey: true });`;
-        }
-        return `      t.${c.type}("${c.name}");`;
-      })
-      .join("\n");
-
-    this.createFile(
-      `db/migrations/${timestamp}-create-${dasherize(tableName)}.ts`,
-      `class ${migClassName} extends Migration {
-  version = "${timestamp}";
-
-  async up() {
-    await this.createTable("${tableName}", (t) => {
-${colLines}
-      t.timestamps();
-    });
-  }
-
-  async down() {
-    await this.dropTable("${tableName}");
-  }
-}
-
-runtime.registerMigration({
-  version: "${timestamp}",
-  name: "${migClassName}",
-  migration: () => {
-    const m = new ${migClassName}();
-    return { up: (a) => m.run(a, "up"), down: (a) => m.run(a, "down") };
-  },
-});
-`,
-    );
-
-    return this.getCreatedFiles();
-  }
 }
 
 function generateAppScaffold(name: string): Array<{ path: string; content: string }> {
@@ -247,15 +170,18 @@ export function createTrailCLI(deps: TrailCliDeps) {
 
         if (!type || !name) {
           log("Usage: generate <type> <name> [columns...]");
-          log("Types: model");
+          log("Types: model, migration");
           return;
         }
 
         if (type === "model") {
           const gen = new VfsModelGenerator({ vfs, output: log });
           gen.run(name, columnArgs);
+        } else if (type === "migration") {
+          const gen = new VfsMigrationGenerator({ vfs, output: log });
+          gen.run(name, columnArgs);
         } else {
-          log(`Unknown generator: ${type}. Available: model`);
+          log(`Unknown generator: ${type}. Available: model, migration`);
         }
       },
 
@@ -321,8 +247,10 @@ export function createTrailCLI(deps: TrailCliDeps) {
       },
 
       "db:drop": async () => {
-        const tables = deps.getTables();
-        for (const table of tables) adapter.execRaw(`DROP TABLE IF EXISTS "${table}"`);
+        const tables = deps.getTables().filter((t) => !t.startsWith("_vfs_"));
+        for (const table of tables) {
+          adapter.execRaw(`DROP TABLE IF EXISTS "${table.replace(/"/g, '""')}"`);
+        }
         adapter.execRaw('DROP TABLE IF EXISTS "schema_migrations"');
         log(`Dropped ${tables.length} table(s).`);
       },
@@ -394,6 +322,7 @@ export function createTrailCLI(deps: TrailCliDeps) {
             "Available commands:",
             "  new <name>                           Create a new app",
             "  generate model <name> [cols...]      Generate a model + migration",
+            "  generate migration <name> [cols...]  Generate a migration",
             "  g <type> <name> [cols...]            Alias for generate",
             "  sql <file.sql | SELECT ...>          Execute SQL",
             ...Object.keys(commands)

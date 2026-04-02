@@ -2222,6 +2222,7 @@ export class Base extends Model {
 
     const pkCols = Array.isArray(ctor.primaryKey) ? ctor.primaryKey : [ctor.primaryKey];
     for (const [key, value] of Object.entries(attrs)) {
+      if (!ctor._attributeDefinitions.has(key)) continue;
       if (pkCols.includes(key) && value === null) continue;
       columns.push(key);
       values.push(value);
@@ -2277,14 +2278,20 @@ export class Base extends Model {
     if (Object.keys(changedAttrs).length === 0) return;
 
     const dbValues = this._attributes.valuesForDatabase();
-    const updateValues: [InstanceType<typeof Nodes.Node>, unknown][] = Object.keys(
-      changedAttrs,
-    ).map((key) => {
-      const val = dbValues[key];
-      const def = ctor._attributeDefinitions.get(key);
-      const isArray = def?.type?.name === "array";
-      return [table.get(key), isArray ? arelSql(quoteSqlValue(val, true)) : val];
-    });
+    const declaredChanges = Object.keys(changedAttrs).filter((key) =>
+      ctor._attributeDefinitions.has(key),
+    );
+
+    if (declaredChanges.length === 0) return;
+
+    const updateValues: [InstanceType<typeof Nodes.Node>, unknown][] = declaredChanges.map(
+      (key) => {
+        const val = dbValues[key];
+        const def = ctor._attributeDefinitions.get(key);
+        const isArray = def?.type?.name === "array";
+        return [table.get(key), isArray ? arelSql(quoteSqlValue(val, true)) : val];
+      },
+    );
 
     // Optimistic locking: include lock column in WHERE and increment it
     const lockCol = ctor.lockingColumn;

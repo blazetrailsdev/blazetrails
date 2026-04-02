@@ -781,9 +781,6 @@ describe("BasicsTest", () => {
       }
     }
     const u = new User();
-    // Rails doesn't validate attribute names in writeAttribute — SQL injection
-    // is prevented by the query builder (Arel) which only uses declared columns.
-    // Writing an unknown attribute name is harmless; it won't appear in SQL.
     u.writeAttribute("name; DROP TABLE users", "val");
     expect(u.readAttribute("name")).toBe(null);
   });

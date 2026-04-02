@@ -9,7 +9,6 @@
  * express the contract here as an interface for the static side.
  */
 export interface TranslationClassMethods {
-  raiseOnMissingTranslations?: boolean;
   readonly i18nScope: string;
   lookupAncestors(): unknown[];
   humanAttributeName(attr: string): string;

@@ -2,6 +2,16 @@ import { Type } from "./type/value.js";
 import { typeRegistry } from "./type/registry.js";
 import { MissingAttributeError } from "./attribute-methods.js";
 
+// Lazy reference to avoid circular import: attribute.ts ↔ user-provided-default.ts
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _UserProvidedDefaultCtor: (new (...args: any[]) => Attribute) | null = null;
+
+/** Called by user-provided-default.ts to register itself after loading. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function _registerUserProvidedDefault(ctor: new (...args: any[]) => Attribute): void {
+  _UserProvidedDefaultCtor = ctor;
+}
+
 /**
  * Wraps a single attribute value with its type, tracking the original
  * value before type cast and memoizing the cast result.
@@ -140,18 +150,19 @@ export abstract class Attribute {
   }
 
   withUserDefault(value: unknown): Attribute {
-    const UPD = Attribute._UserProvidedDefault;
-    if (!UPD) throw new Error("UserProvidedDefault not registered");
-    return new UPD(
+    if (!_UserProvidedDefaultCtor) {
+      throw new Error(
+        "UserProvidedDefault not loaded. Import '@blazetrails/activemodel' " +
+          "or './attribute/user-provided-default.js' before calling withUserDefault().",
+      );
+    }
+    return new _UserProvidedDefaultCtor(
       this.name,
       value,
       this.type,
       this instanceof FromDatabase ? this : this.originalAttribute,
     );
   }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  static _UserProvidedDefault: (new (...args: any[]) => Attribute) | null = null;
 
   /** Access the original attribute for cloning. */
   getOriginalAttribute(): Attribute | null {

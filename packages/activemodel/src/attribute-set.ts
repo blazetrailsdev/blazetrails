@@ -234,12 +234,11 @@ export class AttributeSet {
   }
 
   reverseMergeBang(target: AttributeSet): this {
-    for (const [name, attr] of (target as unknown as { attributes: Map<string, Attribute> })
-      .attributes) {
+    target.forEach((attr, name) => {
       if (!this.attributes.has(name)) {
         this.attributes.set(name, attr);
       }
-    }
+    });
     return this;
   }
 }

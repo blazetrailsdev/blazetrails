@@ -23,7 +23,7 @@ export function deprecator(): Deprecation {
  * so the Ruby API extractor assigns the ActiveModel module to this file.
  */
 export interface ActiveModel {
-  readonly deprecator: Deprecation;
+  deprecator(): Deprecation;
 }
 
 export function gemVersion(): string {

@@ -29,20 +29,31 @@ type Constructor<T = object> = new (...args: any[]) => T;
  * Mirrors: ActiveModel::Attributes
  */
 export interface Attributes {
-  attributes(): Record<string, unknown>;
+  attributes: Record<string, unknown>;
   attributeNames(): string[];
 }
 
-export class AttributesMixin {
-  private _attrs: Map<string, unknown>;
+/**
+ * Base implementation of the Attributes module's instance methods.
+ *
+ * Mirrors: ActiveModel::Attributes (the initialize + attributes methods)
+ *
+ * Model's constructor and attributes getter implement this behavior;
+ * this class documents and exposes the contract for the TS API extractor.
+ * The Attributes() mixin function below also implements these methods.
+ */
+export class AttributesBase {
+  _attributes: Map<string, unknown> = new Map();
 
   constructor(initial: Record<string, unknown> = {}) {
-    this._attrs = new Map(Object.entries(initial));
+    for (const [k, v] of Object.entries(initial)) {
+      this._attributes.set(k, v);
+    }
   }
 
   attributes(): Record<string, unknown> {
     const result: Record<string, unknown> = {};
-    for (const [k, v] of this._attrs) {
+    for (const [k, v] of this._attributes) {
       result[k] = v;
     }
     return result;

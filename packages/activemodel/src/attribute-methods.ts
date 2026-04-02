@@ -3,8 +3,9 @@
  *
  * Mirrors: ActiveModel::AttributeMethods
  *
- * Model implements this via attributeMethodPrefix/Suffix/Affix,
- * defineAttributeMethods, and undefineAttributeMethods.
+ * In Rails, this module provides attribute_method_prefix/suffix/affix,
+ * alias_attribute, define_attribute_methods, etc. as ClassMethods.
+ * Model delegates to the functions exported here.
  */
 export interface AttributeMethods {
   hasAttribute(name: string): boolean;
@@ -78,17 +79,23 @@ export class AttributeMethodPattern {
   }
 }
 
+// ---------------------------------------------------------------------------
+// AttributeMethods ClassMethods — extracted from Model for Rails parity
+// ---------------------------------------------------------------------------
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRecord = any;
 
+/**
+ * The static side contract for a class that uses attribute method generation.
+ * Model satisfies this interface.
+ */
 export interface AttributeMethodHost {
   _attributeDefinitions: Map<string, { name: string }>;
   _attributeMethodPatterns: AttributeMethodPattern[];
   _attributeAliases: Record<string, string>;
   _aliasesByAttributeName: Map<string, string[]>;
   prototype: AnyRecord;
-  readAttribute?(name: string): unknown;
-  writeAttribute?(name: string, value: unknown): void;
 }
 
 export function attributeMethodPrefix(host: AttributeMethodHost, ...prefixes: string[]): void {
@@ -123,6 +130,19 @@ export function aliasAttribute(host: AttributeMethodHost, newName: string, oldNa
   const aliases = aliasesByAttributeName(host);
   if (!aliases.has(oldName)) aliases.set(oldName, []);
   aliases.get(oldName)!.push(newName);
+
+  // Always define the direct alias property (bare name → original)
+  Object.defineProperty(host.prototype, newName, {
+    get(this: AnyRecord) {
+      return this.readAttribute(oldName);
+    },
+    set(this: AnyRecord, value: unknown) {
+      this.writeAttribute(oldName, value);
+    },
+    configurable: true,
+  });
+
+  // Also generate pattern-based alias methods (e.g., clear_fullName if clear_ prefix exists)
   eagerlyGenerateAliasAttributeMethods(host, newName, oldName);
 }
 
@@ -151,7 +171,6 @@ export function aliasAttributeMethodDefinition(
   oldName: string,
 ): void {
   const methodName = pattern.methodName(newName);
-  const _targetName = pattern.methodName(oldName);
   Object.defineProperty(host.prototype, methodName, {
     get(this: AnyRecord) {
       return this.readAttribute(oldName);
@@ -174,6 +193,13 @@ export function attributeAlias(host: AttributeMethodHost, name: string): string 
 export function defineAttributeMethods(host: AttributeMethodHost, ...attrNames: string[]): void {
   for (const attrName of attrNames) {
     defineAttributeMethod(host, attrName);
+    const aliases = aliasesByAttributeName(host);
+    const attrAliases = aliases.get(attrName);
+    if (attrAliases) {
+      for (const aliasedName of attrAliases) {
+        generateAliasAttributeMethods(host, aliasedName, attrName);
+      }
+    }
   }
 }
 
@@ -187,9 +213,10 @@ export function defineAttributeMethodPattern(
   host: AttributeMethodHost,
   pattern: AttributeMethodPattern,
   attrName: string,
+  options?: { override?: boolean },
 ): void {
   const methodName = pattern.methodName(attrName);
-  if (host.prototype[methodName] !== undefined) return;
+  if (host.prototype[methodName] !== undefined && !options?.override) return;
   Object.defineProperty(host.prototype, methodName, {
     value: function (this: AnyRecord) {
       return this.readAttribute(attrName);

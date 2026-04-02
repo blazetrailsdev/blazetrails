@@ -37,6 +37,7 @@ export function registerFsAdapter(name: string, fs: FsAdapter, path: PathAdapter
 }
 
 let nodeAttempted = false;
+let nodeAsyncAttempted = false;
 
 function tryAutoRegisterNode(): boolean {
   if (registry.has("node")) return true;
@@ -46,8 +47,6 @@ function tryAutoRegisterNode(): boolean {
     if (typeof globalThis.process === "undefined" || !globalThis.process.versions?.node) {
       return false;
     }
-    // Dynamic import of node:module to get createRequire — works in both CJS and ESM
-
     const nodeModule =
       typeof require !== "undefined"
         ? // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -59,6 +58,23 @@ function tryAutoRegisterNode(): boolean {
     );
     const fs = req("node:fs") as FsAdapter;
     const path = req("node:path") as PathAdapter;
+    registry.set("node", { fs, path });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function tryAutoRegisterNodeAsync(): Promise<boolean> {
+  if (registry.has("node")) return true;
+  if (nodeAsyncAttempted) return false;
+  nodeAsyncAttempted = true;
+  try {
+    if (typeof globalThis.process === "undefined" || !globalThis.process.versions?.node) {
+      return false;
+    }
+    const fs = (await import("node:fs")) as unknown as FsAdapter;
+    const path = (await import("node:path")) as unknown as PathAdapter;
     registry.set("node", { fs, path });
     return true;
   } catch {
@@ -87,12 +103,34 @@ function resolve(): FsRegistration {
   );
 }
 
+async function resolveAsync(): Promise<FsRegistration> {
+  try {
+    return resolve();
+  } catch {
+    if (await tryAutoRegisterNodeAsync()) {
+      resolved = registry.get("node")!;
+      return resolved;
+    }
+    throw new Error(
+      "No filesystem adapter configured. Set ActiveSupport.fsAdapter or register a custom adapter.",
+    );
+  }
+}
+
 export function getFs(): FsAdapter {
   return resolve().fs;
 }
 
 export function getPath(): PathAdapter {
   return resolve().path;
+}
+
+export async function getFsAsync(): Promise<FsAdapter> {
+  return (await resolveAsync()).fs;
+}
+
+export async function getPathAsync(): Promise<PathAdapter> {
+  return (await resolveAsync()).path;
 }
 
 export const fsAdapterConfig = {

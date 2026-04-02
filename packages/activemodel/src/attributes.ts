@@ -11,19 +11,6 @@ export interface AttributeDefinition {
 type Constructor<T = object> = new (...args: any[]) => T;
 
 /**
- * Attributes mixin — declares typed attributes with defaults and casting.
- *
- * Mirrors: ActiveModel::Attributes
- *
- * @example
- *   class User extends Model {
- *     static {
- *       this.attribute("name", "string");
- *       this.attribute("age", "integer", { default: 0 });
- *     }
- *   }
- */
-/**
  * Attributes mixin contract — declares typed attributes with defaults and casting.
  *
  * Mirrors: ActiveModel::Attributes
@@ -33,14 +20,45 @@ export interface Attributes {
   attributeNames(): string[];
 }
 
+// ---------------------------------------------------------------------------
+// Shared logic — used by AttributesBase, Attributes() mixin, and Model
+// ---------------------------------------------------------------------------
+
+export function initializeAttributes(
+  target: Map<string, unknown>,
+  defs: Map<string, AttributeDefinition>,
+  initial: Record<string, unknown>,
+): void {
+  for (const [name, def] of defs) {
+    if (name in initial) {
+      target.set(name, def.type.cast(initial[name]));
+    } else {
+      const defVal = typeof def.defaultValue === "function" ? def.defaultValue() : def.defaultValue;
+      target.set(name, defVal);
+    }
+  }
+}
+
+export function attributesToHash(attrs: Map<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [k, v] of attrs) {
+    result[k] = v;
+  }
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// AttributesBase — standalone implementation of the Attributes module
+// ---------------------------------------------------------------------------
+
 /**
- * Base implementation of the Attributes module's instance methods.
+ * Standalone implementation of ActiveModel::Attributes instance methods.
  *
- * Mirrors: ActiveModel::Attributes (the initialize + attributes methods)
+ * Mirrors: ActiveModel::Attributes (initialize + attributes)
  *
- * Model's constructor and attributes getter implement this behavior;
- * this class documents and exposes the contract for the TS API extractor.
- * The Attributes() mixin function below also implements these methods.
+ * Can be used directly (`new AttributesBase({...})`) or as a reference
+ * implementation. Model uses the same shared functions for its more
+ * sophisticated AttributeSet-backed initialization.
  */
 export class AttributesBase {
   _attributes: Map<string, unknown> = new Map();
@@ -51,14 +69,14 @@ export class AttributesBase {
     }
   }
 
-  attributes(): Record<string, unknown> {
-    const result: Record<string, unknown> = {};
-    for (const [k, v] of this._attributes) {
-      result[k] = v;
-    }
-    return result;
+  get attributes(): Record<string, unknown> {
+    return attributesToHash(this._attributes);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Attributes() mixin — for composing into class hierarchies
+// ---------------------------------------------------------------------------
 
 export interface AttributesStatic {
   _attributeDefinitions: Map<string, AttributeDefinition>;
@@ -102,16 +120,7 @@ export function Attributes<TBase extends Constructor>(Base: TBase) {
       this.#initialized = true;
       const ctor = this.constructor as typeof AttributesMixin;
       const defs: Map<string, AttributeDefinition> = ctor._attributeDefinitions ?? new Map();
-
-      for (const [name, def] of defs) {
-        if (name in initial) {
-          this._attributes.set(name, def.type.cast(initial[name]));
-        } else {
-          const defVal =
-            typeof def.defaultValue === "function" ? def.defaultValue() : def.defaultValue;
-          this._attributes.set(name, defVal);
-        }
-      }
+      initializeAttributes(this._attributes, defs, initial);
     }
 
     readAttribute(name: string): unknown {
@@ -125,11 +134,7 @@ export function Attributes<TBase extends Constructor>(Base: TBase) {
     }
 
     get attributes(): Record<string, unknown> {
-      const result: Record<string, unknown> = {};
-      for (const [k, v] of this._attributes) {
-        result[k] = v;
-      }
-      return result;
+      return attributesToHash(this._attributes);
     }
 
     attributePresent(name: string): boolean {

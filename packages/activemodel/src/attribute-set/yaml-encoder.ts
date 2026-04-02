@@ -30,7 +30,7 @@ export class YAMLEncoder {
     return parsed as Record<string, unknown>;
   }
 
-  types(): Record<string, string> {
-    return {};
+  types(): Record<string, unknown> {
+    return { ...this.defaultTypes };
   }
 }

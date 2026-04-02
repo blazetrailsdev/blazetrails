@@ -284,6 +284,9 @@ export class Model {
     const sharedAllowBlank = rules.allowBlank as boolean | undefined;
 
     const push = (validator: Validator) => {
+      if (typeof (validator as AnyRecord).checkValidityBang === "function") {
+        (validator as AnyRecord).checkValidityBang();
+      }
       this._validations.push({
         attribute,
         validator,

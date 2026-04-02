@@ -16,9 +16,7 @@ export interface FormatOptions extends ConditionalOptions {
 }
 
 export class FormatValidator implements Validator {
-  constructor(private options: FormatOptions) {
-    this.checkValidityBang();
-  }
+  constructor(private options: FormatOptions) {}
 
   private resolveRegexp(opt: RegExp | ((record: AnyRecord) => RegExp), record: AnyRecord): RegExp {
     const re = typeof opt === "function" ? opt(record) : opt;

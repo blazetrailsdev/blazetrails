@@ -21,9 +21,7 @@ export interface LengthOptions extends ConditionalOptions {
 }
 
 export class LengthValidator implements Validator {
-  constructor(private options: LengthOptions = {}) {
-    this.checkValidityBang();
-  }
+  constructor(private options: LengthOptions = {}) {}
 
   validate(record: AnyRecord, attribute: string, value: unknown, errors: Errors): void {
     if (!shouldValidate(record, this.options)) return;

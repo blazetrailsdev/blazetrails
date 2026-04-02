@@ -1,6 +1,6 @@
 # ActiveModel: Road to 100%
 
-Current: **222/344 methods (64.5%)**. All 62 files exist. 122 methods missing.
+Current: **304/344 methods (88.4%)**. All 62 files exist. 40 methods remaining.
 
 ```bash
 pnpm run api:compare -- --package activemodel

@@ -45,10 +45,15 @@ let _signedIdModulePromise: Promise<typeof import("./signed-id.js")> | null = nu
 const loadSignedId = async () => {
   if (_signedIdModule) return _signedIdModule;
   if (!_signedIdModulePromise) {
-    _signedIdModulePromise = import("./signed-id.js").then((mod) => {
-      _signedIdModule = mod;
-      return mod;
-    });
+    _signedIdModulePromise = import("./signed-id.js")
+      .then((mod) => {
+        _signedIdModule = mod;
+        return mod;
+      })
+      .catch((error) => {
+        _signedIdModulePromise = null;
+        throw error;
+      });
   }
   return _signedIdModulePromise;
 };

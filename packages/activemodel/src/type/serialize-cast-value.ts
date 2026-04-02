@@ -24,11 +24,6 @@ export namespace SerializeCastValue {
     serializeCastValueCompatible(): boolean;
   }
 
-  /**
-   * Mirrors: ActiveModel::Type::SerializeCastValue::DefaultImplementation
-   *
-   * Fallback serialize_cast_value that delegates to serialize.
-   */
   export interface DefaultImplementation {
     serializeCastValue(value: unknown): unknown;
   }

@@ -14,7 +14,7 @@ export class DecimalType extends Type<string> {
   }
 
   typeCastForSchema(value: unknown): string {
-    return JSON.stringify(value);
+    return JSON.stringify(value) ?? String(value);
   }
 }
 

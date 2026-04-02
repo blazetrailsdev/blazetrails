@@ -20,6 +20,6 @@ export class FloatType extends Type<number> {
       if (value === Infinity) return '"Infinity"';
       if (value === -Infinity) return '"-Infinity"';
     }
-    return JSON.stringify(value);
+    return JSON.stringify(value) ?? String(value);
   }
 }

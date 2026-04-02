@@ -22,6 +22,6 @@ export class DateType extends Type<Date> {
     if (value instanceof Date) {
       return `"${value.toISOString().split("T")[0]}"`;
     }
-    return JSON.stringify(value);
+    return JSON.stringify(value) ?? "null";
   }
 }

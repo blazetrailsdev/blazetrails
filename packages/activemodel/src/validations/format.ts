@@ -67,7 +67,7 @@ export class FormatValidator implements Validator {
     const withOpt = this.options.with;
     if (withOpt && withOpt instanceof RegExp && withOpt.multiline) {
       throw new Error(
-        "The provided regular expression is using multiline anchors (^ or $), which may present a security risk. Did you mean to use \\A and \\z, or pass the `multiline: true` option?",
+        "The provided regular expression is using multiline anchors (^ or $), which may present a security risk. Did you mean to use \\A and \\z?",
       );
     }
   }

@@ -359,7 +359,7 @@ async function migrateDb(adapter: SQLite3Adapter) {
       t.string("merge_commit_sha");
       t.integer("pr_number");
       t.text("log_output");
-      t.index(["job_id"], { unique: true });
+      t.index(["merge_commit_sha"], { unique: true });
       t.index(["merge_commit_sha"]);
     });
 

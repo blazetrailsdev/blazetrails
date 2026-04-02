@@ -84,7 +84,7 @@ export class AdapterSchemaSource implements SchemaSource {
   }
 
   async tables(): Promise<string[]> {
-    const t = await this.type();
+    const t = this.type();
 
     if (t === "postgres") {
       const rows = await this.adapter.execute(
@@ -105,7 +105,7 @@ export class AdapterSchemaSource implements SchemaSource {
   }
 
   async columns(tableName: string): Promise<ColumnInfo[]> {
-    const t = await this.type();
+    const t = this.type();
     if (t === "mysql") {
       throw new Error("MySQL schema introspection is not yet supported by AdapterSchemaSource.");
     }
@@ -158,7 +158,7 @@ export class AdapterSchemaSource implements SchemaSource {
   }
 
   async indexes(tableName: string): Promise<IndexInfo[]> {
-    const t = await this.type();
+    const t = this.type();
     if (t === "mysql") {
       throw new Error("MySQL schema introspection is not yet supported by AdapterSchemaSource.");
     }

@@ -12,7 +12,7 @@ import type { Encryptor } from "./encryption.js";
  */
 export class EncryptedAttributeType extends Type<unknown> {
   readonly name: string;
-  private readonly innerType: Type;
+  readonly innerType: Type;
   private readonly encryptor: Encryptor;
 
   constructor(innerType: Type, encryptor: Encryptor) {
@@ -31,7 +31,7 @@ export class EncryptedAttributeType extends Type<unknown> {
       try {
         value = this.encryptor.decrypt(value);
       } catch {
-        // If decryption fails, pass through — value may not be encrypted
+        // Decryption failed — value may be plaintext, pass through
       }
     }
     return this.innerType.deserialize(value);

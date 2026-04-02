@@ -20,12 +20,17 @@ export interface Encryptor {
  * NOT secure — intended as a placeholder.
  * Users should supply a real Encryptor.
  */
+const ENCRYPTED_PREFIX = "AR_ENC:";
+
 export const defaultEncryptor: Encryptor = {
   encrypt(value: string): string {
-    return Buffer.from(value, "utf-8").toString("base64");
+    return ENCRYPTED_PREFIX + Buffer.from(value, "utf-8").toString("base64");
   },
   decrypt(ciphertext: string): string {
-    return Buffer.from(ciphertext, "base64").toString("utf-8");
+    if (!ciphertext.startsWith(ENCRYPTED_PREFIX)) {
+      throw new Error("Not an encrypted value");
+    }
+    return Buffer.from(ciphertext.slice(ENCRYPTED_PREFIX.length), "base64").toString("utf-8");
   },
 };
 
@@ -58,13 +63,16 @@ export function encrypts(klass: any, ...args: Array<string | { encryptor?: Encry
 
   for (const name of names) {
     const def = klass._attributeDefinitions.get(name);
-    if (def) {
-      // Wrap the existing type with encryption
-      klass._attributeDefinitions.set(name, {
-        ...def,
-        type: new EncryptedAttributeType(def.type, enc),
-      });
+    if (!def) {
+      const klassName = typeof klass?.name === "string" ? klass.name : "anonymous class";
+      throw new Error(`encrypts(): attribute "${name}" is not defined on ${klassName}`);
     }
+    // Skip if already wrapped with encryption (prevent double-wrapping on inheritance)
+    if (def.type instanceof EncryptedAttributeType) continue;
+    klass._attributeDefinitions.set(name, {
+      ...def,
+      type: new EncryptedAttributeType(def.type, enc),
+    });
   }
 }
 

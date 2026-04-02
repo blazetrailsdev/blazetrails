@@ -156,10 +156,12 @@ export function aliasAttribute(this: AttributeMethodHost, newName: string, oldNa
 
   // Define the direct alias property (bare name → original)
   ensureOwnGeneratedMethods(this);
+  const getter = function (this: AnyRecord) {
+    return this.readAttribute(oldName);
+  };
+  (getter as AnyRecord).__generatedAttributeMethod = true;
   Object.defineProperty(this.prototype, newName, {
-    get(this: AnyRecord) {
-      return this.readAttribute(oldName);
-    },
+    get: getter,
     set(this: AnyRecord, value: unknown) {
       this.writeAttribute(oldName, value);
     },
@@ -174,7 +176,13 @@ export function aliasAttribute(this: AttributeMethodHost, newName: string, oldNa
 export function undefineAttributeMethods(this: AttributeMethodHost): void {
   if (!this._generatedMethods) return;
   for (const methodName of this._generatedMethods) {
-    delete this.prototype[methodName];
+    const desc = Object.getOwnPropertyDescriptor(this.prototype, methodName);
+    if (!desc) continue;
+    // Only delete if the method is still the generated one (has our marker)
+    const fn = desc.value ?? desc.get;
+    if (fn && (fn as AnyRecord).__generatedAttributeMethod) {
+      delete this.prototype[methodName];
+    }
   }
   this._generatedMethods.clear();
 }
@@ -209,10 +217,12 @@ export function defineAttributeMethodPattern(
   const methodName = pattern.methodName(attrName);
   if (host.prototype[methodName] !== undefined && !options?.override) return;
   ensureOwnGeneratedMethods(host);
+  const fn = function (this: AnyRecord) {
+    return this.readAttribute(attrName);
+  };
+  (fn as AnyRecord).__generatedAttributeMethod = true;
   Object.defineProperty(host.prototype, methodName, {
-    value: function (this: AnyRecord) {
-      return this.readAttribute(attrName);
-    },
+    value: fn,
     writable: true,
     configurable: true,
   });
@@ -246,14 +256,16 @@ export function aliasAttributeMethodDefinition(
   const methodName = pattern.methodName(newName);
   const targetName = pattern.methodName(oldName);
   ensureOwnGeneratedMethods(host);
+  const fn = function (this: AnyRecord, ...args: unknown[]) {
+    const target = this[targetName];
+    if (typeof target === "function") {
+      return target.apply(this, args);
+    }
+    return this.readAttribute(oldName);
+  };
+  (fn as AnyRecord).__generatedAttributeMethod = true;
   Object.defineProperty(host.prototype, methodName, {
-    value: function (this: AnyRecord, ...args: unknown[]) {
-      const target = this[targetName];
-      if (typeof target === "function") {
-        return target.apply(this, args);
-      }
-      return this.readAttribute(oldName);
-    },
+    value: fn,
     writable: true,
     configurable: true,
   });

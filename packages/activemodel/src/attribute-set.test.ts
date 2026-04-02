@@ -292,7 +292,7 @@ describe("AttributeSetTest", () => {
       }
     }
     const p = new Person({ name: "Alice", age: 25 });
-    // After construction, attributes have been cast (read). Reset by building fresh:
+    // After construction, attributes may already have been read; snapshot current state:
     const accessed = p._attributes.accessed();
     // At minimum, reading one more attribute increases the set
     p.readAttribute("name");

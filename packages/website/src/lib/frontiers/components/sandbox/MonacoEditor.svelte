@@ -114,14 +114,18 @@
       if (model) {
         monaco.editor.setModelLanguage(model, lang);
       }
+      suppressChangeEvent = true;
       editor.setValue(file.content);
+      suppressChangeEvent = false;
       editor.revealLineInCenter(1);
       currentPath = file.path;
       decorationIds = editor.deltaDecorations(decorationIds, []);
     } else {
       const current = editor.getValue();
       if (current !== file.content) {
+        suppressChangeEvent = true;
         editor.setValue(file.content);
+        suppressChangeEvent = false;
       }
     }
   });
@@ -138,6 +142,7 @@
   });
 
   let destroyed = false;
+  let suppressChangeEvent = false;
 
   onMount(async () => {
     // Configure workers for language services
@@ -209,7 +214,7 @@
     }
 
     editor.onDidChangeModelContent(() => {
-      if (!readonly && editor) {
+      if (!readonly && !suppressChangeEvent && editor) {
         onchange?.(editor.getValue());
       }
     });

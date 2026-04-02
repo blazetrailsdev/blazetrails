@@ -54,7 +54,7 @@ export {
   registerSubclass,
   findStiClass,
 } from "./inheritance.js";
-export { hasSecurePassword } from "./secure-password.js";
+// hasSecurePassword requires node:crypto — import directly from "./secure-password.js"
 export {
   incrementCounter,
   decrementCounter,
@@ -63,20 +63,8 @@ export {
 } from "./counter-cache.js";
 export { attrReadonly, readonlyAttributes, readonlyAttribute } from "./readonly-attributes.js";
 export { touch, touchAll } from "./timestamp.js";
-export {
-  establishConnection,
-  normalizeAdapterName,
-  parseSqliteUrl,
-  adapterNameFromUrl,
-} from "./connection-handling.js";
-export {
-  signedId,
-  findSigned,
-  findSignedBang,
-  setSignedIdVerifierSecret,
-  signedIdVerifier,
-  setSignedIdVerifier,
-} from "./signed-id.js";
+// establishConnection requires node:fs — import directly from "./connection-handling.js"
+// signedId requires MessageVerifier (node:crypto) — import directly from "./signed-id.js"
 export {
   lockingColumn,
   setLockingColumn,
@@ -190,12 +178,12 @@ export {
   type AssociationLikeReflection,
 } from "./reflection.js";
 export { acceptsNestedAttributesFor, assignNestedAttributes } from "./nested-attributes.js";
-export { hasSecureToken } from "./secure-token.js";
+// hasSecureToken requires node:crypto — import directly from "./secure-token.js"
 export { composedOf } from "./composed-of.js";
 export { serialize } from "./serialize.js";
 export { encrypts, defaultEncryptor, getEncryptor, isEncryptedAttribute } from "./encryption.js";
 export type { Encryptor } from "./encryption.js";
-export { generatesTokenFor } from "./generates-token-for.js";
+// generatesTokenFor requires node:crypto — import directly from "./generates-token-for.js"
 export { delegatedType, getDelegatedTypeConfig } from "./delegated-type.js";
 export { DatabaseConfig } from "./database-configurations/database-config.js";
 export type { DatabaseConfigOptions } from "./database-configurations/database-config.js";

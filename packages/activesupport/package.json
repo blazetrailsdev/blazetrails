@@ -5,6 +5,17 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./message-verifier": "./dist/message-verifier.js",
+    "./message-encryptor": "./dist/message-encryptor.js",
+    "./key-generator": "./dist/key-generator.js",
+    "./digest": "./dist/digest.js",
+    "./security-utils": "./dist/security-utils.js",
+    "./configuration-file": "./dist/configuration-file.js",
+    "./gzip": "./dist/gzip.js",
+    "./cache/file-store": "./dist/cache/file-store.js"
+  },
   "scripts": {
     "build": "tsc"
   },

@@ -80,11 +80,11 @@ export function buildDefaultAttributes(defs: Map<string, AttributeDefinition>): 
  *
  * Mirrors: ActiveModel::Attributes#initialize
  *
- * In Rails, Attributes#initialize does:
- *   @attributes = self.class._default_attributes.deep_dup
+ * In Rails, Attributes#initialize deep-dups a cached class-level default.
+ * Here we build a fresh AttributeSet per instance, so no dup is needed.
  */
 export function constructor(defs: Map<string, AttributeDefinition>): AttributeSet {
-  return buildDefaultAttributes(defs).deepDup();
+  return buildDefaultAttributes(defs);
 }
 
 /**

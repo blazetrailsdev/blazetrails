@@ -163,10 +163,20 @@ export function aliasAttribute(this: AttributeMethodHost, newName: string, oldNa
 }
 
 export function undefineAttributeMethods(this: AttributeMethodHost): void {
+  const aliases = aliasesByAttributeName(this);
+
   for (const [name] of this._attributeDefinitions) {
+    const attrAliases = aliases.get(name) ?? [];
+    const namesToClean = [name, ...attrAliases];
+
     for (const pattern of this._attributeMethodPatterns) {
-      const methodName = pattern.methodName(name);
-      delete this.prototype[methodName];
+      for (const targetName of namesToClean) {
+        delete this.prototype[pattern.methodName(targetName)];
+      }
+    }
+
+    for (const aliasName of attrAliases) {
+      delete this.prototype[aliasName];
     }
   }
 }

@@ -1,17 +1,17 @@
-import { typeRegistry } from "./type/registry.js";
-import { ValueType } from "./type/value.js";
+import { typeRegistry, TypeRegistry } from "./type/registry.js";
+import { Type, ValueType } from "./type/value.js";
 
-export * as Type from "./type/value.js";
+export { Type } from "./type/value.js";
 
-export function registry(): typeof typeRegistry {
+export function registry(): TypeRegistry {
   return typeRegistry;
 }
 
-export function register(name: string, factory: () => unknown): void {
-  typeRegistry.register(name, factory as never);
+export function register(name: string, factory: () => Type): void {
+  typeRegistry.register(name, factory);
 }
 
-export function lookup(name: string): unknown {
+export function lookup(name: string): Type {
   return typeRegistry.lookup(name);
 }
 

@@ -517,6 +517,14 @@ export class Model {
     for (const attr of attributes) this.validates(attr, { confirmation: true });
   }
 
+  static validatesComparisonOf(attribute: string, options: Record<string, unknown>): void {
+    this.validates(attribute, { comparison: options });
+  }
+
+  static validatesSizeOf(attribute: string, options: Record<string, unknown>): void {
+    this.validates(attribute, { length: options });
+  }
+
   // -- Callbacks (Phase 1200) --
 
   static beforeValidation(fn: CallbackFn, conditions?: CallbackConditions): void {

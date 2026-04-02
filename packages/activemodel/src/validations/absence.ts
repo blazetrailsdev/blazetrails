@@ -46,23 +46,3 @@ export class AbsenceValidator implements Validator {
     }
   }
 }
-
-export function validatesComparisonOf(
-  ...attributes: [...string[], Record<string, unknown>] | string[]
-): { attribute: string; rules: Record<string, unknown> }[] {
-  const opts =
-    typeof attributes[attributes.length - 1] === "object"
-      ? (attributes.pop() as Record<string, unknown>)
-      : {};
-  return (attributes as string[]).map((attr) => ({ attribute: attr, rules: { comparison: opts } }));
-}
-
-export function validatesSizeOf(
-  ...attributes: [...string[], Record<string, unknown>] | string[]
-): { attribute: string; rules: Record<string, unknown> }[] {
-  const opts =
-    typeof attributes[attributes.length - 1] === "object"
-      ? (attributes.pop() as Record<string, unknown>)
-      : {};
-  return (attributes as string[]).map((attr) => ({ attribute: attr, rules: { length: opts } }));
-}

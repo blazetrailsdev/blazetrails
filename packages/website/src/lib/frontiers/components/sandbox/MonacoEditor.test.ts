@@ -8,6 +8,7 @@ const mockEditor = {
   revealLineInCenter: vi.fn(),
   deltaDecorations: vi.fn().mockReturnValue([]),
   onDidChangeModelContent: vi.fn(),
+  updateOptions: vi.fn(),
   dispose: vi.fn(),
 };
 
@@ -45,6 +46,7 @@ beforeEach(() => {
   mockEditor.revealLineInCenter.mockClear();
   mockEditor.deltaDecorations.mockClear().mockReturnValue([]);
   mockEditor.onDidChangeModelContent.mockClear();
+  mockEditor.updateOptions.mockClear();
   mockEditor.dispose.mockClear();
 });
 

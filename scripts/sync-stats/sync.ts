@@ -786,7 +786,10 @@ function extractStepLogs(rawLog: string): Map<string, string> {
 
     if (command.includes("api-compare/compare.ts")) {
       stepName = "api_compare";
-    } else if (command.includes("test-compare/test-compare.ts")) {
+    } else if (
+      command.includes("test-compare/test-compare.ts") ||
+      command.includes("test-compare/convention-compare.ts")
+    ) {
       stepName = "test_compare";
     }
 

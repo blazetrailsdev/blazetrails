@@ -1,14 +1,7 @@
-export {
-  setFsAdapter,
-  getFs,
-  getPath,
-  getFsAsync,
-  getPathAsync,
-  initNodeAdapters,
-} from "./fs-adapter.js";
+export { setFsAdapter, getFs, getPath } from "./fs-adapter.js";
 export type { FsAdapter, PathAdapter } from "./fs-adapter.js";
 
-export { setCryptoAdapter, getCrypto, getCryptoAsync, initNodeCrypto } from "./crypto-adapter.js";
+export { setCryptoAdapter, getCrypto, getCryptoAsync } from "./crypto-adapter.js";
 export type { CryptoAdapter, HashAdapter, HmacAdapter } from "./crypto-adapter.js";
 
 export {
@@ -169,16 +162,16 @@ export type { LogLevel, LoggerOutput, TaggedLogger } from "./logger.js";
 export { MemoryStore } from "./cache/memory-store.js";
 export { DupCoder } from "./cache/memory-store.js";
 export { NullStore } from "./cache/null-store.js";
-// FileStore requires node:fs — import directly from "./cache/file-store.js"
+// FileStore requires node:fs — import from "@blazetrails/activesupport/cache/file-store"
 export type { CacheOptions, CacheStore } from "./cache/index.js";
 
 export { Deprecation, DeprecationError, deprecator } from "./deprecation.js";
 export type { DeprecationBehavior } from "./deprecation.js";
 
 export * from "./time-ext.js";
-// MessageEncryptor/MessageVerifier require node:crypto — import directly
-export { InvalidMessage, NullSerializer } from "./message-encryptor.js";
-export { InvalidSignature } from "./message-verifier.js";
+// MessageEncryptor/MessageVerifier require node:crypto — use subpath imports:
+//   import { MessageVerifier } from "@blazetrails/activesupport/message-verifier"
+//   import { MessageEncryptor } from "@blazetrails/activesupport/message-encryptor"
 
 export { Duration, seconds, minutes, hours, days, weeks, months, years } from "./duration.js";
 export type { DurationParts } from "./duration.js";
@@ -225,7 +218,7 @@ export {
   xmlNameEscape,
   isHtmlSafe,
 } from "./core-ext/string/output-safety.js";
-// KeyGenerator requires node:crypto — import directly from "./key-generator.js"
+// KeyGenerator requires node:crypto — import from "@blazetrails/activesupport/key-generator"
 export { BacktraceCleaner } from "./backtrace-cleaner.js";
 export { OrderedHash } from "./ordered-hash.js";
 export { ErrorReporter } from "./error-reporter.js";
@@ -266,11 +259,14 @@ export { objectWith } from "./core-ext/object/with.js";
 export { ArrayInquirer, arrayInquiry } from "./array-inquirer.js";
 export { tryCall, tryWith, tryBang } from "./try.js";
 export { OrderedOptions, InheritableOptions } from "./ordered-options.js";
-// Digest, SecurityUtils, ConfigurationFile require node:crypto/node:fs — import directly
+// Digest/SecurityUtils/ConfigurationFile require node:crypto/node:fs — use subpath imports:
+//   import { Digest } from "@blazetrails/activesupport/digest"
+//   import { SecurityUtils } from "@blazetrails/activesupport/security-utils"
+//   import { ConfigurationFile } from "@blazetrails/activesupport/configuration-file"
 export { WeakSet as DescendantsTrackerWeakSet } from "./descendants-tracker.js";
 export { ActionableError, NonActionable } from "./actionable-error.js";
 export { NullLock } from "./concurrency/null-lock.js";
-// Gzip requires node:zlib — import directly from "./gzip.js"
+// Gzip requires node:zlib — import from "@blazetrails/activesupport/gzip"
 export { DescendantsTracker } from "./descendants-tracker.js";
 export { Configurable, Configuration } from "./configurable.js";
 export {

@@ -1,5 +1,3 @@
-import * as path from "node:path";
-import { execSync } from "node:child_process";
 import { GeneratorBase, GeneratorOptions } from "./base.js";
 
 export interface AppOptions {
@@ -15,7 +13,7 @@ export class AppGenerator extends GeneratorBase {
   }
 
   async run(name: string, options: AppOptions): Promise<string[]> {
-    const appDir = path.join(this.cwd, name);
+    const appDir = this.path.join(this.cwd, name);
     this.cwd = appDir;
 
     this.output(`Creating new trails application: ${name}`);
@@ -38,16 +36,18 @@ export class AppGenerator extends GeneratorBase {
 
     if (!options.skipGit) {
       try {
+        const { execSync } = await import("node:child_process");
         execSync("git init", { cwd: appDir, stdio: "pipe" });
         this.output("  Initialized git repository");
       } catch {
-        // git not available
+        // git not available or not in Node environment
       }
     }
 
     if (!options.skipInstall) {
       this.output("  Installing dependencies...");
       try {
+        const { execSync } = await import("node:child_process");
         execSync("pnpm install", { cwd: appDir, stdio: "pipe" });
         this.output("  Dependencies installed");
       } catch {

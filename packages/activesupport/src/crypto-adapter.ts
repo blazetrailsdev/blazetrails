@@ -63,24 +63,39 @@ export function setCryptoAdapter(adapter: CryptoAdapter): void {
   _cryptoPromise = null;
 }
 
-export function getCrypto(): CryptoAdapter {
-  if (_crypto) return _crypto;
-  throw new Error(
-    "Crypto adapter not available synchronously. " +
-      "Call setCryptoAdapter() first, or use getCryptoAsync().",
-  );
-}
-
-export async function getCryptoAsync(): Promise<CryptoAdapter> {
-  if (_crypto) return _crypto;
-  if (!_cryptoPromise) _cryptoPromise = loadNodeCrypto().then((c) => (_crypto = c));
-  return _cryptoPromise;
+function tryLoadNode(): boolean {
+  if (_crypto) return true;
+  try {
+    /* eslint-disable @typescript-eslint/no-require-imports */
+    const nodeCrypto = require("node:crypto") as typeof import("node:crypto");
+    /* eslint-enable @typescript-eslint/no-require-imports */
+    _crypto = wrapNodeCrypto(nodeCrypto);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
- * Initialize the default Node.js crypto adapter. Call this at
- * application startup in Node environments.
+ * Get the crypto adapter synchronously. In Node, auto-loads node:crypto.
+ * In browser, setCryptoAdapter() must be called first.
  */
-export async function initNodeCrypto(): Promise<void> {
-  await getCryptoAsync();
+export function getCrypto(): CryptoAdapter {
+  if (_crypto) return _crypto;
+  if (tryLoadNode()) return _crypto!;
+  throw new Error(
+    "Crypto adapter not available. " +
+      "In Node this auto-loads; in browser, call setCryptoAdapter() first.",
+  );
+}
+
+/**
+ * Get the crypto adapter asynchronously. Uses dynamic import for
+ * environments that don't support require (ESM-only).
+ */
+export async function getCryptoAsync(): Promise<CryptoAdapter> {
+  if (_crypto) return _crypto;
+  if (tryLoadNode()) return _crypto!;
+  if (!_cryptoPromise) _cryptoPromise = loadNodeCrypto().then((c) => (_crypto = c));
+  return _cryptoPromise;
 }

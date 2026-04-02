@@ -14,7 +14,8 @@
     "./security-utils": "./dist/security-utils.js",
     "./configuration-file": "./dist/configuration-file.js",
     "./gzip": "./dist/gzip.js",
-    "./cache/file-store": "./dist/cache/file-store.js"
+    "./cache/file-store": "./dist/cache/file-store.js",
+    "./*": "./dist/*.js"
   },
   "scripts": {
     "build": "tsc"

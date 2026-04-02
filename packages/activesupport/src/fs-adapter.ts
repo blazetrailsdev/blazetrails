@@ -30,59 +30,46 @@ export interface PathAdapter {
 let _fs: FsAdapter | null = null;
 let _path: PathAdapter | null = null;
 
-async function loadNodeFs(): Promise<FsAdapter> {
-  const fs = await import("node:fs");
-  return fs;
-}
-
-async function loadNodePath(): Promise<PathAdapter> {
-  const path = await import("node:path");
-  return path;
-}
-
-let _fsPromise: Promise<FsAdapter> | null = null;
-let _pathPromise: Promise<PathAdapter> | null = null;
-
 export function setFsAdapter(fs: FsAdapter, path: PathAdapter): void {
   _fs = fs;
   _path = path;
-  _fsPromise = null;
-  _pathPromise = null;
 }
 
-export function getFs(): FsAdapter {
-  if (_fs) return _fs;
-  throw new Error(
-    "Filesystem adapter not available synchronously. " +
-      "Call setFsAdapter() first, or use getFsAsync().",
-  );
-}
-
-export function getPath(): PathAdapter {
-  if (_path) return _path;
-  throw new Error(
-    "Path adapter not available synchronously. " +
-      "Call setFsAdapter() first, or use getPathAsync().",
-  );
-}
-
-export async function getFsAsync(): Promise<FsAdapter> {
-  if (_fs) return _fs;
-  if (!_fsPromise) _fsPromise = loadNodeFs().then((fs) => (_fs = fs));
-  return _fsPromise;
-}
-
-export async function getPathAsync(): Promise<PathAdapter> {
-  if (_path) return _path;
-  if (!_pathPromise) _pathPromise = loadNodePath().then((p) => (_path = p));
-  return _pathPromise;
+function tryLoadNode(): boolean {
+  if (_fs && _path) return true;
+  try {
+    /* eslint-disable @typescript-eslint/no-require-imports */
+    _fs = require("node:fs") as FsAdapter;
+    _path = require("node:path") as PathAdapter;
+    /* eslint-enable @typescript-eslint/no-require-imports */
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
- * Initialize the default Node.js adapters. Call this at application
- * startup in Node environments. In browser environments, call
- * setFsAdapter() with a VFS-backed implementation instead.
+ * Get the filesystem adapter. In Node environments, auto-loads
+ * node:fs synchronously. In browser, setFsAdapter() must be called first.
  */
-export async function initNodeAdapters(): Promise<void> {
-  await Promise.all([getFsAsync(), getPathAsync()]);
+export function getFs(): FsAdapter {
+  if (_fs) return _fs;
+  if (tryLoadNode()) return _fs!;
+  throw new Error(
+    "Filesystem adapter not available. " +
+      "In Node this auto-loads; in browser, call setFsAdapter() first.",
+  );
+}
+
+/**
+ * Get the path adapter. In Node environments, auto-loads
+ * node:path synchronously. In browser, setFsAdapter() must be called first.
+ */
+export function getPath(): PathAdapter {
+  if (_path) return _path;
+  if (tryLoadNode()) return _path!;
+  throw new Error(
+    "Path adapter not available. " +
+      "In Node this auto-loads; in browser, call setFsAdapter() first.",
+  );
 }

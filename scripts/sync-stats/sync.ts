@@ -172,7 +172,7 @@ class RawJobLog extends Base {
     this.attribute("job_id", "integer");
     this.attribute("merge_commit_sha", "string");
     this.attribute("pr_number", "integer");
-    this.attribute("log_output", "string");
+    this.attribute("log_output", "text");
   }
 }
 
@@ -360,7 +360,6 @@ async function migrateDb(adapter: SQLite3Adapter) {
       t.integer("pr_number");
       t.text("log_output");
       t.index(["merge_commit_sha"], { unique: true });
-      t.index(["merge_commit_sha"]);
     });
 
     await ctx.createTable("sync_log", {}, (t) => {

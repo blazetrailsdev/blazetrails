@@ -1,10 +1,14 @@
+<script lang="ts" module>
+  import type { Runtime } from "$lib/frontiers/runtime.js";
+  const runtimes = new Map<string, Runtime>();
+</script>
+
 <script lang="ts">
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { page } from "$app/stores";
   import initSqlJs from "sql.js";
   import wasmUrl from "sql.js/dist/sql-wasm.wasm?url";
-  import { createRuntime, type Runtime } from "$lib/frontiers/runtime.js";
+  import { createRuntime } from "$lib/frontiers/runtime.js";
   import type { TutorialStep } from "$lib/frontiers/tutorials/types.js";
   import { computeHighlightRanges } from "$lib/frontiers/tutorials/diff-engine.js";
   import type { HighlightRange } from "$lib/frontiers/tutorials/types.js";
@@ -26,9 +30,6 @@
   let selectedFile = $state<{ path: string; content: string } | null>(null);
   let highlights = $state<HighlightRange[]>([]);
   let activeTab = $state("filetree");
-
-  // Runtimes keyed by tutorial slug to preserve across step navigation
-  const runtimes = new Map<string, Runtime>();
 
   const PANE_TABS = [
     { id: "filetree", label: "Files" },
@@ -77,28 +78,31 @@
     }
   }
 
-  function handleChange() {
+  function refreshSelectedFile() {
     if (!runtime || !selectedFile) return;
     const file = runtime.vfs.read(selectedFile.path);
     if (file) {
       selectedFile = { path: file.path, content: file.content };
     }
+  }
+
+  function handleChange() {
+    refreshSelectedFile();
     highlights = [];
   }
 
-  function handleApplied() {
-    handleChange();
-    if (currentStep && selectedFile) {
+  function handleFileClick(path: string) {
+    handleFileSelect(path);
+    if (currentStep && runtime) {
       for (const action of currentStep.actions) {
-        if ("operation" in action && action.path === selectedFile.path) {
-          highlights = computeHighlightRanges(
-            runtime!.vfs.read(selectedFile.path)?.content ?? "",
-            action,
-          );
-          break;
+        if ("operation" in action && action.path === path) {
+          const content = runtime.vfs.read(path)?.content ?? "";
+          highlights = computeHighlightRanges(content, action);
+          return;
         }
       }
     }
+    highlights = [];
   }
 
   function navigateStep(step: number) {
@@ -107,6 +111,10 @@
     }
   }
 </script>
+
+<svelte:head>
+  <title>{data.title} — Step {data.stepNumber} | Frontiers</title>
+</svelte:head>
 
 {#if loading}
   <div class="flex h-screen items-center justify-center bg-surface">
@@ -142,8 +150,8 @@
           exec={(cmd) => runtime!.exec(cmd)}
           vfs={runtime.vfs}
           adapter={runtime.adapter}
-          onfileclick={handleFileSelect}
-          onchange={handleApplied}
+          onfileclick={handleFileClick}
+          onchange={handleChange}
         />
       </div>
 

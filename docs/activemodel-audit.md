@@ -5,13 +5,13 @@ mismatches listed — cosmetic differences and documented TS adaptations omitted
 
 ## Summary
 
-| Category                     | Files  | Match | Issues |
-| ---------------------------- | ------ | ----- | ------ |
-| Core (attributes, callbacks) | 13     | 2     | 11     |
-| Model, naming, errors, etc.  | 14     | 4     | 10     |
-| Types                        | 20     | 0     | 20     |
-| Validations                  | 17     | 3     | 14     |
-| **Total**                    | **64** | **9** | **55** |
+| Category                     | Files  | Match  | Issues |
+| ---------------------------- | ------ | ------ | ------ |
+| Core (attributes, callbacks) | 13     | 2      | 11     |
+| Model, naming, errors, etc.  | 16     | 5      | 11     |
+| Types                        | 23     | 0      | 23     |
+| Validations                  | 17     | 3      | 14     |
+| **Total**                    | **69** | **10** | **59** |
 
 ---
 
@@ -108,6 +108,12 @@ mismatches listed — cosmetic differences and documented TS adaptations omitted
 
 ### forbidden-attributes-protection.ts — OK
 
+### i18n.ts — ISSUES
+
+- Missing error messages: `password_too_long`, `in`, `model_invalid`
+- No `errors.attributes` structure
+- No `Translation` module behavior (lookup_ancestors, defaults arrays, humanization fallback)
+
 ### lint.ts — ISSUES
 
 - Method naming differences (camelCase vs snake_case with `?`)
@@ -124,6 +130,8 @@ mismatches listed — cosmetic differences and documented TS adaptations omitted
 - `@singular` doesn't handle "/" replacement
 
 ### nested-error.ts — OK
+
+### railtie.ts — OK
 
 ### secure-password.ts — ISSUES
 
@@ -249,6 +257,21 @@ mismatches listed — cosmetic differences and documented TS adaptations omitted
 
 - Only supports "utc" or "local"; Rails reads from `Time.zone_default`
 - Static variable instead of dynamic runtime config
+
+### type/array.ts — TS-ONLY (Rails equivalent in ActiveRecord PostgreSQL::OID::Array)
+
+- Simpler than Rails: hand-rolled parser vs PG gem TextEncoder/TextDecoder
+- Missing `changed_in_place?` and `force_equality?`
+- Missing serialization wrapper with encoder metadata
+
+### type/json.ts — TS-ONLY (Rails equivalent in ActiveRecord)
+
+- Missing `changed_in_place?`, `accessor` for StringKeyedHashAccessor, Mutable helpers
+
+### type/uuid.ts — TS-ONLY (Rails equivalent in ActiveRecord PostgreSQL::OID::Uuid)
+
+- Regex only accepts canonical UUID format; Rails also allows curly braces and no-dash forms
+- Missing `format_uuid()` normalization logic
 
 ---
 

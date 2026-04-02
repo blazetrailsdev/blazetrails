@@ -41,9 +41,16 @@ import * as ConnectionHandling from "./connection-handling.js";
 import * as ModelSchema from "./model-schema.js";
 // Lazy-loaded to avoid pulling node:crypto into browser bundles
 let _signedIdModule: typeof import("./signed-id.js") | null = null;
+let _signedIdModulePromise: Promise<typeof import("./signed-id.js")> | null = null;
 const loadSignedId = async () => {
-  if (!_signedIdModule) _signedIdModule = await import("./signed-id.js");
-  return _signedIdModule;
+  if (_signedIdModule) return _signedIdModule;
+  if (!_signedIdModulePromise) {
+    _signedIdModulePromise = import("./signed-id.js").then((mod) => {
+      _signedIdModule = mod;
+      return mod;
+    });
+  }
+  return _signedIdModulePromise;
 };
 import * as LockingOptimistic from "./locking/optimistic.js";
 import * as LockingPessimistic from "./locking/pessimistic.js";

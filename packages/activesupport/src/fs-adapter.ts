@@ -104,16 +104,18 @@ function resolve(): FsRegistration {
 }
 
 async function resolveAsync(): Promise<FsRegistration> {
+  const name = currentAdapterName;
   try {
     return resolve();
-  } catch {
+  } catch (error) {
+    if (name) {
+      throw error;
+    }
     if (await tryAutoRegisterNodeAsync()) {
       resolved = registry.get("node")!;
       return resolved;
     }
-    throw new Error(
-      "No filesystem adapter configured. Set ActiveSupport.fsAdapter or register a custom adapter.",
-    );
+    throw error;
   }
 }
 

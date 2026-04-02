@@ -1,12 +1,11 @@
 import { execSync } from "child_process";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
+import { homedir } from "os";
+import { join } from "path";
 import { Base, MigrationContext } from "@blazetrails/activerecord";
 import { SQLite3Adapter } from "@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js";
 
 const REPO = "blazetrailsdev/blazetrails";
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DB_PATH = join(__dirname, "stats.db");
+const DB_PATH = join(homedir(), "github", "blazetrailsdev", "stats.db");
 
 function gh(args: string): string {
   return execSync(`gh ${args}`, { encoding: "utf-8", maxBuffer: 50_000_000 });

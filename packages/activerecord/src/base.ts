@@ -2818,6 +2818,8 @@ export class Base extends Model {
   /**
    * Generate a signed ID for this record using HMAC-SHA256 via MessageVerifier.
    * The purpose parameter scopes the signed ID. expiresIn is in seconds.
+   * Returns a Promise because the signed-id module is lazy-loaded to keep
+   * node:crypto out of browser bundles.
    *
    * Mirrors: ActiveRecord::SignedId#signed_id
    */

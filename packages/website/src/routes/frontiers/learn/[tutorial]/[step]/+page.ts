@@ -7,12 +7,12 @@ export const ssr = false;
 export const load: PageLoad = ({ params }) => {
   const tutorial = getTutorial(params.tutorial);
   if (!tutorial) {
-    error(404, { message: `Tutorial "${params.tutorial}" not found` });
+    throw error(404, { message: `Tutorial "${params.tutorial}" not found` });
   }
 
   const step = parseInt(params.step, 10);
   if (Number.isNaN(step) || step < 1 || step > tutorial.stepCount) {
-    error(404, {
+    throw error(404, {
       message: `Step ${params.step} is out of range (1–${tutorial.stepCount})`,
     });
   }

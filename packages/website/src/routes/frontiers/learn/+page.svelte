@@ -11,7 +11,7 @@
   <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
     {#each tutorials as tutorial (tutorial.slug)}
       <a
-        href="/frontiers/learn/{tutorial.slug}/1"
+        href={`/frontiers/learn/${tutorial.slug}/1`}
         class="rounded-lg border border-border bg-surface-raised p-4 transition-colors hover:border-accent"
         data-testid="tutorial-card"
         data-slug={tutorial.slug}

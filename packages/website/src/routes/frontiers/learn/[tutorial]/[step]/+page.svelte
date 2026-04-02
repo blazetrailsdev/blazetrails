@@ -50,22 +50,43 @@
     currentStep ? PANE_TABS.filter((t) => currentStep!.panes.includes(t.id)) : PANE_TABS,
   );
 
-  onMount(async () => {
+  let lastSlug = "";
+
+  async function loadTutorial(slug: string, loadSteps: () => Promise<TutorialStep[]>) {
+    loading = true;
+    error = null;
+    selectedFile = null;
+    highlights = [];
     try {
       const SQL = await initSqlJs({ locateFile: () => wasmUrl });
 
-      let rt = runtimes.get(data.slug);
+      let rt = runtimes.get(slug);
       if (!rt) {
         rt = await createRuntime(SQL);
-        runtimes.set(data.slug, rt);
+        runtimes.set(slug, rt);
       }
       runtime = rt;
+      steps = await loadSteps();
 
-      steps = await data.loadSteps();
+      if (data.stepNumber > steps.length) {
+        error = `Step ${data.stepNumber} is out of range (1–${steps.length})`;
+      }
     } catch (e: unknown) {
       error = e instanceof Error ? e.message : String(e);
     } finally {
       loading = false;
+    }
+  }
+
+  onMount(() => {
+    lastSlug = data.slug;
+    loadTutorial(data.slug, data.loadSteps);
+  });
+
+  $effect(() => {
+    if (data.slug !== lastSlug) {
+      lastSlug = data.slug;
+      loadTutorial(data.slug, data.loadSteps);
     }
   });
 
@@ -75,6 +96,7 @@
     if (file) {
       selectedFile = { path: file.path, content: file.content };
       activeTab = "editor";
+      highlights = [];
     }
   }
 

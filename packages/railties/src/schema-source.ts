@@ -6,20 +6,11 @@ function sqliteId(name: string): string {
   return `"${name.replace(/"/g, '""')}"`;
 }
 
-/** Detect adapter type via instanceof (falls back to constructor name for subclasses). */
-async function detectAdapter(adapter: DatabaseAdapter): Promise<"sqlite" | "postgres" | "mysql"> {
-  const [{ SQLite3Adapter }, { PostgreSQLAdapter }, { Mysql2Adapter }] = await Promise.all([
-    import("@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js"),
-    import("@blazetrails/activerecord/adapters/postgresql-adapter.js"),
-    import("@blazetrails/activerecord/adapters/mysql2-adapter.js"),
-  ]);
-  if (adapter instanceof PostgreSQLAdapter) return "postgres";
-  if (adapter instanceof Mysql2Adapter) return "mysql";
-  if (adapter instanceof SQLite3Adapter) return "sqlite";
-  // Fallback for subclasses
-  const name = adapter.constructor.name;
-  if (name.includes("Postgres")) return "postgres";
-  if (name.includes("Mysql")) return "mysql";
+/** Detect adapter type from the adapter's adapterName property. */
+function detectAdapter(adapter: DatabaseAdapter): "sqlite" | "postgres" | "mysql" {
+  const name = adapter.adapterName.toLowerCase();
+  if (name.includes("postgres")) return "postgres";
+  if (name.includes("mysql") || name.includes("maria")) return "mysql";
   return "sqlite";
 }
 
@@ -85,9 +76,9 @@ export class AdapterSchemaSource implements SchemaSource {
 
   constructor(private adapter: DatabaseAdapter) {}
 
-  private async type(): Promise<"sqlite" | "postgres" | "mysql"> {
+  private type(): "sqlite" | "postgres" | "mysql" {
     if (!this._type) {
-      this._type = await detectAdapter(this.adapter);
+      this._type = detectAdapter(this.adapter);
     }
     return this._type;
   }

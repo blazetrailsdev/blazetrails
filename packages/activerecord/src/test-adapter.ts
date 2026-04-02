@@ -299,6 +299,8 @@ export async function cleanupTestAdapter(adapter: DatabaseAdapter): Promise<void
  *   3. Handles missing table/column errors as a fallback
  */
 class SchemaAdapter implements DatabaseAdapter {
+  readonly adapterName = "SchemaAdapter";
+
   private inner: any;
 
   constructor(inner: any) {

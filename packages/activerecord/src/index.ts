@@ -98,12 +98,6 @@ export {
   HashAccessor,
   IndifferentHashAccessor,
 } from "./store.js";
-// Database adapters are NOT re-exported from the barrel to avoid forcing
-// bundlers to pull in native Node packages (better-sqlite3, pg, mysql2).
-// Import them directly when needed:
-//   import { SQLite3Adapter } from "@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js"
-//   import { PostgreSQLAdapter } from "@blazetrails/activerecord/adapters/postgresql-adapter.js"
-//   import { Mysql2Adapter } from "@blazetrails/activerecord/adapters/mysql2-adapter.js"
 export { QueryCacheAdapter, QueryCacheStore } from "./query-cache.js";
 export { QueryLogs, escapeComment, LegacyFormatter, SQLCommenter } from "./query-logs.js";
 export type { TagValue, TagHandler, TagDefinition, QueryLogsFormatter } from "./query-logs.js";

@@ -1,10 +1,5 @@
 /**
  * Crypto adapter — mirrors the Rails adapter pattern.
- *
- * Register adapters by name, configure via ActiveSupport.cryptoAdapter:
- *
- *   ActiveSupport.cryptoAdapter = "node";       // default in Node (auto-detected)
- *   ActiveSupport.cryptoAdapter = "webcrypto";   // browser, after registerCryptoAdapter(...)
  */
 
 export interface CryptoAdapter {
@@ -60,16 +55,32 @@ export function registerCryptoAdapter(name: string, adapter: CryptoAdapter): voi
   if (name === currentAdapterName) resolved = null;
 }
 
-// Auto-register "node" at module load time if we're in Node
-try {
-  if (typeof globalThis.process !== "undefined" && globalThis.process.versions?.node) {
-    const nodeModule = await import("node:module");
-    const req = nodeModule.createRequire(import.meta.url);
+let nodeAttempted = false;
+
+function tryAutoRegisterNode(): boolean {
+  if (registry.has("node")) return true;
+  if (nodeAttempted) return false;
+  nodeAttempted = true;
+  try {
+    if (typeof globalThis.process === "undefined" || !globalThis.process.versions?.node) {
+      return false;
+    }
+
+    const nodeModule =
+      typeof require !== "undefined"
+        ? // eslint-disable-next-line @typescript-eslint/no-require-imports
+          require("node:module")
+        : null;
+    if (!nodeModule) return false;
+    const req = nodeModule.createRequire(
+      typeof __filename !== "undefined" ? __filename : "file:///activesupport",
+    );
     const nodeCrypto = req("node:crypto") as typeof import("node:crypto");
-    registerCryptoAdapter("node", wrapNodeCrypto(nodeCrypto));
+    registry.set("node", wrapNodeCrypto(nodeCrypto));
+    return true;
+  } catch {
+    return false;
   }
-} catch {
-  // Not in Node — browser environment
 }
 
 function resolve(): CryptoAdapter {
@@ -83,14 +94,13 @@ function resolve(): CryptoAdapter {
     return reg;
   }
 
-  const nodeReg = registry.get("node");
-  if (nodeReg) {
-    resolved = nodeReg;
-    return nodeReg;
+  if (tryAutoRegisterNode()) {
+    resolved = registry.get("node")!;
+    return resolved;
   }
 
   throw new Error(
-    'No crypto adapter configured. Set ActiveSupport.cryptoAdapter = "node" or register a custom adapter.',
+    "No crypto adapter configured. Set ActiveSupport.cryptoAdapter or register a custom adapter.",
   );
 }
 

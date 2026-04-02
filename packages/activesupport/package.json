@@ -42,6 +42,10 @@
       "types": "./dist/cache/file-store.d.ts",
       "default": "./dist/cache/file-store.js"
     },
+    "./cache/*": {
+      "types": "./dist/cache/*.d.ts",
+      "default": "./dist/cache/*.js"
+    },
     "./*": {
       "types": "./dist/*.d.ts",
       "default": "./dist/*.js"

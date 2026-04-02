@@ -1,10 +1,5 @@
 /**
  * Filesystem adapter — mirrors the Rails adapter pattern.
- *
- * Register adapters by name, configure via ActiveSupport.fsAdapter:
- *
- *   ActiveSupport.fsAdapter = "node";     // default in Node (auto-detected)
- *   ActiveSupport.fsAdapter = "vfs";      // browser, after registerFsAdapter("vfs", ...)
  */
 
 export interface FsAdapter {
@@ -41,15 +36,34 @@ export function registerFsAdapter(name: string, fs: FsAdapter, path: PathAdapter
   if (name === currentAdapterName) resolved = null;
 }
 
-// Auto-register "node" at module load time if we're in Node
-try {
-  if (typeof globalThis.process !== "undefined" && globalThis.process.versions?.node) {
-    const nodeModule = await import("node:module");
-    const req = nodeModule.createRequire(import.meta.url);
-    registerFsAdapter("node", req("node:fs"), req("node:path"));
+let nodeAttempted = false;
+
+function tryAutoRegisterNode(): boolean {
+  if (registry.has("node")) return true;
+  if (nodeAttempted) return false;
+  nodeAttempted = true;
+  try {
+    if (typeof globalThis.process === "undefined" || !globalThis.process.versions?.node) {
+      return false;
+    }
+    // Dynamic import of node:module to get createRequire — works in both CJS and ESM
+
+    const nodeModule =
+      typeof require !== "undefined"
+        ? // eslint-disable-next-line @typescript-eslint/no-require-imports
+          require("node:module")
+        : null;
+    if (!nodeModule) return false;
+    const req = nodeModule.createRequire(
+      typeof __filename !== "undefined" ? __filename : "file:///activesupport",
+    );
+    const fs = req("node:fs") as FsAdapter;
+    const path = req("node:path") as PathAdapter;
+    registry.set("node", { fs, path });
+    return true;
+  } catch {
+    return false;
   }
-} catch {
-  // Not in Node or node:fs unavailable — browser environment
 }
 
 function resolve(): FsRegistration {
@@ -63,15 +77,13 @@ function resolve(): FsRegistration {
     return reg;
   }
 
-  // Default: use "node" if registered
-  const nodeReg = registry.get("node");
-  if (nodeReg) {
-    resolved = nodeReg;
-    return nodeReg;
+  if (tryAutoRegisterNode()) {
+    resolved = registry.get("node")!;
+    return resolved;
   }
 
   throw new Error(
-    'No filesystem adapter configured. Set ActiveSupport.fsAdapter = "node" or register a custom adapter.',
+    "No filesystem adapter configured. Set ActiveSupport.fsAdapter or register a custom adapter.",
   );
 }
 

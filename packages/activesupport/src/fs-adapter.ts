@@ -37,7 +37,7 @@ export function registerFsAdapter(name: string, fs: FsAdapter, path: PathAdapter
 }
 
 let nodeAttempted = false;
-let nodeAsyncAttempted = false;
+let nodeAsyncPromise: Promise<boolean> | null = null;
 
 function tryAutoRegisterNode(): boolean {
   if (registry.has("node")) return true;
@@ -65,21 +65,24 @@ function tryAutoRegisterNode(): boolean {
   }
 }
 
-async function tryAutoRegisterNodeAsync(): Promise<boolean> {
-  if (registry.has("node")) return true;
-  if (nodeAsyncAttempted) return false;
-  nodeAsyncAttempted = true;
-  try {
-    if (typeof globalThis.process === "undefined" || !globalThis.process.versions?.node) {
-      return false;
-    }
-    const fs = (await import("node:fs")) as unknown as FsAdapter;
-    const path = (await import("node:path")) as unknown as PathAdapter;
-    registry.set("node", { fs, path });
-    return true;
-  } catch {
-    return false;
+function tryAutoRegisterNodeAsync(): Promise<boolean> {
+  if (registry.has("node")) return Promise.resolve(true);
+  if (!nodeAsyncPromise) {
+    nodeAsyncPromise = (async () => {
+      try {
+        if (typeof globalThis.process === "undefined" || !globalThis.process.versions?.node) {
+          return false;
+        }
+        const fs = (await import("node:fs")) as unknown as FsAdapter;
+        const path = (await import("node:path")) as unknown as PathAdapter;
+        registry.set("node", { fs, path });
+        return true;
+      } catch {
+        return false;
+      }
+    })();
   }
+  return nodeAsyncPromise;
 }
 
 function resolve(): FsRegistration {

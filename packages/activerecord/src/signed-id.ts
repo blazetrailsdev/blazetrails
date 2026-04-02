@@ -1,5 +1,5 @@
 import type { Base } from "./base.js";
-import type { MessageVerifier } from "@blazetrails/activesupport/message-verifier";
+import { MessageVerifier } from "@blazetrails/activesupport/message-verifier";
 import { underscore } from "@blazetrails/activesupport";
 
 /**
@@ -33,7 +33,7 @@ export function setSignedIdVerifierSecret(secret: string | (() => string)): void
  *
  * Mirrors: ActiveRecord::SignedId::ClassMethods#signed_id_verifier
  */
-export async function signedIdVerifier(modelClass: typeof Base): Promise<MessageVerifier> {
+export function signedIdVerifier(modelClass: typeof Base): MessageVerifier {
   if ((modelClass as any)._signedIdVerifier) {
     return (modelClass as any)._signedIdVerifier;
   }
@@ -46,9 +46,8 @@ export async function signedIdVerifier(modelClass: typeof Base): Promise<Message
     );
   }
 
-  const { MessageVerifier: MV } = await import("@blazetrails/activesupport/message-verifier");
   const resolvedSecret = typeof secret === "function" ? secret() : secret;
-  const verifier = new MV(resolvedSecret, {
+  const verifier = new MessageVerifier(resolvedSecret, {
     digest: "sha256",
     url_safe: true,
   });
@@ -79,15 +78,15 @@ function combinePurposes(modelClass: typeof Base, purpose?: string): string | un
  *
  * Mirrors: ActiveRecord::SignedId#signed_id
  */
-export async function signedId(
+export function signedId(
   instance: Base,
   options?: { purpose?: string; expiresIn?: number; expiresAt?: Date },
-): Promise<string> {
+): string {
   if (!instance.isPersisted()) {
     throw new Error("Cannot generate a signed_id for a new record");
   }
   const ctor = instance.constructor as typeof Base;
-  const verifier = await signedIdVerifier(ctor);
+  const verifier = signedIdVerifier(ctor);
   return verifier.generate(instance.id, {
     expiresIn: options?.expiresIn,
     expiresAt: options?.expiresAt,
@@ -106,7 +105,7 @@ export async function findSigned(
   token: string,
   options?: { purpose?: string },
 ): Promise<Base | null> {
-  const verifier = await signedIdVerifier(modelClass);
+  const verifier = signedIdVerifier(modelClass);
   const id = verifier.verified(token, {
     purpose: combinePurposes(modelClass, options?.purpose),
   });
@@ -133,7 +132,7 @@ export async function findSignedBang(
   token: string,
   options?: { purpose?: string },
 ): Promise<Base> {
-  const verifier = await signedIdVerifier(modelClass);
+  const verifier = signedIdVerifier(modelClass);
   const id = verifier.verify(token, {
     purpose: combinePurposes(modelClass, options?.purpose),
   });

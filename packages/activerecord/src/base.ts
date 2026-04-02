@@ -40,7 +40,11 @@ import { ConnectionHandler } from "./connection-adapters/abstract/connection-han
 import * as ConnectionHandling from "./connection-handling.js";
 import * as ModelSchema from "./model-schema.js";
 // Lazy-loaded to avoid pulling node:crypto into browser bundles
-const loadSignedId = () => import("./signed-id.js");
+let _signedIdModule: typeof import("./signed-id.js") | null = null;
+const loadSignedId = async () => {
+  if (!_signedIdModule) _signedIdModule = await import("./signed-id.js");
+  return _signedIdModule;
+};
 import * as LockingOptimistic from "./locking/optimistic.js";
 import * as LockingPessimistic from "./locking/pessimistic.js";
 import * as Translation from "./translation.js";

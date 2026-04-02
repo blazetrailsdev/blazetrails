@@ -33,8 +33,13 @@ export function quote(value: unknown): string {
   if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
   if (typeof value === "number" || typeof value === "bigint") return String(value);
   if (value instanceof Date) return `'${value.toISOString()}'`;
-  if (typeof value === "string" || typeof value === "symbol") {
-    return `'${String(value).replace(/'/g, "''")}'`;
+  if (typeof value === "symbol") {
+    const desc = value.description;
+    if (desc === undefined) throw new TypeError("Cannot quote a Symbol without a description");
+    return `'${desc.replace(/'/g, "''")}'`;
+  }
+  if (typeof value === "string") {
+    return `'${value.replace(/'/g, "''")}'`;
   }
   return `'${String(value).replace(/'/g, "''")}'`;
 }

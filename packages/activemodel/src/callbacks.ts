@@ -16,6 +16,13 @@ export interface CallbacksClassMethods {
 
 export type Callbacks = CallbacksClassMethods;
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function extended(base: any): void {
+  if (typeof base.defineModelCallbacks !== "function") {
+    base.defineModelCallbacks = function (..._eventNames: string[]) {};
+  }
+}
+
 /**
  * Callback types.
  */

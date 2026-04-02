@@ -151,3 +151,18 @@ export class ModelName {
  * ModelName remains the primary export for backwards compatibility.
  */
 export class Name extends ModelName {}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function extended(base: any): void {
+  if (!base.modelName) {
+    Object.defineProperty(base, "modelName", {
+      get() {
+        if (!this._modelName || this._modelName.name !== this.name) {
+          this._modelName = new ModelName(this.name, { klass: this });
+        }
+        return this._modelName;
+      },
+      configurable: true,
+    });
+  }
+}

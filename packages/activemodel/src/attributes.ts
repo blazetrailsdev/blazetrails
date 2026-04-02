@@ -29,8 +29,24 @@ type Constructor<T = object> = new (...args: any[]) => T;
  * Mirrors: ActiveModel::Attributes
  */
 export interface Attributes {
-  readonly attributes: Record<string, unknown>;
+  attributes(): Record<string, unknown>;
   attributeNames(): string[];
+}
+
+export class AttributesMixin {
+  private _attrs: Map<string, unknown>;
+
+  constructor(initial: Record<string, unknown> = {}) {
+    this._attrs = new Map(Object.entries(initial));
+  }
+
+  attributes(): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    for (const [k, v] of this._attrs) {
+      result[k] = v;
+    }
+    return result;
+  }
 }
 
 export interface AttributesStatic {

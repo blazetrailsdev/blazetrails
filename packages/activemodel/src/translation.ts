@@ -17,5 +17,11 @@ export interface TranslationClassMethods {
 
 export type Translation = TranslationClassMethods;
 
-// eslint-disable-next-line prefer-const -- must be mutable for runtime configuration
-export let raiseOnMissingTranslations = false;
+let _raiseOnMissingTranslations = false;
+
+export function raiseOnMissingTranslations(value?: boolean): boolean {
+  if (value !== undefined) {
+    _raiseOnMissingTranslations = value;
+  }
+  return _raiseOnMissingTranslations;
+}

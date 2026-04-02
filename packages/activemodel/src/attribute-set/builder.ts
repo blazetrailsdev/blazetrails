@@ -103,6 +103,31 @@ export class LazyAttributeHash {
     return cloned;
   }
 
+  isKey(key: string): boolean {
+    return (
+      this.delegate.has(key) ||
+      Object.prototype.hasOwnProperty.call(this.values, key) ||
+      this.types.has(key)
+    );
+  }
+
+  eachKey(fn: (key: string) => void): void {
+    const allKeys = new Set([
+      ...this.delegate.keys(),
+      ...Object.keys(this.values),
+      ...this.types.keys(),
+    ]);
+    for (const key of allKeys) fn(key);
+  }
+
+  marshalDump(): [Map<string, Type>, Record<string, unknown>] {
+    return [this.types, this.values];
+  }
+
+  static marshalLoad(data: [Map<string, Type>, Record<string, unknown>]): LazyAttributeHash {
+    return new LazyAttributeHash(data[0], data[1]);
+  }
+
   private assignDefault(name: string): Attribute {
     const type = this.types.get(name);
     if (Object.prototype.hasOwnProperty.call(this.values, name) && type) {

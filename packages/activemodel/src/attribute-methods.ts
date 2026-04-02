@@ -54,11 +54,15 @@ export namespace AttrNames {
 export class AttributeMethodPattern {
   readonly prefix: string;
   readonly suffix: string;
+  readonly proxyTarget: string;
+  readonly parameters: string;
   readonly method_missing_target: string;
 
-  constructor(prefix: string = "", suffix: string = "") {
+  constructor(prefix: string = "", suffix: string = "", parameters?: string) {
     this.prefix = prefix;
     this.suffix = suffix;
+    this.parameters = parameters === undefined ? "..." : parameters;
+    this.proxyTarget = `${prefix}attribute${suffix}`;
     this.method_missing_target = `attribute_${prefix}${suffix ? `${suffix}` : ""}`;
   }
 
@@ -72,4 +76,141 @@ export class AttributeMethodPattern {
   methodName(attrName: string): string {
     return `${this.prefix}${attrName}${this.suffix}`;
   }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyRecord = any;
+
+export interface AttributeMethodHost {
+  _attributeDefinitions: Map<string, { name: string }>;
+  _attributeMethodPatterns: AttributeMethodPattern[];
+  _attributeAliases: Record<string, string>;
+  _aliasesByAttributeName: Map<string, string[]>;
+  prototype: AnyRecord;
+  readAttribute?(name: string): unknown;
+  writeAttribute?(name: string, value: unknown): void;
+}
+
+export function attributeMethodPrefix(host: AttributeMethodHost, ...prefixes: string[]): void {
+  for (const prefix of prefixes) {
+    host._attributeMethodPatterns.push(new AttributeMethodPattern(prefix, ""));
+  }
+  undefineAttributeMethods(host);
+  defineAttributeMethods(host, ...Array.from(host._attributeDefinitions.keys()));
+}
+
+export function attributeMethodSuffix(host: AttributeMethodHost, ...suffixes: string[]): void {
+  for (const suffix of suffixes) {
+    host._attributeMethodPatterns.push(new AttributeMethodPattern("", suffix));
+  }
+  undefineAttributeMethods(host);
+  defineAttributeMethods(host, ...Array.from(host._attributeDefinitions.keys()));
+}
+
+export function attributeMethodAffix(
+  host: AttributeMethodHost,
+  ...affixes: Array<{ prefix: string; suffix: string }>
+): void {
+  for (const { prefix, suffix } of affixes) {
+    host._attributeMethodPatterns.push(new AttributeMethodPattern(prefix, suffix));
+  }
+  undefineAttributeMethods(host);
+  defineAttributeMethods(host, ...Array.from(host._attributeDefinitions.keys()));
+}
+
+export function aliasAttribute(host: AttributeMethodHost, newName: string, oldName: string): void {
+  host._attributeAliases = { ...host._attributeAliases, [newName]: oldName };
+  const aliases = aliasesByAttributeName(host);
+  if (!aliases.has(oldName)) aliases.set(oldName, []);
+  aliases.get(oldName)!.push(newName);
+  eagerlyGenerateAliasAttributeMethods(host, newName, oldName);
+}
+
+export function eagerlyGenerateAliasAttributeMethods(
+  host: AttributeMethodHost,
+  newName: string,
+  oldName: string,
+): void {
+  generateAliasAttributeMethods(host, newName, oldName);
+}
+
+export function generateAliasAttributeMethods(
+  host: AttributeMethodHost,
+  newName: string,
+  oldName: string,
+): void {
+  for (const pattern of host._attributeMethodPatterns) {
+    aliasAttributeMethodDefinition(host, pattern, newName, oldName);
+  }
+}
+
+export function aliasAttributeMethodDefinition(
+  host: AttributeMethodHost,
+  pattern: AttributeMethodPattern,
+  newName: string,
+  oldName: string,
+): void {
+  const methodName = pattern.methodName(newName);
+  const _targetName = pattern.methodName(oldName);
+  Object.defineProperty(host.prototype, methodName, {
+    get(this: AnyRecord) {
+      return this.readAttribute(oldName);
+    },
+    set(this: AnyRecord, value: unknown) {
+      this.writeAttribute(oldName, value);
+    },
+    configurable: true,
+  });
+}
+
+export function isAttributeAlias(host: AttributeMethodHost, name: string): boolean {
+  return name in host._attributeAliases;
+}
+
+export function attributeAlias(host: AttributeMethodHost, name: string): string | undefined {
+  return host._attributeAliases[name];
+}
+
+export function defineAttributeMethods(host: AttributeMethodHost, ...attrNames: string[]): void {
+  for (const attrName of attrNames) {
+    defineAttributeMethod(host, attrName);
+  }
+}
+
+export function defineAttributeMethod(host: AttributeMethodHost, attrName: string): void {
+  for (const pattern of host._attributeMethodPatterns) {
+    defineAttributeMethodPattern(host, pattern, attrName);
+  }
+}
+
+export function defineAttributeMethodPattern(
+  host: AttributeMethodHost,
+  pattern: AttributeMethodPattern,
+  attrName: string,
+): void {
+  const methodName = pattern.methodName(attrName);
+  if (host.prototype[methodName] !== undefined) return;
+  Object.defineProperty(host.prototype, methodName, {
+    value: function (this: AnyRecord) {
+      return this.readAttribute(attrName);
+    },
+    writable: true,
+    configurable: true,
+  });
+}
+
+export function undefineAttributeMethods(host: AttributeMethodHost): void {
+  for (const [name] of host._attributeDefinitions) {
+    for (const pattern of host._attributeMethodPatterns) {
+      const methodName = pattern.methodName(name);
+      delete host.prototype[methodName];
+    }
+  }
+}
+
+export function aliasesByAttributeName(host: AttributeMethodHost): Map<string, string[]> {
+  if (!host._aliasesByAttributeName) {
+    host._aliasesByAttributeName = new Map();
+  }
+  return host._aliasesByAttributeName;
 }

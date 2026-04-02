@@ -126,7 +126,32 @@ export abstract class Attribute {
     );
   }
 
-  protected abstract typeCast(value: unknown): unknown;
+  abstract typeCast(value: unknown): unknown;
+
+  isSerializable(): boolean {
+    return this.type.isSerializable(this.value);
+  }
+
+  originalValueForDatabase(): unknown {
+    if (this.originalAttribute !== null) {
+      return this.originalAttribute.originalValueForDatabase();
+    }
+    return this.type.serialize(this.originalValue);
+  }
+
+  withUserDefault(value: unknown): Attribute {
+    const UPD = Attribute._UserProvidedDefault;
+    if (!UPD) throw new Error("UserProvidedDefault not registered");
+    return new UPD(
+      this.name,
+      value,
+      this.type,
+      this instanceof FromDatabase ? this : this.originalAttribute,
+    );
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  static _UserProvidedDefault: (new (...args: any[]) => Attribute) | null = null;
 
   /** Access the original attribute for cloning. */
   getOriginalAttribute(): Attribute | null {
@@ -202,13 +227,13 @@ export abstract class Attribute {
 }
 
 export class FromDatabase extends Attribute {
-  protected typeCast(value: unknown): unknown {
+  typeCast(value: unknown): unknown {
     return this.type.deserialize(value);
   }
 }
 
 export class FromUser extends Attribute {
-  protected typeCast(value: unknown): unknown {
+  typeCast(value: unknown): unknown {
     return this.type.cast(value);
   }
 
@@ -218,7 +243,7 @@ export class FromUser extends Attribute {
 }
 
 export class WithCastValue extends Attribute {
-  protected typeCast(value: unknown): unknown {
+  typeCast(value: unknown): unknown {
     return value;
   }
 
@@ -232,7 +257,7 @@ export class Null extends Attribute {
     super(name, null, typeRegistry.lookup("value"));
   }
 
-  protected typeCast(): unknown {
+  typeCast(): unknown {
     return null;
   }
 
@@ -266,7 +291,7 @@ export class Uninitialized extends Attribute {
     return new Uninitialized(this.name, this.type);
   }
 
-  protected typeCast(): unknown {
+  typeCast(): unknown {
     return undefined;
   }
 }

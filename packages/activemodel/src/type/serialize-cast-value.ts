@@ -33,6 +33,15 @@ export namespace SerializeCastValue {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function included(base: any): void {
+  if (typeof base.serializeCastValueCompatible !== "function") {
+    base.serializeCastValueCompatible = function (): boolean {
+      return typeof this.prototype?.serializeCastValue === "function";
+    };
+  }
+}
+
 export function itselfIfSerializeCastValueCompatible(type: {
   serialize(value: unknown): unknown;
   serializeCastValue?(value: unknown): unknown;

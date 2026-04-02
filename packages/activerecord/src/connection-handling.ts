@@ -190,7 +190,8 @@ async function loadConfigFile(modelClass: typeof Base): Promise<Record<string, a
   for (const candidate of tsCandidates) {
     if (fsAdapter.existsSync(candidate)) {
       try {
-        const mod = await import(candidate);
+        const { pathToFileURL } = await import("node:url");
+        const mod = await import(pathToFileURL(candidate).href);
         return mod.default ?? mod;
       } catch (error: unknown) {
         throw new Error(

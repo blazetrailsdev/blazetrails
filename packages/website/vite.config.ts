@@ -32,6 +32,7 @@ export default defineConfig({
     rollupOptions: {
       external: (id: string) =>
         id.startsWith("node:") ||
+        id.startsWith("@blazetrails/activesupport/") ||
         [
           "fs",
           "path",

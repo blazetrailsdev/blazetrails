@@ -31,7 +31,7 @@ import {
   DangerousAttributeError,
   AttributeAssignmentError,
 } from "./errors.js";
-import { encrypts as _encrypts, getEncryptor } from "./encryption.js";
+import { encrypts as _encrypts } from "./encryption.js";
 import * as CounterCache from "./counter-cache.js";
 import * as ReadonlyAttributes from "./readonly-attributes.js";
 import * as Timestamp from "./timestamp.js";
@@ -1697,9 +1697,11 @@ export class Base extends Model {
       return instantiateSti(stiBase, row);
     }
 
-    this._skipEncryption = true;
-    const record = new this(row);
-    this._skipEncryption = false;
+    const record = new this();
+    // Load DB values through deserialize (not cast) so encrypted types decrypt
+    for (const [key, value] of Object.entries(row)) {
+      record._attributes.writeFromDatabase(key, value);
+    }
     record._newRecord = false;
     (record as any)._dirty.snapshot(record._attributes);
     record.changesApplied();
@@ -1727,24 +1729,8 @@ export class Base extends Model {
   _collectionProxies: Map<string, unknown> = new Map();
   _associationInstances: Map<string, AssociationInstance> = new Map();
 
-  /**
-   * Track whether we're inside _instantiate (loading from DB).
-   * In that case, attributes are already encrypted in DB, skip re-encryption.
-   */
-  private static _skipEncryption = false;
-
   constructor(attrs: Record<string, unknown> = {}) {
     super(attrs);
-    // Encrypt initial attribute values for encrypted attributes
-    // (skip when loading from DB — values are already encrypted)
-    if (!(this.constructor as typeof Base)._skipEncryption) {
-      for (const [name, value] of this._attributes) {
-        const enc = getEncryptor(this.constructor, name);
-        if (enc && typeof value === "string") {
-          this._attributes.set(name, enc.encrypt(value));
-        }
-      }
-    }
   }
 
   /**
@@ -1863,38 +1849,17 @@ export class Base extends Model {
   declare cacheVersion: () => string | null;
 
   /**
-   * Override readAttribute to decrypt encrypted attributes.
-   */
-  readAttribute(name: string): unknown {
-    const value = super.readAttribute(name);
-    const enc = getEncryptor(this.constructor, name);
-    if (enc && typeof value === "string") {
-      try {
-        return enc.decrypt(value);
-      } catch {
-        return value;
-      }
-    }
-    return value;
-  }
-
-  /**
    * Override writeAttribute to prevent modifications on frozen records
-   * and to encrypt encrypted attributes.
+   * and validate attribute names.
    */
   writeAttribute(name: string, value: unknown): void {
-    if (!/^[\p{L}\p{N}_]+$/u.test(name)) {
+    if (!/^[\p{L}\p{N}_$]+$/u.test(name)) {
       throw new DangerousAttributeError(`Invalid attribute name: ${name}`);
     }
     if (this._frozen) {
       throw new Error(`Cannot modify a frozen ${(this.constructor as typeof Base).name}`);
     }
-    const enc = getEncryptor(this.constructor, name);
-    if (enc && typeof value === "string") {
-      super.writeAttribute(name, enc.encrypt(value));
-    } else {
-      super.writeAttribute(name, value);
-    }
+    super.writeAttribute(name, value);
   }
 
   /**
@@ -2256,7 +2221,7 @@ export class Base extends Model {
       }
     }
 
-    const attrs = this.attributes;
+    const attrs = this._attributes.valuesForDatabase();
     const columns: string[] = [];
     const values: unknown[] = [];
 
@@ -2316,10 +2281,11 @@ export class Base extends Model {
 
     if (Object.keys(changedAttrs).length === 0) return;
 
+    const dbValues = this._attributes.valuesForDatabase();
     const updateValues: [InstanceType<typeof Nodes.Node>, unknown][] = Object.keys(
       changedAttrs,
     ).map((key) => {
-      const val = this.readAttribute(key);
+      const val = dbValues[key];
       const def = ctor._attributeDefinitions.get(key);
       const isArray = def?.type?.name === "array";
       return [table.get(key), isArray ? arelSql(quoteSqlValue(val, true)) : val];

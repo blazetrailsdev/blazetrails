@@ -1,14 +1,14 @@
 /**
  * ActiveRecord::Encryption — declares encrypted attributes.
  *
- * When an attribute is declared with `encrypts()`, reads will
- * decrypt and writes will encrypt transparently.
- *
- * By default uses a simple base64 encoding. Supply a custom
- * `encryptor` for real encryption (AES, etc.).
+ * When an attribute is declared with `encrypts()`, its type is wrapped
+ * with EncryptedAttributeType which handles encrypt on serialize and
+ * decrypt on deserialize — matching Rails' type-system approach.
  *
  * Mirrors: ActiveRecord::Encryption
  */
+
+import { EncryptedAttributeType } from "./encrypted-attribute-type.js";
 
 export interface Encryptor {
   encrypt(value: string): string;
@@ -30,13 +30,10 @@ export const defaultEncryptor: Encryptor = {
 };
 
 /**
- * Registry of encrypted attribute names per model class,
- * keyed by a class identifier.
- */
-const encryptedAttributes = new WeakMap<object, Map<string, Encryptor>>();
-
-/**
  * Declare one or more attributes as encrypted on a model class.
+ *
+ * Wraps each named attribute's type with EncryptedAttributeType so that
+ * values are encrypted on serialize (save) and decrypted on deserialize (load).
  *
  * Usage (inside a static block on a Base subclass):
  *   encrypts("ssn", "email");
@@ -54,34 +51,35 @@ export function encrypts(klass: any, ...args: Array<string | { encryptor?: Encry
     }
   }
 
-  if (!encryptedAttributes.has(klass)) {
-    encryptedAttributes.set(klass, new Map());
+  // Ensure subclass has own definitions before mutating
+  if (!Object.prototype.hasOwnProperty.call(klass, "_attributeDefinitions")) {
+    klass._attributeDefinitions = new Map(klass._attributeDefinitions);
   }
-  const map = encryptedAttributes.get(klass)!;
-  for (const name of names) {
-    map.set(name, enc);
-  }
-}
 
-/**
- * Get the encryptor for a given attribute on a class, if encrypted.
- */
-export function getEncryptor(klass: any, attr: string): Encryptor | undefined {
-  // Walk prototype chain
-  let current = klass;
-  while (current) {
-    const map = encryptedAttributes.get(current);
-    if (map?.has(attr)) {
-      return map.get(attr);
+  for (const name of names) {
+    const def = klass._attributeDefinitions.get(name);
+    if (def) {
+      // Wrap the existing type with encryption
+      klass._attributeDefinitions.set(name, {
+        ...def,
+        type: new EncryptedAttributeType(def.type, enc),
+      });
     }
-    current = Object.getPrototypeOf(current);
   }
-  return undefined;
 }
 
 /**
  * Check if an attribute is encrypted on a class.
  */
 export function isEncryptedAttribute(klass: any, attr: string): boolean {
-  return getEncryptor(klass, attr) !== undefined;
+  let current = klass;
+  while (current) {
+    const defs = current._attributeDefinitions;
+    if (defs) {
+      const def = defs.get(attr);
+      if (def?.type instanceof EncryptedAttributeType) return true;
+    }
+    current = Object.getPrototypeOf(current);
+  }
+  return false;
 }

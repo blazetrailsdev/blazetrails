@@ -28,7 +28,6 @@ import {
   StaleObjectError,
   ReadOnlyRecord,
   ConnectionNotDefined,
-  DangerousAttributeError,
   AttributeAssignmentError,
 } from "./errors.js";
 import { encrypts as _encrypts, applyPendingEncryptions } from "./encryption.js";
@@ -1851,14 +1850,7 @@ export class Base extends Model {
   declare cacheKeyWithVersion: () => string;
   declare cacheVersion: () => string | null;
 
-  /**
-   * Override writeAttribute to prevent modifications on frozen records
-   * and validate attribute names.
-   */
   writeAttribute(name: string, value: unknown): void {
-    if (!/^[\p{L}\p{N}_$]+$/u.test(name)) {
-      throw new DangerousAttributeError(`Invalid attribute name: ${name}`);
-    }
     if (this._frozen) {
       throw new Error(`Cannot modify a frozen ${(this.constructor as typeof Base).name}`);
     }

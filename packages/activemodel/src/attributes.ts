@@ -32,20 +32,20 @@ export interface Attributes {
  * of the class-level `attribute` declaration.
  */
 export function attribute(
-  host: { _attributeDefinitions: Map<string, AttributeDefinition>; prototype: object },
+  this: { _attributeDefinitions: Map<string, AttributeDefinition>; prototype: object },
   name: string,
   typeName: string,
   options?: { default?: unknown },
 ): void {
   const type = typeRegistry.lookup(typeName);
   const defaultValue = options?.default ?? null;
-  if (!Object.prototype.hasOwnProperty.call(host, "_attributeDefinitions")) {
-    host._attributeDefinitions = new Map(host._attributeDefinitions);
+  if (!Object.prototype.hasOwnProperty.call(this, "_attributeDefinitions")) {
+    this._attributeDefinitions = new Map(this._attributeDefinitions);
   }
-  host._attributeDefinitions.set(name, { name, type, defaultValue });
+  this._attributeDefinitions.set(name, { name, type, defaultValue });
 
-  if (!Object.prototype.hasOwnProperty.call(host.prototype, name)) {
-    Object.defineProperty(host.prototype, name, {
+  if (!Object.prototype.hasOwnProperty.call(this.prototype, name)) {
+    Object.defineProperty(this.prototype, name, {
       get(this: { readAttribute(n: string): unknown }) {
         return this.readAttribute(name);
       },

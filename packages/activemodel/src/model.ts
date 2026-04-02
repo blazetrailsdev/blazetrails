@@ -13,17 +13,17 @@ import {
   CallbackFn,
   AroundCallbackFn,
   CallbackConditions,
-  defineModelCallbacks as cbDefineModelCallbacks,
+  defineModelCallbacks,
 } from "./callbacks.js";
 import { serializableHash, SerializeOptions } from "./serialization.js";
 import { BlockValidator } from "./validator.js";
 import {
   AttributeMethodPattern,
-  attributeMethodPrefix as amPrefix,
-  attributeMethodSuffix as amSuffix,
-  attributeMethodAffix as amAffix,
-  aliasAttribute as amAliasAttribute,
-  undefineAttributeMethods as amUndefineAttributeMethods,
+  attributeMethodPrefix,
+  attributeMethodSuffix,
+  attributeMethodAffix,
+  aliasAttribute,
+  undefineAttributeMethods,
 } from "./attribute-methods.js";
 import {
   assignAttributes as assignAttrs,
@@ -47,11 +47,7 @@ import { FormatValidator } from "./validations/format.js";
 import { AcceptanceValidator } from "./validations/acceptance.js";
 import { ConfirmationValidator } from "./validations/confirmation.js";
 import { ComparisonValidator } from "./validations/comparison.js";
-import {
-  type AttributeDefinition,
-  constructor as initAttrs,
-  attribute as declareAttribute,
-} from "./attributes.js";
+import { type AttributeDefinition, constructor as initAttrs, attribute } from "./attributes.js";
 
 interface ValidationEntry {
   attribute: string;
@@ -91,9 +87,7 @@ export class Model {
 
   // -- Attributes (Phase 1000) --
 
-  static attribute(name: string, typeName: string, options?: { default?: unknown }): void {
-    declareAttribute(this, name, typeName, options);
-  }
+  static attribute = attribute;
 
   static attributeNames(): string[] {
     return Array.from(this._attributeDefinitions.keys());
@@ -104,9 +98,7 @@ export class Model {
    *
    * Mirrors: ActiveModel::AttributeMethods.alias_attribute
    */
-  static aliasAttribute(newName: string, originalName: string): void {
-    amAliasAttribute(this, newName, originalName);
-  }
+  static aliasAttribute = aliasAttribute;
 
   // -- Normalizations --
   static _normalizations: Map<
@@ -656,9 +648,7 @@ export class Model {
    *
    * Mirrors: ActiveModel::Callbacks.define_model_callbacks
    */
-  static defineModelCallbacks(...eventNames: string[]): void {
-    cbDefineModelCallbacks(this, ...eventNames);
-  }
+  static defineModelCallbacks = defineModelCallbacks;
 
   /**
    * Convert an attribute name to a human-readable form.
@@ -695,38 +685,10 @@ export class Model {
     return "activemodel";
   }
 
-  /**
-   * Define attribute methods with a prefix.
-   * For each registered attribute, creates `{prefix}{attribute}` methods.
-   *
-   * Mirrors: ActiveModel::AttributeMethods.attribute_method_prefix
-   */
-  static attributeMethodPrefix(...prefixes: string[]): void {
-    amPrefix(this, ...prefixes);
-  }
-
-  /**
-   * Define attribute methods with a suffix.
-   * For each registered attribute, creates `{attribute}{suffix}` methods.
-   *
-   * Mirrors: ActiveModel::AttributeMethods.attribute_method_suffix
-   */
-  static attributeMethodSuffix(...suffixes: string[]): void {
-    amSuffix(this, ...suffixes);
-  }
-
-  /**
-   * Define attribute methods with both prefix and suffix.
-   *
-   * Mirrors: ActiveModel::AttributeMethods.attribute_method_affix
-   */
-  static attributeMethodAffix(...affixes: Array<{ prefix: string; suffix: string }>): void {
-    amAffix(this, ...affixes);
-  }
-
-  static undefineAttributeMethods(): void {
-    amUndefineAttributeMethods(this);
-  }
+  static attributeMethodPrefix = attributeMethodPrefix;
+  static attributeMethodSuffix = attributeMethodSuffix;
+  static attributeMethodAffix = attributeMethodAffix;
+  static undefineAttributeMethods = undefineAttributeMethods;
 
   // -- Naming (Phase 1300) --
 

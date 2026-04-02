@@ -23,11 +23,11 @@ export type Callbacks = CallbacksClassMethods;
  * Mirrors: ActiveModel::Callbacks.define_model_callbacks
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function defineModelCallbacks(host: any, ...eventNames: string[]): void {
+export function defineModelCallbacks(this: any, ...eventNames: string[]): void {
   for (const event of eventNames) {
     const capitalizedEvent = event.charAt(0).toUpperCase() + event.slice(1);
 
-    Object.defineProperty(host, `before${capitalizedEvent}`, {
+    Object.defineProperty(this, `before${capitalizedEvent}`, {
       value: function (fn: CallbackFn, conditions?: CallbackConditions) {
         if (!Object.prototype.hasOwnProperty.call(this, "_callbackChain")) {
           this._callbackChain = this._callbackChain.clone();
@@ -38,7 +38,7 @@ export function defineModelCallbacks(host: any, ...eventNames: string[]): void {
       configurable: true,
     });
 
-    Object.defineProperty(host, `after${capitalizedEvent}`, {
+    Object.defineProperty(this, `after${capitalizedEvent}`, {
       value: function (fn: CallbackFn, conditions?: CallbackConditions) {
         if (!Object.prototype.hasOwnProperty.call(this, "_callbackChain")) {
           this._callbackChain = this._callbackChain.clone();
@@ -49,7 +49,7 @@ export function defineModelCallbacks(host: any, ...eventNames: string[]): void {
       configurable: true,
     });
 
-    Object.defineProperty(host, `around${capitalizedEvent}`, {
+    Object.defineProperty(this, `around${capitalizedEvent}`, {
       value: function (fn: AroundCallbackFn, conditions?: CallbackConditions) {
         if (!Object.prototype.hasOwnProperty.call(this, "_callbackChain")) {
           this._callbackChain = this._callbackChain.clone();

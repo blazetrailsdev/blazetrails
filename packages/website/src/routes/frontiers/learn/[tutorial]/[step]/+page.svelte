@@ -58,10 +58,9 @@
     selectedFile = null;
     highlights = [];
     try {
-      const SQL = await initSqlJs({ locateFile: () => wasmUrl });
-
       let rt = runtimes.get(slug);
       if (!rt) {
+        const SQL = await initSqlJs({ locateFile: () => wasmUrl });
         rt = await createRuntime(SQL);
         runtimes.set(slug, rt);
       }

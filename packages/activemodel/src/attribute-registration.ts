@@ -22,14 +22,14 @@ export type AttributeRegistration = AttributeRegistrationClassMethods;
 type AnyAttributeHost = any;
 
 export function decorateAttributes(
-  host: AnyAttributeHost,
+  this: AnyAttributeHost,
   names: string[] | null,
   decorator: (name: string, type: Type) => Type,
 ): void {
-  if (!Object.prototype.hasOwnProperty.call(host, "_attributeDefinitions")) {
-    host._attributeDefinitions = new Map(host._attributeDefinitions);
+  if (!Object.prototype.hasOwnProperty.call(this, "_attributeDefinitions")) {
+    this._attributeDefinitions = new Map(this._attributeDefinitions);
   }
-  const defs = host._attributeDefinitions as Map<string, { name: string; type: Type }>;
+  const defs = this._attributeDefinitions as Map<string, { name: string; type: Type }>;
   const targetNames = names ?? Array.from(defs.keys());
   for (const name of targetNames) {
     const def = defs.get(name);
@@ -42,16 +42,16 @@ export function decorateAttributes(
   }
 }
 
-export function attributeTypes(host: AnyAttributeHost): Record<string, Type> {
+export function attributeTypes(this: AnyAttributeHost): Record<string, Type> {
   const result: Record<string, Type> = {};
-  const defs = host._attributeDefinitions as Map<string, { name: string; type: Type }>;
+  const defs = this._attributeDefinitions as Map<string, { name: string; type: Type }>;
   for (const [name, def] of defs) {
     result[name] = def.type;
   }
   return result;
 }
 
-export function typeForAttribute(host: AnyAttributeHost, name: string): Type | null {
-  const def = (host._attributeDefinitions as Map<string, { type: Type }>).get(name);
+export function typeForAttribute(this: AnyAttributeHost, name: string): Type | null {
+  const def = (this._attributeDefinitions as Map<string, { type: Type }>).get(name);
   return def ? def.type : null;
 }

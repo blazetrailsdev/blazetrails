@@ -234,9 +234,10 @@ export class AttributeSet {
   }
 
   reverseMergeBang(target: AttributeSet): this {
+    const cache = new Map<Attribute, Attribute>();
     target.forEach((attr, name) => {
       if (!this.isKey(name)) {
-        this.attributes.set(name, attr);
+        this.attributes.set(name, this.cloneAttribute(attr, cache));
       }
     });
     return this;

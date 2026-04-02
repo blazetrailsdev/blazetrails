@@ -788,8 +788,6 @@ function extractStepLogs(rawLog: string): Map<string, string> {
       stepName = "api_compare";
     } else if (command.includes("test-compare/test-compare.ts")) {
       stepName = "test_compare";
-    } else if (command.includes("convention-compare")) {
-      stepName = "convention_compare";
     }
 
     if (!stepName) continue;
@@ -907,9 +905,21 @@ async function syncCompareStats(mode: "latest" | "refresh"): Promise<number> {
     WHERE wj.name = 'Rails API/Test Comparison'
     AND wj.conclusion = 'success'
     AND (
-      wr.head_sha NOT IN (SELECT DISTINCT merge_commit_sha FROM test_compare_stats)
-      OR wr.head_sha NOT IN (SELECT DISTINCT merge_commit_sha FROM api_compare_stats)
-      OR wr.head_sha NOT IN (SELECT DISTINCT merge_commit_sha FROM compare_logs)
+      NOT EXISTS (
+        SELECT 1 FROM test_compare_stats tcs
+        WHERE tcs.merge_commit_sha = wr.head_sha
+      )
+      OR NOT EXISTS (
+        SELECT 1 FROM api_compare_stats acs
+        WHERE acs.merge_commit_sha = wr.head_sha
+      )
+      OR EXISTS (
+        WITH expected(step_name) AS (VALUES ('api_compare'), ('test_compare'))
+        SELECT 1 FROM expected e
+        LEFT JOIN compare_logs cl
+          ON cl.merge_commit_sha = wr.head_sha AND cl.step_name = e.step_name
+        WHERE cl.step_name IS NULL
+      )
     )
     ORDER BY wr.pr_number DESC
     ${limitClause}
@@ -1102,6 +1112,14 @@ async function printSummary(mode: "latest" | "refresh") {
 
 async function main() {
   const args = process.argv.slice(2);
+  const knownFlags = ["--latest", "--refresh"];
+  const unknownFlags = args.filter((a) => a.startsWith("--") && !knownFlags.includes(a));
+  if (unknownFlags.length > 0) {
+    console.error(`Unknown flag(s): ${unknownFlags.join(", ")}`);
+    console.error("Usage: stats:sync [--latest | --refresh]");
+    process.exit(1);
+  }
+
   const mode: "latest" | "refresh" = args.includes("--refresh") ? "refresh" : "latest";
 
   if (mode === "latest") {

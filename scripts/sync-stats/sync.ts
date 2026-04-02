@@ -767,33 +767,45 @@ async function syncWorkflowRuns(mode: "latest" | "refresh"): Promise<number> {
 
 function extractStepLogs(rawLog: string): Map<string, string> {
   const steps = new Map<string, string>();
-  const stepPattern = /##\[group\]Run (.+)/g;
-  const matches: { name: string; start: number }[] = [];
 
-  let m;
-  while ((m = stepPattern.exec(rawLog)) !== null) {
-    matches.push({ name: m[1].trim(), start: m.index });
+  // Collect ALL ##[group] positions as step boundaries (not just "Run" groups).
+  // This prevents the last comparison step from including post-job cleanup noise.
+  const allGroups: number[] = [];
+  const groupPattern = /##\[group\]/g;
+  let gm;
+  while ((gm = groupPattern.exec(rawLog)) !== null) {
+    allGroups.push(gm.index);
   }
 
-  for (let i = 0; i < matches.length; i++) {
-    const command = matches[i].name;
+  // Find comparison steps by matching "##[group]Run <command>"
+  const runPattern = /##\[group\]Run (.+)/g;
+  let m;
+  while ((m = runPattern.exec(rawLog)) !== null) {
+    const command = m[1].trim();
     let stepName: string | null = null;
 
-    if (command.includes("api-compare/compare") || command.includes("api-compare/extract")) {
+    if (command.includes("api-compare/compare.ts")) {
       stepName = "api_compare";
-    } else if (
-      command.includes("test-compare/test-compare") ||
-      command.includes("test-compare/extract")
-    ) {
+    } else if (command.includes("test-compare/test-compare.ts")) {
       stepName = "test_compare";
-    } else if (command.includes("convention")) {
+    } else if (command.includes("convention-compare")) {
       stepName = "convention_compare";
     }
 
     if (!stepName) continue;
 
-    const end = i + 1 < matches.length ? matches[i + 1].start : rawLog.length;
-    const stepContent = rawLog.slice(matches[i].start, end);
+    // End boundary is the next ##[group] (any kind), not just the next "Run".
+    // For the last step, fall back to "Post job cleanup." as the boundary.
+    const stepStart = m.index;
+    const nextGroup = allGroups.find((pos) => pos > stepStart);
+    let stepEnd: number;
+    if (nextGroup) {
+      stepEnd = nextGroup;
+    } else {
+      const cleanupIdx = rawLog.indexOf("Post job cleanup.", stepStart);
+      stepEnd = cleanupIdx !== -1 ? cleanupIdx : rawLog.length;
+    }
+    const stepContent = rawLog.slice(stepStart, stepEnd);
 
     const cleaned = stepContent
       .split("\n")
@@ -976,12 +988,13 @@ async function syncCompareStats(mode: "latest" | "refresh"): Promise<number> {
         );
       }
 
-      if (testStats.size > 0 || apiStats.size > 0) {
+      if (stepLogs.size > 0 || testStats.size > 0 || apiStats.size > 0) {
         parsed++;
         const totalTests = [...testStats.values()].reduce((sum, s) => sum + s.matched, 0);
         const totalApi = [...apiStats.values()].reduce((sum, s) => sum + s.matched, 0);
+        const logSteps = [...stepLogs.keys()].join(", ");
         console.log(
-          `  PR #${prNumber}: ${testStats.size} test packages (${totalTests} matched), ${apiStats.size} api packages (${totalApi} matched)`,
+          `  PR #${prNumber}: ${testStats.size} test packages (${totalTests} matched), ${apiStats.size} api packages (${totalApi} matched), logs: [${logSteps}]`,
         );
       }
     } catch (err) {
@@ -998,7 +1011,7 @@ async function syncCompareStats(mode: "latest" | "refresh"): Promise<number> {
 // Summary
 // ---------------------------------------------------------------------------
 
-async function printSummary() {
+async function printSummary(mode: "latest" | "refresh") {
   const count = async (table: string) => {
     const rows = await Base.adapter.execute(`SELECT COUNT(*) as cnt FROM ${table}`);
     return (rows[0] as { cnt: number }).cnt;
@@ -1008,38 +1021,37 @@ async function printSummary() {
     return (rows[0] as { cnt: number }).cnt;
   };
 
-  const [
-    prCount,
-    fileCount,
-    commitCount,
-    commentCount,
-    reviewCount,
-    runCount,
-    testStatCount,
-    apiStatCount,
-  ] = await Promise.all([
+  const [prCount, runCount, testStatCount, apiStatCount, logCount] = await Promise.all([
     count("pull_requests"),
-    count("pr_files"),
-    count("pr_commits"),
-    count("pr_comments"),
-    count("pr_reviews"),
     count("workflow_runs"),
     countDistinct("test_compare_stats", "merge_commit_sha"),
     countDistinct("api_compare_stats", "merge_commit_sha"),
+    countDistinct("compare_logs", "merge_commit_sha"),
   ]);
 
   console.log("\n=== Database Summary ===");
   console.log(`  PRs: ${prCount}`);
-  console.log(`  PR files: ${fileCount}`);
-  console.log(`  PR commits: ${commitCount}`);
-  console.log(`  PR comments: ${commentCount}`);
-  console.log(`  PR reviews: ${reviewCount}`);
+
+  if (mode === "refresh") {
+    const [fileCount, commitCount, commentCount, reviewCount] = await Promise.all([
+      count("pr_files"),
+      count("pr_commits"),
+      count("pr_comments"),
+      count("pr_reviews"),
+    ]);
+    console.log(`  PR files: ${fileCount}`);
+    console.log(`  PR commits: ${commitCount}`);
+    console.log(`  PR comments: ${commentCount}`);
+    console.log(`  PR reviews: ${reviewCount}`);
+  }
+
   console.log(`  Workflow runs: ${runCount}`);
   console.log(`  Commits with test:compare stats: ${testStatCount}`);
   console.log(`  Commits with api:compare stats: ${apiStatCount}`);
+  console.log(`  Commits with compare logs: ${logCount}`);
   console.log(`  Database: ${DB_PATH}`);
 
-  const latest = await TestCompareStat.findBySql(`
+  const latestTestStats = await TestCompareStat.findBySql(`
     SELECT package, matched, total, percent, skipped
     FROM test_compare_stats
     WHERE merge_commit_sha = (
@@ -1048,9 +1060,9 @@ async function printSummary() {
     ORDER BY package
   `);
 
-  if (latest.length > 0) {
+  if (latestTestStats.length > 0) {
     console.log("\n  Latest test:compare:");
-    for (const row of latest) {
+    for (const row of latestTestStats) {
       const pkg = row.readAttribute("package");
       const matched = row.readAttribute("matched");
       const total = row.readAttribute("total");
@@ -1058,6 +1070,28 @@ async function printSummary() {
       const skipped = row.readAttribute("skipped") as number;
       const skipStr = skipped > 0 ? ` (${skipped} skipped)` : "";
       console.log(`    ${pkg}: ${matched}/${total} (${percent}%)${skipStr}`);
+    }
+  }
+
+  const latestApiStats = await ApiCompareStat.findBySql(`
+    SELECT package, matched, total, percent, missing
+    FROM api_compare_stats
+    WHERE merge_commit_sha = (
+      SELECT merge_commit_sha FROM api_compare_stats ORDER BY pr_number DESC LIMIT 1
+    )
+    ORDER BY package
+  `);
+
+  if (latestApiStats.length > 0) {
+    console.log("\n  Latest api:compare:");
+    for (const row of latestApiStats) {
+      const pkg = row.readAttribute("package");
+      const matched = row.readAttribute("matched");
+      const total = row.readAttribute("total");
+      const percent = row.readAttribute("percent");
+      const missing = row.readAttribute("missing") as number;
+      const missStr = missing > 0 ? ` (${missing} missing)` : "";
+      console.log(`    ${pkg}: ${matched}/${total} (${percent}%)${missStr}`);
     }
   }
 }
@@ -1109,7 +1143,7 @@ async function main() {
       logs_parsed: logsParsed,
     });
 
-    await printSummary();
+    await printSummary(mode);
   } finally {
     adapter.close();
   }

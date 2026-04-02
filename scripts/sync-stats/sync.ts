@@ -155,6 +155,16 @@ class ApiCompareStat extends Base {
   }
 }
 
+class CompareLog extends Base {
+  static {
+    this.tableName = "compare_logs";
+    this.attribute("merge_commit_sha", "string");
+    this.attribute("pr_number", "integer");
+    this.attribute("step_name", "string");
+    this.attribute("log_output", "string");
+  }
+}
+
 class SyncLog extends Base {
   static {
     this.tableName = "sync_log";
@@ -180,7 +190,20 @@ async function tableExists(adapter: SQLite3Adapter, name: string): Promise<boole
 async function migrateDb(adapter: SQLite3Adapter) {
   const ctx = new MigrationContext(adapter);
 
-  if (await tableExists(adapter, "sync_log")) return;
+  const hasExistingSchema = await tableExists(adapter, "sync_log");
+
+  if (hasExistingSchema) {
+    if (!(await tableExists(adapter, "compare_logs"))) {
+      await ctx.createTable("compare_logs", {}, (t) => {
+        t.string("merge_commit_sha");
+        t.integer("pr_number");
+        t.string("step_name");
+        t.text("log_output");
+        t.index(["merge_commit_sha", "step_name"], { unique: true });
+      });
+    }
+    return;
+  }
 
   await adapter.beginTransaction();
   try {
@@ -303,6 +326,14 @@ async function migrateDb(adapter: SQLite3Adapter) {
       t.index(["merge_commit_sha", "package"], { unique: true });
     });
 
+    await ctx.createTable("compare_logs", {}, (t) => {
+      t.string("merge_commit_sha");
+      t.integer("pr_number");
+      t.string("step_name");
+      t.text("log_output");
+      t.index(["merge_commit_sha", "step_name"], { unique: true });
+    });
+
     await ctx.createTable("sync_log", {}, (t) => {
       t.string("synced_at");
       t.integer("prs_synced", { default: 0 });
@@ -405,7 +436,7 @@ interface GhWorkflowJob {
 // Sync functions
 // ---------------------------------------------------------------------------
 
-async function syncPullRequests(): Promise<number> {
+async function syncPullRequests(mode: "latest" | "refresh"): Promise<number> {
   const rows = await PullRequest.findBySql("SELECT MAX(number) as number FROM pull_requests");
   const lastSynced = (rows[0]?.readAttribute("number") as number) ?? 0;
   console.log(`Last synced PR: #${lastSynced}`);
@@ -428,8 +459,9 @@ async function syncPullRequests(): Promise<number> {
     "reviewDecision",
   ].join(",");
 
+  const limit = mode === "latest" ? 10 : 1000;
   const allPrs = ghJson<GhPrData[]>(
-    `pr list --repo ${REPO} --state merged --limit 1000 --json ${fields} --jq '[.[] | select(.number > ${lastSynced})]'`,
+    `pr list --repo ${REPO} --state merged --limit ${limit} --json ${fields} --jq '[.[] | select(.number > ${lastSynced})]'`,
   );
 
   console.log(`Found ${allPrs.length} new merged PRs to sync`);
@@ -626,7 +658,8 @@ async function syncPrComments() {
   }
 }
 
-async function syncWorkflowRuns(): Promise<number> {
+async function syncWorkflowRuns(mode: "latest" | "refresh"): Promise<number> {
+  const limitClause = mode === "latest" ? "LIMIT 10" : "";
   const missingRuns = await PullRequest.findBySql(`
     SELECT DISTINCT merge_commit_sha, number FROM pull_requests
     WHERE merge_commit_sha IS NOT NULL
@@ -639,7 +672,8 @@ async function syncWorkflowRuns(): Promise<number> {
         GROUP BY wr.id HAVING COUNT(wj.id) = 0
       )
     )
-    ORDER BY number
+    ORDER BY number DESC
+    ${limitClause}
   `);
 
   if (missingRuns.length === 0) {
@@ -731,6 +765,48 @@ async function syncWorkflowRuns(): Promise<number> {
 // CI log parsing
 // ---------------------------------------------------------------------------
 
+function extractStepLogs(rawLog: string): Map<string, string> {
+  const steps = new Map<string, string>();
+  const stepPattern = /##\[group\]Run (.+)/g;
+  const matches: { name: string; start: number }[] = [];
+
+  let m;
+  while ((m = stepPattern.exec(rawLog)) !== null) {
+    matches.push({ name: m[1].trim(), start: m.index });
+  }
+
+  for (let i = 0; i < matches.length; i++) {
+    const command = matches[i].name;
+    let stepName: string | null = null;
+
+    if (command.includes("api-compare/compare") || command.includes("api-compare/extract")) {
+      stepName = "api_compare";
+    } else if (
+      command.includes("test-compare/test-compare") ||
+      command.includes("test-compare/extract")
+    ) {
+      stepName = "test_compare";
+    } else if (command.includes("convention")) {
+      stepName = "convention_compare";
+    }
+
+    if (!stepName) continue;
+
+    const end = i + 1 < matches.length ? matches[i + 1].start : rawLog.length;
+    const stepContent = rawLog.slice(matches[i].start, end);
+
+    const cleaned = stepContent
+      .split("\n")
+      .map((line) => line.replace(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z\s?/, ""))
+      .join("\n")
+      .trim();
+
+    steps.set(stepName, cleaned);
+  }
+
+  return steps;
+}
+
 function parseTestCompareFromLogs(logs: string) {
   const results = new Map<
     string,
@@ -810,7 +886,8 @@ function parseApiCompareFromLogs(logs: string) {
   return results;
 }
 
-async function syncCompareStats(): Promise<number> {
+async function syncCompareStats(mode: "latest" | "refresh"): Promise<number> {
+  const limitClause = mode === "latest" ? "LIMIT 10" : "";
   const runsToProcess = await WorkflowRun.findBySql(`
     SELECT DISTINCT wr.id, wr.head_sha, wr.pr_number
     FROM workflow_runs wr
@@ -820,8 +897,10 @@ async function syncCompareStats(): Promise<number> {
     AND (
       wr.head_sha NOT IN (SELECT DISTINCT merge_commit_sha FROM test_compare_stats)
       OR wr.head_sha NOT IN (SELECT DISTINCT merge_commit_sha FROM api_compare_stats)
+      OR wr.head_sha NOT IN (SELECT DISTINCT merge_commit_sha FROM compare_logs)
     )
-    ORDER BY wr.pr_number
+    ORDER BY wr.pr_number DESC
+    ${limitClause}
   `);
 
   if (runsToProcess.length === 0) {
@@ -846,6 +925,20 @@ async function syncCompareStats(): Promise<number> {
 
     try {
       const logs = gh(`api repos/${REPO}/actions/jobs/${jobId}/logs`);
+
+      // Store raw step logs
+      const stepLogs = extractStepLogs(logs);
+      if (stepLogs.size > 0) {
+        await CompareLog.upsertAll(
+          [...stepLogs.entries()].map(([stepName, output]) => ({
+            merge_commit_sha: headSha,
+            pr_number: prNumber,
+            step_name: stepName,
+            log_output: output,
+          })),
+          { uniqueBy: ["merge_commit_sha", "step_name"] },
+        );
+      }
 
       const testStats = parseTestCompareFromLogs(logs);
       if (testStats.size > 0) {
@@ -974,6 +1067,15 @@ async function printSummary() {
 // ---------------------------------------------------------------------------
 
 async function main() {
+  const args = process.argv.slice(2);
+  const mode: "latest" | "refresh" = args.includes("--refresh") ? "refresh" : "latest";
+
+  if (mode === "latest") {
+    console.log("Running in latest mode (default). Use --refresh for full sync.\n");
+  } else {
+    console.log("Running full refresh sync.\n");
+  }
+
   const adapter = new SQLite3Adapter(DB_PATH);
   Base.adapter = adapter;
 
@@ -981,22 +1083,24 @@ async function main() {
     await migrateDb(adapter);
 
     console.log("=== Syncing PR data ===");
-    const prsSynced = await syncPullRequests();
+    const prsSynced = await syncPullRequests(mode);
 
-    console.log("\n=== Syncing PR files ===");
-    await syncPrFiles();
+    if (mode === "refresh") {
+      console.log("\n=== Syncing PR files ===");
+      await syncPrFiles();
 
-    console.log("\n=== Syncing PR commits ===");
-    await syncPrCommits();
+      console.log("\n=== Syncing PR commits ===");
+      await syncPrCommits();
 
-    console.log("\n=== Syncing PR comments & reviews ===");
-    await syncPrComments();
+      console.log("\n=== Syncing PR comments & reviews ===");
+      await syncPrComments();
+    }
 
     console.log("\n=== Syncing workflow runs ===");
-    const runsSynced = await syncWorkflowRuns();
+    const runsSynced = await syncWorkflowRuns(mode);
 
     console.log("\n=== Syncing compare stats from CI logs ===");
-    const logsParsed = await syncCompareStats();
+    const logsParsed = await syncCompareStats(mode);
 
     await SyncLog.create({
       synced_at: new Date().toISOString(),

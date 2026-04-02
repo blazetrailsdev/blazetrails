@@ -66,8 +66,6 @@ export class VfsAppGenerator extends AppGenerator {
     try {
       return await super.run(name, {
         ...options,
-        skipGit: true,
-        skipInstall: true,
         skipDocker: true,
       });
     } finally {

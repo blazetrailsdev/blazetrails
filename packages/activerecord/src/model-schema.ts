@@ -24,7 +24,7 @@ import { detectAdapterName } from "./adapter-name.js";
  * Mirrors: ActiveRecord::ModelSchema::ClassMethods#table_name
  */
 export function resolveTableName(modelClass: typeof Base): string {
-  if ((modelClass as any)._tableName) return (modelClass as any)._tableName;
+  if ((modelClass as any)._tableName != null) return (modelClass as any)._tableName;
   if (isStiSubclass(modelClass)) {
     return resolveTableName(getStiBase(modelClass));
   }

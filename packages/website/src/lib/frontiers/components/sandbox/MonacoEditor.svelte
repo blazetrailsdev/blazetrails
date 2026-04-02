@@ -120,6 +120,7 @@
       editor.revealLineInCenter(1);
       currentPath = file.path;
       decorationIds = editor.deltaDecorations(decorationIds, []);
+      applyHighlights();
     } else {
       const current = editor.getValue();
       if (current !== file.content) {
@@ -145,7 +146,8 @@
   let suppressChangeEvent = false;
 
   onMount(async () => {
-    // Configure workers for language services
+    // Configure workers only if not already set
+    if (!(globalThis as any).MonacoEnvironment) {
     (globalThis as any).MonacoEnvironment = {
       getWorker(_workerId: string, label: string) {
         switch (label) {
@@ -182,6 +184,7 @@
         }
       },
     };
+    }
 
     monaco = await import("monaco-editor");
     if (destroyed) return;

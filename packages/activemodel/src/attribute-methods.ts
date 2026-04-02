@@ -98,7 +98,14 @@ export interface AttributeMethodHost {
   prototype: AnyRecord;
 }
 
+function ensureOwnPatterns(host: AttributeMethodHost): void {
+  if (!Object.prototype.hasOwnProperty.call(host, "_attributeMethodPatterns")) {
+    host._attributeMethodPatterns = [...host._attributeMethodPatterns];
+  }
+}
+
 export function attributeMethodPrefix(host: AttributeMethodHost, ...prefixes: string[]): void {
+  ensureOwnPatterns(host);
   for (const prefix of prefixes) {
     host._attributeMethodPatterns.push(new AttributeMethodPattern(prefix, ""));
   }
@@ -107,6 +114,7 @@ export function attributeMethodPrefix(host: AttributeMethodHost, ...prefixes: st
 }
 
 export function attributeMethodSuffix(host: AttributeMethodHost, ...suffixes: string[]): void {
+  ensureOwnPatterns(host);
   for (const suffix of suffixes) {
     host._attributeMethodPatterns.push(new AttributeMethodPattern("", suffix));
   }
@@ -118,6 +126,7 @@ export function attributeMethodAffix(
   host: AttributeMethodHost,
   ...affixes: Array<{ prefix: string; suffix: string }>
 ): void {
+  ensureOwnPatterns(host);
   for (const { prefix, suffix } of affixes) {
     host._attributeMethodPatterns.push(new AttributeMethodPattern(prefix, suffix));
   }
@@ -126,7 +135,10 @@ export function attributeMethodAffix(
 }
 
 export function aliasAttribute(host: AttributeMethodHost, newName: string, oldName: string): void {
-  host._attributeAliases = { ...host._attributeAliases, [newName]: oldName };
+  if (!Object.prototype.hasOwnProperty.call(host, "_attributeAliases")) {
+    host._attributeAliases = { ...host._attributeAliases };
+  }
+  host._attributeAliases[newName] = oldName;
   const aliases = aliasesByAttributeName(host);
   if (!aliases.has(oldName)) aliases.set(oldName, []);
   aliases.get(oldName)!.push(newName);
@@ -171,13 +183,16 @@ export function aliasAttributeMethodDefinition(
   oldName: string,
 ): void {
   const methodName = pattern.methodName(newName);
+  const targetName = pattern.methodName(oldName);
   Object.defineProperty(host.prototype, methodName, {
-    get(this: AnyRecord) {
+    value: function (this: AnyRecord, ...args: unknown[]) {
+      const target = this[targetName];
+      if (typeof target === "function") {
+        return target.apply(this, args);
+      }
       return this.readAttribute(oldName);
     },
-    set(this: AnyRecord, value: unknown) {
-      this.writeAttribute(oldName, value);
-    },
+    writable: true,
     configurable: true,
   });
 }
@@ -236,8 +251,8 @@ export function undefineAttributeMethods(host: AttributeMethodHost): void {
 }
 
 export function aliasesByAttributeName(host: AttributeMethodHost): Map<string, string[]> {
-  if (!host._aliasesByAttributeName) {
-    host._aliasesByAttributeName = new Map();
+  if (!Object.prototype.hasOwnProperty.call(host, "_aliasesByAttributeName")) {
+    host._aliasesByAttributeName = new Map(host._aliasesByAttributeName ?? []);
   }
   return host._aliasesByAttributeName;
 }

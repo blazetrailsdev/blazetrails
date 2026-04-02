@@ -151,38 +151,3 @@ export class ModelName {
  * ModelName remains the primary export for backwards compatibility.
  */
 export class Name extends ModelName {}
-
-/**
- * Mixin hook — sets up model_name on the class and delegates from instance.
- *
- * Mirrors: ActiveModel::Naming.extended(base)
- *
- * In Rails, this silences redefinition of model_name and delegates
- * instance.model_name to the class-level model_name getter.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function extended(base: any): void {
-  // Define class-level model_name getter if not already present
-  const descriptor = Object.getOwnPropertyDescriptor(base, "modelName");
-  if (!descriptor) {
-    Object.defineProperty(base, "modelName", {
-      get() {
-        if (!this._modelName || this._modelName.name !== this.name) {
-          this._modelName = new ModelName(this.name, { klass: this });
-        }
-        return this._modelName;
-      },
-      configurable: true,
-    });
-  }
-
-  // Delegate instance.modelName to the class — matches Rails: delegate :model_name, to: :class
-  if (!Object.getOwnPropertyDescriptor(base.prototype, "modelName")) {
-    Object.defineProperty(base.prototype, "modelName", {
-      get() {
-        return this.constructor.modelName;
-      },
-      configurable: true,
-    });
-  }
-}

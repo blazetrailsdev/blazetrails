@@ -33,31 +33,6 @@ export namespace SerializeCastValue {
   }
 }
 
-/**
- * Mixin hook — includes DefaultImplementation if not already defined.
- *
- * Mirrors: ActiveModel::Type::SerializeCastValue.included(klass)
- *
- * In Rails, when a type class includes SerializeCastValue, this hook
- * adds a default serialize_cast_value(value) { value } method if the
- * class hasn't defined one yet, and adds the class-level
- * serialize_cast_value_compatible? check.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function included(klass: any): void {
-  if (typeof klass.prototype.serializeCastValue !== "function") {
-    klass.prototype.serializeCastValue = function (value: unknown): unknown {
-      return value;
-    };
-  }
-
-  if (typeof klass.serializeCastValueCompatible !== "function") {
-    klass.serializeCastValueCompatible = function (): boolean {
-      return typeof this.prototype?.serializeCastValue === "function";
-    };
-  }
-}
-
 export function itselfIfSerializeCastValueCompatible(type: {
   serialize(value: unknown): unknown;
   serializeCastValue?(value: unknown): unknown;

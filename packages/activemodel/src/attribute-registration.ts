@@ -26,6 +26,9 @@ export function decorateAttributes(
   names: string[] | null,
   decorator: (name: string, type: Type) => Type,
 ): void {
+  if (!Object.prototype.hasOwnProperty.call(host, "_attributeDefinitions")) {
+    host._attributeDefinitions = new Map(host._attributeDefinitions);
+  }
   const defs = host._attributeDefinitions as Map<string, { name: string; type: Type }>;
   const targetNames = names ?? Array.from(defs.keys());
   for (const name of targetNames) {

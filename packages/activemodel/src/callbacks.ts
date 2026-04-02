@@ -17,28 +17,6 @@ export interface CallbacksClassMethods {
 export type Callbacks = CallbacksClassMethods;
 
 /**
- * Mixin hook — sets up the callback infrastructure on a class.
- *
- * Mirrors: ActiveModel::Callbacks.extended(base)
- *
- * In Rails, this includes ActiveSupport::Callbacks and makes
- * define_model_callbacks available. Here, it ensures the class
- * has its own CallbackChain and wires up defineModelCallbacks.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function extended(base: any): void {
-  if (!Object.prototype.hasOwnProperty.call(base, "_callbackChain")) {
-    base._callbackChain = base._callbackChain ? base._callbackChain.clone() : new CallbackChain();
-  }
-
-  if (typeof base.defineModelCallbacks !== "function") {
-    base.defineModelCallbacks = function (...eventNames: string[]) {
-      defineModelCallbacks(this, ...eventNames);
-    };
-  }
-}
-
-/**
  * Core implementation of define_model_callbacks.
  * Creates beforeX(), afterX(), and aroundX() class methods for each event name.
  *

@@ -48,33 +48,6 @@ export function attributesToHash(attrs: Map<string, unknown>): Record<string, un
 }
 
 // ---------------------------------------------------------------------------
-// AttributesBase — standalone implementation of the Attributes module
-// ---------------------------------------------------------------------------
-
-/**
- * Standalone implementation of ActiveModel::Attributes instance methods.
- *
- * Mirrors: ActiveModel::Attributes (initialize + attributes)
- *
- * Can be used directly (`new AttributesBase({...})`) or as a reference
- * implementation. Model uses the same shared functions for its more
- * sophisticated AttributeSet-backed initialization.
- */
-export class AttributesBase {
-  _attributes: Map<string, unknown> = new Map();
-
-  constructor(initial: Record<string, unknown> = {}) {
-    for (const [k, v] of Object.entries(initial)) {
-      this._attributes.set(k, v);
-    }
-  }
-
-  get attributes(): Record<string, unknown> {
-    return attributesToHash(this._attributes);
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Attributes() mixin — for composing into class hierarchies
 // ---------------------------------------------------------------------------
 

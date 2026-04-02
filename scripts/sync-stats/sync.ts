@@ -1171,7 +1171,7 @@ async function main() {
       logs_parsed: logsParsed,
     });
 
-    await printSummary(fetchMode);
+    await printSummary(mode === "refresh" ? "refresh" : "latest");
   } finally {
     adapter.close();
   }

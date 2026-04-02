@@ -31,7 +31,7 @@ import {
   DangerousAttributeError,
   AttributeAssignmentError,
 } from "./errors.js";
-import { encrypts as _encrypts } from "./encryption.js";
+import { encrypts as _encrypts, applyPendingEncryptions } from "./encryption.js";
 import * as CounterCache from "./counter-cache.js";
 import * as ReadonlyAttributes from "./readonly-attributes.js";
 import * as Timestamp from "./timestamp.js";
@@ -286,8 +286,10 @@ export class Base extends Model {
   }
 
   /**
-   * Override attribute() to prevent generating an accessor for "id",
-   * since Base already defines id getter/setter with CPK support.
+   * Override attribute() to prevent generating an accessor for "id"
+   * (Base defines id getter/setter with CPK support) and to apply
+   * any pending encryption decorations (matching Rails' deferred
+   * PendingDecorator pattern).
    */
   static attribute(name: string, typeName: string, options?: { default?: unknown }): void {
     super.attribute(name, typeName, options);
@@ -296,6 +298,7 @@ export class Base extends Model {
     if (name === "id" && Object.prototype.hasOwnProperty.call(this.prototype, "id")) {
       delete (this.prototype as any).id;
     }
+    applyPendingEncryptions(this);
   }
 
   /**

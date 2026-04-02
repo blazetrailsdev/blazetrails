@@ -1,11 +1,16 @@
 /**
  * ActiveRecord::Encryption — declares encrypted attributes.
  *
- * When an attribute is declared with `encrypts()`, its type is wrapped
- * with EncryptedAttributeType which handles encrypt on serialize and
- * decrypt on deserialize — matching Rails' type-system approach.
- *
  * Mirrors: ActiveRecord::Encryption
+ *
+ * In Rails, encrypts() uses decorate_attributes which defers type wrapping
+ * via PendingDecorator — the actual wrapping happens when _default_attributes
+ * is first resolved. This means encrypts() can be called before or after
+ * attribute(), and order doesn't matter.
+ *
+ * We mirror this with _pendingEncryptions: encrypts() records the request,
+ * and applyPendingEncryptions() is called during construction to wrap any
+ * attributes that haven't been wrapped yet.
  */
 
 import { EncryptedAttributeType } from "./encrypted-attribute-type.js";
@@ -15,11 +20,6 @@ export interface Encryptor {
   decrypt(ciphertext: string): string;
 }
 
-/**
- * Default encryptor — base64 round-trip.
- * NOT secure — intended as a placeholder.
- * Users should supply a real Encryptor.
- */
 const ENCRYPTED_PREFIX = "AR_ENC:";
 
 export const defaultEncryptor: Encryptor = {
@@ -34,15 +34,19 @@ export const defaultEncryptor: Encryptor = {
   },
 };
 
+interface PendingEncryption {
+  name: string;
+  encryptor: Encryptor;
+}
+
 /**
  * Declare one or more attributes as encrypted on a model class.
  *
- * Wraps each named attribute's type with EncryptedAttributeType so that
- * values are encrypted on serialize (save) and decrypted on deserialize (load).
+ * Mirrors: ActiveRecord::Encryption::EncryptableRecord#encrypts
  *
- * Usage (inside a static block on a Base subclass):
- *   encrypts("ssn", "email");
- *   encrypts("secret", { encryptor: myEncryptor });
+ * Like Rails' decorate_attributes, this defers the actual type wrapping.
+ * Pending encryptions are applied when the attribute definitions are
+ * first used (via applyPendingEncryptions).
  */
 export function encrypts(klass: any, ...args: Array<string | { encryptor?: Encryptor }>): void {
   let enc: Encryptor = defaultEncryptor;
@@ -56,22 +60,42 @@ export function encrypts(klass: any, ...args: Array<string | { encryptor?: Encry
     }
   }
 
-  // Ensure subclass has own definitions before mutating
+  if (!Object.prototype.hasOwnProperty.call(klass, "_pendingEncryptions")) {
+    klass._pendingEncryptions = [...(klass._pendingEncryptions ?? [])];
+  }
+
+  for (const name of names) {
+    klass._pendingEncryptions.push({ name, encryptor: enc });
+  }
+
+  // If definitions are already available, apply immediately
+  // (handles the common case where attribute() was called first)
+  if (klass._attributeDefinitions?.size > 0) {
+    applyPendingEncryptions(klass);
+  }
+}
+
+/**
+ * Apply any pending encryption decorations to the class's attribute definitions.
+ *
+ * Mirrors: Rails' PendingDecorator.apply_to — wraps the attribute type
+ * with EncryptedAttributeType if not already wrapped.
+ */
+export function applyPendingEncryptions(klass: any): void {
+  const pending: PendingEncryption[] | undefined = klass._pendingEncryptions;
+  if (!pending || pending.length === 0) return;
+
   if (!Object.prototype.hasOwnProperty.call(klass, "_attributeDefinitions")) {
     klass._attributeDefinitions = new Map(klass._attributeDefinitions);
   }
 
-  for (const name of names) {
+  for (const { name, encryptor } of pending) {
     const def = klass._attributeDefinitions.get(name);
-    if (!def) {
-      const klassName = typeof klass?.name === "string" ? klass.name : "anonymous class";
-      throw new Error(`encrypts(): attribute "${name}" is not defined on ${klassName}`);
-    }
-    // Skip if already wrapped with encryption (prevent double-wrapping on inheritance)
-    if (def.type instanceof EncryptedAttributeType) continue;
+    if (!def) continue; // attribute not defined yet — will be applied later
+    if (def.type instanceof EncryptedAttributeType) continue; // already wrapped
     klass._attributeDefinitions.set(name, {
       ...def,
-      type: new EncryptedAttributeType(def.type, enc),
+      type: new EncryptedAttributeType(def.type, encryptor),
     });
   }
 }
@@ -80,8 +104,11 @@ export function encrypts(klass: any, ...args: Array<string | { encryptor?: Encry
  * Check if an attribute is encrypted on a class.
  */
 export function isEncryptedAttribute(klass: any, attr: string): boolean {
+  // Check pending encryptions first (may not be applied yet)
   let current = klass;
   while (current) {
+    const pending: PendingEncryption[] | undefined = current._pendingEncryptions;
+    if (pending?.some((p) => p.name === attr)) return true;
     const defs = current._attributeDefinitions;
     if (defs) {
       const def = defs.get(attr);

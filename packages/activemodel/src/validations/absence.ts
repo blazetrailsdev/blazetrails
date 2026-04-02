@@ -36,8 +36,33 @@ export class AbsenceValidator implements Validator {
 
   validate(record: AnyRecord, attribute: string, value: unknown, errors: Errors): void {
     if (!shouldValidate(record, this.options)) return;
+    this.validateEach(record, attribute, value, errors);
+  }
+
+  validateEach(record: AnyRecord, attribute: string, value: unknown, errors?: Errors): void {
+    const errs = errors ?? record.errors;
     if (!isBlank(value)) {
-      errors.add(attribute, "present", { message: this.options.message });
+      errs.add(attribute, "present", { message: this.options.message });
     }
   }
+}
+
+export function validatesComparisonOf(
+  ...attributes: [...string[], Record<string, unknown>] | string[]
+): { attribute: string; rules: Record<string, unknown> }[] {
+  const opts =
+    typeof attributes[attributes.length - 1] === "object"
+      ? (attributes.pop() as Record<string, unknown>)
+      : {};
+  return (attributes as string[]).map((attr) => ({ attribute: attr, rules: { comparison: opts } }));
+}
+
+export function validatesSizeOf(
+  ...attributes: [...string[], Record<string, unknown>] | string[]
+): { attribute: string; rules: Record<string, unknown> }[] {
+  const opts =
+    typeof attributes[attributes.length - 1] === "object"
+      ? (attributes.pop() as Record<string, unknown>)
+      : {};
+  return (attributes as string[]).map((attr) => ({ attribute: attr, rules: { length: opts } }));
 }

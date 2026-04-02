@@ -16,3 +16,5 @@ export interface TranslationClassMethods {
 }
 
 export type Translation = TranslationClassMethods;
+
+export const raiseOnMissingTranslations = false;

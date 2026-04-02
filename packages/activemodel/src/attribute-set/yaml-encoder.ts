@@ -7,6 +7,12 @@ import { AttributeSet } from "../attribute-set.js";
  * Mirrors: ActiveModel::AttributeSet::YAMLEncoder
  */
 export class YAMLEncoder {
+  private defaultTypes: Record<string, unknown>;
+
+  constructor(defaultTypes: Record<string, unknown> = {}) {
+    this.defaultTypes = defaultTypes;
+  }
+
   encode(set: AttributeSet): string {
     return YAML.stringify(set.toHash());
   }

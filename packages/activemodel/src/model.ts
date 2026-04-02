@@ -364,6 +364,19 @@ export class Model {
     }
   }
 
+  static validatesBang(attribute: string, rules: Record<string, unknown>): void {
+    this.validates(attribute, { ...rules, strict: true });
+  }
+
+  static clearValidatorsBang(): void {
+    this._validations = [];
+    this._customValidations = [];
+  }
+
+  static isAttributeMethod(attribute: string): boolean {
+    return this._attributeDefinitions.has(attribute);
+  }
+
   static validate(
     methodOrFn: string | ((record: AnyRecord) => void),
     options: ConditionalOptions = {},
@@ -998,7 +1011,6 @@ export class Model {
       if (!shouldValidate(this, { if: entry.if, unless: entry.unless })) continue;
       const value = this.readAttribute(entry.attribute);
       if (entry.strict) {
-        // Strict validation: collect errors into a temporary Errors, then throw
         const tempErrors = new Errors(this);
         entry.validator.validate(this, entry.attribute, value, tempErrors);
         if (tempErrors.any) {

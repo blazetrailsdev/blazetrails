@@ -32,6 +32,10 @@ export namespace SerializeCastValue {
   export interface DefaultImplementation {
     serializeCastValue(value: unknown): unknown;
   }
+
+  export function serializeCastValue(value: unknown): unknown {
+    return value;
+  }
 }
 
 export function itselfIfSerializeCastValueCompatible(type: {

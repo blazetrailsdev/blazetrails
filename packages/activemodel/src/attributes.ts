@@ -69,7 +69,10 @@ export function attribute(
 export function buildDefaultAttributes(defs: Map<string, AttributeDefinition>): AttributeSet {
   const attrMap = new Map<string, Attribute>();
   for (const [name, def] of defs) {
-    const defVal = typeof def.defaultValue === "function" ? def.defaultValue() : def.defaultValue;
+    let defVal = typeof def.defaultValue === "function" ? def.defaultValue() : def.defaultValue;
+    if (defVal !== null && typeof defVal === "object") {
+      defVal = structuredClone(defVal);
+    }
     attrMap.set(name, Attribute.withCastValue(name, defVal ?? null, def.type));
   }
   return new AttributeSet(attrMap);
@@ -81,7 +84,8 @@ export function buildDefaultAttributes(defs: Map<string, AttributeDefinition>): 
  * Mirrors: ActiveModel::Attributes#initialize
  *
  * In Rails, Attributes#initialize deep-dups a cached class-level default.
- * Here we build a fresh AttributeSet per instance, so no dup is needed.
+ * Here we build a fresh AttributeSet per instance (with object defaults
+ * cloned via structuredClone), so no additional dup is needed.
  */
 export function constructor(defs: Map<string, AttributeDefinition>): AttributeSet {
   return buildDefaultAttributes(defs);

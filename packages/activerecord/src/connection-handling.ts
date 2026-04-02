@@ -1,6 +1,6 @@
 import type { Base } from "./base.js";
 import type { DatabaseAdapter } from "./adapter.js";
-import { getFsAsync, getPathAsync } from "@blazetrails/activesupport";
+import { getFs, getPath } from "@blazetrails/activesupport";
 import { DatabaseConfigurations } from "./database-configurations.js";
 import { HashConfig } from "./database-configurations/hash-config.js";
 import {
@@ -177,8 +177,8 @@ async function loadConfigFile(modelClass: typeof Base): Promise<Record<string, a
     return loadJsonConfig((modelClass as any)._configPath);
   }
 
-  const pathAdapter = await getPathAsync();
-  const fsAdapter = await getFsAsync();
+  const pathAdapter = getPath();
+  const fsAdapter = getFs();
   const cwd = process.cwd();
   const tsCandidates = [
     pathAdapter.resolve(cwd, "config", "database.ts"),
@@ -190,8 +190,7 @@ async function loadConfigFile(modelClass: typeof Base): Promise<Record<string, a
   for (const candidate of tsCandidates) {
     if (fsAdapter.existsSync(candidate)) {
       try {
-        const { pathToFileURL } = await import("node:url");
-        const mod = await import(pathToFileURL(candidate).href);
+        const mod = await import(candidate);
         return mod.default ?? mod;
       } catch (error: unknown) {
         throw new Error(
@@ -205,10 +204,9 @@ async function loadConfigFile(modelClass: typeof Base): Promise<Record<string, a
   return loadJsonConfig(pathAdapter.resolve(cwd, "config", "database.json"));
 }
 
-async function loadJsonConfig(configPath: string): Promise<Record<string, any>> {
+function loadJsonConfig(configPath: string): Record<string, any> {
   try {
-    const fsAdapter = await getFsAsync();
-    return JSON.parse(fsAdapter.readFileSync(configPath, "utf-8"));
+    return JSON.parse(getFs().readFileSync(configPath, "utf-8"));
   } catch (error: unknown) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return {};

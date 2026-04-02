@@ -1,8 +1,37 @@
-export { setFsAdapter, getFs, getPath } from "./fs-adapter.js";
+export { registerFsAdapter, getFs, getPath, fsAdapterConfig } from "./fs-adapter.js";
 export type { FsAdapter, PathAdapter } from "./fs-adapter.js";
 
-export { setCryptoAdapter, getCrypto, getCryptoAsync } from "./crypto-adapter.js";
+export { registerCryptoAdapter, getCrypto, cryptoAdapterConfig } from "./crypto-adapter.js";
 export type { CryptoAdapter, HashAdapter, HmacAdapter } from "./crypto-adapter.js";
+
+import { fsAdapterConfig } from "./fs-adapter.js";
+import { cryptoAdapterConfig } from "./crypto-adapter.js";
+
+/**
+ * ActiveSupport configuration — mirrors Rails' ActiveSupport module.
+ *
+ *   ActiveSupport.fsAdapter = "node";       // default in Node
+ *   ActiveSupport.cryptoAdapter = "node";   // default in Node
+ *
+ *   // Browser:
+ *   registerFsAdapter("vfs", vfsImpl, pathImpl);
+ *   ActiveSupport.fsAdapter = "vfs";
+ */
+export const ActiveSupport = {
+  get fsAdapter(): string | null {
+    return fsAdapterConfig.adapter;
+  },
+  set fsAdapter(name: string | null) {
+    fsAdapterConfig.adapter = name;
+  },
+
+  get cryptoAdapter(): string | null {
+    return cryptoAdapterConfig.adapter;
+  },
+  set cryptoAdapter(name: string | null) {
+    cryptoAdapterConfig.adapter = name;
+  },
+};
 
 export {
   pluralize,

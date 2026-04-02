@@ -1,10 +1,10 @@
 /**
- * Filesystem adapter — abstracts node:fs and node:path so packages
- * can work in both Node and browser environments.
+ * Filesystem adapter — mirrors the Rails adapter pattern.
  *
- * Default: Node fs/path (loaded lazily so the import doesn't break
- * browser bundles). Call `setFsAdapter()` to provide a browser-safe
- * implementation (e.g., VirtualFS-backed).
+ * Register adapters by name, configure via ActiveSupport.fsAdapter:
+ *
+ *   ActiveSupport.fsAdapter = "node";     // default in Node (auto-detected)
+ *   ActiveSupport.fsAdapter = "vfs";      // browser, after registerFsAdapter("vfs", ...)
  */
 
 export interface FsAdapter {
@@ -27,49 +27,68 @@ export interface PathAdapter {
   extname(p: string): string;
 }
 
-let _fs: FsAdapter | null = null;
-let _path: PathAdapter | null = null;
-
-export function setFsAdapter(fs: FsAdapter, path: PathAdapter): void {
-  _fs = fs;
-  _path = path;
+interface FsRegistration {
+  fs: FsAdapter;
+  path: PathAdapter;
 }
 
-function tryLoadNode(): boolean {
-  if (_fs && _path) return true;
-  try {
-    /* eslint-disable @typescript-eslint/no-require-imports */
-    _fs = require("node:fs") as FsAdapter;
-    _path = require("node:path") as PathAdapter;
-    /* eslint-enable @typescript-eslint/no-require-imports */
-    return true;
-  } catch {
-    return false;
+const registry = new Map<string, FsRegistration>();
+let currentAdapterName: string | null = null;
+let resolved: FsRegistration | null = null;
+
+export function registerFsAdapter(name: string, fs: FsAdapter, path: PathAdapter): void {
+  registry.set(name, { fs, path });
+  if (name === currentAdapterName) resolved = null;
+}
+
+// Auto-register "node" at module load time if we're in Node
+try {
+  if (typeof globalThis.process !== "undefined" && globalThis.process.versions?.node) {
+    const nodeModule = await import("node:module");
+    const req = nodeModule.createRequire(import.meta.url);
+    registerFsAdapter("node", req("node:fs"), req("node:path"));
   }
+} catch {
+  // Not in Node or node:fs unavailable — browser environment
 }
 
-/**
- * Get the filesystem adapter. In Node environments, auto-loads
- * node:fs synchronously. In browser, setFsAdapter() must be called first.
- */
+function resolve(): FsRegistration {
+  if (resolved) return resolved;
+
+  const name = currentAdapterName;
+  if (name) {
+    const reg = registry.get(name);
+    if (!reg) throw new Error(`Filesystem adapter "${name}" is not registered.`);
+    resolved = reg;
+    return reg;
+  }
+
+  // Default: use "node" if registered
+  const nodeReg = registry.get("node");
+  if (nodeReg) {
+    resolved = nodeReg;
+    return nodeReg;
+  }
+
+  throw new Error(
+    'No filesystem adapter configured. Set ActiveSupport.fsAdapter = "node" or register a custom adapter.',
+  );
+}
+
 export function getFs(): FsAdapter {
-  if (_fs) return _fs;
-  if (tryLoadNode()) return _fs!;
-  throw new Error(
-    "Filesystem adapter not available. " +
-      "In Node this auto-loads; in browser, call setFsAdapter() first.",
-  );
+  return resolve().fs;
 }
 
-/**
- * Get the path adapter. In Node environments, auto-loads
- * node:path synchronously. In browser, setFsAdapter() must be called first.
- */
 export function getPath(): PathAdapter {
-  if (_path) return _path;
-  if (tryLoadNode()) return _path!;
-  throw new Error(
-    "Path adapter not available. " +
-      "In Node this auto-loads; in browser, call setFsAdapter() first.",
-  );
+  return resolve().path;
 }
+
+export const fsAdapterConfig = {
+  get adapter(): string | null {
+    return currentAdapterName;
+  },
+  set adapter(name: string | null) {
+    currentAdapterName = name;
+    resolved = null;
+  },
+};

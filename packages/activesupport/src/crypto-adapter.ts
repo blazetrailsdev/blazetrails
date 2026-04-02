@@ -1,9 +1,10 @@
 /**
- * Crypto adapter — abstracts node:crypto so packages can work in
- * both Node and browser environments.
+ * Crypto adapter — mirrors the Rails adapter pattern.
  *
- * Default: Node crypto (loaded lazily). Call `setCryptoAdapter()`
- * to provide a browser-safe implementation (e.g., WebCrypto-backed).
+ * Register adapters by name, configure via ActiveSupport.cryptoAdapter:
+ *
+ *   ActiveSupport.cryptoAdapter = "node";       // default in Node (auto-detected)
+ *   ActiveSupport.cryptoAdapter = "webcrypto";   // browser, after registerCryptoAdapter(...)
  */
 
 export interface CryptoAdapter {
@@ -30,9 +31,6 @@ export interface HmacAdapter {
   digest(encoding: "hex" | "base64"): string;
 }
 
-let _crypto: CryptoAdapter | null = null;
-let _cryptoPromise: Promise<CryptoAdapter> | null = null;
-
 function wrapNodeCrypto(nodeCrypto: typeof import("node:crypto")): CryptoAdapter {
   return {
     randomBytes(size: number): Uint8Array {
@@ -53,49 +51,59 @@ function wrapNodeCrypto(nodeCrypto: typeof import("node:crypto")): CryptoAdapter
   };
 }
 
-async function loadNodeCrypto(): Promise<CryptoAdapter> {
-  const nodeCrypto = await import("node:crypto");
-  return wrapNodeCrypto(nodeCrypto);
+const registry = new Map<string, CryptoAdapter>();
+let currentAdapterName: string | null = null;
+let resolved: CryptoAdapter | null = null;
+
+export function registerCryptoAdapter(name: string, adapter: CryptoAdapter): void {
+  registry.set(name, adapter);
+  if (name === currentAdapterName) resolved = null;
 }
 
-export function setCryptoAdapter(adapter: CryptoAdapter): void {
-  _crypto = adapter;
-  _cryptoPromise = null;
-}
-
-function tryLoadNode(): boolean {
-  if (_crypto) return true;
-  try {
-    /* eslint-disable @typescript-eslint/no-require-imports */
-    const nodeCrypto = require("node:crypto") as typeof import("node:crypto");
-    /* eslint-enable @typescript-eslint/no-require-imports */
-    _crypto = wrapNodeCrypto(nodeCrypto);
-    return true;
-  } catch {
-    return false;
+// Auto-register "node" at module load time if we're in Node
+try {
+  if (typeof globalThis.process !== "undefined" && globalThis.process.versions?.node) {
+    const nodeModule = await import("node:module");
+    const req = nodeModule.createRequire(import.meta.url);
+    const nodeCrypto = req("node:crypto") as typeof import("node:crypto");
+    registerCryptoAdapter("node", wrapNodeCrypto(nodeCrypto));
   }
+} catch {
+  // Not in Node — browser environment
 }
 
-/**
- * Get the crypto adapter synchronously. In Node, auto-loads node:crypto.
- * In browser, setCryptoAdapter() must be called first.
- */
-export function getCrypto(): CryptoAdapter {
-  if (_crypto) return _crypto;
-  if (tryLoadNode()) return _crypto!;
+function resolve(): CryptoAdapter {
+  if (resolved) return resolved;
+
+  const name = currentAdapterName;
+  if (name) {
+    const reg = registry.get(name);
+    if (!reg) throw new Error(`Crypto adapter "${name}" is not registered.`);
+    resolved = reg;
+    return reg;
+  }
+
+  const nodeReg = registry.get("node");
+  if (nodeReg) {
+    resolved = nodeReg;
+    return nodeReg;
+  }
+
   throw new Error(
-    "Crypto adapter not available. " +
-      "In Node this auto-loads; in browser, call setCryptoAdapter() first.",
+    'No crypto adapter configured. Set ActiveSupport.cryptoAdapter = "node" or register a custom adapter.',
   );
 }
 
-/**
- * Get the crypto adapter asynchronously. Uses dynamic import for
- * environments that don't support require (ESM-only).
- */
-export async function getCryptoAsync(): Promise<CryptoAdapter> {
-  if (_crypto) return _crypto;
-  if (tryLoadNode()) return _crypto!;
-  if (!_cryptoPromise) _cryptoPromise = loadNodeCrypto().then((c) => (_crypto = c));
-  return _cryptoPromise;
+export function getCrypto(): CryptoAdapter {
+  return resolve();
 }
+
+export const cryptoAdapterConfig = {
+  get adapter(): string | null {
+    return currentAdapterName;
+  },
+  set adapter(name: string | null) {
+    currentAdapterName = name;
+    resolved = null;
+  },
+};

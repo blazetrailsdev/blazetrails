@@ -98,7 +98,12 @@ function ensureOwnAliases(host: AttributeMethodHost): void {
 
 export function aliasesByAttributeName(host: AttributeMethodHost): Map<string, string[]> {
   if (!Object.prototype.hasOwnProperty.call(host, "_aliasesByAttributeName")) {
-    host._aliasesByAttributeName = new Map(host._aliasesByAttributeName ?? []);
+    const parent = host._aliasesByAttributeName;
+    const copy = new Map<string, string[]>();
+    if (parent) {
+      for (const [k, v] of parent) copy.set(k, [...v]);
+    }
+    host._aliasesByAttributeName = copy;
   }
   return host._aliasesByAttributeName;
 }

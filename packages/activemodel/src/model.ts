@@ -2,9 +2,7 @@ import { Errors, StrictValidationFailed } from "./errors.js";
 import { ValidationError, ValidationContext } from "./validations.js";
 import { humanize, underscore } from "@blazetrails/activesupport";
 import { I18n } from "./i18n.js";
-import { typeRegistry } from "./type/registry.js";
 import { Type } from "./type/value.js";
-import { Attribute } from "./attribute.js";
 import { AttributeSet } from "./attribute-set.js";
 import { ModelName } from "./naming.js";
 import { DirtyTracker } from "./dirty.js";
@@ -717,9 +715,6 @@ export class Model {
    * Rails pattern:
    *   Attributes#initialize: @attributes = self.class._default_attributes.deep_dup
    *   API#initialize:        assign_attributes(attributes); super()
-   *
-   * We combine both steps: init defaults from attributes.ts, then assign
-   * user values through writeAttribute (which handles casting/normalization).
    */
   constructor(attrs: Record<string, unknown> = {}) {
     const ctor = this.constructor as typeof Model;
@@ -727,23 +722,15 @@ export class Model {
     // Attributes#initialize — deep-dup class defaults
     this._attributes = initAttrs(ctor._attributeDefinitions);
 
-    // API#initialize — assign initial values directly to the AttributeSet.
-    // This bypasses writeAttribute (which validates names, tracks dirty, etc.)
-    // matching Rails where assign_attributes in initialize writes through
-    // the attribute system but before dirty tracking is active.
+    // API#initialize — assign through Model.writeAttribute (casting, normalization).
+    // Uses Model.prototype directly so subclass overrides (e.g. Base's encryption)
+    // don't interfere during construction — subclass constructors handle their own
+    // post-init concerns (e.g. Base encrypts after super()).
     for (const [key, value] of Object.entries(attrs)) {
-      const def = ctor._attributeDefinitions.get(key);
-      if (def) {
-        let castValue = def.type.cast(value);
-        castValue = ctor._applyNormalization(key, castValue);
-        castValue = this._applyNullifyBlanks(key, castValue);
-        this._attributes.set(key, Attribute.fromUserWithValue(key, value, castValue, def.type));
-      } else {
-        this._attributes.set(key, Attribute.fromUser(key, value, typeRegistry.lookup("value")));
-      }
+      Model.prototype.writeAttribute.call(this, key, value);
     }
 
-    // Snapshot after all initial values are set — the constructed state is "clean"
+    // Snapshot after construction — the initial state is "clean"
     this._dirty.snapshot(this._attributes);
 
     // Fire after_initialize callbacks

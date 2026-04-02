@@ -213,6 +213,16 @@ async function migrateDb(adapter: SQLite3Adapter) {
         t.index(["merge_commit_sha", "step_name"], { unique: true });
       });
     }
+    if (!(await tableExists(adapter, "raw_job_logs"))) {
+      await ctx.createTable("raw_job_logs", {}, (t) => {
+        t.integer("job_id");
+        t.string("merge_commit_sha");
+        t.integer("pr_number");
+        t.text("log_output");
+        t.index(["job_id"], { unique: true });
+        t.index(["merge_commit_sha"]);
+      });
+    }
     return;
   }
 
@@ -351,6 +361,7 @@ async function migrateDb(adapter: SQLite3Adapter) {
       t.integer("pr_number");
       t.text("log_output");
       t.index(["job_id"], { unique: true });
+      t.index(["merge_commit_sha"]);
     });
 
     await ctx.createTable("sync_log", {}, (t) => {
@@ -916,8 +927,9 @@ function parseApiCompareFromLogs(logs: string) {
     }
   }
   // Fall back to earliest format: "  arel: 100% (152/152)"
+  // Use [a-z] to match only lowercase package names, skipping PascalCase class-level lines
   if (results.size === 0) {
-    const reEarliest = /\s{2}(\w+): ([\d.]+)% \((\d+)\/(\d+)\)/g;
+    const reEarliest = / {2}([a-z]\w*): ([\d.]+)% \((\d+)\/(\d+)\)/g;
     while ((m = reEarliest.exec(logs)) !== null) {
       if (m[1] === "Overall") continue;
       results.set(m[1], {

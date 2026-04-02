@@ -10,12 +10,16 @@ import { cryptoAdapterConfig } from "./crypto-adapter.js";
 /**
  * ActiveSupport configuration — mirrors Rails' ActiveSupport module.
  *
- *   ActiveSupport.fsAdapter = "node";       // default in Node
- *   ActiveSupport.cryptoAdapter = "node";   // default in Node
+ * In Node, "node" adapters auto-register at module load. The adapter
+ * property is null by default (meaning "use auto-detected default").
+ * Set explicitly to override:
  *
  *   // Browser:
  *   registerFsAdapter("vfs", vfsImpl, pathImpl);
  *   ActiveSupport.fsAdapter = "vfs";
+ *
+ *   registerCryptoAdapter("webcrypto", webCryptoImpl);
+ *   ActiveSupport.cryptoAdapter = "webcrypto";
  */
 export const ActiveSupport = {
   get fsAdapter(): string | null {

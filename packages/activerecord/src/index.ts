@@ -54,7 +54,7 @@ export {
   registerSubclass,
   findStiClass,
 } from "./inheritance.js";
-// hasSecurePassword requires node:crypto — import directly from "./secure-password.js"
+// hasSecurePassword requires node:crypto — use subpath: @blazetrails/activerecord/secure-password
 export {
   incrementCounter,
   decrementCounter,
@@ -63,8 +63,8 @@ export {
 } from "./counter-cache.js";
 export { attrReadonly, readonlyAttributes, readonlyAttribute } from "./readonly-attributes.js";
 export { touch, touchAll } from "./timestamp.js";
-// establishConnection requires node:fs — import directly from "./connection-handling.js"
-// signedId requires MessageVerifier (node:crypto) — import directly from "./signed-id.js"
+// establishConnection requires node:fs — use subpath: @blazetrails/activerecord/connection-handling
+// signedId requires MessageVerifier (node:crypto) — use subpath: @blazetrails/activerecord/signed-id
 export {
   lockingColumn,
   setLockingColumn,
@@ -178,12 +178,12 @@ export {
   type AssociationLikeReflection,
 } from "./reflection.js";
 export { acceptsNestedAttributesFor, assignNestedAttributes } from "./nested-attributes.js";
-// hasSecureToken requires node:crypto — import directly from "./secure-token.js"
+// hasSecureToken requires node:crypto — use subpath: @blazetrails/activerecord/secure-token
 export { composedOf } from "./composed-of.js";
 export { serialize } from "./serialize.js";
 export { encrypts, defaultEncryptor, getEncryptor, isEncryptedAttribute } from "./encryption.js";
 export type { Encryptor } from "./encryption.js";
-// generatesTokenFor requires node:crypto — import directly from "./generates-token-for.js"
+// generatesTokenFor requires node:crypto — use subpath: @blazetrails/activerecord/generates-token-for
 export { delegatedType, getDelegatedTypeConfig } from "./delegated-type.js";
 export { DatabaseConfig } from "./database-configurations/database-config.js";
 export type { DatabaseConfigOptions } from "./database-configurations/database-config.js";

@@ -44,6 +44,9 @@ export function newCommand(): Command {
           console.log("  Could not install dependencies — run 'pnpm install' manually");
         }
       }
+
+      console.log("");
+      console.log(`  Done! cd ${name} && trails server`);
     });
 
   return cmd;

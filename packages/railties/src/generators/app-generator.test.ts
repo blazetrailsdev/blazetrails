@@ -162,13 +162,6 @@ describe("AppGenerator", () => {
     expect(exists(".dockerignore")).toBe(false);
   });
 
-  it("prints completion message", async () => {
-    const gen = makeGen();
-    await gen.run("my-app", { database: "sqlite" });
-    expect(lines.some((l) => l.includes("Done!"))).toBe(true);
-    expect(lines.some((l) => l.includes("my-app"))).toBe(true);
-  });
-
   it("includes app name in generated files", async () => {
     const gen = makeGen();
     await gen.run("my-app", { database: "sqlite" });

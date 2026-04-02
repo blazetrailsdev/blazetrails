@@ -31,7 +31,6 @@ export class AppGenerator extends GeneratorBase {
     }
 
     this.output("");
-    this.output(`  Done! cd ${name} && trails server`);
 
     return this.getCreatedFiles();
   }

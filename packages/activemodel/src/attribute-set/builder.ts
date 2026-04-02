@@ -104,11 +104,7 @@ export class LazyAttributeHash {
   }
 
   isKey(key: string): boolean {
-    return (
-      this.delegate.has(key) ||
-      Object.prototype.hasOwnProperty.call(this.values, key) ||
-      this.types.has(key)
-    );
+    return this.has(key);
   }
 
   eachKey(fn: (key: string) => void): void {

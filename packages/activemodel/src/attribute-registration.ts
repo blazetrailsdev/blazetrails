@@ -35,7 +35,9 @@ export function decorateAttributes(
     const def = defs.get(name);
     if (def) {
       const newType = decorator(name, def.type);
-      if (newType) def.type = newType;
+      if (newType) {
+        defs.set(name, { ...def, type: newType });
+      }
     }
   }
 }

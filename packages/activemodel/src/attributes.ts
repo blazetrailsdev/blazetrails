@@ -30,7 +30,7 @@ export function initializeAttributes(
   initial: Record<string, unknown>,
 ): void {
   for (const [name, def] of defs) {
-    if (name in initial) {
+    if (Object.prototype.hasOwnProperty.call(initial, name)) {
       target.set(name, def.type.cast(initial[name]));
     } else {
       const defVal = typeof def.defaultValue === "function" ? def.defaultValue() : def.defaultValue;

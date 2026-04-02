@@ -39,7 +39,8 @@ import { Association as AssociationInstance } from "./associations/association.j
 import { ConnectionHandler } from "./connection-adapters/abstract/connection-handler.js";
 import * as ConnectionHandling from "./connection-handling.js";
 import * as ModelSchema from "./model-schema.js";
-import * as SignedIdModule from "./signed-id.js";
+// Lazy-loaded to avoid pulling node:crypto into browser bundles
+const loadSignedId = () => import("./signed-id.js");
 import * as LockingOptimistic from "./locking/optimistic.js";
 import * as LockingPessimistic from "./locking/pessimistic.js";
 import * as Translation from "./translation.js";
@@ -2809,7 +2810,12 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::SignedId#signed_id
    */
-  signedId(options?: { purpose?: string; expiresIn?: number; expiresAt?: Date }): string {
+  async signedId(options?: {
+    purpose?: string;
+    expiresIn?: number;
+    expiresAt?: Date;
+  }): Promise<string> {
+    const SignedIdModule = await loadSignedId();
     return SignedIdModule.signedId(this, options);
   }
 
@@ -2819,6 +2825,7 @@ export class Base extends Model {
    * Mirrors: ActiveRecord::SignedId.find_signed
    */
   static async findSigned(signedId: string, options?: { purpose?: string }): Promise<Base | null> {
+    const SignedIdModule = await loadSignedId();
     return SignedIdModule.findSigned(this, signedId, options);
   }
 
@@ -2829,6 +2836,7 @@ export class Base extends Model {
    * Mirrors: ActiveRecord::SignedId.find_signed!
    */
   static async findSignedBang(signedId: string, options?: { purpose?: string }): Promise<Base> {
+    const SignedIdModule = await loadSignedId();
     return SignedIdModule.findSignedBang(this, signedId, options);
   }
 

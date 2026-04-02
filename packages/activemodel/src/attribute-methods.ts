@@ -198,7 +198,7 @@ export function aliasAttributeMethodDefinition(
 }
 
 export function isAttributeAlias(host: AttributeMethodHost, name: string): boolean {
-  return name in host._attributeAliases;
+  return Object.prototype.hasOwnProperty.call(host._attributeAliases, name);
 }
 
 export function attributeAlias(host: AttributeMethodHost, name: string): string | undefined {

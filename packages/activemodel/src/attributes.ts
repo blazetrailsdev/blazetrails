@@ -1,5 +1,7 @@
 import { Type } from "./type/value.js";
 import { typeRegistry } from "./type/registry.js";
+import { Attribute } from "./attribute.js";
+import { AttributeSet } from "./attribute-set.js";
 
 export interface AttributeDefinition {
   name: string;
@@ -7,116 +9,89 @@ export interface AttributeDefinition {
   defaultValue: unknown;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Constructor<T = object> = new (...args: any[]) => T;
-
 /**
- * Attributes mixin contract — declares typed attributes with defaults and casting.
+ * Attributes module contract.
  *
  * Mirrors: ActiveModel::Attributes
  */
 export interface Attributes {
-  attributes: Record<string, unknown>;
+  readonly attributes: Record<string, unknown>;
   attributeNames(): string[];
 }
 
 // ---------------------------------------------------------------------------
-// Shared logic — used by AttributesBase, Attributes() mixin, and Model
+// Class methods — Mirrors: ActiveModel::Attributes::ClassMethods
 // ---------------------------------------------------------------------------
 
-export function initializeAttributes(
-  target: Map<string, unknown>,
-  defs: Map<string, AttributeDefinition>,
-  initial: Record<string, unknown>,
+/**
+ * Declare a typed attribute with an optional default.
+ *
+ * Mirrors: ActiveModel::Attributes::ClassMethods#attribute
+ *
+ * Model.attribute() delegates here. This is the canonical implementation
+ * of the class-level `attribute` declaration.
+ */
+export function attribute(
+  host: { _attributeDefinitions: Map<string, AttributeDefinition>; prototype: object },
+  name: string,
+  typeName: string,
+  options?: { default?: unknown },
 ): void {
+  const type = typeRegistry.lookup(typeName);
+  const defaultValue = options?.default ?? null;
+  if (!Object.prototype.hasOwnProperty.call(host, "_attributeDefinitions")) {
+    host._attributeDefinitions = new Map(host._attributeDefinitions);
+  }
+  host._attributeDefinitions.set(name, { name, type, defaultValue });
+
+  if (!Object.prototype.hasOwnProperty.call(host.prototype, name)) {
+    Object.defineProperty(host.prototype, name, {
+      get(this: { readAttribute(n: string): unknown }) {
+        return this.readAttribute(name);
+      },
+      set(this: { writeAttribute(n: string, v: unknown): void }, value: unknown) {
+        this.writeAttribute(name, value);
+      },
+      configurable: true,
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Instance methods — Mirrors: ActiveModel::Attributes instance methods
+// ---------------------------------------------------------------------------
+
+/**
+ * Build default AttributeSet from class definitions.
+ *
+ * Mirrors: ActiveModel::AttributeRegistration._default_attributes
+ */
+export function buildDefaultAttributes(defs: Map<string, AttributeDefinition>): AttributeSet {
+  const attrMap = new Map<string, Attribute>();
   for (const [name, def] of defs) {
-    if (Object.prototype.hasOwnProperty.call(initial, name)) {
-      target.set(name, def.type.cast(initial[name]));
-    } else {
-      const defVal = typeof def.defaultValue === "function" ? def.defaultValue() : def.defaultValue;
-      target.set(name, defVal);
-    }
+    const defVal = typeof def.defaultValue === "function" ? def.defaultValue() : def.defaultValue;
+    attrMap.set(name, Attribute.withCastValue(name, defVal ?? null, def.type));
   }
+  return new AttributeSet(attrMap);
 }
 
-export function attributesToHash(attrs: Map<string, unknown>): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  for (const [k, v] of attrs) {
-    result[k] = v;
-  }
-  return result;
+/**
+ * Initialize instance attributes by deep-duping class defaults.
+ *
+ * Mirrors: ActiveModel::Attributes#initialize
+ *
+ * In Rails, Attributes#initialize does:
+ *   @attributes = self.class._default_attributes.deep_dup
+ */
+export function constructor(defs: Map<string, AttributeDefinition>): AttributeSet {
+  return buildDefaultAttributes(defs).deepDup();
 }
 
-// ---------------------------------------------------------------------------
-// Attributes() mixin — for composing into class hierarchies
-// ---------------------------------------------------------------------------
-
-export interface AttributesStatic {
-  _attributeDefinitions: Map<string, AttributeDefinition>;
-  attribute(name: string, typeName: string, options?: { default?: unknown }): void;
-  attributeNames(): string[];
-}
-
-export interface AttributesInstance {
-  _attributes: Map<string, unknown>;
-  readAttribute(name: string): unknown;
-  writeAttribute(name: string, value: unknown): void;
-  attributes: Record<string, unknown>;
-  attributePresent(name: string): boolean;
-}
-
-export function Attributes<TBase extends Constructor>(Base: TBase) {
-  class AttributesMixin extends Base implements AttributesInstance {
-    static _attributeDefinitions: Map<string, AttributeDefinition> = new Map();
-
-    static attribute(name: string, typeName: string, options?: { default?: unknown }): void {
-      const type = typeRegistry.lookup(typeName);
-      const defaultValue = options?.default ?? null;
-      this._attributeDefinitions.set(name, { name, type, defaultValue });
-    }
-
-    static attributeNames(): string[] {
-      return Array.from(this._attributeDefinitions.keys());
-    }
-
-    _attributes: Map<string, unknown> = new Map();
-    #initialized = false;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    constructor(...args: any[]) {
-      super(...args);
-      this.#initAttributes((args[0] as Record<string, unknown>) ?? {});
-    }
-
-    #initAttributes(initial: Record<string, unknown>) {
-      if (this.#initialized) return;
-      this.#initialized = true;
-      const ctor = this.constructor as typeof AttributesMixin;
-      const defs: Map<string, AttributeDefinition> = ctor._attributeDefinitions ?? new Map();
-      initializeAttributes(this._attributes, defs, initial);
-    }
-
-    readAttribute(name: string): unknown {
-      return this._attributes.get(name) ?? null;
-    }
-
-    writeAttribute(name: string, value: unknown): void {
-      const ctor = this.constructor as typeof AttributesMixin;
-      const def = ctor._attributeDefinitions?.get(name);
-      this._attributes.set(name, def ? def.type.cast(value) : value);
-    }
-
-    get attributes(): Record<string, unknown> {
-      return attributesToHash(this._attributes);
-    }
-
-    attributePresent(name: string): boolean {
-      const value = this._attributes.get(name);
-      if (value === null || value === undefined) return false;
-      if (typeof value === "string" && value.trim() === "") return false;
-      return true;
-    }
-  }
-
-  return AttributesMixin;
+/**
+ * Return all attributes as a plain hash.
+ *
+ * Mirrors: ActiveModel::Attributes#attributes
+ */
+export function attributes(attrs: AttributeSet): Record<string, unknown> {
+  return attrs.toHash();
 }

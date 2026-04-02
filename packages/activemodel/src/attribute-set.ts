@@ -235,7 +235,7 @@ export class AttributeSet {
 
   reverseMergeBang(target: AttributeSet): this {
     target.forEach((attr, name) => {
-      if (!this.attributes.has(name)) {
+      if (!this.isKey(name)) {
         this.attributes.set(name, attr);
       }
     });

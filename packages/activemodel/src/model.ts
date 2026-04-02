@@ -47,12 +47,11 @@ import { FormatValidator } from "./validations/format.js";
 import { AcceptanceValidator } from "./validations/acceptance.js";
 import { ConfirmationValidator } from "./validations/confirmation.js";
 import { ComparisonValidator } from "./validations/comparison.js";
-
-interface AttributeDefinition {
-  name: string;
-  type: Type;
-  defaultValue: unknown;
-}
+import {
+  type AttributeDefinition,
+  constructor as initAttrs,
+  attribute as declareAttribute,
+} from "./attributes.js";
 
 interface ValidationEntry {
   attribute: string;
@@ -93,26 +92,7 @@ export class Model {
   // -- Attributes (Phase 1000) --
 
   static attribute(name: string, typeName: string, options?: { default?: unknown }): void {
-    const type = typeRegistry.lookup(typeName);
-    const defaultValue = options?.default ?? null;
-    // Ensure subclass has its own copy
-    if (!Object.prototype.hasOwnProperty.call(this, "_attributeDefinitions")) {
-      this._attributeDefinitions = new Map(this._attributeDefinitions);
-    }
-    this._attributeDefinitions.set(name, { name, type, defaultValue });
-
-    // Auto-define property getter/setter so instances can access attributes directly (e.g. record.title)
-    if (!Object.prototype.hasOwnProperty.call(this.prototype, name)) {
-      Object.defineProperty(this.prototype, name, {
-        get(this: Model) {
-          return this.readAttribute(name);
-        },
-        set(this: Model, value: unknown) {
-          this.writeAttribute(name, value);
-        },
-        configurable: true,
-      });
-    }
+    declareAttribute(this, name, typeName, options);
   }
 
   static attributeNames(): string[] {
@@ -769,38 +749,43 @@ export class Model {
   errors: Errors = new Errors(this);
   _dirty: DirtyTracker = new DirtyTracker();
 
+  /**
+   * Mirrors: ActiveModel::API#initialize → ActiveModel::Attributes#initialize
+   *
+   * Rails pattern:
+   *   Attributes#initialize: @attributes = self.class._default_attributes.deep_dup
+   *   API#initialize:        assign_attributes(attributes); super()
+   *
+   * We combine both steps: init defaults from attributes.ts, then assign
+   * user values through writeAttribute (which handles casting/normalization).
+   */
   constructor(attrs: Record<string, unknown> = {}) {
     const ctor = this.constructor as typeof Model;
-    const defs = ctor._attributeDefinitions;
-    const attrMap = new Map<string, Attribute>();
 
-    for (const [name, def] of defs) {
-      if (name in attrs) {
-        let castValue = def.type.cast(attrs[name]);
-        castValue = ctor._applyNormalization(name, castValue);
-        castValue = this._applyNullifyBlanks(name, castValue);
-        attrMap.set(name, Attribute.fromUserWithValue(name, attrs[name], castValue, def.type));
+    // Attributes#initialize — deep-dup class defaults
+    this._attributes = initAttrs(ctor._attributeDefinitions);
+
+    // API#initialize — assign initial values directly to the AttributeSet.
+    // This bypasses writeAttribute (which validates names, tracks dirty, etc.)
+    // matching Rails where assign_attributes in initialize writes through
+    // the attribute system but before dirty tracking is active.
+    for (const [key, value] of Object.entries(attrs)) {
+      const def = ctor._attributeDefinitions.get(key);
+      if (def) {
+        let castValue = def.type.cast(value);
+        castValue = ctor._applyNormalization(key, castValue);
+        castValue = this._applyNullifyBlanks(key, castValue);
+        this._attributes.set(key, Attribute.fromUserWithValue(key, value, castValue, def.type));
       } else {
-        const defVal =
-          typeof def.defaultValue === "function" ? def.defaultValue() : def.defaultValue;
-        attrMap.set(name, Attribute.withCastValue(name, defVal ?? null, def.type));
+        this._attributes.set(key, Attribute.fromUser(key, value, typeRegistry.lookup("value")));
       }
     }
 
-    // Also set any extra keys passed in (for confirmation fields, etc.)
-    for (const key of Object.keys(attrs)) {
-      if (!attrMap.has(key)) {
-        const type = typeRegistry.lookup("value");
-        attrMap.set(key, Attribute.fromUser(key, attrs[key], type));
-      }
-    }
-
-    this._attributes = new AttributeSet(attrMap);
+    // Snapshot after all initial values are set — the constructed state is "clean"
     this._dirty.snapshot(this._attributes);
 
     // Fire after_initialize callbacks
-    const ctor2 = this.constructor as typeof Model;
-    ctor2._callbackChain.runAfterSync("initialize", this);
+    ctor._callbackChain.runAfterSync("initialize", this);
   }
 
   // -- Attribute access --

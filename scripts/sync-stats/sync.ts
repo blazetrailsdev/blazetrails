@@ -219,8 +219,7 @@ async function migrateDb(adapter: SQLite3Adapter) {
         t.string("merge_commit_sha");
         t.integer("pr_number");
         t.text("log_output");
-        t.index(["job_id"], { unique: true });
-        t.index(["merge_commit_sha"]);
+        t.index(["merge_commit_sha"], { unique: true });
       });
     }
     return;
@@ -1003,7 +1002,7 @@ async function syncCompareStats(mode: "latest" | "refresh"): Promise<number> {
       // Store full raw job log for future re-parsing
       await RawJobLog.upsertAll(
         [{ job_id: jobId, merge_commit_sha: headSha, pr_number: prNumber, log_output: logs }],
-        { uniqueBy: ["job_id"] },
+        { uniqueBy: ["merge_commit_sha"] },
       );
 
       // Store raw step logs

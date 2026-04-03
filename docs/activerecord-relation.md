@@ -3,15 +3,51 @@
 Current: **163/253 methods matched** across relation files (64%).
 6 files already at 100%. 13 files need work.
 
-## Key insight: structural mismatch
+## The problem: methods live in the wrong file
 
 Many methods exist in our `relation.ts` but api:compare can't find them
-because Rails defines them in separate module files that get `include`d into
-Relation. The compare tool matches by file — so `where` in `relation.ts`
-doesn't count toward `relation/query_methods.rb`.
+because Rails defines them in separate module files (`query_methods.rb`,
+`finder_methods.rb`, etc.) that get `include`d into Relation. The compare
+tool matches by file — so `where` in `relation.ts` doesn't count toward
+`relation/query_methods.rb`.
 
-**This is the single biggest win:** moving (or re-exporting) methods into
-the files the compare tool expects.
+## The fix: move the logic, use the mixin pattern
+
+**The logic must live in the file that api:compare expects.** Re-exports
+and delegation wrappers are not allowed — the actual implementation must
+be in the correct file.
+
+We have an established pattern for this (see CLAUDE.md "Module Mixins"):
+`this`-typed functions defined in the module file, assigned directly on
+the class. This is how `activemodel` handles `include`/`extend`:
+
+```ts
+// relation/query-methods.ts
+export function where(this: QueryMethodsHost, conditions: Record<string, unknown>): Relation {
+  const rel = this.clone();
+  rel._whereClause = rel._whereClause.merge(new WhereClause(conditions));
+  return rel;
+}
+
+export function whereBang(this: QueryMethodsHost, conditions: Record<string, unknown>): this {
+  this._whereClause = this._whereClause.merge(new WhereClause(conditions));
+  return this;
+}
+```
+
+```ts
+// relation.ts
+import { where, whereBang } from "./relation/query-methods.js";
+
+export class Relation<T> {
+  where = where;
+  whereBang = whereBang;
+  // ...
+}
+```
+
+This means **extracting** the implementations out of `relation.ts` into
+their correct module files, not adding wrappers or re-exports.
 
 ## File-by-file plan
 
@@ -44,9 +80,12 @@ module methods. Our `query-methods.ts` only has constant arrays
    `excluding`/`without`
    — Need actual implementation.
 
-**Approach:** Export `this`-typed functions from `query-methods.ts` that
-delegate to the existing Relation methods. Add bang variants that mutate
-instead of clone. Implement missing query methods.
+**Approach:** Extract the existing query method implementations out of
+`relation.ts` into `this`-typed functions in `query-methods.ts`. Add
+bang variants that mutate `this` instead of cloning. Assign them on
+Relation via the mixin pattern. Implement missing query methods
+(`withRecursive`, `regroup`, `inOrderOf`, `excluding`/`without`,
+`optimizerHints`).
 
 ### relation.rb — 48/66 (73%) — 18 missing
 
@@ -115,40 +154,61 @@ are internal plumbing methods, not user-facing API.
 | `basic-object-handler.ts` | 1       | `constructor`                      | Initialize handler      |
 | `range-handler.ts`        | 1       | `constructor`                      | Initialize handler      |
 
-## Suggested PR sequence
+## PR plan
 
-### PR 1: Query methods bang variants + file reorganization (~30 methods)
+Two PRs. PR 1 is the heavy lift — it touches `relation.ts` and
+`query-methods.ts` extensively. PR 2 covers everything else and can be
+developed in parallel since it touches separate files.
 
-The single highest-impact PR. Most query methods already exist on Relation
-but aren't in `query-methods.ts`:
+### PR 1: Extract query methods into query-methods.ts (~38 methods)
 
-1. Export `this`-typed functions from `query-methods.ts` for each existing
-   query method (`where`, `order`, `select`, `limit`, `group`, `having`,
-   `joins`, `leftOuterJoins`, `distinct`, `from`, `lock`, `reorder`,
-   `reselect`, `none`, `unscope`, `readonly`, `extending`, `annotate`,
-   `with`, `includes`, `eagerLoad`, `preload`, `references`, `offset`)
+The single highest-impact change. Extract the existing query method
+implementations out of `relation.ts` into `this`-typed functions in
+`query-methods.ts`, following the mixin pattern. Then assign them back
+on Relation.
+
+1. Extract each existing query method (`where`, `order`, `select`,
+   `limit`, `group`, `having`, `joins`, `leftOuterJoins`, `distinct`,
+   `from`, `lock`, `reorder`, `reselect`, `none`, `unscope`, `readonly`,
+   `extending`, `annotate`, `with`, `includes`, `eagerLoad`, `preload`,
+   `references`, `offset`) into `this`-typed functions
 2. Add bang variants that mutate `this` instead of cloning
 3. Implement missing methods: `withRecursive`, `regroup`, `inOrderOf`,
    `excluding`/`without`, `optimizerHints`
 
-Expected gain: ~30-35 methods → query-methods.ts from 54% to ~90%+.
+Expected gain: query-methods.ts from 54% to ~95%+.
 
-### PR 2: relation.rb completion (~18 methods)
+**Touches:** `relation/query-methods.ts` (major), `relation.ts` (extract out).
 
-Add `cacheKey`/`cacheVersion`/`cacheKeyWithVersion`, `scoping`,
-`predicateBuilder` accessor, `bindAttribute`, and remaining accessors.
+### PR 2: Everything else (~52 methods) — parallelizable with PR 1
 
-### PR 3: WhereClause + PredicateBuilder (~9 methods)
+All remaining relation files. These don't touch `query-methods.ts` or
+the query method portions of `relation.ts`, so this can be developed
+on a separate worktree at the same time as PR 1.
 
-`or`, `ast`, `isContradiction` on WhereClause. `registerHandler`,
-`buildBindAttribute`, `resolveArelAttribute` on PredicateBuilder.
+**relation.rb** (~18 methods): `cacheKey`/`cacheVersion`/`cacheKeyWithVersion`,
+`scoping`, `predicateBuilder` accessor, `bindAttribute`, remaining accessors.
 
-### PR 4: Small files cleanup (~15 methods)
+**where-clause.ts** (4 methods): `or`, `ast`, `isContradiction`,
+`extractAttributes`.
 
-BatchEnumerator accessors, delegation plumbing, single-method gaps across
-finder-methods, from-clause, merger, spawn-methods, predicate builder handlers.
+**predicate-builder.ts** (5 methods): `registerHandler`, `buildBindAttribute`,
+`resolveArelAttribute`, `with`, `references`.
+
+**delegation.ts** (8 methods): Delegation registry plumbing — `generateMethod`,
+`delegatedClasses`, `initializeRelationDelegateCache`, etc.
+
+**batch-enumerator.ts** (6 methods): `start`/`finish`/`relation`/`batchSize`
+accessors, `touchAll`, `each`.
+
+**Small files** (7 methods, 1-2 each): `finder-methods.ts`, `from-clause.ts`,
+`merger.ts`, `spawn-methods.ts`, `array-handler.ts`, `basic-object-handler.ts`,
+`range-handler.ts`.
+
+**Touches:** Many files, but none that PR 1 modifies (except `relation.ts`
+for non-query-method additions like `cacheKey` — coordinate merge order).
 
 ## Total
 
-90 methods across 4 PRs would bring relation files from 163/253 (64%) to
+90 methods across 2 PRs would bring relation files from 163/253 (64%) to
 ~253/253 (100%).

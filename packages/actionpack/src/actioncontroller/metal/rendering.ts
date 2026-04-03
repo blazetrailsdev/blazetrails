@@ -48,12 +48,19 @@ export function renderToBody(options: Record<string, unknown> = {}): string | nu
   return body !== null ? String(body) : null;
 }
 
-let _renderer: Renderer | null = null;
+type ControllerClass = abstract new (...args: unknown[]) => unknown;
 
-export function renderer(): Renderer {
-  return _renderer ?? (_renderer = Renderer.for(Metal));
+const _renderers = new WeakMap<object, Renderer>();
+
+export function renderer(controller: ControllerClass): Renderer {
+  let r = _renderers.get(controller);
+  if (!r) {
+    r = Renderer.for(controller);
+    _renderers.set(controller, r);
+  }
+  return r;
 }
 
-export function setupRendererBang(controller: unknown): void {
-  _renderer = Renderer.for(controller);
+export function setupRendererBang(controller: ControllerClass): void {
+  _renderers.set(controller, Renderer.for(controller));
 }

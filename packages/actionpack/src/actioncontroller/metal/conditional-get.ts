@@ -86,13 +86,15 @@ export interface ConditionalGetHost {
 export function httpCacheForever(
   this: ConditionalGetHost,
   options: { public?: boolean } = {},
+  block?: () => void,
 ): void {
   const cc = buildCacheControl({
-    maxAge: 31536000,
+    maxAge: 100 * 365.25 * 24 * 60 * 60, // 100 years in seconds
     public: options.public ?? false,
     immutable: true,
   });
   this.response.setHeader("cache-control", cc);
+  block?.();
 }
 
 export function noStore(this: ConditionalGetHost): void {

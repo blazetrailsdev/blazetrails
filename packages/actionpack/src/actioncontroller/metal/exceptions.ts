@@ -34,10 +34,6 @@ export class RoutingError extends ActionControllerError {
     this.name = "RoutingError";
     this.failures = failures;
   }
-
-  get corrections(): string[] {
-    return [];
-  }
 }
 
 export class UrlGenerationError extends ActionControllerError {
@@ -56,6 +52,14 @@ export class UrlGenerationError extends ActionControllerError {
     this.routes = routes;
     this.routeName = routeName;
     this.methodName = methodName;
+  }
+
+  get corrections(): string[] {
+    if (!this.routeName || !this.routes) return [];
+    const namedRoutes = this.routes as { namedRoutes?: { helperNames?: string[] } };
+    const helpers = namedRoutes.namedRoutes?.helperNames ?? [];
+    const pattern = new RegExp(this.routeName, "i");
+    return helpers.filter((name) => name !== this.methodName && pattern.test(name)).slice(0, 5);
   }
 }
 

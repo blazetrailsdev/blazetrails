@@ -31,6 +31,6 @@ export class ParameterEncodingRegistry {
   }
 
   setupParamEncode(): void {
-    // Initialize the parameter encodings map (called during controller setup)
+    this._encodings = new Map<string, Map<string, string>>();
   }
 }

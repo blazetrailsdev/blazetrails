@@ -165,19 +165,18 @@ export function warningMessage(controller: string, action: string): string {
   return `Can't verify CSRF token authenticity. controller: ${controller}, action: ${action}`;
 }
 
-export function resetCsrfToken(
-  csrfStore: SessionStore | CookieStore,
-  storage: Record<string, unknown>,
-): void {
-  csrfStore.reset(storage as any);
+export interface CsrfTokenStore<TStorage> {
+  fetch(storage: TStorage): string | null;
+  store(storage: TStorage, token: string): void;
+  reset(storage: TStorage): void;
 }
 
-export function commitCsrfToken(
-  csrfStore: SessionStore | CookieStore,
-  storage: Record<string, unknown>,
-  token: string,
-): void {
-  csrfStore.store(storage as any, token);
+export function resetCsrfToken<T>(csrfStore: CsrfTokenStore<T>, storage: T): void {
+  csrfStore.reset(storage);
+}
+
+export function commitCsrfToken<T>(csrfStore: CsrfTokenStore<T>, storage: T, token: string): void {
+  csrfStore.store(storage, token);
 }
 
 export function skipForgeryProtection(

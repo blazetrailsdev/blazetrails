@@ -37,10 +37,14 @@ export function urlFrom(this: RedirectingHost, location: string | null | undefin
 }
 
 function urlHostAllowed(location: string, requestHost: string): boolean {
+  const trimmed = location.trim();
+  if (trimmed.startsWith("//") || trimmed.startsWith("\\")) return false;
+
   try {
-    const url = new URL(location);
+    const url = new URL(trimmed);
     return url.hostname === requestHost;
   } catch {
-    return true;
+    // Relative paths like "/foo" or "bar" are internal
+    return !trimmed.includes("://");
   }
 }

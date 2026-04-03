@@ -54,12 +54,12 @@ export class Middleware {
   }
 }
 
+const _middlewareStacks = new WeakMap<object, MiddlewareStack>();
+
 export class Metal extends AbstractController {
   request!: Request;
   response!: Response;
   params: Parameters = new Parameters({});
-
-  private static _middlewareStack: MiddlewareStack = new MiddlewareStack();
 
   static controllerPath(): string {
     return underscore(this.name.replace(/Controller$/, ""));
@@ -82,11 +82,16 @@ export class Metal extends AbstractController {
   }
 
   static middleware(): MiddlewareStack {
-    return this._middlewareStack;
+    let stack = _middlewareStacks.get(this);
+    if (!stack) {
+      stack = new MiddlewareStack();
+      _middlewareStacks.set(this, stack);
+    }
+    return stack;
   }
 
   static use(...args: unknown[]): void {
-    this._middlewareStack.use(args[0] as MiddlewareEntry["klass"], ...(args.slice(1) as any));
+    this.middleware().use(args[0] as MiddlewareEntry["klass"], ...(args.slice(1) as any));
   }
 
   static action(

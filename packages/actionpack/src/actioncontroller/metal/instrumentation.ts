@@ -72,3 +72,7 @@ export function instrumentRender(
   notifier?.instrument("render.action_controller", { duration: viewRuntime });
   return { result, viewRuntime };
 }
+
+export function logProcessAction(additions: string[]): string {
+  return additions.filter((a) => a.length > 0).join(" | ");
+}

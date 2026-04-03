@@ -7,6 +7,7 @@
  */
 
 import { Metal } from "../metal.js";
+import { Renderer } from "../renderer.js";
 
 export const RENDER_FORMATS_IN_PRIORITY = ["body", "plain", "html"] as const;
 
@@ -40,4 +41,19 @@ export function processRenderOptions(options: Record<string, unknown>): {
     result.contentType = (options.contentType ?? options.content_type) as string;
   if (options.location) result.location = options.location as string;
   return result;
+}
+
+export function renderToBody(options: Record<string, unknown> = {}): string | null {
+  const body = renderInPriorities(options);
+  return body !== null ? String(body) : null;
+}
+
+let _renderer: Renderer | null = null;
+
+export function renderer(): Renderer {
+  return _renderer ?? (_renderer = Renderer.for(Metal));
+}
+
+export function setupRendererBang(controller: unknown): void {
+  _renderer = Renderer.for(controller);
 }

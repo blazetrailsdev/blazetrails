@@ -125,8 +125,17 @@ export class SessionStore {
     const token = session[this._tokenKey];
     return typeof token === "string" ? token : null;
   }
+  fetch(session: Record<string, unknown>): string | null {
+    return this.read(session);
+  }
   write(session: Record<string, unknown>, token: string): void {
     session[this._tokenKey] = token;
+  }
+  store(session: Record<string, unknown>, token: string): void {
+    this.write(session, token);
+  }
+  reset(session: Record<string, unknown>): void {
+    delete session[this._tokenKey];
   }
 }
 
@@ -138,7 +147,42 @@ export class CookieStore {
   read(cookies: Record<string, string>): string | null {
     return cookies[this._cookieName] ?? null;
   }
+  fetch(cookies: Record<string, string>): string | null {
+    return this.read(cookies);
+  }
   write(cookies: Record<string, string>, token: string): void {
     cookies[this._cookieName] = token;
   }
+  store(cookies: Record<string, string>, token: string): void {
+    this.write(cookies, token);
+  }
+  reset(cookies: Record<string, string>): void {
+    delete cookies[this._cookieName];
+  }
+}
+
+export function warningMessage(controller: string, action: string): string {
+  return `Can't verify CSRF token authenticity. controller: ${controller}, action: ${action}`;
+}
+
+export function resetCsrfToken(
+  csrfStore: SessionStore | CookieStore,
+  storage: Record<string, unknown>,
+): void {
+  csrfStore.reset(storage as any);
+}
+
+export function commitCsrfToken(
+  csrfStore: SessionStore | CookieStore,
+  storage: Record<string, unknown>,
+  token: string,
+): void {
+  csrfStore.store(storage as any, token);
+}
+
+export function skipForgeryProtection(
+  _controller: { skipBeforeAction?: (name: string, options?: Record<string, unknown>) => void },
+  options: Record<string, unknown> = {},
+): void {
+  _controller.skipBeforeAction?.("verifyAuthenticityToken", options);
 }

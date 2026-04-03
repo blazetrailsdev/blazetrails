@@ -29,4 +29,8 @@ export class ParameterEncodingRegistry {
     const encodings = this._encodings.get(action);
     return encodings?.has("*") ?? false;
   }
+
+  setupParamEncode(): void {
+    // Initialize the parameter encodings map (called during controller setup)
+  }
 }

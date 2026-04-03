@@ -29,4 +29,31 @@ export class Options {
     this.klass = klass;
     this.model = model;
   }
+
+  static fromHash(hash: Record<string, unknown>): Options {
+    return new Options(
+      (hash.name as string | null) ?? null,
+      (hash.format as string[] | null) ?? null,
+      (hash.include as string[] | null) ?? null,
+      (hash.exclude as string[] | null) ?? null,
+      hash.klass ?? null,
+      hash.model ?? null,
+    );
+  }
+}
+
+export function wrapParameters(
+  params: Record<string, unknown>,
+  name: string,
+  include?: string[] | null,
+  exclude?: string[] | null,
+): Record<string, unknown> {
+  const wrapped: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(params)) {
+    if (key === name || key === "controller" || key === "action") continue;
+    if (include && !include.includes(key)) continue;
+    if (exclude && exclude.includes(key)) continue;
+    wrapped[key] = value;
+  }
+  return { ...params, [name]: wrapped };
 }

@@ -72,4 +72,23 @@ export class Renderer {
   get controller(): unknown {
     return this._controller;
   }
+
+  withDefaults(defaults: Record<string, unknown>): Renderer {
+    return new Renderer(this._controller, { ...this._defaults, ...defaults });
+  }
+
+  renderToString(options: Record<string, unknown> = {}): string {
+    return this.render(options);
+  }
+
+  static normalizeEnv(env: Record<string, unknown>): Record<string, unknown> {
+    const normalized: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(env)) {
+      const rackKey = key.startsWith("HTTP_")
+        ? key
+        : `HTTP_${key.toUpperCase().replace(/-/g, "_")}`;
+      normalized[rackKey] = value;
+    }
+    return normalized;
+  }
 }

@@ -34,6 +34,10 @@ export class RoutingError extends ActionControllerError {
     this.name = "RoutingError";
     this.failures = failures;
   }
+
+  get corrections(): string[] {
+    return [];
+  }
 }
 
 export class UrlGenerationError extends ActionControllerError {

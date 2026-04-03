@@ -59,6 +59,8 @@ export class Metal extends AbstractController {
   response!: Response;
   params: Parameters = new Parameters({});
 
+  private static _middlewareStack: MiddlewareStack = new MiddlewareStack();
+
   static controllerPath(): string {
     return underscore(this.name.replace(/Controller$/, ""));
   }
@@ -67,6 +69,45 @@ export class Metal extends AbstractController {
     const path = this.controllerPath();
     const lastSlash = path.lastIndexOf("/");
     return lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
+  }
+
+  static makeResponseBang(request: Request): Response {
+    const res = new Response();
+    res.request = request;
+    return res;
+  }
+
+  static actionEncodingTemplate(_action: string): false {
+    return false;
+  }
+
+  static middleware(): MiddlewareStack {
+    return this._middlewareStack;
+  }
+
+  static use(...args: unknown[]): void {
+    this._middlewareStack.use(args[0] as MiddlewareEntry["klass"], ...(args.slice(1) as any));
+  }
+
+  static action(
+    this: typeof Metal,
+    name: string,
+  ): (env: Record<string, unknown>) => Promise<Response> {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const Klass = this;
+    return async (env: Record<string, unknown>) => {
+      const req = new Request(env);
+      const res = Klass.makeResponseBang(req);
+      const controller = new Klass();
+      return controller.dispatch(name, req, res);
+    };
+  }
+
+  static build(
+    name: string,
+    app?: (env: Record<string, unknown>) => Promise<Response>,
+  ): (env: Record<string, unknown>) => Promise<Response> {
+    return app ?? this.action(name);
   }
 
   controllerPath(): string {
@@ -81,6 +122,10 @@ export class Metal extends AbstractController {
     return `#<${this.constructor.name}>`;
   }
 
+  urlFor(str: string): string {
+    return str;
+  }
+
   private _status: number = 200;
   private _headers: Record<string, string> = {};
   private _body: string = "";
@@ -88,8 +133,8 @@ export class Metal extends AbstractController {
 
   /** Dispatch an action in the context of a request/response. */
   async dispatch(action: string, request: Request, response: Response): Promise<Response> {
-    this.request = request;
-    this.response = response;
+    this.setRequestBang(request);
+    this.setResponseBang(response);
     this.params =
       (request as any).parameters ??
       new Parameters({ ...request.params, ...request.pathParameters });
@@ -109,6 +154,21 @@ export class Metal extends AbstractController {
     }
 
     return this.response;
+  }
+
+  setRequestBang(request: Request): void {
+    this.request = request;
+    (request as any).controllerInstance = this;
+  }
+
+  setResponseBang(response: Response): void {
+    this.response = response;
+  }
+
+  resetSession(): void {
+    if (this.request && typeof (this.request as any).resetSession === "function") {
+      (this.request as any).resetSession();
+    }
   }
 
   /** Set response status. Accepts number or symbol. */

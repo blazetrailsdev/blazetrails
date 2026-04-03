@@ -21,13 +21,14 @@ export interface RedirectingHost {
 export function redirectBackOrTo(
   this: RedirectingHost,
   fallbackLocation: string,
-  options: Record<string, unknown> = {},
+  options: { allowOtherHost?: boolean } & Record<string, unknown> = {},
 ): void {
+  const { allowOtherHost = true, ...redirectOptions } = options;
   const referer = this.request.referer;
-  if (referer && urlHostAllowed(referer, this.request.host ?? "")) {
-    this.redirectTo(referer, options);
+  if (referer && (allowOtherHost || urlHostAllowed(referer, this.request.host ?? ""))) {
+    this.redirectTo(referer, { allowOtherHost, ...redirectOptions });
   } else {
-    this.redirectTo(fallbackLocation, options);
+    this.redirectTo(fallbackLocation, redirectOptions);
   }
 }
 

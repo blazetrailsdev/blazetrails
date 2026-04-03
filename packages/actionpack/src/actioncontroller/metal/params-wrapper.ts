@@ -31,9 +31,16 @@ export class Options {
   }
 
   static fromHash(hash: Record<string, unknown>): Options {
+    const rawFormat = hash.format;
+    const format =
+      rawFormat == null
+        ? null
+        : Array.isArray(rawFormat)
+          ? (rawFormat as string[])
+          : [rawFormat as string];
     return new Options(
       (hash.name as string | null) ?? null,
-      (hash.format as string[] | null) ?? null,
+      format,
       (hash.include as string[] | null) ?? null,
       (hash.exclude as string[] | null) ?? null,
       hash.klass ?? null,

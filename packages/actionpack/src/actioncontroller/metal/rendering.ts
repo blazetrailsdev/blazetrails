@@ -43,9 +43,9 @@ export function processRenderOptions(options: Record<string, unknown>): {
   return result;
 }
 
-export function renderToBody(options: Record<string, unknown> = {}): string | null {
+export function renderToBody(options: Record<string, unknown> = {}): string {
   const body = renderInPriorities(options);
-  return body !== null ? String(body) : null;
+  return body !== null ? String(body) : " ";
 }
 
 type ControllerClass = abstract new (...args: unknown[]) => unknown;

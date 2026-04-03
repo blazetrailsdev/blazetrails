@@ -100,12 +100,14 @@ export class Metal extends AbstractController {
   ): (env: Record<string, unknown>) => Promise<Response> {
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const Klass = this;
-    return async (env: Record<string, unknown>) => {
+    const app = async (env: Record<string, unknown>) => {
       const req = new Request(env);
       const res = Klass.makeResponseBang(req);
       const controller = new Klass();
       return controller.dispatch(name, req, res);
     };
+
+    return app;
   }
 
   static build(

@@ -95,11 +95,7 @@ export class Renderer {
     for (const [key, rawValue] of Object.entries(env)) {
       let value = rawValue;
       if (key === "https") {
-        if (typeof value === "string") {
-          value = value.toLowerCase() === "on" ? "on" : "off";
-        } else {
-          value = value ? "on" : "off";
-        }
+        value = value ? "on" : "off";
       } else if (key === "method") {
         value = String(value).toUpperCase();
       }

@@ -161,8 +161,11 @@ export class CookieStore {
   }
 }
 
-export function warningMessage(controller: string, action: string): string {
-  return `Can't verify CSRF token authenticity. controller: ${controller}, action: ${action}`;
+export function warningMessage(origin?: string | null, baseUrl?: string | null): string {
+  if (origin && baseUrl && origin !== baseUrl) {
+    return `HTTP Origin header (${origin}) didn't match request.base_url (${baseUrl})`;
+  }
+  return "Can't verify CSRF token authenticity.";
 }
 
 export interface CsrfTokenStore<TStorage> {
@@ -183,5 +186,6 @@ export function skipForgeryProtection(
   _controller: { skipBeforeAction?: (name: string, options?: Record<string, unknown>) => void },
   options: Record<string, unknown> = {},
 ): void {
-  _controller.skipBeforeAction?.("verifyAuthenticityToken", options);
+  const merged = { raise: false, ...options };
+  _controller.skipBeforeAction?.("verifyAuthenticityToken", merged);
 }

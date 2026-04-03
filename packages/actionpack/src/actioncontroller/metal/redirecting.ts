@@ -38,14 +38,16 @@ export function urlFrom(this: RedirectingHost, location: string | null | undefin
 }
 
 function urlHostAllowed(location: string, requestHost: string): boolean {
-  const trimmed = location.trim();
-  if (trimmed.startsWith("//") || trimmed.startsWith("\\")) return false;
-
   try {
-    const url = new URL(trimmed);
-    return url.hostname === requestHost;
+    const url = new URL(location, "http://placeholder");
+    const host = url.hostname === "placeholder" ? null : url.hostname;
+
+    if (host === requestHost) return true;
+    if (host !== null) return false;
+    if (!location.startsWith("/")) return false;
+    if (location.startsWith("//")) return false;
+    return true;
   } catch {
-    // Relative paths like "/foo" or "bar" are internal
-    return !trimmed.includes("://");
+    return false;
   }
 }

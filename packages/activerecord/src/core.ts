@@ -139,8 +139,17 @@ export function initWithAttributes(
   this._attributes = attributes;
 }
 
-export function initAttributes(this: CoreRecord): void {
-  // Reset primary key attributes on the cloned attribute set
+export function initAttributes(
+  this: CoreRecord & { _attributes: any; constructor: { primaryKey?: string | string[] } },
+): void {
+  const pk = this.constructor.primaryKey;
+  if (!pk || !this._attributes) return;
+  const keys = Array.isArray(pk) ? pk : [pk];
+  for (const key of keys) {
+    if (typeof this._attributes.reset === "function") {
+      this._attributes.reset(key);
+    }
+  }
 }
 
 export function strictLoadingMode(

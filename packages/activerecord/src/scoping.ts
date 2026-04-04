@@ -129,6 +129,6 @@ export function isScopeAttributes(this: ScopingClassHost): boolean {
   return !!this.currentScope;
 }
 
-export function scopeRegistry(): typeof ScopeRegistry {
-  return ScopeRegistry;
+export function scopeRegistry(): ScopeRegistry {
+  return ScopeRegistry.instance();
 }

@@ -364,17 +364,15 @@ export function nextSequenceValue(this: SchemaHost): null {
 export function attributesBuilder(this: SchemaHost): {
   buildFromDatabase(values: Record<string, unknown>): Record<string, unknown>;
 } {
-  const attrDefs = this._attributeDefinitions;
-  const pk = this.primaryKey;
-  const pkSet = new Set(Array.isArray(pk) ? pk : [pk]);
-
   if (this._attributesBuilder) return this._attributesBuilder;
 
+  const host = this;
   this._attributesBuilder = {
     buildFromDatabase(values: Record<string, unknown>): Record<string, unknown> {
       const result: Record<string, unknown> = {};
-      // Apply defaults from attribute definitions for non-PK columns
-      for (const [name, def] of attrDefs) {
+      const pk = host.primaryKey;
+      const pkSet = new Set(Array.isArray(pk) ? pk : [pk]);
+      for (const [name, def] of host._attributeDefinitions) {
         if (!pkSet.has(name) && def.defaultValue !== undefined) {
           result[name] =
             typeof def.defaultValue === "function" ? def.defaultValue() : def.defaultValue;

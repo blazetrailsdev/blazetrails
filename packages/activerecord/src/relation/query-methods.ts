@@ -8,6 +8,8 @@ import { Nodes } from "@blazetrails/arel";
 import { FromClause } from "./from-clause.js";
 import { WhereClause } from "./where-clause.js";
 import { IrreversibleOrderError } from "../errors.js";
+import { sanitizeSqlArray } from "../sanitization.js";
+import { quote } from "../connection-adapters/abstract/quoting.js";
 
 export class QueryMethods {
   static readonly MULTI_VALUE_METHODS = [
@@ -283,36 +285,36 @@ function leftOuterJoinsBang(this: QueryMethodsHost, ...args: string[]): any {
 
 function whereBang(this: QueryMethodsHost, opts: any, ...rest: unknown[]): any {
   if (typeof opts === "string") {
-    let sql = opts;
+    let sql: string;
     if (
       rest.length === 1 &&
       typeof rest[0] === "object" &&
       rest[0] !== null &&
       !Array.isArray(rest[0])
     ) {
+      // Named binds: where("age > :min", { min: 18 })
+      sql = opts;
       const namedBinds = rest[0] as Record<string, unknown>;
       for (const [name, value] of Object.entries(namedBinds)) {
-        const replacement = quoteBindValue(value);
-        sql = sql.replace(new RegExp(`:${name}\\b`, "g"), replacement);
+        sql = sql.replace(new RegExp(`:${name}\\b`, "g"), quote(value));
       }
+    } else if (rest.length > 0) {
+      // Positional binds: where("age > ?", 18)
+      sql = sanitizeSqlArray(opts, ...rest);
     } else {
-      for (const bind of rest) {
-        sql = sql.replace("?", quoteBindValue(bind));
-      }
+      sql = opts;
     }
     this._whereClause.rawClauses.push(sql);
+  } else if (opts instanceof Nodes.Node) {
+    this._whereClause.arelNodes.push(opts);
   } else if (typeof opts === "object" && opts !== null) {
-    if (opts instanceof Nodes.Node) {
-      this._whereClause.arelNodes.push(opts);
-    } else {
-      const castConditions: Record<string, unknown> = {};
-      for (const [key, value] of Object.entries(opts as Record<string, unknown>)) {
-        castConditions[key] = Array.isArray(value)
-          ? value.map((v) => this._castWhereValue(key, v))
-          : this._castWhereValue(key, value);
-      }
-      this._whereClause.conditions.push(castConditions);
+    const castConditions: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(opts as Record<string, unknown>)) {
+      castConditions[key] = Array.isArray(value)
+        ? value.map((v) => this._castWhereValue(key, v))
+        : this._castWhereValue(key, value);
     }
+    this._whereClause.conditions.push(castConditions);
   }
   return this;
 }
@@ -489,16 +491,6 @@ function excludingBang(this: QueryMethodsHost, records: any[]): any {
 
 function constructJoinDependency(this: QueryMethodsHost, _associations: any, _joinType: any): any {
   return { associations: _associations, joinType: _joinType, model: this._modelClass };
-}
-
-// ---------------------------------------------------------------------------
-// Helper
-// ---------------------------------------------------------------------------
-function quoteBindValue(value: unknown): string {
-  if (value === null || value === undefined) return "NULL";
-  if (typeof value === "number") return String(value);
-  if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
-  return `'${String(value).replace(/'/g, "''")}'`;
 }
 
 // ---------------------------------------------------------------------------

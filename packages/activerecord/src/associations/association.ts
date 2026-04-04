@@ -182,9 +182,7 @@ export class Association {
       }
     }
 
-    if (!this.loaded) {
-      this.loadedBang();
-    }
+    this.loadedBang();
     return this.target;
   }
 

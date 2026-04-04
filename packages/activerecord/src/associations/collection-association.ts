@@ -214,17 +214,12 @@ export class CollectionAssociation extends Association {
    * delete/add only records that have changed.
    */
   replace(otherArray: Base[]): void {
-    const identity = (r: Base): string | Base => {
-      const id = (r as any).id;
-      return id != null ? JSON.stringify(id) : r;
-    };
-
     const original = [...this.target];
-    const desiredIds = new Set(otherArray.map(identity));
-    const originalIds = new Set(original.map(identity));
+    const desiredIds = new Set(otherArray.map((r) => this.recordIdentity(r)));
+    const originalIds = new Set(original.map((r) => this.recordIdentity(r)));
 
-    const toRemove = original.filter((r) => !desiredIds.has(identity(r)));
-    const toAdd = otherArray.filter((r) => !originalIds.has(identity(r)));
+    const toRemove = original.filter((r) => !desiredIds.has(this.recordIdentity(r)));
+    const toAdd = otherArray.filter((r) => !originalIds.has(this.recordIdentity(r)));
 
     for (const record of toRemove) {
       fireAssocCallbacks(this.options.beforeRemove, this.owner, record);
@@ -252,13 +247,16 @@ export class CollectionAssociation extends Association {
       return this.target.includes(record);
     }
     if (this.isLoaded()) {
-      return this.target.includes(record);
+      const identity = this.recordIdentity(record);
+      return this.target.some((r) => this.recordIdentity(r) === identity);
     }
     const rel = this.scope();
     if (rel && typeof rel.exists === "function") {
-      return await rel.exists((record as any).id);
+      const pk = this.primaryKeyValue(record);
+      return await rel.exists(pk);
     }
-    return this.target.some((r: any) => r.id === (record as any).id);
+    const identity = this.recordIdentity(record);
+    return this.target.some((r) => this.recordIdentity(r) === identity);
   }
 
   /**
@@ -513,6 +511,35 @@ export class CollectionAssociation extends Association {
     }
   }
 
+  /**
+   * Stable identity for a record using the target model's configured PK.
+   * Returns the record object itself for new records with null PK
+   * (reference identity), or a JSON-serialized PK for persisted records.
+   */
+  private recordIdentity(record: Base): string | Base {
+    const pk = (this.klass as any).primaryKey ?? "id";
+    const keys = Array.isArray(pk) ? pk : [pk];
+    const values = keys.map((key: string) =>
+      typeof record.readAttribute === "function" ? record.readAttribute(key) : (record as any)[key],
+    );
+    if (values.some((v) => v == null)) return record;
+    return JSON.stringify(values.length === 1 ? values[0] : values);
+  }
+
+  private primaryKeyValue(record: Base): unknown {
+    const pk = (this.klass as any).primaryKey ?? "id";
+    if (Array.isArray(pk)) {
+      return pk.map((key: string) =>
+        typeof record.readAttribute === "function"
+          ? record.readAttribute(key)
+          : (record as any)[key],
+      );
+    }
+    return typeof record.readAttribute === "function"
+      ? record.readAttribute(pk)
+      : (record as any)[pk];
+  }
+
   private async deleteAllRecords(): Promise<void> {
     const rel = this.scope();
     if (rel && typeof rel.deleteAll === "function") {
@@ -529,29 +556,27 @@ export class CollectionAssociation extends Association {
     if (memory.length === 0) return persisted;
 
     const newRecords: Base[] = [];
-    const memoryById = new Map<string, Base>();
+    const memoryByIdentity = new Map<string | Base, Base>();
     for (const record of memory) {
-      const id = (record as any).id;
-      if (id == null) {
+      const identity = this.recordIdentity(record);
+      if (typeof identity !== "string") {
         newRecords.push(record);
       } else {
-        memoryById.set(JSON.stringify(id), record);
+        memoryByIdentity.set(identity, record);
       }
     }
 
     const merged = persisted.map((record) => {
-      const id = (record as any).id;
-      if (id == null) return record;
-      const key = JSON.stringify(id);
-      const memRecord = memoryById.get(key);
+      const identity = this.recordIdentity(record);
+      if (typeof identity !== "string") return record;
+      const memRecord = memoryByIdentity.get(identity);
       if (memRecord) {
-        memoryById.delete(key);
+        memoryByIdentity.delete(identity);
         return memRecord;
       }
       return record;
     });
 
-    // Append new (unsaved) records that weren't in persisted
     merged.push(...newRecords);
     return merged;
   }
@@ -561,7 +586,9 @@ export class CollectionAssociation extends Association {
     const normalizedIds = ids.map(normalize);
 
     if (ids.length === 1) {
-      const found = this.target.find((r) => normalize((r as any).id) === normalizedIds[0]);
+      const found = this.target.find(
+        (r) => normalize(this.primaryKeyValue(r)) === normalizedIds[0],
+      );
       if (!found) {
         throw new Error(`Couldn't find ${this.klass.name} with ID ${normalizedIds[0]}`);
       }
@@ -569,9 +596,9 @@ export class CollectionAssociation extends Association {
     }
 
     const idSet = new Set(normalizedIds);
-    const found = this.target.filter((r) => idSet.has(normalize((r as any).id)));
+    const found = this.target.filter((r) => idSet.has(normalize(this.primaryKeyValue(r))));
     if (found.length !== ids.length) {
-      const foundSet = new Set(found.map((r) => normalize((r as any).id)));
+      const foundSet = new Set(found.map((r) => normalize(this.primaryKeyValue(r))));
       const missing = ids.filter((id) => !foundSet.has(normalize(id)));
       throw new Error(
         `Couldn't find all ${this.klass.name} with IDs (${missing.map(normalize).join(", ")})`,

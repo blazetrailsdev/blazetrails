@@ -3737,12 +3737,60 @@ export interface Relation<T extends Base> {
   finally(onfinally?: (() => void) | null): Promise<T[]>;
 }
 
+// QueryMethodBangs and Calculations don't involve T — Included<> works fine.
+// FinderMethods and SpawnMethods return T-typed values — explicit signatures needed.
+
 export interface Relation<T extends Base>
-  extends
-    Included<typeof QueryMethodBangs>,
-    Included<typeof FinderMethods>,
-    Included<typeof Calculations>,
-    Included<typeof SpawnMethods> {}
+  extends Included<typeof QueryMethodBangs>, Included<typeof Calculations> {}
+export interface Relation<T extends Base> {
+  find(ids: unknown[]): Promise<T[]>;
+  find(id: unknown): Promise<T>;
+  find(...ids: unknown[]): Promise<T | T[]>;
+  findBy(conditions: Record<string, unknown>): Promise<T | null>;
+  findByBang(conditions: Record<string, unknown>): Promise<T>;
+  findSoleBy(conditions: Record<string, unknown>): Promise<T>;
+  first(): Promise<T | null>;
+  first(n: number): Promise<T[]>;
+  firstBang(): Promise<T>;
+  last(): Promise<T | null>;
+  last(n: number): Promise<T[]>;
+  lastBang(): Promise<T>;
+  sole(): Promise<T>;
+  take(): Promise<T | null>;
+  take(limit: number): Promise<T[]>;
+  takeBang(): Promise<T>;
+  second(): Promise<T | null>;
+  third(): Promise<T | null>;
+  fourth(): Promise<T | null>;
+  fifth(): Promise<T | null>;
+  fortyTwo(): Promise<T | null>;
+  secondToLast(): Promise<T | null>;
+  thirdToLast(): Promise<T | null>;
+  secondBang(): Promise<T>;
+  thirdBang(): Promise<T>;
+  fourthBang(): Promise<T>;
+  fifthBang(): Promise<T>;
+  fortyTwoBang(): Promise<T>;
+  secondToLastBang(): Promise<T>;
+  thirdToLastBang(): Promise<T>;
+  findOrCreateByBang(
+    conditions: Record<string, unknown>,
+    extra?: Record<string, unknown>,
+  ): Promise<T>;
+  createOrFindByBang(
+    conditions: Record<string, unknown>,
+    extra?: Record<string, unknown>,
+  ): Promise<T>;
+  raiseRecordNotFoundExceptionBang(
+    message?: string,
+    modelName?: string,
+    primaryKey?: string,
+    id?: unknown,
+  ): never;
+  spawn(): Relation<T>;
+  merge<U extends Base>(other: Relation<U>): Relation<T>;
+  mergeBang(other: any): Relation<T>;
+}
 
 include(Relation, QueryMethodBangs);
 include(Relation, FinderMethods);

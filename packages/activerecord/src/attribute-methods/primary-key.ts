@@ -37,3 +37,77 @@ export function isPrimaryKeyValuesPresent(this: PrimaryKeyRecord): boolean {
   }
   return this.id != null;
 }
+
+export function idBeforeTypeCast(this: PrimaryKeyRecord): unknown {
+  const pk = (this.constructor as any).primaryKey;
+  if (typeof (this as any).readAttributeBeforeTypeCast === "function") {
+    return (this as any).readAttributeBeforeTypeCast(pk);
+  }
+  return this.readAttribute(pk);
+}
+
+export function idWas(this: PrimaryKeyRecord): unknown {
+  const pk = (this.constructor as any).primaryKey;
+  if (typeof (this as any).attributeWas === "function") {
+    return (this as any).attributeWas(pk);
+  }
+  return this.readAttribute(pk);
+}
+
+export function idInDatabase(this: PrimaryKeyRecord): unknown {
+  const pk = (this.constructor as any).primaryKey;
+  if (typeof (this as any).attributeInDatabase === "function") {
+    return (this as any).attributeInDatabase(pk);
+  }
+  return this.readAttribute(pk);
+}
+
+export function idForDatabase(this: PrimaryKeyRecord): unknown {
+  const pk = (this.constructor as any).primaryKey;
+  const attrs = (this as any)._attributes;
+  if (attrs?.getAttribute) {
+    const attr = attrs.getAttribute(pk);
+    if (attr?.valueForDatabase) return attr.valueForDatabase();
+  }
+  return this.readAttribute(pk);
+}
+
+// ---------------------------------------------------------------------------
+// Class methods
+// ---------------------------------------------------------------------------
+
+interface PrimaryKeyHost {
+  primaryKey: string | string[];
+  _primaryKey?: string | string[];
+  name: string;
+}
+
+export function isInstanceMethodAlreadyImplemented(
+  this: PrimaryKeyHost & { prototype: any },
+  methodName: string,
+): boolean {
+  return methodName in this.prototype;
+}
+
+export function isDangerousAttributeMethod(_this: PrimaryKeyHost, _name: string): boolean {
+  return false;
+}
+
+export function quotedPrimaryKey(this: PrimaryKeyHost): string {
+  const pk = this.primaryKey;
+  if (Array.isArray(pk)) return pk.map((k) => `"${k}"`).join(", ");
+  return `"${pk}"`;
+}
+
+export function resetPrimaryKey(this: PrimaryKeyHost): void {
+  const parent = Object.getPrototypeOf(this);
+  if (parent && typeof parent === "function" && parent.name !== "Base") {
+    this._primaryKey = (parent as PrimaryKeyHost).primaryKey;
+  } else {
+    this._primaryKey = "id";
+  }
+}
+
+export function getPrimaryKey(this: PrimaryKeyHost, _baseName?: string): string {
+  return "id";
+}

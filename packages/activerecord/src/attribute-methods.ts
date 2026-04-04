@@ -80,3 +80,109 @@ export function accessedFields(this: AttributeRecord): string[] {
  */
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface GeneratedAttributeMethods {}
+
+// ---------------------------------------------------------------------------
+// Class methods — mirrors ActiveRecord::AttributeMethods::ClassMethods
+// ---------------------------------------------------------------------------
+
+interface AttributeMethodsHost {
+  name: string;
+  _attributeDefinitions: Map<string, any>;
+  _attributeMethodsGenerated?: boolean;
+  _aliasAttributesMassGenerated?: boolean;
+  _attributeAliases?: Record<string, string>;
+  _dangerousAttributeMethods?: Set<string>;
+  prototype: any;
+}
+
+const RESTRICTED_CLASS_METHODS = new Set(["allocate", "new", "name", "parent", "superclass"]);
+
+export function dangerousAttributeMethods(): Set<string> {
+  return new Set<string>();
+}
+
+export function initializeGeneratedModules(this: AttributeMethodsHost): void {
+  if (!this._attributeMethodsGenerated) {
+    this._attributeMethodsGenerated = false;
+  }
+}
+
+export function aliasAttribute(this: AttributeMethodsHost, newName: string, oldName: string): void {
+  if (!this._attributeAliases) this._attributeAliases = {};
+  this._attributeAliases[newName] = oldName;
+}
+
+export function eagerlyGenerateAliasAttributeMethods(this: AttributeMethodsHost): void {
+  this._aliasAttributesMassGenerated = true;
+}
+
+export function generateAliasAttributeMethods(
+  this: AttributeMethodsHost,
+  _newName: string,
+  _oldName: string,
+): void {
+  // Alias attribute methods are defined eagerly via Object.defineProperty
+  // in activemodel's aliasAttribute. This hook exists for Rails parity.
+}
+
+export function aliasAttributeMethodDefinition(
+  this: AttributeMethodsHost,
+  _newName: string,
+  _oldName: string,
+): void {
+  // Generated at define time — no-op hook for subclass customization
+}
+
+export function isAttributeMethodsGenerated(this: AttributeMethodsHost): boolean {
+  return this._attributeMethodsGenerated ?? false;
+}
+
+export function defineAttributeMethods(this: AttributeMethodsHost): boolean {
+  if (this._attributeMethodsGenerated) return false;
+  this._attributeMethodsGenerated = true;
+  return true;
+}
+
+export function generateAliasAttributes(this: AttributeMethodsHost): void {
+  if (!this._attributeAliases) return;
+  for (const [newName, oldName] of Object.entries(this._attributeAliases)) {
+    generateAliasAttributeMethods.call(this, newName, oldName);
+  }
+  this._aliasAttributesMassGenerated = true;
+}
+
+export function undefineAttributeMethods(this: AttributeMethodsHost): void {
+  this._attributeMethodsGenerated = false;
+  this._aliasAttributesMassGenerated = false;
+}
+
+export function isInstanceMethodAlreadyImplemented(
+  this: AttributeMethodsHost,
+  methodName: string,
+): boolean {
+  return methodName in this.prototype;
+}
+
+export function isDangerousAttributeMethod(this: AttributeMethodsHost, name: string): boolean {
+  return dangerousAttributeMethods().has(name);
+}
+
+export function isMethodDefinedWithin(
+  this: AttributeMethodsHost,
+  name: string,
+  klass: any,
+  superklass?: any,
+): boolean {
+  if (!(name in klass.prototype)) return false;
+  if (!superklass) return true;
+  return !(name in superklass.prototype);
+}
+
+export function isDangerousClassMethod(this: AttributeMethodsHost, methodName: string): boolean {
+  if (RESTRICTED_CLASS_METHODS.has(methodName)) return true;
+  return typeof (this as any)[methodName] === "function";
+}
+
+export function isAttributeMethod(this: AttributeMethodsHost, name: string): boolean {
+  return this._attributeDefinitions.has(name);
+}

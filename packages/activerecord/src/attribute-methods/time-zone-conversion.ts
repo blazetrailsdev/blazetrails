@@ -23,10 +23,8 @@ export class TimeZoneConverter {
   }
 
   deserialize(value: unknown): unknown {
-    const result = (this.subtype as any).deserialize
+    return (this.subtype as any).deserialize
       ? (this.subtype as any).deserialize(value)
       : this.subtype.cast(value);
-    if (result instanceof Date) return result;
-    return result;
   }
 }

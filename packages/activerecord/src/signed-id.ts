@@ -66,9 +66,7 @@ export function setSignedIdVerifier(modelClass: typeof Base, verifier: MessageVe
 }
 
 function combinePurposes(modelClass: typeof Base, purpose?: string): string | undefined {
-  const parts = [underscore(modelClass.name)];
-  if (purpose) parts.push(purpose);
-  const combined = parts.filter(Boolean).join("/");
+  const combined = combineSignedIdPurposes(modelClass, purpose);
   return combined || undefined;
 }
 

@@ -40,12 +40,6 @@ export function sanitizeSql(input: string | [string, ...unknown[]]): string {
 }
 
 /**
- * Sanitize a string for use in a SQL LIKE clause.
- * Escapes %, _, and the escape character itself.
- *
- * Mirrors: ActiveRecord::Sanitization::ClassMethods#sanitize_sql_like
- */
-/**
  * Mirrors: ActiveRecord::Sanitization::ClassMethods#sanitize_sql_for_conditions
  */
 export function sanitizeSqlForConditions(
@@ -109,7 +103,9 @@ export function sanitizeSqlHashForAssignment(
  * Mirrors: ActiveRecord::Sanitization::ClassMethods#disallow_raw_sql!
  */
 export function disallowRawSqlBang(args: (string | symbol)[], permit?: RegExp): void {
-  const columnMatcher = permit ?? /^\w+$/;
+  // Rails: adapter_class.column_name_matcher — allows table.column, quoted, directions
+  const columnMatcher =
+    permit ?? /^(?:"?\w+"?\.)?"?\w+"?(?:\s+(?:ASC|DESC))?(?:\s+NULLS\s+(?:FIRST|LAST))?$/i;
   const unexpected: string[] = [];
   for (const arg of args) {
     if (typeof arg === "symbol") continue;
@@ -125,6 +121,12 @@ export function disallowRawSqlBang(args: (string | symbol)[], permit?: RegExp): 
   }
 }
 
+/**
+ * Sanitize a string for use in a SQL LIKE clause.
+ * Escapes %, _, and the escape character itself.
+ *
+ * Mirrors: ActiveRecord::Sanitization::ClassMethods#sanitize_sql_like
+ */
 export function sanitizeSqlLike(value: string, escapeChar: string = "\\"): string {
   return value
     .replace(

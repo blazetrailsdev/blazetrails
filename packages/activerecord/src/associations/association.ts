@@ -176,7 +176,7 @@ export class Association {
         this.target = cached;
       } else {
         const result = await this.doAsyncFindTarget();
-        if (result !== undefined && result !== null) {
+        if (result !== undefined) {
           this.target = result;
         }
       }

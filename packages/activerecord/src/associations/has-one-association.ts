@@ -34,10 +34,9 @@ export class HasOneAssociation extends SingularAssociation {
         if (await this.loadTarget()) {
           const ownerAny = this.owner as any;
           if (typeof ownerAny.errors?.add === "function") {
-            ownerAny.errors.add(
-              "base",
-              `Cannot delete record because dependent ${this.reflection.name} exists`,
-            );
+            ownerAny.errors.add("base", "invalid", {
+              message: `Cannot delete record because dependent ${this.reflection.name} exists`,
+            });
           }
           throw new DeleteRestrictionError(this.owner, this.reflection.name);
         }

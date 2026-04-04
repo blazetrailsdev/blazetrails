@@ -27,22 +27,28 @@ export class HasManyAssociation extends CollectionAssociation {
     const dependent = this.reflection.options.dependent;
 
     switch (dependent) {
-      case "restrictWithException":
-        if (!this.isEmpty()) {
+      case "restrictWithException": {
+        const records = await this.loadTarget();
+        if (records.length > 0) {
           throw new DeleteRestrictionError(this.owner, this.reflection.name);
         }
         break;
+      }
 
-      case "restrictWithError":
-        if (!this.isEmpty()) {
+      case "restrictWithError": {
+        const records = await this.loadTarget();
+        if (records.length > 0) {
           const ownerAny = this.owner as any;
           if (typeof ownerAny.errors?.add === "function") {
             const name = this.reflection.name;
-            ownerAny.errors.add("base", `Cannot delete record because dependent ${name} exists`);
+            ownerAny.errors.add("base", "invalid", {
+              message: `Cannot delete record because dependent ${name} exists`,
+            });
           }
           throw new DeleteRestrictionError(this.owner, this.reflection.name);
         }
         break;
+      }
 
       case "destroy": {
         const records = await this.loadTarget();

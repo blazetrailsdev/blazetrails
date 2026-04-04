@@ -65,8 +65,22 @@ export class CollectionAssociation extends Association {
       return;
     }
     const Klass = this.klass as any;
-    if (typeof Klass.where === "function") {
-      const pk = Klass.primaryKey ?? "id";
+    const pk = Klass.primaryKey ?? "id";
+
+    if (Array.isArray(pk)) {
+      // Composite PK: find each record individually
+      const records: Base[] = [];
+      for (const id of filteredIds) {
+        const conditions: Record<string, unknown> = {};
+        const idParts = Array.isArray(id) ? id : [id];
+        pk.forEach((col: string, i: number) => {
+          conditions[col] = idParts[i];
+        });
+        const found = await Klass.findBy(conditions);
+        if (found) records.push(found);
+      }
+      this.replace(records);
+    } else if (typeof Klass.where === "function") {
       const records: Base[] = await Klass.where({ [pk]: filteredIds }).toArray();
       this.replace(records);
     }
@@ -199,9 +213,17 @@ export class CollectionAssociation extends Association {
    * delete/add only records that have changed.
    */
   replace(otherArray: Base[]): void {
+    const identity = (r: Base): string | Base => {
+      const id = (r as any).id;
+      return id != null ? JSON.stringify(id) : r;
+    };
+
     const original = [...this.target];
-    const toRemove = original.filter((r) => !otherArray.includes(r));
-    const toAdd = otherArray.filter((r) => !original.includes(r));
+    const desiredIds = new Set(otherArray.map(identity));
+    const originalIds = new Set(original.map(identity));
+
+    const toRemove = original.filter((r) => !desiredIds.has(identity(r)));
+    const toAdd = otherArray.filter((r) => !originalIds.has(identity(r)));
 
     for (const record of toRemove) {
       fireAssocCallbacks(this.options.beforeRemove, this.owner, record);
@@ -446,34 +468,34 @@ export class CollectionAssociation extends Association {
    * Preserves order of persisted, deduplicates, and keeps
    * attribute changes from in-memory versions.
    */
-  private recordIdentity(record: Base): string {
-    return JSON.stringify((record as any).id);
-  }
-
   private mergeTargetLists(persisted: Base[], memory: Base[]): Base[] {
     if (memory.length === 0) return persisted;
 
+    const newRecords: Base[] = [];
     const memoryById = new Map<string, Base>();
     for (const record of memory) {
-      memoryById.set(this.recordIdentity(record), record);
+      const id = (record as any).id;
+      if (id == null) {
+        newRecords.push(record);
+      } else {
+        memoryById.set(JSON.stringify(id), record);
+      }
     }
 
     const merged = persisted.map((record) => {
-      const identity = this.recordIdentity(record);
-      const memRecord = memoryById.get(identity);
+      const id = (record as any).id;
+      if (id == null) return record;
+      const key = JSON.stringify(id);
+      const memRecord = memoryById.get(key);
       if (memRecord) {
-        memoryById.delete(identity);
+        memoryById.delete(key);
         return memRecord;
       }
       return record;
     });
 
-    for (const record of memoryById.values()) {
-      if (record.isNewRecord()) {
-        merged.push(record);
-      }
-    }
-
+    // Append new (unsaved) records that weren't in persisted
+    merged.push(...newRecords);
     return merged;
   }
 

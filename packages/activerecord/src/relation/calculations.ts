@@ -235,7 +235,7 @@ export interface CalculationMethods {
  *
  * Mirrors: ActiveRecord::Calculations::ColumnAliasTracker
  */
-export const CalculationsFns = {
+export const Calculations = {
   count: performCount,
   sum: performSum,
   average: performAverage,

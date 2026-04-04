@@ -30,9 +30,9 @@ import { InsertAll } from "./insert-all.js";
 import { ScopeRegistry } from "./scoping.js";
 import { PredicateBuilder } from "./relation/predicate-builder.js";
 import { include, type Included } from "@blazetrails/activesupport";
-import { CalculationsFns } from "./relation/calculations.js";
-import { FinderMethodsFns } from "./relation/finder-methods.js";
-import { SpawnMethodsFns } from "./relation/spawn-methods.js";
+import { Calculations } from "./relation/calculations.js";
+import { FinderMethods } from "./relation/finder-methods.js";
+import { SpawnMethods } from "./relation/spawn-methods.js";
 import { FromClause } from "./relation/from-clause.js";
 import { WhereClause } from "./relation/where-clause.js";
 import { BatchEnumerator } from "./relation/batches/batch-enumerator.js";
@@ -3739,16 +3739,16 @@ export interface Relation<T extends Base> {
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface Relation<T extends Base> extends Included<typeof QueryMethodBangs> {}
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface Relation<T extends Base> extends Included<typeof FinderMethodsFns> {}
+export interface Relation<T extends Base> extends Included<typeof FinderMethods> {}
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface Relation<T extends Base> extends Included<typeof CalculationsFns> {}
+export interface Relation<T extends Base> extends Included<typeof Calculations> {}
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface Relation<T extends Base> extends Included<typeof SpawnMethodsFns> {}
+export interface Relation<T extends Base> extends Included<typeof SpawnMethods> {}
 
 include(Relation, QueryMethodBangs);
-include(Relation, FinderMethodsFns);
-include(Relation, CalculationsFns);
-include(Relation, SpawnMethodsFns);
+include(Relation, FinderMethods);
+include(Relation, Calculations);
+include(Relation, SpawnMethods);
 
 // Thenable: make Relation directly awaitable (delegates to toArray).
 applyThenable(Relation.prototype);

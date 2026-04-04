@@ -377,7 +377,7 @@ export function raiseRecordNotFoundExceptionBang(
   );
 }
 
-export const FinderMethodsFns = {
+export const FinderMethods = {
   find: performFind,
   findBy: performFindBy,
   findByBang: performFindByBang,

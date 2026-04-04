@@ -178,12 +178,28 @@ export function generateAliasAttributeMethods(
 
 export function aliasAttributeMethodDefinition(
   this: AttributeMethodsHost,
-  _newName: string,
-  _oldName: string,
+  newName: string,
+  oldName: string,
 ): void {
-  // In Rails, this generates a single pattern-based alias method.
-  // Our aliasAttribute (from ActiveModel) handles this eagerly via
-  // eagerlyGenerateAliasAttributeMethods.
+  // Rails generates pattern-based alias methods (e.g. clear_fullName).
+  // Delegate to AM's eagerlyGenerateAliasAttributeMethods via prototype chain.
+  const amFn = Object.getPrototypeOf(this)?.eagerlyGenerateAliasAttributeMethods;
+  if (typeof amFn === "function") {
+    amFn.call(this, newName, oldName);
+    return;
+  }
+  // Fallback: at minimum define a direct getter/setter
+  if (this.prototype && !(newName in this.prototype)) {
+    Object.defineProperty(this.prototype, newName, {
+      get(this: any) {
+        return this.readAttribute(oldName);
+      },
+      set(this: any, value: unknown) {
+        this.writeAttribute(oldName, value);
+      },
+      configurable: true,
+    });
+  }
 }
 
 export function isAttributeMethodsGenerated(this: AttributeMethodsHost): boolean {

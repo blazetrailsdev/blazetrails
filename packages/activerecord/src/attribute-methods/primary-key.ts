@@ -120,19 +120,23 @@ export function resetPrimaryKey(this: PrimaryKeyHost): void {
 }
 
 /**
- * Rails: checks primary_key_prefix_type, then falls back to "id".
- * In practice, nearly all Rails apps use "id" as the default PK.
+ * Rails: foreign_key(false) → "admin_userid", foreign_key → "admin_user_id"
+ * Then checks schema_cache.primary_keys(table_name) for non-Base classes.
  */
-/**
- * Rails: checks primary_key_prefix_type to derive PK column name.
- * table_name → "adminuserid", table_name_with_underscore → "admin_user_id"
- */
-export function getPrimaryKey(this: PrimaryKeyHost, baseName?: string): string {
-  if (baseName && (this as any).primaryKeyPrefixType === "table_name") {
-    return `${underscore(baseName).replace(/_/g, "")}id`;
-  }
-  if (baseName && (this as any).primaryKeyPrefixType === "table_name_with_underscore") {
-    return `${underscore(baseName)}_id`;
+export function getPrimaryKey(
+  this: PrimaryKeyHost & { tableExists?(): Promise<boolean> },
+  baseName?: string,
+): string {
+  if (baseName) {
+    const prefixType = (this as any).primaryKeyPrefixType;
+    if (prefixType === "table_name") {
+      // foreign_key(false): underscore + "id" with no separator
+      return underscore(baseName) + "id";
+    }
+    if (prefixType === "table_name_with_underscore") {
+      // foreign_key: underscore + "_id"
+      return underscore(baseName) + "_id";
+    }
   }
   return "id";
 }

@@ -21,7 +21,6 @@ export class Association {
   target: Base | Base[] | null;
 
   private _staleState: unknown = undefined;
-  private _associationScope: unknown = null;
 
   constructor(owner: Base, reflection: AssociationDefinition) {
     this.owner = owner;
@@ -85,7 +84,7 @@ export class Association {
   }
 
   resetScope(): void {
-    this._associationScope = null;
+    // Subclasses may cache the scope; reset any cached value.
   }
 
   /**

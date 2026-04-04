@@ -143,6 +143,28 @@ export class BelongsToAssociation extends SingularAssociation {
     return this.ownerSavedChangeToAttribute(this.foreignKeyName());
   }
 
+  /**
+   * Build a scope on the target model, filtering by the owner's FK value
+   * against the target's PK. This is the reverse direction from has_many.
+   */
+  override scope(): any {
+    const Klass = this.klass as any;
+    if (!Klass || typeof Klass.all !== "function") return null;
+
+    const fk = this.foreignKeyName();
+    const ownerAny = this.owner as any;
+    const fkValue =
+      typeof ownerAny.readAttribute === "function" ? ownerAny.readAttribute(fk) : ownerAny[fk];
+    if (fkValue == null) return null;
+
+    const pk = this.reflection.options.primaryKey ?? Klass.primaryKey ?? "id";
+    let rel = Klass.all().where({ [pk as string]: fkValue });
+    if (this.reflection.options.scope) {
+      rel = this.reflection.options.scope(rel);
+    }
+    return rel;
+  }
+
   // --- Protected ---
 
   protected override replace(record: Base | null): void {

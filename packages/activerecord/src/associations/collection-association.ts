@@ -222,7 +222,8 @@ export class CollectionAssociation extends Association {
     const toAdd = otherArray.filter((r) => !originalIds.has(this.recordIdentity(r)));
 
     for (const record of toRemove) {
-      fireAssocCallbacks(this.options.beforeRemove, this.owner, record);
+      const proceed = fireAssocCallbacks(this.options.beforeRemove, this.owner, record);
+      if (proceed === false) continue;
       const idx = this.target.indexOf(record);
       if (idx !== -1) {
         this.target.splice(idx, 1);
@@ -263,19 +264,25 @@ export class CollectionAssociation extends Association {
    * Load target from database and merge with in-memory records.
    */
   override async loadTarget(): Promise<Base[]> {
+    let didLoad = this.isLoaded();
+
     if (this.findTargetNeeded()) {
       const cached = this.doFindTarget();
       if (cached !== undefined && Array.isArray(cached)) {
         this.target = this.mergeTargetLists(cached, this.target);
+        didLoad = true;
       } else {
         const found = await this.doAsyncFindTarget();
         if (found !== undefined && found !== null && Array.isArray(found)) {
           this.target = this.mergeTargetLists(found, this.target);
+          didLoad = true;
         }
       }
     }
 
-    this.loadedBang();
+    if (didLoad) {
+      this.loadedBang();
+    }
     return this.target;
   }
 

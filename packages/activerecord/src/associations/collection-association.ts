@@ -118,6 +118,7 @@ export class CollectionAssociation extends Association {
   build(attributes?: Record<string, unknown>): Base {
     const record = this.buildRecord(attributes);
     if (record) {
+      this.setOwnerAttributes(record);
       this.addToTarget(record, { replace: true });
     }
     return record!;
@@ -381,17 +382,22 @@ export class CollectionAssociation extends Association {
     if (this.reflection.options.through) return;
 
     const ctor = this.owner.constructor as any;
-    const pk = this.reflection.options.primaryKey ?? ctor.primaryKey ?? "id";
-    const fk = this.foreignKeyColumn();
-    const pkValue =
-      typeof this.owner.readAttribute === "function"
-        ? this.owner.readAttribute(pk as string)
-        : (this.owner as any)[pk];
+    const configuredPk = this.reflection.options.primaryKey ?? ctor.primaryKey ?? "id";
+    const pks = Array.isArray(configuredPk) ? configuredPk : [configuredPk];
+    const fks = this.foreignKeyColumns();
 
-    if (typeof (record as any).writeAttribute === "function") {
-      (record as any).writeAttribute(fk, pkValue);
-    } else {
-      (record as any)[fk] = pkValue;
+    for (let i = 0; i < fks.length; i++) {
+      const pkCol = pks[i] ?? pks[0];
+      const pkValue =
+        typeof this.owner.readAttribute === "function"
+          ? this.owner.readAttribute(pkCol)
+          : (this.owner as any)[pkCol];
+
+      if (typeof (record as any).writeAttribute === "function") {
+        (record as any).writeAttribute(fks[i], pkValue);
+      } else {
+        (record as any)[fks[i]] = pkValue;
+      }
     }
 
     if (this.reflection.options.as) {
@@ -406,21 +412,28 @@ export class CollectionAssociation extends Association {
 
   // --- Private helpers ---
 
-  private foreignKeyColumn(): string {
+  private foreignKeyColumns(): string[] {
     const fk = this.reflection.options.foreignKey;
-    if (typeof fk === "string") return fk;
+    if (typeof fk === "string") return [fk];
+    if (Array.isArray(fk)) return fk;
     const ctor = this.owner.constructor as any;
     if (this.reflection.options.as) {
-      return `${underscore(this.reflection.options.as)}_id`;
+      return [`${underscore(this.reflection.options.as)}_id`];
     }
-    return `${underscore(ctor.name)}_id`;
+    return [`${underscore(ctor.name)}_id`];
+  }
+
+  private foreignKeyColumn(): string {
+    return this.foreignKeyColumns()[0];
   }
 
   private async deleteOrDestroy(records: Base[], method?: string): Promise<void> {
     if (records.length === 0) return;
 
+    // Fire beforeRemove callbacks; abort if any returns false
     for (const record of records) {
-      fireAssocCallbacks(this.options.beforeRemove, this.owner, record);
+      const proceed = fireAssocCallbacks(this.options.beforeRemove, this.owner, record);
+      if (proceed === false) return;
     }
 
     const persisted = records.filter((r) => r.isPersisted());
@@ -431,18 +444,18 @@ export class CollectionAssociation extends Association {
         }
       }
     } else if (persisted.length > 0) {
-      // Nullify FK on persisted records (Rails: delete_records)
-      const fk = this.foreignKeyColumn();
-      const nullAttrs: Record<string, null> = { [fk]: null };
+      // Nullify FK columns on persisted records (Rails: delete_records)
+      const fks = this.foreignKeyColumns();
+      const nullAttrs: string[] = [...fks];
       if (this.reflection.options.as) {
-        nullAttrs[`${underscore(this.reflection.options.as)}_type`] = null;
+        nullAttrs.push(`${underscore(this.reflection.options.as)}_type`);
       }
       for (const record of persisted) {
-        for (const [attr, val] of Object.entries(nullAttrs)) {
+        for (const attr of nullAttrs) {
           if (typeof (record as any).writeAttribute === "function") {
-            (record as any).writeAttribute(attr, val);
+            (record as any).writeAttribute(attr, null);
           } else {
-            (record as any)[attr] = val;
+            (record as any)[attr] = null;
           }
         }
         if (typeof (record as any).save === "function") {
@@ -465,8 +478,10 @@ export class CollectionAssociation extends Association {
   }
 
   private async nullifyAllRecords(): Promise<void> {
-    const fk = this.foreignKeyColumn();
-    const nullAttrs: Record<string, null> = { [fk]: null };
+    const nullAttrs: Record<string, null> = {};
+    for (const fk of this.foreignKeyColumns()) {
+      nullAttrs[fk] = null;
+    }
     if (this.reflection.options.as) {
       nullAttrs[`${underscore(this.reflection.options.as)}_type`] = null;
     }

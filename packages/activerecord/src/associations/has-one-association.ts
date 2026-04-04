@@ -141,11 +141,15 @@ export class HasOneAssociation extends SingularAssociation {
   }
 
   private nullifyOwnerAttributes(record: Base): void {
-    const fk = this.foreignKeyColumn();
-    if (typeof (record as any).writeAttribute === "function") {
-      (record as any).writeAttribute(fk, null);
-    } else {
-      (record as any)[fk] = null;
+    const fks = Array.isArray(this.reflection.options.foreignKey)
+      ? this.reflection.options.foreignKey
+      : [this.foreignKeyColumn()];
+    for (const fk of fks) {
+      if (typeof (record as any).writeAttribute === "function") {
+        (record as any).writeAttribute(fk, null);
+      } else {
+        (record as any)[fk] = null;
+      }
     }
 
     if (this.reflection.options.as) {

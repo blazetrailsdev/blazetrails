@@ -176,10 +176,13 @@ export class BelongsToAssociation extends SingularAssociation {
   }
 
   protected override staleState(): unknown {
-    const fk = this.foreignKeyName();
-    return typeof this.owner.readAttribute === "function"
-      ? this.owner.readAttribute(fk)
-      : (this.owner as any)[fk];
+    const fks = this.foreignKeyNames();
+    const values = fks.map((fk) =>
+      typeof this.owner.readAttribute === "function"
+        ? this.owner.readAttribute(fk)
+        : (this.owner as any)[fk],
+    );
+    return values.length === 1 ? values[0] : JSON.stringify(values);
   }
 
   protected override findTargetNeeded(): boolean {

@@ -25,13 +25,13 @@ export class HasOneAssociation extends SingularAssociation {
 
     switch (dependent) {
       case "restrictWithException":
-        if (this.loadTarget()) {
+        if (await this.loadTarget()) {
           throw new DeleteRestrictionError(this.owner, this.reflection.name);
         }
         break;
 
       case "restrictWithError":
-        if (this.loadTarget()) {
+        if (await this.loadTarget()) {
           const ownerAny = this.owner as any;
           if (typeof ownerAny.errors?.add === "function") {
             ownerAny.errors.add(
@@ -52,7 +52,7 @@ export class HasOneAssociation extends SingularAssociation {
    * Supports: delete, destroy, nullify, destroy_async.
    */
   async delete(method?: string): Promise<void> {
-    if (!this.loadTarget()) return;
+    if (!(await this.loadTarget())) return;
     const target = this.target!;
 
     switch (method) {

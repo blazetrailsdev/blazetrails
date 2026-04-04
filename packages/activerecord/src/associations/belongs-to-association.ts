@@ -22,8 +22,7 @@ export class BelongsToAssociation extends SingularAssociation {
    * Called by the owner's before_destroy callback.
    */
   async handleDependency(): Promise<void> {
-    await this.asyncLoadTarget();
-    const target = this.target;
+    const target = await this.loadTarget();
     if (!target) return;
 
     const dependent = this.reflection.options.dependent;

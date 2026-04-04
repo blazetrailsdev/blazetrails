@@ -45,7 +45,7 @@ export class HasManyAssociation extends CollectionAssociation {
         break;
 
       case "destroy": {
-        const records = this.loadTarget();
+        const records = await this.loadTarget();
         for (const record of records) {
           (record as any).destroyedByAssociation = this.reflection;
         }

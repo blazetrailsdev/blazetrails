@@ -43,7 +43,7 @@ export class CollectionAssociation extends Association {
       return this.target.map((r: any) => r[pk]);
     }
     if (this.target.length > 0) {
-      this.loadTarget();
+      await this.loadTarget();
       return this.target.map((r: any) => r[pk]);
     }
     if (this._associationIds) return this._associationIds;
@@ -152,7 +152,7 @@ export class CollectionAssociation extends Association {
    * Destroy all records from this association, calling destroy callbacks.
    */
   async destroyAll(): Promise<void> {
-    const records = this.loadTarget() as Base[];
+    const records = await this.loadTarget();
     for (const record of records) {
       if (typeof (record as any).destroy === "function") {
         await (record as any).destroy();
@@ -239,11 +239,16 @@ export class CollectionAssociation extends Association {
   /**
    * Load target from database and merge with in-memory records.
    */
-  override loadTarget(): Base[] {
+  override async loadTarget(): Promise<Base[]> {
     if (this.findTargetNeeded()) {
-      const found = this.doFindTarget();
-      if (found !== undefined && Array.isArray(found)) {
-        this.target = this.mergeTargetLists(found, this.target);
+      const cached = this.doFindTarget();
+      if (cached !== undefined && Array.isArray(cached)) {
+        this.target = this.mergeTargetLists(cached, this.target);
+      } else {
+        const found = await this.doAsyncFindTarget();
+        if (found !== undefined && found !== null && Array.isArray(found)) {
+          this.target = this.mergeTargetLists(found, this.target);
+        }
       }
     }
 

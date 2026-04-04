@@ -63,10 +63,10 @@ export class Association {
     }
   }
 
-  reload(): this {
+  async reload(): Promise<this> {
     this.reset();
     this.resetScope();
-    this.loadTarget();
+    await this.loadTarget();
     return this;
   }
 
@@ -169,33 +169,18 @@ export class Association {
 
   /**
    * Loads the target if needed and returns it. Checks caches first,
-   * then falls back to async loading. If already loaded, returns
-   * cached target.
+   * then falls back to the async load functions in associations.ts.
+   *
+   * Mirrors: ActiveRecord::Associations::Association#load_target
    */
-  loadTarget(): Base | Base[] | null {
+  async loadTarget(): Promise<Base | Base[] | null> {
     if (this.isStaleTarget() || this.findTargetNeeded()) {
-      const cached = this.doFindTarget();
-      if (cached !== undefined) {
-        this.target = cached;
-      }
-      // If no cached data, the sync path can't load from DB.
-      // Callers needing DB loads should use asyncLoadTarget().
-    }
-
-    if (!this.loaded) {
-      this.loadedBang();
-    }
-    return this.target;
-  }
-
-  async asyncLoadTarget(): Promise<void> {
-    if (this.findTargetNeeded()) {
       const cached = this.doFindTarget();
       if (cached !== undefined) {
         this.target = cached;
       } else {
         const result = await this.doAsyncFindTarget();
-        if (result !== undefined) {
+        if (result !== undefined && result !== null) {
           this.target = result;
         }
       }
@@ -204,6 +189,16 @@ export class Association {
     if (!this.loaded) {
       this.loadedBang();
     }
+    return this.target;
+  }
+
+  /**
+   * Mirrors: ActiveRecord::Associations::Association#async_load_target
+   * In Rails this kicks off an async load and returns nil immediately.
+   * In our async-native implementation, this is identical to loadTarget.
+   */
+  async asyncLoadTarget(): Promise<Base | Base[] | null> {
+    return this.loadTarget();
   }
 
   marshalDump(): [string, Record<string, unknown>] {

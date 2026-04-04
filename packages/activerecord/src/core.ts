@@ -278,7 +278,7 @@ export function isPreventingWrites(this: CoreHost, className?: string): boolean 
   for (let i = _connectedToStack.length - 1; i >= 0; i--) {
     const entry = _connectedToStack[i];
     if (entry.prevent_writes === undefined) continue;
-    if (entry.klasses.has("Base")) return entry.prevent_writes;
+    if (klassesInclude(entry.klasses, "Base")) return entry.prevent_writes;
     if (className) {
       for (const klass of entry.klasses) {
         if (typeof klass === "function" && klass.name === className) {

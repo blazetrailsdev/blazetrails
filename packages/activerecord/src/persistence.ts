@@ -80,7 +80,8 @@ export function queryConstraintsList(this: PersistenceHost): string[] | null {
   if (this._queryConstraintsList) return this._queryConstraintsList;
 
   const parent = Object.getPrototypeOf(this) as PersistenceHost | null;
-  const isBase = this._isBaseClass ?? typeof parent !== "function";
+  const parentIsBase = !parent || typeof parent !== "function" || parent.name === "Base";
+  const isBase = this._isBaseClass ?? parentIsBase;
   if (isBase) {
     const pk = this.primaryKey;
     return Array.isArray(pk) ? pk : null;

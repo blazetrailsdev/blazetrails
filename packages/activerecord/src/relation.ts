@@ -3565,8 +3565,13 @@ export class Relation<T extends Base> {
   // Missing relation.rb methods — accessors, cache keys, scoping
   // ---------------------------------------------------------------------------
 
+  private _predicateBuilder: PredicateBuilder | null = null;
+
   get predicateBuilder(): PredicateBuilder {
-    return new PredicateBuilder(this._modelClass.arelTable);
+    if (!this._predicateBuilder) {
+      this._predicateBuilder = new PredicateBuilder(this._modelClass.arelTable);
+    }
+    return this._predicateBuilder;
   }
 
   get skipPreloadingValue(): boolean {

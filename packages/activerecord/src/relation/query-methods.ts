@@ -340,11 +340,7 @@ function havingBang(this: QueryMethodsHost, condition: string | Record<string, u
     this._havingClauses.push(condition);
   } else {
     for (const [key, value] of Object.entries(condition)) {
-      if (typeof value === "number") {
-        this._havingClauses.push(`${key} = ${value}`);
-      } else {
-        this._havingClauses.push(`${key} = '${String(value).replace(/'/g, "''")}'`);
-      }
+      this._havingClauses.push(`${key} = ${quote(value)}`);
     }
   }
   return this;

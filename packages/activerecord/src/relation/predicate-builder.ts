@@ -228,6 +228,7 @@ export class PredicateBuilder {
   with(context: any): PredicateBuilder {
     const builder = new PredicateBuilder(this.table);
     builder.setAssociationMap(this.associationMap);
+    builder.handlers = [...this.handlers];
     (builder as any)._context = context;
     return builder;
   }

@@ -21,7 +21,7 @@ export class FromClause {
   }
 
   isEmpty(): boolean {
-    return this.value === null;
+    return this.value == null;
   }
 
   merge(other: FromClause): FromClause {

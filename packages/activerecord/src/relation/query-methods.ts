@@ -404,7 +404,7 @@ function createWithBang(this: QueryMethodsHost, value: Record<string, unknown> |
   return this;
 }
 
-function fromBang(this: QueryMethodsHost, value: string, subqueryName?: string): any {
+function fromBang(this: QueryMethodsHost, value: any, subqueryName?: string): any {
   this._fromClause = new FromClause(value, subqueryName ?? null);
   return this;
 }

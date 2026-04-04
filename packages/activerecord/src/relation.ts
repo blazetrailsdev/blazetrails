@@ -798,7 +798,7 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#from
    */
-  from(source: string, subqueryName?: string): Relation<T> {
+  from(source: string | Relation<any>, subqueryName?: string): Relation<T> {
     return this._clone().fromBang(source, subqueryName);
   }
 
@@ -2445,16 +2445,17 @@ export class Relation<T extends Base> {
 
     // Replace FROM clause if from() was used
     if (!this._fromClause.isEmpty()) {
-      const value = this._fromClause.value!;
+      const raw = this._fromClause.value;
       const alias = this._fromClause.name;
-      const isSubquery = /^\s*SELECT\b/i.test(value);
       let fromExpr: string;
-      if (alias) {
-        fromExpr = isSubquery
-          ? `(${value}) "${alias.replace(/"/g, '""')}"`
-          : `${value} "${alias.replace(/"/g, '""')}"`;
+      if (raw instanceof Relation) {
+        const subSql = raw.toSql();
+        const name = alias ?? "subquery";
+        fromExpr = `(${subSql}) "${name.replace(/"/g, '""')}"`;
+      } else if (alias) {
+        fromExpr = `${raw} "${alias.replace(/"/g, '""')}"`;
       } else {
-        fromExpr = value;
+        fromExpr = raw;
       }
       sql = sql.replace(/FROM\s+"[^"]+"/, `FROM ${fromExpr}`);
     }

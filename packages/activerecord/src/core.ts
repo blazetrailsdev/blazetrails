@@ -392,13 +392,13 @@ export function inspectionFilter(this: CoreHost): {
     const parent = parentClass(this);
     if (parent) return inspectionFilter.call(parent);
   }
-  const attrs = this._filterAttributes ?? [];
+  const attrSet = new Set(this._filterAttributes ?? []);
   const mask = new InspectionMask();
   this._inspectionFilter = {
     filter(params: Record<string, unknown>): Record<string, unknown> {
       const result: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(params)) {
-        result[key] = attrs.includes(key) ? mask.toString() : value;
+        result[key] = attrSet.has(key) ? mask.toString() : value;
       }
       return result;
     },

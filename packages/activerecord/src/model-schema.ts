@@ -124,7 +124,7 @@ export function columnsHash(
   }
   const result: Record<string, { name: string; type: string; default: unknown }> = {};
   for (const [name, def] of modelClass._attributeDefinitions) {
-    result[name] = { name, type: def.type.name, default: def.defaultValue };
+    result[name] = { name, type: def.type.name, default: def.defaultValue ?? null };
   }
   return result;
 }

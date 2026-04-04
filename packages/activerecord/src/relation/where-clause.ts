@@ -152,10 +152,16 @@ function clauseToAstString(clause: WhereClause): string {
       if (v === null || v === undefined) {
         parts.push(`${col} IS NULL`);
       } else if (Array.isArray(v)) {
-        if (v.length === 0) {
+        const nonNull = v.filter((x) => x !== null && x !== undefined);
+        const hasNull = nonNull.length !== v.length;
+        if (nonNull.length === 0 && !hasNull) {
           parts.push("1=0");
         } else {
-          parts.push(`${col} IN (${v.map((x) => quote(x)).join(", ")})`);
+          const sub: string[] = [];
+          if (nonNull.length > 0)
+            sub.push(`${col} IN (${nonNull.map((x) => quote(x)).join(", ")})`);
+          if (hasNull) sub.push(`${col} IS NULL`);
+          parts.push(sub.length === 1 ? sub[0] : `(${sub.join(" OR ")})`);
         }
       } else {
         parts.push(`${col} = ${quote(v)}`);
@@ -168,10 +174,14 @@ function clauseToAstString(clause: WhereClause): string {
       if (v === null || v === undefined) {
         parts.push(`${col} IS NOT NULL`);
       } else if (Array.isArray(v)) {
-        if (v.length === 0) {
+        const nonNull = v.filter((x) => x !== null && x !== undefined);
+        const hasNull = nonNull.length !== v.length;
+        if (nonNull.length === 0 && !hasNull) {
           parts.push("1=1");
         } else {
-          parts.push(`${col} NOT IN (${v.map((x) => quote(x)).join(", ")})`);
+          if (nonNull.length > 0)
+            parts.push(`${col} NOT IN (${nonNull.map((x) => quote(x)).join(", ")})`);
+          if (hasNull) parts.push(`${col} IS NOT NULL`);
         }
       } else {
         parts.push(`${col} != ${quote(v)}`);

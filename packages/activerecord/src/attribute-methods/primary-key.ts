@@ -70,11 +70,14 @@ export function idForDatabase(this: PrimaryKeyRecord): unknown {
     if (Array.isArray(pk)) {
       return pk.map((k: string) => {
         const attr = attrs.getAttribute(k);
-        return attr?.valueForDatabase ? attr.valueForDatabase() : this.readAttribute(k);
+        // valueForDatabase is a getter property, not a method
+        return attr != null && "valueForDatabase" in attr
+          ? attr.valueForDatabase
+          : this.readAttribute(k);
       });
     }
     const attr = attrs.getAttribute(pk);
-    if (attr?.valueForDatabase) return attr.valueForDatabase();
+    if (attr != null && "valueForDatabase" in attr) return attr.valueForDatabase;
   }
   if (Array.isArray(pk)) return pk.map((k: string) => this.readAttribute(k));
   return this.readAttribute(pk);

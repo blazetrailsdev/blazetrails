@@ -208,9 +208,19 @@ export function isAttributeMethodsGenerated(this: AttributeMethodsHost): boolean
 
 export function defineAttributeMethods(this: AttributeMethodsHost): boolean {
   if (this._attributeMethodsGenerated) return false;
-  const amFn = Object.getPrototypeOf(this)?.defineAttributeMethods;
-  if (typeof amFn === "function") {
-    amFn.call(this, ...Array.from(this._attributeDefinitions.keys()));
+  // Generate getter/setter for each attribute definition that doesn't
+  // already have one on the prototype (mirrors Rails' define_attribute_methods)
+  for (const name of this._attributeDefinitions.keys()) {
+    if (name in this.prototype) continue;
+    Object.defineProperty(this.prototype, name, {
+      get(this: any) {
+        return this.readAttribute(name);
+      },
+      set(this: any, value: unknown) {
+        this.writeAttribute(name, value);
+      },
+      configurable: true,
+    });
   }
   this._attributeMethodsGenerated = true;
   return true;

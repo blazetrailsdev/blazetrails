@@ -324,6 +324,24 @@ export class CollectionAssociation extends Association {
   }
 
   /**
+   * For collection associations, the "foreign key" that matters is the
+   * owner's primary key (since children reference it via their FK).
+   * A new record that already has a PK assigned can still load children.
+   */
+  protected override foreignKeyPresent(): boolean {
+    const ctor = this.owner.constructor as any;
+    const pk = this.reflection.options.primaryKey ?? ctor.primaryKey ?? "id";
+    const keys = Array.isArray(pk) ? pk : [pk];
+    return keys.every((key: string) => {
+      const val =
+        typeof this.owner.readAttribute === "function"
+          ? this.owner.readAttribute(key)
+          : (this.owner as any)[key];
+      return val != null;
+    });
+  }
+
+  /**
    * Returns true if the scope should be null — owner is a new
    * record and has no foreign key present.
    */

@@ -276,22 +276,22 @@ export class BelongsToAssociation extends SingularAssociation {
     if (!this.owner.isPersisted()) return;
     if (!this.foreignKeyPresent()) return;
 
+    const fkValue = this.owner.readAttribute?.(this.foreignKeyName());
+    if (fkValue == null) return;
+
+    const Klass = this.klass;
+    if (Klass && typeof (Klass as any).where === "function") {
+      const pk = (Klass as any).primaryKey ?? "id";
+      const scope = (Klass as any).where({ [pk]: fkValue });
+      if (typeof scope.updateCounters === "function") {
+        await scope.updateCounters({ [counterCol]: by });
+      }
+    }
+
+    // Mirror the updated value in-memory if target is loaded
     if (this.target && !this.isStaleTarget()) {
-      if (typeof (this.target as any).increment === "function") {
-        (this.target as any).increment(counterCol, by);
-      }
-    } else {
-      const fkValue = this.owner.readAttribute?.(this.foreignKeyName());
-      if (fkValue != null) {
-        const Klass = this.klass;
-        if (Klass && typeof (Klass as any).where === "function") {
-          const pk = (Klass as any).primaryKey ?? "id";
-          const scope = (Klass as any).where({ [pk]: fkValue });
-          if (typeof scope.updateCounters === "function") {
-            await scope.updateCounters({ [counterCol]: by });
-          }
-        }
-      }
+      const current = (this.target as any)[counterCol] ?? 0;
+      (this.target as any)[counterCol] = current + by;
     }
   }
 

@@ -229,7 +229,10 @@ export class CollectionAssociation extends Association {
     for (const record of toRemove) {
       fireAssocCallbacks(this.options.beforeRemove, this.owner, record);
       const idx = this.target.indexOf(record);
-      if (idx !== -1) this.target.splice(idx, 1);
+      if (idx !== -1) {
+        this.target.splice(idx, 1);
+        this.removeInverseInstance(record);
+      }
       fireAssocCallbacks(this.options.afterRemove, this.owner, record);
     }
 
@@ -469,6 +472,7 @@ export class CollectionAssociation extends Association {
       if (idx !== -1) {
         this.target.splice(idx, 1);
       }
+      this.removeInverseInstance(record);
     }
     this._associationIds = null;
 
@@ -554,11 +558,25 @@ export class CollectionAssociation extends Association {
 
   private findByScan(ids: unknown[]): Base | Base[] {
     const normalize = (v: unknown) => JSON.stringify(v);
-    const idSet = new Set(ids.map(normalize));
+    const normalizedIds = ids.map(normalize);
+
     if (ids.length === 1) {
-      const found = this.target.find((r) => normalize((r as any).id) === normalize(ids[0]));
-      return found ?? (null as any);
+      const found = this.target.find((r) => normalize((r as any).id) === normalizedIds[0]);
+      if (!found) {
+        throw new Error(`Couldn't find ${this.klass.name} with ID ${normalizedIds[0]}`);
+      }
+      return found;
     }
-    return this.target.filter((r) => idSet.has(normalize((r as any).id)));
+
+    const idSet = new Set(normalizedIds);
+    const found = this.target.filter((r) => idSet.has(normalize((r as any).id)));
+    if (found.length !== ids.length) {
+      const foundSet = new Set(found.map((r) => normalize((r as any).id)));
+      const missing = ids.filter((id) => !foundSet.has(normalize(id)));
+      throw new Error(
+        `Couldn't find all ${this.klass.name} with IDs (${missing.map(normalize).join(", ")})`,
+      );
+    }
+    return found;
   }
 }

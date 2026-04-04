@@ -15,22 +15,24 @@
  *     orderBang(this: Relation, ...args: any[]) { ... },
  *   };
  *
- *   // Include it into a class
- *   include(Relation, QueryMethods);
+ *   // Include one or more modules into a class
+ *   include(Relation, QueryMethods, FinderMethods);
  */
 
 type AnyClass = new (...args: any[]) => any;
 type Module = Record<string, Function>;
 
-export function include(klass: AnyClass, mod: Module): void {
+export function include(klass: AnyClass, ...modules: Module[]): void {
   const descriptors: PropertyDescriptorMap = {};
-  for (const key of Object.keys(mod)) {
-    descriptors[key] = {
-      value: mod[key],
-      writable: true,
-      configurable: true,
-      enumerable: false,
-    };
+  for (const mod of modules) {
+    for (const key of Object.keys(mod)) {
+      descriptors[key] = {
+        value: mod[key],
+        writable: true,
+        configurable: true,
+        enumerable: false,
+      };
+    }
   }
   Object.defineProperties(klass.prototype, descriptors);
 }

@@ -7,7 +7,8 @@
  * Mirrors: ActiveRecord::Relation::WhereClause
  */
 
-import type { Nodes } from "@blazetrails/arel";
+import { Visitors, type Nodes } from "@blazetrails/arel";
+import { quote } from "../connection-adapters/abstract/quoting.js";
 
 export class WhereClause {
   conditions: Array<Record<string, unknown>>;
@@ -141,21 +142,41 @@ export class WhereClause {
   }
 }
 
+const visitor = new Visitors.ToSql();
+
 function clauseToAstString(clause: WhereClause): string {
   const parts: string[] = [];
   for (const cond of clause.conditions) {
     for (const [k, v] of Object.entries(cond)) {
-      parts.push(`${k} = ${JSON.stringify(v)}`);
+      if (Array.isArray(v)) {
+        parts.push(`${quoteIdent(k)} IN (${v.map((x) => quote(x)).join(", ")})`);
+      } else {
+        parts.push(`${quoteIdent(k)} = ${quote(v)}`);
+      }
     }
   }
   for (const cond of clause.notConditions) {
     for (const [k, v] of Object.entries(cond)) {
-      parts.push(`${k} != ${JSON.stringify(v)}`);
+      if (v === null || v === undefined) {
+        parts.push(`${quoteIdent(k)} IS NOT NULL`);
+      } else if (Array.isArray(v)) {
+        parts.push(`${quoteIdent(k)} NOT IN (${v.map((x) => quote(x)).join(", ")})`);
+      } else {
+        parts.push(`${quoteIdent(k)} != ${quote(v)}`);
+      }
     }
   }
   parts.push(...clause.rawClauses);
   for (const node of clause.arelNodes) {
-    parts.push(String(node));
+    try {
+      parts.push(visitor.compile(node));
+    } catch {
+      parts.push(String(node));
+    }
   }
   return parts.length <= 1 ? (parts[0] ?? "") : parts.join(" AND ");
+}
+
+function quoteIdent(name: string): string {
+  return `"${name.replace(/"/g, '""')}"`;
 }

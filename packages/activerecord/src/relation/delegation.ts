@@ -111,9 +111,10 @@ export function initializeRelationDelegateCache(): void {
   _delegateCache.initialize(Object);
 }
 
+const _generatedMethods = new GeneratedRelationMethods();
+
 export function generateRelationMethod(name: string, fn: Function): void {
-  const methods = new GeneratedRelationMethods();
-  methods.generate(name, fn);
+  _generatedMethods.generate(name, fn);
 }
 
 export function generateMethod(name: string): Function {

@@ -4,7 +4,7 @@
  * Mirrors: ActiveRecord::SpawnMethods
  */
 
-import { Merger } from "./merger.js";
+import { Merger, HashMerger } from "./merger.js";
 
 interface SpawnRelation<T = unknown> {
   _clone(): T;
@@ -54,8 +54,9 @@ export function mergeBang(this: any, other: any): any {
     this._rawJoins.push(...(other._rawJoins ?? []));
     this._annotations.push(...(other._annotations ?? []));
   } else if (typeof other === "object" && other !== null) {
-    const merged = new Merger(this, other).merge();
-    Object.assign(this, merged);
+    new HashMerger(this, other).merge();
+  } else if (typeof other === "function") {
+    other.call(this);
   }
   return this;
 }

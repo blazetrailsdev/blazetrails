@@ -2444,7 +2444,10 @@ export class Relation<T extends Base> {
 
     // Replace FROM clause if from() was used
     if (!this._fromClause.isEmpty()) {
-      sql = sql.replace(/FROM\s+"[^"]+"/, `FROM ${this._fromClause.value}`);
+      const fromExpr = this._fromClause.name
+        ? `(${this._fromClause.value}) ${this._fromClause.name}`
+        : this._fromClause.value!;
+      sql = sql.replace(/FROM\s+"[^"]+"/, `FROM ${fromExpr}`);
     }
 
     // Append SQL comments from annotate()
@@ -3687,12 +3690,10 @@ export class Relation<T extends Base> {
   computeCacheKey(): string {
     const tableName = this._modelClass.tableName;
     const sql = this.toSql();
-    let hash = 0;
-    for (let i = 0; i < sql.length; i++) {
-      const ch = sql.charCodeAt(i);
-      hash = ((hash << 5) - hash + ch) | 0;
-    }
-    return `${tableName}/query-${(hash >>> 0).toString(36)}`;
+    // Use MD5 for a stable, collision-resistant digest (matches Rails' Digest::MD5)
+    const { createHash } = require("crypto") as typeof import("crypto");
+    const digest = createHash("md5").update(sql).digest("hex");
+    return `${tableName}/query-${digest}`;
   }
 
   async cacheVersion(): Promise<string> {

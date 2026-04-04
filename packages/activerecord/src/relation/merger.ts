@@ -12,7 +12,7 @@ export class Merger {
   constructor(relation: any, other: any) {
     this.relation = relation;
     this.other = other;
-    this.values = other.values?.() ?? {};
+    this.values = typeof other.values === "function" ? (other.values() ?? {}) : {};
   }
 
   merge(): any {

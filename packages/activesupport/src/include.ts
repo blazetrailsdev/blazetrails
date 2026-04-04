@@ -25,6 +25,8 @@ type Module = Record<string, Function>;
 export function include(klass: AnyClass, mod: Module): void {
   const descriptors: PropertyDescriptorMap = {};
   for (const key of Object.keys(mod)) {
+    // Ruby's include doesn't replace methods already defined on the class
+    if (Object.prototype.hasOwnProperty.call(klass.prototype, key)) continue;
     descriptors[key] = {
       value: mod[key],
       writable: true,

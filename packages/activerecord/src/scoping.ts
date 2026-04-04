@@ -52,39 +52,52 @@ export class ScopeRegistry {
     ScopeRegistry.setGlobalCurrentScope(modelClass, scope);
   }
 
-  static currentScope(modelClass: object, _skipInherited = false): any | null {
-    return this._currentScopes.get(modelClass) ?? null;
+  static currentScope(modelClass: object, skipInherited = false): any | null {
+    return this.valueFor(this._currentScopes, modelClass, skipInherited);
   }
 
   static setCurrentScope(modelClass: object, scope: any): void {
-    if (scope === null) {
-      this._currentScopes.delete(modelClass);
-    } else {
-      this._currentScopes.set(modelClass, scope);
-    }
+    this.setValueFor(this._currentScopes, modelClass, scope);
   }
 
-  static ignoreDefaultScope(modelClass: object, _skipInherited = false): any | null {
-    return this._ignoreDefaultScope.get(modelClass) ?? null;
+  static ignoreDefaultScope(modelClass: object, skipInherited = false): any | null {
+    return this.valueFor(this._ignoreDefaultScope, modelClass, skipInherited);
   }
 
   static setIgnoreDefaultScope(modelClass: object, value: any): void {
-    if (value === null) {
-      this._ignoreDefaultScope.delete(modelClass);
-    } else {
-      this._ignoreDefaultScope.set(modelClass, value);
-    }
+    this.setValueFor(this._ignoreDefaultScope, modelClass, value);
   }
 
-  static globalCurrentScope(modelClass: object, _skipInherited = false): any | null {
-    return this._globalCurrentScope.get(modelClass) ?? null;
+  static globalCurrentScope(modelClass: object, skipInherited = false): any | null {
+    return this.valueFor(this._globalCurrentScope, modelClass, skipInherited);
   }
 
   static setGlobalCurrentScope(modelClass: object, scope: any): void {
-    if (scope === null) {
-      this._globalCurrentScope.delete(modelClass);
+    this.setValueFor(this._globalCurrentScope, modelClass, scope);
+  }
+
+  // Rails: value_for(@registry, model, skip_inherited_scope)
+  // Walks up the prototype chain unless skipInherited is true.
+  private static valueFor(
+    map: WeakMap<object, any>,
+    modelClass: object,
+    skipInherited: boolean,
+  ): any | null {
+    const value = map.get(modelClass);
+    if (value !== undefined) return value;
+    if (skipInherited) return null;
+    const parent = Object.getPrototypeOf(modelClass);
+    if (typeof parent === "function" && parent !== modelClass) {
+      return this.valueFor(map, parent, false);
+    }
+    return null;
+  }
+
+  private static setValueFor(map: WeakMap<object, any>, modelClass: object, value: any): void {
+    if (value === null) {
+      map.delete(modelClass);
     } else {
-      this._globalCurrentScope.set(modelClass, scope);
+      map.set(modelClass, value);
     }
   }
 }

@@ -417,6 +417,7 @@ export function columnForAttribute(this: SchemaHost, name: string): any {
  * Rails: column_names.index_by(&:to_sym)[name_symbol]
  */
 export function symbolColumnToString(this: SchemaHost, name: string): string | undefined {
+  loadSchema.call(this);
   const hash = getColumnsHash(this);
   return hash[name] ? name : undefined;
 }

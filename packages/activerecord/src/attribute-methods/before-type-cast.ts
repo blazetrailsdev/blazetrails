@@ -33,25 +33,25 @@ export function attributesBeforeTypeCast(record: BeforeTypeCastRecord): Record<s
 
 interface DatabaseRecord {
   _attributes: {
-    valueForDatabase?(name: string): unknown;
     valuesForDatabase?(): Record<string, unknown>;
-    get?(name: string): { valueForDatabase?(): unknown } | undefined;
-    [key: string]: unknown;
+    getAttribute?(name: string): { valueForDatabase?(): unknown } | undefined;
+    keys?(): Iterable<string>;
   };
   readAttribute(name: string): unknown;
   constructor: { _attributeAliases?: Record<string, string> };
 }
 
 /**
- * Rails: resolves alias, then calls attribute_for_database(name)
- * which reads the serialized-for-database value from the attribute set.
+ * Rails: resolves alias, then calls @attributes[name].value_for_database
  */
 export function readAttributeForDatabase(record: DatabaseRecord, attrName: string): unknown {
   const name = record.constructor._attributeAliases?.[attrName] ?? attrName;
-  // Try the attribute's valueForDatabase (matches Rails' @attributes[name].value_for_database)
-  const attr = record._attributes.get?.(name);
+  const attr = record._attributes.getAttribute?.(name);
   if (attr?.valueForDatabase) return attr.valueForDatabase();
-  if (record._attributes.valueForDatabase) return record._attributes.valueForDatabase(name);
+  // Fallback: use valuesForDatabase bulk method
+  if (record._attributes.valuesForDatabase) {
+    return record._attributes.valuesForDatabase()[name];
+  }
   return record.readAttribute(name);
 }
 
@@ -62,11 +62,10 @@ export function attributesForDatabase(record: DatabaseRecord): Record<string, un
   if (record._attributes.valuesForDatabase) {
     return record._attributes.valuesForDatabase();
   }
-  // Fallback: serialize each attribute individually
   const result: Record<string, unknown> = {};
-  if (record._attributes.get) {
-    for (const [key] of Object.entries(record._attributes)) {
-      if (key.startsWith("_")) continue;
+  const keys = record._attributes.keys?.();
+  if (keys) {
+    for (const key of keys) {
       result[key] = readAttributeForDatabase(record, key);
     }
   }

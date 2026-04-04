@@ -57,7 +57,7 @@ const UPDATED_ATTRS = ["updated_at", "updated_on"];
 
 interface TimestampHost {
   _attributeAliases?: Record<string, string>;
-  columnNames?: string[];
+  columnNames?: string[] | (() => string[]);
   _timestampAttributesForCreateInModel?: string[];
   _timestampAttributesForUpdateInModel?: string[];
   _allTimestampAttributesInModel?: string[];
@@ -78,14 +78,18 @@ export function touchAttributesWithTime(
 
 export function timestampAttributesForCreateInModel(this: TimestampHost): string[] {
   if (this._timestampAttributesForCreateInModel) return this._timestampAttributesForCreateInModel;
-  const cols = new Set(this.columnNames ?? []);
+  const names =
+    typeof this.columnNames === "function" ? this.columnNames() : (this.columnNames ?? []);
+  const cols = new Set(names);
   this._timestampAttributesForCreateInModel = CREATED_ATTRS.filter((a) => cols.has(a));
   return this._timestampAttributesForCreateInModel;
 }
 
 export function timestampAttributesForUpdateInModel(this: TimestampHost): string[] {
   if (this._timestampAttributesForUpdateInModel) return this._timestampAttributesForUpdateInModel;
-  const cols = new Set(this.columnNames ?? []);
+  const names =
+    typeof this.columnNames === "function" ? this.columnNames() : (this.columnNames ?? []);
+  const cols = new Set(names);
   this._timestampAttributesForUpdateInModel = UPDATED_ATTRS.filter((a) => cols.has(a));
   return this._timestampAttributesForUpdateInModel;
 }

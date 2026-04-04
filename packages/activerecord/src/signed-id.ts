@@ -144,7 +144,7 @@ export async function findSignedBang(
  */
 export function combineSignedIdPurposes(modelClass: typeof Base, purpose?: string): string {
   // Rails: base_class.name.underscore
-  const base = (modelClass as any).baseClass?.() ?? modelClass;
+  const base = (modelClass as any).baseClass ?? modelClass;
   const parts = [underscore(base.name)];
   if (purpose) parts.push(String(purpose));
   return parts.filter(Boolean).join("/");

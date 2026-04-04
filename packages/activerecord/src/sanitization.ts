@@ -4,7 +4,7 @@
  * Mirrors: ActiveRecord::Sanitization
  */
 
-import { quote } from "./connection-adapters/abstract/quoting.js";
+import { quote, quoteIdentifier, quoteTableName } from "./connection-adapters/abstract/quoting.js";
 import { PreparedStatementInvalid } from "./errors.js";
 
 /**
@@ -97,7 +97,9 @@ export function sanitizeSqlHashForAssignment(
           if (type.serialize) value = type.serialize(value);
         }
       }
-      const col = table ? `"${table}"."${attr}"` : `"${attr}"`;
+      const col = table
+        ? `${quoteTableName(table)}.${quoteIdentifier(attr)}`
+        : quoteIdentifier(attr);
       return `${col} = ${quote(value)}`;
     })
     .join(", ");

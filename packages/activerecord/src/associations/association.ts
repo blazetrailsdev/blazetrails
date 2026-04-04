@@ -137,17 +137,13 @@ export class Association {
 
   inversedFrom(record: Base | null): void {
     this.target = record;
-    if (record !== null) {
-      this.loadedBang();
-    }
+    this.loadedBang();
   }
 
   inversedFromQueries(record: Base | null): void {
     if (this.inversable(record)) {
       this.target = record;
-      if (record !== null) {
-        this.loadedBang();
-      }
+      this.loadedBang();
     }
   }
 

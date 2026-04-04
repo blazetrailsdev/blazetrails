@@ -167,9 +167,7 @@ export class BelongsToAssociation extends SingularAssociation {
 
     this.replaceKeys(record);
     this.target = record;
-    if (record !== null) {
-      this.loadedBang();
-    }
+    this.loadedBang();
   }
 
   protected override staleState(): unknown {

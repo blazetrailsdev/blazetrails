@@ -37,21 +37,18 @@ export class CollectionAssociation extends Association {
    * Returns an array of primary key values from the target.
    */
   async idsReader(): Promise<unknown[]> {
-    const pk = (this.klass as any).primaryKey ?? "id";
-    const readPk = (r: Base) =>
-      typeof r.readAttribute === "function" ? r.readAttribute(pk as string) : (r as any)[pk];
-
     if (this.isLoaded()) {
-      return this.target.map(readPk);
+      return this.target.map((r: any) => r.id);
     }
     if (this.target.length > 0) {
       await this.loadTarget();
-      return this.target.map(readPk);
+      return this.target.map((r: any) => r.id);
     }
     if (this._associationIds) return this._associationIds;
+    const pk = (this.klass as any).primaryKey ?? "id";
     const rel = this.scope();
     if (rel && typeof rel.pluck === "function") {
-      this._associationIds = await rel.pluck(pk as string);
+      this._associationIds = await rel.pluck(...(Array.isArray(pk) ? pk : [pk]));
       return this._associationIds!;
     }
     return [];
@@ -224,7 +221,7 @@ export class CollectionAssociation extends Association {
    * Check if a record is in the collection. For new records, checks
    * the in-memory target. For persisted records, uses scope if not loaded.
    */
-  isInclude(record: Base): boolean {
+  async isInclude(record: Base): Promise<boolean> {
     if (record.isNewRecord()) {
       return this.target.includes(record);
     }
@@ -233,7 +230,7 @@ export class CollectionAssociation extends Association {
     }
     const rel = this.scope();
     if (rel && typeof rel.exists === "function") {
-      return rel.exists((record as any).id);
+      return await rel.exists((record as any).id);
     }
     return this.target.some((r: any) => r.id === (record as any).id);
   }
@@ -449,18 +446,23 @@ export class CollectionAssociation extends Association {
    * Preserves order of persisted, deduplicates, and keeps
    * attribute changes from in-memory versions.
    */
+  private recordIdentity(record: Base): string {
+    return JSON.stringify((record as any).id);
+  }
+
   private mergeTargetLists(persisted: Base[], memory: Base[]): Base[] {
     if (memory.length === 0) return persisted;
 
-    const memoryById = new Map<unknown, Base>();
+    const memoryById = new Map<string, Base>();
     for (const record of memory) {
-      memoryById.set((record as any).id, record);
+      memoryById.set(this.recordIdentity(record), record);
     }
 
     const merged = persisted.map((record) => {
-      const memRecord = memoryById.get((record as any).id);
+      const identity = this.recordIdentity(record);
+      const memRecord = memoryById.get(identity);
       if (memRecord) {
-        memoryById.delete((record as any).id);
+        memoryById.delete(identity);
         return memRecord;
       }
       return record;
@@ -476,12 +478,12 @@ export class CollectionAssociation extends Association {
   }
 
   private findByScan(ids: unknown[]): Base | Base[] {
-    const pk = (this.klass as any).primaryKey ?? "id";
-    const stringIds = ids.map(String);
-    if (stringIds.length === 1) {
-      const found = this.target.find((r: any) => String(r[pk]) === stringIds[0]);
+    const normalize = (v: unknown) => JSON.stringify(v);
+    const idSet = new Set(ids.map(normalize));
+    if (ids.length === 1) {
+      const found = this.target.find((r) => normalize((r as any).id) === normalize(ids[0]));
       return found ?? (null as any);
     }
-    return this.target.filter((r: any) => stringIds.includes(String(r[pk])));
+    return this.target.filter((r) => idSet.has(normalize((r as any).id)));
   }
 }

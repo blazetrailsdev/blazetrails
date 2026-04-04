@@ -54,6 +54,21 @@ export class BelongsToPolymorphicAssociation extends BelongsToAssociation {
     return undefined;
   }
 
+  /**
+   * Override replace to also write/clear the polymorphic type column.
+   * Rails: BelongsToPolymorphicAssociation#replace_keys sets foreign_type.
+   */
+  protected override replace(record: Base | null): void {
+    const typeCol = this.foreignTypeName();
+    const typeName = record ? (record.constructor as any).name : null;
+    if (typeof this.owner.writeAttribute === "function") {
+      (this.owner as any).writeAttribute(typeCol, typeName);
+    } else {
+      (this.owner as any)[typeCol] = typeName;
+    }
+    super.replace(record);
+  }
+
   protected override async doAsyncFindTarget(): Promise<Base | null> {
     return loadBelongsTo(this.owner, this.reflection.name, this.reflection.options);
   }

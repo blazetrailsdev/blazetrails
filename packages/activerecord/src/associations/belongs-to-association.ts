@@ -190,12 +190,13 @@ export class BelongsToAssociation extends SingularAssociation {
   }
 
   protected override foreignKeyPresent(): boolean {
-    const fk = this.foreignKeyName();
-    const value =
-      typeof this.owner.readAttribute === "function"
-        ? this.owner.readAttribute(fk)
-        : (this.owner as any)[fk];
-    return value != null;
+    return this.foreignKeyNames().every((fk) => {
+      const value =
+        typeof this.owner.readAttribute === "function"
+          ? this.owner.readAttribute(fk)
+          : (this.owner as any)[fk];
+      return value != null;
+    });
   }
 
   protected override async doAsyncFindTarget(): Promise<Base | null> {

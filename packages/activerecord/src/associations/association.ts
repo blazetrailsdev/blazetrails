@@ -136,15 +136,31 @@ export class Association {
   }
 
   inversedFrom(record: Base | null): void {
-    this.target = record;
+    this.assignInversedTarget(record);
     this.loadedBang();
   }
 
   inversedFromQueries(record: Base | null): void {
     if (this.inversable(record)) {
-      this.target = record;
+      this.assignInversedTarget(record);
       this.loadedBang();
     }
+  }
+
+  private assignInversedTarget(record: Base | null): void {
+    if (!this.isCollection()) {
+      this.target = record;
+      return;
+    }
+    if (record === null) {
+      this.target = [];
+      return;
+    }
+    const target = Array.isArray(this.target) ? this.target : [];
+    if (!target.includes(record)) {
+      target.push(record);
+    }
+    this.target = target;
   }
 
   /**

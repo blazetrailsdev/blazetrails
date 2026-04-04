@@ -24,7 +24,11 @@ import { Range } from "./connection-adapters/postgresql/oid/range.js";
 export { Range };
 import { WhereChain, QueryMethodBangs } from "./relation/query-methods.js";
 import { Batches } from "./relation/batches.js";
-import { performSpawn, performMerge } from "./relation/spawn-methods.js";
+import {
+  performSpawn,
+  performMerge,
+  mergeBang as performMergeBang,
+} from "./relation/spawn-methods.js";
 import { wrapWithScopeProxy } from "./relation/delegation.js";
 import { InsertAll } from "./insert-all.js";
 import { ScopeRegistry } from "./scoping.js";
@@ -66,6 +70,7 @@ import {
   performThirdToLastBang,
   performFindOrCreateByBang,
   performCreateOrFindByBang,
+  raiseRecordNotFoundExceptionBang,
 } from "./relation/finder-methods.js";
 import { FromClause } from "./relation/from-clause.js";
 import { WhereClause } from "./relation/where-clause.js";
@@ -3981,6 +3986,14 @@ export interface Relation<T extends Base> extends CalculationMethods {
   // SpawnMethods
   spawn(): Relation<T>;
   merge<U extends Base>(other: Relation<U>): Relation<T>;
+  mergeBang(other: any): Relation<T>;
+  // FinderMethods
+  raiseRecordNotFoundExceptionBang(
+    message?: string,
+    modelName?: string,
+    primaryKey?: string,
+    id?: unknown,
+  ): never;
   // QueryMethods bang variants (mixed in from query-methods.ts)
   includesBang(...associations: string[]): Relation<T>;
   eagerLoadBang(...associations: string[]): Relation<T>;
@@ -4064,6 +4077,8 @@ Object.defineProperties(Relation.prototype, {
   // SpawnMethods
   spawn: { ...def, value: performSpawn },
   merge: { ...def, value: performMerge },
+  mergeBang: { ...def, value: performMergeBang },
+  raiseRecordNotFoundExceptionBang: { ...def, value: raiseRecordNotFoundExceptionBang },
 });
 
 // Thenable: make Relation directly awaitable (delegates to toArray).

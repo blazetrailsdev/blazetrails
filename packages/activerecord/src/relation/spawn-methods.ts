@@ -54,7 +54,8 @@ export function mergeBang(this: any, other: any): any {
     this._rawJoins.push(...(other._rawJoins ?? []));
     this._annotations.push(...(other._annotations ?? []));
   } else if (typeof other === "object" && other !== null) {
-    new Merger(this, other).merge();
+    const merged = new Merger(this, other).merge();
+    Object.assign(this, merged);
   }
   return this;
 }

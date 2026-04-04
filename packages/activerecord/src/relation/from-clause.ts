@@ -30,7 +30,7 @@ export class FromClause {
   }
 
   equals(other: FromClause): boolean {
-    return this.value === other.value;
+    return this.value === other.value && this.name === other.name;
   }
 }
 

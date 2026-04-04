@@ -101,32 +101,15 @@ export class WhereClause {
     if (this.isEmpty()) return other.clone();
     if (other.isEmpty()) return this.clone();
 
-    // Rails: extract common predicates, OR the differences.
-    // Our representation uses parallel arrays rather than Arel predicates,
-    // so we keep the OR as two merged WhereClause halves stored together.
-    // The SQL generation in Relation handles combining them with OR.
-    const result = new WhereClause();
-    result.conditions = [...this.conditions, ...other.conditions];
-    result.notConditions = [...this.notConditions, ...other.notConditions];
-    result.rawClauses = [...this.rawClauses, ...other.rawClauses];
-    result.arelNodes = [...this.arelNodes, ...other.arelNodes];
-    return result;
+    // Rails builds an Arel::Nodes::Or from the two sides' ASTs.
+    // We represent each side as its AST string, then combine with OR.
+    const left = this.ast;
+    const right = other.ast;
+    return new WhereClause([], [], [`(${left}) OR (${right})`]);
   }
 
   get ast(): string {
-    const parts: string[] = [];
-    for (const cond of this.conditions) {
-      for (const [k, v] of Object.entries(cond)) {
-        parts.push(`${k} = ${JSON.stringify(v)}`);
-      }
-    }
-    for (const cond of this.notConditions) {
-      for (const [k, v] of Object.entries(cond)) {
-        parts.push(`${k} != ${JSON.stringify(v)}`);
-      }
-    }
-    parts.push(...this.rawClauses);
-    return parts.length <= 1 ? (parts[0] ?? "") : parts.join(" AND ");
+    return clauseToAstString(this);
   }
 
   isContradiction(): boolean {
@@ -156,4 +139,23 @@ export class WhereClause {
     }
     return result;
   }
+}
+
+function clauseToAstString(clause: WhereClause): string {
+  const parts: string[] = [];
+  for (const cond of clause.conditions) {
+    for (const [k, v] of Object.entries(cond)) {
+      parts.push(`${k} = ${JSON.stringify(v)}`);
+    }
+  }
+  for (const cond of clause.notConditions) {
+    for (const [k, v] of Object.entries(cond)) {
+      parts.push(`${k} != ${JSON.stringify(v)}`);
+    }
+  }
+  parts.push(...clause.rawClauses);
+  for (const node of clause.arelNodes) {
+    parts.push(String(node));
+  }
+  return parts.length <= 1 ? (parts[0] ?? "") : parts.join(" AND ");
 }

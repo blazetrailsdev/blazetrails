@@ -3736,14 +3736,13 @@ export interface Relation<T extends Base> {
   ): Promise<T[] | TResult>;
   finally(onfinally?: (() => void) | null): Promise<T[]>;
 }
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface Relation<T extends Base> extends Included<typeof QueryMethodBangs> {}
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface Relation<T extends Base> extends Included<typeof FinderMethods> {}
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface Relation<T extends Base> extends Included<typeof Calculations> {}
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface Relation<T extends Base> extends Included<typeof SpawnMethods> {}
+
+export interface Relation<T extends Base>
+  extends
+    Included<typeof QueryMethodBangs>,
+    Included<typeof FinderMethods>,
+    Included<typeof Calculations>,
+    Included<typeof SpawnMethods> {}
 
 include(Relation, QueryMethodBangs);
 include(Relation, FinderMethods);

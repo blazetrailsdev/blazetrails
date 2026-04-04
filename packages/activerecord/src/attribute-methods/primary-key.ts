@@ -3,6 +3,7 @@
  *
  * Mirrors: ActiveRecord::AttributeMethods::PrimaryKey
  */
+import { quoteIdentifier } from "../connection-adapters/abstract/quoting.js";
 
 interface PrimaryKeyRecord {
   id: unknown;
@@ -93,10 +94,13 @@ export function isDangerousAttributeMethod(_this: PrimaryKeyHost, _name: string)
   return false;
 }
 
+/**
+ * Rails: adapter_class.quote_column_name(primary_key)
+ */
 export function quotedPrimaryKey(this: PrimaryKeyHost): string {
   const pk = this.primaryKey;
-  if (Array.isArray(pk)) return pk.map((k) => `"${k}"`).join(", ");
-  return `"${pk}"`;
+  if (Array.isArray(pk)) return pk.map((k) => quoteIdentifier(k)).join(", ");
+  return quoteIdentifier(pk);
 }
 
 export function resetPrimaryKey(this: PrimaryKeyHost): void {
@@ -108,6 +112,16 @@ export function resetPrimaryKey(this: PrimaryKeyHost): void {
   }
 }
 
-export function getPrimaryKey(this: PrimaryKeyHost, _baseName?: string): string {
+/**
+ * Rails: checks primary_key_prefix_type, then falls back to "id".
+ * In practice, nearly all Rails apps use "id" as the default PK.
+ */
+export function getPrimaryKey(this: PrimaryKeyHost, baseName?: string): string {
+  if (baseName && (this as any).primaryKeyPrefixType === "table_name") {
+    return `${baseName.toLowerCase()}_id`;
+  }
+  if (baseName && (this as any).primaryKeyPrefixType === "table_name_with_underscore") {
+    return `${baseName.toLowerCase()}_id`;
+  }
   return "id";
 }

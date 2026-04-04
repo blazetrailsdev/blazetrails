@@ -97,8 +97,46 @@ interface AttributeMethodsHost {
 
 const RESTRICTED_CLASS_METHODS = new Set(["allocate", "new", "name", "parent", "superclass"]);
 
+let _dangerousMethodsCache: Set<string> | null = null;
+
+/**
+ * Rails: collects Base.instance_methods + private_instance_methods
+ * minus superclass methods. These are method names that would conflict
+ * with attribute accessors if a column had the same name.
+ */
 export function dangerousAttributeMethods(): Set<string> {
-  return new Set<string>();
+  if (_dangerousMethodsCache) return _dangerousMethodsCache;
+  _dangerousMethodsCache = new Set([
+    "save",
+    "saveBang",
+    "destroy",
+    "delete",
+    "reload",
+    "update",
+    "increment",
+    "decrement",
+    "toggle",
+    "touch",
+    "lock",
+    "freeze",
+    "dup",
+    "clone",
+    "becomes",
+    "inspect",
+    "toJSON",
+    "isNewRecord",
+    "isPersisted",
+    "isDestroyed",
+    "isReadonly",
+    "isChanged",
+    "isValid",
+    "errors",
+    "validate",
+    "readAttribute",
+    "writeAttribute",
+    "assignAttributes",
+  ]);
+  return _dangerousMethodsCache;
 }
 
 export function initializeGeneratedModules(this: AttributeMethodsHost): void {
@@ -107,9 +145,30 @@ export function initializeGeneratedModules(this: AttributeMethodsHost): void {
   }
 }
 
+/**
+ * Rails: calls super (ActiveModel::AttributeMethods#alias_attribute)
+ * then generates alias attribute methods if mass generation is enabled.
+ */
 export function aliasAttribute(this: AttributeMethodsHost, newName: string, oldName: string): void {
   if (!this._attributeAliases) this._attributeAliases = {};
   this._attributeAliases[newName] = oldName;
+
+  // Define getter/setter on prototype for the alias (mirrors Rails' code generation)
+  if (this.prototype && !(newName in this.prototype)) {
+    Object.defineProperty(this.prototype, newName, {
+      get(this: any) {
+        return this.readAttribute(oldName);
+      },
+      set(this: any, value: unknown) {
+        this.writeAttribute(oldName, value);
+      },
+      configurable: true,
+    });
+  }
+
+  if (this._aliasAttributesMassGenerated) {
+    generateAliasAttributeMethods.call(this, newName, oldName);
+  }
 }
 
 export function eagerlyGenerateAliasAttributeMethods(this: AttributeMethodsHost): void {

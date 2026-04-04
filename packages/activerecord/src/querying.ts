@@ -2,9 +2,6 @@
  * Querying — find_by_sql, count_by_sql, and delegation of query
  * methods to all().
  *
- * In Rails, this module delegates ~50 query methods to all() and
- * provides find_by_sql/count_by_sql for raw SQL queries.
- *
  * Mirrors: ActiveRecord::Querying
  */
 
@@ -12,48 +9,65 @@ import { sanitizeSql } from "./sanitization.js";
 
 interface QueryingHost {
   name: string;
-  adapter: { execute(sql: string): Promise<Record<string, unknown>[]> };
-  _instantiate(row: Record<string, unknown>): any;
+  adapter: {
+    execute(sql: string): Promise<Record<string, unknown>[]>;
+    selectValue?(sql: string): Promise<unknown>;
+  };
+  _instantiate(row: Record<string, unknown>, columnTypes?: Record<string, any>): any;
 }
 
 /**
- * Mirrors: ActiveRecord::Querying#find_by_sql
+ * Rails: find_by_sql(sql, binds = [], preparable: nil, allow_retry: false, &block)
+ * Executes raw SQL and instantiates model objects from the result rows.
  */
-export function findBySql(
+export async function findBySql(
   this: QueryingHost,
   sql: string | [string, ...unknown[]],
+  _binds: unknown[] = [],
+  block?: (record: any) => void,
 ): Promise<any[]> {
   const sanitized = typeof sql === "string" ? sql : sanitizeSql(sql);
-  return this.adapter.execute(sanitized).then((rows) => rows.map((row) => this._instantiate(row)));
+  const rows = await this.adapter.execute(sanitized);
+  const records = rows.map((row) => this._instantiate(row));
+  if (block) records.forEach(block);
+  return records;
 }
 
 /**
- * Mirrors: ActiveRecord::Querying#async_find_by_sql
+ * Rails: async_find_by_sql — same as find_by_sql but returns a Promise.
+ * In our async-first codebase, this is identical to findBySql.
  */
 export function asyncFindBySql(
   this: QueryingHost,
   sql: string | [string, ...unknown[]],
+  binds: unknown[] = [],
+  block?: (record: any) => void,
 ): Promise<any[]> {
-  return findBySql.call(this, sql);
+  return findBySql.call(this, sql, binds, block);
 }
 
 /**
- * Mirrors: ActiveRecord::Querying#count_by_sql
+ * Rails: count_by_sql(sql) — returns the count from a raw SQL COUNT query.
+ * Uses select_value to get a single scalar, not full row instantiation.
  */
 export async function countBySql(
   this: QueryingHost,
   sql: string | [string, ...unknown[]],
 ): Promise<number> {
   const sanitized = typeof sql === "string" ? sql : sanitizeSql(sql);
+  // Rails: connection.select_value(sanitize_sql(sql)).to_i
+  if (this.adapter.selectValue) {
+    const value = await this.adapter.selectValue(sanitized);
+    return Number(value) || 0;
+  }
   const rows = await this.adapter.execute(sanitized);
-  const firstRow = rows[0];
-  if (!firstRow) return 0;
-  const firstValue = Object.values(firstRow)[0];
+  if (!rows[0]) return 0;
+  const firstValue = Object.values(rows[0])[0];
   return Number(firstValue) || 0;
 }
 
 /**
- * Mirrors: ActiveRecord::Querying#async_count_by_sql
+ * Rails: async_count_by_sql — same as count_by_sql but returns a Promise.
  */
 export function asyncCountBySql(
   this: QueryingHost,

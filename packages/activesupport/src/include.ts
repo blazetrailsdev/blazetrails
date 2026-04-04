@@ -23,12 +23,14 @@ type AnyClass = new (...args: any[]) => any;
 type Module = Record<string, Function>;
 
 export function include(klass: AnyClass, mod: Module): void {
+  const descriptors: PropertyDescriptorMap = {};
   for (const key of Object.keys(mod)) {
-    Object.defineProperty(klass.prototype, key, {
+    descriptors[key] = {
       value: mod[key],
       writable: true,
       configurable: true,
       enumerable: false,
-    });
+    };
   }
+  Object.defineProperties(klass.prototype, descriptors);
 }

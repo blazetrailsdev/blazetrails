@@ -49,7 +49,7 @@ export class BelongsToPolymorphicAssociation extends BelongsToAssociation {
   protected override staleState(): unknown {
     const fkState = super.staleState();
     if (fkState != null) {
-      return [fkState, this.readForeignType()];
+      return JSON.stringify([fkState, this.readForeignType()]);
     }
     return undefined;
   }

@@ -39,6 +39,7 @@ export class HasOneAssociation extends SingularAssociation {
               `Cannot delete record because dependent ${this.reflection.name} exists`,
             );
           }
+          throw new DeleteRestrictionError(this.owner, this.reflection.name);
         }
         break;
 
@@ -49,7 +50,7 @@ export class HasOneAssociation extends SingularAssociation {
 
   /**
    * Delete the associated record using the given method.
-   * Supports: delete, destroy, nullify, destroy_async.
+   * Supports: delete, destroy, nullify.
    */
   async delete(method?: string): Promise<void> {
     if (!(await this.loadTarget())) return;
@@ -79,7 +80,6 @@ export class HasOneAssociation extends SingularAssociation {
         break;
 
       default:
-        // Default: destroy
         if (typeof (target as any).destroy === "function") {
           await (target as any).destroy();
         }
@@ -97,48 +97,57 @@ export class HasOneAssociation extends SingularAssociation {
     return loadHasOne(this.owner, this.reflection.name, this.reflection.options);
   }
 
-  private setOwnerAttributes(record: Base): void {
-    const ownerAny = this.owner as any;
-    const ctor = ownerAny.constructor;
-    const primaryKey = this.reflection.options.primaryKey ?? ctor.primaryKey ?? "id";
-
-    let fk: string;
-    if (this.reflection.options.as) {
-      fk =
-        typeof this.reflection.options.foreignKey === "string"
-          ? this.reflection.options.foreignKey
-          : `${underscore(this.reflection.options.as)}_id`;
-    } else {
-      fk =
-        typeof this.reflection.options.foreignKey === "string"
-          ? this.reflection.options.foreignKey
-          : `${underscore(ctor.name)}_id`;
+  private foreignKeyColumn(): string {
+    if (typeof this.reflection.options.foreignKey === "string") {
+      return this.reflection.options.foreignKey;
     }
+    const ctor = (this.owner as any).constructor;
+    if (this.reflection.options.as) {
+      return `${underscore(this.reflection.options.as)}_id`;
+    }
+    return `${underscore(ctor.name)}_id`;
+  }
 
-    (record as any)[fk] = ownerAny.readAttribute
-      ? ownerAny.readAttribute(primaryKey as string)
-      : ownerAny[primaryKey as string];
+  private setOwnerAttributes(record: Base): void {
+    const ctor = (this.owner as any).constructor;
+    const primaryKey = this.reflection.options.primaryKey ?? ctor.primaryKey ?? "id";
+    const fk = this.foreignKeyColumn();
+    const pkValue =
+      typeof this.owner.readAttribute === "function"
+        ? this.owner.readAttribute(primaryKey as string)
+        : (this.owner as any)[primaryKey as string];
+
+    if (typeof (record as any).writeAttribute === "function") {
+      (record as any).writeAttribute(fk, pkValue);
+    } else {
+      (record as any)[fk] = pkValue;
+    }
 
     if (this.reflection.options.as) {
       const typeCol = `${underscore(this.reflection.options.as)}_type`;
-      (record as any)[typeCol] = ctor.name;
+      if (typeof (record as any).writeAttribute === "function") {
+        (record as any).writeAttribute(typeCol, ctor.name);
+      } else {
+        (record as any)[typeCol] = ctor.name;
+      }
     }
   }
 
   private nullifyOwnerAttributes(record: Base): void {
-    const ctor = (this.owner as any).constructor;
-    let fk: string;
-    if (this.reflection.options.as) {
-      fk =
-        typeof this.reflection.options.foreignKey === "string"
-          ? this.reflection.options.foreignKey
-          : `${underscore(this.reflection.options.as)}_id`;
+    const fk = this.foreignKeyColumn();
+    if (typeof (record as any).writeAttribute === "function") {
+      (record as any).writeAttribute(fk, null);
     } else {
-      fk =
-        typeof this.reflection.options.foreignKey === "string"
-          ? this.reflection.options.foreignKey
-          : `${underscore(ctor.name)}_id`;
+      (record as any)[fk] = null;
     }
-    (record as any)[fk] = null;
+
+    if (this.reflection.options.as) {
+      const typeCol = `${underscore(this.reflection.options.as)}_type`;
+      if (typeof (record as any).writeAttribute === "function") {
+        (record as any).writeAttribute(typeCol, null);
+      } else {
+        (record as any)[typeCol] = null;
+      }
+    }
   }
 }

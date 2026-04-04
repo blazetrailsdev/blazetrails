@@ -65,9 +65,7 @@ export class SingularAssociation extends Association {
       this.removeInverseInstance(this.target);
     }
     this.target = record;
-    if (record !== null) {
-      this.loadedBang();
-    }
+    this.loadedBang();
   }
 
   protected setNewRecord(record: Base): void {

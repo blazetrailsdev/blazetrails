@@ -86,7 +86,7 @@ export class CollectionAssociation extends Association {
    * delegates to the association scope.
    */
   async find(...args: unknown[]): Promise<Base | Base[] | null> {
-    const ids = (args as any[]).flat().filter(Boolean);
+    const ids = (args as any[]).flat().filter((id) => id != null);
 
     if (this.reflection.options.inverseOf && this.isLoaded()) {
       if (ids.length === 0) {
@@ -339,18 +339,29 @@ export class CollectionAssociation extends Association {
   // --- Protected helpers ---
 
   protected setOwnerAttributes(record: Base): void {
+    if (this.reflection.options.through) return;
+
     const ctor = this.owner.constructor as any;
     const pk = this.reflection.options.primaryKey ?? ctor.primaryKey ?? "id";
     const fk = this.foreignKeyColumn();
-
-    (record as any)[fk] =
+    const pkValue =
       typeof this.owner.readAttribute === "function"
         ? this.owner.readAttribute(pk as string)
         : (this.owner as any)[pk];
 
+    if (typeof (record as any).writeAttribute === "function") {
+      (record as any).writeAttribute(fk, pkValue);
+    } else {
+      (record as any)[fk] = pkValue;
+    }
+
     if (this.reflection.options.as) {
       const typeCol = `${underscore(this.reflection.options.as)}_type`;
-      (record as any)[typeCol] = ctor.name;
+      if (typeof (record as any).writeAttribute === "function") {
+        (record as any).writeAttribute(typeCol, ctor.name);
+      } else {
+        (record as any)[typeCol] = ctor.name;
+      }
     }
   }
 
@@ -397,7 +408,19 @@ export class CollectionAssociation extends Association {
   private async nullifyAllRecords(): Promise<void> {
     const fk = this.foreignKeyColumn();
     for (const record of this.target) {
-      (record as any)[fk] = null;
+      if (typeof (record as any).writeAttribute === "function") {
+        (record as any).writeAttribute(fk, null);
+      } else {
+        (record as any)[fk] = null;
+      }
+      if (this.reflection.options.as) {
+        const typeCol = `${underscore(this.reflection.options.as)}_type`;
+        if (typeof (record as any).writeAttribute === "function") {
+          (record as any).writeAttribute(typeCol, null);
+        } else {
+          (record as any)[typeCol] = null;
+        }
+      }
       if (typeof (record as any).save === "function") {
         await (record as any).save();
       }
@@ -443,11 +466,12 @@ export class CollectionAssociation extends Association {
   }
 
   private findByScan(ids: unknown[]): Base | Base[] {
+    const pk = (this.klass as any).primaryKey ?? "id";
     const stringIds = ids.map(String);
     if (stringIds.length === 1) {
-      const found = this.target.find((r: any) => String(r.id) === stringIds[0]);
+      const found = this.target.find((r: any) => String(r[pk]) === stringIds[0]);
       return found ?? (null as any);
     }
-    return this.target.filter((r: any) => stringIds.includes(String(r.id)));
+    return this.target.filter((r: any) => stringIds.includes(String(r[pk])));
   }
 }

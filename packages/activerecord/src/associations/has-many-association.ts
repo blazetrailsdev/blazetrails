@@ -3,7 +3,6 @@ import type { AssociationDefinition } from "../associations.js";
 import { loadHasMany } from "../associations.js";
 import { DeleteRestrictionError } from "./errors.js";
 import { CollectionAssociation } from "./collection-association.js";
-import { underscore } from "@blazetrails/activesupport";
 
 /**
  * Proxy that handles a has_many association.
@@ -41,6 +40,7 @@ export class HasManyAssociation extends CollectionAssociation {
             const name = this.reflection.name;
             ownerAny.errors.add("base", `Cannot delete record because dependent ${name} exist`);
           }
+          throw new DeleteRestrictionError(this.owner, this.reflection.name);
         }
         break;
 
@@ -90,32 +90,7 @@ export class HasManyAssociation extends CollectionAssociation {
   }
 
   protected override setOwnerAttributes(record: Base): void {
-    const ownerAny = this.owner as any;
-    const ctor = ownerAny.constructor;
-    const primaryKey = this.reflection.options.primaryKey ?? ctor.primaryKey ?? "id";
-
-    // Determine FK column name
-    let fk: string;
-    if (this.reflection.options.as) {
-      fk =
-        typeof this.reflection.options.foreignKey === "string"
-          ? this.reflection.options.foreignKey
-          : `${underscore(this.reflection.options.as)}_id`;
-    } else {
-      fk =
-        typeof this.reflection.options.foreignKey === "string"
-          ? this.reflection.options.foreignKey
-          : `${underscore(ctor.name)}_id`;
-    }
-
-    (record as any)[fk] = ownerAny.readAttribute
-      ? ownerAny.readAttribute(primaryKey as string)
-      : ownerAny[primaryKey as string];
-
-    // Set polymorphic type column
-    if (this.reflection.options.as) {
-      const typeCol = `${underscore(this.reflection.options.as)}_type`;
-      (record as any)[typeCol] = ctor.name;
-    }
+    if (this.reflection.options.through) return;
+    super.setOwnerAttributes(record);
   }
 }

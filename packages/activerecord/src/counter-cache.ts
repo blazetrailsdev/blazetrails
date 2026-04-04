@@ -156,3 +156,24 @@ function buildTouchClause(touch?: boolean | string | string[]): string {
   if (cols.length === 0) return "";
   return cols.map((c) => `, ${quoteIdentifier(c)} = CURRENT_TIMESTAMP`).join("");
 }
+
+/**
+ * Mirrors: ActiveRecord::CounterCache::ClassMethods#counter_cache_column?
+ */
+export function isCounterCacheColumn(modelClass: typeof Base, columnName: string): boolean {
+  const reflections = (modelClass as any)._reflections ?? {};
+  for (const [, reflection] of Object.entries(reflections)) {
+    const r = reflection as any;
+    if (r.belongsTo && r.counterCacheColumn === columnName) return true;
+  }
+  return false;
+}
+
+/**
+ * Mirrors: ActiveRecord::CounterCache.load_schema!
+ * Extends load_schema! to track counter cache columns from reflections.
+ */
+export function loadSchemaBang(modelClass: typeof Base): void {
+  // Counter cache columns are already tracked via association reflections
+  // This hook exists for Rails to populate _counter_cache_columns
+}

@@ -138,3 +138,12 @@ export async function findSignedBang(
   });
   return modelClass.find(id);
 }
+
+/**
+ * Mirrors: ActiveRecord::SignedId::ClassMethods#combine_signed_id_purposes
+ */
+export function combineSignedIdPurposes(modelClass: typeof Base, purpose?: string): string {
+  const parts = [underscore(modelClass.name)];
+  if (purpose) parts.push(String(purpose));
+  return parts.filter(Boolean).join("/");
+}

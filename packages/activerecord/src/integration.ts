@@ -64,14 +64,21 @@ export function cacheVersion(this: Identifiable): string | null {
 /**
  * Mirrors: ActiveRecord::Integration::ClassMethods#collection_cache_key
  */
+/**
+ * Rails: collection.send(:compute_cache_key, timestamp_column)
+ */
 export function collectionCacheKey(
   this: { all(): any },
   collection?: any,
   timestampColumn = "updated_at",
 ): string {
   const rel = collection ?? this.all();
+  // Rails delegates to Relation#compute_cache_key with the timestamp column
   if (typeof rel.computeCacheKey === "function") {
     return rel.computeCacheKey(timestampColumn);
   }
-  return rel.cacheKey?.() ?? "";
+  if (typeof rel.cacheKey === "function") {
+    return rel.cacheKey(timestampColumn);
+  }
+  return "";
 }

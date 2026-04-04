@@ -83,9 +83,20 @@ export function sanitizeSqlForOrder(condition: string | [string, ...unknown[]]):
 export function sanitizeSqlHashForAssignment(
   attrs: Record<string, unknown>,
   table: string,
+  typeForAttribute?: (
+    name: string,
+  ) => { cast?(v: unknown): unknown; serialize?(v: unknown): unknown } | undefined,
 ): string {
   return Object.entries(attrs)
     .map(([attr, value]) => {
+      // Rails: type = type_for_attribute(attr); value = type.serialize(type.cast(value))
+      if (typeForAttribute) {
+        const type = typeForAttribute(attr);
+        if (type) {
+          if (type.cast) value = type.cast(value);
+          if (type.serialize) value = type.serialize(value);
+        }
+      }
       const col = table ? `"${table}"."${attr}"` : `"${attr}"`;
       return `${col} = ${quote(value)}`;
     })

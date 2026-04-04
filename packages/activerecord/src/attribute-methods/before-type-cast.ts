@@ -32,31 +32,43 @@ export function attributesBeforeTypeCast(record: BeforeTypeCastRecord): Record<s
 }
 
 interface DatabaseRecord {
-  _attributes: { valuesForDatabase?(): Record<string, unknown>; [key: string]: unknown };
+  _attributes: {
+    valueForDatabase?(name: string): unknown;
+    valuesForDatabase?(): Record<string, unknown>;
+    get?(name: string): { valueForDatabase?(): unknown } | undefined;
+    [key: string]: unknown;
+  };
   readAttribute(name: string): unknown;
   constructor: { _attributeAliases?: Record<string, string> };
 }
 
 /**
- * Read the attribute value serialized for the database.
- * Mirrors: ActiveRecord::AttributeMethods::BeforeTypeCast#read_attribute_for_database
+ * Rails: resolves alias, then calls attribute_for_database(name)
+ * which reads the serialized-for-database value from the attribute set.
  */
 export function readAttributeForDatabase(record: DatabaseRecord, attrName: string): unknown {
   const name = record.constructor._attributeAliases?.[attrName] ?? attrName;
-  const attrs = record._attributes;
-  if (attrs.valuesForDatabase) {
-    return attrs.valuesForDatabase()[name];
-  }
+  // Try the attribute's valueForDatabase (matches Rails' @attributes[name].value_for_database)
+  const attr = record._attributes.get?.(name);
+  if (attr?.valueForDatabase) return attr.valueForDatabase();
+  if (record._attributes.valueForDatabase) return record._attributes.valueForDatabase(name);
   return record.readAttribute(name);
 }
 
 /**
- * Return all attribute values serialized for the database.
- * Mirrors: ActiveRecord::AttributeMethods::BeforeTypeCast#attributes_for_database
+ * Rails: @attributes.values_for_database
  */
 export function attributesForDatabase(record: DatabaseRecord): Record<string, unknown> {
   if (record._attributes.valuesForDatabase) {
     return record._attributes.valuesForDatabase();
   }
-  return {};
+  // Fallback: serialize each attribute individually
+  const result: Record<string, unknown> = {};
+  if (record._attributes.get) {
+    for (const [key] of Object.entries(record._attributes)) {
+      if (key.startsWith("_")) continue;
+      result[key] = readAttributeForDatabase(record, key);
+    }
+  }
+  return result;
 }

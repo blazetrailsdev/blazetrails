@@ -160,20 +160,38 @@ function buildTouchClause(touch?: boolean | string | string[]): string {
 /**
  * Mirrors: ActiveRecord::CounterCache::ClassMethods#counter_cache_column?
  */
+/**
+ * Rails: _counter_cache_columns.include?(name)
+ * Checks associations for belongs_to with counter_cache.
+ */
 export function isCounterCacheColumn(modelClass: typeof Base, columnName: string): boolean {
-  const reflections = (modelClass as any)._reflections ?? {};
-  for (const [, reflection] of Object.entries(reflections)) {
-    const r = reflection as any;
-    if (r.belongsTo && r.counterCacheColumn === columnName) return true;
-  }
-  return false;
+  const counterCols = getCounterCacheColumns(modelClass);
+  return counterCols.has(columnName);
 }
 
 /**
- * Mirrors: ActiveRecord::CounterCache.load_schema!
- * Extends load_schema! to track counter cache columns from reflections.
+ * Rails: populates _counter_cache_columns from belongs_to reflections
+ * that have counter_cache enabled.
  */
 export function loadSchemaBang(modelClass: typeof Base): void {
-  // Counter cache columns are already tracked via association reflections
-  // This hook exists for Rails to populate _counter_cache_columns
+  // Force population of counter cache columns set
+  getCounterCacheColumns(modelClass);
+}
+
+function getCounterCacheColumns(modelClass: typeof Base): Set<string> {
+  const cached = (modelClass as any)._counterCacheColumns;
+  if (cached) return cached;
+  const cols = new Set<string>();
+  const associations: any[] = (modelClass as any)._associations ?? [];
+  for (const assoc of associations) {
+    if (assoc.type === "belongsTo" && assoc.options?.counterCache) {
+      const col =
+        typeof assoc.options.counterCache === "string"
+          ? assoc.options.counterCache
+          : `${assoc.name}_count`;
+      cols.add(col);
+    }
+  }
+  (modelClass as any)._counterCacheColumns = cols;
+  return cols;
 }

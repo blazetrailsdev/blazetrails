@@ -112,15 +112,17 @@ export function resetLockingColumn(this: LockingHost): void {
  * Adds locking_column increment when optimistic locking is enabled.
  */
 export async function updateCounters(
-  this: LockingHost,
+  this: LockingHost & { all?(): any },
   id: unknown,
   counters: Record<string, number>,
 ): Promise<number> {
   if (this.lockOptimistically && this._lockingColumn) {
     counters = { ...counters, [this._lockingColumn]: 1 };
   }
-  if (this.updateCounters) {
-    return this.updateCounters(id, counters);
+  // Rails calls super which delegates to CounterCache.update_counters → Relation
+  const rel = this.all?.();
+  if (rel?.where && rel?.updateAll) {
+    return rel.where({ [(this as any).primaryKey]: id }).updateAll(counters);
   }
   return 0;
 }

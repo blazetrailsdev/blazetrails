@@ -213,7 +213,11 @@ export class PredicateBuilder {
     klass: any,
     handler: { call(attr: Nodes.Attribute, value: any): Nodes.Node },
   ): void {
-    if (typeof klass !== "function") {
+    if (
+      typeof klass !== "function" ||
+      typeof klass.prototype !== "object" ||
+      klass.prototype === null
+    ) {
       throw new TypeError("registerHandler requires a constructor function as the first argument");
     }
     this.handlers.push([klass, handler]);

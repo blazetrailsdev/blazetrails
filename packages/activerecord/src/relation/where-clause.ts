@@ -8,7 +8,7 @@
  */
 
 import { Visitors, type Nodes } from "@blazetrails/arel";
-import { quote, quoteIdentifier } from "../connection-adapters/abstract/quoting.js";
+import { quote, quoteTableName } from "../connection-adapters/abstract/quoting.js";
 
 export class WhereClause {
   conditions: Array<Record<string, unknown>>;
@@ -148,7 +148,7 @@ function clauseToAstString(clause: WhereClause): string {
   const parts: string[] = [];
   for (const cond of clause.conditions) {
     for (const [k, v] of Object.entries(cond)) {
-      const col = quoteIdentifier(k);
+      const col = quoteTableName(k);
       if (v === null || v === undefined) {
         parts.push(`${col} IS NULL`);
       } else if (Array.isArray(v)) {
@@ -164,7 +164,7 @@ function clauseToAstString(clause: WhereClause): string {
   }
   for (const cond of clause.notConditions) {
     for (const [k, v] of Object.entries(cond)) {
-      const col = quoteIdentifier(k);
+      const col = quoteTableName(k);
       if (v === null || v === undefined) {
         parts.push(`${col} IS NOT NULL`);
       } else if (Array.isArray(v)) {

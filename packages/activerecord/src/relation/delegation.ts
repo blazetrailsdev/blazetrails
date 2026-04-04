@@ -135,6 +135,12 @@ export function wrapWithScopeProxy<T extends object>(rel: T): T {
       if (value !== undefined) return value;
       if (prop in target) return value;
 
+      // Check generated relation methods first (mirrors Rails' GeneratedRelationMethods)
+      if (_generatedMethods.has(prop as string)) {
+        const fn = _generatedMethods.get(prop as string)!;
+        return (...args: any[]) => fn.apply(target, args);
+      }
+
       const modelClass = target._modelClass as typeof Base;
       if (modelClass._scopes.has(prop as string)) {
         return (...args: any[]) => {

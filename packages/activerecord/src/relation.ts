@@ -2445,10 +2445,17 @@ export class Relation<T extends Base> {
 
     // Replace FROM clause if from() was used
     if (!this._fromClause.isEmpty()) {
+      const value = this._fromClause.value!;
       const alias = this._fromClause.name;
-      const fromExpr = alias
-        ? `(${this._fromClause.value}) "${alias.replace(/"/g, '""')}"`
-        : this._fromClause.value!;
+      const isSubquery = /^\s*SELECT\b/i.test(value);
+      let fromExpr: string;
+      if (alias) {
+        fromExpr = isSubquery
+          ? `(${value}) "${alias.replace(/"/g, '""')}"`
+          : `${value} "${alias.replace(/"/g, '""')}"`;
+      } else {
+        fromExpr = value;
+      }
       sql = sql.replace(/FROM\s+"[^"]+"/, `FROM ${fromExpr}`);
     }
 

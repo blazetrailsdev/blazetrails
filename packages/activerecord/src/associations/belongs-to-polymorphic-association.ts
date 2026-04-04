@@ -74,14 +74,10 @@ export class BelongsToPolymorphicAssociation extends BelongsToAssociation {
   }
 
   /**
-   * Derive the type column name from the FK. Follows the codebase
-   * convention of snake_case: post_id → post_type, commentable_id → commentable_type.
+   * Derive the type column name from the association name, matching
+   * loadBelongsTo which reads `${underscore(assocName)}_type`.
    */
   private foreignTypeName(): string {
-    const fk = this.reflection.options.foreignKey;
-    if (typeof fk === "string") {
-      return fk.replace(/_id$/, "_type");
-    }
     return `${underscore(this.reflection.name)}_type`;
   }
 

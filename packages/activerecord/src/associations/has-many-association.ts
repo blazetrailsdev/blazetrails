@@ -66,15 +66,21 @@ export class HasManyAssociation extends CollectionAssociation {
    * Insert a record into the collection. Sets the FK and type
    * columns on the record to point to the owner, then saves.
    */
+  /**
+   * Insert a record into the collection. Sets the FK and type
+   * columns on the record to point to the owner, then saves.
+   * Rails: if raise is true, uses save! (raises on failure);
+   * otherwise uses save (returns boolean).
+   */
   async insertRecord(record: Base, validate = true, raise = false): Promise<boolean> {
     this.setOwnerAttributes(record);
 
-    if (raise && typeof (record as any).saveBang === "function") {
-      await (record as any).saveBang({ validate });
-      return true;
-    }
     if (typeof (record as any).save === "function") {
-      return await (record as any).save({ validate });
+      const saved = await (record as any).save({ validate });
+      if (!saved && raise) {
+        throw new Error(`Failed to save the new associated ${this.reflection.name}.`);
+      }
+      return !!saved;
     }
     return false;
   }

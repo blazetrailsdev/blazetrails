@@ -220,6 +220,9 @@ export class Association {
     const [, ivars] = data;
     this.loaded = ivars.loaded as boolean;
     this.target = ivars.target as Base | Base[] | null;
+    if (this.loaded) {
+      this._staleState = this.staleState();
+    }
   }
 
   /**

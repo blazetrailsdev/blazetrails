@@ -1,6 +1,7 @@
 import type { Base } from "../base.js";
 import type { AssociationDefinition } from "../associations.js";
 import { fireAssocCallbacks } from "../associations.js";
+import { underscore } from "@blazetrails/activesupport";
 import { Association } from "./association.js";
 
 /**
@@ -343,7 +344,7 @@ export class CollectionAssociation extends Association {
         : (this.owner as any)[pk];
 
     if (this.reflection.options.as) {
-      const typeCol = `${this.reflection.options.as}_type`;
+      const typeCol = `${underscore(this.reflection.options.as)}_type`;
       (record as any)[typeCol] = ctor.name;
     }
   }
@@ -355,9 +356,9 @@ export class CollectionAssociation extends Association {
     if (typeof fk === "string") return fk;
     const ctor = this.owner.constructor as any;
     if (this.reflection.options.as) {
-      return `${this.reflection.options.as}_id`;
+      return `${underscore(this.reflection.options.as)}_id`;
     }
-    return `${(ctor.name as string).charAt(0).toLowerCase() + (ctor.name as string).slice(1)}_id`;
+    return `${underscore(ctor.name)}_id`;
   }
 
   private async deleteOrDestroy(records: Base[], method?: string): Promise<void> {

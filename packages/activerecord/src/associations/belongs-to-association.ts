@@ -207,13 +207,32 @@ export class BelongsToAssociation extends SingularAssociation {
 
   private replaceKeys(record: Base | null): void {
     const fk = this.foreignKeyName();
-    const targetKeyValue = record ? (record as any).id : null;
+    const targetPk = this.associationPrimaryKey(record);
+    const targetKeyValue = record
+      ? typeof record.readAttribute === "function"
+        ? record.readAttribute(targetPk)
+        : (record as any)[targetPk]
+      : null;
 
     if (typeof this.owner.writeAttribute === "function") {
       (this.owner as any).writeAttribute(fk, targetKeyValue);
     } else {
       (this.owner as any)[fk] = targetKeyValue;
     }
+  }
+
+  private associationPrimaryKey(record: Base | null): string {
+    if (this.reflection.options.primaryKey) {
+      return typeof this.reflection.options.primaryKey === "string"
+        ? this.reflection.options.primaryKey
+        : this.reflection.options.primaryKey[0];
+    }
+    if (record) {
+      const ctor = record.constructor as any;
+      const pk = ctor.primaryKey;
+      return typeof pk === "string" ? pk : Array.isArray(pk) ? pk[0] : "id";
+    }
+    return (this.klass as any).primaryKey ?? "id";
   }
 
   /**

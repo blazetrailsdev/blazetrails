@@ -309,7 +309,7 @@ export function deriveJoinTableName(this: SchemaHost, otherTableName: string): s
 }
 
 export function quotedTableName(this: SchemaHost): string {
-  return quoteTableName(this.tableName);
+  return quoteTableName(this.tableName, detectAdapterName(this.adapter));
 }
 
 /**
@@ -321,9 +321,12 @@ export function resetTableName(this: SchemaHost): string {
   if (this.name === "Base") {
     return "";
   }
-  if (this._abstractClass && this.superclass) {
-    this._tableName = this.superclass.tableName;
-    return this._tableName!;
+  if (this._abstractClass) {
+    const parent = Object.getPrototypeOf(this) as SchemaHost | null;
+    if (parent?.tableName != null) {
+      this._tableName = parent.tableName;
+      return this._tableName!;
+    }
   }
   const name = resolveTableName(this as any);
   this._tableName = name;
@@ -372,8 +375,9 @@ export function attributesBuilder(this: SchemaHost): {
       const result: Record<string, unknown> = {};
       // Apply defaults from attribute definitions for non-PK columns
       for (const [name, def] of attrDefs) {
-        if (!pkSet.has(name) && def.default !== undefined) {
-          result[name] = typeof def.default === "function" ? def.default() : def.default;
+        if (!pkSet.has(name) && def.defaultValue !== undefined) {
+          result[name] =
+            typeof def.defaultValue === "function" ? def.defaultValue() : def.defaultValue;
         }
       }
       Object.assign(result, values);
@@ -389,7 +393,7 @@ export function attributesBuilder(this: SchemaHost): {
 export function columns(this: SchemaHost): any[] {
   if (this._columns) return this._columns;
   loadSchema.call(this);
-  const hash = (this as any).columnsHash ?? this._columnsHash ?? {};
+  const hash = getColumnsHash(this);
   this._columns = Object.values(hash);
   return this._columns!;
 }
@@ -407,7 +411,7 @@ export function yamlEncoder(this: SchemaHost): { encode(value: unknown): string 
  */
 export function columnForAttribute(this: SchemaHost, name: string): any {
   loadSchema.call(this);
-  const hash = (this as any).columnsHash ?? this._columnsHash ?? {};
+  const hash = getColumnsHash(this);
   return hash[name] ?? { name, null: true, type: null };
 }
 
@@ -415,7 +419,7 @@ export function columnForAttribute(this: SchemaHost, name: string): any {
  * Rails: column_names.index_by(&:to_sym)[name_symbol]
  */
 export function symbolColumnToString(this: SchemaHost, name: string): string | undefined {
-  const hash = (this as any).columnsHash ?? this._columnsHash ?? {};
+  const hash = getColumnsHash(this);
   return hash[name] ? name : undefined;
 }
 
@@ -443,8 +447,18 @@ export function loadSchema(this: SchemaHost): void {
     const ignored = new Set(this._ignoredColumns ?? []);
     for (const [name, def] of this._attributeDefinitions) {
       if (ignored.has(name)) continue;
-      hash[name] = { name, type: def.type ?? def.typeName ?? null, default: def.default ?? null };
+      hash[name] = {
+        name,
+        type: def.type?.name ?? null,
+        default: def.defaultValue ?? null,
+      };
     }
     this._columnsHash = hash;
   }
+}
+
+function getColumnsHash(host: SchemaHost): Record<string, any> {
+  const ch = (host as any).columnsHash;
+  if (typeof ch === "function") return ch.call(host) ?? {};
+  return host._columnsHash ?? {};
 }

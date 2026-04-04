@@ -13,7 +13,6 @@ interface PersistenceHost {
   _queryConstraintsList?: string[] | null;
   _hasQueryConstraints?: boolean;
   _isBaseClass?: boolean;
-  superclass?: PersistenceHost;
 }
 
 /**
@@ -80,22 +79,19 @@ export function hasQueryConstraints(this: PersistenceHost): boolean {
 export function queryConstraintsList(this: PersistenceHost): string[] | null {
   if (this._queryConstraintsList) return this._queryConstraintsList;
 
-  // Rails: base_class? || primary_key != base_class.primary_key
-  const isBase = this._isBaseClass ?? !this.superclass;
+  const parent = Object.getPrototypeOf(this) as PersistenceHost | null;
+  const isBase = this._isBaseClass ?? typeof parent !== "function";
   if (isBase) {
     const pk = this.primaryKey;
     return Array.isArray(pk) ? pk : null;
   }
 
-  // Check if our PK differs from base class PK
-  const base = this.superclass;
-  if (base && this.primaryKey !== base.primaryKey) {
+  if (parent && this.primaryKey !== parent.primaryKey) {
     const pk = this.primaryKey;
     return Array.isArray(pk) ? pk : null;
   }
 
-  // Delegate to base class
-  if (base) return queryConstraintsList.call(base);
+  if (parent && typeof parent === "function") return queryConstraintsList.call(parent);
   return null;
 }
 

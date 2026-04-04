@@ -179,7 +179,11 @@ interface CoreHost {
   _predicateBuilder?: any;
   arelTable?: any;
   prototype: any;
-  superclass?: CoreHost;
+}
+
+function parentClass(klass: CoreHost): CoreHost | null {
+  const proto = Object.getPrototypeOf(klass);
+  return typeof proto === "function" ? (proto as CoreHost) : null;
 }
 
 export function destroyAssociationAsyncJob(this: CoreHost, value?: any): any {
@@ -261,7 +265,7 @@ export function isPreventingWrites(this: CoreHost, className?: string): boolean 
     if (entry.klasses.has("Base")) return entry.prevent_writes;
     if (className) {
       for (const klass of entry.klasses) {
-        if (typeof klass === "object" && klass !== null && klass.name === className) {
+        if (typeof klass === "function" && klass.name === className) {
           return entry.prevent_writes;
         }
       }
@@ -286,12 +290,13 @@ export function isConnectionClass(this: CoreHost): boolean {
  * Mirrors: ActiveRecord::Core.connection_class_for_self
  */
 export function connectionClassForSelf(this: CoreHost): CoreHost {
-  let klass: CoreHost | undefined = this;
-  while (klass && klass.name !== "Base") {
+  let klass: CoreHost | null = this;
+  while (klass) {
     if (klass._connectionClass) return klass;
-    klass = klass.superclass;
+    if (klass.name === "Base") return klass;
+    klass = parentClass(klass);
   }
-  return klass ?? this;
+  return this;
 }
 
 /**
@@ -353,7 +358,8 @@ export function filterAttributes(this: CoreHost, value?: string[]): string[] {
     this._inspectionFilter = null;
   }
   if (this._filterAttributes !== undefined) return this._filterAttributes;
-  if (this.superclass) return filterAttributes.call(this.superclass);
+  const parent = parentClass(this);
+  if (parent) return filterAttributes.call(parent);
   return [];
 }
 
@@ -366,8 +372,9 @@ export function inspectionFilter(this: CoreHost): {
   filter(params: Record<string, unknown>): Record<string, unknown>;
 } {
   if (this._inspectionFilter) return this._inspectionFilter;
-  if (this._filterAttributes === undefined && this.superclass) {
-    return inspectionFilter.call(this.superclass);
+  if (this._filterAttributes === undefined) {
+    const parent = parentClass(this);
+    if (parent) return inspectionFilter.call(parent);
   }
   const attrs = this._filterAttributes ?? [];
   const mask = new InspectionMask();
@@ -393,9 +400,8 @@ export function predicateBuilder(this: CoreHost): any {
   // any model class calls this. Access via the relation module.
   const table = this.arelTable;
   if (!table) return null;
-  // Deferred: the actual PredicateBuilder is wired up when Relation loads.
-  // For now, return a minimal object that satisfies the interface.
-  return { table };
+  this._predicateBuilder = { table };
+  return this._predicateBuilder;
 }
 
 /**

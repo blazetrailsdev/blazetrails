@@ -28,6 +28,30 @@ export class ScopeRegistry {
     return this._instance;
   }
 
+  currentScope(modelClass: object, skipInherited = false): any | null {
+    return ScopeRegistry.currentScope(modelClass, skipInherited);
+  }
+
+  setCurrentScope(modelClass: object, scope: any): void {
+    ScopeRegistry.setCurrentScope(modelClass, scope);
+  }
+
+  ignoreDefaultScope(modelClass: object, skipInherited = false): any | null {
+    return ScopeRegistry.ignoreDefaultScope(modelClass, skipInherited);
+  }
+
+  setIgnoreDefaultScope(modelClass: object, value: any): void {
+    ScopeRegistry.setIgnoreDefaultScope(modelClass, value);
+  }
+
+  globalCurrentScope(modelClass: object, skipInherited = false): any | null {
+    return ScopeRegistry.globalCurrentScope(modelClass, skipInherited);
+  }
+
+  setGlobalCurrentScope(modelClass: object, scope: any): void {
+    ScopeRegistry.setGlobalCurrentScope(modelClass, scope);
+  }
+
   static currentScope(modelClass: object, _skipInherited = false): any | null {
     return this._currentScopes.get(modelClass) ?? null;
   }

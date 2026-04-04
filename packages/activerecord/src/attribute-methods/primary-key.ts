@@ -4,6 +4,7 @@
  * Mirrors: ActiveRecord::AttributeMethods::PrimaryKey
  */
 import { quoteIdentifier } from "../connection-adapters/abstract/quoting.js";
+import { underscore } from "@blazetrails/activesupport";
 
 interface PrimaryKeyRecord {
   id: unknown;
@@ -39,37 +40,43 @@ export function isPrimaryKeyValuesPresent(this: PrimaryKeyRecord): boolean {
   return this.id != null;
 }
 
-export function idBeforeTypeCast(this: PrimaryKeyRecord): unknown {
-  const pk = (this.constructor as any).primaryKey;
-  if (typeof (this as any).readAttributeBeforeTypeCast === "function") {
-    return (this as any).readAttributeBeforeTypeCast(pk);
+function readPkWith(record: PrimaryKeyRecord, method: string): unknown {
+  const pk = (record.constructor as any).primaryKey;
+  const fn = (record as any)[method];
+  if (typeof fn === "function") {
+    if (Array.isArray(pk)) return pk.map((k: string) => fn.call(record, k));
+    return fn.call(record, pk);
   }
-  return this.readAttribute(pk);
+  if (Array.isArray(pk)) return pk.map((k: string) => record.readAttribute(k));
+  return record.readAttribute(pk);
+}
+
+export function idBeforeTypeCast(this: PrimaryKeyRecord): unknown {
+  return readPkWith(this, "readAttributeBeforeTypeCast");
 }
 
 export function idWas(this: PrimaryKeyRecord): unknown {
-  const pk = (this.constructor as any).primaryKey;
-  if (typeof (this as any).attributeWas === "function") {
-    return (this as any).attributeWas(pk);
-  }
-  return this.readAttribute(pk);
+  return readPkWith(this, "attributeWas");
 }
 
 export function idInDatabase(this: PrimaryKeyRecord): unknown {
-  const pk = (this.constructor as any).primaryKey;
-  if (typeof (this as any).attributeInDatabase === "function") {
-    return (this as any).attributeInDatabase(pk);
-  }
-  return this.readAttribute(pk);
+  return readPkWith(this, "attributeInDatabase");
 }
 
 export function idForDatabase(this: PrimaryKeyRecord): unknown {
   const pk = (this.constructor as any).primaryKey;
   const attrs = (this as any)._attributes;
   if (attrs?.getAttribute) {
+    if (Array.isArray(pk)) {
+      return pk.map((k: string) => {
+        const attr = attrs.getAttribute(k);
+        return attr?.valueForDatabase ? attr.valueForDatabase() : this.readAttribute(k);
+      });
+    }
     const attr = attrs.getAttribute(pk);
     if (attr?.valueForDatabase) return attr.valueForDatabase();
   }
+  if (Array.isArray(pk)) return pk.map((k: string) => this.readAttribute(k));
   return this.readAttribute(pk);
 }
 
@@ -105,23 +112,27 @@ export function quotedPrimaryKey(this: PrimaryKeyHost): string {
 
 export function resetPrimaryKey(this: PrimaryKeyHost): void {
   const parent = Object.getPrototypeOf(this);
-  if (parent && typeof parent === "function" && parent.name !== "Base") {
-    this._primaryKey = (parent as PrimaryKeyHost).primaryKey;
-  } else {
-    this._primaryKey = "id";
-  }
+  const parentPk =
+    parent && typeof parent === "function"
+      ? (parent as Partial<PrimaryKeyHost>).primaryKey
+      : undefined;
+  this._primaryKey = parentPk ?? "id";
 }
 
 /**
  * Rails: checks primary_key_prefix_type, then falls back to "id".
  * In practice, nearly all Rails apps use "id" as the default PK.
  */
+/**
+ * Rails: checks primary_key_prefix_type to derive PK column name.
+ * table_name → "adminuserid", table_name_with_underscore → "admin_user_id"
+ */
 export function getPrimaryKey(this: PrimaryKeyHost, baseName?: string): string {
   if (baseName && (this as any).primaryKeyPrefixType === "table_name") {
-    return `${baseName.toLowerCase()}_id`;
+    return `${underscore(baseName).replace(/_/g, "")}id`;
   }
   if (baseName && (this as any).primaryKeyPrefixType === "table_name_with_underscore") {
-    return `${baseName.toLowerCase()}_id`;
+    return `${underscore(baseName)}_id`;
   }
   return "id";
 }

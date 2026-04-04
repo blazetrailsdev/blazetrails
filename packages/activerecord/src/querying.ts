@@ -23,10 +23,19 @@ interface QueryingHost {
 export async function findBySql(
   this: QueryingHost,
   sql: string | [string, ...unknown[]],
-  _binds: unknown[] = [],
+  binds: unknown[] = [],
   block?: (record: any) => void,
 ): Promise<any[]> {
-  const sanitized = typeof sql === "string" ? sql : sanitizeSql(sql);
+  // Rails passes binds to the connection for prepared statements.
+  // Our adapter uses string substitution, so merge binds into the SQL.
+  let sanitized: string;
+  if (Array.isArray(sql)) {
+    sanitized = sanitizeSql(sql);
+  } else if (binds.length > 0) {
+    sanitized = sanitizeSql([sql, ...binds] as [string, ...unknown[]]);
+  } else {
+    sanitized = sql;
+  }
   const rows = await this.adapter.execute(sanitized);
   const records = rows.map((row) => this._instantiate(row));
   if (block) records.forEach(block);

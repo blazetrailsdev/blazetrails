@@ -1630,6 +1630,9 @@ export class Base extends Model {
   }
 
   static findBySql = Querying.findBySql;
+  static asyncFindBySql = Querying.asyncFindBySql;
+  static countBySql = Querying.countBySql;
+  static asyncCountBySql = Querying.asyncCountBySql;
 
   /**
    * Increment counter columns for a record by primary key.

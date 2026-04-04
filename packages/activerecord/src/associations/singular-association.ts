@@ -39,10 +39,34 @@ export class SingularAssociation extends Association {
   }
 
   get reader(): Base | null {
+    if (!this.isLoaded() || this.isStaleTarget()) {
+      this.reload();
+    }
     return this.target;
   }
 
+  protected override async _createRecord(
+    attributes?: Record<string, unknown>,
+    shouldRaise = false,
+  ): Promise<Base | null> {
+    const record = this.buildRecord(attributes);
+    if (!record) return null;
+    if (typeof (record as any).save === "function") {
+      const saved = await (record as any).save();
+      if (!saved && shouldRaise) {
+        throw new Error(`Failed to save the new associated ${this.reflection.name}.`);
+      }
+    }
+    this.setNewRecord(record);
+    return record;
+  }
+
   protected replace(record: Base | null): void {
+    if (record) {
+      this.setInverseInstance(record);
+    } else if (this.target) {
+      this.removeInverseInstance(this.target);
+    }
     this.target = record;
     if (record !== null) {
       this.loadedBang();

@@ -1,10 +1,14 @@
 import type { Base } from "../base.js";
 import type { AssociationDefinition } from "../associations.js";
+import { loadBelongsTo } from "../associations.js";
 import { underscore } from "@blazetrails/activesupport";
 import { SingularAssociation } from "./singular-association.js";
 
 /**
  * Mirrors: ActiveRecord::Associations::BelongsToAssociation
+ *
+ * Manages the belongs_to side of an association. Handles FK replacement,
+ * counter cache updates, change tracking, and dependent destruction.
  */
 export class BelongsToAssociation extends SingularAssociation {
   private _updated = false;
@@ -13,35 +17,45 @@ export class BelongsToAssociation extends SingularAssociation {
     super(owner, definition);
   }
 
-  handleDependency(): void {
-    if (!this.loadTarget()) return;
+  /**
+   * Handle dependent destruction/deletion of the target record.
+   * Called by the owner's before_destroy callback.
+   */
+  async handleDependency(): Promise<void> {
+    await this.asyncLoadTarget();
+    const target = this.target;
+    if (!target) return;
 
     const dependent = this.reflection.options.dependent;
     if (!dependent) return;
 
     switch (dependent) {
       case "destroy":
-        if (this.target && typeof (this.target as any).destroy === "function") {
-          (this.target as any).destroy();
+        if (typeof (target as any).destroy === "function") {
+          await (target as any).destroy();
         }
         break;
       case "delete":
-        if (this.target && typeof (this.target as any).delete === "function") {
-          (this.target as any).delete();
+        if (typeof (target as any).delete === "function") {
+          await (target as any).delete();
         }
         break;
-      default:
-        if (this.target && typeof (this.target as any)[dependent] === "function") {
-          (this.target as any)[dependent]();
-        }
     }
   }
 
+  /**
+   * When set from the inverse side, also update the FK on the owner
+   * to point to the new record.
+   */
   override inversedFrom(record: Base | null): void {
     this.replaceKeys(record);
     super.inversedFrom(record);
   }
 
+  /**
+   * Set the default value for this association if the current reader is nil.
+   * Called by the before_validation callback set up by the builder.
+   */
   default(block: () => Base | null): void {
     if (this.reader == null) {
       const value = block.call(this.owner);
@@ -60,61 +74,76 @@ export class BelongsToAssociation extends SingularAssociation {
     return this._updated;
   }
 
-  decrementCounters(): void {
-    this.updateCounters(-1);
+  /**
+   * Decrement the counter cache column on the target by 1.
+   * Called when the owner is removed from this association.
+   */
+  async decrementCounters(): Promise<void> {
+    await this.updateCounters(-1);
   }
 
-  incrementCounters(): void {
-    this.updateCounters(1);
+  /**
+   * Increment the counter cache column on the target by 1.
+   * Called when the owner is added to this association.
+   */
+  async incrementCounters(): Promise<void> {
+    await this.updateCounters(1);
   }
 
-  decrementCountersBeforeLastSave(): void {
-    const foreignKey = this.foreignKeyName();
+  /**
+   * Decrement counters for the previously associated record (before last save).
+   * Used during counter cache updates on FK change.
+   */
+  async decrementCountersBeforeLastSave(): Promise<void> {
     const ownerAny = this.owner as any;
+    const fk = this.foreignKeyName();
     const foreignKeyWas =
       typeof ownerAny.attributeBeforeLastSave === "function"
-        ? ownerAny.attributeBeforeLastSave(foreignKey)
+        ? ownerAny.attributeBeforeLastSave(fk)
         : undefined;
 
-    if (foreignKeyWas) {
-      this.updateCounters(-1);
+    if (foreignKeyWas != null) {
+      const counterCol = this.counterCacheColumn();
+      if (!counterCol) return;
+
+      const Klass = this.klass;
+      if (Klass && typeof (Klass as any).where === "function") {
+        const pk = (Klass as any).primaryKey ?? "id";
+        const scope = (Klass as any).where({ [pk]: foreignKeyWas });
+        if (typeof scope.updateCounters === "function") {
+          await scope.updateCounters({ [counterCol]: -1 });
+        }
+      }
     }
   }
 
+  /**
+   * Returns true if the FK has changed since the last save, or if the
+   * target is an unsaved new record.
+   */
   isTargetChanged(): boolean {
     const ownerAny = this.owner as any;
     const fk = this.foreignKeyName();
-    const attrChanged =
-      typeof ownerAny.attributeChanged === "function"
-        ? ownerAny.attributeChanged(fk)
-        : typeof ownerAny.isAttributeChanged === "function"
-          ? ownerAny.isAttributeChanged(fk)
-          : false;
+    const changed = this.ownerAttributeChanged(fk);
     return (
-      attrChanged ||
-      (!this.foreignKeyPresent() && this.target != null && (this.target as any).isNewRecord?.())
+      changed ||
+      (!this.foreignKeyPresent() &&
+        this.target != null &&
+        (typeof (this.target as any).isNewRecord === "function"
+          ? (this.target as any).isNewRecord()
+          : !(this.target as any)._persisted))
     );
   }
 
   isTargetPreviouslyChanged(): boolean {
-    const ownerAny = this.owner as any;
-    const fk = this.foreignKeyName();
-    return typeof ownerAny.attributePreviouslyChanged === "function"
-      ? ownerAny.attributePreviouslyChanged(fk)
-      : typeof ownerAny.isAttributePreviouslyChanged === "function"
-        ? ownerAny.isAttributePreviouslyChanged(fk)
-        : false;
+    return this.ownerAttributePreviouslyChanged(this.foreignKeyName());
   }
 
   isSavedChangeToTarget(): boolean {
-    const ownerAny = this.owner as any;
-    const fk = this.foreignKeyName();
-    return typeof ownerAny.savedChangeToAttribute === "function"
-      ? ownerAny.savedChangeToAttribute(fk)
-      : typeof ownerAny.isSavedChangeToAttribute === "function"
-        ? ownerAny.isSavedChangeToAttribute(fk)
-        : false;
+    return this.ownerSavedChangeToAttribute(this.foreignKeyName());
   }
+
+  // --- Protected ---
 
   protected override replace(record: Base | null): void {
     if (record) {
@@ -125,33 +154,40 @@ export class BelongsToAssociation extends SingularAssociation {
     }
 
     this.replaceKeys(record);
-    super.replace(record);
+    this.target = record;
+    if (record !== null) {
+      this.loadedBang();
+    }
   }
 
   protected override staleState(): unknown {
     const ownerAny = this.owner as any;
     const fk = this.foreignKeyName();
-    return typeof ownerAny.readAttribute === "function"
-      ? ownerAny.readAttribute(fk)
-      : (ownerAny as any)[fk];
+    return typeof ownerAny.readAttribute === "function" ? ownerAny.readAttribute(fk) : ownerAny[fk];
   }
 
-  protected override findTarget(): boolean {
-    return !this.isLoaded() && this.foreignKeyPresent() && !!this.klass;
+  protected override findTargetNeeded(): boolean {
+    return !this.isLoaded() && this.foreignKeyPresent();
   }
 
-  private foreignKeyName(): string {
-    const fk = this.reflection.options.foreignKey;
-    if (typeof fk === "string") return fk;
-    return `${underscore(this.reflection.name)}Id`;
-  }
-
-  private foreignKeyPresent(): boolean {
+  protected override foreignKeyPresent(): boolean {
     const fk = this.foreignKeyName();
     const ownerAny = this.owner as any;
     const value =
       typeof ownerAny.readAttribute === "function" ? ownerAny.readAttribute(fk) : ownerAny[fk];
     return value != null;
+  }
+
+  protected override async doAsyncFindTarget(): Promise<Base | null> {
+    return loadBelongsTo(this.owner, this.reflection.name, this.reflection.options);
+  }
+
+  // --- Private helpers ---
+
+  private foreignKeyName(): string {
+    const fk = this.reflection.options.foreignKey;
+    if (typeof fk === "string") return fk;
+    return `${underscore(this.reflection.name)}Id`;
   }
 
   private replaceKeys(record: Base | null): void {
@@ -166,17 +202,62 @@ export class BelongsToAssociation extends SingularAssociation {
     }
   }
 
-  private updateCounters(by: number): void {
-    const counterCache = this.reflection.options.counterCache;
-    if (!counterCache) return;
-    if (!(this.owner as any).isPersisted?.()) return;
+  private counterCacheColumn(): string | null {
+    const cc = this.reflection.options.counterCache;
+    if (!cc) return null;
+    if (typeof cc === "string") return cc;
+    return `${underscore(this.reflection.name)}Count`;
+  }
 
-    if (this.target && typeof (this.target as any).increment === "function") {
-      const column =
-        typeof counterCache === "string"
-          ? counterCache
-          : `${underscore(this.reflection.name)}Count`;
-      (this.target as any).increment(column, by);
+  private async updateCounters(by: number): Promise<void> {
+    const counterCol = this.counterCacheColumn();
+    if (!counterCol) return;
+    if (!(this.owner as any)._persisted) return;
+    if (!this.foreignKeyPresent()) return;
+
+    if (this.target && !this.isStaleTarget()) {
+      // Update the in-memory target's counter directly
+      if (typeof (this.target as any).increment === "function") {
+        (this.target as any).increment(counterCol, by);
+      }
+    } else {
+      // Update via scope against the database
+      const fkValue = (this.owner as any).readAttribute?.(this.foreignKeyName());
+      if (fkValue != null) {
+        const Klass = this.klass;
+        if (Klass && typeof (Klass as any).where === "function") {
+          const pk = (Klass as any).primaryKey ?? "id";
+          const scope = (Klass as any).where({ [pk]: fkValue });
+          if (typeof scope.updateCounters === "function") {
+            await scope.updateCounters({ [counterCol]: by });
+          }
+        }
+      }
     }
+  }
+
+  protected ownerAttributeChanged(attr: string): boolean {
+    const ownerAny = this.owner as any;
+    if (typeof ownerAny.attributeChanged === "function") return ownerAny.attributeChanged(attr);
+    if (typeof ownerAny.isAttributeChanged === "function") return ownerAny.isAttributeChanged(attr);
+    return false;
+  }
+
+  protected ownerAttributePreviouslyChanged(attr: string): boolean {
+    const ownerAny = this.owner as any;
+    if (typeof ownerAny.attributePreviouslyChanged === "function")
+      return ownerAny.attributePreviouslyChanged(attr);
+    if (typeof ownerAny.isAttributePreviouslyChanged === "function")
+      return ownerAny.isAttributePreviouslyChanged(attr);
+    return false;
+  }
+
+  protected ownerSavedChangeToAttribute(attr: string): boolean {
+    const ownerAny = this.owner as any;
+    if (typeof ownerAny.savedChangeToAttribute === "function")
+      return ownerAny.savedChangeToAttribute(attr);
+    if (typeof ownerAny.isSavedChangeToAttribute === "function")
+      return ownerAny.isSavedChangeToAttribute(attr);
+    return false;
   }
 }

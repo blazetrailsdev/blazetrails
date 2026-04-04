@@ -1,10 +1,14 @@
 import type { Base } from "../base.js";
 import type { AssociationDefinition } from "../associations.js";
-import { resolveModel } from "../associations.js";
+import { resolveModel, loadBelongsTo } from "../associations.js";
 import { underscore } from "@blazetrails/activesupport";
 import { BelongsToAssociation } from "./belongs-to-association.js";
 
 /**
+ * Extends BelongsToAssociation to handle polymorphic type columns.
+ * Reads the foreign_type attribute on the owner to determine the
+ * target class at runtime.
+ *
  * Mirrors: ActiveRecord::Associations::BelongsToPolymorphicAssociation
  */
 export class BelongsToPolymorphicAssociation extends BelongsToAssociation {
@@ -12,63 +16,61 @@ export class BelongsToPolymorphicAssociation extends BelongsToAssociation {
     super(owner, definition);
   }
 
+  /**
+   * Resolve the target class from the polymorphic type column.
+   * Returns the class for whatever type string is stored on the owner.
+   */
   override get klass(): typeof Base {
-    const foreignType = this.foreignTypeName();
-    const ownerAny = this.owner as any;
-    const type =
-      typeof ownerAny.readAttribute === "function"
-        ? ownerAny.readAttribute(foreignType)
-        : ownerAny[foreignType];
-
+    const type = this.readForeignType();
     if (!type) return undefined as any;
     return resolveModel(type);
   }
 
+  /**
+   * Also check if the type column has changed, not just the FK.
+   */
   override isTargetChanged(): boolean {
-    return super.isTargetChanged() || this.foreignTypeChanged();
+    return super.isTargetChanged() || this.ownerAttributeChanged(this.foreignTypeName());
   }
 
   override isTargetPreviouslyChanged(): boolean {
-    return super.isTargetPreviouslyChanged() || this.foreignTypePreviouslyChanged();
+    return (
+      super.isTargetPreviouslyChanged() ||
+      this.ownerAttributePreviouslyChanged(this.foreignTypeName())
+    );
   }
 
   override isSavedChangeToTarget(): boolean {
-    return super.isSavedChangeToTarget() || this.savedChangeToForeignType();
+    return (
+      super.isSavedChangeToTarget() || this.ownerSavedChangeToAttribute(this.foreignTypeName())
+    );
+  }
+
+  protected override staleState(): unknown {
+    const fkState = super.staleState();
+    if (fkState != null) {
+      return [fkState, this.readForeignType()];
+    }
+    return undefined;
+  }
+
+  protected override async doAsyncFindTarget(): Promise<Base | null> {
+    return loadBelongsTo(this.owner, this.reflection.name, this.reflection.options);
   }
 
   private foreignTypeName(): string {
-    return this.reflection.options.foreignKey
-      ? `${String(this.reflection.options.foreignKey).replace(/Id$/, "")}Type`
-      : `${underscore(this.reflection.name)}Type`;
+    const fk = this.reflection.options.foreignKey;
+    if (typeof fk === "string") {
+      return fk.replace(/Id$/, "Type");
+    }
+    return `${underscore(this.reflection.name)}Type`;
   }
 
-  private foreignTypeChanged(): boolean {
-    const ownerAny = this.owner as any;
+  private readForeignType(): string | null {
     const ft = this.foreignTypeName();
-    return typeof ownerAny.attributeChanged === "function"
-      ? ownerAny.attributeChanged(ft)
-      : typeof ownerAny.isAttributeChanged === "function"
-        ? ownerAny.isAttributeChanged(ft)
-        : false;
-  }
-
-  private foreignTypePreviouslyChanged(): boolean {
     const ownerAny = this.owner as any;
-    const ft = this.foreignTypeName();
-    return typeof ownerAny.attributePreviouslyChanged === "function"
-      ? ownerAny.attributePreviouslyChanged(ft)
-      : typeof ownerAny.isAttributePreviouslyChanged === "function"
-        ? ownerAny.isAttributePreviouslyChanged(ft)
-        : false;
-  }
-
-  private savedChangeToForeignType(): boolean {
-    const ownerAny = this.owner as any;
-    const ft = this.foreignTypeName();
-    return typeof ownerAny.savedChangeToAttribute === "function"
-      ? ownerAny.savedChangeToAttribute(ft)
-      : typeof ownerAny.isSavedChangeToAttribute === "function"
-        ? ownerAny.isSavedChangeToAttribute(ft)
-        : false;
+    const value =
+      typeof ownerAny.readAttribute === "function" ? ownerAny.readAttribute(ft) : ownerAny[ft];
+    return value ?? null;
   }
 }

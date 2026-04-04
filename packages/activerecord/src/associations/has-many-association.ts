@@ -1,9 +1,17 @@
 import type { Base } from "../base.js";
 import type { AssociationDefinition } from "../associations.js";
+import { loadHasMany } from "../associations.js";
 import { DeleteRestrictionError } from "./errors.js";
 import { CollectionAssociation } from "./collection-association.js";
+import { underscore } from "@blazetrails/activesupport";
 
 /**
+ * Proxy that handles a has_many association.
+ *
+ * Adds counter cache awareness, dependent handling, and FK setup
+ * on record insertion. Delegates collection behavior to
+ * CollectionAssociation and load functions in associations.ts.
+ *
  * Mirrors: ActiveRecord::Associations::HasManyAssociation
  */
 export class HasManyAssociation extends CollectionAssociation {
@@ -11,12 +19,13 @@ export class HasManyAssociation extends CollectionAssociation {
     super(owner, definition);
   }
 
-  handleDependency(): void {
+  /**
+   * Handle the :dependent option when the owner is being destroyed.
+   * Supports: restrict_with_exception, restrict_with_error, destroy,
+   * nullify, delete (delete_all).
+   */
+  async handleDependency(): Promise<void> {
     const dependent = this.reflection.options.dependent;
-    if (!dependent) {
-      this.deleteAll();
-      return;
-    }
 
     switch (dependent) {
       case "restrictWithException":
@@ -29,42 +38,78 @@ export class HasManyAssociation extends CollectionAssociation {
         if (!this.isEmpty()) {
           const ownerAny = this.owner as any;
           if (typeof ownerAny.errors?.add === "function") {
-            ownerAny.errors.add(
-              "base",
-              `Cannot delete record because dependent ${this.reflection.name} exist`,
-            );
+            const name = this.reflection.name;
+            ownerAny.errors.add("base", `Cannot delete record because dependent ${name} exist`);
           }
         }
         break;
 
-      case "destroy":
-        this.loadTarget();
-        this.destroyAll();
+      case "destroy": {
+        const records = this.loadTarget();
+        for (const record of records) {
+          (record as any).destroyedByAssociation = this.reflection;
+        }
+        await this.destroyAll();
+        break;
+      }
+
+      case "nullify":
+        await this.deleteAll("nullify");
         break;
 
       default:
-        this.deleteAll();
+        await this.deleteAll();
     }
   }
 
-  insertRecord(record: Base, validate = true, raise = false): boolean {
+  /**
+   * Insert a record into the collection. Sets the FK and type
+   * columns on the record to point to the owner, then saves.
+   */
+  async insertRecord(record: Base, validate = true, raise = false): Promise<boolean> {
     this.setOwnerAttributes(record);
-    if (raise) {
-      if (typeof (record as any).saveBang === "function") {
-        (record as any).saveBang({ validate });
-        return true;
-      }
+
+    if (raise && typeof (record as any).saveBang === "function") {
+      await (record as any).saveBang({ validate });
+      return true;
     }
     if (typeof (record as any).save === "function") {
-      return (record as any).save({ validate });
+      return await (record as any).save({ validate });
     }
     return false;
   }
 
-  private setOwnerAttributes(record: Base): void {
-    const fk = this.reflection.options.foreignKey;
-    if (fk && typeof fk === "string") {
-      (record as any)[fk] = (this.owner as any).id;
+  protected override async doAsyncFindTarget(): Promise<Base[]> {
+    return loadHasMany(this.owner, this.reflection.name, this.reflection.options);
+  }
+
+  protected override setOwnerAttributes(record: Base): void {
+    const ownerAny = this.owner as any;
+    const ctor = ownerAny.constructor;
+    const primaryKey = this.reflection.options.primaryKey ?? ctor.primaryKey ?? "id";
+
+    // Determine FK column name
+    let fk: string;
+    if (this.reflection.options.as) {
+      fk =
+        typeof this.reflection.options.foreignKey === "string"
+          ? this.reflection.options.foreignKey
+          : `${underscore(this.reflection.options.as)}_id`;
+    } else {
+      fk =
+        typeof this.reflection.options.foreignKey === "string"
+          ? this.reflection.options.foreignKey
+          : `${underscore(ctor.name)}_id`;
+    }
+
+    (record as any)[fk] = ownerAny.readAttribute
+      ? ownerAny.readAttribute(primaryKey as string)
+      : ownerAny[primaryKey as string];
+
+    // Set polymorphic type column
+    if (this.reflection.options.as) {
+      const typeCol = `${underscore(this.reflection.options.as)}_type`;
+      (record as any)[typeCol] = ctor.name;
     }
   }
 }

@@ -83,9 +83,9 @@ export class Model {
   (e.g., `User` not `Model`), just like Ruby's `self`.
 
 For **instance methods** mixed in bulk (like Rails' `include QueryMethods`),
-use `include(Klass, { method1, method2 })` from `@blazetrails/activesupport`.
-It assigns all methods onto the prototype via `Object.defineProperties`.
-See `relation.ts` + `query-methods.ts` for the pattern.
+use `include()` and `Included<>` from `@blazetrails/activesupport`.
+See `activesupport/src/include.ts` for the API and
+`relation.ts` + `relation/query-methods.ts` for usage.
 
 ### When NOT to use this
 

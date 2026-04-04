@@ -29,3 +29,15 @@ export function performSpawn<T extends SpawnRelation<T>>(this: T): T {
 export function performMerge<T extends SpawnRelation<T>>(this: T, other: any): T {
   return new Merger(this, other).merge() as T;
 }
+
+/**
+ * In-place merge — mutates this relation directly.
+ *
+ * Mirrors: ActiveRecord::SpawnMethods#merge!
+ */
+export function mergeBang<T extends SpawnRelation<T>>(this: T, other: any): T {
+  if (typeof other === "object" && other !== null && "_modelClass" in other) {
+    return new Merger(this, other).merge() as T;
+  }
+  return this;
+}

@@ -203,6 +203,44 @@ export class PredicateBuilder {
     return PredicateBuilder.resolveColumn(this.table, key);
   }
 
+  registerHandler(
+    klass: any,
+    handler: { call(attr: Nodes.Attribute, value: any): Nodes.Node },
+  ): void {
+    (this as any)[`_handler_${klass.name ?? "custom"}`] = handler;
+  }
+
+  buildBindAttribute(columnName: string, value: unknown): Nodes.Node {
+    const attr = this.resolveColumn(columnName);
+    return this.build(attr, value);
+  }
+
+  resolveArelAttribute(tableName: string, columnName: string): Nodes.Attribute {
+    return new Table(tableName).get(columnName);
+  }
+
+  with(context: any): PredicateBuilder {
+    const builder = new PredicateBuilder(this.table);
+    builder.setAssociationMap(this.associationMap);
+    (builder as any)._context = context;
+    return builder;
+  }
+
+  static references(conditions: Record<string, unknown>): string[] {
+    const refs: string[] = [];
+    for (const key of Object.keys(conditions)) {
+      const dot = key.indexOf(".");
+      if (dot !== -1) {
+        refs.push(key.slice(0, dot));
+      }
+    }
+    return refs;
+  }
+
+  references(): string[] {
+    return [];
+  }
+
   static resolveColumn(table: Table, key: string): Nodes.Attribute {
     if (key.includes('"')) return table.get(key);
     const firstDot = key.indexOf(".");

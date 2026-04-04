@@ -97,6 +97,82 @@ export class WhereClause {
     );
   }
 
+  or(other: WhereClause): WhereClause {
+    if (this.isEmpty()) return other.clone();
+    if (other.isEmpty()) return this.clone();
+    const combined = this.merge(other);
+    combined.rawClauses = [];
+    const leftParts = [
+      ...this.conditions.map(
+        (c) =>
+          `(${Object.entries(c)
+            .map(([k, v]) => `${k} = ${JSON.stringify(v)}`)
+            .join(" AND ")})`,
+      ),
+      ...this.notConditions.map(
+        (c) =>
+          `NOT (${Object.entries(c)
+            .map(([k, v]) => `${k} = ${JSON.stringify(v)}`)
+            .join(" AND ")})`,
+      ),
+      ...this.rawClauses,
+    ].filter(Boolean);
+    const rightParts = [
+      ...other.conditions.map(
+        (c) =>
+          `(${Object.entries(c)
+            .map(([k, v]) => `${k} = ${JSON.stringify(v)}`)
+            .join(" AND ")})`,
+      ),
+      ...other.notConditions.map(
+        (c) =>
+          `NOT (${Object.entries(c)
+            .map(([k, v]) => `${k} = ${JSON.stringify(v)}`)
+            .join(" AND ")})`,
+      ),
+      ...other.rawClauses,
+    ].filter(Boolean);
+    const left = leftParts.join(" AND ");
+    const right = rightParts.join(" AND ");
+    return new WhereClause([], [], [`(${left}) OR (${right})`]);
+  }
+
+  get ast(): string {
+    const parts: string[] = [];
+    for (const cond of this.conditions) {
+      for (const [k, v] of Object.entries(cond)) {
+        parts.push(`${k} = ${JSON.stringify(v)}`);
+      }
+    }
+    for (const cond of this.notConditions) {
+      for (const [k, v] of Object.entries(cond)) {
+        parts.push(`${k} != ${JSON.stringify(v)}`);
+      }
+    }
+    parts.push(...this.rawClauses);
+    return parts.length <= 1 ? (parts[0] ?? "") : parts.join(" AND ");
+  }
+
+  isContradiction(): boolean {
+    for (const cond of this.conditions) {
+      for (const value of Object.values(cond)) {
+        if (Array.isArray(value) && value.length === 0) return true;
+      }
+    }
+    return false;
+  }
+
+  extractAttributes(): string[] {
+    const attrs: string[] = [];
+    for (const cond of this.conditions) {
+      attrs.push(...Object.keys(cond));
+    }
+    for (const cond of this.notConditions) {
+      attrs.push(...Object.keys(cond));
+    }
+    return attrs;
+  }
+
   toH(): Record<string, unknown> {
     const result: Record<string, unknown> = {};
     for (const cond of this.conditions) {

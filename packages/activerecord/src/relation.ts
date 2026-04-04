@@ -22,12 +22,13 @@ import {
 
 import { Range } from "./connection-adapters/postgresql/oid/range.js";
 export { Range };
-import { WhereChain } from "./relation/query-methods.js";
+import { WhereChain, QueryMethodBangs } from "./relation/query-methods.js";
 import { Batches } from "./relation/batches.js";
 import { performSpawn, performMerge } from "./relation/spawn-methods.js";
 import { wrapWithScopeProxy } from "./relation/delegation.js";
 import { InsertAll } from "./insert-all.js";
 import { PredicateBuilder } from "./relation/predicate-builder.js";
+import { include } from "@blazetrails/activesupport";
 import {
   performCount,
   performSum,
@@ -108,6 +109,8 @@ export class Relation<T extends Base> {
   private _createWithAttrs: Record<string, unknown> = {};
   private _extending: Array<Record<string, Function>> = [];
   private _ctes: Array<{ name: string; sql: string; recursive: boolean }> = [];
+  private _skipPreloading = false;
+  private _skipQueryCache = false;
   private _loaded = false;
   private _records: T[] = [];
 
@@ -3733,6 +3736,157 @@ export class Relation<T extends Base> {
     return records.some((r) => r.isEqual(record));
   }
 
+  // ---------------------------------------------------------------------------
+  // Missing relation.rb methods — accessors, cache keys, scoping
+  // ---------------------------------------------------------------------------
+
+  get predicateBuilder(): PredicateBuilder {
+    return new PredicateBuilder(this._modelClass.arelTable);
+  }
+
+  get skipPreloadingValue(): boolean {
+    return this._skipPreloading;
+  }
+
+  get isScheduled(): boolean {
+    return false;
+  }
+
+  get isEagerLoading(): boolean {
+    return (
+      this._eagerLoadAssociations.length > 0 ||
+      (this._includesAssociations.length > 0 && this._joinClauses.length > 0)
+    );
+  }
+
+  get joinedIncludesValues(): string[] {
+    if (this._joinClauses.length === 0) return [];
+    return this._includesAssociations.filter((assoc) =>
+      this._joinClauses.some((j) => j.table === assoc),
+    );
+  }
+
+  values(): Record<string, unknown> {
+    return {
+      includes: this._includesAssociations,
+      eagerLoad: this._eagerLoadAssociations,
+      preload: this._preloadAssociations,
+      select: this._selectColumns,
+      group: this._groupColumns,
+      order: this._orderClauses,
+      joins: this._joinClauses,
+      where: this._whereClause,
+      having: this._havingClauses,
+      limit: this._limitValue,
+      offset: this._offsetValue,
+      lock: this._lockValue,
+      readonly: this._isReadonly,
+      distinct: this._isDistinct,
+      strictLoading: this._isStrictLoading,
+      from: this._fromClause,
+      annotations: this._annotations,
+      optimizerHints: this._optimizerHints,
+      extending: this._extending,
+      with: this._ctes,
+      createWith: this._createWithAttrs,
+    };
+  }
+
+  valuesForQueries(): Record<string, unknown> {
+    return this.values();
+  }
+
+  get isEmptyScope(): boolean {
+    return (
+      this._whereClause.isEmpty() &&
+      this._orderClauses.length === 0 &&
+      this._limitValue === null &&
+      this._offsetValue === null &&
+      this._selectColumns === null &&
+      !this._isDistinct &&
+      this._groupColumns.length === 0 &&
+      this._havingClauses.length === 0 &&
+      this._joinClauses.length === 0 &&
+      this._rawJoins.length === 0 &&
+      this._includesAssociations.length === 0 &&
+      this._eagerLoadAssociations.length === 0 &&
+      this._preloadAssociations.length === 0 &&
+      this._lockValue === null &&
+      this._fromClause.isEmpty() &&
+      this._ctes.length === 0 &&
+      this._annotations.length === 0 &&
+      this._optimizerHints.length === 0
+    );
+  }
+
+  get hasLimitOrOffset(): boolean {
+    return this._limitValue !== null || this._offsetValue !== null;
+  }
+
+  aliasTracker(): Record<string, number> {
+    const tracker: Record<string, number> = {};
+    for (const join of this._joinClauses) {
+      tracker[join.table] = (tracker[join.table] ?? 0) + 1;
+    }
+    return tracker;
+  }
+
+  preloadAssociations(): string[] {
+    return [...this._preloadAssociations, ...this._includesAssociations];
+  }
+
+  bindAttribute(column: string, value: unknown): unknown {
+    return this.predicateBuilder.build(this._modelClass.arelTable.get(column), value);
+  }
+
+  async scoping<R>(callback: () => R | Promise<R>): Promise<R> {
+    const modelClass = this._modelClass as any;
+    const prev = modelClass._currentScope;
+    modelClass._currentScope = this;
+    try {
+      return await callback();
+    } finally {
+      modelClass._currentScope = prev;
+    }
+  }
+
+  cacheKey(): string {
+    return this.computeCacheKey();
+  }
+
+  computeCacheKey(): string {
+    const tableName = this._modelClass.tableName;
+    const sql = this.toSql();
+    let hash = 0;
+    for (let i = 0; i < sql.length; i++) {
+      const ch = sql.charCodeAt(i);
+      hash = ((hash << 5) - hash + ch) | 0;
+    }
+    return `${tableName}/query-${(hash >>> 0).toString(36)}`;
+  }
+
+  async cacheVersion(): Promise<string> {
+    return this.computeCacheVersion();
+  }
+
+  async computeCacheVersion(): Promise<string> {
+    const records = await this.toArray();
+    let maxTime = 0;
+    for (const record of records) {
+      const updatedAt = (record as any).updatedAt ?? (record as any).updated_at;
+      if (updatedAt instanceof Date) {
+        maxTime = Math.max(maxTime, updatedAt.getTime());
+      }
+    }
+    return maxTime > 0 ? String(maxTime) : "";
+  }
+
+  async cacheKeyWithVersion(): Promise<string> {
+    const key = this.cacheKey();
+    const version = await this.cacheVersion();
+    return version ? `${key}-${version}` : key;
+  }
+
   /** @internal */
   _clone(): Relation<T> {
     const rel = new Relation<T>(this._modelClass);
@@ -3763,6 +3917,8 @@ export class Relation<T extends Base> {
     rel._createWithAttrs = { ...this._createWithAttrs };
     rel._extending = [...this._extending];
     rel._ctes = [...this._ctes];
+    rel._skipPreloading = this._skipPreloading;
+    rel._skipQueryCache = this._skipQueryCache;
     return wrapWithScopeProxy(rel);
   }
 }
@@ -3783,7 +3939,6 @@ export interface Relation<T extends Base> extends CalculationMethods {
   ): Promise<T[] | TResult>;
   finally(onfinally?: (() => void) | null): Promise<T[]>;
   // Finder methods — typed with T to preserve generics through the interface merge.
-  // Implementations are in finder-methods.ts, wired via prototype assignment below.
   find(ids: unknown[]): Promise<T[]>;
   find(id: unknown): Promise<T>;
   find(...ids: unknown[]): Promise<T | T[]>;
@@ -3825,7 +3980,49 @@ export interface Relation<T extends Base> extends CalculationMethods {
   // SpawnMethods
   spawn(): Relation<T>;
   merge<U extends Base>(other: Relation<U>): Relation<T>;
+  // QueryMethods bang variants (mixed in from query-methods.ts)
+  includesBang(...associations: string[]): Relation<T>;
+  eagerLoadBang(...associations: string[]): Relation<T>;
+  preloadBang(...associations: string[]): Relation<T>;
+  referencesBang(...tables: string[]): Relation<T>;
+  withBang(...ctes: Array<Record<string, any>>): Relation<T>;
+  withRecursiveBang(...ctes: Array<Record<string, any>>): Relation<T>;
+  reselectBang(...columns: any[]): Relation<T>;
+  groupBang(...columns: string[]): Relation<T>;
+  regroupBang(...columns: string[]): Relation<T>;
+  orderBang(...args: Array<string | Record<string, "asc" | "desc">>): Relation<T>;
+  reorderBang(...args: Array<string | Record<string, "asc" | "desc">>): Relation<T>;
+  unscopeBang(...types: string[]): Relation<T>;
+  joinsBang(...args: string[]): Relation<T>;
+  leftOuterJoinsBang(...args: string[]): Relation<T>;
+  whereBang(opts: any, ...rest: unknown[]): Relation<T>;
+  invertWhereBang(): Relation<T>;
+  andBang(other: Relation<T>): Relation<T>;
+  orBang(other: Relation<T>): Relation<T>;
+  havingBang(condition: string | Record<string, unknown>): Relation<T>;
+  limitBang(value: number | null): Relation<T>;
+  offsetBang(value: number): Relation<T>;
+  lockBang(locks?: string | boolean): Relation<T>;
+  noneBang(): Relation<T>;
+  isNullRelation(): boolean;
+  readonlyBang(value?: boolean): Relation<T>;
+  strictLoadingBang(value?: boolean): Relation<T>;
+  createWithBang(value: Record<string, unknown> | null): Relation<T>;
+  fromBang(value: string, subqueryName?: string): Relation<T>;
+  distinctBang(value?: boolean): Relation<T>;
+  extendingBang(...modules: Array<Record<string, Function> | ((rel: any) => void)>): Relation<T>;
+  optimizerHintsBang(...hints: string[]): Relation<T>;
+  reverseOrderBang(): Relation<T>;
+  skipQueryCacheBang(value?: boolean): Relation<T>;
+  skipPreloadingBang(): Relation<T>;
+  annotateBang(...comments: string[]): Relation<T>;
+  uniqBang(name?: string): Relation<T>;
+  excludingBang(records: any[]): Relation<T>;
+  constructJoinDependency(associations: any, joinType: any): any;
 }
+
+// Mix in modules — mirrors Rails' `include QueryMethods, FinderMethods, ...`
+include(Relation, QueryMethodBangs);
 
 const def = { writable: true, configurable: true, enumerable: false };
 Object.defineProperties(Relation.prototype, {

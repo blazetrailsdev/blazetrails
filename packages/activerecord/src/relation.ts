@@ -27,6 +27,7 @@ import { Batches } from "./relation/batches.js";
 import { performSpawn, performMerge } from "./relation/spawn-methods.js";
 import { wrapWithScopeProxy } from "./relation/delegation.js";
 import { InsertAll } from "./insert-all.js";
+import { ScopeRegistry } from "./scoping.js";
 import { PredicateBuilder } from "./relation/predicate-builder.js";
 import { include } from "@blazetrails/activesupport";
 import {
@@ -3768,15 +3769,15 @@ export class Relation<T extends Base> {
 
   values(): Record<string, unknown> {
     return {
-      includes: this._includesAssociations,
-      eagerLoad: this._eagerLoadAssociations,
-      preload: this._preloadAssociations,
-      select: this._selectColumns,
-      group: this._groupColumns,
-      order: this._orderClauses,
-      joins: this._joinClauses,
-      where: this._whereClause,
-      having: this._havingClauses,
+      includes: [...this._includesAssociations],
+      eagerLoad: [...this._eagerLoadAssociations],
+      preload: [...this._preloadAssociations],
+      select: this._selectColumns ? [...this._selectColumns] : null,
+      group: [...this._groupColumns],
+      order: [...this._orderClauses],
+      joins: [...this._joinClauses],
+      where: this._whereClause.clone(),
+      having: [...this._havingClauses],
       limit: this._limitValue,
       offset: this._offsetValue,
       lock: this._lockValue,
@@ -3784,11 +3785,11 @@ export class Relation<T extends Base> {
       distinct: this._isDistinct,
       strictLoading: this._isStrictLoading,
       from: this._fromClause,
-      annotations: this._annotations,
-      optimizerHints: this._optimizerHints,
-      extending: this._extending,
-      with: this._ctes,
-      createWith: this._createWithAttrs,
+      annotations: [...this._annotations],
+      optimizerHints: [...this._optimizerHints],
+      extending: [...this._extending],
+      with: [...this._ctes],
+      createWith: { ...this._createWithAttrs },
     };
   }
 
@@ -3841,12 +3842,12 @@ export class Relation<T extends Base> {
 
   async scoping<R>(callback: () => R | Promise<R>): Promise<R> {
     const modelClass = this._modelClass as any;
-    const prev = modelClass._currentScope;
-    modelClass._currentScope = this;
+    const prev = ScopeRegistry.currentScope(modelClass);
+    ScopeRegistry.setCurrentScope(modelClass, this as any);
     try {
       return await callback();
     } finally {
-      modelClass._currentScope = prev;
+      ScopeRegistry.setCurrentScope(modelClass, prev);
     }
   }
 
@@ -3870,15 +3871,15 @@ export class Relation<T extends Base> {
   }
 
   async computeCacheVersion(): Promise<string> {
-    const records = await this.toArray();
-    let maxTime = 0;
-    for (const record of records) {
-      const updatedAt = (record as any).updatedAt ?? (record as any).updated_at;
-      if (updatedAt instanceof Date) {
-        maxTime = Math.max(maxTime, updatedAt.getTime());
-      }
+    try {
+      const col = "updated_at";
+      const result = await (this as any).maximum(col);
+      if (result instanceof Date) return String(result.getTime());
+      if (result) return String(result);
+    } catch {
+      // Fall through if updated_at column doesn't exist
     }
-    return maxTime > 0 ? String(maxTime) : "";
+    return "";
   }
 
   async cacheKeyWithVersion(): Promise<string> {

@@ -25,6 +25,7 @@ export class PredicateBuilder {
   private basicObjectHandler: BasicObjectHandler;
   private relationHandler: RelationHandler;
   private associationMap: Map<string, AssociationMapping> = new Map();
+  private handlers: Array<[any, { call(attr: Nodes.Attribute, value: any): Nodes.Node }]> = [];
 
   constructor(table: Table) {
     this.table = table;
@@ -183,6 +184,11 @@ export class PredicateBuilder {
     if (value === null || value === undefined) {
       return attribute.isNull();
     }
+    for (const [klass, handler] of this.handlers) {
+      if (value instanceof klass) {
+        return handler.call(attribute, value);
+      }
+    }
     if (value instanceof Range) {
       return this.rangeHandler.call(attribute, value);
     }
@@ -207,7 +213,7 @@ export class PredicateBuilder {
     klass: any,
     handler: { call(attr: Nodes.Attribute, value: any): Nodes.Node },
   ): void {
-    (this as any)[`_handler_${klass.name ?? "custom"}`] = handler;
+    this.handlers.push([klass, handler]);
   }
 
   buildBindAttribute(columnName: string, value: unknown): Nodes.Node {

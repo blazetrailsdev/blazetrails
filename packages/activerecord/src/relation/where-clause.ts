@@ -100,41 +100,17 @@ export class WhereClause {
   or(other: WhereClause): WhereClause {
     if (this.isEmpty()) return other.clone();
     if (other.isEmpty()) return this.clone();
-    const combined = this.merge(other);
-    combined.rawClauses = [];
-    const leftParts = [
-      ...this.conditions.map(
-        (c) =>
-          `(${Object.entries(c)
-            .map(([k, v]) => `${k} = ${JSON.stringify(v)}`)
-            .join(" AND ")})`,
-      ),
-      ...this.notConditions.map(
-        (c) =>
-          `NOT (${Object.entries(c)
-            .map(([k, v]) => `${k} = ${JSON.stringify(v)}`)
-            .join(" AND ")})`,
-      ),
-      ...this.rawClauses,
-    ].filter(Boolean);
-    const rightParts = [
-      ...other.conditions.map(
-        (c) =>
-          `(${Object.entries(c)
-            .map(([k, v]) => `${k} = ${JSON.stringify(v)}`)
-            .join(" AND ")})`,
-      ),
-      ...other.notConditions.map(
-        (c) =>
-          `NOT (${Object.entries(c)
-            .map(([k, v]) => `${k} = ${JSON.stringify(v)}`)
-            .join(" AND ")})`,
-      ),
-      ...other.rawClauses,
-    ].filter(Boolean);
-    const left = leftParts.join(" AND ");
-    const right = rightParts.join(" AND ");
-    return new WhereClause([], [], [`(${left}) OR (${right})`]);
+
+    // Rails: extract common predicates, OR the differences.
+    // Our representation uses parallel arrays rather than Arel predicates,
+    // so we keep the OR as two merged WhereClause halves stored together.
+    // The SQL generation in Relation handles combining them with OR.
+    const result = new WhereClause();
+    result.conditions = [...this.conditions, ...other.conditions];
+    result.notConditions = [...this.notConditions, ...other.notConditions];
+    result.rawClauses = [...this.rawClauses, ...other.rawClauses];
+    result.arelNodes = [...this.arelNodes, ...other.arelNodes];
+    return result;
   }
 
   get ast(): string {

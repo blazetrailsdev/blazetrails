@@ -4,6 +4,7 @@
  *
  * Mirrors: ActiveRecord::QueryMethods
  */
+import { Nodes } from "@blazetrails/arel";
 import { FromClause } from "./from-clause.js";
 import { WhereClause } from "./where-clause.js";
 import { IrreversibleOrderError } from "../errors.js";
@@ -301,7 +302,7 @@ function whereBang(this: QueryMethodsHost, opts: any, ...rest: unknown[]): any {
     }
     this._whereClause.rawClauses.push(sql);
   } else if (typeof opts === "object" && opts !== null) {
-    if ("_isArelNode" in opts || (opts.constructor && opts.constructor.name === "Node")) {
+    if (opts instanceof Nodes.Node) {
       this._whereClause.arelNodes.push(opts);
     } else {
       const castConditions: Record<string, unknown> = {};
@@ -404,8 +405,8 @@ function createWithBang(this: QueryMethodsHost, value: Record<string, unknown> |
   return this;
 }
 
-function fromBang(this: QueryMethodsHost, value: string, _subqueryName?: string): any {
-  this._fromClause = new FromClause(value);
+function fromBang(this: QueryMethodsHost, value: string, subqueryName?: string): any {
+  this._fromClause = new FromClause(value, subqueryName ?? null);
   return this;
 }
 

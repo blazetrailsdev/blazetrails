@@ -33,7 +33,7 @@ import { wrapWithScopeProxy } from "./relation/delegation.js";
 import { InsertAll } from "./insert-all.js";
 import { ScopeRegistry } from "./scoping.js";
 import { PredicateBuilder } from "./relation/predicate-builder.js";
-import { include } from "@blazetrails/activesupport";
+import { include, type Included } from "@blazetrails/activesupport";
 import {
   performCount,
   performSum,
@@ -3814,45 +3814,9 @@ export interface Relation<T extends Base> extends CalculationMethods {
     id?: unknown,
   ): never;
   // QueryMethods bang variants (mixed in from query-methods.ts)
-  includesBang(...associations: string[]): Relation<T>;
-  eagerLoadBang(...associations: string[]): Relation<T>;
-  preloadBang(...associations: string[]): Relation<T>;
-  referencesBang(...tables: string[]): Relation<T>;
-  withBang(...ctes: Array<Record<string, any>>): Relation<T>;
-  withRecursiveBang(...ctes: Array<Record<string, any>>): Relation<T>;
-  reselectBang(...columns: any[]): Relation<T>;
-  groupBang(...columns: string[]): Relation<T>;
-  regroupBang(...columns: string[]): Relation<T>;
-  orderBang(...args: Array<string | Record<string, "asc" | "desc">>): Relation<T>;
-  reorderBang(...args: Array<string | Record<string, "asc" | "desc">>): Relation<T>;
-  unscopeBang(...types: string[]): Relation<T>;
-  joinsBang(...args: string[]): Relation<T>;
-  leftOuterJoinsBang(...args: string[]): Relation<T>;
-  whereBang(opts: any, ...rest: unknown[]): Relation<T>;
-  invertWhereBang(): Relation<T>;
-  andBang(other: Relation<T>): Relation<T>;
-  orBang(other: Relation<T>): Relation<T>;
-  havingBang(condition: string | Record<string, unknown>): Relation<T>;
-  limitBang(value: number | null): Relation<T>;
-  offsetBang(value: number): Relation<T>;
-  lockBang(locks?: string | boolean): Relation<T>;
-  noneBang(): Relation<T>;
-  isNullRelation(): boolean;
-  readonlyBang(value?: boolean): Relation<T>;
-  strictLoadingBang(value?: boolean): Relation<T>;
-  createWithBang(value: Record<string, unknown> | null): Relation<T>;
-  fromBang(value: string, subqueryName?: string): Relation<T>;
-  distinctBang(value?: boolean): Relation<T>;
-  extendingBang(...modules: Array<Record<string, Function> | ((rel: any) => void)>): Relation<T>;
-  optimizerHintsBang(...hints: string[]): Relation<T>;
-  reverseOrderBang(): Relation<T>;
-  skipQueryCacheBang(value?: boolean): Relation<T>;
-  skipPreloadingBang(): Relation<T>;
-  annotateBang(...comments: string[]): Relation<T>;
-  uniqBang(name?: string): Relation<T>;
-  excludingBang(records: any[]): Relation<T>;
-  constructJoinDependency(associations: any, joinType: any): any;
 }
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface Relation<T extends Base> extends Included<typeof QueryMethodBangs> {}
 
 // Mix in modules — mirrors Rails' `include QueryMethods, FinderMethods, ...`
 include(Relation, QueryMethodBangs);

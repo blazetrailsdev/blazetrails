@@ -22,6 +22,17 @@
 type AnyClass = new (...args: any[]) => any;
 type Module = Record<string, Function>;
 
+/**
+ * Derive instance method types from an included module object.
+ * Strips the `this` parameter from each function signature.
+ *
+ * Usage:
+ *   export interface Relation<T> extends Included<typeof QueryMethodBangs> {}
+ */
+export type Included<M extends Module> = {
+  [K in keyof M]: M[K] extends (this: any, ...args: infer A) => infer R ? (...args: A) => R : never;
+};
+
 export function include(klass: AnyClass, mod: Module): void {
   const descriptors: PropertyDescriptorMap = {};
   for (const key of Object.keys(mod)) {

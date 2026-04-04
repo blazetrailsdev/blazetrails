@@ -62,23 +62,23 @@ export function cacheVersion(this: Identifiable): string | null {
 }
 
 /**
- * Mirrors: ActiveRecord::Integration::ClassMethods#collection_cache_key
- */
-/**
  * Rails: collection.send(:compute_cache_key, timestamp_column)
+ * Note: timestampColumn is accepted for API parity but Relation#computeCacheKey
+ * does not yet support it — will take effect when that's implemented.
+ *
+ * Mirrors: ActiveRecord::Integration::ClassMethods#collection_cache_key
  */
 export function collectionCacheKey(
   this: { all(): any },
   collection?: any,
-  timestampColumn = "updated_at",
+  _timestampColumn = "updated_at",
 ): string {
   const rel = collection ?? this.all();
-  // Rails delegates to Relation#compute_cache_key with the timestamp column
   if (typeof rel.computeCacheKey === "function") {
-    return rel.computeCacheKey(timestampColumn);
+    return rel.computeCacheKey();
   }
   if (typeof rel.cacheKey === "function") {
-    return rel.cacheKey(timestampColumn);
+    return rel.cacheKey();
   }
   return "";
 }

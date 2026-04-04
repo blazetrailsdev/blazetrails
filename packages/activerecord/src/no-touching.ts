@@ -64,17 +64,28 @@ export async function touchLater(
 /**
  * Mirrors: ActiveRecord::NoTouching.apply_to
  */
-export function applyTo<R>(klass: any, fn: () => R): R {
+export function applyTo<R>(klass: any, fn: () => R | Promise<R>): R | Promise<R> {
   const prev = _noTouchingDepth.get(klass) ?? 0;
   _noTouchingDepth.set(klass, prev + 1);
-  try {
-    return fn();
-  } finally {
+
+  const cleanup = () => {
     const current = _noTouchingDepth.get(klass) ?? 1;
     if (current <= 1) {
       _noTouchingDepth.delete(klass);
     } else {
       _noTouchingDepth.set(klass, current - 1);
     }
+  };
+
+  try {
+    const result = fn();
+    if (result && typeof (result as any).then === "function") {
+      return Promise.resolve(result).finally(cleanup) as Promise<R>;
+    }
+    cleanup();
+    return result;
+  } catch (error) {
+    cleanup();
+    throw error;
   }
 }

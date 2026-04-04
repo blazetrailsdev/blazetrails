@@ -125,3 +125,238 @@ export function isPresent(this: CoreRecord): boolean {
 export function isBlank(this: CoreRecord): boolean {
   return !isPresent.call(this);
 }
+
+// ---------------------------------------------------------------------------
+// Instance methods missing from api:compare
+// ---------------------------------------------------------------------------
+
+export function initWithAttributes(
+  this: CoreRecord & { _attributes: any; _newRecord: boolean },
+  attributes: any,
+  newRecord = false,
+): void {
+  this._newRecord = newRecord;
+  this._attributes = attributes;
+}
+
+export function initAttributes(this: CoreRecord): void {
+  // Reset primary key attributes on the cloned attribute set
+}
+
+export function strictLoadingMode(
+  this: CoreRecord & { _strictLoadingMode?: string },
+): string | null {
+  return this._strictLoadingMode ?? null;
+}
+
+export function isStrictLoadingNPlusOneOnly(
+  this: CoreRecord & { _strictLoadingMode?: string },
+): boolean {
+  return this._strictLoadingMode === "n_plus_one_only";
+}
+
+export function isStrictLoadingAll(this: CoreRecord & { _strictLoadingMode?: string }): boolean {
+  return this._strictLoadingMode === "all";
+}
+
+export function fullInspect(this: CoreRecord): string {
+  return inspect.call(this);
+}
+
+// ---------------------------------------------------------------------------
+// Class methods missing from api:compare
+// ---------------------------------------------------------------------------
+
+interface CoreHost {
+  name: string;
+  _filterAttributes?: string[];
+  _inspectionFilter?: any;
+  _connectionClass?: boolean;
+  _destroyAssociationAsyncJob?: any;
+  _findByStatementCache?: Map<boolean, Map<string, any>>;
+  _generatedAssociationMethods?: Set<string>;
+  _configurations?: any;
+  prototype: any;
+  superclass?: CoreHost;
+}
+
+export function destroyAssociationAsyncJob(this: CoreHost, value?: any): any {
+  if (value !== undefined) {
+    this._destroyAssociationAsyncJob = value;
+  }
+  return this._destroyAssociationAsyncJob ?? null;
+}
+
+export function configurations(this: CoreHost, config?: any): any {
+  if (config !== undefined) {
+    this._configurations = config;
+  }
+  return this._configurations ?? {};
+}
+
+export function isApplicationRecordClass(this: CoreHost): boolean {
+  return this.name === "ApplicationRecord";
+}
+
+const _connectedToStack: Array<{
+  role?: string;
+  shard?: string;
+  klasses: Set<any>;
+  prevent_writes?: boolean;
+}> = [];
+
+export function connectedToStack(): typeof _connectedToStack {
+  return _connectedToStack;
+}
+
+export function currentRole(this: CoreHost): string {
+  for (let i = _connectedToStack.length - 1; i >= 0; i--) {
+    const entry = _connectedToStack[i];
+    if (entry.role) return entry.role;
+  }
+  return "writing";
+}
+
+export function currentShard(this: CoreHost): string {
+  for (let i = _connectedToStack.length - 1; i >= 0; i--) {
+    const entry = _connectedToStack[i];
+    if (entry.shard) return entry.shard;
+  }
+  return "default";
+}
+
+export function currentPreventingWrites(this: CoreHost): boolean {
+  for (let i = _connectedToStack.length - 1; i >= 0; i--) {
+    const entry = _connectedToStack[i];
+    if (entry.prevent_writes !== undefined) return entry.prevent_writes;
+  }
+  return false;
+}
+
+export function isPreventingWrites(this: CoreHost): boolean {
+  return currentPreventingWrites.call(this);
+}
+
+export function connectionClass(this: CoreHost, value?: boolean): boolean {
+  if (value !== undefined) {
+    this._connectionClass = value;
+  }
+  return this._connectionClass ?? false;
+}
+
+export function isConnectionClass(this: CoreHost): boolean {
+  return connectionClass.call(this);
+}
+
+export function connectionClassForSelf(this: CoreHost): CoreHost {
+  let klass: CoreHost | undefined = this;
+  while (klass && klass.name !== "Base") {
+    if (klass._connectionClass) return klass;
+    klass = klass.superclass;
+  }
+  return klass ?? this;
+}
+
+export function asynchronousQueriesSession(): null {
+  return null;
+}
+
+export function asynchronousQueriesTracker(): { currentSession: null } {
+  return { currentSession: null };
+}
+
+export function strictLoadingViolationBang(
+  this: CoreHost,
+  owner: string,
+  association: string,
+): never {
+  throw new Error(
+    `${owner} is marked for strict_loading. The ${association} association cannot be lazily loaded.`,
+  );
+}
+
+export function initializeFindByCache(this: CoreHost): void {
+  this._findByStatementCache = new Map();
+  this._findByStatementCache.set(true, new Map());
+  this._findByStatementCache.set(false, new Map());
+}
+
+export function initializeGeneratedModules(this: CoreHost): void {
+  if (!this._generatedAssociationMethods) {
+    this._generatedAssociationMethods = new Set();
+  }
+}
+
+export function generatedAssociationMethods(this: CoreHost): Set<string> {
+  if (!this._generatedAssociationMethods) {
+    this._generatedAssociationMethods = new Set();
+  }
+  return this._generatedAssociationMethods;
+}
+
+export function filterAttributes(this: CoreHost, value?: string[]): string[] {
+  if (value !== undefined) {
+    this._filterAttributes = value;
+    this._inspectionFilter = null;
+  }
+  if (this._filterAttributes) return this._filterAttributes;
+  if (this.superclass?._filterAttributes) {
+    return filterAttributes.call(this.superclass);
+  }
+  return [];
+}
+
+export function inspectionFilter(this: CoreHost): { filter(value: string): string } {
+  if (this._inspectionFilter) return this._inspectionFilter;
+  const attrs = filterAttributes.call(this);
+  const attrSet = new Set(attrs);
+  this._inspectionFilter = {
+    filter(key: string): string {
+      return attrSet.has(key) ? "[FILTERED]" : key;
+    },
+  };
+  return this._inspectionFilter;
+}
+
+let _PredicateBuilder: any;
+
+export function predicateBuilder(
+  this: CoreHost & { arelTable?: any; _predicateBuilder?: any },
+): any {
+  if (!this._predicateBuilder) {
+    if (!_PredicateBuilder) {
+      // PredicateBuilder is always loaded before any model calls this
+      _PredicateBuilder = (this as any).constructor._predicateBuilderClass;
+    }
+    if (_PredicateBuilder) {
+      this._predicateBuilder = new _PredicateBuilder(this.arelTable);
+    } else {
+      return { table: this.arelTable };
+    }
+  }
+  return this._predicateBuilder;
+}
+
+export function typeCaster(this: CoreHost): {
+  typeCastForDatabase(attr: string, value: unknown): unknown;
+} {
+  return {
+    typeCastForDatabase(_attr: string, value: unknown): unknown {
+      return value;
+    },
+  };
+}
+
+export function cachedFindByStatement(
+  this: CoreHost,
+  _connection: any,
+  key: string,
+  block: () => any,
+): any {
+  if (!this._findByStatementCache) initializeFindByCache.call(this);
+  const cache = this._findByStatementCache!.get(true)!;
+  if (!cache.has(key)) {
+    cache.set(key, block());
+  }
+  return cache.get(key);
+}

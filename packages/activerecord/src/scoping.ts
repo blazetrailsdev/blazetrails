@@ -18,8 +18,14 @@ export class Scoping {
  */
 export class ScopeRegistry {
   private static _currentScopes: WeakMap<object, any> = new WeakMap();
+  private static _ignoreDefaultScope: WeakMap<object, any> = new WeakMap();
+  private static _globalCurrentScope: WeakMap<object, any> = new WeakMap();
 
-  static currentScope(modelClass: object): any | null {
+  static instance(): ScopeRegistry {
+    return this as any;
+  }
+
+  static currentScope(modelClass: object, _skipInherited = false): any | null {
     return this._currentScopes.get(modelClass) ?? null;
   }
 
@@ -30,4 +36,72 @@ export class ScopeRegistry {
       this._currentScopes.set(modelClass, scope);
     }
   }
+
+  static ignoreDefaultScope(modelClass: object, _skipInherited = false): any | null {
+    return this._ignoreDefaultScope.get(modelClass) ?? null;
+  }
+
+  static setIgnoreDefaultScope(modelClass: object, value: any): void {
+    if (value === null) {
+      this._ignoreDefaultScope.delete(modelClass);
+    } else {
+      this._ignoreDefaultScope.set(modelClass, value);
+    }
+  }
+
+  static globalCurrentScope(modelClass: object, _skipInherited = false): any | null {
+    return this._globalCurrentScope.get(modelClass) ?? null;
+  }
+
+  static setGlobalCurrentScope(modelClass: object, scope: any): void {
+    if (scope === null) {
+      this._globalCurrentScope.delete(modelClass);
+    } else {
+      this._globalCurrentScope.set(modelClass, scope);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Instance methods
+// ---------------------------------------------------------------------------
+
+interface ScopingHost {
+  constructor: { scope_attributes?(): Record<string, unknown>; currentScope?: any };
+  _assignAttributes?(attrs: Record<string, unknown>): void;
+}
+
+export function populateWithCurrentScopeAttributes(this: ScopingHost): void {
+  const klass = this.constructor as any;
+  if (!klass.currentScope) return;
+  const attrs = scopeAttributes.call(klass);
+  if (attrs && Object.keys(attrs).length > 0 && this._assignAttributes) {
+    this._assignAttributes(attrs);
+  }
+}
+
+export function initializeInternalsCallback(this: ScopingHost): void {
+  populateWithCurrentScopeAttributes.call(this);
+}
+
+// ---------------------------------------------------------------------------
+// Class methods
+// ---------------------------------------------------------------------------
+
+interface ScopingClassHost {
+  currentScope?: any;
+  all?(): any;
+}
+
+export function scopeAttributes(this: ScopingClassHost): Record<string, unknown> {
+  const all = this.all?.();
+  return all?.scopeForCreate?.() ?? {};
+}
+
+export function isScopeAttributes(this: ScopingClassHost): boolean {
+  return !!this.currentScope;
+}
+
+export function scopeRegistry(): typeof ScopeRegistry {
+  return ScopeRegistry;
 }

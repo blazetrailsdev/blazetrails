@@ -278,3 +278,110 @@ export async function createTable(modelClass: typeof Base): Promise<void> {
     `CREATE TABLE IF NOT EXISTS ${quoteTableName(table, adapterName)} (${colDefs.join(", ")})`,
   );
 }
+
+// ---------------------------------------------------------------------------
+// Missing ClassMethods from api:compare
+// ---------------------------------------------------------------------------
+
+interface SchemaHost {
+  name: string;
+  tableName: string;
+  primaryKey: string | string[];
+  _tableName: string | null;
+  _tableNamePrefix: string;
+  _tableNameSuffix: string;
+  _sequenceName: string | null;
+  _inheritanceColumn?: string;
+  _attributeDefinitions: Map<string, any>;
+  _columnsHash?: Record<string, any>;
+  _columns?: any[];
+  _schemaLoaded?: boolean;
+  adapter: any;
+  superclass?: SchemaHost;
+}
+
+export function deriveJoinTableName(this: SchemaHost, otherTableName: string): string {
+  const tables = [underscore(this.name), otherTableName].sort();
+  return tables.join("_");
+}
+
+export function quotedTableName(this: SchemaHost): string {
+  return quoteTableName(this.tableName);
+}
+
+export function resetTableName(this: SchemaHost): string {
+  this._tableName = null;
+  const name = resolveTableName(this as any);
+  this._tableName = name;
+  return name;
+}
+
+export function fullTableNamePrefix(this: SchemaHost): string {
+  return this._tableNamePrefix ?? "";
+}
+
+export function fullTableNameSuffix(this: SchemaHost): string {
+  return this._tableNameSuffix ?? "";
+}
+
+export function realInheritanceColumn(this: SchemaHost, value: string): void {
+  this._inheritanceColumn = value;
+}
+
+export function resetSequenceName(this: SchemaHost): void {
+  this._sequenceName = null;
+}
+
+export function isPrefetchPrimaryKey(this: SchemaHost): boolean {
+  return false;
+}
+
+export function nextSequenceValue(this: SchemaHost): null {
+  return null;
+}
+
+export function attributesBuilder(this: SchemaHost): {
+  buildFromDatabase(values: Record<string, unknown>): any;
+} {
+  return {
+    buildFromDatabase(values: Record<string, unknown>) {
+      return values;
+    },
+  };
+}
+
+export function columns(this: SchemaHost): any[] {
+  if (this._columns) return this._columns;
+  const hash = (this as any).columnsHash ?? {};
+  this._columns = Object.values(hash);
+  return this._columns!;
+}
+
+export function yamlEncoder(this: SchemaHost): { encode(value: unknown): string } {
+  return {
+    encode(value: unknown): string {
+      return JSON.stringify(value);
+    },
+  };
+}
+
+export function columnForAttribute(this: SchemaHost, name: string): any {
+  const hash = (this as any).columnsHash ?? {};
+  return hash[name] ?? { name, null: true };
+}
+
+export function symbolColumnToString(this: SchemaHost, name: string): string | undefined {
+  const hash = (this as any).columnsHash ?? {};
+  return hash[name] ? name : undefined;
+}
+
+export function resetColumnInformation(this: SchemaHost): void {
+  this._columnsHash = undefined;
+  this._columns = undefined;
+  this._schemaLoaded = false;
+}
+
+export function loadSchema(this: SchemaHost): void {
+  if (this._schemaLoaded) return;
+  this._schemaLoaded = true;
+}

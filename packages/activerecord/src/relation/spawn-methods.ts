@@ -63,3 +63,9 @@ export function mergeBang(this: any, other: any): any {
   }
   return this;
 }
+
+export const SpawnMethodsFns = {
+  spawn: performSpawn,
+  merge: performMerge,
+  mergeBang,
+} as const;

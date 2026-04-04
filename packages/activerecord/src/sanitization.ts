@@ -43,7 +43,7 @@ export function sanitizeSql(input: string | [string, ...unknown[]]): string {
  * Mirrors: ActiveRecord::Sanitization::ClassMethods#sanitize_sql_for_conditions
  */
 export function sanitizeSqlForConditions(
-  condition: string | [string, ...unknown[]],
+  condition: string | [string, ...unknown[]] | null | undefined,
 ): string | null {
   if (!condition || (typeof condition === "string" && condition.trim() === "")) return null;
   return sanitizeSql(condition);

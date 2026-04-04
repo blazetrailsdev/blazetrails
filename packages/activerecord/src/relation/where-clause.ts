@@ -8,7 +8,7 @@
  */
 
 import { Visitors, type Nodes } from "@blazetrails/arel";
-import { quote } from "../connection-adapters/abstract/quoting.js";
+import { quote, quoteIdentifier } from "../connection-adapters/abstract/quoting.js";
 
 export class WhereClause {
   conditions: Array<Record<string, unknown>>;
@@ -148,21 +148,33 @@ function clauseToAstString(clause: WhereClause): string {
   const parts: string[] = [];
   for (const cond of clause.conditions) {
     for (const [k, v] of Object.entries(cond)) {
-      if (Array.isArray(v)) {
-        parts.push(`${quoteIdent(k)} IN (${v.map((x) => quote(x)).join(", ")})`);
+      const col = quoteIdentifier(k);
+      if (v === null || v === undefined) {
+        parts.push(`${col} IS NULL`);
+      } else if (Array.isArray(v)) {
+        if (v.length === 0) {
+          parts.push("1=0");
+        } else {
+          parts.push(`${col} IN (${v.map((x) => quote(x)).join(", ")})`);
+        }
       } else {
-        parts.push(`${quoteIdent(k)} = ${quote(v)}`);
+        parts.push(`${col} = ${quote(v)}`);
       }
     }
   }
   for (const cond of clause.notConditions) {
     for (const [k, v] of Object.entries(cond)) {
+      const col = quoteIdentifier(k);
       if (v === null || v === undefined) {
-        parts.push(`${quoteIdent(k)} IS NOT NULL`);
+        parts.push(`${col} IS NOT NULL`);
       } else if (Array.isArray(v)) {
-        parts.push(`${quoteIdent(k)} NOT IN (${v.map((x) => quote(x)).join(", ")})`);
+        if (v.length === 0) {
+          parts.push("1=1");
+        } else {
+          parts.push(`${col} NOT IN (${v.map((x) => quote(x)).join(", ")})`);
+        }
       } else {
-        parts.push(`${quoteIdent(k)} != ${quote(v)}`);
+        parts.push(`${col} != ${quote(v)}`);
       }
     }
   }
@@ -175,8 +187,4 @@ function clauseToAstString(clause: WhereClause): string {
     }
   }
   return parts.length <= 1 ? (parts[0] ?? "") : parts.join(" AND ");
-}
-
-function quoteIdent(name: string): string {
-  return `"${name.replace(/"/g, '""')}"`;
 }

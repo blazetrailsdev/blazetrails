@@ -54,7 +54,10 @@ export function mergeBang(this: any, other: any): any {
     this._rawJoins.push(...(other._rawJoins ?? []));
     this._annotations.push(...(other._annotations ?? []));
   } else if (typeof other === "object" && other !== null) {
-    new HashMerger(this, other).merge();
+    const merged = new HashMerger(this, other).merge();
+    if (merged && merged._whereClause) {
+      this._whereClause = merged._whereClause;
+    }
   } else if (typeof other === "function") {
     other.call(this);
   }

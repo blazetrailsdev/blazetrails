@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   Table,
   SelectManager,
@@ -2444,8 +2445,9 @@ export class Relation<T extends Base> {
 
     // Replace FROM clause if from() was used
     if (!this._fromClause.isEmpty()) {
-      const fromExpr = this._fromClause.name
-        ? `(${this._fromClause.value}) ${this._fromClause.name}`
+      const alias = this._fromClause.name;
+      const fromExpr = alias
+        ? `(${this._fromClause.value}) "${alias.replace(/"/g, '""')}"`
         : this._fromClause.value!;
       sql = sql.replace(/FROM\s+"[^"]+"/, `FROM ${fromExpr}`);
     }
@@ -3690,8 +3692,6 @@ export class Relation<T extends Base> {
   computeCacheKey(): string {
     const tableName = this._modelClass.tableName;
     const sql = this.toSql();
-    // Use MD5 for a stable, collision-resistant digest (matches Rails' Digest::MD5)
-    const { createHash } = require("crypto") as typeof import("crypto");
     const digest = createHash("md5").update(sql).digest("hex");
     return `${tableName}/query-${digest}`;
   }

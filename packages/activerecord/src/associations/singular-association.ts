@@ -9,7 +9,6 @@ import { Association } from "./association.js";
  */
 export class SingularAssociation extends Association {
   declare target: Base | null;
-  private _futureTarget: Base | null = null;
 
   constructor(owner: Base, definition: AssociationDefinition) {
     super(owner, definition);
@@ -18,7 +17,6 @@ export class SingularAssociation extends Association {
   override reset(): void {
     super.reset();
     this.target = null;
-    this._futureTarget = null;
   }
 
   writer(record: Base | null): void {

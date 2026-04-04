@@ -38,18 +38,20 @@ export class CollectionAssociation extends Association {
    */
   async idsReader(): Promise<unknown[]> {
     const pk = (this.klass as any).primaryKey ?? "id";
+    const readPk = (r: Base) =>
+      typeof r.readAttribute === "function" ? r.readAttribute(pk as string) : (r as any)[pk];
 
     if (this.isLoaded()) {
-      return this.target.map((r: any) => r[pk]);
+      return this.target.map(readPk);
     }
     if (this.target.length > 0) {
       await this.loadTarget();
-      return this.target.map((r: any) => r[pk]);
+      return this.target.map(readPk);
     }
     if (this._associationIds) return this._associationIds;
     const rel = this.scope();
     if (rel && typeof rel.pluck === "function") {
-      this._associationIds = await rel.pluck(pk);
+      this._associationIds = await rel.pluck(pk as string);
       return this._associationIds!;
     }
     return [];
@@ -407,18 +409,26 @@ export class CollectionAssociation extends Association {
 
   private async nullifyAllRecords(): Promise<void> {
     const fk = this.foreignKeyColumn();
+    const nullAttrs: Record<string, null> = { [fk]: null };
+    if (this.reflection.options.as) {
+      nullAttrs[`${underscore(this.reflection.options.as)}_type`] = null;
+    }
+
+    // Prefer scope-based bulk update (hits DB even if target isn't loaded)
+    const rel = this.scope();
+    if (rel && typeof rel.updateAll === "function") {
+      await rel.updateAll(nullAttrs);
+      return;
+    }
+
+    // Fallback: load and update individually
+    await this.loadTarget();
     for (const record of this.target) {
-      if (typeof (record as any).writeAttribute === "function") {
-        (record as any).writeAttribute(fk, null);
-      } else {
-        (record as any)[fk] = null;
-      }
-      if (this.reflection.options.as) {
-        const typeCol = `${underscore(this.reflection.options.as)}_type`;
+      for (const [attr, val] of Object.entries(nullAttrs)) {
         if (typeof (record as any).writeAttribute === "function") {
-          (record as any).writeAttribute(typeCol, null);
+          (record as any).writeAttribute(attr, val);
         } else {
-          (record as any)[typeCol] = null;
+          (record as any)[attr] = val;
         }
       }
       if (typeof (record as any).save === "function") {

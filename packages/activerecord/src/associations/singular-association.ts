@@ -38,9 +38,14 @@ export class SingularAssociation extends Association {
     return this.target;
   }
 
+  /**
+   * Returns the target record. If not loaded or stale, attempts to
+   * reload from caches/preloaded data. For DB loading, callers should
+   * use asyncLoadTarget() first.
+   */
   get reader(): Base | null {
     if (!this.isLoaded() || this.isStaleTarget()) {
-      this.reload();
+      this.loadTarget();
     }
     return this.target;
   }

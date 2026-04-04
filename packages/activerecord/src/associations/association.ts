@@ -53,6 +53,7 @@ export class Association {
 
   reset(): void {
     this.loaded = false;
+    this.target = null;
     this._staleState = undefined;
   }
 
@@ -75,9 +76,10 @@ export class Association {
   }
 
   /**
-   * Returns the scope (Relation) for this association. Subclasses
-   * override to provide type-specific scoping. The base implementation
-   * delegates to buildHasManyRelation / target model scoping.
+   * Returns the scope (Relation) for this association. The base
+   * implementation delegates to buildHasManyRelation, which builds
+   * a WHERE clause in the has_many direction. Subclasses (e.g.
+   * BelongsToAssociation) override for their own direction.
    */
   scope(): any {
     return buildHasManyRelation(this.owner, this.reflection.name, this.reflection.options);
@@ -91,16 +93,15 @@ export class Association {
    * Apply strict loading settings from the owner to a loaded record.
    */
   setStrictLoading(record: Base): Base {
-    const ownerAny = this.owner as any;
     const recordAny = record as any;
     if (typeof recordAny.strictLoadingBang === "function") {
       if (
-        typeof ownerAny.isStrictLoadingNPlusOneOnly === "function" &&
-        ownerAny.isStrictLoadingNPlusOneOnly() &&
+        typeof this.owner.isStrictLoadingNPlusOneOnly === "function" &&
+        (this.owner as any).isStrictLoadingNPlusOneOnly() &&
         this.reflection.type === "hasMany"
       ) {
         recordAny.strictLoadingBang();
-      } else if (ownerAny._strictLoading) {
+      } else if ((this.owner as any)._strictLoading) {
         recordAny.strictLoadingBang(false);
       }
     }
@@ -167,16 +168,18 @@ export class Association {
   }
 
   /**
-   * Loads the target if needed and returns it. Uses the async load
-   * functions from associations.ts and awaits them synchronously
-   * via the target cache. If already loaded, returns cached target.
+   * Loads the target if needed and returns it. Checks caches first,
+   * then falls back to async loading. If already loaded, returns
+   * cached target.
    */
   loadTarget(): Base | Base[] | null {
     if (this.isStaleTarget() || this.findTargetNeeded()) {
-      const result = this.doFindTarget();
-      if (result !== undefined) {
-        this.target = result;
+      const cached = this.doFindTarget();
+      if (cached !== undefined) {
+        this.target = cached;
       }
+      // If no cached data, the sync path can't load from DB.
+      // Callers needing DB loads should use asyncLoadTarget().
     }
 
     if (!this.loaded) {
@@ -187,9 +190,14 @@ export class Association {
 
   async asyncLoadTarget(): Promise<void> {
     if (this.findTargetNeeded()) {
-      const result = await this.doAsyncFindTarget();
-      if (result !== undefined) {
-        this.target = result;
+      const cached = this.doFindTarget();
+      if (cached !== undefined) {
+        this.target = cached;
+      } else {
+        const result = await this.doAsyncFindTarget();
+        if (result !== undefined) {
+          this.target = result;
+        }
       }
     }
 
@@ -250,7 +258,7 @@ export class Association {
 
   /**
    * Synchronous find — checks caches and preloaded data. Returns
-   * undefined if no cached data is available (caller should use async).
+   * undefined if no cached data is available.
    */
   protected doFindTarget(): Base | Base[] | null | undefined {
     const ownerAny = this.owner as any;
@@ -275,10 +283,8 @@ export class Association {
 
   protected findTargetNeeded(): boolean {
     if (this.loaded) return false;
-    const ownerAny = this.owner as any;
-    const isNewRecord =
-      typeof ownerAny.isNewRecord === "function" ? ownerAny.isNewRecord() : !ownerAny._persisted;
-    return !isNewRecord || this.foreignKeyPresent();
+    const isNew = this.owner.isNewRecord();
+    return !isNew || this.foreignKeyPresent();
   }
 
   protected foreignKeyPresent(): boolean {
@@ -324,10 +330,6 @@ export class Association {
 
   private inversable(record: Base | null): boolean {
     if (!record) return false;
-    const recordAny = record as any;
-    const ownerAny = this.owner as any;
-    const recordPersisted = recordAny._persisted ?? false;
-    const ownerPersisted = ownerAny._persisted ?? false;
-    return !recordPersisted || !ownerPersisted;
+    return record.isNewRecord() || this.owner.isNewRecord();
   }
 }

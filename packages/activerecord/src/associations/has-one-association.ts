@@ -70,7 +70,7 @@ export class HasOneAssociation extends SingularAssociation {
         break;
 
       case "nullify":
-        if ((target as any)._persisted) {
+        if (target.isPersisted()) {
           this.nullifyOwnerAttributes(target);
           if (typeof (target as any).save === "function") {
             await (target as any).save();

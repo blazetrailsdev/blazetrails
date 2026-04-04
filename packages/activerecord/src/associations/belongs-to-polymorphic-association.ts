@@ -58,19 +58,24 @@ export class BelongsToPolymorphicAssociation extends BelongsToAssociation {
     return loadBelongsTo(this.owner, this.reflection.name, this.reflection.options);
   }
 
+  /**
+   * Derive the type column name from the FK. Follows the codebase
+   * convention of snake_case: post_id → post_type, commentable_id → commentable_type.
+   */
   private foreignTypeName(): string {
     const fk = this.reflection.options.foreignKey;
     if (typeof fk === "string") {
-      return fk.replace(/Id$/, "Type");
+      return fk.replace(/_id$/, "_type");
     }
-    return `${underscore(this.reflection.name)}Type`;
+    return `${underscore(this.reflection.name)}_type`;
   }
 
   private readForeignType(): string | null {
     const ft = this.foreignTypeName();
-    const ownerAny = this.owner as any;
     const value =
-      typeof ownerAny.readAttribute === "function" ? ownerAny.readAttribute(ft) : ownerAny[ft];
-    return value ?? null;
+      typeof this.owner.readAttribute === "function"
+        ? this.owner.readAttribute(ft)
+        : (this.owner as any)[ft];
+    return (value as string) ?? null;
   }
 }

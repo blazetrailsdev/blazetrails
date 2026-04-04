@@ -35,19 +35,21 @@ export class CollectionAssociation extends Association {
    * Implements the ids reader, e.g. foo.item_ids.
    * Returns an array of primary key values from the target.
    */
-  idsReader(): unknown[] {
+  async idsReader(): Promise<unknown[]> {
+    const pk = (this.klass as any).primaryKey ?? "id";
+
     if (this.isLoaded()) {
-      return this.target.map((r: any) => r.id);
+      return this.target.map((r: any) => r[pk]);
     }
     if (this.target.length > 0) {
       this.loadTarget();
-      return this.target.map((r: any) => r.id);
+      return this.target.map((r: any) => r[pk]);
     }
     if (this._associationIds) return this._associationIds;
-    // If not loaded and empty, defer to scope
     const rel = this.scope();
     if (rel && typeof rel.pluck === "function") {
-      return rel.pluck("id");
+      this._associationIds = await rel.pluck(pk);
+      return this._associationIds!;
     }
     return [];
   }
@@ -82,7 +84,7 @@ export class CollectionAssociation extends Association {
    * collection is loaded, scans the in-memory target. Otherwise
    * delegates to the association scope.
    */
-  find(...args: unknown[]): Base | Base[] | null {
+  async find(...args: unknown[]): Promise<Base | Base[] | null> {
     const ids = (args as any[]).flat().filter(Boolean);
 
     if (this.reflection.options.inverseOf && this.isLoaded()) {
@@ -92,10 +94,9 @@ export class CollectionAssociation extends Association {
       return this.findByScan(ids);
     }
 
-    // Delegate to scope
     const rel = this.scope();
     if (rel && typeof rel.find === "function") {
-      return rel.find(...ids);
+      return await rel.find(...ids);
     }
     return null;
   }
@@ -116,7 +117,7 @@ export class CollectionAssociation extends Association {
     const flattened = records.flat() as Base[];
     for (const record of flattened) {
       this.addToTarget(record);
-      if ((this.owner as any)._persisted && typeof (record as any).save === "function") {
+      if (this.owner.isPersisted() && typeof (record as any).save === "function") {
         this.setOwnerAttributes(record);
         await (record as any).save();
       }
@@ -164,16 +165,16 @@ export class CollectionAssociation extends Association {
    * Remove specific records from the association using the :dependent
    * strategy. Calls before_remove/after_remove callbacks.
    */
-  delete(...records: Base[]): void {
-    this.deleteOrDestroy(records.flat(), this.reflection.options.dependent);
+  async delete(...records: Base[]): Promise<void> {
+    await this.deleteOrDestroy(records.flat(), this.reflection.options.dependent);
   }
 
   /**
    * Destroy specific records, ignoring the :dependent option.
    * Calls before_remove/after_remove + before_destroy/after_destroy callbacks.
    */
-  destroy(...records: Base[]): void {
-    this.deleteOrDestroy(records.flat(), "destroy");
+  async destroy(...records: Base[]): Promise<void> {
+    await this.deleteOrDestroy(records.flat(), "destroy");
   }
 
   get size(): number {
@@ -183,14 +184,7 @@ export class CollectionAssociation extends Association {
     if (this._associationIds) {
       return this._associationIds.length;
     }
-    if (this.target.length > 0) {
-      // Unsaved + count
-      const unsaved = this.target.filter(
-        (r: any) => typeof r.isNewRecord === "function" && r.isNewRecord(),
-      );
-      return unsaved.length + this.countRecords();
-    }
-    return this.countRecords();
+    return this.target.length;
   }
 
   isEmpty(): boolean {
@@ -228,22 +222,17 @@ export class CollectionAssociation extends Association {
    * the in-memory target. For persisted records, uses scope if not loaded.
    */
   isInclude(record: Base): boolean {
-    const recordAny = record as any;
-    const isNew =
-      typeof recordAny.isNewRecord === "function" ? recordAny.isNewRecord() : !recordAny._persisted;
-
-    if (isNew) {
+    if (record.isNewRecord()) {
       return this.target.includes(record);
     }
     if (this.isLoaded()) {
       return this.target.includes(record);
     }
-    // Check by ID against the scope
     const rel = this.scope();
     if (rel && typeof rel.exists === "function") {
-      return rel.exists(recordAny.id);
+      return rel.exists((record as any).id);
     }
-    return this.target.some((r: any) => r.id === recordAny.id);
+    return this.target.some((r: any) => r.id === (record as any).id);
   }
 
   /**
@@ -312,10 +301,7 @@ export class CollectionAssociation extends Association {
    * record and has no foreign key present.
    */
   isNullScope(): boolean {
-    const ownerAny = this.owner as any;
-    const isNewRecord =
-      typeof ownerAny.isNewRecord === "function" ? ownerAny.isNewRecord() : !ownerAny._persisted;
-    return isNewRecord && !this.foreignKeyPresent();
+    return this.owner.isNewRecord() && !this.foreignKeyPresent();
   }
 
   /**
@@ -327,10 +313,11 @@ export class CollectionAssociation extends Association {
     return (
       this.isLoaded() ||
       (this.owner as any)._strictLoading ||
-      !(this.owner as any)._persisted ||
+      this.owner.isNewRecord() ||
       this.target.some(
-        (r: any) =>
-          !r._persisted || (typeof r.hasChangesToSave === "function" && r.hasChangesToSave()),
+        (r) =>
+          r.isNewRecord() ||
+          (typeof (r as any).hasChangesToSave === "function" && (r as any).hasChangesToSave()),
       )
     );
   }
@@ -343,37 +330,37 @@ export class CollectionAssociation extends Association {
     return this.target;
   }
 
-  // --- Private helpers ---
+  // --- Protected helpers ---
 
   protected setOwnerAttributes(record: Base): void {
-    const ownerAny = this.owner as any;
-    const ctor = ownerAny.constructor;
-    const fk =
-      this.reflection.options.foreignKey ??
-      `${(ctor.name as string).charAt(0).toLowerCase() + (ctor.name as string).slice(1)}Id`;
+    const ctor = this.owner.constructor as any;
+    const pk = this.reflection.options.primaryKey ?? ctor.primaryKey ?? "id";
+    const fk = this.foreignKeyColumn();
 
-    if (typeof fk === "string") {
-      (record as any)[fk] = ownerAny.id;
-    }
+    (record as any)[fk] =
+      typeof this.owner.readAttribute === "function"
+        ? this.owner.readAttribute(pk as string)
+        : (this.owner as any)[pk];
 
     if (this.reflection.options.as) {
-      const typeCol = `${this.reflection.options.as}Type`;
+      const typeCol = `${this.reflection.options.as}_type`;
       (record as any)[typeCol] = ctor.name;
     }
   }
 
-  private countRecords(): number {
-    const rel = this.scope();
-    if (rel && typeof rel.count === "function") {
-      // This is synchronous for in-memory adapters, async for real DB.
-      // Return 0 as a safe default if we can't count synchronously.
-      const result = rel.count();
-      if (typeof result === "number") return result;
+  // --- Private helpers ---
+
+  private foreignKeyColumn(): string {
+    const fk = this.reflection.options.foreignKey;
+    if (typeof fk === "string") return fk;
+    const ctor = this.owner.constructor as any;
+    if (this.reflection.options.as) {
+      return `${this.reflection.options.as}_id`;
     }
-    return 0;
+    return `${(ctor.name as string).charAt(0).toLowerCase() + (ctor.name as string).slice(1)}_id`;
   }
 
-  private deleteOrDestroy(records: Base[], method?: string): void {
+  private async deleteOrDestroy(records: Base[], method?: string): Promise<void> {
     if (records.length === 0) return;
 
     for (const record of records) {
@@ -383,7 +370,7 @@ export class CollectionAssociation extends Association {
     if (method === "destroy") {
       for (const record of records) {
         if (typeof (record as any).destroy === "function") {
-          (record as any).destroy();
+          await (record as any).destroy();
         }
       }
     }
@@ -402,18 +389,12 @@ export class CollectionAssociation extends Association {
   }
 
   private async nullifyAllRecords(): Promise<void> {
+    const fk = this.foreignKeyColumn();
     for (const record of this.target) {
-      this.nullifyOwnerAttributes(record);
+      (record as any)[fk] = null;
       if (typeof (record as any).save === "function") {
         await (record as any).save();
       }
-    }
-  }
-
-  private nullifyOwnerAttributes(record: Base): void {
-    const fk = this.reflection.options.foreignKey;
-    if (fk && typeof fk === "string") {
-      (record as any)[fk] = null;
     }
   }
 
@@ -446,13 +427,8 @@ export class CollectionAssociation extends Association {
       return record;
     });
 
-    // Add remaining in-memory records that weren't in persisted (new records)
     for (const record of memoryById.values()) {
-      const isNew =
-        typeof (record as any).isNewRecord === "function"
-          ? (record as any).isNewRecord()
-          : !(record as any)._persisted;
-      if (isNew) {
+      if (record.isNewRecord()) {
         merged.push(record);
       }
     }

@@ -4,6 +4,9 @@
  * Mirrors: ActiveRecord::AttributeMethods
  */
 import { isBlank } from "@blazetrails/activesupport";
+// ActiveModel already provides aliasAttribute, defineAttributeMethods,
+// undefineAttributeMethods on Model (Base's superclass). The functions
+// below delegate to the AM versions via the prototype chain at runtime.
 
 /**
  * The AttributeMethods module interface.
@@ -146,28 +149,17 @@ export function initializeGeneratedModules(this: AttributeMethodsHost): void {
 }
 
 /**
- * Rails: calls super (ActiveModel::AttributeMethods#alias_attribute)
- * then generates alias attribute methods if mass generation is enabled.
+ * Delegates to ActiveModel::AttributeMethods#alias_attribute which
+ * handles aliases, getter/setter generation, and pattern-based methods.
  */
 export function aliasAttribute(this: AttributeMethodsHost, newName: string, oldName: string): void {
-  if (!this._attributeAliases) this._attributeAliases = {};
-  this._attributeAliases[newName] = oldName;
-
-  // Define getter/setter on prototype for the alias (mirrors Rails' code generation)
-  if (this.prototype && !(newName in this.prototype)) {
-    Object.defineProperty(this.prototype, newName, {
-      get(this: any) {
-        return this.readAttribute(oldName);
-      },
-      set(this: any, value: unknown) {
-        this.writeAttribute(oldName, value);
-      },
-      configurable: true,
-    });
-  }
-
-  if (this._aliasAttributesMassGenerated) {
-    generateAliasAttributeMethods.call(this, newName, oldName);
+  // Delegate to ActiveModel's aliasAttribute via prototype chain
+  const amFn = Object.getPrototypeOf(this)?.aliasAttribute;
+  if (typeof amFn === "function") {
+    amFn.call(this, newName, oldName);
+  } else {
+    if (!this._attributeAliases) this._attributeAliases = {};
+    this._attributeAliases[newName] = oldName;
   }
 }
 
@@ -189,7 +181,9 @@ export function aliasAttributeMethodDefinition(
   _newName: string,
   _oldName: string,
 ): void {
-  // Generated at define time — no-op hook for subclass customization
+  // In Rails, this generates a single pattern-based alias method.
+  // Our aliasAttribute (from ActiveModel) handles this eagerly via
+  // eagerlyGenerateAliasAttributeMethods.
 }
 
 export function isAttributeMethodsGenerated(this: AttributeMethodsHost): boolean {
@@ -198,6 +192,10 @@ export function isAttributeMethodsGenerated(this: AttributeMethodsHost): boolean
 
 export function defineAttributeMethods(this: AttributeMethodsHost): boolean {
   if (this._attributeMethodsGenerated) return false;
+  const amFn = Object.getPrototypeOf(this)?.defineAttributeMethods;
+  if (typeof amFn === "function") {
+    amFn.call(this, ...Array.from(this._attributeDefinitions.keys()));
+  }
   this._attributeMethodsGenerated = true;
   return true;
 }
@@ -211,6 +209,8 @@ export function generateAliasAttributes(this: AttributeMethodsHost): void {
 }
 
 export function undefineAttributeMethods(this: AttributeMethodsHost): void {
+  const amFn = Object.getPrototypeOf(this)?.undefineAttributeMethods;
+  if (typeof amFn === "function") amFn.call(this);
   this._attributeMethodsGenerated = false;
   this._aliasAttributesMassGenerated = false;
 }

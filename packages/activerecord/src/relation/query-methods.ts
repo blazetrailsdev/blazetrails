@@ -296,7 +296,8 @@ function whereBang(this: QueryMethodsHost, opts: any, ...rest: unknown[]): any {
       sql = opts;
       const namedBinds = rest[0] as Record<string, unknown>;
       for (const [name, value] of Object.entries(namedBinds)) {
-        sql = sql.replace(new RegExp(`:${name}\\b`, "g"), quote(value));
+        const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        sql = sql.replace(new RegExp(`:${escaped}\\b`, "g"), quote(value));
       }
     } else if (rest.length > 0) {
       // Positional binds: where("age > ?", 18)

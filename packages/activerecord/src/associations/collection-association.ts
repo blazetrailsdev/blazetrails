@@ -423,10 +423,30 @@ export class CollectionAssociation extends Association {
       fireAssocCallbacks(this.options.beforeRemove, this.owner, record);
     }
 
+    const persisted = records.filter((r) => r.isPersisted());
     if (method === "destroy") {
-      for (const record of records) {
+      for (const record of persisted) {
         if (typeof (record as any).destroy === "function") {
           await (record as any).destroy();
+        }
+      }
+    } else if (persisted.length > 0) {
+      // Nullify FK on persisted records (Rails: delete_records)
+      const fk = this.foreignKeyColumn();
+      const nullAttrs: Record<string, null> = { [fk]: null };
+      if (this.reflection.options.as) {
+        nullAttrs[`${underscore(this.reflection.options.as)}_type`] = null;
+      }
+      for (const record of persisted) {
+        for (const [attr, val] of Object.entries(nullAttrs)) {
+          if (typeof (record as any).writeAttribute === "function") {
+            (record as any).writeAttribute(attr, val);
+          } else {
+            (record as any)[attr] = val;
+          }
+        }
+        if (typeof (record as any).save === "function") {
+          await (record as any).save();
         }
       }
     }

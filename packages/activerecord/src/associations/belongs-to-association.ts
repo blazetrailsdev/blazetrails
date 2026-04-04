@@ -140,15 +140,20 @@ export class BelongsToAssociation extends SingularAssociation {
     const Klass = this.klass as any;
     if (!Klass || typeof Klass.all !== "function") return null;
 
-    const fk = this.foreignKeyName();
-    const fkValue =
-      typeof this.owner.readAttribute === "function"
-        ? this.owner.readAttribute(fk)
-        : (this.owner as any)[fk];
-    if (fkValue == null) return null;
+    const fks = this.foreignKeyNames();
+    const pks = this.associationPrimaryKeys(null);
+    const conditions: Record<string, unknown> = {};
 
-    const pk = this.reflection.options.primaryKey ?? Klass.primaryKey ?? "id";
-    let rel = Klass.all().where({ [pk as string]: fkValue });
+    for (let i = 0; i < fks.length; i++) {
+      const fkValue =
+        typeof this.owner.readAttribute === "function"
+          ? this.owner.readAttribute(fks[i])
+          : (this.owner as any)[fks[i]];
+      if (fkValue == null) return null;
+      conditions[pks[i] ?? pks[0]] = fkValue;
+    }
+
+    let rel = Klass.all().where(conditions);
     if (this.reflection.options.scope) {
       rel = this.reflection.options.scope(rel);
     }
@@ -199,37 +204,54 @@ export class BelongsToAssociation extends SingularAssociation {
   private foreignKeyName(): string {
     const fk = this.reflection.options.foreignKey;
     if (typeof fk === "string") return fk;
+    if (Array.isArray(fk)) return fk[0];
     return `${underscore(this.reflection.name)}_id`;
   }
 
-  private replaceKeys(record: Base | null): void {
-    const fk = this.foreignKeyName();
-    const targetPk = this.associationPrimaryKey(record);
-    const targetKeyValue = record
-      ? typeof record.readAttribute === "function"
-        ? record.readAttribute(targetPk)
-        : (record as any)[targetPk]
-      : null;
-
-    if (typeof this.owner.writeAttribute === "function") {
-      (this.owner as any).writeAttribute(fk, targetKeyValue);
-    } else {
-      (this.owner as any)[fk] = targetKeyValue;
-    }
+  private foreignKeyNames(): string[] {
+    const fk = this.reflection.options.foreignKey;
+    if (typeof fk === "string") return [fk];
+    if (Array.isArray(fk)) return fk;
+    return [`${underscore(this.reflection.name)}_id`];
   }
 
-  private associationPrimaryKey(record: Base | null): string {
-    if (this.reflection.options.primaryKey) {
-      return typeof this.reflection.options.primaryKey === "string"
-        ? this.reflection.options.primaryKey
-        : this.reflection.options.primaryKey[0];
+  private associationPrimaryKeys(record: Base | null): string[] {
+    const configured = this.reflection.options.primaryKey;
+    if (configured) {
+      return Array.isArray(configured) ? configured : [configured];
     }
     if (record) {
-      const ctor = record.constructor as any;
-      const pk = ctor.primaryKey;
-      return typeof pk === "string" ? pk : Array.isArray(pk) ? pk[0] : "id";
+      const pk = (record.constructor as any).primaryKey;
+      if (pk) return Array.isArray(pk) ? pk : [pk];
     }
-    return (this.klass as any).primaryKey ?? "id";
+    const pk = (this.klass as any).primaryKey;
+    if (pk) return Array.isArray(pk) ? pk : [pk];
+    return ["id"];
+  }
+
+  /**
+   * Replace FK columns on the owner to point at the given record's PK.
+   * Handles composite keys by zipping FK columns with PK columns.
+   * Rails: replace_keys(record, force: false)
+   */
+  private replaceKeys(record: Base | null): void {
+    const fks = this.foreignKeyNames();
+    const pks = this.associationPrimaryKeys(record);
+
+    for (let i = 0; i < fks.length; i++) {
+      const pkCol = pks[i] ?? pks[0];
+      const value = record
+        ? typeof record.readAttribute === "function"
+          ? record.readAttribute(pkCol)
+          : (record as any)[pkCol]
+        : null;
+
+      if (typeof this.owner.writeAttribute === "function") {
+        (this.owner as any).writeAttribute(fks[i], value);
+      } else {
+        (this.owner as any)[fks[i]] = value;
+      }
+    }
   }
 
   /**

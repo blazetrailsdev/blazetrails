@@ -102,7 +102,7 @@ export class Association {
       ) {
         recordAny.strictLoadingBang();
       } else if ((this.owner as any)._strictLoading) {
-        recordAny.strictLoadingBang(false);
+        recordAny.strictLoadingBang();
       }
     }
     return record;
@@ -217,8 +217,9 @@ export class Association {
   }
 
   /**
-   * Initialize attributes on a newly built record from the association
-   * scope (e.g. set the FK on a has_many child).
+   * Set the inverse instance on a newly built record. Subclasses
+   * (CollectionAssociation, HasOneAssociation) override to also set
+   * FK/type columns via setOwnerAttributes.
    */
   initializeAttributes(record: Base, _exceptFromScopeAttributes?: Record<string, unknown>): void {
     this.setInverseInstance(record);

@@ -46,13 +46,14 @@ export class SingularAssociation extends Association {
   ): Promise<Base | null> {
     const record = this.buildRecord(attributes);
     if (!record) return null;
+    // Set FK/inverse before saving so the record persists with correct owner reference
+    this.setNewRecord(record);
     if (typeof (record as any).save === "function") {
       const saved = await (record as any).save();
       if (!saved && shouldRaise) {
         throw new Error(`Failed to save the new associated ${this.reflection.name}.`);
       }
     }
-    this.setNewRecord(record);
     return record;
   }
 

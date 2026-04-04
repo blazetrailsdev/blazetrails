@@ -109,17 +109,25 @@ export class HasOneAssociation extends SingularAssociation {
 
   private setOwnerAttributes(record: Base): void {
     const ctor = (this.owner as any).constructor;
-    const primaryKey = this.reflection.options.primaryKey ?? ctor.primaryKey ?? "id";
+    const configuredPk = this.reflection.options.primaryKey ?? ctor.primaryKey ?? "id";
+    const pks = Array.isArray(configuredPk) ? configuredPk : [configuredPk];
     const fk = this.foreignKeyColumn();
-    const pkValue =
-      typeof this.owner.readAttribute === "function"
-        ? this.owner.readAttribute(primaryKey as string)
-        : (this.owner as any)[primaryKey as string];
+    const fks = Array.isArray(this.reflection.options.foreignKey)
+      ? this.reflection.options.foreignKey
+      : [fk];
 
-    if (typeof (record as any).writeAttribute === "function") {
-      (record as any).writeAttribute(fk, pkValue);
-    } else {
-      (record as any)[fk] = pkValue;
+    for (let i = 0; i < fks.length; i++) {
+      const pkCol = pks[i] ?? pks[0];
+      const pkValue =
+        typeof this.owner.readAttribute === "function"
+          ? this.owner.readAttribute(pkCol)
+          : (this.owner as any)[pkCol];
+
+      if (typeof (record as any).writeAttribute === "function") {
+        (record as any).writeAttribute(fks[i], pkValue);
+      } else {
+        (record as any)[fks[i]] = pkValue;
+      }
     }
 
     if (this.reflection.options.as) {

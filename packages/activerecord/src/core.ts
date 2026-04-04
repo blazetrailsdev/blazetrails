@@ -205,7 +205,8 @@ export function isApplicationRecordClass(this: CoreHost): boolean {
 }
 
 // Rails uses ActiveSupport::IsolatedExecutionState for per-fiber/thread
-// storage. We use AsyncLocalStorage when available for async safety.
+// storage. This is currently process-global; AsyncLocalStorage isolation
+// is a future improvement.
 type ConnectedToEntry = {
   role?: string;
   shard?: string;
@@ -219,14 +220,23 @@ export function connectedToStack(): ConnectedToEntry[] {
   return _connectedToStack;
 }
 
-/**
- * Rails: checks klasses.include?(Base) and klasses.include?(connection_class_for_self)
- */
+function klassesInclude(klasses: Set<any>, target: any): boolean {
+  if (klasses.has(target)) return true;
+  for (const k of klasses) {
+    if (typeof k === "function" && k.name === "Base") return true;
+  }
+  return false;
+}
+
+function matchesStack(entry: ConnectedToEntry, connClass: CoreHost): boolean {
+  return klassesInclude(entry.klasses, connClass) || klassesInclude(entry.klasses, "Base");
+}
+
 export function currentRole(this: CoreHost): string {
   const connClass = connectionClassForSelf.call(this);
   for (let i = _connectedToStack.length - 1; i >= 0; i--) {
     const entry = _connectedToStack[i];
-    if (entry.role && (entry.klasses.has("Base") || entry.klasses.has(connClass))) {
+    if (entry.role && matchesStack(entry, connClass)) {
       return entry.role;
     }
   }
@@ -237,7 +247,7 @@ export function currentShard(this: CoreHost): string {
   const connClass = connectionClassForSelf.call(this);
   for (let i = _connectedToStack.length - 1; i >= 0; i--) {
     const entry = _connectedToStack[i];
-    if (entry.shard && (entry.klasses.has("Base") || entry.klasses.has(connClass))) {
+    if (entry.shard && matchesStack(entry, connClass)) {
       return entry.shard;
     }
   }
@@ -248,10 +258,7 @@ export function currentPreventingWrites(this: CoreHost): boolean {
   const connClass = connectionClassForSelf.call(this);
   for (let i = _connectedToStack.length - 1; i >= 0; i--) {
     const entry = _connectedToStack[i];
-    if (
-      entry.prevent_writes !== undefined &&
-      (entry.klasses.has("Base") || entry.klasses.has(connClass))
-    ) {
+    if (entry.prevent_writes !== undefined && matchesStack(entry, connClass)) {
       return entry.prevent_writes;
     }
   }

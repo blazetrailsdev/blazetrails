@@ -359,7 +359,7 @@ export function nextSequenceValue(this: SchemaHost): null {
 
 /**
  * Rails: builds an AttributeSet::Builder with defaults from attribute
- * definitions, excluding non-PK columns from defaults.
+ * definitions, excluding PK columns from defaults.
  */
 export function attributesBuilder(this: SchemaHost): {
   buildFromDatabase(values: Record<string, unknown>): Record<string, unknown>;
@@ -458,7 +458,8 @@ export function loadSchema(this: SchemaHost): void {
 }
 
 function getColumnsHash(host: SchemaHost): Record<string, any> {
+  if (host._columnsHash != null) return host._columnsHash;
   const ch = (host as any).columnsHash;
   if (typeof ch === "function") return ch.call(host) ?? {};
-  return host._columnsHash ?? {};
+  return {};
 }

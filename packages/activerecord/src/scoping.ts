@@ -95,15 +95,15 @@ export class ScopeRegistry {
 
 interface ScopingHost {
   constructor: { scope_attributes?(): Record<string, unknown>; currentScope?: any };
-  _assignAttributes?(attrs: Record<string, unknown>): void;
+  assignAttributes?(attrs: Record<string, unknown>): void;
 }
 
 export function populateWithCurrentScopeAttributes(this: ScopingHost): void {
   const klass = this.constructor as any;
   if (!klass.currentScope) return;
   const attrs = scopeAttributes.call(klass);
-  if (attrs && Object.keys(attrs).length > 0 && this._assignAttributes) {
-    this._assignAttributes(attrs);
+  if (attrs && Object.keys(attrs).length > 0 && this.assignAttributes) {
+    this.assignAttributes(attrs);
   }
 }
 

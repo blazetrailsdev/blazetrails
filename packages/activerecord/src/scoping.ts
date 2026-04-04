@@ -21,8 +21,11 @@ export class ScopeRegistry {
   private static _ignoreDefaultScope: WeakMap<object, any> = new WeakMap();
   private static _globalCurrentScope: WeakMap<object, any> = new WeakMap();
 
+  private static _instance: ScopeRegistry | null = null;
+
   static instance(): ScopeRegistry {
-    return this as any;
+    if (!this._instance) this._instance = new ScopeRegistry();
+    return this._instance;
   }
 
   static currentScope(modelClass: object, _skipInherited = false): any | null {

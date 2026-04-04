@@ -7,27 +7,56 @@
 
 interface PersistenceHost {
   new (attrs?: Record<string, unknown>): any;
-  _instantiate(row: Record<string, unknown>): any;
+  _instantiate(row: Record<string, unknown>, columnTypes?: Record<string, any>): any;
+  discriminateClassForRecord?(attributes: Record<string, unknown>): PersistenceHost;
   primaryKey: string | string[];
   _queryConstraintsList?: string[] | null;
   _hasQueryConstraints?: boolean;
-  baseClass?: () => PersistenceHost;
+  _isBaseClass?: boolean;
+  superclass?: PersistenceHost;
 }
 
+/**
+ * Build a new instance (or array of instances) without saving.
+ * Mirrors: ActiveRecord::Persistence::ClassMethods#build
+ */
 export function build(
   this: PersistenceHost,
-  attrs: Record<string, unknown> | Record<string, unknown>[] = {},
+  attrs?: Record<string, unknown> | Record<string, unknown>[],
+  block?: (record: any) => void,
 ): any {
   if (Array.isArray(attrs)) {
-    return attrs.map((a) => new this(a));
+    return attrs.map((a) => build.call(this, a, block));
   }
-  return new this(attrs);
+  const record = new this(attrs ?? {});
+  if (block) block(record);
+  return record;
 }
 
-export function instantiate(this: PersistenceHost, attributes: Record<string, unknown>): any {
-  return this._instantiate(attributes);
+/**
+ * Instantiate a record from database attributes, dispatching through
+ * STI if applicable.
+ * Mirrors: ActiveRecord::Persistence::ClassMethods#instantiate
+ */
+export function instantiate(
+  this: PersistenceHost,
+  attributes: Record<string, unknown>,
+  columnTypes: Record<string, any> = {},
+  block?: (record: any) => void,
+): any {
+  // Rails: klass = discriminate_class_for_record(attributes)
+  //        instantiate_instance_of(klass, attributes, column_types, &block)
+  const klass = this.discriminateClassForRecord
+    ? this.discriminateClassForRecord(attributes)
+    : this;
+  const record = klass._instantiate(attributes, columnTypes);
+  if (block) block(record);
+  return record;
 }
 
+/**
+ * Mirrors: ActiveRecord::Persistence::ClassMethods#query_constraints
+ */
 export function queryConstraints(this: PersistenceHost, ...columns: string[]): void {
   if (columns.length === 0) {
     throw new Error("You must specify at least one column to be used in querying");
@@ -36,21 +65,43 @@ export function queryConstraints(this: PersistenceHost, ...columns: string[]): v
   this._hasQueryConstraints = true;
 }
 
+/**
+ * Mirrors: ActiveRecord::Persistence::ClassMethods#has_query_constraints?
+ */
 export function hasQueryConstraints(this: PersistenceHost): boolean {
-  return this._hasQueryConstraints ?? false;
+  return !!this._hasQueryConstraints;
 }
 
+/**
+ * Returns the list of query constraint columns, falling back to the
+ * base class's list or the composite primary key.
+ * Mirrors: ActiveRecord::Persistence::ClassMethods#query_constraints_list
+ */
 export function queryConstraintsList(this: PersistenceHost): string[] | null {
   if (this._queryConstraintsList) return this._queryConstraintsList;
-  const pk = this.primaryKey;
-  if (Array.isArray(pk)) return pk;
-  if (this.baseClass) {
-    const base = this.baseClass();
-    if (base !== (this as any)) return queryConstraintsList.call(base);
+
+  // Rails: base_class? || primary_key != base_class.primary_key
+  const isBase = this._isBaseClass ?? !this.superclass;
+  if (isBase) {
+    const pk = this.primaryKey;
+    return Array.isArray(pk) ? pk : null;
   }
+
+  // Check if our PK differs from base class PK
+  const base = this.superclass;
+  if (base && this.primaryKey !== base.primaryKey) {
+    const pk = this.primaryKey;
+    return Array.isArray(pk) ? pk : null;
+  }
+
+  // Delegate to base class
+  if (base) return queryConstraintsList.call(base);
   return null;
 }
 
+/**
+ * Mirrors: ActiveRecord::Persistence::ClassMethods#composite_query_constraints_list
+ */
 export function compositeQueryConstraintsList(this: PersistenceHost): string[] {
   const list = queryConstraintsList.call(this);
   if (list) return list;

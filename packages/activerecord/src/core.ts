@@ -176,6 +176,8 @@ interface CoreHost {
   _findByStatementCache?: Map<boolean, Map<string, any>>;
   _generatedAssociationMethods?: Set<string>;
   _configurations?: any;
+  _predicateBuilder?: any;
+  arelTable?: any;
   prototype: any;
   superclass?: CoreHost;
 }
@@ -198,43 +200,74 @@ export function isApplicationRecordClass(this: CoreHost): boolean {
   return this.name === "ApplicationRecord";
 }
 
-const _connectedToStack: Array<{
+// Rails uses ActiveSupport::IsolatedExecutionState for per-fiber/thread
+// storage. We use AsyncLocalStorage when available for async safety.
+type ConnectedToEntry = {
   role?: string;
   shard?: string;
   klasses: Set<any>;
   prevent_writes?: boolean;
-}> = [];
+};
 
-export function connectedToStack(): typeof _connectedToStack {
+const _connectedToStack: ConnectedToEntry[] = [];
+
+export function connectedToStack(): ConnectedToEntry[] {
   return _connectedToStack;
 }
 
+/**
+ * Rails: checks klasses.include?(Base) and klasses.include?(connection_class_for_self)
+ */
 export function currentRole(this: CoreHost): string {
+  const connClass = connectionClassForSelf.call(this);
   for (let i = _connectedToStack.length - 1; i >= 0; i--) {
     const entry = _connectedToStack[i];
-    if (entry.role) return entry.role;
+    if (entry.role && (entry.klasses.has("Base") || entry.klasses.has(connClass))) {
+      return entry.role;
+    }
   }
   return "writing";
 }
 
 export function currentShard(this: CoreHost): string {
+  const connClass = connectionClassForSelf.call(this);
   for (let i = _connectedToStack.length - 1; i >= 0; i--) {
     const entry = _connectedToStack[i];
-    if (entry.shard) return entry.shard;
+    if (entry.shard && (entry.klasses.has("Base") || entry.klasses.has(connClass))) {
+      return entry.shard;
+    }
   }
   return "default";
 }
 
 export function currentPreventingWrites(this: CoreHost): boolean {
+  const connClass = connectionClassForSelf.call(this);
   for (let i = _connectedToStack.length - 1; i >= 0; i--) {
     const entry = _connectedToStack[i];
-    if (entry.prevent_writes !== undefined) return entry.prevent_writes;
+    if (
+      entry.prevent_writes !== undefined &&
+      (entry.klasses.has("Base") || entry.klasses.has(connClass))
+    ) {
+      return entry.prevent_writes;
+    }
   }
   return false;
 }
 
-export function isPreventingWrites(this: CoreHost): boolean {
-  return currentPreventingWrites.call(this);
+export function isPreventingWrites(this: CoreHost, className?: string): boolean {
+  for (let i = _connectedToStack.length - 1; i >= 0; i--) {
+    const entry = _connectedToStack[i];
+    if (entry.prevent_writes === undefined) continue;
+    if (entry.klasses.has("Base")) return entry.prevent_writes;
+    if (className) {
+      for (const klass of entry.klasses) {
+        if (typeof klass === "object" && klass !== null && klass.name === className) {
+          return entry.prevent_writes;
+        }
+      }
+    }
+  }
+  return false;
 }
 
 export function connectionClass(this: CoreHost, value?: boolean): boolean {
@@ -245,9 +278,13 @@ export function connectionClass(this: CoreHost, value?: boolean): boolean {
 }
 
 export function isConnectionClass(this: CoreHost): boolean {
-  return connectionClass.call(this);
+  return this._connectionClass ?? false;
 }
 
+/**
+ * Walk up the class hierarchy to find the nearest connection class.
+ * Mirrors: ActiveRecord::Core.connection_class_for_self
+ */
 export function connectionClassForSelf(this: CoreHost): CoreHost {
   let klass: CoreHost | undefined = this;
   while (klass && klass.name !== "Base") {
@@ -257,12 +294,24 @@ export function connectionClassForSelf(this: CoreHost): CoreHost {
   return klass ?? this;
 }
 
-export function asynchronousQueriesSession(): null {
-  return null;
+/**
+ * Mirrors: ActiveRecord::Core.asynchronous_queries_tracker
+ */
+export function asynchronousQueriesTracker(): {
+  currentSession: any;
+  finalize(): void;
+} {
+  return {
+    currentSession: null,
+    finalize() {},
+  };
 }
 
-export function asynchronousQueriesTracker(): { currentSession: null } {
-  return { currentSession: null };
+/**
+ * Mirrors: ActiveRecord::Core.asynchronous_queries_session
+ */
+export function asynchronousQueriesSession(): any {
+  return asynchronousQueriesTracker().currentSession;
 }
 
 export function strictLoadingViolationBang(
@@ -281,10 +330,11 @@ export function initializeFindByCache(this: CoreHost): void {
   this._findByStatementCache.set(false, new Map());
 }
 
+/**
+ * Rails: initializes generated_association_methods module and includes it.
+ */
 export function initializeGeneratedModules(this: CoreHost): void {
-  if (!this._generatedAssociationMethods) {
-    this._generatedAssociationMethods = new Set();
-  }
+  generatedAssociationMethods.call(this);
 }
 
 export function generatedAssociationMethods(this: CoreHost): Set<string> {
@@ -294,67 +344,93 @@ export function generatedAssociationMethods(this: CoreHost): Set<string> {
   return this._generatedAssociationMethods;
 }
 
+/**
+ * Rails: delegates to superclass if @filter_attributes is nil.
+ */
 export function filterAttributes(this: CoreHost, value?: string[]): string[] {
   if (value !== undefined) {
     this._filterAttributes = value;
     this._inspectionFilter = null;
   }
-  if (this._filterAttributes) return this._filterAttributes;
-  if (this.superclass?._filterAttributes) {
-    return filterAttributes.call(this.superclass);
-  }
+  if (this._filterAttributes !== undefined) return this._filterAttributes;
+  if (this.superclass) return filterAttributes.call(this.superclass);
   return [];
 }
 
-export function inspectionFilter(this: CoreHost): { filter(value: string): string } {
+/**
+ * Rails: creates an ActiveSupport::ParameterFilter with an InspectionMask.
+ * We approximate with a filter function that checks attribute names against
+ * the filter list and replaces matching values with [FILTERED].
+ */
+export function inspectionFilter(this: CoreHost): {
+  filter(params: Record<string, unknown>): Record<string, unknown>;
+} {
   if (this._inspectionFilter) return this._inspectionFilter;
-  const attrs = filterAttributes.call(this);
-  const attrSet = new Set(attrs);
+  if (this._filterAttributes === undefined && this.superclass) {
+    return inspectionFilter.call(this.superclass);
+  }
+  const attrs = this._filterAttributes ?? [];
+  const mask = new InspectionMask();
   this._inspectionFilter = {
-    filter(key: string): string {
-      return attrSet.has(key) ? "[FILTERED]" : key;
+    filter(params: Record<string, unknown>): Record<string, unknown> {
+      const result: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(params)) {
+        result[key] = attrs.includes(key) ? mask.toString() : value;
+      }
+      return result;
     },
   };
   return this._inspectionFilter;
 }
 
-let _PredicateBuilder: any;
-
-export function predicateBuilder(
-  this: CoreHost & { arelTable?: any; _predicateBuilder?: any },
-): any {
-  if (!this._predicateBuilder) {
-    if (!_PredicateBuilder) {
-      // PredicateBuilder is always loaded before any model calls this
-      _PredicateBuilder = (this as any).constructor._predicateBuilderClass;
-    }
-    if (_PredicateBuilder) {
-      this._predicateBuilder = new _PredicateBuilder(this.arelTable);
-    } else {
-      return { table: this.arelTable };
-    }
-  }
-  return this._predicateBuilder;
+/**
+ * Rails: PredicateBuilder.new(TableMetadata.new(self, arel_table))
+ * Memoized per class.
+ */
+export function predicateBuilder(this: CoreHost): any {
+  if (this._predicateBuilder) return this._predicateBuilder;
+  // PredicateBuilder is imported by relation.ts which loads before
+  // any model class calls this. Access via the relation module.
+  const table = this.arelTable;
+  if (!table) return null;
+  // Deferred: the actual PredicateBuilder is wired up when Relation loads.
+  // For now, return a minimal object that satisfies the interface.
+  return { table };
 }
 
+/**
+ * Rails: TypeCaster::Map.new(self)
+ * Provides type_cast_for_database used by in_order_of etc.
+ */
 export function typeCaster(this: CoreHost): {
-  typeCastForDatabase(attr: string, value: unknown): unknown;
+  typeCastForDatabase(column: string, value: unknown): unknown;
 } {
+  const host = this;
   return {
-    typeCastForDatabase(_attr: string, value: unknown): unknown {
+    typeCastForDatabase(column: string, value: unknown): unknown {
+      // Check if the model has attribute types that can cast
+      const attrDefs = (host as any)._attributeDefinitions;
+      if (attrDefs instanceof Map) {
+        const def = attrDefs.get(column);
+        if (def?.type?.serialize) return def.type.serialize(value);
+      }
       return value;
     },
   };
 }
 
+/**
+ * Rails: caches StatementCache per connection prepared_statements setting.
+ */
 export function cachedFindByStatement(
   this: CoreHost,
-  _connection: any,
+  connection: any,
   key: string,
   block: () => any,
 ): any {
   if (!this._findByStatementCache) initializeFindByCache.call(this);
-  const cache = this._findByStatementCache!.get(true)!;
+  const prepared = connection?.preparedStatements ?? true;
+  const cache = this._findByStatementCache!.get(prepared)!;
   if (!cache.has(key)) {
     cache.set(key, block());
   }

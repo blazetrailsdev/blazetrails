@@ -292,9 +292,12 @@ interface SchemaHost {
   _tableNameSuffix: string;
   _sequenceName: string | null;
   _inheritanceColumn?: string;
+  _abstractClass?: boolean;
+  _ignoredColumns?: string[];
   _attributeDefinitions: Map<string, any>;
   _columnsHash?: Record<string, any>;
   _columns?: any[];
+  _attributesBuilder?: any;
   _schemaLoaded?: boolean;
   adapter: any;
   superclass?: SchemaHost;
@@ -309,8 +312,19 @@ export function quotedTableName(this: SchemaHost): string {
   return quoteTableName(this.tableName);
 }
 
+/**
+ * Rails: resets and recomputes table name, handling abstract classes
+ * and STI inheritance.
+ */
 export function resetTableName(this: SchemaHost): string {
   this._tableName = null;
+  if (this.name === "Base") {
+    return "";
+  }
+  if (this._abstractClass && this.superclass) {
+    this._tableName = this.superclass.tableName;
+    return this._tableName!;
+  }
   const name = resolveTableName(this as any);
   this._tableName = name;
   return name;
@@ -340,19 +354,42 @@ export function nextSequenceValue(this: SchemaHost): null {
   return null;
 }
 
+/**
+ * Rails: builds an AttributeSet::Builder with defaults from attribute
+ * definitions, excluding non-PK columns from defaults.
+ */
 export function attributesBuilder(this: SchemaHost): {
-  buildFromDatabase(values: Record<string, unknown>): any;
+  buildFromDatabase(values: Record<string, unknown>): Record<string, unknown>;
 } {
-  return {
-    buildFromDatabase(values: Record<string, unknown>) {
-      return values;
+  const attrDefs = this._attributeDefinitions;
+  const pk = this.primaryKey;
+  const pkSet = new Set(Array.isArray(pk) ? pk : [pk]);
+
+  if (this._attributesBuilder) return this._attributesBuilder;
+
+  this._attributesBuilder = {
+    buildFromDatabase(values: Record<string, unknown>): Record<string, unknown> {
+      const result: Record<string, unknown> = {};
+      // Apply defaults from attribute definitions for non-PK columns
+      for (const [name, def] of attrDefs) {
+        if (!pkSet.has(name) && def.default !== undefined) {
+          result[name] = typeof def.default === "function" ? def.default() : def.default;
+        }
+      }
+      Object.assign(result, values);
+      return result;
     },
   };
+  return this._attributesBuilder;
 }
 
+/**
+ * Rails: @columns ||= columns_hash.values.freeze
+ */
 export function columns(this: SchemaHost): any[] {
   if (this._columns) return this._columns;
-  const hash = (this as any).columnsHash ?? {};
+  loadSchema.call(this);
+  const hash = (this as any).columnsHash ?? this._columnsHash ?? {};
   this._columns = Object.values(hash);
   return this._columns!;
 }
@@ -365,23 +402,49 @@ export function yamlEncoder(this: SchemaHost): { encode(value: unknown): string 
   };
 }
 
+/**
+ * Rails: columns_hash.fetch(name) { NullColumn.new(name) }
+ */
 export function columnForAttribute(this: SchemaHost, name: string): any {
-  const hash = (this as any).columnsHash ?? {};
-  return hash[name] ?? { name, null: true };
+  loadSchema.call(this);
+  const hash = (this as any).columnsHash ?? this._columnsHash ?? {};
+  return hash[name] ?? { name, null: true, type: null };
 }
 
+/**
+ * Rails: column_names.index_by(&:to_sym)[name_symbol]
+ */
 export function symbolColumnToString(this: SchemaHost, name: string): string | undefined {
-  const hash = (this as any).columnsHash ?? {};
+  const hash = (this as any).columnsHash ?? this._columnsHash ?? {};
   return hash[name] ? name : undefined;
 }
 
+/**
+ * Rails: clears column cache, schema cache, reloads schema.
+ */
 export function resetColumnInformation(this: SchemaHost): void {
   this._columnsHash = undefined;
   this._columns = undefined;
+  this._attributesBuilder = undefined;
   this._schemaLoaded = false;
 }
 
+/**
+ * Rails: loads schema from schema cache if not already loaded.
+ * Our schema is defined via attribute() calls, so loading is
+ * checking that _columnsHash is populated from attribute definitions.
+ */
 export function loadSchema(this: SchemaHost): void {
   if (this._schemaLoaded) return;
   this._schemaLoaded = true;
+
+  if (!this._columnsHash && this._attributeDefinitions.size > 0) {
+    const hash: Record<string, any> = {};
+    const ignored = new Set(this._ignoredColumns ?? []);
+    for (const [name, def] of this._attributeDefinitions) {
+      if (ignored.has(name)) continue;
+      hash[name] = { name, type: def.type ?? def.typeName ?? null, default: def.default ?? null };
+    }
+    this._columnsHash = hash;
+  }
 }

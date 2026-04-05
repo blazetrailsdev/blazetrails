@@ -1252,10 +1252,10 @@ export function addAggregateReflection(
   name: string,
   reflection: AggregateReflection,
 ): void {
-  const aggs: Record<string, AggregateReflection> =
-    (activeRecord as any).aggregateReflections ?? {};
-  aggs[name] = reflection;
-  (activeRecord as any).aggregateReflections = aggs;
+  const aggs: Map<string, AggregateReflection> =
+    (activeRecord as any)._aggregateReflections ?? new Map<string, AggregateReflection>();
+  aggs.set(name, reflection);
+  (activeRecord as any)._aggregateReflections = aggs;
 }
 
 // ---------------------------------------------------------------------------

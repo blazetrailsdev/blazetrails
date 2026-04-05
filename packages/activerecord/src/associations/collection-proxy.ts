@@ -347,7 +347,7 @@ export class CollectionProxy {
     }
   }
 
-  private async _pushThrough(records: Base[]): Promise<void> {
+  private async _pushThrough(records: Base[], skipCallbacks = false): Promise<void> {
     const ctor = this._record.constructor as typeof Base;
     const associations: AssociationDefinition[] = (ctor as any)._associations ?? [];
     const throughAssoc = associations.find((a: any) => a.name === this._assocDef.options.through);
@@ -367,7 +367,11 @@ export class CollectionProxy {
     const sourceFk = `${underscore(sourceName)}_id`;
 
     for (const record of records) {
-      if (!fireAssocCallbacks(this._assocDef.options.beforeAdd, this._record, record)) continue;
+      if (
+        !skipCallbacks &&
+        !fireAssocCallbacks(this._assocDef.options.beforeAdd, this._record, record)
+      )
+        continue;
       // Save the target record if it's new
       if (record.isNewRecord()) {
         const saved = await record.save();
@@ -388,7 +392,9 @@ export class CollectionProxy {
       const joinRecord = await throughModel.create(joinAttrs);
       if (joinRecord.isPersisted()) {
         this._target.push(record);
-        fireAssocCallbacks(this._assocDef.options.afterAdd, this._record, record);
+        if (!skipCallbacks) {
+          fireAssocCallbacks(this._assocDef.options.afterAdd, this._record, record);
+        }
       }
     }
   }
@@ -985,7 +991,8 @@ export class CollectionProxy {
       }
       const saved = await record.save();
       if (!saved) throw new RecordInvalid(record);
-      await this._pushThrough([record]);
+      await this._pushThrough([record], true);
+      fireAssocCallbacks(this._assocDef.options.afterAdd, this._record, record);
       return record;
     }
     const record = this._buildRaw(attrs);
@@ -1090,14 +1097,34 @@ export class CollectionProxy {
    * Mirrors: ActiveRecord::Associations::CollectionProxy#include?
    */
   async isInclude(record: Base): Promise<boolean> {
+    const primaryKey = (record.constructor as typeof Base).primaryKey;
+
     if (this._loaded) {
-      return this.includes(record);
+      const targetId = this._identityFor(record);
+      if (targetId != null) {
+        return this._target.some((r) => this._identityFor(r) === targetId);
+      }
+      return this._target.includes(record);
     }
-    const pk = (record.constructor as typeof Base).primaryKey as string;
-    const pkValue = record.readAttribute(pk);
+
     const s = this.scope();
-    if (pkValue != null && typeof s.exists === "function") {
-      return s.exists({ [pk]: pkValue });
+    if (typeof s.exists === "function") {
+      if (Array.isArray(primaryKey)) {
+        const condition: Record<string, unknown> = {};
+        let allPresent = true;
+        for (const key of primaryKey) {
+          const value = record.readAttribute(key);
+          if (value == null) {
+            allPresent = false;
+            break;
+          }
+          condition[key] = value;
+        }
+        if (allPresent) return s.exists(condition);
+      } else {
+        const pkValue = record.readAttribute(primaryKey);
+        if (pkValue != null) return s.exists({ [primaryKey]: pkValue });
+      }
     }
     return this.includes(record);
   }

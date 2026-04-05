@@ -4,6 +4,7 @@
  * Mirrors: ActiveRecord::AttributeMethods::PrimaryKey
  */
 import { quoteIdentifier } from "../connection-adapters/abstract/quoting.js";
+import { detectAdapterName } from "../adapter-name.js";
 import { underscore } from "@blazetrails/activesupport";
 
 interface PrimaryKeyRecord {
@@ -107,10 +108,11 @@ export function isDangerousAttributeMethod(_this: PrimaryKeyHost, _name: string)
 /**
  * Rails: adapter_class.quote_column_name(primary_key)
  */
-export function quotedPrimaryKey(this: PrimaryKeyHost): string {
+export function quotedPrimaryKey(this: PrimaryKeyHost & { adapter?: any }): string {
   const pk = this.primaryKey;
-  if (Array.isArray(pk)) return pk.map((k) => quoteIdentifier(k)).join(", ");
-  return quoteIdentifier(pk);
+  const adapter = this.adapter ? detectAdapterName(this.adapter) : undefined;
+  if (Array.isArray(pk)) return pk.map((k) => quoteIdentifier(k, adapter)).join(", ");
+  return quoteIdentifier(pk, adapter);
 }
 
 export function resetPrimaryKey(this: PrimaryKeyHost): void {

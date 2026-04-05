@@ -38,11 +38,11 @@ export class CollectionAssociation extends Association {
    */
   async idsReader(): Promise<unknown[]> {
     if (this.isLoaded()) {
-      return this.target.map((r: any) => r.id);
+      return this.target.map((r) => this.primaryKeyValue(r));
     }
     if (this.target.length > 0) {
       await this.loadTarget();
-      return this.target.map((r: any) => r.id);
+      return this.target.map((r) => this.primaryKeyValue(r));
     }
     if (this._associationIds) return this._associationIds;
     const pk = (this.klass as any).primaryKey ?? "id";
@@ -68,18 +68,17 @@ export class CollectionAssociation extends Association {
     const pk = Klass.primaryKey ?? "id";
 
     if (Array.isArray(pk)) {
-      // Composite PK: find each record individually
-      const records: Base[] = [];
-      for (const id of filteredIds) {
-        const conditions: Record<string, unknown> = {};
-        const idParts = Array.isArray(id) ? id : [id];
-        pk.forEach((col: string, i: number) => {
-          conditions[col] = idParts[i];
-        });
-        const found = await Klass.findBy(conditions);
-        if (found) records.push(found);
-      }
-      this.replace(records);
+      const found = await Promise.all(
+        filteredIds.map(async (id) => {
+          const conditions: Record<string, unknown> = {};
+          const idParts = Array.isArray(id) ? id : [id];
+          pk.forEach((col: string, i: number) => {
+            conditions[col] = idParts[i];
+          });
+          return Klass.findBy(conditions);
+        }),
+      );
+      this.replace(found.filter((r): r is Base => r != null));
     } else if (typeof Klass.where === "function") {
       const records: Base[] = await Klass.where({ [pk]: filteredIds }).toArray();
       this.replace(records);

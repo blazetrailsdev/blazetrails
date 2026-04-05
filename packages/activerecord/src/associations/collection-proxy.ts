@@ -2,7 +2,7 @@ import type { Base } from "../base.js";
 import { applyThenable, stripThenable } from "../relation/thenable.js";
 import { Table as ArelTable } from "@blazetrails/arel";
 import { underscore, singularize, pluralize, camelize } from "@blazetrails/activesupport";
-import { StrictLoadingViolationError } from "../errors.js";
+import { StrictLoadingViolationError, RecordInvalid } from "../errors.js";
 import {
   HasManyThroughCantAssociateThroughHasOneOrManyReflection,
   HasManyThroughNestedAssociationsAreReadonly,
@@ -916,24 +916,16 @@ export class CollectionProxy {
     if (this._isThrough) {
       const record = this._buildThrough(attrs);
       const saved = await record.save();
-      if (!saved) {
-        throw new Error(
-          `Failed to save record: ${JSON.stringify((record as any).errors?.fullMessages?.() ?? [])}`,
-        );
-      }
+      if (!saved) throw new RecordInvalid(record);
       await this._pushThrough([record]);
       return record;
     }
     const record = this._buildRaw(attrs);
     if (!fireAssocCallbacks(this._assocDef.options.beforeAdd, this._record, record)) {
-      throw new Error("Callback prevented record creation");
+      throw new RecordInvalid(record);
     }
     const saved = await record.save();
-    if (!saved) {
-      throw new Error(
-        `Failed to save record: ${JSON.stringify((record as any).errors?.fullMessages?.() ?? [])}`,
-      );
-    }
+    if (!saved) throw new RecordInvalid(record);
     this._target.push(record);
     fireAssocCallbacks(this._assocDef.options.afterAdd, this._record, record);
     return record;
@@ -949,16 +941,19 @@ export class CollectionProxy {
     if (dep === "destroy") {
       await this.destroyAll();
     } else if (dep === "deleteAll" || dep === "delete_all" || dep === "delete") {
-      const records = await this.toArray();
-      for (const record of records) {
-        if (!record.isNewRecord()) {
-          await record.destroy();
-        }
-      }
+      // Direct SQL deletion — no callbacks, matching Rails delete_all strategy
+      await this.scope().deleteAll();
       this._target = [];
       this._loaded = true;
     } else {
-      await this.clear();
+      // Default: nullify foreign keys
+      const records = await this.toArray();
+      const persisted = records.filter((r) => !r.isNewRecord());
+      if (persisted.length > 0) {
+        await this.delete(...persisted);
+      }
+      this._target = [];
+      this._loaded = true;
     }
     this.resetScope();
   }
@@ -969,7 +964,34 @@ export class CollectionProxy {
    * Mirrors: ActiveRecord::Associations::CollectionProxy#calculate
    */
   async calculate(operation: string, columnName: string): Promise<unknown> {
-    return this.scope().calculate(operation, columnName);
+    const s = this.scope();
+    if (typeof s.calculate === "function") {
+      return s.calculate(operation, columnName);
+    }
+    // Fallback: compute in-memory from loaded records
+    const records = await this.loadTarget();
+    const values = records
+      .map((r) => r.readAttribute(columnName))
+      .filter((v) => v != null) as number[];
+    switch (operation) {
+      case "count":
+        return values.length;
+      case "sum":
+        return values.reduce((a, b) => Number(a) + Number(b), 0);
+      case "average":
+      case "avg":
+        return values.length > 0
+          ? values.reduce((a, b) => Number(a) + Number(b), 0) / values.length
+          : null;
+      case "minimum":
+      case "min":
+        return values.length > 0 ? Math.min(...values.map(Number)) : null;
+      case "maximum":
+      case "max":
+        return values.length > 0 ? Math.max(...values.map(Number)) : null;
+      default:
+        throw new Error(`Unknown calculation operation: ${operation}`);
+    }
   }
 
   /**
@@ -986,11 +1008,19 @@ export class CollectionProxy {
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#proxy_association
    */
-  get proxyAssociation(): { owner: Base; reflection: any; target: Base[] } {
+  get proxyAssociation(): {
+    owner: Base;
+    reflection: any;
+    target: Base[];
+    loaded: boolean;
+    reset: () => void;
+  } {
     return {
       owner: this._record,
       reflection: this._assocDef,
       target: this._target,
+      loaded: this._loaded,
+      reset: () => this.reset(),
     };
   }
 

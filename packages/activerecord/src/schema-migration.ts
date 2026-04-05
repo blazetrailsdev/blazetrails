@@ -110,7 +110,8 @@ export class SchemaMigration {
   }
 
   static normalizeMigrationNumber(number: string | number): string {
-    return String(number).padStart(3, "0");
+    const n = parseInt(String(number), 10);
+    return String(isNaN(n) ? 0 : n).padStart(3, "0");
   }
 
   async normalizedVersions(): Promise<string[]> {
@@ -124,6 +125,9 @@ export class SchemaMigration {
 
   async integerVersions(): Promise<number[]> {
     const vers = await this.allVersions();
-    return vers.map((v) => parseInt(v, 10)).filter((n) => !isNaN(n));
+    return vers.map((v) => {
+      const n = parseInt(v, 10);
+      return isNaN(n) ? 0 : n;
+    });
   }
 }

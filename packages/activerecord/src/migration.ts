@@ -912,7 +912,6 @@ export abstract class Migration {
   ): string {
     const prefix = options.tableNamePrefix ?? "";
     const suffix = options.tableNameSuffix ?? "";
-    if (name.startsWith(prefix) && name.endsWith(suffix)) return name;
     return `${prefix}${name}${suffix}`;
   }
 
@@ -1778,8 +1777,11 @@ export class Migrator {
     try {
       await this.checkProtectedEnvironments();
       return false;
-    } catch {
-      return true;
+    } catch (error) {
+      if (error instanceof ProtectedEnvironmentError) {
+        return true;
+      }
+      throw error;
     }
   }
 

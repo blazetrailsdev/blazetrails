@@ -1749,7 +1749,7 @@ export class Migrator {
   // --- MigrationContext-style methods (Rails: MigrationContext) ---
 
   get migrationsPaths(): string[] {
-    return [];
+    return [...Migrator.migrationsPaths];
   }
 
   get schemaMigration(): SchemaMigration {

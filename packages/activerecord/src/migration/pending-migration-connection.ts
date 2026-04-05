@@ -68,7 +68,8 @@ export class PendingMigrationConnection {
     if (!dbConfig.adapter) {
       throw new Error("withTemporaryPool requires a database adapter");
     }
-    return callback(dbConfig.adapter);
+    const connection = new PendingMigrationConnection({ adapter: dbConfig.adapter });
+    return connection.withAdapter(callback);
   }
 
   static isPrimaryClass(): boolean {

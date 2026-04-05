@@ -505,7 +505,7 @@ export class AssociationReflection extends MacroReflection {
     if (this.scope.length > 1) {
       throw new Error(
         `The association scope '${this.name}' is instance dependent (the scope ` +
-          `block takes an argument). Eager loading instance dependent scopes is not supported.`,
+          `block takes more than one argument). Eager loading instance dependent scopes is not supported.`,
       );
     }
   }
@@ -1305,11 +1305,11 @@ export function addAggregateReflection(
   reflection: AggregateReflection,
 ): void {
   const hasOwn = Object.prototype.hasOwnProperty.call(activeRecord, "_aggregateReflections");
-  const aggs: Map<string, AggregateReflection> = hasOwn
-    ? (activeRecord as any)._aggregateReflections
-    : new Map<string, AggregateReflection>(
-        (activeRecord as any)._aggregateReflections ?? new Map(),
-      );
+  const existing = (activeRecord as any)._aggregateReflections;
+  const aggs: Map<string, AggregateReflection> =
+    hasOwn && existing instanceof Map
+      ? existing
+      : new Map<string, AggregateReflection>(existing instanceof Map ? existing : undefined);
   aggs.set(name, reflection);
   (activeRecord as any)._aggregateReflections = aggs;
 }
@@ -1340,8 +1340,10 @@ export function normalizedReflections(
   return result;
 }
 
-export function clearReflectionsCache(modelClass: typeof Base): void {
-  (modelClass as any).__reflectionsCache = null;
+export function clearReflectionsCache(_modelClass: typeof Base): void {
+  // No-op until normalizedReflections adds memoization.
+  // Rails clears @__reflections here so the next call to normalized_reflections
+  // recomputes the collapsed reflection map.
 }
 
 // ---------------------------------------------------------------------------

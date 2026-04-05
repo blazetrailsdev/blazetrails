@@ -959,14 +959,17 @@ export class CollectionProxy {
   async createBang(attrs: Record<string, unknown> = {}): Promise<Base> {
     this._ensureThroughWritable();
     if (this._isThrough) {
-      const record = this._buildThrough(attrs);
-      if (!fireAssocCallbacks(this._assocDef.options.beforeAdd, this._record, record)) {
-        throw new RecordNotSaved("Callback prevented record creation", record);
+      const ctor = this._record.constructor as typeof Base;
+      if (this._record.isNewRecord()) {
+        throw new RecordNotSaved(
+          `Cannot create through association on an unpersisted ${ctor.name}`,
+        );
       }
+      const record = this._buildThrough(attrs);
       const saved = await record.save();
       if (!saved) throw new RecordInvalid(record);
+      // _pushThrough owns the callback lifecycle (beforeAdd/afterAdd)
       await this._pushThrough([record]);
-      fireAssocCallbacks(this._assocDef.options.afterAdd, this._record, record);
       return record;
     }
     const record = this._buildRaw(attrs);
@@ -1034,35 +1037,44 @@ export class CollectionProxy {
    * Mirrors: ActiveRecord::Associations::CollectionProxy#calculate
    */
   async calculate(operation: string, columnName?: string): Promise<unknown> {
+    const op =
+      operation === "avg"
+        ? "average"
+        : operation === "min"
+          ? "minimum"
+          : operation === "max"
+            ? "maximum"
+            : operation;
+
     const s = this.scope();
+    if (op === "count" && columnName == null && typeof s.count === "function") {
+      return s.count();
+    }
     if (typeof s.calculate === "function") {
-      return s.calculate(operation, columnName);
+      return s.calculate(op, columnName);
     }
     // Fallback: compute in-memory from loaded records
     const records = await this.loadTarget();
-    if (operation === "count") return records.length;
+    if (op === "count") return records.length;
     if (columnName == null) {
-      throw new Error(`Column name is required for calculation operation: ${operation}`);
+      throw new Error(`Column name is required for calculation operation: ${op}`);
     }
     const values = records
       .map((r) => r.readAttribute(columnName))
       .filter((v) => v != null) as number[];
-    switch (operation) {
+    switch (op) {
       case "sum":
         return values.reduce((a, b) => Number(a) + Number(b), 0);
       case "average":
-      case "avg":
         return values.length > 0
           ? values.reduce((a, b) => Number(a) + Number(b), 0) / values.length
           : null;
       case "minimum":
-      case "min":
         return values.length > 0 ? Math.min(...values.map(Number)) : null;
       case "maximum":
-      case "max":
         return values.length > 0 ? Math.max(...values.map(Number)) : null;
       default:
-        throw new Error(`Unknown calculation operation: ${operation}`);
+        throw new Error(`Unknown calculation operation: ${op}`);
     }
   }
 
@@ -1134,7 +1146,7 @@ export class CollectionProxy {
    * Mirrors: ActiveRecord::Associations::CollectionProxy#reset_scope
    */
   resetScope(): this {
-    return this;
+    return stripThenable(this);
   }
 }
 

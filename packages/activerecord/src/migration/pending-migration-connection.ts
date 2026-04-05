@@ -53,4 +53,29 @@ export class PendingMigrationConnection {
         "Provide either an adapter or a connectionHandler with a pool for this connection.",
     );
   }
+
+  /**
+   * Establish a temporary connection pool for the given database config
+   * and yield it. In Rails this creates a real pool from the handler;
+   * here we delegate to withAdapter.
+   *
+   * Mirrors: ActiveRecord::PendingMigrationConnection.with_temporary_pool
+   */
+  static async withTemporaryPool<T>(
+    dbConfig: { adapter?: DatabaseAdapter },
+    callback: (adapter: DatabaseAdapter) => Promise<T> | T,
+  ): Promise<T> {
+    if (!dbConfig.adapter) {
+      throw new Error("withTemporaryPool requires a database adapter");
+    }
+    return callback(dbConfig.adapter);
+  }
+
+  static isPrimaryClass(): boolean {
+    return false;
+  }
+
+  static currentPreventingWrites(): boolean {
+    return false;
+  }
 }

@@ -125,8 +125,8 @@ export function resetPrimaryKey(this: PrimaryKeyHost): void {
 }
 
 /**
- * Rails: foreign_key(false) → "admin_userid", foreign_key → "admin_user_id"
- * Then checks schema_cache.primary_keys(table_name) for non-Base classes.
+ * Rails: foreign_key(false) → "admin_userid", foreign_key → "admin_user_id".
+ * Falls back to "id" when no prefix type is configured.
  */
 export function getPrimaryKey(
   this: PrimaryKeyHost & { tableExists?(): Promise<boolean> },

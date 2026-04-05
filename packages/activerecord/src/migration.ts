@@ -282,6 +282,20 @@ export abstract class Migration {
       case "renameIndex":
         await this.renameIndex(args[0] as string, args[2] as string, args[1] as string);
         break;
+      case "changeColumnDefault": {
+        const [cdTable, cdCol, cdOpts] = args as [string, string, { from?: unknown; to: unknown }];
+        if (cdOpts && typeof cdOpts === "object" && "from" in cdOpts) {
+          await this.changeColumnDefault(cdTable, cdCol, { from: cdOpts.to, to: cdOpts.from });
+        } else {
+          throw new IrreversibleMigration("Cannot reverse changeColumnDefault without from/to");
+        }
+        break;
+      }
+      case "changeColumnNull": {
+        const [cnTable, cnCol, cnAllow, cnDefault] = args as [string, string, boolean, unknown?];
+        await this.changeColumnNull(cnTable, cnCol, !cnAllow, cnDefault);
+        break;
+      }
       case "changeColumn":
         throw new IrreversibleMigration("Cannot reverse changeColumn without previous type info");
       case "addForeignKey": {
@@ -740,11 +754,12 @@ export abstract class Migration {
    * Mirrors: ActiveRecord::Migration#migrate
    */
   async migrate(direction: "up" | "down"): Promise<void> {
-    if (direction === "up") {
-      await this.up();
-    } else {
-      await this.down();
-    }
+    this.announce(direction === "up" ? "migrating" : "reverting");
+    const start = Date.now();
+    await this.execMigration(this.adapter, direction);
+    const elapsed = ((Date.now() - start) / 1000).toFixed(4);
+    this.announce(`${direction === "up" ? "migrated" : "reverted"} (${elapsed}s)`);
+    this.write();
   }
 
   /**
@@ -806,20 +821,25 @@ export abstract class Migration {
   }
 
   announce(message: string): void {
-    const text = `== ${this.version} ${this.name}: ${message} `;
-    this.write(text + "=".repeat(Math.max(0, 75 - text.length)));
+    const text = `${this.version} ${this.name}: ${message}`;
+    const pad = Math.max(0, 75 - text.length);
+    this.write(`== ${text} ${"=".repeat(pad)}`);
   }
 
   say(message: string, subitem = false): void {
     this.write(`${subitem ? "   ->" : "--"} ${message}`);
   }
 
-  async sayWithTime(message: string, fn: () => Promise<void>): Promise<void> {
+  async sayWithTime<T>(message: string, fn: () => Promise<T>): Promise<T> {
     this.say(message);
     const start = Date.now();
-    await fn();
+    const result = await fn();
     const elapsed = ((Date.now() - start) / 1000).toFixed(4);
     this.say(`${elapsed}s`, true);
+    if (typeof result === "number") {
+      this.say(`${result} rows`, true);
+    }
+    return result;
   }
 
   async suppressMessages(fn: () => Promise<void>): Promise<void> {
@@ -846,10 +866,14 @@ export abstract class Migration {
 
   async execMigration(conn: DatabaseAdapter, direction: "up" | "down"): Promise<void> {
     this.adapter = conn;
-    if (direction === "up") {
-      await this.up();
-    } else {
-      await this.down();
+    try {
+      if (direction === "up") {
+        await this.up();
+      } else {
+        await this.down();
+      }
+    } finally {
+      this._schema = undefined;
     }
   }
 
@@ -897,11 +921,34 @@ export abstract class Migration {
   }
 
   static async copy(
-    _destination: string,
-    _sources: Record<string, string>,
+    destination: string,
+    sources: Record<string, string>,
     _options: Record<string, unknown> = {},
   ): Promise<string[]> {
-    return [];
+    // Rails copies migration files from source directories to destination.
+    // In our TS implementation, migrations are registered programmatically,
+    // not via filesystem discovery. This returns the list of copied files
+    // (empty when there's nothing to copy).
+    const { existsSync, mkdirSync, copyFileSync, readdirSync } = await import("fs");
+    const { join, basename } = await import("path");
+
+    if (!existsSync(destination)) {
+      mkdirSync(destination, { recursive: true });
+    }
+
+    const copied: string[] = [];
+    for (const [, sourcePath] of Object.entries(sources)) {
+      if (!existsSync(sourcePath)) continue;
+      const files = readdirSync(sourcePath).filter((f) => f.endsWith(".ts") || f.endsWith(".js"));
+      for (const file of files) {
+        const dest = join(destination, file);
+        if (!existsSync(dest)) {
+          copyFileSync(join(sourcePath, file), dest);
+          copied.push(dest);
+        }
+      }
+    }
+    return copied;
   }
 
   // --- Pending checks (Rails class methods) ---

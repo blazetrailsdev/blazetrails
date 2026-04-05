@@ -14,6 +14,7 @@ import { HasManyAssociation } from "./associations/has-many-association.js";
 import { HasManyThroughAssociation } from "./associations/has-many-through-association.js";
 import { HasOneAssociation } from "./associations/has-one-association.js";
 import { HasOneThroughAssociation } from "./associations/has-one-through-association.js";
+import { AmbiguousSourceReflectionForThroughAssociation } from "./associations/errors.js";
 
 type MacroType = "belongsTo" | "hasOne" | "hasMany" | "hasAndBelongsToMany" | "composedOf";
 
@@ -151,19 +152,20 @@ export class AbstractReflection {
 
   counterCacheColumn(): string | null {
     const counterCache = (this as any).options?.counterCache;
+    const explicitColumn =
+      typeof counterCache === "string"
+        ? counterCache
+        : counterCache && typeof counterCache === "object" && counterCache.column
+          ? (counterCache.column as string)
+          : null;
+
     if (this.belongsTo()) {
-      if (counterCache) {
-        return (
-          counterCache.column ||
-          `${pluralize(underscore((this as any).activeRecord?.name ?? ""))}_count`
-        );
-      }
-      return null;
+      if (!counterCache) return null;
+      return (
+        explicitColumn || `${pluralize(underscore((this as any).activeRecord?.name ?? ""))}_count`
+      );
     }
-    if (counterCache && counterCache.column) {
-      return counterCache.column;
-    }
-    return `${(this as any).name}_count`;
+    return explicitColumn || `${(this as any).name}_count`;
   }
 
   checkValidityOfInverseBang(): void {
@@ -475,7 +477,10 @@ export class AssociationReflection extends MacroReflection {
 
   checkEagerLoadableBang(): void {
     if (!this.scope) return;
-    if (this.scope.length !== 0) {
+    // In our codebase scopes always receive the relation as first arg (arity 1).
+    // Instance-dependent scopes also receive the owner (arity >= 2).
+    // Rails checks scope.arity == 0 because it uses instance_exec for the relation.
+    if (this.scope.length > 1) {
       throw new Error(
         `The association scope '${this.name}' is instance dependent (the scope ` +
           `block takes an argument). Eager loading instance dependent scopes is not supported.`,
@@ -556,7 +561,9 @@ export class AssociationReflection extends MacroReflection {
   }
 
   extensions(): any[] {
-    return Array.isArray(this.options.extend) ? (this.options.extend as any[]) : [];
+    if (Array.isArray(this.options.extend)) return this.options.extend as any[];
+    if (this.options.extend) return [this.options.extend];
+    return [];
   }
 
   computeClass(name: string): typeof Base {
@@ -772,23 +779,22 @@ export class ThroughReflection extends AbstractReflection {
 
   get sourceReflection(): AssociationReflection | ThroughReflection | null {
     if (this._sourceReflectionCache !== undefined) return this._sourceReflectionCache;
+    const srcName = this.sourceReflectionName();
+    if (!srcName) {
+      this._sourceReflectionCache = null;
+      return null;
+    }
     const throughRef = this.throughReflection;
     if (!throughRef) {
       this._sourceReflectionCache = null;
       return null;
     }
     try {
-      const throughKlass = throughRef.klass;
-      const throughAssocs: any[] = (throughKlass as any)._associations ?? [];
-      const candidates = this.options.source
-        ? [this.options.source as string]
-        : [singularize(this.name), this.name];
-      for (const candidate of candidates) {
-        const sourceDef = throughAssocs.find((a: any) => a.name === candidate);
-        if (sourceDef) {
-          this._sourceReflectionCache = createReflection(sourceDef, throughKlass);
-          return this._sourceReflectionCache;
-        }
+      const throughAssocs: any[] = (throughRef.klass as any)._associations ?? [];
+      const sourceDef = throughAssocs.find((a: any) => a.name === srcName);
+      if (sourceDef) {
+        this._sourceReflectionCache = createReflection(sourceDef, throughRef.klass);
+        return this._sourceReflectionCache;
       }
       this._sourceReflectionCache = null;
       return null;
@@ -906,14 +912,15 @@ export class ThroughReflection extends AbstractReflection {
       const matching = candidates.filter((n) => throughAssocs.some((a: any) => a.name === n));
 
       if (matching.length > 1) {
-        throw new Error(
-          `Ambiguous source reflection for through association. ` +
-            `Source reflection names: ${this.sourceReflectionNames().join(", ")}`,
+        throw new AmbiguousSourceReflectionForThroughAssociation(
+          this.activeRecord.name,
+          this.name,
+          this.sourceReflectionNames(),
         );
       }
       this._sourceReflectionNameCache = matching[0] ?? null;
-    } catch (e: any) {
-      if (e.message?.includes("Ambiguous")) throw e;
+    } catch (e: unknown) {
+      if (e instanceof AmbiguousSourceReflectionForThroughAssociation) throw e;
       this._sourceReflectionNameCache = null;
     }
     return this._sourceReflectionNameCache ?? null;
@@ -1054,6 +1061,10 @@ export class PolymorphicReflection extends AbstractReflection {
     return (this._reflection as any).name;
   }
 
+  get className(): string {
+    return (this._reflection as any).className;
+  }
+
   scopeFor(relation: any, owner?: any): any {
     return (this._reflection as any).scopeFor?.(relation, owner) ?? relation;
   }
@@ -1094,6 +1105,18 @@ export class RuntimeReflection extends AbstractReflection {
     super();
     this._reflection = reflection;
     this._association = association;
+  }
+
+  get name(): string {
+    return (this._reflection as any).name;
+  }
+
+  get className(): string {
+    return (this._reflection as any).className;
+  }
+
+  get pluralName(): string {
+    return (this._reflection as any).pluralName;
   }
 
   get scope(): ((...args: any[]) => any) | null {

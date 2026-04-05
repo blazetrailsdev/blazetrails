@@ -5,6 +5,8 @@
  */
 
 import type { DatabaseAdapter } from "../adapter.js";
+import { ReadOnlyError } from "../errors.js";
+import { SchemaCache } from "./schema-cache.js";
 
 /**
  * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter::Version
@@ -60,8 +62,7 @@ export class AbstractAdapter {
   private _owner: string | null = null;
   private _inUse = false;
   private _prepared_statements = false;
-  private _pool: unknown = null;
-  private _schemaCache: Map<string, unknown> | null = null;
+  private _schemaCache: SchemaCache | null = null;
   private _config: Record<string, unknown> = {};
   private _verified = false;
   private _idleSince = 0;
@@ -128,17 +129,17 @@ export class AbstractAdapter {
   }
 
   get role(): string {
-    return (this._pool as any)?.role ?? "writing";
+    return (this.pool as any)?.role ?? "writing";
   }
 
   get shard(): string {
-    return (this._pool as any)?.shard ?? "default";
+    return (this.pool as any)?.shard ?? "default";
   }
 
   // --- Capability introspection ---
 
-  isValidType(type: string): boolean {
-    return type !== undefined && type !== null && type !== "";
+  isValidType(type: string | null | undefined): boolean {
+    return type != null && type !== "";
   }
 
   isReplica(): boolean {
@@ -150,16 +151,16 @@ export class AbstractAdapter {
     return false;
   }
 
-  get schemaCache(): Map<string, unknown> {
+  get schemaCache(): SchemaCache {
     if (!this._schemaCache) {
-      this._schemaCache = new Map();
+      this._schemaCache = new SchemaCache();
     }
     return this._schemaCache;
   }
 
   checkIfWriteQuery(sql: string): void {
     if (this.isPreventingWrites() && this.isWriteQuery(sql)) {
-      throw new Error(`Write query attempted while in readonly mode: ${sql}`);
+      throw new ReadOnlyError("Write query attempted while in readonly mode");
     }
   }
 
@@ -200,7 +201,29 @@ export class AbstractAdapter {
   // --- Private helpers ---
 
   protected isWriteQuery(sql: string): boolean {
-    return !/^\s*(SELECT|EXPLAIN|PRAGMA|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE)\b/i.test(sql);
+    const stripped = this.stripSqlComments(sql);
+    const match = stripped.match(/^\s*([A-Z]+)\b/i);
+    if (!match) return true;
+    const stmt = match[1].toUpperCase();
+    if (this.isReadOnlyStatement(stmt)) return false;
+    if (stmt !== "WITH") return true;
+    // CTE: check the statement after the WITH clause
+    const afterWith = stripped.replace(/^\s*WITH\b/i, "").replace(/\([^)]*\)/g, "");
+    const innerMatch = afterWith.match(/\b(SELECT|INSERT|UPDATE|DELETE|MERGE)\b/i);
+    return !innerMatch || innerMatch[1].toUpperCase() !== "SELECT";
+  }
+
+  private isReadOnlyStatement(stmt: string): boolean {
+    return /^(SELECT|EXPLAIN|PRAGMA|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE)$/.test(stmt);
+  }
+
+  private stripSqlComments(sql: string): string {
+    let result = sql;
+    // Strip line comments
+    result = result.replace(/--[^\n]*/g, "");
+    // Strip block comments
+    result = result.replace(/\/\*[\s\S]*?\*\//g, "");
+    return result;
   }
 
   supportsDdlTransactions(): boolean {

@@ -264,25 +264,19 @@ export class CollectionAssociation extends Association {
    * Load target from database and merge with in-memory records.
    */
   override async loadTarget(): Promise<Base[]> {
-    let didLoad = this.isLoaded();
-
     if (this.findTargetNeeded()) {
       const cached = this.doFindTarget();
       if (cached !== undefined && Array.isArray(cached)) {
         this.target = this.mergeTargetLists(cached, this.target);
-        didLoad = true;
       } else {
         const found = await this.doAsyncFindTarget();
         if (found !== undefined && found !== null && Array.isArray(found)) {
           this.target = this.mergeTargetLists(found, this.target);
-          didLoad = true;
         }
       }
     }
 
-    if (didLoad) {
-      this.loadedBang();
-    }
+    this.loadedBang();
     return this.target;
   }
 

@@ -130,7 +130,14 @@ export class Association {
 
   removeInverseInstance(record: Base): void {
     const inverse = this.inverseAssociationFor(record);
-    if (inverse) {
+    if (!inverse) return;
+
+    if (inverse.isCollection() && Array.isArray(inverse.target)) {
+      const idx = inverse.target.indexOf(this.owner);
+      if (idx !== -1) {
+        inverse.target.splice(idx, 1);
+      }
+    } else {
       inverse.inversedFrom(null as any);
     }
   }

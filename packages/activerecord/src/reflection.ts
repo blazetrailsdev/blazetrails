@@ -14,7 +14,16 @@ import { HasManyAssociation } from "./associations/has-many-association.js";
 import { HasManyThroughAssociation } from "./associations/has-many-through-association.js";
 import { HasOneAssociation } from "./associations/has-one-association.js";
 import { HasOneThroughAssociation } from "./associations/has-one-through-association.js";
-import { AmbiguousSourceReflectionForThroughAssociation } from "./associations/errors.js";
+import {
+  AmbiguousSourceReflectionForThroughAssociation,
+  HasManyThroughAssociationNotFoundError,
+  HasManyThroughAssociationPolymorphicThroughError,
+  HasManyThroughAssociationPolymorphicSourceError,
+  HasManyThroughAssociationPointlessSourceTypeError,
+  HasManyThroughSourceAssociationNotFoundError,
+  HasOneAssociationPolymorphicThroughError,
+  HasOneThroughCantAssociateThroughCollection,
+} from "./associations/errors.js";
 
 type MacroType = "belongsTo" | "hasOne" | "hasMany" | "hasAndBelongsToMany" | "composedOf";
 
@@ -174,7 +183,10 @@ export class AbstractReflection {
       if (inverse == null) {
         throw new Error(`Could not find the inverse association for ${(this as any).name}.`);
       }
-      if (inverse === (this as any)) {
+      if (
+        (inverse as any).name === (this as any).name &&
+        (inverse as any).activeRecord === (this as any).activeRecord
+      ) {
         throw new Error(`Inverse association for ${(this as any).name} is recursive.`);
       }
     }
@@ -196,7 +208,13 @@ export class AbstractReflection {
 
   isInverseUpdatesCounterInMemory(): boolean {
     const inv = this.inverseOf();
-    return inv != null && this.inverseWhichUpdatesCounterCache() === inv;
+    if (inv == null) return false;
+    const iwucc = this.inverseWhichUpdatesCounterCache();
+    if (iwucc == null) return false;
+    return (
+      (inv as any).name === (iwucc as any).name &&
+      (inv as any).activeRecord === (iwucc as any).activeRecord
+    );
   }
 
   hasCachedCounter(): boolean {
@@ -940,49 +958,50 @@ export class ThroughReflection extends AbstractReflection {
 
   checkValidityBang(): void {
     if (!this.throughReflection) {
-      throw new Error(
-        `Could not find the association '${this.through}' in model ${this.activeRecord.name}`,
-      );
+      throw new HasManyThroughAssociationNotFoundError(this.activeRecord.name, this.through);
     }
 
     if (this.throughReflection.isPolymorphic()) {
       if (this.hasOne()) {
-        throw new Error(
-          `Cannot have a has_one :through association '${this.name}' on ${this.activeRecord.name} ` +
-            `that has a polymorphic :through association.`,
-        );
+        throw new HasOneAssociationPolymorphicThroughError(this.activeRecord.name, this.name);
       } else {
-        throw new Error(
-          `Cannot have a has_many :through association '${this.name}' on ${this.activeRecord.name} ` +
-            `that has a polymorphic :through association.`,
+        throw new HasManyThroughAssociationPolymorphicThroughError(
+          this.activeRecord.name,
+          this.name,
         );
       }
     }
 
     if (!this.sourceReflection) {
-      throw new Error(
-        `Could not find the source association(s) for '${this.name}' through '${this.through}'.`,
+      throw new HasManyThroughSourceAssociationNotFoundError(
+        this.activeRecord.name,
+        this.through,
+        this.sourceReflectionNames().join(" or "),
+        this.name,
       );
     }
 
     if (this.options.sourceType && !this.sourceReflection.isPolymorphic()) {
-      throw new Error(
-        `Cannot have a has_many :through association '${this.name}' on ${this.activeRecord.name} ` +
-          `with a :source_type but the :source '${(this.sourceReflection as any).name}' is not polymorphic.`,
+      throw new HasManyThroughAssociationPointlessSourceTypeError(
+        this.activeRecord.name,
+        this.name,
+        (this.sourceReflection as any).name,
       );
     }
 
     if (this.sourceReflection.isPolymorphic() && !this.options.sourceType) {
-      throw new Error(
-        `Cannot have a has_many :through association '${this.name}' on ${this.activeRecord.name} ` +
-          `which goes through the polymorphic association '${(this.sourceReflection as any).name}'.`,
+      throw new HasManyThroughAssociationPolymorphicSourceError(
+        this.activeRecord.name,
+        this.name,
+        (this.sourceReflection as any).name,
       );
     }
 
     if (this.hasOne() && this.throughReflection.isCollection()) {
-      throw new Error(
-        `Cannot have a has_one :through association '${this.name}' on ${this.activeRecord.name} ` +
-          `going through '${(this.throughReflection as any).name}' which is a collection.`,
+      throw new HasOneThroughCantAssociateThroughCollection(
+        this.activeRecord.name,
+        this.name,
+        (this.throughReflection as any).name,
       );
     }
 
@@ -1230,7 +1249,9 @@ export function createReflection(
       assocDef.type === "hasManyThrough" ||
       assocDef.type === "hasOneThrough")
   ) {
-    return new ThroughReflection(reflection);
+    const through = new ThroughReflection(reflection);
+    reflection.parentReflection = through;
+    return through;
   }
 
   return reflection;
@@ -1252,7 +1273,9 @@ export function create(
   const ReflectionClass = reflectionClassFor(macro);
   const reflection = new ReflectionClass(name, scope, options, activeRecord);
   if (options.through) {
-    return new ThroughReflection(reflection);
+    const through = new ThroughReflection(reflection);
+    reflection.parentReflection = through;
+    return through;
   }
   return reflection;
 }

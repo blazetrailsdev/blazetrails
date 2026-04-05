@@ -284,7 +284,11 @@ export class MacroReflection extends AbstractReflection {
     (this.options as any).autosave = value;
     const parent = (this as any).parentReflection;
     if (parent) {
-      parent.autosave = value;
+      if (parent instanceof MacroReflection) {
+        parent.autosave = value;
+      } else {
+        (parent.options as any).autosave = value;
+      }
     }
   }
 
@@ -1261,8 +1265,10 @@ export function addReflection(
   name: string,
   reflection: AssociationReflection | ThroughReflection,
 ): void {
-  (activeRecord as any).clearReflectionsCache?.();
-  const reflections: Record<string, any> = (activeRecord as any)._reflections ?? {};
+  clearReflectionsCache(activeRecord);
+  const hasOwn = Object.prototype.hasOwnProperty.call(activeRecord, "_reflections");
+  const inherited: Record<string, any> = (activeRecord as any)._reflections ?? {};
+  const reflections = hasOwn ? inherited : { ...inherited };
   reflections[name] = reflection;
   (activeRecord as any)._reflections = reflections;
 }
@@ -1275,15 +1281,20 @@ export function addAggregateReflection(
   name: string,
   reflection: AggregateReflection,
 ): void {
-  const aggs: Map<string, AggregateReflection> =
-    (activeRecord as any)._aggregateReflections ?? new Map<string, AggregateReflection>();
+  const hasOwn = Object.prototype.hasOwnProperty.call(activeRecord, "_aggregateReflections");
+  const aggs: Map<string, AggregateReflection> = hasOwn
+    ? (activeRecord as any)._aggregateReflections
+    : new Map<string, AggregateReflection>(
+        (activeRecord as any)._aggregateReflections ?? new Map(),
+      );
   aggs.set(name, reflection);
   (activeRecord as any)._aggregateReflections = aggs;
 }
 
 // ---------------------------------------------------------------------------
-// ClassMethods — functions that mirror ActiveRecord::Reflection::ClassMethods
-// These are mixed into the model class.
+// ClassMethods — standalone functions mirroring ActiveRecord::Reflection::ClassMethods.
+// In Rails these are mixed into the model class; here they are module-level
+// functions that take the model class as the first argument.
 // ---------------------------------------------------------------------------
 
 export function reflections(modelClass: typeof Base): Record<string, any> {

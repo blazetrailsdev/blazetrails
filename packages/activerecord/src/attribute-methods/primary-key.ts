@@ -6,6 +6,7 @@
 import { quoteIdentifier } from "../connection-adapters/abstract/quoting.js";
 import { detectAdapterName } from "../adapter-name.js";
 import { underscore } from "@blazetrails/activesupport";
+import { dangerousAttributeMethods } from "../attribute-methods.js";
 
 interface PrimaryKeyRecord {
   id: unknown;
@@ -101,8 +102,8 @@ export function isInstanceMethodAlreadyImplemented(
   return methodName in this.prototype;
 }
 
-export function isDangerousAttributeMethod(_this: PrimaryKeyHost, _name: string): boolean {
-  return false;
+export function isDangerousAttributeMethod(_this: PrimaryKeyHost, name: string): boolean {
+  return dangerousAttributeMethods().has(name);
 }
 
 /**

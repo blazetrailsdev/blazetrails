@@ -223,7 +223,7 @@ export function defineAttributeMethods(this: AttributeMethodsHost): boolean {
 export function generateAliasAttributes(this: AttributeMethodsHost): void {
   if (!this._attributeAliases) return;
   for (const [newName, oldName] of Object.entries(this._attributeAliases)) {
-    generateAliasAttributeMethods.call(this, newName, oldName);
+    aliasAttributeMethodDefinition.call(this, newName, oldName);
   }
   this._aliasAttributesMassGenerated = true;
 }

@@ -59,8 +59,16 @@ export class AbstractAdapter {
   private _connection: DatabaseAdapter | null = null;
   private _owner: string | null = null;
   private _inUse = false;
-  private _logger: unknown = null;
   private _prepared_statements = false;
+  private _pool: unknown = null;
+  private _schemaCache: Map<string, unknown> | null = null;
+  private _config: Record<string, unknown> = {};
+  private _verified = false;
+  private _idleSince = 0;
+
+  pool: unknown = null;
+  logger: unknown = null;
+  lock: unknown = null;
 
   get inUse(): boolean {
     return this._inUse;
@@ -85,10 +93,114 @@ export class AbstractAdapter {
   expire(): void {
     this._inUse = false;
     this._owner = null;
+    this._idleSince = Date.now();
   }
 
   get adapterName(): string {
     return "Abstract";
+  }
+
+  // --- Identity & lifecycle ---
+
+  isConnected(): boolean {
+    return this._connection !== null;
+  }
+
+  reconnectBang(): void {
+    this.clearCacheBang();
+    this._verified = true;
+  }
+
+  disconnectBang(): void {
+    this.clearCacheBang();
+    this._connection = null;
+  }
+
+  verifyBang(): void {
+    if (!this.active) {
+      this.reconnectBang();
+    }
+    this._verified = true;
+  }
+
+  clearCacheBang(): void {
+    // Subclasses with statement caches override this
+  }
+
+  get role(): string {
+    return (this._pool as any)?.role ?? "writing";
+  }
+
+  get shard(): string {
+    return (this._pool as any)?.shard ?? "default";
+  }
+
+  // --- Capability introspection ---
+
+  isValidType(type: string): boolean {
+    return type !== undefined && type !== null && type !== "";
+  }
+
+  isReplica(): boolean {
+    return (this._config.replica as boolean) ?? false;
+  }
+
+  isPreventingWrites(): boolean {
+    if (this.isReplica()) return true;
+    return false;
+  }
+
+  get schemaCache(): Map<string, unknown> {
+    if (!this._schemaCache) {
+      this._schemaCache = new Map();
+    }
+    return this._schemaCache;
+  }
+
+  checkIfWriteQuery(sql: string): void {
+    if (this.isPreventingWrites() && this.isWriteQuery(sql)) {
+      throw new Error(`Write query attempted while in readonly mode: ${sql}`);
+    }
+  }
+
+  async unpreparedStatement<T>(fn: () => Promise<T> | T): Promise<T> {
+    const was = this._prepared_statements;
+    this._prepared_statements = false;
+    try {
+      return await fn();
+    } finally {
+      this._prepared_statements = was;
+    }
+  }
+
+  supportsExplain(): boolean {
+    return false;
+  }
+
+  supportsExtensions(): boolean {
+    return false;
+  }
+
+  supportsIndexesInCreate(): boolean {
+    return false;
+  }
+
+  supportsInsertReturning(): boolean {
+    return false;
+  }
+
+  supportsInsertOnDuplicateSkip(): boolean {
+    return false;
+  }
+
+  supportsInsertOnDuplicateUpdate(): boolean {
+    return false;
+  }
+
+  // --- Private helpers ---
+
+  protected isWriteQuery(sql: string): boolean {
+    return !/^\s*(SELECT|EXPLAIN|PRAGMA|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE)\b/i.test(sql);
   }
 
   supportsDdlTransactions(): boolean {
@@ -147,13 +259,17 @@ export class AbstractAdapter {
     return false;
   }
 
-  reconnect(): void {}
-
-  disconnect(): void {
-    this._connection = null;
+  reconnect(): void {
+    this.reconnectBang();
   }
 
-  clearCache(): void {}
+  disconnect(): void {
+    this.disconnectBang();
+  }
+
+  clearCache(): void {
+    this.clearCacheBang();
+  }
 
   resetTransaction(): void {}
 

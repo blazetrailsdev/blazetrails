@@ -55,9 +55,9 @@ export class BelongsToAssociation extends SingularAssociation {
    * Set the default value for this association if the current reader is nil.
    * Called by the before_validation callback set up by the builder.
    */
-  default(block: () => Base | null): void {
+  default(block: (owner: Base) => Base | null): void {
     if (this.reader == null) {
-      const value = block.call(this.owner);
+      const value = block(this.owner);
       if (value != null) {
         this.writer(value);
       }

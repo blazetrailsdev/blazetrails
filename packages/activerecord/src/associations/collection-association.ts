@@ -144,12 +144,19 @@ export class CollectionAssociation extends Association {
    * option. If :dependent is :destroy, uses :delete_all strategy instead.
    */
   async deleteAll(dependent?: string): Promise<void> {
-    if (dependent && dependent !== "nullify" && dependent !== "deleteAll") {
-      throw new Error("Valid values are 'nullify' or 'deleteAll'");
+    if (
+      dependent &&
+      dependent !== "nullify" &&
+      dependent !== "deleteAll" &&
+      dependent !== "delete"
+    ) {
+      throw new Error("Valid values are 'nullify', 'delete', or 'deleteAll'");
     }
 
+    const normalized = dependent === "delete" ? "deleteAll" : dependent;
+    const optionDep = this.options.dependent;
     const effectiveDependent =
-      dependent ?? (this.options.dependent === "destroy" ? "deleteAll" : this.options.dependent);
+      normalized ?? (optionDep === "destroy" || optionDep === "delete" ? "deleteAll" : optionDep);
 
     if (effectiveDependent === "nullify") {
       await this.nullifyAllRecords();

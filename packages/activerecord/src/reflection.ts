@@ -8,8 +8,18 @@ import {
 } from "@blazetrails/activesupport";
 import { Table } from "@blazetrails/arel";
 import { modelRegistry } from "./associations.js";
+import { BelongsToAssociation } from "./associations/belongs-to-association.js";
+import { BelongsToPolymorphicAssociation } from "./associations/belongs-to-polymorphic-association.js";
+import { HasManyAssociation } from "./associations/has-many-association.js";
+import { HasManyThroughAssociation } from "./associations/has-many-through-association.js";
+import { HasOneAssociation } from "./associations/has-one-association.js";
+import { HasOneThroughAssociation } from "./associations/has-one-through-association.js";
 
 type MacroType = "belongsTo" | "hasOne" | "hasMany" | "hasAndBelongsToMany" | "composedOf";
+
+function arrayLen(value: string | string[]): number {
+  return Array.isArray(value) ? value.length : 1;
+}
 
 /**
  * Base class shared by all reflection types.
@@ -172,11 +182,7 @@ export class AbstractReflection {
     const col = this.counterCacheColumn();
     if (!col) return null;
     const inv = this.inverseOf();
-    const candidates: any[] = inv
-      ? [inv]
-      : (this.klass as any).reflectOnAllAssociations
-        ? (this.klass as any).reflectOnAllAssociations("belongsTo")
-        : [];
+    const candidates: any[] = inv ? [inv] : reflectOnAllAssociations(this.klass, "belongsTo");
     return (
       candidates.find(
         (c: any) =>
@@ -274,6 +280,10 @@ export class MacroReflection extends AbstractReflection {
 
   set autosave(value: boolean) {
     (this.options as any).autosave = value;
+    const parent = (this as any).parentReflection;
+    if (parent) {
+      parent.autosave = value;
+    }
   }
 
   get scope(): ((...args: any[]) => any) | null {
@@ -441,6 +451,26 @@ export class AssociationReflection extends MacroReflection {
 
   checkValidityBang(): void {
     this.checkValidityOfInverseBang();
+
+    if (!this.isPolymorphic()) {
+      const arPk = this.activeRecordPrimaryKey;
+      const fk = this.foreignKey;
+      if (this.hasOne() || this.isCollection()) {
+        if (arrayLen(arPk) !== arrayLen(fk)) {
+          throw new Error(
+            `Association ${this.name}: composite primary key / foreign key length mismatch ` +
+              `(${arrayLen(arPk)} primary key column(s) vs ${arrayLen(fk)} foreign key column(s))`,
+          );
+        }
+      } else if (this.belongsTo()) {
+        if (arrayLen(this.associationPrimaryKey) !== arrayLen(fk)) {
+          throw new Error(
+            `Association ${this.name}: composite primary key / foreign key length mismatch ` +
+              `(${arrayLen(this.associationPrimaryKey)} primary key column(s) vs ${arrayLen(fk)} foreign key column(s))`,
+          );
+        }
+      }
+    }
   }
 
   checkEagerLoadableBang(): void {
@@ -458,11 +488,11 @@ export class AssociationReflection extends MacroReflection {
     return keys.map((key) => (owner.readAttribute ? owner.readAttribute(key) : owner[key]));
   }
 
-  throughReflection(): null {
+  get throughReflection(): null {
     return null;
   }
 
-  sourceReflection(): this {
+  get sourceReflection(): this {
     return this;
   }
 
@@ -471,7 +501,7 @@ export class AssociationReflection extends MacroReflection {
   }
 
   clearAssociationScopeCache(): void {
-    // no-op in base — Rails calls klass.initialize_find_by_cache
+    // Rails calls klass.initialize_find_by_cache — no-op until we have statement caching
   }
 
   isNested(): boolean {
@@ -499,12 +529,15 @@ export class AssociationReflection extends MacroReflection {
     return null;
   }
 
-  associationClass(): any {
+  associationClass():
+    | typeof BelongsToAssociation
+    | typeof HasManyAssociation
+    | typeof HasOneAssociation {
     throw new Error("Subclass must implement associationClass");
   }
 
   polymorphicName(): string {
-    return this.activeRecord.name;
+    return (this.activeRecord as any).polymorphicName?.() ?? this.activeRecord.name;
   }
 
   addAsSource(seed: AbstractReflection[]): AbstractReflection[] {
@@ -558,8 +591,8 @@ export class HasManyReflection extends AssociationReflection {
     return true;
   }
 
-  associationClass(): any {
-    return this.options.through ? "HasManyThroughAssociation" : "HasManyAssociation";
+  associationClass(): typeof HasManyAssociation | typeof HasManyThroughAssociation {
+    return this.options.through ? HasManyThroughAssociation : HasManyAssociation;
   }
 }
 
@@ -575,8 +608,8 @@ export class HasOneReflection extends AssociationReflection {
     return true;
   }
 
-  associationClass(): any {
-    return this.options.through ? "HasOneThroughAssociation" : "HasOneAssociation";
+  associationClass(): typeof HasOneAssociation | typeof HasOneThroughAssociation {
+    return this.options.through ? HasOneThroughAssociation : HasOneAssociation;
   }
 }
 
@@ -592,8 +625,8 @@ export class BelongsToReflection extends AssociationReflection {
     return true;
   }
 
-  associationClass(): any {
-    return this.isPolymorphic() ? "BelongsToPolymorphicAssociation" : "BelongsToAssociation";
+  associationClass(): typeof BelongsToAssociation | typeof BelongsToPolymorphicAssociation {
+    return this.isPolymorphic() ? BelongsToPolymorphicAssociation : BelongsToAssociation;
   }
 
   get associationPrimaryKey(): string | string[] {
@@ -795,12 +828,7 @@ export class ThroughReflection extends AbstractReflection {
   }
 
   collectJoinChain(): AbstractReflection[] {
-    const result: AbstractReflection[] = [this];
-    const through = this.throughReflection;
-    if (through) {
-      result.push(...through.chain);
-    }
-    return result;
+    return this._collectJoinReflections([this]);
   }
 
   clearAssociationScopeCache(): void {
@@ -902,19 +930,51 @@ export class ThroughReflection extends AbstractReflection {
   checkValidityBang(): void {
     if (!this.throughReflection) {
       throw new Error(
-        `Could not find the through association '${this.through}' on ${this.activeRecord.name}.`,
+        `Could not find the association '${this.through}' in model ${this.activeRecord.name}`,
       );
     }
+
     if (this.throughReflection.isPolymorphic()) {
-      throw new Error(
-        `Cannot have a through association '${this.name}' through a polymorphic association.`,
-      );
+      if (this.hasOne()) {
+        throw new Error(
+          `Cannot have a has_one :through association '${this.name}' on ${this.activeRecord.name} ` +
+            `that has a polymorphic :through association.`,
+        );
+      } else {
+        throw new Error(
+          `Cannot have a has_many :through association '${this.name}' on ${this.activeRecord.name} ` +
+            `that has a polymorphic :through association.`,
+        );
+      }
     }
+
     if (!this.sourceReflection) {
       throw new Error(
-        `Could not find the source association for '${this.name}' through '${this.through}'.`,
+        `Could not find the source association(s) for '${this.name}' through '${this.through}'.`,
       );
     }
+
+    if (this.options.sourceType && !this.sourceReflection.isPolymorphic()) {
+      throw new Error(
+        `Cannot have a has_many :through association '${this.name}' on ${this.activeRecord.name} ` +
+          `with a :source_type but the :source '${(this.sourceReflection as any).name}' is not polymorphic.`,
+      );
+    }
+
+    if (this.sourceReflection.isPolymorphic() && !this.options.sourceType) {
+      throw new Error(
+        `Cannot have a has_many :through association '${this.name}' on ${this.activeRecord.name} ` +
+          `which goes through the polymorphic association '${(this.sourceReflection as any).name}'.`,
+      );
+    }
+
+    if (this.hasOne() && this.throughReflection.isCollection()) {
+      throw new Error(
+        `Cannot have a has_one :through association '${this.name}' on ${this.activeRecord.name} ` +
+          `going through '${(this.throughReflection as any).name}' which is a collection.`,
+      );
+    }
+
     this.checkValidityOfInverseBang();
   }
 

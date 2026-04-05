@@ -436,4 +436,76 @@ export class AbstractAdapter {
   isAsyncEnabled(): boolean {
     return false;
   }
+
+  // --- Capability flags (batch 3) ---
+
+  supportsIndexInclude(): boolean {
+    return false;
+  }
+
+  supportsValidateConstraints(): boolean {
+    return false;
+  }
+
+  supportsDeferrableConstraints(): boolean {
+    return false;
+  }
+
+  supportsExclusionConstraints(): boolean {
+    return false;
+  }
+
+  supportsUniqueConstraints(): boolean {
+    return false;
+  }
+
+  supportsDatetimeWithPrecision(): boolean {
+    return false;
+  }
+
+  supportsCommentsInCreate(): boolean {
+    return false;
+  }
+
+  supportsVirtualColumns(): boolean {
+    return false;
+  }
+
+  supportsForeignTables(): boolean {
+    return false;
+  }
+
+  supportsOptimizerHints(): boolean {
+    return false;
+  }
+
+  supportsInsertConflictTarget(): boolean {
+    return false;
+  }
+
+  supportsNullsNotDistinct(): boolean {
+    return false;
+  }
+
+  isReturnValueAfterInsert(_column?: unknown): boolean {
+    return false;
+  }
+
+  isPrefetchPrimaryKey(_tableName?: string): boolean {
+    return false;
+  }
+
+  isSavepointErrorsInvalidateTransactions(): boolean {
+    return false;
+  }
+
+  supportsRestartDbTransaction(): boolean {
+    return false;
+  }
+
+  isDatabaseExists(): boolean {
+    return this._connection !== null;
+  }
+
+  lockThread: boolean = false;
 }

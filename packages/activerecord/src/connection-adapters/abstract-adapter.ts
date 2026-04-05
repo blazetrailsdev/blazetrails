@@ -216,7 +216,7 @@ export class AbstractAdapter {
   }
 
   private isReadOnlyStatement(stmt: string): boolean {
-    return /^(SELECT|EXPLAIN|PRAGMA|SHOW|SET|RESET|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE)$/.test(
+    return /^(SELECT|EXPLAIN|PRAGMA|SHOW|SET|RESET|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE|DESCRIBE|DESC|USE|KILL)$/.test(
       stmt,
     );
   }

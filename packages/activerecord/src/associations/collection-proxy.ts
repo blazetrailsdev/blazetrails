@@ -2,7 +2,7 @@ import type { Base } from "../base.js";
 import { applyThenable, stripThenable } from "../relation/thenable.js";
 import { Table as ArelTable } from "@blazetrails/arel";
 import { underscore, singularize, pluralize, camelize } from "@blazetrails/activesupport";
-import { StrictLoadingViolationError, RecordInvalid } from "../errors.js";
+import { StrictLoadingViolationError, RecordInvalid, RecordNotSaved } from "../errors.js";
 import {
   HasManyThroughCantAssociateThroughHasOneOrManyReflection,
   HasManyThroughNestedAssociationsAreReadonly,
@@ -915,14 +915,18 @@ export class CollectionProxy {
     this._ensureThroughWritable();
     if (this._isThrough) {
       const record = this._buildThrough(attrs);
+      if (!fireAssocCallbacks(this._assocDef.options.beforeAdd, this._record, record)) {
+        throw new RecordNotSaved("Callback prevented record creation", record);
+      }
       const saved = await record.save();
       if (!saved) throw new RecordInvalid(record);
       await this._pushThrough([record]);
+      fireAssocCallbacks(this._assocDef.options.afterAdd, this._record, record);
       return record;
     }
     const record = this._buildRaw(attrs);
     if (!fireAssocCallbacks(this._assocDef.options.beforeAdd, this._record, record)) {
-      throw new RecordInvalid(record);
+      throw new RecordNotSaved("Callback prevented record creation", record);
     }
     const saved = await record.save();
     if (!saved) throw new RecordInvalid(record);
@@ -937,16 +941,30 @@ export class CollectionProxy {
    * Mirrors: ActiveRecord::Associations::CollectionProxy#delete_all
    */
   async deleteAll(dependent?: string): Promise<void> {
-    const dep = dependent ?? (this._assocDef.options.dependent as string | undefined);
-    if (dep === "destroy") {
+    const raw = dependent ?? (this._assocDef.options.dependent as string | undefined);
+    let strategy: "destroy" | "delete_all" | "nullify";
+
+    if (raw == null || raw === "nullify") {
+      strategy = "nullify";
+    } else if (raw === "destroy") {
+      strategy = "destroy";
+    } else if (raw === "deleteAll" || raw === "delete_all" || raw === "delete") {
+      strategy = "delete_all";
+    } else {
+      throw new Error(
+        `Invalid dependent option: ${raw}. Valid values are "destroy", "delete_all", "deleteAll", "delete", or "nullify".`,
+      );
+    }
+
+    if (strategy === "destroy") {
       await this.destroyAll();
-    } else if (dep === "deleteAll" || dep === "delete_all" || dep === "delete") {
-      // Direct SQL deletion — no callbacks, matching Rails delete_all strategy
+      this._target = [];
+      this._loaded = true;
+    } else if (strategy === "delete_all") {
       await this.scope().deleteAll();
       this._target = [];
       this._loaded = true;
     } else {
-      // Default: nullify foreign keys
       const records = await this.toArray();
       const persisted = records.filter((r) => !r.isNewRecord());
       if (persisted.length > 0) {

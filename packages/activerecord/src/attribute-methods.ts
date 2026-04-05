@@ -4,9 +4,9 @@
  * Mirrors: ActiveRecord::AttributeMethods
  */
 import { isBlank } from "@blazetrails/activesupport";
-// ActiveModel already provides aliasAttribute, defineAttributeMethods,
-// undefineAttributeMethods on Model (Base's superclass). The functions
-// below delegate to the AM versions via the prototype chain at runtime.
+// ActiveModel provides aliasAttribute and undefineAttributeMethods on Model.
+// aliasAttribute delegates via the prototype chain. defineAttributeMethods
+// is implemented here since AM doesn't expose it as a static on Model.
 
 /**
  * The AttributeMethods module interface.
@@ -181,14 +181,8 @@ export function aliasAttributeMethodDefinition(
   newName: string,
   oldName: string,
 ): void {
-  // Rails generates pattern-based alias methods (e.g. clear_fullName).
-  // Delegate to AM's eagerlyGenerateAliasAttributeMethods via prototype chain.
-  const amFn = Object.getPrototypeOf(this)?.eagerlyGenerateAliasAttributeMethods;
-  if (typeof amFn === "function") {
-    amFn.call(this, newName, oldName);
-    return;
-  }
-  // Fallback: at minimum define a direct getter/setter
+  // Rails generates pattern-based alias methods for a single pattern.
+  // Define a direct getter/setter for the alias name.
   if (this.prototype && !(newName in this.prototype)) {
     Object.defineProperty(this.prototype, newName, {
       get(this: any) {

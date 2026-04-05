@@ -11,7 +11,6 @@ interface QueryingHost {
   name: string;
   adapter: {
     execute(sql: string): Promise<Record<string, unknown>[]>;
-    selectValue?(sql: string): Promise<unknown>;
   };
   _instantiate(row: Record<string, unknown>, columnTypes?: Record<string, any>): any;
 }
@@ -65,10 +64,7 @@ export async function countBySql(
 ): Promise<number> {
   const sanitized = typeof sql === "string" ? sql : sanitizeSql(sql);
   // Rails: connection.select_value(sanitize_sql(sql)).to_i
-  if (this.adapter.selectValue) {
-    const value = await this.adapter.selectValue(sanitized);
-    return Number(value) || 0;
-  }
+  // Our adapters return rows; extract the first scalar value.
   const rows = await this.adapter.execute(sanitized);
   if (!rows[0]) return 0;
   const firstValue = Object.values(rows[0])[0];

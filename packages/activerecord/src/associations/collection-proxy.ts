@@ -991,7 +991,11 @@ export class CollectionProxy {
       }
       const saved = await record.save();
       if (!saved) throw new RecordInvalid(record);
+      const targetBefore = this._target.length;
       await this._pushThrough([record], true);
+      if (this._target.length === targetBefore) {
+        throw new RecordNotSaved("Failed to create join record for through association", record);
+      }
       fireAssocCallbacks(this._assocDef.options.afterAdd, this._record, record);
       return record;
     }
@@ -1016,9 +1020,9 @@ export class CollectionProxy {
     // Rails normalizes dependent: :destroy → :delete_all for deleteAll,
     // because deleteAll should never run destroy callbacks (use destroyAll for that).
     const raw = dependent ?? (this._assocDef.options.dependent as string | undefined);
-    // Rails normalizes everything except nullify to delete_all for deleteAll.
-    const strategy: "delete_all" | "nullify" =
-      raw == null || raw === "nullify" ? "nullify" : "delete_all";
+    // Match CollectionAssociation#deleteAll: only explicit "nullify" nullifies;
+    // everything else (including no dependent) defaults to delete_all.
+    const strategy: "delete_all" | "nullify" = raw === "nullify" ? "nullify" : "delete_all";
 
     if (strategy === "delete_all") {
       if (this._isThrough) {

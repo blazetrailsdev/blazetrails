@@ -38,11 +38,11 @@ export function isId(this: CompositePKRecord): boolean {
   if (ctor.compositePrimaryKey) {
     return (ctor.primaryKey as string[]).every((col: string) => {
       const v = this.readAttribute(col);
-      return v !== null && v !== undefined && v !== "" && v !== false && v !== 0;
+      return v !== null && v !== undefined && v !== "" && v !== false;
     });
   }
   const v = this.readAttribute(ctor.primaryKey);
-  return v !== null && v !== undefined && v !== "" && v !== false && v !== 0;
+  return v !== null && v !== undefined && v !== "" && v !== false;
 }
 
 export function idBeforeTypeCast(this: CompositePKRecord): unknown {

@@ -216,6 +216,14 @@ export class BelongsToAssociation extends SingularAssociation {
     const fk = this.reflection.options.foreignKey;
     if (typeof fk === "string") return [fk];
     if (Array.isArray(fk)) return fk;
+
+    // Derive composite FKs when target has composite PK (mirrors loadBelongsTo)
+    const pks = this.associationPrimaryKeys(null);
+    if (pks.length > 1) {
+      const assocName = underscore(this.reflection.name);
+      return pks.map((pk) => `${assocName}_${pk}`);
+    }
+
     return [`${underscore(this.reflection.name)}_id`];
   }
 

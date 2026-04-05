@@ -89,6 +89,10 @@ export class HasOneAssociation extends SingularAssociation {
   }
 
   protected override replace(record: Base | null): void {
+    // Nullify FK on previous target when swapping records
+    if (this.target && this.target !== record) {
+      this.nullifyOwnerAttributes(this.target);
+    }
     if (record) {
       this.setOwnerAttributes(record);
     }

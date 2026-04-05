@@ -239,6 +239,7 @@ export class CollectionAssociation extends Association {
     }
 
     for (const record of toAdd) {
+      this.setOwnerAttributes(record);
       this.addToTarget(record);
     }
 

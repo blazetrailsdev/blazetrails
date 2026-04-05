@@ -1049,6 +1049,9 @@ export class CollectionProxy {
             ? "maximum"
             : operation;
 
+    if (op !== "count" && columnName == null) {
+      throw new Error(`Column name is required for calculation operation: ${op}`);
+    }
     const s = this.scope();
     if (op === "count" && columnName == null && typeof s.count === "function") {
       return s.count();

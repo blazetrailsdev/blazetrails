@@ -508,12 +508,16 @@ export class CollectionProxy {
     const throughClassName =
       throughAssoc.options.className ?? camelize(singularize(throughAssoc.name));
     const throughModel = resolveModel(throughClassName);
-    const ownerFk = throughAssoc.options.foreignKey ?? `${underscore(ctor.name)}_id`;
     const primaryKey = throughAssoc.options.primaryKey ?? ctor.primaryKey;
     const pkValue = this._record.readAttribute(primaryKey as string);
-    const conditions: Record<string, unknown> = { [ownerFk as string]: pkValue };
-    if (throughAssoc.options.as) {
-      conditions[`${underscore(throughAssoc.options.as)}_type`] = ctor.name;
+    const throughAs = throughAssoc.options.as;
+    const conditions: Record<string, unknown> = {};
+    if (throughAs) {
+      conditions[`${underscore(throughAs)}_id`] = pkValue;
+      conditions[`${underscore(throughAs)}_type`] = ctor.name;
+    } else {
+      const ownerFk = throughAssoc.options.foreignKey ?? `${underscore(ctor.name)}_id`;
+      conditions[ownerFk as string] = pkValue;
     }
     await (throughModel as any).where(conditions).deleteAll();
   }
@@ -522,12 +526,14 @@ export class CollectionProxy {
     const ctor = this._record.constructor as typeof Base;
     const asName = this._assocDef.options.as;
     const primaryKey = this._assocDef.options.primaryKey ?? ctor.primaryKey;
-    const foreignKey = asName
-      ? (this._assocDef.options.foreignKey ?? `${underscore(asName)}_id`)
-      : (this._assocDef.options.foreignKey ??
-        (Array.isArray(primaryKey)
+    const foreignKey =
+      this._assocDef.options.foreignKey ??
+      this._assocDef.options.queryConstraints ??
+      (asName
+        ? `${underscore(asName)}_id`
+        : Array.isArray(primaryKey)
           ? primaryKey.map((col: string) => `${underscore(ctor.name)}_${col}`)
-          : `${underscore(ctor.name)}_id`));
+          : `${underscore(ctor.name)}_id`);
     const updates: Record<string, null> = {};
     if (Array.isArray(foreignKey)) {
       for (const fk of foreignKey) updates[fk] = null;
@@ -980,6 +986,7 @@ export class CollectionProxy {
    * Mirrors: ActiveRecord::Associations::CollectionProxy#delete_all
    */
   async deleteAll(dependent?: string): Promise<void> {
+    this._ensureThroughWritable();
     // Rails normalizes dependent: :destroy → :delete_all for deleteAll,
     // because deleteAll should never run destroy callbacks (use destroyAll for that).
     const raw = dependent ?? (this._assocDef.options.dependent as string | undefined);
@@ -1026,19 +1033,21 @@ export class CollectionProxy {
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#calculate
    */
-  async calculate(operation: string, columnName: string): Promise<unknown> {
+  async calculate(operation: string, columnName?: string): Promise<unknown> {
     const s = this.scope();
     if (typeof s.calculate === "function") {
       return s.calculate(operation, columnName);
     }
     // Fallback: compute in-memory from loaded records
     const records = await this.loadTarget();
+    if (operation === "count") return records.length;
+    if (columnName == null) {
+      throw new Error(`Column name is required for calculation operation: ${operation}`);
+    }
     const values = records
       .map((r) => r.readAttribute(columnName))
       .filter((v) => v != null) as number[];
     switch (operation) {
-      case "count":
-        return values.length;
       case "sum":
         return values.reduce((a, b) => Number(a) + Number(b), 0);
       case "average":
@@ -1072,17 +1081,22 @@ export class CollectionProxy {
    * Mirrors: ActiveRecord::Associations::CollectionProxy#proxy_association
    */
   get proxyAssociation(): {
-    owner: Base;
-    reflection: any;
-    target: Base[];
-    loaded: boolean;
+    readonly owner: Base;
+    readonly reflection: any;
+    readonly target: Base[];
+    readonly loaded: boolean;
     reset: () => void;
   } {
+    const proxy = this;
     return {
       owner: this._record,
       reflection: this._assocDef,
-      target: this._target,
-      loaded: this._loaded,
+      get target() {
+        return proxy._target;
+      },
+      get loaded() {
+        return proxy._loaded;
+      },
       reset: () => this.reset(),
     };
   }

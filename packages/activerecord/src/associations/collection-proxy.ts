@@ -941,14 +941,19 @@ export class CollectionProxy {
    * Mirrors: ActiveRecord::Associations::CollectionProxy#delete_all
    */
   async deleteAll(dependent?: string): Promise<void> {
+    // Rails normalizes dependent: :destroy → :delete_all for deleteAll,
+    // because deleteAll should never run destroy callbacks (use destroyAll for that).
     const raw = dependent ?? (this._assocDef.options.dependent as string | undefined);
-    let strategy: "destroy" | "delete_all" | "nullify";
+    let strategy: "delete_all" | "nullify";
 
     if (raw == null || raw === "nullify") {
       strategy = "nullify";
-    } else if (raw === "destroy") {
-      strategy = "destroy";
-    } else if (raw === "deleteAll" || raw === "delete_all" || raw === "delete") {
+    } else if (
+      raw === "destroy" ||
+      raw === "deleteAll" ||
+      raw === "delete_all" ||
+      raw === "delete"
+    ) {
       strategy = "delete_all";
     } else {
       throw new Error(
@@ -956,23 +961,27 @@ export class CollectionProxy {
       );
     }
 
-    if (strategy === "destroy") {
-      await this.destroyAll();
-      this._target = [];
-      this._loaded = true;
-    } else if (strategy === "delete_all") {
-      await this.scope().deleteAll();
-      this._target = [];
-      this._loaded = true;
+    if (strategy === "delete_all") {
+      if (this._isThrough) {
+        // For through associations, remove join rows — not the target records
+        const records = await this.toArray();
+        const persisted = records.filter((r) => !r.isNewRecord());
+        if (persisted.length > 0) {
+          await this._deleteThrough(persisted);
+        }
+      } else {
+        await this.scope().deleteAll();
+      }
     } else {
+      // Nullify: set foreign keys to null
       const records = await this.toArray();
       const persisted = records.filter((r) => !r.isNewRecord());
       if (persisted.length > 0) {
         await this.delete(...persisted);
       }
-      this._target = [];
-      this._loaded = true;
     }
+    this._target = [];
+    this._loaded = true;
     this.resetScope();
   }
 

@@ -25,6 +25,7 @@ export class HasManyAssociation extends CollectionAssociation {
    */
   async handleDependency(): Promise<void> {
     const dependent = this.reflection.options.dependent;
+    if (!dependent) return;
 
     switch (dependent) {
       case "restrictWithException": {

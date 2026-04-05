@@ -22,6 +22,7 @@ export class HasOneAssociation extends SingularAssociation {
    */
   async handleDependency(): Promise<void> {
     const dependent = this.reflection.options.dependent;
+    if (!dependent) return;
 
     switch (dependent) {
       case "restrictWithException":
@@ -83,6 +84,9 @@ export class HasOneAssociation extends SingularAssociation {
           await (target as any).destroy();
         }
     }
+
+    this.target = null;
+    this.loadedBang();
   }
 
   protected override replace(record: Base | null): void {

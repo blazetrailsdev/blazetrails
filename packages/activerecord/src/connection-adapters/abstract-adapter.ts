@@ -150,12 +150,21 @@ export class AbstractAdapter {
 
   isPreventingWrites(): boolean {
     if (this.isReplica()) return true;
+    const pool = this.pool as any;
+    if (pool?.preventWrites === true || pool?.prevent_writes === true) return true;
+    if (pool?.dbConfig?.preventWrites === true || pool?.dbConfig?.prevent_writes === true)
+      return true;
+    if (this._config.preventWrites === true || this._config.prevent_writes === true) return true;
     return false;
   }
 
   get schemaCache(): SchemaCache {
+    const pool = this.pool as any;
+    if (pool?.schemaCache) return pool.schemaCache;
+
     if (!this._schemaCache) {
       this._schemaCache = new SchemaCache();
+      if (pool) pool.schemaCache = this._schemaCache;
     }
     return this._schemaCache;
   }

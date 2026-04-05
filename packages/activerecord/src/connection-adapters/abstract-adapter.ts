@@ -145,7 +145,7 @@ export class AbstractAdapter {
       return (this.pool as any).dbConfig.replica;
     }
     if (this.role === "reading") return true;
-    return (this._config.replica as boolean) ?? false;
+    return this._config.replica === true;
   }
 
   isPreventingWrites(): boolean {

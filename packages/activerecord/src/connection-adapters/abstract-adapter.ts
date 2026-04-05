@@ -143,6 +143,10 @@ export class AbstractAdapter {
   }
 
   isReplica(): boolean {
+    if (typeof (this.pool as any)?.dbConfig?.replica === "boolean") {
+      return (this.pool as any).dbConfig.replica;
+    }
+    if (this.role === "reading") return true;
     return (this._config.replica as boolean) ?? false;
   }
 
@@ -214,15 +218,24 @@ export class AbstractAdapter {
   }
 
   private isReadOnlyStatement(stmt: string): boolean {
-    return /^(SELECT|EXPLAIN|PRAGMA|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE)$/.test(stmt);
+    return /^(SELECT|EXPLAIN|PRAGMA|SHOW|SET|RESET|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE)$/.test(
+      stmt,
+    );
   }
 
   private stripSqlComments(sql: string): string {
-    let result = sql;
-    // Strip line comments
-    result = result.replace(/--[^\n]*/g, "");
     // Strip block comments
-    result = result.replace(/\/\*[\s\S]*?\*\//g, "");
+    let result = sql.replace(/\/\*[\s\S]*?\*\//g, "");
+    // Strip line comments conservatively (-- must be preceded by whitespace
+    // or at start of line to avoid matching arithmetic like 1--1)
+    result = result
+      .split("\n")
+      .map((line) => {
+        const match = line.match(/(^|[\s])(--(?=[\s]|$))/);
+        if (!match || match.index === undefined) return line;
+        return line.slice(0, match.index + match[1].length);
+      })
+      .join("\n");
     return result;
   }
 

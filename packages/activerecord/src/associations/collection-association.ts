@@ -130,7 +130,8 @@ export class CollectionAssociation extends Association {
   async concat(...records: Base[]): Promise<Base[]> {
     const flattened = records.flat() as Base[];
     for (const record of flattened) {
-      this.addToTarget(record);
+      const added = this.addToTarget(record);
+      if (!added) continue;
       if (this.owner.isPersisted() && typeof (record as any).save === "function") {
         this.setOwnerAttributes(record);
         await (record as any).save();
@@ -291,7 +292,10 @@ export class CollectionAssociation extends Association {
    * Add a record to the in-memory target array, firing callbacks
    * and setting inverse associations.
    */
-  addToTarget(record: Base, options: { skipCallbacks?: boolean; replace?: boolean } = {}): Base {
+  addToTarget(
+    record: Base,
+    options: { skipCallbacks?: boolean; replace?: boolean } = {},
+  ): Base | null {
     const { skipCallbacks, replace: shouldReplace } = options;
 
     let index = -1;
@@ -301,7 +305,7 @@ export class CollectionAssociation extends Association {
 
     if (!skipCallbacks) {
       const proceed = fireAssocCallbacks(this.reflection.options.beforeAdd, this.owner, record);
-      if (proceed === false) return record;
+      if (proceed === false) return null;
     }
 
     this.setInverseInstance(record);
@@ -428,6 +432,11 @@ export class CollectionAssociation extends Association {
     const ctor = this.owner.constructor as any;
     if (this.reflection.options.as) {
       return [`${underscore(this.reflection.options.as)}_id`];
+    }
+    // Derive composite FKs for CPK owners (mirrors loadHasMany)
+    const pk = this.reflection.options.primaryKey ?? ctor.primaryKey ?? "id";
+    if (Array.isArray(pk)) {
+      return pk.map((col: string) => `${underscore(ctor.name)}_${col}`);
     }
     return [`${underscore(ctor.name)}_id`];
   }

@@ -103,15 +103,23 @@ export class HasOneAssociation extends SingularAssociation {
     return loadHasOne(this.owner, this.reflection.name, this.reflection.options);
   }
 
-  private foreignKeyColumn(): string {
-    if (typeof this.reflection.options.foreignKey === "string") {
-      return this.reflection.options.foreignKey;
-    }
+  private foreignKeyColumns(): string[] {
+    const fk = this.reflection.options.foreignKey;
+    if (typeof fk === "string") return [fk];
+    if (Array.isArray(fk)) return fk;
     const ctor = (this.owner as any).constructor;
     if (this.reflection.options.as) {
-      return `${underscore(this.reflection.options.as)}_id`;
+      return [`${underscore(this.reflection.options.as)}_id`];
     }
-    return `${underscore(ctor.name)}_id`;
+    const pk = this.reflection.options.primaryKey ?? ctor.primaryKey ?? "id";
+    if (Array.isArray(pk)) {
+      return pk.map((col: string) => `${underscore(ctor.name)}_${col}`);
+    }
+    return [`${underscore(ctor.name)}_id`];
+  }
+
+  private foreignKeyColumn(): string {
+    return this.foreignKeyColumns()[0];
   }
 
   private setOwnerAttributes(record: Base): void {

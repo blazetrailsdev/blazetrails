@@ -117,19 +117,18 @@ export class BelongsToAssociation extends SingularAssociation {
    * target is an unsaved new record.
    */
   isTargetChanged(): boolean {
-    const fk = this.foreignKeyName();
-    const changed = this.ownerAttributeChanged(fk);
+    const changed = this.foreignKeyNames().some((fk) => this.ownerAttributeChanged(fk));
     return (
       changed || (!this.foreignKeyPresent() && this.target != null && this.target.isNewRecord())
     );
   }
 
   isTargetPreviouslyChanged(): boolean {
-    return this.ownerAttributePreviouslyChanged(this.foreignKeyName());
+    return this.foreignKeyNames().some((fk) => this.ownerAttributePreviouslyChanged(fk));
   }
 
   isSavedChangeToTarget(): boolean {
-    return this.ownerSavedChangeToAttribute(this.foreignKeyName());
+    return this.foreignKeyNames().some((fk) => this.ownerSavedChangeToAttribute(fk));
   }
 
   /**
@@ -285,13 +284,18 @@ export class BelongsToAssociation extends SingularAssociation {
     if (!this.owner.isPersisted()) return;
     if (!this.foreignKeyPresent()) return;
 
-    const fkValue = this.owner.readAttribute?.(this.foreignKeyName());
-    if (fkValue == null) return;
+    const fks = this.foreignKeyNames();
+    const pks = this.associationPrimaryKeys(null);
+    const conditions: Record<string, unknown> = {};
+    for (let i = 0; i < fks.length; i++) {
+      const fkValue = this.owner.readAttribute?.(fks[i]);
+      if (fkValue == null) return;
+      conditions[pks[i] ?? pks[0]] = fkValue;
+    }
 
     const Klass = this.klass;
     if (Klass && typeof (Klass as any).where === "function") {
-      const pk = (Klass as any).primaryKey ?? "id";
-      const scope = (Klass as any).where({ [pk]: fkValue });
+      const scope = (Klass as any).where(conditions);
       if (typeof scope.updateCounters === "function") {
         await scope.updateCounters({ [counterCol]: by });
       }

@@ -15,6 +15,14 @@ export class Cipher {
   static keyLength = KEY_LENGTH;
   static ivLength = IV_LENGTH;
 
+  readonly secret?: string;
+  readonly deterministic: boolean;
+
+  constructor(secret?: string, options?: { deterministic?: boolean }) {
+    this.secret = secret;
+    this.deterministic = options?.deterministic ?? false;
+  }
+
   encrypt(
     data: string,
     key: string,

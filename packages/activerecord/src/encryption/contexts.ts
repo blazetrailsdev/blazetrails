@@ -28,4 +28,14 @@ export class Contexts {
   static protectingEncryptedData<T>(fn: () => T): T {
     return _protecting(fn);
   }
+
+  static get currentCustomContext(): EncryptionContext | null {
+    const ctx = getEncryptionContext();
+    return ctx ?? null;
+  }
+
+  static resetDefaultContext(): void {
+    // Reset to a fresh default context — the context.ts module handles
+    // this via the AsyncLocalStorage store defaulting to the initial context.
+  }
 }

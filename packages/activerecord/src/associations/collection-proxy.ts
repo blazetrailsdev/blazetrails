@@ -895,6 +895,140 @@ export class CollectionProxy {
       return rel;
     }
   }
+
+  /**
+   * Load and return the target records array.
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#load_target
+   */
+  async loadTarget(): Promise<Base[]> {
+    await this.load();
+    return this._target;
+  }
+
+  /**
+   * Build and save a new associated record, raising on validation failure.
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#create!
+   */
+  async createBang(attrs: Record<string, unknown> = {}): Promise<Base> {
+    this._ensureThroughWritable();
+    if (this._isThrough) {
+      const record = this._buildThrough(attrs);
+      const saved = await record.save();
+      if (!saved) {
+        throw new Error(
+          `Failed to save record: ${JSON.stringify((record as any).errors?.fullMessages?.() ?? [])}`,
+        );
+      }
+      await this._pushThrough([record]);
+      return record;
+    }
+    const record = this._buildRaw(attrs);
+    if (!fireAssocCallbacks(this._assocDef.options.beforeAdd, this._record, record)) {
+      throw new Error("Callback prevented record creation");
+    }
+    const saved = await record.save();
+    if (!saved) {
+      throw new Error(
+        `Failed to save record: ${JSON.stringify((record as any).errors?.fullMessages?.() ?? [])}`,
+      );
+    }
+    this._target.push(record);
+    fireAssocCallbacks(this._assocDef.options.afterAdd, this._record, record);
+    return record;
+  }
+
+  /**
+   * Delete all records from the collection according to the dependent strategy.
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#delete_all
+   */
+  async deleteAll(dependent?: string): Promise<void> {
+    const dep = dependent ?? (this._assocDef.options.dependent as string | undefined);
+    if (dep === "destroy") {
+      await this.destroyAll();
+    } else if (dep === "deleteAll" || dep === "delete_all" || dep === "delete") {
+      const records = await this.toArray();
+      for (const record of records) {
+        if (!record.isNewRecord()) {
+          await record.destroy();
+        }
+      }
+      this._target = [];
+      this._loaded = true;
+    } else {
+      await this.clear();
+    }
+    this.resetScope();
+  }
+
+  /**
+   * Perform a calculation on the association scope.
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#calculate
+   */
+  async calculate(operation: string, columnName: string): Promise<unknown> {
+    return this.scope().calculate(operation, columnName);
+  }
+
+  /**
+   * Check if the collection includes a given record.
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#include?
+   */
+  async isInclude(record: Base): Promise<boolean> {
+    return this.includes(record);
+  }
+
+  /**
+   * Returns the underlying association object.
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#proxy_association
+   */
+  get proxyAssociation(): { owner: Base; reflection: any; target: Base[] } {
+    return {
+      owner: this._record,
+      reflection: this._assocDef,
+      target: this._target,
+    };
+  }
+
+  /**
+   * Returns the loaded records array (loading if needed).
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#records
+   */
+  async records(): Promise<Base[]> {
+    return this.loadTarget();
+  }
+
+  /**
+   * Alias for push/<<.
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#append
+   */
+  async append(...records: Base[]): Promise<void> {
+    return this.push(...records);
+  }
+
+  /**
+   * Raises NoMethodError — prepend is not supported on associations.
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#prepend
+   */
+  prepend(..._args: any[]): never {
+    throw new Error("prepend on association is not defined. Please use <<, push or append");
+  }
+
+  /**
+   * Reset cached scope state.
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#reset_scope
+   */
+  resetScope(): this {
+    return this;
+  }
 }
 
 applyThenable(CollectionProxy.prototype);

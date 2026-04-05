@@ -499,6 +499,45 @@ export class CollectionProxy {
     this._removeFromTarget(removed);
   }
 
+  private async _deleteThroughAllSql(): Promise<void> {
+    const ctor = this._record.constructor as typeof Base;
+    const associations: AssociationDefinition[] = (ctor as any)._associations ?? [];
+    const throughAssoc = associations.find((a: any) => a.name === this._assocDef.options.through);
+    if (!throughAssoc) return;
+
+    const throughClassName =
+      throughAssoc.options.className ?? camelize(singularize(throughAssoc.name));
+    const throughModel = resolveModel(throughClassName);
+    const ownerFk = throughAssoc.options.foreignKey ?? `${underscore(ctor.name)}_id`;
+    const primaryKey = throughAssoc.options.primaryKey ?? ctor.primaryKey;
+    const pkValue = this._record.readAttribute(primaryKey as string);
+    const conditions: Record<string, unknown> = { [ownerFk as string]: pkValue };
+    if (throughAssoc.options.as) {
+      conditions[`${underscore(throughAssoc.options.as)}_type`] = ctor.name;
+    }
+    await (throughModel as any).where(conditions).deleteAll();
+  }
+
+  private _buildNullifyUpdates(): Record<string, null> {
+    const ctor = this._record.constructor as typeof Base;
+    const asName = this._assocDef.options.as;
+    const primaryKey = this._assocDef.options.primaryKey ?? ctor.primaryKey;
+    const foreignKey = asName
+      ? (this._assocDef.options.foreignKey ?? `${underscore(asName)}_id`)
+      : (this._assocDef.options.foreignKey ??
+        (Array.isArray(primaryKey)
+          ? primaryKey.map((col: string) => `${underscore(ctor.name)}_${col}`)
+          : `${underscore(ctor.name)}_id`));
+    const updates: Record<string, null> = {};
+    if (Array.isArray(foreignKey)) {
+      for (const fk of foreignKey) updates[fk] = null;
+    } else {
+      updates[foreignKey as string] = null;
+    }
+    if (asName) updates[`${underscore(asName)}_type`] = null;
+    return updates;
+  }
+
   /**
    * Destroy associated records (runs callbacks and deletes from DB).
    *
@@ -963,21 +1002,18 @@ export class CollectionProxy {
 
     if (strategy === "delete_all") {
       if (this._isThrough) {
-        // For through associations, remove join rows — not the target records
-        const records = await this.toArray();
-        const persisted = records.filter((r) => !r.isNewRecord());
-        if (persisted.length > 0) {
-          await this._deleteThrough(persisted);
-        }
+        // For through associations, delete join rows via SQL — not the target records
+        await this._deleteThroughAllSql();
       } else {
         await this.scope().deleteAll();
       }
     } else {
-      // Nullify: set foreign keys to null
-      const records = await this.toArray();
-      const persisted = records.filter((r) => !r.isNewRecord());
-      if (persisted.length > 0) {
-        await this.delete(...persisted);
+      // Nullify: set-based SQL update to null FKs (no per-record callbacks)
+      if (this._isThrough) {
+        await this._deleteThroughAllSql();
+      } else {
+        const nullUpdates = this._buildNullifyUpdates();
+        await this.scope().updateAll(nullUpdates);
       }
     }
     this._target = [];
@@ -1070,7 +1106,7 @@ export class CollectionProxy {
   }
 
   /**
-   * Raises NoMethodError — prepend is not supported on associations.
+   * Raises an error — prepend is not supported on associations.
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#prepend
    */

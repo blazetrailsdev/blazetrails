@@ -509,7 +509,12 @@ export class CollectionProxy {
       throughAssoc.options.className ?? camelize(singularize(throughAssoc.name));
     const throughModel = resolveModel(throughClassName);
     const primaryKey = throughAssoc.options.primaryKey ?? ctor.primaryKey;
-    const pkValue = this._record.readAttribute(primaryKey as string);
+    if (Array.isArray(primaryKey)) {
+      throw new Error(
+        `deleteAll does not support composite primary keys for through associations on "${this._assocName}".`,
+      );
+    }
+    const pkValue = this._record.readAttribute(primaryKey);
     const throughAs = throughAssoc.options.as;
     const conditions: Record<string, unknown> = {};
     if (throughAs) {
@@ -1146,7 +1151,9 @@ export class CollectionProxy {
    * Mirrors: ActiveRecord::Associations::CollectionProxy#reset_scope
    */
   resetScope(): this {
-    return stripThenable(this);
+    // No-op: scope() rebuilds the relation each call, so there's nothing
+    // cached to clear. Rails resets @scope/@offsets/@take here.
+    return this;
   }
 }
 

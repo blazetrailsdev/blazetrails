@@ -205,7 +205,7 @@ export class AbstractAdapter {
   // --- Private helpers ---
 
   protected isWriteQuery(sql: string): boolean {
-    const stripped = this.stripSqlComments(sql);
+    const stripped = this.stripSqlComments(sql).replace(/^\s*\(+\s*/, "");
     const match = stripped.match(/^\s*([A-Z]+)\b/i);
     if (!match) return true;
     const stmt = match[1].toUpperCase();
@@ -231,7 +231,7 @@ export class AbstractAdapter {
     result = result
       .split("\n")
       .map((line) => {
-        const match = line.match(/(^|[\s])(--(?=[\s]|$))/);
+        const match = line.match(/(^|[\s])--.*/);
         if (!match || match.index === undefined) return line;
         return line.slice(0, match.index + match[1].length);
       })

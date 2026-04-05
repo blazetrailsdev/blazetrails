@@ -522,7 +522,16 @@ export class CollectionProxy {
       conditions[`${underscore(throughAs)}_type`] = ctor.name;
     } else {
       const ownerFk = throughAssoc.options.foreignKey ?? `${underscore(ctor.name)}_id`;
-      conditions[ownerFk as string] = pkValue;
+      if (Array.isArray(ownerFk)) {
+        throw new Error(
+          `deleteAll does not support composite foreign keys for through associations on "${this._assocName}".`,
+        );
+      }
+      conditions[ownerFk] = pkValue;
+    }
+    if (this._assocDef.options.sourceType) {
+      const sourceName = this._assocDef.options.source ?? singularize(this._assocName);
+      conditions[`${underscore(sourceName)}_type`] = this._assocDef.options.sourceType;
     }
     await (throughModel as any).where(conditions).deleteAll();
   }
@@ -971,9 +980,11 @@ export class CollectionProxy {
         );
       }
       const record = this._buildThrough(attrs);
+      if (!fireAssocCallbacks(this._assocDef.options.beforeAdd, this._record, record)) {
+        throw new RecordNotSaved("Callback prevented record creation", record);
+      }
       const saved = await record.save();
       if (!saved) throw new RecordInvalid(record);
-      // _pushThrough owns the callback lifecycle (beforeAdd/afterAdd)
       await this._pushThrough([record]);
       return record;
     }
@@ -998,22 +1009,9 @@ export class CollectionProxy {
     // Rails normalizes dependent: :destroy → :delete_all for deleteAll,
     // because deleteAll should never run destroy callbacks (use destroyAll for that).
     const raw = dependent ?? (this._assocDef.options.dependent as string | undefined);
-    let strategy: "delete_all" | "nullify";
-
-    if (raw == null || raw === "nullify") {
-      strategy = "nullify";
-    } else if (
-      raw === "destroy" ||
-      raw === "deleteAll" ||
-      raw === "delete_all" ||
-      raw === "delete"
-    ) {
-      strategy = "delete_all";
-    } else {
-      throw new Error(
-        `Invalid dependent option: ${raw}. Valid values are "destroy", "delete_all", "deleteAll", "delete", or "nullify".`,
-      );
-    }
+    // Rails normalizes everything except nullify to delete_all for deleteAll.
+    const strategy: "delete_all" | "nullify" =
+      raw == null || raw === "nullify" ? "nullify" : "delete_all";
 
     if (strategy === "delete_all") {
       if (this._isThrough) {
@@ -1089,6 +1087,15 @@ export class CollectionProxy {
    * Mirrors: ActiveRecord::Associations::CollectionProxy#include?
    */
   async isInclude(record: Base): Promise<boolean> {
+    if (this._loaded) {
+      return this.includes(record);
+    }
+    const pk = (record.constructor as typeof Base).primaryKey as string;
+    const pkValue = record.readAttribute(pk);
+    const s = this.scope();
+    if (pkValue != null && typeof s.exists === "function") {
+      return s.exists({ [pk]: pkValue });
+    }
     return this.includes(record);
   }
 

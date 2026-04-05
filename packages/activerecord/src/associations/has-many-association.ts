@@ -72,10 +72,6 @@ export class HasManyAssociation extends CollectionAssociation {
   /**
    * Insert a record into the collection. Sets the FK and type
    * columns on the record to point to the owner, then saves.
-   */
-  /**
-   * Insert a record into the collection. Sets the FK and type
-   * columns on the record to point to the owner, then saves.
    * Rails: if raise is true, uses save! (raises on failure);
    * otherwise uses save (returns boolean).
    */

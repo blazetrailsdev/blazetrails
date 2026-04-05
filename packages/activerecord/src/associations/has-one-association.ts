@@ -85,8 +85,7 @@ export class HasOneAssociation extends SingularAssociation {
         }
     }
 
-    this.target = null;
-    this.loadedBang();
+    super.replace(null);
   }
 
   protected override replace(record: Base | null): void {

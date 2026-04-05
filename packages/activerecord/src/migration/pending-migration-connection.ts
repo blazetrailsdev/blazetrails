@@ -57,7 +57,7 @@ export class PendingMigrationConnection {
   /**
    * Establish a temporary connection pool for the given database config
    * and yield it. In Rails this creates a real pool from the handler;
-   * here we delegate to withAdapter.
+   * here we call the callback directly with the adapter.
    *
    * Mirrors: ActiveRecord::PendingMigrationConnection.with_temporary_pool
    */

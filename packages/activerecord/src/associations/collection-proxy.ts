@@ -1020,9 +1020,23 @@ export class CollectionProxy {
     // Rails normalizes dependent: :destroy → :delete_all for deleteAll,
     // because deleteAll should never run destroy callbacks (use destroyAll for that).
     const raw = dependent ?? (this._assocDef.options.dependent as string | undefined);
-    // Match CollectionAssociation#deleteAll: only explicit "nullify" nullifies;
-    // everything else (including no dependent) defaults to delete_all.
-    const strategy: "delete_all" | "nullify" = raw === "nullify" ? "nullify" : "delete_all";
+    let strategy: "delete_all" | "nullify";
+    switch (raw) {
+      case undefined:
+      case "delete_all":
+      case "deleteAll":
+      case "delete":
+      case "destroy":
+        strategy = "delete_all";
+        break;
+      case "nullify":
+        strategy = "nullify";
+        break;
+      default:
+        throw new Error(
+          `deleteAll only accepts "nullify", "delete_all", or "destroy". Received: "${raw}"`,
+        );
+    }
 
     if (strategy === "delete_all") {
       if (this._isThrough) {
@@ -1130,7 +1144,12 @@ export class CollectionProxy {
         if (pkValue != null) return s.exists({ [primaryKey]: pkValue });
       }
     }
-    return this.includes(record);
+    const loaded = await this.loadTarget();
+    const targetId = this._identityFor(record);
+    if (targetId != null) {
+      return loaded.some((r) => this._identityFor(r) === targetId);
+    }
+    return loaded.includes(record);
   }
 
   /**

@@ -63,9 +63,7 @@ export class AbstractAdapter {
   private _inUse = false;
   private _prepared_statements = false;
   private _schemaCache: SchemaCache | null = null;
-  private _config: Record<string, unknown> = {};
-  private _verified = false;
-  private _idleSince = 0;
+  protected _config: Record<string, unknown> = {};
 
   pool: unknown = null;
   logger: unknown = null;
@@ -94,7 +92,6 @@ export class AbstractAdapter {
   expire(): void {
     this._inUse = false;
     this._owner = null;
-    this._idleSince = Date.now();
   }
 
   get adapterName(): string {
@@ -108,8 +105,10 @@ export class AbstractAdapter {
   }
 
   reconnectBang(): void {
+    // Base implementation clears caches and marks verified.
+    // Concrete adapters (SQLite3, PostgreSQL, MySQL) override to
+    // actually close and reopen the raw connection.
     this.clearCacheBang();
-    this._verified = true;
   }
 
   disconnectBang(): void {
@@ -121,7 +120,6 @@ export class AbstractAdapter {
     if (!this.active) {
       this.reconnectBang();
     }
-    this._verified = true;
   }
 
   clearCacheBang(): void {
@@ -164,7 +162,7 @@ export class AbstractAdapter {
 
   checkIfWriteQuery(sql: string): void {
     if (this.isPreventingWrites() && this.isWriteQuery(sql)) {
-      throw new ReadOnlyError("Write query attempted while in readonly mode");
+      throw new ReadOnlyError("Write query attempted while preventing writes");
     }
   }
 

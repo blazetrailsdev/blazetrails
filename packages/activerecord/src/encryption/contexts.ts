@@ -6,6 +6,8 @@ import {
   type EncryptionContext,
 } from "./context.js";
 
+let _defaultContext: EncryptionContext = {};
+
 /**
  * Class-based API for managing encryption contexts. Delegates to the
  * existing AsyncLocalStorage-based context system in context.ts.
@@ -34,8 +36,11 @@ export class Contexts {
     return ctx ?? null;
   }
 
+  static get defaultContext(): EncryptionContext {
+    return _defaultContext;
+  }
+
   static resetDefaultContext(): void {
-    // Reset to a fresh default context — the context.ts module handles
-    // this via the AsyncLocalStorage store defaulting to the initial context.
+    _defaultContext = {};
   }
 }

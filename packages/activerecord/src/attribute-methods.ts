@@ -205,7 +205,7 @@ export function defineAttributeMethods(this: AttributeMethodsHost): boolean {
   // Generate getter/setter for each attribute definition that doesn't
   // already have one on the prototype (mirrors Rails' define_attribute_methods)
   for (const name of this._attributeDefinitions.keys()) {
-    if (name in this.prototype) continue;
+    if (Object.prototype.hasOwnProperty.call(this.prototype, name)) continue;
     Object.defineProperty(this.prototype, name, {
       get(this: any) {
         return this.readAttribute(name);

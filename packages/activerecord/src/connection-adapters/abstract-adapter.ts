@@ -63,6 +63,8 @@ export class AbstractAdapter {
   private _inUse = false;
   private _prepared_statements = false;
   private _schemaCache: SchemaCache | null = null;
+  private _idleSince = 0;
+  private _lastActivity = 0;
   protected _config: Record<string, unknown> = {};
 
   pool: unknown = null;
@@ -92,6 +94,7 @@ export class AbstractAdapter {
   expire(): void {
     this._inUse = false;
     this._owner = null;
+    this._idleSince = Date.now();
   }
 
   get adapterName(): string {
@@ -330,5 +333,107 @@ export class AbstractAdapter {
 
   get rawConnection(): DatabaseAdapter | null {
     return this._connection;
+  }
+
+  // --- Config accessors (Rails: attr_reader from @config) ---
+
+  get connectionRetries(): number {
+    const v = this._config.connection_retries ?? this._config.connectionRetries;
+    return typeof v === "number" ? v : 1;
+  }
+
+  get verifyTimeout(): number {
+    const v = this._config.verify_timeout ?? this._config.verifyTimeout;
+    return typeof v === "number" ? v : 2;
+  }
+
+  get retryDeadline(): number | null {
+    const v = this._config.retry_deadline ?? this._config.retryDeadline;
+    return typeof v === "number" ? v : null;
+  }
+
+  get defaultTimezone(): string {
+    return (this._config.default_timezone as string) ?? "utc";
+  }
+
+  get connectionDescriptor(): unknown {
+    return (this.pool as any)?.connectionDescriptor ?? null;
+  }
+
+  get visitor(): unknown {
+    return (this.pool as any)?.visitor ?? null;
+  }
+
+  get preparedStatementsDisabledCache(): Set<unknown> {
+    return new Set();
+  }
+
+  // --- Lifecycle ---
+
+  stealBang(): void {
+    if (!this._inUse) {
+      throw new Error("Cannot steal connection, it is not currently leased.");
+    }
+    this._owner = null;
+    this.lease();
+  }
+
+  get secondsIdle(): number {
+    if (this._inUse) return 0;
+    return (Date.now() - this._idleSince) / 1000;
+  }
+
+  get secondsSinceLastActivity(): number | null {
+    if (!this._connection || !this._lastActivity) return null;
+    return (Date.now() - this._lastActivity) / 1000;
+  }
+
+  discardBang(): void {
+    // Immediately forget this connection without communicating with server.
+    // Concrete adapters override to release native resources.
+  }
+
+  resetBang(): void {
+    this.clearCacheBang();
+    this.resetTransaction();
+  }
+
+  // --- Capability flags ---
+
+  supportsAdvisoryLocks(): boolean {
+    return false;
+  }
+
+  supportsPartitionedIndexes(): boolean {
+    return false;
+  }
+
+  supportsIndexSortOrder(): boolean {
+    return false;
+  }
+
+  supportsConcurrentConnections(): boolean {
+    return true;
+  }
+
+  supportsCommonTableExpressions(): boolean {
+    return false;
+  }
+
+  // --- Static utilities ---
+
+  static typeCastConfigToInteger(config: unknown): number | unknown {
+    if (typeof config === "number") return config;
+    if (typeof config === "string" && /^\d+$/.test(config)) return parseInt(config, 10);
+    return config;
+  }
+
+  static typeCastConfigToBoolean(config: unknown): boolean | unknown {
+    if (config === "false") return false;
+    return config;
+  }
+
+  isAsyncEnabled(): boolean {
+    return false;
   }
 }

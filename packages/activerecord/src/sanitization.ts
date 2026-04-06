@@ -70,6 +70,7 @@ export function sanitizeSqlForOrder(
 ): string | Nodes.Node {
   if (condition instanceof Nodes.Node) return condition;
   if (Array.isArray(condition) && condition[0]?.toString().includes("?")) {
+    disallowRawSqlBang([condition[0]]);
     return arelSql(sanitizeSqlArray(condition[0], ...condition.slice(1)));
   }
   return typeof condition === "string" ? condition : condition[0];

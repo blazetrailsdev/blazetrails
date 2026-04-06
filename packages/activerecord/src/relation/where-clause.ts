@@ -103,9 +103,13 @@ export class WhereClause {
     if (this.isEmpty()) return other.clone();
     if (other.isEmpty()) return this.clone();
 
-    let left = this.astNode();
+    // Rails: left = self - other; common = self - left; right = other - common
+    // Then ORs only the differing predicates and keeps common ones.
+    // Our simplified version: since we don't yet have full predicate equality,
+    // OR both sides' full ASTs (correct but may produce redundant conditions).
+    let left: Nodes.Node = this.astNode();
     if (left instanceof Nodes.Grouping) left = (left as any).expr;
-    let right = other.astNode();
+    let right: Nodes.Node = other.astNode();
     if (right instanceof Nodes.Grouping) right = (right as any).expr;
 
     const orNode =
@@ -145,12 +149,7 @@ export class WhereClause {
   }
 
   isContradiction(): boolean {
-    for (const cond of this.conditions) {
-      for (const value of Object.values(cond)) {
-        if (Array.isArray(value) && value.length === 0) return true;
-      }
-    }
-    for (const node of this.arelNodes) {
+    for (const node of this.predicateNodes()) {
       if (node instanceof Nodes.In) {
         const right = (node as any).right;
         if (Array.isArray(right) && right.length === 0) return true;
@@ -187,15 +186,16 @@ export class WhereClause {
 function conditionToArelNode(key: string, value: unknown, negate: boolean): Nodes.Node {
   const col = new Nodes.SqlLiteral(quoteTableName(key));
   if (value === null || value === undefined) {
-    const eq = new Nodes.Equality(col, null as any);
-    return negate ? new Nodes.Not(eq) : eq;
+    const eq = new Nodes.Equality(col, null);
+    return negate ? eq.invert() : eq;
   }
   if (Array.isArray(value)) {
-    const node = new Nodes.In(col, new Nodes.Quoted(value) as any);
-    return negate ? new Nodes.Not(node) : node;
+    // NodeOrValue doesn't include arrays; In stores the array on .right directly
+    const node = new Nodes.In(col, value as any);
+    return negate ? node.invert() : node;
   }
   const eq = new Nodes.Equality(col, new Nodes.Quoted(value));
-  return negate ? new Nodes.Not(eq) : eq;
+  return negate ? eq.invert() : eq;
 }
 
 function invertPredicate(node: Nodes.Node): Nodes.Node {

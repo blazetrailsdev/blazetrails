@@ -2185,19 +2185,13 @@ export class Relation<T extends Base> {
       }
 
       // Apply start/finish range constraints
+      const pkCol = Array.isArray(pk) ? pk[0] : pk;
+      const pkAttr = this._modelClass.arelTable.get(pkCol);
       if (start !== undefined) {
-        rel._whereClause.predicates.push(
-          new Nodes.SqlLiteral(
-            `"${this._modelClass.arelTable.name}"."${pk}" >= ${quoteSqlValue(start)}`,
-          ),
-        );
+        rel._whereClause.predicates.push(pkAttr.gteq(start));
       }
       if (finish !== undefined) {
-        rel._whereClause.predicates.push(
-          new Nodes.SqlLiteral(
-            `"${this._modelClass.arelTable.name}"."${pk}" <= ${quoteSqlValue(finish)}`,
-          ),
-        );
+        rel._whereClause.predicates.push(pkAttr.lteq(finish));
       }
 
       const batch = await rel.toArray();
@@ -2256,11 +2250,7 @@ export class Relation<T extends Base> {
         while (true) {
           const rel = self._clone();
           if (lastId !== null) {
-            rel._whereClause.predicates.push(
-              new Nodes.SqlLiteral(
-                `"${self._modelClass.arelTable.name}"."${pk}" > ${quoteSqlValue(lastId)}`,
-              ),
-            );
+            rel._whereClause.predicates.push(self._modelClass.arelTable.get(pk).gt(lastId));
           }
           rel._orderClauses = [pk];
           rel._limitValue = batchSize;

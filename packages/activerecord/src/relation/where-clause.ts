@@ -40,7 +40,7 @@ export class WhereClause {
     return new WhereClause([new Nodes.Not(this.ast)]);
   }
 
-  except(...columns: (string | Nodes.Node)[]): WhereClause {
+  except(...columns: (string | Nodes.Attribute)[]): WhereClause {
     return new WhereClause(exceptPredicates(this.predicates, columns));
   }
 
@@ -148,10 +148,11 @@ function subtractNodes(a: Nodes.Node[], b: Nodes.Node[]): Nodes.Node[] {
 }
 
 function fetchAttributeNode(node: Nodes.Node): Nodes.Attribute | null {
-  if ("left" in node) {
-    const left = (node as any).left;
-    if (left instanceof Nodes.Attribute) return left;
-  }
+  let found: Nodes.Attribute | null = null;
+  node.fetchAttribute?.((attr: Nodes.Node) => {
+    if (attr instanceof Nodes.Attribute) found = attr;
+  });
+  if (found) return found;
   if (node instanceof Nodes.Not) {
     return fetchAttributeNode((node as any).expr);
   }

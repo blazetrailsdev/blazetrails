@@ -521,6 +521,7 @@ export class CollectionProxy {
       );
     }
     const pkValue = this._record.readAttribute(primaryKey);
+    if (pkValue == null) return;
     const throughAs = throughAssoc.options.as;
     const conditions: Record<string, unknown> = {};
     if (throughAs) {

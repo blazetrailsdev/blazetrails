@@ -361,8 +361,18 @@ export class CollectionProxy {
       throughAssoc.options.className ?? camelize(singularize(throughAssoc.name));
     const throughModel = resolveModel(throughClassName);
     const ownerFk = throughAssoc.options.foreignKey ?? `${underscore(ctor.name)}_id`;
+    if (Array.isArray(ownerFk)) {
+      throw new Error(
+        `Through associations do not support composite foreign keys on "${this._assocName}".`,
+      );
+    }
     const primaryKey = throughAssoc.options.primaryKey ?? ctor.primaryKey;
-    const pkValue = this._record.readAttribute(primaryKey as string);
+    if (Array.isArray(primaryKey)) {
+      throw new Error(
+        `Through associations do not support composite primary keys on "${this._assocName}".`,
+      );
+    }
+    const pkValue = this._record.readAttribute(primaryKey);
     const sourceName = this._assocDef.options.source ?? singularize(this._assocName);
     const sourceFk = `${underscore(sourceName)}_id`;
 
@@ -611,10 +621,41 @@ export class CollectionProxy {
    * Mirrors: ActiveRecord::Associations::CollectionProxy#include?
    */
   async includes(record: Base): Promise<boolean> {
-    const records = await this.toArray();
-    const pk = (record.constructor as typeof Base).primaryKey;
-    const targetId = record.readAttribute(pk as string);
-    return records.some((r) => r.readAttribute(pk as string) === targetId);
+    if (this._loaded) {
+      const targetId = this._identityFor(record);
+      if (targetId != null) {
+        return this._target.some((r) => this._identityFor(r) === targetId);
+      }
+      return this._target.includes(record);
+    }
+
+    const primaryKey = (record.constructor as typeof Base).primaryKey;
+    const s = this.scope();
+    if (typeof s.exists === "function") {
+      if (Array.isArray(primaryKey)) {
+        const condition: Record<string, unknown> = {};
+        let allPresent = true;
+        for (const key of primaryKey) {
+          const value = record.readAttribute(key);
+          if (value == null) {
+            allPresent = false;
+            break;
+          }
+          condition[key] = value;
+        }
+        if (allPresent) return s.exists(condition);
+      } else {
+        const pkValue = record.readAttribute(primaryKey);
+        if (pkValue != null) return s.exists({ [primaryKey]: pkValue });
+      }
+    }
+
+    const loaded = await this.loadTarget();
+    const targetId = this._identityFor(record);
+    if (targetId != null) {
+      return loaded.some((r) => this._identityFor(r) === targetId);
+    }
+    return loaded.includes(record);
   }
 
   /**
@@ -1116,41 +1157,7 @@ export class CollectionProxy {
    * Mirrors: ActiveRecord::Associations::CollectionProxy#include?
    */
   async isInclude(record: Base): Promise<boolean> {
-    const primaryKey = (record.constructor as typeof Base).primaryKey;
-
-    if (this._loaded) {
-      const targetId = this._identityFor(record);
-      if (targetId != null) {
-        return this._target.some((r) => this._identityFor(r) === targetId);
-      }
-      return this._target.includes(record);
-    }
-
-    const s = this.scope();
-    if (typeof s.exists === "function") {
-      if (Array.isArray(primaryKey)) {
-        const condition: Record<string, unknown> = {};
-        let allPresent = true;
-        for (const key of primaryKey) {
-          const value = record.readAttribute(key);
-          if (value == null) {
-            allPresent = false;
-            break;
-          }
-          condition[key] = value;
-        }
-        if (allPresent) return s.exists(condition);
-      } else {
-        const pkValue = record.readAttribute(primaryKey);
-        if (pkValue != null) return s.exists({ [primaryKey]: pkValue });
-      }
-    }
-    const loaded = await this.loadTarget();
-    const targetId = this._identityFor(record);
-    if (targetId != null) {
-      return loaded.some((r) => this._identityFor(r) === targetId);
-    }
-    return loaded.includes(record);
+    return this.includes(record);
   }
 
   /**

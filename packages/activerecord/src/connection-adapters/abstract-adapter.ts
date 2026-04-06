@@ -63,8 +63,8 @@ export class AbstractAdapter {
   private _inUse = false;
   private _prepared_statements = false;
   private _schemaCache: SchemaCache | null = null;
-  private _idleSince = 0;
-  private _lastActivity = 0;
+  private _idleSince = Date.now();
+  protected _lastActivity = 0;
   protected _config: Record<string, unknown> = {};
 
   pool: unknown = null;
@@ -154,10 +154,9 @@ export class AbstractAdapter {
   isPreventingWrites(): boolean {
     if (this.isReplica()) return true;
     const pool = this.pool as any;
-    if (pool?.preventWrites === true || pool?.prevent_writes === true) return true;
-    if (pool?.dbConfig?.preventWrites === true || pool?.dbConfig?.prevent_writes === true)
-      return true;
-    if (this._config.preventWrites === true || this._config.prevent_writes === true) return true;
+    if (pool?.preventWrites === true) return true;
+    if (pool?.dbConfig?.preventWrites === true) return true;
+    if (this._config.preventWrites === true) return true;
     return false;
   }
 
@@ -257,10 +256,6 @@ export class AbstractAdapter {
     return false;
   }
 
-  supportsIndex_sort_order(): boolean {
-    return false;
-  }
-
   supportsPartialIndex(): boolean {
     return false;
   }
@@ -338,22 +333,22 @@ export class AbstractAdapter {
   // --- Config accessors ---
 
   get connectionRetries(): number {
-    const v = this._config.connection_retries ?? this._config.connectionRetries;
+    const v = this._config.connectionRetries;
     return typeof v === "number" ? v : 1;
   }
 
   get verifyTimeout(): number {
-    const v = this._config.verify_timeout ?? this._config.verifyTimeout;
+    const v = this._config.verifyTimeout;
     return typeof v === "number" ? v : 2;
   }
 
   get retryDeadline(): number | null {
-    const v = this._config.retry_deadline ?? this._config.retryDeadline;
+    const v = this._config.retryDeadline;
     return typeof v === "number" ? v : null;
   }
 
   get defaultTimezone(): string {
-    return (this._config.default_timezone as string) ?? "utc";
+    return (this._config.defaultTimezone as string) ?? "utc";
   }
 
   get connectionDescriptor(): unknown {
@@ -364,8 +359,10 @@ export class AbstractAdapter {
     return (this.pool as any)?.visitor ?? null;
   }
 
+  private _preparedStatementsDisabledCache = new Set<unknown>();
+
   get preparedStatementsDisabledCache(): Set<unknown> {
-    return new Set();
+    return this._preparedStatementsDisabledCache;
   }
 
   // --- Lifecycle ---

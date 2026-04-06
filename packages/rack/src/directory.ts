@@ -29,7 +29,7 @@ export class Directory {
 
     // Directory traversal check — use separator-aware boundary to prevent
     // sibling prefix bypass (e.g. /var/www vs /var/www_public)
-    if (resolved !== this.root && !resolved.startsWith(this.root + "/")) {
+    if (resolved !== this.root && !resolved.startsWith(this.root + getPath().sep)) {
       return [404, { [CONTENT_TYPE]: "text/plain" }, ["Not Found"]];
     }
 

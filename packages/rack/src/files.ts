@@ -45,7 +45,7 @@ export class Files {
     const resolved = getPath().resolve(filePath);
 
     // Directory traversal check — separator-aware boundary
-    if (this.root && resolved !== this.root && !resolved.startsWith(this.root + "/")) {
+    if (this.root && resolved !== this.root && !resolved.startsWith(this.root + getPath().sep)) {
       return [404, { [CONTENT_TYPE]: "text/plain", [CONTENT_LENGTH]: "10" }, ["Not Found\n"]];
     }
 

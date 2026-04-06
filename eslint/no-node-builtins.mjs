@@ -27,34 +27,19 @@ const ACTIVESUPPORT_REPLACEMENTS = {
   },
 };
 
-const OTHER_NODE_BUILTINS = [
-  "buffer",
-  "child_process",
-  "cluster",
-  "dgram",
-  "dns",
-  "http",
-  "http2",
-  "https",
-  "inspector",
-  "net",
-  "os",
-  "perf_hooks",
-  "readline",
-  "repl",
-  "stream",
-  "tls",
-  "v8",
-  "vm",
-  "worker_threads",
-  "zlib",
-  "async_hooks",
-  "trace_events",
-  "module",
-];
+import { builtinModules } from "node:module";
+
+// All Node.js built-in module names (without node: prefix), including underscored internals
+const NODE_BUILTINS = new Set(builtinModules.filter((m) => !m.startsWith("_")));
 
 function normalizeModule(source) {
   return source.replace(/^node:/, "");
+}
+
+function getBuiltinBase(normalized) {
+  // Handle subpath imports like "fs/promises", "path/posix", "dns/promises"
+  const slashIndex = normalized.indexOf("/");
+  return slashIndex === -1 ? normalized : normalized.slice(0, slashIndex);
 }
 
 /** @type {import("eslint").Rule.RuleModule} */
@@ -180,9 +165,11 @@ const rule = {
 
     function check(node, source) {
       const mod = normalizeModule(source);
-      const replacement = ACTIVESUPPORT_REPLACEMENTS[mod];
+      const base = getBuiltinBase(mod);
+      const replacement = ACTIVESUPPORT_REPLACEMENTS[base];
 
-      if (replacement) {
+      // Only autofix exact base module imports (not subpaths like "fs/promises")
+      if (replacement && base === mod) {
         context.report({
           node,
           messageId: "useAdapter",
@@ -211,7 +198,17 @@ const rule = {
         return;
       }
 
-      if (OTHER_NODE_BUILTINS.includes(mod)) {
+      // Report adapter-replaceable subpaths (e.g. "fs/promises") without autofix
+      if (replacement && base !== mod) {
+        context.report({
+          node,
+          messageId: "useAdapter",
+          data: { message: replacement.message.replace("{{module}}", source) },
+        });
+        return;
+      }
+
+      if (NODE_BUILTINS.has(base)) {
         context.report({
           node,
           messageId: "noNodeBuiltin",
@@ -241,14 +238,15 @@ const rule = {
         ) {
           const source = node.arguments[0].value;
           const mod = normalizeModule(source);
-          const replacement = ACTIVESUPPORT_REPLACEMENTS[mod];
+          const base = getBuiltinBase(mod);
+          const replacement = ACTIVESUPPORT_REPLACEMENTS[base];
           if (replacement) {
             context.report({
               node,
               messageId: "useAdapter",
               data: { message: replacement.message.replace("{{module}}", source) },
             });
-          } else if (OTHER_NODE_BUILTINS.includes(mod)) {
+          } else if (NODE_BUILTINS.has(base)) {
             context.report({
               node,
               messageId: "noNodeBuiltin",

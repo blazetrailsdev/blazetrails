@@ -72,6 +72,7 @@ export default defineConfig(
       "packages/rack/src/deflater.ts",
       "packages/activerecord/src/encryption/config.ts",
       "packages/activerecord/src/encryption/context.ts",
+      "packages/activerecord/src/connection-handling.ts",
     ],
     plugins: {
       blazetrails: { rules: { "no-node-builtins": noNodeBuiltins } },

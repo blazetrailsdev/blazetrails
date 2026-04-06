@@ -50,6 +50,7 @@ export interface PathAdapter {
   basename(p: string): string;
   resolve(...parts: string[]): string;
   extname(p: string): string;
+  sep: string;
 }
 
 interface FsRegistration {

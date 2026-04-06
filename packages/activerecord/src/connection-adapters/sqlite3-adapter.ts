@@ -371,6 +371,16 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
 
   // --- Database info ---
 
+  private resolveSqlType(type: string): string {
+    const known = this.nativeDatabaseTypes[type];
+    if (known) return known.name;
+    // Validate: only allow alphanumeric type names (with optional parenthesized precision)
+    if (!/^[A-Za-z_][A-Za-z0-9_ ]*(\(\d+(,\s*\d+)?\))?$/.test(type)) {
+      throw new Error(`Invalid column type: ${type}`);
+    }
+    return type.toUpperCase();
+  }
+
   get nativeDatabaseTypes(): Record<string, { name: string; limit?: number }> {
     return {
       primary_key: { name: "integer" },
@@ -508,7 +518,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     type: string,
     options?: Record<string, unknown>,
   ): Promise<void> {
-    const sqlType = this.nativeDatabaseTypes[type]?.name ?? type.toUpperCase();
+    const sqlType = this.resolveSqlType(type);
     let sql = `ALTER TABLE ${quoteTableName(tableName)} ADD COLUMN ${quoteColumnName(columnName)} ${sqlType}`;
     if (options?.null === false) sql += " NOT NULL";
     if (options?.default !== undefined) {
@@ -578,7 +588,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     type: string,
     options?: Record<string, unknown>,
   ): Promise<void> {
-    const sqlType = this.nativeDatabaseTypes[type]?.name ?? type.toUpperCase();
+    const sqlType = this.resolveSqlType(type);
     await this.alterTable(tableName, (columns) => {
       if (columns[columnName]) {
         columns[columnName].type = sqlType;

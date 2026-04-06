@@ -34,7 +34,7 @@ import { Calculations } from "./relation/calculations.js";
 import { FinderMethods } from "./relation/finder-methods.js";
 import { SpawnMethods } from "./relation/spawn-methods.js";
 import { FromClause } from "./relation/from-clause.js";
-import { WhereClause } from "./relation/where-clause.js";
+import { WhereClause, predicatesWithWrappedSqlLiterals } from "./relation/where-clause.js";
 import { BatchEnumerator } from "./relation/batches/batch-enumerator.js";
 
 /**
@@ -2453,7 +2453,7 @@ export class Relation<T extends Base> {
   }
 
   private _collectAllWhereNodes(_table: Table, rel: Relation<T>): Nodes.Node[] {
-    return [...rel._whereClause.predicates];
+    return predicatesWithWrappedSqlLiterals(rel._whereClause.predicates);
   }
 
   private _applyWheresToManager(manager: SelectManager, table: Table): void {
@@ -2536,12 +2536,8 @@ export class Relation<T extends Base> {
   }
 
   private _buildWhereStrings(_table: Table): string[] {
-    const conditions: string[] = [];
-    for (const node of this._whereClause.predicates) {
-      const sql = this._compileArelNode(node);
-      conditions.push(`(${sql})`);
-    }
-    return conditions;
+    const normalized = predicatesWithWrappedSqlLiterals(this._whereClause.predicates);
+    return normalized.map((node) => this._compileArelNode(node));
   }
 
   private async _preloadAssociationsForRecords(records: T[], assocNames: string[]): Promise<void> {

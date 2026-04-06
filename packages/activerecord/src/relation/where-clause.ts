@@ -204,7 +204,7 @@ function unionNodes(a: Nodes.Node[], b: Nodes.Node[]): Nodes.Node[] {
   return result;
 }
 
-function predicatesWithWrappedSqlLiterals(predicates: Nodes.Node[]): Nodes.Node[] {
+export function predicatesWithWrappedSqlLiterals(predicates: Nodes.Node[]): Nodes.Node[] {
   return predicates
     .filter((n) => !(n instanceof Nodes.SqlLiteral && n.value === ""))
     .map((node) => {

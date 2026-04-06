@@ -243,7 +243,7 @@ export class PredicateBuilder {
   static references(conditions: Record<string, unknown>): Nodes.SqlLiteral[] {
     const refs: Nodes.SqlLiteral[] = [];
     for (const [key, value] of Object.entries(conditions)) {
-      if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+      if (isPlainObject(value)) {
         refs.push(arelSql(key));
       } else {
         const dot = key.lastIndexOf(".");
@@ -273,4 +273,10 @@ export class PredicateBuilder {
       typeof value === "object" && value !== null && "_modelClass" in value && "toArel" in value
     );
   }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
 }

@@ -205,12 +205,13 @@ function subtractNodes(a: Nodes.Node[], b: Nodes.Node[]): Nodes.Node[] {
 function conditionToArelNode(key: string, value: unknown, negate: boolean): Nodes.Node {
   const col = new Nodes.SqlLiteral(quoteTableName(key));
   if (value === null || value === undefined) {
-    const eq = new Nodes.Equality(col, null);
+    // Wrap null in Quoted so the visitor produces IS NULL / IS NOT NULL
+    const eq = new Nodes.Equality(col, new Nodes.Quoted(null));
     return negate ? eq.invert() : eq;
   }
   if (Array.isArray(value)) {
-    // NodeOrValue doesn't include arrays; In stores the array on .right directly
-    const node = new Nodes.In(col, value as any);
+    const quoted = value.map((v) => new Nodes.Quoted(v));
+    const node = new Nodes.In(col, quoted as any);
     return negate ? node.invert() : node;
   }
   const eq = new Nodes.Equality(col, new Nodes.Quoted(value));

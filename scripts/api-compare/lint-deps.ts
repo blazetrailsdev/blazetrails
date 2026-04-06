@@ -231,12 +231,13 @@ function visitMethodDeclarations(
 
 function hasJsDocTag(sourceFile: ts.SourceFile, node: ts.Node, tag: string): boolean {
   // ts.getJSDocTags doesn't work reliably with createProgram, so parse the
-  // leading JSDoc comment directly. We only match inside /** ... */ blocks
-  // to avoid false positives from regular comments.
+  // leading JSDoc comment directly. Use the LAST match to get the JSDoc
+  // immediately preceding this declaration (not a file-level header).
   const fullText = sourceFile.getFullText();
   const leading = fullText.slice(node.getFullStart(), node.getStart(sourceFile));
-  const jsDocMatch = leading.match(/\/\*\*[\s\S]*?\*\//);
-  return jsDocMatch !== null && jsDocMatch[0].includes(tag);
+  const jsDocMatches = leading.match(/\/\*\*[\s\S]*?\*\//g);
+  const jsDoc = jsDocMatches?.at(-1);
+  return jsDoc !== undefined && jsDoc.includes(tag);
 }
 
 function bodyReferencesImports(body: ts.Node, importedNames: Set<string>): boolean {
@@ -466,7 +467,7 @@ function applyJsDocFixes(violations: Violation[], pkgSrcDir: string, rule: DepRu
       const refs = violation.depRefs.slice(0, 5).join(", ");
       const indent = getIndentAtNode(source, node);
       const hasDoc = hasExistingJsDoc(source, node);
-      const tag = `${rule.jsdocTag} ${refs}`;
+      const tag = refs ? `${rule.jsdocTag} ${refs}` : rule.jsdocTag;
 
       if (hasDoc) {
         const close = findExistingJsDocClose(source, node);
@@ -493,8 +494,8 @@ function getLeadingJsDoc(source: string, node: ts.Node): string | null {
   const fullStart = node.getFullStart();
   const start = node.getStart();
   const leading = source.slice(fullStart, start);
-  const jsDocMatch = leading.match(/\/\*\*[\s\S]*?\*\//);
-  return jsDocMatch ? jsDocMatch[0] : null;
+  const jsDocMatches = leading.match(/\/\*\*[\s\S]*?\*\//g);
+  return jsDocMatches?.at(-1) ?? null;
 }
 
 function getIndentAtNode(source: string, node: ts.Node): string {

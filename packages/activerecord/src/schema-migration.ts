@@ -16,7 +16,6 @@ export class NullSchemaMigration {
     return [];
   }
 
-  /** @arel Arel::SelectManager, arel_table, Arel::Nodes::Count, Arel */
   async count(): Promise<number> {
     return 0;
   }

@@ -1,5 +1,3 @@
-import { sveltekit } from "@sveltejs/kit/vite";
-import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -14,9 +12,13 @@ function pkgAlias(name: string, entry: string) {
 }
 
 export default defineConfig({
-  plugins: [tailwindcss(), sveltekit()],
   resolve: {
     alias: [
+      // Subpath imports must come before the base alias
+      {
+        find: /^@blazetrails\/activesupport\/(.+)$/,
+        replacement: path.resolve(__dirname, "../activesupport/src/$1.ts"),
+      },
       pkgAlias("@blazetrails/activesupport", "../activesupport/src/index.ts"),
       pkgAlias("@blazetrails/arel", "../arel/src/index.ts"),
       pkgAlias("@blazetrails/activemodel", "../activemodel/src/index.ts"),
@@ -30,24 +32,24 @@ export default defineConfig({
     ],
   },
   build: {
+    lib: {
+      entry: path.resolve(__dirname, "src/lib/frontiers/sandbox-sw.ts"),
+      formats: ["iife"],
+      name: "SandboxSW",
+      fileName: () => "sandbox-sw.js",
+    },
+    outDir: path.resolve(__dirname, "static"),
+    emptyOutDir: false,
     rollupOptions: {
       external: (id: string) =>
+        id === "sql.js" ||
         id.startsWith("node:") ||
-        id.startsWith("@blazetrails/activesupport/") ||
-        [
-          "fs",
-          "path",
-          "crypto",
-          "url",
-          "zlib",
-          "child_process",
-          "util",
-          "events",
-          "stream",
-          "net",
-          "tls",
-          "dns",
-        ].includes(id),
+        ["fs", "path", "crypto", "url", "child_process", "util", "events", "stream"].includes(id),
+      output: {
+        globals: {
+          "sql.js": "initSqlJs",
+        },
+      },
     },
   },
 });

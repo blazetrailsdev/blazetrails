@@ -134,9 +134,6 @@ export class WhereClause {
 // ---------------------------------------------------------------------------
 
 function invertPredicate(node: Nodes.Node): Nodes.Node {
-  if (typeof node === "string") {
-    return new Nodes.Not(new Nodes.SqlLiteral(node));
-  }
   return node.invert();
 }
 
@@ -154,7 +151,6 @@ function fetchAttribute(node: Nodes.Node): string | null {
   if ("left" in node) {
     const left = (node as any).left;
     if (left instanceof Nodes.Attribute) return left.name;
-    if (left instanceof Nodes.SqlLiteral) return stripQuotes(String(left));
   }
   if (node instanceof Nodes.Not) {
     return fetchAttribute((node as any).expr);
@@ -195,15 +191,11 @@ function unionNodes(a: Nodes.Node[], b: Nodes.Node[]): Nodes.Node[] {
 
 function predicatesWithWrappedSqlLiterals(predicates: Nodes.Node[]): Nodes.Node[] {
   return predicates
-    .filter((n) => !(n instanceof Nodes.SqlLiteral && String(n) === ""))
+    .filter((n) => !(n instanceof Nodes.SqlLiteral && n.value === ""))
     .map((node) => {
       if (node instanceof Nodes.SqlLiteral) return new Nodes.Grouping(node);
       return node;
     });
-}
-
-function stripQuotes(s: string): string {
-  return s.replace(/^"(.*)"$/, "$1");
 }
 
 const visitor = new Visitors.ToSql();

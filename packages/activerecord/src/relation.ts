@@ -168,24 +168,18 @@ export class Relation<T extends Base> {
       }
       rel._whereClause.predicates.push(new Nodes.SqlLiteral(sql));
     } else {
-      // Check for subquery values (Relation instances)
-      const normalConditions: Record<string, unknown> = {};
+      const castConditions: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(conditionsOrSql)) {
+        // Relation subquery values pass through to PredicateBuilder's RelationHandler
         if (value instanceof Relation) {
-          const subSql = value.toSql();
-          const { tbl, col } = this._qualifiedCol(this._modelClass.arelTable, key);
-          rel._whereClause.predicates.push(
-            new Nodes.SqlLiteral(`"${tbl}"."${col}" IN (${subSql})`),
-          );
+          castConditions[key] = value;
         } else {
-          normalConditions[key] = Array.isArray(value)
+          castConditions[key] = Array.isArray(value)
             ? value.map((v) => this._castWhereValue(key, v))
             : this._castWhereValue(key, value);
         }
       }
-      if (Object.keys(normalConditions).length > 0) {
-        rel._whereClause.predicates.push(...this.predicateBuilder.buildFromHash(normalConditions));
-      }
+      rel._whereClause.predicates.push(...this.predicateBuilder.buildFromHash(castConditions));
     }
     return rel;
   }
@@ -2554,7 +2548,8 @@ export class Relation<T extends Base> {
   private _buildWhereStrings(_table: Table): string[] {
     const conditions: string[] = [];
     for (const node of this._whereClause.predicates) {
-      conditions.push(this._compileArelNode(node));
+      const sql = this._compileArelNode(node);
+      conditions.push(`(${sql})`);
     }
     return conditions;
   }

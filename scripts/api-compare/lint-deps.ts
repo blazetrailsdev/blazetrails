@@ -12,6 +12,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
+import * as ts from "typescript";
 import type { ApiManifest, ClassInfo } from "./types.js";
 import { OUTPUT_DIR, packageSrcDir } from "./config.js";
 import { rubyFileToTs, rubyMethodToTs } from "./conventions.js";
@@ -89,223 +90,137 @@ function collectRubyDepMethods(ruby: ApiManifest, pkg: string, dep: string): Rub
 }
 
 // ---------------------------------------------------------------------------
-// TS analysis: per-file dep usage via text scanning (no TS program needed)
+// TS analysis: detect dependency usage per method
 // ---------------------------------------------------------------------------
 
 type TsDepMap = Map<string, Map<string, boolean>>; // file -> method -> usesDep
 
 function analyzeTsDepUsage(pkgSrcDir: string, tsImport: string, tsIdentifiers: string[]): TsDepMap {
   const result: TsDepMap = new Map();
-  const files = getAllTsFiles(pkgSrcDir);
+  const allFiles = getAllTsFiles(pkgSrcDir);
+  if (allFiles.length === 0) return result;
 
-  for (const filePath of files) {
-    const relPath = path.relative(pkgSrcDir, filePath);
-    const source = fs.readFileSync(filePath, "utf-8");
+  const program = ts.createProgram(allFiles, {
+    target: ts.ScriptTarget.ESNext,
+    module: ts.ModuleKind.NodeNext,
+    moduleResolution: ts.ModuleResolutionKind.NodeNext,
+    strict: true,
+    esModuleInterop: true,
+    skipLibCheck: true,
+    noEmit: true,
+  });
+
+  const knownIds = new Set(tsIdentifiers);
+
+  for (const sourceFile of program.getSourceFiles()) {
+    if (!sourceFile.fileName.startsWith(pkgSrcDir)) continue;
+    if (sourceFile.fileName.endsWith(".test.ts")) continue;
+    if (sourceFile.fileName.endsWith(".d.ts")) continue;
+
+    const relPath = path.relative(pkgSrcDir, sourceFile.fileName);
 
     // Collect import bindings from the target package
-    const importedNames = collectImportBindings(source, tsImport);
-    const searchTerms = new Set([...importedNames, ...tsIdentifiers]);
+    const importedNames = new Set<string>();
+    for (const stmt of sourceFile.statements) {
+      if (!ts.isImportDeclaration(stmt)) continue;
+      const specifier = (stmt.moduleSpecifier as ts.StringLiteral).text;
+      if (specifier !== tsImport) continue;
+      const clause = stmt.importClause;
+      if (!clause) continue;
+      if (clause.name) importedNames.add(clause.name.text);
+      if (clause.namedBindings) {
+        if (ts.isNamedImports(clause.namedBindings)) {
+          for (const el of clause.namedBindings.elements) {
+            importedNames.add(el.name.text);
+          }
+        } else if (ts.isNamespaceImport(clause.namedBindings)) {
+          importedNames.add(clause.namedBindings.name.text);
+        }
+      }
+    }
 
-    // Fast path: if no imports and no identifiers to check, all methods miss
-    if (searchTerms.size === 0) continue;
-
-    // Extract methods and check if their bodies reference any search term.
-    // Uses a lightweight regex approach instead of a full TS program — much
-    // faster and sufficient for identifier presence checks.
-    const methods = extractMethodBodies(source);
+    // For each method, check if body references any import or known identifier.
+    // Multiple declarations with the same name are merged: true wins.
     const methodMap = new Map<string, boolean>();
-    for (const { name, body } of methods) {
-      const uses = searchTerms.size > 0 && bodyContainsAny(body, searchTerms);
+    visitMethodDeclarations(sourceFile, (name, bodyNode) => {
+      const uses = bodyNode !== undefined && bodyReferencesDep(bodyNode, importedNames, knownIds);
       const existing = methodMap.get(name);
       if (existing === undefined || uses) methodMap.set(name, uses);
-    }
+    });
     if (methodMap.size > 0) result.set(relPath, methodMap);
   }
 
   return result;
 }
 
-/** Extract named import bindings from `import { A, B } from "pkg"` statements. */
-function collectImportBindings(source: string, targetImport: string): Set<string> {
-  const names = new Set<string>();
-  const escaped = targetImport.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const re = new RegExp(`import\\s*(?:type\\s+)?\\{([^}]+)\\}\\s*from\\s*["']${escaped}["']`, "g");
-  for (const m of source.matchAll(re)) {
-    for (const binding of m[1].split(",")) {
-      const name = binding
-        .trim()
-        .split(/\s+as\s+/)
-        .pop()
-        ?.trim();
-      if (name) names.add(name);
+function visitMethodDeclarations(
+  sourceFile: ts.SourceFile,
+  callback: (name: string, body: ts.Node | undefined) => void,
+) {
+  const visit = (node: ts.Node) => {
+    if (ts.isMethodDeclaration(node) && node.name && ts.isIdentifier(node.name)) {
+      callback(node.name.text, node.body);
+      return;
     }
-  }
-  // Handle namespace imports: import * as Arel from "pkg"
-  const nsRe = new RegExp(`import\\s*\\*\\s*as\\s+(\\w+)\\s*from\\s*["']${escaped}["']`, "g");
-  for (const m of source.matchAll(nsRe)) {
-    names.add(m[1]);
-  }
-  return names;
-}
-
-interface MethodBody {
-  name: string;
-  body: string;
-}
-
-/**
- * Extract method/function names and their body text from TS source.
- * Finds declaration keywords/names, skips past parenthesized params
- * (handling nesting), then extracts the brace-delimited body.
- */
-function extractMethodBodies(source: string): MethodBody[] {
-  const results: MethodBody[] = [];
-
-  // Match the declaration head — we just need the name and position.
-  // The regex stops before params; we handle parens + body manually.
-  const declRe =
-    /(?:(?:export\s+)?(?:async\s+)?function\s+(\w+))|(?:(?:async\s+)?(?:(?:get|set)\s+)?(\w+))\s*\(|(?:constructor)\s*\(/g;
-
-  for (const match of source.matchAll(declRe)) {
-    const name = match[1] ?? match[2] ?? "constructor";
-    // Skip noise from control flow
-    if (
-      /^(if|for|while|switch|catch|return|throw|new|await|typeof|import|from|else|case|argument)$/.test(
-        name,
-      )
-    )
-      continue;
-
-    // Find the opening paren after the name
-    let pos = match.index! + match[0].length;
-    if (match[1]) {
-      // function declaration: regex stopped after name, find the paren
-      while (pos < source.length && source[pos] !== "(") pos++;
-    } else {
-      // method/constructor: regex included the paren, back up
-      pos--;
+    if (ts.isGetAccessorDeclaration(node) && node.name && ts.isIdentifier(node.name)) {
+      callback(node.name.text, node.body);
+      return;
     }
-    if (pos >= source.length || source[pos] !== "(") continue;
-
-    // Skip past balanced parens
-    pos = skipBalanced(source, pos, "(", ")");
-    if (pos === -1) continue;
-
-    // Skip return type annotation and whitespace until {
-    while (pos < source.length && source[pos] !== "{") {
-      if (source[pos] === "=" && source[pos + 1] === ">") {
-        // Arrow function — skip =>
-        pos += 2;
-        while (pos < source.length && /\s/.test(source[pos])) pos++;
-        break;
+    if (ts.isSetAccessorDeclaration(node) && node.name && ts.isIdentifier(node.name)) {
+      callback(node.name.text, node.body);
+      return;
+    }
+    if (ts.isConstructorDeclaration(node)) {
+      callback("constructor", node.body);
+      return;
+    }
+    if (ts.isFunctionDeclaration(node) && node.name) {
+      callback(node.name.text, node.body);
+      return;
+    }
+    if (ts.isVariableStatement(node)) {
+      for (const decl of node.declarationList.declarations) {
+        if (ts.isIdentifier(decl.name) && decl.initializer) {
+          if (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer)) {
+            callback(decl.name.text, decl.initializer.body);
+          }
+        }
       }
-      pos++;
+      return;
     }
-    if (pos >= source.length || source[pos] !== "{") continue;
+    if (ts.isPropertyDeclaration(node) && node.name && ts.isIdentifier(node.name)) {
+      if (
+        node.initializer &&
+        (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))
+      ) {
+        callback(node.name.text, node.initializer.body);
+        return;
+      }
+    }
 
-    const body = extractBraceBlock(source, pos);
-    if (body !== null) results.push({ name, body });
-  }
-
-  return results;
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(sourceFile, visit);
 }
 
-function skipBalanced(source: string, start: number, open: string, close: string): number {
-  let depth = 1;
-  let i = start + 1;
-  while (i < source.length && depth > 0) {
-    const ch = source[i];
-    if (ch === open) depth++;
-    else if (ch === close) depth--;
-    else if (ch === '"' || ch === "'" || ch === "`") {
-      i = skipString(source, i);
-      continue;
-    }
-    i++;
-  }
-  return depth === 0 ? i : -1;
-}
-
-function extractBraceBlock(source: string, openBrace: number): string | null {
-  let depth = 1;
-  let i = openBrace + 1;
-  while (i < source.length && depth > 0) {
-    const ch = source[i];
-    if (ch === "{") depth++;
-    else if (ch === "}") depth--;
-    else if (ch === '"' || ch === "'" || ch === "`") {
-      i = skipString(source, i);
-      continue;
-    } else if (ch === "/" && source[i + 1] === "/") {
-      // Skip line comment
-      while (i < source.length && source[i] !== "\n") i++;
-      continue;
-    } else if (ch === "/" && source[i + 1] === "*") {
-      // Skip block comment
-      i = source.indexOf("*/", i + 2);
-      if (i === -1) return null;
-      i += 2;
-      continue;
-    }
-    i++;
-  }
-  return depth === 0 ? source.slice(openBrace + 1, i - 1) : null;
-}
-
-function skipString(source: string, start: number): number {
-  const quote = source[start];
-  let i = start + 1;
-  if (quote === "`") {
-    // Template literal — handle ${} nesting
-    let depth = 0;
-    while (i < source.length) {
-      if (source[i] === "\\" && i + 1 < source.length) {
-        i += 2;
-        continue;
+function bodyReferencesDep(
+  body: ts.Node,
+  importedNames: Set<string>,
+  knownIdentifiers: Set<string>,
+): boolean {
+  let found = false;
+  const check = (node: ts.Node) => {
+    if (found) return;
+    if (ts.isIdentifier(node)) {
+      if (importedNames.has(node.text) || knownIdentifiers.has(node.text)) {
+        found = true;
+        return;
       }
-      if (source[i] === "`" && depth === 0) return i + 1;
-      if (source[i] === "$" && source[i + 1] === "{") {
-        depth++;
-        i += 2;
-        continue;
-      }
-      if (source[i] === "}" && depth > 0) {
-        depth--;
-        i++;
-        continue;
-      }
-      i++;
     }
-  } else {
-    while (i < source.length) {
-      if (source[i] === "\\" && i + 1 < source.length) {
-        i += 2;
-        continue;
-      }
-      if (source[i] === quote) return i + 1;
-      i++;
-    }
-  }
-  return i;
-}
-
-/** Check if body text contains any of the search terms as whole words. */
-function bodyContainsAny(body: string, terms: Set<string>): boolean {
-  for (const term of terms) {
-    // Use word boundary check to avoid matching substrings
-    const idx = body.indexOf(term);
-    if (idx === -1) continue;
-    const before = idx > 0 ? body[idx - 1] : " ";
-    const after = idx + term.length < body.length ? body[idx + term.length] : " ";
-    if (/\w/.test(before) || /\w/.test(after)) {
-      // Could be a substring match — do a regex check
-      const re = new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
-      if (re.test(body)) return true;
-    } else {
-      return true;
-    }
-  }
-  return false;
+    ts.forEachChild(node, check);
+  };
+  check(body);
+  return found;
 }
 
 function getAllTsFiles(dir: string): string[] {
@@ -434,7 +349,6 @@ function printReport(results: LintResult[]) {
     console.log(`\nDependency Lint -- ${rule.package} -> ${rule.dependency}`);
     console.log("=".repeat(60));
 
-    // Group violations by file for per-file display
     const violationsByFile = new Map<string, Violation[]>();
     for (const v of violations) {
       const list = violationsByFile.get(v.tsFile) || [];

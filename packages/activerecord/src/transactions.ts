@@ -10,6 +10,25 @@ type TransactionAction = "create" | "update" | "destroy";
 // Per-async-context transaction tracking (safe under concurrent async operations)
 const _transactionStorage = new AsyncLocalStorage<Transaction | null>();
 
+// Per-adapter mutex: serializes beginTransaction so concurrent callers wait
+// for the first BEGIN to complete before checking nesting state.
+const _adapterLocks = new WeakMap<object, Promise<void>>();
+
+async function acquireAdapterLock(adapter: object): Promise<() => void> {
+  while (_adapterLocks.has(adapter)) {
+    await _adapterLocks.get(adapter);
+  }
+  let release!: () => void;
+  const lock = new Promise<void>((resolve) => {
+    release = () => {
+      _adapterLocks.delete(adapter);
+      resolve();
+    };
+  });
+  _adapterLocks.set(adapter, lock);
+  return release;
+}
+
 /**
  * Get the currently active transaction, if any.
  */
@@ -45,12 +64,16 @@ export async function transaction<T>(
 
   const tx = new Transaction(adapter);
 
-  // Use a savepoint for nesting if already in a transaction — check both our
-  // AsyncLocalStorage tracker and the adapter's own state (the adapter may be
-  // in a transaction from external code like test fixtures).
-  const adapterInTx = "inTransaction" in adapter && (adapter as any).inTransaction;
-  const nested = previousTx !== null || adapterInTx;
+  // Check nesting: either we're inside a transaction() call (AsyncLocalStorage)
+  // or the adapter is already in a DB transaction (external code / test fixtures).
+  const nested = previousTx !== null || adapter.inTransaction;
   const spName = nested ? `sp_${++_savepointCounter}` : null;
+
+  // For outermost transactions, serialize on the adapter. This matches Rails
+  // where each thread gets its own connection — concurrent callers queue.
+  // Nested transactions (savepoints) skip the lock since they run inside
+  // the outer transaction's locked scope.
+  const releaseLock = nested ? null : await acquireAdapterLock(adapter);
 
   if (nested && spName) {
     await adapter.createSavepoint(spName);
@@ -75,12 +98,14 @@ export async function transaction<T>(
     }
     await tx.rollback();
     await tx.runAfterRollbackCallbacks();
+    releaseLock?.();
     if (error instanceof Rollback) {
       return undefined;
     }
     throw error;
   }
   await tx.runAfterCommitCallbacks();
+  releaseLock?.();
   return result;
 }
 

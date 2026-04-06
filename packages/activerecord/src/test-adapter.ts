@@ -573,6 +573,9 @@ class SchemaAdapter implements DatabaseAdapter {
   async rollbackToSavepoint(name: string): Promise<void> {
     return this.inner.rollbackToSavepoint(name);
   }
+  get inTransaction(): boolean {
+    return this.inner.inTransaction;
+  }
 
   async exec(sql: string): Promise<void> {
     await this.setup();

@@ -138,45 +138,25 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   /**
    * Begin a transaction.
    */
-  private _transactionDepth = 0;
-
   async beginTransaction(): Promise<void> {
-    if (this._inTransaction) {
-      // Already in a transaction — use a savepoint for nesting
-      this._transactionDepth++;
-      this.db.exec(`SAVEPOINT _nested_${this._transactionDepth}`);
-    } else {
-      this.db.exec("BEGIN");
-      this._inTransaction = true;
-      this._transactionDepth = 0;
-    }
+    this.db.exec("BEGIN");
+    this._inTransaction = true;
   }
 
   /**
    * Commit the current transaction.
    */
   async commit(): Promise<void> {
-    if (this._transactionDepth > 0) {
-      this.db.exec(`RELEASE SAVEPOINT _nested_${this._transactionDepth}`);
-      this._transactionDepth--;
-    } else {
-      this.db.exec("COMMIT");
-      this._inTransaction = false;
-    }
+    this.db.exec("COMMIT");
+    this._inTransaction = false;
   }
 
   /**
    * Rollback the current transaction.
    */
   async rollback(): Promise<void> {
-    if (this._transactionDepth > 0) {
-      this.db.exec(`ROLLBACK TO SAVEPOINT _nested_${this._transactionDepth}`);
-      this.db.exec(`RELEASE SAVEPOINT _nested_${this._transactionDepth}`);
-      this._transactionDepth--;
-    } else {
-      this.db.exec("ROLLBACK");
-      this._inTransaction = false;
-    }
+    this.db.exec("ROLLBACK");
+    this._inTransaction = false;
   }
 
   /**

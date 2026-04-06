@@ -17,7 +17,8 @@ function prependImportScripts() {
     generateBundle(_: unknown, bundle: Record<string, { type: string; code?: string }>) {
       for (const file of Object.values(bundle)) {
         if (file.type === "chunk" && file.code) {
-          file.code = 'importScripts("/sql-wasm.js");\n' + file.code;
+          file.code =
+            'importScripts("/sql-wasm.js");\n' + "var __external_stub = {};\n" + file.code;
         }
       }
     },
@@ -82,8 +83,13 @@ export default defineConfig({
           "process",
         ].includes(id),
       output: {
-        globals: {
-          "sql.js": "initSqlJs",
+        // Map all externals to globals. sql.js is the only real one;
+        // the rest are dead code paths (Node DB drivers, builtins).
+        // Use a function to return "{}" for any unmapped external
+        // so the IIFE doesn't throw ReferenceError on undefined globals.
+        globals: (id: string) => {
+          if (id === "sql.js") return "initSqlJs";
+          return "__external_stub";
         },
       },
     },

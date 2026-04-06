@@ -89,10 +89,11 @@ export async function requestToRackEnvWithBody(request: Request, basePath = ""):
   const env = requestToRackEnv(request, basePath);
 
   if (request.body && request.method !== "GET" && request.method !== "HEAD") {
-    const body = await request.text();
+    const buf = await request.arrayBuffer();
+    const body = new TextDecoder().decode(buf);
     env["rack.input"] = new StringIO(body);
     if (!env["CONTENT_LENGTH"]) {
-      env["CONTENT_LENGTH"] = String(new TextEncoder().encode(body).byteLength);
+      env["CONTENT_LENGTH"] = String(buf.byteLength);
     }
   }
 
@@ -108,12 +109,18 @@ const NULL_BODY_STATUSES = new Set([101, 204, 205, 304]);
 export async function rackResponseToFetchResponse(rackResponse: RackResponse): Promise<Response> {
   const [status, headers, body] = rackResponse;
 
-  const responseBody = NULL_BODY_STATUSES.has(status) ? null : await collectBody(body);
+  try {
+    const responseBody = NULL_BODY_STATUSES.has(status) ? null : await collectBody(body);
 
-  return new Response(responseBody, {
-    status,
-    headers: new Headers(headers),
-  });
+    return new Response(responseBody, {
+      status,
+      headers: new Headers(headers),
+    });
+  } finally {
+    if (body && typeof (body as any).close === "function") {
+      (body as any).close();
+    }
+  }
 }
 
 const encoder = new TextEncoder();

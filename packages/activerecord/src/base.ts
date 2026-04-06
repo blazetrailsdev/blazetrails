@@ -2057,112 +2057,83 @@ export class Base extends Model {
       }
     }
 
-    // Check if we have autosave associations — if so, wrap in transaction
-    // so failures in autosave roll back the parent's INSERT/UPDATE.
+    // Mirrors: ActiveRecord::Transactions#save
+    const { withTransactionReturningStatus } = await import("./transactions.js");
+    return withTransactionReturningStatus(this, () => this._createOrUpdate());
+  }
+
+  /**
+   * The persistence half of save — runs callbacks, performs INSERT or UPDATE,
+   * autosaves children, and touches parents. Called by save() inside a
+   * transaction wrapper.
+   *
+   * Mirrors: ActiveRecord::Persistence#save (the super that Transactions#save calls)
+   */
+  private async _createOrUpdate(): Promise<boolean> {
+    const ctor = this.constructor as typeof Base;
     const { autosaveBelongsTo, autosaveChildren } = await import("./autosave-association.js");
-    const associations: any[] = (ctor as any)._associations ?? [];
-    const hasAutosave = associations.some((a: any) => a.options?.autosave);
 
-    const saveBody = async (): Promise<boolean> => {
-      let saved = false;
-      // Reset transaction tracking flags to prevent stale state from prior saves
-      this._transactionAction = undefined;
-      (this as any)._newRecordBeforeLastCommit = false;
-      (this as any)._triggerUpdateCallback = false;
-      (this as any)._triggerDestroyCallback = false;
-      if (!(await ctor._callbackChain.runBefore("save", this))) return false;
+    let saved = false;
+    // Reset transaction tracking flags to prevent stale state from prior saves
+    this._transactionAction = undefined;
+    (this as any)._newRecordBeforeLastCommit = false;
+    (this as any)._triggerUpdateCallback = false;
+    (this as any)._triggerDestroyCallback = false;
+    if (!(await ctor._callbackChain.runBefore("save", this))) return false;
 
-      const belongsToOk = await autosaveBelongsTo(this);
-      if (!belongsToOk) {
-        this._skipTouch = false;
-        return false;
-      }
-
-      const wasNewRecord = this._newRecord;
-      if (this._newRecord) {
-        const createResult = await ctor._callbackChain.run("create", this, async () => {
-          this._performInsert();
-          if (this._pendingOperation) {
-            await this._pendingOperation;
-            this._pendingOperation = null;
-          }
-          this._previouslyNewRecord = true;
-          this._newRecord = false;
-          this.changesApplied();
-          saved = true;
-        });
-        if (!createResult) saved = false;
-      } else {
-        const updateResult = await ctor._callbackChain.run("update", this, async () => {
-          this._performUpdate();
-          if (this._pendingOperation) {
-            await this._pendingOperation;
-            this._pendingOperation = null;
-          }
-          this._previouslyNewRecord = false;
-          this.changesApplied();
-          saved = true;
-        });
-        if (!updateResult) saved = false;
-      }
+    const belongsToOk = await autosaveBelongsTo(this);
+    if (!belongsToOk) {
       this._skipTouch = false;
+      return false;
+    }
 
-      if (saved) {
-        // Set transaction action and tracking flags for callback filtering
-        this._transactionAction = wasNewRecord ? "create" : "update";
-        (this as any)._newRecordBeforeLastCommit = wasNewRecord;
-        (this as any)._triggerUpdateCallback = !wasNewRecord;
-
-        await ctor._callbackChain.runAfter("save", this);
-
-        if (wasNewRecord) {
-          const { updateCounterCaches } = await import("./associations.js");
-          await updateCounterCaches(this, "increment");
+    const wasNewRecord = this._newRecord;
+    if (this._newRecord) {
+      const createResult = await ctor._callbackChain.run("create", this, async () => {
+        this._performInsert();
+        if (this._pendingOperation) {
+          await this._pendingOperation;
+          this._pendingOperation = null;
         }
-
-        const autosaveOk = await autosaveChildren(this);
-        if (!autosaveOk) return false;
-
-        const { touchBelongsToParents } = await import("./associations.js");
-        await touchBelongsToParents(this);
-      }
-
-      return saved;
-    };
-
-    const { Rollback, currentTransaction, committedBang, rolledbackBang } =
-      await import("./transactions.js");
-
-    // Always wrap in transaction (matches Rails with_transaction_returning_status)
-    const txResult = await this.transaction(async () => {
-      const result = await saveBody();
-      if (!result) throw new Rollback();
-      return result;
-    });
-    const saved = txResult ?? false;
-
-    // Fire after_commit/after_rollback callbacks.
-    // If inside an outer transaction, defer. Otherwise fire immediately.
-    const outerTx = currentTransaction();
-    if (saved) {
-      if (outerTx) {
-        outerTx.afterCommit(async () => {
-          await committedBang(this);
-        });
-        outerTx.afterRollback(async () => {
-          await rolledbackBang(this);
-        });
-      } else {
-        await committedBang(this);
-      }
+        this._previouslyNewRecord = true;
+        this._newRecord = false;
+        this.changesApplied();
+        saved = true;
+      });
+      if (!createResult) saved = false;
     } else {
-      if (outerTx) {
-        outerTx.afterRollback(async () => {
-          await rolledbackBang(this);
-        });
-      } else {
-        await rolledbackBang(this);
+      const updateResult = await ctor._callbackChain.run("update", this, async () => {
+        this._performUpdate();
+        if (this._pendingOperation) {
+          await this._pendingOperation;
+          this._pendingOperation = null;
+        }
+        this._previouslyNewRecord = false;
+        this.changesApplied();
+        saved = true;
+      });
+      if (!updateResult) saved = false;
+    }
+    this._skipTouch = false;
+
+    if (saved) {
+      // Set transaction action and tracking flags for callback filtering
+      this._transactionAction = wasNewRecord ? "create" : "update";
+      (this as any)._newRecordBeforeLastCommit = wasNewRecord;
+      (this as any)._triggerUpdateCallback = !wasNewRecord;
+
+      await ctor._callbackChain.runAfter("save", this);
+
+      if (wasNewRecord) {
+        const { updateCounterCaches } = await import("./associations.js");
+        await updateCounterCaches(this, "increment");
       }
+
+      const autosaveOk = await autosaveChildren(this);
+      if (!autosaveOk) return false;
+
+      const { touchBelongsToParents } = await import("./associations.js");
+      await touchBelongsToParents(this);
     }
 
     return saved;
@@ -2364,78 +2335,69 @@ export class Base extends Model {
     if (this._readonly) {
       throw new ReadOnlyRecord(`${this.constructor.name} is marked as readonly`);
     }
+
+    // Mirrors: ActiveRecord::Transactions#destroy
+    const { withTransactionReturningStatus } = await import("./transactions.js");
+    const result = await withTransactionReturningStatus(this, () => this._destroyRow());
+    return result ? this : false;
+  }
+
+  /**
+   * The persistence half of destroy — runs callbacks, performs DELETE,
+   * updates counter caches, and touches parents. Called by destroy() inside
+   * a transaction wrapper.
+   *
+   * Mirrors: ActiveRecord::Persistence#destroy (the super that Transactions#destroy calls)
+   */
+  private async _destroyRow(): Promise<boolean> {
     const ctor = this.constructor as typeof Base;
-    const { Rollback, currentTransaction, committedBang, rolledbackBang } =
-      await import("./transactions.js");
 
-    // Always wrap in transaction (matches Rails with_transaction_returning_status)
-    const txResult = await this.transaction(async () => {
-      let didDelete = false;
-      const halted = !(await ctor._callbackChain.run("destroy", this, async () => {
-        const { processDependentAssociations } = await import("./associations.js");
-        await processDependentAssociations(this);
+    let didDelete = false;
+    const halted = !(await ctor._callbackChain.run("destroy", this, async () => {
+      const { processDependentAssociations } = await import("./associations.js");
+      await processDependentAssociations(this);
 
-        const table = ctor.arelTable;
-        const pk = this.id;
-        if (!(Array.isArray(pk) ? pk.every((v) => v == null) : pk == null)) {
-          const dm = new DeleteManager().from(table).where(ctor._buildPkWhereNode(pk));
-          const lockCol = ctor.lockingColumn;
-          if (ctor.lockingEnabled) {
-            const currentVersion = this.readAttribute(lockCol);
-            if (currentVersion == null) {
-              dm.where(table.get(lockCol).isNull());
-            } else {
-              dm.where(table.get(lockCol).eq(Number(currentVersion) || 0));
-            }
+      const table = ctor.arelTable;
+      const pk = this.id;
+      if (!(Array.isArray(pk) ? pk.every((v) => v == null) : pk == null)) {
+        const dm = new DeleteManager().from(table).where(ctor._buildPkWhereNode(pk));
+        const lockCol = ctor.lockingColumn;
+        if (ctor.lockingEnabled) {
+          const currentVersion = this.readAttribute(lockCol);
+          if (currentVersion == null) {
+            dm.where(table.get(lockCol).isNull());
+          } else {
+            dm.where(table.get(lockCol).eq(Number(currentVersion) || 0));
           }
-
-          const affected = await ctor.adapter.executeMutation(dm.toSql());
-          if (ctor.lockingEnabled && affected === 0) {
-            throw new StaleObjectError(this, "destroy");
-          }
-          didDelete = affected > 0;
         }
 
-        this._destroyed = true;
-        this._frozen = true;
-        this._collectionProxies.clear();
-        this._preloadedAssociations.clear();
-        this._associationInstances.clear();
-      }));
-
-      if (halted) throw new Rollback();
-
-      if (didDelete) {
-        this._transactionAction = "destroy";
-        (this as any)._triggerDestroyCallback = true;
-        (this as any)._newRecordBeforeLastCommit = false;
-        (this as any)._triggerUpdateCallback = false;
-        const { updateCounterCaches, touchBelongsToParents } = await import("./associations.js");
-        await updateCounterCaches(this, "decrement");
-        await touchBelongsToParents(this);
+        const affected = await ctor.adapter.executeMutation(dm.toSql());
+        if (ctor.lockingEnabled && affected === 0) {
+          throw new StaleObjectError(this, "destroy");
+        }
+        didDelete = affected > 0;
       }
 
-      return didDelete;
-    });
+      this._destroyed = true;
+      this._frozen = true;
+      this._collectionProxies.clear();
+      this._preloadedAssociations.clear();
+      this._associationInstances.clear();
+    }));
 
-    if (txResult === undefined) return false; // Rollback from halted callback
+    if (halted) return false;
 
-    // Fire after_commit/after_rollback callbacks
-    if (txResult) {
-      const outerTx = currentTransaction();
-      if (outerTx) {
-        outerTx.afterCommit(async () => {
-          await committedBang(this);
-        });
-        outerTx.afterRollback(async () => {
-          await rolledbackBang(this);
-        });
-      } else {
-        await committedBang(this);
-      }
+    if (didDelete) {
+      this._transactionAction = "destroy";
+      (this as any)._triggerDestroyCallback = true;
+      (this as any)._newRecordBeforeLastCommit = false;
+      (this as any)._triggerUpdateCallback = false;
+      const { updateCounterCaches, touchBelongsToParents } = await import("./associations.js");
+      await updateCounterCaches(this, "decrement");
+      await touchBelongsToParents(this);
     }
 
-    return this;
+    return didDelete || !halted;
   }
 
   /**

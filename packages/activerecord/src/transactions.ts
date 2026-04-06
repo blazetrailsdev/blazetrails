@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Base } from "./base.js";
 
+import { ArgumentError } from "@blazetrails/activemodel";
 import { Rollback, TransactionIsolationError } from "./errors.js";
 export { Rollback };
 import { Transaction } from "./connection-adapters/abstract/transaction.js";
@@ -97,15 +98,19 @@ export async function transaction<T>(
       await adapter.rollback();
     }
     await tx.rollback();
-    await tx.runAfterRollbackCallbacks();
+    // Release lock before callbacks to prevent deadlocks if a callback
+    // starts a new outermost transaction on the same adapter.
     releaseLock?.();
+    await tx.runAfterRollbackCallbacks();
     if (error instanceof Rollback) {
       return undefined;
     }
     throw error;
   }
-  await tx.runAfterCommitCallbacks();
+  // Release lock before callbacks to prevent deadlocks if a callback
+  // starts a new outermost transaction on the same adapter.
   releaseLock?.();
+  await tx.runAfterCommitCallbacks();
   return result;
 }
 
@@ -140,7 +145,12 @@ export async function savepoint<T>(
 // ---------------------------------------------------------------------------
 
 type CallbackFn = (...args: any[]) => any;
-type CallbackOptions = { on?: TransactionAction | TransactionAction[] };
+type CallbackOptions = {
+  on?: TransactionAction | TransactionAction[];
+  if?: CallbackFn | CallbackFn[];
+  unless?: CallbackFn | CallbackFn[];
+  prepend?: boolean;
+};
 
 /**
  * Mirrors: ActiveRecord::Transactions::ClassMethods#before_commit
@@ -156,7 +166,9 @@ export function beforeCommit(
     const actions = Array.isArray(options.on) ? options.on : [options.on];
     for (const action of actions) {
       if (action !== "create" && action !== "update" && action !== "destroy") {
-        throw new Error(`Unknown transaction action: ${action}`);
+        throw new ArgumentError(
+          `:on conditions for after_commit and after_rollback callbacks have to be one of [:create, :destroy, :update]`,
+        );
       }
     }
   }
@@ -238,50 +250,6 @@ export function setCallback(
 // ---------------------------------------------------------------------------
 
 /**
- * Wraps save in a transaction. If the save fails, rolls back.
- *
- * Mirrors: ActiveRecord::Transactions#save (override)
- */
-export async function save(record: Base): Promise<boolean> {
-  return withTransactionReturningStatus(record, async () => {
-    return record.save();
-  });
-}
-
-/**
- * Wraps save! in a transaction. If the save fails, rolls back.
- *
- * Mirrors: ActiveRecord::Transactions#save! (override)
- */
-export async function saveBang(record: Base): Promise<boolean> {
-  return withTransactionReturningStatus(record, async () => {
-    return (record as any).saveBang();
-  });
-}
-
-/**
- * Wraps destroy in a transaction.
- *
- * Mirrors: ActiveRecord::Transactions#destroy (override)
- */
-export async function destroy(record: Base): Promise<Base | false> {
-  return withTransactionReturningStatus(record, async () => {
-    return record.destroy();
-  });
-}
-
-/**
- * Wraps touch in a transaction.
- *
- * Mirrors: ActiveRecord::Transactions#touch (override)
- */
-export async function touch(record: Base, ...columnNames: string[]): Promise<boolean> {
-  return withTransactionReturningStatus(record, async () => {
-    return (record as any).touch(...columnNames);
-  });
-}
-
-/**
  * Run before_commit callbacks on the record.
  *
  * Mirrors: ActiveRecord::Transactions#before_committed!
@@ -315,7 +283,9 @@ export async function rolledbackBang(record: Base): Promise<void> {
 
 /**
  * Execute a block within a transaction and capture its return value as a
- * status flag. If the status is falsy, the transaction is rolled back.
+ * status flag. If the status is falsy (false/null/undefined), the transaction
+ * is rolled back. After the transaction, schedules committedBang/rolledbackBang
+ * on the outer transaction (or fires immediately if none).
  *
  * Mirrors: ActiveRecord::Transactions#with_transaction_returning_status
  */
@@ -331,6 +301,25 @@ export async function withTransactionReturningStatus<T>(
     if (status === false || status == null) throw new Rollback();
     return status;
   });
+
+  // Schedule commit/rollback callbacks — mirrors add_to_transaction.
+  // If inside an outer transaction, defer. Otherwise fire immediately.
+  const outerTx = currentTransaction();
+  if (status! !== false && status! != null) {
+    if (outerTx) {
+      outerTx.afterCommit(async () => await committedBang(record));
+      outerTx.afterRollback(async () => await rolledbackBang(record));
+    } else {
+      await committedBang(record);
+    }
+  } else {
+    if (outerTx) {
+      outerTx.afterRollback(async () => await rolledbackBang(record));
+    } else {
+      await rolledbackBang(record);
+    }
+  }
+
   return status!;
 }
 

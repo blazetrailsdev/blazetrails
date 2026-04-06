@@ -26,7 +26,7 @@ export class ActiveRecordTransaction {
   afterCommit(fn: () => void | Promise<void>): void | Promise<void> {
     if (this.isClosed()) {
       // No open transaction — execute immediately (matches Rails behavior)
-      return Promise.resolve(fn());
+      return fn();
     }
     this._internalTransaction!.afterCommit(fn);
   }

@@ -166,7 +166,7 @@ export class Relation<T extends Base> {
           sql = sql.replace("?", replacement);
         }
       }
-      rel._whereClause.predicates.push(new Nodes.SqlLiteral(sql));
+      if (sql.trim()) rel._whereClause.predicates.push(new Nodes.SqlLiteral(sql));
     } else {
       const castConditions: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(conditionsOrSql)) {

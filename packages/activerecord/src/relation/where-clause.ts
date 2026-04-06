@@ -106,10 +106,10 @@ export class WhereClause {
     return false;
   }
 
-  extractAttributes(): string[] {
-    const attrs: string[] = [];
+  extractAttributes(): (string | Nodes.Attribute)[] {
+    const attrs: (string | Nodes.Attribute)[] = [];
     for (const node of this.predicates) {
-      const attr = fetchAttribute(node);
+      const attr = fetchAttributeNode(node);
       if (attr !== null) attrs.push(attr);
     }
     return attrs;
@@ -119,9 +119,9 @@ export class WhereClause {
     const result: Record<string, unknown> = {};
     for (const node of this.predicates) {
       if (node instanceof Nodes.Equality) {
-        const attr = fetchAttribute(node);
+        const attr = fetchAttributeNode(node);
         if (attr !== null) {
-          result[attr] = extractNodeValue((node as any).right);
+          result[attr.name] = extractNodeValue((node as any).right);
         }
       }
     }
@@ -147,13 +147,13 @@ function subtractNodes(a: Nodes.Node[], b: Nodes.Node[]): Nodes.Node[] {
   return result;
 }
 
-function fetchAttribute(node: Nodes.Node): string | null {
+function fetchAttributeNode(node: Nodes.Node): Nodes.Attribute | null {
   if ("left" in node) {
     const left = (node as any).left;
-    if (left instanceof Nodes.Attribute) return left.name;
+    if (left instanceof Nodes.Attribute) return left;
   }
   if (node instanceof Nodes.Not) {
-    return fetchAttribute((node as any).expr);
+    return fetchAttributeNode((node as any).expr);
   }
   return null;
 }
@@ -166,16 +166,22 @@ function extractNodeValue(node: unknown): unknown {
 
 function exceptPredicates(
   predicates: Nodes.Node[],
-  columns: (string | Nodes.Node)[],
+  columns: (string | Nodes.Attribute | Nodes.Node)[],
 ): Nodes.Node[] {
+  // Rails: separate Attribute objects from string column names.
+  // Attributes compared via eql() (table-qualified), strings by name only.
+  const attrNodes: Nodes.Attribute[] = [];
   const colStrings = new Set<string>();
   for (const c of columns) {
     if (typeof c === "string") colStrings.add(c);
-    else if (c instanceof Nodes.Attribute) colStrings.add(c.name);
+    else if (c instanceof Nodes.Attribute) attrNodes.push(c);
   }
   return predicates.filter((node) => {
-    const attr = fetchAttribute(node);
-    return attr === null || !colStrings.has(attr);
+    const attr = fetchAttributeNode(node);
+    if (attr === null) return true;
+    if (attrNodes.some((a) => a.eql(attr))) return false;
+    if (colStrings.has(attr.name)) return false;
+    return true;
   });
 }
 

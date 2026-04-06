@@ -306,7 +306,7 @@ function whereBang(this: QueryMethodsHost, opts: any, ...rest: unknown[]): any {
     } else {
       sql = opts;
     }
-    this._whereClause.predicates.push(new Nodes.SqlLiteral(sql));
+    if (sql.trim()) this._whereClause.predicates.push(new Nodes.SqlLiteral(sql));
   } else if (opts instanceof Nodes.Node) {
     this._whereClause.predicates.push(opts);
   } else if (typeof opts === "object" && opts !== null) {

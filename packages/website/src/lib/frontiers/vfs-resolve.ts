@@ -35,7 +35,7 @@ export function resolveVfsPath(
   content = tryRead(`public/${path}`, false);
   if (content != null) return { path: `public/${path}`, content, found: true };
 
-  // Try extensions: .ts, .html, /index.html
+  // Try extensions: .ts, .html, /index.html (both root and public/)
   if (!path.includes(".")) {
     for (const ext of [".ts", ".html"]) {
       content = tryRead(path + ext, ext === ".ts");
@@ -44,7 +44,10 @@ export function resolveVfsPath(
     content = tryRead(`${path}/index.html`, false);
     if (content != null) return { path: `${path}/index.html`, content, found: true };
 
-    // Also try public/ with extensions
+    for (const ext of [".html"]) {
+      content = tryRead(`public/${path}${ext}`, false);
+      if (content != null) return { path: `public/${path}${ext}`, content, found: true };
+    }
     content = tryRead(`public/${path}/index.html`, false);
     if (content != null) return { path: `public/${path}/index.html`, content, found: true };
   }

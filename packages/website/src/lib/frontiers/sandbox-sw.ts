@@ -331,7 +331,7 @@ async function handleFetch(request: Request, url: URL): Promise<Response> {
   let content = resolved.content;
 
   // If we got raw .ts (no compiled cache hit), strip types
-  if (resolved.path.endsWith(".ts") && content.includes(":")) {
+  if (resolved.path.endsWith(".ts")) {
     content = stripTypes(content);
   }
 

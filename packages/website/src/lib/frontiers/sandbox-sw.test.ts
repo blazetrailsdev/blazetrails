@@ -69,6 +69,13 @@ describe("resolveVfsPath", () => {
     expect(r.path).toBe("docs/index.html");
   });
 
+  it("probes public/ with .html extension", () => {
+    vfs.write("public/about.html", "<p>About</p>");
+    const r = resolveVfsPath("about", reader());
+    expect(r.found).toBe(true);
+    expect(r.path).toBe("public/about.html");
+  });
+
   it("probes public/ with /index.html", () => {
     vfs.write("public/admin/index.html", "<p>Admin</p>");
     const r = resolveVfsPath("admin", reader());

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { getCrypto } from "@blazetrails/activesupport";
 import { Transaction as InternalTransaction } from "./connection-adapters/abstract/transaction.js";
 
 /**
@@ -78,7 +78,7 @@ export class ActiveRecordTransaction {
   uuid(): string | null {
     if (this.isClosed()) return null;
     if (!this._uuid) {
-      this._uuid = randomUUID();
+      this._uuid = getCrypto().randomUUID();
     }
     return this._uuid;
   }

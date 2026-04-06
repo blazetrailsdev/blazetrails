@@ -17,6 +17,13 @@ export type {
   DecipherAdapter,
 } from "./crypto-adapter.js";
 
+export {
+  registerAsyncContextAdapter,
+  getAsyncContext,
+  asyncContextAdapterConfig,
+} from "./async-context-adapter.js";
+export type { AsyncContext, AsyncContextAdapter } from "./async-context-adapter.js";
+
 import { fsAdapterConfig } from "./fs-adapter.js";
 import { cryptoAdapterConfig } from "./crypto-adapter.js";
 

@@ -1,15 +1,23 @@
-import { AsyncLocalStorage } from "node:async_hooks";
 import type { Base } from "./base.js";
 
 import { ArgumentError } from "@blazetrails/activemodel";
+import { getAsyncContext, type AsyncContext } from "@blazetrails/activesupport";
 import { Rollback, TransactionIsolationError } from "./errors.js";
 export { Rollback };
 import { Transaction } from "./connection-adapters/abstract/transaction.js";
 
 type TransactionAction = "create" | "update" | "destroy";
 
-// Per-async-context transaction tracking (safe under concurrent async operations)
-const _transactionStorage = new AsyncLocalStorage<Transaction | null>();
+// Per-async-context transaction tracking via activesupport's adapter
+// (uses AsyncLocalStorage in Node, fallback in browsers).
+let _transactionStorage: AsyncContext<Transaction | null> | null = null;
+
+function getTransactionStorage(): AsyncContext<Transaction | null> {
+  if (!_transactionStorage) {
+    _transactionStorage = getAsyncContext().create<Transaction | null>();
+  }
+  return _transactionStorage;
+}
 
 // Per-adapter mutex: serializes beginTransaction so concurrent callers wait
 // for the first BEGIN to complete before checking nesting state.
@@ -34,7 +42,7 @@ async function acquireAdapterLock(adapter: object): Promise<() => void> {
  * Get the currently active transaction, if any.
  */
 export function currentTransaction(): Transaction | null {
-  return _transactionStorage.getStore() ?? null;
+  return getTransactionStorage().getStore() ?? null;
 }
 
 /**
@@ -84,7 +92,7 @@ export async function transaction<T>(
 
   let result: T;
   try {
-    result = await _transactionStorage.run(tx, () => fn(tx));
+    result = await getTransactionStorage().run(tx, () => fn(tx));
     if (nested && spName) {
       await adapter.releaseSavepoint(spName);
     } else {

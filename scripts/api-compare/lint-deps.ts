@@ -55,6 +55,7 @@ function parseArgs() {
     filterPkg: get("--package") ?? null,
     filterDep: get("--dep") ?? null,
     fix: args.includes("--fix"),
+    strict: args.includes("--strict"),
   };
 }
 
@@ -98,24 +99,13 @@ function collectRubyDepMethods(ruby: ApiManifest, pkg: string, dep: string): Rub
 // TS analysis: detect dependency usage per method
 // ---------------------------------------------------------------------------
 
-type DepStatus = "uses" | "suppressed" | "missing";
-type TsDepMap = Map<string, Map<string, DepStatus>>; // file -> method -> status
+type TsDepMap = Map<string, Map<string, boolean>>; // file -> method -> usesDep
 
-const STATUS_PRIORITY: Record<DepStatus, number> = { uses: 2, suppressed: 1, missing: 0 };
-
-function mergeStatus(map: Map<string, DepStatus>, name: string, status: DepStatus) {
-  const existing = map.get(name);
-  if (!existing || STATUS_PRIORITY[status] > STATUS_PRIORITY[existing]) {
-    map.set(name, status);
-  }
+function mergeUses(map: Map<string, boolean>, name: string, uses: boolean) {
+  if (uses || !map.has(name)) map.set(name, uses || map.get(name) || false);
 }
 
-function analyzeTsDepUsage(
-  pkgSrcDir: string,
-  tsImport: string,
-  tsIdentifiers: string[],
-  jsdocTag: string,
-): TsDepMap {
+function analyzeTsDepUsage(pkgSrcDir: string, tsImport: string, tsIdentifiers: string[]): TsDepMap {
   const result: TsDepMap = new Map();
 
   const allFiles = getAllTsFiles(pkgSrcDir);
@@ -161,28 +151,22 @@ function analyzeTsDepUsage(
     const knownIdentifiers = new Set(tsIdentifiers);
 
     if (importedNames.size === 0 && knownIdentifiers.size === 0) {
-      // File has no imports and no known identifiers to check
-      const methodMap = new Map<string, DepStatus>();
-      visitMethodDeclarations(sourceFile, (name, _body, node) => {
-        const suppressed = hasJsDocTag(sourceFile, node, jsdocTag);
-        mergeStatus(methodMap, name, suppressed ? "suppressed" : "missing");
+      const methodMap = new Map<string, boolean>();
+      visitMethodDeclarations(sourceFile, (name) => {
+        mergeUses(methodMap, name, false);
       });
       if (methodMap.size > 0) result.set(relPath, methodMap);
       continue;
     }
 
-    // Step 2: for each method, check if body references any imported name
+    // For each method, check if body references any imported name
     // or known indirect identifier (e.g., this.arelTable).
     // Multiple declarations with the same name (e.g., count() in two classes)
-    // are merged: "uses" wins over "suppressed" wins over "missing".
-    const methodMap = new Map<string, DepStatus>();
-    visitMethodDeclarations(sourceFile, (name, bodyNode, node) => {
-      if (bodyNode && bodyReferencesDep(bodyNode, importedNames, knownIdentifiers)) {
-        mergeStatus(methodMap, name, "uses");
-      } else {
-        const suppressed = hasJsDocTag(sourceFile, node, jsdocTag);
-        mergeStatus(methodMap, name, suppressed ? "suppressed" : "missing");
-      }
+    // are merged: true wins over false.
+    const methodMap = new Map<string, boolean>();
+    visitMethodDeclarations(sourceFile, (name, bodyNode) => {
+      const uses = bodyNode ? bodyReferencesDep(bodyNode, importedNames, knownIdentifiers) : false;
+      mergeUses(methodMap, name, uses);
     });
     if (methodMap.size > 0) result.set(relPath, methodMap);
   }
@@ -238,17 +222,6 @@ function visitMethodDeclarations(
     ts.forEachChild(node, visit);
   };
   ts.forEachChild(sourceFile, visit);
-}
-
-function hasJsDocTag(sourceFile: ts.SourceFile, node: ts.Node, tag: string): boolean {
-  // ts.getJSDocTags doesn't work reliably with createProgram, so parse the
-  // leading JSDoc comment directly. Use the LAST match to get the JSDoc
-  // immediately preceding this declaration (not a file-level header).
-  const fullText = sourceFile.getFullText();
-  const leading = fullText.slice(node.getFullStart(), node.getStart(sourceFile));
-  const jsDocMatches = leading.match(/\/\*\*[\s\S]*?\*\//g);
-  const jsDoc = jsDocMatches?.at(-1);
-  return jsDoc !== undefined && jsDoc.includes(tag);
 }
 
 function bodyReferencesDep(
@@ -312,15 +285,6 @@ interface Violation {
   depRefs: string[];
 }
 
-interface Suppressed {
-  rubyFile: string;
-  tsFile: string;
-  rubyMethod: string;
-  tsMethod: string;
-  rubyModule: string;
-  depRefs: string[];
-}
-
 interface Compliant {
   rubyFile: string;
   tsFile: string;
@@ -340,16 +304,13 @@ function crossReference(
   tsDepMap: TsDepMap,
 ): {
   violations: Violation[];
-  suppressed: Suppressed[];
   compliant: Compliant[];
   unmatched: Unmatched[];
 } {
   const violations: Violation[] = [];
-  const suppressed: Suppressed[] = [];
   const compliant: Compliant[] = [];
   const unmatched: Unmatched[] = [];
 
-  // Deduplicate: same ruby method name in same file (from multiple classes)
   const seen = new Set<string>();
 
   for (const rm of rubyMethods) {
@@ -367,13 +328,12 @@ function crossReference(
       continue;
     }
 
-    // Find matching TS method
     let matchedTsName: string | null = null;
-    let status: DepStatus = "missing";
+    let uses = false;
     for (const candidate of tsCandidates) {
       if (fileMethods.has(candidate)) {
         matchedTsName = candidate;
-        status = fileMethods.get(candidate)!;
+        uses = fileMethods.get(candidate)!;
         break;
       }
     }
@@ -390,16 +350,14 @@ function crossReference(
       tsMethod: matchedTsName,
       rubyModule: rm.rubyModule,
     };
-    if (status === "uses") {
+    if (uses) {
       compliant.push(entry);
-    } else if (status === "suppressed") {
-      suppressed.push({ ...entry, depRefs: rm.depRefs });
     } else {
       violations.push({ ...entry, depRefs: rm.depRefs });
     }
   }
 
-  return { violations, suppressed, compliant, unmatched };
+  return { violations, compliant, unmatched };
 }
 
 // ---------------------------------------------------------------------------
@@ -604,16 +562,14 @@ function findExistingJsDocClose(
 interface LintResult {
   rule: DepRule;
   violations: Violation[];
-  suppressed: Suppressed[];
   compliant: Compliant[];
   unmatched: Unmatched[];
 }
 
 function printReport(results: LintResult[], fix: boolean) {
-  for (const { rule, violations, suppressed, compliant, unmatched } of results) {
-    const total = violations.length + suppressed.length + compliant.length;
-    const pct =
-      total > 0 ? Math.round(((compliant.length + suppressed.length) / total) * 1000) / 10 : 100;
+  for (const { rule, violations, compliant, unmatched } of results) {
+    const total = violations.length + compliant.length;
+    const pct = total > 0 ? Math.round((compliant.length / total) * 1000) / 10 : 100;
 
     console.log(`\nDependency Lint -- ${rule.package} -> ${rule.dependency}`);
     console.log("=".repeat(60));
@@ -626,13 +582,6 @@ function printReport(results: LintResult[], fix: boolean) {
       violationsByFile.set(v.tsFile, list);
     }
 
-    const suppressedByFile = new Map<string, Suppressed[]>();
-    for (const s of suppressed) {
-      const list = suppressedByFile.get(s.tsFile) || [];
-      list.push(s);
-      suppressedByFile.set(s.tsFile, list);
-    }
-
     const compliantByFile = new Map<string, Compliant[]>();
     for (const c of compliant) {
       const list = compliantByFile.get(c.tsFile) || [];
@@ -640,24 +589,16 @@ function printReport(results: LintResult[], fix: boolean) {
       compliantByFile.set(c.tsFile, list);
     }
 
-    const allFiles = new Set([
-      ...violationsByFile.keys(),
-      ...suppressedByFile.keys(),
-      ...compliantByFile.keys(),
-    ]);
+    const allFiles = new Set([...violationsByFile.keys(), ...compliantByFile.keys()]);
     for (const f of [...allFiles].sort()) {
       const fv = violationsByFile.get(f) || [];
-      const fs_ = suppressedByFile.get(f) || [];
       const fc = compliantByFile.get(f) || [];
-      if (fv.length === 0 && fs_.length === 0) continue;
+      if (fv.length === 0) continue;
 
       console.log(`\n  ${f}`);
       for (const v of fv) {
         const refs = v.depRefs.slice(0, 3).join(", ");
         console.log(`    \u2717 ${v.tsMethod} -- Rails uses ${rule.dependency} (${refs})`);
-      }
-      for (const s of fs_) {
-        console.log(`    ~ ${s.tsMethod} (suppressed)`);
       }
       for (const c of fc) {
         console.log(`    \u2713 ${c.tsMethod}`);
@@ -665,8 +606,11 @@ function printReport(results: LintResult[], fix: boolean) {
     }
 
     console.log(
-      `\n  Summary: ${compliant.length} compliant, ${suppressed.length} suppressed, ${violations.length} violations (${total} total)`,
+      `\n  Summary: ${compliant.length}/${total} methods use ${rule.dependency} (${pct}%)`,
     );
+    if (violations.length > 0) {
+      console.log(`           ${violations.length} methods need ${rule.dependency} migration`);
+    }
     if (unmatched.length > 0) {
       console.log(
         `           ${unmatched.length} Rails ${rule.dependency}-using methods not yet implemented in TS`,
@@ -674,7 +618,7 @@ function printReport(results: LintResult[], fix: boolean) {
     }
 
     if (violations.length > 0 && !fix) {
-      console.log(`\n  Run with --fix to suppress violations with ${rule.jsdocTag} JSDoc tags.`);
+      console.log(`\n  Run with --fix to add ${rule.jsdocTag} JSDoc documentation to violations.`);
     }
   }
 }
@@ -684,7 +628,7 @@ function printReport(results: LintResult[], fix: boolean) {
 // ---------------------------------------------------------------------------
 
 function main() {
-  const { filterPkg, filterDep, fix } = parseArgs();
+  const { filterPkg, filterDep, fix, strict } = parseArgs();
 
   const rubyPath = path.join(OUTPUT_DIR, "rails-api.json");
   if (!fs.existsSync(rubyPath)) {
@@ -718,44 +662,34 @@ function main() {
     console.log(`  Found ${rubyMethods.length} Rails methods using ${rule.dependency}`);
 
     const pkgSrcDir = packageSrcDir(rule.package);
-    const tsDepMap = analyzeTsDepUsage(pkgSrcDir, rule.tsImport, rule.tsIdentifiers, rule.jsdocTag);
+    const tsDepMap = analyzeTsDepUsage(pkgSrcDir, rule.tsImport, rule.tsIdentifiers);
 
-    let { violations, suppressed, compliant, unmatched } = crossReference(rubyMethods, tsDepMap);
+    const { violations, compliant, unmatched } = crossReference(rubyMethods, tsDepMap);
 
     if (fix && violations.length > 0) {
       const fixedCount = applyJsDocFixes(violations, pkgSrcDir, rule);
-      console.log(`  Suppressed ${fixedCount} violations with ${rule.jsdocTag} JSDoc tags`);
-      // Re-scan so the report reflects post-fix state
-      const freshMap = analyzeTsDepUsage(
-        pkgSrcDir,
-        rule.tsImport,
-        rule.tsIdentifiers,
-        rule.jsdocTag,
-      );
-      ({ violations, suppressed, compliant, unmatched } = crossReference(rubyMethods, freshMap));
+      console.log(`  Added ${rule.jsdocTag} JSDoc to ${fixedCount} methods`);
     }
 
-    allResults.push({ rule, violations, suppressed, compliant, unmatched });
+    allResults.push({ rule, violations, compliant, unmatched });
     totalViolations += violations.length;
   }
 
   // Write JSON report
   const report = {
     generatedAt: new Date().toISOString(),
-    rules: allResults.map(({ rule, violations, suppressed, compliant, unmatched }) => {
-      const matched = violations.length + suppressed.length + compliant.length;
+    rules: allResults.map(({ rule, violations, compliant, unmatched }) => {
+      const matched = violations.length + compliant.length;
       return {
         package: rule.package,
         dependency: rule.dependency,
         summary: {
           rubyDepMethods: matched + unmatched.length,
           tsMatchedCompliant: compliant.length,
-          tsMatchedSuppressed: suppressed.length,
           tsMatchedViolations: violations.length,
           tsUnmatched: unmatched.length,
         },
         violations,
-        suppressed,
         compliant,
         unmatched,
       };
@@ -768,7 +702,7 @@ function main() {
 
   printReport(allResults, fix);
 
-  if (totalViolations > 0 && !fix) {
+  if (totalViolations > 0 && strict) {
     process.exit(1);
   }
 }

@@ -348,7 +348,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     return true;
   }
 
-  isRequiresReloading(): boolean {
+  override requiresReloading(): boolean {
     return false;
   }
 
@@ -439,7 +439,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   // --- Schema operations ---
 
   async primaryKeys(tableName: string): Promise<string[]> {
-    const rows = await this.execute(`PRAGMA table_info("${tableName}")`);
+    const rows = await this.execute(`PRAGMA table_info(${quoteTableName(tableName)})`);
     return rows.filter((r) => r.pk).map((r) => String(r.name));
   }
 
@@ -472,16 +472,18 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     return rows.map((r) => String(r.name));
   }
 
-  override async createVirtualTable(
-    tableName: string,
-    moduleName?: unknown,
-    values?: unknown,
-  ): Promise<void> {
-    const mod = moduleName as string;
-    const vals = values as string[];
-    const cols = (vals ?? []).join(", ");
+  override async createVirtualTable(tableName: string, options?: unknown): Promise<void> {
+    const opts = (options ?? {}) as { moduleName?: unknown; values?: unknown };
+    const moduleName = opts.moduleName;
+    if (typeof moduleName !== "string" || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(moduleName)) {
+      throw new Error("createVirtualTable requires a valid moduleName");
+    }
+    const values = opts.values;
+    const cols = Array.isArray(values)
+      ? values.map((v) => quoteColumnName(String(v))).join(", ")
+      : "";
     await this.executeMutation(
-      `CREATE VIRTUAL TABLE ${quoteTableName(tableName)} USING ${mod}(${cols})`,
+      `CREATE VIRTUAL TABLE ${quoteTableName(tableName)} USING ${moduleName}(${cols})`,
     );
   }
 
@@ -621,7 +623,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
       onUpdate: string | null;
     }>
   > {
-    const rows = await this.execute(`PRAGMA foreign_key_list("${tableName}")`);
+    const rows = await this.execute(`PRAGMA foreign_key_list(${quoteTableName(tableName)})`);
     const grouped = new Map<number, Array<Record<string, unknown>>>();
     for (const row of rows) {
       const id = row.id as number;
@@ -720,9 +722,9 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     tableName: string,
     modify: (columns: Record<string, Record<string, unknown>>) => void,
   ): Promise<void> {
-    const tableInfo = this.db.prepare(`PRAGMA table_info("${tableName}")`).all() as Array<
-      Record<string, unknown>
-    >;
+    const tableInfo = this.db
+      .prepare(`PRAGMA table_info(${quoteTableName(tableName)})`)
+      .all() as Array<Record<string, unknown>>;
 
     const columns: Record<string, Record<string, unknown>> = {};
     for (const col of tableInfo) {
@@ -732,10 +734,12 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     modify(columns);
 
     const tmpTable = `_alter_tmp_${tableName}`;
+    const quotedTmp = quoteTableName(tmpTable);
+    const quotedTable = quoteTableName(tableName);
     const colNames = Object.keys(columns);
     const colDefs = colNames.map((name) => {
       const col = columns[name];
-      let def = `"${name}" ${col.type ?? "TEXT"}`;
+      let def = `${quoteColumnName(name)} ${col.type ?? "TEXT"}`;
       if (col.pk) def += " PRIMARY KEY";
       if (col.notnull) def += " NOT NULL";
       if (col.dflt_value !== null && col.dflt_value !== undefined) {
@@ -748,15 +752,15 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
       .map((c) => c.name as string)
       .filter((n) => colNames.includes(n));
 
-    this.db.exec(`CREATE TABLE "${tmpTable}" (${colDefs.join(", ")})`);
+    this.db.exec(`CREATE TABLE ${quotedTmp} (${colDefs.join(", ")})`);
     if (originalColNames.length > 0) {
-      const selectCols = originalColNames.map((n) => `"${n}"`).join(", ");
+      const selectCols = originalColNames.map((n) => quoteColumnName(n)).join(", ");
       this.db.exec(
-        `INSERT INTO "${tmpTable}" (${selectCols}) SELECT ${selectCols} FROM "${tableName}"`,
+        `INSERT INTO ${quotedTmp} (${selectCols}) SELECT ${selectCols} FROM ${quotedTable}`,
       );
     }
-    this.db.exec(`DROP TABLE "${tableName}"`);
-    this.db.exec(`ALTER TABLE "${tmpTable}" RENAME TO "${tableName}"`);
+    this.db.exec(`DROP TABLE ${quotedTable}`);
+    this.db.exec(`ALTER TABLE ${quotedTmp} RENAME TO ${quotedTable}`);
     this.schemaCache.clear();
   }
 

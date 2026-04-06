@@ -27,8 +27,9 @@ export class Directory {
     const fullPath = getPath().join(this.root, decodedPath);
     const resolved = getPath().resolve(fullPath);
 
-    // Directory traversal check
-    if (!resolved.startsWith(this.root)) {
+    // Directory traversal check — use separator-aware boundary to prevent
+    // sibling prefix bypass (e.g. /var/www vs /var/www_public)
+    if (resolved !== this.root && !resolved.startsWith(this.root + "/")) {
       return [404, { [CONTENT_TYPE]: "text/plain" }, ["Not Found"]];
     }
 

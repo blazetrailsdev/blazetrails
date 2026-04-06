@@ -59,7 +59,7 @@ export interface DecipherAdapter {
 function wrapNodeCrypto(nodeCrypto: typeof import("node:crypto")): CryptoAdapter {
   return {
     randomBytes(size: number): Uint8Array {
-      return new Uint8Array(nodeCrypto.randomBytes(size));
+      return nodeCrypto.randomBytes(size);
     },
     createHash(algorithm: string): HashAdapter {
       return nodeCrypto.createHash(algorithm) as unknown as HashAdapter;

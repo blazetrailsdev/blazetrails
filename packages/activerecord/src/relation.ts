@@ -2407,47 +2407,6 @@ export class Relation<T extends Base> {
     return sql;
   }
 
-  private _resolveColumn(table: Table, key: string): Nodes.Attribute {
-    return PredicateBuilder.resolveColumn(table, key);
-  }
-
-  private _buildWhereNodes(
-    table: Table,
-    whereClauses: Array<Record<string, unknown>>,
-    whereNotClauses: Array<Record<string, unknown>>,
-  ): Nodes.Node[] {
-    const builder = new PredicateBuilder(table);
-
-    // Wire up association metadata so where({ author: record }) expands
-    // to where({ author_id: record.id })
-    const modelClass = this._modelClass as any;
-    const associations: any[] = modelClass?._associations ?? [];
-    if (associations.length > 0) {
-      const map = new Map<string, { foreignKey: string; foreignType?: string }>();
-      for (const assoc of associations) {
-        if (assoc.type === "belongsTo") {
-          const fk = assoc.options?.foreignKey ?? `${_toUnderscore(assoc.name)}_id`;
-          // Skip composite foreign keys — association expansion only supports single-column FKs
-          if (Array.isArray(fk)) continue;
-          const ft =
-            assoc.options?.foreignType ??
-            (assoc.options?.polymorphic ? `${_toUnderscore(assoc.name)}_type` : undefined);
-          map.set(assoc.name, { foreignKey: fk, foreignType: ft });
-        }
-      }
-      if (map.size > 0) builder.setAssociationMap(map);
-    }
-
-    const nodes: Nodes.Node[] = [];
-    for (const clause of whereClauses) {
-      nodes.push(...builder.buildFromHash(clause));
-    }
-    for (const clause of whereNotClauses) {
-      nodes.push(...builder.buildNegatedFromHash(clause));
-    }
-    return nodes;
-  }
-
   private _combineNodes(nodes: Nodes.Node[]): Nodes.Node | null {
     if (nodes.length === 0) return null;
     if (nodes.length === 1) return nodes[0];

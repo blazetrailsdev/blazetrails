@@ -28,7 +28,7 @@ const INIT_TIMEOUT = 10_000;
 const REQUEST_TIMEOUT = 30_000;
 
 export async function createSwClient(options: SwClientOptions = {}): Promise<SwClient> {
-  if (!("serviceWorker" in navigator)) {
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
     throw new Error("Service workers not supported");
   }
 
@@ -115,12 +115,15 @@ export async function createSwClient(options: SwClientOptions = {}): Promise<SwC
 
         try {
           const transfer: Transferable[] = [channel.port2];
-          if ("data" in request && request.data instanceof ArrayBuffer) {
-            transfer.push(request.data);
-          } else if ("data" in request && request.data instanceof Uint8Array) {
-            transfer.push(request.data.buffer as ArrayBuffer);
+          let message: SwRequest = request;
+
+          if ("data" in request && request.data instanceof Uint8Array) {
+            const data = request.data.slice();
+            message = { ...request, data } as typeof request;
+            transfer.push(data.buffer);
           }
-          sw.postMessage(request, transfer);
+
+          sw.postMessage(message, transfer);
         } catch (error) {
           clearTimeout(timer);
           cleanup();

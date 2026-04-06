@@ -37,7 +37,7 @@ export function requestToRackEnv(request: Request, basePath = ""): RackEnv {
 
   let pathInfo: string;
   try {
-    pathInfo = decodeURIComponent(url.pathname);
+    pathInfo = decodeURI(url.pathname);
   } catch {
     pathInfo = url.pathname;
   }
@@ -59,7 +59,7 @@ export function requestToRackEnv(request: Request, basePath = ""): RackEnv {
     SERVER_PORT: serverPort,
     HTTP_HOST: url.host,
     SERVER_PROTOCOL: "HTTP/1.1",
-    SCRIPT_NAME: "",
+    SCRIPT_NAME: normalizedBasePath || "",
     HTTPS: url.protocol === "https:" ? "on" : "off",
     "rack.url_scheme": url.protocol.replace(":", ""),
     "rack.input": new StringIO(),

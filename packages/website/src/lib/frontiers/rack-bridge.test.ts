@@ -19,11 +19,12 @@ describe("requestToRackEnv", () => {
     expect(env["HTTPS"]).toBe("off");
   });
 
-  it("strips basePath from PATH_INFO", () => {
+  it("strips basePath from PATH_INFO and sets SCRIPT_NAME", () => {
     const req = new Request("http://localhost/~dev/users/1");
     const env = requestToRackEnv(req, "/~dev");
 
     expect(env["PATH_INFO"]).toBe("/users/1");
+    expect(env["SCRIPT_NAME"]).toBe("/~dev");
   });
 
   it("defaults to / when basePath equals full path", () => {
@@ -31,6 +32,7 @@ describe("requestToRackEnv", () => {
     const env = requestToRackEnv(req, "/~dev");
 
     expect(env["PATH_INFO"]).toBe("/");
+    expect(env["SCRIPT_NAME"]).toBe("/~dev");
   });
 
   it("handles HTTPS", () => {

@@ -348,7 +348,8 @@ export class AbstractAdapter {
   }
 
   get defaultTimezone(): string {
-    return (this._config.defaultTimezone as string) ?? "utc";
+    const v = this._config.defaultTimezone;
+    return typeof v === "string" ? v : "utc";
   }
 
   get connectionDescriptor(): unknown {

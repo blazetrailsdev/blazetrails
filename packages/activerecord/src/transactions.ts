@@ -4,6 +4,8 @@ import { Rollback, TransactionIsolationError } from "./errors.js";
 export { Rollback };
 import { Transaction } from "./connection-adapters/abstract/transaction.js";
 
+type TransactionAction = "create" | "update" | "destroy";
+
 // Track the currently-active transaction (if any) for after_commit/after_rollback callbacks
 let _currentTransaction: Transaction | null = null;
 
@@ -103,4 +105,240 @@ export async function savepoint<T>(
     await adapter.rollbackToSavepoint(name);
     throw error;
   }
+}
+
+// ---------------------------------------------------------------------------
+// ClassMethods — mirrors ActiveRecord::Transactions::ClassMethods
+// These are standalone functions that take the model class as first arg,
+// following the codebase mixin pattern.
+// ---------------------------------------------------------------------------
+
+const VALID_ACTIONS: TransactionAction[] = ["create", "update", "destroy"];
+
+function assertValidTransactionAction(actions: TransactionAction[]): void {
+  for (const a of actions) {
+    if (!VALID_ACTIONS.includes(a)) {
+      throw new Error(
+        `:on conditions for after_commit and after_rollback callbacks have to be one of [:create, :destroy, :update]`,
+      );
+    }
+  }
+}
+
+type CallbackFn = (...args: any[]) => any;
+type CallbackOptions = { on?: TransactionAction | TransactionAction[] };
+
+/**
+ * Mirrors: ActiveRecord::Transactions::ClassMethods#before_commit
+ * Delegates to Model._callbackChain via the class's static method.
+ */
+export function beforeCommit(
+  modelClass: typeof Base,
+  fn: CallbackFn,
+  options?: CallbackOptions,
+): void {
+  (modelClass as any).beforeCommit(fn, options);
+}
+
+/**
+ * Mirrors: ActiveRecord::Transactions::ClassMethods#after_commit
+ */
+export function afterCommit(
+  modelClass: typeof Base,
+  fn: CallbackFn,
+  options?: CallbackOptions,
+): void {
+  (modelClass as any).afterCommit(fn, options);
+}
+
+/**
+ * Mirrors: ActiveRecord::Transactions::ClassMethods#after_save_commit
+ */
+export function afterSaveCommit(modelClass: typeof Base, fn: CallbackFn): void {
+  (modelClass as any).afterSaveCommit(fn);
+}
+
+/**
+ * Mirrors: ActiveRecord::Transactions::ClassMethods#after_create_commit
+ */
+export function afterCreateCommit(modelClass: typeof Base, fn: CallbackFn): void {
+  (modelClass as any).afterCreateCommit(fn);
+}
+
+/**
+ * Mirrors: ActiveRecord::Transactions::ClassMethods#after_update_commit
+ */
+export function afterUpdateCommit(modelClass: typeof Base, fn: CallbackFn): void {
+  (modelClass as any).afterUpdateCommit(fn);
+}
+
+/**
+ * Mirrors: ActiveRecord::Transactions::ClassMethods#after_destroy_commit
+ */
+export function afterDestroyCommit(modelClass: typeof Base, fn: CallbackFn): void {
+  (modelClass as any).afterDestroyCommit(fn);
+}
+
+/**
+ * Mirrors: ActiveRecord::Transactions::ClassMethods#after_rollback
+ */
+export function afterRollback(
+  modelClass: typeof Base,
+  fn: CallbackFn,
+  options?: CallbackOptions,
+): void {
+  (modelClass as any).afterRollback(fn, options);
+}
+
+/**
+ * Mirrors: ActiveRecord::Transactions::ClassMethods#set_callback
+ */
+export function setCallback(
+  modelClass: typeof Base,
+  name: "commit" | "rollback" | "before_commit",
+  fn: CallbackFn,
+  options?: CallbackOptions,
+): void {
+  if (name === "commit") {
+    afterCommit(modelClass, fn, options);
+  } else if (name === "rollback") {
+    afterRollback(modelClass, fn, options);
+  } else if (name === "before_commit") {
+    beforeCommit(modelClass, fn, options);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Instance methods — mirrors ActiveRecord::Transactions instance methods
+// These are standalone functions that take the record as first arg.
+// ---------------------------------------------------------------------------
+
+/**
+ * Wraps save in a transaction. If the save fails, rolls back.
+ *
+ * Mirrors: ActiveRecord::Transactions#save (override)
+ */
+export async function save(record: Base): Promise<boolean> {
+  return withTransactionReturningStatus(record, async () => {
+    return record.save();
+  });
+}
+
+/**
+ * Wraps save! in a transaction. If the save fails, rolls back.
+ *
+ * Mirrors: ActiveRecord::Transactions#save! (override)
+ */
+export async function saveBang(record: Base): Promise<boolean> {
+  return withTransactionReturningStatus(record, async () => {
+    return (record as any).saveBang();
+  });
+}
+
+/**
+ * Wraps destroy in a transaction.
+ *
+ * Mirrors: ActiveRecord::Transactions#destroy (override)
+ */
+export async function destroy(record: Base): Promise<Base | false> {
+  return withTransactionReturningStatus(record, async () => {
+    return record.destroy();
+  });
+}
+
+/**
+ * Wraps touch in a transaction.
+ *
+ * Mirrors: ActiveRecord::Transactions#touch (override)
+ */
+export async function touch(record: Base, ...columnNames: string[]): Promise<boolean> {
+  return withTransactionReturningStatus(record, async () => {
+    return (record as any).touch(...columnNames);
+  });
+}
+
+/**
+ * Run before_commit callbacks on the record.
+ *
+ * Mirrors: ActiveRecord::Transactions#before_committed!
+ */
+export async function beforeCommittedBang(record: Base): Promise<void> {
+  const ctor = record.constructor as typeof Base;
+  await (ctor as any)._callbackChain?.runBefore?.("commit", record);
+}
+
+/**
+ * Run after_commit callbacks on the record.
+ *
+ * Mirrors: ActiveRecord::Transactions#committed!
+ */
+export async function committedBang(record: Base): Promise<void> {
+  if (!isTriggerTransactionalCallbacks(record)) return;
+  const ctor = record.constructor as typeof Base;
+  await (ctor as any)._callbackChain?.runAfter?.("commit", record);
+}
+
+/**
+ * Run after_rollback callbacks on the record.
+ *
+ * Mirrors: ActiveRecord::Transactions#rolledback!
+ */
+export async function rolledbackBang(record: Base): Promise<void> {
+  const ctor = record.constructor as typeof Base;
+  await (ctor as any)._callbackChain?.runAfter?.("rollback", record);
+}
+
+/**
+ * Execute a block within a transaction and capture its return value as a
+ * status flag. If the status is falsy, the transaction is rolled back.
+ *
+ * Mirrors: ActiveRecord::Transactions#with_transaction_returning_status
+ */
+export async function withTransactionReturningStatus<T>(
+  record: Base,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const modelClass = record.constructor as typeof Base;
+  let status: T;
+  await transaction(modelClass, async () => {
+    status = await fn();
+    if (!status) throw new Rollback();
+    return status;
+  });
+  return status!;
+}
+
+/**
+ * Returns whether the record should trigger transactional callbacks.
+ *
+ * Mirrors: ActiveRecord::Transactions#trigger_transactional_callbacks?
+ */
+export function isTriggerTransactionalCallbacks(record: Base): boolean {
+  const r = record as any;
+  const newBeforeLastCommit = r._newRecordBeforeLastCommit ?? false;
+  const triggerUpdate = r._triggerUpdateCallback ?? false;
+  const triggerDestroy = r._triggerDestroyCallback ?? false;
+  return (
+    ((newBeforeLastCommit || triggerUpdate) && record.isPersisted()) ||
+    (triggerDestroy && record.isDestroyed())
+  );
+}
+
+function transactionIncludeAnyAction(record: Base, actions: TransactionAction[]): boolean {
+  const r = record as any;
+  const newBeforeLastCommit = r._newRecordBeforeLastCommit ?? false;
+  const triggerUpdate = r._triggerUpdateCallback ?? false;
+  const triggerDestroy = r._triggerDestroyCallback ?? false;
+  return actions.some((action) => {
+    switch (action) {
+      case "create":
+        return record.isPersisted() && newBeforeLastCommit;
+      case "update":
+        return !(newBeforeLastCommit || record.isDestroyed()) && triggerUpdate;
+      case "destroy":
+        return triggerDestroy;
+      default:
+        return false;
+    }
+  });
 }

@@ -439,7 +439,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   // --- Schema operations ---
 
   async primaryKeys(tableName: string): Promise<string[]> {
-    const rows = await this.execute(`PRAGMA table_info("${tableName}")`);
+    const rows = await this.execute(`PRAGMA table_info(${quoteTableName(tableName)})`);
     return rows.filter((r) => r.pk).map((r) => String(r.name));
   }
 
@@ -477,9 +477,13 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     moduleName?: unknown,
     values?: unknown,
   ): Promise<void> {
-    const mod = moduleName as string;
-    const vals = values as string[];
-    const cols = (vals ?? []).join(", ");
+    const mod = String(moduleName ?? "");
+    const safeIdent = /^[A-Za-z_][A-Za-z0-9_]*$/;
+    if (!safeIdent.test(mod)) {
+      throw new Error("moduleName must be a valid SQLite identifier");
+    }
+    const vals = Array.isArray(values) ? values.map(String) : [];
+    const cols = vals.map((v) => quoteColumnName(v)).join(", ");
     await this.executeMutation(
       `CREATE VIRTUAL TABLE ${quoteTableName(tableName)} USING ${mod}(${cols})`,
     );
@@ -541,7 +545,12 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
         : defaultOrChanges;
     await this.alterTable(tableName, (columns) => {
       if (columns[columnName]) {
-        columns[columnName].dflt_value = newDefault === null ? null : String(newDefault);
+        columns[columnName].dflt_value =
+          newDefault === null
+            ? null
+            : typeof newDefault === "string"
+              ? quoteString(newDefault)
+              : String(newDefault);
       }
     });
   }
@@ -583,7 +592,11 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
         if (options?.null !== undefined) columns[columnName].notnull = options.null ? 0 : 1;
         if (options?.default !== undefined)
           columns[columnName].dflt_value =
-            options.default === null ? null : String(options.default);
+            options.default === null
+              ? null
+              : typeof options.default === "string"
+                ? quoteString(options.default)
+                : String(options.default);
       }
     });
   }
@@ -621,7 +634,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
       onUpdate: string | null;
     }>
   > {
-    const rows = await this.execute(`PRAGMA foreign_key_list("${tableName}")`);
+    const rows = await this.execute(`PRAGMA foreign_key_list(${quoteTableName(tableName)})`);
     const grouped = new Map<number, Array<Record<string, unknown>>>();
     for (const row of rows) {
       const id = row.id as number;
@@ -720,7 +733,8 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     tableName: string,
     modify: (columns: Record<string, Record<string, unknown>>) => void,
   ): Promise<void> {
-    const tableInfo = this.db.prepare(`PRAGMA table_info("${tableName}")`).all() as Array<
+    const qTable = quoteTableName(tableName);
+    const tableInfo = this.db.prepare(`PRAGMA table_info(${qTable})`).all() as Array<
       Record<string, unknown>
     >;
 
@@ -731,11 +745,31 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
 
     modify(columns);
 
+    // Collect existing indexes to recreate after table rebuild
+    const indexList = this.db.prepare(`PRAGMA index_list(${qTable})`).all() as Array<
+      Record<string, unknown>
+    >;
+    const indexDefs: string[] = [];
+    for (const idx of indexList) {
+      const idxName = idx.name as string;
+      // Skip auto-created indexes (sqlite_autoindex_*)
+      if (idxName.startsWith("sqlite_autoindex_")) continue;
+      const createSql = this.db
+        .prepare(
+          `SELECT sql FROM sqlite_master WHERE type='index' AND name=${quoteString(idxName)}`,
+        )
+        .get() as { sql: string } | undefined;
+      if (createSql?.sql) {
+        indexDefs.push(createSql.sql);
+      }
+    }
+
     const tmpTable = `_alter_tmp_${tableName}`;
+    const qTmp = quoteTableName(tmpTable);
     const colNames = Object.keys(columns);
     const colDefs = colNames.map((name) => {
       const col = columns[name];
-      let def = `"${name}" ${col.type ?? "TEXT"}`;
+      let def = `${quoteColumnName(name)} ${col.type ?? "TEXT"}`;
       if (col.pk) def += " PRIMARY KEY";
       if (col.notnull) def += " NOT NULL";
       if (col.dflt_value !== null && col.dflt_value !== undefined) {
@@ -748,15 +782,31 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
       .map((c) => c.name as string)
       .filter((n) => colNames.includes(n));
 
-    this.db.exec(`CREATE TABLE "${tmpTable}" (${colDefs.join(", ")})`);
+    this.db.exec(`CREATE TABLE ${qTmp} (${colDefs.join(", ")})`);
     if (originalColNames.length > 0) {
-      const selectCols = originalColNames.map((n) => `"${n}"`).join(", ");
-      this.db.exec(
-        `INSERT INTO "${tmpTable}" (${selectCols}) SELECT ${selectCols} FROM "${tableName}"`,
-      );
+      const selectCols = originalColNames.map((n) => quoteColumnName(n)).join(", ");
+      this.db.exec(`INSERT INTO ${qTmp} (${selectCols}) SELECT ${selectCols} FROM ${qTable}`);
     }
-    this.db.exec(`DROP TABLE "${tableName}"`);
-    this.db.exec(`ALTER TABLE "${tmpTable}" RENAME TO "${tableName}"`);
+    this.db.exec(`DROP TABLE ${qTable}`);
+    this.db.exec(`ALTER TABLE ${qTmp} RENAME TO ${qTable}`);
+
+    // Recreate indexes, adjusting table name references
+    for (const sql of indexDefs) {
+      // Only recreate if all referenced columns still exist
+      const colsStillExist = originalColNames.every((n) => colNames.includes(n));
+      if (colsStillExist) {
+        const adjusted = sql.replace(
+          new RegExp(`ON\\s+${quoteTableName(tmpTable)}`, "i"),
+          `ON ${qTable}`,
+        );
+        try {
+          this.db.exec(adjusted);
+        } catch {
+          // Index references removed column — skip silently
+        }
+      }
+    }
+
     this.schemaCache.clear();
   }
 

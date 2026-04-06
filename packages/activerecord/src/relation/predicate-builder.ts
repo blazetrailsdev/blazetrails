@@ -240,7 +240,6 @@ export class PredicateBuilder {
     return builder;
   }
 
-  /** @arel Arel */
   static references(conditions: Record<string, unknown>): string[] {
     const refs: string[] = [];
     for (const key of Object.keys(conditions)) {
@@ -252,7 +251,6 @@ export class PredicateBuilder {
     return refs;
   }
 
-  /** @arel Arel */
   references(): string[] {
     return [];
   }

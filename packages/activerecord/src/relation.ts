@@ -81,7 +81,6 @@ export class Relation<T extends Base> {
   private _loaded = false;
   private _records: T[] = [];
 
-  /** @arel arel_table */
   constructor(modelClass: typeof Base) {
     this._modelClass = modelClass;
   }
@@ -3669,7 +3668,6 @@ export class Relation<T extends Base> {
     return this.computeCacheVersion();
   }
 
-  /** @arel Arel */
   async computeCacheVersion(): Promise<string> {
     try {
       const col = "updated_at";

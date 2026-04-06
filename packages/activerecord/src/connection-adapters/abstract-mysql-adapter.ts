@@ -385,7 +385,6 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     return [];
   }
 
-  /** @arel Arel::Nodes::Bin */
   caseSensitiveComparison(attribute: unknown, value: unknown): unknown {
     void attribute;
     void value;

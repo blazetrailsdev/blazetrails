@@ -150,7 +150,15 @@ function subtractNodes(a: Nodes.Node[], b: Nodes.Node[]): Nodes.Node[] {
 function fetchAttributeNode(node: Nodes.Node): Nodes.Attribute | null {
   let found: Nodes.Attribute | null = null;
   node.fetchAttribute?.((attr: Nodes.Node) => {
-    if (attr instanceof Nodes.Attribute) found = attr;
+    if (attr instanceof Nodes.Attribute) {
+      if (found !== null && !found.eql(attr)) {
+        // Multiple different attributes — return null like Rails
+        found = null;
+        return false;
+      }
+      found = attr;
+    }
+    return true;
   });
   if (found) return found;
   if (node instanceof Nodes.Not) {

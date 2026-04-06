@@ -390,7 +390,15 @@ export class CollectionProxy {
       // Create the join record
       const joinAttrs: Record<string, unknown> = {
         [ownerFk as string]: pkValue,
-        [sourceFk]: record.readAttribute((record.constructor as typeof Base).primaryKey as string),
+        [sourceFk]: (() => {
+          const targetPk = (record.constructor as typeof Base).primaryKey;
+          if (Array.isArray(targetPk)) {
+            throw new Error(
+              `Through associations do not support composite primary keys on target model for "${this._assocName}".`,
+            );
+          }
+          return record.readAttribute(targetPk);
+        })(),
       };
       // Handle polymorphic through (as option on through association)
       if (throughAssoc.options.as) {
@@ -1076,7 +1084,7 @@ export class CollectionProxy {
         break;
       default:
         throw new Error(
-          `deleteAll only accepts "nullify", "delete_all", or "destroy". Received: "${raw}"`,
+          `deleteAll only accepts "nullify", "delete_all", "deleteAll", "delete", or "destroy". Received: "${raw}"`,
         );
     }
 

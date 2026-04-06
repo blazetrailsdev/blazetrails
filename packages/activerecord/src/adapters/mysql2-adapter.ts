@@ -113,13 +113,22 @@ export class Mysql2Adapter implements DatabaseAdapter {
     }
   }
 
+  private _transactionDepth = 0;
+
   /**
    * Begin a transaction. Acquires a dedicated connection from the pool.
+   * If already in a transaction, uses a savepoint for nesting.
    */
   async beginTransaction(): Promise<void> {
-    this._conn = await this.pool.getConnection();
-    await this._conn.query("BEGIN");
-    this._inTransaction = true;
+    if (this._inTransaction) {
+      this._transactionDepth++;
+      await this._conn!.query(`SAVEPOINT _nested_${this._transactionDepth}`);
+    } else {
+      this._conn = await this.pool.getConnection();
+      await this._conn.query("BEGIN");
+      this._inTransaction = true;
+      this._transactionDepth = 0;
+    }
   }
 
   /**
@@ -127,10 +136,15 @@ export class Mysql2Adapter implements DatabaseAdapter {
    */
   async commit(): Promise<void> {
     if (!this._conn) throw new Error("No active transaction");
-    await this._conn.query("COMMIT");
-    this._conn.release();
-    this._conn = null;
-    this._inTransaction = false;
+    if (this._transactionDepth > 0) {
+      await this._conn.query(`RELEASE SAVEPOINT _nested_${this._transactionDepth}`);
+      this._transactionDepth--;
+    } else {
+      await this._conn.query("COMMIT");
+      this._conn.release();
+      this._conn = null;
+      this._inTransaction = false;
+    }
   }
 
   /**
@@ -138,10 +152,16 @@ export class Mysql2Adapter implements DatabaseAdapter {
    */
   async rollback(): Promise<void> {
     if (!this._conn) throw new Error("No active transaction");
-    await this._conn.query("ROLLBACK");
-    this._conn.release();
-    this._conn = null;
-    this._inTransaction = false;
+    if (this._transactionDepth > 0) {
+      await this._conn.query(`ROLLBACK TO SAVEPOINT _nested_${this._transactionDepth}`);
+      await this._conn.query(`RELEASE SAVEPOINT _nested_${this._transactionDepth}`);
+      this._transactionDepth--;
+    } else {
+      await this._conn.query("ROLLBACK");
+      this._conn.release();
+      this._conn = null;
+      this._inTransaction = false;
+    }
   }
 
   /**

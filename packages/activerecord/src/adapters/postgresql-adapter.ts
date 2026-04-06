@@ -131,13 +131,22 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
     }
   }
 
+  private _transactionDepth = 0;
+
   /**
    * Begin a transaction. Acquires a dedicated client from the pool.
+   * If already in a transaction, uses a savepoint for nesting.
    */
   async beginTransaction(): Promise<void> {
-    this._client = await this.pool.connect();
-    await this._client.query("BEGIN");
-    this._inTransaction = true;
+    if (this._inTransaction) {
+      this._transactionDepth++;
+      await this._client!.query(`SAVEPOINT _nested_${this._transactionDepth}`);
+    } else {
+      this._client = await this.pool.connect();
+      await this._client.query("BEGIN");
+      this._inTransaction = true;
+      this._transactionDepth = 0;
+    }
   }
 
   /**
@@ -145,10 +154,15 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
    */
   async commit(): Promise<void> {
     if (!this._client) throw new Error("No active transaction");
-    await this._client.query("COMMIT");
-    this._client.release();
-    this._client = null;
-    this._inTransaction = false;
+    if (this._transactionDepth > 0) {
+      await this._client.query(`RELEASE SAVEPOINT _nested_${this._transactionDepth}`);
+      this._transactionDepth--;
+    } else {
+      await this._client.query("COMMIT");
+      this._client.release();
+      this._client = null;
+      this._inTransaction = false;
+    }
   }
 
   /**
@@ -156,10 +170,16 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
    */
   async rollback(): Promise<void> {
     if (!this._client) throw new Error("No active transaction");
-    await this._client.query("ROLLBACK");
-    this._client.release();
-    this._client = null;
-    this._inTransaction = false;
+    if (this._transactionDepth > 0) {
+      await this._client.query(`ROLLBACK TO SAVEPOINT _nested_${this._transactionDepth}`);
+      await this._client.query(`RELEASE SAVEPOINT _nested_${this._transactionDepth}`);
+      this._transactionDepth--;
+    } else {
+      await this._client.query("ROLLBACK");
+      this._client.release();
+      this._client = null;
+      this._inTransaction = false;
+    }
   }
 
   /**

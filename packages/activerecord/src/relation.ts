@@ -2098,7 +2098,7 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#where_clause
    */
   get whereValues(): Array<Record<string, unknown>> {
-    const h = this._whereClause.toH();
+    const h = this._whereClause.toH(this._modelClass.tableName);
     return Object.keys(h).length > 0 ? [h] : [];
   }
 
@@ -2142,7 +2142,7 @@ export class Relation<T extends Base> {
   }
 
   private _scopeAttributes(): Record<string, unknown> {
-    const h = this._whereClause.toH();
+    const h = this._whereClause.toH(this._modelClass.tableName);
     const attrs: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(h)) {
       if (value !== null && !Array.isArray(value) && !(value instanceof Range)) {

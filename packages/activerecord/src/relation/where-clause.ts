@@ -117,13 +117,13 @@ export class WhereClause {
     return attrs;
   }
 
-  toH(): Record<string, unknown> {
+  toH(tableName?: string): Record<string, unknown> {
     const result: Record<string, unknown> = {};
     for (const node of equalities(this.predicates)) {
       const attr = fetchAttributeNode(node);
-      if (attr !== null) {
-        result[attr.name] = extractNodeValue((node as any).right);
-      }
+      if (attr === null) continue;
+      if (tableName !== undefined && attr.relation.name !== tableName) continue;
+      result[attr.name] = extractNodeValue((node as any).right);
     }
     return result;
   }

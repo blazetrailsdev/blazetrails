@@ -202,6 +202,9 @@ function exceptPredicates(
     if (attr === null) return true;
     if (attrNodes.some((a) => a.eql(attr))) return false;
     if (colStrings.has(attr.name)) return false;
+    // Match qualified "table.column" strings against the attribute's relation + name
+    const qualified = `${attr.relation.name}.${attr.name}`;
+    if (colStrings.has(qualified)) return false;
     return true;
   });
 }

@@ -88,6 +88,7 @@ describe("requestToRackEnv", () => {
     const env = requestToRackEnv(req, "/~dev");
 
     expect(env["PATH_INFO"]).toBe("/~devil/users");
+    expect(env["SCRIPT_NAME"]).toBe("");
   });
 
   it("normalizes trailing slash on basePath", () => {

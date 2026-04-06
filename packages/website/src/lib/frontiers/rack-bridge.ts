@@ -42,10 +42,12 @@ export function requestToRackEnv(request: Request, basePath = ""): RackEnv {
     pathInfo = url.pathname;
   }
   const normalizedBasePath = basePath.endsWith("/") ? basePath.slice(0, -1) : basePath;
+  let scriptName = "";
   if (
     normalizedBasePath &&
     (pathInfo === normalizedBasePath || pathInfo.startsWith(`${normalizedBasePath}/`))
   ) {
+    scriptName = normalizedBasePath;
     pathInfo = pathInfo.slice(normalizedBasePath.length) || "/";
   }
 
@@ -59,7 +61,7 @@ export function requestToRackEnv(request: Request, basePath = ""): RackEnv {
     SERVER_PORT: serverPort,
     HTTP_HOST: url.host,
     SERVER_PROTOCOL: "HTTP/1.1",
-    SCRIPT_NAME: normalizedBasePath || "",
+    SCRIPT_NAME: scriptName,
     HTTPS: url.protocol === "https:" ? "on" : "off",
     "rack.url_scheme": url.protocol.replace(":", ""),
     "rack.input": new StringIO(),

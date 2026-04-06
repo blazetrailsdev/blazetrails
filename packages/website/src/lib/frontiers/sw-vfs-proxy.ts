@@ -1,7 +1,8 @@
 /**
- * VFS-shaped async interface backed by the sandbox service worker.
- * Components use this instead of the sync VirtualFS when running
- * in the sandbox (where SQLite lives in the SW).
+ * Async VFS proxy backed by the sandbox service worker.
+ * Components use this for sandboxed file operations when SQLite lives
+ * in the service worker. Mirrors the VirtualFS operations needed by
+ * the sandbox, but is not a drop-in replacement for the sync VirtualFS API.
  */
 
 import type { VfsFile } from "./virtual-fs.js";

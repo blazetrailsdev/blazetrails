@@ -1,6 +1,7 @@
 /**
- * SqlJsAdapter-shaped async interface backed by the sandbox service worker.
- * DatabaseBrowser uses this to query schema/data when SQLite lives in the SW.
+ * Minimal async DB proxy backed by the sandbox service worker.
+ * Provides the subset of schema/query operations needed by DatabaseBrowser
+ * and CLI paths — not a full SqlJsAdapter replacement.
  */
 
 import type { SwClient } from "./sw-client.js";

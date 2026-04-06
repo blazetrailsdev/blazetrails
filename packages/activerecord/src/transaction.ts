@@ -1,7 +1,5 @@
 import { Transaction as InternalTransaction } from "./connection-adapters/abstract/transaction.js";
 
-const _uuidCounter = 0;
-
 function generateUuidV4(): string {
   // Simple v4-like UUID generation without crypto dependency
   const hex = () => Math.floor(Math.random() * 16).toString(16);

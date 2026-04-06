@@ -113,18 +113,6 @@ export async function savepoint<T>(
 // following the codebase mixin pattern.
 // ---------------------------------------------------------------------------
 
-const VALID_ACTIONS: TransactionAction[] = ["create", "update", "destroy"];
-
-function assertValidTransactionAction(actions: TransactionAction[]): void {
-  for (const a of actions) {
-    if (!VALID_ACTIONS.includes(a)) {
-      throw new Error(
-        `:on conditions for after_commit and after_rollback callbacks have to be one of [:create, :destroy, :update]`,
-      );
-    }
-  }
-}
-
 type CallbackFn = (...args: any[]) => any;
 type CallbackOptions = { on?: TransactionAction | TransactionAction[] };
 
@@ -322,23 +310,4 @@ export function isTriggerTransactionalCallbacks(record: Base): boolean {
     ((newBeforeLastCommit || triggerUpdate) && record.isPersisted()) ||
     (triggerDestroy && record.isDestroyed())
   );
-}
-
-function transactionIncludeAnyAction(record: Base, actions: TransactionAction[]): boolean {
-  const r = record as any;
-  const newBeforeLastCommit = r._newRecordBeforeLastCommit ?? false;
-  const triggerUpdate = r._triggerUpdateCallback ?? false;
-  const triggerDestroy = r._triggerDestroyCallback ?? false;
-  return actions.some((action) => {
-    switch (action) {
-      case "create":
-        return record.isPersisted() && newBeforeLastCommit;
-      case "update":
-        return !(newBeforeLastCommit || record.isDestroyed()) && triggerUpdate;
-      case "destroy":
-        return triggerDestroy;
-      default:
-        return false;
-    }
-  });
 }

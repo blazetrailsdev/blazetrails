@@ -596,4 +596,179 @@ describe("SQLite3AdapterTest", () => {
   it.skip("tables logs name", async () => {});
 
   it.skip("table exists logs name", async () => {});
+
+  // --- Adapter schema method integration tests ---
+
+  it("supports capability flags", () => {
+    expect(adapter.supportsDdlTransactions()).toBe(true);
+    expect(adapter.supportsSavepoints()).toBe(true);
+    expect(adapter.supportsForeignKeys()).toBe(true);
+    expect(adapter.supportsCheckConstraints()).toBe(true);
+    expect(adapter.supportsViews()).toBe(true);
+    expect(adapter.supportsJson()).toBe(true);
+    expect(adapter.supportsExplain()).toBe(true);
+    expect(adapter.supportsPartialIndex()).toBe(true);
+    expect(adapter.supportsIndexSortOrder()).toBe(true);
+    expect(adapter.supportsLazyTransactions()).toBe(true);
+    expect(adapter.supportsDeferrableConstraints()).toBe(true);
+  });
+
+  it("connected and active", () => {
+    expect(adapter.isConnected()).toBe(true);
+    expect(adapter.isActive()).toBe(true);
+  });
+
+  it("disconnect", () => {
+    const a = new SQLite3Adapter(":memory:");
+    expect(a.isConnected()).toBe(true);
+    a.disconnectBang();
+    expect(a.isConnected()).toBe(false);
+  });
+
+  it("native database types", () => {
+    const types = adapter.nativeDatabaseTypes;
+    expect(types.string.name).toBe("varchar");
+    expect(types.integer.name).toBe("integer");
+    expect(types.text.name).toBe("text");
+    expect(types.boolean.name).toBe("boolean");
+    expect(types.json.name).toBe("json");
+  });
+
+  it("encoding", () => {
+    expect(adapter.encoding).toBe("UTF-8");
+  });
+
+  it("get database version", () => {
+    const version = adapter.getDatabaseVersion();
+    expect(version.toString()).toMatch(/^\d+\.\d+/);
+  });
+
+  it("add column via adapter", async () => {
+    await adapter.addColumn("items", "email", "string");
+    const cols = await adapter.execute(`PRAGMA table_info("items")`);
+    expect(cols.some((c: any) => c.name === "email")).toBe(true);
+  });
+
+  it("add column with not null", async () => {
+    await adapter.addColumn("items", "code", "string", { null: false, default: "N/A" });
+    const cols = await adapter.execute(`PRAGMA table_info("items")`);
+    const col = cols.find((c: any) => c.name === "code");
+    expect(col!.notnull).toBe(1);
+    expect(col!.dflt_value).toBe("'N/A'");
+  });
+
+  it("remove column via alter_table copy strategy", async () => {
+    await adapter.addColumn("items", "temp_col", "string");
+    let cols = await adapter.execute(`PRAGMA table_info("items")`);
+    expect(cols.some((c: any) => c.name === "temp_col")).toBe(true);
+
+    await adapter.removeColumn("items", "temp_col");
+    cols = await adapter.execute(`PRAGMA table_info("items")`);
+    expect(cols.some((c: any) => c.name === "temp_col")).toBe(false);
+    // Original columns preserved
+    expect(cols.some((c: any) => c.name === "name")).toBe(true);
+  });
+
+  it("remove columns via alter_table", async () => {
+    await adapter.addColumn("items", "a", "string");
+    await adapter.addColumn("items", "b", "string");
+    await adapter.removeColumns("items", "a", "b");
+    const cols = await adapter.execute(`PRAGMA table_info("items")`);
+    expect(cols.some((c: any) => c.name === "a")).toBe(false);
+    expect(cols.some((c: any) => c.name === "b")).toBe(false);
+  });
+
+  it("change column default via alter_table", async () => {
+    await adapter.changeColumnDefault("items", "active", { from: 1, to: 0 });
+    const cols = await adapter.execute(`PRAGMA table_info("items")`);
+    const col = cols.find((c: any) => c.name === "active");
+    expect(col!.dflt_value).toBe("0");
+  });
+
+  it("change column null via alter_table", async () => {
+    await adapter.changeColumnNull("items", "name", false);
+    const cols = await adapter.execute(`PRAGMA table_info("items")`);
+    const col = cols.find((c: any) => c.name === "name");
+    expect(col!.notnull).toBe(1);
+  });
+
+  it("change column null with default updates existing nulls", async () => {
+    await adapter.executeMutation(`INSERT INTO "items" ("name") VALUES (NULL)`);
+    await adapter.changeColumnNull("items", "name", false, "unknown");
+    const rows = await adapter.execute(`SELECT "name" FROM "items"`);
+    expect(rows[0].name).toBe("unknown");
+  });
+
+  it("rename column", async () => {
+    await adapter.renameColumn("items", "name", "title");
+    const cols = await adapter.execute(`PRAGMA table_info("items")`);
+    expect(cols.some((c: any) => c.name === "title")).toBe(true);
+    expect(cols.some((c: any) => c.name === "name")).toBe(false);
+  });
+
+  it("rename table", async () => {
+    await adapter.renameTable("items", "products");
+    const tables = await adapter.execute(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='products'",
+    );
+    expect(tables).toHaveLength(1);
+  });
+
+  it("add timestamps", async () => {
+    await adapter.addTimestamps("items");
+    const cols = await adapter.execute(`PRAGMA table_info("items")`);
+    const created = cols.find((c: any) => c.name === "created_at");
+    const updated = cols.find((c: any) => c.name === "updated_at");
+    expect(created).toBeDefined();
+    expect(updated).toBeDefined();
+    expect(created!.notnull).toBe(1);
+    expect(updated!.notnull).toBe(1);
+  });
+
+  it("add reference", async () => {
+    await adapter.addReference("items", "category");
+    const cols = await adapter.execute(`PRAGMA table_info("items")`);
+    expect(cols.some((c: any) => c.name === "category_id")).toBe(true);
+  });
+
+  it("primary keys", async () => {
+    const pks = await adapter.primaryKeys("items");
+    expect(pks).toEqual(["id"]);
+  });
+
+  it("foreign keys", async () => {
+    adapter.exec(`CREATE TABLE "categories" ("id" INTEGER PRIMARY KEY, "name" TEXT)`);
+    adapter.exec(
+      `CREATE TABLE "products" ("id" INTEGER PRIMARY KEY, "category_id" INTEGER REFERENCES "categories"("id"))`,
+    );
+    const fks = await adapter.foreignKeys("products");
+    expect(fks).toHaveLength(1);
+    expect(fks[0].toTable).toBe("categories");
+    expect(fks[0].column).toBe("category_id");
+    expect(fks[0].primaryKey).toBe("id");
+  });
+
+  it("disable referential integrity", async () => {
+    adapter.exec(`CREATE TABLE "parents" ("id" INTEGER PRIMARY KEY)`);
+    adapter.exec(
+      `CREATE TABLE "children" ("id" INTEGER PRIMARY KEY, "parent_id" INTEGER REFERENCES "parents"("id"))`,
+    );
+    // This should work inside disable_referential_integrity even with FK violation
+    await adapter.disableReferentialIntegrity(async () => {
+      await adapter.executeMutation(`INSERT INTO "children" ("parent_id") VALUES (999)`);
+    });
+    const rows = await adapter.execute(`SELECT * FROM "children"`);
+    expect(rows).toHaveLength(1);
+  });
+
+  it("check all foreign keys valid", async () => {
+    adapter.exec(`CREATE TABLE "parents" ("id" INTEGER PRIMARY KEY)`);
+    adapter.exec(
+      `CREATE TABLE "children" ("id" INTEGER PRIMARY KEY, "parent_id" INTEGER REFERENCES "parents"("id"))`,
+    );
+    await adapter.executeMutation(`INSERT INTO "parents" ("id") VALUES (1)`);
+    await adapter.executeMutation(`INSERT INTO "children" ("parent_id") VALUES (1)`);
+    // Should not throw — all FKs valid
+    await adapter.checkAllForeignKeysValidBang();
+  });
 });

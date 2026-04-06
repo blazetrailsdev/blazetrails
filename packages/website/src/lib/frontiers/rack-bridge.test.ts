@@ -190,6 +190,38 @@ describe("rackResponseToFetchResponse", () => {
     expect(await resp.text()).toBe("binary data");
   });
 
+  it("preserves binary data in Uint8Array-only bodies", async () => {
+    const bytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00]);
+    async function* body() {
+      yield bytes;
+    }
+    const rackResp: [number, Record<string, string>, AsyncIterable<string | Uint8Array>] = [
+      200,
+      { "content-type": "image/jpeg" },
+      body(),
+    ];
+
+    const resp = await rackResponseToFetchResponse(rackResp);
+    const result = new Uint8Array(await resp.arrayBuffer());
+    expect(result).toEqual(bytes);
+  });
+
+  it("handles mixed string and binary chunks", async () => {
+    async function* body() {
+      yield "hello ";
+      yield new TextEncoder().encode("world");
+    }
+    const rackResp: [number, Record<string, string>, AsyncIterable<string | Uint8Array>] = [
+      200,
+      { "content-type": "application/octet-stream" },
+      body(),
+    ];
+
+    const resp = await rackResponseToFetchResponse(rackResp);
+    const result = new Uint8Array(await resp.arrayBuffer());
+    expect(new TextDecoder().decode(result)).toBe("hello world");
+  });
+
   it("passes through all headers", async () => {
     async function* body() {
       yield "";

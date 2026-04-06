@@ -94,22 +94,51 @@ export async function requestToRackEnvWithBody(request: Request, basePath = ""):
 
 /**
  * Convert a Rack response tuple to a fetch Response.
+ * Preserves binary data when the body contains Uint8Array chunks.
  */
 export async function rackResponseToFetchResponse(rackResponse: RackResponse): Promise<Response> {
   const [status, headers, body] = rackResponse;
 
-  const bodyText = await collectBody(body);
+  const responseBody = await collectBody(body);
 
-  return new Response(bodyText, {
+  return new Response(responseBody, {
     status,
     headers: new Headers(headers),
   });
 }
 
-async function collectBody(body: RackBody): Promise<string> {
-  const chunks: string[] = [];
+async function collectBody(body: RackBody): Promise<string | Uint8Array> {
+  const textChunks: string[] = [];
+  const binaryChunks: Uint8Array[] = [];
+  let hasBinary = false;
+
   for await (const chunk of body) {
-    chunks.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
+    if (typeof chunk === "string") {
+      if (hasBinary) {
+        binaryChunks.push(new TextEncoder().encode(chunk));
+      } else {
+        textChunks.push(chunk);
+      }
+    } else {
+      if (!hasBinary) {
+        hasBinary = true;
+        for (const t of textChunks) {
+          binaryChunks.push(new TextEncoder().encode(t));
+        }
+        textChunks.length = 0;
+      }
+      binaryChunks.push(chunk);
+    }
   }
-  return chunks.join("");
+
+  if (!hasBinary) return textChunks.join("");
+
+  const totalLength = binaryChunks.reduce((n, c) => n + c.byteLength, 0);
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const c of binaryChunks) {
+    result.set(c, offset);
+    offset += c.byteLength;
+  }
+  return result;
 }

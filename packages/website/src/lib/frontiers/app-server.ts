@@ -44,8 +44,8 @@ export function createAppServer(_deps: AppServerDeps): AppServer {
       await controller.dispatch(action, request, response);
 
       const headers: Record<string, string> = {};
-      if ((response as any)._headers) {
-        Object.assign(headers, (response as any)._headers);
+      if (response.headers) {
+        Object.assign(headers, response.headers);
       }
 
       return [response.status, headers, bodyFromString(response.body ?? "")];

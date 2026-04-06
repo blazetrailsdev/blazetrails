@@ -24,6 +24,8 @@ import { MigrationRunner } from "@blazetrails/activerecord/migration-runner";
 import { Schema } from "@blazetrails/activerecord/schema";
 import { ActionController } from "@blazetrails/actionpack";
 
+// sql.js is loaded via importScripts before the IIFE (see vite.sw.config.ts banner).
+// The Vite build externalizes it and maps the import to the global `initSqlJs`.
 import initSqlJs from "sql.js";
 
 const DEV_PREFIX = "/~dev/";
@@ -267,10 +269,10 @@ function createFileReader() {
 
 const ERROR_CAPTURE_SCRIPT = `<script>
 window.addEventListener("error", function(e) {
-  parent.postMessage({ type: "frontiers:error", message: e.message + " at " + (e.filename || "") + ":" + (e.lineno || "") }, "*");
+  parent.postMessage({ type: "frontiers:error", message: e.message + " at " + (e.filename || "") + ":" + (e.lineno || "") }, location.origin);
 });
 window.addEventListener("unhandledrejection", function(e) {
-  parent.postMessage({ type: "frontiers:error", message: "Unhandled rejection: " + (e.reason?.message || e.reason || "unknown") }, "*");
+  parent.postMessage({ type: "frontiers:error", message: "Unhandled rejection: " + (e.reason?.message || e.reason || "unknown") }, location.origin);
 });
 </script>`;
 
@@ -295,8 +297,12 @@ async function handleFetch(request: Request, url: URL): Promise<Response> {
       const env = await requestToRackEnvWithBody(request, "/~dev");
       const rackResponse = await appServer.call(env);
       return await rackResponseToFetchResponse(rackResponse);
-    } catch {
-      // Fall through to static file serving
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Rack dispatch failed";
+      return new Response(`500 — ${message}`, {
+        status: 500,
+        headers: { "content-type": "text/plain" },
+      });
     }
   }
 

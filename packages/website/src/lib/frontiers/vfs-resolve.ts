@@ -13,7 +13,7 @@ export interface VfsFileReader {
  * 1. Exact path (prefer compiled JS for .ts files)
  * 2. public/ prefix (Rails public directory is the web root)
  * 3. Extension probing: .ts, .html
- * 4. Directory index: /index.html, public//index.html
+ * 4. Directory index: path/index.html, public/path/index.html
  */
 export function resolveVfsPath(
   path: string,

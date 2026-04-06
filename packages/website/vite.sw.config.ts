@@ -11,7 +11,21 @@ function pkgAlias(name: string, entry: string) {
   };
 }
 
+function prependImportScripts() {
+  return {
+    name: "prepend-importscripts",
+    generateBundle(_: unknown, bundle: Record<string, { type: string; code?: string }>) {
+      for (const file of Object.values(bundle)) {
+        if (file.type === "chunk" && file.code) {
+          file.code = 'importScripts("/sql-wasm.js");\n' + file.code;
+        }
+      }
+    },
+  };
+}
+
 export default defineConfig({
+  plugins: [prependImportScripts()],
   resolve: {
     alias: [
       // Subpath imports must come before the base alias

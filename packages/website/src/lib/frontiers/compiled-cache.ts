@@ -18,41 +18,36 @@ export class CompiledCache {
   }
 
   get(path: string): string | null {
-    const results = this.adapter.execRaw(
-      `SELECT "js" FROM "_vfs_compiled" WHERE "path" = '${esc(path)}'`,
-    );
+    const results = this.adapter.query(`SELECT "js" FROM "_vfs_compiled" WHERE "path" = ?`, [path]);
     if (!results.length || !results[0].values.length) return null;
     return results[0].values[0][0] as string;
   }
 
   set(path: string, js: string, sourceHash: string): void {
-    const existing = this.adapter.execRaw(
-      `SELECT 1 FROM "_vfs_compiled" WHERE "path" = '${esc(path)}'`,
-    );
+    const existing = this.adapter.query(`SELECT 1 FROM "_vfs_compiled" WHERE "path" = ?`, [path]);
     if (existing.length && existing[0].values.length) {
       this.adapter.runSql(
-        `UPDATE "_vfs_compiled" SET "js" = '${esc(js)}', "source_hash" = '${esc(sourceHash)}', "updated_at" = datetime('now') WHERE "path" = '${esc(path)}'`,
+        `UPDATE "_vfs_compiled" SET "js" = ?, "source_hash" = ?, "updated_at" = datetime('now') WHERE "path" = ?`,
+        [js, sourceHash, path],
       );
     } else {
       this.adapter.runSql(
-        `INSERT INTO "_vfs_compiled" ("path", "js", "source_hash") VALUES ('${esc(path)}', '${esc(js)}', '${esc(sourceHash)}')`,
+        `INSERT INTO "_vfs_compiled" ("path", "js", "source_hash") VALUES (?, ?, ?)`,
+        [path, js, sourceHash],
       );
     }
   }
 
   getSourceHash(path: string): string | null {
-    const results = this.adapter.execRaw(
-      `SELECT "source_hash" FROM "_vfs_compiled" WHERE "path" = '${esc(path)}'`,
+    const results = this.adapter.query(
+      `SELECT "source_hash" FROM "_vfs_compiled" WHERE "path" = ?`,
+      [path],
     );
     if (!results.length || !results[0].values.length) return null;
     return results[0].values[0][0] as string;
   }
 
   delete(path: string): void {
-    this.adapter.runSql(`DELETE FROM "_vfs_compiled" WHERE "path" = '${esc(path)}'`);
+    this.adapter.runSql(`DELETE FROM "_vfs_compiled" WHERE "path" = ?`, [path]);
   }
-}
-
-function esc(s: string): string {
-  return s.replace(/'/g, "''");
 }

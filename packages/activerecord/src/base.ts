@@ -2059,7 +2059,11 @@ export class Base extends Model {
 
     // Mirrors: ActiveRecord::Transactions#save
     const { withTransactionReturningStatus } = await import("./transactions.js");
-    return withTransactionReturningStatus(this, () => this._createOrUpdate());
+    try {
+      return await withTransactionReturningStatus(this, () => this._createOrUpdate());
+    } finally {
+      this._skipTouch = false;
+    }
   }
 
   /**

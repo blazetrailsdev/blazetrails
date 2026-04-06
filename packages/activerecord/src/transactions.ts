@@ -87,21 +87,16 @@ export async function transaction<T>(
   // where each thread gets its own connection — concurrent callers queue.
   // Nested transactions (savepoints) skip the lock since they run inside
   // the outer transaction's locked scope.
-  const releaseLock = nested ? null : await acquireAdapterLock(adapter);
+  let releaseLock = nested ? null : await acquireAdapterLock(adapter);
 
+  let result: T;
   try {
     if (nested && spName) {
       await adapter.createSavepoint(spName);
     } else {
       await adapter.beginTransaction();
     }
-  } catch (e) {
-    releaseLock?.();
-    throw e;
-  }
 
-  let result: T;
-  try {
     result = await getTransactionStorage().run(tx, () => fn(tx));
     if (nested && spName) {
       await adapter.releaseSavepoint(spName);
@@ -110,24 +105,29 @@ export async function transaction<T>(
     }
     await tx.commit();
   } catch (error) {
-    if (nested && spName) {
-      await adapter.rollbackToSavepoint(spName);
-    } else {
-      await adapter.rollback();
+    try {
+      if (nested && spName) {
+        await adapter.rollbackToSavepoint(spName);
+      } else {
+        await adapter.rollback();
+      }
+      await tx.rollback();
+    } catch {
+      // Swallow rollback errors — the original error is more important
     }
-    await tx.rollback();
     // Release lock before callbacks to prevent deadlocks if a callback
     // starts a new outermost transaction on the same adapter.
     releaseLock?.();
+    releaseLock = null;
     await tx.runAfterRollbackCallbacks();
     if (error instanceof Rollback) {
       return undefined;
     }
     throw error;
+  } finally {
+    // Guarantee lock release even if commit/rollback/callbacks throw
+    releaseLock?.();
   }
-  // Release lock before callbacks to prevent deadlocks if a callback
-  // starts a new outermost transaction on the same adapter.
-  releaseLock?.();
   await tx.runAfterCommitCallbacks();
   return result;
 }

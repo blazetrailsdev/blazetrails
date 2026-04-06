@@ -3,14 +3,14 @@
  * Uses MessageChannel for request/response pairs and listens for broadcasts.
  */
 
-import type { SwRequest, SwResponse, SwBroadcast } from "./sw-protocol.js";
+import type { SwRequest, SwResponse, SwBroadcast, SwMessageMap } from "./sw-protocol.js";
 
 export interface SwClient {
-  /** Send a request and wait for the response. */
-  send<T extends SwResponse>(request: SwRequest): Promise<T>;
+  /** Send a typed request and get the matching response. */
+  send<R extends SwRequest>(request: R): Promise<SwMessageMap[R["type"]]>;
   /** Register a listener for broadcast messages from the SW. */
   onBroadcast(fn: (msg: SwBroadcast) => void): () => void;
-  /** Unregister the service worker. */
+  /** Unregister the service worker and clean up listeners. */
   destroy(): Promise<void>;
   /** Whether the SW is connected and ready. */
   readonly ready: boolean;
@@ -49,13 +49,14 @@ export async function createSwClient(): Promise<SwClient> {
 
   const broadcastListeners: Array<(msg: SwBroadcast) => void> = [];
 
-  // Listen for broadcasts from SW
-  navigator.serviceWorker.addEventListener("message", (event) => {
+  function handleBroadcast(event: MessageEvent) {
     const data = event.data as SwBroadcast;
     if (data?.type === "vfs:changed" || data?.type === "db:changed") {
       for (const fn of broadcastListeners) fn(data);
     }
-  });
+  }
+
+  navigator.serviceWorker.addEventListener("message", handleBroadcast);
 
   function getController(): ServiceWorker {
     const sw = navigator.serviceWorker.controller ?? reg.active;
@@ -70,11 +71,12 @@ export async function createSwClient(): Promise<SwClient> {
       return isReady;
     },
 
-    async send<T extends SwResponse>(request: SwRequest): Promise<T> {
+    async send<R extends SwRequest>(request: R): Promise<SwMessageMap[R["type"]]> {
       const sw = getController();
-      return new Promise<T>((resolve, reject) => {
+      return new Promise<SwMessageMap[R["type"]]>((resolve, reject) => {
         const channel = new MessageChannel();
         const timer = setTimeout(() => {
+          channel.port1.onmessage = null;
           reject(new Error(`SW request timed out: ${request.type}`));
         }, REQUEST_TIMEOUT);
 
@@ -84,7 +86,7 @@ export async function createSwClient(): Promise<SwClient> {
           if (response.type === "error") {
             reject(new Error((response as { type: "error"; message: string }).message));
           } else {
-            resolve(response as T);
+            resolve(response as SwMessageMap[R["type"]]);
           }
         };
 
@@ -102,13 +104,15 @@ export async function createSwClient(): Promise<SwClient> {
 
     async destroy() {
       isReady = false;
+      navigator.serviceWorker.removeEventListener("message", handleBroadcast);
+      broadcastListeners.length = 0;
       await reg.unregister();
     },
   };
 
   // Send init and wait for ready
   const initResponse = await Promise.race([
-    client.send<SwResponse & { type: "init" }>({ type: "init" }),
+    client.send({ type: "init" as const }),
     new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error("SW init timed out")), INIT_TIMEOUT),
     ),

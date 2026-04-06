@@ -21,17 +21,12 @@ export class SwVfsProxy {
   }
 
   async list(): Promise<VfsFile[]> {
-    const resp = await this.client.send<{ type: "vfs:list"; files: VfsFile[] }>({
-      type: "vfs:list",
-    });
+    const resp = await this.client.send({ type: "vfs:list" });
     return resp.files;
   }
 
   async read(path: string): Promise<VfsFile | null> {
-    const resp = await this.client.send<{ type: "vfs:read"; file: VfsFile | null }>({
-      type: "vfs:read",
-      path,
-    });
+    const resp = await this.client.send({ type: "vfs:read", path });
     return resp.file;
   }
 
@@ -40,27 +35,17 @@ export class SwVfsProxy {
   }
 
   async delete(path: string): Promise<boolean> {
-    const resp = await this.client.send<{ type: "vfs:delete"; deleted: boolean }>({
-      type: "vfs:delete",
-      path,
-    });
+    const resp = await this.client.send({ type: "vfs:delete", path });
     return resp.deleted;
   }
 
   async rename(oldPath: string, newPath: string): Promise<boolean> {
-    const resp = await this.client.send<{ type: "vfs:rename"; renamed: boolean }>({
-      type: "vfs:rename",
-      oldPath,
-      newPath,
-    });
+    const resp = await this.client.send({ type: "vfs:rename", oldPath, newPath });
     return resp.renamed;
   }
 
   async exists(path: string): Promise<boolean> {
-    const resp = await this.client.send<{ type: "vfs:exists"; exists: boolean }>({
-      type: "vfs:exists",
-      path,
-    });
+    const resp = await this.client.send({ type: "vfs:exists", path });
     return resp.exists;
   }
 

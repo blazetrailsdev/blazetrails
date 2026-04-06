@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { SwRequest, SwResponse, SwBroadcast } from "./sw-protocol.js";
+import type { SwRequest, SwResponse, SwBroadcast, SwMessageMap } from "./sw-protocol.js";
 import { SwVfsProxy } from "./sw-vfs-proxy.js";
 import { SwAdapterProxy } from "./sw-adapter-proxy.js";
+import { SwRuntimeProxy } from "./sw-runtime-proxy.js";
 import type { SwClient } from "./sw-client.js";
 
 /**
@@ -16,12 +17,12 @@ function createMockSwClient(
   return {
     ready: true,
 
-    async send<T extends SwResponse>(request: SwRequest): Promise<T> {
+    async send<R extends SwRequest>(request: R): Promise<SwMessageMap[R["type"]]> {
       const response = handler(request);
       if (response.type === "error") {
         throw new Error((response as { type: "error"; message: string }).message);
       }
-      return response as T;
+      return response as SwMessageMap[R["type"]];
     },
 
     onBroadcast(fn: (msg: SwBroadcast) => void): () => void {
@@ -39,6 +40,32 @@ function createMockSwClient(
     },
   };
 }
+
+/**
+ * Mock SwClient where send() never resolves — for testing timeout behavior.
+ */
+function createHangingSwClient(): SwClient & { broadcast: (msg: SwBroadcast) => void } {
+  const broadcastListeners: Array<(msg: SwBroadcast) => void> = [];
+  return {
+    ready: true,
+    send<R extends SwRequest>(_request: R): Promise<SwMessageMap[R["type"]]> {
+      return new Promise(() => {});
+    },
+    onBroadcast(fn: (msg: SwBroadcast) => void) {
+      broadcastListeners.push(fn);
+      return () => {
+        const idx = broadcastListeners.indexOf(fn);
+        if (idx >= 0) broadcastListeners.splice(idx, 1);
+      };
+    },
+    async destroy() {},
+    broadcast(msg: SwBroadcast) {
+      for (const fn of broadcastListeners) fn(msg);
+    },
+  };
+}
+
+// ── SwVfsProxy ──────────────────────────────────────────────────────────
 
 describe("SwVfsProxy", () => {
   let client: ReturnType<typeof createMockSwClient>;
@@ -60,7 +87,7 @@ describe("SwVfsProxy", () => {
         case "vfs:read":
           return {
             type: "vfs:read",
-            file: (req as any).path === sampleFile.path ? sampleFile : null,
+            file: (req as { path: string }).path === sampleFile.path ? sampleFile : null,
           };
         case "vfs:write":
           return { type: "vfs:write", ok: true as const };
@@ -69,7 +96,10 @@ describe("SwVfsProxy", () => {
         case "vfs:rename":
           return { type: "vfs:rename", renamed: true };
         case "vfs:exists":
-          return { type: "vfs:exists", exists: (req as any).path === sampleFile.path };
+          return {
+            type: "vfs:exists",
+            exists: (req as { path: string }).path === sampleFile.path,
+          };
         default:
           return { type: "error", message: `Unknown: ${req.type}` };
       }
@@ -150,6 +180,8 @@ describe("SwVfsProxy", () => {
   });
 });
 
+// ── SwAdapterProxy ──────────────────────────────────────────────────────
+
 describe("SwAdapterProxy", () => {
   let client: ReturnType<typeof createMockSwClient>;
   let proxy: SwAdapterProxy;
@@ -172,15 +204,6 @@ describe("SwAdapterProxy", () => {
             type: "db:query",
             results: [{ columns: ["id", "name"], values: [[1, "dean"]] }],
           };
-        case "exec":
-          return {
-            type: "exec",
-            result: { success: true, output: ["Created model User"], exitCode: 0 },
-          };
-        case "db:export":
-          return { type: "db:export", data: new Uint8Array([1, 2, 3]) };
-        case "db:import":
-          return { type: "db:import", ok: true as const };
         default:
           return { type: "error", message: `Unknown: ${req.type}` };
       }
@@ -205,6 +228,32 @@ describe("SwAdapterProxy", () => {
     expect(results[0].columns).toEqual(["id", "name"]);
     expect(results[0].values).toEqual([[1, "dean"]]);
   });
+});
+
+// ── SwRuntimeProxy ──────────────────────────────────────────────────────
+
+describe("SwRuntimeProxy", () => {
+  let client: ReturnType<typeof createMockSwClient>;
+  let proxy: SwRuntimeProxy;
+
+  beforeEach(() => {
+    client = createMockSwClient((req) => {
+      switch (req.type) {
+        case "exec":
+          return {
+            type: "exec",
+            result: { success: true, output: ["Created model User"], exitCode: 0 },
+          };
+        case "db:export":
+          return { type: "db:export", data: new Uint8Array([1, 2, 3]) };
+        case "db:import":
+          return { type: "db:import", ok: true as const };
+        default:
+          return { type: "error", message: `Unknown: ${req.type}` };
+      }
+    });
+    proxy = new SwRuntimeProxy(client);
+  });
 
   it("executes CLI commands", async () => {
     const result = await proxy.exec("generate model User name:string");
@@ -224,6 +273,8 @@ describe("SwAdapterProxy", () => {
   });
 });
 
+// ── Error handling ──────────────────────────────────────────────────────
+
 describe("SwClient error handling", () => {
   it("rejects when SW returns error response", async () => {
     const client = createMockSwClient(() => ({
@@ -232,5 +283,49 @@ describe("SwClient error handling", () => {
     }));
 
     await expect(client.send({ type: "vfs:list" })).rejects.toThrow("Something broke");
+  });
+});
+
+// ── Timeout behavior ────────────────────────────────────────────────────
+
+describe("SwClient timeout behavior", () => {
+  it("VFS proxy rejects when SW never responds", async () => {
+    const client = createHangingSwClient();
+    const proxy = new SwVfsProxy(client);
+
+    // The proxy awaits the client.send which never resolves.
+    // In the real SwClient, this would timeout after REQUEST_TIMEOUT.
+    // Here we verify the proxy correctly propagates rejections.
+    const sendSpy = vi
+      .spyOn(client, "send")
+      .mockRejectedValueOnce(new Error("SW request timed out: vfs:list"));
+
+    await expect(proxy.list()).rejects.toThrow("SW request timed out: vfs:list");
+    sendSpy.mockRestore();
+    proxy.dispose();
+  });
+
+  it("adapter proxy rejects when SW never responds", async () => {
+    const client = createHangingSwClient();
+    const proxy = new SwAdapterProxy(client);
+
+    const sendSpy = vi
+      .spyOn(client, "send")
+      .mockRejectedValueOnce(new Error("SW request timed out: db:tables"));
+
+    await expect(proxy.getTables()).rejects.toThrow("SW request timed out: db:tables");
+    sendSpy.mockRestore();
+  });
+
+  it("runtime proxy rejects when SW never responds", async () => {
+    const client = createHangingSwClient();
+    const proxy = new SwRuntimeProxy(client);
+
+    const sendSpy = vi
+      .spyOn(client, "send")
+      .mockRejectedValueOnce(new Error("SW request timed out: exec"));
+
+    await expect(proxy.exec("db:migrate")).rejects.toThrow("SW request timed out: exec");
+    sendSpy.mockRestore();
   });
 });

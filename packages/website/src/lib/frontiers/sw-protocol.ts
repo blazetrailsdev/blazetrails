@@ -5,6 +5,30 @@
 
 import type { VfsFile } from "./virtual-fs.js";
 
+// ── Request → Response mapping ──────────────────────────────────────────
+// Each request type maps to exactly one response shape. SwClient.send()
+// uses this to infer the return type from the request, so callers get
+// type-safe responses without manual generic parameters.
+
+export interface SwMessageMap {
+  init: { type: "init"; ready: true };
+  "vfs:list": { type: "vfs:list"; files: VfsFile[] };
+  "vfs:read": { type: "vfs:read"; file: VfsFile | null };
+  "vfs:write": { type: "vfs:write"; ok: true };
+  "vfs:delete": { type: "vfs:delete"; deleted: boolean };
+  "vfs:rename": { type: "vfs:rename"; renamed: boolean };
+  "vfs:exists": { type: "vfs:exists"; exists: boolean };
+  "db:tables": { type: "db:tables"; tables: string[] };
+  "db:columns": {
+    type: "db:columns";
+    columns: Array<{ name: string; type: string; notnull: boolean; pk: boolean }>;
+  };
+  "db:query": { type: "db:query"; results: Array<{ columns: string[]; values: unknown[][] }> };
+  exec: { type: "exec"; result: { success: boolean; output: string[]; exitCode: number } };
+  "db:export": { type: "db:export"; data: Uint8Array };
+  "db:import": { type: "db:import"; ok: true };
+}
+
 // ── Request messages (main → SW) ────────────────────────────────────────
 
 export type SwRequest =
@@ -24,24 +48,7 @@ export type SwRequest =
 
 // ── Response messages (SW → main) ───────────────────────────────────────
 
-export type SwResponse =
-  | { type: "init"; ready: true }
-  | { type: "vfs:list"; files: VfsFile[] }
-  | { type: "vfs:read"; file: VfsFile | null }
-  | { type: "vfs:write"; ok: true }
-  | { type: "vfs:delete"; deleted: boolean }
-  | { type: "vfs:rename"; renamed: boolean }
-  | { type: "vfs:exists"; exists: boolean }
-  | { type: "db:tables"; tables: string[] }
-  | {
-      type: "db:columns";
-      columns: Array<{ name: string; type: string; notnull: boolean; pk: boolean }>;
-    }
-  | { type: "db:query"; results: Array<{ columns: string[]; values: unknown[][] }> }
-  | { type: "exec"; result: { success: boolean; output: string[]; exitCode: number } }
-  | { type: "db:export"; data: Uint8Array }
-  | { type: "db:import"; ok: true }
-  | { type: "error"; message: string };
+export type SwResponse = SwMessageMap[keyof SwMessageMap] | { type: "error"; message: string };
 
 // ── Broadcast messages (SW → all clients) ───────────────────────────────
 

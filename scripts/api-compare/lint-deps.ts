@@ -98,6 +98,15 @@ function collectRubyDepMethods(ruby: ApiManifest, pkg: string, dep: string): Rub
 type DepStatus = "uses" | "suppressed" | "missing";
 type TsDepMap = Map<string, Map<string, DepStatus>>; // file -> method -> status
 
+const STATUS_PRIORITY: Record<DepStatus, number> = { uses: 2, suppressed: 1, missing: 0 };
+
+function mergeStatus(map: Map<string, DepStatus>, name: string, status: DepStatus) {
+  const existing = map.get(name);
+  if (!existing || STATUS_PRIORITY[status] > STATUS_PRIORITY[existing]) {
+    map.set(name, status);
+  }
+}
+
 function analyzeTsDepUsage(pkgSrcDir: string, tsImport: string, jsdocTag: string): TsDepMap {
   const result: TsDepMap = new Map();
 
@@ -146,20 +155,22 @@ function analyzeTsDepUsage(pkgSrcDir: string, tsImport: string, jsdocTag: string
       const methodMap = new Map<string, DepStatus>();
       visitMethodDeclarations(sourceFile, (name, _body, node) => {
         const suppressed = hasJsDocTag(sourceFile, node, jsdocTag);
-        methodMap.set(name, suppressed ? "suppressed" : "missing");
+        mergeStatus(methodMap, name, suppressed ? "suppressed" : "missing");
       });
       if (methodMap.size > 0) result.set(relPath, methodMap);
       continue;
     }
 
-    // Step 2: for each method, check if body references any imported name
+    // Step 2: for each method, check if body references any imported name.
+    // Multiple declarations with the same name (e.g., count() in two classes)
+    // are merged: "uses" wins over "suppressed" wins over "missing".
     const methodMap = new Map<string, DepStatus>();
     visitMethodDeclarations(sourceFile, (name, bodyNode, node) => {
       if (bodyNode && bodyReferencesImports(bodyNode, importedNames)) {
-        methodMap.set(name, "uses");
+        mergeStatus(methodMap, name, "uses");
       } else {
         const suppressed = hasJsDocTag(sourceFile, node, jsdocTag);
-        methodMap.set(name, suppressed ? "suppressed" : "missing");
+        mergeStatus(methodMap, name, suppressed ? "suppressed" : "missing");
       }
     });
     if (methodMap.size > 0) result.set(relPath, methodMap);
@@ -219,11 +230,13 @@ function visitMethodDeclarations(
 }
 
 function hasJsDocTag(sourceFile: ts.SourceFile, node: ts.Node, tag: string): boolean {
+  // ts.getJSDocTags doesn't work reliably with createProgram, so parse the
+  // leading JSDoc comment directly. We only match inside /** ... */ blocks
+  // to avoid false positives from regular comments.
   const fullText = sourceFile.getFullText();
-  const fullStart = node.getFullStart();
-  const start = node.getStart(sourceFile);
-  const leading = fullText.slice(fullStart, start);
-  return leading.includes(tag);
+  const leading = fullText.slice(node.getFullStart(), node.getStart(sourceFile));
+  const jsDocMatch = leading.match(/\/\*\*[\s\S]*?\*\//);
+  return jsDocMatch !== null && jsDocMatch[0].includes(tag);
 }
 
 function bodyReferencesImports(body: ts.Node, importedNames: Set<string>): boolean {
@@ -446,10 +459,10 @@ function applyJsDocFixes(violations: Violation[], pkgSrcDir: string, rule: DepRu
       const tag = `${rule.jsdocTag} ${refs}`;
 
       if (hasDoc) {
-        const closePos = findExistingJsDocClosePos(source, node);
-        if (closePos !== null) {
-          const insertLine = `\n${indent} * ${tag}\n${indent} `;
-          modified = modified.slice(0, closePos) + insertLine + modified.slice(closePos);
+        const close = findExistingJsDocClose(source, node);
+        if (close !== null) {
+          const replacement = `${indent} * ${tag}\n${indent} */`;
+          modified = modified.slice(0, close.start) + replacement + modified.slice(close.end);
         }
       } else {
         const insertPos = findInsertionPoint(source, node);
@@ -499,13 +512,20 @@ function hasExistingJsDoc(source: string, node: ts.Node): boolean {
   return /\/\*\*[\s\S]*?\*\//.test(leading);
 }
 
-function findExistingJsDocClosePos(source: string, node: ts.Node): number | null {
+function findExistingJsDocClose(
+  source: string,
+  node: ts.Node,
+): { start: number; end: number } | null {
   const fullStart = node.getFullStart();
   const start = node.getStart();
   const leading = source.slice(fullStart, start);
   const match = leading.match(/\/\*\*[\s\S]*?\*\//);
   if (!match) return null;
-  return fullStart + match.index! + match[0].lastIndexOf("*/");
+  const closeEnd = fullStart + match.index! + match[0].length;
+  // Find the start of the closing line: backtrack from */ past whitespace and newline
+  let closeStart = fullStart + match.index! + match[0].lastIndexOf("*/");
+  while (closeStart > 0 && source[closeStart - 1] !== "\n") closeStart--;
+  return { start: closeStart, end: closeEnd };
 }
 
 // ---------------------------------------------------------------------------

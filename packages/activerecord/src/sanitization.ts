@@ -63,7 +63,6 @@ export function sanitizeSqlForAssignment(
 
 /**
  * Mirrors: ActiveRecord::Sanitization::ClassMethods#sanitize_sql_for_order
- 
  * @arel Arel
  */
 export function sanitizeSqlForOrder(condition: string | [string, ...unknown[]]): string {
@@ -103,7 +102,6 @@ export function sanitizeSqlHashForAssignment(
 
 /**
  * Mirrors: ActiveRecord::Sanitization::ClassMethods#disallow_raw_sql!
- 
  * @arel Arel
  */
 export function disallowRawSqlBang(args: (string | symbol)[], permit?: RegExp): void {

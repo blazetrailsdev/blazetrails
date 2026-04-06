@@ -103,16 +103,20 @@ export async function requestToRackEnvWithBody(request: Request, basePath = ""):
  * Convert a Rack response tuple to a fetch Response.
  * Preserves binary data when the body contains Uint8Array chunks.
  */
+const NULL_BODY_STATUSES = new Set([101, 204, 205, 304]);
+
 export async function rackResponseToFetchResponse(rackResponse: RackResponse): Promise<Response> {
   const [status, headers, body] = rackResponse;
 
-  const responseBody = await collectBody(body);
+  const responseBody = NULL_BODY_STATUSES.has(status) ? null : await collectBody(body);
 
   return new Response(responseBody, {
     status,
     headers: new Headers(headers),
   });
 }
+
+const encoder = new TextEncoder();
 
 async function collectBody(body: RackBody): Promise<string | Uint8Array> {
   const textChunks: string[] = [];
@@ -122,7 +126,7 @@ async function collectBody(body: RackBody): Promise<string | Uint8Array> {
   for await (const chunk of body) {
     if (typeof chunk === "string") {
       if (hasBinary) {
-        binaryChunks.push(new TextEncoder().encode(chunk));
+        binaryChunks.push(encoder.encode(chunk));
       } else {
         textChunks.push(chunk);
       }
@@ -130,7 +134,7 @@ async function collectBody(body: RackBody): Promise<string | Uint8Array> {
       if (!hasBinary) {
         hasBinary = true;
         for (const t of textChunks) {
-          binaryChunks.push(new TextEncoder().encode(t));
+          binaryChunks.push(encoder.encode(t));
         }
         textChunks.length = 0;
       }

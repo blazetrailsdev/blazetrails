@@ -238,6 +238,17 @@ describe("rackResponseToFetchResponse", () => {
     expect(new TextDecoder().decode(result)).toBe("hello world");
   });
 
+  it("returns null body for 204 No Content", async () => {
+    async function* body() {
+      yield "";
+    }
+    const rackResp: [number, Record<string, string>, AsyncIterable<string>] = [204, {}, body()];
+
+    const resp = await rackResponseToFetchResponse(rackResp);
+    expect(resp.status).toBe(204);
+    expect(resp.body).toBeNull();
+  });
+
   it("passes through all headers", async () => {
     async function* body() {
       yield "";

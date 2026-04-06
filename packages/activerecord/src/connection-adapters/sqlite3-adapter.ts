@@ -50,10 +50,16 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   private _memoryDatabase: boolean;
   private _filename: string;
 
+  private static _isMemoryFilename(filename: string): boolean {
+    if (filename === ":memory:") return true;
+    if (!filename.startsWith("file:")) return false;
+    return filename.startsWith("file::memory:") || filename.includes("mode=memory");
+  }
+
   constructor(filename: string | ":memory:" = ":memory:", options?: { readonly?: boolean }) {
     super();
     this._filename = filename;
-    this._memoryDatabase = filename === ":memory:";
+    this._memoryDatabase = SQLite3Adapter._isMemoryFilename(filename);
     this._readonly = options?.readonly ?? false;
     try {
       this.db = new Database(filename, { readonly: this._readonly });
@@ -760,10 +766,15 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     tableName: string,
     modify: (columns: Record<string, Record<string, unknown>>) => void,
   ): Promise<void> {
+    // Split schema-qualified names: PRAGMA requires schema prefix, not quoted name
+    const dotIdx = tableName.lastIndexOf(".");
+    const schema = dotIdx === -1 ? "" : tableName.slice(0, dotIdx);
+    const bareTable = dotIdx === -1 ? tableName : tableName.slice(dotIdx + 1);
+    const pragmaPrefix = schema ? `${quoteColumnName(schema)}.` : "";
     const qTable = quoteTableName(tableName);
-    const tableInfo = this.db.prepare(`PRAGMA table_info(${qTable})`).all() as Array<
-      Record<string, unknown>
-    >;
+    const tableInfo = this.db
+      .prepare(`PRAGMA ${pragmaPrefix}table_info(${quoteColumnName(bareTable)})`)
+      .all() as Array<Record<string, unknown>>;
 
     const columns: Record<string, Record<string, unknown>> = {};
     for (const col of tableInfo) {
@@ -773,9 +784,9 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     modify(columns);
 
     // Collect existing indexes to recreate after table rebuild
-    const indexList = this.db.prepare(`PRAGMA index_list(${qTable})`).all() as Array<
-      Record<string, unknown>
-    >;
+    const indexList = this.db
+      .prepare(`PRAGMA ${pragmaPrefix}index_list(${quoteColumnName(bareTable)})`)
+      .all() as Array<Record<string, unknown>>;
     const indexDefs: string[] = [];
     for (const idx of indexList) {
       const idxName = idx.name as string;
@@ -791,22 +802,32 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
       }
     }
 
-    const dotIdx = tableName.lastIndexOf(".");
-    const prefix = dotIdx === -1 ? "" : `${tableName.slice(0, dotIdx)}.`;
-    const base = dotIdx === -1 ? tableName : tableName.slice(dotIdx + 1);
-    const tmpTable = `${prefix}_alter_tmp_${base}`;
+    const prefix = schema ? `${schema}.` : "";
+    const tmpTable = `${prefix}_alter_tmp_${bareTable}`;
     const qTmp = quoteTableName(tmpTable);
     const colNames = Object.keys(columns);
+
+    // Detect composite primary keys
+    const pkColumns = colNames
+      .map((name) => ({ name, pk: Number(columns[name].pk) || 0 }))
+      .filter((c) => c.pk > 0)
+      .sort((a, b) => a.pk - b.pk)
+      .map((c) => c.name);
+    const compositePk = pkColumns.length > 1;
+
     const colDefs = colNames.map((name) => {
       const col = columns[name];
       let def = `${quoteColumnName(name)} ${col.type ?? "TEXT"}`;
-      if (col.pk) def += " PRIMARY KEY";
+      if (!compositePk && col.pk) def += " PRIMARY KEY";
       if (col.notnull) def += " NOT NULL";
       if (col.dflt_value !== null && col.dflt_value !== undefined) {
         def += ` DEFAULT ${col.dflt_value}`;
       }
       return def;
     });
+    if (compositePk) {
+      colDefs.push(`PRIMARY KEY(${pkColumns.map((n) => quoteColumnName(n)).join(", ")})`);
+    }
 
     const originalColNames = tableInfo
       .map((c) => c.name as string)
@@ -818,7 +839,8 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
       this.db.exec(`INSERT INTO ${qTmp} (${selectCols}) SELECT ${selectCols} FROM ${qTable}`);
     }
     this.db.exec(`DROP TABLE ${qTable}`);
-    this.db.exec(`ALTER TABLE ${qTmp} RENAME TO ${qTable}`);
+    // RENAME TO requires unqualified name
+    this.db.exec(`ALTER TABLE ${qTmp} RENAME TO ${quoteColumnName(bareTable)}`);
 
     // Recreate indexes, adjusting table name references
     for (const sql of indexDefs) {

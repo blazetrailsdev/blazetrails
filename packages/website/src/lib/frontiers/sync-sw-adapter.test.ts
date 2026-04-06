@@ -27,8 +27,13 @@ function createMockAdapter() {
     async getColumns(table: string) {
       return columns[table] ?? [];
     },
-    async execRaw(_sql: string) {
-      return [{ columns: ["count"], values: [[42]] }];
+    async execRaw(sql: string) {
+      if (sql.includes("COUNT(*)")) {
+        const table = sql.match(/FROM "(\w+)"/)?.[1];
+        if (table === "users") return [{ columns: ["COUNT(*)"], values: [[5]] }];
+        if (table === "posts") return [{ columns: ["COUNT(*)"], values: [[3]] }];
+      }
+      return [{ columns: ["id"], values: [[1]] }];
     },
   } as SwAdapterProxy;
 
@@ -80,9 +85,19 @@ describe("SyncSwAdapter", () => {
     expect(syncAdapter.getColumns("unknown")).toEqual([]);
   });
 
+  it("returns cached COUNT(*) results synchronously", () => {
+    const result = syncAdapter.execRaw('SELECT COUNT(*) FROM "users"');
+    expect(result).toHaveLength(1);
+    expect(result[0].values[0][0]).toBe(5);
+  });
+
+  it("returns empty for uncached queries", () => {
+    const result = syncAdapter.execRaw("SELECT * FROM users LIMIT 3");
+    expect(result).toEqual([]);
+  });
+
   it("dispose stops listeners", () => {
     syncAdapter.dispose();
-    // Should not throw
     mock.broadcast({ type: "db:changed" });
   });
 });

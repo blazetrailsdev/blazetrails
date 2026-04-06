@@ -1,22 +1,23 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
-  import { createSwClient, type SwClient } from "$frontiers/sw-client.js";
-  import { SwVfsProxy } from "$frontiers/sw-vfs-proxy.js";
-  import { SwAdapterProxy } from "$frontiers/sw-adapter-proxy.js";
-  import { SwRuntimeProxy } from "$frontiers/sw-runtime-proxy.js";
-  import { SyncSwVfs } from "$frontiers/sync-sw-vfs.js";
-  import { SyncSwAdapter } from "$frontiers/sync-sw-adapter.js";
-  import type { CliResult } from "$frontiers/trail-cli.js";
-  import FileTree from "$frontiers/components/sandbox/FileTree.svelte";
-  import MonacoEditor from "$frontiers/components/sandbox/MonacoEditor.svelte";
-  import DatabaseBrowser from "$frontiers/components/sandbox/DatabaseBrowser.svelte";
-  import TabPanel from "$frontiers/components/sandbox/TabPanel.svelte";
-  import PreviewPanel from "$frontiers/components/sandbox/PreviewPanel.svelte";
+  import { onMount, onDestroy, tick } from "svelte";
+  import { createSwClient, type SwClient } from "$lib/frontiers/sw-client.js";
+  import { SwVfsProxy } from "$lib/frontiers/sw-vfs-proxy.js";
+  import { SwAdapterProxy } from "$lib/frontiers/sw-adapter-proxy.js";
+  import { SwRuntimeProxy } from "$lib/frontiers/sw-runtime-proxy.js";
+  import { SyncSwVfs } from "$lib/frontiers/sync-sw-vfs.js";
+  import { SyncSwAdapter } from "$lib/frontiers/sync-sw-adapter.js";
+  import type { CliResult } from "$lib/frontiers/trail-cli.js";
+  import FileTree from "$lib/frontiers/components/sandbox/FileTree.svelte";
+  import MonacoEditor from "$lib/frontiers/components/sandbox/MonacoEditor.svelte";
+  import DatabaseBrowser from "$lib/frontiers/components/sandbox/DatabaseBrowser.svelte";
+  import TabPanel from "$lib/frontiers/components/sandbox/TabPanel.svelte";
+  import PreviewPanel from "$lib/frontiers/components/sandbox/PreviewPanel.svelte";
 
   let client = $state<SwClient | null>(null);
   let vfs = $state<SyncSwVfs | null>(null);
   let adapter = $state<SyncSwAdapter | null>(null);
   let runtimeProxy = $state<SwRuntimeProxy | null>(null);
+  let previewPanel = $state<PreviewPanel | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
 
@@ -26,6 +27,7 @@
   let cliInput = $state("");
   let cliOutput = $state<string[]>([]);
   let cliRunning = $state(false);
+  let cliOutputEl: HTMLDivElement | undefined = $state();
 
   const TABS = [
     { id: "editor", label: "Editor" },
@@ -50,7 +52,14 @@
 
       vfs = syncVfs;
       adapter = syncAdapter;
-      loading = false;
+
+      // Auto-scaffold a new app if VFS is empty
+      if (syncVfs.list().length === 0) {
+        loading = false;
+        await scaffoldNewApp();
+      } else {
+        loading = false;
+      }
     } catch (e: unknown) {
       error = e instanceof Error ? e.message : String(e);
       loading = false;
@@ -58,10 +67,25 @@
   });
 
   onDestroy(() => {
+    clearTimeout(writeTimer);
     vfs?.dispose();
     adapter?.dispose();
     client?.destroy();
   });
+
+  async function scaffoldNewApp() {
+    if (!runtimeProxy) return;
+    cliOutput = ["$ new myapp", "Creating new trails application..."];
+    cliRunning = true;
+    try {
+      const result = await runtimeProxy.exec("new myapp");
+      cliOutput = [...cliOutput, ...result.output];
+    } catch (e: unknown) {
+      cliOutput = [...cliOutput, `Error: ${e instanceof Error ? e.message : String(e)}`];
+    } finally {
+      cliRunning = false;
+    }
+  }
 
   function handleFileSelect(path: string) {
     if (!vfs) return;
@@ -72,10 +96,17 @@
     }
   }
 
+  // Debounce editor writes — 300ms after last keystroke
+  let writeTimer: ReturnType<typeof setTimeout>;
+
   function handleFileChange(content: string) {
     if (!vfs || !selectedFile) return;
-    vfs.write(selectedFile.path, content);
     selectedFile = { ...selectedFile, content };
+    clearTimeout(writeTimer);
+    const path = selectedFile.path;
+    writeTimer = setTimeout(() => {
+      vfs?.write(path, content);
+    }, 300);
   }
 
   async function runCommand() {
@@ -96,8 +127,18 @@
       cliOutput = [...cliOutput, `Error: ${e instanceof Error ? e.message : String(e)}`];
     } finally {
       cliRunning = false;
+      previewPanel?.refresh();
     }
   }
+
+  // Auto-scroll CLI output to bottom
+  $effect(() => {
+    if (cliOutput.length && cliOutputEl) {
+      tick().then(() => {
+        cliOutputEl?.scrollTo(0, cliOutputEl.scrollHeight);
+      });
+    }
+  });
 
   // Re-read the selected file when VFS changes (e.g. after CLI generates files)
   $effect(() => {
@@ -165,7 +206,7 @@
                 {vfs}
               />
             {:else if tab === "preview"}
-              <PreviewPanel {client} />
+              <PreviewPanel bind:this={previewPanel} {client} />
             {/if}
           {/snippet}
         </TabPanel>
@@ -175,7 +216,7 @@
     <!-- CLI bar -->
     <div class="border-t border-border bg-surface-raised">
       {#if cliOutput.length > 0}
-        <div class="max-h-32 overflow-y-auto px-4 py-2">
+        <div bind:this={cliOutputEl} class="max-h-32 overflow-y-auto px-4 py-2">
           {#each cliOutput as line}
             <pre class="text-[11px] leading-relaxed text-text-muted">{line}</pre>
           {/each}

@@ -2,6 +2,9 @@
  * Sync SqlJsAdapter-compatible wrapper over the async SwAdapterProxy.
  * Maintains cached tables/columns so DatabaseBrowser can use its
  * existing sync API without modification.
+ *
+ * execRaw() caches per-table COUNT(*) and preview queries during hydrate
+ * so DatabaseBrowser's sync refresh() gets real data on first call.
  */
 
 import type { SwAdapterProxy } from "./sw-adapter-proxy.js";
@@ -14,6 +17,7 @@ export class SyncSwAdapter {
     string,
     Array<{ name: string; type: string; notnull: boolean; pk: boolean }>
   >();
+  private _queryCache = new Map<string, Array<{ columns: string[]; values: unknown[][] }>>();
   private _listeners: Array<() => void> = [];
   private _unsubBroadcast: (() => void) | null = null;
 
@@ -31,19 +35,18 @@ export class SyncSwAdapter {
   async hydrate(): Promise<void> {
     this._tables = await this.proxy.getTables();
     this._columns.clear();
+    this._queryCache.clear();
     for (const table of this._tables) {
       this._columns.set(table, await this.proxy.getColumns(table));
+      const escaped = table.replace(/"/g, '""');
+      const countResult = await this.proxy.execRaw(`SELECT COUNT(*) FROM "${escaped}"`);
+      this._queryCache.set(`SELECT COUNT(*) FROM "${escaped}"`, countResult);
     }
     this._notify();
   }
 
   private async _rehydrate(): Promise<void> {
-    this._tables = await this.proxy.getTables();
-    this._columns.clear();
-    for (const table of this._tables) {
-      this._columns.set(table, await this.proxy.getColumns(table));
-    }
-    this._notify();
+    await this.hydrate();
   }
 
   private _notify(): void {
@@ -59,15 +62,16 @@ export class SyncSwAdapter {
   }
 
   execRaw(sql: string): Array<{ columns: string[]; values: unknown[][] }> {
-    // Fire async query and trigger refresh when done
+    const cached = this._queryCache.get(sql);
+    if (cached) return cached;
+
+    // For uncached queries, fire async and cache for next call
     void this.proxy.execRaw(sql).then((results) => {
-      this._lastExecResult = results;
+      this._queryCache.set(sql, results);
       this._notify();
     });
-    return this._lastExecResult ?? [];
+    return [];
   }
-
-  private _lastExecResult: Array<{ columns: string[]; values: unknown[][] }> | null = null;
 
   onChange(fn: () => void): () => void {
     this._listeners.push(fn);

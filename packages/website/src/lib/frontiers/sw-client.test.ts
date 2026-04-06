@@ -5,6 +5,10 @@ import { SwAdapterProxy } from "./sw-adapter-proxy.js";
 import { SwRuntimeProxy } from "./sw-runtime-proxy.js";
 import type { SwClient } from "./sw-client.js";
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 /**
  * Mock SwClient that resolves responses via a handler function.
  * Simulates the postMessage/MessageChannel pattern without a real SW.
@@ -296,12 +300,9 @@ describe("SwClient timeout behavior", () => {
     // The proxy awaits the client.send which never resolves.
     // In the real SwClient, this would timeout after REQUEST_TIMEOUT.
     // Here we verify the proxy correctly propagates rejections.
-    const sendSpy = vi
-      .spyOn(client, "send")
-      .mockRejectedValueOnce(new Error("SW request timed out: vfs:list"));
+    vi.spyOn(client, "send").mockRejectedValueOnce(new Error("SW request timed out: vfs:list"));
 
     await expect(proxy.list()).rejects.toThrow("SW request timed out: vfs:list");
-    sendSpy.mockRestore();
     proxy.dispose();
   });
 
@@ -309,23 +310,17 @@ describe("SwClient timeout behavior", () => {
     const client = createHangingSwClient();
     const proxy = new SwAdapterProxy(client);
 
-    const sendSpy = vi
-      .spyOn(client, "send")
-      .mockRejectedValueOnce(new Error("SW request timed out: db:tables"));
+    vi.spyOn(client, "send").mockRejectedValueOnce(new Error("SW request timed out: db:tables"));
 
     await expect(proxy.getTables()).rejects.toThrow("SW request timed out: db:tables");
-    sendSpy.mockRestore();
   });
 
   it("runtime proxy rejects when SW never responds", async () => {
     const client = createHangingSwClient();
     const proxy = new SwRuntimeProxy(client);
 
-    const sendSpy = vi
-      .spyOn(client, "send")
-      .mockRejectedValueOnce(new Error("SW request timed out: exec"));
+    vi.spyOn(client, "send").mockRejectedValueOnce(new Error("SW request timed out: exec"));
 
     await expect(proxy.exec("db:migrate")).rejects.toThrow("SW request timed out: exec");
-    sendSpy.mockRestore();
   });
 });

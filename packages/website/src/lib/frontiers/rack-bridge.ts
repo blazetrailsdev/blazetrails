@@ -41,16 +41,23 @@ export function requestToRackEnv(request: Request, basePath = ""): RackEnv {
   } catch {
     pathInfo = url.pathname;
   }
-  if (basePath && (pathInfo === basePath || pathInfo.startsWith(`${basePath}/`))) {
-    pathInfo = pathInfo.slice(basePath.length) || "/";
+  const normalizedBasePath = basePath.endsWith("/") ? basePath.slice(0, -1) : basePath;
+  if (
+    normalizedBasePath &&
+    (pathInfo === normalizedBasePath || pathInfo.startsWith(`${normalizedBasePath}/`))
+  ) {
+    pathInfo = pathInfo.slice(normalizedBasePath.length) || "/";
   }
+
+  const serverPort = url.port || (url.protocol === "https:" ? "443" : "80");
 
   const env: RackEnv = {
     REQUEST_METHOD: request.method.toUpperCase(),
     PATH_INFO: pathInfo,
     QUERY_STRING: url.search ? url.search.slice(1) : "",
     SERVER_NAME: url.hostname,
-    SERVER_PORT: url.port || (url.protocol === "https:" ? "443" : "80"),
+    SERVER_PORT: serverPort,
+    HTTP_HOST: url.host,
     SERVER_PROTOCOL: "HTTP/1.1",
     SCRIPT_NAME: "",
     HTTPS: url.protocol === "https:" ? "on" : "off",

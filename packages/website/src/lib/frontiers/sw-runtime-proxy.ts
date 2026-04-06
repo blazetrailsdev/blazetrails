@@ -3,13 +3,8 @@
  * Separated from SwAdapterProxy which handles DB introspection only.
  */
 
+import type { CliResult } from "./trail-cli.js";
 import type { SwClient } from "./sw-client.js";
-
-export interface CliResult {
-  success: boolean;
-  output: string[];
-  exitCode: number;
-}
 
 export class SwRuntimeProxy {
   constructor(private client: SwClient) {}

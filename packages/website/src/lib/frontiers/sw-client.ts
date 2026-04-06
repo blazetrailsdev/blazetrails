@@ -113,7 +113,19 @@ export async function createSwClient(options: SwClientOptions = {}): Promise<SwC
           }
         };
 
-        sw.postMessage(request, [channel.port2]);
+        try {
+          const transfer: Transferable[] = [channel.port2];
+          if ("data" in request && request.data instanceof ArrayBuffer) {
+            transfer.push(request.data);
+          } else if ("data" in request && request.data instanceof Uint8Array) {
+            transfer.push(request.data.buffer as ArrayBuffer);
+          }
+          sw.postMessage(request, transfer);
+        } catch (error) {
+          clearTimeout(timer);
+          cleanup();
+          reject(error instanceof Error ? error : new Error(String(error)));
+        }
       });
     },
 

@@ -88,6 +88,20 @@ describe("requestToRackEnv", () => {
     expect(env["PATH_INFO"]).toBe("/~devil/users");
   });
 
+  it("normalizes trailing slash on basePath", () => {
+    const req = new Request("http://localhost/~dev/users/1");
+    const env = requestToRackEnv(req, "/~dev/");
+
+    expect(env["PATH_INFO"]).toBe("/users/1");
+  });
+
+  it("sets HTTP_HOST from request URL", () => {
+    const req = new Request("http://localhost:3000/users");
+    const env = requestToRackEnv(req);
+
+    expect(env["HTTP_HOST"]).toBe("localhost:3000");
+  });
+
   it("survives malformed percent-encoding", () => {
     const req = new Request("http://localhost/%E0%A4");
     const env = requestToRackEnv(req);

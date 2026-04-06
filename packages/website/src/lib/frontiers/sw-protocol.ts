@@ -4,6 +4,7 @@
  */
 
 import type { VfsFile } from "./virtual-fs.js";
+import type { CliResult } from "./trail-cli.js";
 
 // ── Request → Response mapping ──────────────────────────────────────────
 // Each request type maps to exactly one response shape. SwClient.send()
@@ -24,7 +25,7 @@ export interface SwMessageMap {
     columns: Array<{ name: string; type: string; notnull: boolean; pk: boolean }>;
   };
   "db:query": { type: "db:query"; results: Array<{ columns: string[]; values: unknown[][] }> };
-  exec: { type: "exec"; result: { success: boolean; output: string[]; exitCode: number } };
+  exec: { type: "exec"; result: CliResult };
   "db:export": { type: "db:export"; data: Uint8Array };
   "db:import": { type: "db:import"; ok: true };
 }

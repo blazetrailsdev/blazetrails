@@ -116,14 +116,14 @@ export class WhereClause {
     }
 
     let leftAst: Nodes.Node = leftOnly.length === 1 ? leftOnly[0] : new Nodes.And(leftOnly);
-    if (leftAst instanceof Nodes.Grouping) leftAst = (leftAst as any).expr;
+    if (leftAst instanceof Nodes.Grouping) leftAst = leftAst.expr;
 
     let rightAst: Nodes.Node = rightOnly.length === 1 ? rightOnly[0] : new Nodes.And(rightOnly);
-    if (rightAst instanceof Nodes.Grouping) rightAst = (rightAst as any).expr;
+    if (rightAst instanceof Nodes.Grouping) rightAst = rightAst.expr;
 
     const orNode =
       leftAst instanceof Nodes.Or
-        ? new Nodes.Or([...(leftAst as any).children, rightAst])
+        ? new Nodes.Or([...leftAst.children, rightAst])
         : new Nodes.Or([leftAst, rightAst]);
 
     return new WhereClause([], [], [], [...common, new Nodes.Grouping(orNode)]);

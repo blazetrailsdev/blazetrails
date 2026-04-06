@@ -505,4 +505,148 @@ export class AbstractAdapter {
   }
 
   lockThread: boolean = false;
+
+  // --- DDL: extensions, enums, virtual tables ---
+
+  async enableExtension(_name: string): Promise<void> {}
+
+  async disableExtension(_name: string): Promise<void> {}
+
+  async createEnum(_name: string, _values: string[]): Promise<void> {}
+
+  async dropEnum(_name: string): Promise<void> {}
+
+  async renameEnum(_oldName: string, _newName: string): Promise<void> {}
+
+  async addEnumValue(_enumName: string, _value: string): Promise<void> {}
+
+  async renameEnumValue(_enumName: string, _oldValue: string, _newValue: string): Promise<void> {}
+
+  async createVirtualTable(_name: string, _options?: unknown): Promise<void> {}
+
+  async dropVirtualTable(_name: string): Promise<void> {}
+
+  // --- Advisory locks ---
+
+  isAdvisoryLocksEnabled(): boolean {
+    return false;
+  }
+
+  async getAdvisoryLock(_lockId: number | string): Promise<boolean> {
+    return false;
+  }
+
+  async releaseAdvisoryLock(_lockId: number | string): Promise<boolean> {
+    return false;
+  }
+
+  // --- Extensions & algorithms ---
+
+  get extensions(): string[] {
+    return [];
+  }
+
+  indexAlgorithms(): Record<string, string> {
+    return {};
+  }
+
+  // --- Referential integrity & FK validation ---
+
+  async disableReferentialIntegrity(fn: () => Promise<void>): Promise<void> {
+    await fn();
+  }
+
+  async checkAllForeignKeysValidBang(): Promise<void> {}
+
+  // --- Connection lifecycle ---
+
+  throwAwayBang(): void {
+    this.disconnectBang();
+  }
+
+  connectBang(): void {
+    // Concrete adapters override to establish the raw connection.
+  }
+
+  cleanBang(): void {
+    this.clearCacheBang();
+  }
+
+  // --- Comparison helpers ---
+
+  defaultUniquenessComparison(_attribute: unknown, _value: unknown): unknown {
+    return null;
+  }
+
+  caseSensitiveComparison(_attribute: unknown, _value: unknown): unknown {
+    return null;
+  }
+
+  caseInsensitiveComparison(_attribute: unknown, _value: unknown): unknown {
+    return null;
+  }
+
+  canPerformCaseInsensitiveComparisonFor(_column: unknown): boolean {
+    return false;
+  }
+
+  isDefaultIndexType(_index: unknown): boolean {
+    return true;
+  }
+
+  // --- Insert SQL ---
+
+  buildInsertSql(
+    _insertManager: unknown,
+    _onDuplicate?: unknown,
+    _returning?: unknown,
+  ): string | null {
+    return null;
+  }
+
+  // --- Version introspection ---
+
+  getDatabaseVersion(): Version {
+    return new Version("0.0.0");
+  }
+
+  get databaseVersion(): Version {
+    return this.getDatabaseVersion();
+  }
+
+  checkVersion(): void {}
+
+  async schemaVersion(): Promise<number> {
+    return 0;
+  }
+
+  // --- Timezone validation ---
+
+  static validateDefaultTimezone(timezone: string): string {
+    const valid = ["utc", "local"];
+    if (!valid.includes(timezone)) {
+      throw new Error(`Invalid timezone: ${timezone}. Must be one of: ${valid.join(", ")}`);
+    }
+    return timezone;
+  }
+
+  // --- Query classification ---
+
+  buildReadQueryRegexp(): RegExp {
+    return /^\s*(SELECT|EXPLAIN|PRAGMA|SHOW|SET|RESET|DESCRIBE|DESC)\b/i;
+  }
+
+  // --- Console ---
+
+  static findCmdAndExec(_commands: string[]): void {}
+
+  static dbconsole(_config?: unknown): void {}
+
+  // --- Type registration ---
+
+  static registerClassWithPrecision(_typeMap: unknown, _name: string, _klass: unknown): void {}
+
+  get extendedTypeMap(): Map<string, unknown> {
+    return new Map();
+  }
 }

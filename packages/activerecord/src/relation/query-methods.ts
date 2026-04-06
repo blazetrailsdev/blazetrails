@@ -480,7 +480,11 @@ function uniqBang(this: QueryMethodsHost, _name?: string): any {
 }
 
 function excludingBang(this: QueryMethodsHost, records: any[]): any {
-  const pk = this._modelClass.primaryKey as string;
+  const primaryKey = this._modelClass.primaryKey;
+  if (Array.isArray(primaryKey)) {
+    throw new Error("excluding does not support models with composite primary keys");
+  }
+  const pk = primaryKey as string;
   const ids = records.map((r: any) => (typeof r === "object" && r !== null ? (r.id ?? r) : r));
   this._whereClause.predicates.push(...this.predicateBuilder.buildNegatedFromHash({ [pk]: ids }));
   return this;

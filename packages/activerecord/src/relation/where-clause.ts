@@ -87,8 +87,10 @@ export class WhereClause {
   }
 
   toSql(): string {
-    if (this.predicates.length === 0) return "";
-    return visitor.compile(this.ast);
+    const wrapped = predicatesWithWrappedSqlLiterals(this.predicates);
+    if (wrapped.length === 0) return "";
+    const node = wrapped.length === 1 ? wrapped[0] : new Nodes.And(wrapped);
+    return visitor.compile(node);
   }
 
   isContradiction(): boolean {
@@ -117,12 +119,10 @@ export class WhereClause {
 
   toH(): Record<string, unknown> {
     const result: Record<string, unknown> = {};
-    for (const node of this.predicates) {
-      if (node instanceof Nodes.Equality) {
-        const attr = fetchAttributeNode(node);
-        if (attr !== null) {
-          result[attr.name] = extractNodeValue((node as any).right);
-        }
+    for (const node of equalities(this.predicates)) {
+      const attr = fetchAttributeNode(node);
+      if (attr !== null) {
+        result[attr.name] = extractNodeValue((node as any).right);
       }
     }
     return result;
@@ -165,6 +165,18 @@ function fetchAttributeNode(node: Nodes.Node): Nodes.Attribute | null {
     return fetchAttributeNode((node as any).expr);
   }
   return null;
+}
+
+function equalities(predicates: Nodes.Node[]): Nodes.Node[] {
+  const result: Nodes.Node[] = [];
+  for (const node of predicates) {
+    if (typeof (node as any).isEquality === "function" && (node as any).isEquality()) {
+      result.push(node);
+    } else if (node instanceof Nodes.And) {
+      result.push(...equalities((node as any).children));
+    }
+  }
+  return result;
 }
 
 function extractNodeValue(node: unknown): unknown {

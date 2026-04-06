@@ -73,8 +73,10 @@ export async function transaction<T>(
 
   const tx = new Transaction(adapter);
 
-  // Check nesting: either we're inside a transaction() call (AsyncLocalStorage)
-  // or the adapter is already in a DB transaction (external code / test fixtures).
+  // Check nesting: prefer AsyncLocalStorage (tracks our own transaction() calls).
+  // Fall back to adapter.inTransaction for DB transactions started outside our
+  // transaction() function (e.g. test fixtures). The per-adapter mutex serializes
+  // outermost transactions, so unrelated async flows cannot race here.
   const nested = previousTx !== null || adapter.inTransaction;
   const spName = nested ? `sp_${++_savepointCounter}` : null;
 
@@ -311,7 +313,9 @@ export async function withTransactionReturningStatus<T>(
   });
 
   // Schedule commit/rollback callbacks — mirrors add_to_transaction.
-  // If inside an outer transaction, defer. Otherwise fire immediately.
+  // If inside an outer transaction, defer commit callbacks to the outer
+  // transaction. Rollback callbacks fire immediately since the inner
+  // transaction (savepoint) has already rolled back.
   const outerTx = currentTransaction();
   if (status! !== false && status! != null) {
     if (outerTx) {
@@ -321,11 +325,9 @@ export async function withTransactionReturningStatus<T>(
       await committedBang(record);
     }
   } else {
-    if (outerTx) {
-      outerTx.afterRollback(async () => await rolledbackBang(record));
-    } else {
-      await rolledbackBang(record);
-    }
+    // Inner transaction rolled back — fire immediately regardless of
+    // outer transaction state.
+    await rolledbackBang(record);
   }
 
   return status!;

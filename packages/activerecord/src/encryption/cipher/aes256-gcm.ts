@@ -40,11 +40,14 @@ export class Cipher {
     } else {
       iv = Buffer.from(crypto.randomBytes(IV_LENGTH));
     }
-    const cipher = (crypto as any).createCipheriv("aes-256-gcm", keyBuf, iv, {
+    const cipher = crypto.createCipheriv("aes-256-gcm", keyBuf, iv, {
       authTagLength: AUTH_TAG_LENGTH,
     });
-    const encrypted = Buffer.concat([cipher.update(data, "utf-8"), cipher.final()]);
-    const authTag = cipher.getAuthTag() as Buffer;
+    const encrypted = Buffer.concat([
+      Buffer.from(cipher.update(Buffer.from(data, "utf-8"))),
+      Buffer.from(cipher.final()),
+    ]);
+    const authTag = Buffer.from(cipher.getAuthTag!());
 
     return {
       payload: encrypted.toString("base64"),
@@ -63,11 +66,14 @@ export class Cipher {
     for (const key of keyList) {
       try {
         const keyBuf = Buffer.from(key, "base64").subarray(0, KEY_LENGTH);
-        const decipher = (crypto as any).createDecipheriv("aes-256-gcm", keyBuf, ivBuf, {
+        const decipher = crypto.createDecipheriv("aes-256-gcm", keyBuf, ivBuf, {
           authTagLength: AUTH_TAG_LENGTH,
         });
-        decipher.setAuthTag(authTagBuf) as void;
-        const decrypted = Buffer.concat([decipher.update(encryptedBuf), decipher.final()]);
+        decipher.setAuthTag!(authTagBuf);
+        const decrypted = Buffer.concat([
+          Buffer.from(decipher.update(encryptedBuf)),
+          Buffer.from(decipher.final()),
+        ]);
         return decrypted.toString("utf-8");
       } catch {
         continue;

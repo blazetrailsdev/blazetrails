@@ -6,8 +6,18 @@ export interface CryptoAdapter {
   randomBytes(size: number): Uint8Array;
   createHash(algorithm: string): HashAdapter;
   createHmac(algorithm: string, key: string | Uint8Array): HmacAdapter;
-  createCipheriv(algorithm: string, key: Uint8Array, iv: Uint8Array): CipherAdapter;
-  createDecipheriv(algorithm: string, key: Uint8Array, iv: Uint8Array): DecipherAdapter;
+  createCipheriv(
+    algorithm: string,
+    key: Uint8Array,
+    iv: Uint8Array,
+    options?: Record<string, unknown>,
+  ): CipherAdapter;
+  createDecipheriv(
+    algorithm: string,
+    key: Uint8Array,
+    iv: Uint8Array,
+    options?: Record<string, unknown>,
+  ): DecipherAdapter;
   pbkdf2Sync(
     password: string | Uint8Array,
     salt: string | Uint8Array,
@@ -32,12 +42,18 @@ export interface HmacAdapter {
 
 export interface CipherAdapter {
   update(data: string, inputEncoding: string, outputEncoding: string): string;
+  update(data: Uint8Array): Uint8Array;
   final(outputEncoding: string): string;
+  final(): Uint8Array;
+  getAuthTag?(): Uint8Array;
 }
 
 export interface DecipherAdapter {
   update(data: string, inputEncoding: string, outputEncoding: string): string;
+  update(data: Uint8Array): Uint8Array;
   final(outputEncoding: string): string;
+  final(): Uint8Array;
+  setAuthTag?(tag: Uint8Array): void;
 }
 
 function wrapNodeCrypto(nodeCrypto: typeof import("node:crypto")): CryptoAdapter {
@@ -51,11 +67,31 @@ function wrapNodeCrypto(nodeCrypto: typeof import("node:crypto")): CryptoAdapter
     createHmac(algorithm: string, key: string | Uint8Array): HmacAdapter {
       return nodeCrypto.createHmac(algorithm, key) as unknown as HmacAdapter;
     },
-    createCipheriv(algorithm: string, key: Uint8Array, iv: Uint8Array): CipherAdapter {
-      return nodeCrypto.createCipheriv(algorithm, key, iv) as unknown as CipherAdapter;
+    createCipheriv(
+      algorithm: string,
+      key: Uint8Array,
+      iv: Uint8Array,
+      options?: Record<string, unknown>,
+    ): CipherAdapter {
+      return nodeCrypto.createCipheriv(
+        algorithm,
+        key,
+        iv,
+        options as any,
+      ) as unknown as CipherAdapter;
     },
-    createDecipheriv(algorithm: string, key: Uint8Array, iv: Uint8Array): DecipherAdapter {
-      return nodeCrypto.createDecipheriv(algorithm, key, iv) as unknown as DecipherAdapter;
+    createDecipheriv(
+      algorithm: string,
+      key: Uint8Array,
+      iv: Uint8Array,
+      options?: Record<string, unknown>,
+    ): DecipherAdapter {
+      return nodeCrypto.createDecipheriv(
+        algorithm,
+        key,
+        iv,
+        options as any,
+      ) as unknown as DecipherAdapter;
     },
     pbkdf2Sync(password, salt, iterations, keylen, digest): Uint8Array {
       return new Uint8Array(nodeCrypto.pbkdf2Sync(password, salt, iterations, keylen, digest));

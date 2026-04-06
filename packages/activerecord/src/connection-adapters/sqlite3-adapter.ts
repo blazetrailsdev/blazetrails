@@ -510,12 +510,11 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     type: string,
     options?: Record<string, unknown>,
   ): Promise<void> {
-    const sqlType = this.nativeDatabaseTypes[type]?.name ?? type.toUpperCase();
+    const sqlType = this.typeToSql(type, options);
     let sql = `ALTER TABLE ${quoteTableName(tableName)} ADD COLUMN ${quoteColumnName(columnName)} ${sqlType}`;
     if (options?.null === false) sql += " NOT NULL";
     if (options?.default !== undefined) {
-      const def = options.default;
-      sql += ` DEFAULT ${def === null ? "NULL" : typeof def === "string" ? quoteString(def) : def}`;
+      sql += ` DEFAULT ${this.quoteDefault(options.default)}`;
     }
     await this.executeMutation(sql);
   }
@@ -545,12 +544,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
         : defaultOrChanges;
     await this.alterTable(tableName, (columns) => {
       if (columns[columnName]) {
-        columns[columnName].dflt_value =
-          newDefault === null
-            ? null
-            : typeof newDefault === "string"
-              ? quoteString(newDefault)
-              : String(newDefault);
+        columns[columnName].dflt_value = newDefault === null ? null : this.quoteDefault(newDefault);
       }
     });
   }
@@ -585,18 +579,14 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     type: string,
     options?: Record<string, unknown>,
   ): Promise<void> {
-    const sqlType = this.nativeDatabaseTypes[type]?.name ?? type.toUpperCase();
+    const sqlType = this.typeToSql(type, options);
     await this.alterTable(tableName, (columns) => {
       if (columns[columnName]) {
         columns[columnName].type = sqlType;
         if (options?.null !== undefined) columns[columnName].notnull = options.null ? 0 : 1;
         if (options?.default !== undefined)
           columns[columnName].dflt_value =
-            options.default === null
-              ? null
-              : typeof options.default === "string"
-                ? quoteString(options.default)
-                : String(options.default);
+            options.default === null ? null : this.quoteDefault(options.default);
       }
     });
   }
@@ -727,6 +717,25 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     }
   }
 
+  private typeToSql(type: string, options?: Record<string, unknown>): string {
+    const base = this.nativeDatabaseTypes[type]?.name ?? type.toUpperCase();
+    const precision = options?.precision as number | undefined;
+    const scale = options?.scale as number | undefined;
+    const limit = options?.limit as number | undefined;
+    if (precision !== undefined && scale !== undefined) return `${base}(${precision},${scale})`;
+    if (precision !== undefined) return `${base}(${precision})`;
+    if (limit !== undefined) return `${base}(${limit})`;
+    return base;
+  }
+
+  private quoteDefault(value: unknown): string {
+    if (value === null) return "NULL";
+    if (typeof value === "string") return quoteString(value);
+    if (typeof value === "boolean") return value ? "1" : "0";
+    if (typeof value === "function") return String(value());
+    return String(value);
+  }
+
   // --- Private: alter_table copy strategy (Rails: SQLite3Adapter#alter_table) ---
 
   private async alterTable(
@@ -764,7 +773,10 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
       }
     }
 
-    const tmpTable = `_alter_tmp_${tableName}`;
+    const dotIdx = tableName.lastIndexOf(".");
+    const prefix = dotIdx === -1 ? "" : `${tableName.slice(0, dotIdx)}.`;
+    const base = dotIdx === -1 ? tableName : tableName.slice(dotIdx + 1);
+    const tmpTable = `${prefix}_alter_tmp_${base}`;
     const qTmp = quoteTableName(tmpTable);
     const colNames = Object.keys(columns);
     const colDefs = colNames.map((name) => {
@@ -801,8 +813,11 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
         );
         try {
           this.db.exec(adjusted);
-        } catch {
-          // Index references removed column — skip silently
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "";
+          if (!msg.includes("no such column") && !msg.includes("already exists")) {
+            throw err;
+          }
         }
       }
     }

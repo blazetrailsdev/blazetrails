@@ -47,7 +47,10 @@ export class Cipher {
       Buffer.from(cipher.update(Buffer.from(data, "utf-8"))),
       Buffer.from(cipher.final()),
     ]);
-    const authTag = Buffer.from(cipher.getAuthTag!());
+    if (!cipher.getAuthTag) {
+      throw new ConfigError("Crypto adapter does not support GCM auth tags (getAuthTag)");
+    }
+    const authTag = Buffer.from(cipher.getAuthTag());
 
     return {
       payload: encrypted.toString("base64"),
@@ -69,7 +72,10 @@ export class Cipher {
         const decipher = crypto.createDecipheriv("aes-256-gcm", keyBuf, ivBuf, {
           authTagLength: AUTH_TAG_LENGTH,
         });
-        decipher.setAuthTag!(authTagBuf);
+        if (!decipher.setAuthTag) {
+          throw new ConfigError("Crypto adapter does not support GCM auth tags (setAuthTag)");
+        }
+        decipher.setAuthTag(authTagBuf);
         const decrypted = Buffer.concat([
           Buffer.from(decipher.update(encryptedBuf)),
           Buffer.from(decipher.final()),

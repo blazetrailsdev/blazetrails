@@ -29,6 +29,7 @@ import {
   DecimalType,
 } from "@blazetrails/activemodel";
 import { getFs } from "@blazetrails/activesupport";
+import { quoteString, quoteTableName, quoteColumnName } from "./sqlite3/quoting.js";
 
 /**
  * SQLite adapter — connects ActiveRecord to a real SQLite database.
@@ -394,9 +395,14 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   }
 
   isSharedCache(): boolean {
-    return (this._config.flags as number & { anybits?: (n: number) => boolean }) !== undefined
-      ? false // Default: no shared cache unless explicitly configured
-      : this._filename.includes("cache=shared");
+    const SQLITE_OPEN_SHAREDCACHE = 0x00020000;
+    const flags = this._config.flags;
+    if (typeof flags === "number") {
+      return (flags & SQLITE_OPEN_SHAREDCACHE) !== 0;
+    }
+    const qIdx = this._filename.indexOf("?");
+    if (qIdx === -1) return false;
+    return this._filename.slice(qIdx).includes("cache=shared");
   }
 
   override getDatabaseVersion(): Version {
@@ -422,7 +428,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   }
 
   static newClient(config: { database?: string; readonly?: boolean }): SQLite3Adapter {
-    return new SQLite3Adapter(config.database, { readonly: config.readonly });
+    return new SQLite3Adapter(config.database ?? ":memory:", { readonly: config.readonly });
   }
 
   static override dbconsole(config?: { database?: string }): void {
@@ -456,7 +462,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     } else {
       throw new Error("No index name or column specified");
     }
-    await this.executeMutation(`DROP INDEX IF EXISTS "${indexName}"`);
+    await this.executeMutation(`DROP INDEX IF EXISTS ${quoteColumnName(indexName)}`);
   }
 
   async virtualTables(): Promise<string[]> {
@@ -474,7 +480,9 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     const mod = moduleName as string;
     const vals = values as string[];
     const cols = (vals ?? []).join(", ");
-    await this.executeMutation(`CREATE VIRTUAL TABLE "${tableName}" USING ${mod}(${cols})`);
+    await this.executeMutation(
+      `CREATE VIRTUAL TABLE ${quoteTableName(tableName)} USING ${mod}(${cols})`,
+    );
   }
 
   async dropVirtualTable(
@@ -482,12 +490,14 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     _moduleName?: string,
     _values?: string[],
   ): Promise<void> {
-    await this.executeMutation(`DROP TABLE IF EXISTS "${tableName}"`);
+    await this.executeMutation(`DROP TABLE IF EXISTS ${quoteTableName(tableName)}`);
   }
 
   async renameTable(tableName: string, newName: string): Promise<void> {
     this.schemaCache.clear();
-    await this.executeMutation(`ALTER TABLE "${tableName}" RENAME TO "${newName}"`);
+    await this.executeMutation(
+      `ALTER TABLE ${quoteTableName(tableName)} RENAME TO ${quoteTableName(newName)}`,
+    );
   }
 
   async addColumn(
@@ -497,11 +507,11 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     options?: Record<string, unknown>,
   ): Promise<void> {
     const sqlType = this.nativeDatabaseTypes[type]?.name ?? type.toUpperCase();
-    let sql = `ALTER TABLE "${tableName}" ADD COLUMN "${columnName}" ${sqlType}`;
+    let sql = `ALTER TABLE ${quoteTableName(tableName)} ADD COLUMN ${quoteColumnName(columnName)} ${sqlType}`;
     if (options?.null === false) sql += " NOT NULL";
     if (options?.default !== undefined) {
       const def = options.default;
-      sql += ` DEFAULT ${def === null ? "NULL" : typeof def === "string" ? `'${def}'` : def}`;
+      sql += ` DEFAULT ${def === null ? "NULL" : typeof def === "string" ? quoteString(def) : def}`;
     }
     await this.executeMutation(sql);
   }
@@ -543,10 +553,14 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     defaultValue?: unknown,
   ): Promise<void> {
     if (!allowNull && defaultValue !== undefined) {
+      const quotedDefault =
+        defaultValue === null
+          ? "NULL"
+          : typeof defaultValue === "string"
+            ? quoteString(defaultValue)
+            : String(defaultValue);
       await this.executeMutation(
-        `UPDATE "${tableName}" SET "${columnName}" = ${
-          defaultValue === null ? "NULL" : `'${defaultValue}'`
-        } WHERE "${columnName}" IS NULL`,
+        `UPDATE ${quoteTableName(tableName)} SET ${quoteColumnName(columnName)} = ${quotedDefault} WHERE ${quoteColumnName(columnName)} IS NULL`,
       );
     }
     await this.alterTable(tableName, (columns) => {
@@ -576,7 +590,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
 
   async renameColumn(tableName: string, columnName: string, newColumnName: string): Promise<void> {
     await this.executeMutation(
-      `ALTER TABLE "${tableName}" RENAME COLUMN "${columnName}" TO "${newColumnName}"`,
+      `ALTER TABLE ${quoteTableName(tableName)} RENAME COLUMN ${quoteColumnName(columnName)} TO ${quoteColumnName(newColumnName)}`,
     );
   }
 
@@ -655,7 +669,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     valuesList?: string;
     skipDuplicates?: boolean;
     conflictTarget?: string;
-    update?: unknown;
+    update?: string;
     returning?: string;
   }): string | null {
     if (!insert.into) {

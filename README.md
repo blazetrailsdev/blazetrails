@@ -10,13 +10,13 @@ The goal is to be **100% API compatible with Rails**, matching behavior **test f
 
 | Package                      | Rails Equivalent                                                        | API       | Tests     | Description                                                |
 | ---------------------------- | ----------------------------------------------------------------------- | --------- | --------- | ---------------------------------------------------------- |
-| `@blazetrails/activerecord`  | [ActiveRecord](https://api.rubyonrails.org/classes/ActiveRecord.html)   | **40.5%** | **62%**   | ORM — persistence, querying, associations, migrations      |
+| `@blazetrails/activerecord`  | [ActiveRecord](https://api.rubyonrails.org/classes/ActiveRecord.html)   | **59.5%** | **62%**   | ORM — persistence, querying, associations, migrations      |
 | `@blazetrails/activesupport` | [ActiveSupport](https://api.rubyonrails.org/classes/ActiveSupport.html) | **23.9%** | **77.9%** | Core utilities, inflection, caching, notifications         |
 | `@blazetrails/arel`          | [Arel](https://api.rubyonrails.org/classes/Arel.html)                   | **100%**  | **99.4%** | SQL AST builder and query generation                       |
 | `@blazetrails/activemodel`   | [ActiveModel](https://api.rubyonrails.org/classes/ActiveModel.html)     | **100%**  | **100%**  | Attributes, validations, callbacks, dirty tracking, i18n   |
 | `@blazetrails/rack`          | [Rack](https://rack.github.io/)                                         | —         | **100%**  | Modular web server interface, request/response, middleware |
 
-**Data Layer Parity** (ActiveRecord + Arel + ActiveModel + ActiveSupport): **44% API** | **70.4% Tests**
+**Data Layer Parity** (ActiveRecord + Arel + ActiveModel + ActiveSupport): **55% API** | **70.4% Tests**
 
 **ActionPack** — started but not the current priority:
 
@@ -27,7 +27,7 @@ The goal is to be **100% API compatible with Rails**, matching behavior **test f
 
 **Tests** = `test:compare` — matches our test names against the Rails test suite. **API** = `api:compare` — matches individual public methods against Rails source (method-level, not class/module wrappers). Rack doesn't have API comparison yet (it's not a Rails gem).
 
-**32.9%** overall API coverage (2,430 / 7,396 methods) | **50.9%** test coverage (11,146 / 21,890 tests). CI runs both comparisons on every push.
+**40.1%** overall API coverage (2,969 / 7,396 methods) | **50.9%** test coverage (11,146 / 21,890 tests). CI runs both comparisons on every push.
 
 ## Quick Example
 

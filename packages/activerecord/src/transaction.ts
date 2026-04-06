@@ -30,10 +30,11 @@ export class ActiveRecordTransaction {
    * Mirrors: ActiveRecord::Transaction#after_commit
    */
   afterCommit(fn: () => void | Promise<void>): void {
-    if (this._internalTransaction == null) {
+    if (this.isClosed()) {
+      // No open transaction — execute immediately (matches Rails behavior)
       fn();
     } else {
-      this._internalTransaction.afterCommit(fn);
+      this._internalTransaction!.afterCommit(fn);
     }
   }
 
@@ -44,7 +45,8 @@ export class ActiveRecordTransaction {
    * Mirrors: ActiveRecord::Transaction#after_rollback
    */
   afterRollback(fn: () => void | Promise<void>): void {
-    this._internalTransaction?.afterRollback(fn);
+    if (this.isClosed()) return;
+    this._internalTransaction!.afterRollback(fn);
   }
 
   /**
@@ -81,13 +83,11 @@ export class ActiveRecordTransaction {
    * Mirrors: ActiveRecord::Transaction#uuid
    */
   uuid(): string | null {
-    if (this._internalTransaction) {
-      if (!this._uuid) {
-        this._uuid = generateUuidV4();
-      }
-      return this._uuid;
+    if (this.isClosed()) return null;
+    if (!this._uuid) {
+      this._uuid = generateUuidV4();
     }
-    return null;
+    return this._uuid;
   }
 
   static readonly NULL_TRANSACTION = new ActiveRecordTransaction(null);

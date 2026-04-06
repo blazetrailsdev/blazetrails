@@ -2154,7 +2154,7 @@ export class Base extends Model {
       } else {
         await committedBang(this);
       }
-    } else if (hasAutosave) {
+    } else {
       if (outerTx) {
         outerTx.afterRollback(async () => {
           await rolledbackBang(this);

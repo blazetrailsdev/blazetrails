@@ -290,7 +290,8 @@ export async function withTransactionReturningStatus<T>(
   let status: T;
   await transaction(modelClass, async () => {
     status = await fn();
-    if (!status) throw new Rollback();
+    // Ruby truthiness: only false/nil trigger rollback (0, "" are truthy in Ruby)
+    if (status === false || status == null) throw new Rollback();
     return status;
   });
   return status!;

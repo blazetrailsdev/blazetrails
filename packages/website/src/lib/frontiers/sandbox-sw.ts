@@ -157,6 +157,10 @@ async function broadcast(msg: SwBroadcast): Promise<void> {
 // ── Message handler ────────────────────────────────────────────────────
 
 export async function handleSwMessage(request: SwRequest): Promise<SwResponse> {
+  if (request.type !== "init" && !initialized) {
+    return { type: "error", message: "Service worker not initialized — send init first" };
+  }
+
   switch (request.type) {
     case "init":
       await init();
@@ -216,6 +220,12 @@ export async function handleSwMessage(request: SwRequest): Promise<SwResponse> {
       await broadcast({ type: "db:changed" });
       return { type: "db:import", ok: true };
     }
+
+    default:
+      return {
+        type: "error",
+        message: `Unknown request type: ${(request as any).type}`,
+      };
   }
 }
 
@@ -288,7 +298,7 @@ async function handleFetch(request: Request, url: URL): Promise<Response> {
     await init();
   }
 
-  const rawPath = url.pathname.slice(DEV_PREFIX.length);
+  const rawPath = url.pathname.slice(DEV_PREFIX.length).replace(/^\/+/, "");
   const method = request.method.toUpperCase();
 
   // Try Rack app server first if a route matches this request

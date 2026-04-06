@@ -37,5 +37,9 @@ export function stripTypes(code: string): string {
   // Remove `!` non-null assertions
   code = code.replace(/(\w)!/g, "$1");
 
+  // Remove empty import/export clauses left after stripping type specifiers
+  code = code.replace(/^\s*import\s*\{\s*\}\s*from\s*["'][^"']+["']\s*;?\s*$/gm, "");
+  code = code.replace(/^\s*export\s*\{\s*\}\s*(?:from\s*["'][^"']+["'])?\s*;?\s*$/gm, "");
+
   return code;
 }

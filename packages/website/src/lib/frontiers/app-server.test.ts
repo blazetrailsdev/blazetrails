@@ -33,7 +33,7 @@ describe("createAppServer", () => {
       async index() {
         this.response.body = '{"posts":[]}';
         this.response.status = 200;
-        (this.response as any)._headers = { "content-type": "application/json" };
+        this.response.setHeader("content-type", "application/json");
       }
     }
 

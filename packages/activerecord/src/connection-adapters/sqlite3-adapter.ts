@@ -450,8 +450,20 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   // --- Schema operations ---
 
   async primaryKeys(tableName: string): Promise<string[]> {
-    const rows = await this.execute(`PRAGMA table_info(${quoteTableName(tableName)})`);
-    return rows.filter((r) => r.pk).map((r) => String(r.name));
+    const { schema, bare } = this._splitTableName(tableName);
+    const prefix = schema ? `${quoteColumnName(schema)}.` : "";
+    const rows = await this.execute(`PRAGMA ${prefix}table_info(${quoteColumnName(bare)})`);
+    return rows
+      .filter((r) => Number(r.pk) > 0)
+      .sort((a, b) => Number(a.pk) - Number(b.pk))
+      .map((r) => String(r.name));
+  }
+
+  private _splitTableName(tableName: string): { schema: string; bare: string } {
+    const dot = tableName.lastIndexOf(".");
+    return dot === -1
+      ? { schema: "", bare: tableName }
+      : { schema: tableName.slice(0, dot), bare: tableName.slice(dot + 1) };
   }
 
   async removeIndex(
@@ -766,10 +778,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     tableName: string,
     modify: (columns: Record<string, Record<string, unknown>>) => void,
   ): Promise<void> {
-    // Split schema-qualified names: PRAGMA requires schema prefix, not quoted name
-    const dotIdx = tableName.lastIndexOf(".");
-    const schema = dotIdx === -1 ? "" : tableName.slice(0, dotIdx);
-    const bareTable = dotIdx === -1 ? tableName : tableName.slice(dotIdx + 1);
+    const { schema, bare: bareTable } = this._splitTableName(tableName);
     const pragmaPrefix = schema ? `${quoteColumnName(schema)}.` : "";
     const qTable = quoteTableName(tableName);
     const tableInfo = this.db
@@ -794,7 +803,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
       if (idxName.startsWith("sqlite_autoindex_")) continue;
       const createSql = this.db
         .prepare(
-          `SELECT sql FROM sqlite_master WHERE type='index' AND name=${quoteString(idxName)}`,
+          `SELECT sql FROM ${pragmaPrefix}sqlite_master WHERE type='index' AND name=${quoteString(idxName)}`,
         )
         .get() as { sql: string } | undefined;
       if (createSql?.sql) {

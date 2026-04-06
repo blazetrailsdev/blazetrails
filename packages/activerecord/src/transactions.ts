@@ -66,14 +66,14 @@ export async function transaction<T>(
     } else {
       await adapter.commit();
     }
-    tx.state.setCommitted();
+    await tx.commit();
   } catch (error) {
     if (nested && spName) {
       await adapter.rollbackToSavepoint(spName);
     } else {
       await adapter.rollback();
     }
-    tx.state.setRolledBack();
+    await tx.rollback();
     await tx.runAfterRollbackCallbacks();
     if (error instanceof Rollback) {
       return undefined;
@@ -135,6 +135,7 @@ export function beforeCommit(
       }
     }
   }
+  (modelClass as any)._ensureOwnCallbacks();
   (modelClass as any)._callbackChain.register("before", "commit", fn, options);
 }
 

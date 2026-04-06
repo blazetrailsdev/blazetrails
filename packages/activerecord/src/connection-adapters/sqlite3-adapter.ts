@@ -171,6 +171,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   async rollback(): Promise<void> {
     if (this._transactionDepth > 0) {
       this.db.exec(`ROLLBACK TO SAVEPOINT _nested_${this._transactionDepth}`);
+      this.db.exec(`RELEASE SAVEPOINT _nested_${this._transactionDepth}`);
       this._transactionDepth--;
     } else {
       this.db.exec("ROLLBACK");

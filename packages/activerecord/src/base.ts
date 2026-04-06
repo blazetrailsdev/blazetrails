@@ -2065,7 +2065,11 @@ export class Base extends Model {
 
     const saveBody = async (): Promise<boolean> => {
       let saved = false;
+      // Reset transaction tracking flags to prevent stale state from prior saves
       this._transactionAction = undefined;
+      (this as any)._newRecordBeforeLastCommit = false;
+      (this as any)._triggerUpdateCallback = false;
+      (this as any)._triggerDestroyCallback = false;
       if (!(await ctor._callbackChain.runBefore("save", this))) return false;
 
       const belongsToOk = await autosaveBelongsTo(this);

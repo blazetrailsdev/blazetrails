@@ -2126,33 +2126,39 @@ export class Base extends Model {
       return saved;
     };
 
-    // Rails always wraps save in a transaction via with_transaction_returning_status.
     const { Rollback, currentTransaction, committedBang, rolledbackBang } =
       await import("./transactions.js");
 
     let saved: boolean;
-    const outerTx = currentTransaction();
-    if (outerTx) {
-      // Already inside a transaction — run save body directly, defer callbacks
-      saved = await saveBody();
-      if (saved) {
-        outerTx.afterCommit(async () => {
-          await committedBang(this);
-        });
-        outerTx.afterRollback(async () => {
-          await rolledbackBang(this);
-        });
-      }
-    } else {
-      // Not in a transaction — open one
+    if (hasAutosave) {
       const txResult = await this.transaction(async () => {
         const result = await saveBody();
         if (!result) throw new Rollback();
         return result;
       });
       saved = txResult ?? false;
-      if (saved) {
+    } else {
+      saved = await saveBody();
+    }
+
+    // Fire after_commit/after_rollback callbacks.
+    const outerTx = currentTransaction();
+    if (saved) {
+      if (outerTx) {
+        outerTx.afterCommit(async () => {
+          await committedBang(this);
+        });
+        outerTx.afterRollback(async () => {
+          await rolledbackBang(this);
+        });
+      } else {
         await committedBang(this);
+      }
+    } else if (hasAutosave) {
+      if (outerTx) {
+        outerTx.afterRollback(async () => {
+          await rolledbackBang(this);
+        });
       } else {
         await rolledbackBang(this);
       }
@@ -2358,86 +2364,67 @@ export class Base extends Model {
       throw new ReadOnlyRecord(`${this.constructor.name} is marked as readonly`);
     }
     const ctor = this.constructor as typeof Base;
-    const { Rollback, currentTransaction, committedBang, rolledbackBang } =
-      await import("./transactions.js");
 
-    const destroyBody = async (): Promise<boolean> => {
-      let didDelete = false;
-      const halted = !(await ctor._callbackChain.run("destroy", this, async () => {
-        const { processDependentAssociations } = await import("./associations.js");
-        await processDependentAssociations(this);
+    let didDelete = false;
+    const halted = !(await ctor._callbackChain.run("destroy", this, async () => {
+      const { processDependentAssociations } = await import("./associations.js");
+      await processDependentAssociations(this);
 
-        const table = ctor.arelTable;
-        const pk = this.id;
-        if (!(Array.isArray(pk) ? pk.every((v) => v == null) : pk == null)) {
-          const dm = new DeleteManager().from(table).where(ctor._buildPkWhereNode(pk));
-          const lockCol = ctor.lockingColumn;
-          if (ctor.lockingEnabled) {
-            const currentVersion = this.readAttribute(lockCol);
-            if (currentVersion == null) {
-              dm.where(table.get(lockCol).isNull());
-            } else {
-              dm.where(table.get(lockCol).eq(Number(currentVersion) || 0));
-            }
+      const table = ctor.arelTable;
+      const pk = this.id;
+      if (!(Array.isArray(pk) ? pk.every((v) => v == null) : pk == null)) {
+        const dm = new DeleteManager().from(table).where(ctor._buildPkWhereNode(pk));
+        const lockCol = ctor.lockingColumn;
+        if (ctor.lockingEnabled) {
+          const currentVersion = this.readAttribute(lockCol);
+          if (currentVersion == null) {
+            dm.where(table.get(lockCol).isNull());
+          } else {
+            dm.where(table.get(lockCol).eq(Number(currentVersion) || 0));
           }
-
-          const affected = await ctor.adapter.executeMutation(dm.toSql());
-          if (ctor.lockingEnabled && affected === 0) {
-            throw new StaleObjectError(this, "destroy");
-          }
-          didDelete = affected > 0;
         }
 
-        this._destroyed = true;
-        this._frozen = true;
-        this._collectionProxies.clear();
-        this._preloadedAssociations.clear();
-        this._associationInstances.clear();
-      }));
-
-      if (halted) return false;
-
-      if (didDelete) {
-        this._transactionAction = "destroy";
-        (this as any)._triggerDestroyCallback = true;
-        (this as any)._newRecordBeforeLastCommit = false;
-        (this as any)._triggerUpdateCallback = false;
-        const { updateCounterCaches, touchBelongsToParents } = await import("./associations.js");
-        await updateCounterCaches(this, "decrement");
-        await touchBelongsToParents(this);
+        const affected = await ctor.adapter.executeMutation(dm.toSql());
+        if (ctor.lockingEnabled && affected === 0) {
+          throw new StaleObjectError(this, "destroy");
+        }
+        didDelete = affected > 0;
       }
 
-      return !halted;
-    };
+      this._destroyed = true;
+      this._frozen = true;
+      this._collectionProxies.clear();
+      this._preloadedAssociations.clear();
+      this._associationInstances.clear();
+    }));
 
-    // Rails always wraps destroy in a transaction via with_transaction_returning_status.
-    const outerTx = currentTransaction();
-    let success: boolean;
-    if (outerTx) {
-      success = await destroyBody();
-      if (success) {
-        outerTx.afterCommit(async () => {
+    if (halted) return false;
+
+    if (didDelete) {
+      this._transactionAction = "destroy";
+      (this as any)._triggerDestroyCallback = true;
+      (this as any)._newRecordBeforeLastCommit = false;
+      (this as any)._triggerUpdateCallback = false;
+      const { updateCounterCaches, touchBelongsToParents } = await import("./associations.js");
+      await updateCounterCaches(this, "decrement");
+      await touchBelongsToParents(this);
+
+      const { currentTransaction, committedBang, rolledbackBang } =
+        await import("./transactions.js");
+      const tx = currentTransaction();
+      if (tx) {
+        tx.afterCommit(async () => {
           await committedBang(this);
         });
-        outerTx.afterRollback(async () => {
+        tx.afterRollback(async () => {
           await rolledbackBang(this);
         });
-      }
-    } else {
-      const txResult = await this.transaction(async () => {
-        const result = await destroyBody();
-        if (!result) throw new Rollback();
-        return result;
-      });
-      success = txResult ?? false;
-      if (success) {
-        await committedBang(this);
       } else {
-        await rolledbackBang(this);
+        await committedBang(this);
       }
     }
 
-    return success ? this : false;
+    return this;
   }
 
   /**

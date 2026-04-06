@@ -191,7 +191,13 @@ export class CookieStore {
       .createHmac("sha256", key)
       .update(ivB64 + "--" + encrypted)
       .digest("base64");
-    if (hmac !== expectedHmac) return null;
+    const hmacBytes = Buffer.from(hmac, "base64");
+    const expectedBytes = Buffer.from(expectedHmac, "base64");
+    if (
+      hmacBytes.length !== expectedBytes.length ||
+      !crypto.timingSafeEqual(hmacBytes, expectedBytes)
+    )
+      return null;
 
     try {
       const iv = Buffer.from(ivB64, "base64");

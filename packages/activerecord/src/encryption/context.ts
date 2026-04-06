@@ -20,11 +20,28 @@ function currentContext(): EncryptionContext {
 export function withEncryptionContext<T>(overrides: EncryptionContext, fn: () => T): T {
   const previous = currentContext();
   contextStack.push({ ...previous, ...overrides });
+  let result: T;
   try {
-    return fn();
-  } finally {
+    result = fn();
+  } catch (e) {
     contextStack.pop();
+    throw e;
   }
+  // If fn returned a Promise, defer the pop until it settles
+  if (result && typeof (result as any).then === "function") {
+    return (result as any).then(
+      (val: any) => {
+        contextStack.pop();
+        return val;
+      },
+      (err: any) => {
+        contextStack.pop();
+        throw err;
+      },
+    ) as unknown as T;
+  }
+  contextStack.pop();
+  return result;
 }
 
 export function withoutEncryption<T>(fn: () => T): T {

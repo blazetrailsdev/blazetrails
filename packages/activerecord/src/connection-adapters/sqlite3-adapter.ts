@@ -479,16 +479,34 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
 
   override async createVirtualTable(
     tableName: string,
-    moduleName?: unknown,
+    optionsOrModuleName?: unknown,
     values?: unknown,
   ): Promise<void> {
+    // Support both (name, options) and (name, moduleName, values) signatures
+    const opts =
+      optionsOrModuleName !== null &&
+      typeof optionsOrModuleName === "object" &&
+      !Array.isArray(optionsOrModuleName)
+        ? (optionsOrModuleName as Record<string, unknown>)
+        : undefined;
+
+    const moduleName = opts?.moduleName ?? (opts ? undefined : optionsOrModuleName);
+    const virtualValues = opts?.values ?? values;
+
     const mod = String(moduleName ?? "");
     const safeIdent = /^[A-Za-z_][A-Za-z0-9_]*$/;
     if (!safeIdent.test(mod)) {
       throw new Error("moduleName must be a valid SQLite identifier");
     }
-    const vals = Array.isArray(values) ? values.map(String) : [];
-    const cols = vals.map((v) => (safeIdent.test(v) ? quoteColumnName(v) : v)).join(", ");
+    const vals = Array.isArray(virtualValues) ? virtualValues.map(String) : [];
+    for (const v of vals) {
+      if (!safeIdent.test(v)) {
+        throw new Error(
+          `Virtual table argument "${v}" must be a valid SQLite identifier (letters, digits, underscores)`,
+        );
+      }
+    }
+    const cols = vals.map((v) => quoteColumnName(v)).join(", ");
     await this.executeMutation(
       `CREATE VIRTUAL TABLE ${quoteTableName(tableName)} USING ${mod}(${cols})`,
     );

@@ -522,7 +522,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     const args = Array.isArray(virtualValues) ? virtualValues.map(String) : [];
     const rawArgs = args.join(", ");
     await this.executeMutation(
-      `CREATE VIRTUAL TABLE ${quoteTableName(tableName)} USING ${mod}(${rawArgs})`,
+      `CREATE VIRTUAL TABLE IF NOT EXISTS ${quoteTableName(tableName)} USING ${mod}(${rawArgs})`,
     );
   }
 

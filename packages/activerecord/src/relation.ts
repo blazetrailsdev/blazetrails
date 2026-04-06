@@ -193,7 +193,16 @@ export class Relation<T extends Base> {
     const rel = this._clone();
     const keysToReplace = new Set(Object.keys(conditions));
     rel._whereClause = rel._whereClause.except(...keysToReplace);
-    rel._whereClause.predicates.push(...this.predicateBuilder.buildFromHash(conditions));
+    const castConditions: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(conditions)) {
+      castConditions[key] =
+        value instanceof Relation
+          ? value
+          : Array.isArray(value)
+            ? value.map((v) => this._castWhereValue(key, v))
+            : this._castWhereValue(key, value);
+    }
+    rel._whereClause.predicates.push(...this.predicateBuilder.buildFromHash(castConditions));
     return rel;
   }
 
@@ -403,7 +412,16 @@ export class Relation<T extends Base> {
     // Build a chain: where(cond1).or(where(cond2)).or(where(cond3))...
     const makeRel = (cond: Record<string, unknown>) => {
       const r = this._clone();
-      r._whereClause = new WhereClause(this.predicateBuilder.buildFromHash(cond));
+      const cast: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(cond)) {
+        cast[key] =
+          value instanceof Relation
+            ? value
+            : Array.isArray(value)
+              ? value.map((v) => this._castWhereValue(key, v))
+              : this._castWhereValue(key, value);
+      }
+      r._whereClause = new WhereClause(this.predicateBuilder.buildFromHash(cast));
       r._orRelations = [];
       return r;
     };
@@ -620,7 +638,7 @@ export class Relation<T extends Base> {
     parts.push(`${this._modelClass.name}.all`);
     if (!this._whereClause.isEmpty()) {
       const sql = this._whereClause.toSql();
-      if (sql) parts.push(`.where(${sql})`);
+      if (sql) parts.push(`.where(${JSON.stringify(sql)})`);
     }
     if (this._orderClauses.length > 0) {
       parts.push(`.order(${JSON.stringify(this._orderClauses)})`);
@@ -2498,7 +2516,7 @@ export class Relation<T extends Base> {
 
   private _buildWhereStrings(_table: Table): string[] {
     const normalized = predicatesWithWrappedSqlLiterals(this._whereClause.predicates);
-    return normalized.map((node) => this._compileArelNode(node));
+    return normalized.map((node) => `(${this._compileArelNode(node)})`);
   }
 
   private async _preloadAssociationsForRecords(records: T[], assocNames: string[]): Promise<void> {

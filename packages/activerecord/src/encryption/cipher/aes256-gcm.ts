@@ -4,7 +4,7 @@
  * Mirrors: ActiveRecord::Encryption::Cipher::Aes256Gcm
  */
 
-import * as crypto from "crypto";
+import { getCrypto } from "@blazetrails/activesupport";
 import { ConfigError, DecryptionError } from "../errors.js";
 
 const KEY_LENGTH = 32;
@@ -29,18 +29,22 @@ export class Cipher {
     options?: { deterministic?: boolean },
   ): { payload: string; iv: string; authTag: string } {
     this._validateKeyLength(key);
+    const crypto = getCrypto();
     const keyBuf = Buffer.from(key, "base64").subarray(0, KEY_LENGTH);
     let iv: Buffer;
     if (options?.deterministic ?? this.deterministic) {
-      iv = crypto.createHash("sha256").update(data).update(key).digest().subarray(0, IV_LENGTH);
+      iv = Buffer.from(crypto.createHash("sha256").update(data).update(key).digest()).subarray(
+        0,
+        IV_LENGTH,
+      );
     } else {
-      iv = crypto.randomBytes(IV_LENGTH);
+      iv = Buffer.from(crypto.randomBytes(IV_LENGTH));
     }
-    const cipher = crypto.createCipheriv("aes-256-gcm", keyBuf, iv, {
+    const cipher = (crypto as any).createCipheriv("aes-256-gcm", keyBuf, iv, {
       authTagLength: AUTH_TAG_LENGTH,
     });
     const encrypted = Buffer.concat([cipher.update(data, "utf-8"), cipher.final()]);
-    const authTag = cipher.getAuthTag();
+    const authTag = cipher.getAuthTag() as Buffer;
 
     return {
       payload: encrypted.toString("base64"),
@@ -55,13 +59,14 @@ export class Cipher {
     const authTagBuf = Buffer.from(authTag, "base64");
     const encryptedBuf = Buffer.from(payload, "base64");
 
+    const crypto = getCrypto();
     for (const key of keyList) {
       try {
         const keyBuf = Buffer.from(key, "base64").subarray(0, KEY_LENGTH);
-        const decipher = crypto.createDecipheriv("aes-256-gcm", keyBuf, ivBuf, {
+        const decipher = (crypto as any).createDecipheriv("aes-256-gcm", keyBuf, ivBuf, {
           authTagLength: AUTH_TAG_LENGTH,
         });
-        decipher.setAuthTag(authTagBuf);
+        decipher.setAuthTag(authTagBuf) as void;
         const decrypted = Buffer.concat([decipher.update(encryptedBuf), decipher.final()]);
         return decrypted.toString("utf-8");
       } catch {

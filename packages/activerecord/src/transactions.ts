@@ -11,10 +11,13 @@ type TransactionAction = "create" | "update" | "destroy";
 // Per-async-context transaction tracking via activesupport's adapter
 // (uses AsyncLocalStorage in Node, fallback in browsers).
 let _transactionStorage: AsyncContext<Transaction | null> | null = null;
+let _transactionStorageAdapter: ReturnType<typeof getAsyncContext> | null = null;
 
 function getTransactionStorage(): AsyncContext<Transaction | null> {
-  if (!_transactionStorage) {
-    _transactionStorage = getAsyncContext().create<Transaction | null>();
+  const asyncContext = getAsyncContext();
+  if (!_transactionStorage || _transactionStorageAdapter !== asyncContext) {
+    _transactionStorage = asyncContext.create<Transaction | null>();
+    _transactionStorageAdapter = asyncContext;
   }
   return _transactionStorage;
 }
@@ -86,10 +89,15 @@ export async function transaction<T>(
   // the outer transaction's locked scope.
   const releaseLock = nested ? null : await acquireAdapterLock(adapter);
 
-  if (nested && spName) {
-    await adapter.createSavepoint(spName);
-  } else {
-    await adapter.beginTransaction();
+  try {
+    if (nested && spName) {
+      await adapter.createSavepoint(spName);
+    } else {
+      await adapter.beginTransaction();
+    }
+  } catch (e) {
+    releaseLock?.();
+    throw e;
   }
 
   let result: T;

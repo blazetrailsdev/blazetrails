@@ -2352,6 +2352,12 @@ export class Base extends Model {
   private async _destroyRow(): Promise<boolean> {
     const ctor = this.constructor as typeof Base;
 
+    // Reset transaction tracking flags to prevent stale state from prior operations
+    this._transactionAction = undefined;
+    (this as any)._newRecordBeforeLastCommit = false;
+    (this as any)._triggerUpdateCallback = false;
+    (this as any)._triggerDestroyCallback = false;
+
     let didDelete = false;
     const halted = !(await ctor._callbackChain.run("destroy", this, async () => {
       const { processDependentAssociations } = await import("./associations.js");

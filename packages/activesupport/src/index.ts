@@ -26,6 +26,7 @@ export type { AsyncContext, AsyncContextAdapter } from "./async-context-adapter.
 
 import { fsAdapterConfig } from "./fs-adapter.js";
 import { cryptoAdapterConfig } from "./crypto-adapter.js";
+import { asyncContextAdapterConfig } from "./async-context-adapter.js";
 
 /**
  * ActiveSupport configuration — mirrors Rails' ActiveSupport module.
@@ -54,6 +55,13 @@ export const ActiveSupport = {
   },
   set cryptoAdapter(name: string | null) {
     cryptoAdapterConfig.adapter = name;
+  },
+
+  get asyncContextAdapter(): string | null {
+    return asyncContextAdapterConfig.adapter;
+  },
+  set asyncContextAdapter(name: string | null) {
+    asyncContextAdapterConfig.adapter = name;
   },
 };
 

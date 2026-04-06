@@ -416,6 +416,7 @@ class SchemaAdapter implements DatabaseAdapter {
         if (useSp) {
           try {
             await this.inner.rollbackToSavepoint(sp);
+            await this.inner.releaseSavepoint(sp);
           } catch {}
         }
         if (await this.handleMissingSchemaError(e, sql)) {
@@ -469,6 +470,7 @@ class SchemaAdapter implements DatabaseAdapter {
         if (useSp) {
           try {
             await this.inner.rollbackToSavepoint(sp);
+            await this.inner.releaseSavepoint(sp);
           } catch {}
         }
         if (await this.handleMissingSchemaError(e, sql)) {

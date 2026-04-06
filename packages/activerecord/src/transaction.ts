@@ -1,11 +1,5 @@
+import { randomUUID } from "node:crypto";
 import { Transaction as InternalTransaction } from "./connection-adapters/abstract/transaction.js";
-
-function generateUuidV4(): string {
-  // Simple v4-like UUID generation without crypto dependency
-  const hex = () => Math.floor(Math.random() * 16).toString(16);
-  const s = (n: number) => Array.from({ length: n }, hex).join("");
-  return `${s(8)}-${s(4)}-4${s(3)}-${(8 + Math.floor(Math.random() * 4)).toString(16)}${s(3)}-${s(12)}`;
-}
 
 /**
  * Represents the current transaction state for application-level interaction.
@@ -29,13 +23,12 @@ export class ActiveRecordTransaction {
    *
    * Mirrors: ActiveRecord::Transaction#after_commit
    */
-  afterCommit(fn: () => void | Promise<void>): void {
+  afterCommit(fn: () => void | Promise<void>): void | Promise<void> {
     if (this.isClosed()) {
       // No open transaction — execute immediately (matches Rails behavior)
-      fn();
-    } else {
-      this._internalTransaction!.afterCommit(fn);
+      return Promise.resolve(fn());
     }
+    this._internalTransaction!.afterCommit(fn);
   }
 
   /**
@@ -85,7 +78,7 @@ export class ActiveRecordTransaction {
   uuid(): string | null {
     if (this.isClosed()) return null;
     if (!this._uuid) {
-      this._uuid = generateUuidV4();
+      this._uuid = randomUUID();
     }
     return this._uuid;
   }

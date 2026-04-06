@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { Base } from "./base.js";
 
 import { Rollback, TransactionIsolationError } from "./errors.js";
@@ -6,14 +7,14 @@ import { Transaction } from "./connection-adapters/abstract/transaction.js";
 
 type TransactionAction = "create" | "update" | "destroy";
 
-// Track the currently-active transaction (if any) for after_commit/after_rollback callbacks
-let _currentTransaction: Transaction | null = null;
+// Per-async-context transaction tracking (safe under concurrent async operations)
+const _transactionStorage = new AsyncLocalStorage<Transaction | null>();
 
 /**
  * Get the currently active transaction, if any.
  */
 export function currentTransaction(): Transaction | null {
-  return _currentTransaction;
+  return _transactionStorage.getStore() ?? null;
 }
 
 /**
@@ -29,9 +30,9 @@ export async function transaction<T>(
   options?: { isolation?: string },
 ): Promise<T | undefined> {
   const adapter = modelClass.adapter;
+  const previousTx = currentTransaction();
 
   if (options?.isolation) {
-    const previousTx = _currentTransaction;
     if (previousTx !== null) {
       throw new TransactionIsolationError(
         "Setting transaction isolation level is not supported inside a nested transaction",
@@ -43,12 +44,12 @@ export async function transaction<T>(
   }
 
   const tx = new Transaction(adapter);
-  const previousTx = _currentTransaction;
-  _currentTransaction = tx;
 
-  // If already in a transaction (module-level tracker),
-  // use a savepoint for nesting.
-  const nested = previousTx !== null;
+  // Use a savepoint for nesting if already in a transaction — check both our
+  // AsyncLocalStorage tracker and the adapter's own state (the adapter may be
+  // in a transaction from external code like test fixtures).
+  const adapterInTx = "inTransaction" in adapter && (adapter as any).inTransaction;
+  const nested = previousTx !== null || adapterInTx;
   const spName = nested ? `sp_${++_savepointCounter}` : null;
 
   if (nested && spName) {
@@ -59,26 +60,26 @@ export async function transaction<T>(
 
   let result: T;
   try {
-    result = await fn(tx);
+    result = await _transactionStorage.run(tx, () => fn(tx));
     if (nested && spName) {
       await adapter.releaseSavepoint(spName);
     } else {
       await adapter.commit();
     }
+    tx.state.setCommitted();
   } catch (error) {
     if (nested && spName) {
       await adapter.rollbackToSavepoint(spName);
     } else {
       await adapter.rollback();
     }
-    _currentTransaction = previousTx;
+    tx.state.setRolledBack();
     await tx.runAfterRollbackCallbacks();
     if (error instanceof Rollback) {
       return undefined;
     }
     throw error;
   }
-  _currentTransaction = previousTx;
   await tx.runAfterCommitCallbacks();
   return result;
 }
@@ -118,14 +119,23 @@ type CallbackOptions = { on?: TransactionAction | TransactionAction[] };
 
 /**
  * Mirrors: ActiveRecord::Transactions::ClassMethods#before_commit
- * Delegates to Model._callbackChain via the class's static method.
+ * Registers directly on the model callback chain (ActiveModel does not
+ * provide a `beforeCommit` class helper).
  */
 export function beforeCommit(
   modelClass: typeof Base,
   fn: CallbackFn,
   options?: CallbackOptions,
 ): void {
-  (modelClass as any).beforeCommit(fn, options);
+  if (options?.on !== undefined) {
+    const actions = Array.isArray(options.on) ? options.on : [options.on];
+    for (const action of actions) {
+      if (action !== "create" && action !== "update" && action !== "destroy") {
+        throw new Error(`Unknown transaction action: ${action}`);
+      }
+    }
+  }
+  (modelClass as any)._callbackChain.register("before", "commit", fn, options);
 }
 
 /**
@@ -272,6 +282,7 @@ export async function committedBang(record: Base): Promise<void> {
  * Mirrors: ActiveRecord::Transactions#rolledback!
  */
 export async function rolledbackBang(record: Base): Promise<void> {
+  if (!isTriggerTransactionalCallbacks(record)) return;
   const ctor = record.constructor as typeof Base;
   await (ctor as any)._callbackChain?.runAfter?.("rollback", record);
 }

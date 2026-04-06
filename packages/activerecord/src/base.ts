@@ -2129,19 +2129,16 @@ export class Base extends Model {
     const { Rollback, currentTransaction, committedBang, rolledbackBang } =
       await import("./transactions.js");
 
-    let saved: boolean;
-    if (hasAutosave) {
-      const txResult = await this.transaction(async () => {
-        const result = await saveBody();
-        if (!result) throw new Rollback();
-        return result;
-      });
-      saved = txResult ?? false;
-    } else {
-      saved = await saveBody();
-    }
+    // Always wrap in transaction (matches Rails with_transaction_returning_status)
+    const txResult = await this.transaction(async () => {
+      const result = await saveBody();
+      if (!result) throw new Rollback();
+      return result;
+    });
+    const saved = txResult ?? false;
 
     // Fire after_commit/after_rollback callbacks.
+    // If inside an outer transaction, defer. Otherwise fire immediately.
     const outerTx = currentTransaction();
     if (saved) {
       if (outerTx) {
@@ -2364,59 +2361,69 @@ export class Base extends Model {
       throw new ReadOnlyRecord(`${this.constructor.name} is marked as readonly`);
     }
     const ctor = this.constructor as typeof Base;
+    const { Rollback, currentTransaction, committedBang, rolledbackBang } =
+      await import("./transactions.js");
 
-    let didDelete = false;
-    const halted = !(await ctor._callbackChain.run("destroy", this, async () => {
-      const { processDependentAssociations } = await import("./associations.js");
-      await processDependentAssociations(this);
+    // Always wrap in transaction (matches Rails with_transaction_returning_status)
+    const txResult = await this.transaction(async () => {
+      let didDelete = false;
+      const halted = !(await ctor._callbackChain.run("destroy", this, async () => {
+        const { processDependentAssociations } = await import("./associations.js");
+        await processDependentAssociations(this);
 
-      const table = ctor.arelTable;
-      const pk = this.id;
-      if (!(Array.isArray(pk) ? pk.every((v) => v == null) : pk == null)) {
-        const dm = new DeleteManager().from(table).where(ctor._buildPkWhereNode(pk));
-        const lockCol = ctor.lockingColumn;
-        if (ctor.lockingEnabled) {
-          const currentVersion = this.readAttribute(lockCol);
-          if (currentVersion == null) {
-            dm.where(table.get(lockCol).isNull());
-          } else {
-            dm.where(table.get(lockCol).eq(Number(currentVersion) || 0));
+        const table = ctor.arelTable;
+        const pk = this.id;
+        if (!(Array.isArray(pk) ? pk.every((v) => v == null) : pk == null)) {
+          const dm = new DeleteManager().from(table).where(ctor._buildPkWhereNode(pk));
+          const lockCol = ctor.lockingColumn;
+          if (ctor.lockingEnabled) {
+            const currentVersion = this.readAttribute(lockCol);
+            if (currentVersion == null) {
+              dm.where(table.get(lockCol).isNull());
+            } else {
+              dm.where(table.get(lockCol).eq(Number(currentVersion) || 0));
+            }
           }
+
+          const affected = await ctor.adapter.executeMutation(dm.toSql());
+          if (ctor.lockingEnabled && affected === 0) {
+            throw new StaleObjectError(this, "destroy");
+          }
+          didDelete = affected > 0;
         }
 
-        const affected = await ctor.adapter.executeMutation(dm.toSql());
-        if (ctor.lockingEnabled && affected === 0) {
-          throw new StaleObjectError(this, "destroy");
-        }
-        didDelete = affected > 0;
+        this._destroyed = true;
+        this._frozen = true;
+        this._collectionProxies.clear();
+        this._preloadedAssociations.clear();
+        this._associationInstances.clear();
+      }));
+
+      if (halted) throw new Rollback();
+
+      if (didDelete) {
+        this._transactionAction = "destroy";
+        (this as any)._triggerDestroyCallback = true;
+        (this as any)._newRecordBeforeLastCommit = false;
+        (this as any)._triggerUpdateCallback = false;
+        const { updateCounterCaches, touchBelongsToParents } = await import("./associations.js");
+        await updateCounterCaches(this, "decrement");
+        await touchBelongsToParents(this);
       }
 
-      this._destroyed = true;
-      this._frozen = true;
-      this._collectionProxies.clear();
-      this._preloadedAssociations.clear();
-      this._associationInstances.clear();
-    }));
+      return didDelete;
+    });
 
-    if (halted) return false;
+    if (txResult === undefined) return false; // Rollback from halted callback
 
-    if (didDelete) {
-      this._transactionAction = "destroy";
-      (this as any)._triggerDestroyCallback = true;
-      (this as any)._newRecordBeforeLastCommit = false;
-      (this as any)._triggerUpdateCallback = false;
-      const { updateCounterCaches, touchBelongsToParents } = await import("./associations.js");
-      await updateCounterCaches(this, "decrement");
-      await touchBelongsToParents(this);
-
-      const { currentTransaction, committedBang, rolledbackBang } =
-        await import("./transactions.js");
-      const tx = currentTransaction();
-      if (tx) {
-        tx.afterCommit(async () => {
+    // Fire after_commit/after_rollback callbacks
+    if (txResult) {
+      const outerTx = currentTransaction();
+      if (outerTx) {
+        outerTx.afterCommit(async () => {
           await committedBang(this);
         });
-        tx.afterRollback(async () => {
+        outerTx.afterRollback(async () => {
           await rolledbackBang(this);
         });
       } else {

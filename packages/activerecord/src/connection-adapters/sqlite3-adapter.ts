@@ -28,8 +28,6 @@ import {
   BigIntegerType,
   DecimalType,
 } from "@blazetrails/activemodel";
-import { getFs } from "@blazetrails/activesupport";
-import { quoteString, quoteTableName, quoteColumnName } from "./sqlite3/quoting.js";
 
 /**
  * SQLite adapter — connects ActiveRecord to a real SQLite database.
@@ -348,7 +346,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     return true;
   }
 
-  override requiresReloading(): boolean {
+  isRequiresReloading(): boolean {
     return false;
   }
 
@@ -370,16 +368,6 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   }
 
   // --- Database info ---
-
-  private resolveSqlType(type: string): string {
-    const known = this.nativeDatabaseTypes[type];
-    if (known) return known.name;
-    // Validate: only allow alphanumeric type names (with optional parenthesized precision)
-    if (!/^[A-Za-z_][A-Za-z0-9_ ]*(\(\d+(,\s*\d+)?\))?$/.test(type)) {
-      throw new Error(`Invalid column type: ${type}`);
-    }
-    return type.toUpperCase();
-  }
 
   get nativeDatabaseTypes(): Record<string, { name: string; limit?: number }> {
     return {
@@ -405,19 +393,13 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   }
 
   isSharedCache(): boolean {
-    const SQLITE_OPEN_SHAREDCACHE = 0x00020000;
-    const flags = this._config.flags;
-    if (typeof flags === "number") {
-      return (flags & SQLITE_OPEN_SHAREDCACHE) !== 0;
-    }
-    const qIdx = this._filename.indexOf("?");
-    if (qIdx === -1) return false;
-    return this._filename.slice(qIdx).includes("cache=shared");
+    return this._filename.includes("cache=shared");
   }
 
   override getDatabaseVersion(): Version {
-    const row = this.db.prepare("SELECT sqlite_version() AS v").get() as any;
-    return new Version(row?.v ?? "0.0.0");
+    const result = this.db.pragma("data_version");
+    const sqliteVersion = (this.db.prepare("SELECT sqlite_version() AS v").get() as any)?.v;
+    return new Version(sqliteVersion ?? "0.0.0");
   }
 
   override checkVersion(): void {
@@ -431,14 +413,15 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   static isDatabaseExists(config: { database?: string }): boolean {
     if (!config.database || config.database === ":memory:") return true;
     try {
-      return getFs().existsSync(config.database);
+      const { existsSync } = require("fs");
+      return existsSync(config.database);
     } catch {
       return false;
     }
   }
 
   static newClient(config: { database?: string; readonly?: boolean }): SQLite3Adapter {
-    return new SQLite3Adapter(config.database ?? ":memory:", { readonly: config.readonly });
+    return new SQLite3Adapter(config.database, { readonly: config.readonly });
   }
 
   static override dbconsole(config?: { database?: string }): void {
@@ -449,7 +432,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   // --- Schema operations ---
 
   async primaryKeys(tableName: string): Promise<string[]> {
-    const rows = await this.execute(`PRAGMA table_info(${quoteTableName(tableName)})`);
+    const rows = await this.execute(`PRAGMA table_info("${tableName}")`);
     return rows.filter((r) => r.pk).map((r) => String(r.name));
   }
 
@@ -472,7 +455,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     } else {
       throw new Error("No index name or column specified");
     }
-    await this.executeMutation(`DROP INDEX IF EXISTS ${quoteColumnName(indexName)}`);
+    await this.executeMutation(`DROP INDEX IF EXISTS "${indexName}"`);
   }
 
   async virtualTables(): Promise<string[]> {
@@ -482,18 +465,16 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     return rows.map((r) => String(r.name));
   }
 
-  override async createVirtualTable(tableName: string, options?: unknown): Promise<void> {
-    const opts = (options ?? {}) as { moduleName?: unknown; values?: unknown };
-    const moduleName = opts.moduleName;
-    if (typeof moduleName !== "string" || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(moduleName)) {
-      throw new Error("createVirtualTable requires a valid moduleName");
-    }
-    const values = opts.values;
-    const cols = Array.isArray(values)
-      ? values.map((v) => quoteColumnName(String(v))).join(", ")
-      : "";
+  override async createVirtualTable(
+    tableName: string,
+    moduleName?: unknown,
+    values?: unknown,
+  ): Promise<void> {
+    const mod = moduleName as string;
+    const vals = values as string[];
+    const cols = (vals ?? []).join(", ");
     await this.executeMutation(
-      `CREATE VIRTUAL TABLE ${quoteTableName(tableName)} USING ${moduleName}(${cols})`,
+      `CREATE VIRTUAL TABLE "${tableName}" USING ${mod}(${cols})`,
     );
   }
 
@@ -502,44 +483,35 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     _moduleName?: string,
     _values?: string[],
   ): Promise<void> {
-    await this.executeMutation(`DROP TABLE IF EXISTS ${quoteTableName(tableName)}`);
+    await this.executeMutation(`DROP TABLE IF EXISTS "${tableName}"`);
   }
 
   async renameTable(tableName: string, newName: string): Promise<void> {
-    this.schemaCache.clear();
-    await this.executeMutation(
-      `ALTER TABLE ${quoteTableName(tableName)} RENAME TO ${quoteTableName(newName)}`,
-    );
+    await this.executeMutation(`ALTER TABLE "${tableName}" RENAME TO "${newName}"`);
   }
 
   async addColumn(
     tableName: string,
     columnName: string,
     type: string,
-    options?: Record<string, unknown>,
+    _options?: Record<string, unknown>,
   ): Promise<void> {
-    const sqlType = this.resolveSqlType(type);
-    let sql = `ALTER TABLE ${quoteTableName(tableName)} ADD COLUMN ${quoteColumnName(columnName)} ${sqlType}`;
-    if (options?.null === false) sql += " NOT NULL";
-    if (options?.default !== undefined) {
-      const def = options.default;
-      sql += ` DEFAULT ${def === null ? "NULL" : typeof def === "string" ? quoteString(def) : def}`;
-    }
-    await this.executeMutation(sql);
+    const sqlType = this.nativeDatabaseTypes[type]?.name ?? type.toUpperCase();
+    await this.executeMutation(`ALTER TABLE "${tableName}" ADD COLUMN "${columnName}" ${sqlType}`);
   }
 
-  async removeColumn(tableName: string, columnName: string, _type?: string): Promise<void> {
-    await this.alterTable(tableName, (columns) => {
-      delete columns[columnName];
-    });
+  async removeColumn(
+    tableName: string,
+    columnName: string,
+    _type?: string,
+  ): Promise<void> {
+    await this.executeMutation(`ALTER TABLE "${tableName}" DROP COLUMN "${columnName}"`);
   }
 
   async removeColumns(tableName: string, ...columnNames: string[]): Promise<void> {
-    await this.alterTable(tableName, (columns) => {
-      for (const col of columnNames) {
-        delete columns[col];
-      }
-    });
+    for (const col of columnNames) {
+      await this.removeColumn(tableName, col);
+    }
   }
 
   async changeColumnDefault(
@@ -551,227 +523,98 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
       typeof defaultOrChanges === "object" && defaultOrChanges !== null
         ? (defaultOrChanges as any).to
         : defaultOrChanges;
-    await this.alterTable(tableName, (columns) => {
-      if (columns[columnName]) {
-        columns[columnName].dflt_value = newDefault === null ? null : String(newDefault);
-      }
-    });
+    const quoted = newDefault === null ? "NULL" : `'${newDefault}'`;
+    // SQLite doesn't support ALTER COLUMN SET DEFAULT directly.
+    // This requires table rebuild via copy strategy.
+    throw new StatementInvalid(
+      `SQLite does not support ALTER TABLE ... ALTER COLUMN ... SET DEFAULT. ` +
+        `Column: ${tableName}.${columnName}, Default: ${quoted}`,
+      { sql: "", binds: [] },
+    );
   }
 
   async changeColumnNull(
     tableName: string,
     columnName: string,
-    allowNull: boolean,
-    defaultValue?: unknown,
+    _null: boolean,
+    _default?: unknown,
   ): Promise<void> {
-    if (!allowNull && defaultValue !== undefined) {
-      const quotedDefault =
-        defaultValue === null
-          ? "NULL"
-          : typeof defaultValue === "string"
-            ? quoteString(defaultValue)
-            : String(defaultValue);
-      await this.executeMutation(
-        `UPDATE ${quoteTableName(tableName)} SET ${quoteColumnName(columnName)} = ${quotedDefault} WHERE ${quoteColumnName(columnName)} IS NULL`,
-      );
-    }
-    await this.alterTable(tableName, (columns) => {
-      if (columns[columnName]) {
-        columns[columnName].notnull = allowNull ? 0 : 1;
-      }
-    });
+    throw new StatementInvalid(
+      `SQLite does not support ALTER TABLE ... ALTER COLUMN ... SET NOT NULL. ` +
+        `Column: ${tableName}.${columnName}`,
+      { sql: "", binds: [] },
+    );
   }
 
   async changeColumn(
     tableName: string,
     columnName: string,
-    type: string,
-    options?: Record<string, unknown>,
+    _type: string,
   ): Promise<void> {
-    const sqlType = this.resolveSqlType(type);
-    await this.alterTable(tableName, (columns) => {
-      if (columns[columnName]) {
-        columns[columnName].type = sqlType;
-        if (options?.null !== undefined) columns[columnName].notnull = options.null ? 0 : 1;
-        if (options?.default !== undefined)
-          columns[columnName].dflt_value =
-            options.default === null ? null : String(options.default);
-      }
-    });
-  }
-
-  async renameColumn(tableName: string, columnName: string, newColumnName: string): Promise<void> {
-    await this.executeMutation(
-      `ALTER TABLE ${quoteTableName(tableName)} RENAME COLUMN ${quoteColumnName(columnName)} TO ${quoteColumnName(newColumnName)}`,
+    throw new StatementInvalid(
+      `SQLite does not support ALTER TABLE ... ALTER COLUMN TYPE. ` +
+        `Column: ${tableName}.${columnName}`,
+      { sql: "", binds: [] },
     );
   }
 
-  async addTimestamps(tableName: string, options?: Record<string, unknown>): Promise<void> {
-    const opts = {
-      null: false,
-      ...options,
-    };
-    await this.addColumn(tableName, "created_at", "datetime", opts);
-    await this.addColumn(tableName, "updated_at", "datetime", opts);
+  async renameColumn(
+    tableName: string,
+    columnName: string,
+    newColumnName: string,
+  ): Promise<void> {
+    await this.executeMutation(
+      `ALTER TABLE "${tableName}" RENAME COLUMN "${columnName}" TO "${newColumnName}"`,
+    );
+  }
+
+  async addTimestamps(
+    tableName: string,
+    _options?: Record<string, unknown>,
+  ): Promise<void> {
+    await this.addColumn(tableName, "created_at", "datetime");
+    await this.addColumn(tableName, "updated_at", "datetime");
   }
 
   async addReference(
     tableName: string,
     refName: string,
-    options?: Record<string, unknown>,
+    _options?: Record<string, unknown>,
   ): Promise<void> {
-    const type = (options?.type as string) ?? "integer";
-    await this.addColumn(tableName, `${refName}_id`, type, options);
+    await this.addColumn(tableName, `${refName}_id`, "integer");
   }
 
-  async foreignKeys(tableName: string): Promise<
-    Array<{
-      column: string | string[];
-      primaryKey: string | string[];
-      toTable: string;
-      onDelete: string | null;
-      onUpdate: string | null;
-    }>
-  > {
-    const rows = await this.execute(`PRAGMA foreign_key_list(${quoteTableName(tableName)})`);
-    const grouped = new Map<number, Array<Record<string, unknown>>>();
-    for (const row of rows) {
-      const id = row.id as number;
-      if (!grouped.has(id)) grouped.set(id, []);
-      grouped.get(id)!.push(row);
-    }
-
-    const results: Array<{
-      column: string | string[];
-      primaryKey: string | string[];
-      toTable: string;
-      onDelete: string | null;
-      onUpdate: string | null;
-    }> = [];
-
-    for (const group of grouped.values()) {
-      group.sort((a, b) => (a.seq as number) - (b.seq as number));
-      const first = group[0];
-      const onDelete = first.on_delete === "NO ACTION" ? null : (first.on_delete as string);
-      const onUpdate = first.on_update === "NO ACTION" ? null : (first.on_update as string);
-
-      if (group.length === 1) {
-        results.push({
-          column: first.from as string,
-          primaryKey: first.to as string,
-          toTable: first.table as string,
-          onDelete,
-          onUpdate,
-        });
-      } else {
-        results.push({
-          column: group.map((r) => r.from as string),
-          primaryKey: group.map((r) => r.to as string),
-          toTable: first.table as string,
-          onDelete,
-          onUpdate,
-        });
-      }
-    }
-    return results;
+  async foreignKeys(tableName: string): Promise<Array<Record<string, unknown>>> {
+    const rows = await this.execute(`PRAGMA foreign_key_list("${tableName}")`);
+    return rows;
   }
 
-  override buildInsertSql(insert: {
-    into?: string;
-    valuesList?: string;
-    skipDuplicates?: boolean;
-    conflictTarget?: string;
-    update?: string;
-    returning?: string;
-  }): string | null {
-    if (!insert.into) {
-      if (insert.skipDuplicates) return "OR IGNORE";
-      if (insert.update) return "ON CONFLICT DO UPDATE SET";
-      return null;
-    }
-
-    let sql = `INSERT ${insert.into} ${insert.valuesList ?? ""}`;
+  override buildInsertSql(
+    insert: { skipDuplicates?: boolean; update?: unknown },
+  ): string | null {
     if (insert.skipDuplicates) {
-      sql += ` ON CONFLICT ${insert.conflictTarget ?? ""} DO NOTHING`;
-    } else if (insert.update) {
-      sql += ` ON CONFLICT ${insert.conflictTarget ?? ""} DO UPDATE SET ${insert.update}`;
+      return "OR IGNORE";
     }
-    if (insert.returning) {
-      sql += ` RETURNING ${insert.returning}`;
+    if (insert.update) {
+      return "ON CONFLICT DO UPDATE SET";
     }
-    return sql;
+    return null;
   }
 
-  override async disableReferentialIntegrity(fn: () => Promise<void>): Promise<void> {
-    const oldForeignKeys = (this.db.pragma("foreign_keys") as any[])[0]?.foreign_keys;
-    const oldDefer = (this.db.pragma("defer_foreign_keys") as any[])[0]?.defer_foreign_keys;
+  async disableReferentialIntegrity(fn: () => Promise<void>): Promise<void> {
+    this.db.pragma("foreign_keys = OFF");
     try {
-      this.db.pragma("defer_foreign_keys = ON");
-      this.db.pragma("foreign_keys = OFF");
       await fn();
     } finally {
-      this.db.pragma(`defer_foreign_keys = ${oldDefer ?? 0}`);
-      this.db.pragma(`foreign_keys = ${oldForeignKeys ?? 1}`);
+      this.db.pragma("foreign_keys = ON");
     }
   }
 
-  override async checkAllForeignKeysValidBang(): Promise<void> {
-    const violations = this.db.pragma("foreign_key_check") as Array<Record<string, unknown>>;
+  async checkAllForeignKeysValidBang(): Promise<void> {
+    const violations = this.db.pragma("foreign_key_check") as unknown[];
     if (violations.length > 0) {
-      const tables = violations.map((r) => r.table).join(", ");
-      throw new StatementInvalid(`Foreign key violations found: ${tables}`, {
-        sql: "PRAGMA foreign_key_check",
-        binds: [],
-      });
+      throw new Error(`Foreign key violations found: ${violations.length} rows`);
     }
-  }
-
-  // --- Private: alter_table copy strategy (Rails: SQLite3Adapter#alter_table) ---
-
-  private async alterTable(
-    tableName: string,
-    modify: (columns: Record<string, Record<string, unknown>>) => void,
-  ): Promise<void> {
-    const tableInfo = this.db
-      .prepare(`PRAGMA table_info(${quoteTableName(tableName)})`)
-      .all() as Array<Record<string, unknown>>;
-
-    const columns: Record<string, Record<string, unknown>> = {};
-    for (const col of tableInfo) {
-      columns[col.name as string] = { ...col };
-    }
-
-    modify(columns);
-
-    const tmpTable = `_alter_tmp_${tableName}`;
-    const quotedTmp = quoteTableName(tmpTable);
-    const quotedTable = quoteTableName(tableName);
-    const colNames = Object.keys(columns);
-    const colDefs = colNames.map((name) => {
-      const col = columns[name];
-      let def = `${quoteColumnName(name)} ${col.type ?? "TEXT"}`;
-      if (col.pk) def += " PRIMARY KEY";
-      if (col.notnull) def += " NOT NULL";
-      if (col.dflt_value !== null && col.dflt_value !== undefined) {
-        def += ` DEFAULT ${col.dflt_value}`;
-      }
-      return def;
-    });
-
-    const originalColNames = tableInfo
-      .map((c) => c.name as string)
-      .filter((n) => colNames.includes(n));
-
-    this.db.exec(`CREATE TABLE ${quotedTmp} (${colDefs.join(", ")})`);
-    if (originalColNames.length > 0) {
-      const selectCols = originalColNames.map((n) => quoteColumnName(n)).join(", ");
-      this.db.exec(
-        `INSERT INTO ${quotedTmp} (${selectCols}) SELECT ${selectCols} FROM ${quotedTable}`,
-      );
-    }
-    this.db.exec(`DROP TABLE ${quotedTable}`);
-    this.db.exec(`ALTER TABLE ${quotedTmp} RENAME TO ${quotedTable}`);
-    this.schemaCache.clear();
   }
 
   private _translateException(e: unknown, sql: string, binds: unknown[]): Error {

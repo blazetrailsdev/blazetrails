@@ -516,17 +516,13 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     if (!safeIdent.test(mod)) {
       throw new Error("moduleName must be a valid SQLite identifier");
     }
-    const vals = Array.isArray(virtualValues) ? virtualValues.map(String) : [];
-    for (const v of vals) {
-      if (!safeIdent.test(v)) {
-        throw new Error(
-          `Virtual table argument "${v}" must be a valid SQLite identifier (letters, digits, underscores)`,
-        );
-      }
-    }
-    const cols = vals.map((v) => quoteColumnName(v)).join(", ");
+    // Virtual table module arguments are passed through as-is (e.g. FTS
+    // tokenize='porter', content='posts'). Only the module name is validated
+    // as an identifier since it occupies a SQL keyword position.
+    const args = Array.isArray(virtualValues) ? virtualValues.map(String) : [];
+    const rawArgs = args.join(", ");
     await this.executeMutation(
-      `CREATE VIRTUAL TABLE ${quoteTableName(tableName)} USING ${mod}(${cols})`,
+      `CREATE VIRTUAL TABLE ${quoteTableName(tableName)} USING ${mod}(${rawArgs})`,
     );
   }
 
@@ -660,7 +656,9 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
       onUpdate: string | null;
     }>
   > {
-    const rows = await this.execute(`PRAGMA foreign_key_list(${quoteTableName(tableName)})`);
+    const { schema, bare } = this._splitTableName(tableName);
+    const prefix = schema ? `${quoteColumnName(schema)}.` : "";
+    const rows = await this.execute(`PRAGMA ${prefix}foreign_key_list(${quoteColumnName(bare)})`);
     const grouped = new Map<number, Array<Record<string, unknown>>>();
     for (const row of rows) {
       const id = row.id as number;

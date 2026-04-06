@@ -2172,6 +2172,9 @@ export class Relation<T extends Base> {
   } = {}): AsyncGenerator<T[]> {
     let currentOffset = this._offsetValue ?? 0;
     const pk = this._modelClass.primaryKey;
+    if (Array.isArray(pk)) {
+      throw new Error("findInBatches does not support composite primary keys");
+    }
 
     while (true) {
       const rel = this._clone();
@@ -2181,12 +2184,11 @@ export class Relation<T extends Base> {
 
       // Ensure deterministic ordering; support custom order direction (Rails 7.1)
       if (rel._orderClauses.length === 0) {
-        rel._orderClauses.push(order ? [pk as string, order] : (pk as string));
+        rel._orderClauses.push(order ? [pk, order] : pk);
       }
 
       // Apply start/finish range constraints
-      const pkCol = Array.isArray(pk) ? pk[0] : pk;
-      const pkAttr = this._modelClass.arelTable.get(pkCol);
+      const pkAttr = this._modelClass.arelTable.get(pk);
       if (start !== undefined) {
         rel._whereClause.predicates.push(pkAttr.gteq(start));
       }

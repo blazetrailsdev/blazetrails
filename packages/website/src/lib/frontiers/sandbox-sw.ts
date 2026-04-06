@@ -16,9 +16,12 @@ import { stripTypes } from "./transpiler.js";
 import { createTrailCLI, type CliResult } from "./trail-cli.js";
 import { createAppServer, type AppServer } from "./app-server.js";
 import { requestToRackEnvWithBody, rackResponseToFetchResponse } from "./rack-bridge.js";
-import { Base, Migration, MigrationRunner, Migrator, Schema } from "@blazetrails/activerecord";
-import { ActionController } from "@blazetrails/actionpack";
+import { Base } from "@blazetrails/activerecord/base";
+import { Migration, Migrator } from "@blazetrails/activerecord/migration";
 import type { MigrationProxy } from "@blazetrails/activerecord/migration";
+import { MigrationRunner } from "@blazetrails/activerecord/migration-runner";
+import { Schema } from "@blazetrails/activerecord/schema";
+import { ActionController } from "@blazetrails/actionpack";
 
 import initSqlJs from "sql.js";
 

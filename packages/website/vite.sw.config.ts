@@ -24,6 +24,10 @@ export default defineConfig({
       pkgAlias("@blazetrails/activemodel", "../activemodel/src/index.ts"),
       pkgAlias("@blazetrails/activerecord/adapter", "../activerecord/src/adapter.ts"),
       pkgAlias("@blazetrails/activerecord/migration", "../activerecord/src/migration.ts"),
+      {
+        find: /^@blazetrails\/activerecord\/(.+)$/,
+        replacement: path.resolve(__dirname, "../activerecord/src/$1.ts"),
+      },
       pkgAlias("@blazetrails/activerecord", "../activerecord/src/index.ts"),
       pkgAlias("@blazetrails/rack", "../rack/src/index.ts"),
       pkgAlias("@blazetrails/actionview", "../actionview/src/index.ts"),
@@ -44,7 +48,25 @@ export default defineConfig({
       external: (id: string) =>
         id === "sql.js" ||
         id.startsWith("node:") ||
-        ["fs", "path", "crypto", "url", "child_process", "util", "events", "stream"].includes(id),
+        id.startsWith("pg") ||
+        id.startsWith("mysql2") ||
+        id.startsWith("better-sqlite3") ||
+        [
+          "fs",
+          "path",
+          "crypto",
+          "url",
+          "child_process",
+          "util",
+          "events",
+          "stream",
+          "net",
+          "tls",
+          "dns",
+          "zlib",
+          "timers",
+          "process",
+        ].includes(id),
       output: {
         globals: {
           "sql.js": "initSqlJs",

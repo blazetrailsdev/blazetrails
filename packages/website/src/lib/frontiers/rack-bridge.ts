@@ -90,7 +90,8 @@ export function requestToRackEnv(request: Request, basePath = ""): RackEnv {
 export async function requestToRackEnvWithBody(request: Request, basePath = ""): Promise<RackEnv> {
   const env = requestToRackEnv(request, basePath);
 
-  if (request.body && request.method !== "GET" && request.method !== "HEAD") {
+  const method = request.method.toUpperCase();
+  if (request.body && method !== "GET" && method !== "HEAD") {
     const buf = await request.arrayBuffer();
     const body = new TextDecoder().decode(buf);
     env["rack.input"] = new StringIO(body);

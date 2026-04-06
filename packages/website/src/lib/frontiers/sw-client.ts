@@ -139,6 +139,7 @@ export async function createSwClient(options: SwClientOptions = {}): Promise<SwC
             sw.postMessage(message, transfer);
           } catch (error) {
             clearTimeout(timer);
+            channel.port2.close();
             cleanup();
             reject(error instanceof Error ? error : new Error(String(error)));
           }
@@ -160,12 +161,24 @@ export async function createSwClient(options: SwClientOptions = {}): Promise<SwC
     };
 
     // Send init and wait for ready
-    const initResponse = await Promise.race([
-      client.send({ type: "init" as const }),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("SW init timed out")), INIT_TIMEOUT),
-      ),
-    ]);
+    const initRequest = client.send({ type: "init" as const });
+    const initResponse = await new Promise<Awaited<typeof initRequest>>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        void initRequest.catch(() => {});
+        reject(new Error("SW init timed out"));
+      }, INIT_TIMEOUT);
+
+      void initRequest.then(
+        (response) => {
+          clearTimeout(timer);
+          resolve(response);
+        },
+        (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      );
+    });
 
     if (initResponse.type === "init") {
       isReady = true;

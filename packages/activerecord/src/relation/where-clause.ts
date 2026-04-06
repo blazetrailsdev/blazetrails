@@ -26,7 +26,10 @@ export class WhereClause {
   }
 
   merge(other: WhereClause): WhereClause {
-    return new WhereClause([...this.predicates, ...other.predicates]);
+    // Rails: remove predicates from self that conflict with other's attributes,
+    // then union with other's predicates (other wins on conflict)
+    const filtered = exceptPredicates(this.predicates, other.extractAttributes());
+    return new WhereClause(unionNodes(filtered, other.predicates));
   }
 
   invert(): WhereClause {
@@ -37,13 +40,8 @@ export class WhereClause {
     return new WhereClause([new Nodes.Not(this.ast)]);
   }
 
-  except(...columns: string[]): WhereClause {
-    const colSet = new Set(columns);
-    const kept = this.predicates.filter((node) => {
-      const attr = fetchAttribute(node);
-      return attr === null || !colSet.has(attr);
-    });
-    return new WhereClause(kept);
+  except(...columns: (string | Nodes.Node)[]): WhereClause {
+    return new WhereClause(exceptPredicates(this.predicates, columns));
   }
 
   clear(): void {
@@ -84,8 +82,8 @@ export class WhereClause {
   }
 
   get ast(): Nodes.Node {
-    if (this.predicates.length === 1) return this.predicates[0];
-    return new Nodes.And(this.predicates);
+    const wrapped = predicatesWithWrappedSqlLiterals(this.predicates);
+    return wrapped.length === 1 ? wrapped[0] : new Nodes.And(wrapped);
   }
 
   toSql(): string {
@@ -168,6 +166,40 @@ function extractNodeValue(node: unknown): unknown {
   if (node instanceof Nodes.Quoted) return node.value;
   if (Array.isArray(node)) return node.map((v) => extractNodeValue(v));
   return node;
+}
+
+function exceptPredicates(
+  predicates: Nodes.Node[],
+  columns: (string | Nodes.Node)[],
+): Nodes.Node[] {
+  const colStrings = new Set<string>();
+  for (const c of columns) {
+    if (typeof c === "string") colStrings.add(c);
+    else if (c instanceof Nodes.Attribute) colStrings.add(c.name);
+  }
+  return predicates.filter((node) => {
+    const attr = fetchAttribute(node);
+    return attr === null || !colStrings.has(attr);
+  });
+}
+
+function unionNodes(a: Nodes.Node[], b: Nodes.Node[]): Nodes.Node[] {
+  const result = [...a];
+  for (const node of b) {
+    if (!result.some((existing) => existing.eql(node))) {
+      result.push(node);
+    }
+  }
+  return result;
+}
+
+function predicatesWithWrappedSqlLiterals(predicates: Nodes.Node[]): Nodes.Node[] {
+  return predicates
+    .filter((n) => !(n instanceof Nodes.SqlLiteral && String(n) === ""))
+    .map((node) => {
+      if (node instanceof Nodes.SqlLiteral) return new Nodes.Grouping(node);
+      return node;
+    });
 }
 
 function stripQuotes(s: string): string {

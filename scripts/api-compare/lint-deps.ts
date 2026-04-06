@@ -401,9 +401,16 @@ function applyJsDocFixes(violations: Violation[], pkgSrcDir: string, rule: DepRu
     const source = fs.readFileSync(absPath, "utf-8");
     const sourceFile = ts.createSourceFile(tsFile, source, ts.ScriptTarget.ESNext, true);
 
-    // Collect ALL method nodes, deduplicating by position so we only annotate
-    // each physical method declaration once (even if multiple Ruby classes map to it).
+    // Build lookup: method name -> violation, with expected TS class name
+    // extracted from the Ruby module FQN (e.g., "ActiveRecord::SchemaMigration" -> "SchemaMigration")
     const violationsByMethod = new Map(fileViolations.map((v) => [v.tsMethod, v]));
+    const expectedClassForMethod = new Map(
+      fileViolations.map((v) => {
+        const shortClass = v.rubyModule.split("::").pop()!;
+        return [v.tsMethod, shortClass];
+      }),
+    );
+
     const methodsNeedingDoc: { name: string; node: ts.Node; violation: Violation }[] = [];
     const seenPositions = new Set<number>();
 
@@ -442,6 +449,10 @@ function applyJsDocFixes(violations: Violation[], pkgSrcDir: string, rule: DepRu
       for (const { methodName, targetNode } of candidates) {
         const pos = targetNode.getStart();
         if (violationsByMethod.has(methodName) && !seenPositions.has(pos)) {
+          // Only annotate if the enclosing class matches the Rails module
+          const expectedClass = expectedClassForMethod.get(methodName);
+          if (expectedClass && !enclosingClassMatches(targetNode, expectedClass)) continue;
+
           seenPositions.add(pos);
           const v = violationsByMethod.get(methodName)!;
           const existingJsDoc = getLeadingJsDoc(source, targetNode);
@@ -472,8 +483,18 @@ function applyJsDocFixes(violations: Violation[], pkgSrcDir: string, rule: DepRu
       if (hasDoc) {
         const close = findExistingJsDocClose(source, node);
         if (close !== null) {
-          const replacement = `${indent} * ${tag}\n${indent} */`;
-          modified = modified.slice(0, close.start) + replacement + modified.slice(close.end);
+          if (close.isSingleLine) {
+            // Expand single-line /** ... */ to multiline with new tag
+            const existingContent = source.slice(close.docStart + 3, close.end - 2).trim();
+            const lines = [`${indent}/**`];
+            if (existingContent) lines.push(`${indent} * ${existingContent}`);
+            lines.push(`${indent} * ${tag}`, `${indent} */`);
+            modified =
+              modified.slice(0, close.docStart) + lines.join("\n") + modified.slice(close.end);
+          } else {
+            const replacement = `${indent} * ${tag}\n${indent} */`;
+            modified = modified.slice(0, close.start) + replacement + modified.slice(close.end);
+          }
         }
       } else {
         const insertPos = findInsertionPoint(source, node);
@@ -516,6 +537,18 @@ function findInsertionPoint(source: string, node: ts.Node): number {
   return lineStart;
 }
 
+function enclosingClassMatches(node: ts.Node, expectedClassName: string): boolean {
+  let current = node.parent;
+  while (current) {
+    if (ts.isClassDeclaration(current) && current.name) {
+      return current.name.text === expectedClassName;
+    }
+    current = current.parent;
+  }
+  // No enclosing class — top-level function, always matches
+  return true;
+}
+
 function hasExistingJsDoc(source: string, node: ts.Node): boolean {
   const fullStart = node.getFullStart();
   const start = node.getStart();
@@ -526,17 +559,19 @@ function hasExistingJsDoc(source: string, node: ts.Node): boolean {
 function findExistingJsDocClose(
   source: string,
   node: ts.Node,
-): { start: number; end: number } | null {
+): { start: number; end: number; isSingleLine: boolean; docStart: number } | null {
   const fullStart = node.getFullStart();
   const start = node.getStart();
   const leading = source.slice(fullStart, start);
-  const match = leading.match(/\/\*\*[\s\S]*?\*\//);
-  if (!match) return null;
-  const closeEnd = fullStart + match.index! + match[0].length;
-  // Find the start of the closing line: backtrack from */ past whitespace and newline
-  let closeStart = fullStart + match.index! + match[0].lastIndexOf("*/");
+  const matches = [...leading.matchAll(/\/\*\*[\s\S]*?\*\//g)];
+  const match = matches.at(-1);
+  if (!match || match.index == null) return null;
+  const docStart = fullStart + match.index;
+  const closeEnd = fullStart + match.index + match[0].length;
+  const isSingleLine = !match[0].includes("\n");
+  let closeStart = fullStart + match.index + match[0].lastIndexOf("*/");
   while (closeStart > 0 && source[closeStart - 1] !== "\n") closeStart--;
-  return { start: closeStart, end: closeEnd };
+  return { start: closeStart, end: closeEnd, isSingleLine, docStart };
 }
 
 // ---------------------------------------------------------------------------

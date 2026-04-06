@@ -300,10 +300,62 @@ export async function rolledbackBang(record: Base): Promise<void> {
 }
 
 /**
+ * Snapshot record state before the transaction so it can be restored on
+ * rollback.
+ *
+ * Mirrors: ActiveRecord::Transactions#remember_transaction_record_state
+ */
+/**
+ * Record identity state snapshot — only captures fields that define what
+ * the record IS (new? destroyed? id?), not what happened to it during the
+ * transaction (tracking flags are set by save/destroy and read by
+ * trigger_transactional_callbacks?).
+ */
+interface TransactionRecordSnapshot {
+  newRecord: boolean;
+  destroyed: boolean;
+  frozen: boolean;
+  id: unknown;
+  previouslyNewRecord: boolean;
+}
+
+function rememberTransactionRecordState(record: Base): TransactionRecordSnapshot {
+  const r = record as any;
+  return {
+    newRecord: r._newRecord,
+    destroyed: r._destroyed,
+    frozen: r._frozen,
+    id: record.id,
+    previouslyNewRecord: r._previouslyNewRecord,
+  };
+}
+
+/**
+ * Restore record identity state from a snapshot after a transaction rollback.
+ * Does NOT restore tracking flags — those reflect what happened during the
+ * transaction and are needed by trigger_transactional_callbacks?.
+ *
+ * Mirrors: ActiveRecord::Transactions#restore_transaction_record_state
+ */
+function restoreTransactionRecordState(record: Base, snapshot: TransactionRecordSnapshot): void {
+  const r = record as any;
+  r._newRecord = snapshot.newRecord;
+  r._destroyed = snapshot.destroyed;
+  r._frozen = snapshot.frozen;
+  r._previouslyNewRecord = snapshot.previouslyNewRecord;
+
+  // Restore the primary key if it was auto-assigned during insert
+  if (snapshot.newRecord && !Array.isArray(record.id)) {
+    const ctor = record.constructor as typeof Base;
+    r._attributes.set(ctor.primaryKey as string, snapshot.id);
+  }
+}
+
+/**
  * Execute a block within a transaction and capture its return value as a
  * status flag. If the status is falsy (false/null/undefined), the transaction
- * is rolled back. After the transaction, schedules committedBang/rolledbackBang
- * on the outer transaction (or fires immediately if none).
+ * is rolled back. Handles record state snapshotting/restore and callback
+ * scheduling.
  *
  * Mirrors: ActiveRecord::Transactions#with_transaction_returning_status
  */
@@ -312,29 +364,57 @@ export async function withTransactionReturningStatus<T>(
   fn: () => Promise<T>,
 ): Promise<T> {
   const modelClass = record.constructor as typeof Base;
+
+  // Mirrors: remember_transaction_record_state — snapshot before transaction
+  const snapshot = rememberTransactionRecordState(record);
+
+  // Reset transaction tracking flags (the block will set them if the
+  // operation succeeds).
+  const r = record as any;
+  r._transactionAction = undefined;
+  r._newRecordBeforeLastCommit = false;
+  r._triggerUpdateCallback = false;
+  r._triggerDestroyCallback = false;
+
   let status: T;
-  await transaction(modelClass, async () => {
+  let rolledBack = false;
+
+  await transaction(modelClass, async (tx) => {
+    // Mirrors: add_to_transaction — register for state restoration on rollback.
+    // Actual committedBang/rolledbackBang callbacks are scheduled after
+    // the transaction returns, on the outer transaction or fired immediately.
+    tx.afterRollback(async () => {
+      restoreTransactionRecordState(record, snapshot);
+    });
+
     status = await fn();
     // Ruby truthiness: only false/nil trigger rollback (0, "" are truthy in Ruby)
-    if (status === false || status == null) throw new Rollback();
+    if (status === false || status == null) {
+      rolledBack = true;
+      throw new Rollback();
+    }
     return status;
   });
 
-  // Schedule commit/rollback callbacks — mirrors add_to_transaction.
-  // If inside an outer transaction, defer commit callbacks to the outer
-  // transaction. Rollback callbacks fire immediately since the inner
-  // transaction (savepoint) has already rolled back.
-  const outerTx = currentTransaction();
-  if (status! !== false && status! != null) {
+  // Schedule commit/rollback callbacks. If inside an outer transaction,
+  // defer to it. If the inner transaction rolled back, fire rolledbackBang
+  // immediately (state was already restored by the afterRollback above).
+  if (!rolledBack) {
+    const outerTx = currentTransaction();
     if (outerTx) {
       outerTx.afterCommit(async () => await committedBang(record));
-      outerTx.afterRollback(async () => await rolledbackBang(record));
+      outerTx.afterRollback(async () => {
+        // Fire callbacks before restoring state — rolledbackBang needs
+        // isPersisted()/isDestroyed() to reflect what happened during the
+        // transaction, not the pre-transaction state. Matches Rails where
+        // rolledback! fires during rollback, restore runs in ensure.
+        await rolledbackBang(record);
+        restoreTransactionRecordState(record, snapshot);
+      });
     } else {
       await committedBang(record);
     }
   } else {
-    // Inner transaction rolled back — fire immediately regardless of
-    // outer transaction state.
     await rolledbackBang(record);
   }
 

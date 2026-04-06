@@ -2074,11 +2074,6 @@ export class Base extends Model {
     const { autosaveBelongsTo, autosaveChildren } = await import("./autosave-association.js");
 
     let saved = false;
-    // Reset transaction tracking flags to prevent stale state from prior saves
-    this._transactionAction = undefined;
-    (this as any)._newRecordBeforeLastCommit = false;
-    (this as any)._triggerUpdateCallback = false;
-    (this as any)._triggerDestroyCallback = false;
     if (!(await ctor._callbackChain.runBefore("save", this))) return false;
 
     const belongsToOk = await autosaveBelongsTo(this);
@@ -2351,12 +2346,6 @@ export class Base extends Model {
    */
   private async _destroyRow(): Promise<boolean> {
     const ctor = this.constructor as typeof Base;
-
-    // Reset transaction tracking flags to prevent stale state from prior operations
-    this._transactionAction = undefined;
-    (this as any)._newRecordBeforeLastCommit = false;
-    (this as any)._triggerUpdateCallback = false;
-    (this as any)._triggerDestroyCallback = false;
 
     let didDelete = false;
     const halted = !(await ctor._callbackChain.run("destroy", this, async () => {

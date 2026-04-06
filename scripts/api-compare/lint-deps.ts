@@ -26,6 +26,8 @@ interface DepRule {
   package: string;
   dependency: string;
   tsImport: string;
+  // Property/method names that indicate indirect usage (e.g., this.arelTable)
+  tsIdentifiers: string[];
   jsdocTag: string;
 }
 
@@ -34,6 +36,7 @@ const RULES: DepRule[] = [
     package: "activerecord",
     dependency: "arel",
     tsImport: "@blazetrails/arel",
+    tsIdentifiers: ["arelTable"],
     jsdocTag: "@arel",
   },
 ];
@@ -107,7 +110,12 @@ function mergeStatus(map: Map<string, DepStatus>, name: string, status: DepStatu
   }
 }
 
-function analyzeTsDepUsage(pkgSrcDir: string, tsImport: string, jsdocTag: string): TsDepMap {
+function analyzeTsDepUsage(
+  pkgSrcDir: string,
+  tsImport: string,
+  tsIdentifiers: string[],
+  jsdocTag: string,
+): TsDepMap {
   const result: TsDepMap = new Map();
 
   const allFiles = getAllTsFiles(pkgSrcDir);
@@ -150,8 +158,10 @@ function analyzeTsDepUsage(pkgSrcDir: string, tsImport: string, jsdocTag: string
       }
     }
 
-    if (importedNames.size === 0) {
-      // File has no imports from the target package
+    const knownIdentifiers = new Set(tsIdentifiers);
+
+    if (importedNames.size === 0 && knownIdentifiers.size === 0) {
+      // File has no imports and no known identifiers to check
       const methodMap = new Map<string, DepStatus>();
       visitMethodDeclarations(sourceFile, (name, _body, node) => {
         const suppressed = hasJsDocTag(sourceFile, node, jsdocTag);
@@ -161,12 +171,13 @@ function analyzeTsDepUsage(pkgSrcDir: string, tsImport: string, jsdocTag: string
       continue;
     }
 
-    // Step 2: for each method, check if body references any imported name.
+    // Step 2: for each method, check if body references any imported name
+    // or known indirect identifier (e.g., this.arelTable).
     // Multiple declarations with the same name (e.g., count() in two classes)
     // are merged: "uses" wins over "suppressed" wins over "missing".
     const methodMap = new Map<string, DepStatus>();
     visitMethodDeclarations(sourceFile, (name, bodyNode, node) => {
-      if (bodyNode && bodyReferencesImports(bodyNode, importedNames)) {
+      if (bodyNode && bodyReferencesDep(bodyNode, importedNames, knownIdentifiers)) {
         mergeStatus(methodMap, name, "uses");
       } else {
         const suppressed = hasJsDocTag(sourceFile, node, jsdocTag);
@@ -240,13 +251,25 @@ function hasJsDocTag(sourceFile: ts.SourceFile, node: ts.Node, tag: string): boo
   return jsDoc !== undefined && jsDoc.includes(tag);
 }
 
-function bodyReferencesImports(body: ts.Node, importedNames: Set<string>): boolean {
+function bodyReferencesDep(
+  body: ts.Node,
+  importedNames: Set<string>,
+  knownIdentifiers: Set<string>,
+): boolean {
   let found = false;
   const check = (node: ts.Node) => {
     if (found) return;
-    if (ts.isIdentifier(node) && importedNames.has(node.text)) {
-      found = true;
-      return;
+    if (ts.isIdentifier(node)) {
+      // Direct import reference: e.g., Nodes, Table, SelectManager
+      if (importedNames.has(node.text)) {
+        found = true;
+        return;
+      }
+      // Indirect usage via known property: e.g., this.arelTable
+      if (knownIdentifiers.has(node.text)) {
+        found = true;
+        return;
+      }
     }
     ts.forEachChild(node, check);
   };
@@ -695,7 +718,7 @@ function main() {
     console.log(`  Found ${rubyMethods.length} Rails methods using ${rule.dependency}`);
 
     const pkgSrcDir = packageSrcDir(rule.package);
-    const tsDepMap = analyzeTsDepUsage(pkgSrcDir, rule.tsImport, rule.jsdocTag);
+    const tsDepMap = analyzeTsDepUsage(pkgSrcDir, rule.tsImport, rule.tsIdentifiers, rule.jsdocTag);
 
     let { violations, suppressed, compliant, unmatched } = crossReference(rubyMethods, tsDepMap);
 
@@ -703,7 +726,12 @@ function main() {
       const fixedCount = applyJsDocFixes(violations, pkgSrcDir, rule);
       console.log(`  Suppressed ${fixedCount} violations with ${rule.jsdocTag} JSDoc tags`);
       // Re-scan so the report reflects post-fix state
-      const freshMap = analyzeTsDepUsage(pkgSrcDir, rule.tsImport, rule.jsdocTag);
+      const freshMap = analyzeTsDepUsage(
+        pkgSrcDir,
+        rule.tsImport,
+        rule.tsIdentifiers,
+        rule.jsdocTag,
+      );
       ({ violations, suppressed, compliant, unmatched } = crossReference(rubyMethods, freshMap));
     }
 

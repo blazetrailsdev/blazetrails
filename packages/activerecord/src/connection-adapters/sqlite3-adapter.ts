@@ -752,7 +752,12 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   }
 
   private typeToSql(type: string, options?: Record<string, unknown>): string {
-    const base = this.nativeDatabaseTypes[type]?.name ?? type.toUpperCase();
+    const raw = this.nativeDatabaseTypes[type]?.name ?? type.toUpperCase();
+    // Validate: only allow safe SQL type identifiers (letters, digits, underscores, spaces)
+    if (!/^[A-Za-z_][A-Za-z0-9_ ]*$/.test(raw)) {
+      throw new Error(`Invalid SQL type: ${raw}`);
+    }
+    const base = raw;
     const precision =
       typeof options?.precision === "number" ? Math.floor(options.precision) : undefined;
     const scale = typeof options?.scale === "number" ? Math.floor(options.scale) : undefined;

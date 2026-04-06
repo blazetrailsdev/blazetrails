@@ -28,6 +28,7 @@ import {
   BigIntegerType,
   DecimalType,
 } from "@blazetrails/activemodel";
+import { getFs } from "@blazetrails/activesupport";
 
 /**
  * SQLite adapter — connects ActiveRecord to a real SQLite database.
@@ -413,8 +414,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   static isDatabaseExists(config: { database?: string }): boolean {
     if (!config.database || config.database === ":memory:") return true;
     try {
-      const { existsSync } = require("fs");
-      return existsSync(config.database);
+      return getFs().existsSync(config.database);
     } catch {
       return false;
     }
@@ -473,9 +473,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     const mod = moduleName as string;
     const vals = values as string[];
     const cols = (vals ?? []).join(", ");
-    await this.executeMutation(
-      `CREATE VIRTUAL TABLE "${tableName}" USING ${mod}(${cols})`,
-    );
+    await this.executeMutation(`CREATE VIRTUAL TABLE "${tableName}" USING ${mod}(${cols})`);
   }
 
   async dropVirtualTable(
@@ -500,11 +498,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     await this.executeMutation(`ALTER TABLE "${tableName}" ADD COLUMN "${columnName}" ${sqlType}`);
   }
 
-  async removeColumn(
-    tableName: string,
-    columnName: string,
-    _type?: string,
-  ): Promise<void> {
+  async removeColumn(tableName: string, columnName: string, _type?: string): Promise<void> {
     await this.executeMutation(`ALTER TABLE "${tableName}" DROP COLUMN "${columnName}"`);
   }
 
@@ -546,11 +540,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     );
   }
 
-  async changeColumn(
-    tableName: string,
-    columnName: string,
-    _type: string,
-  ): Promise<void> {
+  async changeColumn(tableName: string, columnName: string, _type: string): Promise<void> {
     throw new StatementInvalid(
       `SQLite does not support ALTER TABLE ... ALTER COLUMN TYPE. ` +
         `Column: ${tableName}.${columnName}`,
@@ -558,20 +548,13 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     );
   }
 
-  async renameColumn(
-    tableName: string,
-    columnName: string,
-    newColumnName: string,
-  ): Promise<void> {
+  async renameColumn(tableName: string, columnName: string, newColumnName: string): Promise<void> {
     await this.executeMutation(
       `ALTER TABLE "${tableName}" RENAME COLUMN "${columnName}" TO "${newColumnName}"`,
     );
   }
 
-  async addTimestamps(
-    tableName: string,
-    _options?: Record<string, unknown>,
-  ): Promise<void> {
+  async addTimestamps(tableName: string, _options?: Record<string, unknown>): Promise<void> {
     await this.addColumn(tableName, "created_at", "datetime");
     await this.addColumn(tableName, "updated_at", "datetime");
   }
@@ -589,9 +572,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     return rows;
   }
 
-  override buildInsertSql(
-    insert: { skipDuplicates?: boolean; update?: unknown },
-  ): string | null {
+  override buildInsertSql(insert: { skipDuplicates?: boolean; update?: unknown }): string | null {
     if (insert.skipDuplicates) {
       return "OR IGNORE";
     }

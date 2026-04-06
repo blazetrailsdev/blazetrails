@@ -405,9 +405,14 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     return this._filename.slice(qIdx).includes("cache=shared");
   }
 
+  private _databaseVersion: Version | null = null;
+
   override getDatabaseVersion(): Version {
-    const row = this.db.prepare("SELECT sqlite_version() AS v").get() as any;
-    return new Version(row?.v ?? "0.0.0");
+    if (!this._databaseVersion) {
+      const row = this.db.prepare("SELECT sqlite_version() AS v").get() as any;
+      this._databaseVersion = new Version(row?.v ?? "0.0.0");
+    }
+    return this._databaseVersion;
   }
 
   override checkVersion(): void {
@@ -483,7 +488,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
       throw new Error("moduleName must be a valid SQLite identifier");
     }
     const vals = Array.isArray(values) ? values.map(String) : [];
-    const cols = vals.map((v) => quoteColumnName(v)).join(", ");
+    const cols = vals.map((v) => (safeIdent.test(v) ? quoteColumnName(v) : v)).join(", ");
     await this.executeMutation(
       `CREATE VIRTUAL TABLE ${quoteTableName(tableName)} USING ${mod}(${cols})`,
     );
@@ -556,12 +561,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     defaultValue?: unknown,
   ): Promise<void> {
     if (!allowNull && defaultValue !== undefined) {
-      const quotedDefault =
-        defaultValue === null
-          ? "NULL"
-          : typeof defaultValue === "string"
-            ? quoteString(defaultValue)
-            : String(defaultValue);
+      const quotedDefault = this.quoteDefault(defaultValue);
       await this.executeMutation(
         `UPDATE ${quoteTableName(tableName)} SET ${quoteColumnName(columnName)} = ${quotedDefault} WHERE ${quoteColumnName(columnName)} IS NULL`,
       );
@@ -669,23 +669,23 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
 
   override buildInsertSql(insert: {
     into?: string;
-    valuesList?: string;
-    skipDuplicates?: boolean;
-    conflictTarget?: string;
+    values_list?: string;
+    skip_duplicates?: boolean;
+    conflict_target?: string;
     update?: string;
     returning?: string;
   }): string | null {
     if (!insert.into) {
-      if (insert.skipDuplicates) return "OR IGNORE";
+      if (insert.skip_duplicates) return "OR IGNORE";
       if (insert.update) return "ON CONFLICT DO UPDATE SET";
       return null;
     }
 
-    let sql = `INSERT ${insert.into} ${insert.valuesList ?? ""}`;
-    if (insert.skipDuplicates) {
-      sql += ` ON CONFLICT ${insert.conflictTarget ?? ""} DO NOTHING`;
+    let sql = `INSERT ${insert.into} ${insert.values_list ?? ""}`;
+    if (insert.skip_duplicates) {
+      sql += ` ON CONFLICT ${insert.conflict_target ?? ""} DO NOTHING`;
     } else if (insert.update) {
-      sql += ` ON CONFLICT ${insert.conflictTarget ?? ""} DO UPDATE SET ${insert.update}`;
+      sql += ` ON CONFLICT ${insert.conflict_target ?? ""} DO UPDATE SET ${insert.update}`;
     }
     if (insert.returning) {
       sql += ` RETURNING ${insert.returning}`;
@@ -804,20 +804,14 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
 
     // Recreate indexes, adjusting table name references
     for (const sql of indexDefs) {
-      // Only recreate if all referenced columns still exist
-      const colsStillExist = originalColNames.every((n) => colNames.includes(n));
-      if (colsStillExist) {
-        const adjusted = sql.replace(
-          new RegExp(`ON\\s+${quoteTableName(tmpTable)}`, "i"),
-          `ON ${qTable}`,
-        );
-        try {
-          this.db.exec(adjusted);
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : "";
-          if (!msg.includes("no such column") && !msg.includes("already exists")) {
-            throw err;
-          }
+      // Index SQL references the original table name — no adjustment needed
+      // since we renamed tmpTable back to tableName
+      try {
+        this.db.exec(sql);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "";
+        if (!msg.includes("no such column") && !msg.includes("already exists")) {
+          throw err;
         }
       }
     }

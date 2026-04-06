@@ -16,6 +16,7 @@ import { stripTypes } from "./transpiler.js";
 import { createTrailCLI, type CliResult } from "./trail-cli.js";
 import { createAppServer, type AppServer } from "./app-server.js";
 import { requestToRackEnvWithBody, rackResponseToFetchResponse } from "./rack-bridge.js";
+import { resolveVfsPath } from "./vfs-resolve.js";
 import { Base } from "@blazetrails/activerecord/base";
 import { Migration, Migrator } from "@blazetrails/activerecord/migration";
 import type { MigrationProxy } from "@blazetrails/activerecord/migration";
@@ -108,6 +109,30 @@ async function init(): Promise<void> {
   initialized = true;
 }
 
+// ── Database replacement (used by db:import) ───────────────────────────
+
+function replaceDatabase(data: Uint8Array): void {
+  db.close();
+  db = new SQL.Database(data);
+  adapter = new SqlJsAdapter(db);
+  Base.adapter = adapter;
+  vfs = new VirtualFS(adapter);
+  compiled = new CompiledCache(adapter);
+  migrations = [];
+  cli = createTrailCLI({
+    vfs,
+    adapter,
+    executeCode,
+    getMigrations: () => [...migrations],
+    registerMigration,
+    clearMigrations: () => {
+      migrations = [];
+    },
+    getTables: () => adapter.getTables(),
+  });
+  appServer = createAppServer({ executeCode });
+}
+
 // ── SW lifecycle ───────────────────────────────────────────────────────
 
 self.addEventListener("install", () => {
@@ -184,24 +209,7 @@ export async function handleSwMessage(request: SwRequest): Promise<SwResponse> {
       return { type: "db:export", data: db.export() };
 
     case "db:import": {
-      db.close();
-      db = new SQL.Database(request.data);
-      adapter = new SqlJsAdapter(db);
-      Base.adapter = adapter;
-      vfs = new VirtualFS(adapter);
-      compiled = new CompiledCache(adapter);
-      migrations = [];
-      cli = createTrailCLI({
-        vfs,
-        adapter,
-        executeCode,
-        getMigrations: () => [...migrations],
-        registerMigration,
-        clearMigrations: () => {
-          migrations = [];
-        },
-        getTables: () => adapter.getTables(),
-      });
+      replaceDatabase(request.data);
       await broadcast({ type: "vfs:changed" });
       await broadcast({ type: "db:changed" });
       return { type: "db:import", ok: true };
@@ -244,45 +252,17 @@ function mimeType(path: string): string {
   }
 }
 
-function readFile(path: string, wantCompiled = false): { content: string; found: boolean } {
-  if (!vfs) return { content: "", found: false };
-
-  // For .ts files, prefer compiled JS from cache
-  if (wantCompiled && path.endsWith(".ts")) {
-    const js = compiled.get(path);
-    if (js) return { content: js, found: true };
-  }
-
-  const file = vfs.read(path);
-  if (file) return { content: file.content, found: true };
-
-  return { content: "", found: false };
-}
-
-function resolvePath(path: string): { path: string; result: { content: string; found: boolean } } {
-  // Try exact path (prefer compiled for .ts)
-  let result = readFile(path, true);
-  if (result.found) return { path, result };
-
-  // Try public/ prefix (Rails convention: public/ is the web root)
-  result = readFile(`public/${path}`, false);
-  if (result.found) return { path: `public/${path}`, result };
-
-  // Try extensions: .ts, .html, /index.html
-  if (!path.includes(".")) {
-    for (const ext of [".ts", ".html"]) {
-      result = readFile(path + ext, ext === ".ts");
-      if (result.found) return { path: path + ext, result };
-    }
-    result = readFile(`${path}/index.html`, false);
-    if (result.found) return { path: `${path}/index.html`, result };
-
-    // Also try public/ with extensions
-    result = readFile(`public/${path}/index.html`, false);
-    if (result.found) return { path: `public/${path}/index.html`, result };
-  }
-
-  return { path, result: { content: "", found: false } };
+function createFileReader() {
+  return {
+    read(path: string): string | null {
+      if (!vfs) return null;
+      return vfs.read(path)?.content ?? null;
+    },
+    readCompiled(path: string): string | null {
+      if (!compiled) return null;
+      return compiled.get(path);
+    },
+  };
 }
 
 const ERROR_CAPTURE_SCRIPT = `<script>
@@ -306,11 +286,11 @@ async function handleFetch(request: Request, url: URL): Promise<Response> {
     await init();
   }
 
-  let path = url.pathname.slice(DEV_PREFIX.length);
-  if (!path || path.endsWith("/")) path += "index.html";
+  const rawPath = url.pathname.slice(DEV_PREFIX.length);
+  const method = request.method.toUpperCase();
 
-  // Check if this should be dispatched to the Rack app server
-  if (appServer.routes && path.startsWith("api/")) {
+  // Try Rack app server first if a route matches this request
+  if (appServer.routes.recognize(method, `/${rawPath}`)) {
     try {
       const env = await requestToRackEnvWithBody(request, "/~dev");
       const rackResponse = await appServer.call(env);
@@ -320,15 +300,19 @@ async function handleFetch(request: Request, url: URL): Promise<Response> {
     }
   }
 
-  const resolved = resolvePath(path);
-  if (!resolved.result.found) {
+  // Static file serving from VFS
+  let path = rawPath;
+  if (!path || path.endsWith("/")) path += "index.html";
+
+  const resolved = resolveVfsPath(path, createFileReader());
+  if (!resolved.found) {
     return new Response(`404 — ${path} not found in VFS`, {
       status: 404,
       headers: { "content-type": "text/plain" },
     });
   }
 
-  let content = resolved.result.content;
+  let content = resolved.content;
 
   // If we got raw .ts (no compiled cache hit), strip types
   if (resolved.path.endsWith(".ts") && content.includes(":")) {

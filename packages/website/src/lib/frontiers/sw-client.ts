@@ -16,18 +16,28 @@ export interface SwClient {
   readonly ready: boolean;
 }
 
-const SW_PATH = "/sandbox-sw.js";
+export interface SwClientOptions {
+  /** SW script path. Default: "/sandbox-sw.js" */
+  swPath?: string;
+  /** SW registration scope. Default: "/~dev/" */
+  scope?: string;
+}
+
+const ACTIVATION_TIMEOUT = 10_000;
 const INIT_TIMEOUT = 10_000;
 const REQUEST_TIMEOUT = 30_000;
 
-export async function createSwClient(): Promise<SwClient> {
+export async function createSwClient(options: SwClientOptions = {}): Promise<SwClient> {
   if (!("serviceWorker" in navigator)) {
     throw new Error("Service workers not supported");
   }
 
-  const reg = await navigator.serviceWorker.register(SW_PATH, { scope: "/" });
+  const swPath = options.swPath ?? "/sandbox-sw.js";
+  const scope = options.scope ?? "/~dev/";
 
-  // Wait for activation
+  const reg = await navigator.serviceWorker.register(swPath, { scope });
+
+  // Wait for activation with a timeout
   await new Promise<void>((resolve, reject) => {
     const worker = reg.active ?? reg.installing ?? reg.waiting;
     if (!worker) {
@@ -38,12 +48,18 @@ export async function createSwClient(): Promise<SwClient> {
       resolve();
       return;
     }
-    const onStateChange = () => {
-      if (worker.state === "activated") {
-        worker.removeEventListener("statechange", onStateChange);
+    const timer = setTimeout(() => {
+      worker.removeEventListener("statechange", onStateChange);
+      reject(new Error("Service worker activation timed out"));
+    }, ACTIVATION_TIMEOUT);
+
+    function onStateChange() {
+      if (worker!.state === "activated") {
+        clearTimeout(timer);
+        worker!.removeEventListener("statechange", onStateChange);
         resolve();
       }
-    };
+    }
     worker.addEventListener("statechange", onStateChange);
   });
 
@@ -75,13 +91,20 @@ export async function createSwClient(): Promise<SwClient> {
       const sw = getController();
       return new Promise<SwMessageMap[R["type"]]>((resolve, reject) => {
         const channel = new MessageChannel();
-        const timer = setTimeout(() => {
+
+        function cleanup() {
           channel.port1.onmessage = null;
+          channel.port1.close();
+        }
+
+        const timer = setTimeout(() => {
+          cleanup();
           reject(new Error(`SW request timed out: ${request.type}`));
         }, REQUEST_TIMEOUT);
 
         channel.port1.onmessage = (event) => {
           clearTimeout(timer);
+          cleanup();
           const response = event.data as SwResponse;
           if (response.type === "error") {
             reject(new Error((response as { type: "error"; message: string }).message));

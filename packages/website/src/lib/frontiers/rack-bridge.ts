@@ -35,8 +35,13 @@ class StringIO {
 export function requestToRackEnv(request: Request, basePath = ""): RackEnv {
   const url = new URL(request.url);
 
-  let pathInfo = decodeURIComponent(url.pathname);
-  if (basePath && pathInfo.startsWith(basePath)) {
+  let pathInfo: string;
+  try {
+    pathInfo = decodeURIComponent(url.pathname);
+  } catch {
+    pathInfo = url.pathname;
+  }
+  if (basePath && (pathInfo === basePath || pathInfo.startsWith(`${basePath}/`))) {
     pathInfo = pathInfo.slice(basePath.length) || "/";
   }
 

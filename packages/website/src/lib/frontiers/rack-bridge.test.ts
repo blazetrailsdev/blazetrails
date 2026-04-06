@@ -80,6 +80,20 @@ describe("requestToRackEnv", () => {
 
     expect(env["PATH_INFO"]).toBe("/users/John Doe");
   });
+
+  it("does not strip basePath from similar-but-different prefix", () => {
+    const req = new Request("http://localhost/~devil/users");
+    const env = requestToRackEnv(req, "/~dev");
+
+    expect(env["PATH_INFO"]).toBe("/~devil/users");
+  });
+
+  it("survives malformed percent-encoding", () => {
+    const req = new Request("http://localhost/%E0%A4");
+    const env = requestToRackEnv(req);
+
+    expect(env["PATH_INFO"]).toBe("/%E0%A4");
+  });
 });
 
 describe("requestToRackEnvWithBody", () => {

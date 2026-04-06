@@ -103,21 +103,30 @@ export class WhereClause {
     if (this.isEmpty()) return other.clone();
     if (other.isEmpty()) return this.clone();
 
-    // Rails: left = self - other; common = self - left; right = other - common
-    // Then ORs only the differing predicates and keeps common ones.
-    // Our simplified version: since we don't yet have full predicate equality,
-    // OR both sides' full ASTs (correct but may produce redundant conditions).
-    let left: Nodes.Node = this.astNode();
-    if (left instanceof Nodes.Grouping) left = (left as any).expr;
-    let right: Nodes.Node = other.astNode();
-    if (right instanceof Nodes.Grouping) right = (right as any).expr;
+    // Rails: extract common predicates, OR only the differing ones
+    const selfPreds = this.predicateNodes();
+    const otherPreds = other.predicateNodes();
+
+    const leftOnly = subtractNodes(selfPreds, otherPreds);
+    const common = subtractNodes(selfPreds, leftOnly);
+    const rightOnly = subtractNodes(otherPreds, common);
+
+    if (leftOnly.length === 0 || rightOnly.length === 0) {
+      return new WhereClause([], [], [], common);
+    }
+
+    let leftAst: Nodes.Node = leftOnly.length === 1 ? leftOnly[0] : new Nodes.And(leftOnly);
+    if (leftAst instanceof Nodes.Grouping) leftAst = (leftAst as any).expr;
+
+    let rightAst: Nodes.Node = rightOnly.length === 1 ? rightOnly[0] : new Nodes.And(rightOnly);
+    if (rightAst instanceof Nodes.Grouping) rightAst = (rightAst as any).expr;
 
     const orNode =
-      left instanceof Nodes.Or
-        ? new Nodes.Or([...(left as any).children, right])
-        : new Nodes.Or([left, right]);
+      leftAst instanceof Nodes.Or
+        ? new Nodes.Or([...(leftAst as any).children, rightAst])
+        : new Nodes.Or([leftAst, rightAst]);
 
-    return new WhereClause([], [], [], [new Nodes.Grouping(orNode)]);
+    return new WhereClause([], [], [], [...common, new Nodes.Grouping(orNode)]);
   }
 
   get ast(): string {
@@ -181,6 +190,16 @@ export class WhereClause {
     }
     return result;
   }
+}
+
+function subtractNodes(a: Nodes.Node[], b: Nodes.Node[]): Nodes.Node[] {
+  const result: Nodes.Node[] = [];
+  for (const node of a) {
+    if (!b.some((other) => node.eql(other))) {
+      result.push(node);
+    }
+  }
+  return result;
 }
 
 function conditionToArelNode(key: string, value: unknown, negate: boolean): Nodes.Node {

@@ -860,7 +860,6 @@ def filter_public(info)
     instanceMethods: info[:instanceMethods].select { |m| m[:visibility] == "public" },
     classMethods: info[:classMethods].select { |m| m[:visibility] == "public" },
   }
-  # deps and depRefs are preserved on the method_info hashes themselves
 end
 
 run

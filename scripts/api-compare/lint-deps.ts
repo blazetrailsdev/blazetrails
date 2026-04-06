@@ -14,7 +14,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as ts from "typescript";
-import type { ApiManifest, ClassInfo, MethodInfo } from "./types.js";
+import type { ApiManifest, ClassInfo } from "./types.js";
 import { OUTPUT_DIR, packageSrcDir } from "./config.js";
 import { rubyFileToTs, rubyMethodToTs } from "./conventions.js";
 
@@ -71,7 +71,7 @@ function collectRubyDepMethods(ruby: ApiManifest, pkg: string, dep: string): Rub
   if (!rubyPkg) return [];
 
   const results: RubyDepMethod[] = [];
-  const process = (entities: Record<string, unknown>) => {
+  const scan = (entities: Record<string, unknown>) => {
     for (const [fqn, raw] of Object.entries(entities)) {
       const info = raw as ClassInfo;
       for (const m of [...info.instanceMethods, ...info.classMethods]) {
@@ -86,8 +86,8 @@ function collectRubyDepMethods(ruby: ApiManifest, pkg: string, dep: string): Rub
       }
     }
   };
-  process(rubyPkg.classes);
-  process(rubyPkg.modules);
+  scan(rubyPkg.classes);
+  scan(rubyPkg.modules);
   return results;
 }
 
@@ -508,50 +508,6 @@ function findExistingJsDocClosePos(source: string, node: ts.Node): number | null
   return fullStart + match.index! + match[0].lastIndexOf("*/");
 }
 
-function findMethodNode(sourceFile: ts.SourceFile, methodName: string): ts.Node | null {
-  let found: ts.Node | null = null;
-  const visit = (node: ts.Node) => {
-    if (found) return;
-    if (
-      ts.isMethodDeclaration(node) &&
-      node.name &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === methodName
-    ) {
-      found = node;
-    } else if (
-      ts.isGetAccessorDeclaration(node) &&
-      node.name &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === methodName
-    ) {
-      found = node;
-    } else if (
-      ts.isSetAccessorDeclaration(node) &&
-      node.name &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === methodName
-    ) {
-      found = node;
-    } else if (ts.isConstructorDeclaration(node) && methodName === "constructor") {
-      found = node;
-    } else if (ts.isFunctionDeclaration(node) && node.name && node.name.text === methodName) {
-      found = node;
-    } else if (
-      ts.isPropertyDeclaration(node) &&
-      node.name &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === methodName
-    ) {
-      found = node;
-    } else {
-      ts.forEachChild(node, visit);
-    }
-  };
-  ts.forEachChild(sourceFile, visit);
-  return found;
-}
-
 // ---------------------------------------------------------------------------
 // Report
 // ---------------------------------------------------------------------------
@@ -675,11 +631,14 @@ function main() {
     const pkgSrcDir = packageSrcDir(rule.package);
     const tsDepMap = analyzeTsDepUsage(pkgSrcDir, rule.tsImport, rule.jsdocTag);
 
-    const { violations, suppressed, compliant, unmatched } = crossReference(rubyMethods, tsDepMap);
+    let { violations, suppressed, compliant, unmatched } = crossReference(rubyMethods, tsDepMap);
 
     if (fix && violations.length > 0) {
       const fixedCount = applyJsDocFixes(violations, pkgSrcDir, rule);
       console.log(`  Suppressed ${fixedCount} violations with ${rule.jsdocTag} JSDoc tags`);
+      // Re-scan so the report reflects post-fix state
+      const freshMap = analyzeTsDepUsage(pkgSrcDir, rule.tsImport, rule.jsdocTag);
+      ({ violations, suppressed, compliant, unmatched } = crossReference(rubyMethods, freshMap));
     }
 
     allResults.push({ rule, violations, suppressed, compliant, unmatched });

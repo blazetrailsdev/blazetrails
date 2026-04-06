@@ -20,16 +20,16 @@ The goal is to be **100% API compatible with Rails**, matching behavior **test f
 
 **ActionPack & friends** — started but not the current priority:
 
-| Package                         | Rails Equivalent                                                              | API       | Tests     | Description                                            |
-| ------------------------------- | ----------------------------------------------------------------------------- | --------- | --------- | ------------------------------------------------------ |
-| `@blazetrails/actioncontroller` | [ActionController](https://api.rubyonrails.org/classes/ActionController.html) | **67.6%** | **28.3%** | Controller layer, rendering, filters, parameters       |
-| `@blazetrails/actiondispatch`   | [ActionDispatch](https://api.rubyonrails.org/classes/ActionDispatch.html)     | **6.1%**  | **37.3%** | Routing, middleware stack, cookies, sessions, security |
-| `@blazetrails/actionview`       | [ActionView](https://api.rubyonrails.org/classes/ActionView.html)             | **3.7%**  | **5.1%**  | Templates, rendering, view helpers                     |
-| `@blazetrails/railties`         | [Railties](https://api.rubyonrails.org/classes/Rails.html)                    | **0.1%**  | **3.9%**  | CLI, generators, application bootstrap                 |
+| Package                   | Rails Equivalent                                                              | API       | Tests     | Description                                            |
+| ------------------------- | ----------------------------------------------------------------------------- | --------- | --------- | ------------------------------------------------------ |
+| `@blazetrails/actionpack` | [ActionController](https://api.rubyonrails.org/classes/ActionController.html) | **67.6%** | **28.3%** | Controller layer, rendering, filters, parameters       |
+|                           | [ActionDispatch](https://api.rubyonrails.org/classes/ActionDispatch.html)     | **6.1%**  | **37.3%** | Routing, middleware stack, cookies, sessions, security |
+| `@blazetrails/actionview` | [ActionView](https://api.rubyonrails.org/classes/ActionView.html)             | **3.7%**  | **5.1%**  | Templates, rendering, view helpers                     |
+| `@blazetrails/railties`   | [Railties](https://api.rubyonrails.org/classes/Rails.html)                    | **0.1%**  | **3.9%**  | CLI, generators, application bootstrap                 |
 
 **Tests** = `test:compare` — matches our test names against the Rails test suite. **API** = `api:compare` — matches individual public methods against Rails source (method-level, not class/module wrappers). Rack doesn't have API comparison yet (it's not a Rails gem).
 
-**40.1%** overall API coverage (2,969 / 7,396 methods) | **50.9%** test coverage (11,146 / 21,890 tests). CI runs both comparisons on every push.
+**40.1%** overall API coverage (2,969 / 7,396 methods) and **50.9%** test coverage (11,146 / 21,890 tests). CI runs both comparisons on every push.
 
 ## Quick Example
 

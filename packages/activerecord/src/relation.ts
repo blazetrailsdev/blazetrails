@@ -111,7 +111,7 @@ export class Relation<T extends Base> {
     // Arel node: store directly, bypass string/hash processing
     if (conditionsOrSql instanceof Nodes.Node) {
       const rel = this._clone();
-      rel._whereClause.arelNodes.push(conditionsOrSql);
+      rel._whereClause.predicates.push(conditionsOrSql);
       return rel;
     }
 
@@ -166,16 +166,17 @@ export class Relation<T extends Base> {
           sql = sql.replace("?", replacement);
         }
       }
-      rel._whereClause.rawClauses.push(sql);
+      rel._whereClause.predicates.push(new Nodes.SqlLiteral(sql));
     } else {
       // Check for subquery values (Relation instances)
       const normalConditions: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(conditionsOrSql)) {
         if (value instanceof Relation) {
-          // Subquery: WHERE column IN (SELECT ...)
           const subSql = value.toSql();
           const { tbl, col } = this._qualifiedCol(this._modelClass.arelTable, key);
-          rel._whereClause.rawClauses.push(`"${tbl}"."${col}" IN (${subSql})`);
+          rel._whereClause.predicates.push(
+            new Nodes.SqlLiteral(`"${tbl}"."${col}" IN (${subSql})`),
+          );
         } else {
           normalConditions[key] = Array.isArray(value)
             ? value.map((v) => this._castWhereValue(key, v))
@@ -183,7 +184,7 @@ export class Relation<T extends Base> {
         }
       }
       if (Object.keys(normalConditions).length > 0) {
-        rel._whereClause.conditions.push(normalConditions);
+        rel._whereClause.predicates.push(...this.predicateBuilder.buildFromHash(normalConditions));
       }
     }
     return rel;
@@ -196,28 +197,9 @@ export class Relation<T extends Base> {
    */
   rewhere(conditions: Record<string, unknown>): Relation<T> {
     const rel = this._clone();
-    // Remove existing clauses for the keys being rewritten
     const keysToReplace = new Set(Object.keys(conditions));
-    rel._whereClause.conditions = rel._whereClause.conditions
-      .map((clause) => {
-        const filtered: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(clause)) {
-          if (!keysToReplace.has(k)) filtered[k] = v;
-        }
-        return filtered;
-      })
-      .filter((c) => Object.keys(c).length > 0);
-    // Also remove NOT clauses for the same keys
-    rel._whereClause.notConditions = rel._whereClause.notConditions
-      .map((clause) => {
-        const filtered: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(clause)) {
-          if (!keysToReplace.has(k)) filtered[k] = v;
-        }
-        return filtered;
-      })
-      .filter((c) => Object.keys(c).length > 0);
-    rel._whereClause.conditions.push(conditions);
+    rel._whereClause = rel._whereClause.except(...keysToReplace);
+    rel._whereClause.predicates.push(...this.predicateBuilder.buildFromHash(conditions));
     return rel;
   }
 
@@ -255,7 +237,7 @@ export class Relation<T extends Base> {
         const subquery = tgtTable.project(tgtTable.get(foreignKey));
         for (const node of typeNodes) subquery.where(node);
         const cloned = rel._clone();
-        cloned._whereClause.arelNodes.push(srcTable.get(pk).in(subquery));
+        cloned._whereClause.predicates.push(srcTable.get(pk).in(subquery));
         rel = cloned;
       }
     }
@@ -296,7 +278,7 @@ export class Relation<T extends Base> {
         const subquery = tgtTable.project(tgtTable.get(foreignKey));
         for (const node of typeNodes) subquery.where(node);
         const cloned = rel._clone();
-        cloned._whereClause.arelNodes.push(srcTable.get(pk).notIn(subquery));
+        cloned._whereClause.predicates.push(srcTable.get(pk).notIn(subquery));
         rel = cloned;
       }
     }
@@ -391,7 +373,7 @@ export class Relation<T extends Base> {
         ? value.map((v) => this._castWhereValue(key, v))
         : this._castWhereValue(key, value);
     }
-    rel._whereClause.notConditions.push(castConditions);
+    rel._whereClause.predicates.push(...this.predicateBuilder.buildNegatedFromHash(castConditions));
     return rel;
   }
 
@@ -427,7 +409,7 @@ export class Relation<T extends Base> {
     // Build a chain: where(cond1).or(where(cond2)).or(where(cond3))...
     const makeRel = (cond: Record<string, unknown>) => {
       const r = this._clone();
-      r._whereClause = new WhereClause([cond]);
+      r._whereClause = new WhereClause(this.predicateBuilder.buildFromHash(cond));
       r._orRelations = [];
       return r;
     };
@@ -642,15 +624,9 @@ export class Relation<T extends Base> {
   inspect(): string {
     const parts: string[] = [];
     parts.push(`${this._modelClass.name}.all`);
-    if (this._whereClause.conditions.length > 0) {
-      parts.push(
-        `.where(${JSON.stringify(this._whereClause.conditions.length === 1 ? this._whereClause.conditions[0] : this._whereClause.conditions)})`,
-      );
-    }
-    if (this._whereClause.notConditions.length > 0) {
-      parts.push(
-        `.whereNot(${JSON.stringify(this._whereClause.notConditions.length === 1 ? this._whereClause.notConditions[0] : this._whereClause.notConditions)})`,
-      );
+    if (!this._whereClause.isEmpty()) {
+      const sql = this._whereClause.toSql();
+      if (sql) parts.push(`.where(${sql})`);
     }
     if (this._orderClauses.length > 0) {
       parts.push(`.order(${JSON.stringify(this._orderClauses)})`);
@@ -2128,7 +2104,8 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#where_clause
    */
   get whereValues(): Array<Record<string, unknown>> {
-    return [...this._whereClause.conditions];
+    const h = this._whereClause.toH();
+    return Object.keys(h).length > 0 ? [h] : [];
   }
 
   // -- Collection convenience methods --
@@ -2171,12 +2148,11 @@ export class Relation<T extends Base> {
   }
 
   private _scopeAttributes(): Record<string, unknown> {
+    const h = this._whereClause.toH();
     const attrs: Record<string, unknown> = {};
-    for (const clause of this._whereClause.conditions) {
-      for (const [key, value] of Object.entries(clause)) {
-        if (value !== null && !Array.isArray(value) && !(value instanceof Range)) {
-          attrs[key] = value;
-        }
+    for (const [key, value] of Object.entries(h)) {
+      if (value !== null && !Array.isArray(value) && !(value instanceof Range)) {
+        attrs[key] = value;
       }
     }
     return attrs;
@@ -2216,13 +2192,17 @@ export class Relation<T extends Base> {
 
       // Apply start/finish range constraints
       if (start !== undefined) {
-        rel._whereClause.rawClauses.push(
-          `"${this._modelClass.arelTable.name}"."${pk}" >= ${quoteSqlValue(start)}`,
+        rel._whereClause.predicates.push(
+          new Nodes.SqlLiteral(
+            `"${this._modelClass.arelTable.name}"."${pk}" >= ${quoteSqlValue(start)}`,
+          ),
         );
       }
       if (finish !== undefined) {
-        rel._whereClause.rawClauses.push(
-          `"${this._modelClass.arelTable.name}"."${pk}" <= ${quoteSqlValue(finish)}`,
+        rel._whereClause.predicates.push(
+          new Nodes.SqlLiteral(
+            `"${this._modelClass.arelTable.name}"."${pk}" <= ${quoteSqlValue(finish)}`,
+          ),
         );
       }
 
@@ -2282,8 +2262,10 @@ export class Relation<T extends Base> {
         while (true) {
           const rel = self._clone();
           if (lastId !== null) {
-            rel._whereClause.rawClauses.push(
-              `"${self._modelClass.arelTable.name}"."${pk}" > ${quoteSqlValue(lastId)}`,
+            rel._whereClause.predicates.push(
+              new Nodes.SqlLiteral(
+                `"${self._modelClass.arelTable.name}"."${pk}" > ${quoteSqlValue(lastId)}`,
+              ),
             );
           }
           rel._orderClauses = [pk];
@@ -2295,7 +2277,9 @@ export class Relation<T extends Base> {
 
           const ids = records.map((r) => (r as any).readAttribute(pk));
           const batchRel = self._clone();
-          batchRel._whereClause.conditions.push({ [pk]: ids });
+          batchRel._whereClause.predicates.push(
+            ...self.predicateBuilder.buildFromHash({ [pk]: ids }),
+          );
           yield stripThenable(batchRel);
 
           if (records.length < batchSize) break;
@@ -2484,19 +2468,8 @@ export class Relation<T extends Base> {
     return new Nodes.And(nodes);
   }
 
-  private _collectAllWhereNodes(table: Table, rel: Relation<T>): Nodes.Node[] {
-    const nodes = this._buildWhereNodes(
-      table,
-      rel._whereClause.conditions,
-      rel._whereClause.notConditions,
-    );
-    for (const rawClause of rel._whereClause.rawClauses) {
-      nodes.push(new Nodes.SqlLiteral(rawClause));
-    }
-    for (const arelNode of rel._whereClause.arelNodes) {
-      nodes.push(arelNode);
-    }
-    return nodes;
+  private _collectAllWhereNodes(_table: Table, rel: Relation<T>): Nodes.Node[] {
+    return [...rel._whereClause.predicates];
   }
 
   private _applyWheresToManager(manager: SelectManager, table: Table): void {
@@ -2578,85 +2551,10 @@ export class Relation<T extends Base> {
     return { tbl: key.slice(0, firstDot), col: key.slice(firstDot + 1) };
   }
 
-  private _buildWhereStrings(table: Table): string[] {
+  private _buildWhereStrings(_table: Table): string[] {
     const conditions: string[] = [];
-    for (const clause of this._whereClause.conditions) {
-      for (const [key, value] of Object.entries(clause)) {
-        const { tbl, col } = this._qualifiedCol(table, key);
-        if (value === null) {
-          conditions.push(`"${tbl}"."${col}" IS NULL`);
-        } else if (value instanceof Range) {
-          const begin =
-            typeof value.begin === "number"
-              ? String(value.begin)
-              : `'${String(value.begin).replace(/'/g, "''")}'`;
-          const end =
-            typeof value.end === "number"
-              ? String(value.end)
-              : `'${String(value.end).replace(/'/g, "''")}'`;
-          if (value.excludeEnd) {
-            conditions.push(`"${tbl}"."${col}" >= ${begin} AND "${tbl}"."${col}" < ${end}`);
-          } else {
-            conditions.push(`"${tbl}"."${col}" BETWEEN ${begin} AND ${end}`);
-          }
-        } else if (typeof value === "boolean") {
-          conditions.push(`"${tbl}"."${col}" = ${value ? "TRUE" : "FALSE"}`);
-        } else if (typeof value === "number") {
-          conditions.push(`"${tbl}"."${col}" = ${value}`);
-        } else if (Array.isArray(value)) {
-          const vals = value
-            .map((v) => {
-              if (v === null) return "NULL";
-              if (typeof v === "number") return String(v);
-              return `'${String(v).replace(/'/g, "''")}'`;
-            })
-            .join(", ");
-          conditions.push(`"${tbl}"."${col}" IN (${vals})`);
-        } else {
-          conditions.push(`"${tbl}"."${col}" = '${String(value).replace(/'/g, "''")}'`);
-        }
-      }
-    }
-    for (const clause of this._whereClause.notConditions) {
-      for (const [key, value] of Object.entries(clause)) {
-        const { tbl, col } = this._qualifiedCol(table, key);
-        if (value === null) {
-          conditions.push(`"${tbl}"."${col}" IS NOT NULL`);
-        } else if (value instanceof Range) {
-          const begin =
-            typeof value.begin === "number"
-              ? String(value.begin)
-              : `'${String(value.begin).replace(/'/g, "''")}'`;
-          const end =
-            typeof value.end === "number"
-              ? String(value.end)
-              : `'${String(value.end).replace(/'/g, "''")}'`;
-          conditions.push(`NOT ("${tbl}"."${col}" BETWEEN ${begin} AND ${end})`);
-        } else if (typeof value === "boolean") {
-          conditions.push(`"${tbl}"."${col}" != ${value ? "TRUE" : "FALSE"}`);
-        } else if (typeof value === "number") {
-          conditions.push(`"${tbl}"."${col}" != ${value}`);
-        } else if (Array.isArray(value)) {
-          const vals = value
-            .map((v) => {
-              if (v === null) return "NULL";
-              if (typeof v === "number") return String(v);
-              return `'${String(v).replace(/'/g, "''")}'`;
-            })
-            .join(", ");
-          conditions.push(`"${tbl}"."${col}" NOT IN (${vals})`);
-        } else {
-          conditions.push(`"${tbl}"."${col}" != '${String(value).replace(/'/g, "''")}'`);
-        }
-      }
-    }
-    // Raw SQL WHERE clauses
-    for (const rawClause of this._whereClause.rawClauses) {
-      conditions.push(rawClause);
-    }
-    // Arel node WHERE clauses — compile to SQL for the condition list
-    for (const node of this._whereClause.arelNodes) {
-      conditions.push(`(${this._compileArelNode(node)})`);
+    for (const node of this._whereClause.predicates) {
+      conditions.push(this._compileArelNode(node));
     }
     return conditions;
   }

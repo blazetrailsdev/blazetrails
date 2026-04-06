@@ -753,9 +753,10 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
 
   private typeToSql(type: string, options?: Record<string, unknown>): string {
     const base = this.nativeDatabaseTypes[type]?.name ?? type.toUpperCase();
-    const precision = options?.precision as number | undefined;
-    const scale = options?.scale as number | undefined;
-    const limit = options?.limit as number | undefined;
+    const precision =
+      typeof options?.precision === "number" ? Math.floor(options.precision) : undefined;
+    const scale = typeof options?.scale === "number" ? Math.floor(options.scale) : undefined;
+    const limit = typeof options?.limit === "number" ? Math.floor(options.limit) : undefined;
     if (precision !== undefined && scale !== undefined) return `${base}(${precision},${scale})`;
     if (precision !== undefined) return `${base}(${precision})`;
     if (limit !== undefined) return `${base}(${limit})`;
@@ -765,9 +766,13 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   private quoteDefault(value: unknown): string {
     if (value === null) return "NULL";
     if (typeof value === "string") return quoteString(value);
+    if (typeof value === "number") return String(value);
     if (typeof value === "boolean") return value ? "1" : "0";
     if (typeof value === "function") return String(value());
-    return String(value);
+    if (value instanceof globalThis.Date) return quoteString(value.toISOString());
+    // SqlLiteral or objects with toSql
+    if (typeof (value as any)?.toSql === "function") return String((value as any).toSql());
+    return quoteString(String(value));
   }
 
   // --- Private: alter_table copy strategy (Rails: SQLite3Adapter#alter_table) ---

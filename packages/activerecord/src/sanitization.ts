@@ -63,6 +63,8 @@ export function sanitizeSqlForAssignment(
 
 /**
  * Mirrors: ActiveRecord::Sanitization::ClassMethods#sanitize_sql_for_order
+ 
+ * @arel Arel
  */
 export function sanitizeSqlForOrder(condition: string | [string, ...unknown[]]): string {
   if (Array.isArray(condition) && condition[0]?.toString().includes("?")) {
@@ -101,6 +103,8 @@ export function sanitizeSqlHashForAssignment(
 
 /**
  * Mirrors: ActiveRecord::Sanitization::ClassMethods#disallow_raw_sql!
+ 
+ * @arel Arel
  */
 export function disallowRawSqlBang(args: (string | symbol)[], permit?: RegExp): void {
   // Rails: adapter_class.column_name_matcher — allows table.column, quoted, directions

@@ -54,6 +54,7 @@ export class JoinAssociation extends JoinPart {
     return this.reflection.modelClass === otherKlass;
   }
 
+  /** @arel Arel::Nodes::OuterJoin, Arel::Nodes::And, Arel, Arel::Nodes::On */
   joinConstraints(parentTable: string, parentKlass: typeof Base): string {
     const fk = this.reflection.foreignKey;
 

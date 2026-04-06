@@ -16,6 +16,7 @@ export class NullSchemaMigration {
     return [];
   }
 
+  /** @arel Arel::SelectManager, arel_table, Arel::Nodes::Count, Arel */
   async count(): Promise<number> {
     return 0;
   }
@@ -33,6 +34,7 @@ export class SchemaMigration {
     return `"${SchemaMigration.TABLE_NAME}"`;
   }
 
+  /** @arel Arel::Table */
   constructor(adapter: DatabaseAdapter) {
     this._adapter = adapter;
   }
@@ -54,6 +56,7 @@ export class SchemaMigration {
     return rows.map((row) => String(row.version).trim());
   }
 
+  /** @arel Arel::SelectManager, arel_table, Arel::Nodes::Count, Arel */
   async count(): Promise<number> {
     const rows = await this._adapter.execute(`SELECT COUNT(*) AS cnt FROM ${this._quotedTable}`);
     return Number(rows[0]?.cnt ?? 0);
@@ -81,6 +84,7 @@ export class SchemaMigration {
     await this._adapter.executeMutation(sql, [version]);
   }
 
+  /** @arel Arel::DeleteManager, arel_table */
   async deleteVersion(version: string): Promise<void> {
     await this._adapter.executeMutation(`DELETE FROM ${this._quotedTable} WHERE "version" = ?`, [
       version,
@@ -93,6 +97,7 @@ export class SchemaMigration {
 
   // --- Methods matching Rails public API names ---
 
+  /** @arel Arel::InsertManager, arel_table */
   async createVersion(version: string): Promise<void> {
     return this.recordVersion(version);
   }
@@ -119,6 +124,7 @@ export class SchemaMigration {
     return vers.map((v) => SchemaMigration.normalizeMigrationNumber(v));
   }
 
+  /** @arel Arel::SelectManager, arel_table */
   async versions(): Promise<string[]> {
     return this.allVersions();
   }

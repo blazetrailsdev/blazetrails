@@ -37,6 +37,7 @@ export class InternalMetadata {
     return quoteTableName(InternalMetadata.TABLE_NAME, this._adapterName);
   }
 
+  /** @arel Arel::Table */
   constructor(adapter: DatabaseAdapter) {
     this._adapter = adapter;
   }

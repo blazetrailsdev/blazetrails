@@ -1162,6 +1162,7 @@ export class RuntimeReflection extends AbstractReflection {
     return this._association.klass;
   }
 
+  /** @arel arel_table */
   aliasedTable(): Table {
     return (this.klass as any).arelTable;
   }

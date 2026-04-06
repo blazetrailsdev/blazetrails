@@ -50,6 +50,7 @@ export class WhereClause {
     );
   }
 
+  /** @arel Arel::Nodes::Not */
   invert(): WhereClause {
     return new WhereClause(
       [...this.notConditions],
@@ -98,6 +99,7 @@ export class WhereClause {
     );
   }
 
+  /** @arel Arel::Nodes::Grouping, Arel::Nodes::Or */
   or(other: WhereClause): WhereClause {
     if (this.isEmpty()) return other.clone();
     if (other.isEmpty()) return this.clone();
@@ -109,10 +111,12 @@ export class WhereClause {
     return new WhereClause([], [], [`(${left}) OR (${right})`]);
   }
 
+  /** @arel Arel::Nodes::And */
   get ast(): string {
     return clauseToAstString(this);
   }
 
+  /** @arel Arel::Nodes::In, Arel::Nodes::Equality */
   isContradiction(): boolean {
     for (const cond of this.conditions) {
       for (const value of Object.values(cond)) {

@@ -409,6 +409,8 @@ export function inspectionFilter(this: CoreHost): {
 /**
  * Rails: PredicateBuilder.new(TableMetadata.new(self, arel_table))
  * Memoized per class.
+ 
+ * @arel arel_table
  */
 export function predicateBuilder(this: CoreHost): any {
   if (this._predicateBuilder) return this._predicateBuilder;

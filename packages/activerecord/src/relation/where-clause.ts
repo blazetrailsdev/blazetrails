@@ -7,7 +7,7 @@
  * Mirrors: ActiveRecord::Relation::WhereClause
  */
 
-import { Visitors, type Nodes } from "@blazetrails/arel";
+import { Visitors, Nodes } from "@blazetrails/arel";
 import { quote, quoteTableName } from "../connection-adapters/abstract/quoting.js";
 
 export class WhereClause {
@@ -51,12 +51,13 @@ export class WhereClause {
   }
 
   invert(): WhereClause {
-    return new WhereClause(
-      [...this.notConditions],
-      [...this.conditions],
-      [...this.rawClauses],
-      [...this.arelNodes],
-    );
+    const allPredicates = this.predicateNodes();
+    if (allPredicates.length === 0) return this.clone();
+    if (allPredicates.length === 1) {
+      return new WhereClause([], [], [], [invertPredicate(allPredicates[0])]);
+    }
+    const ast = new Nodes.And(allPredicates);
+    return new WhereClause([], [], [], [new Nodes.Not(ast)]);
   }
 
   except(...columns: string[]): WhereClause {
@@ -102,21 +103,62 @@ export class WhereClause {
     if (this.isEmpty()) return other.clone();
     if (other.isEmpty()) return this.clone();
 
-    // Rails builds an Arel::Nodes::Or from the two sides' ASTs.
-    // We represent each side as its AST string, then combine with OR.
-    const left = this.ast;
-    const right = other.ast;
-    return new WhereClause([], [], [`(${left}) OR (${right})`]);
+    let left = this.astNode();
+    if (left instanceof Nodes.Grouping) left = (left as any).expr;
+    let right = other.astNode();
+    if (right instanceof Nodes.Grouping) right = (right as any).expr;
+
+    const orNode =
+      left instanceof Nodes.Or
+        ? new Nodes.Or([...(left as any).children, right])
+        : new Nodes.Or([left, right]);
+
+    return new WhereClause([], [], [], [new Nodes.Grouping(orNode)]);
   }
 
   get ast(): string {
     return clauseToAstString(this);
   }
 
+  astNode(): Nodes.Node {
+    const predicates = this.predicateNodes();
+    return predicates.length === 1 ? predicates[0] : new Nodes.And(predicates);
+  }
+
+  predicateNodes(): Nodes.Node[] {
+    const nodes: Nodes.Node[] = [];
+    for (const cond of this.conditions) {
+      for (const [k, v] of Object.entries(cond)) {
+        nodes.push(conditionToArelNode(k, v, false));
+      }
+    }
+    for (const cond of this.notConditions) {
+      for (const [k, v] of Object.entries(cond)) {
+        nodes.push(conditionToArelNode(k, v, true));
+      }
+    }
+    for (const raw of this.rawClauses) {
+      nodes.push(new Nodes.SqlLiteral(raw));
+    }
+    nodes.push(...this.arelNodes);
+    return nodes;
+  }
+
   isContradiction(): boolean {
     for (const cond of this.conditions) {
       for (const value of Object.values(cond)) {
         if (Array.isArray(value) && value.length === 0) return true;
+      }
+    }
+    for (const node of this.arelNodes) {
+      if (node instanceof Nodes.In) {
+        const right = (node as any).right;
+        if (Array.isArray(right) && right.length === 0) return true;
+      }
+      if (node instanceof Nodes.Equality) {
+        const right = (node as any).right;
+        if (right && typeof right === "object" && "unboundable" in right && right.unboundable)
+          return true;
       }
     }
     return false;
@@ -140,6 +182,24 @@ export class WhereClause {
     }
     return result;
   }
+}
+
+function conditionToArelNode(key: string, value: unknown, negate: boolean): Nodes.Node {
+  const col = new Nodes.SqlLiteral(quoteTableName(key));
+  if (value === null || value === undefined) {
+    const eq = new Nodes.Equality(col, null as any);
+    return negate ? new Nodes.Not(eq) : eq;
+  }
+  if (Array.isArray(value)) {
+    const node = new Nodes.In(col, new Nodes.Quoted(value) as any);
+    return negate ? new Nodes.Not(node) : node;
+  }
+  const eq = new Nodes.Equality(col, new Nodes.Quoted(value));
+  return negate ? new Nodes.Not(eq) : eq;
+}
+
+function invertPredicate(node: Nodes.Node): Nodes.Node {
+  return node.invert();
 }
 
 const visitor = new Visitors.ToSql();

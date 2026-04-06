@@ -1,4 +1,4 @@
-import { Table, Nodes } from "@blazetrails/arel";
+import { Table, Nodes, sql as arelSql } from "@blazetrails/arel";
 import { Range } from "../connection-adapters/postgresql/oid/range.js";
 import { ArrayHandler } from "./predicate-builder/array-handler.js";
 import { RangeHandler } from "./predicate-builder/range-handler.js";
@@ -240,12 +240,16 @@ export class PredicateBuilder {
     return builder;
   }
 
-  static references(conditions: Record<string, unknown>): string[] {
-    const refs: string[] = [];
-    for (const key of Object.keys(conditions)) {
-      const dot = key.indexOf(".");
-      if (dot !== -1) {
-        refs.push(key.slice(0, dot));
+  static references(conditions: Record<string, unknown>): Nodes.SqlLiteral[] {
+    const refs: Nodes.SqlLiteral[] = [];
+    for (const [key, value] of Object.entries(conditions)) {
+      if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+        refs.push(arelSql(key));
+      } else {
+        const dot = key.lastIndexOf(".");
+        if (dot !== -1) {
+          refs.push(arelSql(key.slice(0, dot)));
+        }
       }
     }
     return refs;

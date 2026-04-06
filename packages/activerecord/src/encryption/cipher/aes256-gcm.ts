@@ -81,7 +81,8 @@ export class Cipher {
           Buffer.from(decipher.final()),
         ]);
         return decrypted.toString("utf-8");
-      } catch {
+      } catch (e) {
+        if (e instanceof ConfigError) throw e;
         continue;
       }
     }

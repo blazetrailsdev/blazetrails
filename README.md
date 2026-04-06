@@ -18,12 +18,14 @@ The goal is to be **100% API compatible with Rails**, matching behavior **test f
 
 **Data Layer Parity** (ActiveRecord + Arel + ActiveModel + ActiveSupport): **55% API** | **70.4% Tests**
 
-**ActionPack** — started but not the current priority:
+**ActionPack & friends** — started but not the current priority:
 
 | Package                         | Rails Equivalent                                                              | API       | Tests     | Description                                            |
 | ------------------------------- | ----------------------------------------------------------------------------- | --------- | --------- | ------------------------------------------------------ |
-| `@blazetrails/actiondispatch`   | [ActionDispatch](https://api.rubyonrails.org/classes/ActionDispatch.html)     | **6.1%**  | **37.3%** | Routing, middleware stack, cookies, sessions, security |
 | `@blazetrails/actioncontroller` | [ActionController](https://api.rubyonrails.org/classes/ActionController.html) | **67.6%** | **28.3%** | Controller layer, rendering, filters, parameters       |
+| `@blazetrails/actiondispatch`   | [ActionDispatch](https://api.rubyonrails.org/classes/ActionDispatch.html)     | **6.1%**  | **37.3%** | Routing, middleware stack, cookies, sessions, security |
+| `@blazetrails/actionview`       | [ActionView](https://api.rubyonrails.org/classes/ActionView.html)             | **3.7%**  | **5.1%**  | Templates, rendering, view helpers                     |
+| `@blazetrails/railties`         | [Railties](https://api.rubyonrails.org/classes/Rails.html)                    | **0.1%**  | **3.9%**  | CLI, generators, application bootstrap                 |
 
 **Tests** = `test:compare` — matches our test names against the Rails test suite. **API** = `api:compare` — matches individual public methods against Rails source (method-level, not class/module wrappers). Rack doesn't have API comparison yet (it's not a Rails gem).
 
@@ -132,6 +134,8 @@ packages/
   activesupport/    — Core utilities, inflection, caching, encryption
   rack/             — Web server interface, middleware, request/response
   actionpack/       — ActionDispatch (routing, cookies, sessions) and ActionController
+  actionview/       — Templates, rendering, view helpers
+  railties/         — CLI, generators, application bootstrap
 ```
 
 ## Disclaimer

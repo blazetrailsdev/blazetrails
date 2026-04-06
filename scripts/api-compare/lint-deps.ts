@@ -407,35 +407,45 @@ function applyJsDocFixes(violations: Violation[], pkgSrcDir: string, rule: DepRu
     const seenPositions = new Set<number>();
 
     const visit = (node: ts.Node) => {
-      let methodName: string | null = null;
+      const candidates: { methodName: string; targetNode: ts.Node }[] = [];
 
       if (ts.isMethodDeclaration(node) && node.name && ts.isIdentifier(node.name)) {
-        methodName = node.name.text;
+        candidates.push({ methodName: node.name.text, targetNode: node });
       } else if (ts.isGetAccessorDeclaration(node) && node.name && ts.isIdentifier(node.name)) {
-        methodName = node.name.text;
+        candidates.push({ methodName: node.name.text, targetNode: node });
       } else if (ts.isSetAccessorDeclaration(node) && node.name && ts.isIdentifier(node.name)) {
-        methodName = node.name.text;
+        candidates.push({ methodName: node.name.text, targetNode: node });
       } else if (ts.isConstructorDeclaration(node)) {
-        methodName = "constructor";
+        candidates.push({ methodName: "constructor", targetNode: node });
       } else if (ts.isFunctionDeclaration(node) && node.name) {
-        methodName = node.name.text;
+        candidates.push({ methodName: node.name.text, targetNode: node });
       } else if (ts.isPropertyDeclaration(node) && node.name && ts.isIdentifier(node.name)) {
         if (
           node.initializer &&
           (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))
         ) {
-          methodName = node.name.text;
+          candidates.push({ methodName: node.name.text, targetNode: node });
+        }
+      } else if (ts.isVariableStatement(node)) {
+        for (const decl of node.declarationList.declarations) {
+          if (
+            ts.isIdentifier(decl.name) &&
+            decl.initializer &&
+            (ts.isArrowFunction(decl.initializer) || ts.isFunctionExpression(decl.initializer))
+          ) {
+            candidates.push({ methodName: decl.name.text, targetNode: node });
+          }
         }
       }
 
-      if (methodName && violationsByMethod.has(methodName)) {
-        const pos = node.getStart();
-        if (!seenPositions.has(pos)) {
+      for (const { methodName, targetNode } of candidates) {
+        const pos = targetNode.getStart();
+        if (violationsByMethod.has(methodName) && !seenPositions.has(pos)) {
           seenPositions.add(pos);
           const v = violationsByMethod.get(methodName)!;
-          const existingJsDoc = getLeadingJsDoc(source, node);
+          const existingJsDoc = getLeadingJsDoc(source, targetNode);
           if (!existingJsDoc || !existingJsDoc.includes(rule.jsdocTag)) {
-            methodsNeedingDoc.push({ name: methodName, node, violation: v });
+            methodsNeedingDoc.push({ name: methodName, node: targetNode, violation: v });
           }
         }
       }

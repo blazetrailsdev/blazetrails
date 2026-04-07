@@ -137,6 +137,48 @@
     dirty = false;
   }
 
+  async function resetSandbox() {
+    vfs?.dispose();
+    adapter?.dispose();
+    await client?.destroy();
+    vfs = null;
+    adapter = null;
+    client = null;
+    runtimeProxy = null;
+    selectedFile = null;
+    dirty = false;
+    cliOutput = [];
+    loading = true;
+    error = null;
+
+    // Re-register from scratch
+    try {
+      const sw = await createSwClient({ scope: "/" });
+      client = sw;
+
+      const vfsProxy = new SwVfsProxy(sw);
+      const adapterProxy = new SwAdapterProxy(sw);
+      runtimeProxy = new SwRuntimeProxy(sw);
+
+      const syncVfs = new SyncSwVfs(vfsProxy);
+      const syncAdapter = new SyncSwAdapter(adapterProxy, sw);
+
+      await syncVfs.hydrate();
+      await syncAdapter.hydrate();
+
+      vfs = syncVfs;
+      adapter = syncAdapter;
+
+      if (syncVfs.list().length === 0) {
+        await scaffoldNewApp();
+      }
+      loading = false;
+    } catch (e: unknown) {
+      error = e instanceof Error ? e.message : String(e);
+      loading = false;
+    }
+  }
+
   function handleKeydown(e: KeyboardEvent) {
     if ((e.metaKey || e.ctrlKey) && e.key === "s") {
       e.preventDefault();
@@ -206,6 +248,10 @@
         <a href="/frontiers" class="text-xs text-text-muted hover:text-accent">← Frontiers</a>
         <h1 class="text-sm font-medium text-text">Sandbox</h1>
       </div>
+      <button
+        class="rounded border border-border px-2 py-0.5 text-[10px] text-text-muted hover:text-accent"
+        onclick={resetSandbox}
+      >Reset SW</button>
     </div>
 
     <!-- Main content -->

@@ -6,7 +6,7 @@
 
 import { sql as arelSql, type Nodes } from "@blazetrails/arel";
 import { TransactionIsolationError } from "../../errors.js";
-import { quoteTableName } from "./quoting.js";
+import { quote, quoteTableName, quoteColumnName } from "./quoting.js";
 
 /**
  * Host interface for DatabaseStatements mixin methods that need adapter context.
@@ -657,16 +657,11 @@ export async function insertFixture(
   tableName: string,
 ): Promise<unknown> {
   const columns = Object.keys(fixture);
-  const values = Object.values(fixture).map((v) => {
-    if (v === null || v === undefined) return "NULL";
-    if (typeof v === "number" || typeof v === "bigint") return String(v);
-    if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
-    return `'${String(v).replace(/'/g, "''")}'`;
-  });
+  const values = Object.values(fixture).map((v) => quote(withYamlFallback(v)));
 
   const sql =
     columns.length > 0
-      ? `INSERT INTO ${quoteTableName(tableName)} (${columns.map((c) => `"${c}"`).join(", ")}) VALUES (${values.join(", ")})`
+      ? `INSERT INTO ${quoteTableName(tableName)} (${columns.map((c) => quoteColumnName(c)).join(", ")}) VALUES (${values.join(", ")})`
       : `INSERT INTO ${quoteTableName(tableName)} DEFAULT VALUES`;
 
   return execute(sql, "Fixture Insert");
@@ -689,14 +684,9 @@ export async function insertFixturesSet(
     if (fixtures.length === 0) continue;
     for (const fixture of fixtures) {
       const columns = Object.keys(fixture);
-      const values = Object.values(fixture).map((v) => {
-        if (v === null || v === undefined) return "NULL";
-        if (typeof v === "number" || typeof v === "bigint") return String(v);
-        if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
-        return `'${String(v).replace(/'/g, "''")}'`;
-      });
+      const values = Object.values(fixture).map((v) => quote(withYamlFallback(v)));
       insertStatements.push(
-        `INSERT INTO ${quoteTableName(tableName)} (${columns.map((c) => `"${c}"`).join(", ")}) VALUES (${values.join(", ")})`,
+        `INSERT INTO ${quoteTableName(tableName)} (${columns.map((c) => quoteColumnName(c)).join(", ")}) VALUES (${values.join(", ")})`,
       );
     }
   }

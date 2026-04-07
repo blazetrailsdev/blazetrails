@@ -36,3 +36,7 @@ is timing: Rails defines on first access, we define at registration.
 ### attribute-registration.ts
 
 - Missing `resolve_attribute_name`, `resolve_type_name`, `hook_attribute_type` hooks
+
+### attribute-set/builder.ts
+
+- `LazyAttributeSet` implemented but not wired in — interacts with ActiveRecord dirty tracking/optimistic locking; needs careful integration

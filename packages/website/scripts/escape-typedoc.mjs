@@ -10,9 +10,11 @@
  * looks like an HTML tag to the Vue parser.
  */
 import { readdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const apiDir = join(import.meta.dirname, "..", "docs", "api");
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const apiDir = join(__dirname, "..", "docs", "api");
 
 async function* walkMd(dir) {
   for (const entry of await readdir(dir, { withFileTypes: true })) {

@@ -468,7 +468,7 @@ export async function transaction<T>(
   const { requiresNew, isolation, joinable = true } = options;
   const host = this as any;
 
-  if (!requiresNew && this.currentTransaction?.()?.joinable?.()) {
+  if (!requiresNew && joinable && this.currentTransaction?.()?.joinable?.()) {
     if (isolation) {
       throw new TransactionIsolationError("cannot set isolation when joining a transaction");
     }
@@ -867,7 +867,12 @@ export async function internalExecQuery(
     const rawResult = await this.internalExecute(sql, name ?? "SQL", binds);
     return this.castResult ? this.castResult(rawResult) : rawResult;
   }
-  // Fallback: delegate through this.execute if available
+  if (binds && binds.length > 0) {
+    throw new Error(
+      "internalExecQuery requires internalExecute on the adapter when binds are provided",
+    );
+  }
+  // Fallback: delegate through this.execute only when there are no binds
   const doExecute = this?.execute ?? execute;
   return doExecute(sql, name);
 }

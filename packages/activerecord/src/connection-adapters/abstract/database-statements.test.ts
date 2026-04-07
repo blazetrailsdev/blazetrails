@@ -204,6 +204,36 @@ describe("DatabaseStatements", () => {
     });
   });
 
+  describe("insertFixturesSet", () => {
+    it("executes deletes and inserts wrapped in transaction", async () => {
+      const executed: string[] = [];
+      let transactionUsed = false;
+      const { insertFixturesSet } = await import("./database-statements.js");
+      const host = {
+        execute: async (sql: string) => {
+          executed.push(sql);
+        },
+        transaction: async (fn: (tx?: unknown) => Promise<void> | void) => {
+          transactionUsed = true;
+          await fn();
+          return undefined;
+        },
+      } as unknown as DatabaseStatementsHost;
+
+      await insertFixturesSet.call(
+        host,
+        {
+          users: [{ name: "Alice" }],
+        },
+        ["old_table"],
+      );
+
+      expect(transactionUsed).toBe(true);
+      expect(executed[0]).toMatch(/DELETE FROM/);
+      expect(executed[1]).toMatch(/INSERT INTO/);
+    });
+  });
+
   describe("utility methods", () => {
     it("default sequence name returns null", () => {
       expect(defaultSequenceName("users", "id")).toBeNull();

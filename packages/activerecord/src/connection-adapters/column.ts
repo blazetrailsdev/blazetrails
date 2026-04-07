@@ -77,7 +77,7 @@ export class Column {
    * Mirrors: ActiveRecord::ConnectionAdapters::Column#bigint?
    */
   isBigint(): boolean {
-    return this.sqlType != null && /^bigint\b/.test(this.sqlType);
+    return this.sqlType != null && /^bigint\b/i.test(this.sqlType);
   }
 
   /**

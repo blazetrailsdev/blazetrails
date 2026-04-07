@@ -54,7 +54,7 @@ export interface SavepointHost {
  */
 export async function createSavepoint(this: SavepointHost, name?: string): Promise<void> {
   const spName = name ?? this.currentSavepointName?.() ?? currentSavepointName();
-  await this.internalExecute(`SAVEPOINT ${validateSavepointName(spName)}`, "TRANSACTION");
+  await this.internalExecute(createSavepointSql(spName), "TRANSACTION");
 }
 
 /**
@@ -64,10 +64,7 @@ export async function createSavepoint(this: SavepointHost, name?: string): Promi
  */
 export async function execRollbackToSavepoint(this: SavepointHost, name?: string): Promise<void> {
   const spName = name ?? this.currentSavepointName?.() ?? currentSavepointName();
-  await this.internalExecute(
-    `ROLLBACK TO SAVEPOINT ${validateSavepointName(spName)}`,
-    "TRANSACTION",
-  );
+  await this.internalExecute(execRollbackToSavepointSql(spName), "TRANSACTION");
 }
 
 /**
@@ -77,5 +74,5 @@ export async function execRollbackToSavepoint(this: SavepointHost, name?: string
  */
 export async function releaseSavepoint(this: SavepointHost, name?: string): Promise<void> {
   const spName = name ?? this.currentSavepointName?.() ?? currentSavepointName();
-  await this.internalExecute(`RELEASE SAVEPOINT ${validateSavepointName(spName)}`, "TRANSACTION");
+  await this.internalExecute(releaseSavepointSql(spName), "TRANSACTION");
 }

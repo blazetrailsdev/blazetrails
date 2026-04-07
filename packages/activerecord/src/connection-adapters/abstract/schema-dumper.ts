@@ -222,12 +222,12 @@ export class SchemaDumper {
   }
 
   static dump(source: SchemaSource): string | Promise<string> {
-    const dumper = new SchemaDumper(source);
+    const dumper = this.create(source);
     return dumper.dump();
   }
 
   static async dumpTableSchema(source: SchemaSource, tableName: string): Promise<string> {
-    const dumper = new SchemaDumper(source);
+    const dumper = this.create(source);
     const lines: string[] = [];
     await dumper.dumpTable(lines, tableName);
     return lines.join("\n");

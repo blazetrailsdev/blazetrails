@@ -1,6 +1,13 @@
 /**
  * Post-processes typedoc-generated markdown to be VitePress-compatible.
- * Escapes raw HTML tags that Vue's template compiler would choke on.
+ *
+ * VitePress compiles markdown as Vue SFC templates. The Vue SFC parser must
+ * successfully parse the entire template before any directives (like v-pre)
+ * take effect. TypeScript generics (Array<T>), JSDoc HTML examples (<script>,
+ * <br>), and type signatures all produce angle brackets that break parsing.
+ *
+ * Fix: escape all `<` outside fenced code blocks to `&lt;`, so nothing
+ * looks like an HTML tag to the Vue parser.
  */
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -15,23 +22,35 @@ async function* walkMd(dir) {
   }
 }
 
-// Matches HTML-like tags that aren't inside backtick code spans or fenced code blocks.
-// We wrap each markdown file's content in a raw block to prevent Vue compilation.
-for await (const file of walkMd(apiDir)) {
-  let content = await readFile(file, "utf8");
+function escapeForVue(content) {
+  const lines = content.split("\n");
+  let inFencedBlock = false;
+  const result = [];
 
-  // Extract frontmatter if present
-  let frontmatter = "";
-  if (content.startsWith("---")) {
-    const end = content.indexOf("---", 3);
-    if (end !== -1) {
-      frontmatter = content.slice(0, end + 3) + "\n";
-      content = content.slice(end + 3);
+  for (const line of lines) {
+    if (line.startsWith("```")) {
+      inFencedBlock = !inFencedBlock;
+      result.push(line);
+      continue;
     }
+
+    if (inFencedBlock) {
+      result.push(line);
+      continue;
+    }
+
+    result.push(line.replace(/</g, "&lt;"));
   }
 
-  // Wrap the body in <div v-pre> to prevent Vue template compilation
-  await writeFile(file, frontmatter + "<div v-pre>\n\n" + content.trimStart() + "\n\n</div>\n");
+  return result.join("\n");
 }
 
-console.log("Escaped typedoc output for VitePress compatibility.");
+let count = 0;
+for await (const file of walkMd(apiDir)) {
+  const original = await readFile(file, "utf8");
+  const escaped = escapeForVue(original);
+  await writeFile(file, escaped);
+  if (escaped !== original) count++;
+}
+
+console.log(`Escaped ${count} files for VitePress compatibility.`);

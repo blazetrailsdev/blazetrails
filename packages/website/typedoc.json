@@ -17,7 +17,6 @@
   "expandObjects": true,
   "parametersFormat": "table",
   "enumMembersFormat": "table",
-  "sanitizeComments": true,
   "packageOptions": {
     "entryPoints": ["src/index.ts"]
   }

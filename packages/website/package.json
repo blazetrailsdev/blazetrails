@@ -7,10 +7,10 @@
     "predev": "pnpm run build:sw",
     "dev": "vite dev --host",
     "build:sw": "vite build --config vite.sw.config.ts",
-    "build": "pnpm run build:sw && vite build",
+    "build": "pnpm run build:sw && vite build && pnpm run docs:build",
     "preview": "vite preview",
     "test": "vitest run",
-    "docs:typedoc": "typedoc --tsconfig ../../tsconfig.json && node scripts/escape-typedoc.mjs",
+    "docs:typedoc": "tsc --build ../../tsconfig.json && typedoc --tsconfig ../../tsconfig.json && node scripts/escape-typedoc.mjs",
     "docs:dev": "pnpm run docs:typedoc && vitepress dev docs",
     "docs:build": "pnpm run docs:typedoc && vitepress build docs",
     "docs:preview": "vitepress preview docs"

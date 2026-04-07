@@ -77,7 +77,7 @@ export class SchemaMigration {
     sm.project(this.arelTable.get(this.primaryKey));
     sm.order(this.arelTable.get(this.primaryKey).asc());
     const rows = await this._adapter.execute(sm.toSql());
-    return rows.map((row) => String(row.version).trim());
+    return rows.map((row) => String(row[this.primaryKey]).trim());
   }
 
   async allVersions(): Promise<string[]> {

@@ -62,8 +62,10 @@ export function hasSecurePassword(
     },
     set(this: Model, value: unknown) {
       const currentDigest = this.readAttribute(digestAttr) as string | null;
-      if (!previousDigestCache.has(this) && currentDigest) {
+      if (currentDigest) {
         previousDigestCache.set(this, currentDigest);
+      } else {
+        previousDigestCache.delete(this);
       }
       setPassword(this, value, attribute, digestAttr, passwordCache);
     },
@@ -137,8 +139,10 @@ export function hasSecurePassword(
 
       const challenge = challengeCache.get(record);
       if (challenge !== undefined && challenge !== null) {
-        const digestToCheck =
-          previousDigestCache.get(record) ?? (record.readAttribute(digestAttr) as string | null);
+        const currentDigest = record.readAttribute(digestAttr) as string | null;
+        const digestToCheck = passwordCache.has(record)
+          ? (previousDigestCache.get(record) ?? currentDigest)
+          : currentDigest;
         if (!digestToCheck || !bcrypt.compareSync(challenge, digestToCheck)) {
           record.errors.add(challengeAttr, "invalid");
         }

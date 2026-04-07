@@ -83,6 +83,7 @@
       // Explicitly rehydrate after scaffold — don't rely on broadcast timing
       await vfs?.hydrate();
       await adapter?.hydrate();
+      previewPanel?.refresh();
     } catch (e: unknown) {
       cliOutput = [...cliOutput, `Error: ${e instanceof Error ? e.message : String(e)}`];
     } finally {

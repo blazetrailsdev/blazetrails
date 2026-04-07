@@ -26,7 +26,7 @@ export type Callbacks = CallbacksClassMethods;
  *
  * Mirrors: ActiveModel::Callbacks.define_model_callbacks
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- mixin `this` must accept any class constructor
 export function defineModelCallbacks(this: any, ...eventNames: string[]): void;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function defineModelCallbacks(

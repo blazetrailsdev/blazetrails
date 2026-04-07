@@ -203,6 +203,36 @@ describe("DatabaseStatements", () => {
     });
   });
 
+  describe("internalExecQuery", () => {
+    it("throws when binds provided without internalExecute", async () => {
+      const { internalExecQuery } = await import("./database-statements.js");
+      const host = {
+        execute: async () => [],
+      } as unknown as DatabaseStatementsHost;
+      await expect(internalExecQuery.call(host, "SELECT ?", "SQL", [1])).rejects.toThrow(
+        "internalExecQuery requires internalExecute",
+      );
+    });
+
+    it("delegates to internalExecute when available", async () => {
+      const { internalExecQuery } = await import("./database-statements.js");
+      const host = {
+        internalExecute: async () => ({ rows: [[1]] }),
+      } as unknown as DatabaseStatementsHost;
+      const result = await internalExecQuery.call(host, "SELECT 1", "SQL");
+      expect((result as any).rows).toEqual([[1]]);
+    });
+
+    it("normalizes execute fallback result", async () => {
+      const { internalExecQuery } = await import("./database-statements.js");
+      const host = {
+        execute: async () => [{ id: 1 }],
+      } as unknown as DatabaseStatementsHost;
+      const result = await internalExecQuery.call(host, "SELECT 1", "SQL");
+      expect((result as any).rows).toEqual([[1]]);
+    });
+  });
+
   describe("insertFixturesSet", () => {
     it("executes deletes and inserts wrapped in transaction", async () => {
       const executed: string[] = [];

@@ -39,6 +39,7 @@ export interface DatabaseStatementsHost {
   rollbackDbTransaction?(): Promise<void>;
   execRollbackDbTransaction?(): Promise<void>;
   execRestartDbTransaction?(): Promise<void>;
+  resetIsolationLevel?(): void | Promise<void>;
   emptyInsertStatementValue?(pk?: string | null): string;
   transaction?<T>(fn: (tx?: unknown) => Promise<T> | T, opts?: unknown): Promise<T | undefined>;
   pool?: { schemaMigration?: { tableName: string }; internalMetadata?: { tableName: string } };
@@ -531,7 +532,7 @@ export async function transaction<T>(
     throw e;
   } finally {
     if (isolation) {
-      await (this as any).resetIsolationLevel?.call(this);
+      await this.resetIsolationLevel?.call(this);
     }
   }
 }

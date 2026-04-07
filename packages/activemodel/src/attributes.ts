@@ -179,9 +179,59 @@ class LazyAttributeSet extends AttributeSet {
     super.forEach(fn);
   }
 
+  override toHash(): Record<string, unknown> {
+    this._materializeAll();
+    return super.toHash();
+  }
+
+  override valuesBeforeTypeCast(): Record<string, unknown> {
+    this._materializeAll();
+    return super.valuesBeforeTypeCast();
+  }
+
+  override valuesForDatabase(): Record<string, unknown> {
+    this._materializeAll();
+    return super.valuesForDatabase();
+  }
+
+  override snapshotValues(): Map<string, unknown> {
+    this._materializeAll();
+    return super.snapshotValues();
+  }
+
+  override castTypes(): Record<string, import("./type/value.js").Type> {
+    this._materializeAll();
+    return super.castTypes();
+  }
+
+  override accessed(): string[] {
+    this._materializeAll();
+    return super.accessed();
+  }
+
+  override map(fn: (attr: Attribute) => Attribute): AttributeSet {
+    this._materializeAll();
+    return super.map(fn);
+  }
+
+  override reverseMergeBang(target: AttributeSet): this {
+    this._materializeAll();
+    return super.reverseMergeBang(target);
+  }
+
   override deepDup(): AttributeSet {
     this._materializeAll();
     return super.deepDup();
+  }
+
+  override delete(name: string): boolean {
+    this._materialized.add(name);
+    return super.delete(name);
+  }
+
+  override reset(name: string): void {
+    this._materialize(name);
+    super.reset(name);
   }
 }
 

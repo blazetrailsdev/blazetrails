@@ -137,7 +137,8 @@ export function hasSecurePassword(
         }
       }
 
-      const challenge = challengeCache.get(record);
+      const challenge =
+        challengeCache.get(record) ?? (record.readAttribute(challengeAttr) as string | null);
       if (challenge !== undefined && challenge !== null) {
         const currentDigest = record.readAttribute(digestAttr) as string | null;
         const digestToCheck = passwordCache.has(record)

@@ -2213,13 +2213,11 @@ export class Base extends Model {
       im.insert(insertValues);
       sql = im.toSql();
     }
-    this._pendingOperation = (ctor.adapter.execInsert(sql, "Insert") as Promise<number>).then(
-      (insertedId) => {
-        if (!Array.isArray(ctor.primaryKey) && this.id === null) {
-          this._attributes.set(ctor.primaryKey, insertedId);
-        }
-      },
-    );
+    this._pendingOperation = ctor.adapter.execInsert(sql, "Insert").then((insertedId) => {
+      if (!Array.isArray(ctor.primaryKey) && this.id === null) {
+        this._attributes.set(ctor.primaryKey, insertedId);
+      }
+    });
   }
 
   private _performUpdate(): void {

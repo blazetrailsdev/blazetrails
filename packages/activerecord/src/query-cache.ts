@@ -300,7 +300,7 @@ export class QueryCacheAdapter implements DatabaseAdapter {
     return this.execute(sql, binds);
   }
 
-  async execInsert(sql: string, _name?: string | null, binds?: unknown[]): Promise<unknown> {
+  async execInsert(sql: string, _name?: string | null, binds?: unknown[]): Promise<number> {
     return this.executeMutation(sql, binds);
   }
 

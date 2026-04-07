@@ -85,7 +85,7 @@ export interface DatabaseAdapter {
     name?: string | null,
     binds?: unknown[],
   ): Promise<Record<string, unknown>[]>;
-  execInsert(sql: string, name?: string | null, binds?: unknown[]): Promise<unknown>;
+  execInsert(sql: string, name?: string | null, binds?: unknown[]): Promise<number>;
   execDelete(sql: string, name?: string | null, binds?: unknown[]): Promise<number>;
   execUpdate(sql: string, name?: string | null, binds?: unknown[]): Promise<number>;
   isWriteQuery(sql: string): boolean;

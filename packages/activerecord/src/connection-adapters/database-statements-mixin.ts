@@ -63,7 +63,7 @@ export function DatabaseStatementsMixin<T extends new (...args: any[]) => any>(B
       return (this as unknown as AdapterWithStatements).execute(sql, binds);
     }
 
-    async execInsert(sql: string, _name?: string | null, binds?: unknown[]): Promise<unknown> {
+    async execInsert(sql: string, _name?: string | null, binds?: unknown[]): Promise<number> {
       return (this as unknown as AdapterWithStatements).executeMutation(sql, binds);
     }
 
@@ -76,13 +76,31 @@ export function DatabaseStatementsMixin<T extends new (...args: any[]) => any>(B
     }
 
     isWriteQuery(sql: string): boolean {
-      const trimmed = sql.trimStart().toUpperCase();
-      return (
-        !trimmed.startsWith("SELECT") &&
-        !trimmed.startsWith("EXPLAIN") &&
-        !trimmed.startsWith("PRAGMA") &&
-        !trimmed.startsWith("SHOW")
-      );
+      // Strip block and line comments, then leading parentheses
+      const stripped = sql
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .split("\n")
+        .map((line) => {
+          const m = line.match(/(^|[\s])--.*/);
+          if (!m || m.index === undefined) return line;
+          return line.slice(0, m.index + m[1].length);
+        })
+        .join("\n")
+        .replace(/^\s*\(+\s*/, "");
+
+      const match = stripped.match(/^\s*([A-Z]+)\b/i);
+      if (!match) return true;
+      const stmt = match[1].toUpperCase();
+
+      const READ_ONLY =
+        /^(SELECT|EXPLAIN|PRAGMA|SHOW|SET|RESET|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE|DESCRIBE|DESC|USE|KILL)$/;
+      if (READ_ONLY.test(stmt)) return false;
+      if (stmt !== "WITH") return true;
+
+      // CTE: check the statement after the WITH clause
+      const afterWith = stripped.replace(/^\s*WITH\b/i, "").replace(/\([^)]*\)/g, "");
+      const innerMatch = afterWith.match(/\b(SELECT|INSERT|UPDATE|DELETE|MERGE)\b/i);
+      return !innerMatch || innerMatch[1].toUpperCase() !== "SELECT";
     }
 
     emptyInsertStatementValue(_pk?: string | null): string {

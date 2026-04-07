@@ -30,6 +30,28 @@
   let cliOutputEl: HTMLDivElement | undefined = $state();
 
   let previewCollapsed = $state(false);
+  let treeWidth = $state(224);
+  let treeCollapsed = $state(false);
+  let resizing = $state(false);
+
+  function startResize(e: MouseEvent) {
+    e.preventDefault();
+    resizing = true;
+    const startX = e.clientX;
+    const startWidth = treeWidth;
+
+    function onMove(ev: MouseEvent) {
+      const newWidth = Math.max(120, Math.min(500, startWidth + ev.clientX - startX));
+      treeWidth = newWidth;
+    }
+    function onUp() {
+      resizing = false;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
 
   const TABS = [
     { id: "files", label: "Files" },
@@ -190,20 +212,41 @@
         <TabPanel tabs={TABS} bind:activeTab>
           {#snippet children(tab)}
             {#if tab === "files"}
-              <div class="flex h-full overflow-hidden">
-                <div class="w-56 flex-shrink-0 overflow-hidden border-r border-border">
-                  <FileTree
-                    {vfs}
-                    selectedPath={selectedFile?.path ?? ""}
-                    onselect={handleFileSelect}
-                  />
-                </div>
-                <div class="flex-1 overflow-hidden">
-                  <MonacoEditor
-                    file={selectedFile}
-                    readonly={false}
-                    onchange={handleFileChange}
-                  />
+              <div class="flex h-full overflow-hidden" class:select-none={resizing}>
+                {#if !treeCollapsed}
+                  <div class="flex-shrink-0 overflow-hidden" style="width: {treeWidth}px">
+                    <FileTree
+                      {vfs}
+                      selectedPath={selectedFile?.path ?? ""}
+                      onselect={handleFileSelect}
+                    />
+                  </div>
+                  <!-- Resize handle -->
+                  <div
+                    class="w-1 flex-shrink-0 cursor-col-resize bg-border hover:bg-accent transition-colors"
+                    onmousedown={startResize}
+                    role="separator"
+                    aria-orientation="vertical"
+                  ></div>
+                {/if}
+                <div class="flex flex-1 flex-col overflow-hidden">
+                  <div class="flex items-center border-b border-border bg-surface-raised px-2 py-0.5">
+                    <button
+                      class="text-xs text-text-muted hover:text-accent"
+                      onclick={() => treeCollapsed = !treeCollapsed}
+                      title={treeCollapsed ? "Show file tree" : "Hide file tree"}
+                    >{treeCollapsed ? "▶" : "◀"}</button>
+                    {#if selectedFile}
+                      <span class="ml-2 truncate text-[10px] text-text-muted">{selectedFile.path}</span>
+                    {/if}
+                  </div>
+                  <div class="flex-1 overflow-hidden">
+                    <MonacoEditor
+                      file={selectedFile}
+                      readonly={false}
+                      onchange={handleFileChange}
+                    />
+                  </div>
                 </div>
               </div>
             {:else if tab === "database"}

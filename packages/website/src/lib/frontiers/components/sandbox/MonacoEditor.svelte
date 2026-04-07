@@ -12,8 +12,8 @@
   let { file = null, readonly = true, highlights = [], onchange }: Props = $props();
 
   let container: HTMLDivElement;
-  let editor: import("monaco-editor").editor.IStandaloneCodeEditor | undefined;
-  let monaco: typeof import("monaco-editor") | undefined;
+  let editor = $state<import("monaco-editor").editor.IStandaloneCodeEditor | undefined>();
+  let monaco = $state<typeof import("monaco-editor") | undefined>();
   let currentPath = "";
   let decorationIds: string[] = [];
 

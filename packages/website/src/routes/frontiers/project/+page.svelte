@@ -37,7 +37,7 @@
 
   onMount(async () => {
     try {
-      const sw = await createSwClient();
+      const sw = await createSwClient({ scope: "/" });
       client = sw;
 
       const vfsProxy = new SwVfsProxy(sw);

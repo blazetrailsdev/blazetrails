@@ -51,6 +51,20 @@ export function isMember(
   return isMemberSingle(resolved, value);
 }
 
+export function isExcluded(
+  collection: unknown[] | (() => unknown[]) | Iterable<unknown>,
+  value: unknown,
+): boolean {
+  const resolved = typeof collection === "function" ? collection() : collection;
+
+  // Exclusion: if value is an array, fail when ANY element is in the excluded set
+  if (Array.isArray(value)) {
+    return value.some((v) => isMemberSingle(resolved, v));
+  }
+
+  return isMemberSingle(resolved, value);
+}
+
 function isMemberSingle(resolved: unknown[] | Iterable<unknown>, value: unknown): boolean {
   if (Array.isArray(resolved)) return resolved.includes(value);
 

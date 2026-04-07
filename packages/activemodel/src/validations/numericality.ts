@@ -79,7 +79,7 @@ export class NumericalityValidator implements Validator {
     if (this.options.allowBlank && isBlank(value)) return;
 
     // Rails rejects hex literals (0x...) — JS Number() accepts them
-    if (typeof value === "string" && /^\s*0x/i.test(value)) {
+    if (typeof value === "string" && /^\s*[+-]?0x/i.test(value)) {
       errs.add(attribute, "not_a_number", { value, message: this.options.message });
       return;
     }

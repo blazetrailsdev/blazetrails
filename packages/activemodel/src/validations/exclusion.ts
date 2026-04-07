@@ -6,7 +6,7 @@ import type {
 } from "../validator.js";
 import { shouldValidate } from "../validator.js";
 import { isBlank } from "@blazetrails/activesupport";
-import { isMember, checkClusivityValidity } from "./clusivity.js";
+import { isExcluded, checkClusivityValidity } from "./clusivity.js";
 
 export interface ExclusionOptions extends ConditionalOptions {
   in?: Iterable<unknown> | (() => Iterable<unknown>);
@@ -35,7 +35,7 @@ export class ExclusionValidator implements Validator {
     const inOpt = this.options.in ?? this.options.within;
     if (!inOpt) return;
     const collection = typeof inOpt === "function" ? inOpt() : inOpt;
-    if (isMember(collection, value)) {
+    if (isExcluded(collection, value)) {
       errs.add(attribute, "exclusion", { value, message: this.options.message });
     }
   }

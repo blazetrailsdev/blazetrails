@@ -1,0 +1,15 @@
+{
+  "entryPointStrategy": "packages",
+  "entryPoints": [
+    "../arel",
+    "../activemodel",
+    "../activerecord",
+    "../activesupport",
+    "../rack",
+    "../actionpack"
+  ],
+  "out": "api",
+  "plugin": ["typedoc-plugin-markdown", "typedoc-vitepress-theme"],
+  "outputFileStrategy": "modules",
+  "readme": "none"
+}

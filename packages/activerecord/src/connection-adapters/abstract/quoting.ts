@@ -32,12 +32,15 @@ export function quoteTableName(name: string, adapter?: "sqlite" | "postgres" | "
 }
 
 /**
- * Quote a column name. Must be implemented by adapter subclasses.
+ * Quote a column name.
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#quote_column_name
  */
-export function quoteColumnName(columnName: string): string {
-  return quoteIdentifier(columnName);
+export function quoteColumnName(
+  columnName: string,
+  adapter?: "sqlite" | "postgres" | "mysql",
+): string {
+  return quoteIdentifier(columnName, adapter);
 }
 
 /**
@@ -129,8 +132,12 @@ export function quoteString(s: string): string {
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#quote_table_name_for_assignment
  */
-export function quoteTableNameForAssignment(table: string, attr: string): string {
-  return quoteTableName(`${table}.${attr}`);
+export function quoteTableNameForAssignment(
+  table: string,
+  attr: string,
+  adapter?: "sqlite" | "postgres" | "mysql",
+): string {
+  return quoteTableName(`${table}.${attr}`, adapter);
 }
 
 /**

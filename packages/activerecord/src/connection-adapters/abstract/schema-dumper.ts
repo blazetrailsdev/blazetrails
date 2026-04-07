@@ -201,12 +201,24 @@ function cleanDefault(raw: unknown): unknown {
 }
 
 export class SchemaDumper {
+  static readonly DEFAULT_DATETIME_PRECISION = 6;
   static ignoreTables: (string | RegExp)[] = [];
 
   private _source: SchemaSource;
+  protected _options: Record<string, unknown>;
 
-  constructor(source: SchemaSource) {
+  constructor(source: SchemaSource, options: Record<string, unknown> = {}) {
     this._source = source;
+    this._options = options;
+  }
+
+  /**
+   * Factory method matching Rails' SchemaDumper.create(connection, options).
+   *
+   * Mirrors: ActiveRecord::ConnectionAdapters::SchemaDumper.create
+   */
+  static create(source: SchemaSource, options: Record<string, unknown> = {}): SchemaDumper {
+    return new this(source, options);
   }
 
   static dump(source: SchemaSource): string | Promise<string> {

@@ -90,7 +90,11 @@ export class WhereClause {
     const wrapped = predicatesWithWrappedSqlLiterals(this.predicates);
     if (wrapped.length === 0) return "";
     const node = wrapped.length === 1 ? wrapped[0] : new Nodes.And(wrapped);
-    return visitor.compile(node);
+    try {
+      return visitor.compile(node);
+    } catch {
+      return "";
+    }
   }
 
   isContradiction(): boolean {

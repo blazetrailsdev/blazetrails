@@ -61,7 +61,10 @@ export function hasSecurePassword(
       return passwordCache.get(this) ?? null;
     },
     set(this: Model, value: unknown) {
-      previousDigestCache.set(this, this.readAttribute(digestAttr) as string | null);
+      const currentDigest = this.readAttribute(digestAttr) as string | null;
+      if (!previousDigestCache.has(this) && currentDigest) {
+        previousDigestCache.set(this, currentDigest);
+      }
       setPassword(this, value, attribute, digestAttr, passwordCache);
     },
     configurable: true,

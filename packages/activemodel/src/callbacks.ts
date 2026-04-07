@@ -17,7 +17,9 @@ export interface DefineModelCallbacksOptions {
 }
 
 export interface CallbacksClassMethods {
-  defineModelCallbacks(...args: [...string[], DefineModelCallbacksOptions] | string[]): void;
+  defineModelCallbacks(
+    ...args: [string, ...string[]] | [string, ...string[], DefineModelCallbacksOptions]
+  ): void;
 }
 
 export type Callbacks = CallbacksClassMethods;

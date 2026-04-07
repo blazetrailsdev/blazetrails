@@ -298,6 +298,9 @@ export async function execDelete(
     const result = await host.internalExecute(sql, name ?? "SQL", binds);
     return host.affectedRows ? host.affectedRows(result) : (result as number);
   }
+  if (binds.length > 0) {
+    throw new Error("execDelete requires internalExecute on the adapter when binds are provided");
+  }
   const doExecute = host?.execute ?? execute;
   return doExecute(sql, name) as Promise<number>;
 }
@@ -317,6 +320,9 @@ export async function execUpdate(
   if (host?.internalExecute) {
     const result = await host.internalExecute(sql, name ?? "SQL", binds);
     return host.affectedRows ? host.affectedRows(result) : (result as number);
+  }
+  if (binds.length > 0) {
+    throw new Error("execUpdate requires internalExecute on the adapter when binds are provided");
   }
   const doExecute = host?.execute ?? execute;
   return doExecute(sql, name) as Promise<number>;
@@ -874,10 +880,34 @@ export async function internalExecQuery(
   }
   // Fallback: delegate through this.execute only when there are no binds
   const doExecute = this?.execute ?? execute;
-  return doExecute(sql, name);
+  const result = await doExecute(sql, name);
+  return normalizeResult(result);
 }
 
 // --- Private helpers ---
+
+function normalizeResult(result: unknown): { rows: unknown[][] } {
+  if (
+    typeof result === "object" &&
+    result !== null &&
+    "rows" in result &&
+    Array.isArray((result as any).rows)
+  ) {
+    return result as { rows: unknown[][] };
+  }
+  if (Array.isArray(result)) {
+    return {
+      rows: result.map((row) =>
+        Array.isArray(row)
+          ? row
+          : typeof row === "object" && row !== null
+            ? Object.values(row)
+            : [row],
+      ),
+    };
+  }
+  return { rows: [] };
+}
 
 function singleValueFromRows(rows: unknown[][]): unknown {
   const row = rows[0];

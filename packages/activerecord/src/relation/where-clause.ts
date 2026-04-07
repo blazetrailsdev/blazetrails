@@ -68,10 +68,10 @@ export class WhereClause {
     }
 
     let leftAst: Nodes.Node = leftOnly.length === 1 ? leftOnly[0] : new Nodes.And(leftOnly);
-    if (leftAst instanceof Nodes.Grouping) leftAst = leftAst.expr;
+    if (leftAst instanceof Nodes.Grouping) leftAst = leftAst.expr as Nodes.Node;
 
     let rightAst: Nodes.Node = rightOnly.length === 1 ? rightOnly[0] : new Nodes.And(rightOnly);
-    if (rightAst instanceof Nodes.Grouping) rightAst = rightAst.expr;
+    if (rightAst instanceof Nodes.Grouping) rightAst = rightAst.expr as Nodes.Node;
 
     const orNode =
       leftAst instanceof Nodes.Or

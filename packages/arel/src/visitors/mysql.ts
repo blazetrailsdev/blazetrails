@@ -117,6 +117,24 @@ export class MySQL extends ToSql {
     return this.collector;
   }
 
+  protected override visitNullsFirst(node: Nodes.NullsFirst): SQLString {
+    // MySQL has no NULLS FIRST syntax; emulate with: column IS NOT NULL, column [ASC|DESC]
+    const expr = node.expr as Node;
+    this.visit(expr);
+    this.collector.append(" IS NULL DESC, ");
+    this.visit(expr);
+    return this.collector;
+  }
+
+  protected override visitNullsLast(node: Nodes.NullsLast): SQLString {
+    // MySQL has no NULLS LAST syntax; emulate with: column IS NULL, column [ASC|DESC]
+    const expr = node.expr as Node;
+    this.visit(expr);
+    this.collector.append(" IS NULL ASC, ");
+    this.visit(expr);
+    return this.collector;
+  }
+
   protected override visitCte(node: Nodes.Cte): SQLString {
     // MySQL ignores MATERIALIZED / NOT MATERIALIZED modifiers.
     this.collector.append(`"${node.name}" AS (`);

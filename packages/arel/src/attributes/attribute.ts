@@ -113,7 +113,7 @@ export class Attribute extends Node {
   }
 
   notEq(other: unknown): NotEqual {
-    return new NotEqual(this, buildQuoted(other));
+    return new NotEqual(this, buildQuoted(this.castValue(other)));
   }
 
   gt(other: unknown): GreaterThan {

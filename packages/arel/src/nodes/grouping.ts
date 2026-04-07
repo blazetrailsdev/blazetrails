@@ -1,20 +1,14 @@
-import { Node, NodeVisitor } from "./node.js";
+import { Node } from "./node.js";
+import { Unary } from "./unary.js";
 import { As } from "./binary.js";
 import { SqlLiteral } from "./sql-literal.js";
 
 /**
  * Grouping node — wraps an expression in parentheses.
  *
- * Mirrors: Arel::Nodes::Grouping
+ * Mirrors: Arel::Nodes::Grouping (extends Unary)
  */
-export class Grouping extends Node {
-  readonly expr: Node;
-
-  constructor(expr: Node) {
-    super();
-    this.expr = expr;
-  }
-
+export class Grouping extends Unary {
   as(aliasName: string): As {
     return new As(this, new SqlLiteral(aliasName));
   }
@@ -29,9 +23,5 @@ export class Grouping extends Node {
       ).fetchAttribute(block);
     }
     return undefined;
-  }
-
-  accept<T>(visitor: NodeVisitor<T>): T {
-    return visitor.visit(this);
   }
 }

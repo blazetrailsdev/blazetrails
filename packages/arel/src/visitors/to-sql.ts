@@ -142,9 +142,11 @@ export class ToSql implements NodeVisitor<SQLString> {
     if (node instanceof Nodes.Cube) return this.visitCube(node);
     if (node instanceof Nodes.Rollup) return this.visitRollup(node);
     if (node instanceof Nodes.GroupingSet) return this.visitGroupingSet(node);
+    if (node instanceof Nodes.Group) return this.visitGroup(node);
     if (node instanceof Nodes.GroupingElement) return this.visitGroupingElement(node);
     if (node instanceof Nodes.Lateral) return this.visitLateral(node);
     if (node instanceof Nodes.Comment) return this.visitComment(node);
+    if (node instanceof Nodes.HomogeneousIn) return this.visitHomogeneousIn(node);
 
     // Boolean literals
     if (node instanceof Nodes.True) return this.visitTrue(node);
@@ -503,6 +505,22 @@ export class ToSql implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
+  private visitHomogeneousIn(node: Nodes.HomogeneousIn): SQLString {
+    if (node.values.length === 0) {
+      this.collector.append(node.type === "in" ? "1=0" : "1=1");
+      return this.collector;
+    }
+    this.visit(node.attribute);
+    this.collector.append(node.type === "in" ? " IN (" : " NOT IN (");
+    const values = node.castedValues;
+    for (let i = 0; i < values.length; i++) {
+      if (i > 0) this.collector.append(", ");
+      this.collector.append(this.quote(values[i]));
+    }
+    this.collector.append(")");
+    return this.collector;
+  }
+
   private visitBetween(node: Nodes.Between): SQLString {
     this.visitNodeOrValue(node.left);
     this.collector.append(" BETWEEN ");
@@ -562,9 +580,13 @@ export class ToSql implements NodeVisitor<SQLString> {
 
   private visitGrouping(node: Nodes.Grouping): SQLString {
     this.collector.append("(");
-    let inner: Node = node.expr;
+    let inner = node.expr;
     while (inner instanceof Nodes.Grouping) inner = inner.expr;
-    this.visit(inner);
+    if (inner instanceof Node) {
+      this.visit(inner);
+    } else if (inner !== null && inner !== undefined) {
+      this.collector.append(String(inner));
+    }
     this.collector.append(")");
     return this.collector;
   }
@@ -706,10 +728,10 @@ export class ToSql implements NodeVisitor<SQLString> {
   }
 
   private visitOver(node: Nodes.Over): SQLString {
-    this.visit(node.left);
+    this.visitNodeOrValue(node.left);
     this.collector.append(" OVER ");
     if (node.right) {
-      this.visit(node.right);
+      this.visitNodeOrValue(node.right);
     } else {
       this.collector.append("()");
     }
@@ -767,15 +789,15 @@ export class ToSql implements NodeVisitor<SQLString> {
       this.collector.append(" ");
       this.visit(node.case);
     }
-    for (const cond of node.conditions) {
+    for (const when of node.conditions) {
       this.collector.append(" WHEN ");
-      this.visit(cond.when);
+      this.visitNodeOrValue(when.left);
       this.collector.append(" THEN ");
-      this.visit(cond.then);
+      this.visitNodeOrValue(when.right);
     }
     if (node.default) {
       this.collector.append(" ELSE ");
-      this.visit(node.default);
+      this.visit(node.default.expr as Node);
     }
     this.collector.append(" END");
     return this.collector;
@@ -820,7 +842,11 @@ export class ToSql implements NodeVisitor<SQLString> {
 
   private visitExtract(node: Nodes.Extract): SQLString {
     this.collector.append(`EXTRACT(${node.field} FROM `);
-    this.visit(node.expr);
+    if (node.expr instanceof Node) {
+      this.visit(node.expr);
+    } else if (node.expr !== null && node.expr !== undefined) {
+      this.collector.append(String(node.expr));
+    }
     this.collector.append(")");
     return this.collector;
   }
@@ -950,6 +976,14 @@ export class ToSql implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
+  private visitGroup(node: Nodes.Group): SQLString {
+    if (node.expr instanceof Node) {
+      return this.visit(node.expr);
+    }
+    this.collector.append(String(node.expr));
+    return this.collector;
+  }
+
   private visitLateral(node: Nodes.Lateral): SQLString {
     this.collector.append("LATERAL (");
     this.visit(node.subquery);
@@ -959,7 +993,8 @@ export class ToSql implements NodeVisitor<SQLString> {
 
   private visitComment(node: Nodes.Comment): SQLString {
     for (const value of node.values) {
-      this.collector.append(` /* ${value} */`);
+      const sanitized = value.replace(/\/\*/g, "").replace(/\*\//g, "").replace(/\s+/g, " ").trim();
+      this.collector.append(` /* ${sanitized} */`);
     }
     return this.collector;
   }
@@ -988,13 +1023,13 @@ export class ToSql implements NodeVisitor<SQLString> {
 
   // -- NullsFirst / NullsLast --
 
-  private visitNullsFirst(node: Nodes.NullsFirst): SQLString {
+  protected visitNullsFirst(node: Nodes.NullsFirst): SQLString {
     if (node.expr instanceof Node) this.visit(node.expr);
     this.collector.append(" NULLS FIRST");
     return this.collector;
   }
 
-  private visitNullsLast(node: Nodes.NullsLast): SQLString {
+  protected visitNullsLast(node: Nodes.NullsLast): SQLString {
     if (node.expr instanceof Node) this.visit(node.expr);
     this.collector.append(" NULLS LAST");
     return this.collector;

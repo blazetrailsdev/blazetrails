@@ -60,11 +60,14 @@ export function hasSecurePassword(
       return passwordCache.get(this) ?? null;
     },
     set(this: Model, value: unknown) {
-      const currentDigest = this.readAttribute(digestAttr) as string | null;
-      if (currentDigest) {
-        previousDigestCache.set(this, currentDigest);
-      } else {
-        previousDigestCache.delete(this);
+      const willUpdateDigest = value === null || value === undefined || String(value) !== "";
+      if (willUpdateDigest) {
+        const currentDigest = this.readAttribute(digestAttr) as string | null;
+        if (currentDigest) {
+          previousDigestCache.set(this, currentDigest);
+        } else {
+          previousDigestCache.delete(this);
+        }
       }
       setPassword(this, value, attribute, digestAttr, passwordCache);
     },

@@ -306,7 +306,7 @@ export async function execDelete(
     throw new Error("execDelete requires internalExecute on the adapter when binds are provided");
   }
   const doExecute = host?.execute ?? execute;
-  return doExecute(sql, name) as Promise<number>;
+  return doExecute(sql) as Promise<number>;
 }
 
 /**
@@ -329,7 +329,7 @@ export async function execUpdate(
     throw new Error("execUpdate requires internalExecute on the adapter when binds are provided");
   }
   const doExecute = host?.execute ?? execute;
-  return doExecute(sql, name) as Promise<number>;
+  return doExecute(sql) as Promise<number>;
 }
 
 /**
@@ -421,7 +421,7 @@ export async function truncate(
 ): Promise<unknown> {
   const sql = `TRUNCATE TABLE ${quoteTableName(tableName)}`;
   const doExecute = (this as DatabaseStatementsHost)?.execute ?? execute;
-  return doExecute(sql, name);
+  return doExecute(sql);
 }
 
 /**
@@ -449,7 +449,7 @@ export async function truncateTables(
       await this.executeBatch(statements, "Truncate Tables");
     } else {
       for (const stmt of statements) {
-        await doExecute(stmt, "Truncate Tables");
+        await doExecute(stmt);
       }
     }
   };
@@ -766,7 +766,7 @@ export async function insertFixture(
       : `INSERT INTO ${quoteTableName(tableName)} ${emptyValue}`;
 
   const doExecute = host?.execute ?? execute;
-  return doExecute(sql, "Fixture Insert");
+  return doExecute(sql);
 }
 
 /**
@@ -806,7 +806,7 @@ export async function insertFixturesSet(
       await this.executeBatch(allStatements, "Fixtures Load");
     } else {
       for (const stmt of allStatements) {
-        await doExecute(stmt, "Fixtures Load");
+        await doExecute(stmt);
       }
     }
   };
@@ -927,7 +927,7 @@ export async function internalExecQuery(
   }
   // Fallback: delegate through this.execute only when there are no binds
   const doExecute = this?.execute ?? execute;
-  const result = await doExecute(sql, name);
+  const result = await doExecute(sql);
   return normalizeResult(result);
 }
 

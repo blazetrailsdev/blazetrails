@@ -84,6 +84,31 @@
     });
   }
 
+  let typesLoaded = false;
+  async function loadBlazetrailsTypes(m: typeof import("monaco-editor")) {
+    if (typesLoaded) return;
+    typesLoaded = true;
+    try {
+      const resp = await fetch("/blazetrails-types.json");
+      if (!resp.ok) return;
+      const typeMap: Record<string, string> = await resp.json();
+      const defaults = m.languages.typescript.typescriptDefaults;
+      defaults.setCompilerOptions({
+        ...defaults.getCompilerOptions(),
+        target: m.languages.typescript.ScriptTarget.ES2022,
+        module: m.languages.typescript.ModuleKind.ESNext,
+        moduleResolution: m.languages.typescript.ModuleResolutionKind.NodeJs,
+        allowNonTsExtensions: true,
+        strict: true,
+      });
+      for (const [path, content] of Object.entries(typeMap)) {
+        defaults.addExtraLib(content, path);
+      }
+    } catch {
+      // Types are optional — autocomplete just won't work
+    }
+  }
+
   function applyHighlights() {
     if (!editor || !monaco) return;
     const ranges = highlights ?? [];
@@ -188,6 +213,7 @@
     monaco = await import("monaco-editor");
     if (destroyed) return;
     defineTheme(monaco);
+    loadBlazetrailsTypes(monaco);
 
     editor = monaco.editor.create(container, {
       value: file?.content ?? "",

@@ -84,10 +84,14 @@ export function hasSecurePassword(
 
   Object.defineProperty(modelClass.prototype, challengeAttr, {
     get(this: Model) {
-      return challengeCache.get(this) ?? null;
+      if (challengeCache.has(this)) return challengeCache.get(this) ?? null;
+      const val = this.readAttribute(challengeAttr);
+      return val === null || val === undefined ? null : String(val);
     },
     set(this: Model, value: unknown) {
-      challengeCache.set(this, value === null || value === undefined ? null : String(value));
+      const normalized = value === null || value === undefined ? null : String(value);
+      challengeCache.set(this, normalized);
+      this.writeAttribute(challengeAttr, normalized);
     },
     configurable: true,
   });

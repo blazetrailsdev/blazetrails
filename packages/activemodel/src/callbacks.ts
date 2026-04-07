@@ -22,7 +22,9 @@ export type Callbacks = CallbacksClassMethods;
 
 /**
  * Core implementation of define_model_callbacks.
- * Creates beforeX(), afterX(), and aroundX() class methods for each event name.
+ * Creates beforeX(), afterX(), and/or aroundX() class methods for each event
+ * name. Pass `{ only: ["before"] }` as the last argument to limit which
+ * timing types are created (defaults to all three).
  *
  * Mirrors: ActiveModel::Callbacks.define_model_callbacks
  */

@@ -86,13 +86,9 @@ export class SchemaMigration {
 
   async count(): Promise<number> {
     const sm = new SelectManager(this.arelTable);
-    sm.project(new Nodes.Count(star));
+    sm.project(new Nodes.NamedFunction("COUNT", [star]).as("cnt"));
     const rows = await this._adapter.execute(sm.toSql());
-    // Column name varies by adapter: count, count(*), COUNT(*), cnt
-    const row = rows[0];
-    if (!row) return 0;
-    const val = Object.values(row)[0];
-    return Number(val ?? 0);
+    return Number(rows[0]?.cnt ?? 0);
   }
 
   async tableExists(): Promise<boolean> {

@@ -10,8 +10,12 @@ type AnyRecord = any;
  * define_model_callbacks which creates before/after/around hooks.
  * Model already implements this via defineModelCallbacks().
  */
+export interface DefineModelCallbacksOptions {
+  only?: CallbackTiming[];
+}
+
 export interface CallbacksClassMethods {
-  defineModelCallbacks(...eventNames: string[]): void;
+  defineModelCallbacks(...args: [...string[], DefineModelCallbacksOptions] | string[]): void;
 }
 
 export type Callbacks = CallbacksClassMethods;
@@ -23,42 +27,61 @@ export type Callbacks = CallbacksClassMethods;
  * Mirrors: ActiveModel::Callbacks.define_model_callbacks
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function defineModelCallbacks(this: any, ...eventNames: string[]): void {
+export function defineModelCallbacks(this: any, ...args: unknown[]): void {
+  let options: DefineModelCallbacksOptions = {};
+  let eventNames: string[];
+
+  const last = args[args.length - 1];
+  if (last && typeof last === "object" && !Array.isArray(last) && "only" in (last as object)) {
+    options = last as DefineModelCallbacksOptions;
+    eventNames = args.slice(0, -1) as string[];
+  } else {
+    eventNames = args as string[];
+  }
+
+  const timings: CallbackTiming[] = options.only ?? ["before", "after", "around"];
+
   for (const event of eventNames) {
     const capitalizedEvent = event.charAt(0).toUpperCase() + event.slice(1);
 
-    Object.defineProperty(this, `before${capitalizedEvent}`, {
-      value: function (fn: CallbackFn, conditions?: CallbackConditions) {
-        if (!Object.prototype.hasOwnProperty.call(this, "_callbackChain")) {
-          this._callbackChain = this._callbackChain.clone();
-        }
-        this._callbackChain.register("before", event, fn, conditions);
-      },
-      writable: true,
-      configurable: true,
-    });
+    if (timings.includes("before")) {
+      Object.defineProperty(this, `before${capitalizedEvent}`, {
+        value: function (fn: CallbackFn, conditions?: CallbackConditions) {
+          if (!Object.prototype.hasOwnProperty.call(this, "_callbackChain")) {
+            this._callbackChain = this._callbackChain.clone();
+          }
+          this._callbackChain.register("before", event, fn, conditions);
+        },
+        writable: true,
+        configurable: true,
+      });
+    }
 
-    Object.defineProperty(this, `after${capitalizedEvent}`, {
-      value: function (fn: CallbackFn, conditions?: CallbackConditions) {
-        if (!Object.prototype.hasOwnProperty.call(this, "_callbackChain")) {
-          this._callbackChain = this._callbackChain.clone();
-        }
-        this._callbackChain.register("after", event, fn, conditions);
-      },
-      writable: true,
-      configurable: true,
-    });
+    if (timings.includes("after")) {
+      Object.defineProperty(this, `after${capitalizedEvent}`, {
+        value: function (fn: CallbackFn, conditions?: CallbackConditions) {
+          if (!Object.prototype.hasOwnProperty.call(this, "_callbackChain")) {
+            this._callbackChain = this._callbackChain.clone();
+          }
+          this._callbackChain.register("after", event, fn, conditions);
+        },
+        writable: true,
+        configurable: true,
+      });
+    }
 
-    Object.defineProperty(this, `around${capitalizedEvent}`, {
-      value: function (fn: AroundCallbackFn, conditions?: CallbackConditions) {
-        if (!Object.prototype.hasOwnProperty.call(this, "_callbackChain")) {
-          this._callbackChain = this._callbackChain.clone();
-        }
-        this._callbackChain.register("around", event, fn, conditions);
-      },
-      writable: true,
-      configurable: true,
-    });
+    if (timings.includes("around")) {
+      Object.defineProperty(this, `around${capitalizedEvent}`, {
+        value: function (fn: AroundCallbackFn, conditions?: CallbackConditions) {
+          if (!Object.prototype.hasOwnProperty.call(this, "_callbackChain")) {
+            this._callbackChain = this._callbackChain.clone();
+          }
+          this._callbackChain.register("around", event, fn, conditions);
+        },
+        writable: true,
+        configurable: true,
+      });
+    }
   }
 }
 

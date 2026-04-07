@@ -45,6 +45,7 @@ export function hasSecurePassword(
 ) {
   const digestAttr = `${attribute}_digest`;
   const confirmationAttr = `${attribute}Confirmation`;
+  const challengeAttr = `${attribute}Challenge`;
   const validations = options.validations !== false;
 
   if (!modelClass._attributeDefinitions.has(digestAttr)) {
@@ -52,6 +53,7 @@ export function hasSecurePassword(
   }
 
   const passwordCache = new WeakMap<object, string | null>();
+  const challengeCache = new WeakMap<object, string | null>();
 
   Object.defineProperty(modelClass.prototype, attribute, {
     get(this: Model) {
@@ -69,6 +71,16 @@ export function hasSecurePassword(
     },
     set(this: Model, value: unknown) {
       this.writeAttribute(confirmationAttr, value);
+    },
+    configurable: true,
+  });
+
+  Object.defineProperty(modelClass.prototype, challengeAttr, {
+    get(this: Model) {
+      return challengeCache.get(this) ?? null;
+    },
+    set(this: Model, value: unknown) {
+      challengeCache.set(this, value === null || value === undefined ? null : String(value));
     },
     configurable: true,
   });
@@ -115,6 +127,14 @@ export function hasSecurePassword(
         const confirmation = record.readAttribute(confirmationAttr);
         if (confirmation !== undefined && confirmation !== null && pwd !== confirmation) {
           record.errors.add(attribute, "confirmation", { attribute: humanAttr });
+        }
+      }
+
+      const challenge = challengeCache.get(record);
+      if (challenge !== undefined && challenge !== null) {
+        const existingDigest = record.readAttribute(digestAttr) as string | null;
+        if (!existingDigest || !bcrypt.compareSync(challenge, existingDigest)) {
+          record.errors.add(challengeAttr, "invalid");
         }
       }
     });

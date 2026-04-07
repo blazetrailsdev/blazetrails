@@ -148,8 +148,8 @@ async function broadcast(msg: SwBroadcast): Promise<void> {
 // ── Message handler ────────────────────────────────────────────────────
 
 export async function handleSwMessage(request: SwRequest): Promise<SwResponse> {
-  if (request.type !== "init" && !initialized) {
-    return { type: "error", message: "Service worker not initialized — send init first" };
+  if (!initialized) {
+    await init();
   }
 
   switch (request.type) {
@@ -313,7 +313,7 @@ async function handleFetch(request: Request, url: URL): Promise<Response> {
 
   const resolved = resolveVfsPath(path, createFileReader());
   if (!resolved.found) {
-    return new Response(`404 — ${path} not found in VFS`, {
+    return new Response(`404 — ${path} not found`, {
       status: 404,
       headers: { "content-type": "text/plain" },
     });

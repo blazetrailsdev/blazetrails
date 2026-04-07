@@ -22,17 +22,18 @@
   let error = $state<string | null>(null);
 
   let selectedFile = $state<{ path: string; content: string } | null>(null);
-  let activeTab = $state("editor");
+  let activeTab = $state("files");
 
   let cliInput = $state("");
   let cliOutput = $state<string[]>([]);
   let cliRunning = $state(false);
   let cliOutputEl: HTMLDivElement | undefined = $state();
 
+  let previewCollapsed = $state(false);
+
   const TABS = [
-    { id: "editor", label: "Editor" },
+    { id: "files", label: "Files" },
     { id: "database", label: "Database" },
-    { id: "preview", label: "Preview" },
   ];
 
   onMount(async () => {
@@ -94,7 +95,7 @@
     const file = vfs.read(path);
     if (file) {
       selectedFile = { path: file.path, content: file.content };
-      activeTab = "editor";
+      activeTab = "files";
     }
   }
 
@@ -184,35 +185,54 @@
 
     <!-- Main content -->
     <div class="flex flex-1 overflow-hidden">
-      <!-- Sidebar: FileTree -->
-      <div class="w-56 flex-shrink-0 overflow-hidden border-r border-border">
-        <FileTree
-          {vfs}
-          selectedPath={selectedFile?.path ?? ""}
-          onselect={handleFileSelect}
-        />
-      </div>
-
-      <!-- Main pane: TabPanel -->
+      <!-- Left: TabPanel (Files / Database) -->
       <div class="flex flex-1 flex-col overflow-hidden">
         <TabPanel tabs={TABS} bind:activeTab>
           {#snippet children(tab)}
-            {#if tab === "editor"}
-              <MonacoEditor
-                file={selectedFile}
-                readonly={false}
-                onchange={handleFileChange}
-              />
+            {#if tab === "files"}
+              <div class="flex h-full overflow-hidden">
+                <div class="w-56 flex-shrink-0 overflow-hidden border-r border-border">
+                  <FileTree
+                    {vfs}
+                    selectedPath={selectedFile?.path ?? ""}
+                    onselect={handleFileSelect}
+                  />
+                </div>
+                <div class="flex-1 overflow-hidden">
+                  <MonacoEditor
+                    file={selectedFile}
+                    readonly={false}
+                    onchange={handleFileChange}
+                  />
+                </div>
+              </div>
             {:else if tab === "database"}
               <DatabaseBrowser
                 {adapter}
                 {vfs}
               />
-            {:else if tab === "preview"}
-              <PreviewPanel bind:this={previewPanel} {client} />
             {/if}
           {/snippet}
         </TabPanel>
+      </div>
+
+      <!-- Right: Preview (collapsible) -->
+      <div class="flex flex-col border-l border-border {previewCollapsed ? 'w-8' : 'w-[40%]'} transition-all">
+        <div class="flex items-center border-b border-border bg-surface-raised px-2 py-1">
+          {#if !previewCollapsed}
+            <span class="flex-1 text-[10px] font-medium uppercase tracking-wider text-text-muted">Preview</span>
+          {/if}
+          <button
+            class="text-xs text-text-muted hover:text-accent"
+            onclick={() => previewCollapsed = !previewCollapsed}
+            title={previewCollapsed ? "Show preview" : "Hide preview"}
+          >{previewCollapsed ? "◀" : "▶"}</button>
+        </div>
+        {#if !previewCollapsed}
+          <div class="flex-1 overflow-hidden">
+            <PreviewPanel bind:this={previewPanel} {client} />
+          </div>
+        {/if}
       </div>
     </div>
 

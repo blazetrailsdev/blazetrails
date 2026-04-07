@@ -383,6 +383,19 @@ describe("AttributeTest", () => {
     expect(attr.cameFromUser()).toBe(false);
   });
 
+  it("from_user came_from_user? passes valueBeforeTypeCast to type, not cast value", () => {
+    let receivedValue: unknown;
+    const intType = Object.create(typeRegistry.lookup("integer"));
+    intType.isValueConstructedByMassAssignment = (v: unknown) => {
+      receivedValue = v;
+      return false;
+    };
+    const attr = Attribute.fromUser("age", "42", intType);
+    attr.cameFromUser();
+    expect(receivedValue).toBe("42");
+    expect(attr.value).toBe(42);
+  });
+
   it("from_database came_from_user? returns false", () => {
     const attr = Attribute.fromDatabase("name", "hello", typeRegistry.lookup("string"));
     expect(attr.cameFromUser()).toBe(false);

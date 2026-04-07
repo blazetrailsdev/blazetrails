@@ -75,7 +75,7 @@ async function executeCode(code: string): Promise<unknown> {
         version: ${className}.version,
         name: ${className}.name,
         filename: "",
-        migration: () => new ${className}(),
+        migration: () => { const m = new ${className}(); m.adapter = adapter; return m; },
       });
     }\n`;
   }

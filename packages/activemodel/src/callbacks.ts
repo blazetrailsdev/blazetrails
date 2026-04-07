@@ -26,15 +26,14 @@ export type Callbacks = CallbacksClassMethods;
  *
  * Mirrors: ActiveModel::Callbacks.define_model_callbacks
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- mixin `this` must accept any class constructor
+/* eslint-disable @typescript-eslint/no-explicit-any -- mixin `this` must accept any class constructor */
 export function defineModelCallbacks(this: any, ...eventNames: string[]): void;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function defineModelCallbacks(
   this: any,
   ...args: [...string[], DefineModelCallbacksOptions]
 ): void;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function defineModelCallbacks(this: any, ...args: unknown[]): void {
+  /* eslint-enable @typescript-eslint/no-explicit-any */
   let options: DefineModelCallbacksOptions = {};
   const eventNames: string[] = [];
 

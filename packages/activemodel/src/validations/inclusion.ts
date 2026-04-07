@@ -19,7 +19,7 @@ export class InclusionValidator implements Validator {
   constructor(private options: InclusionOptions) {}
 
   checkValidityBang(): void {
-    if (this.options.in === undefined && this.options.within === undefined) {
+    if (this.options.in == null && this.options.within == null) {
       throw new Error("An :in or :within option must be supplied");
     }
   }

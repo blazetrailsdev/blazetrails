@@ -18,6 +18,12 @@ export interface ExclusionOptions extends ConditionalOptions {
 export class ExclusionValidator implements Validator {
   constructor(private options: ExclusionOptions) {}
 
+  checkValidityBang(): void {
+    if (this.options.in == null && this.options.within == null) {
+      throw new Error("An :in or :within option must be supplied");
+    }
+  }
+
   validate(record: AnyRecord, attribute: string, value: unknown, errors: Errors): void {
     if (!shouldValidate(record, this.options)) return;
     this.validateEach(record, attribute, value, errors);

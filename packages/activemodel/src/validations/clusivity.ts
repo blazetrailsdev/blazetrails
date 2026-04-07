@@ -18,14 +18,18 @@ export function checkValidityBang(options: { in?: unknown; within?: unknown }): 
 export function checkClusivityValidity(options: { in?: unknown; within?: unknown }): void {
   const collection = options.in ?? options.within;
   if (collection === undefined || collection === null) {
-    throw new Error("An :in option must be supplied (either an Array, a Range, or a Proc)");
+    throw new Error(
+      "An :in or :within option must be supplied (either an Array, a Range, or a Proc)",
+    );
   }
   if (
     !Array.isArray(collection) &&
     typeof collection !== "function" &&
     !(typeof collection === "object" && Symbol.iterator in (collection as object))
   ) {
-    throw new Error("An :in option must be supplied (either an Array, a Range, or a Proc)");
+    throw new Error(
+      "An :in or :within option must be supplied (either an Array, a Range, or a Proc)",
+    );
   }
 }
 

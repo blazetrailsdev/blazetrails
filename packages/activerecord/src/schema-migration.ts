@@ -94,7 +94,7 @@ export class SchemaMigration {
   async tableExists(): Promise<boolean> {
     try {
       const sm = new SelectManager(this.arelTable);
-      sm.project(new Nodes.SqlLiteral("1"));
+      sm.project(new Nodes.Quoted(1));
       sm.take(1);
       await this._adapter.execute(sm.toSql());
       return true;

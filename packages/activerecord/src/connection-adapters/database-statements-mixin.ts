@@ -7,23 +7,36 @@
  * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements
  */
 
-import type { DatabaseAdapter } from "../adapter.js";
+import { isWriteQuerySql } from "./sql-classification.js";
 
-type AdapterWithStatements = DatabaseAdapter;
+/**
+ * Minimum interface required by the mixin — the base class must provide
+ * execute() and executeMutation() for delegation.
+ */
+interface ExecutionMethods {
+  execute(sql: string, binds?: unknown[]): Promise<Record<string, unknown>[]>;
+  executeMutation(sql: string, binds?: unknown[]): Promise<number>;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+type Constructor<T = {}> = new (...args: any[]) => T;
 
 /**
  * Adds DatabaseStatements methods to a concrete adapter class.
  * Usage: class MyAdapter extends DatabaseStatementsMixin(BaseClass) { ... }
+ *
+ * The base class should provide execute()/executeMutation(). If the mixin
+ * is applied to a bare class {}, the concrete subclass must provide them.
  */
 
-export function DatabaseStatementsMixin<T extends new (...args: any[]) => any>(Base: T) {
+export function DatabaseStatementsMixin<T extends Constructor<any>>(Base: T) {
   return class extends Base {
     async selectAll(
       sql: string,
       _name?: string | null,
       binds?: unknown[],
     ): Promise<Record<string, unknown>[]> {
-      return (this as unknown as AdapterWithStatements).execute(sql, binds);
+      return (this as unknown as ExecutionMethods).execute(sql, binds);
     }
 
     async selectOne(
@@ -31,19 +44,19 @@ export function DatabaseStatementsMixin<T extends new (...args: any[]) => any>(B
       _name?: string | null,
       binds?: unknown[],
     ): Promise<Record<string, unknown> | undefined> {
-      const rows = await (this as unknown as AdapterWithStatements).execute(sql, binds);
+      const rows = await (this as unknown as ExecutionMethods).execute(sql, binds);
       return rows[0];
     }
 
     async selectValue(sql: string, _name?: string | null, binds?: unknown[]): Promise<unknown> {
-      const rows = await (this as unknown as AdapterWithStatements).execute(sql, binds);
+      const rows = await (this as unknown as ExecutionMethods).execute(sql, binds);
       if (rows.length === 0) return undefined;
       const keys = Object.keys(rows[0]);
       return keys.length > 0 ? rows[0][keys[0]] : undefined;
     }
 
     async selectValues(sql: string, _name?: string | null, binds?: unknown[]): Promise<unknown[]> {
-      const rows = await (this as unknown as AdapterWithStatements).execute(sql, binds);
+      const rows = await (this as unknown as ExecutionMethods).execute(sql, binds);
       return rows.map((row) => {
         const keys = Object.keys(row);
         return keys.length > 0 ? row[keys[0]] : undefined;
@@ -51,7 +64,7 @@ export function DatabaseStatementsMixin<T extends new (...args: any[]) => any>(B
     }
 
     async selectRows(sql: string, _name?: string | null, binds?: unknown[]): Promise<unknown[][]> {
-      const rows = await (this as unknown as AdapterWithStatements).execute(sql, binds);
+      const rows = await (this as unknown as ExecutionMethods).execute(sql, binds);
       if (rows.length === 0) return [];
       const keys = Object.keys(rows[0]);
       return rows.map((row) => keys.map((key) => row[key]));
@@ -62,47 +75,23 @@ export function DatabaseStatementsMixin<T extends new (...args: any[]) => any>(B
       _name?: string | null,
       binds?: unknown[],
     ): Promise<Record<string, unknown>[]> {
-      return (this as unknown as AdapterWithStatements).execute(sql, binds);
+      return (this as unknown as ExecutionMethods).execute(sql, binds);
     }
 
     async execInsert(sql: string, _name?: string | null, binds?: unknown[]): Promise<number> {
-      return (this as unknown as AdapterWithStatements).executeMutation(sql, binds);
+      return (this as unknown as ExecutionMethods).executeMutation(sql, binds);
     }
 
     async execDelete(sql: string, _name?: string | null, binds?: unknown[]): Promise<number> {
-      return (this as unknown as AdapterWithStatements).executeMutation(sql, binds);
+      return (this as unknown as ExecutionMethods).executeMutation(sql, binds);
     }
 
     async execUpdate(sql: string, _name?: string | null, binds?: unknown[]): Promise<number> {
-      return (this as unknown as AdapterWithStatements).executeMutation(sql, binds);
+      return (this as unknown as ExecutionMethods).executeMutation(sql, binds);
     }
 
     isWriteQuery(sql: string): boolean {
-      // Strip block and line comments, then leading parentheses
-      const stripped = sql
-        .replace(/\/\*[\s\S]*?\*\//g, "")
-        .split("\n")
-        .map((line) => {
-          const m = line.match(/(^|[\s])--.*/);
-          if (!m || m.index === undefined) return line;
-          return line.slice(0, m.index + m[1].length);
-        })
-        .join("\n")
-        .replace(/^\s*\(+\s*/, "");
-
-      const match = stripped.match(/^\s*([A-Z]+)\b/i);
-      if (!match) return true;
-      const stmt = match[1].toUpperCase();
-
-      const READ_ONLY =
-        /^(SELECT|EXPLAIN|PRAGMA|SHOW|SET|RESET|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE|DESCRIBE|DESC|USE|KILL)$/;
-      if (READ_ONLY.test(stmt)) return false;
-      if (stmt !== "WITH") return true;
-
-      // CTE: check the statement after the WITH clause
-      const afterWith = stripped.replace(/^\s*WITH\b/i, "").replace(/\([^)]*\)/g, "");
-      const innerMatch = afterWith.match(/\b(SELECT|INSERT|UPDATE|DELETE|MERGE)\b/i);
-      return !innerMatch || innerMatch[1].toUpperCase() !== "SELECT";
+      return isWriteQuerySql(sql);
     }
 
     emptyInsertStatementValue(_pk?: string | null): string {

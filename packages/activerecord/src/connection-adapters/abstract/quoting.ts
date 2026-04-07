@@ -4,6 +4,8 @@
  * Mirrors: ActiveRecord::ConnectionAdapters::Quoting
  */
 
+import { getDefaultTimezone } from "../../type/internal/timezone.js";
+
 /**
  * Quote a SQL identifier (table name, column name, index name).
  * Uses double quotes for SQLite/PG, backticks for MySQL.
@@ -56,8 +58,9 @@ export function quote(value: unknown): string {
   if (typeof value === "string") {
     return `'${quoteString(value)}'`;
   }
-  if (typeof value === "function") {
-    return `'${String(value)}'`;
+  // Rails: when Class then "'#{value}'"
+  if (typeof value === "function" && value.name) {
+    return `'${value.name}'`;
   }
   throw new TypeError(`can't quote ${(value as object).constructor?.name ?? typeof value}`);
 }
@@ -88,12 +91,28 @@ export function castBoundValue(value: unknown): unknown {
 }
 
 /**
- * Look up the cast type from a column's sql_type.
+ * Host interface for quoting methods that need adapter context.
+ */
+export interface QuotingHost {
+  lookupCastType?(sqlType: string): unknown;
+}
+
+/**
+ * Look up the cast type from a column. Delegates to lookupCastType(column.sql_type)
+ * on the adapter, matching Rails' internal delegation chain.
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#lookup_cast_type_from_column
  */
-export function lookupCastTypeFromColumn(column: { sqlType: string | null }): unknown {
-  return column.sqlType;
+export function lookupCastTypeFromColumn(
+  this: QuotingHost | void,
+  column: { sqlType: string | null },
+): unknown {
+  const sqlType = column.sqlType;
+  if (!sqlType) return null;
+  if (this && typeof this === "object" && typeof this.lookupCastType === "function") {
+    return this.lookupCastType(sqlType);
+  }
+  return sqlType;
 }
 
 /**
@@ -169,18 +188,21 @@ export function unquotedFalse(): boolean {
 
 /**
  * Format a date/time value for SQL. Includes microseconds if available.
+ * Respects ActiveRecord.default_timezone (:utc or :local).
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#quoted_date
  */
 export function quotedDate(value: Date): string {
   const pad = (n: number, width = 2) => String(n).padStart(width, "0");
-  const y = value.getUTCFullYear();
-  const m = pad(value.getUTCMonth() + 1);
-  const d = pad(value.getUTCDate());
-  const hh = pad(value.getUTCHours());
-  const mm = pad(value.getUTCMinutes());
-  const ss = pad(value.getUTCSeconds());
-  const ms = value.getUTCMilliseconds();
+  const useUtc = getDefaultTimezone() === "utc";
+
+  const y = useUtc ? value.getUTCFullYear() : value.getFullYear();
+  const m = pad(useUtc ? value.getUTCMonth() + 1 : value.getMonth() + 1);
+  const d = pad(useUtc ? value.getUTCDate() : value.getDate());
+  const hh = pad(useUtc ? value.getUTCHours() : value.getHours());
+  const mm = pad(useUtc ? value.getUTCMinutes() : value.getMinutes());
+  const ss = pad(useUtc ? value.getUTCSeconds() : value.getSeconds());
+  const ms = useUtc ? value.getUTCMilliseconds() : value.getMilliseconds();
 
   let result = `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
   if (ms > 0) {
@@ -195,19 +217,17 @@ export function quotedDate(value: Date): string {
  * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#quoted_time
  */
 export function quotedTime(value: Date): string {
-  const full = quotedDate(
-    new Date(
-      Date.UTC(
-        2000,
-        0,
-        1,
-        value.getUTCHours(),
-        value.getUTCMinutes(),
-        value.getUTCSeconds(),
-        value.getUTCMilliseconds(),
-      ),
-    ),
-  );
+  const useUtc = getDefaultTimezone() === "utc";
+  const h = useUtc ? value.getUTCHours() : value.getHours();
+  const m = useUtc ? value.getUTCMinutes() : value.getMinutes();
+  const s = useUtc ? value.getUTCSeconds() : value.getSeconds();
+  const ms = useUtc ? value.getUTCMilliseconds() : value.getMilliseconds();
+
+  // Build a date at 2000-01-01 with the time components, then format via quotedDate
+  const adjusted = useUtc
+    ? new Date(Date.UTC(2000, 0, 1, h, m, s, ms))
+    : new Date(2000, 0, 1, h, m, s, ms);
+  const full = quotedDate(adjusted);
   return full.replace(/^\d{4}-\d{2}-\d{2} /, "");
 }
 

@@ -82,6 +82,10 @@ describe("QuotingTest", () => {
     expect(quote("lo\\l")).toBe("'lo\\\\l'");
   });
 
+  it("quoting classes", () => {
+    expect(quote(Object)).toBe("'Object'");
+  });
+
   it("quote object instance", () => {
     const object = {};
     expect(() => quote(object)).toThrow(TypeError);

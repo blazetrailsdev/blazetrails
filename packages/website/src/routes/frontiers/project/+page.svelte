@@ -180,9 +180,6 @@
       <div class="flex items-center gap-3">
         <a href="/frontiers" class="text-xs text-text-muted hover:text-accent">← Frontiers</a>
         <h1 class="text-sm font-medium text-text">Sandbox</h1>
-        {#if selectedFile}
-          <span class="text-xs text-text-muted">{selectedFile.path}</span>
-        {/if}
       </div>
     </div>
 

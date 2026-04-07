@@ -1,5 +1,7 @@
 import { defineConfig } from "vitepress";
 
+const siteRoot = process.env.SITE_ROOT || "https://frontiers.deanoftech.com";
+
 export default defineConfig({
   title: "BlazeTrails",
   description: "Rails API for TypeScript",
@@ -10,7 +12,7 @@ export default defineConfig({
   themeConfig: {
     siteTitle: "BlazeTrails",
     nav: [
-      { text: "Home", link: "https://blazetrails.dev" },
+      { text: "Home", link: siteRoot },
       { text: "API Reference", link: "/api/@blazetrails/arel/README" },
     ],
 

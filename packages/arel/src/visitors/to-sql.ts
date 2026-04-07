@@ -332,7 +332,16 @@ export class ToSql implements NodeVisitor<SQLString> {
     if (this.hasJoinSources(node)) {
       const joinSource = node.relation as Nodes.JoinSource;
       if (joinSource.left) {
-        this.visit(joinSource.left);
+        const table = joinSource.left;
+        if (table instanceof Nodes.TableAlias) {
+          this.collector.append(`"${table.name}"`);
+        } else if (table instanceof Table && table.tableAlias) {
+          this.collector.append(`"${table.tableAlias}"`);
+        } else if (table instanceof Table) {
+          this.collector.append(`"${table.name}"`);
+        } else {
+          this.visit(table);
+        }
         this.collector.append(" FROM ");
       } else {
         this.collector.append("FROM ");
@@ -372,8 +381,6 @@ export class ToSql implements NodeVisitor<SQLString> {
       if (this.hasJoinSources(o)) {
         stmt.relation = (o.relation as Nodes.JoinSource).left;
       }
-      if (o.groups.length > 0) stmt.groups = [...o.groups];
-      if (o.havings.length > 0) stmt.havings = [...o.havings];
       return stmt;
     }
     return o;
@@ -391,8 +398,6 @@ export class ToSql implements NodeVisitor<SQLString> {
       if (this.hasJoinSources(o)) {
         stmt.relation = (o.relation as Nodes.JoinSource).left;
       }
-      if (o.groups.length > 0) stmt.groups = [...o.groups];
-      if (o.havings.length > 0) stmt.havings = [...o.havings];
       return stmt;
     }
     return o;
@@ -403,6 +408,8 @@ export class ToSql implements NodeVisitor<SQLString> {
     o: {
       relation: Node | null;
       wheres: Node[];
+      groups: Node[];
+      havings: Node[];
       limit: Node | null;
       offset: Node | null;
       orders: Node[];
@@ -413,6 +420,8 @@ export class ToSql implements NodeVisitor<SQLString> {
     if (o.relation) core.source = new Nodes.JoinSource(o.relation);
     core.wheres = [...o.wheres];
     core.projections = [key];
+    core.groups = [...o.groups];
+    core.havings = [...o.havings];
     stmt.limit = o.limit;
     stmt.offset = o.offset;
     stmt.orders = [...o.orders];
@@ -595,10 +604,15 @@ export class ToSql implements NodeVisitor<SQLString> {
     }
     this.visit(node.attribute);
     this.collector.append(node.type === "in" ? " IN (" : " NOT IN (");
-    const values = node.castedValues;
+    const values = node.right;
     for (let i = 0; i < values.length; i++) {
       if (i > 0) this.collector.append(", ");
-      this.collector.append(this.quote(values[i]));
+      const value = values[i];
+      if (value instanceof Node) {
+        this.visit(value);
+      } else {
+        this.collector.append(this.quote(value));
+      }
     }
     this.collector.append(")");
     return this.collector;

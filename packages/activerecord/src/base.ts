@@ -2198,10 +2198,8 @@ export class Base extends Model {
 
     let sql: string;
     if (columns.length === 0) {
-      // PG supports DEFAULT VALUES, MySQL/SQLite need () VALUES ()
-      sql = process.env.MYSQL_TEST_URL
-        ? `INSERT INTO "${table.name}" () VALUES ()`
-        : `INSERT INTO "${table.name}" DEFAULT VALUES`;
+      const emptyValue = ctor.adapter.emptyInsertStatementValue();
+      sql = `INSERT INTO "${table.name}" ${emptyValue}`;
     } else {
       const im = new InsertManager(table);
       const insertValues: [InstanceType<typeof Nodes.Node>, unknown][] = columns.map((c, i) => {

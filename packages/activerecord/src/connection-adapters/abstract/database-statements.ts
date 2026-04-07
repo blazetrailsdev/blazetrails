@@ -505,9 +505,13 @@ export async function transaction<T>(
   }
 
   // Fallback: simple begin/commit/rollback — delegate through this, preserving context
-  await (this.beginDbTransaction
-    ? this.beginDbTransaction.call(this)
-    : beginDbTransaction.call(this));
+  if (isolation) {
+    await beginDeferredTransaction.call(this, isolation);
+  } else {
+    await (this.beginDbTransaction
+      ? this.beginDbTransaction.call(this)
+      : beginDbTransaction.call(this));
+  }
   try {
     const result = await fn();
     await (this.commitDbTransaction

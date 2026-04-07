@@ -201,6 +201,7 @@
             {#if tab === "editor"}
               <MonacoEditor
                 file={selectedFile}
+                readonly={false}
                 onchange={handleFileChange}
               />
             {:else if tab === "database"}

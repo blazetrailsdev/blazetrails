@@ -66,6 +66,10 @@ export function defineModelCallbacks(this: any, ...args: unknown[]): void {
     }
   }
 
+  if (eventNames.length === 0) {
+    throw new Error("At least one event name must be provided to defineModelCallbacks");
+  }
+
   const timings: CallbackTiming[] = options.only ?? ["before", "after", "around"];
 
   for (const event of eventNames) {

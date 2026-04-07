@@ -152,6 +152,8 @@ export function hasSecurePassword(
           record.errors.add(challengeAttr, "invalid");
         }
       }
+
+      previousDigestCache.delete(record);
     });
   }
 }

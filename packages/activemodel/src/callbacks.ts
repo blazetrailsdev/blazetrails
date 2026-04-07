@@ -39,11 +39,30 @@ export function defineModelCallbacks(this: any, ...args: unknown[]): void {
   let options: DefineModelCallbacksOptions = {};
   const eventNames: string[] = [];
 
-  for (const arg of args) {
+  const validTimings: CallbackTiming[] = ["before", "after", "around"];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
     if (typeof arg === "string") {
       eventNames.push(arg);
-    } else if (arg !== undefined && arg !== null && typeof arg === "object") {
+    } else if (
+      i === args.length - 1 &&
+      arg !== undefined &&
+      arg !== null &&
+      typeof arg === "object" &&
+      !Array.isArray(arg)
+    ) {
       options = arg as DefineModelCallbacksOptions;
+      if (options.only) {
+        for (const t of options.only) {
+          if (!validTimings.includes(t)) {
+            throw new Error(
+              `Invalid callback type: ${t}. Must be one of: ${validTimings.join(", ")}`,
+            );
+          }
+        }
+      }
+    } else if (typeof arg !== "string") {
+      throw new Error(`Expected event name (string), got ${typeof arg}`);
     }
   }
 

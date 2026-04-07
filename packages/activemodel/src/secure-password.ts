@@ -53,7 +53,6 @@ export function hasSecurePassword(
   }
 
   const passwordCache = new WeakMap<object, string | null>();
-  const challengeCache = new WeakMap<object, string | null>();
   const previousDigestCache = new WeakMap<object, string | null>();
 
   Object.defineProperty(modelClass.prototype, attribute, {
@@ -84,14 +83,14 @@ export function hasSecurePassword(
 
   Object.defineProperty(modelClass.prototype, challengeAttr, {
     get(this: Model) {
-      if (challengeCache.has(this)) return challengeCache.get(this) ?? null;
       const val = this.readAttribute(challengeAttr);
       return val === null || val === undefined ? null : String(val);
     },
     set(this: Model, value: unknown) {
-      const normalized = value === null || value === undefined ? null : String(value);
-      challengeCache.set(this, normalized);
-      this.writeAttribute(challengeAttr, normalized);
+      this.writeAttribute(
+        challengeAttr,
+        value === null || value === undefined ? null : String(value),
+      );
     },
     configurable: true,
   });
@@ -141,9 +140,10 @@ export function hasSecurePassword(
         }
       }
 
+      const rawChallenge = record.readAttribute(challengeAttr);
       const challenge =
-        challengeCache.get(record) ?? (record.readAttribute(challengeAttr) as string | null);
-      if (challenge !== undefined && challenge !== null) {
+        rawChallenge === null || rawChallenge === undefined ? null : String(rawChallenge);
+      if (challenge !== null) {
         const currentDigest = record.readAttribute(digestAttr) as string | null;
         const digestToCheck = passwordCache.has(record)
           ? (previousDigestCache.get(record) ?? currentDigest)

@@ -45,17 +45,14 @@ export class LengthValidator implements Validator {
     const errs = errors ?? record.errors;
     if (!shouldValidate(record, this.options)) return;
     if (value === null || value === undefined) {
-      if (this.options.allowNil !== false) return;
-      // Rails: for maximum-only, nil is allowed even without allowNil
-      if (
+      // Rails: nil is always skipped for maximum-only validations
+      const maximumOnly =
         this.options.maximum !== undefined &&
         this.options.minimum === undefined &&
         this.options.is === undefined &&
-        this.options.in === undefined
-      ) {
-        return;
-      }
-      return;
+        this.options.in === undefined;
+      if (this.options.allowNil !== false || maximumOnly) return;
+      // allowNil is explicitly false and not maximum-only — fall through to validate
     }
     if (this.options.allowBlank && isBlank(value)) return;
 
@@ -81,9 +78,10 @@ export class LengthValidator implements Validator {
     let min = this.options.in ? this.options.in[0] : resolveNum(this.options.minimum);
     const max = this.options.in ? this.options.in[1] : resolveNum(this.options.maximum);
 
-    // Rails: implicit minimum: 1 when allow_blank is false and no explicit constraint
+    // Rails: implicit minimum: 1 when allow_blank is false and no explicit constraints
     if (
       min === undefined &&
+      max === undefined &&
       this.options.allowBlank === false &&
       this.options.is === undefined &&
       this.options.in === undefined

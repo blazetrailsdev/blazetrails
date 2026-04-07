@@ -18,6 +18,12 @@ export interface InclusionOptions extends ConditionalOptions {
 export class InclusionValidator implements Validator {
   constructor(private options: InclusionOptions) {}
 
+  checkValidityBang(): void {
+    if (this.options.in === undefined && this.options.within === undefined) {
+      throw new Error("An :in or :within option must be supplied");
+    }
+  }
+
   validate(record: AnyRecord, attribute: string, value: unknown, errors: Errors): void {
     if (!shouldValidate(record, this.options)) return;
     this.validateEach(record, attribute, value, errors);

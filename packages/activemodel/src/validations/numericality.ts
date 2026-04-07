@@ -95,45 +95,46 @@ export class NumericalityValidator implements Validator {
       return;
     }
 
+    const msg = this.options.message;
     const gt = this.resolveNumeric(this.options.greaterThan, record);
     if (gt !== undefined && !(num > gt)) {
-      errs.add(attribute, "greater_than", { count: gt, value });
+      errs.add(attribute, "greater_than", { count: gt, value, message: msg });
     }
     const gte = this.resolveNumeric(this.options.greaterThanOrEqualTo, record);
     if (gte !== undefined && !(num >= gte)) {
-      errs.add(attribute, "greater_than_or_equal_to", { count: gte, value });
+      errs.add(attribute, "greater_than_or_equal_to", { count: gte, value, message: msg });
     }
     const lt = this.resolveNumeric(this.options.lessThan, record);
     if (lt !== undefined && !(num < lt)) {
-      errs.add(attribute, "less_than", { count: lt, value });
+      errs.add(attribute, "less_than", { count: lt, value, message: msg });
     }
     const lte = this.resolveNumeric(this.options.lessThanOrEqualTo, record);
     if (lte !== undefined && !(num <= lte)) {
-      errs.add(attribute, "less_than_or_equal_to", { count: lte, value });
+      errs.add(attribute, "less_than_or_equal_to", { count: lte, value, message: msg });
     }
     const eq = this.resolveNumeric(this.options.equalTo, record);
     if (eq !== undefined && num !== eq) {
-      errs.add(attribute, "equal_to", { count: eq, value });
+      errs.add(attribute, "equal_to", { count: eq, value, message: msg });
     }
     const ot = this.resolveNumeric(this.options.otherThan, record);
     if (ot !== undefined && num === ot) {
-      errs.add(attribute, "other_than", { count: ot, value });
+      errs.add(attribute, "other_than", { count: ot, value, message: msg });
     }
     if (this.options.in !== undefined) {
       const [min, max] = this.options.in;
       if (num < min || num > max) {
         errs.add(attribute, "not_in_range", {
-          message: this.options.message,
+          message: msg,
           value,
           count: `${min}..${max}`,
         });
       }
     }
     if (this.options.odd && num % 2 === 0) {
-      errs.add(attribute, "odd", { value });
+      errs.add(attribute, "odd", { value, message: msg });
     }
     if (this.options.even && num % 2 !== 0) {
-      errs.add(attribute, "even", { value });
+      errs.add(attribute, "even", { value, message: msg });
     }
   }
 }

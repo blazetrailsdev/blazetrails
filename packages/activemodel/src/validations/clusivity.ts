@@ -11,7 +11,7 @@ export interface Clusivity {
   checkValidity(): void;
 }
 
-export function checkValidityBang(options: { in?: unknown }): void {
+export function checkValidityBang(options: { in?: unknown; within?: unknown }): void {
   checkClusivityValidity(options);
 }
 

@@ -25,7 +25,11 @@ export function checkClusivityValidity(options: { in?: unknown; within?: unknown
   if (
     !Array.isArray(collection) &&
     typeof collection !== "function" &&
-    !(typeof collection === "object" && Symbol.iterator in (collection as object))
+    !(
+      typeof collection === "object" &&
+      Symbol.iterator in (collection as object) &&
+      typeof (collection as Record<symbol, unknown>)[Symbol.iterator] === "function"
+    )
   ) {
     throw new Error(
       "An :in or :within option must be supplied (either an Array, a Range, or a Proc)",

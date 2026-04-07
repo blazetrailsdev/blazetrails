@@ -9,8 +9,8 @@ import { isBlank } from "@blazetrails/activesupport";
 import { isMember, checkClusivityValidity } from "./clusivity.js";
 
 export interface ExclusionOptions extends ConditionalOptions {
-  in?: unknown[] | (() => unknown[]);
-  within?: unknown[] | (() => unknown[]);
+  in?: Iterable<unknown> | (() => Iterable<unknown>);
+  within?: Iterable<unknown> | (() => Iterable<unknown>);
   allowNil?: boolean;
   allowBlank?: boolean;
   message?: string;

@@ -200,7 +200,7 @@ describe("InclusionValidationTest", () => {
     class Person extends Model {
       static {
         this.attribute("role", "string");
-        this.validates("role", { inclusion: { in: () => [...new Set(["admin", "user"])] } });
+        this.validates("role", { inclusion: { in: () => new Set(["admin", "user"]) } });
       }
     }
     expect(new Person({ role: "admin" }).isValid()).toBe(true);

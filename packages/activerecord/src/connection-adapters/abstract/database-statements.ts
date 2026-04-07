@@ -454,7 +454,12 @@ export async function truncateTables(
   };
 
   if (this.disableReferentialIntegrity) {
-    await this.disableReferentialIntegrity(doTruncate);
+    let executed = false;
+    await this.disableReferentialIntegrity(async () => {
+      executed = true;
+      await doTruncate();
+    });
+    if (!executed) await doTruncate();
   } else {
     await doTruncate();
   }
@@ -802,7 +807,12 @@ export async function insertFixturesSet(
   // Rails wraps fixture loading in a transaction with requires_new: true
   const doLoadInTransaction = async () => {
     if (this.disableReferentialIntegrity) {
-      await this.disableReferentialIntegrity(doInserts);
+      let executed = false;
+      await this.disableReferentialIntegrity(async () => {
+        executed = true;
+        await doInserts();
+      });
+      if (!executed) await doInserts();
     } else {
       await doInserts();
     }

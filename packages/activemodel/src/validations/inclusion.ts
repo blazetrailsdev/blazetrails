@@ -6,6 +6,7 @@ import type {
 } from "../validator.js";
 import { shouldValidate } from "../validator.js";
 import { isBlank } from "@blazetrails/activesupport";
+import { isMember } from "./clusivity.js";
 
 export interface InclusionOptions extends ConditionalOptions {
   in?: unknown[] | (() => unknown[]);
@@ -35,8 +36,8 @@ export class InclusionValidator implements Validator {
     if (this.options.allowBlank && isBlank(value)) return;
     const inOpt = this.options.in ?? this.options.within;
     if (!inOpt) return;
-    const list = typeof inOpt === "function" ? inOpt() : inOpt;
-    if (!list.includes(value)) {
+    const collection = typeof inOpt === "function" ? inOpt() : inOpt;
+    if (!isMember(collection, value)) {
       errs.add(attribute, "inclusion", { value, message: this.options.message });
     }
   }

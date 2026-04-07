@@ -72,8 +72,8 @@ export class NumericalityValidator implements Validator {
   validateEach(record: AnyRecord, attribute: string, value: unknown, errors?: Errors): void {
     const errs = errors ?? record.errors;
     if (value === null || value === undefined) {
-      if (this.options.allowNil) return;
-      // Default: skip nil (Rails default for numericality)
+      if (this.options.allowNil !== false) return;
+      errs.add(attribute, "not_a_number", { value, message: this.options.message });
       return;
     }
     if (this.options.allowBlank && isBlank(value)) return;
@@ -123,7 +123,7 @@ export class NumericalityValidator implements Validator {
     if (this.options.in !== undefined) {
       const [min, max] = this.options.in;
       if (num < min || num > max) {
-        errs.add(attribute, "not_in_range", {
+        errs.add(attribute, "in", {
           message: msg,
           value,
           count: `${min}..${max}`,

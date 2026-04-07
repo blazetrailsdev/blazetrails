@@ -607,12 +607,7 @@ export class ToSql implements NodeVisitor<SQLString> {
     const values = node.right;
     for (let i = 0; i < values.length; i++) {
       if (i > 0) this.collector.append(", ");
-      const value = values[i];
-      if (value instanceof Node) {
-        this.visit(value);
-      } else {
-        this.collector.append(this.quote(value));
-      }
+      this.visit(values[i]);
     }
     this.collector.append(")");
     return this.collector;

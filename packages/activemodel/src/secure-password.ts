@@ -54,12 +54,14 @@ export function hasSecurePassword(
 
   const passwordCache = new WeakMap<object, string | null>();
   const challengeCache = new WeakMap<object, string | null>();
+  const previousDigestCache = new WeakMap<object, string | null>();
 
   Object.defineProperty(modelClass.prototype, attribute, {
     get(this: Model) {
       return passwordCache.get(this) ?? null;
     },
     set(this: Model, value: unknown) {
+      previousDigestCache.set(this, this.readAttribute(digestAttr) as string | null);
       setPassword(this, value, attribute, digestAttr, passwordCache);
     },
     configurable: true,
@@ -132,8 +134,9 @@ export function hasSecurePassword(
 
       const challenge = challengeCache.get(record);
       if (challenge !== undefined && challenge !== null) {
-        const existingDigest = record.readAttribute(digestAttr) as string | null;
-        if (!existingDigest || !bcrypt.compareSync(challenge, existingDigest)) {
+        const digestToCheck =
+          previousDigestCache.get(record) ?? (record.readAttribute(digestAttr) as string | null);
+        if (!digestToCheck || !bcrypt.compareSync(challenge, digestToCheck)) {
           record.errors.add(challengeAttr, "invalid");
         }
       }

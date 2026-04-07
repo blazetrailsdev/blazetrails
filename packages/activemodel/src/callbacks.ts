@@ -27,16 +27,23 @@ export type Callbacks = CallbacksClassMethods;
  * Mirrors: ActiveModel::Callbacks.define_model_callbacks
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function defineModelCallbacks(this: any, ...eventNames: string[]): void;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function defineModelCallbacks(
+  this: any,
+  ...args: [...string[], DefineModelCallbacksOptions]
+): void;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function defineModelCallbacks(this: any, ...args: unknown[]): void {
   let options: DefineModelCallbacksOptions = {};
-  let eventNames: string[];
+  const eventNames: string[] = [];
 
-  const last = args[args.length - 1];
-  if (last && typeof last === "object" && !Array.isArray(last) && "only" in (last as object)) {
-    options = last as DefineModelCallbacksOptions;
-    eventNames = args.slice(0, -1) as string[];
-  } else {
-    eventNames = args as string[];
+  for (const arg of args) {
+    if (typeof arg === "string") {
+      eventNames.push(arg);
+    } else if (arg !== undefined && arg !== null && typeof arg === "object") {
+      options = arg as DefineModelCallbacksOptions;
+    }
   }
 
   const timings: CallbackTiming[] = options.only ?? ["before", "after", "around"];

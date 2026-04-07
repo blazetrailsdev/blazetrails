@@ -380,6 +380,29 @@ describe("SecurePasswordTest", () => {
     expect(u.errors.get("passwordChallenge")).toContain("is invalid");
   });
 
+  it("password_challenge validates against existing digest before allowing changes", () => {
+    const User = createUserClass();
+    const u = new User({ name: "test" });
+    (u as any).password = "secret";
+    expect(u.isValid()).toBe(true);
+    (u as any).password = "newpassword";
+    (u as any).passwordChallenge = "secret";
+    expect(u.isValid()).toBe(true);
+    expect((u as any).authenticate("newpassword")).toBe(u);
+    expect((u as any).authenticate("secret")).toBe(false);
+  });
+
+  it("password_challenge rejects wrong challenge during password change", () => {
+    const User = createUserClass();
+    const u = new User({ name: "test" });
+    (u as any).password = "secret";
+    expect(u.isValid()).toBe(true);
+    (u as any).password = "newpassword";
+    (u as any).passwordChallenge = "wrongold";
+    expect(u.isValid()).toBe(false);
+    expect(u.errors.get("passwordChallenge")).toContain("is invalid");
+  });
+
   it("password_challenge is not validated when nil", () => {
     const User = createUserClass();
     const u = new User({ name: "test" });

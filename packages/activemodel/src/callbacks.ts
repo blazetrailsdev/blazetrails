@@ -31,10 +31,11 @@ export type Callbacks = CallbacksClassMethods;
  * Mirrors: ActiveModel::Callbacks.define_model_callbacks
  */
 /* eslint-disable @typescript-eslint/no-explicit-any -- mixin `this` must accept any class constructor */
-export function defineModelCallbacks(this: any, ...eventNames: string[]): void;
+export function defineModelCallbacks(this: any, event: string, ...rest: string[]): void;
 export function defineModelCallbacks(
   this: any,
-  ...args: [...string[], DefineModelCallbacksOptions]
+  event: string,
+  ...rest: [...string[], DefineModelCallbacksOptions]
 ): void;
 export function defineModelCallbacks(this: any, ...args: unknown[]): void {
   /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -54,6 +55,12 @@ export function defineModelCallbacks(this: any, ...args: unknown[]): void {
       !Array.isArray(arg)
     ) {
       options = arg as DefineModelCallbacksOptions;
+      const knownKeys = new Set(["only"]);
+      for (const key of Object.keys(options)) {
+        if (!knownKeys.has(key)) {
+          throw new ArgumentError(`Unknown option: ${key}`);
+        }
+      }
       if (options.only) {
         for (const t of options.only) {
           if (!validTimings.includes(t)) {

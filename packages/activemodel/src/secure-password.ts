@@ -90,10 +90,8 @@ export function hasSecurePassword(
       return val === null || val === undefined ? null : String(val);
     },
     set(this: Model, value: unknown) {
-      this.writeAttribute(
-        challengeAttr,
-        value === null || value === undefined ? null : String(value),
-      );
+      const str = value === null || value === undefined ? null : String(value);
+      this.writeAttribute(challengeAttr, str && str.trim() !== "" ? str : null);
     },
     configurable: true,
   });

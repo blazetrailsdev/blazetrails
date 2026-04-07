@@ -290,7 +290,8 @@ export class ToSql implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visitUpdateStatement(node: Nodes.UpdateStatement): SQLString {
+  private visitUpdateStatement(o: Nodes.UpdateStatement): SQLString {
+    const node = this.prepareUpdateStatement(o);
     this.collector.retryable = false;
     this.collector.append("UPDATE ");
     if (node.relation) this.visit(node.relation);
@@ -324,9 +325,21 @@ export class ToSql implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visitDeleteStatement(node: Nodes.DeleteStatement): SQLString {
+  private visitDeleteStatement(o: Nodes.DeleteStatement): SQLString {
+    const node = this.prepareDeleteStatement(o);
     this.collector.retryable = false;
-    this.collector.append("DELETE FROM ");
+    this.collector.append("DELETE ");
+    if (this.hasJoinSources(node)) {
+      const joinSource = node.relation as Nodes.JoinSource;
+      if (joinSource.left) {
+        this.visit(joinSource.left);
+        this.collector.append(" FROM ");
+      } else {
+        this.collector.append("FROM ");
+      }
+    } else {
+      this.collector.append("FROM ");
+    }
     if (node.relation) this.visit(node.relation);
 
     if (node.wheres.length > 0) {
@@ -346,6 +359,76 @@ export class ToSql implements NodeVisitor<SQLString> {
     }
 
     return this.collector;
+  }
+
+  protected prepareUpdateStatement(o: Nodes.UpdateStatement): Nodes.UpdateStatement {
+    if (o.key && (this.hasLimitOrOffsetOrOrders(o) || this.hasJoinSources(o))) {
+      const stmt = o.clone();
+      stmt.limit = null;
+      stmt.offset = null;
+      stmt.orders = [];
+      const columns = new Nodes.Grouping(o.key);
+      stmt.wheres = [new Nodes.In(columns, this.buildSubselect(o.key, o))];
+      if (this.hasJoinSources(o)) {
+        stmt.relation = (o.relation as Nodes.JoinSource).left;
+      }
+      if (o.groups.length > 0) stmt.groups = [...o.groups];
+      if (o.havings.length > 0) stmt.havings = [...o.havings];
+      return stmt;
+    }
+    return o;
+  }
+
+  protected prepareDeleteStatement(o: Nodes.DeleteStatement): Nodes.DeleteStatement {
+    if (o.key && (this.hasLimitOrOffsetOrOrders(o) || this.hasJoinSources(o))) {
+      const stmt = o.clone();
+      stmt.limit = null;
+      stmt.offset = null;
+      stmt.orders = [];
+      const key = Array.isArray(o.key) ? o.key[0] : o.key;
+      const columns = new Nodes.Grouping(key);
+      stmt.wheres = [new Nodes.In(columns, this.buildSubselect(key, o))];
+      if (this.hasJoinSources(o)) {
+        stmt.relation = (o.relation as Nodes.JoinSource).left;
+      }
+      if (o.groups.length > 0) stmt.groups = [...o.groups];
+      if (o.havings.length > 0) stmt.havings = [...o.havings];
+      return stmt;
+    }
+    return o;
+  }
+
+  private buildSubselect(
+    key: Node,
+    o: {
+      relation: Node | null;
+      wheres: Node[];
+      limit: Node | null;
+      offset: Node | null;
+      orders: Node[];
+    },
+  ): Nodes.SelectStatement {
+    const stmt = new Nodes.SelectStatement();
+    const core = stmt.cores[0];
+    if (o.relation) core.source = new Nodes.JoinSource(o.relation);
+    core.wheres = [...o.wheres];
+    core.projections = [key];
+    stmt.limit = o.limit;
+    stmt.offset = o.offset;
+    stmt.orders = [...o.orders];
+    return stmt;
+  }
+
+  private hasJoinSources(o: { relation: Node | null }): boolean {
+    return o.relation instanceof Nodes.JoinSource && o.relation.right.length > 0;
+  }
+
+  private hasLimitOrOffsetOrOrders(o: {
+    limit: Node | null;
+    offset: Node | null;
+    orders: Node[];
+  }): boolean {
+    return !!(o.limit || o.offset || o.orders.length > 0);
   }
 
   // -- Joins --

@@ -55,11 +55,9 @@
 
       // Auto-scaffold a new app if VFS is empty
       if (syncVfs.list().length === 0) {
-        loading = false;
         await scaffoldNewApp();
-      } else {
-        loading = false;
       }
+      loading = false;
     } catch (e: unknown) {
       error = e instanceof Error ? e.message : String(e);
       loading = false;

@@ -607,9 +607,11 @@ export async function beginDeferredTransaction(
 ): Promise<void> {
   const host = this as DatabaseStatementsHost;
   if (isolationLevel) {
+    const levels = transactionIsolationLevels();
+    const normalized = levels[isolationLevel] ?? isolationLevel;
     return host?.beginIsolatedDbTransaction
-      ? host.beginIsolatedDbTransaction.call(host, isolationLevel)
-      : beginIsolatedDbTransaction.call(this, isolationLevel);
+      ? host.beginIsolatedDbTransaction.call(host, normalized)
+      : beginIsolatedDbTransaction.call(this, normalized);
   }
   return host?.beginDbTransaction
     ? host.beginDbTransaction.call(host)
@@ -850,11 +852,10 @@ export function sanitizeLimit(limit: unknown): number | Nodes.SqlLiteral {
   if (limit instanceof Nodes.SqlLiteral) {
     return limit;
   }
-  const parsed = Number(limit);
-  if (!Number.isInteger(parsed)) {
-    throw new TypeError(`Invalid LIMIT: ${limit}`);
+  if (typeof limit === "string" && /^[+-]?\d+$/.test(limit.trim())) {
+    return Number(limit.trim());
   }
-  return parsed;
+  throw new TypeError(`Invalid LIMIT: ${limit}`);
 }
 
 /**

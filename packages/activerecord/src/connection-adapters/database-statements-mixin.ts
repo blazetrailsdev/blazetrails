@@ -57,10 +57,10 @@ export function DatabaseStatementsMixin<T extends Constructor<any>>(Base: T) {
 
     async selectValues(sql: string, _name?: string | null, binds?: unknown[]): Promise<unknown[]> {
       const rows = await (this as unknown as ExecutionMethods).execute(sql, binds);
-      return rows.map((row) => {
-        const keys = Object.keys(row);
-        return keys.length > 0 ? row[keys[0]] : undefined;
-      });
+      if (rows.length === 0) return [];
+      const firstKey = Object.keys(rows[0])[0];
+      if (firstKey === undefined) return rows.map(() => undefined);
+      return rows.map((row) => row[firstKey]);
     }
 
     async selectRows(sql: string, _name?: string | null, binds?: unknown[]): Promise<unknown[][]> {

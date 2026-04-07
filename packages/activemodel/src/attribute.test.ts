@@ -369,4 +369,22 @@ describe("AttributeTest", () => {
     const withDefault = attr.withUserDefault("fallback");
     expect(withDefault.value).toBe("fallback");
   });
+
+  it("from_user came_from_user? checks value_constructed_by_mass_assignment", () => {
+    const stringType = typeRegistry.lookup("string");
+    const attr = Attribute.fromUser("name", "hello", stringType);
+    expect(attr.cameFromUser()).toBe(true);
+  });
+
+  it("from_user came_from_user? returns false when type says value constructed by mass assignment", () => {
+    const customType = Object.create(typeRegistry.lookup("string"));
+    customType.isValueConstructedByMassAssignment = () => true;
+    const attr = Attribute.fromUser("data", '{"key":"val"}', customType);
+    expect(attr.cameFromUser()).toBe(false);
+  });
+
+  it("from_database came_from_user? returns false", () => {
+    const attr = Attribute.fromDatabase("name", "hello", typeRegistry.lookup("string"));
+    expect(attr.cameFromUser()).toBe(false);
+  });
 });

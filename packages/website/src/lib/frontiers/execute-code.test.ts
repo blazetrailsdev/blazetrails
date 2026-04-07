@@ -154,6 +154,77 @@ export class CreatePosts extends Migration {
   });
 });
 
+describe("edit file and verify preview serves updated content", () => {
+  let adapter: SqlJsAdapter;
+  let vfs: VirtualFS;
+  let migrations: MigrationProxy[];
+
+  function registerMigration(proxy: MigrationProxy) {
+    const idx = migrations.findIndex((m) => m.version === proxy.version);
+    if (idx >= 0) migrations[idx] = proxy;
+    else migrations.push(proxy);
+  }
+
+  beforeEach(async () => {
+    const SQL = await initSqlJs();
+    const db = new SQL.Database();
+    adapter = new SqlJsAdapter(db);
+    Base.adapter = adapter;
+    vfs = new VirtualFS(adapter);
+    migrations = [];
+  });
+
+  it("scaffold → edit index.html → preview serves the edit", async () => {
+    const { resolveVfsPath } = await import("./vfs-resolve.js");
+
+    const deps = {
+      Base,
+      Migration,
+      MigrationRunner,
+      Migrator,
+      Schema,
+      ActionController,
+      adapter,
+      appServer: null,
+      registerMigration,
+    };
+
+    const cli = createTrailCLI({
+      vfs,
+      adapter,
+      executeCode: (code: string) => executeCode(code, deps),
+      getMigrations: () => [...migrations],
+      registerMigration,
+      clearMigrations: () => {
+        migrations.length = 0;
+      },
+      getTables: () => adapter.getTables(),
+    });
+
+    // 1. Scaffold a new app
+    const newResult = await cli.exec("new myapp");
+    expect(newResult.success).toBe(true);
+
+    // 2. Verify public/index.html was created with welcome content
+    const reader = {
+      read: (path: string) => vfs.read(path)?.content ?? null,
+      readCompiled: () => null,
+    };
+    const original = resolveVfsPath("index.html", reader);
+    expect(original.found).toBe(true);
+    expect(original.path).toBe("public/index.html");
+    expect(original.content).toContain("Trails");
+
+    // 3. Edit the file (simulates user editing in Monaco + saving)
+    vfs.write("public/index.html", "<html><body><h1>My Custom Page</h1></body></html>");
+
+    // 4. Verify the preview path resolves to the updated content
+    const updated = resolveVfsPath("index.html", reader);
+    expect(updated.found).toBe(true);
+    expect(updated.content).toBe("<html><body><h1>My Custom Page</h1></body></html>");
+  });
+});
+
 describe("generate model + db:migrate end-to-end", () => {
   let adapter: SqlJsAdapter;
   let vfs: VirtualFS;

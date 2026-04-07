@@ -34,8 +34,11 @@ export interface DatabaseStatementsHost {
   disableReferentialIntegrity?(fn: () => Promise<void>): Promise<void>;
   executeBatch?(statements: string[], name?: string): Promise<void>;
   beginDbTransaction?(): Promise<void>;
+  beginIsolatedDbTransaction?(isolation: string): Promise<void>;
   commitDbTransaction?(): Promise<void>;
   rollbackDbTransaction?(): Promise<void>;
+  execRollbackDbTransaction?(): Promise<void>;
+  execRestartDbTransaction?(): Promise<void>;
   emptyInsertStatementValue?(pk?: string | null): string;
   transaction?<T>(fn: (tx?: unknown) => Promise<T> | T, opts?: unknown): Promise<T | undefined>;
   pool?: { schemaMigration?: { tableName: string }; internalMetadata?: { tableName: string } };
@@ -473,11 +476,17 @@ export async function transaction<T>(
 ): Promise<T | undefined> {
   const { requiresNew, isolation, joinable = true } = options;
 
-  if (!requiresNew && joinable && this.currentTransaction?.()?.joinable?.()) {
+  // Check if we can join the current transaction.
+  // joinable may be a boolean property or a function — support both.
+  const currentTxn = this.currentTransaction?.();
+  const currentTxnJoinable =
+    typeof currentTxn?.joinable === "function" ? currentTxn.joinable() : currentTxn?.joinable;
+
+  if (!requiresNew && joinable && currentTxnJoinable) {
     if (isolation) {
       throw new TransactionIsolationError("cannot set isolation when joining a transaction");
     }
-    const userTx = this.currentTransaction().userTransaction;
+    const userTx = currentTxn!.userTransaction;
     try {
       return await fn(userTx);
     } catch (e: any) {
@@ -495,17 +504,20 @@ export async function transaction<T>(
     }
   }
 
-  // Fallback: simple begin/commit/rollback — delegate through this
-  const doBegin = this.beginDbTransaction ?? beginDbTransaction;
-  const doCommit = this.commitDbTransaction ?? commitDbTransaction;
-  const doRollback = this.rollbackDbTransaction ?? rollbackDbTransaction;
-  await doBegin();
+  // Fallback: simple begin/commit/rollback — delegate through this, preserving context
+  await (this.beginDbTransaction
+    ? this.beginDbTransaction.call(this)
+    : beginDbTransaction.call(this));
   try {
     const result = await fn();
-    await doCommit();
+    await (this.commitDbTransaction
+      ? this.commitDbTransaction.call(this)
+      : commitDbTransaction.call(this));
     return result;
   } catch (e: any) {
-    await doRollback();
+    await (this.rollbackDbTransaction
+      ? this.rollbackDbTransaction.call(this)
+      : rollbackDbTransaction.call(this));
     if (e?.name === "Rollback") return undefined;
     throw e;
   }
@@ -580,10 +592,15 @@ export async function beginDeferredTransaction(
   this: DatabaseStatementsHost | void,
   isolationLevel?: string,
 ): Promise<void> {
+  const host = this as DatabaseStatementsHost;
   if (isolationLevel) {
-    return beginIsolatedDbTransaction.call(this, isolationLevel);
+    return host?.beginIsolatedDbTransaction
+      ? host.beginIsolatedDbTransaction.call(host, isolationLevel)
+      : beginIsolatedDbTransaction.call(this, isolationLevel);
   }
-  return beginDbTransaction.call(this);
+  return host?.beginDbTransaction
+    ? host.beginDbTransaction.call(host)
+    : beginDbTransaction.call(this);
 }
 
 /**
@@ -637,7 +654,10 @@ export async function commitDbTransaction(): Promise<void> {
  * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#rollback_db_transaction
  */
 export async function rollbackDbTransaction(this: DatabaseStatementsHost | void): Promise<void> {
-  await execRollbackDbTransaction.call(this);
+  const host = this as DatabaseStatementsHost;
+  await (host?.execRollbackDbTransaction
+    ? host.execRollbackDbTransaction.call(host)
+    : execRollbackDbTransaction.call(this));
 }
 
 /**
@@ -655,7 +675,10 @@ export async function execRollbackDbTransaction(): Promise<void> {
  * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#restart_db_transaction
  */
 export async function restartDbTransaction(this: DatabaseStatementsHost | void): Promise<void> {
-  await execRestartDbTransaction.call(this);
+  const host = this as DatabaseStatementsHost;
+  await (host?.execRestartDbTransaction
+    ? host.execRestartDbTransaction.call(host)
+    : execRestartDbTransaction.call(this));
 }
 
 /**

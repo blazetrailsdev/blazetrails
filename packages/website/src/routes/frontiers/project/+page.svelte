@@ -88,7 +88,7 @@
   });
 
   onDestroy(() => {
-    clearTimeout(writeTimer);
+    saveFile();
     vfs?.dispose();
     adapter?.dispose();
     client?.destroy();
@@ -114,24 +114,34 @@
 
   function handleFileSelect(path: string) {
     if (!vfs) return;
+    saveFile();
     const file = vfs.read(path);
     if (file) {
       selectedFile = { path: file.path, content: file.content };
+      dirty = false;
       activeTab = "files";
     }
   }
 
-  // Debounce editor writes — 300ms after last keystroke
-  let writeTimer: ReturnType<typeof setTimeout> | undefined;
+  let dirty = $state(false);
 
   function handleFileChange(content: string) {
-    if (!vfs || !selectedFile) return;
+    if (!selectedFile) return;
     selectedFile = { ...selectedFile, content };
-    clearTimeout(writeTimer);
-    const path = selectedFile.path;
-    writeTimer = setTimeout(() => {
-      vfs?.write(path, content);
-    }, 300);
+    dirty = true;
+  }
+
+  function saveFile() {
+    if (!vfs || !selectedFile || !dirty) return;
+    vfs.write(selectedFile.path, selectedFile.content);
+    dirty = false;
+  }
+
+  function handleKeydown(e: KeyboardEvent) {
+    if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+      e.preventDefault();
+      saveFile();
+    }
   }
 
   async function runCommand() {
@@ -166,6 +176,8 @@
   });
 
 </script>
+
+<svelte:window onkeydown={handleKeydown} />
 
 <svelte:head>
   <title>Project | Frontiers</title>
@@ -228,10 +240,13 @@
                       title={treeCollapsed ? "Show file tree" : "Hide file tree"}
                     >{treeCollapsed ? "▶" : "◀"}</button>
                     {#if selectedFile}
-                      <span class="ml-2 truncate text-[10px] text-text-muted">{selectedFile.path}</span>
+                      <span class="ml-2 truncate text-[10px] text-text-muted">
+                        {selectedFile.path}{#if dirty}<span class="text-accent"> *</span>{/if}
+                      </span>
                     {/if}
                   </div>
-                  <div class="flex-1 overflow-hidden">
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <div class="flex-1 overflow-hidden" onfocusout={saveFile}>
                     <MonacoEditor
                       file={selectedFile}
                       readonly={false}

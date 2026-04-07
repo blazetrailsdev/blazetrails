@@ -13,6 +13,7 @@ import { SqlJsAdapter } from "./sql-js-adapter.js";
 import { VirtualFS } from "./virtual-fs.js";
 import { CompiledCache } from "./compiled-cache.js";
 import { stripTypes } from "./transpiler.js";
+import { executeCode as executeCodeImpl } from "./execute-code.js";
 import { createTrailCLI, type CliResult } from "./trail-cli.js";
 import { createAppServer, type AppServer } from "./app-server.js";
 import { requestToRackEnvWithBody, rackResponseToFetchResponse } from "./rack-bridge.js";
@@ -44,55 +45,8 @@ let initialized = false;
 
 // ── executeCode ────────────────────────────────────────────────────────
 
-/**
- * Strip import/export declarations so code can run inside new Function().
- * The imports are unnecessary because all @blazetrails globals are injected
- * as function parameters. Exports are converted to plain declarations.
- */
-function prepareCodeForEval(code: string): string {
-  // Remove import statements (the globals are injected as params)
-  code = code.replace(/^\s*import\s+.*?from\s+["'][^"']+["']\s*;?\s*$/gm, "");
-  code = code.replace(/^\s*import\s+["'][^"']+["']\s*;?\s*$/gm, "");
-  // Convert `export class` / `export function` / `export const` to plain declarations
-  code = code.replace(
-    /^\s*export\s+(default\s+)?(class|function|const|let|var|async\s+function)\s/gm,
-    "$2 ",
-  );
-  return code;
-}
-
 async function executeCode(code: string): Promise<unknown> {
-  let prepared = prepareCodeForEval(stripTypes(code));
-
-  // Auto-register Migration subclasses defined in the code.
-  // Appends `registerMigration({ version, filename, migration })` for each
-  // `class Foo extends Migration { static version = "..." }` found.
-  const migrationClasses = [...prepared.matchAll(/class\s+(\w+)\s+extends\s+Migration\b/g)];
-  for (const match of migrationClasses) {
-    const className = match[1];
-    prepared += `\nif (typeof ${className} !== "undefined" && ${className}.version) {
-      registerMigration({
-        version: ${className}.version,
-        name: ${className}.name,
-        filename: "",
-        migration: () => { const m = new ${className}(); m.adapter = adapter; return m; },
-      });
-    }\n`;
-  }
-
-  const fn = new Function(
-    "Base",
-    "Migration",
-    "MigrationRunner",
-    "Migrator",
-    "Schema",
-    "ActionController",
-    "adapter",
-    "app",
-    "registerMigration",
-    `return (async () => { ${prepared} })();`,
-  );
-  return fn(
+  return executeCodeImpl(code, {
     Base,
     Migration,
     MigrationRunner,
@@ -102,7 +56,7 @@ async function executeCode(code: string): Promise<unknown> {
     adapter,
     appServer,
     registerMigration,
-  );
+  });
 }
 
 // ── Migration registry ─────────────────────────────────────────────────

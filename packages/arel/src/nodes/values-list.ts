@@ -4,14 +4,13 @@ import { Unary } from "./unary.js";
 /**
  * ValuesList — VALUES (...), (...), ...
  *
- * Mirrors: Arel::Nodes::ValuesList (extends Unary, rows aliases expr)
+ * Mirrors: Arel::Nodes::ValuesList (extends Unary)
  */
 export class ValuesList extends Unary {
-  constructor(rows: Node[][]) {
-    super(rows as unknown as Node);
-  }
+  readonly rows: Node[][];
 
-  get rows(): Node[][] {
-    return this.expr as unknown as Node[][];
+  constructor(rows: Node[][]) {
+    super(null);
+    this.rows = rows;
   }
 }

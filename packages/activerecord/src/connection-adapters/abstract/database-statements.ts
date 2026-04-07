@@ -4,7 +4,7 @@
  * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements
  */
 
-import { sql as arelSql, type Nodes } from "@blazetrails/arel";
+import { sql as arelSql, Nodes } from "@blazetrails/arel";
 import { TransactionIsolationError } from "../../errors.js";
 import { quote, quoteTableName, quoteColumnName } from "./quoting.js";
 
@@ -50,13 +50,24 @@ export function toSqlAndBinds(
   if (typeof arel === "string") {
     return [arel, binds, preparable, allowRetry];
   }
-  // Arel::TreeManager -> ast
+
+  // Arel::TreeManager -> Arel::Node (unwrap .ast)
   if (arel && typeof (arel as any).ast === "object") {
     arel = (arel as any).ast;
   }
-  if (arel && typeof (arel as any).toSql === "function") {
-    return [(arel as any).toSql(), binds, preparable, allowRetry];
+
+  // Arel node — compile to SQL via toSql()
+  if (arel instanceof Nodes.Node || (arel && typeof (arel as any).toSql === "function")) {
+    if (binds.length > 0) {
+      throw new Error(
+        "Passing bind parameters with an arel AST is forbidden. " +
+          "The values must be stored on the AST directly",
+      );
+    }
+    const sql = (arel as any).toSql();
+    return [sql, [], preparable, allowRetry];
   }
+
   throw new TypeError("Cannot convert to SQL");
 }
 
@@ -728,8 +739,8 @@ export function sanitizeLimit(limit: unknown): number | Nodes.SqlLiteral {
   if (typeof limit === "number" && Number.isInteger(limit)) {
     return limit;
   }
-  if (limit && typeof limit === "object" && (limit as any).constructor?.name === "SqlLiteral") {
-    return limit as Nodes.SqlLiteral;
+  if (limit instanceof Nodes.SqlLiteral) {
+    return limit;
   }
   const parsed = Number(limit);
   if (!Number.isInteger(parsed)) {

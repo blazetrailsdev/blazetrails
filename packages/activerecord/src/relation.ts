@@ -1442,7 +1442,7 @@ export class Relation<T extends Base> {
       await this._executeEagerLoad();
     } else {
       const sql = this._toSql();
-      const rows = await this._modelClass.adapter.execute(sql);
+      const rows = await this._modelClass.adapter.selectAll(sql, "Load");
       this._records = rows.map((row) => this._modelClass._instantiate(row) as T);
     }
     this._loaded = true;
@@ -1477,7 +1477,7 @@ export class Relation<T extends Base> {
       !this._fromClause.isEmpty()
     ) {
       const sql = this._toSql();
-      const rows = await this._modelClass.adapter.execute(sql);
+      const rows = await this._modelClass.adapter.selectAll(sql, "Eager Load");
       this._records = rows.map((row) => this._modelClass._instantiate(row) as T);
       await this._preloadAssociationsForRecords(this._records, this._eagerLoadAssociations);
       return;
@@ -1844,7 +1844,7 @@ export class Relation<T extends Base> {
       um.where(arelSql(cond));
     }
 
-    return this._modelClass.adapter.executeMutation(um.toSql());
+    return this._modelClass.adapter.execUpdate(um.toSql(), "Update All");
   }
 
   /**
@@ -1874,7 +1874,7 @@ export class Relation<T extends Base> {
       dm.where(arelSql(cond));
     }
 
-    return this._modelClass.adapter.executeMutation(dm.toSql());
+    return this._modelClass.adapter.execDelete(dm.toSql(), "Delete All");
   }
 
   /**

@@ -250,4 +250,62 @@ export class QueryCacheAdapter implements DatabaseAdapter {
     }
     return "EXPLAIN is not supported by the underlying adapter";
   }
+
+  // --- DatabaseStatements delegation ---
+
+  async selectAll(
+    sql: string,
+    name?: string | null,
+    binds?: unknown[],
+  ): Promise<Record<string, unknown>[]> {
+    return this.inner.selectAll(sql, name, binds);
+  }
+
+  async selectOne(
+    sql: string,
+    name?: string | null,
+    binds?: unknown[],
+  ): Promise<Record<string, unknown> | undefined> {
+    return this.inner.selectOne(sql, name, binds);
+  }
+
+  async selectValue(sql: string, name?: string | null, binds?: unknown[]): Promise<unknown> {
+    return this.inner.selectValue(sql, name, binds);
+  }
+
+  async selectValues(sql: string, name?: string | null, binds?: unknown[]): Promise<unknown[]> {
+    return this.inner.selectValues(sql, name, binds);
+  }
+
+  async selectRows(sql: string, name?: string | null, binds?: unknown[]): Promise<unknown[][]> {
+    return this.inner.selectRows(sql, name, binds);
+  }
+
+  async execQuery(
+    sql: string,
+    name?: string | null,
+    binds?: unknown[],
+  ): Promise<Record<string, unknown>[]> {
+    return this.inner.execQuery(sql, name, binds);
+  }
+
+  async execInsert(sql: string, name?: string | null, binds?: unknown[]): Promise<unknown> {
+    return this.inner.execInsert(sql, name, binds);
+  }
+
+  async execDelete(sql: string, name?: string | null, binds?: unknown[]): Promise<number> {
+    return this.inner.execDelete(sql, name, binds);
+  }
+
+  async execUpdate(sql: string, name?: string | null, binds?: unknown[]): Promise<number> {
+    return this.inner.execUpdate(sql, name, binds);
+  }
+
+  isWriteQuery(sql: string): boolean {
+    return this.inner.isWriteQuery(sql);
+  }
+
+  emptyInsertStatementValue(pk?: string | null): string {
+    return this.inner.emptyInsertStatementValue(pk);
+  }
 }

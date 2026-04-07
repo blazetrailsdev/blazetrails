@@ -997,10 +997,10 @@ export class Base extends Model {
 
     manager.take(1);
     const sql = manager.toSql();
-    const rows = await this.adapter.execute(sql);
-    if (rows.length === 0) return null;
+    const row = await this.adapter.selectOne(sql, "Find");
+    if (!row) return null;
 
-    return this._instantiate(rows[0]);
+    return this._instantiate(row);
   }
 
   /**
@@ -2213,11 +2213,13 @@ export class Base extends Model {
       im.insert(insertValues);
       sql = im.toSql();
     }
-    this._pendingOperation = ctor.adapter.executeMutation(sql).then((insertedId) => {
-      if (!Array.isArray(ctor.primaryKey) && this.id === null) {
-        this._attributes.set(ctor.primaryKey, insertedId);
-      }
-    });
+    this._pendingOperation = (ctor.adapter.execInsert(sql, "Insert") as Promise<number>).then(
+      (insertedId) => {
+        if (!Array.isArray(ctor.primaryKey) && this.id === null) {
+          this._attributes.set(ctor.primaryKey, insertedId);
+        }
+      },
+    );
   }
 
   private _performUpdate(): void {
@@ -2283,7 +2285,7 @@ export class Base extends Model {
       }
     }
 
-    this._pendingOperation = ctor.adapter.executeMutation(um.toSql()).then((affected) => {
+    this._pendingOperation = ctor.adapter.execUpdate(um.toSql(), "Update").then((affected) => {
       if (ctor.lockingEnabled && affected === 0) {
         throw new StaleObjectError(this, "update");
       }
@@ -2370,7 +2372,7 @@ export class Base extends Model {
           }
         }
 
-        const affected = await ctor.adapter.executeMutation(dm.toSql());
+        const affected = await ctor.adapter.execDelete(dm.toSql(), "Destroy");
         if (ctor.lockingEnabled && affected === 0) {
           throw new StaleObjectError(this, "destroy");
         }
@@ -2429,7 +2431,7 @@ export class Base extends Model {
     }
 
     const dm = new DeleteManager().from(table).where(ctor._buildPkWhereNode(pk));
-    await ctor.adapter.executeMutation(dm.toSql());
+    await ctor.adapter.execDelete(dm.toSql(), "Delete");
 
     this._destroyed = true;
     this._frozen = true;
@@ -2443,7 +2445,7 @@ export class Base extends Model {
    */
   static async delete(id: unknown): Promise<number> {
     const dm = new DeleteManager().from(this.arelTable).where(this._buildPkWhereNode(id));
-    return this.adapter.executeMutation(dm.toSql());
+    return this.adapter.execDelete(dm.toSql(), "Delete");
   }
 
   /**
@@ -2454,7 +2456,7 @@ export class Base extends Model {
   async reload(): Promise<this> {
     const ctor = this.constructor as typeof Base;
     const sm = ctor.arelTable.project(arelStar).where(ctor._buildPkWhereNode(this.id));
-    const row = await ctor.adapter.execute(sm.toSql());
+    const row = await ctor.adapter.selectAll(sm.toSql(), "Reload");
 
     if (row.length === 0) {
       throw new RecordNotFound(
@@ -2647,7 +2649,7 @@ export class Base extends Model {
       .join(", ");
 
     const sql = `UPDATE "${table.name}" SET ${setClauses} WHERE ${ctor._buildPkWhere(this.id)}`;
-    await ctor.adapter.executeMutation(sql);
+    await ctor.adapter.execUpdate(sql, "Update Columns");
 
     // Reset dirty tracking to reflect the new persisted state
     this.changesApplied();

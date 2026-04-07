@@ -72,7 +72,7 @@ export function toSqlAndBinds(
   }
 
   // Arel::TreeManager -> Arel::Node (unwrap .ast)
-  if (arel && typeof (arel as any).ast === "object") {
+  if (arel && (arel as any).ast != null && typeof (arel as any).ast === "object") {
     arel = (arel as any).ast;
   }
 
@@ -529,6 +529,10 @@ export async function transaction<T>(
       : rollbackDbTransaction.call(this));
     if (e?.name === "Rollback") return undefined;
     throw e;
+  } finally {
+    if (isolation) {
+      await (this as any).resetIsolationLevel?.call(this);
+    }
   }
 }
 

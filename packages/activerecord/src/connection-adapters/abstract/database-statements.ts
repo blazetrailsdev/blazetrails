@@ -472,7 +472,6 @@ export async function transaction<T>(
   options: { requiresNew?: boolean; isolation?: string; joinable?: boolean } = {},
 ): Promise<T | undefined> {
   const { requiresNew, isolation, joinable = true } = options;
-  const host = this as any;
 
   if (!requiresNew && joinable && this.currentTransaction?.()?.joinable?.()) {
     if (isolation) {
@@ -748,10 +747,15 @@ export async function insertFixturesSet(
     if (fixtures.length === 0) continue;
     for (const fixture of fixtures) {
       const columns = Object.keys(fixture);
-      const values = Object.values(fixture).map((v) => quote(withYamlFallback(v)));
-      insertStatements.push(
-        `INSERT INTO ${quoteTableName(tableName)} (${columns.map((c) => quoteColumnName(c)).join(", ")}) VALUES (${values.join(", ")})`,
-      );
+      if (columns.length === 0) {
+        const emptyValue = this.emptyInsertStatementValue?.() ?? emptyInsertStatementValue();
+        insertStatements.push(`INSERT INTO ${quoteTableName(tableName)} ${emptyValue}`);
+      } else {
+        const values = Object.values(fixture).map((v) => quote(withYamlFallback(v)));
+        insertStatements.push(
+          `INSERT INTO ${quoteTableName(tableName)} (${columns.map((c) => quoteColumnName(c)).join(", ")}) VALUES (${values.join(", ")})`,
+        );
+      }
     }
   }
 

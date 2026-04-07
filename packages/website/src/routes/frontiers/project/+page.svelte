@@ -80,6 +80,9 @@
     try {
       const result = await runtimeProxy.exec("new myapp");
       cliOutput = [...cliOutput, ...result.output];
+      // Explicitly rehydrate after scaffold — don't rely on broadcast timing
+      await vfs?.hydrate();
+      await adapter?.hydrate();
     } catch (e: unknown) {
       cliOutput = [...cliOutput, `Error: ${e instanceof Error ? e.message : String(e)}`];
     } finally {

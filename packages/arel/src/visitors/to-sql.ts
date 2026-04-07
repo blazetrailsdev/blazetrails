@@ -325,7 +325,7 @@ export class ToSql implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visitDeleteStatement(o: Nodes.DeleteStatement): SQLString {
+  protected visitDeleteStatement(o: Nodes.DeleteStatement): SQLString {
     const node = this.prepareDeleteStatement(o);
     this.collector.retryable = false;
     this.collector.append("DELETE ");

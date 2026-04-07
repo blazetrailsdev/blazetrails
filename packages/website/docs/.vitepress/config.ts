@@ -1,15 +1,16 @@
 import { defineConfig } from "vitepress";
 
 export default defineConfig({
-  title: "Trails",
+  title: "BlazeTrails",
   description: "Rails API for TypeScript",
   base: "/docs/",
   outDir: "../build/docs",
   cleanUrls: false,
 
   themeConfig: {
+    siteTitle: "BlazeTrails",
     nav: [
-      { text: "Home", link: "/" },
+      { text: "Home", link: "https://blazetrails.dev" },
       { text: "API Reference", link: "/api/@blazetrails/arel/README" },
     ],
 

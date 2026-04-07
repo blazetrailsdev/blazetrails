@@ -1,9 +1,9 @@
 ---
 layout: home
 hero:
-  name: Trails
+  name: BlazeTrails
   text: Rails API for TypeScript
-  tagline: A set of TypeScript packages that mirror the Rails API as closely as possible.
+  tagline: TypeScript packages that mirror the Rails API. trails is the CLI.
   actions:
     - theme: brand
       text: API Reference

@@ -7,7 +7,7 @@ hero:
   actions:
     - theme: brand
       text: API Reference
-      link: /api/
+      link: /api/@blazetrails/arel/README
     - theme: alt
       text: GitHub
       link: https://github.com/blazetrailsdev/trails

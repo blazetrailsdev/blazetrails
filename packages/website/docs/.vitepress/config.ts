@@ -5,12 +5,12 @@ export default defineConfig({
   description: "Rails API for TypeScript",
   base: "/docs/",
   outDir: "../build/docs",
-  cleanUrls: true,
+  cleanUrls: false,
 
   themeConfig: {
     nav: [
       { text: "Home", link: "/" },
-      { text: "API Reference", link: "/api/" },
+      { text: "API Reference", link: "/api/@blazetrails/arel/README" },
     ],
 
     sidebar: {
@@ -18,12 +18,12 @@ export default defineConfig({
         {
           text: "Packages",
           items: [
-            { text: "Arel", link: "/api/@blazetrails/arel/" },
-            { text: "ActiveModel", link: "/api/@blazetrails/activemodel/" },
-            { text: "ActiveRecord", link: "/api/@blazetrails/activerecord/" },
-            { text: "ActiveSupport", link: "/api/@blazetrails/activesupport/" },
-            { text: "Rack", link: "/api/@blazetrails/rack/" },
-            { text: "ActionPack", link: "/api/@blazetrails/actionpack/" },
+            { text: "Arel", link: "/api/@blazetrails/arel/README" },
+            { text: "ActiveModel", link: "/api/@blazetrails/activemodel/README" },
+            { text: "ActiveRecord", link: "/api/@blazetrails/activerecord/README" },
+            { text: "ActiveSupport", link: "/api/@blazetrails/activesupport/README" },
+            { text: "Rack", link: "/api/@blazetrails/rack/README" },
+            { text: "ActionPack", link: "/api/@blazetrails/actionpack/README" },
           ],
         },
       ],

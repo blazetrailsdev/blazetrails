@@ -289,7 +289,9 @@ export class QueryCacheAdapter implements DatabaseAdapter {
 
   async selectRows(sql: string, _name?: string | null, binds?: unknown[]): Promise<unknown[][]> {
     const rows = await this.execute(sql, binds);
-    return rows.map((row) => Object.values(row));
+    if (rows.length === 0) return [];
+    const keys = Object.keys(rows[0]);
+    return rows.map((row) => keys.map((key) => row[key]));
   }
 
   async execQuery(

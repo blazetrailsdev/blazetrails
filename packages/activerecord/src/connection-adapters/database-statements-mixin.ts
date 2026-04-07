@@ -52,7 +52,9 @@ export function DatabaseStatementsMixin<T extends new (...args: any[]) => any>(B
 
     async selectRows(sql: string, _name?: string | null, binds?: unknown[]): Promise<unknown[][]> {
       const rows = await (this as unknown as AdapterWithStatements).execute(sql, binds);
-      return rows.map((row) => Object.values(row));
+      if (rows.length === 0) return [];
+      const keys = Object.keys(rows[0]);
+      return rows.map((row) => keys.map((key) => row[key]));
     }
 
     async execQuery(

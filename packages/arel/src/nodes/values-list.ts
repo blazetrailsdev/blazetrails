@@ -1,19 +1,17 @@
-import { Node, NodeVisitor } from "./node.js";
+import { Node } from "./node.js";
+import { Unary } from "./unary.js";
 
 /**
  * ValuesList — VALUES (...), (...), ...
  *
- * Mirrors: Arel::Nodes::ValuesList
+ * Mirrors: Arel::Nodes::ValuesList (extends Unary, rows aliases expr)
  */
-export class ValuesList extends Node {
-  readonly rows: Node[][];
-
+export class ValuesList extends Unary {
   constructor(rows: Node[][]) {
-    super();
-    this.rows = rows;
+    super(rows as unknown as Node);
   }
 
-  accept<T>(visitor: NodeVisitor<T>): T {
-    return visitor.visit(this);
+  get rows(): Node[][] {
+    return this.expr as unknown as Node[][];
   }
 }

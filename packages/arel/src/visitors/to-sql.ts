@@ -1061,9 +1061,9 @@ export class ToSql implements NodeVisitor<SQLString> {
   // -- Filter --
 
   private visitFilter(node: Nodes.Filter): SQLString {
-    this.visit(node.expression);
+    this.visitNodeOrValue(node.left);
     this.collector.append(" FILTER (WHERE ");
-    this.visit(node.filter);
+    this.visitNodeOrValue(node.right);
     this.collector.append(")");
     return this.collector;
   }

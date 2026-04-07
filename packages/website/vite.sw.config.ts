@@ -18,7 +18,10 @@ function prependImportScripts() {
       for (const file of Object.values(bundle)) {
         if (file.type === "chunk" && file.code) {
           file.code =
-            'importScripts("/sql-wasm.js");\n' + "var __external_stub = {};\n" + file.code;
+            'importScripts("/sql-wasm.js");\n' +
+            "var __external_stub = new Proxy({}, { get: () => __external_stub });\n" +
+            "var process = { env: {} };\n" +
+            file.code;
         }
       }
     },

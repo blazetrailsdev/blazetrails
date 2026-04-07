@@ -120,8 +120,7 @@ export class MySQL extends ToSql {
   protected override visitNullsFirst(node: Nodes.NullsFirst): SQLString {
     // MySQL has no NULLS FIRST; emulate: col IS NOT NULL, col ASC/DESC
     const ordering = node.expr as Nodes.Ascending | Nodes.Descending;
-    const column = ordering.expr;
-    if (column instanceof Node) this.visit(column);
+    this.visitNodeOrValue(ordering.expr);
     this.collector.append(" IS NOT NULL, ");
     this.visit(ordering);
     return this.collector;
@@ -130,8 +129,7 @@ export class MySQL extends ToSql {
   protected override visitNullsLast(node: Nodes.NullsLast): SQLString {
     // MySQL has no NULLS LAST; emulate: col IS NULL, col ASC/DESC
     const ordering = node.expr as Nodes.Ascending | Nodes.Descending;
-    const column = ordering.expr;
-    if (column instanceof Node) this.visit(column);
+    this.visitNodeOrValue(ordering.expr);
     this.collector.append(" IS NULL, ");
     this.visit(ordering);
     return this.collector;

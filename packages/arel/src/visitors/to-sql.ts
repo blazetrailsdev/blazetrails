@@ -880,7 +880,7 @@ export class ToSql implements NodeVisitor<SQLString> {
     }
     if (node.default) {
       this.collector.append(" ELSE ");
-      this.visit(node.default.expr as Node);
+      this.visitNodeOrValue(node.default.expr);
     }
     this.collector.append(" END");
     return this.collector;

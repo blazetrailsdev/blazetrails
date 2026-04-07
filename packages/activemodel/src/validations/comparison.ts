@@ -56,7 +56,7 @@ export class ComparisonValidator implements Validator {
     const errs = errors ?? record.errors;
     if (value === null || value === undefined) return;
     if (typeof value === "string" && isBlank(value)) {
-      errs.add(attribute, "blank", { value });
+      errs.add(attribute, "blank", { value, message: this.options.message });
       return;
     }
 

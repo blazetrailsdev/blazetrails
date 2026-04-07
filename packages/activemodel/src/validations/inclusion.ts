@@ -6,7 +6,7 @@ import type {
 } from "../validator.js";
 import { shouldValidate } from "../validator.js";
 import { isBlank } from "@blazetrails/activesupport";
-import { isMember } from "./clusivity.js";
+import { isMember, checkClusivityValidity } from "./clusivity.js";
 
 export interface InclusionOptions extends ConditionalOptions {
   in?: unknown[] | (() => unknown[]);
@@ -20,9 +20,7 @@ export class InclusionValidator implements Validator {
   constructor(private options: InclusionOptions) {}
 
   checkValidityBang(): void {
-    if (this.options.in == null && this.options.within == null) {
-      throw new Error("An :in or :within option must be supplied");
-    }
+    checkClusivityValidity(this.options);
   }
 
   validate(record: AnyRecord, attribute: string, value: unknown, errors: Errors): void {

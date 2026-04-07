@@ -13,14 +13,31 @@ import { quote, quoteTableName, quoteColumnName } from "./quoting.js";
  */
 export interface DatabaseStatementsHost {
   preparedStatements?: boolean;
+  execute?(sql: string, name?: string | null): Promise<unknown>;
+  selectAll?(
+    sql: string,
+    name?: string | null,
+    binds?: unknown[],
+  ): Promise<Record<string, unknown>[]>;
   internalExecute?(sql: string, name?: string, binds?: unknown[]): Promise<unknown>;
   rawExecute?(sql: string, name?: string, binds?: unknown[]): Promise<unknown>;
   castResult?(rawResult: unknown): { rows: unknown[][] };
   affectedRows?(rawResult: unknown): number;
   isWriteQuery?(sql: string): boolean;
-  currentTransaction?(): { open: boolean; written?: boolean; joinable?(): boolean };
+  currentTransaction?(): {
+    open: boolean;
+    written?: boolean;
+    joinable?(): boolean;
+    userTransaction?: unknown;
+  };
+  withinNewTransaction?<T>(opts: unknown, fn: (tx?: unknown) => Promise<T> | T): Promise<T>;
   disableReferentialIntegrity?(fn: () => Promise<void>): Promise<void>;
   executeBatch?(statements: string[], name?: string): Promise<void>;
+  beginDbTransaction?(): Promise<void>;
+  commitDbTransaction?(): Promise<void>;
+  rollbackDbTransaction?(): Promise<void>;
+  emptyInsertStatementValue?(pk?: string | null): string;
+  transaction?<T>(fn: (tx?: unknown) => Promise<T> | T, opts?: unknown): Promise<T | undefined>;
   pool?: { schemaMigration?: { tableName: string }; internalMetadata?: { tableName: string } };
 }
 
@@ -79,11 +96,25 @@ export function toSqlAndBinds(
  */
 export function cacheableQuery(
   this: DatabaseStatementsHost | void,
-  klass: { query?(sql: string): unknown; partialQuery?(parts: unknown): unknown },
+  klass: {
+    query?(sql: string): unknown;
+    partialQuery?(parts: unknown): unknown;
+    partialQueryCollector?(): unknown;
+  },
   arel: unknown,
 ): [unknown, unknown[]] {
-  // Compile the arel to SQL
+  const host = this as DatabaseStatementsHost;
   const [sql, binds] = toSqlAndBinds(arel);
+
+  if (host?.preparedStatements && klass.query) {
+    return [klass.query(sql), binds as unknown[]];
+  }
+
+  if (klass.partialQuery) {
+    return [klass.partialQuery(sql), binds as unknown[]];
+  }
+
+  // Fallback: use query if available, otherwise raw SQL
   const queryObj = klass.query ? klass.query(sql) : sql;
   return [queryObj, binds as unknown[]];
 }
@@ -109,11 +140,13 @@ export function selectAll(
  * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#select_one
  */
 export function selectOne(
+  this: DatabaseStatementsHost | void,
   sql: string,
   name?: string | null,
   binds?: unknown[],
 ): Promise<Record<string, unknown> | undefined> {
-  return selectAll(sql, name, binds).then((rows) => rows[0]);
+  const doSelect = (this as DatabaseStatementsHost)?.selectAll ?? selectAll;
+  return doSelect(sql, name, binds).then((rows) => rows[0]);
 }
 
 /**
@@ -122,11 +155,12 @@ export function selectOne(
  * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#select_value
  */
 export function selectValue(
+  this: DatabaseStatementsHost | void,
   sql: string,
   name?: string | null,
   binds?: unknown[],
 ): Promise<unknown> {
-  return selectRows(sql, name, binds).then((rows) => singleValueFromRows(rows));
+  return selectRows.call(this, sql, name, binds).then((rows) => singleValueFromRows(rows));
 }
 
 /**
@@ -135,11 +169,12 @@ export function selectValue(
  * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#select_values
  */
 export function selectValues(
+  this: DatabaseStatementsHost | void,
   sql: string,
   name?: string | null,
   binds?: unknown[],
 ): Promise<unknown[]> {
-  return selectRows(sql, name, binds).then((rows) => rows.map((row) => row[0]));
+  return selectRows.call(this, sql, name, binds).then((rows) => rows.map((row) => row[0]));
 }
 
 /**
@@ -148,11 +183,13 @@ export function selectValues(
  * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#select_rows
  */
 export function selectRows(
+  this: DatabaseStatementsHost | void,
   sql: string,
   name?: string | null,
   binds?: unknown[],
 ): Promise<unknown[][]> {
-  return selectAll(sql, name, binds).then((rows) => rows.map((row) => Object.values(row)));
+  const doSelect = (this as DatabaseStatementsHost)?.selectAll ?? selectAll;
+  return doSelect(sql, name, binds).then((rows) => rows.map((row) => Object.values(row)));
 }
 
 /**
@@ -261,7 +298,8 @@ export async function execDelete(
     const result = await host.internalExecute(sql, name ?? "SQL", binds);
     return host.affectedRows ? host.affectedRows(result) : (result as number);
   }
-  return execute(sql, name) as Promise<number>;
+  const doExecute = host?.execute ?? execute;
+  return doExecute(sql, name) as Promise<number>;
 }
 
 /**
@@ -280,7 +318,8 @@ export async function execUpdate(
     const result = await host.internalExecute(sql, name ?? "SQL", binds);
     return host.affectedRows ? host.affectedRows(result) : (result as number);
   }
-  return execute(sql, name) as Promise<number>;
+  const doExecute = host?.execute ?? execute;
+  return doExecute(sql, name) as Promise<number>;
 }
 
 /**
@@ -371,7 +410,8 @@ export async function truncate(
   name?: string | null,
 ): Promise<unknown> {
   const sql = `TRUNCATE TABLE ${quoteTableName(tableName)}`;
-  return execute(sql, name);
+  const doExecute = (this as DatabaseStatementsHost)?.execute ?? execute;
+  return doExecute(sql, name);
 }
 
 /**
@@ -393,12 +433,13 @@ export async function truncateTables(
 
   const statements = filtered.map((t) => `TRUNCATE TABLE ${quoteTableName(t)}`);
 
+  const doExecute = this.execute ?? execute;
   const doTruncate = async () => {
     if (this.executeBatch) {
       await this.executeBatch(statements, "Truncate Tables");
     } else {
       for (const stmt of statements) {
-        await execute(stmt, "Truncate Tables");
+        await doExecute(stmt, "Truncate Tables");
       }
     }
   };
@@ -427,11 +468,11 @@ export async function transaction<T>(
   const { requiresNew, isolation, joinable = true } = options;
   const host = this as any;
 
-  if (!requiresNew && host.currentTransaction?.()?.joinable?.()) {
+  if (!requiresNew && this.currentTransaction?.()?.joinable?.()) {
     if (isolation) {
       throw new TransactionIsolationError("cannot set isolation when joining a transaction");
     }
-    const userTx = host.currentTransaction().userTransaction;
+    const userTx = this.currentTransaction().userTransaction;
     try {
       return await fn(userTx);
     } catch (e: any) {
@@ -440,23 +481,26 @@ export async function transaction<T>(
     }
   }
 
-  if (host.withinNewTransaction) {
+  if (this.withinNewTransaction) {
     try {
-      return await host.withinNewTransaction({ isolation, joinable }, fn);
+      return await this.withinNewTransaction({ isolation, joinable }, fn);
     } catch (e: any) {
       if (e?.name === "Rollback") return undefined;
       throw e;
     }
   }
 
-  // Fallback: simple begin/commit/rollback
-  await beginDbTransaction.call(this);
+  // Fallback: simple begin/commit/rollback — delegate through this
+  const doBegin = this.beginDbTransaction ?? beginDbTransaction;
+  const doCommit = this.commitDbTransaction ?? commitDbTransaction;
+  const doRollback = this.rollbackDbTransaction ?? rollbackDbTransaction;
+  await doBegin();
   try {
     const result = await fn();
-    await commitDbTransaction.call(this);
+    await doCommit();
     return result;
   } catch (e: any) {
-    await rollbackDbTransaction.call(this);
+    await doRollback();
     if (e?.name === "Rollback") return undefined;
     throw e;
   }
@@ -667,15 +711,18 @@ export async function insertFixture(
   fixture: Record<string, unknown>,
   tableName: string,
 ): Promise<unknown> {
+  const host = this as DatabaseStatementsHost;
   const columns = Object.keys(fixture);
   const values = Object.values(fixture).map((v) => quote(withYamlFallback(v)));
 
+  const emptyValue = host?.emptyInsertStatementValue?.() ?? emptyInsertStatementValue();
   const sql =
     columns.length > 0
       ? `INSERT INTO ${quoteTableName(tableName)} (${columns.map((c) => quoteColumnName(c)).join(", ")}) VALUES (${values.join(", ")})`
-      : `INSERT INTO ${quoteTableName(tableName)} DEFAULT VALUES`;
+      : `INSERT INTO ${quoteTableName(tableName)} ${emptyValue}`;
 
-  return execute(sql, "Fixture Insert");
+  const doExecute = host?.execute ?? execute;
+  return doExecute(sql, "Fixture Insert");
 }
 
 /**
@@ -704,20 +751,30 @@ export async function insertFixturesSet(
 
   const allStatements = [...deleteStatements, ...insertStatements];
 
+  const doExecute = this.execute ?? execute;
   const doInserts = async () => {
     if (this.executeBatch) {
       await this.executeBatch(allStatements, "Fixtures Load");
     } else {
       for (const stmt of allStatements) {
-        await execute(stmt, "Fixtures Load");
+        await doExecute(stmt, "Fixtures Load");
       }
     }
   };
 
-  if (this.disableReferentialIntegrity) {
-    await this.disableReferentialIntegrity(doInserts);
+  // Rails wraps fixture loading in a transaction with requires_new: true
+  const doLoadInTransaction = async () => {
+    if (this.disableReferentialIntegrity) {
+      await this.disableReferentialIntegrity(doInserts);
+    } else {
+      await doInserts();
+    }
+  };
+
+  if (this.transaction) {
+    await this.transaction(doLoadInTransaction, { requiresNew: true });
   } else {
-    await doInserts();
+    await doLoadInTransaction();
   }
 }
 
@@ -750,7 +807,8 @@ export function sanitizeLimit(limit: unknown): number | Nodes.SqlLiteral {
 }
 
 /**
- * Converts Hash/Array fixture values to YAML strings, passes scalars through.
+ * Converts Array/object fixture values to JSON strings, passes scalars through.
+ * Rails uses YAML.dump; we use JSON.stringify as the TS equivalent.
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#with_yaml_fallback
  */
@@ -809,8 +867,9 @@ export async function internalExecQuery(
     const rawResult = await this.internalExecute(sql, name ?? "SQL", binds);
     return this.castResult ? this.castResult(rawResult) : rawResult;
   }
-  // Fallback: try execute directly
-  return execute(sql, name);
+  // Fallback: delegate through this.execute if available
+  const doExecute = this?.execute ?? execute;
+  return doExecute(sql, name);
 }
 
 // --- Private helpers ---

@@ -68,20 +68,32 @@ describe("DatabaseStatements", () => {
   describe("transaction", () => {
     it("wraps block in begin/commit on success", async () => {
       const calls: string[] = [];
-      const host: any = {};
-      // Patch begin/commit to track calls via the module functions
-      const origBegin = beginDbTransaction;
-      const origCommit = commitDbTransaction;
+      const host: DatabaseStatementsHost = {
+        beginDbTransaction: async () => {
+          calls.push("begin");
+        },
+        commitDbTransaction: async () => {
+          calls.push("commit");
+        },
+        rollbackDbTransaction: async () => {
+          calls.push("rollback");
+        },
+      };
 
       const result = await transaction.call(host, async () => {
         calls.push("body");
         return 42;
       });
       expect(result).toBe(42);
+      expect(calls).toEqual(["begin", "body", "commit"]);
     });
 
     it("catches Rollback errors and returns undefined", async () => {
-      const host: any = {};
+      const host: DatabaseStatementsHost = {
+        beginDbTransaction: async () => {},
+        commitDbTransaction: async () => {},
+        rollbackDbTransaction: async () => {},
+      };
       const result = await transaction.call(host, async () => {
         const err = new Error("Rollback");
         err.name = "Rollback";

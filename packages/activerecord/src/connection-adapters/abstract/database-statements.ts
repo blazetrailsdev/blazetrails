@@ -27,7 +27,7 @@ export interface DatabaseStatementsHost {
   currentTransaction?(): {
     open: boolean;
     written?: boolean;
-    joinable?(): boolean;
+    joinable?: boolean | (() => boolean);
     userTransaction?: unknown;
   };
   withinNewTransaction?<T>(opts: unknown, fn: (tx?: unknown) => Promise<T> | T): Promise<T>;

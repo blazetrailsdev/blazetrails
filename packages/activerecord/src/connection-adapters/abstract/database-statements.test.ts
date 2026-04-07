@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { Rollback } from "../../errors.js";
 import {
   toSql,
   toSqlAndBinds,
@@ -95,9 +96,7 @@ describe("DatabaseStatements", () => {
         rollbackDbTransaction: async () => {},
       };
       const result = await transaction.call(host, async () => {
-        const err = new Error("Rollback");
-        err.name = "Rollback";
-        throw err;
+        throw new Rollback();
       });
       expect(result).toBeUndefined();
     });

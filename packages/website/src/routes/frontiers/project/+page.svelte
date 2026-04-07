@@ -165,15 +165,6 @@
     }
   });
 
-  // Re-read the selected file when VFS changes (e.g. after CLI generates files)
-  $effect(() => {
-    if (vfs && selectedFile) {
-      const updated = vfs.read(selectedFile.path);
-      if (updated && updated.content !== selectedFile.content) {
-        selectedFile = { path: updated.path, content: updated.content };
-      }
-    }
-  });
 </script>
 
 <svelte:head>

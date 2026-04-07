@@ -251,54 +251,65 @@ export class QueryCacheAdapter implements DatabaseAdapter {
     return "EXPLAIN is not supported by the underlying adapter";
   }
 
-  // --- DatabaseStatements delegation ---
+  // --- DatabaseStatements ---
+  // Read methods go through this.execute() to leverage the query cache.
+  // Write methods go through this.executeMutation() to clear the cache.
 
   async selectAll(
     sql: string,
-    name?: string | null,
+    _name?: string | null,
     binds?: unknown[],
   ): Promise<Record<string, unknown>[]> {
-    return this.inner.selectAll(sql, name, binds);
+    return this.execute(sql, binds);
   }
 
   async selectOne(
     sql: string,
-    name?: string | null,
+    _name?: string | null,
     binds?: unknown[],
   ): Promise<Record<string, unknown> | undefined> {
-    return this.inner.selectOne(sql, name, binds);
+    const rows = await this.execute(sql, binds);
+    return rows[0];
   }
 
-  async selectValue(sql: string, name?: string | null, binds?: unknown[]): Promise<unknown> {
-    return this.inner.selectValue(sql, name, binds);
+  async selectValue(sql: string, _name?: string | null, binds?: unknown[]): Promise<unknown> {
+    const rows = await this.execute(sql, binds);
+    if (rows.length === 0) return undefined;
+    const keys = Object.keys(rows[0]);
+    return keys.length > 0 ? rows[0][keys[0]] : undefined;
   }
 
-  async selectValues(sql: string, name?: string | null, binds?: unknown[]): Promise<unknown[]> {
-    return this.inner.selectValues(sql, name, binds);
+  async selectValues(sql: string, _name?: string | null, binds?: unknown[]): Promise<unknown[]> {
+    const rows = await this.execute(sql, binds);
+    return rows.map((row) => {
+      const keys = Object.keys(row);
+      return keys.length > 0 ? row[keys[0]] : undefined;
+    });
   }
 
-  async selectRows(sql: string, name?: string | null, binds?: unknown[]): Promise<unknown[][]> {
-    return this.inner.selectRows(sql, name, binds);
+  async selectRows(sql: string, _name?: string | null, binds?: unknown[]): Promise<unknown[][]> {
+    const rows = await this.execute(sql, binds);
+    return rows.map((row) => Object.values(row));
   }
 
   async execQuery(
     sql: string,
-    name?: string | null,
+    _name?: string | null,
     binds?: unknown[],
   ): Promise<Record<string, unknown>[]> {
-    return this.inner.execQuery(sql, name, binds);
+    return this.execute(sql, binds);
   }
 
-  async execInsert(sql: string, name?: string | null, binds?: unknown[]): Promise<unknown> {
-    return this.inner.execInsert(sql, name, binds);
+  async execInsert(sql: string, _name?: string | null, binds?: unknown[]): Promise<unknown> {
+    return this.executeMutation(sql, binds);
   }
 
-  async execDelete(sql: string, name?: string | null, binds?: unknown[]): Promise<number> {
-    return this.inner.execDelete(sql, name, binds);
+  async execDelete(sql: string, _name?: string | null, binds?: unknown[]): Promise<number> {
+    return this.executeMutation(sql, binds);
   }
 
-  async execUpdate(sql: string, name?: string | null, binds?: unknown[]): Promise<number> {
-    return this.inner.execUpdate(sql, name, binds);
+  async execUpdate(sql: string, _name?: string | null, binds?: unknown[]): Promise<number> {
+    return this.executeMutation(sql, binds);
   }
 
   isWriteQuery(sql: string): boolean {

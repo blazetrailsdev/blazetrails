@@ -86,10 +86,9 @@ export default defineConfig({
           "process",
         ].includes(id),
       output: {
-        // Map all externals to globals. sql.js is the only real one;
-        // the rest are dead code paths (Node DB drivers, builtins).
-        // Use a function to return "{}" for any unmapped external
-        // so the IIFE doesn't throw ReferenceError on undefined globals.
+        // Map all externals to globals. sql.js → initSqlJs (loaded via
+        // importScripts). Everything else → __external_stub (a Proxy that
+        // returns itself on any property access, defined in the banner).
         globals: (id: string) => {
           if (id === "sql.js") return "initSqlJs";
           return "__external_stub";

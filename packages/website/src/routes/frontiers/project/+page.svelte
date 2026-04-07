@@ -99,7 +99,7 @@
   }
 
   // Debounce editor writes — 300ms after last keystroke
-  let writeTimer: ReturnType<typeof setTimeout>;
+  let writeTimer: ReturnType<typeof setTimeout> | undefined;
 
   function handleFileChange(content: string) {
     if (!vfs || !selectedFile) return;

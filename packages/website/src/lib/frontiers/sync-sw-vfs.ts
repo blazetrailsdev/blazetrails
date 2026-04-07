@@ -14,7 +14,7 @@ export class SyncSwVfs {
 
   constructor(private proxy: SwVfsProxy) {
     this._unsubProxy = proxy.onChange(() => {
-      this._rehydrate();
+      void this._rehydrate().catch(() => {});
     });
   }
 

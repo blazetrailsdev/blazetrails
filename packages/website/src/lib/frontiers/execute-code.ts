@@ -15,9 +15,17 @@ import type { DatabaseAdapter } from "@blazetrails/activerecord/adapter";
  * as function parameters. Exports are converted to plain declarations.
  */
 export function prepareCodeForEval(code: string): string {
-  // Remove import statements (the globals are injected as params)
-  code = code.replace(/^\s*import\s+.*?from\s+["'][^"']+["']\s*;?\s*$/gm, "");
+  // Remove import statements including multi-line named imports
+  code = code.replace(
+    /^\s*import\s+(?:type\s+)?(?:\{[\s\S]*?\}|[\w*]+(?:\s*,\s*\{[\s\S]*?\})?)\s+from\s+["'][^"']+["']\s*;?\s*$/gm,
+    "",
+  );
   code = code.replace(/^\s*import\s+["'][^"']+["']\s*;?\s*$/gm, "");
+
+  // Remove export lists and re-exports
+  code = code.replace(/^\s*export\s+\{[\s\S]*?\}\s*(?:from\s+["'][^"']+["'])?\s*;?\s*$/gm, "");
+  code = code.replace(/^\s*export\s+\*\s+from\s+["'][^"']+["']\s*;?\s*$/gm, "");
+
   // Convert `export class` / `export function` / `export const` to plain declarations
   code = code.replace(
     /^\s*export\s+(default\s+)?(class|function|const|let|var|async\s+function)\s/gm,

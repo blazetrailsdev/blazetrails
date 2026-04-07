@@ -42,6 +42,22 @@ describe("prepareCodeForEval", () => {
     expect(result).not.toContain("export");
   });
 
+  it("strips multi-line named imports", () => {
+    const code = `import {\n  Base,\n  Migration\n} from "@blazetrails/activerecord";\nconst x = 1;`;
+    const result = prepareCodeForEval(code);
+    expect(result).not.toContain("import");
+    expect(result).toContain("const x = 1;");
+  });
+
+  it("strips export lists", () => {
+    expect(prepareCodeForEval("export { Foo, Bar };").trim()).toBe("");
+    expect(prepareCodeForEval('export { Foo } from "./foo.js";').trim()).toBe("");
+  });
+
+  it("strips star re-exports", () => {
+    expect(prepareCodeForEval('export * from "./mod.js";').trim()).toBe("");
+  });
+
   it("preserves non-import/export code", () => {
     const code = `const x = 42;\nfunction greet() { return "hi"; }`;
     expect(prepareCodeForEval(code)).toBe(code);

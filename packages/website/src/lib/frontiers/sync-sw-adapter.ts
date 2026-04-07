@@ -27,7 +27,7 @@ export class SyncSwAdapter {
   ) {
     this._unsubBroadcast = client.onBroadcast((msg: SwBroadcast) => {
       if (msg.type === "db:changed" || msg.type === "vfs:changed") {
-        this._rehydrate();
+        void this._rehydrate().catch(() => {});
       }
     });
   }

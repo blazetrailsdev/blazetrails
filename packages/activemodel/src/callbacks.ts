@@ -1,6 +1,8 @@
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRecord = any;
 
+import { ArgumentError } from "./attribute-assignment.js";
+
 /**
  * Callbacks mixin contract — defines model callback registration.
  *
@@ -55,19 +57,19 @@ export function defineModelCallbacks(this: any, ...args: unknown[]): void {
       if (options.only) {
         for (const t of options.only) {
           if (!validTimings.includes(t)) {
-            throw new Error(
+            throw new ArgumentError(
               `Invalid callback type: ${t}. Must be one of: ${validTimings.join(", ")}`,
             );
           }
         }
       }
     } else if (typeof arg !== "string") {
-      throw new Error(`Expected event name (string), got ${typeof arg}`);
+      throw new ArgumentError(`Expected event name (string), got ${typeof arg}`);
     }
   }
 
   if (eventNames.length === 0) {
-    throw new Error("At least one event name must be provided to defineModelCallbacks");
+    throw new ArgumentError("At least one event name must be provided to defineModelCallbacks");
   }
 
   const timings: CallbackTiming[] = options.only ?? ["before", "after", "around"];

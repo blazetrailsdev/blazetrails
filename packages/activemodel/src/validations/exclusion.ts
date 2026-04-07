@@ -31,7 +31,7 @@ export class ExclusionValidator implements Validator {
     if (!inOpt) return;
     const list = typeof inOpt === "function" ? inOpt() : inOpt;
     if (list.includes(value)) {
-      errs.add(attribute, "exclusion", { message: this.options.message });
+      errs.add(attribute, "exclusion", { value, message: this.options.message });
     }
   }
 }

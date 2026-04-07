@@ -15,8 +15,8 @@ export function checkValidityBang(options: { in?: unknown }): void {
   checkClusivityValidity(options);
 }
 
-export function checkClusivityValidity(options: { in?: unknown }): void {
-  const collection = options.in;
+export function checkClusivityValidity(options: { in?: unknown; within?: unknown }): void {
+  const collection = options.in ?? options.within;
   if (collection === undefined || collection === null) {
     throw new Error("An :in option must be supplied (either an Array, a Range, or a Proc)");
   }
@@ -35,6 +35,15 @@ export function isMember(
 ): boolean {
   const resolved = typeof collection === "function" ? collection() : collection;
 
+  // Rails: if value is an array, check that all elements are members
+  if (Array.isArray(value)) {
+    return value.every((v) => isMemberSingle(resolved, v));
+  }
+
+  return isMemberSingle(resolved, value);
+}
+
+function isMemberSingle(resolved: unknown[] | Iterable<unknown>, value: unknown): boolean {
   if (Array.isArray(resolved)) return resolved.includes(value);
 
   if (resolved instanceof Set) return resolved.has(value);

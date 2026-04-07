@@ -7,12 +7,13 @@ export default defineConfig({
   description: "Rails API for TypeScript",
   base: "/docs/",
   outDir: "../build/docs",
-  cleanUrls: false,
+  cleanUrls: true,
 
   themeConfig: {
     siteTitle: "BlazeTrails",
     nav: [
-      { text: "Home", link: siteRoot },
+      { text: "Docs", link: "/" },
+      { text: "Website", link: siteRoot },
       { text: "API Reference", link: "/api/@blazetrails/arel/README" },
     ],
 

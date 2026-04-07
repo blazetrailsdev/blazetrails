@@ -51,8 +51,10 @@ let count = 0;
 for await (const file of walkMd(apiDir)) {
   const original = await readFile(file, "utf8");
   const escaped = escapeForVue(original);
-  await writeFile(file, escaped);
-  if (escaped !== original) count++;
+  if (escaped !== original) {
+    await writeFile(file, escaped);
+    count++;
+  }
 }
 
 console.log(`Escaped ${count} files for VitePress compatibility.`);

@@ -376,8 +376,9 @@ export class ToSql implements NodeVisitor<SQLString> {
       stmt.limit = null;
       stmt.offset = null;
       stmt.orders = [];
-      const columns = new Nodes.Grouping(o.key);
-      stmt.wheres = [new Nodes.In(columns, this.buildSubselect(o.key, o))];
+      const key = this.subselectKey(o.key);
+      const columns = new Nodes.Grouping(key);
+      stmt.wheres = [new Nodes.In(columns, this.buildSubselect(key, o))];
       if (this.hasJoinSources(o)) {
         stmt.relation = (o.relation as Nodes.JoinSource).left;
       }
@@ -392,7 +393,8 @@ export class ToSql implements NodeVisitor<SQLString> {
       stmt.limit = null;
       stmt.offset = null;
       stmt.orders = [];
-      const key = Array.isArray(o.key) ? o.key[0] : o.key;
+      const rawKey = Array.isArray(o.key) ? o.key[0] : o.key;
+      const key = this.subselectKey(rawKey);
       const columns = new Nodes.Grouping(key);
       stmt.wheres = [new Nodes.In(columns, this.buildSubselect(key, o))];
       if (this.hasJoinSources(o)) {
@@ -426,6 +428,13 @@ export class ToSql implements NodeVisitor<SQLString> {
     stmt.offset = o.offset;
     stmt.orders = [...o.orders];
     return stmt;
+  }
+
+  private subselectKey(key: Node): Node {
+    if (key instanceof Nodes.Equality) {
+      return key.left as Node;
+    }
+    return key;
   }
 
   private hasJoinSources(o: { relation: Node | null }): boolean {

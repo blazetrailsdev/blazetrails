@@ -1,6 +1,5 @@
 import { Node, NodeVisitor } from "./node.js";
 import { Cte } from "./cte.js";
-import type { Table } from "../table.js";
 import { Attribute } from "../attributes/attribute.js";
 
 interface TypeCastable {
@@ -21,7 +20,7 @@ export class TableAlias extends Node {
   }
 
   get(columnName: string): Attribute {
-    return new Attribute(this as unknown as Table, columnName);
+    return new Attribute(this, columnName);
   }
 
   get tableName(): string {

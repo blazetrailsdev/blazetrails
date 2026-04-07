@@ -25,13 +25,9 @@ is timing: Rails defines on first access, we define at registration.
 
 ## Add when needed (low priority)
 
-### callbacks.ts
-
-- Only function callbacks; Rails also supports class-based
-
 ### secure-password.ts
 
-- Missing: `password_salt`, `generates_token_for`
+- Missing: `generates_token_for`
 
 ### translation.ts
 
@@ -40,7 +36,3 @@ is timing: Rails defines on first access, we define at registration.
 ### attribute-registration.ts
 
 - Missing `resolve_attribute_name`, `resolve_type_name`, `hook_attribute_type` hooks
-
-### attribute-set/builder.ts
-
-- `LazyAttributeSet` not actually lazy (performance issue on large schemas)

@@ -87,11 +87,13 @@ export function defineModelCallbacks(this: any, ...args: unknown[]): void {
     const capitalizedEvent = event.charAt(0).toUpperCase() + event.slice(1);
 
     if (timings.includes("before")) {
-      Object.defineProperty(this, `before${capitalizedEvent}`, {
-        value: function (fn: CallbackFn, conditions?: CallbackConditions) {
+      const methodName = `before${capitalizedEvent}`;
+      Object.defineProperty(this, methodName, {
+        value: function (fnOrObject: CallbackFn | CallbackObject, conditions?: CallbackConditions) {
           if (!Object.prototype.hasOwnProperty.call(this, "_callbackChain")) {
             this._callbackChain = this._callbackChain.clone();
           }
+          const fn = resolveCallback(fnOrObject, "before", event);
           this._callbackChain.register("before", event, fn, conditions);
         },
         writable: true,
@@ -100,11 +102,13 @@ export function defineModelCallbacks(this: any, ...args: unknown[]): void {
     }
 
     if (timings.includes("after")) {
-      Object.defineProperty(this, `after${capitalizedEvent}`, {
-        value: function (fn: CallbackFn, conditions?: CallbackConditions) {
+      const methodName = `after${capitalizedEvent}`;
+      Object.defineProperty(this, methodName, {
+        value: function (fnOrObject: CallbackFn | CallbackObject, conditions?: CallbackConditions) {
           if (!Object.prototype.hasOwnProperty.call(this, "_callbackChain")) {
             this._callbackChain = this._callbackChain.clone();
           }
+          const fn = resolveCallback(fnOrObject, "after", event);
           this._callbackChain.register("after", event, fn, conditions);
         },
         writable: true,
@@ -113,18 +117,45 @@ export function defineModelCallbacks(this: any, ...args: unknown[]): void {
     }
 
     if (timings.includes("around")) {
-      Object.defineProperty(this, `around${capitalizedEvent}`, {
-        value: function (fn: AroundCallbackFn, conditions?: CallbackConditions) {
+      const methodName = `around${capitalizedEvent}`;
+      Object.defineProperty(this, methodName, {
+        value: function (
+          fnOrObject: AroundCallbackFn | CallbackObject,
+          conditions?: CallbackConditions,
+        ) {
           if (!Object.prototype.hasOwnProperty.call(this, "_callbackChain")) {
             this._callbackChain = this._callbackChain.clone();
           }
-          this._callbackChain.register("around", event, fn, conditions);
+          const fn = resolveCallback(fnOrObject, "around", event);
+          this._callbackChain.register("around", event, fn as AroundCallbackFn, conditions);
         },
         writable: true,
         configurable: true,
       });
     }
   }
+}
+
+/**
+ * Class-based callback object. Rails supports passing an object with
+ * a method matching the callback (e.g., `beforeSave(record)`).
+ */
+export type CallbackObject = Record<string, (record: AnyRecord, ...args: unknown[]) => unknown>;
+
+function resolveCallback(
+  fnOrObject: CallbackFn | AroundCallbackFn | CallbackObject,
+  timing: CallbackTiming,
+  event: string,
+): CallbackFn | AroundCallbackFn {
+  if (typeof fnOrObject === "function") return fnOrObject;
+  const methodName = `${timing}_${event}`;
+  const camelMethod = `${timing}${event.charAt(0).toUpperCase()}${event.slice(1)}`;
+  const method = fnOrObject[methodName] ?? fnOrObject[camelMethod];
+  if (typeof method !== "function") {
+    throw new ArgumentError(`Callback object must implement ${methodName} or ${camelMethod}`);
+  }
+  return ((record: AnyRecord, ...args: unknown[]) =>
+    method.call(fnOrObject, record, ...args)) as CallbackFn;
 }
 
 /**
@@ -169,10 +200,11 @@ export class CallbackChain {
   register(
     timing: CallbackTiming,
     event: CallbackEvent,
-    fn: CallbackFn | AroundCallbackFn,
+    fn: CallbackFn | AroundCallbackFn | CallbackObject,
     conditions?: CallbackConditions,
   ): void {
-    const entry = { timing, event, fn, conditions };
+    const resolved = typeof fn === "function" ? fn : resolveCallback(fn, timing, event);
+    const entry = { timing, event, fn: resolved, conditions };
     if (conditions?.prepend) {
       this.callbacks.unshift(entry);
     } else {

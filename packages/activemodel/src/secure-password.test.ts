@@ -410,4 +410,20 @@ describe("SecurePasswordTest", () => {
     (u as any).passwordChallenge = null;
     expect(u.isValid()).toBe(true);
   });
+
+  it("password_salt returns the bcrypt salt from the digest", () => {
+    const User = createUserClass();
+    const u = new User({ name: "test" });
+    (u as any).password = "secret";
+    const salt = (u as any).passwordSalt;
+    expect(salt).not.toBeNull();
+    expect(typeof salt).toBe("string");
+    expect(salt).toMatch(/^\$2[aby]?\$\d{2}\$/);
+  });
+
+  it("password_salt returns null when no digest", () => {
+    const User = createUserClass();
+    const u = new User({ name: "test" });
+    expect((u as any).passwordSalt).toBeNull();
+  });
 });

@@ -80,16 +80,109 @@ export function buildDefaultAttributes(defs: Map<string, AttributeDefinition>): 
 }
 
 /**
- * Initialize instance attributes by deep-duping class defaults.
+ * Initialize instance attributes lazily from class definitions.
  *
- * Mirrors: ActiveModel::Attributes#initialize
+ * Mirrors: ActiveModel::AttributeSet::LazyAttributeHash
  *
- * In Rails, Attributes#initialize deep-dups a cached class-level default.
- * Here we build a fresh AttributeSet per instance (with object defaults
- * cloned via structuredClone), so no additional dup is needed.
+ * Rails uses LazyAttributeHash to defer Attribute instantiation until
+ * first access. We use LazyAttributeSet which stores definitions and
+ * materializes Attribute instances on demand.
  */
 export function constructor(defs: Map<string, AttributeDefinition>): AttributeSet {
-  return buildDefaultAttributes(defs);
+  return new LazyAttributeSet(defs);
+}
+
+/**
+ * Lazy attribute set that defers Attribute creation until first access.
+ *
+ * Mirrors: ActiveModel::AttributeSet::LazyAttributeHash
+ */
+class LazyAttributeSet extends AttributeSet {
+  private _defs: Map<string, AttributeDefinition>;
+  private _materialized: Set<string> = new Set();
+
+  constructor(defs: Map<string, AttributeDefinition>) {
+    super(new Map());
+    this._defs = defs;
+  }
+
+  private _materialize(name: string): void {
+    if (this._materialized.has(name)) return;
+    const def = this._defs.get(name);
+    if (!def) return;
+    let defVal = typeof def.defaultValue === "function" ? def.defaultValue() : def.defaultValue;
+    if (defVal !== null && typeof defVal === "object") {
+      defVal = structuredClone(defVal);
+    }
+    super.set(name, Attribute.withCastValue(name, defVal ?? null, def.type));
+    this._materialized.add(name);
+  }
+
+  private _materializeAll(): void {
+    for (const name of this._defs.keys()) {
+      this._materialize(name);
+    }
+  }
+
+  override getAttribute(name: string): Attribute {
+    this._materialize(name);
+    return super.getAttribute(name);
+  }
+
+  override get(name: string): unknown {
+    this._materialize(name);
+    return super.get(name);
+  }
+
+  override set(name: string, attrOrValue: Attribute | unknown): void {
+    this._materialized.add(name);
+    super.set(name, attrOrValue);
+  }
+
+  override has(name: string): boolean {
+    this._materialize(name);
+    return super.has(name) || this._defs.has(name);
+  }
+
+  override keys(): string[] {
+    this._materializeAll();
+    return super.keys();
+  }
+
+  override fetchValue(name: string): unknown {
+    this._materialize(name);
+    return super.fetchValue(name);
+  }
+
+  override writeFromUser(name: string, value: unknown): unknown {
+    if (!this._materialized.has(name)) this._materialize(name);
+    return super.writeFromUser(name, value);
+  }
+
+  override writeFromDatabase(name: string, value: unknown): void {
+    if (!this._materialized.has(name)) this._materialize(name);
+    super.writeFromDatabase(name, value);
+  }
+
+  override writeCastValue(name: string, value: unknown): void {
+    if (!this._materialized.has(name)) this._materialize(name);
+    super.writeCastValue(name, value);
+  }
+
+  override isKey(name: string): boolean {
+    this._materialize(name);
+    return super.isKey(name);
+  }
+
+  override forEach(fn: (attr: Attribute, name: string) => void): void {
+    this._materializeAll();
+    super.forEach(fn);
+  }
+
+  override deepDup(): AttributeSet {
+    this._materializeAll();
+    return super.deepDup();
+  }
 }
 
 /**

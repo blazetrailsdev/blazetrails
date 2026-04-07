@@ -230,6 +230,41 @@ describe("CallbacksTest", () => {
     expect((Task as any).afterExecute).toBeUndefined();
     expect((Task as any).aroundExecute).toBeUndefined();
   });
+
+  it("class-based callback object with before method", () => {
+    const log: string[] = [];
+    const auditor = {
+      beforeValidation(record: any) {
+        log.push(`auditing ${record.readAttribute("name")}`);
+      },
+    };
+    class Person extends Model {
+      static {
+        this.attribute("name", "string");
+        this.beforeValidation(auditor);
+      }
+    }
+    const p = new Person({ name: "Alice" });
+    p.isValid();
+    expect(log).toContain("auditing Alice");
+  });
+
+  it("class-based callback object with snake_case method", () => {
+    const log: string[] = [];
+    const auditor = {
+      before_validation(record: any) {
+        log.push("snake_case called");
+      },
+    };
+    class Person extends Model {
+      static {
+        this.attribute("name", "string");
+        this.beforeValidation(auditor);
+      }
+    }
+    new Person({ name: "test" }).isValid();
+    expect(log).toContain("snake_case called");
+  });
 });
 
 describe("CallbackChain.runAsync", () => {

@@ -44,7 +44,6 @@ type DelegatedQueryMethods = Pick<
   | "order"
   | "limit"
   | "offset"
-  | "select"
   | "reselect"
   | "distinct"
   | "group"
@@ -787,6 +786,19 @@ export class CollectionProxy {
    * Mirrors: ActiveRecord::Associations::CollectionProxy#exists?
    */
   async exists(conditions?: Record<string, unknown> | unknown): Promise<boolean> {
+    if (this._isThrough) {
+      const records = await this.toArray();
+      if (conditions === undefined) return records.length > 0;
+      if (typeof conditions === "object" && conditions !== null && !Array.isArray(conditions)) {
+        return records.some((r) =>
+          Object.entries(conditions as Record<string, unknown>).every(
+            ([k, v]) => r.readAttribute(k) === v,
+          ),
+        );
+      }
+      const pk = (records[0]?.constructor as typeof Base)?.primaryKey ?? "id";
+      return records.some((r) => r.readAttribute(pk as string) === conditions);
+    }
     this._checkStrictLoading();
     return this.scope().exists(conditions);
   }
@@ -1260,6 +1272,33 @@ export class CollectionProxy {
     // No-op: scope() rebuilds the relation each call, so there's nothing
     // cached to clear. Rails resets @scope/@offsets/@take here.
     return this;
+  }
+
+  /**
+   * Select columns (delegates to Relation) or filter with a block function.
+   * The block form loads records and filters in-memory, matching Rails behavior.
+   *
+   * Mirrors: ActiveRecord::Associations::CollectionProxy#select
+   */
+  select(fn: (record: Base) => boolean): Promise<Base[]>;
+  select(...columns: string[]): any;
+  select(...args: any[]): any {
+    if (args.length === 1 && typeof args[0] === "function") {
+      return this.toArray().then((records: Base[]) => records.filter(args[0]));
+    }
+    return this.scope().select(...args);
+  }
+
+  /**
+   * Async iterator — allows `for await (const record of proxy)`.
+   *
+   * Mirrors: Ruby's Enumerable#each on CollectionProxy
+   */
+  async *[Symbol.asyncIterator](): AsyncIterableIterator<Base> {
+    const records = await this.toArray();
+    for (const record of records) {
+      yield record;
+    }
   }
 }
 

@@ -265,6 +265,49 @@ describe("CallbacksTest", () => {
     new Person({ name: "test" }).isValid();
     expect(log).toContain("snake_case called");
   });
+
+  it("class-based around callback object with proceed", () => {
+    const log: string[] = [];
+    const wrapper = {
+      aroundSave(record: any, proceed: () => void) {
+        log.push("around_before");
+        proceed();
+        log.push("around_after");
+      },
+    };
+    class Person extends Model {
+      static {
+        this.attribute("name", "string");
+        this.aroundSave(wrapper);
+      }
+    }
+    const p = new Person({ name: "test" });
+    p.runCallbacks("save", () => {
+      log.push("save");
+    });
+    expect(log).toEqual(["around_before", "save", "around_after"]);
+  });
+
+  it("class-based callback via defineModelCallbacks-generated methods", () => {
+    const log: string[] = [];
+    const observer = {
+      beforeProcess(record: any) {
+        log.push(`processing ${record.readAttribute("name")}`);
+      },
+    };
+    class Job extends Model {
+      static {
+        this.attribute("name", "string");
+        this.defineModelCallbacks("process");
+        (this as any).beforeProcess(observer);
+      }
+    }
+    const j = new Job({ name: "import" });
+    j.runCallbacks("process", () => {
+      log.push("executed");
+    });
+    expect(log).toEqual(["processing import", "executed"]);
+  });
 });
 
 describe("CallbackChain.runAsync", () => {

@@ -451,6 +451,10 @@ export class AssociationReflection extends MacroReflection {
   }
 
   get foreignKey(): string | string[] {
+    return this.computeForeignKey();
+  }
+
+  computeForeignKey(inferFromInverseOf = true): string | string[] {
     if (this._foreignKeyCache !== null) return this._foreignKeyCache;
 
     if (this.options.foreignKey) {
@@ -459,7 +463,7 @@ export class AssociationReflection extends MacroReflection {
     } else if (this.options.queryConstraints) {
       this._foreignKeyCache = (this.options.queryConstraints as string[]).map(String);
     } else {
-      let derivedFk: string | string[] = this.deriveForeignKey();
+      let derivedFk: string | string[] = this.deriveForeignKey(inferFromInverseOf);
 
       if (hasQueryConstraints.call(this.activeRecord as any)) {
         derivedFk = this.deriveFkQueryConstraints(derivedFk as string);
@@ -471,9 +475,13 @@ export class AssociationReflection extends MacroReflection {
     return this._foreignKeyCache;
   }
 
-  private deriveForeignKey(): string {
+  private deriveForeignKey(inferFromInverseOf = true): string {
     if (this.belongsTo()) return `${underscore(this.name)}_id`;
     if (this.options.as) return `${underscore(this.options.as as string)}_id`;
+    if (this.options.inverseOf && inferFromInverseOf) {
+      const inv = this.inverseOf();
+      if (inv) return String((inv as any).computeForeignKey?.(false) ?? (inv as any).foreignKey);
+    }
     return `${underscore(this.activeRecord.name)}_id`;
   }
 

@@ -1287,9 +1287,7 @@ export function createReflection(
       assocDef.type === "hasManyThrough" ||
       assocDef.type === "hasOneThrough")
   ) {
-    const through = new ThroughReflection(reflection);
-    reflection.parentReflection = through;
-    return through;
+    return new ThroughReflection(reflection);
   }
 
   return reflection;
@@ -1311,9 +1309,7 @@ export function create(
   const ReflectionClass = reflectionClassFor(macro);
   const reflection = new ReflectionClass(name, scope, options, activeRecord);
   if (options.through) {
-    const through = new ThroughReflection(reflection);
-    reflection.parentReflection = through;
-    return through;
+    return new ThroughReflection(reflection);
   }
   return reflection;
 }

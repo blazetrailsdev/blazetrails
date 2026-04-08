@@ -110,7 +110,9 @@ export class BelongsTo extends SingularAssociation {
       if (change) return change[0];
       return typeof record.readAttribute === "function" ? record.readAttribute(col) : record[col];
     });
-    const hasOldFk = fkColumns.some((col) => changes[col] != null);
+    const foreignTypeCol = `${underscore(name)}_type`;
+    const hasOldFk =
+      fkColumns.some((col) => changes[col] != null) || changes[foreignTypeCol] != null;
 
     if (hasOldFk) {
       const association =
@@ -170,7 +172,10 @@ export class BelongsTo extends SingularAssociation {
   }
 
   static addTouchCallbacks(model: any, reflection: any): void {
-    const foreignKey = reflection.foreignKey ?? reflection.options?.foreignKey;
+    const foreignKey =
+      reflection.foreignKey ??
+      reflection.options?.foreignKey ??
+      reflection.options?.queryConstraints;
     const name = reflection.name;
     const touch = reflection.options?.touch;
 
@@ -183,7 +188,7 @@ export class BelongsTo extends SingularAssociation {
     afterCreate(model, makeCallback("savedChanges"));
     afterUpdate(model, makeCallback("savedChanges"));
     afterDestroy(model, async (record: any) => {
-      if (typeof record.isPersisted === "function" && !record.isNewRecord()) {
+      if (typeof record.isNewRecord !== "function" || !record.isNewRecord()) {
         await BelongsTo.touchRecord(record, {}, foreignKey, name, touch);
       }
     });

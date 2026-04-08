@@ -98,6 +98,7 @@ export class HasOne extends SingularAssociation {
       if (touch === true) {
         await instance.touch();
       } else if (Array.isArray(touch)) {
+        if (touch.length === 0) return;
         await instance.touch(...touch);
       } else {
         await instance.touch(touch);
@@ -116,7 +117,7 @@ export class HasOne extends SingularAssociation {
     afterCreate(model, callback);
     afterUpdate(model, callback);
     afterDestroy(model, async (record: any) => {
-      if (typeof record.isNewRecord === "function" && !record.isNewRecord()) {
+      if (typeof record.isNewRecord !== "function" || !record.isNewRecord()) {
         await HasOne.touchRecord(record, name, touch);
       }
     });

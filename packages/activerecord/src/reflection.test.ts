@@ -1097,6 +1097,78 @@ describe("ReflectionTest", () => {
     expect(childrenRef.hasInverse()).toBe(false);
   });
 
+  it("has many with scope should not find inverse automatically unless automatic scope inversing", () => {
+    class Company extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class Contract extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.attribute("company_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(Company);
+    registerModel(Contract);
+    const scopeFn = (rel: any) => rel;
+    Associations.hasMany.call(Company, "contracts", { scope: scopeFn });
+    Associations.belongsTo.call(Contract, "company", {});
+
+    const contractsRef = reflectOnAssociation(Company, "contracts")!;
+    expect(contractsRef.hasInverse()).toBe(false);
+
+    // Enable automatic scope inversing on the target klass (Contract),
+    // since Rails checks reflection.klass.automatic_scope_inversing
+    (Contract as any).automaticScopeInversing = true;
+    try {
+      const contractsRef2 = reflectOnAssociation(Company, "contracts")!;
+      expect(contractsRef2.hasInverse()).toBe(true);
+      expect(contractsRef2.inverseOf()!.name).toBe("company");
+    } finally {
+      (Contract as any).automaticScopeInversing = false;
+    }
+  });
+
+  it("scoped belongs to on inverse side blocks automatic inverse", () => {
+    class Publisher extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class Magazine extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.attribute("publisher_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(Publisher);
+    registerModel(Magazine);
+    Associations.hasMany.call(Publisher, "magazines", {});
+    const scopeFn = (rel: any) => rel;
+    Associations.belongsTo.call(Magazine, "publisher", { scope: scopeFn });
+
+    const magazinesRef = reflectOnAssociation(Publisher, "magazines")!;
+    // Inverse side has a scope — should NOT find inverse even with automatic_scope_inversing
+    expect(magazinesRef.hasInverse()).toBe(false);
+
+    // Even with automatic_scope_inversing, scopes on the inverse (belongs_to)
+    // side always block automatic detection
+    (Magazine as any).automaticScopeInversing = true;
+    (Publisher as any).automaticScopeInversing = true;
+    try {
+      const magazinesRef2 = reflectOnAssociation(Publisher, "magazines")!;
+      expect(magazinesRef2.hasInverse()).toBe(false);
+    } finally {
+      (Magazine as any).automaticScopeInversing = false;
+      (Publisher as any).automaticScopeInversing = false;
+    }
+  });
+
   it("human name", () => {
     class Post extends Base {
       static {

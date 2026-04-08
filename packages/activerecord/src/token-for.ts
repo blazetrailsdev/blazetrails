@@ -1,0 +1,227 @@
+/**
+ * Token generation and resolution for model records.
+ *
+ * Mirrors: ActiveRecord::TokenFor
+ */
+
+import { getCrypto } from "@blazetrails/activesupport";
+import type { Base } from "./base.js";
+
+const SECRET = "trails-token-secret";
+
+/**
+ * TokenDefinition — encapsulates token behavior for a specific purpose.
+ * Stores the defining class, purpose, expiration, and optional block
+ * that embeds data in the token for invalidation checks.
+ *
+ * Mirrors: ActiveRecord::TokenFor::TokenDefinition
+ */
+export class TokenDefinition {
+  readonly definingClass: typeof Base;
+  readonly purpose: string;
+  readonly expiresIn: number | undefined;
+  readonly block: ((record: any) => string) | undefined;
+
+  constructor(
+    definingClass: typeof Base,
+    purpose: string,
+    expiresIn: number | undefined,
+    block: ((record: any) => string) | undefined,
+  ) {
+    this.definingClass = definingClass;
+    this.purpose = purpose;
+    this.expiresIn = expiresIn;
+    this.block = block;
+  }
+
+  fullPurpose(): string {
+    return [this.definingClass.name, this.purpose, this.expiresIn ?? ""].join("\n");
+  }
+
+  messageVerifier(): { sign(data: string): string; verify(token: string): string | null } {
+    return {
+      sign: (data: string) =>
+        getCrypto().createHmac("sha256", SECRET).update(data).digest("base64url"),
+      verify: (token: string) => {
+        // Verification is handled inline in resolveToken
+        return token;
+      },
+    };
+  }
+
+  payloadFor(model: Base): unknown[] {
+    const id = (model as any).id;
+    return this.block ? [id, this.block(model)] : [id];
+  }
+
+  generateToken(model: Base): string {
+    const payload = JSON.stringify({
+      pk: (model as any).id,
+      purpose: this.purpose,
+      digest: this.block ? this.block(model) : "",
+      timestamp: Date.now(),
+    });
+    const encoded = Buffer.from(payload).toString("base64url");
+    const sig = getCrypto().createHmac("sha256", SECRET).update(encoded).digest("base64url");
+    return `${encoded}.${sig}`;
+  }
+
+  async resolveToken(
+    token: string,
+    finder: (id: unknown) => Promise<Base | null>,
+  ): Promise<Base | null> {
+    const parts = token.split(".");
+    if (parts.length !== 2) return null;
+    const [encoded, sig] = parts;
+
+    const expectedSig = getCrypto()
+      .createHmac("sha256", SECRET)
+      .update(encoded)
+      .digest("base64url");
+    if (sig !== expectedSig) return null;
+
+    let payload: any;
+    try {
+      payload = JSON.parse(Buffer.from(encoded, "base64url").toString());
+    } catch {
+      return null;
+    }
+
+    if (payload.purpose !== this.purpose) return null;
+
+    if (this.expiresIn && Date.now() - payload.timestamp > this.expiresIn) {
+      return null;
+    }
+
+    const record = await finder(payload.pk);
+    if (!record) return null;
+
+    const currentDigest = this.block ? this.block(record) : "";
+    if (currentDigest !== payload.digest) return null;
+
+    return record;
+  }
+}
+
+/**
+ * Registry of token definitions per model class.
+ */
+const tokenDefinitions = new WeakMap<object, Map<string, TokenDefinition>>();
+
+function getDefinitions(modelClass: typeof Base): Map<string, TokenDefinition> {
+  if (!tokenDefinitions.has(modelClass)) {
+    tokenDefinitions.set(modelClass, new Map());
+  }
+  return tokenDefinitions.get(modelClass)!;
+}
+
+function getDefinition(modelClass: typeof Base, purpose: string): TokenDefinition | undefined {
+  let current: any = modelClass;
+  while (current) {
+    const map = tokenDefinitions.get(current);
+    if (map?.has(purpose)) return map.get(purpose);
+    current = Object.getPrototypeOf(current);
+  }
+  return undefined;
+}
+
+/**
+ * Declare a token purpose on a model class.
+ *
+ * Mirrors: ActiveRecord::TokenFor::ClassMethods#generates_token_for
+ */
+export function generatesTokenFor(
+  modelClass: typeof Base,
+  purpose: string,
+  options: {
+    expiresIn?: number;
+    generator?: (record: any) => string;
+  } = {},
+): void {
+  const def = new TokenDefinition(modelClass, purpose, options.expiresIn, options.generator);
+  getDefinitions(modelClass).set(purpose, def);
+
+  if (!(modelClass.prototype as any).generateTokenFor) {
+    Object.defineProperty(modelClass.prototype, "generateTokenFor", {
+      value: function (this: Base, purposeName: string): string {
+        return generateTokenFor(this, purposeName);
+      },
+      writable: true,
+      configurable: true,
+    });
+  }
+
+  if (!(modelClass as any).findByTokenFor) {
+    Object.defineProperty(modelClass, "findByTokenFor", {
+      value: async function (
+        this: typeof Base,
+        purposeName: string,
+        token: string,
+      ): Promise<Base | null> {
+        return findByTokenFor(this, purposeName, token);
+      },
+      writable: true,
+      configurable: true,
+    });
+  }
+
+  if (!(modelClass as any).findByTokenForBang) {
+    Object.defineProperty(modelClass, "findByTokenForBang", {
+      value: async function (this: typeof Base, purposeName: string, token: string): Promise<Base> {
+        return findByTokenForBang(this, purposeName, token);
+      },
+      writable: true,
+      configurable: true,
+    });
+  }
+}
+
+/**
+ * Generate a token for a record.
+ *
+ * Mirrors: ActiveRecord::TokenFor#generate_token_for
+ */
+export function generateTokenFor(record: Base, purpose: string): string {
+  const def = getDefinition(record.constructor as typeof Base, purpose);
+  if (!def) throw new Error(`Unknown token purpose: ${purpose}`);
+  return def.generateToken(record);
+}
+
+/**
+ * Find a record by token. Returns null if invalid.
+ *
+ * Mirrors: ActiveRecord::TokenFor::ClassMethods#find_by_token_for
+ */
+export async function findByTokenFor(
+  modelClass: typeof Base,
+  purpose: string,
+  token: string,
+): Promise<Base | null> {
+  const def = getDefinition(modelClass, purpose);
+  if (!def) return null;
+  return def.resolveToken(token, async (id) => {
+    try {
+      return await modelClass.find(id);
+    } catch {
+      return null;
+    }
+  });
+}
+
+/**
+ * Find a record by token. Throws if invalid.
+ *
+ * Mirrors: ActiveRecord::TokenFor::ClassMethods#find_by_token_for!
+ */
+export async function findByTokenForBang(
+  modelClass: typeof Base,
+  purpose: string,
+  token: string,
+): Promise<Base> {
+  const record = await findByTokenFor(modelClass, purpose, token);
+  if (!record) {
+    const { RecordNotFound } = await import("./errors.js");
+    throw new RecordNotFound(`Couldn't find record for token purpose: ${purpose}`);
+  }
+  return record;
+}

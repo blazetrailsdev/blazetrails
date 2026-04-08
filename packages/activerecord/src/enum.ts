@@ -143,6 +143,85 @@ export function defineEnum(
 }
 
 /**
+ * EnumType — wraps an underlying type to handle enum cast/serialize/deserialize.
+ *
+ * Mirrors: ActiveRecord::Enum::EnumType
+ */
+export class EnumType {
+  private _name: string;
+  private _mapping: Map<string, number | string>;
+  private _reverseMapping: Map<number | string, string>;
+  private _raiseOnInvalidValues: boolean;
+  readonly subtype: string;
+
+  constructor(
+    name: string,
+    mapping: Map<string, number | string>,
+    subtype: string,
+    raiseOnInvalidValues = true,
+  ) {
+    this._name = name;
+    this._mapping = mapping;
+    this._reverseMapping = new Map();
+    for (const [k, v] of mapping) {
+      this._reverseMapping.set(v, k);
+    }
+    this._raiseOnInvalidValues = raiseOnInvalidValues;
+    this.subtype = subtype;
+  }
+
+  cast(value: unknown): string | null {
+    if (typeof value === "string" && this._mapping.has(value)) {
+      return value;
+    }
+    if (
+      (typeof value === "number" || typeof value === "string") &&
+      this._reverseMapping.has(value)
+    ) {
+      return this._reverseMapping.get(value)!;
+    }
+    if (value === null || value === undefined) return null;
+    return null;
+  }
+
+  deserialize(value: unknown): string | null {
+    if (value === null || value === undefined) return null;
+    return this._reverseMapping.get(value as number | string) ?? null;
+  }
+
+  serialize(value: unknown): number | string | null {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "string" && this._mapping.has(value)) {
+      return this._mapping.get(value)!;
+    }
+    if (
+      (typeof value === "number" || typeof value === "string") &&
+      this._reverseMapping.has(value)
+    ) {
+      return value;
+    }
+    return null;
+  }
+
+  isSerializable(value: unknown): boolean {
+    if (value === null || value === undefined) return true;
+    if (typeof value === "string" && this._mapping.has(value)) return true;
+    if ((typeof value === "number" || typeof value === "string") && this._reverseMapping.has(value))
+      return true;
+    return false;
+  }
+
+  assertValidValue(value: unknown): void {
+    if (!this._raiseOnInvalidValues) return;
+    if (value === null || value === undefined || value === "") return;
+    if (typeof value === "string" && this._mapping.has(value)) return;
+    if ((typeof value === "number" || typeof value === "string") && this._reverseMapping.has(value))
+      return;
+    throw new Error(`'${value}' is not a valid ${this._name}`);
+  }
+}
+
+/**
  * Get the human-readable enum value for an attribute.
  */
 export function readEnumValue(record: Base, attribute: string): string | null {

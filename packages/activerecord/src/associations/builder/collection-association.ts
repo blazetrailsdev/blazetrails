@@ -55,7 +55,11 @@ export class CollectionAssociation extends Association {
 
     const methodDefined = fullCallbackName in model;
 
-    if ((callbackValues as any[]).length === 0 && !methodDefined) return;
+    if ((callbackValues as any[]).length === 0) return;
+
+    if (!methodDefined) {
+      model[fullCallbackName] = [];
+    }
 
     const callbacks = (callbackValues as any[]).map((callback: any) => {
       if (typeof callback === "string" || typeof callback === "symbol") {
@@ -67,7 +71,7 @@ export class CollectionAssociation extends Association {
       }
     });
 
-    model[fullCallbackName] = callbacks;
+    model[fullCallbackName] = [...(model[fullCallbackName] ?? []), ...callbacks];
   }
 
   static override defineReaders(mixin: any, name: string): void {

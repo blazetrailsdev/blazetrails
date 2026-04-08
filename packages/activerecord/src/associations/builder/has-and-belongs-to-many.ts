@@ -24,11 +24,6 @@ export class HasAndBelongsToMany {
 
     const joinModelName = `HABTM_${camelize(associationName)}`;
     const tableName = this._tableName();
-    const leftFk =
-      typeof options.foreignKey === "string"
-        ? options.foreignKey
-        : `${underscore(lhsModel.name)}_id`;
-    const targetClassName = (options.className as string) ?? camelize(singularize(associationName));
     const rightName = singularize(associationName);
 
     const joinModel: any = {

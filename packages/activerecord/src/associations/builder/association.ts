@@ -140,7 +140,9 @@ export class Association {
     const valid = new Set(this.validOptions(options));
     for (const key of Object.keys(options)) {
       if (!valid.has(key)) {
-        throw new Error(`Unknown key: :${key}. Valid keys are: ${[...valid].join(", ")}`);
+        throw new Error(
+          `Unknown key: :${key}. Valid keys are: ${[...valid].map((k) => `:${k}`).join(", ")}`,
+        );
       }
     }
   }
@@ -157,7 +159,7 @@ export class Association {
       this.addAfterCommitJobsCallback(model, dependent);
     }
 
-    for (const extension of Association.extensions) {
+    for (const extension of this.extensions) {
       if (typeof extension.build === "function") {
         extension.build(model, reflection);
       }

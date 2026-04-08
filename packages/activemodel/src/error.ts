@@ -163,7 +163,9 @@ export class Error {
     }
 
     const modelClass = base?.constructor;
-    const modelKey = modelClass?.name ? underscore(modelClass.name) : undefined;
+    const modelKey =
+      (modelClass as AnyRecord)?.modelName?.i18nKey ??
+      (modelClass?.name ? underscore(modelClass.name) : undefined);
     const humanAttr = modelClass?.humanAttributeName
       ? modelClass.humanAttributeName(attribute)
       : humanize(attribute);

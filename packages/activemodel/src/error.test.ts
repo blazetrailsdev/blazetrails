@@ -235,10 +235,13 @@ describe("ErrorTest", () => {
       },
     });
 
-    const record = new Child({ name: "" }) as any;
-    const msg = ModelError.generateMessage("name", "blank", record);
-    I18n.reset();
-    expect(msg).toBe("parent-level blank");
+    try {
+      const record = new Child({ name: "" }) as any;
+      const msg = ModelError.generateMessage("name", "blank", record);
+      expect(msg).toBe("parent-level blank");
+    } finally {
+      I18n.reset();
+    }
   });
 
   it("generateMessage falls back to activemodel scope for non-activemodel i18nScope", () => {

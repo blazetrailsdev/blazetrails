@@ -18,6 +18,7 @@ import {
 } from "@blazetrails/activesupport";
 import { sql as arelSql } from "@blazetrails/arel";
 import { modelRegistry } from "../associations.js";
+import { reflectOnAssociation } from "../reflection.js";
 import { getInheritanceColumn, isStiSubclass } from "../inheritance.js";
 
 export interface JoinNode {
@@ -295,10 +296,7 @@ export class JoinDependency {
         const parentModel = node.parentPath
           ? (modelByPath.get(node.parentPath) ?? (this._baseModel as any))
           : (this._baseModel as any);
-        const reflection =
-          typeof parentModel.reflectOnAssociation === "function"
-            ? parentModel.reflectOnAssociation(node.immediateAssocName)
-            : ((parentModel._reflections ?? {})[node.immediateAssocName] ?? null);
+        const reflection = reflectOnAssociation(parentModel, node.immediateAssocName);
         const nodePath = node.parentPath
           ? `${node.parentPath}.${node.immediateAssocName}`
           : node.immediateAssocName;

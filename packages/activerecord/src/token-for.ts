@@ -63,7 +63,7 @@ export class TokenDefinition {
   }
 
   messageVerifier(): MessageVerifier {
-    return new MessageVerifier(resolveSecret());
+    return new MessageVerifier(resolveSecret(), { digest: "sha256" });
   }
 
   payloadFor(model: Base): unknown[] {

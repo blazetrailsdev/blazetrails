@@ -66,7 +66,7 @@ export function defineEnum(
   }
 
   const defs = getEnumDefinitions(modelClass);
-  const enumType = new EnumType(attribute, mapping as Map<string, number | string>, "integer");
+  const enumType = new EnumType(attribute, mapping, "integer");
   const def: EnumDefinition = { attribute, mapping, reverseMapping, type: enumType };
   defs.set(attribute, def);
 
@@ -151,23 +151,24 @@ export function defineEnum(
  */
 export class EnumType {
   private _name: string;
-  private _mapping: Map<string, number | string>;
-  private _reverseMapping: Map<number | string, string>;
+  private _mapping: ReadonlyMap<string, number | string>;
+  private _reverseMapping: ReadonlyMap<number | string, string>;
   private _raiseOnInvalidValues: boolean;
   readonly subtype: string;
 
   constructor(
     name: string,
-    mapping: Map<string, number | string>,
+    mapping: ReadonlyMap<string, number | string>,
     subtype: string,
     raiseOnInvalidValues = true,
   ) {
     this._name = name;
     this._mapping = mapping;
-    this._reverseMapping = new Map();
+    const reverse = new Map<number | string, string>();
     for (const [k, v] of mapping) {
-      this._reverseMapping.set(v, k);
+      reverse.set(v, k);
     }
+    this._reverseMapping = reverse;
     this._raiseOnInvalidValues = raiseOnInvalidValues;
     this.subtype = subtype;
   }

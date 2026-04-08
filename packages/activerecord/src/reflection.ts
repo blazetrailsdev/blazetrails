@@ -740,7 +740,9 @@ export class AssociationReflection extends MacroReflection {
 
     if (
       !this.isPolymorphic() &&
-      ((this.klass as any).compositePrimaryKey || (this.activeRecord as any).compositePrimaryKey)
+      ((this.klass as any).compositePrimaryKey ||
+        (this.activeRecord as any).compositePrimaryKey ||
+        Array.isArray(this.foreignKey))
     ) {
       const fk = this.foreignKey;
       if (this.hasOne() || this.isCollection()) {
@@ -962,6 +964,13 @@ export class BelongsToReflection extends AssociationReflection {
   }
 
   get joinPrimaryKey(): string | string[] {
+    if (this.isPolymorphic()) {
+      const pk = this.options.primaryKey;
+      if (pk !== undefined) {
+        return Array.isArray(pk) ? pk.map(String) : String(pk);
+      }
+      return "id";
+    }
     return this.joinPrimaryKeyFor();
   }
 

@@ -7963,6 +7963,7 @@ describe("CollectionProxyDelegation", () => {
     await DlgComment.create({ body: "no", active: false, dlg_post_id: post.id });
 
     const proxy = association(post, "dlgComments");
+    await proxy.load();
     const filtered = await proxy.select((r: any) => r.readAttribute("active") === true);
     expect(filtered.length).toBe(1);
     expect(filtered[0].readAttribute("body")).toBe("yes");

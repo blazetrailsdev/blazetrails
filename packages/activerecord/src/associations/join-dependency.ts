@@ -281,6 +281,85 @@ export class JoinDependency {
     return this._nodes.map((n) => n.joinSql).join(" ");
   }
 
+  get baseKlass(): typeof Base {
+    return this._baseModel;
+  }
+
+  get reflections(): any[] {
+    return this._nodes
+      .map((node) => {
+        const modelClass = node.modelClass as any;
+        const reflections = modelClass._reflections ?? {};
+        return reflections[node.immediateAssocName] ?? null;
+      })
+      .filter(Boolean);
+  }
+
+  joinConstraints(
+    joinsToAdd: JoinDependency[],
+    _aliasTracker?: any,
+    _references?: string[],
+  ): string[] {
+    const joins = this._nodes.map((n) => n.joinSql);
+    for (const oj of joinsToAdd) {
+      joins.push(...oj._nodes.map((n) => n.joinSql));
+    }
+    return joins;
+  }
+
+  instantiate(resultSet: Record<string, unknown>[], _strictLoadingValue?: boolean): any[] {
+    const { parents } = this.instantiateFromRows(resultSet);
+    return parents;
+  }
+
+  applyColumnAliases(relation: any): void {
+    const aliases = this._aliases;
+    const aliasByIndex = new Map<number, string>();
+    aliasByIndex.set(this._baseTableIndex, this._baseAlias);
+    for (const node of this._nodes) aliasByIndex.set(node.tableIndex, node.tableAlias);
+
+    const selectExprs = aliases.map((a) => {
+      const tableAlias = aliasByIndex.get(a.tableIndex)!;
+      return `"${tableAlias}"."${a.column}" AS "${a.alias}"`;
+    });
+
+    if (typeof relation.select === "function") {
+      relation.select(...selectExprs);
+    } else if (typeof relation._select === "function") {
+      relation._select(...selectExprs);
+    }
+  }
+
+  each(callback: (node: JoinNode, index: number) => void): void {
+    this._nodes.forEach(callback);
+  }
+
+  [Symbol.iterator](): Iterator<JoinNode> {
+    return this._nodes[Symbol.iterator]();
+  }
+
+  static makeTree(associations: any): Record<string, any> {
+    const hash: Record<string, any> = {};
+    JoinDependency.walkTree(associations, hash);
+    return hash;
+  }
+
+  static walkTree(associations: any, hash: Record<string, any>): void {
+    if (typeof associations === "string" || typeof associations === "symbol") {
+      const key = String(associations);
+      if (!hash[key]) hash[key] = {};
+    } else if (Array.isArray(associations)) {
+      for (const assoc of associations) {
+        JoinDependency.walkTree(assoc, hash);
+      }
+    } else if (associations && typeof associations === "object") {
+      for (const [k, v] of Object.entries(associations)) {
+        if (!hash[k]) hash[k] = {};
+        if (v != null) JoinDependency.walkTree(v, hash[k]);
+      }
+    }
+  }
+
   private _addStiConstraint(joinOn: string, model: typeof Base, alias: string): string {
     const inheritanceCol = getInheritanceColumn(model);
     if (inheritanceCol && isStiSubclass(model)) {

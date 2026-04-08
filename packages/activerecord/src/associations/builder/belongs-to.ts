@@ -1,6 +1,6 @@
 import { underscore } from "@blazetrails/activesupport";
 import { SingularAssociation } from "./singular-association.js";
-import { beforeValidation, afterDestroy } from "../../callbacks.js";
+import { beforeValidation, afterCreate, afterUpdate, afterDestroy } from "../../callbacks.js";
 
 /**
  * Mirrors: ActiveRecord::Associations::Builder::BelongsTo
@@ -93,21 +93,60 @@ export class BelongsTo extends SingularAssociation {
       }
     }
 
-    const related = typeof record[name] === "function" ? record[name]() : record[name];
-    if (related && typeof related.isPersisted === "function" && related.isPersisted()) {
-      const touchFn = related.touchLater ?? related.touch;
-      if (typeof touchFn === "function") {
-        await (touch !== true ? touchFn.call(related, touch) : touchFn.call(related));
+    // Touch the current parent by looking it up via FK value.
+    // We can't use record[name] (association reader) because it returns
+    // the cached target which is null for newly created records.
+    const fkValue =
+      typeof record.readAttribute === "function"
+        ? record.readAttribute(foreignKey)
+        : record[foreignKey];
+    if (fkValue != null) {
+      const association =
+        typeof record.association === "function" ? record.association(name) : null;
+      if (association) {
+        const klass = association.klass;
+        if (klass && typeof klass.findBy === "function") {
+          const pk =
+            association.reflection?.associationPrimaryKey?.(klass) ?? klass.primaryKey ?? "id";
+          const parent = await klass.findBy({ [pk as string]: fkValue });
+          if (parent) {
+            const touchFn = parent.touchLater ?? parent.touch;
+            if (typeof touchFn === "function") {
+              await (touch !== true ? touchFn.call(parent, touch) : touchFn.call(parent));
+            }
+          }
+        }
       }
     }
   }
 
-  static addTouchCallbacks(_model: any, _reflection: any): void {
-    // Touch callbacks are handled by touchBelongsToParents() in
-    // associations.ts, called from Base#_createOrUpdate and Base#_destroyRow.
-    // Migrating to per-association afterCreate/afterUpdate/afterDestroy
-    // callbacks is tracked as a follow-up to avoid double-touching with
-    // the centralized handler.
+  static addTouchCallbacks(model: any, reflection: any): void {
+    const foreignKey = reflection.foreignKey ?? reflection.options?.foreignKey;
+    const foreignKeys: string[] = Array.isArray(foreignKey) ? foreignKey : [foreignKey];
+    const name = reflection.name;
+    const touch = reflection.options?.touch;
+
+    const makeCallback = (changesMethod: string) => async (record: any) => {
+      const raw = record[changesMethod];
+      const changes = (typeof raw === "function" ? raw.call(record) : raw) ?? {};
+      for (const key of foreignKeys) {
+        await BelongsTo.touchRecord(record, changes, key, name, touch);
+      }
+    };
+
+    if (reflection.counterCacheColumn?.() ?? reflection.options?.counterCache) {
+      const touchCb = makeCallback("savedChanges");
+      afterUpdate(model, async (record: any) => {
+        const assoc = record.association(name);
+        if (!assoc.isSavedChangeToTarget()) {
+          await touchCb(record);
+        }
+      });
+    } else {
+      afterCreate(model, makeCallback("savedChanges"));
+      afterUpdate(model, makeCallback("savedChanges"));
+      afterDestroy(model, makeCallback("changesToSave"));
+    }
   }
 
   static addDefaultCallbacks(model: any, reflection: any): void {

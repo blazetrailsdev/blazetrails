@@ -2134,9 +2134,6 @@ export class Base extends Model {
 
       const autosaveOk = await autosaveChildren(this);
       if (!autosaveOk) return false;
-
-      const { touchBelongsToParents } = await import("./associations.js");
-      await touchBelongsToParents(this);
     }
 
     return saved;
@@ -2390,9 +2387,8 @@ export class Base extends Model {
       (this as any)._triggerDestroyCallback = true;
       (this as any)._newRecordBeforeLastCommit = false;
       (this as any)._triggerUpdateCallback = false;
-      const { updateCounterCaches, touchBelongsToParents } = await import("./associations.js");
+      const { updateCounterCaches } = await import("./associations.js");
       await updateCounterCaches(this, "decrement");
-      await touchBelongsToParents(this);
     }
 
     return didDelete || !halted;

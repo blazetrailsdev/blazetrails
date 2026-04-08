@@ -128,7 +128,11 @@ export class BelongsTo extends SingularAssociation {
             reflection?.foreignType ??
             reflection?.options?.foreignType ??
             `${underscore(name)}_type`;
-          const typeName = changes[foreignType]?.[0] ?? record[foreignType];
+          const typeName =
+            changes[foreignType]?.[0] ??
+            (typeof record.readAttribute === "function"
+              ? record.readAttribute(foreignType)
+              : record[foreignType]);
           try {
             klass = typeName ? resolveModel(typeName) : null;
           } catch {

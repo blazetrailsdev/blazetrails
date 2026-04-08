@@ -39,7 +39,7 @@ export class AliasTracker {
     let count = 0;
     const nameEscaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const pattern = new RegExp(
-      `JOIN(?:\\s+\\w+)?\\s+(?:\\S+\\s+)?(?:"?${nameEscaped}"?)\\s+ON`,
+      `JOIN(?:\\s+\\w+)?\\s+(?:\\S+\\s+)?(?:"?${nameEscaped}"?)(?:\\s+(?:AS\\s+)?\\S+)?\\s+ON`,
       "gi",
     );
 

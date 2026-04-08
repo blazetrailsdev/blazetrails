@@ -265,17 +265,19 @@ export class JoinDependency {
     return lastNode;
   }
 
-  buildSelectSql(): string {
+  private _buildSelectExpressions(): string[] {
     const aliasByIndex = new Map<number, string>();
     aliasByIndex.set(this._baseTableIndex, this._baseAlias);
     for (const node of this._nodes) aliasByIndex.set(node.tableIndex, node.tableAlias);
 
-    return this._aliases
-      .map((a) => {
-        const tableAlias = aliasByIndex.get(a.tableIndex)!;
-        return `"${tableAlias}"."${a.column}" AS "${a.alias}"`;
-      })
-      .join(", ");
+    return this._aliases.map((a) => {
+      const tableAlias = aliasByIndex.get(a.tableIndex)!;
+      return `"${tableAlias}"."${a.column}" AS "${a.alias}"`;
+    });
+  }
+
+  buildSelectSql(): string {
+    return this._buildSelectExpressions().join(", ");
   }
 
   buildJoinSql(): string {
@@ -293,8 +295,10 @@ export class JoinDependency {
         const parentModel = node.parentPath
           ? (modelByPath.get(node.parentPath) ?? (this._baseModel as any))
           : (this._baseModel as any);
-        const reflections = parentModel._reflections ?? {};
-        const reflection = reflections[node.immediateAssocName] ?? null;
+        const reflection =
+          typeof parentModel.reflectOnAssociation === "function"
+            ? parentModel.reflectOnAssociation(node.immediateAssocName)
+            : ((parentModel._reflections ?? {})[node.immediateAssocName] ?? null);
         const nodePath = node.parentPath
           ? `${node.parentPath}.${node.immediateAssocName}`
           : node.immediateAssocName;
@@ -322,16 +326,7 @@ export class JoinDependency {
   }
 
   applyColumnAliases(relation: any): any {
-    const aliases = this._aliases;
-    const aliasByIndex = new Map<number, string>();
-    aliasByIndex.set(this._baseTableIndex, this._baseAlias);
-    for (const node of this._nodes) aliasByIndex.set(node.tableIndex, node.tableAlias);
-
-    const selectExprs = aliases.map((a) => {
-      const tableAlias = aliasByIndex.get(a.tableIndex)!;
-      return `"${tableAlias}"."${a.column}" AS "${a.alias}"`;
-    });
-
+    const selectExprs = this._buildSelectExpressions();
     if (typeof relation.reselectBang === "function") {
       relation.reselectBang(...selectExprs);
       return relation;

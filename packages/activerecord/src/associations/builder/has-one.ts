@@ -94,14 +94,15 @@ export class HasOne extends SingularAssociation {
     }
 
     if (instance && typeof instance.isPersisted === "function" && instance.isPersisted()) {
-      if (typeof instance.touch !== "function") return;
+      const touchFn = instance.touchLater ?? instance.touch;
+      if (typeof touchFn !== "function") return;
       if (touch === true) {
-        await instance.touch();
+        await touchFn.call(instance);
       } else if (Array.isArray(touch)) {
         if (touch.length === 0) return;
-        await instance.touch(...touch);
+        await touchFn.call(instance, ...touch);
       } else {
-        await instance.touch(touch);
+        await touchFn.call(instance, touch);
       }
     }
   }

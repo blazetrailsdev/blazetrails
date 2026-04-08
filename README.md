@@ -16,7 +16,7 @@ The goal is to be **100% API compatible with Rails**, matching behavior **test f
 | `@blazetrails/activemodel`   | [ActiveModel](https://api.rubyonrails.org/classes/ActiveModel.html)     | **100%**  | **100%**  | Attributes, validations, callbacks, dirty tracking, i18n   |
 | `@blazetrails/rack`          | [Rack](https://rack.github.io/)                                         | —         | **100%**  | Modular web server interface, request/response, middleware |
 
-**Data Layer Parity** (ActiveRecord + Arel + ActiveModel + ActiveSupport): **56.1% API** | **70.4% Tests**
+**Data Layer Parity** (ActiveRecord + Arel + ActiveModel): **69% API** | **70.4% Tests**
 
 **ActionPack & friends** — started but not the current priority:
 

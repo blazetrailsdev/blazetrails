@@ -154,8 +154,11 @@ function resolveCallback(
   if (typeof method !== "function") {
     throw new ArgumentError(`Callback object must implement ${methodName} or ${camelMethod}`);
   }
-  return ((record: AnyRecord, ...args: unknown[]) =>
-    method.call(fnOrObject, record, ...args)) as CallbackFn;
+  if (timing === "around") {
+    return ((record: AnyRecord, proceed: () => void | Promise<void>) =>
+      method.call(fnOrObject, record, proceed)) as AroundCallbackFn;
+  }
+  return ((record: AnyRecord) => method.call(fnOrObject, record)) as CallbackFn;
 }
 
 /**

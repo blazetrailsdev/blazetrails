@@ -2,7 +2,7 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { Base } from "./index.js";
 import { generatesTokenFor, setTokenForSecret } from "./generates-token-for.js";
 import { setSignedIdVerifierSecret } from "./signed-id.js";
@@ -21,6 +21,10 @@ describe("TokenForTest", () => {
     adapter = freshAdapter();
     setSignedIdVerifierSecret("blazetrails-test-secret");
     setTokenForSecret("blazetrails-test-token-secret");
+  });
+
+  afterEach(() => {
+    setTokenForSecret(null);
   });
 
   function makeModel() {
@@ -237,6 +241,10 @@ describe("TokenForTest", () => {
 describe("TokenForTest", () => {
   beforeEach(() => {
     setTokenForSecret("blazetrails-test-token-secret");
+  });
+
+  afterEach(() => {
+    setTokenForSecret(null);
   });
 
   it("generates and resolves a token", async () => {

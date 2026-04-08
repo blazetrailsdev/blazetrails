@@ -44,13 +44,13 @@ export class TokenDefinition {
   readonly definingClass: typeof Base;
   readonly purpose: string;
   readonly expiresIn: number | undefined;
-  readonly block: ((record: any) => string) | undefined;
+  readonly block: ((record: any) => unknown) | undefined;
 
   constructor(
     definingClass: typeof Base,
     purpose: string,
     expiresIn: number | undefined,
-    block: ((record: any) => string) | undefined,
+    block: ((record: any) => unknown) | undefined,
   ) {
     this.definingClass = definingClass;
     this.purpose = purpose;
@@ -67,8 +67,7 @@ export class TokenDefinition {
   }
 
   payloadFor(model: Base): unknown[] {
-    const id = (model as any).id;
-    return this.block ? [id, this.block(model)] : [id];
+    return this.block ? [model.id, this.block(model)] : [model.id];
   }
 
   generateToken(model: Base): string {

@@ -46,6 +46,7 @@ export class Association {
     "strictLoading",
     "queryConstraints",
     "scope",
+    "extend",
   ];
 
   static build(
@@ -212,17 +213,18 @@ export class Association {
   }
 
   static checkDependentOptions(dependent: string, model: any): void {
+    const validOptions = this.validDependentOptions();
+    if (!validOptions.includes(dependent)) {
+      throw new Error(
+        `The :dependent option must be one of ${validOptions.join(", ")}, but is :${dependent}`,
+      );
+    }
     if (
       dependent === "destroyAsync" &&
       !(model._destroyAssociationAsyncJob ?? model.destroyAssociationAsyncJob)
     ) {
       throw new Error(
         "A valid destroyAssociationAsyncJob is required to use `dependent: destroyAsync` on associations",
-      );
-    }
-    if (!this.validDependentOptions().includes(dependent)) {
-      throw new Error(
-        `The :dependent option must be one of ${this.validDependentOptions().join(", ")}, but is :${dependent}`,
       );
     }
   }

@@ -58,13 +58,13 @@ export class BelongsTo extends SingularAssociation {
     // instance methods (incrementCounters, decrementCountersBeforeLastSave).
   }
 
-  static touchRecord(
+  static async touchRecord(
     record: any,
     changes: Record<string, any>,
     foreignKey: string,
     name: string,
     touch: any,
-  ): void {
+  ): Promise<void> {
     const oldForeignId = changes[foreignKey]?.[0];
 
     if (oldForeignId != null) {
@@ -83,12 +83,12 @@ export class BelongsTo extends SingularAssociation {
         if (klass) {
           const pk = reflection?.associationPrimaryKey?.(klass) ?? "id";
           const oldRecord =
-            typeof klass.findBy === "function" ? klass.findBy({ [pk]: oldForeignId }) : null;
+            typeof klass.findBy === "function" ? await klass.findBy({ [pk]: oldForeignId }) : null;
           if (oldRecord) {
             if (touch !== true && typeof oldRecord.touchLater === "function") {
-              oldRecord.touchLater(touch);
+              await oldRecord.touchLater(touch);
             } else if (typeof oldRecord.touchLater === "function") {
-              oldRecord.touchLater();
+              await oldRecord.touchLater();
             }
           }
         }
@@ -98,9 +98,9 @@ export class BelongsTo extends SingularAssociation {
     const related = typeof record[name] === "function" ? record[name]() : record[name];
     if (related && typeof related.isPersisted === "function" && related.isPersisted()) {
       if (touch !== true && typeof related.touchLater === "function") {
-        related.touchLater(touch);
+        await related.touchLater(touch);
       } else if (typeof related.touchLater === "function") {
-        related.touchLater();
+        await related.touchLater();
       }
     }
   }

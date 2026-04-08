@@ -183,14 +183,16 @@ async function processPendingModels(inner: any): Promise<void> {
         );
       } catch (e: any) {
         const msg = String(e?.message ?? "").toLowerCase();
+        const code = String(e?.code ?? "");
+        const constraint = String(e?.constraint ?? "");
         // On PG, concurrent CREATE TABLE IF NOT EXISTS can race on the
-        // pg_type unique index. If the table was created by another
-        // connection, treat it as success.
-        if (
-          msg.includes("already exists") ||
-          msg.includes("pg_type") ||
-          msg.includes("duplicate key")
-        ) {
+        // pg_type unique index (error 23505). If the table was created
+        // by another connection, treat it as success.
+        const isPgCreateTableRace =
+          isPg() &&
+          ((code === "23505" && constraint === "pg_type_typname_nsp_index") ||
+            (msg.includes("pg_type") && msg.includes("duplicate key")));
+        if (isPgCreateTableRace || msg.includes("already exists")) {
           _createdTables.add(tableName);
           _createdColumns.set(
             tableName,
@@ -664,7 +666,7 @@ class SchemaAdapter extends DatabaseStatementsMixin(class {}) implements Databas
     if (/DROP\s+TABLE\s+(?!IF)/i.test(sql)) {
       sql = sql.replace(/DROP\s+TABLE\s+/i, "DROP TABLE IF EXISTS ");
     }
-    return this.inner.exec(sql);
+    return execDdlWithSavepoint(this.inner, sql);
   }
 
   async explain(sql: string): Promise<string> {

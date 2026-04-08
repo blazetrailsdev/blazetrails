@@ -118,7 +118,8 @@ export class Error {
       ? modelClass.humanAttributeName(attribute)
       : humanize(attribute);
 
-    const i18nScope = modelClass?.i18nScope ?? "activemodel";
+    const i18nScope =
+      typeof modelClass?.i18nScope === "string" ? modelClass.i18nScope : "activemodel";
     let format: string;
     if (Error.i18nCustomizeFullMessage) {
       const modelKey =
@@ -168,7 +169,8 @@ export class Error {
       ...options,
     };
 
-    const i18nScope = modelClass?.i18nScope ?? "activemodel";
+    const i18nScope =
+      typeof modelClass?.i18nScope === "string" ? modelClass.i18nScope : "activemodel";
     const ancestors: string[] = [];
     if (typeof modelClass?.lookupAncestors === "function") {
       for (const klass of modelClass.lookupAncestors()) {
@@ -187,6 +189,9 @@ export class Error {
       defaults.push({ key: `${i18nScope}.errors.models.${ancestorKey}.${type}` });
     }
     defaults.push({ key: `${i18nScope}.errors.messages.${type}` });
+    if (i18nScope !== "activemodel") {
+      defaults.push({ key: `activemodel.errors.messages.${type}` });
+    }
     defaults.push({ key: `errors.attributes.${attribute}.${type}` });
     defaults.push({ key: `errors.messages.${type}` });
 

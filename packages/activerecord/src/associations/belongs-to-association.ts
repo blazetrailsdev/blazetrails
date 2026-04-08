@@ -135,12 +135,13 @@ export class BelongsToAssociation extends SingularAssociation {
     if (!counterCol) return;
     if (typeof klass.where !== "function") return;
 
-    const pks = this.associationPrimaryKeys(klass);
+    const rawPk = klass.primaryKey ?? "id";
+    const pks = Array.isArray(rawPk) ? rawPk : [rawPk];
+    if (pks.length !== foreignKeyValues.length) return;
     const conditions: Record<string, unknown> = {};
     for (let i = 0; i < pks.length; i++) {
-      const val = foreignKeyValues[i] ?? foreignKeyValues[0];
-      if (val == null) return;
-      conditions[pks[i]] = val;
+      if (foreignKeyValues[i] == null) return;
+      conditions[pks[i]] = foreignKeyValues[i];
     }
 
     const scope = klass.where(conditions);

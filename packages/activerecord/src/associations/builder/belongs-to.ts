@@ -119,7 +119,8 @@ export class BelongsTo extends SingularAssociation {
     const touch = reflection.options?.touch;
 
     const makeCallback = (changesMethod: string) => async (record: any) => {
-      const changes = typeof record[changesMethod] === "function" ? record[changesMethod]() : {};
+      const raw = record[changesMethod];
+      const changes = (typeof raw === "function" ? raw.call(record) : raw) ?? {};
       for (const key of foreignKeys) {
         await BelongsTo.touchRecord(record, changes, key, name, touch);
       }

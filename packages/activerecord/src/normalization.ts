@@ -11,7 +11,6 @@
  */
 
 import { Model } from "@blazetrails/activemodel";
-// SerializeCastValue protocol — castType delegates serialization per ActiveModel::Type::SerializeCastValue
 
 /**
  * NormalizedValueType — decorates an underlying cast type with a normalizer.

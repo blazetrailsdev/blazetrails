@@ -39,7 +39,11 @@ export interface CollectionProxy {
  * Using Omit instead of Pick means new Relation methods are automatically
  * available on AssociationProxy without manual maintenance.
  */
-type DelegatedRelationMethods = Omit<Relation<Base>, keyof CollectionProxy>;
+type DelegatedRelationMethods = {
+  [K in keyof Omit<Relation<Base>, keyof CollectionProxy> as K extends `_${string}`
+    ? never
+    : K]: Omit<Relation<Base>, keyof CollectionProxy>[K];
+};
 
 /**
  * A CollectionProxy wrapped with a JS Proxy that delegates methods

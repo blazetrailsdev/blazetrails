@@ -3,7 +3,7 @@
  *
  * Mirrors: ActiveRecord::Associations::AliasTracker
  */
-import { Table } from "@blazetrails/arel";
+import { Table, Nodes } from "@blazetrails/arel";
 
 const DEFAULT_TABLE_ALIAS_LENGTH = 63;
 
@@ -54,17 +54,15 @@ export class AliasTracker {
     );
 
     for (const join of tableJoins) {
-      if (typeof join === "string") {
-        // Raw SQL string
+      if (join instanceof Nodes.StringJoin) {
+        const sql = join.left?.toString?.() ?? "";
+        const matches = sql.match(pattern);
+        count += matches ? matches.length : 0;
+      } else if (join instanceof Nodes.Join) {
+        if ((join.left as any)?.name === name) count += 1;
+      } else if (typeof join === "string") {
         const matches = join.match(pattern);
         count += matches ? matches.length : 0;
-      } else if (join && typeof join === "object" && typeof join.left === "string") {
-        // Arel StringJoin — join.left is the SQL string
-        const matches = join.left.match(pattern);
-        count += matches ? matches.length : 0;
-      } else if (join && typeof join === "object" && join.left?.name != null) {
-        // Arel Join node — join.left is a Table
-        if (join.left.name === name) count += 1;
       }
     }
 

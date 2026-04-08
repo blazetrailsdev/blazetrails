@@ -45,32 +45,39 @@ export class CollectionAssociation extends Association {
     name: string,
     options: Record<string, unknown>,
   ): void {
-    const fullCallbackName = `${callbackName}For${name.charAt(0).toUpperCase()}${name.slice(1)}`;
-
     const callbackValues = Array.isArray(options[callbackName])
       ? (options[callbackName] as any[])
       : options[callbackName] != null
         ? [options[callbackName]]
         : [];
 
-    if ((callbackValues as any[]).length === 0) return;
+    if (callbackValues.length === 0) return;
 
+    const normalized = callbackValues.map((callback: any) => {
+      if (typeof callback === "string" || typeof callback === "symbol") {
+        return (owner: any, record: any) => owner[callback](record);
+      } else if (typeof callback === "function") {
+        return (owner: any, record: any) => callback(owner, record);
+      } else {
+        return (owner: any, record: any) => callback.call(owner, record);
+      }
+    });
+
+    // Store on model class for Rails parity (class_attribute pattern)
+    const fullCallbackName = `${callbackName}For${name.charAt(0).toUpperCase()}${name.slice(1)}`;
     const existing = Object.prototype.hasOwnProperty.call(model, fullCallbackName)
       ? model[fullCallbackName]
       : undefined;
     const prior = Array.isArray(existing) ? existing : [];
+    model[fullCallbackName] = [...prior, ...normalized];
 
-    const callbacks = (callbackValues as any[]).map((callback: any) => {
-      if (typeof callback === "string" || typeof callback === "symbol") {
-        return (_method: string, owner: any, record: any) => owner[callback](record);
-      } else if (typeof callback === "function") {
-        return (_method: string, owner: any, record: any) => callback(owner, record);
-      } else {
-        return (method: string, owner: any, record: any) => callback[method](owner, record);
-      }
-    });
-
-    model[fullCallbackName] = [...prior, ...callbacks];
+    // Also store normalized callbacks in the association options so
+    // fireAssocCallbacks (which reads options.beforeAdd etc.) finds them
+    const assocs: any[] = model._associations ?? [];
+    const assocDef = assocs.find((a: any) => a.name === name);
+    if (assocDef) {
+      assocDef.options[callbackName] = model[fullCallbackName];
+    }
   }
 
   static override defineReaders(mixin: any, name: string): void {

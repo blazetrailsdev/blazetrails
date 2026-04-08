@@ -1,5 +1,4 @@
 import { SingularAssociation } from "./singular-association.js";
-import { afterCreate, afterUpdate, afterDestroy } from "../../callbacks.js";
 
 /**
  * Mirrors: ActiveRecord::Associations::Builder::HasOne
@@ -95,16 +94,9 @@ export class HasOne extends SingularAssociation {
     }
   }
 
-  static addTouchCallbacks(model: any, reflection: any): void {
-    const name = reflection.name ?? reflection;
-    const touch = reflection.options?.touch;
-
-    const callback = async (record: any) => {
-      await HasOne.touchRecord(record, name, touch);
-    };
-
-    afterCreate(model, callback);
-    afterUpdate(model, callback);
-    afterDestroy(model, callback);
+  static addTouchCallbacks(_model: any, _reflection: any): void {
+    // Touch callbacks are handled by touchBelongsToParents() in
+    // associations.ts (from the child's belongsTo side). Migrating to
+    // per-association callbacks registered here is a follow-up.
   }
 }

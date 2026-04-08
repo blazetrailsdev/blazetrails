@@ -1,6 +1,6 @@
 import { underscore } from "@blazetrails/activesupport";
 import { SingularAssociation } from "./singular-association.js";
-import { beforeValidation, afterCreate, afterUpdate, afterDestroy } from "../../callbacks.js";
+import { beforeValidation } from "../../callbacks.js";
 
 /**
  * Mirrors: ActiveRecord::Associations::Builder::BelongsTo
@@ -50,17 +50,11 @@ export class BelongsTo extends SingularAssociation {
     }
   }
 
-  static addCounterCacheCallbacks(model: any, reflection: any): void {
-    const name = reflection.name;
-    afterUpdate(model, async (record: any) => {
-      if (typeof record.association !== "function") return;
-      const assoc = record.association(name);
-      if (typeof assoc.savedChangeToTarget === "function" && assoc.savedChangeToTarget()) {
-        if (typeof assoc.incrementCounters === "function") await assoc.incrementCounters();
-        if (typeof assoc.decrementCountersBeforeLastSave === "function")
-          await assoc.decrementCountersBeforeLastSave();
-      }
-    });
+  static addCounterCacheCallbacks(_model: any, _reflection: any): void {
+    // Counter cache is handled by updateCounterCaches() in associations.ts,
+    // called from Base#_createOrUpdate and Base#_destroyRow. Migrating to
+    // per-association afterCreate/afterUpdate callbacks is tracked as a
+    // follow-up to avoid double-counting with the centralized handler.
   }
 
   static async touchRecord(
@@ -108,37 +102,12 @@ export class BelongsTo extends SingularAssociation {
     }
   }
 
-  static addTouchCallbacks(model: any, reflection: any): void {
-    const rawFk = reflection.foreignKey ?? reflection.options?.foreignKey;
-    const foreignKeys: string[] = Array.isArray(rawFk)
-      ? rawFk.filter((k: any): k is string => typeof k === "string")
-      : typeof rawFk === "string"
-        ? [rawFk]
-        : [];
-    const name = reflection.name;
-    const touch = reflection.options?.touch;
-
-    const makeCallback = (changesMethod: string) => async (record: any) => {
-      const raw = record[changesMethod];
-      const changes = (typeof raw === "function" ? raw.call(record) : raw) ?? {};
-      for (const key of foreignKeys) {
-        await BelongsTo.touchRecord(record, changes, key, name, touch);
-      }
-    };
-
-    if (reflection.options?.counterCache) {
-      afterUpdate(model, async (record: any) => {
-        if (typeof record.association !== "function") return;
-        const assoc = record.association(name);
-        if (typeof assoc.savedChangeToTarget !== "function" || !assoc.savedChangeToTarget()) {
-          await makeCallback("savedChanges")(record);
-        }
-      });
-    } else {
-      afterCreate(model, makeCallback("savedChanges"));
-      afterUpdate(model, makeCallback("savedChanges"));
-      afterDestroy(model, makeCallback("changesToSave"));
-    }
+  static addTouchCallbacks(_model: any, _reflection: any): void {
+    // Touch callbacks are handled by touchBelongsToParents() in
+    // associations.ts, called from Base#_createOrUpdate and Base#_destroyRow.
+    // Migrating to per-association afterCreate/afterUpdate/afterDestroy
+    // callbacks is tracked as a follow-up to avoid double-touching with
+    // the centralized handler.
   }
 
   static addDefaultCallbacks(model: any, reflection: any): void {
@@ -152,16 +121,10 @@ export class BelongsTo extends SingularAssociation {
     });
   }
 
-  static override addDestroyCallbacks(model: any, reflection: any): void {
-    const name = reflection.name ?? reflection;
-    afterDestroy(model, (record: any) => {
-      if (typeof record.association === "function") {
-        const assoc = record.association(name);
-        if (typeof assoc.handleDependency === "function") {
-          return assoc.handleDependency();
-        }
-      }
-    });
+  static override addDestroyCallbacks(_model: any, _reflection: any): void {
+    // BelongsTo destroy is handled by processDependentAssociations() in
+    // associations.ts. Migrating to per-association afterDestroy callbacks
+    // is tracked as a follow-up.
   }
 
   static override defineValidations(model: any, reflection: any): void {
@@ -236,13 +199,13 @@ export class BelongsTo extends SingularAssociation {
       [
         `${name}Changed`,
         function (this: any) {
-          return this.association(name).targetChanged();
+          return this.association(name).isTargetChanged();
         },
       ],
       [
         `${name}PreviouslyChanged`,
         function (this: any) {
-          return this.association(name).targetPreviouslyChanged();
+          return this.association(name).isTargetPreviouslyChanged();
         },
       ],
     ] as [string, () => any][]) {

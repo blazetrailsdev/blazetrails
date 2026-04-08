@@ -6,7 +6,6 @@
  */
 
 import * as Reflection from "../../reflection.js";
-import { beforeDestroy } from "../../callbacks.js";
 
 type ExtensionModule = {
   validOptions?: () => string[];
@@ -240,16 +239,11 @@ export class Association {
     }
   }
 
-  static addDestroyCallbacks(model: any, reflection: any): void {
-    const name = reflection.name ?? reflection;
-    beforeDestroy(model, (record: any) => {
-      if (typeof record.association === "function") {
-        const assoc = record.association(name);
-        if (typeof assoc.handleDependency === "function") {
-          return assoc.handleDependency();
-        }
-      }
-    });
+  static addDestroyCallbacks(_model: any, _reflection: any): void {
+    // Destroy callbacks are handled by processDependentAssociations() in
+    // associations.ts, called from Base#_destroyRow. Migrating to
+    // per-association beforeDestroy callbacks is tracked as a follow-up
+    // to avoid double-processing with the centralized handler.
   }
 
   static addAfterCommitJobsCallback(_model: any, _dependent: string): void {

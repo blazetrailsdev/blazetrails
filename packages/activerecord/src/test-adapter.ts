@@ -193,11 +193,11 @@ async function processPendingModels(inner: any): Promise<void> {
           ((code === "23505" && constraint === "pg_type_typname_nsp_index") ||
             (msg.includes("pg_type") && msg.includes("duplicate key")));
         if (isPgCreateTableRace || msg.includes("already exists")) {
+          // Mark table as existing but don't assume columns — another
+          // connection may have created it with a different column set.
+          // The next loop iteration will attempt ALTER TABLE for any
+          // missing columns.
           _createdTables.add(tableName);
-          _createdColumns.set(
-            tableName,
-            cpkCols ? new Set(columns.keys()) : new Set(["id", ...columns.keys()]),
-          );
         } else {
           console.error(`[test-adapter] Failed to create table "${tableName}": ${e?.message}`);
         }

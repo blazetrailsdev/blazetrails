@@ -429,16 +429,19 @@ export class AssociationReflection extends MacroReflection {
   inverseOf(): AssociationReflection | ThroughReflection | null {
     const name = this.inverseName();
     if (!name) return null;
-    if (this._inverseOfCache) return this._inverseOfCache;
+    if (this._inverseOfCache !== undefined) return this._inverseOfCache;
     const targetAssocs: any[] = (this.klass as any)._associations ?? [];
     const assocDef = targetAssocs.find((a: any) => a.name === name);
-    if (!assocDef) return null;
+    if (!assocDef) {
+      this._inverseOfCache = null;
+      return null;
+    }
     this._inverseOfCache = createReflection(assocDef, this.klass);
     return this._inverseOfCache;
   }
 
   private _inverseNameCache: string | null | undefined = undefined;
-  private _inverseOfCache: AssociationReflection | ThroughReflection | null = null;
+  private _inverseOfCache: AssociationReflection | ThroughReflection | null | undefined = undefined;
 
   private inverseName(): string | null {
     if (this._inverseNameCache !== undefined) return this._inverseNameCache;
@@ -469,8 +472,14 @@ export class AssociationReflection extends MacroReflection {
         assocDef = targetAssocs.find((a: any) => a.name === pluralInverseName);
         reflection = assocDef ? createReflection(assocDef, this.klass) : null;
       }
-    } catch {
-      reflection = false;
+    } catch (e: unknown) {
+      // Rails: rescue NameError => error; raise unless error.name.to_s == class_name
+      // Swallow klass resolution errors (model not found), re-raise anything else
+      if (e instanceof Error && e.message.includes(this.className)) {
+        reflection = false;
+      } else {
+        throw e;
+      }
     }
 
     if (this.validInverseReflection(reflection)) {
@@ -754,7 +763,7 @@ export class BelongsToReflection extends AssociationReflection {
     reflection: AssociationReflection | ThroughReflection,
     inverseReflection = false,
   ): boolean {
-    if ((reflection as any).options?.polymorphic) return false;
+    if (this.isPolymorphic()) return false;
     return super.canFindInverseOfAutomatically(reflection, inverseReflection);
   }
 

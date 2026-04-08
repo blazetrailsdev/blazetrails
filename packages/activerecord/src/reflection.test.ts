@@ -941,6 +941,162 @@ describe("ReflectionTest", () => {
   it.skip("automatic inverse suppresses name error for association", () => {});
   it.skip("automatic inverse does not suppress name error from incidental code", () => {});
 
+  it("has one and belongs to should find inverse automatically", () => {
+    class Car extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class Bulb extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.attribute("car_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(Car);
+    registerModel(Bulb);
+    Associations.hasOne.call(Car, "bulb", {});
+    Associations.belongsTo.call(Bulb, "car", {});
+
+    const carRef = reflectOnAssociation(Car, "bulb")!;
+    const bulbRef = reflectOnAssociation(Bulb, "car")!;
+
+    expect(carRef.hasInverse()).toBe(true);
+    expect(carRef.inverseOf()!.name).toBe("car");
+
+    expect(bulbRef.hasInverse()).toBe(true);
+    expect(bulbRef.inverseOf()!.name).toBe("bulb");
+  });
+
+  it("has many and belongs to should find inverse automatically", () => {
+    class Comment extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class Rating extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.attribute("comment_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(Comment);
+    registerModel(Rating);
+    Associations.hasMany.call(Comment, "ratings", {});
+    Associations.belongsTo.call(Rating, "comment", {});
+
+    const commentRef = reflectOnAssociation(Comment, "ratings")!;
+    expect(commentRef.hasInverse()).toBe(true);
+    expect(commentRef.inverseOf()!.name).toBe("comment");
+  });
+
+  it("has one and belongs to with non default foreign key should not find inverse automatically", () => {
+    class User extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class Room extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.attribute("owner_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(User);
+    registerModel(Room);
+    Associations.hasOne.call(User, "ownedRoom", { foreignKey: "owner_id" });
+    Associations.belongsTo.call(Room, "owner", { className: "User", foreignKey: "owner_id" });
+
+    const ownerRef = reflectOnAssociation(Room, "owner")!;
+    expect(ownerRef.hasInverse()).toBe(false);
+  });
+
+  it("through association should not find inverse automatically", () => {
+    class Doctor extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class Appointment extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.attribute("doctor_id", "integer");
+        this.attribute("patient_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class Patient extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(Doctor);
+    registerModel(Appointment);
+    registerModel(Patient);
+    Associations.hasMany.call(Doctor, "appointments", {});
+    Associations.hasMany.call(Doctor, "patients", { through: "appointments" });
+    Associations.belongsTo.call(Appointment, "doctor", {});
+    Associations.belongsTo.call(Appointment, "patient", {});
+
+    const patientsRef = reflectOnAssociation(Doctor, "patients")!;
+    expect(patientsRef.hasInverse()).toBe(false);
+  });
+
+  it("polymorphic belongs to should not find inverse automatically", () => {
+    class Tag extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.attribute("taggable_id", "integer");
+        this.attribute("taggable_type", "string");
+        this.adapter = adapter;
+      }
+    }
+    class Post extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(Tag);
+    registerModel(Post);
+    Associations.belongsTo.call(Tag, "taggable", { polymorphic: true });
+    Associations.hasMany.call(Post, "tags", { as: "taggable" });
+
+    const taggableRef = reflectOnAssociation(Tag, "taggable")!;
+    expect(taggableRef.hasInverse()).toBe(false);
+  });
+
+  it("explicit inverse of false disables automatic detection", () => {
+    class Parent extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class Child extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.attribute("parent_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(Parent);
+    registerModel(Child);
+    Associations.hasMany.call(Parent, "children", { className: "Child", inverseOf: false });
+    Associations.belongsTo.call(Child, "parent", {});
+
+    const childrenRef = reflectOnAssociation(Parent, "children")!;
+    expect(childrenRef.hasInverse()).toBe(false);
+  });
+
   it("human name", () => {
     class Post extends Base {
       static {

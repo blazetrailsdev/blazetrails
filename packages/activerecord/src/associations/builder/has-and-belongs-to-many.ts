@@ -82,7 +82,7 @@ export class HasAndBelongsToMany {
   }
 
   middleReflection(joinModel: any): any {
-    const lhsModelName = underscore(this.lhsModel.name).replace(/\//g, "_").toLowerCase();
+    const lhsModelName = this.lhsModel.name.toLowerCase();
     const middleName = [pluralize(lhsModelName), this.associationName].sort().join("_");
 
     const middleOptions: Record<string, unknown> = {};
@@ -178,7 +178,7 @@ export class HasAndBelongsToMany {
 
     deps.modelRegistry.set(registryKey, JoinModel);
 
-    const middleName = [pluralize(underscore(model.name).toLowerCase()), name].sort().join("_");
+    const middleName = [pluralize(model.name.toLowerCase()), name].sort().join("_");
     model._associations.push({
       type: "hasMany",
       name: middleName,

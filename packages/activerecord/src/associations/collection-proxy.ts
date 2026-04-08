@@ -132,7 +132,7 @@ export class CollectionProxy {
       );
     }
 
-    if (throughAssoc.type === "hasOne") {
+    if (throughAssoc.type === "hasOne" && !throughAssoc.options.through) {
       throw new HasManyThroughCantAssociateThroughHasOneOrManyReflection(
         ctor.name,
         this._assocName,

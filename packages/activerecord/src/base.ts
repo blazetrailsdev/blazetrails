@@ -2351,13 +2351,6 @@ export class Base extends Model {
 
     let didDelete = false;
     const halted = !(await ctor._callbackChain.run("destroy", this, async () => {
-      // Fallback for associations defined without going through the builder
-      // (e.g. tests that set _associations directly). Builder-registered
-      // beforeDestroy callbacks handle their own associations first;
-      // this catches any remaining unhandled dependent associations.
-      const { processDependentAssociations } = await import("./associations.js");
-      await processDependentAssociations(this);
-
       const table = ctor.arelTable;
       const pk = this.id;
       if (!(Array.isArray(pk) ? pk.every((v) => v == null) : pk == null)) {

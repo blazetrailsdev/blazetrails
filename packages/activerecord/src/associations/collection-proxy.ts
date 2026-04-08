@@ -34,43 +34,12 @@ export interface CollectionProxy {
 }
 
 /**
- * Query methods available on a wrapped CollectionProxy (returned by association()).
- * These delegate to the underlying Relation via the JS Proxy at runtime.
- * Separated from CollectionProxy so that unwrapped instances (e.g. new CollectionProxy())
- * don't advertise methods that only exist through the Proxy wrapper.
+ * All Relation methods not already defined on CollectionProxy. These are
+ * delegated to the underlying Relation via the JS Proxy at runtime.
+ * Using Omit instead of Pick means new Relation methods are automatically
+ * available on AssociationProxy without manual maintenance.
  */
-type DelegatedQueryMethods = Pick<
-  Relation<Base>,
-  | "where"
-  | "order"
-  | "limit"
-  | "offset"
-  | "reselect"
-  | "distinct"
-  | "group"
-  | "having"
-  | "reorder"
-  | "reverseOrder"
-  | "inOrderOf"
-  | "rewhere"
-  | "none"
-  | "unscope"
-  | "lock"
-  | "readonly"
-  | "joins"
-  | "leftOuterJoins"
-  | "includes"
-  | "preload"
-  | "eagerLoad"
-  | "references"
-  | "extending"
-  | "annotate"
-  | "optimizerHints"
-  | "from"
-  | "createWith"
-  | "excluding"
-  | "without"
->;
+type DelegatedQueryMethods = Omit<Relation<Base>, keyof CollectionProxy>;
 
 /**
  * A CollectionProxy wrapped with a JS Proxy that delegates query methods

@@ -291,7 +291,7 @@ describe("SecurePasswordTest", () => {
     (u as any).password = "secret";
     const digest = u.readAttribute("password_digest") as string;
     const salt = digest.slice(0, 29);
-    expect(salt).toMatch(/^\$2[aby]?\$\d{2}\$/);
+    expect(salt).toMatch(/^\$2[aby]?\$\d{2}\$[./A-Za-z0-9]{22}$/);
   });
 
   it("password_salt should return nil when password is nil", () => {
@@ -418,7 +418,7 @@ describe("SecurePasswordTest", () => {
     const salt = (u as any).passwordSalt;
     expect(salt).not.toBeNull();
     expect(typeof salt).toBe("string");
-    expect(salt).toMatch(/^\$2[aby]?\$\d{2}\$/);
+    expect(salt).toMatch(/^\$2[aby]?\$\d{2}\$[./A-Za-z0-9]{22}$/);
   });
 
   it("password_salt returns null when no digest", () => {

@@ -140,7 +140,7 @@ export function defineModelCallbacks(this: any, ...args: unknown[]): void {
  * Class-based callback object. Rails supports passing an object with
  * a method matching the callback (e.g., `beforeSave(record)`).
  */
-export type CallbackObject = Record<string, (record: AnyRecord, ...args: unknown[]) => unknown>;
+export type CallbackObject = Record<string, unknown>;
 
 function resolveCallback(
   fnOrObject: CallbackFn | AroundCallbackFn | CallbackObject,

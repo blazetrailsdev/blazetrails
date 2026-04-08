@@ -175,15 +175,30 @@ async function processPendingModels(inner: any): Promise<void> {
       }
 
       try {
-        await inner.exec(createSql);
+        await execDdlWithSavepoint(inner, createSql);
         _createdTables.add(tableName);
         _createdColumns.set(
           tableName,
           cpkCols ? new Set(columns.keys()) : new Set(["id", ...columns.keys()]),
         );
       } catch (e: any) {
-        // Log but don't add to _createdTables so we retry next time
-        console.error(`[test-adapter] Failed to create table "${tableName}": ${e?.message}`);
+        const msg = String(e?.message ?? "").toLowerCase();
+        // On PG, concurrent CREATE TABLE IF NOT EXISTS can race on the
+        // pg_type unique index. If the table was created by another
+        // connection, treat it as success.
+        if (
+          msg.includes("already exists") ||
+          msg.includes("pg_type") ||
+          msg.includes("duplicate key")
+        ) {
+          _createdTables.add(tableName);
+          _createdColumns.set(
+            tableName,
+            cpkCols ? new Set(columns.keys()) : new Set(["id", ...columns.keys()]),
+          );
+        } else {
+          console.error(`[test-adapter] Failed to create table "${tableName}": ${e?.message}`);
+        }
       }
     } else {
       // Table exists — add missing columns
@@ -195,10 +210,12 @@ async function processPendingModels(inner: any): Promise<void> {
       for (const [col, type] of columns) {
         if (known.has(col)) continue;
         try {
-          const alterSql = isMysql()
-            ? `ALTER TABLE \`${tableName}\` ADD COLUMN \`${col}\` ${type}`
-            : `ALTER TABLE "${tableName}" ADD COLUMN "${col}" ${type}`;
-          await inner.exec(alterSql);
+          await execDdlWithSavepoint(
+            inner,
+            isMysql()
+              ? `ALTER TABLE \`${tableName}\` ADD COLUMN \`${col}\` ${type}`
+              : `ALTER TABLE "${tableName}" ADD COLUMN "${col}" ${type}`,
+          );
           known.add(col);
         } catch {
           // Column might already exist in the real DB
@@ -209,6 +226,32 @@ async function processPendingModels(inner: any): Promise<void> {
   }
   _pendingModels.clear();
   _pendingCpk.clear();
+}
+
+let _ddlSpCounter = 0;
+
+/**
+ * Execute a DDL statement, wrapping it in a savepoint on PostgreSQL when
+ * inside a transaction. PG aborts the entire transaction on any error
+ * (even from CREATE TABLE IF NOT EXISTS when there's a type catalog race),
+ * so we need savepoints to isolate DDL failures and allow rollback+retry.
+ */
+async function execDdlWithSavepoint(inner: any, sql: string): Promise<void> {
+  const useSp = isPg() && inner.inTransaction;
+  const sp = useSp ? `_ddl_sp_${++_ddlSpCounter}` : "";
+  try {
+    if (useSp) await inner.createSavepoint(sp);
+    await inner.exec(sql);
+    if (useSp) await inner.releaseSavepoint(sp);
+  } catch (e) {
+    if (useSp) {
+      try {
+        await inner.rollbackToSavepoint(sp);
+        await inner.releaseSavepoint(sp);
+      } catch {}
+    }
+    throw e;
+  }
 }
 
 /**

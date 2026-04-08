@@ -67,10 +67,20 @@ export class HasOne extends SingularAssociation {
   static override defineValidations(model: any, reflection: any): void {
     super.defineValidations(model, reflection);
     const options = reflection.options ?? {};
-    if (options.required) {
-      if (typeof model.validates === "function") {
-        model.validates(reflection.name, { presence: true });
-      }
+    if (options.required && typeof model.validate === "function") {
+      model.validate((record: any) => {
+        const instance =
+          typeof record[reflection.name] === "function"
+            ? record[reflection.name]()
+            : record[reflection.name];
+        if (
+          (instance === null || instance === undefined) &&
+          record.errors &&
+          typeof record.errors.add === "function"
+        ) {
+          record.errors.add(reflection.name, "required");
+        }
+      });
     }
   }
 

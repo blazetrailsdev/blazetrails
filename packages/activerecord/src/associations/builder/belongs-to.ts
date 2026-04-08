@@ -178,31 +178,42 @@ export class BelongsTo extends SingularAssociation {
       // checks whether the associated record can be loaded. Our codebase
       // validates the foreign key directly since association-aware presence
       // validation is not yet wired. The effect is the same: reject nil FK.
-      const fk = reflection.foreignKey ?? options.foreignKey ?? `${underscore(reflection.name)}_id`;
+      const rawFk =
+        reflection.foreignKey ?? options.foreignKey ?? `${underscore(reflection.name)}_id`;
+      const foreignKeys = Array.isArray(rawFk) ? rawFk : [rawFk];
 
       if (model.belongsToRequiredValidatesForeignKey ?? true) {
         if (typeof model.validatesPresenceOf === "function") {
-          model.validatesPresenceOf(fk, { message: "required" });
+          for (const key of foreignKeys) {
+            model.validatesPresenceOf(key, { message: "required" });
+          }
         } else if (typeof model.validates === "function") {
-          model.validates(fk, { presence: true });
+          for (const key of foreignKeys) {
+            model.validates(key, { presence: true });
+          }
         }
       } else {
-        const condition = (record: any) => {
-          return (
-            record.readAttribute(fk) == null ||
-            (typeof record.attributeChanged === "function" && record.attributeChanged(fk)) ||
-            (reflection.options?.polymorphic &&
-              (() => {
-                const ft = reflection.foreignType ?? `${underscore(reflection.name)}_type`;
-                return (
-                  record.readAttribute(ft) == null ||
-                  (typeof record.attributeChanged === "function" && record.attributeChanged(ft))
-                );
-              })())
+        const foreignTypes = reflection.options?.polymorphic
+          ? Array.isArray(reflection.foreignType)
+            ? (reflection.foreignType as string[])
+            : [reflection.foreignType ?? `${underscore(reflection.name)}_type`]
+          : [];
+
+        const needsValidation = (record: any, attrs: string[]) =>
+          attrs.some(
+            (attr) =>
+              record.readAttribute(attr) == null ||
+              (typeof record.attributeChanged === "function" && record.attributeChanged(attr)),
           );
-        };
+
+        const condition = (record: any) =>
+          needsValidation(record, foreignKeys) ||
+          (reflection.options?.polymorphic && needsValidation(record, foreignTypes));
+
         if (typeof model.validates === "function") {
-          model.validates(fk, { presence: true, if: condition });
+          for (const key of foreignKeys) {
+            model.validates(key, { presence: true, if: condition });
+          }
         }
       }
     }

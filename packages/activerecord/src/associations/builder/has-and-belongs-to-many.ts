@@ -1,4 +1,10 @@
-import { underscore, singularize, pluralize, camelize } from "@blazetrails/activesupport";
+import {
+  underscore,
+  singularize,
+  pluralize,
+  camelize,
+  demodulize,
+} from "@blazetrails/activesupport";
 
 /**
  * Builder for has_and_belongs_to_many associations. Internally creates
@@ -57,7 +63,7 @@ export class HasAndBelongsToMany {
 
     const rhsOptions: Record<string, unknown> = {};
     if (options.className) {
-      rhsOptions.foreignKey = `${underscore(options.className as string)}_id`;
+      rhsOptions.foreignKey = `${underscore(demodulize(options.className as string))}_id`;
       rhsOptions.className = options.className;
     }
     if (options.associationForeignKey) {

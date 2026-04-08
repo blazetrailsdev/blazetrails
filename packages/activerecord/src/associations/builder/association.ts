@@ -129,8 +129,8 @@ export class Association {
   static buildScope(scope: ((...args: any[]) => any) | null): ((...args: any[]) => any) | null {
     if (scope && scope.length === 0) {
       const orig = scope;
-      return function (this: any) {
-        return orig.call(this);
+      return function (this: any, relation: any) {
+        return orig.call(relation ?? this);
       };
     }
     return scope;

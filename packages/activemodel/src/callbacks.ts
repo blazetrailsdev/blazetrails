@@ -140,17 +140,18 @@ export function defineModelCallbacks(this: any, ...args: unknown[]): void {
  * Class-based callback object. Rails supports passing an object with
  * a method matching the callback (e.g., `beforeSave(record)`).
  */
-export type CallbackObject = Record<string, unknown>;
+export type CallbackObject = object;
 
 function resolveCallback(
   fnOrObject: CallbackFn | AroundCallbackFn | CallbackObject,
   timing: CallbackTiming,
   event: string,
 ): CallbackFn | AroundCallbackFn {
-  if (typeof fnOrObject === "function") return fnOrObject;
+  if (typeof fnOrObject === "function") return fnOrObject as CallbackFn | AroundCallbackFn;
+  const obj = fnOrObject as Record<string, unknown>;
   const methodName = `${timing}_${event}`;
   const camelMethod = `${timing}${event.charAt(0).toUpperCase()}${event.slice(1)}`;
-  const method = fnOrObject[methodName] ?? fnOrObject[camelMethod];
+  const method = obj[methodName] ?? obj[camelMethod];
   if (typeof method !== "function") {
     throw new ArgumentError(`Callback object must implement ${methodName} or ${camelMethod}`);
   }
@@ -206,7 +207,10 @@ export class CallbackChain {
     fn: CallbackFn | AroundCallbackFn | CallbackObject,
     conditions?: CallbackConditions,
   ): void {
-    const resolved = typeof fn === "function" ? fn : resolveCallback(fn, timing, event);
+    const resolved: CallbackFn | AroundCallbackFn =
+      typeof fn === "function"
+        ? (fn as CallbackFn | AroundCallbackFn)
+        : resolveCallback(fn, timing, event);
     const entry = { timing, event, fn: resolved, conditions };
     if (conditions?.prepend) {
       this.callbacks.unshift(entry);

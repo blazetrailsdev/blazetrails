@@ -122,7 +122,9 @@ export class TokenDefinition {
     if (!record) return null;
 
     const currentDigest = this.block ? this.block(record) : "";
-    if (currentDigest !== payload.digest) return null;
+    const a = Buffer.from(String(currentDigest));
+    const b = Buffer.from(String(payload.digest));
+    if (a.length !== b.length || !getCrypto().timingSafeEqual(a, b)) return null;
 
     return record;
   }

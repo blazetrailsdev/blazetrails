@@ -188,7 +188,13 @@ export class EnumType {
 
   deserialize(value: unknown): string | null {
     if (value === null || value === undefined) return null;
-    return this._reverseMapping.get(value as number | string) ?? null;
+    const result = this._reverseMapping.get(value as number | string);
+    if (result !== undefined) return result;
+    if (typeof value === "string" && value !== "" && this.subtype === "integer") {
+      const num = Number(value);
+      if (!Number.isNaN(num)) return this._reverseMapping.get(num) ?? null;
+    }
+    return null;
   }
 
   serialize(value: unknown): number | string | null {
@@ -196,11 +202,12 @@ export class EnumType {
     if (typeof value === "string" && this._mapping.has(value)) {
       return this._mapping.get(value)!;
     }
-    if (
-      (typeof value === "number" || typeof value === "string") &&
-      this._reverseMapping.has(value)
-    ) {
+    if (typeof value === "number" && this._reverseMapping.has(value)) {
       return value;
+    }
+    if (typeof value === "string" && value !== "" && this.subtype === "integer") {
+      const num = Number(value);
+      if (!Number.isNaN(num) && this._reverseMapping.has(num)) return num;
     }
     return null;
   }

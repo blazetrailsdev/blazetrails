@@ -5,6 +5,7 @@
  */
 import { Table, Nodes } from "@blazetrails/arel";
 import { tableAliasLength as getTableAliasLength } from "../connection-adapters/abstract/database-limits.js";
+import { quoteTableName } from "../connection-adapters/abstract/quoting.js";
 
 const DEFAULT_TABLE_ALIAS_LENGTH = getTableAliasLength();
 
@@ -36,13 +37,14 @@ export class AliasTracker {
   }
 
   static initialCountFor(name: string, tableJoins: any[]): number {
-    let count = 0;
+    const quotedNameEscaped = quoteTableName(name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const nameEscaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const pattern = new RegExp(
-      `JOIN(?:\\s+\\w+)?\\s+(?:\\S+\\s+)?(?:"?${nameEscaped}"?)(?:\\s+(?:AS\\s+)?\\S+)?\\s+ON`,
+      `JOIN(?:\\s+\\w+)?\\s+(?:\\S+\\s+)?(?:${quotedNameEscaped}|${nameEscaped})\\s+ON`,
       "gi",
     );
 
+    let count = 0;
     for (const join of tableJoins) {
       if (join instanceof Nodes.StringJoin) {
         const left = join.left;
@@ -51,15 +53,7 @@ export class AliasTracker {
         const matches = sql.match(pattern);
         count += matches ? matches.length : 0;
       } else if (join instanceof Nodes.Join) {
-        const left = join.left as any;
-        const leftName =
-          left instanceof Nodes.TableAlias
-            ? ((left.relation as any)?.name ?? left.name)
-            : left?.name;
-        if (leftName === name) count += 1;
-      } else if (typeof join === "string") {
-        const matches = join.match(pattern);
-        count += matches ? matches.length : 0;
+        if ((join.left as any)?.name === name) count += 1;
       }
     }
 

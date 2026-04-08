@@ -474,8 +474,8 @@ export class AssociationReflection extends MacroReflection {
       }
     } catch (e: unknown) {
       // Rails: rescue NameError => error; raise unless error.name.to_s == class_name
-      // Swallow klass resolution errors (model not found), re-raise anything else
-      if (e instanceof Error && e.message.includes(this.className)) {
+      // Only swallow model-not-found errors from computeClass, re-raise anything else
+      if (e instanceof Error && e.message.startsWith("Could not find model")) {
         reflection = false;
       } else {
         throw e;
@@ -532,7 +532,12 @@ export class AssociationReflection extends MacroReflection {
     if (inverseReflection) {
       return !(reflection as any).scope;
     }
-    return !(reflection as any).scope || !!(reflection as any).klass?.automaticScopeInversing;
+    if (!(reflection as any).scope) return true;
+    try {
+      return !!(reflection as any).klass?.automaticScopeInversing;
+    } catch {
+      return false;
+    }
   }
 
   get associationPrimaryKey(): string | string[] {

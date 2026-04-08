@@ -7,6 +7,123 @@ import { underscore, singularize, pluralize, camelize } from "@blazetrails/activ
  * Mirrors: ActiveRecord::Associations::Builder::HasAndBelongsToMany
  */
 export class HasAndBelongsToMany {
+  readonly lhsModel: any;
+  readonly associationName: string;
+  readonly options: Record<string, unknown>;
+
+  constructor(associationName: string, lhsModel: any, options: Record<string, unknown>) {
+    this.associationName = associationName;
+    this.lhsModel = lhsModel;
+    this.options = options;
+  }
+
+  throughModel(): any {
+    const lhsModel = this.lhsModel;
+    const associationName = this.associationName;
+    const options = this.options;
+
+    const joinModelName = `HABTM_${camelize(associationName)}`;
+    const tableName = this._tableName();
+    const leftFk =
+      typeof options.foreignKey === "string"
+        ? options.foreignKey
+        : `${underscore(lhsModel.name)}_id`;
+    const targetClassName = (options.className as string) ?? camelize(singularize(associationName));
+    const rightName = singularize(associationName);
+
+    const joinModel: any = {
+      name: joinModelName,
+      leftModel: lhsModel,
+      _tableName: tableName,
+      _associations: [],
+      _reflections: {},
+      leftReflection: null as any,
+      rightReflection: null as any,
+
+      get tableName() {
+        return this._tableName;
+      },
+
+      computeType(className: string) {
+        return lhsModel.computeType?.(className) ?? null;
+      },
+
+      connectionPool() {
+        return lhsModel.connectionPool?.() ?? null;
+      },
+    };
+
+    joinModel.leftReflection = {
+      name: "leftSide",
+      type: "belongsTo",
+      options: { anonymousClass: lhsModel },
+    };
+    joinModel._associations.push(joinModel.leftReflection);
+
+    const rhsOptions: Record<string, unknown> = {};
+    if (options.className) {
+      rhsOptions.foreignKey = `${underscore(options.className as string)}_id`;
+      rhsOptions.className = options.className;
+    }
+    if (options.associationForeignKey) {
+      rhsOptions.foreignKey = options.associationForeignKey;
+    }
+
+    joinModel.rightReflection = {
+      name: rightName,
+      type: "belongsTo",
+      options: { ...rhsOptions },
+    };
+    joinModel._associations.push(joinModel.rightReflection);
+
+    return joinModel;
+  }
+
+  middleReflection(joinModel: any): any {
+    const lhsModelName = underscore(this.lhsModel.name).toLowerCase();
+    const middleName = [pluralize(lhsModelName), this.associationName]
+      .sort()
+      .join("_")
+      .replace(/::/g, "_");
+
+    const middleOptions: Record<string, unknown> = {};
+    middleOptions.className = `${this.lhsModel.name}::${joinModel.name}`;
+    if (this.options.foreignKey) {
+      middleOptions.foreignKey = this.options.foreignKey;
+    }
+
+    return {
+      name: middleName,
+      macro: "hasMany",
+      scope: null,
+      options: middleOptions,
+      activeRecord: this.lhsModel,
+    };
+  }
+
+  private _tableName(): string {
+    if (this.options.joinTable) {
+      return this.options.joinTable as string;
+    }
+    const className =
+      (this.options.className as string) ?? camelize(singularize(this.associationName));
+    const lhsTable = this.lhsModel.tableName ?? underscore(pluralize(this.lhsModel.name));
+
+    let rhsTable: string;
+    if (typeof this.lhsModel.computeType === "function") {
+      try {
+        const klass = this.lhsModel.computeType(className);
+        rhsTable = klass?.tableName ?? underscore(pluralize(className));
+      } catch {
+        rhsTable = underscore(pluralize(className));
+      }
+    } else {
+      rhsTable = underscore(pluralize(className));
+    }
+
+    return [lhsTable, rhsTable].sort().join("_");
+  }
+
   static build(
     model: any,
     name: string,
@@ -18,20 +135,19 @@ export class HasAndBelongsToMany {
       modelRegistry: Map<string, any>;
     },
   ): void {
-    new this().build(model, name, options, deps);
+    new this(name, model, options)._build(deps);
   }
 
-  build(
-    model: any,
-    name: string,
-    options: Record<string, unknown>,
-    deps: {
-      defaultJoinTableName: (model: any, name: string) => string;
-      singleFk: (fk: string | string[] | undefined, fallback: string) => string;
-      createHabtmJoinModel: (...args: any[]) => any;
-      modelRegistry: Map<string, any>;
-    },
-  ): void {
+  private _build(deps: {
+    defaultJoinTableName: (model: any, name: string) => string;
+    singleFk: (fk: string | string[] | undefined, fallback: string) => string;
+    createHabtmJoinModel: (...args: any[]) => any;
+    modelRegistry: Map<string, any>;
+  }): void {
+    const model = this.lhsModel;
+    const name = this.associationName;
+    const options = this.options;
+
     if (!Object.prototype.hasOwnProperty.call(model, "_associations")) {
       model._associations = [...(model._associations ?? [])];
     }

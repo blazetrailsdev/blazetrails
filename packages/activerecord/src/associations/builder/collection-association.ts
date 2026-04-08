@@ -1,3 +1,4 @@
+import { singularize } from "@blazetrails/activesupport";
 import { Association } from "./association.js";
 
 const CALLBACKS = ["beforeAdd", "afterAdd", "beforeRemove", "afterRemove"] as const;
@@ -32,9 +33,7 @@ export class CollectionAssociation extends Association {
     if (block) {
       const extensionModuleName = `${name.charAt(0).toUpperCase()}${name.slice(1)}AssociationExtension`;
       const extension = { name: extensionModuleName, block };
-      if (typeof model.constructor === "function") {
-        (model as any)[extensionModuleName] = extension;
-      }
+      (model as any)[extensionModuleName] = extension;
       return extension;
     }
     return undefined;
@@ -74,7 +73,7 @@ export class CollectionAssociation extends Association {
   static override defineReaders(mixin: any, name: string): void {
     super.defineReaders(mixin, name);
     if (mixin instanceof Set) {
-      const singular = name.replace(/s$/, "");
+      const singular = singularize(name);
       mixin.add(`${singular}Ids`);
     }
   }
@@ -82,7 +81,7 @@ export class CollectionAssociation extends Association {
   static override defineWriters(mixin: any, name: string): void {
     super.defineWriters(mixin, name);
     if (mixin instanceof Set) {
-      const singular = name.replace(/s$/, "");
+      const singular = singularize(name);
       mixin.add(`${singular}Ids=`);
     }
   }

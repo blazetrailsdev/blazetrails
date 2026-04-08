@@ -1,5 +1,5 @@
 import { SingularAssociation } from "./singular-association.js";
-import { afterDestroy } from "../../callbacks.js";
+import { afterCreate, afterUpdate, afterDestroy } from "../../callbacks.js";
 
 /**
  * Mirrors: ActiveRecord::Associations::Builder::HasOne
@@ -68,8 +68,8 @@ export class HasOne extends SingularAssociation {
     super.defineValidations(model, reflection);
     const options = reflection.options ?? {};
     if (options.required) {
-      if (typeof model.validatesPresenceOf === "function") {
-        model.validatesPresenceOf(reflection.name, { message: "required" });
+      if (typeof model.validates === "function") {
+        model.validates(reflection.name, { presence: true });
       }
     }
   }
@@ -93,19 +93,12 @@ export class HasOne extends SingularAssociation {
       HasOne.touchRecord(record, name, touch);
     };
 
-    if (typeof model.afterCreate === "function") {
-      model.afterCreate(callback, { if: (r: any) => r.savedChanges?.() });
-    }
-    if (typeof model.afterUpdate === "function") {
-      model.afterUpdate(callback, { if: (r: any) => r.savedChanges?.() });
-    }
-    if (typeof model.afterDestroy === "function") {
-      model.afterDestroy(callback);
-    } else {
-      afterDestroy(model, callback);
-    }
-    if (typeof model.afterTouch === "function") {
-      model.afterTouch(callback);
-    }
+    afterCreate(model, callback, {
+      if: (r: any) => Object.keys(r.savedChanges?.() ?? {}).length > 0,
+    });
+    afterUpdate(model, callback, {
+      if: (r: any) => Object.keys(r.savedChanges?.() ?? {}).length > 0,
+    });
+    afterDestroy(model, callback);
   }
 }

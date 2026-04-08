@@ -1,5 +1,6 @@
+import { underscore } from "@blazetrails/activesupport";
 import { SingularAssociation } from "./singular-association.js";
-import { afterDestroy } from "../../callbacks.js";
+import { afterDestroy, beforeValidation } from "../../callbacks.js";
 
 /**
  * Mirrors: ActiveRecord::Associations::Builder::BelongsTo
@@ -27,8 +28,17 @@ export class BelongsTo extends SingularAssociation {
   }
 
   static override defineCallbacks(model: any, reflection: any): void {
-    super.defineCallbacks(model, reflection);
     const options = reflection.options ?? {};
+    const dependent = options.dependent;
+    if (dependent) {
+      this.addDestroyCallbacks(model, reflection);
+      this.addAfterCommitJobsCallback(model, dependent as string);
+    }
+    for (const extension of this.extensions) {
+      if (typeof extension.build === "function") {
+        extension.build(model, reflection);
+      }
+    }
     if (options.counterCache) {
       this.addCounterCacheCallbacks(model, reflection);
     }
@@ -41,7 +51,11 @@ export class BelongsTo extends SingularAssociation {
   }
 
   static addCounterCacheCallbacks(_model: any, _reflection: any): void {
-    // Counter cache callback wiring — delegates to the association at runtime
+    // Counter cache callbacks are handled centrally by updateCounterCaches()
+    // in associations.ts, called from Base#_createOrUpdate and Base#_destroyRow.
+    // Rails registers per-association after_update callbacks here, but our
+    // architecture centralizes counter cache handling via BelongsToAssociation
+    // instance methods (incrementCounters, decrementCountersBeforeLastSave).
   }
 
   static touchRecord(
@@ -91,48 +105,22 @@ export class BelongsTo extends SingularAssociation {
     }
   }
 
-  static addTouchCallbacks(model: any, reflection: any): void {
-    const foreignKey = reflection.foreignKey ?? reflection.options?.foreignKey;
-    const name = reflection.name;
-    const touch = reflection.options?.touch;
-
-    const callback = (changesMethod: string) => (record: any) => {
-      const changes = typeof record[changesMethod] === "function" ? record[changesMethod]() : {};
-      BelongsTo.touchRecord(record, changes, foreignKey, name, touch);
-    };
-
-    if (reflection.options?.counterCache) {
-      // When counter cache is present, only fire touch on update when target didn't change
-    } else {
-      if (typeof model.afterCreate === "function") {
-        model.afterCreate(callback("savedChanges"));
-      }
-      if (typeof model.afterUpdate === "function") {
-        model.afterUpdate(callback("savedChanges"));
-      }
-      if (typeof model.afterDestroy === "function") {
-        model.afterDestroy(callback("changesToSave"));
-      } else {
-        afterDestroy(model, callback("changesToSave"));
-      }
-    }
-
-    if (typeof model.afterTouch === "function") {
-      model.afterTouch(callback("changesToSave"));
-    }
+  static addTouchCallbacks(_model: any, _reflection: any): void {
+    // Touch callbacks are handled by touchBelongsToParents() in
+    // associations.ts, called from Base#_createOrUpdate and Base#_destroyRow.
+    // Rails registers per-association after_create/after_update/after_destroy
+    // callbacks here, but our architecture centralizes touch handling.
   }
 
   static addDefaultCallbacks(model: any, reflection: any): void {
-    if (typeof model.beforeValidation === "function") {
-      model.beforeValidation((record: any) => {
-        if (typeof record.association === "function") {
-          const assoc = record.association(reflection.name);
-          if (typeof assoc.default === "function") {
-            assoc.default(reflection.options?.default);
-          }
+    beforeValidation(model, (record: any) => {
+      if (typeof record.association === "function") {
+        const assoc = record.association(reflection.name);
+        if (typeof assoc.default === "function") {
+          assoc.default(reflection.options?.default);
         }
-      });
-    }
+      }
+    });
   }
 
   static override addDestroyCallbacks(model: any, reflection: any): void {
@@ -165,8 +153,27 @@ export class BelongsTo extends SingularAssociation {
     super.defineValidations(model, reflection);
 
     if (required && typeof model.validates === "function") {
-      const foreignKey = reflection.foreignKey ?? options.foreignKey ?? `${reflection.name}_id`;
-      model.validates(foreignKey, { presence: true });
+      const fk = reflection.foreignKey ?? options.foreignKey ?? `${underscore(reflection.name)}_id`;
+
+      if (model.belongsToRequiredValidatesForeignKey ?? true) {
+        model.validates(fk, { presence: true });
+      } else {
+        const condition = (record: any) => {
+          return (
+            record.readAttribute(fk) == null ||
+            (typeof record.attributeChanged === "function" && record.attributeChanged(fk)) ||
+            (reflection.options?.polymorphic &&
+              (() => {
+                const ft = reflection.foreignType ?? `${underscore(reflection.name)}_type`;
+                return (
+                  record.readAttribute(ft) == null ||
+                  (typeof record.attributeChanged === "function" && record.attributeChanged(ft))
+                );
+              })())
+          );
+        };
+        model.validates(fk, { presence: { if: condition } });
+      }
     }
   }
 

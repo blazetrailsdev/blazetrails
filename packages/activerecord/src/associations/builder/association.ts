@@ -153,6 +153,7 @@ export class Association {
   static defineCallbacks(model: any, reflection: any): void {
     const dependent = reflection.options?.dependent;
     if (dependent) {
+      this.checkDependentOptions(dependent, model);
       this.addDestroyCallbacks(model, reflection);
       this.addAfterCommitJobsCallback(model, dependent);
     }
@@ -187,11 +188,11 @@ export class Association {
   }
 
   static defineValidations(_model: any, _reflection: any): void {
-    // noop — subclasses override
+    // noop in base — BelongsTo and HasOne override
   }
 
   static defineChangeTrackingMethods(_model: any, _reflection: any): void {
-    // noop — subclasses override
+    // noop in base — BelongsTo overrides
   }
 
   static validDependentOptions(): string[] {
@@ -227,7 +228,9 @@ export class Association {
   }
 
   static addAfterCommitJobsCallback(_model: any, _dependent: string): void {
-    // destroy_async job scheduling — not yet implemented
+    // Rails registers an after_commit that runs _after_commit_jobs for
+    // dependent: :destroy_async. Requires after_commit infrastructure
+    // which is not yet wired to the callback chain — skip until then.
   }
 
   private static _ensureOwnAssociations(model: any): void {

@@ -8,4 +8,5 @@ export {
   generateTokenFor,
   findByTokenFor,
   findByTokenForBang,
+  setTokenForSecret,
 } from "./token-for.js";

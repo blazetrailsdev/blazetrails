@@ -12,7 +12,9 @@ let _tokenForSecret: string | (() => string) | null = null;
 
 /**
  * Configure the secret used for token generation/verification.
- * Falls back to the signed-id secret or BLAZETRAILS_SECRET_KEY_BASE env var.
+ * If not set, falls back to BLAZETRAILS_SECRET_KEY_BASE or
+ * BLAZETRAILS_SIGNED_ID_SECRET env vars. Throws if no secret
+ * is configured — matching signed-id behavior.
  */
 export function setTokenForSecret(secret: string | (() => string)): void {
   _tokenForSecret = secret;
@@ -25,7 +27,10 @@ function resolveSecret(): string {
   const env = typeof process !== "undefined" ? process.env : undefined;
   const envSecret = env?.BLAZETRAILS_SECRET_KEY_BASE ?? env?.BLAZETRAILS_SIGNED_ID_SECRET;
   if (typeof envSecret === "string" && envSecret.length > 0) return envSecret;
-  return "trails-token-default-secret";
+  throw new Error(
+    "TokenFor requires a configured secret. Call setTokenForSecret() " +
+      "or set BLAZETRAILS_SECRET_KEY_BASE.",
+  );
 }
 
 /**

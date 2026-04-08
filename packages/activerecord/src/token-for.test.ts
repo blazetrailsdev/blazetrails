@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { Base } from "./index.js";
-import { generatesTokenFor } from "./generates-token-for.js";
+import { generatesTokenFor, setTokenForSecret } from "./generates-token-for.js";
 import { setSignedIdVerifierSecret } from "./signed-id.js";
 
 import { createTestAdapter } from "./test-adapter.js";
@@ -20,6 +20,7 @@ describe("TokenForTest", () => {
   beforeEach(() => {
     adapter = freshAdapter();
     setSignedIdVerifierSecret("blazetrails-test-secret");
+    setTokenForSecret("blazetrails-test-token-secret");
   });
 
   function makeModel() {

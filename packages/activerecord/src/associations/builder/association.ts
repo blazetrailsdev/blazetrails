@@ -6,6 +6,7 @@
  */
 
 import * as Reflection from "../../reflection.js";
+import { beforeDestroy } from "../../callbacks.js";
 
 type ExtensionModule = {
   validOptions?: () => string[];
@@ -195,7 +196,7 @@ export class Association {
 
   static defineWriters(mixin: any, name: string): void {
     if (mixin && mixin instanceof Set) {
-      mixin.add(`${name}=`);
+      mixin.add(name);
     }
   }
 
@@ -228,11 +229,16 @@ export class Association {
     }
   }
 
-  static addDestroyCallbacks(_model: any, _reflection: any): void {
-    // Destroy callbacks for dependent associations are handled centrally
-    // by processDependentAssociations() in associations.ts, called from
-    // Base#_destroyRow. Rails registers per-association before_destroy
-    // callbacks here, but our architecture centralizes dependent handling.
+  static addDestroyCallbacks(model: any, reflection: any): void {
+    const name = reflection.name ?? reflection;
+    beforeDestroy(model, (record: any) => {
+      if (typeof record.association === "function") {
+        const assoc = record.association(name);
+        if (typeof assoc.handleDependency === "function") {
+          return assoc.handleDependency();
+        }
+      }
+    });
   }
 
   static addAfterCommitJobsCallback(_model: any, _dependent: string): void {

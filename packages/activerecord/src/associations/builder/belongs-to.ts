@@ -1,6 +1,6 @@
 import { underscore } from "@blazetrails/activesupport";
 import { SingularAssociation } from "./singular-association.js";
-import { beforeValidation } from "../../callbacks.js";
+import { beforeValidation, afterCreate, afterUpdate, afterDestroy } from "../../callbacks.js";
 
 /**
  * Mirrors: ActiveRecord::Associations::Builder::BelongsTo
@@ -50,12 +50,17 @@ export class BelongsTo extends SingularAssociation {
     }
   }
 
-  static addCounterCacheCallbacks(_model: any, _reflection: any): void {
-    // Counter cache callbacks are handled centrally by updateCounterCaches()
-    // in associations.ts, called from Base#_createOrUpdate and Base#_destroyRow.
-    // Rails registers per-association after_update callbacks here, but our
-    // architecture centralizes counter cache handling via BelongsToAssociation
-    // instance methods (incrementCounters, decrementCountersBeforeLastSave).
+  static addCounterCacheCallbacks(model: any, reflection: any): void {
+    const name = reflection.name;
+    afterUpdate(model, async (record: any) => {
+      if (typeof record.association !== "function") return;
+      const assoc = record.association(name);
+      if (typeof assoc.savedChangeToTarget === "function" && assoc.savedChangeToTarget()) {
+        if (typeof assoc.incrementCounters === "function") await assoc.incrementCounters();
+        if (typeof assoc.decrementCountersBeforeLastSave === "function")
+          await assoc.decrementCountersBeforeLastSave();
+      }
+    });
   }
 
   static async touchRecord(
@@ -103,11 +108,29 @@ export class BelongsTo extends SingularAssociation {
     }
   }
 
-  static addTouchCallbacks(_model: any, _reflection: any): void {
-    // Touch callbacks are handled by touchBelongsToParents() in
-    // associations.ts, called from Base#_createOrUpdate and Base#_destroyRow.
-    // Rails registers per-association after_create/after_update/after_destroy
-    // callbacks here, but our architecture centralizes touch handling.
+  static addTouchCallbacks(model: any, reflection: any): void {
+    const foreignKey = reflection.foreignKey ?? reflection.options?.foreignKey;
+    const name = reflection.name;
+    const touch = reflection.options?.touch;
+
+    const makeCallback = (changesMethod: string) => async (record: any) => {
+      const changes = typeof record[changesMethod] === "function" ? record[changesMethod]() : {};
+      await BelongsTo.touchRecord(record, changes, foreignKey, name, touch);
+    };
+
+    if (reflection.options?.counterCache) {
+      afterUpdate(model, async (record: any) => {
+        if (typeof record.association !== "function") return;
+        const assoc = record.association(name);
+        if (typeof assoc.savedChangeToTarget !== "function" || !assoc.savedChangeToTarget()) {
+          await makeCallback("savedChanges")(record);
+        }
+      });
+    } else {
+      afterCreate(model, makeCallback("savedChanges"));
+      afterUpdate(model, makeCallback("savedChanges"));
+      afterDestroy(model, makeCallback("changesToSave"));
+    }
   }
 
   static addDefaultCallbacks(model: any, reflection: any): void {
@@ -121,11 +144,16 @@ export class BelongsTo extends SingularAssociation {
     });
   }
 
-  static override addDestroyCallbacks(_model: any, _reflection: any): void {
-    // BelongsTo destroy callbacks are handled centrally by
-    // processDependentAssociations() in associations.ts.
-    // Rails registers an after_destroy here, but our architecture
-    // centralizes dependent handling.
+  static override addDestroyCallbacks(model: any, reflection: any): void {
+    const name = reflection.name ?? reflection;
+    afterDestroy(model, (record: any) => {
+      if (typeof record.association === "function") {
+        const assoc = record.association(name);
+        if (typeof assoc.handleDependency === "function") {
+          return assoc.handleDependency();
+        }
+      }
+    });
   }
 
   static override defineValidations(model: any, reflection: any): void {

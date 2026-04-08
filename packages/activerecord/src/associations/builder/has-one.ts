@@ -1,4 +1,5 @@
 import { SingularAssociation } from "./singular-association.js";
+import { afterCreate, afterUpdate, afterDestroy } from "../../callbacks.js";
 
 /**
  * Mirrors: ActiveRecord::Associations::Builder::HasOne
@@ -84,11 +85,16 @@ export class HasOne extends SingularAssociation {
     }
   }
 
-  static addTouchCallbacks(_model: any, _reflection: any): void {
-    // In Rails, this registers after_create/after_update/after_destroy
-    // callbacks on the owner to touch the has_one target. In this codebase,
-    // touch for has_one targets is triggered from the belongs_to side via
-    // touchBelongsToParents() in associations.ts — the child's belongs_to
-    // touch: true option handles the parent←→child touch propagation.
+  static addTouchCallbacks(model: any, reflection: any): void {
+    const name = reflection.name ?? reflection;
+    const touch = reflection.options?.touch;
+
+    const callback = async (record: any) => {
+      await HasOne.touchRecord(record, name, touch);
+    };
+
+    afterCreate(model, callback);
+    afterUpdate(model, callback);
+    afterDestroy(model, callback);
   }
 }

@@ -5,6 +5,7 @@ import {
   camelize,
   demodulize,
 } from "@blazetrails/activesupport";
+import { beforeDestroy } from "../../callbacks.js";
 
 /**
  * Builder for has_and_belongs_to_many associations. Internally creates
@@ -186,6 +187,15 @@ export class HasAndBelongsToMany {
         foreignKey: ownerFk,
         dependent: "delete",
       },
+    });
+
+    beforeDestroy(model, (record: any) => {
+      if (typeof record.association === "function") {
+        const assoc = record.association(middleName);
+        if (typeof assoc.handleDependency === "function") {
+          return assoc.handleDependency();
+        }
+      }
     });
 
     model._associations.push({

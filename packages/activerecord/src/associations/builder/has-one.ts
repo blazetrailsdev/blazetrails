@@ -87,10 +87,13 @@ export class HasOne extends SingularAssociation {
   static async touchRecord(record: any, name: string, touch: any): Promise<void> {
     const instance = typeof record[name] === "function" ? record[name]() : record[name];
     if (instance && typeof instance.isPersisted === "function" && instance.isPersisted()) {
-      if (touch !== true && typeof instance.touch === "function") {
-        await instance.touch(touch);
-      } else if (typeof instance.touch === "function") {
+      if (typeof instance.touch !== "function") return;
+      if (touch === true) {
         await instance.touch();
+      } else if (Array.isArray(touch)) {
+        await instance.touch(...touch);
+      } else {
+        await instance.touch(touch);
       }
     }
   }

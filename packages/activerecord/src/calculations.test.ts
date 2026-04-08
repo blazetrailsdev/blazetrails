@@ -6072,21 +6072,25 @@ describe("CalculationsTest", () => {
   it("generatesTokenFor creates and resolves purpose tokens", async () => {
     const { generatesTokenFor, setTokenForSecret } = await import("./generates-token-for.js");
     setTokenForSecret("test-secret");
-    const adapter = createTestAdapter();
-    class User extends Base {
-      static {
-        this._tableName = "users";
-        this.attribute("id", "integer");
-        this.attribute("name", "string");
-        this.adapter = adapter;
+    try {
+      const adapter = createTestAdapter();
+      class User extends Base {
+        static {
+          this._tableName = "users";
+          this.attribute("id", "integer");
+          this.attribute("name", "string");
+          this.adapter = adapter;
+        }
       }
+      generatesTokenFor(User, "email_verify", {});
+      const user = await User.create({ name: "Alice" });
+      const token = (user as any).generateTokenFor("email_verify");
+      const found = await (User as any).findByTokenFor("email_verify", token);
+      expect(found).not.toBeNull();
+      expect(found!.name).toBe("Alice");
+    } finally {
+      setTokenForSecret(null as any);
     }
-    generatesTokenFor(User, "email_verify", {});
-    const user = await User.create({ name: "Alice" });
-    const token = (user as any).generateTokenFor("email_verify");
-    const found = await (User as any).findByTokenFor("email_verify", token);
-    expect(found).not.toBeNull();
-    expect(found!.name).toBe("Alice");
   });
 
   // Rails guide: Relation#readonly? — check readonly status

@@ -13,7 +13,18 @@ type ExtensionModule = {
 };
 
 export class Association {
-  static extensions: ExtensionModule[] = [];
+  private static _extensions: ExtensionModule[] = [];
+
+  static get extensions(): ExtensionModule[] {
+    if (!Object.prototype.hasOwnProperty.call(this, "_extensions")) {
+      this._extensions = [...(Object.getPrototypeOf(this)._extensions ?? [])];
+    }
+    return this._extensions;
+  }
+
+  static set extensions(value: ExtensionModule[]) {
+    this._extensions = value;
+  }
 
   get extensions(): ExtensionModule[] {
     return (this.constructor as typeof Association).extensions;

@@ -115,9 +115,21 @@ export class HasOne extends SingularAssociation {
 
     afterCreate(model, callback);
     afterUpdate(model, callback);
-    afterDestroy(model, callback);
+    afterDestroy(model, async (record: any) => {
+      if (typeof record.isNewRecord === "function" && !record.isNewRecord()) {
+        await HasOne.touchRecord(record, name, touch);
+      }
+    });
     if (typeof model.afterTouch === "function") {
-      model.afterTouch(callback);
+      model.afterTouch(async (record: any) => {
+        if ((record as any)._touchingAssociations) return;
+        (record as any)._touchingAssociations = true;
+        try {
+          await HasOne.touchRecord(record, name, touch);
+        } finally {
+          (record as any)._touchingAssociations = false;
+        }
+      });
     }
   }
 }

@@ -118,6 +118,7 @@ export class Error {
       ? modelClass.humanAttributeName(attribute)
       : humanize(attribute);
 
+    const i18nScope = modelClass?.i18nScope ?? "activemodel";
     let format: string;
     if (Error.i18nCustomizeFullMessage) {
       const modelKey =
@@ -125,10 +126,10 @@ export class Error {
         (modelClass?.name ? underscore(modelClass.name) : undefined);
       const defaults: string[] = [];
       if (modelKey) {
-        defaults.push(`activemodel.errors.models.${modelKey}.attributes.${attribute}.format`);
-        defaults.push(`activemodel.errors.models.${modelKey}.format`);
+        defaults.push(`${i18nScope}.errors.models.${modelKey}.attributes.${attribute}.format`);
+        defaults.push(`${i18nScope}.errors.models.${modelKey}.format`);
       }
-      defaults.push("activemodel.errors.format");
+      defaults.push(`${i18nScope}.errors.format`);
       const primaryKey = defaults[0];
       const fallbackDefaults = defaults.slice(1).map((key) => ({ key }));
       format = I18n.t(primaryKey, {
@@ -136,7 +137,7 @@ export class Error {
         defaultValue: "%{attribute} %{message}",
       });
     } else {
-      format = I18n.t("activemodel.errors.format", {
+      format = I18n.t(`${i18nScope}.errors.format`, {
         defaultValue: "%{attribute} %{message}",
       });
     }
@@ -167,20 +168,30 @@ export class Error {
       ...options,
     };
 
-    const defaults: Array<{ key: string } | { message: string }> = [];
-    if (modelKey) {
-      defaults.push({
-        key: `activemodel.errors.models.${modelKey}.attributes.${attribute}.${type}`,
-      });
-      defaults.push({ key: `activemodel.errors.models.${modelKey}.${type}` });
+    const i18nScope = modelClass?.i18nScope ?? "activemodel";
+    const ancestors: string[] = [];
+    if (typeof modelClass?.lookupAncestors === "function") {
+      for (const klass of modelClass.lookupAncestors()) {
+        const key = klass.modelName?.i18nKey ?? (klass.name ? underscore(klass.name) : undefined);
+        if (key) ancestors.push(key);
+      }
+    } else if (modelKey) {
+      ancestors.push(modelKey);
     }
-    defaults.push({ key: `activemodel.errors.messages.${type}` });
+
+    const defaults: Array<{ key: string } | { message: string }> = [];
+    for (const ancestorKey of ancestors) {
+      defaults.push({
+        key: `${i18nScope}.errors.models.${ancestorKey}.attributes.${attribute}.${type}`,
+      });
+      defaults.push({ key: `${i18nScope}.errors.models.${ancestorKey}.${type}` });
+    }
+    defaults.push({ key: `${i18nScope}.errors.messages.${type}` });
     defaults.push({ key: `errors.attributes.${attribute}.${type}` });
     defaults.push({ key: `errors.messages.${type}` });
 
-    const primaryKey = modelKey
-      ? `activemodel.errors.models.${modelKey}.attributes.${attribute}.${type}`
-      : `activemodel.errors.messages.${type}`;
+    const first = defaults[0];
+    const primaryKey = first && "key" in first ? first.key : `${i18nScope}.errors.messages.${type}`;
 
     return I18n.t(primaryKey, {
       ...i18nOptions,

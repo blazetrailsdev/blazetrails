@@ -6556,7 +6556,7 @@ describe("AssociationProxyTest", () => {
   it.skip("inverses get set of subsets of the association", () => {
     /* requires inverse_of tracking */
   });
-  it("pluck delegates to scope", async () => {
+  it("pluck uses loaded target", async () => {
     const { APPost, APComment } = setupProxyModels();
     const post = await APPost.create({ title: "pluck test" });
     await APComment.create({ body: "plucked", ap_post_id: post.id });
@@ -6564,7 +6564,7 @@ describe("AssociationProxyTest", () => {
     const bodies = await proxy.pluck("body");
     expect(bodies).toEqual(["plucked"]);
   });
-  it("pick delegates to scope", async () => {
+  it("pick uses loaded target", async () => {
     const { APPost, APComment } = setupProxyModels();
     const post = await APPost.create({ title: "pick test" });
     await APComment.create({ body: "picked", ap_post_id: post.id });

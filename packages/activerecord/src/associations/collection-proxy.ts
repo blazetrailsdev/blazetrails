@@ -33,9 +33,7 @@ export interface CollectionProxy {
 
   // Query method delegation — runtime handled by Proxy, typed here for DX.
   // These delegate to the underlying Relation via scope().
-  where(conditions: Record<string, unknown> | null): Relation<Base>;
-  where(sql: string, ...binds: unknown[]): Relation<Base>;
-  where(): Relation<Base>;
+  where: Relation<Base>["where"];
   order(...args: Array<string | Record<string, "asc" | "desc">>): Relation<Base>;
   limit(value: number | null): Relation<Base>;
   offset(value: number): Relation<Base>;
@@ -861,7 +859,7 @@ export class CollectionProxy {
 
   async pluck(...columns: string[]): Promise<unknown[]> {
     if (this._isThrough) {
-      const records = await this.toArray();
+      const records = (await this.toArray()).filter((r) => !r.isNewRecord());
       if (columns.length === 1) {
         return records.map((r) => r.readAttribute(columns[0]));
       }
@@ -872,7 +870,7 @@ export class CollectionProxy {
 
   async pick(...columns: string[]): Promise<unknown> {
     if (this._isThrough) {
-      const records = await this.toArray();
+      const records = (await this.toArray()).filter((r) => !r.isNewRecord());
       if (records.length === 0) return null;
       if (columns.length === 1) return records[0].readAttribute(columns[0]);
       return columns.map((c) => records[0].readAttribute(c));

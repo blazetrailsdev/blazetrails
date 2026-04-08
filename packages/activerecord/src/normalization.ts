@@ -10,7 +10,8 @@
  * Mirrors: ActiveRecord::Normalization
  */
 
-import { Model, SerializeCastValue } from "@blazetrails/activemodel";
+import { Model } from "@blazetrails/activemodel";
+// SerializeCastValue protocol — castType delegates serialization per ActiveModel::Type::SerializeCastValue
 
 /**
  * NormalizedValueType — decorates an underlying cast type with a normalizer.
@@ -45,11 +46,11 @@ export class NormalizedValueType {
   }
 
   serializeCastValue(value: unknown): unknown {
-    const compatible = this.castType as any;
-    if (typeof compatible.serializeCastValue === "function") {
-      return SerializeCastValue.serializeCastValue.call(compatible, value);
+    const ct = this.castType as any;
+    if (typeof ct.serializeCastValue === "function") {
+      return ct.serializeCastValue(value);
     }
-    return typeof this.castType.serialize === "function" ? this.castType.serialize(value) : value;
+    return typeof ct.serialize === "function" ? ct.serialize(value) : value;
   }
 
   private _normalize(value: unknown): unknown {

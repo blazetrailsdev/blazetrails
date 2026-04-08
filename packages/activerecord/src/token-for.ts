@@ -69,7 +69,7 @@ export class TokenDefinition {
   generateToken(model: Base): string {
     const payload = JSON.stringify({
       pk: (model as any).id,
-      purpose: this.purpose,
+      purpose: this.fullPurpose(),
       digest: this.block ? this.block(model) : "",
       timestamp: Date.now(),
     });
@@ -106,7 +106,7 @@ export class TokenDefinition {
       return null;
     }
 
-    if (payload.purpose !== this.purpose) return null;
+    if (payload.purpose !== this.fullPurpose()) return null;
 
     if (this.expiresIn !== undefined) {
       if (!Number.isFinite(payload.timestamp)) return null;

@@ -604,6 +604,14 @@ class SchemaAdapter extends DatabaseStatementsMixin(class {}) implements Databas
     return this.inner.inTransaction;
   }
 
+  override emptyInsertStatementValue(pk?: string | null): string {
+    return this.inner.emptyInsertStatementValue?.(pk) ?? super.emptyInsertStatementValue(pk);
+  }
+
+  override isWriteQuery(sql: string): boolean {
+    return this.inner.isWriteQuery?.(sql) ?? super.isWriteQuery(sql);
+  }
+
   async exec(sql: string): Promise<void> {
     await this.setup();
     // Auto-add IF NOT EXISTS / IF EXISTS

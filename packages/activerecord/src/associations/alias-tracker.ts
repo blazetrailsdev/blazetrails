@@ -29,20 +29,9 @@ export class AliasTracker {
 
     if (joins.length === 0) {
       if (!aliases) aliases = new Map();
-    } else if (aliases) {
-      const base = new Map(aliases);
-      aliases = new Map();
-      for (const [k, v] of base) aliases.set(k, v);
-      // Lazy-initialize counts for unknown tables from joins
-      const origGet = aliases.get.bind(aliases);
-      aliases.get = (key: string) => {
-        if (aliases!.has(key)) return origGet(key);
-        const count = AliasTracker.initialCountFor(key, joins);
-        aliases!.set(key, count);
-        return count;
-      };
     } else {
-      aliases = new Map();
+      const base = aliases ? new Map(aliases) : new Map<string, number>();
+      aliases = new Map(base);
       const origGet = aliases.get.bind(aliases);
       aliases.get = (key: string) => {
         if (aliases!.has(key)) return origGet(key);
@@ -66,17 +55,16 @@ export class AliasTracker {
 
     for (const join of tableJoins) {
       if (typeof join === "string") {
+        // Raw SQL string
         const matches = join.match(pattern);
         count += matches ? matches.length : 0;
-      } else if (join && typeof join === "object") {
+      } else if (join && typeof join === "object" && typeof join.left === "string") {
         // Arel StringJoin — join.left is the SQL string
-        const sql = join.left?.toString?.() ?? join.toString?.() ?? "";
-        if (typeof sql === "string") {
-          const matches = sql.match(pattern);
-          count += matches ? matches.length : 0;
-        }
+        const matches = join.left.match(pattern);
+        count += matches ? matches.length : 0;
+      } else if (join && typeof join === "object" && join.left?.name != null) {
         // Arel Join node — join.left is a Table
-        if (join.left?.name === name) count += 1;
+        if (join.left.name === name) count += 1;
       }
     }
 

@@ -227,14 +227,19 @@ export class BelongsTo extends SingularAssociation {
   }
 
   static override defineChangeTrackingMethods(model: any, reflection: any): void {
-    const mixin =
-      typeof model.generatedAssociationMethods === "function"
-        ? model.generatedAssociationMethods()
-        : null;
-    if (mixin instanceof Set) {
-      const name = reflection.name ?? reflection;
-      mixin.add(`${name}Changed`);
-      mixin.add(`${name}PreviouslyChanged`);
+    const mixin = model.prototype ?? model;
+    if (!mixin || typeof mixin !== "object") return;
+    const name = reflection.name ?? reflection;
+
+    if (!(`${name}Changed` in mixin)) {
+      mixin[`${name}Changed`] = function (this: any) {
+        return this.association(name).targetChanged();
+      };
+    }
+    if (!(`${name}PreviouslyChanged` in mixin)) {
+      mixin[`${name}PreviouslyChanged`] = function (this: any) {
+        return this.association(name).targetPreviouslyChanged();
+      };
     }
   }
 }

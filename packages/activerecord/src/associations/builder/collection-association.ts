@@ -75,17 +75,30 @@ export class CollectionAssociation extends Association {
 
   static override defineReaders(mixin: any, name: string): void {
     super.defineReaders(mixin, name);
-    if (mixin instanceof Set) {
-      const singular = singularize(name);
-      mixin.add(`${singular}Ids`);
+    if (!mixin || typeof mixin !== "object") return;
+    const idsName = `${singularize(name)}Ids`;
+    if (!(idsName in mixin)) {
+      Object.defineProperty(mixin, idsName, {
+        get(this: any) {
+          return this.association(name).idsReader();
+        },
+        configurable: true,
+      });
     }
   }
 
   static override defineWriters(mixin: any, name: string): void {
     super.defineWriters(mixin, name);
-    if (mixin instanceof Set) {
-      const singular = singularize(name);
-      mixin.add(`${singular}Ids=`);
-    }
+    if (!mixin || typeof mixin !== "object") return;
+    const idsName = `${singularize(name)}Ids`;
+    const existing = Object.getOwnPropertyDescriptor(mixin, idsName);
+    if (existing && !existing.configurable) return;
+    Object.defineProperty(mixin, idsName, {
+      get: existing?.get,
+      set(this: any, ids: any) {
+        this.association(name).idsWriter(ids);
+      },
+      configurable: true,
+    });
   }
 }

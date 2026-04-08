@@ -179,25 +179,36 @@ export class Association {
   }
 
   static defineAccessors(model: any, reflection: any): void {
-    const mixin =
-      typeof model.generatedAssociationMethods === "function"
-        ? model.generatedAssociationMethods()
-        : null;
+    const mixin = model.prototype ?? model;
     const name = reflection.name ?? reflection;
     this.defineReaders(mixin, name);
     this.defineWriters(mixin, name);
   }
 
   static defineReaders(mixin: any, name: string): void {
-    if (mixin && mixin instanceof Set) {
-      mixin.add(name);
-    }
+    if (!mixin || typeof mixin !== "object") return;
+    const existing = Object.getOwnPropertyDescriptor(mixin, name);
+    if (existing && !existing.configurable) return;
+    Object.defineProperty(mixin, name, {
+      get(this: any) {
+        return this.association(name).reader;
+      },
+      set: existing?.set,
+      configurable: true,
+    });
   }
 
   static defineWriters(mixin: any, name: string): void {
-    if (mixin && mixin instanceof Set) {
-      mixin.add(`${name}=`);
-    }
+    if (!mixin || typeof mixin !== "object") return;
+    const existing = Object.getOwnPropertyDescriptor(mixin, name);
+    if (existing && !existing.configurable) return;
+    Object.defineProperty(mixin, name, {
+      get: existing?.get,
+      set(this: any, value: any) {
+        this.association(name).writer(value);
+      },
+      configurable: true,
+    });
   }
 
   static defineValidations(_model: any, _reflection: any): void {

@@ -10,10 +10,12 @@ const DEFAULT_TABLE_ALIAS_LENGTH = 63;
 export class AliasTracker {
   readonly aliases: Map<string, number>;
   private _tableAliasLength: number;
+  private _joins: any[];
 
-  constructor(tableAliasLength?: number, aliases?: Map<string, number>) {
+  constructor(tableAliasLength?: number, aliases?: Map<string, number>, joins?: any[]) {
     this._tableAliasLength = tableAliasLength ?? DEFAULT_TABLE_ALIAS_LENGTH;
     this.aliases = aliases ?? new Map();
+    this._joins = joins ?? [];
   }
 
   static create(
@@ -27,22 +29,9 @@ export class AliasTracker {
         ? DEFAULT_TABLE_ALIAS_LENGTH
         : (pool?.tableAliasLength ?? DEFAULT_TABLE_ALIAS_LENGTH);
 
-    if (joins.length === 0) {
-      if (!aliases) aliases = new Map();
-    } else {
-      const base = aliases ? new Map(aliases) : new Map<string, number>();
-      aliases = new Map(base);
-      const origGet = aliases.get.bind(aliases);
-      aliases.get = (key: string) => {
-        if (aliases!.has(key)) return origGet(key);
-        const count = AliasTracker.initialCountFor(key, joins);
-        aliases!.set(key, count);
-        return count;
-      };
-    }
-
-    aliases.set(initialTable, 1);
-    return new AliasTracker(tableAliasLength, aliases);
+    const map = aliases ? new Map(aliases) : new Map<string, number>();
+    map.set(initialTable, 1);
+    return new AliasTracker(tableAliasLength, map, joins);
   }
 
   static initialCountFor(name: string, tableJoins: any[]): number {
@@ -71,11 +60,21 @@ export class AliasTracker {
     return count;
   }
 
+  private _getCount(key: string): number {
+    if (this.aliases.has(key)) return this.aliases.get(key)!;
+    if (this._joins.length > 0) {
+      const count = AliasTracker.initialCountFor(key, this._joins);
+      this.aliases.set(key, count);
+      return count;
+    }
+    return 0;
+  }
+
   aliasedTableFor(arelTable: Table | any, tableNameOrBlock?: string | (() => string)): Table | any {
     const tableName =
       typeof tableNameOrBlock === "string" ? tableNameOrBlock : (arelTable.name ?? arelTable);
 
-    const count = this.aliases.get(tableName) ?? 0;
+    const count = this._getCount(tableName);
     if (count === 0) {
       this.aliases.set(tableName, 1);
       if (arelTable.name !== tableName) {
@@ -84,11 +83,10 @@ export class AliasTracker {
       return arelTable;
     }
 
-    // Need an alias — use the block if provided, otherwise the table name
     const aliasCandidate = typeof tableNameOrBlock === "function" ? tableNameOrBlock() : tableName;
     const aliasedName = this._tableAliasFor(aliasCandidate);
 
-    const newCount = (this.aliases.get(aliasedName) ?? 0) + 1;
+    const newCount = this._getCount(aliasedName) + 1;
     this.aliases.set(aliasedName, newCount);
 
     const suffix = `_${newCount}`;
@@ -97,11 +95,11 @@ export class AliasTracker {
         ? `${aliasedName.slice(0, this._tableAliasLength - suffix.length)}${suffix}`
         : aliasedName;
 
-    return typeof arelTable.alias === "function" ? arelTable.alias(finalName) : finalName;
+    return typeof arelTable.alias === "function" ? arelTable.alias(finalName) : arelTable;
   }
 
   aliasFor(tableName: string): string {
-    const count = this.aliases.get(tableName) ?? 0;
+    const count = this._getCount(tableName);
     if (count === 0) {
       this.aliases.set(tableName, 1);
       return tableName;
@@ -112,9 +110,5 @@ export class AliasTracker {
 
   private _tableAliasFor(tableName: string): string {
     return tableName.slice(0, this._tableAliasLength).replace(/\./g, "_");
-  }
-
-  private _truncate(name: string): string {
-    return name.slice(0, this._tableAliasLength - 2);
   }
 }

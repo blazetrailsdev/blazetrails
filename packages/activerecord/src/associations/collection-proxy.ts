@@ -788,9 +788,7 @@ export class CollectionProxy {
    */
   async exists(conditions?: Record<string, unknown> | unknown): Promise<boolean> {
     if (this._isThrough) {
-      const records = (this._loaded ? this._target : await this.toArray()).filter(
-        (r) => !r.isNewRecord(),
-      );
+      const records = (await this.loadTarget()).filter((r) => !r.isNewRecord());
       if (conditions === undefined) return records.length > 0;
       if (typeof conditions === "object" && conditions !== null && !Array.isArray(conditions)) {
         const entries = Object.entries(conditions as Record<string, unknown>);
@@ -1295,13 +1293,8 @@ export class CollectionProxy {
   select(...columns: (string | Nodes.SqlLiteral)[]): Relation<Base>;
   select(...args: any[]): Promise<Base[]> | Relation<Base> {
     if (args.length === 1 && typeof args[0] === "function") {
-      if (this._loaded) {
-        return Promise.resolve(this._target.filter(args[0]));
-      }
-      this._checkStrictLoading();
       return this.loadTarget().then((records: Base[]) => records.filter(args[0]));
     }
-    this._checkStrictLoading();
     return this.scope().select(...args);
   }
 
@@ -1311,8 +1304,7 @@ export class CollectionProxy {
    * Mirrors: Ruby's Enumerable#each on CollectionProxy
    */
   async *[Symbol.asyncIterator](): AsyncIterableIterator<Base> {
-    if (!this._loaded) this._checkStrictLoading();
-    const records = this._loaded ? this._target : await this.loadTarget();
+    const records = await this.loadTarget();
     for (const record of records) {
       yield record;
     }

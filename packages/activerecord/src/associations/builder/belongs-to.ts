@@ -232,15 +232,27 @@ export class BelongsTo extends SingularAssociation {
     if (!mixin || typeof mixin !== "object") return;
     const name = reflection.name ?? reflection;
 
-    if (!(`${name}Changed` in mixin)) {
-      mixin[`${name}Changed`] = function (this: any) {
-        return this.association(name).targetChanged();
-      };
-    }
-    if (!(`${name}PreviouslyChanged` in mixin)) {
-      mixin[`${name}PreviouslyChanged`] = function (this: any) {
-        return this.association(name).targetPreviouslyChanged();
-      };
+    for (const [methodName, impl] of [
+      [
+        `${name}Changed`,
+        function (this: any) {
+          return this.association(name).targetChanged();
+        },
+      ],
+      [
+        `${name}PreviouslyChanged`,
+        function (this: any) {
+          return this.association(name).targetPreviouslyChanged();
+        },
+      ],
+    ] as [string, () => any][]) {
+      const existing = Object.getOwnPropertyDescriptor(mixin, methodName);
+      if (existing && !existing.configurable) continue;
+      Object.defineProperty(mixin, methodName, {
+        value: impl,
+        writable: true,
+        configurable: true,
+      });
     }
   }
 }

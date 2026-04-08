@@ -118,8 +118,8 @@ export class Error {
       ? modelClass.humanAttributeName(attribute)
       : humanize(attribute);
 
-    const i18nScope =
-      typeof modelClass?.i18nScope === "string" ? modelClass.i18nScope : "activemodel";
+    const rawScope = modelClass?.i18nScope;
+    const i18nScope = typeof rawScope === "string" ? rawScope : "activemodel";
     let format: string;
     if (Error.i18nCustomizeFullMessage) {
       const modelKey =
@@ -131,6 +131,8 @@ export class Error {
         defaults.push(`${i18nScope}.errors.models.${modelKey}.format`);
       }
       defaults.push(`${i18nScope}.errors.format`);
+      if (i18nScope !== "activemodel") defaults.push("activemodel.errors.format");
+      defaults.push("errors.format");
       const primaryKey = defaults[0];
       const fallbackDefaults = defaults.slice(1).map((key) => ({ key }));
       format = I18n.t(primaryKey, {
@@ -139,6 +141,10 @@ export class Error {
       });
     } else {
       format = I18n.t(`${i18nScope}.errors.format`, {
+        defaults: [
+          ...(i18nScope !== "activemodel" ? [{ key: "activemodel.errors.format" }] : []),
+          { key: "errors.format" },
+        ],
         defaultValue: "%{attribute} %{message}",
       });
     }
@@ -169,8 +175,8 @@ export class Error {
       ...options,
     };
 
-    const i18nScope =
-      typeof modelClass?.i18nScope === "string" ? modelClass.i18nScope : "activemodel";
+    const rawScope2 = modelClass?.i18nScope;
+    const i18nScope = typeof rawScope2 === "string" ? rawScope2 : "activemodel";
     const ancestors: string[] = [];
     if (typeof modelClass?.lookupAncestors === "function") {
       for (const klass of modelClass.lookupAncestors()) {

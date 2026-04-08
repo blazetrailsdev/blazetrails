@@ -14,7 +14,7 @@ let _tokenForSecret: string | (() => string) | null = null;
  * Configure the secret used for token generation/verification.
  * If not set, falls back to BLAZETRAILS_SECRET_KEY_BASE or
  * BLAZETRAILS_SIGNED_ID_SECRET env vars. Throws if no secret
- * is configured — matching signed-id behavior.
+ * is configured.
  */
 export function setTokenForSecret(secret: string | (() => string)): void {
   _tokenForSecret = secret;

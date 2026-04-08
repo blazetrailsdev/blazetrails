@@ -824,10 +824,7 @@ export class CollectionProxy {
     this._checkStrictLoading();
     const matches = await this.scope().where(conditions).toArray();
     if (matches.length > 0) return matches[0];
-    const record = this.build(conditions);
-    await record.save();
-    if (record.isNewRecord()) throw new Error("Failed to create record");
-    return record;
+    return this.createBang(conditions);
   }
 
   /**

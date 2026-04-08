@@ -1317,14 +1317,12 @@ export function association(record: Base, assocName: string): CollectionProxy {
 function wrapCollectionProxy(proxy: CollectionProxy): CollectionProxy {
   return new Proxy(proxy, {
     get(target: any, prop: string | symbol, receiver: any) {
-      if (typeof prop === "symbol") return Reflect.get(target, prop, receiver);
-
       const value = Reflect.get(target, prop, receiver);
       if (value !== undefined) return value;
       if (prop in target) return value;
 
       const scope = target.scope();
-      const scopeVal = scope[prop];
+      const scopeVal = Reflect.get(scope, prop, scope);
       if (typeof scopeVal === "function") {
         return (...args: any[]) => scopeVal.apply(scope, args);
       }

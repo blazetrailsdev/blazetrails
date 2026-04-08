@@ -787,7 +787,7 @@ export class CollectionProxy {
    */
   async exists(conditions?: Record<string, unknown> | unknown): Promise<boolean> {
     if (this._isThrough) {
-      const records = await this.toArray();
+      const records = this._loaded ? this._target : await this.toArray();
       if (conditions === undefined) return records.length > 0;
       if (typeof conditions === "object" && conditions !== null && !Array.isArray(conditions)) {
         return records.some((r) =>
@@ -796,8 +796,10 @@ export class CollectionProxy {
           ),
         );
       }
-      const pk = (records[0]?.constructor as typeof Base)?.primaryKey ?? "id";
-      return records.some((r) => r.readAttribute(pk as string) === conditions);
+      const className = this._assocDef.options.className ?? camelize(singularize(this._assocName));
+      const targetModel = resolveModel(className);
+      const pk = targetModel.primaryKey as string;
+      return records.some((r) => r.readAttribute(pk) === conditions);
     }
     this._checkStrictLoading();
     return this.scope().exists(conditions);
@@ -1284,7 +1286,10 @@ export class CollectionProxy {
   select(...columns: string[]): any;
   select(...args: any[]): any {
     if (args.length === 1 && typeof args[0] === "function") {
-      return this.toArray().then((records: Base[]) => records.filter(args[0]));
+      if (this._loaded) {
+        return Promise.resolve(this._target.filter(args[0]));
+      }
+      return this.loadTarget().then((records: Base[]) => records.filter(args[0]));
     }
     return this.scope().select(...args);
   }
@@ -1295,7 +1300,7 @@ export class CollectionProxy {
    * Mirrors: Ruby's Enumerable#each on CollectionProxy
    */
   async *[Symbol.asyncIterator](): AsyncIterableIterator<Base> {
-    const records = await this.toArray();
+    const records = this._loaded ? this._target : await this.loadTarget();
     for (const record of records) {
       yield record;
     }

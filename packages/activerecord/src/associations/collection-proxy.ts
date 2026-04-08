@@ -39,16 +39,16 @@ export interface CollectionProxy {
  * Using Omit instead of Pick means new Relation methods are automatically
  * available on AssociationProxy without manual maintenance.
  */
-type DelegatedQueryMethods = Omit<Relation<Base>, keyof CollectionProxy>;
+type DelegatedRelationMethods = Omit<Relation<Base>, keyof CollectionProxy>;
 
 /**
- * A CollectionProxy wrapped with a JS Proxy that delegates query methods
+ * A CollectionProxy wrapped with a JS Proxy that delegates methods
  * and named scopes to the underlying Relation. Returned by association().
  * The generic parameter allows typing extend-option methods; defaults to
  * an open index signature so named scopes and extensions work without casts.
  */
 export type AssociationProxy<TExtensions extends Record<string, any> = Record<string, any>> =
-  CollectionProxy & DelegatedQueryMethods & TExtensions;
+  CollectionProxy & DelegatedRelationMethods & TExtensions;
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class CollectionProxy {

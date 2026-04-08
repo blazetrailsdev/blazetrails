@@ -29,7 +29,7 @@ function resolveSecret(): string {
   if (typeof envSecret === "string" && envSecret.length > 0) return envSecret;
   throw new Error(
     "TokenFor requires a configured secret. Call setTokenForSecret() " +
-      "or set BLAZETRAILS_SECRET_KEY_BASE.",
+      "or set BLAZETRAILS_SECRET_KEY_BASE or BLAZETRAILS_SIGNED_ID_SECRET.",
   );
 }
 

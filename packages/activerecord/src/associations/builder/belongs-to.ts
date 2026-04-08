@@ -58,13 +58,16 @@ export class BelongsTo extends SingularAssociation {
   }
 
   private static resolvePk(reflection: any, klass: any): string | string[] {
+    const configuredPk = reflection?.options?.primaryKey;
+    if (configuredPk != null) return configuredPk;
     const apk = reflection?.associationPrimaryKey;
     if (typeof apk === "function") return apk.call(reflection, klass);
-    if (apk) return apk;
+    if (apk != null) return apk;
     return klass?.primaryKey ?? "id";
   }
 
   private static async touchParent(target: any, touch: any): Promise<void> {
+    if (Array.isArray(touch) && touch.length === 0) return;
     const touchFn = target.touchLater ?? target.touch;
     if (typeof touchFn !== "function") return;
     if (touch === true) {
@@ -98,8 +101,15 @@ export class BelongsTo extends SingularAssociation {
     touch: any,
   ): Promise<void> {
     const fkColumns = Array.isArray(foreignKey) ? foreignKey : [foreignKey];
-    const oldFkValues = fkColumns.map((col) => changes[col]?.[0]);
-    const hasOldFk = oldFkValues.some((v) => v != null);
+
+    // Fill missing old FK parts from current attributes for composite keys —
+    // unchanged columns have the same old/new value.
+    const oldFkValues = fkColumns.map((col) => {
+      const change = changes[col];
+      if (change) return change[0];
+      return typeof record.readAttribute === "function" ? record.readAttribute(col) : record[col];
+    });
+    const hasOldFk = fkColumns.some((col) => changes[col] != null);
 
     if (hasOldFk) {
       const association =
@@ -107,8 +117,14 @@ export class BelongsTo extends SingularAssociation {
       if (association) {
         const reflection = association.reflection;
         let klass: any;
-        if (reflection?.isPolymorphic?.()) {
-          const foreignType = reflection.foreignType;
+        const isPolymorphic =
+          reflection?.options?.polymorphic ??
+          (typeof reflection?.isPolymorphic === "function" && reflection.isPolymorphic());
+        if (isPolymorphic) {
+          const foreignType =
+            reflection?.foreignType ??
+            reflection?.options?.foreignType ??
+            `${underscore(name)}_type`;
           const typeName = changes[foreignType]?.[0] ?? record[foreignType];
           klass = record.constructor.polymorphicClassFor?.(typeName) ?? null;
         } else {

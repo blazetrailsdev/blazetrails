@@ -196,7 +196,7 @@ export class Association {
 
   static defineWriters(mixin: any, name: string): void {
     if (mixin && mixin instanceof Set) {
-      mixin.add(name);
+      mixin.add(`${name}=`);
     }
   }
 

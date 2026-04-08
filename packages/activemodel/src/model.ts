@@ -10,7 +10,7 @@ import {
   CallbackChain,
   CallbackFn,
   AroundCallbackFn,
-  CallbackObject,
+  type CallbackObject,
   CallbackConditions,
   defineModelCallbacks,
 } from "./callbacks.js";

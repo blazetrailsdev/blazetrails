@@ -72,10 +72,10 @@ export class TokenDefinition {
   }
 
   generateToken(model: Base): string {
+    const data = this.payloadFor(model);
     const payload = JSON.stringify({
-      pk: (model as any).id,
+      data,
       purpose: this.fullPurpose(),
-      digest: this.block ? this.block(model) : "",
       timestamp: Date.now(),
     });
     const encoded = Buffer.from(payload).toString("base64url");
@@ -118,12 +118,15 @@ export class TokenDefinition {
       if (Date.now() - payload.timestamp > this.expiresIn) return null;
     }
 
-    const record = await finder(payload.pk);
+    const data = payload.data as unknown[];
+    if (!Array.isArray(data) || data.length === 0) return null;
+
+    const record = await finder(data[0]);
     if (!record) return null;
 
-    const currentDigest = this.block ? this.block(record) : "";
-    const a = Buffer.from(String(currentDigest));
-    const b = Buffer.from(String(payload.digest));
+    const currentPayload = this.payloadFor(record);
+    const a = Buffer.from(JSON.stringify(currentPayload));
+    const b = Buffer.from(JSON.stringify(data));
     if (a.length !== b.length || !getCrypto().timingSafeEqual(a, b)) return null;
 
     return record;

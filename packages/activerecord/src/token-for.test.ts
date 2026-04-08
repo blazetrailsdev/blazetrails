@@ -235,6 +235,10 @@ describe("TokenForTest", () => {
 });
 
 describe("TokenForTest", () => {
+  beforeEach(() => {
+    setTokenForSecret("blazetrails-test-token-secret");
+  });
+
   it("generates and resolves a token", async () => {
     const { generatesTokenFor } = await import("./generates-token-for.js");
     const adapter = freshAdapter();

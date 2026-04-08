@@ -5,6 +5,7 @@
  */
 
 import { getCrypto } from "@blazetrails/activesupport";
+import { InvalidSignature } from "@blazetrails/activesupport/message-verifier";
 import type { Base } from "./base.js";
 
 const SECRET = "trails-token-secret";
@@ -220,8 +221,7 @@ export async function findByTokenForBang(
 ): Promise<Base> {
   const record = await findByTokenFor(modelClass, purpose, token);
   if (!record) {
-    const { RecordNotFound } = await import("./errors.js");
-    throw new RecordNotFound(`Couldn't find record for token purpose: ${purpose}`);
+    throw new InvalidSignature();
   }
   return record;
 }

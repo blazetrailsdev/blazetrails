@@ -11,6 +11,7 @@ interface EnumDefinition {
   attribute: string;
   mapping: Map<string, number>;
   reverseMapping: Map<number, string>;
+  type: EnumType;
 }
 
 /**
@@ -65,7 +66,8 @@ export function defineEnum(
   }
 
   const defs = getEnumDefinitions(modelClass);
-  const def: EnumDefinition = { attribute, mapping, reverseMapping };
+  const enumType = new EnumType(attribute, mapping as Map<string, number | string>, "integer");
+  const def: EnumDefinition = { attribute, mapping, reverseMapping, type: enumType };
   defs.set(attribute, def);
 
   // Compute prefix/suffix for method names
@@ -223,6 +225,7 @@ export class EnumType {
 
 /**
  * Get the human-readable enum value for an attribute.
+ * Delegates to EnumType.deserialize for the mapping lookup.
  */
 export function readEnumValue(record: Base, attribute: string): string | null {
   const ctor = record.constructor as typeof Base;
@@ -231,12 +234,12 @@ export function readEnumValue(record: Base, attribute: string): string | null {
   if (!def) return null;
 
   const numericValue = record.readAttribute(attribute);
-  if (numericValue === null || numericValue === undefined) return null;
-  return def.reverseMapping.get(Number(numericValue)) ?? null;
+  return def.type.deserialize(numericValue);
 }
 
 /**
  * Cast an enum value (string name or number) to its integer storage value.
+ * Delegates to EnumType.serialize for the mapping lookup.
  */
 export function castEnumValue(
   modelClass: typeof Base,
@@ -247,11 +250,5 @@ export function castEnumValue(
   const def = defs.get(attribute);
   if (!def) return null;
 
-  if (typeof value === "string") {
-    return def.mapping.get(value) ?? null;
-  }
-  if (typeof value === "number") {
-    return def.reverseMapping.has(value) ? value : null;
-  }
-  return null;
+  return def.type.serialize(value) as number | null;
 }

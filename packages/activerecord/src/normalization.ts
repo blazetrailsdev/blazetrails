@@ -1,15 +1,16 @@
 /**
- * Attribute normalization — wraps a cast type to apply normalizer functions.
+ * Attribute normalization support for ActiveRecord.
  *
  * The class methods `normalizes`, `normalizeValueFor`, and instance method
  * `normalizeAttribute` are defined on ActiveModel::Model and inherited by
  * ActiveRecord::Base. This file provides the NormalizedValueType wrapper
- * that Rails defines in ActiveRecord::Normalization.
+ * that Rails defines in ActiveRecord::Normalization, and re-exports the
+ * methods from Model for api:compare discoverability.
  *
  * Mirrors: ActiveRecord::Normalization
  */
 
-import type { Base } from "./base.js";
+import { Model } from "@blazetrails/activemodel";
 
 /**
  * NormalizedValueType — decorates an underlying cast type with a normalizer.
@@ -58,33 +59,8 @@ export class NormalizedValueType {
   }
 }
 
-/**
- * Declare normalizations for one or more attributes.
- * Delegates to the implementation on ActiveModel::Model.
- *
- * Mirrors: ActiveRecord::Normalization::ClassMethods#normalizes
- */
-export function normalizes(
-  this: typeof Base,
-  ...args: [...string[], ((value: unknown) => unknown) | Record<string, unknown>]
-): void {
-  return (this as any).normalizes(...args);
-}
-
-/**
- * Normalize a value for a given attribute without a record instance.
- *
- * Mirrors: ActiveRecord::Normalization::ClassMethods#normalize_value_for
- */
-export function normalizeValueFor(this: typeof Base, name: string, value: unknown): unknown {
-  return (this as any).normalizeValueFor(name, value);
-}
-
-/**
- * Re-normalize an attribute in place on a record instance.
- *
- * Mirrors: ActiveRecord::Normalization#normalize_attribute
- */
-export function normalizeAttribute(this: Base, name: string): void {
-  return (this as any).normalizeAttribute(name);
-}
+// Re-export the normalization methods from Model for api:compare discoverability.
+// These are the actual implementations inherited by ActiveRecord::Base.
+export const normalizes = Model.normalizes;
+export const normalizeValueFor = Model.normalizeValueFor;
+export const normalizeAttribute = Model.prototype.normalizeAttribute;

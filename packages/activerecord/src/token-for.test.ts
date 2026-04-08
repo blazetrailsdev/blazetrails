@@ -129,7 +129,7 @@ describe("TokenForTest", () => {
     const { User } = makeModel();
     await expect(
       (User as any).findByTokenForBang("password_reset", "invalid-token"),
-    ).rejects.toThrow();
+    ).rejects.toThrow("Invalid signature");
   });
 
   it("does not find record when expires_in is different", async () => {

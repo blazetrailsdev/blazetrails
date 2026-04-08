@@ -7801,3 +7801,120 @@ describe("WithAnnotationsTest", () => {
     expect(sql).toContain("eager-hmt-hint");
   });
 });
+
+// ==========================================================================
+// CollectionProxy delegation via Proxy
+// ==========================================================================
+
+describe("CollectionProxyDelegation", () => {
+  let adapter: DatabaseAdapter;
+
+  beforeEach(() => {
+    adapter = freshAdapter();
+  });
+
+  function setupDelegationModels() {
+    class DlgComment extends Base {
+      static {
+        this._tableName = "dlg_comments";
+        this.attribute("body", "string");
+        this.attribute("active", "boolean");
+        this.attribute("dlg_post_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class DlgPost extends Base {
+      static {
+        this._tableName = "dlg_posts";
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    Associations.hasMany.call(DlgPost, "dlgComments", {
+      foreignKey: "dlg_post_id",
+      className: "DlgComment",
+    });
+    Associations.belongsTo.call(DlgComment, "dlgPost", {
+      foreignKey: "dlg_post_id",
+      className: "DlgPost",
+    });
+    registerModel("DlgPost", DlgPost);
+    registerModel("DlgComment", DlgComment);
+    return { DlgPost, DlgComment };
+  }
+
+  it("delegates query methods to scope", async () => {
+    const { DlgPost } = setupDelegationModels();
+    const post = await DlgPost.create({ title: "delegation test" });
+    const proxy = association(post, "dlgComments");
+    const result = (proxy as any).order("body");
+    expect(result).toBeDefined();
+    expect(typeof result.toSql).toBe("function");
+  });
+
+  it("delegates named scopes to scope", async () => {
+    const { DlgPost, DlgComment } = setupDelegationModels();
+    DlgComment.scope("active", (rel: any) => rel.where({ active: true }));
+
+    const post = await DlgPost.create({ title: "scope delegation" });
+    const proxy = association(post, "dlgComments");
+    const result = (proxy as any).active();
+    expect(result).toBeDefined();
+    expect(typeof result.toSql).toBe("function");
+    expect(result.toSql()).toContain("active");
+  });
+
+  it("CollectionProxy own methods take priority over delegation", async () => {
+    const { DlgPost, DlgComment } = setupDelegationModels();
+    const post = await DlgPost.create({ title: "priority test" });
+    await DlgComment.create({ body: "c1", dlg_post_id: post.id });
+
+    const proxy = association(post, "dlgComments");
+    const count = await proxy.count();
+    expect(count).toBe(1);
+  });
+
+  it("thenable is preserved through Proxy wrapper", async () => {
+    const { DlgPost, DlgComment } = setupDelegationModels();
+    const post = await DlgPost.create({ title: "thenable test" });
+    await DlgComment.create({ body: "c1", dlg_post_id: post.id });
+
+    const records = await association(post, "dlgComments");
+    expect(Array.isArray(records)).toBe(true);
+    expect((records as Base[]).length).toBe(1);
+  });
+
+  it("extend option methods take priority over delegation", async () => {
+    const { DlgPost, DlgComment } = setupDelegationModels();
+    // Re-register with extend option
+    (DlgPost as any)._associations = [];
+    Associations.hasMany.call(DlgPost, "dlgComments", {
+      foreignKey: "dlg_post_id",
+      className: "DlgComment",
+      extend: {
+        custom() {
+          return "from-extend";
+        },
+      },
+    });
+    const post = await DlgPost.create({ title: "extend test" });
+    const proxy = association(post, "dlgComments") as any;
+    expect(proxy.custom()).toBe("from-extend");
+  });
+
+  it("unknown properties return undefined", async () => {
+    const { DlgPost } = setupDelegationModels();
+    const post = await DlgPost.create({ title: "unknown prop test" });
+    const proxy = association(post, "dlgComments") as any;
+    expect(proxy.completelyNonExistent).toBeUndefined();
+  });
+
+  it("chaining query methods works", async () => {
+    const { DlgPost } = setupDelegationModels();
+    const post = await DlgPost.create({ title: "chain test" });
+    const proxy = association(post, "dlgComments") as any;
+    const result = proxy.order("body").limit(5);
+    expect(result).toBeDefined();
+    expect(typeof result.toSql).toBe("function");
+  });
+});

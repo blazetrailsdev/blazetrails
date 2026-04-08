@@ -1300,8 +1300,37 @@ export function association(record: Base, assocName: string): CollectionProxy {
     proxy._hydrateFromPreload(records as Base[]);
   }
 
-  record._collectionProxies.set(assocName, proxy);
-  return proxy;
+  const wrapped = wrapCollectionProxy(proxy);
+  record._collectionProxies.set(assocName, wrapped);
+  return wrapped;
+}
+
+/**
+ * Wrap a CollectionProxy in a Proxy that delegates unknown property access
+ * to the underlying Relation (via scope()). This mirrors Ruby's
+ * CollectionProxy#method_missing which delegates to the association scope.
+ *
+ * Priority:
+ * 1. Own/prototype properties (CollectionProxy methods, extend methods)
+ * 2. Relation query methods + named scopes (via scope()'s own proxy)
+ */
+function wrapCollectionProxy(proxy: CollectionProxy): CollectionProxy {
+  return new Proxy(proxy, {
+    get(target: any, prop: string | symbol, receiver: any) {
+      if (typeof prop === "symbol") return Reflect.get(target, prop, receiver);
+
+      const value = Reflect.get(target, prop, receiver);
+      if (value !== undefined) return value;
+      if (prop in target) return value;
+
+      const scope = target.scope();
+      const scopeVal = scope[prop];
+      if (typeof scopeVal === "function") {
+        return (...args: any[]) => scopeVal.apply(scope, args);
+      }
+      return scopeVal;
+    },
+  });
 }
 
 /**

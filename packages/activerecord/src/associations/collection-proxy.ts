@@ -20,6 +20,7 @@ import {
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export interface CollectionProxy {
+  // Thenable — makes CollectionProxy awaitable (delegates to toArray)
   then<TResult1 = Base[], TResult2 = never>(
     onfulfilled?: ((value: Base[]) => TResult1 | PromiseLike<TResult1>) | null,
     onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null,
@@ -28,6 +29,39 @@ export interface CollectionProxy {
     onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null,
   ): Promise<Base[] | TResult>;
   finally(onfinally?: (() => void) | null): Promise<Base[]>;
+
+  // Query method delegation — runtime handled by Proxy, typed here for DX.
+  // These delegate to the underlying Relation via scope().
+  // Methods already on CollectionProxy (where, includes) are omitted to avoid
+  // overload conflicts — CollectionProxy's own versions take priority at runtime.
+  order(...args: Array<string | Record<string, "asc" | "desc">>): any;
+  limit(value: number | null): any;
+  offset(value: number): any;
+  select(...columns: string[]): any;
+  reselect(...columns: string[]): any;
+  distinct(): any;
+  group(...columns: string[]): any;
+  having(condition: string | Record<string, unknown>): any;
+  reorder(...args: Array<string | Record<string, "asc" | "desc">>): any;
+  reverseOrder(): any;
+  inOrderOf(column: string, values: unknown[]): any;
+  rewhere(conditions: Record<string, unknown>): any;
+  none(): any;
+  unscope(...args: any[]): any;
+  lock(clause?: string | boolean): any;
+  readonly(value?: boolean): any;
+  joins(tableOrSql?: string, on?: string): any;
+  leftOuterJoins(table?: string, on?: string): any;
+  preload(...associations: string[]): any;
+  eagerLoad(...associations: string[]): any;
+  references(...tables: string[]): any;
+  extending(mod?: Record<string, Function> | ((rel: any) => void)): any;
+  annotate(...comments: string[]): any;
+  optimizerHints(...hints: string[]): any;
+  from(source: string, subqueryName?: string): any;
+  createWith(attrs: Record<string, unknown>): any;
+  excluding(...records: Base[]): any;
+  without(...records: Base[]): any;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging

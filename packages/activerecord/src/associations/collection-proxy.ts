@@ -1,8 +1,9 @@
 import type { Base } from "../base.js";
+import type { Relation } from "../relation.js";
 import { applyThenable, stripThenable } from "../relation/thenable.js";
 import { Table as ArelTable } from "@blazetrails/arel";
 import { underscore, singularize, pluralize, camelize } from "@blazetrails/activesupport";
-import { StrictLoadingViolationError, RecordInvalid, RecordNotSaved } from "../errors.js";
+import { RecordInvalid, RecordNotSaved } from "../errors.js";
 import {
   HasManyThroughCantAssociateThroughHasOneOrManyReflection,
   HasManyThroughNestedAssociationsAreReadonly,
@@ -32,38 +33,38 @@ export interface CollectionProxy {
 
   // Query method delegation — runtime handled by Proxy, typed here for DX.
   // These delegate to the underlying Relation via scope().
-  where(conditions: Record<string, unknown> | null): any;
-  where(sql: string, ...binds: unknown[]): any;
-  where(): any;
-  order(...args: Array<string | Record<string, "asc" | "desc">>): any;
-  limit(value: number | null): any;
-  offset(value: number): any;
-  select(...columns: string[]): any;
-  reselect(...columns: string[]): any;
-  distinct(): any;
-  group(...columns: string[]): any;
-  having(condition: string | Record<string, unknown>): any;
-  reorder(...args: Array<string | Record<string, "asc" | "desc">>): any;
-  reverseOrder(): any;
-  inOrderOf(column: string, values: unknown[]): any;
-  rewhere(conditions: Record<string, unknown>): any;
-  none(): any; // Delegates to Relation#none (null relation); predicate is isNone()
-  unscope(...args: any[]): any;
-  lock(clause?: string | boolean): any;
-  readonly(value?: boolean): any;
-  joins(tableOrSql?: string, on?: string): any;
-  leftOuterJoins(table?: string, on?: string): any;
-  includes(...associations: string[]): any;
-  preload(...associations: string[]): any;
-  eagerLoad(...associations: string[]): any;
-  references(...tables: string[]): any;
-  extending(mod?: Record<string, Function> | ((rel: any) => void)): any;
-  annotate(...comments: string[]): any;
-  optimizerHints(...hints: string[]): any;
-  from(source: string, subqueryName?: string): any;
-  createWith(attrs: Record<string, unknown>): any;
-  excluding(...records: Base[]): any;
-  without(...records: Base[]): any;
+  where(conditions: Record<string, unknown> | null): Relation<Base>;
+  where(sql: string, ...binds: unknown[]): Relation<Base>;
+  where(): Relation<Base>;
+  order(...args: Array<string | Record<string, "asc" | "desc">>): Relation<Base>;
+  limit(value: number | null): Relation<Base>;
+  offset(value: number): Relation<Base>;
+  select(...columns: string[]): Relation<Base>;
+  reselect(...columns: string[]): Relation<Base>;
+  distinct(): Relation<Base>;
+  group(...columns: string[]): Relation<Base>;
+  having(condition: string | Record<string, unknown>): Relation<Base>;
+  reorder(...args: Array<string | Record<string, "asc" | "desc">>): Relation<Base>;
+  reverseOrder(): Relation<Base>;
+  inOrderOf(column: string, values: unknown[]): Relation<Base>;
+  rewhere(conditions: Record<string, unknown>): Relation<Base>;
+  none(): Relation<Base>;
+  unscope(...args: any[]): Relation<Base>;
+  lock(clause?: string | boolean): Relation<Base>;
+  readonly(value?: boolean): Relation<Base>;
+  joins(tableOrSql?: string, on?: string): Relation<Base>;
+  leftOuterJoins(table?: string, on?: string): Relation<Base>;
+  includes(...associations: string[]): Relation<Base>;
+  preload(...associations: string[]): Relation<Base>;
+  eagerLoad(...associations: string[]): Relation<Base>;
+  references(...tables: string[]): Relation<Base>;
+  extending(mod?: Record<string, Function> | ((rel: Relation<Base>) => void)): Relation<Base>;
+  annotate(...comments: string[]): Relation<Base>;
+  optimizerHints(...hints: string[]): Relation<Base>;
+  from(source: string, subqueryName?: string): Relation<Base>;
+  createWith(attrs: Record<string, unknown>): Relation<Base>;
+  excluding(...records: Base[]): Relation<Base>;
+  without(...records: Base[]): Relation<Base>;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
@@ -765,12 +766,8 @@ export class CollectionProxy {
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#exists?
    */
-  async exists(conditions: Record<string, unknown> = {}): Promise<boolean> {
-    const records = await this.toArray();
-    if (Object.keys(conditions).length === 0) return records.length > 0;
-    return records.some((r) =>
-      Object.entries(conditions).every(([k, v]) => r.readAttribute(k) === v),
-    );
+  async exists(conditions?: Record<string, unknown> | unknown): Promise<boolean> {
+    return this.scope().exists(conditions);
   }
 
   /**
@@ -862,34 +859,12 @@ export class CollectionProxy {
     await this.replace(records);
   }
 
-  private async _resolveRecords(): Promise<Base[]> {
-    if (this._loaded) return this._target;
-    if (this._record._strictLoading && !this._record._strictLoadingBypassCount) {
-      throw StrictLoadingViolationError.forAssociation(this._record, this._assocName);
-    }
-    // For through associations, scope() may not handle all cases (nested through).
-    // Fall back to loading via the loader, filtering to persisted records only
-    // so pluck/pick don't include unsaved in-memory records.
-    if (this._isThrough) {
-      const all = await this.toArray();
-      return all.filter((r) => !r.isNewRecord());
-    }
-    return this.scope().toArray();
-  }
-
   async pluck(...columns: string[]): Promise<unknown[]> {
-    const records = this._loaded ? this._target : await this._resolveRecords();
-    if (columns.length === 1) {
-      return records.map((r) => r.readAttribute(columns[0]));
-    }
-    return records.map((r) => columns.map((c) => r.readAttribute(c)));
+    return this.scope().pluck(...columns);
   }
 
   async pick(...columns: string[]): Promise<unknown> {
-    const records = this._loaded ? this._target : await this._resolveRecords();
-    if (records.length === 0) return null;
-    if (columns.length === 1) return records[0].readAttribute(columns[0]);
-    return columns.map((c) => records[0].readAttribute(c));
+    return this.scope().pick(...columns);
   }
 
   async reload(): Promise<this> {

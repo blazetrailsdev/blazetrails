@@ -106,5 +106,8 @@ export class HasOne extends SingularAssociation {
     afterCreate(model, callback);
     afterUpdate(model, callback);
     afterDestroy(model, callback);
+    if (typeof model.afterTouch === "function") {
+      model.afterTouch(callback);
+    }
   }
 }

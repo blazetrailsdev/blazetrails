@@ -147,6 +147,10 @@ export class BelongsTo extends SingularAssociation {
       afterUpdate(model, makeCallback("savedChanges"));
       afterDestroy(model, makeCallback("changesToSave"));
     }
+
+    if (typeof model.afterTouch === "function") {
+      model.afterTouch(makeCallback("changesToSave"));
+    }
   }
 
   static addDefaultCallbacks(model: any, reflection: any): void {

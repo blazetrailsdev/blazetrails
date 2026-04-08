@@ -1,7 +1,8 @@
 import type { Base } from "../base.js";
 import type { Relation } from "../relation.js";
 import { applyThenable, stripThenable } from "../relation/thenable.js";
-import { Table as ArelTable, Nodes } from "@blazetrails/arel";
+import { Table as ArelTable } from "@blazetrails/arel";
+import type { Nodes } from "@blazetrails/arel";
 import { underscore, singularize, pluralize, camelize } from "@blazetrails/activesupport";
 import { StrictLoadingViolationError, RecordInvalid, RecordNotSaved } from "../errors.js";
 import {
@@ -792,11 +793,8 @@ export class CollectionProxy {
       );
       if (conditions === undefined) return records.length > 0;
       if (typeof conditions === "object" && conditions !== null && !Array.isArray(conditions)) {
-        return records.some((r) =>
-          Object.entries(conditions as Record<string, unknown>).every(
-            ([k, v]) => r.readAttribute(k) === v,
-          ),
-        );
+        const entries = Object.entries(conditions as Record<string, unknown>);
+        return records.some((r) => entries.every(([k, v]) => r.readAttribute(k) === v));
       }
       const className = this._assocDef.options.className ?? camelize(singularize(this._assocName));
       const targetModel = resolveModel(className);
@@ -807,7 +805,8 @@ export class CollectionProxy {
         );
       }
       if (Array.isArray(conditions)) {
-        return records.some((r) => conditions.includes(r.readAttribute(pk)));
+        const idSet = new Set(conditions);
+        return records.some((r) => idSet.has(r.readAttribute(pk)));
       }
       return records.some((r) => r.readAttribute(pk) === conditions);
     }

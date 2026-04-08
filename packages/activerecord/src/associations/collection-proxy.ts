@@ -32,8 +32,9 @@ export interface CollectionProxy {
 
   // Query method delegation — runtime handled by Proxy, typed here for DX.
   // These delegate to the underlying Relation via scope().
-  // Methods already on CollectionProxy (where, includes) are omitted to avoid
-  // overload conflicts — CollectionProxy's own versions take priority at runtime.
+  where(conditions: Record<string, unknown> | null): any;
+  where(sql: string, ...binds: unknown[]): any;
+  where(): any;
   order(...args: Array<string | Record<string, "asc" | "desc">>): any;
   limit(value: number | null): any;
   offset(value: number): any;
@@ -46,12 +47,13 @@ export interface CollectionProxy {
   reverseOrder(): any;
   inOrderOf(column: string, values: unknown[]): any;
   rewhere(conditions: Record<string, unknown>): any;
-  none(): any;
+  none(): any; // Delegates to Relation#none (null relation); predicate is isNone()
   unscope(...args: any[]): any;
   lock(clause?: string | boolean): any;
   readonly(value?: boolean): any;
   joins(tableOrSql?: string, on?: string): any;
   leftOuterJoins(table?: string, on?: string): any;
+  includes(...associations: string[]): any;
   preload(...associations: string[]): any;
   eagerLoad(...associations: string[]): any;
   references(...tables: string[]): any;
@@ -662,7 +664,7 @@ export class CollectionProxy {
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#include?
    */
-  async includes(record: Base): Promise<boolean> {
+  async isInclude(record: Base): Promise<boolean> {
     if (this._loaded) {
       const targetId = this._identityFor(record);
       if (targetId != null) {
@@ -745,7 +747,7 @@ export class CollectionProxy {
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#none?
    */
-  async none(): Promise<boolean> {
+  async isNone(): Promise<boolean> {
     return (await this.count()) === 0;
   }
 
@@ -772,24 +774,12 @@ export class CollectionProxy {
   }
 
   /**
-   * Filter the collection by conditions. Returns matching records.
-   *
-   * Mirrors: ActiveRecord::Associations::CollectionProxy#where
-   */
-  async where(conditions: Record<string, unknown>): Promise<Base[]> {
-    const records = await this.toArray();
-    return records.filter((r) =>
-      Object.entries(conditions).every(([k, v]) => r.readAttribute(k) === v),
-    );
-  }
-
-  /**
    * Find first record matching conditions, or build (but don't save) a new one.
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#first_or_initialize
    */
   async firstOrInitialize(conditions: Record<string, unknown> = {}): Promise<Base> {
-    const matches = await this.where(conditions);
+    const matches = await this.scope().where(conditions).toArray();
     if (matches.length > 0) return matches[0];
     return this.build(conditions);
   }
@@ -800,7 +790,7 @@ export class CollectionProxy {
    * Mirrors: ActiveRecord::Associations::CollectionProxy#first_or_create
    */
   async firstOrCreate(conditions: Record<string, unknown> = {}): Promise<Base> {
-    const matches = await this.where(conditions);
+    const matches = await this.scope().where(conditions).toArray();
     if (matches.length > 0) return matches[0];
     return this.create(conditions);
   }
@@ -811,7 +801,7 @@ export class CollectionProxy {
    * Mirrors: ActiveRecord::Associations::CollectionProxy#first_or_create!
    */
   async firstOrCreate_(conditions: Record<string, unknown> = {}): Promise<Base> {
-    const matches = await this.where(conditions);
+    const matches = await this.scope().where(conditions).toArray();
     if (matches.length > 0) return matches[0];
     const record = this.build(conditions);
     await record.save();
@@ -1191,15 +1181,6 @@ export class CollectionProxy {
       default:
         throw new Error(`Unknown calculation operation: ${op}`);
     }
-  }
-
-  /**
-   * Check if the collection includes a given record.
-   *
-   * Mirrors: ActiveRecord::Associations::CollectionProxy#include?
-   */
-  async isInclude(record: Base): Promise<boolean> {
-    return this.includes(record);
   }
 
   /**

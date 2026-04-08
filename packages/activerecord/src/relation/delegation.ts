@@ -140,13 +140,6 @@ export function name(): string {
   return "Delegation";
 }
 
-export function getGeneratedMethodForModel(
-  modelClass: Function,
-  name: string,
-): Function | undefined {
-  return _generatedMethodsByModel.get(modelClass)?.get(name);
-}
-
 export function wrapWithScopeProxy<T extends object>(rel: T): T {
   return new Proxy(rel, {
     get(target: any, prop: string | symbol, receiver: any) {

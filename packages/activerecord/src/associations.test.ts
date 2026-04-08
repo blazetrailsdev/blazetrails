@@ -777,8 +777,8 @@ describe("CollectionProxy", () => {
     const jordan = await Player.create({ name: "Jordan", team_id: team.id });
     const magic = await Player.create({ name: "Magic", team_id: 999 });
     const proxy = association(team, "players");
-    expect(await proxy.includes(jordan)).toBe(true);
-    expect(await proxy.includes(magic)).toBe(false);
+    expect(await proxy.isInclude(jordan)).toBe(true);
+    expect(await proxy.isInclude(magic)).toBe(false);
   });
 
   // Rails: test_to_array
@@ -3482,8 +3482,8 @@ describe("CollectionProxy enhancements", () => {
     const post = await Post.create({ title: "Mine", author_id: author.id });
     const other = await Post.create({ title: "Other", author_id: 999 });
     const proxy = association(author, "posts");
-    expect(await proxy.includes(post)).toBe(true);
-    expect(await proxy.includes(other)).toBe(false);
+    expect(await proxy.isInclude(post)).toBe(true);
+    expect(await proxy.isInclude(other)).toBe(false);
   });
 });
 
@@ -5609,7 +5609,7 @@ describe("HasManyAssociationsTest", () => {
     await Client.create({ name: "Other", firm_id: 99999 });
 
     const proxy = association(firm, "clients");
-    expect(await proxy.includes(client)).toBe(true);
+    expect(await proxy.isInclude(client)).toBe(true);
   });
 
   it("included in collection for new records", async () => {
@@ -5619,7 +5619,7 @@ describe("HasManyAssociationsTest", () => {
     const unsaved = new Client({ name: "New" });
 
     const proxy = association(firm, "clients");
-    expect(await proxy.includes(unsaved)).toBe(false);
+    expect(await proxy.isInclude(unsaved)).toBe(false);
   });
 
   // -------------------------------------------------------------------------
@@ -5823,7 +5823,7 @@ describe("HasManyAssociationsTest", () => {
     const { Firm } = makeFirmClients(adapter);
     const firm = await Firm.create({ name: "Empty" });
 
-    expect(await association(firm, "clients").none()).toBe(true);
+    expect(await association(firm, "clients").isNone()).toBe(true);
   });
 
   it("calling none should return false if any", async () => {
@@ -5831,7 +5831,7 @@ describe("HasManyAssociationsTest", () => {
     const firm = await Firm.create({ name: "Corp" });
     await Client.create({ name: "A", firm_id: firm.id });
 
-    expect(await association(firm, "clients").none()).toBe(false);
+    expect(await association(firm, "clients").isNone()).toBe(false);
   });
 
   it("calling one should return false if zero", async () => {
@@ -5974,7 +5974,7 @@ describe("HasManyAssociationsTest", () => {
     const built = proxy.build({ name: "Built" });
     await built.save();
 
-    expect(await proxy.includes(built)).toBe(true);
+    expect(await proxy.isInclude(built)).toBe(true);
   });
 
   // -------------------------------------------------------------------------
@@ -6023,7 +6023,7 @@ describe("HasManyAssociationsTest", () => {
     await Client.create({ name: "Apple", firm_id: firm.id });
 
     const proxy = association(firm, "clients");
-    const matches = await proxy.where({ name: "Microsoft" });
+    const matches = await (proxy as any).where({ name: "Microsoft" }).toArray();
     expect(matches.length).toBe(1);
     expect(matches[0].name).toBe("Microsoft");
   });
@@ -6035,7 +6035,7 @@ describe("HasManyAssociationsTest", () => {
     await Client.create({ name: "Beta", firm_id: firm.id });
 
     const proxy = association(firm, "clients");
-    const matches = await proxy.where({ name: "Alpha" });
+    const matches = await (proxy as any).where({ name: "Alpha" }).toArray();
     expect(matches.length).toBe(1);
   });
 
@@ -6248,7 +6248,7 @@ describe("HasManyAssociationsTest", () => {
 
     const proxy = association(firm, "clients");
     await proxy.toArray(); // load
-    expect(await proxy.includes(a)).toBe(true);
+    expect(await proxy.isInclude(a)).toBe(true);
   });
 
   it("include returns false for non matching record to verify scoping", async () => {
@@ -6258,7 +6258,7 @@ describe("HasManyAssociationsTest", () => {
     await Client.create({ name: "A", firm_id: firm.id });
     const outside = await Client.create({ name: "B", firm_id: other.id });
 
-    expect(await association(firm, "clients").includes(outside)).toBe(false);
+    expect(await association(firm, "clients").isInclude(outside)).toBe(false);
   });
 
   // -------------------------------------------------------------------------
@@ -6461,7 +6461,7 @@ describe("AssociationProxyTest", () => {
     await APComment.create({ body: "match", ap_post_id: post.id });
     await APComment.create({ body: "other", ap_post_id: post.id });
     const proxy = association(post, "apComments");
-    const filtered = await proxy.where({ body: "match" });
+    const filtered = await (proxy as any).where({ body: "match" }).toArray();
     expect(filtered.length).toBe(1);
     expect(filtered[0].body).toBe("match");
   });
@@ -7907,6 +7907,31 @@ describe("CollectionProxyDelegation", () => {
     const post = await DlgPost.create({ title: "unknown prop test" });
     const proxy = association(post, "dlgComments") as any;
     expect(proxy.completelyNonExistent).toBeUndefined();
+  });
+
+  it("where delegates to Relation and returns a chainable Relation", async () => {
+    const { DlgPost, DlgComment } = setupDelegationModels();
+    const post = await DlgPost.create({ title: "where delegation" });
+    await DlgComment.create({ body: "yes", active: true, dlg_post_id: post.id });
+    await DlgComment.create({ body: "no", active: false, dlg_post_id: post.id });
+
+    const proxy = association(post, "dlgComments") as any;
+    const rel = proxy.where({ active: true });
+    expect(typeof rel.toSql).toBe("function");
+    expect(typeof rel.order).toBe("function");
+    const results = await rel.toArray();
+    expect(results.length).toBe(1);
+    expect(results[0].body).toBe("yes");
+  });
+
+  it("none delegates to Relation (null relation), not predicate", async () => {
+    const { DlgPost } = setupDelegationModels();
+    const post = await DlgPost.create({ title: "none test" });
+    const proxy = association(post, "dlgComments") as any;
+    const rel = proxy.none();
+    expect(typeof rel.toSql).toBe("function");
+    const results = await rel.toArray();
+    expect(results).toEqual([]);
   });
 
   it("chaining query methods works", async () => {

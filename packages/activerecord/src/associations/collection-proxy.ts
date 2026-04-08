@@ -3,7 +3,7 @@ import type { Relation } from "../relation.js";
 import { applyThenable, stripThenable } from "../relation/thenable.js";
 import { Table as ArelTable } from "@blazetrails/arel";
 import { underscore, singularize, pluralize, camelize } from "@blazetrails/activesupport";
-import { RecordInvalid, RecordNotSaved } from "../errors.js";
+import { StrictLoadingViolationError, RecordInvalid, RecordNotSaved } from "../errors.js";
 import {
   HasManyThroughCantAssociateThroughHasOneOrManyReflection,
   HasManyThroughNestedAssociationsAreReadonly,
@@ -152,6 +152,12 @@ export class CollectionProxy {
 
   private get _isThrough(): boolean {
     return !!this._assocDef.options.through;
+  }
+
+  private _checkStrictLoading(): void {
+    if (this._record._strictLoading && !this._record._strictLoadingBypassCount) {
+      throw StrictLoadingViolationError.forAssociation(this._record, this._assocName);
+    }
   }
 
   private _ensureThroughWritable(): void {
@@ -765,6 +771,7 @@ export class CollectionProxy {
    * Mirrors: ActiveRecord::Associations::CollectionProxy#exists?
    */
   async exists(conditions?: Record<string, unknown> | unknown): Promise<boolean> {
+    this._checkStrictLoading();
     return this.scope().exists(conditions);
   }
 
@@ -774,6 +781,7 @@ export class CollectionProxy {
    * Mirrors: ActiveRecord::Associations::CollectionProxy#first_or_initialize
    */
   async firstOrInitialize(conditions: Record<string, unknown> = {}): Promise<Base> {
+    this._checkStrictLoading();
     const matches = await this.scope().where(conditions).toArray();
     if (matches.length > 0) return matches[0];
     return this.build(conditions);
@@ -785,6 +793,7 @@ export class CollectionProxy {
    * Mirrors: ActiveRecord::Associations::CollectionProxy#first_or_create
    */
   async firstOrCreate(conditions: Record<string, unknown> = {}): Promise<Base> {
+    this._checkStrictLoading();
     const matches = await this.scope().where(conditions).toArray();
     if (matches.length > 0) return matches[0];
     return this.create(conditions);
@@ -795,7 +804,8 @@ export class CollectionProxy {
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#first_or_create!
    */
-  async firstOrCreate_(conditions: Record<string, unknown> = {}): Promise<Base> {
+  async firstOrCreateBang(conditions: Record<string, unknown> = {}): Promise<Base> {
+    this._checkStrictLoading();
     const matches = await this.scope().where(conditions).toArray();
     if (matches.length > 0) return matches[0];
     const record = this.build(conditions);
@@ -858,23 +868,29 @@ export class CollectionProxy {
   }
 
   async pluck(...columns: string[]): Promise<unknown[]> {
-    if (this._isThrough) {
-      const records = (await this.toArray()).filter((r) => !r.isNewRecord());
+    if (this._isThrough || this._loaded) {
+      const records = (this._isThrough ? await this.toArray() : this._target).filter(
+        (r) => !r.isNewRecord(),
+      );
       if (columns.length === 1) {
         return records.map((r) => r.readAttribute(columns[0]));
       }
       return records.map((r) => columns.map((c) => r.readAttribute(c)));
     }
+    this._checkStrictLoading();
     return this.scope().pluck(...columns);
   }
 
   async pick(...columns: string[]): Promise<unknown> {
-    if (this._isThrough) {
-      const records = (await this.toArray()).filter((r) => !r.isNewRecord());
+    if (this._isThrough || this._loaded) {
+      const records = (this._isThrough ? await this.toArray() : this._target).filter(
+        (r) => !r.isNewRecord(),
+      );
       if (records.length === 0) return null;
       if (columns.length === 1) return records[0].readAttribute(columns[0]);
       return columns.map((c) => records[0].readAttribute(c));
     }
+    this._checkStrictLoading();
     return this.scope().pick(...columns);
   }
 

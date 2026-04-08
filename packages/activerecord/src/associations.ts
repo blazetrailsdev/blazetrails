@@ -1320,6 +1320,7 @@ function wrapCollectionProxy(proxy: CollectionProxy): CollectionProxy {
       const value = Reflect.get(target, prop, receiver);
       if (value !== undefined) return value;
       if (prop in target) return value;
+      if (typeof prop === "symbol") return value;
 
       const scope = target.scope();
       const scopeVal = Reflect.get(scope, prop, scope);

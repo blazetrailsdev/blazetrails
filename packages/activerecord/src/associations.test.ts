@@ -5905,7 +5905,7 @@ describe("HasManyAssociationsTest", () => {
     const firm = await Firm.create({ name: "Corp" });
 
     const proxy = association(firm, "clients");
-    const client = await proxy.firstOrCreate_({ name: "New Client" });
+    const client = await proxy.firstOrCreateBang({ name: "New Client" });
 
     expect(client.isNewRecord()).toBe(false);
     expect(client.firm_id).toBe(firm.id);

@@ -1,7 +1,7 @@
 import type { Base } from "../base.js";
 import type { Relation } from "../relation.js";
 import { applyThenable, stripThenable } from "../relation/thenable.js";
-import { Table as ArelTable } from "@blazetrails/arel";
+import { Table as ArelTable, Nodes } from "@blazetrails/arel";
 import { underscore, singularize, pluralize, camelize } from "@blazetrails/activesupport";
 import { StrictLoadingViolationError, RecordInvalid, RecordNotSaved } from "../errors.js";
 import {
@@ -806,6 +806,9 @@ export class CollectionProxy {
           `CollectionProxy#exists does not support composite primary keys for through associations on "${this._assocName}".`,
         );
       }
+      if (Array.isArray(conditions)) {
+        return records.some((r) => conditions.includes(r.readAttribute(pk)));
+      }
       return records.some((r) => r.readAttribute(pk) === conditions);
     }
     this._checkStrictLoading();
@@ -1290,7 +1293,7 @@ export class CollectionProxy {
    * Mirrors: ActiveRecord::Associations::CollectionProxy#select
    */
   select(fn: (record: Base) => boolean): Promise<Base[]>;
-  select(...columns: Parameters<Relation<Base>["select"]>): Relation<Base>;
+  select(...columns: (string | Nodes.SqlLiteral)[]): Relation<Base>;
   select(...args: any[]): Promise<Base[]> | Relation<Base> {
     if (args.length === 1 && typeof args[0] === "function") {
       if (this._loaded) {

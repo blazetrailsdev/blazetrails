@@ -467,7 +467,7 @@ export class AssociationReflection extends MacroReflection {
       let assocDef = targetAssocs.find((a: any) => a.name === inverseName);
       reflection = assocDef ? createReflection(assocDef, this.klass) : null;
 
-      if (!reflection && (this.activeRecord as any).automaticallyInvertPluralAssociations) {
+      if (!reflection && this.activeRecord.automaticallyInvertPluralAssociations) {
         const pluralInverseName = pluralize(inverseName);
         assocDef = targetAssocs.find((a: any) => a.name === pluralInverseName);
         reflection = assocDef ? createReflection(assocDef, this.klass) : null;

@@ -1122,13 +1122,13 @@ describe("ReflectionTest", () => {
 
     // Enable automatic scope inversing on the target klass (Contract),
     // since Rails checks reflection.klass.automatic_scope_inversing
-    (Contract as any).automaticScopeInversing = true;
+    Contract.automaticScopeInversing = true;
     try {
       const contractsRef2 = reflectOnAssociation(Company, "contracts")!;
       expect(contractsRef2.hasInverse()).toBe(true);
       expect(contractsRef2.inverseOf()!.name).toBe("company");
     } finally {
-      (Contract as any).automaticScopeInversing = false;
+      Contract.automaticScopeInversing = false;
     }
   });
 
@@ -1158,14 +1158,14 @@ describe("ReflectionTest", () => {
 
     // Even with automatic_scope_inversing, scopes on the inverse (belongs_to)
     // side always block automatic detection
-    (Magazine as any).automaticScopeInversing = true;
-    (Publisher as any).automaticScopeInversing = true;
+    Magazine.automaticScopeInversing = true;
+    Publisher.automaticScopeInversing = true;
     try {
       const magazinesRef2 = reflectOnAssociation(Publisher, "magazines")!;
       expect(magazinesRef2.hasInverse()).toBe(false);
     } finally {
-      (Magazine as any).automaticScopeInversing = false;
-      (Publisher as any).automaticScopeInversing = false;
+      Magazine.automaticScopeInversing = false;
+      Publisher.automaticScopeInversing = false;
     }
   });
 

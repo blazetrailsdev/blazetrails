@@ -121,7 +121,7 @@ describe("AssociationsExtensionsTest", () => {
     const proxy = association(dev, "hProjects");
     await proxy.push(p1, p2);
     const most = await (
-      proxy as CollectionProxy & { findMostRecent: () => Promise<Base | null> }
+      proxy as any as CollectionProxy & { findMostRecent: () => Promise<Base | null> }
     ).findMostRecent();
     expect(most).not.toBeNull();
     expect(most!.name).toBe("Second");
@@ -163,7 +163,7 @@ describe("AssociationsExtensionsTest", () => {
     const proxy = association(dev, "nProjects");
     await proxy.push(p1, p2);
     const most = await (
-      proxy as CollectionProxy & { findMostRecent: () => Promise<Base | null> }
+      proxy as any as CollectionProxy & { findMostRecent: () => Promise<Base | null> }
     ).findMostRecent();
     expect(most).not.toBeNull();
     expect(most!.name).toBe("New");
@@ -208,7 +208,7 @@ describe("AssociationsExtensionsTest", () => {
     const dev = await T2Developer.create({ name: "Carol" });
     const p1 = await T2Project.create({ name: "Alpha" });
     const p2 = await T2Project.create({ name: "Beta" });
-    const proxy = association(dev, "t2Projects") as CollectionProxy & {
+    const proxy = association(dev, "t2Projects") as any as CollectionProxy & {
       findMostRecent: () => Promise<Base | null>;
       findLeastRecent: () => Promise<Base | null>;
     };
@@ -258,7 +258,7 @@ describe("AssociationsExtensionsTest", () => {
     const dev = await NBDeveloper.create({ name: "Dave" });
     const p1 = await NBProject.create({ name: "First" });
     const p2 = await NBProject.create({ name: "Last" });
-    const proxy = association(dev, "nbProjects") as CollectionProxy & {
+    const proxy = association(dev, "nbProjects") as any as CollectionProxy & {
       findMostRecent: () => Promise<Base | null>;
       findLeastRecent: () => Promise<Base | null>;
     };

@@ -30,40 +30,54 @@ export interface CollectionProxy {
     onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null,
   ): Promise<Base[] | TResult>;
   finally(onfinally?: (() => void) | null): Promise<Base[]>;
-
-  // Query method delegation — runtime handled by Proxy, typed here for DX.
-  // These delegate to the underlying Relation via scope().
-  where: Relation<Base>["where"];
-  order(...args: Array<string | Record<string, "asc" | "desc">>): Relation<Base>;
-  limit(value: number | null): Relation<Base>;
-  offset(value: number): Relation<Base>;
-  select(...columns: string[]): Relation<Base>;
-  reselect(...columns: string[]): Relation<Base>;
-  distinct(): Relation<Base>;
-  group(...columns: string[]): Relation<Base>;
-  having(condition: string | Record<string, unknown>): Relation<Base>;
-  reorder(...args: Array<string | Record<string, "asc" | "desc">>): Relation<Base>;
-  reverseOrder(): Relation<Base>;
-  inOrderOf(column: string, values: unknown[]): Relation<Base>;
-  rewhere(conditions: Record<string, unknown>): Relation<Base>;
-  none(): Relation<Base>;
-  unscope(...args: any[]): Relation<Base>;
-  lock(clause?: string | boolean): Relation<Base>;
-  readonly(value?: boolean): Relation<Base>;
-  joins(tableOrSql?: string, on?: string): Relation<Base>;
-  leftOuterJoins(table?: string, on?: string): Relation<Base>;
-  includes(...associations: string[]): Relation<Base>;
-  preload(...associations: string[]): Relation<Base>;
-  eagerLoad(...associations: string[]): Relation<Base>;
-  references(...tables: string[]): Relation<Base>;
-  extending(mod?: Record<string, Function> | ((rel: Relation<Base>) => void)): Relation<Base>;
-  annotate(...comments: string[]): Relation<Base>;
-  optimizerHints(...hints: string[]): Relation<Base>;
-  from(source: string, subqueryName?: string): Relation<Base>;
-  createWith(attrs: Record<string, unknown>): Relation<Base>;
-  excluding(...records: Base[]): Relation<Base>;
-  without(...records: Base[]): Relation<Base>;
 }
+
+/**
+ * Query methods available on a wrapped CollectionProxy (returned by association()).
+ * These delegate to the underlying Relation via the JS Proxy at runtime.
+ * Separated from CollectionProxy so that unwrapped instances (e.g. new CollectionProxy())
+ * don't advertise methods that only exist through the Proxy wrapper.
+ */
+type DelegatedQueryMethods = Pick<
+  Relation<Base>,
+  | "where"
+  | "order"
+  | "limit"
+  | "offset"
+  | "select"
+  | "reselect"
+  | "distinct"
+  | "group"
+  | "having"
+  | "reorder"
+  | "reverseOrder"
+  | "inOrderOf"
+  | "rewhere"
+  | "none"
+  | "unscope"
+  | "lock"
+  | "readonly"
+  | "joins"
+  | "leftOuterJoins"
+  | "includes"
+  | "preload"
+  | "eagerLoad"
+  | "references"
+  | "extending"
+  | "annotate"
+  | "optimizerHints"
+  | "from"
+  | "createWith"
+  | "excluding"
+  | "without"
+>;
+
+/**
+ * A CollectionProxy wrapped with a JS Proxy that delegates query methods
+ * and named scopes to the underlying Relation. Returned by association().
+ * The index signature allows extend-option methods and named scopes.
+ */
+export type AssociationProxy = CollectionProxy & DelegatedQueryMethods;
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class CollectionProxy {

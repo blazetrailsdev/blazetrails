@@ -6070,7 +6070,8 @@ describe("CalculationsTest", () => {
 
   // Rails guide: generates_token_for — purpose-specific tokens
   it("generatesTokenFor creates and resolves purpose tokens", async () => {
-    const { generatesTokenFor } = await import("./generates-token-for.js");
+    const { generatesTokenFor, setTokenForSecret } = await import("./generates-token-for.js");
+    setTokenForSecret("test-secret");
     const adapter = createTestAdapter();
     class User extends Base {
       static {

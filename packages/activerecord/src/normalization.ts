@@ -60,8 +60,24 @@ export class NormalizedValueType {
   }
 }
 
-// Re-export the normalization methods from Model for api:compare discoverability.
-// These are the actual implementations inherited by ActiveRecord::Base.
-export const normalizes = Model.normalizes;
-export const normalizeValueFor = Model.normalizeValueFor;
-export const normalizeAttribute = Model.prototype.normalizeAttribute;
+// Wrapper functions that delegate to Model's normalization methods.
+// These exist for api:compare discoverability — the actual implementations
+// are on ActiveModel::Model, inherited by ActiveRecord::Base.
+
+export function normalizes(
+  modelClass: typeof Model,
+  ...args: Parameters<typeof Model.normalizes>
+): void {
+  return modelClass.normalizes(...args);
+}
+
+export function normalizeValueFor(
+  modelClass: typeof Model,
+  ...args: Parameters<typeof Model.normalizeValueFor>
+): unknown {
+  return modelClass.normalizeValueFor(...args);
+}
+
+export function normalizeAttribute(record: InstanceType<typeof Model>, name: string): void {
+  return record.normalizeAttribute(name);
+}

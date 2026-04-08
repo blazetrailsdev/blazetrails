@@ -5,10 +5,28 @@
  */
 
 import { getCrypto } from "@blazetrails/activesupport";
-import { InvalidSignature } from "@blazetrails/activesupport/message-verifier";
+import { InvalidSignature, MessageVerifier } from "@blazetrails/activesupport/message-verifier";
 import type { Base } from "./base.js";
 
-const SECRET = "trails-token-secret";
+let _tokenForSecret: string | (() => string) | null = null;
+
+/**
+ * Configure the secret used for token generation/verification.
+ * Falls back to the signed-id secret or BLAZETRAILS_SECRET_KEY_BASE env var.
+ */
+export function setTokenForSecret(secret: string | (() => string)): void {
+  _tokenForSecret = secret;
+}
+
+function resolveSecret(): string {
+  if (_tokenForSecret) {
+    return typeof _tokenForSecret === "function" ? _tokenForSecret() : _tokenForSecret;
+  }
+  const env = typeof process !== "undefined" ? process.env : undefined;
+  const envSecret = env?.BLAZETRAILS_SECRET_KEY_BASE ?? env?.BLAZETRAILS_SIGNED_ID_SECRET;
+  if (typeof envSecret === "string" && envSecret.length > 0) return envSecret;
+  return "trails-token-default-secret";
+}
 
 /**
  * TokenDefinition — encapsulates token behavior for a specific purpose.
@@ -39,15 +57,8 @@ export class TokenDefinition {
     return [this.definingClass.name, this.purpose, this.expiresIn ?? ""].join("\n");
   }
 
-  messageVerifier(): { sign(data: string): string; verify(token: string): string | null } {
-    return {
-      sign: (data: string) =>
-        getCrypto().createHmac("sha256", SECRET).update(data).digest("base64url"),
-      verify: (token: string) => {
-        // Verification is handled inline in resolveToken
-        return token;
-      },
-    };
+  messageVerifier(): MessageVerifier {
+    return new MessageVerifier(resolveSecret());
   }
 
   payloadFor(model: Base): unknown[] {
@@ -63,7 +74,10 @@ export class TokenDefinition {
       timestamp: Date.now(),
     });
     const encoded = Buffer.from(payload).toString("base64url");
-    const sig = getCrypto().createHmac("sha256", SECRET).update(encoded).digest("base64url");
+    const sig = getCrypto()
+      .createHmac("sha256", resolveSecret())
+      .update(encoded)
+      .digest("base64url");
     return `${encoded}.${sig}`;
   }
 
@@ -76,10 +90,14 @@ export class TokenDefinition {
     const [encoded, sig] = parts;
 
     const expectedSig = getCrypto()
-      .createHmac("sha256", SECRET)
+      .createHmac("sha256", resolveSecret())
       .update(encoded)
       .digest("base64url");
-    if (sig !== expectedSig) return null;
+
+    const sigBuf = Buffer.from(sig, "base64url");
+    const expectedBuf = Buffer.from(expectedSig, "base64url");
+    if (sigBuf.length !== expectedBuf.length) return null;
+    if (!getCrypto().timingSafeEqual(sigBuf, expectedBuf)) return null;
 
     let payload: any;
     try {
@@ -90,8 +108,9 @@ export class TokenDefinition {
 
     if (payload.purpose !== this.purpose) return null;
 
-    if (this.expiresIn && Date.now() - payload.timestamp > this.expiresIn) {
-      return null;
+    if (this.expiresIn !== undefined) {
+      if (!Number.isFinite(payload.timestamp)) return null;
+      if (Date.now() - payload.timestamp > this.expiresIn) return null;
     }
 
     const record = await finder(payload.pk);

@@ -83,8 +83,10 @@ export class BelongsTo extends SingularAssociation {
     if (Array.isArray(pk)) {
       const values = Array.isArray(fkValue) ? fkValue : [fkValue];
       if (pk.length !== values.length) return null;
+      if (values.some((v) => v == null)) return null;
       return Object.fromEntries(pk.map((key, i) => [key, values[i]]));
     }
+    if (fkValue == null) return null;
     return { [pk]: fkValue };
   }
 
@@ -157,21 +159,9 @@ export class BelongsTo extends SingularAssociation {
       await BelongsTo.touchRecord(record, changes, foreignKey, name, touch);
     };
 
-    if (reflection.counterCacheColumn?.() ?? reflection.options?.counterCache) {
-      const touchCb = makeCallback("savedChanges");
-      afterCreate(model, makeCallback("savedChanges"));
-      afterUpdate(model, async (record: any) => {
-        const assoc = record.association(name);
-        if (!assoc.isSavedChangeToTarget()) {
-          await touchCb(record);
-        }
-      });
-      afterDestroy(model, makeCallback("changesToSave"));
-    } else {
-      afterCreate(model, makeCallback("savedChanges"));
-      afterUpdate(model, makeCallback("savedChanges"));
-      afterDestroy(model, makeCallback("changesToSave"));
-    }
+    afterCreate(model, makeCallback("savedChanges"));
+    afterUpdate(model, makeCallback("savedChanges"));
+    afterDestroy(model, makeCallback("changesToSave"));
 
     if (typeof model.afterTouch === "function") {
       model.afterTouch(makeCallback("changesToSave"));

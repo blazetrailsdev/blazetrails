@@ -787,7 +787,9 @@ export class CollectionProxy {
    */
   async exists(conditions?: Record<string, unknown> | unknown): Promise<boolean> {
     if (this._isThrough) {
-      const records = this._loaded ? this._target : await this.toArray();
+      const records = (this._loaded ? this._target : await this.toArray()).filter(
+        (r) => !r.isNewRecord(),
+      );
       if (conditions === undefined) return records.length > 0;
       if (typeof conditions === "object" && conditions !== null && !Array.isArray(conditions)) {
         return records.some((r) =>
@@ -798,7 +800,12 @@ export class CollectionProxy {
       }
       const className = this._assocDef.options.className ?? camelize(singularize(this._assocName));
       const targetModel = resolveModel(className);
-      const pk = targetModel.primaryKey as string;
+      const pk = targetModel.primaryKey;
+      if (Array.isArray(pk)) {
+        throw new Error(
+          `CollectionProxy#exists does not support composite primary keys for through associations on "${this._assocName}".`,
+        );
+      }
       return records.some((r) => r.readAttribute(pk) === conditions);
     }
     this._checkStrictLoading();
@@ -1283,8 +1290,8 @@ export class CollectionProxy {
    * Mirrors: ActiveRecord::Associations::CollectionProxy#select
    */
   select(fn: (record: Base) => boolean): Promise<Base[]>;
-  select(...columns: string[]): any;
-  select(...args: any[]): any {
+  select(...columns: Parameters<Relation<Base>["select"]>): Relation<Base>;
+  select(...args: any[]): Promise<Base[]> | Relation<Base> {
     if (args.length === 1 && typeof args[0] === "function") {
       if (this._loaded) {
         return Promise.resolve(this._target.filter(args[0]));

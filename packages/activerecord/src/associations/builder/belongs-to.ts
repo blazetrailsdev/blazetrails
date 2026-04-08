@@ -1,6 +1,7 @@
 import { underscore } from "@blazetrails/activesupport";
 import { SingularAssociation } from "./singular-association.js";
 import { beforeValidation, afterCreate, afterUpdate, afterDestroy } from "../../callbacks.js";
+import { resolveModel } from "../../associations.js";
 
 /**
  * Mirrors: ActiveRecord::Associations::Builder::BelongsTo
@@ -126,7 +127,11 @@ export class BelongsTo extends SingularAssociation {
             reflection?.options?.foreignType ??
             `${underscore(name)}_type`;
           const typeName = changes[foreignType]?.[0] ?? record[foreignType];
-          klass = record.constructor.polymorphicClassFor?.(typeName) ?? null;
+          try {
+            klass = typeName ? resolveModel(typeName) : null;
+          } catch {
+            klass = null;
+          }
         } else {
           klass = association.klass;
         }

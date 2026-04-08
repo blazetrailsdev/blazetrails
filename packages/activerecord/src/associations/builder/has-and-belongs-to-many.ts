@@ -81,11 +81,8 @@ export class HasAndBelongsToMany {
   }
 
   middleReflection(joinModel: any): any {
-    const lhsModelName = underscore(this.lhsModel.name).toLowerCase();
-    const middleName = [pluralize(lhsModelName), this.associationName]
-      .sort()
-      .join("_")
-      .replace(/::/g, "_");
+    const lhsModelName = underscore(this.lhsModel.name).replace(/\//g, "_").toLowerCase();
+    const middleName = [pluralize(lhsModelName), this.associationName].sort().join("_");
 
     const middleOptions: Record<string, unknown> = {};
     middleOptions.className = `${this.lhsModel.name}::${joinModel.name}`;
@@ -102,24 +99,28 @@ export class HasAndBelongsToMany {
     };
   }
 
+  private _fallbackTableName(name: string): string {
+    return underscore(pluralize(name)).replace(/\//g, "_");
+  }
+
   private _tableName(): string {
     if (this.options.joinTable) {
       return this.options.joinTable as string;
     }
     const className =
       (this.options.className as string) ?? camelize(singularize(this.associationName));
-    const lhsTable = this.lhsModel.tableName ?? underscore(pluralize(this.lhsModel.name));
+    const lhsTable = this.lhsModel.tableName ?? this._fallbackTableName(this.lhsModel.name);
 
     let rhsTable: string;
     if (typeof this.lhsModel.computeType === "function") {
       try {
         const klass = this.lhsModel.computeType(className);
-        rhsTable = klass?.tableName ?? underscore(pluralize(className));
+        rhsTable = klass?.tableName ?? this._fallbackTableName(className);
       } catch {
-        rhsTable = underscore(pluralize(className));
+        rhsTable = this._fallbackTableName(className);
       }
     } else {
-      rhsTable = underscore(pluralize(className));
+      rhsTable = this._fallbackTableName(className);
     }
 
     return [lhsTable, rhsTable].sort().join("_");

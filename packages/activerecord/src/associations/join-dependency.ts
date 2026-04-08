@@ -345,14 +345,14 @@ export class JoinDependency {
   }
 
   static makeTree(associations: any): Record<PropertyKey, any> {
-    const hash: Record<PropertyKey, any> = {};
+    const hash: Record<PropertyKey, any> = Object.create(null);
     JoinDependency.walkTree(associations, hash);
     return hash;
   }
 
   static walkTree(associations: any, hash: Record<PropertyKey, any>): void {
     if (typeof associations === "string" || typeof associations === "symbol") {
-      if (!hash[associations]) hash[associations] = {};
+      if (!hash[associations]) hash[associations] = Object.create(null);
     } else if (Array.isArray(associations)) {
       for (const assoc of associations) {
         JoinDependency.walkTree(assoc, hash);
@@ -360,7 +360,7 @@ export class JoinDependency {
     } else if (associations && typeof associations === "object") {
       for (const key of Reflect.ownKeys(associations)) {
         const value = associations[key];
-        if (!hash[key]) hash[key] = {};
+        if (!hash[key]) hash[key] = Object.create(null);
         if (value != null) JoinDependency.walkTree(value, hash[key]);
       }
     }

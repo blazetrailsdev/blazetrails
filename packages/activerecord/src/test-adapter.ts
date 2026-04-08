@@ -208,7 +208,8 @@ async function processPendingModels(inner: any): Promise<void> {
     if (_createdTables.has(tableName)) {
       let known = _createdColumns.get(tableName);
       if (!known) {
-        known = new Set(["id"]);
+        const cpkCols = _pendingCpk.get(tableName);
+        known = cpkCols ? new Set<string>() : new Set(["id"]);
         _createdColumns.set(tableName, known);
       }
       for (const [col, type] of columns) {

@@ -135,7 +135,8 @@ export class BelongsToAssociation extends SingularAssociation {
     if (!counterCol) return;
     if (typeof klass.where !== "function") return;
 
-    const rawPk = klass.primaryKey ?? "id";
+    const configuredPk = (this.reflection.options as any).primaryKey;
+    const rawPk = configuredPk ?? klass.primaryKey ?? "id";
     const pks = Array.isArray(rawPk) ? rawPk : [rawPk];
     if (pks.length !== foreignKeyValues.length) return;
     const conditions: Record<string, unknown> = {};

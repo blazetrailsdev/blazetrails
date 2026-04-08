@@ -96,6 +96,12 @@ export class Association {
 
     this.validateOptions(options);
 
+    // Extract scope from options if passed there (e.g., Associations.hasMany(name, { scope: fn }))
+    if (!scope && typeof options.scope === "function") {
+      scope = options.scope as (...args: any[]) => any;
+      delete options.scope;
+    }
+
     const extension = this.defineExtensions(model, name);
     if (extension) {
       options.extend = [

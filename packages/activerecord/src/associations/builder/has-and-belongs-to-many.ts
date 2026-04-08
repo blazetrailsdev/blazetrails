@@ -208,11 +208,12 @@ export class HasAndBelongsToMany {
       name,
       options: habtmOptions,
     });
+    const { through: _through, ...habtmReflectionOptions } = habtmOptions;
     const habtmReflection = Reflection.create(
       "hasAndBelongsToMany" as any,
       name,
       null,
-      habtmOptions,
+      habtmReflectionOptions,
       model,
     );
     Reflection.addReflection(model, name, habtmReflection as any);

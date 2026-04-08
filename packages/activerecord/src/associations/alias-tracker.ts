@@ -104,8 +104,9 @@ export class AliasTracker {
       this.aliases.set(tableName, 1);
       return tableName;
     }
-    this.aliases.set(tableName, count + 1);
-    return `${tableName}_${count}`;
+    const newCount = count + 1;
+    this.aliases.set(tableName, newCount);
+    return `${tableName}_${newCount}`;
   }
 
   private _tableAliasFor(tableName: string): string {

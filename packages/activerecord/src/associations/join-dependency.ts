@@ -332,8 +332,8 @@ export class JoinDependency {
       return `"${tableAlias}"."${a.column}" AS "${a.alias}"`;
     });
 
-    if (typeof relation.selectBang === "function") {
-      relation.selectBang(...selectExprs);
+    if (typeof relation.reselectBang === "function") {
+      relation.reselectBang(...selectExprs);
       return relation;
     } else if (typeof relation.select === "function") {
       return relation.select(...selectExprs);

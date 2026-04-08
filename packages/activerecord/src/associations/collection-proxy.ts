@@ -1299,8 +1299,10 @@ export class CollectionProxy {
       if (this._loaded) {
         return Promise.resolve(this._target.filter(args[0]));
       }
+      this._checkStrictLoading();
       return this.loadTarget().then((records: Base[]) => records.filter(args[0]));
     }
+    this._checkStrictLoading();
     return this.scope().select(...args);
   }
 
@@ -1310,6 +1312,7 @@ export class CollectionProxy {
    * Mirrors: Ruby's Enumerable#each on CollectionProxy
    */
   async *[Symbol.asyncIterator](): AsyncIterableIterator<Base> {
+    if (!this._loaded) this._checkStrictLoading();
     const records = this._loaded ? this._target : await this.loadTarget();
     for (const record of records) {
       yield record;

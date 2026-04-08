@@ -55,7 +55,9 @@ export class AliasTracker {
 
     for (const join of tableJoins) {
       if (join instanceof Nodes.StringJoin) {
-        const sql = join.left?.toString?.() ?? "";
+        const left = join.left;
+        const sql =
+          typeof left === "string" ? left : ((left as any)?.value ?? left?.toString?.() ?? "");
         const matches = sql.match(pattern);
         count += matches ? matches.length : 0;
       } else if (join instanceof Nodes.Join) {
@@ -89,7 +91,11 @@ export class AliasTracker {
     const newCount = (this.aliases.get(aliasedName) ?? 0) + 1;
     this.aliases.set(aliasedName, newCount);
 
-    const finalName = newCount > 1 ? `${this._truncate(aliasedName)}_${newCount}` : aliasedName;
+    const suffix = `_${newCount}`;
+    const finalName =
+      newCount > 1
+        ? `${aliasedName.slice(0, this._tableAliasLength - suffix.length)}${suffix}`
+        : aliasedName;
 
     return typeof arelTable.alias === "function" ? arelTable.alias(finalName) : finalName;
   }

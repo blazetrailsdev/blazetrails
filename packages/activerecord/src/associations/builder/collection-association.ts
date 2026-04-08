@@ -53,13 +53,12 @@ export class CollectionAssociation extends Association {
         ? [options[callbackName]]
         : [];
 
-    const methodDefined = fullCallbackName in model;
-
     if ((callbackValues as any[]).length === 0) return;
 
-    if (!methodDefined) {
-      model[fullCallbackName] = [];
-    }
+    const existing = Object.prototype.hasOwnProperty.call(model, fullCallbackName)
+      ? model[fullCallbackName]
+      : undefined;
+    const prior = Array.isArray(existing) ? existing : [];
 
     const callbacks = (callbackValues as any[]).map((callback: any) => {
       if (typeof callback === "string" || typeof callback === "symbol") {
@@ -71,7 +70,7 @@ export class CollectionAssociation extends Association {
       }
     });
 
-    model[fullCallbackName] = [...(model[fullCallbackName] ?? []), ...callbacks];
+    model[fullCallbackName] = [...prior, ...callbacks];
   }
 
   static override defineReaders(mixin: any, name: string): void {

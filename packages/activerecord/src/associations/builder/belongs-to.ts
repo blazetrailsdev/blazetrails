@@ -85,10 +85,9 @@ export class BelongsTo extends SingularAssociation {
           const oldRecord =
             typeof klass.findBy === "function" ? await klass.findBy({ [pk]: oldForeignId }) : null;
           if (oldRecord) {
-            if (touch !== true && typeof oldRecord.touchLater === "function") {
-              await oldRecord.touchLater(touch);
-            } else if (typeof oldRecord.touchLater === "function") {
-              await oldRecord.touchLater();
+            const touchFn = oldRecord.touchLater ?? oldRecord.touch;
+            if (typeof touchFn === "function") {
+              await (touch !== true ? touchFn.call(oldRecord, touch) : touchFn.call(oldRecord));
             }
           }
         }
@@ -97,10 +96,9 @@ export class BelongsTo extends SingularAssociation {
 
     const related = typeof record[name] === "function" ? record[name]() : record[name];
     if (related && typeof related.isPersisted === "function" && related.isPersisted()) {
-      if (touch !== true && typeof related.touchLater === "function") {
-        await related.touchLater(touch);
-      } else if (typeof related.touchLater === "function") {
-        await related.touchLater();
+      const touchFn = related.touchLater ?? related.touch;
+      if (typeof touchFn === "function") {
+        await (touch !== true ? touchFn.call(related, touch) : touchFn.call(related));
       }
     }
   }

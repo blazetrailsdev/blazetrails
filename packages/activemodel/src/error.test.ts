@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { Errors, Model } from "./index.js";
 import { I18n } from "./i18n.js";
 import { Error as ModelError } from "./error.js";
@@ -213,8 +213,6 @@ describe("ErrorTest", () => {
   });
 
   it("generateMessage walks ancestor lookup chain", () => {
-    afterEach(() => I18n.reset());
-
     class Parent extends Model {
       static i18nScope = "activemodel";
       static lookupAncestors() {
@@ -239,6 +237,7 @@ describe("ErrorTest", () => {
 
     const record = new Child({ name: "" }) as any;
     const msg = ModelError.generateMessage("name", "blank", record);
+    I18n.reset();
     expect(msg).toBe("parent-level blank");
   });
 

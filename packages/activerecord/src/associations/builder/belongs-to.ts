@@ -1,6 +1,6 @@
 import { underscore } from "@blazetrails/activesupport";
 import { SingularAssociation } from "./singular-association.js";
-import { afterDestroy, beforeValidation } from "../../callbacks.js";
+import { beforeValidation } from "../../callbacks.js";
 
 /**
  * Mirrors: ActiveRecord::Associations::Builder::BelongsTo
@@ -123,16 +123,11 @@ export class BelongsTo extends SingularAssociation {
     });
   }
 
-  static override addDestroyCallbacks(model: any, reflection: any): void {
-    const name = reflection.name ?? reflection;
-    afterDestroy(model, (record: any) => {
-      if (typeof record.association === "function") {
-        const assoc = record.association(name);
-        if (typeof assoc.handleDependency === "function") {
-          assoc.handleDependency();
-        }
-      }
-    });
+  static override addDestroyCallbacks(_model: any, _reflection: any): void {
+    // BelongsTo destroy callbacks are handled centrally by
+    // processDependentAssociations() in associations.ts.
+    // Rails registers an after_destroy here, but our architecture
+    // centralizes dependent handling.
   }
 
   static override defineValidations(model: any, reflection: any): void {

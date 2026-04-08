@@ -16,7 +16,7 @@ let _tokenForSecret: string | (() => string) | null = null;
  * BLAZETRAILS_SIGNED_ID_SECRET env vars. Throws if no secret
  * is configured.
  */
-export function setTokenForSecret(secret: string | (() => string)): void {
+export function setTokenForSecret(secret: string | (() => string) | null): void {
   _tokenForSecret = secret;
 }
 

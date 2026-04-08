@@ -6089,7 +6089,7 @@ describe("CalculationsTest", () => {
       expect(found).not.toBeNull();
       expect(found!.name).toBe("Alice");
     } finally {
-      setTokenForSecret(null as any);
+      setTokenForSecret(null);
     }
   });
 

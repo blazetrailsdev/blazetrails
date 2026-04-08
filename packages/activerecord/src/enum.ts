@@ -218,6 +218,10 @@ export class EnumType {
     if (typeof value === "string" && this._mapping.has(value)) return true;
     if ((typeof value === "number" || typeof value === "string") && this._reverseMapping.has(value))
       return true;
+    if (typeof value === "string" && value !== "" && this.subtype === "integer") {
+      const num = Number(value);
+      if (!Number.isNaN(num) && this._reverseMapping.has(num)) return true;
+    }
     return false;
   }
 
@@ -227,6 +231,10 @@ export class EnumType {
     if (typeof value === "string" && this._mapping.has(value)) return;
     if ((typeof value === "number" || typeof value === "string") && this._reverseMapping.has(value))
       return;
+    if (typeof value === "string" && this.subtype === "integer") {
+      const num = Number(value);
+      if (!Number.isNaN(num) && this._reverseMapping.has(num)) return;
+    }
     throw new Error(`'${value}' is not a valid ${this._name}`);
   }
 }

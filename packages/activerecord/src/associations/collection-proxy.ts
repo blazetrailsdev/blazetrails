@@ -75,9 +75,11 @@ type DelegatedQueryMethods = Pick<
 /**
  * A CollectionProxy wrapped with a JS Proxy that delegates query methods
  * and named scopes to the underlying Relation. Returned by association().
- * The index signature allows extend-option methods and named scopes.
+ * The generic parameter allows typing extend-option methods; defaults to
+ * an open index signature so named scopes and extensions work without casts.
  */
-export type AssociationProxy = CollectionProxy & DelegatedQueryMethods;
+export type AssociationProxy<TExtensions extends Record<string, any> = Record<string, any>> =
+  CollectionProxy & DelegatedQueryMethods & TExtensions;
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class CollectionProxy {

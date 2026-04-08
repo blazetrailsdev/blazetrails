@@ -10,7 +10,7 @@
  * Mirrors: ActiveRecord::Normalization
  */
 
-import { Model } from "@blazetrails/activemodel";
+import { Model, SerializeCastValue } from "@blazetrails/activemodel";
 
 /**
  * NormalizedValueType — decorates an underlying cast type with a normalizer.
@@ -45,10 +45,11 @@ export class NormalizedValueType {
   }
 
   serializeCastValue(value: unknown): unknown {
-    if (typeof this.castType.serialize === "function") {
-      return this.castType.serialize(value);
+    const compatible = this.castType as any;
+    if (typeof compatible.serializeCastValue === "function") {
+      return SerializeCastValue.serializeCastValue.call(compatible, value);
     }
-    return value;
+    return typeof this.castType.serialize === "function" ? this.castType.serialize(value) : value;
   }
 
   private _normalize(value: unknown): unknown {

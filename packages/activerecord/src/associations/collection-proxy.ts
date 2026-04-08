@@ -860,10 +860,23 @@ export class CollectionProxy {
   }
 
   async pluck(...columns: string[]): Promise<unknown[]> {
+    if (this._isThrough) {
+      const records = await this.toArray();
+      if (columns.length === 1) {
+        return records.map((r) => r.readAttribute(columns[0]));
+      }
+      return records.map((r) => columns.map((c) => r.readAttribute(c)));
+    }
     return this.scope().pluck(...columns);
   }
 
   async pick(...columns: string[]): Promise<unknown> {
+    if (this._isThrough) {
+      const records = await this.toArray();
+      if (records.length === 0) return null;
+      if (columns.length === 1) return records[0].readAttribute(columns[0]);
+      return columns.map((c) => records[0].readAttribute(c));
+    }
     return this.scope().pick(...columns);
   }
 

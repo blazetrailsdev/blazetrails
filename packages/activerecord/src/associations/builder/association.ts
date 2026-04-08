@@ -46,7 +46,6 @@ export class Association {
     "strictLoading",
     "queryConstraints",
     "scope",
-    "extend",
   ];
 
   static build(

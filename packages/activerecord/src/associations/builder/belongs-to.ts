@@ -145,11 +145,19 @@ export class BelongsTo extends SingularAssociation {
 
     super.defineValidations(model, reflection);
 
-    if (required && typeof model.validates === "function") {
+    if (required) {
+      // Rails validates the association name (reflection.name) which
+      // checks whether the associated record can be loaded. Our codebase
+      // validates the foreign key directly since association-aware presence
+      // validation is not yet wired. The effect is the same: reject nil FK.
       const fk = reflection.foreignKey ?? options.foreignKey ?? `${underscore(reflection.name)}_id`;
 
       if (model.belongsToRequiredValidatesForeignKey ?? true) {
-        model.validates(fk, { presence: true });
+        if (typeof model.validatesPresenceOf === "function") {
+          model.validatesPresenceOf(fk, { message: "required" });
+        } else if (typeof model.validates === "function") {
+          model.validates(fk, { presence: true });
+        }
       } else {
         const condition = (record: any) => {
           return (
@@ -165,7 +173,9 @@ export class BelongsTo extends SingularAssociation {
               })())
           );
         };
-        model.validates(fk, { presence: { if: condition } });
+        if (typeof model.validates === "function") {
+          model.validates(fk, { presence: true, if: condition });
+        }
       }
     }
   }

@@ -4,8 +4,9 @@
  * Mirrors: ActiveRecord::Associations::AliasTracker
  */
 import { Table, Nodes } from "@blazetrails/arel";
+import { tableAliasLength as getTableAliasLength } from "../connection-adapters/abstract/database-limits.js";
 
-const DEFAULT_TABLE_ALIAS_LENGTH = 63;
+const DEFAULT_TABLE_ALIAS_LENGTH = getTableAliasLength();
 
 export class AliasTracker {
   readonly aliases: Map<string, number>;
@@ -50,7 +51,12 @@ export class AliasTracker {
         const matches = sql.match(pattern);
         count += matches ? matches.length : 0;
       } else if (join instanceof Nodes.Join) {
-        if ((join.left as any)?.name === name) count += 1;
+        const left = join.left as any;
+        const leftName =
+          left instanceof Nodes.TableAlias
+            ? ((left.relation as any)?.name ?? left.name)
+            : left?.name;
+        if (leftName === name) count += 1;
       } else if (typeof join === "string") {
         const matches = join.match(pattern);
         count += matches ? matches.length : 0;

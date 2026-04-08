@@ -564,7 +564,7 @@ class SchemaAdapter extends DatabaseStatementsMixin(class {}) implements Databas
         const alterSql = isMysql()
           ? `ALTER TABLE \`${colTableName}\` ADD COLUMN \`${colName}\` ${colType}`
           : `ALTER TABLE "${colTableName}" ADD COLUMN "${colName}" ${colType}`;
-        await this.inner.exec(alterSql);
+        await execDdlWithSavepoint(this.inner, alterSql);
         let known = _createdColumns.get(colTableName);
         if (!known) {
           known = new Set(["id"]);

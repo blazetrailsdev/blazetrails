@@ -116,8 +116,8 @@ export class AbstractReflection {
     return [this];
   }
 
-  buildScope(_table?: Table, _predicateBuilder?: any, _klass?: typeof Base): any {
-    return (this.klass as any).all();
+  buildScope(_table?: Table, _predicateBuilder?: any, klass?: typeof Base): any {
+    return ((klass ?? this.klass) as any).all();
   }
 
   joinScope(table: Table, foreignTable: Table, foreignKlass: typeof Base): any {

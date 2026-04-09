@@ -138,6 +138,7 @@ export class Branch {
   }
 
   get sourceRecords(): Base[] {
+    if (this.isRoot()) return [];
     return this.parent!.preloadedRecords;
   }
 
@@ -146,6 +147,7 @@ export class Branch {
   }
 
   runnableLoaders(): Association[] {
+    if (this.isRoot()) return [];
     return this.loaders.flatMap((l) => l.runnableLoaders()).filter((l) => !l.isRun());
   }
 

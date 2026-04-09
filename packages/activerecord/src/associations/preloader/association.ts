@@ -23,6 +23,7 @@ export class Association {
   private _preloadedRecords: Base[] | undefined;
   private _ownersByKey: Map<unknown, Base[]> | undefined;
   private _scope: any;
+  private _keyConversionRequired: boolean | undefined;
 
   constructor(
     klass: typeof Base,
@@ -242,9 +243,30 @@ export class Association {
 
   private _deriveKey(record: Base, key: string | string[]): unknown {
     if (Array.isArray(key)) {
-      return key.map((k) => (record as any).readAttribute(k));
+      return key.map((k) => this._convertKey((record as any).readAttribute(k)));
     }
-    return (record as any).readAttribute(key);
+    return this._convertKey((record as any).readAttribute(key));
+  }
+
+  private _convertKey(key: unknown): unknown {
+    if (key == null) return key;
+    return this._isKeyConversionRequired() ? String(key) : key;
+  }
+
+  private _isKeyConversionRequired(): boolean {
+    if (this._keyConversionRequired !== undefined) return this._keyConversionRequired;
+    const assocType = this._attributeType(this.klass, this.associationKeyName);
+    const ownerType = this._attributeType(this._model, this._ownerKeyName);
+    this._keyConversionRequired = assocType !== ownerType && assocType != null && ownerType != null;
+    return this._keyConversionRequired;
+  }
+
+  private _attributeType(model: typeof Base | null, key: string | string[]): string | null {
+    if (!model) return null;
+    const types = (model as any).attributeTypes;
+    if (!types) return null;
+    const k = Array.isArray(key) ? key[0] : key;
+    return types[k]?.toString() ?? null;
   }
 
   private _buildScope(): any {

@@ -396,6 +396,7 @@ export class SchemaReflection {
 
   private _cache: SchemaCache | null;
   private _cachePath: string | null;
+  private _cachePromise: Promise<SchemaCache> | null = null;
 
   constructor(cachePath?: string | null, cache?: SchemaCache) {
     this._cache = cache ?? null;
@@ -404,6 +405,7 @@ export class SchemaReflection {
 
   clearBang(): void {
     this._cache = new SchemaCache();
+    this._cachePromise = null;
   }
 
   async loadBang(pool: unknown): Promise<this> {
@@ -436,6 +438,7 @@ export class SchemaReflection {
   }
 
   isColumnsHashCached(pool: unknown, tableName: string): boolean {
+    this.ensureSyncCache();
     return this._cache?.isColumnsHashCached(pool, tableName) ?? false;
   }
 
@@ -448,6 +451,7 @@ export class SchemaReflection {
   }
 
   size(pool: unknown): number {
+    this.ensureSyncCache();
     return this._cache?.size ?? 0;
   }
 
@@ -456,12 +460,7 @@ export class SchemaReflection {
   }
 
   isCached(tableName: string): boolean {
-    if (!this._cache) {
-      // Without a pool we can only load if version check is disabled
-      if (!SchemaReflection.checkSchemaCacheDumpVersion) {
-        this._cache = this.loadCacheFromDisk();
-      }
-    }
+    this.ensureSyncCache();
     return this._cache?.isCached(tableName) ?? false;
   }
 
@@ -470,13 +469,33 @@ export class SchemaReflection {
     await freshCache.addAll(pool);
     freshCache.dumpTo(filename);
     this._cache = freshCache;
+    this._cachePromise = null;
   }
 
   private async cache(pool: unknown): Promise<SchemaCache> {
-    if (!this._cache) {
-      this._cache = (await this.loadCache(pool)) ?? new SchemaCache();
+    if (this._cache) return this._cache;
+
+    // Memoize in-flight load so concurrent callers share one disk read
+    if (!this._cachePromise) {
+      this._cachePromise = this.loadCache(pool).then((loaded) => {
+        this._cache = loaded ?? new SchemaCache();
+        this._cachePromise = null;
+        return this._cache;
+      });
     }
-    return this._cache;
+    return this._cachePromise;
+  }
+
+  /**
+   * Attempt to populate _cache synchronously from disk when version
+   * checking is disabled. Used by sync-only paths (isCached, size,
+   * isColumnsHashCached) that can't await.
+   */
+  private ensureSyncCache(): void {
+    if (this._cache) return;
+    if (!SchemaReflection.checkSchemaCacheDumpVersion) {
+      this._cache = this.loadCacheFromDisk();
+    }
   }
 
   private possibleCacheAvailable(): boolean {

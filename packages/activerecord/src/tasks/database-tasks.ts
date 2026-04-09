@@ -319,13 +319,19 @@ export class DatabaseTasks {
   }
 
   static clearSchemaCache(filename: string): void {
+    const fs = getFs();
     try {
-      const fs = getFs();
-      if (fs.existsSync(filename)) {
-        fs.unlinkSync(filename);
+      fs.unlinkSync(filename);
+    } catch (error: unknown) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        (error as { code?: string }).code === "ENOENT"
+      ) {
+        return;
       }
-    } catch {
-      // Ignore if file doesn't exist
+      throw error;
     }
   }
 

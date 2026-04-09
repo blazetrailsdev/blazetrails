@@ -239,9 +239,7 @@ describe("ConnectionPool::BiasableQueue", () => {
     const q = new Queue();
     const c = fakeConn();
 
-    // Create a waiter inside the biased section
     let innerPromise: Promise<DatabaseAdapter>;
-    // Use BiasableQueue.prototype directly since Queue doesn't have withABiasFor
     BiasableQueue.prototype.withABiasFor.call(q, "ctx", () => {
       innerPromise = q.poll(5) as Promise<DatabaseAdapter>;
     });
@@ -251,6 +249,30 @@ describe("ConnectionPool::BiasableQueue", () => {
     q.add(c);
     const result = await innerPromise!;
     expect(result).toBe(c);
+  });
+
+  it("timed-out migrated waiter does not consume future connections", async () => {
+    vi.useFakeTimers();
+    try {
+      const q = new Queue();
+      const c = fakeConn();
+
+      let innerPromise: Promise<DatabaseAdapter>;
+      BiasableQueue.prototype.withABiasFor.call(q, "ctx", () => {
+        innerPromise = q.poll(5) as Promise<DatabaseAdapter>;
+      });
+
+      // Attach rejection handler BEFORE advancing timers to avoid unhandled rejection
+      const rejection = expect(innerPromise!).rejects.toBeInstanceOf(ConnectionTimeoutError);
+      await vi.advanceTimersByTimeAsync(6000);
+      await rejection;
+
+      // A subsequent add should go to the queue, not a stale waiter
+      q.add(c);
+      expect(q.poll()).toBe(c);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

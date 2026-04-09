@@ -21,6 +21,12 @@ import { ConnectionTimeoutError } from "../../../errors.js";
  * is structurally a no-op, but we implement the full API so that callers
  * (ConnectionLeasingQueue, withABiasFor) work identically.
  */
+interface WaiterState {
+  container: Array<(conn: DatabaseAdapter) => void>;
+  timer: ReturnType<typeof setTimeout> | null;
+  settled: boolean;
+}
+
 export class BiasedConditionVariable {
   private _waiters: Array<(conn: DatabaseAdapter) => void> = [];
   private _otherCond: BiasedConditionVariable | null;
@@ -39,18 +45,27 @@ export class BiasedConditionVariable {
 
   wait(timeout: number): Promise<DatabaseAdapter> {
     return new Promise((resolve, reject) => {
-      const state = { timer: null as ReturnType<typeof setTimeout> | null };
-
-      const waiter = (conn: DatabaseAdapter) => {
-        if (state.timer) clearTimeout(state.timer);
-        const idx = this._waiters.indexOf(waiter);
-        if (idx >= 0) this._waiters.splice(idx, 1);
-        resolve(conn);
+      const state: WaiterState = {
+        container: this._waiters,
+        timer: null,
+        settled: false,
       };
 
+      const waiter = (conn: DatabaseAdapter) => {
+        if (state.settled) return;
+        state.settled = true;
+        if (state.timer) clearTimeout(state.timer);
+        const idx = state.container.indexOf(waiter);
+        if (idx >= 0) state.container.splice(idx, 1);
+        resolve(conn);
+      };
+      (waiter as any)._state = state;
+
       state.timer = setTimeout(() => {
-        const idx = this._waiters.indexOf(waiter);
-        if (idx >= 0) this._waiters.splice(idx, 1);
+        if (state.settled) return;
+        state.settled = true;
+        const idx = state.container.indexOf(waiter);
+        if (idx >= 0) state.container.splice(idx, 1);
         const msg =
           `could not obtain a connection from the pool within ${timeout.toFixed(3)} seconds; ` +
           `all pooled connections were in use`;
@@ -99,10 +114,17 @@ export class BiasedConditionVariable {
    * Transfer all pending waiters to another condition variable.
    * Used by withABiasFor cleanup to migrate orphaned waiters back to
    * the restored cond so they can be signaled by future add() calls.
+   * Updates each waiter's container ref so timeout cleanup targets
+   * the correct array.
    */
   transferWaitersTo(target: BiasedConditionVariable): void {
     while (this._waiters.length > 0) {
-      target._waiters.push(this._waiters.shift()!);
+      const waiter = this._waiters.shift()!;
+      const waiterState = (waiter as any)._state as WaiterState | undefined;
+      if (waiterState) {
+        waiterState.container = target._waiters;
+      }
+      target._waiters.push(waiter);
     }
   }
 }

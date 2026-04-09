@@ -192,6 +192,8 @@ export class Queue {
     return false;
   }
 
+  poll(): DatabaseAdapter | undefined;
+  poll(timeout: number): Promise<DatabaseAdapter> | DatabaseAdapter;
   poll(timeout?: number): Promise<DatabaseAdapter> | DatabaseAdapter | undefined {
     return this.internalPoll(timeout);
   }

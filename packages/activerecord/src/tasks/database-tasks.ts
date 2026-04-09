@@ -7,6 +7,7 @@
 import type { DatabaseConfig } from "../database-configurations/database-config.js";
 import { DatabaseConfigurations } from "../database-configurations.js";
 import { ProtectedEnvironmentError } from "../migration.js";
+import { getFs } from "@blazetrails/activesupport";
 
 export class DatabaseTasks {
   static get env(): string {
@@ -286,6 +287,46 @@ export class DatabaseTasks {
       const host = c.host;
       return !host || host === "localhost" || host === "127.0.0.1" || host === "::1";
     });
+  }
+
+  static cacheDumpFilename(
+    dbConfig: DatabaseConfig,
+    options?: { schemaCachePath?: string },
+  ): string {
+    const explicit = options?.schemaCachePath;
+    if (explicit) return explicit;
+
+    const configPath =
+      typeof (dbConfig as any).schemaCachePath === "function"
+        ? (dbConfig as any).schemaCachePath()
+        : (dbConfig as any).schemaCachePath;
+    if (configPath) return configPath;
+
+    const configDefault =
+      typeof (dbConfig as any).defaultSchemaCachePath === "function"
+        ? (dbConfig as any).defaultSchemaCachePath(this.dbDir)
+        : null;
+    if (configDefault) return configDefault;
+
+    return `${this.dbDir}/schema_cache.json`;
+  }
+
+  static async dumpSchemaCache(connOrPool: unknown, filename: string): Promise<void> {
+    const schemaCache = (connOrPool as any).schemaCache;
+    if (schemaCache && typeof schemaCache.dumpTo === "function") {
+      schemaCache.dumpTo(filename);
+    }
+  }
+
+  static clearSchemaCache(filename: string): void {
+    try {
+      const fs = getFs();
+      if (fs.existsSync(filename)) {
+        fs.unlinkSync(filename);
+      }
+    } catch {
+      // Ignore if file doesn't exist
+    }
   }
 
   private static _environmentsFor(environment?: string): string[] {

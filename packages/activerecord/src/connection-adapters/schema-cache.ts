@@ -6,7 +6,8 @@
  */
 
 import { getFs, getPath } from "@blazetrails/activesupport";
-import type { Column } from "./column.js";
+import { Column } from "./column.js";
+import type { ColumnJSON } from "./column.js";
 
 // ---------------------------------------------------------------------------
 // Helper: run callback inside pool.withConnection if available
@@ -20,6 +21,15 @@ async function withConnection<T>(
     return (pool as any).withConnection(callback);
   }
   return callback(pool);
+}
+
+// ---------------------------------------------------------------------------
+// Helper: rehydrate a column from plain JSON or pass through if already Column
+// ---------------------------------------------------------------------------
+
+function rehydrateColumn(data: unknown): Column {
+  if (data instanceof Column) return data;
+  return Column.fromJSON(data as ColumnJSON);
 }
 
 // ---------------------------------------------------------------------------
@@ -68,7 +78,12 @@ export class SchemaCache {
 
   encodeWith(coder: Record<string, unknown>): void {
     const byKey = (a: [string, unknown], b: [string, unknown]) => a[0].localeCompare(b[0]);
-    coder["columns"] = Object.fromEntries([...this._columns].sort(byKey));
+    // Serialize Column instances to plain JSON for roundtrip
+    const columnsJSON: Record<string, ColumnJSON[]> = {};
+    for (const [table, cols] of [...this._columns].sort(byKey)) {
+      columnsJSON[table as string] = (cols as Column[]).map((c) => c.toJSON());
+    }
+    coder["columns"] = columnsJSON;
     coder["primary_keys"] = Object.fromEntries([...this._primaryKeys].sort(byKey));
     coder["data_sources"] = Object.fromEntries([...this._dataSourceExists].sort(byKey));
     coder["indexes"] = Object.fromEntries([...this._indexes].sort(byKey));
@@ -79,7 +94,10 @@ export class SchemaCache {
     if (coder["columns"] instanceof Map) {
       this._columns = coder["columns"] as Map<string, Column[]>;
     } else if (coder["columns"] && typeof coder["columns"] === "object") {
-      this._columns = new Map(Object.entries(coder["columns"] as Record<string, Column[]>));
+      const entries = Object.entries(coder["columns"] as Record<string, unknown[]>);
+      this._columns = new Map(
+        entries.map(([table, cols]) => [table, cols.map((c) => rehydrateColumn(c))]),
+      );
     }
 
     if (coder["primary_keys"] instanceof Map) {
@@ -317,7 +335,10 @@ export class SchemaCache {
     const [version, columns, _columnsHash, primaryKeys, dataSources, indexes] = array;
     this._version = (version as string | number) ?? null;
 
-    this._columns = new Map(Object.entries((columns as Record<string, Column[]>) ?? {}));
+    const rawCols = (columns as Record<string, unknown[]>) ?? {};
+    this._columns = new Map(
+      Object.entries(rawCols).map(([table, cols]) => [table, cols.map((c) => rehydrateColumn(c))]),
+    );
     this._primaryKeys = new Map(
       Object.entries((primaryKeys as Record<string, string | null>) ?? {}),
     );
@@ -426,11 +447,17 @@ export class SchemaReflection {
   }
 
   clearDataSourceCacheBang(pool: unknown, name: string): void {
-    if (!this._cache) return;
+    if (!this._cache && !this.possibleCacheAvailable()) return;
     this.cache(pool).clearDataSourceCacheBang(pool, name);
   }
 
   isCached(tableName: string): boolean {
+    if (!this._cache) {
+      // If check_schema_cache_dump_version is disabled, we can load without a pool
+      if (!SchemaReflection.checkSchemaCacheDumpVersion) {
+        this._cache = this.loadCache(null);
+      }
+    }
     return this._cache?.isCached(tableName) ?? false;
   }
 
@@ -443,9 +470,71 @@ export class SchemaReflection {
 
   private cache(pool: unknown): SchemaCache {
     if (!this._cache) {
-      this._cache = new SchemaCache();
+      this._cache = this.loadCache(pool) ?? this.emptyCache();
     }
     return this._cache;
+  }
+
+  private emptyCache(): SchemaCache {
+    return new SchemaCache();
+  }
+
+  private possibleCacheAvailable(): boolean {
+    if (!SchemaReflection.useSchemaCacheDump) return false;
+    if (!this._cachePath) return false;
+    try {
+      const fs = getFs();
+      return fs.existsSync(this._cachePath);
+    } catch {
+      return false;
+    }
+  }
+
+  private loadCache(pool: unknown): SchemaCache | null {
+    if (!this.possibleCacheAvailable()) return null;
+
+    const newCache = SchemaCache._loadFrom(this._cachePath!);
+    if (!newCache) return null;
+
+    if (SchemaReflection.checkSchemaCacheDumpVersion && pool) {
+      try {
+        const cachedVersion = newCache.schemaVersion;
+        // We need the current version from the DB to compare.
+        // Since version() is async, and this is called from sync cache(),
+        // we can only validate if the pool is a FakePool/connection (sync).
+        let currentVersion: string | number | null = null;
+        if (typeof (pool as any).withConnection === "function") {
+          (pool as any).withConnection((connection: any) => {
+            if (typeof connection.schemaVersion === "function") {
+              const result = connection.schemaVersion();
+              // If sync (FakePool), we get the value directly
+              if (result && typeof result.then !== "function") {
+                currentVersion = result;
+              }
+            }
+          });
+        } else if (typeof (pool as any).schemaVersion === "function") {
+          const result = (pool as any).schemaVersion();
+          if (result && typeof result.then !== "function") {
+            currentVersion = result;
+          }
+        }
+
+        if (currentVersion !== null && cachedVersion !== currentVersion) {
+          console.warn(
+            `Ignoring ${this._cachePath} because it has expired. ` +
+              `The current schema version is ${currentVersion}, ` +
+              `but the one in the schema cache file is ${cachedVersion}.`,
+          );
+          return null;
+        }
+      } catch {
+        // If we can't validate, skip the cache
+        return null;
+      }
+    }
+
+    return newCache;
   }
 }
 

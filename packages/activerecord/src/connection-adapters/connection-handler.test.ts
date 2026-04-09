@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { ConnectionHandler } from "./abstract/connection-handler.js";
 import { HashConfig } from "../database-configurations/hash-config.js";
 import { DatabaseConfigurations } from "../database-configurations.js";
@@ -255,10 +255,18 @@ describe("ConnectionHandlerTest", () => {
       adapter: "sqlite3",
       database: "new.db",
     });
-    handler.establishConnection(config1, { owner: "primary", adapterFactory: createTestAdapter });
-    handler.establishConnection(config2, { owner: "primary", adapterFactory: createTestAdapter });
-    const pool = handler.retrieveConnectionPool("primary");
-    expect(pool!.dbConfig.database).toBe("new.db");
+    const oldPool = handler.establishConnection(config1, {
+      owner: "primary",
+      adapterFactory: createTestAdapter,
+    });
+    const disconnectSpy = vi.spyOn(oldPool, "disconnect");
+    const newPool = handler.establishConnection(config2, {
+      owner: "primary",
+      adapterFactory: createTestAdapter,
+    });
+    expect(disconnectSpy).toHaveBeenCalled();
+    expect(newPool).not.toBe(oldPool);
+    expect(newPool.dbConfig.database).toBe("new.db");
     expect(handler.connectionPools).toHaveLength(1);
   });
 

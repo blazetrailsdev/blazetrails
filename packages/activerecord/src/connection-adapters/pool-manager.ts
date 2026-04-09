@@ -98,9 +98,8 @@ export class PoolManager {
     if (!poolConfig) {
       throw new ArgumentError(
         `The \`poolConfig\` for the :${role} role and :${shard} shard was \`null\`. ` +
-          `Please check your configuration. If you want your writing role to be something ` +
-          `other than \`:writing\` set \`config.activeRecord.writingRole\` in your application ` +
-          `configuration. The same setting should be applied for the \`readingRole\` if applicable.`,
+          `Please check your connection configuration for this role and shard and ensure a valid ` +
+          `pool configuration is provided.`,
       );
     }
     let shardMap = this._roleToShardMapping.get(role);

@@ -412,12 +412,9 @@ export class Base extends Model {
     }
 
     // Fall back to the connection class's pool — cache on the connection class
-    // so all its subclasses share one connection.
-    // Also check legacy "primary" key for backward compat with direct handler calls.
+    // so all its subclasses share one connection
     const connectionClass = this.connectionClassForSelf();
-    const connPool =
-      this._connectionHandler.retrieveConnectionPool(connectionClass.name) ??
-      this._connectionHandler.retrieveConnectionPool("primary");
+    const connPool = this._connectionHandler.retrieveConnectionPool(connectionClass.name);
     if (connPool) {
       if (!connectionClass._adapter) {
         connectionClass._adapter = connPool.checkout();

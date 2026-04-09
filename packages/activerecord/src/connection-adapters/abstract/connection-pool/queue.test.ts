@@ -48,8 +48,9 @@ describe("ConnectionPool::Queue", () => {
     try {
       const q = new Queue();
       const promise = q.poll(5) as Promise<DatabaseAdapter>;
+      const rejection = expect(promise).rejects.toThrow(ConnectionTimeoutError);
       vi.advanceTimersByTime(5000);
-      await expect(promise).rejects.toThrow(ConnectionTimeoutError);
+      await rejection;
     } finally {
       vi.useRealTimers();
     }

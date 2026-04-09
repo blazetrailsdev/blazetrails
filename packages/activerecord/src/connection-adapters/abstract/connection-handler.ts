@@ -5,56 +5,57 @@
  */
 
 import type { ConnectionPool } from "./connection-pool.js";
+import { ConnectionDescriptor } from "./connection-descriptor.js";
 import { DatabaseConfig } from "../../database-configurations/database-config.js";
 import { HashConfig } from "../../database-configurations/hash-config.js";
 import { DatabaseConfigurations } from "../../database-configurations.js";
-import { PoolConfig } from "../pool-config.js";
+import { PoolConfig, type ConnectionOwner } from "../pool-config.js";
 import { PoolManager } from "../pool-manager.js";
 import type { DatabaseAdapter } from "../../adapter.js";
 import { AdapterNotSpecified } from "../../errors.js";
 import { Notifications } from "@blazetrails/activesupport";
 
-/**
- * Mirrors: ActiveRecord::ConnectionAdapters::ConnectionHandler::ConnectionDescriptor
- */
-export class ConnectionDescriptor {
-  constructor(
-    readonly name: string,
-    readonly role: string,
-    readonly shard: string,
-  ) {}
-
-  get poolKey(): string {
-    return `${this.name}:${this.role}:${this.shard}`;
-  }
-}
+export { ConnectionDescriptor };
 
 export class ConnectionHandler {
   private _connectionNameToPoolManager = new Map<string, PoolManager>();
 
+  /**
+   * Normalize an owner (string or class) into a ConnectionDescriptor.
+   *
+   * Mirrors: ActiveRecord::ConnectionAdapters::ConnectionHandler#determine_owner_name
+   */
+  determineOwnerName(owner: string | ConnectionOwner): ConnectionDescriptor {
+    if (typeof owner === "string") {
+      return new ConnectionDescriptor(owner, owner === "Base");
+    }
+    const isPrimary = owner.primaryClassQ();
+    const name = isPrimary ? "Base" : owner.name;
+    return new ConnectionDescriptor(name, isPrimary);
+  }
+
   establishConnection(
     config: DatabaseConfig | Record<string, unknown>,
     options: {
-      owner?: string;
+      owner?: string | ConnectionOwner;
       role?: string;
       shard?: string;
       adapterFactory?: () => DatabaseAdapter;
     } = {},
   ): ConnectionPool {
+    const descriptor = options.owner != null ? this.determineOwnerName(options.owner) : null;
+    const ownerName = descriptor?.name ?? undefined;
+
     const dbConfig =
       config instanceof DatabaseConfig
         ? config
-        : new HashConfig(
-            DatabaseConfigurations.defaultEnv,
-            options.owner ?? "primary",
-            config as any,
-          );
+        : new HashConfig(DatabaseConfigurations.defaultEnv, ownerName ?? "primary", config as any);
 
     if (!dbConfig.adapter) {
       throw new AdapterNotSpecified("database configuration does not specify adapter");
     }
 
-    const owner = options.owner ?? dbConfig.name;
+    const owner = ownerName ?? dbConfig.name;
     const role = options.role ?? "writing";
     const shard = options.shard ?? "default";
 
@@ -70,6 +71,9 @@ export class ConnectionHandler {
       shard,
       adapterFactory: options.adapterFactory,
     });
+    if (descriptor) {
+      poolConfig.connectionDescriptor = descriptor;
+    }
     poolManager.setPoolConfig(role, shard, poolConfig);
 
     Notifications.instrument("!connection.active_record", {

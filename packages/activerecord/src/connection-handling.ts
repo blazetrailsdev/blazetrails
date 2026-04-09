@@ -101,14 +101,15 @@ async function establishWithConfig(
     adapterArg = url;
   }
 
+  const ownerName = modelClass.primaryClassQ() ? "Base" : modelClass.name;
   const dbConfig = new HashConfig(
     process.env.NODE_ENV || DatabaseConfigurations.defaultEnv,
-    "primary",
+    ownerName,
     { adapter: adapterName, url, ...config },
   );
 
   modelClass.connectionHandler.establishConnection(dbConfig, {
-    owner: "primary",
+    owner: modelClass,
     adapterFactory: () => new AdapterClass(adapterArg),
   });
 }

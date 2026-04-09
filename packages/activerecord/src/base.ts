@@ -162,6 +162,7 @@ export class Base extends Model {
   static _connectionHandler: ConnectionHandler = new ConnectionHandler();
   static _configPath: string | null = null;
   static _abstractClass = false;
+  static _connectionClass = false;
   static automaticScopeInversing = false;
   static automaticallyInvertPluralAssociations = false;
   static _tableNamePrefix = "";
@@ -196,6 +197,57 @@ export class Base extends Model {
 
   static set abstractClass(value: boolean) {
     this._abstractClass = value;
+  }
+
+  /**
+   * Whether this class is a connection class (owns its own connection pool).
+   * Per-class via hasOwnProperty — does not inherit from parent.
+   *
+   * Mirrors: ActiveRecord::Base.connection_class
+   */
+  static get connectionClass(): boolean {
+    return Object.prototype.hasOwnProperty.call(this, "_connectionClass")
+      ? this._connectionClass
+      : false;
+  }
+
+  static set connectionClass(value: boolean) {
+    this._connectionClass = value;
+  }
+
+  /**
+   * Returns true if this class has `connectionClass` set.
+   *
+   * Mirrors: ActiveRecord::Base.connection_class?
+   */
+  static connectionClassQ(): boolean {
+    return !!this.connectionClass;
+  }
+
+  /**
+   * Returns true when this class IS Base (the top of the AR hierarchy).
+   *
+   * Mirrors: ActiveRecord::Base.primary_class?
+   */
+  static primaryClassQ(): boolean {
+    return this.connectionClassForSelf() === Base;
+  }
+
+  /**
+   * Walks up the superclass chain until it finds a class where
+   * connectionClassQ() is true, or reaches Base.
+   *
+   * Mirrors: ActiveRecord::Base.connection_class_for_self
+   */
+  static connectionClassForSelf(): typeof Base {
+    let klass: typeof Base = this;
+    while (klass !== Base) {
+      if (klass.connectionClassQ()) return klass;
+      const parent = Object.getPrototypeOf(klass);
+      if (!parent || parent === Function.prototype) break;
+      klass = parent;
+    }
+    return Base;
   }
 
   /**
@@ -358,9 +410,10 @@ export class Base extends Model {
       return this._adapter;
     }
 
-    // Fall back to the shared primary pool — cache on Base so all subclasses
+    // Fall back to the connection class's pool — cache on Base so all subclasses
     // share one connection instead of checking out per-model connections
-    const primaryPool = this._connectionHandler.retrieveConnectionPool("primary");
+    const connectionClass = this.connectionClassForSelf();
+    const primaryPool = this._connectionHandler.retrieveConnectionPool(connectionClass.name);
     if (primaryPool) {
       if (!Base._adapter) {
         Base._adapter = primaryPool.checkout();

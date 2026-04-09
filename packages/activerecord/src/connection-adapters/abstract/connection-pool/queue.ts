@@ -54,7 +54,10 @@ export class BiasedConditionVariable {
       const waiter = (conn: DatabaseAdapter) => {
         if (state.settled) return;
         state.settled = true;
-        if (state.timer) clearTimeout(state.timer);
+        if (state.timer != null) {
+          clearTimeout(state.timer);
+          state.timer = null;
+        }
         const idx = state.container.indexOf(waiter);
         if (idx >= 0) state.container.splice(idx, 1);
         resolve(conn);

@@ -503,11 +503,15 @@ export class SchemaReflection {
 
     // Memoize in-flight load so concurrent callers share one disk read
     if (!this._cachePromise) {
-      this._cachePromise = this.loadCache(pool).then((loaded) => {
-        this._cache = loaded ?? new SchemaCache();
-        this._cachePromise = null;
-        return this._cache;
+      const promise = this.loadCache(pool).then((loaded) => {
+        // Guard against clearBang() racing with an in-flight load
+        if (this._cachePromise === promise) {
+          this._cache = loaded ?? new SchemaCache();
+          this._cachePromise = null;
+        }
+        return this._cache ?? new SchemaCache();
       });
+      this._cachePromise = promise;
     }
     return this._cachePromise;
   }

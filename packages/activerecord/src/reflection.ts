@@ -358,7 +358,7 @@ export class MacroReflection extends AbstractReflection {
       if (this._scope.length === 0) {
         return this._scope.call(relation) || relation;
       }
-      return this._scope(relation, owner) || relation;
+      return this._scope.call(relation, relation, owner) || relation;
     }
     return relation;
   }

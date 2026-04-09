@@ -360,12 +360,12 @@ export class LoaderQuery {
     return this.scope.where({ [this.associationKeyName as string]: keys }).toArray();
   }
 
+  recordsFor(loaders: Association[]): Promise<Base[]> {
+    return new LoaderRecords(loaders, this).records();
+  }
+
   async loadRecordsInBatch(loaders: Association[]): Promise<void> {
-    const allKeys: unknown[] = [];
-    for (const loader of loaders) {
-      allKeys.push(...loader.ownersByKey.keys());
-    }
-    const rawRecords = await this.loadRecordsForKeys(allKeys);
+    const rawRecords = await this.recordsFor(loaders);
 
     for (const loader of loaders) {
       await loader.loadRecords(rawRecords);

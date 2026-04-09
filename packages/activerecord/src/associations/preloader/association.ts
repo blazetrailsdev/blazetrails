@@ -307,7 +307,7 @@ export class LoaderQuery {
         this.associationKeyName.every((k, i) => k === (other.associationKeyName as string[])[i]));
     return (
       keysMatch &&
-      this.scope?.tableName === other.scope?.tableName &&
+      this._scopeTableName() === other._scopeTableName() &&
       this._valuesForQueries() === other._valuesForQueries()
     );
   }
@@ -316,7 +316,11 @@ export class LoaderQuery {
     const keyName = Array.isArray(this.associationKeyName)
       ? this.associationKeyName.join(",")
       : this.associationKeyName;
-    return `${keyName}::${this.scope?.tableName ?? ""}::${this._valuesForQueries()}`;
+    return `${keyName}::${this._scopeTableName()}::${this._valuesForQueries()}`;
+  }
+
+  private _scopeTableName(): string {
+    return this.scope?._modelClass?.tableName ?? this.scope?.tableName ?? "";
   }
 
   private _valuesForQueries(): string {

@@ -183,6 +183,8 @@ export class Association {
 
   associateRecordsFromUnscoped(unscopedRecords: Base[] | undefined): void {
     if (!unscopedRecords || unscopedRecords.length === 0) return;
+    if (this._reflectionScope != null) return;
+    if (this._preloadScope != null) return;
     if ((this.reflection as any).isCollection?.()) return;
 
     for (const record of unscopedRecords) {
@@ -249,11 +251,17 @@ export class Association {
 
     const type = (this.reflection as any).type;
     if (type && !(this.reflection as any).isThroughReflection?.()) {
-      scope = scope.where({ [type]: this._model?.name });
+      scope = scope.where({
+        [type]: (this._model as any)?.polymorphicName?.() ?? this._model?.name,
+      });
     }
 
-    if (this.reflection.scope) {
-      const scopeResult = this.reflection.scope.call(null, scope);
+    // Merge reflection scope: use the pre-computed scope from Branch if available,
+    // otherwise apply the raw scope function directly
+    if (this._reflectionScope != null) {
+      scope = scope.merge(this._reflectionScope);
+    } else if (this.reflection.scope) {
+      const scopeResult = this.reflection.scope(scope);
       if (scopeResult) scope = scopeResult;
     }
 
@@ -287,6 +295,34 @@ export class LoaderQuery {
   constructor(scope: any, associationKeyName: string | string[]) {
     this.scope = scope;
     this.associationKeyName = associationKeyName;
+  }
+
+  eql(other: LoaderQuery): boolean {
+    const keysMatch =
+      this.associationKeyName === other.associationKeyName ||
+      (Array.isArray(this.associationKeyName) &&
+        Array.isArray(other.associationKeyName) &&
+        this.associationKeyName.length === other.associationKeyName.length &&
+        this.associationKeyName.every((k, i) => k === (other.associationKeyName as string[])[i]));
+    return (
+      keysMatch &&
+      this.scope?.tableName === other.scope?.tableName &&
+      this._valuesForQueries() === other._valuesForQueries()
+    );
+  }
+
+  hashKey(): string {
+    const keyName = Array.isArray(this.associationKeyName)
+      ? this.associationKeyName.join(",")
+      : this.associationKeyName;
+    return `${keyName}::${this.scope?.tableName ?? ""}::${this._valuesForQueries()}`;
+  }
+
+  private _valuesForQueries(): string {
+    if (typeof this.scope?.valuesForQueries === "function") {
+      return JSON.stringify(this.scope.valuesForQueries());
+    }
+    return this.scope?.toSql?.() ?? "";
   }
 
   async loadRecordsForKeys(keys: unknown[]): Promise<Base[]> {

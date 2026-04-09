@@ -20,6 +20,7 @@ export class ThroughAssociation extends Association {
   private _sourceRecordsByOwner: Map<Base, Base[]> | undefined;
   private _throughRecordsByOwner: Map<Base, Base[]> | undefined;
   private _throughPreloadedRecords: Base[] | undefined;
+  private _preloadIndex: Map<Base, number> | undefined;
 
   constructor(
     klass: typeof Base,
@@ -43,15 +44,51 @@ export class ThroughAssociation extends Association {
     const throughRecordsByOwner = await this._getThroughRecordsByOwner();
     const sourceRecordsByOwner = await this._getSourceRecordsByOwner();
 
+    const throughRefl = this._throughReflection;
+
     for (const owner of this.owners) {
       if (this.isLoaded(owner)) {
         result.set(owner, this.targetFor(owner));
         continue;
       }
 
-      const throughRecords = throughRecordsByOwner.get(owner) ?? [];
+      let throughRecords = throughRecordsByOwner.get(owner) ?? [];
+
+      // source_type filtering on through records when already loaded
+      if (throughRefl && this.owners.length > 0) {
+        try {
+          if ((this.owners[0] as any).association(throughRefl.name)?.loaded) {
+            const sourceType = (this.reflection as any).options?.sourceType;
+            const foreignType = (this.reflection as any).foreignType;
+            if (sourceType && foreignType) {
+              throughRecords = throughRecords.filter(
+                (record) => (record as any).readAttribute(foreignType) === sourceType,
+              );
+            }
+          }
+        } catch {
+          // association may not exist
+        }
+      }
+
       let records = throughRecords.flatMap((tr) => sourceRecordsByOwner.get(tr) ?? []);
       records = records.filter((r) => r != null);
+
+      // Preserve scope ordering via preload index
+      if (this.scope?.orderValues?.length > 0) {
+        const index = this._getPreloadIndex();
+        records.sort((a, b) => (index.get(a) ?? 0) - (index.get(b) ?? 0));
+      }
+
+      // Apply distinct
+      if (this.scope?.distinctValue) {
+        const seen = new Set<Base>();
+        records = records.filter((r) => {
+          if (seen.has(r)) return false;
+          seen.add(r);
+          return true;
+        });
+      }
 
       result.set(owner, records);
     }
@@ -153,6 +190,7 @@ export class ThroughAssociation extends Association {
     const preloader = new Preloader({
       records: this.owners,
       associations: [throughRefl.name],
+      scope: this._buildThroughScope(),
       associateByDefault: false,
     });
     this._throughPreloaders = preloader.loaders;
@@ -195,6 +233,42 @@ export class ThroughAssociation extends Association {
       }
     }
     return this._throughRecordsByOwner;
+  }
+
+  private _getPreloadIndex(): Map<Base, number> {
+    if (this._preloadIndex !== undefined) return this._preloadIndex;
+    this._preloadIndex = new Map();
+    this.preloadedRecords.forEach((record, index) => {
+      this._preloadIndex!.set(record, index);
+    });
+    return this._preloadIndex;
+  }
+
+  private _buildThroughScope(): any {
+    const throughRefl = this._throughReflection;
+    if (!throughRefl) return undefined;
+
+    let throughKlass: typeof Base;
+    try {
+      throughKlass = throughRefl.klass;
+    } catch {
+      return undefined;
+    }
+
+    let scope = (throughKlass as any).unscoped?.() ?? (throughKlass as any)._allForPreload();
+    const options = (this.reflection as any).options ?? {};
+
+    if (options.disableJoins) return scope;
+
+    // source_type: filter through records by polymorphic type column
+    if (options.sourceType) {
+      const foreignType = (this.reflection as any).foreignType;
+      if (foreignType) {
+        scope = scope.where({ [foreignType]: options.sourceType });
+      }
+    }
+
+    return scope;
   }
 
   private get _throughReflection(): AssociationLikeReflection | null {

@@ -407,11 +407,6 @@ export class LoaderRecords {
     }
 
     const loaded = await this.loaderQuery.loadRecordsForKeys([...keysToLoad]);
-    for (const record of loaded) {
-      for (const loader of this.loaders) {
-        loader.setInverse(record);
-      }
-    }
 
     return [...loaded, ...Array.from(alreadyLoadedByKey.values()).flat()];
   }

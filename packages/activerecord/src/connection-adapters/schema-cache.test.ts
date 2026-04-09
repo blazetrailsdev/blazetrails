@@ -103,7 +103,9 @@ describe("SchemaCacheTest", () => {
 
   it("columns for non existent table", () => {
     const cache = new SchemaCache();
+    // Not cached — columns() would need a pool for cache-miss lookup
     expect(cache.isCached("missing")).toBe(false);
+    expect(cache.getCachedColumnsHash("missing")).toBeUndefined();
   });
 
   it("columns hash for existent table", async () => {
@@ -219,7 +221,11 @@ describe("SchemaCacheTest", () => {
   it("#columns_hash? is populated by #columns_hash", async () => {
     const cache = new SchemaCache();
     cache.setColumns("users", [makeColumn("id", "integer")]);
+    // setColumns populates both _columns and _columnsHash
     expect(cache.isColumnsHashCached(null, "users")).toBe(true);
+    // Also verify columnsHash() returns the expected data
+    const hash = await cache.columnsHash(null, "users");
+    expect(hash!["id"]).toBeInstanceOf(Column);
   });
 
   it("#columns_hash? is not populated by #data_source_exists?", () => {

@@ -314,7 +314,7 @@ export class DatabaseTasks {
   static async dumpSchemaCache(connOrPool: unknown, filename: string): Promise<void> {
     const schemaCache = (connOrPool as any).schemaCache;
     if (schemaCache && typeof schemaCache.dumpTo === "function") {
-      schemaCache.dumpTo(filename);
+      await schemaCache.dumpTo(filename);
     }
   }
 

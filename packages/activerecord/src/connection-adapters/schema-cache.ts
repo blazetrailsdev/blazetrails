@@ -479,6 +479,7 @@ export class SchemaReflection {
   }
 
   clearDataSourceCacheBang(pool: unknown, name: string): void {
+    this.ensureSyncCache();
     this._cache?.clearDataSourceCacheBang(pool, name);
   }
 

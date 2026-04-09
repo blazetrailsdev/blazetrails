@@ -8,12 +8,7 @@ import type { DatabaseConfig } from "../database-configurations/database-config.
 import type { DatabaseAdapter } from "../adapter.js";
 import type { SchemaCache } from "./schema-cache.js";
 import { ConnectionPool } from "./abstract/connection-pool.js";
-import { ConnectionDescriptor } from "./abstract/connection-descriptor.js";
-
-export interface ConnectionOwner {
-  name: string;
-  primaryClassQ(): boolean;
-}
+import { ConnectionDescriptor, type ConnectionOwner } from "./abstract/connection-descriptor.js";
 
 export class PoolConfig {
   readonly role: string;

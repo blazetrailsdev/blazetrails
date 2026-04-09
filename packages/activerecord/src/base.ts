@@ -410,16 +410,16 @@ export class Base extends Model {
       return this._adapter;
     }
 
-    // Fall back to the connection class's pool — cache on Base so all subclasses
-    // share one connection instead of checking out per-model connections
+    // Fall back to the connection class's pool — cache on the connection class
+    // so all its subclasses share one connection
     const connectionClass = this.connectionClassForSelf();
-    const primaryPool = this._connectionHandler.retrieveConnectionPool(connectionClass.name);
-    if (primaryPool) {
-      if (!Base._adapter) {
-        Base._adapter = primaryPool.checkout();
-        if (_onAdapterSet) _onAdapterSet(Base);
+    const connPool = this._connectionHandler.retrieveConnectionPool(connectionClass.name);
+    if (connPool) {
+      if (!connectionClass._adapter) {
+        connectionClass._adapter = connPool.checkout();
+        if (_onAdapterSet) _onAdapterSet(connectionClass);
       }
-      return Base._adapter;
+      return connectionClass._adapter;
     }
 
     throw new ConnectionNotDefined(

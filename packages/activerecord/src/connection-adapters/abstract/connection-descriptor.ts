@@ -4,6 +4,11 @@
  * Mirrors: ActiveRecord::ConnectionAdapters::ConnectionHandler::ConnectionDescriptor
  */
 
+export interface ConnectionOwner {
+  name: string;
+  primaryClassQ(): boolean;
+}
+
 export class ConnectionDescriptor {
   readonly name: string;
   readonly isPrimary: boolean;

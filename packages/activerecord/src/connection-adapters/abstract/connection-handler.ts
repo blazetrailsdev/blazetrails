@@ -5,33 +5,35 @@
  */
 
 import type { ConnectionPool } from "./connection-pool.js";
-import { ConnectionDescriptor } from "./connection-descriptor.js";
+import { ConnectionDescriptor, type ConnectionOwner } from "./connection-descriptor.js";
 import { DatabaseConfig } from "../../database-configurations/database-config.js";
 import { HashConfig } from "../../database-configurations/hash-config.js";
 import { DatabaseConfigurations } from "../../database-configurations.js";
-import { PoolConfig, type ConnectionOwner } from "../pool-config.js";
+import { PoolConfig } from "../pool-config.js";
 import { PoolManager } from "../pool-manager.js";
 import type { DatabaseAdapter } from "../../adapter.js";
 import { AdapterNotSpecified } from "../../errors.js";
 import { Notifications } from "@blazetrails/activesupport";
 
 export { ConnectionDescriptor };
+export type { ConnectionOwner };
 
 export class ConnectionHandler {
   private _connectionNameToPoolManager = new Map<string, PoolManager>();
 
   /**
-   * Normalize an owner (string or class) into a ConnectionDescriptor.
+   * Normalize an owner into a form suitable for PoolConfig.connectionDescriptor=.
+   *
+   * Strings/symbols → ConnectionDescriptor. Classes pass through as-is so that
+   * PoolConfig.connectionDescriptor= can call primaryClassQ() on them.
    *
    * Mirrors: ActiveRecord::ConnectionAdapters::ConnectionHandler#determine_owner_name
    */
-  determineOwnerName(owner: string | ConnectionOwner): ConnectionDescriptor {
+  determineOwnerName(owner: string | ConnectionOwner): ConnectionDescriptor | ConnectionOwner {
     if (typeof owner === "string") {
-      return new ConnectionDescriptor(owner, owner === "Base");
+      return new ConnectionDescriptor(owner);
     }
-    const isPrimary = owner.primaryClassQ();
-    const name = isPrimary ? "Base" : owner.name;
-    return new ConnectionDescriptor(name, isPrimary);
+    return owner;
   }
 
   establishConnection(
@@ -43,41 +45,48 @@ export class ConnectionHandler {
       adapterFactory?: () => DatabaseAdapter;
     } = {},
   ): ConnectionPool {
-    const descriptor = options.owner != null ? this.determineOwnerName(options.owner) : null;
-    const ownerName = descriptor?.name ?? undefined;
+    const ownerName = options.owner != null ? this.determineOwnerName(options.owner) : null;
 
     const dbConfig =
       config instanceof DatabaseConfig
         ? config
-        : new HashConfig(DatabaseConfigurations.defaultEnv, ownerName ?? "primary", config as any);
+        : new HashConfig(
+            DatabaseConfigurations.defaultEnv,
+            typeof options.owner === "string" ? options.owner : "primary",
+            config as any,
+          );
 
     if (!dbConfig.adapter) {
       throw new AdapterNotSpecified("database configuration does not specify adapter");
     }
 
-    const owner = ownerName ?? dbConfig.name;
     const role = options.role ?? "writing";
     const shard = options.shard ?? "default";
-
-    const poolManager = this._setPoolManager(owner);
-
-    const existingPoolConfig = poolManager.getPoolConfig(role, shard);
-    if (existingPoolConfig) {
-      this._disconnectPoolFromPoolManager(poolManager, role, shard);
-    }
 
     const poolConfig = new PoolConfig(dbConfig, {
       role,
       shard,
       adapterFactory: options.adapterFactory,
     });
-    if (descriptor) {
-      poolConfig.connectionDescriptor = descriptor;
+
+    if (ownerName) {
+      poolConfig.connectionDescriptor = ownerName;
     }
+
+    // Key the pool manager by the descriptor name (e.g. "Base" for primary,
+    // "MyModel" for custom connection classes, or the raw string owner).
+    const poolKey = poolConfig.connectionDescriptor?.name ?? dbConfig.name;
+    const poolManager = this._setPoolManager(poolKey);
+
+    const existingPoolConfig = poolManager.getPoolConfig(role, shard);
+    if (existingPoolConfig) {
+      this._disconnectPoolFromPoolManager(poolManager, role, shard);
+    }
+
     poolManager.setPoolConfig(role, shard, poolConfig);
 
     Notifications.instrument("!connection.active_record", {
-      spec_name: owner,
+      spec_name: poolKey,
       shard,
     });
 

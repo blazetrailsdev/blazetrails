@@ -5,13 +5,17 @@
  */
 
 import type { DatabaseConfig } from "../database-configurations/database-config.js";
+import type { DatabaseAdapter } from "../adapter.js";
 import type { SchemaCache } from "./schema-cache.js";
+import { ConnectionPool } from "./abstract/connection-pool.js";
 
 export class PoolConfig {
   readonly role: string;
   readonly shard: string;
   readonly dbConfig: DatabaseConfig;
   private _schemaCache: SchemaCache | null = null;
+  private _pool: ConnectionPool | null = null;
+  adapterFactory?: () => DatabaseAdapter;
 
   constructor(
     dbConfig: DatabaseConfig,
@@ -23,6 +27,17 @@ export class PoolConfig {
     this.dbConfig = dbConfig;
     this.role = options.role ?? "writing";
     this.shard = options.shard ?? "default";
+  }
+
+  get pool(): ConnectionPool {
+    if (!this._pool) {
+      this._pool = new ConnectionPool(this.dbConfig, {
+        role: this.role,
+        shard: this.shard,
+        adapterFactory: this.adapterFactory,
+      });
+    }
+    return this._pool;
   }
 
   get schemaCache(): SchemaCache | null {

@@ -243,7 +243,7 @@ export class Association {
 
   private _deriveKey(record: Base, key: string | string[]): unknown {
     if (Array.isArray(key)) {
-      return key.map((k) => this._convertKey((record as any).readAttribute(k)));
+      return JSON.stringify(key.map((k) => this._convertKey((record as any).readAttribute(k))));
     }
     return this._convertKey((record as any).readAttribute(key));
   }
@@ -255,18 +255,31 @@ export class Association {
 
   private _isKeyConversionRequired(): boolean {
     if (this._keyConversionRequired !== undefined) return this._keyConversionRequired;
-    const assocType = this._attributeType(this.klass, this.associationKeyName);
-    const ownerType = this._attributeType(this._model, this._ownerKeyName);
-    this._keyConversionRequired = assocType !== ownerType && assocType != null && ownerType != null;
+    const assocKeys = Array.isArray(this.associationKeyName)
+      ? this.associationKeyName
+      : [this.associationKeyName];
+    const ownerKeys = Array.isArray(this._ownerKeyName) ? this._ownerKeyName : [this._ownerKeyName];
+    this._keyConversionRequired = false;
+    for (let i = 0; i < Math.min(assocKeys.length, ownerKeys.length); i++) {
+      const assocType = this._attributeTypeName(this.klass, assocKeys[i]);
+      const ownerType = this._attributeTypeName(this._model, ownerKeys[i]);
+      if (assocType != null && ownerType != null && assocType !== ownerType) {
+        this._keyConversionRequired = true;
+        break;
+      }
+    }
     return this._keyConversionRequired;
   }
 
-  private _attributeType(model: typeof Base | null, key: string | string[]): string | null {
+  private _attributeTypeName(model: typeof Base | null, key: string): string | null {
     if (!model) return null;
     const types = (model as any).attributeTypes;
     if (!types) return null;
-    const k = Array.isArray(key) ? key[0] : key;
-    return types[k]?.toString() ?? null;
+    const type = types[key];
+    if (!type) return null;
+    if (typeof type === "string") return type;
+    if (typeof type.type === "function") return type.type();
+    return type.name ?? null;
   }
 
   private _buildScope(): any {

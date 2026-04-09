@@ -7,16 +7,15 @@
  * registered pool. A reaper instantiated with a zero or null frequency will
  * never reap the connection pool.
  *
- * Rails uses a class-level registry (`@pools`, `@threads`) so that one timer
- * is shared across all pools with the same frequency. We mirror this with
- * static maps + `setInterval`.
+ * Rails uses a class-level registry (`@pools`, `@threads`) so that one reaper
+ * timer is shared across all pools with the same frequency. We mirror this with
+ * static maps and `setInterval`, using WeakRef to avoid preventing pool GC.
  */
 
 export interface ReapablePool {
   reap?(): void;
   flush?(): void;
   isDiscarded?(): boolean;
-  removeStaleConnections?(): void;
 }
 
 export class Reaper {
@@ -67,7 +66,6 @@ export class Reaper {
         return;
       }
 
-      // Filter out GC'd or discarded pools
       const alive = refs.filter((ref) => {
         const p = ref.deref();
         return p != null && !p.isDiscarded?.();
@@ -88,13 +86,12 @@ export class Reaper {
             p.reap?.();
             p.flush?.();
           } catch {
-            // WeakRef may have been collected between check and call
+            // Pool may have been collected between filter and use
           }
         }
       }
     }, frequency * 1000);
 
-    // Don't keep the process alive just for reaping
     if (typeof timer === "object" && "unref" in timer) {
       (timer as NodeJS.Timeout).unref();
     }

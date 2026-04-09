@@ -2,22 +2,28 @@
  * Connection pool queue — manages waiting for available connections.
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::ConnectionPool::Queue
+ *
+ * Rails uses Monitor-based synchronization with condition variables.
+ * In single-threaded Node we model the same fairness semantics using
+ * Promise-based waiters: `signal` resolves a pending waiter's promise
+ * directly with the connection, while `poll` either takes from the
+ * internal array (if fairness allows) or creates a new waiter promise.
  */
 
 import type { DatabaseAdapter } from "../../../adapter.js";
+import { ConnectionTimeoutError } from "../../../errors.js";
 
 /**
  * Mirrors: ActiveRecord::ConnectionAdapters::ConnectionPool::BiasableQueue::BiasedConditionVariable
  *
- * In Rails this is a condition variable that preferentially wakes a biased thread.
- * In TS (single-threaded), we model the same API using Promise-based waiters.
- * The `otherCond` and `preferredThread` params exist for API parity but the
- * bias behavior is a no-op in a single-threaded environment.
+ * In Rails this wraps two condition variables (one biased, one fallback) and
+ * preferentially wakes the biased thread. In Node (single-threaded) the bias
+ * is structurally a no-op, but we implement the full API so that callers
+ * (ConnectionLeasingQueue, withABiasFor) work identically.
  */
 export class BiasedConditionVariable {
   private _waiters: Array<(conn: DatabaseAdapter) => void> = [];
   private _otherCond: BiasedConditionVariable | null;
-  private _numWaitingOnRealCond = 0;
 
   constructor(
     _lock?: unknown,
@@ -33,10 +39,10 @@ export class BiasedConditionVariable {
 
   wait(timeout: number): Promise<DatabaseAdapter> {
     return new Promise((resolve, reject) => {
-      const state = { timer: 0 as unknown as ReturnType<typeof setTimeout> };
+      const state = { timer: null as ReturnType<typeof setTimeout> | null };
 
       const waiter = (conn: DatabaseAdapter) => {
-        clearTimeout(state.timer);
+        if (state.timer) clearTimeout(state.timer);
         const idx = this._waiters.indexOf(waiter);
         if (idx >= 0) this._waiters.splice(idx, 1);
         resolve(conn);
@@ -45,18 +51,29 @@ export class BiasedConditionVariable {
       state.timer = setTimeout(() => {
         const idx = this._waiters.indexOf(waiter);
         if (idx >= 0) this._waiters.splice(idx, 1);
-        reject(new Error("Connection pool timeout"));
+        const msg =
+          `could not obtain a connection from the pool within ${timeout.toFixed(3)} seconds; ` +
+          `all pooled connections were in use`;
+        reject(new ConnectionTimeoutError(msg));
       }, timeout * 1000);
 
       this._waiters.push(waiter);
     });
   }
 
+  /**
+   * In Rails, signal prefers the biased thread's cond, then falls back to
+   * the other cond. In Node (single-threaded) all waiters land on this CV's
+   * _waiters, so we try local first, then delegate to _otherCond.
+   */
   signal(conn: DatabaseAdapter): boolean {
     const waiter = this._waiters.shift();
     if (waiter) {
       waiter(conn);
       return true;
+    }
+    if (this._otherCond) {
+      return this._otherCond.signal(conn);
     }
     return false;
   }
@@ -69,9 +86,10 @@ export class BiasedConditionVariable {
   }
 
   broadcastOnBiased(connections: DatabaseAdapter[]): void {
-    this._numWaitingOnRealCond = 0;
     for (const conn of connections) {
-      if (!this.signal(conn)) break;
+      const waiter = this._waiters.shift();
+      if (!waiter) break;
+      waiter(conn);
     }
   }
 }
@@ -81,13 +99,11 @@ export class BiasedConditionVariable {
  *
  * In Rails this is a module included into ConnectionLeasingQueue that adds
  * `with_a_bias_for(thread)` to temporarily bias the queue's condition variable
- * toward a specific thread. In TS (single-threaded), we implement the API
- * for parity; the bias is effectively a no-op.
+ * toward a specific thread. Subclasses must expose a `_cond` field.
  */
 export class BiasableQueue {
   static BiasedConditionVariable = BiasedConditionVariable;
 
-  /** @internal — subclass must provide */
   protected _cond!: BiasedConditionVariable;
 
   withABiasFor<T>(context: unknown, fn: () => T): T {
@@ -98,7 +114,6 @@ export class BiasableQueue {
       return fn();
     } finally {
       this._cond = previousCond;
-      // wake up any remaining sleepers on the biased cond
       newCond.broadcastOnBiased([]);
     }
   }
@@ -106,6 +121,10 @@ export class BiasableQueue {
 
 /**
  * Mirrors: ActiveRecord::ConnectionAdapters::ConnectionPool::Queue
+ *
+ * Threadsafe, fair, LIFO queue. In Rails, fairness is enforced by tracking
+ * `@num_waiting` — a no-timeout poll only succeeds when queue size exceeds
+ * the number of threads blocked in wait_poll. We mirror this with _numWaiting.
  */
 export class Queue {
   private _queue: DatabaseAdapter[] = [];
@@ -136,9 +155,10 @@ export class Queue {
     return this._queue.length > 0;
   }
 
-  add(conn: DatabaseAdapter): void {
-    this._queue.push(conn);
-    this._cond.signal(conn);
+  add(element: DatabaseAdapter): void {
+    if (!this._cond.signal(element)) {
+      this._queue.push(element);
+    }
   }
 
   delete(element: DatabaseAdapter): DatabaseAdapter | undefined {
@@ -160,16 +180,20 @@ export class Queue {
   }
 
   poll(timeout?: number): Promise<DatabaseAdapter> | DatabaseAdapter | undefined {
-    const conn = this.noWaitPoll();
-    if (conn) return conn;
-    if (timeout != null) return this.waitPoll(timeout);
-    return undefined;
+    return this.internalPoll(timeout);
   }
 
   clear(): DatabaseAdapter[] {
     const items = [...this._queue];
     this._queue = [];
     return items;
+  }
+
+  protected internalPoll(timeout?: number): Promise<DatabaseAdapter> | DatabaseAdapter | undefined {
+    const conn = this.noWaitPoll();
+    if (conn) return conn;
+    if (timeout != null) return this.waitPoll(timeout);
+    return undefined;
   }
 
   private canRemoveNoWait(): boolean {
@@ -193,12 +217,32 @@ export class Queue {
 
 /**
  * Mirrors: ActiveRecord::ConnectionAdapters::ConnectionPool::ConnectionLeasingQueue
+ *
+ * Connections returned by poll are automatically leased while still inside
+ * the queue's critical section, matching Rails where internal_poll calls
+ * conn.lease before returning.
  */
 export class ConnectionLeasingQueue extends Queue {
   private _leasedTo = new Map<DatabaseAdapter, string>();
 
   withABiasFor<T>(context: unknown, fn: () => T): T {
     return BiasableQueue.prototype.withABiasFor.call(this, context, fn) as T;
+  }
+
+  protected override internalPoll(
+    timeout?: number,
+  ): Promise<DatabaseAdapter> | DatabaseAdapter | undefined {
+    const result = super.internalPoll(timeout);
+    if (result && typeof (result as any).then === "function") {
+      return (result as Promise<DatabaseAdapter>).then((conn) => {
+        this._leaseConn(conn);
+        return conn;
+      });
+    }
+    if (result) {
+      this._leaseConn(result as DatabaseAdapter);
+    }
+    return result;
   }
 
   leaseTo(conn: DatabaseAdapter, key: string): void {
@@ -211,5 +255,11 @@ export class ConnectionLeasingQueue extends Queue {
 
   leasedTo(conn: DatabaseAdapter): string | undefined {
     return this._leasedTo.get(conn);
+  }
+
+  private _leaseConn(conn: DatabaseAdapter): void {
+    if (typeof (conn as any).lease === "function") {
+      (conn as any).lease();
+    }
   }
 }

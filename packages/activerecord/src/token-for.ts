@@ -10,6 +10,7 @@ import type { Base } from "./base.js";
 export { InvalidSignature };
 
 let _tokenForSecret: string | (() => string) | null = null;
+let _cachedVerifier: MessageVerifier | null = null;
 
 /**
  * Configure the secret used for token generation/verification.
@@ -19,6 +20,7 @@ let _tokenForSecret: string | (() => string) | null = null;
  */
 export function setTokenForSecret(secret: string | (() => string) | null): void {
   _tokenForSecret = secret;
+  _cachedVerifier = null;
 }
 
 function resolveSecret(): string {
@@ -65,7 +67,10 @@ export class TokenDefinition {
   }
 
   messageVerifier(): MessageVerifier {
-    return new MessageVerifier(resolveSecret());
+    if (!_cachedVerifier) {
+      _cachedVerifier = new MessageVerifier(resolveSecret());
+    }
+    return _cachedVerifier;
   }
 
   payloadFor(model: Base): unknown[] {

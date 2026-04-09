@@ -127,7 +127,7 @@ export class SchemaCache {
     }
 
     return withConnection(pool, async (connection) => {
-      if (await this.dataSourceExists(pool, tableName)) {
+      if (await this.dataSourceExists(connection, tableName)) {
         const pk =
           typeof connection.primaryKey === "function"
             ? ((await connection.primaryKey(tableName)) ?? null)
@@ -163,12 +163,12 @@ export class SchemaCache {
   }
 
   async add(pool: unknown, tableName: string): Promise<void> {
-    await withConnection(pool, async () => {
-      if (await this.dataSourceExists(pool, tableName)) {
-        await this.primaryKeys(pool, tableName);
-        await this.columns(pool, tableName);
-        await this.columnsHash(pool, tableName);
-        await this.indexes(pool, tableName);
+    await withConnection(pool, async (connection) => {
+      if (await this.dataSourceExists(connection, tableName)) {
+        await this.primaryKeys(connection, tableName);
+        await this.columns(connection, tableName);
+        await this.columnsHash(connection, tableName);
+        await this.indexes(connection, tableName);
       }
     });
   }
@@ -221,7 +221,7 @@ export class SchemaCache {
 
     return withConnection(pool, async (connection) => {
       if (typeof connection.indexes === "function") {
-        if (await this.dataSourceExists(pool, tableName)) {
+        if (await this.dataSourceExists(connection, tableName)) {
           const idx = await connection.indexes(tableName);
           this._indexes.set(tableName, idx);
           return idx;
@@ -284,12 +284,12 @@ export class SchemaCache {
   }
 
   async addAll(pool: unknown): Promise<void> {
-    await withConnection(pool, async () => {
-      const tables = await this.tablesToCache(pool);
+    await withConnection(pool, async (connection) => {
+      const tables = await this.tablesToCache(connection);
       for (const table of tables) {
-        await this.add(pool, table);
+        await this.add(connection, table);
       }
-      await this.version(pool);
+      await this.version(connection);
     });
   }
 

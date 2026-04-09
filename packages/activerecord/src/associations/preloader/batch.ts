@@ -105,7 +105,7 @@ export class Batch {
     >();
     for (const loader of nonThroughLoaders) {
       const query = loader.loaderQuery();
-      const key = `${loader.tableName}::${loader.associationKeyName}`;
+      const key = query.hashKey();
       const existing = groups.get(key);
       if (existing) {
         existing.loaders.push(loader);

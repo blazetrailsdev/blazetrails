@@ -55,9 +55,9 @@ export class ThroughAssociation extends Association {
       let throughRecords = throughRecordsByOwner.get(owner) ?? [];
 
       // source_type filtering on through records when already loaded
-      if (throughRefl && this.owners.length > 0) {
+      if (throughRefl) {
         try {
-          if ((this.owners[0] as any).association(throughRefl.name)?.loaded) {
+          if ((owner as any).association(throughRefl.name)?.loaded) {
             const sourceType = (this.reflection as any).options?.sourceType;
             const foreignType = (this.reflection as any).foreignType;
             if (sourceType && foreignType) {

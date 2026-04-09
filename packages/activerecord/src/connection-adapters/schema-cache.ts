@@ -321,9 +321,14 @@ export class SchemaCache {
   }
 
   marshalDump(): unknown[] {
+    // Serialize columns via toJSON for proper roundtrip
+    const columnsData: Record<string, ColumnJSON[]> = {};
+    for (const [table, cols] of this._columns) {
+      columnsData[table] = cols.map((c) => c.toJSON());
+    }
     return [
       this._version,
-      Object.fromEntries(this._columns),
+      columnsData,
       {},
       Object.fromEntries(this._primaryKeys),
       Object.fromEntries(this._dataSourceExists),
@@ -401,61 +406,60 @@ export class SchemaReflection {
     this._cache = new SchemaCache();
   }
 
-  loadBang(pool: unknown): this {
-    this.cache(pool);
+  async loadBang(pool: unknown): Promise<this> {
+    await this.cache(pool);
     return this;
   }
 
   async primaryKeys(pool: unknown, tableName: string): Promise<string | null | undefined> {
-    return this.cache(pool).primaryKeys(pool, tableName);
+    return (await this.cache(pool)).primaryKeys(pool, tableName);
   }
 
   async dataSourceExists(pool: unknown, name: string): Promise<boolean | undefined> {
-    return this.cache(pool).dataSourceExists(pool, name);
+    return (await this.cache(pool)).dataSourceExists(pool, name);
   }
 
   async add(pool: unknown, name: string): Promise<void> {
-    return this.cache(pool).add(pool, name);
+    return (await this.cache(pool)).add(pool, name);
   }
 
   async dataSources(pool: unknown, name: string): Promise<boolean | undefined> {
-    return this.cache(pool).dataSourceExists(pool, name);
+    return (await this.cache(pool)).dataSourceExists(pool, name);
   }
 
   async columns(pool: unknown, tableName: string): Promise<Column[] | undefined> {
-    return this.cache(pool).columns(pool, tableName);
+    return (await this.cache(pool)).columns(pool, tableName);
   }
 
   async columnsHash(pool: unknown, tableName: string): Promise<Record<string, Column> | undefined> {
-    return this.cache(pool).columnsHash(pool, tableName);
+    return (await this.cache(pool)).columnsHash(pool, tableName);
   }
 
   isColumnsHashCached(pool: unknown, tableName: string): boolean {
-    return this.cache(pool).isColumnsHashCached(pool, tableName);
+    return this._cache?.isColumnsHashCached(pool, tableName) ?? false;
   }
 
   async indexes(pool: unknown, tableName: string): Promise<unknown[]> {
-    return this.cache(pool).indexes(pool, tableName);
+    return (await this.cache(pool)).indexes(pool, tableName);
   }
 
   async version(pool: unknown): Promise<string | number | null> {
-    return this.cache(pool).version(pool);
+    return (await this.cache(pool)).version(pool);
   }
 
   size(pool: unknown): number {
-    return this.cache(pool).size;
+    return this._cache?.size ?? 0;
   }
 
   clearDataSourceCacheBang(pool: unknown, name: string): void {
-    if (!this._cache && !this.possibleCacheAvailable()) return;
-    this.cache(pool).clearDataSourceCacheBang(pool, name);
+    this._cache?.clearDataSourceCacheBang(pool, name);
   }
 
   isCached(tableName: string): boolean {
     if (!this._cache) {
-      // If check_schema_cache_dump_version is disabled, we can load without a pool
+      // Without a pool we can only load if version check is disabled
       if (!SchemaReflection.checkSchemaCacheDumpVersion) {
-        this._cache = this.loadCache(null);
+        this._cache = this.loadCacheFromDisk();
       }
     }
     return this._cache?.isCached(tableName) ?? false;
@@ -468,15 +472,11 @@ export class SchemaReflection {
     this._cache = freshCache;
   }
 
-  private cache(pool: unknown): SchemaCache {
+  private async cache(pool: unknown): Promise<SchemaCache> {
     if (!this._cache) {
-      this._cache = this.loadCache(pool) ?? this.emptyCache();
+      this._cache = (await this.loadCache(pool)) ?? new SchemaCache();
     }
     return this._cache;
-  }
-
-  private emptyCache(): SchemaCache {
-    return new SchemaCache();
   }
 
   private possibleCacheAvailable(): boolean {
@@ -490,7 +490,12 @@ export class SchemaReflection {
     }
   }
 
-  private loadCache(pool: unknown): SchemaCache | null {
+  private loadCacheFromDisk(): SchemaCache | null {
+    if (!this.possibleCacheAvailable()) return null;
+    return SchemaCache._loadFrom(this._cachePath!);
+  }
+
+  private async loadCache(pool: unknown): Promise<SchemaCache | null> {
     if (!this.possibleCacheAvailable()) return null;
 
     const newCache = SchemaCache._loadFrom(this._cachePath!);
@@ -498,38 +503,24 @@ export class SchemaReflection {
 
     if (SchemaReflection.checkSchemaCacheDumpVersion && pool) {
       try {
-        const cachedVersion = newCache.schemaVersion;
-        // We need the current version from the DB to compare.
-        // Since version() is async, and this is called from sync cache(),
-        // we can only validate if the pool is a FakePool/connection (sync).
-        let currentVersion: string | number | null = null;
-        if (typeof (pool as any).withConnection === "function") {
-          (pool as any).withConnection((connection: any) => {
-            if (typeof connection.schemaVersion === "function") {
-              const result = connection.schemaVersion();
-              // If sync (FakePool), we get the value directly
-              if (result && typeof result.then !== "function") {
-                currentVersion = result;
-              }
-            }
-          });
-        } else if (typeof (pool as any).schemaVersion === "function") {
-          const result = (pool as any).schemaVersion();
-          if (result && typeof result.then !== "function") {
-            currentVersion = result;
+        const currentVersion = await withConnection(pool, async (connection) => {
+          if (typeof connection.schemaVersion === "function") {
+            return await connection.schemaVersion();
           }
-        }
+          return null;
+        });
 
-        if (currentVersion !== null && cachedVersion !== currentVersion) {
+        if (currentVersion !== null && newCache.schemaVersion !== currentVersion) {
           console.warn(
             `Ignoring ${this._cachePath} because it has expired. ` +
               `The current schema version is ${currentVersion}, ` +
-              `but the one in the schema cache file is ${cachedVersion}.`,
+              `but the one in the schema cache file is ${newCache.schemaVersion}.`,
           );
           return null;
         }
-      } catch {
-        // If we can't validate, skip the cache
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.warn(`Failed to validate the schema cache because of ${errorMessage}`);
         return null;
       }
     }
@@ -565,8 +556,8 @@ export class BoundSchemaReflection {
     this._schemaReflection.clearBang();
   }
 
-  loadBang(): this {
-    this._schemaReflection.loadBang(this._pool);
+  async loadBang(): Promise<this> {
+    await this._schemaReflection.loadBang(this._pool);
     return this;
   }
 

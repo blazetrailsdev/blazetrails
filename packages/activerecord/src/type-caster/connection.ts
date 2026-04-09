@@ -44,7 +44,7 @@ export class Connection {
     const adapter = this._klass?.adapter;
     const schemaCache = adapter?.schemaCache;
     if (schemaCache?.isCached(this._tableName)) {
-      const hash = schemaCache.columnsHash(adapter, this._tableName);
+      const hash = schemaCache.getCachedColumnsHash(this._tableName);
       const column = hash?.[attrName];
       if (column) return column;
     }

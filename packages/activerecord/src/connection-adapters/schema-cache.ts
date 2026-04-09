@@ -12,7 +12,10 @@ import type { Column } from "./column.js";
 // Helper: run callback inside pool.withConnection if available
 // ---------------------------------------------------------------------------
 
-function withConnection<T>(pool: unknown, callback: (connection: any) => T): T {
+async function withConnection<T>(
+  pool: unknown,
+  callback: (connection: any) => T | Promise<T>,
+): Promise<T> {
   if (pool && typeof (pool as any).withConnection === "function") {
     return (pool as any).withConnection(callback);
   }
@@ -118,16 +121,16 @@ export class SchemaCache {
     return this._columns.has(tableName);
   }
 
-  primaryKeys(pool: unknown, tableName: string): string | null | undefined {
+  async primaryKeys(pool: unknown, tableName: string): Promise<string | null | undefined> {
     if (this._primaryKeys.has(tableName)) {
       return this._primaryKeys.get(tableName);
     }
 
-    return withConnection(pool, (connection) => {
-      if (this.dataSourceExists(pool, tableName)) {
+    return withConnection(pool, async (connection) => {
+      if (await this.dataSourceExists(pool, tableName)) {
         const pk =
           typeof connection.primaryKey === "function"
-            ? (connection.primaryKey(tableName) ?? null)
+            ? ((await connection.primaryKey(tableName)) ?? null)
             : null;
         this._primaryKeys.set(tableName, pk);
         return pk;
@@ -136,10 +139,10 @@ export class SchemaCache {
     });
   }
 
-  dataSourceExists(pool: unknown, name: string): boolean | undefined {
+  async dataSourceExists(pool: unknown, name: string): Promise<boolean | undefined> {
     // Rails: eager-load all data sources on first cache miss
     if (this._dataSourceExists.size === 0) {
-      const tables = this.tablesToCache(pool);
+      const tables = await this.tablesToCache(pool);
       for (const source of tables) {
         this._dataSourceExists.set(source, true);
       }
@@ -149,9 +152,9 @@ export class SchemaCache {
       return this._dataSourceExists.get(name);
     }
 
-    return withConnection(pool, (connection) => {
+    return withConnection(pool, async (connection) => {
       if (typeof connection.dataSourceExists === "function") {
-        const exists = connection.dataSourceExists(name);
+        const exists = await connection.dataSourceExists(name);
         this._dataSourceExists.set(name, exists);
         return exists;
       }
@@ -159,25 +162,25 @@ export class SchemaCache {
     });
   }
 
-  add(pool: unknown, tableName: string): void {
-    withConnection(pool, () => {
-      if (this.dataSourceExists(pool, tableName)) {
-        this.primaryKeys(pool, tableName);
-        this.columns(pool, tableName);
-        this.columnsHash(pool, tableName);
-        this.indexes(pool, tableName);
+  async add(pool: unknown, tableName: string): Promise<void> {
+    await withConnection(pool, async () => {
+      if (await this.dataSourceExists(pool, tableName)) {
+        await this.primaryKeys(pool, tableName);
+        await this.columns(pool, tableName);
+        await this.columnsHash(pool, tableName);
+        await this.indexes(pool, tableName);
       }
     });
   }
 
-  columns(pool: unknown, tableName: string): Column[] | undefined {
+  async columns(pool: unknown, tableName: string): Promise<Column[] | undefined> {
     if (this._columns.has(tableName)) {
       return this._columns.get(tableName);
     }
 
-    return withConnection(pool, (connection) => {
+    return withConnection(pool, async (connection) => {
       if (typeof connection.columns === "function") {
-        const cols = connection.columns(tableName);
+        const cols = await connection.columns(tableName);
         this.setColumns(tableName, cols);
         return cols;
       }
@@ -185,13 +188,13 @@ export class SchemaCache {
     });
   }
 
-  columnsHash(pool: unknown, tableName: string): Record<string, Column> | undefined {
+  async columnsHash(pool: unknown, tableName: string): Promise<Record<string, Column> | undefined> {
     if (this._columnsHash.has(tableName)) {
       return this._columnsHash.get(tableName);
     }
 
     // Rails: @columns_hash[table_name] = columns(pool, table_name).index_by(&:name).freeze
-    const cols = this.columns(pool, tableName);
+    const cols = await this.columns(pool, tableName);
     if (cols) {
       const hash: Record<string, Column> = {};
       for (const col of cols) {
@@ -207,15 +210,19 @@ export class SchemaCache {
     return this._columnsHash.has(tableName);
   }
 
-  indexes(pool: unknown, tableName: string): unknown[] {
+  getCachedColumnsHash(tableName: string): Record<string, Column> | undefined {
+    return this._columnsHash.get(tableName);
+  }
+
+  async indexes(pool: unknown, tableName: string): Promise<unknown[]> {
     if (this._indexes.has(tableName)) {
       return this._indexes.get(tableName)!;
     }
 
-    return withConnection(pool, (connection) => {
+    return withConnection(pool, async (connection) => {
       if (typeof connection.indexes === "function") {
-        if (this.dataSourceExists(pool, tableName)) {
-          const idx = connection.indexes(tableName);
+        if (await this.dataSourceExists(pool, tableName)) {
+          const idx = await connection.indexes(tableName);
           this._indexes.set(tableName, idx);
           return idx;
         }
@@ -224,12 +231,12 @@ export class SchemaCache {
     });
   }
 
-  version(pool: unknown): string | number | null {
+  async version(pool: unknown): Promise<string | number | null> {
     if (this._version !== null) return this._version;
 
-    return withConnection(pool, (connection) => {
+    return withConnection(pool, async (connection) => {
       if (typeof connection.schemaVersion === "function") {
-        this._version = connection.schemaVersion();
+        this._version = await connection.schemaVersion();
       }
       return this._version;
     });
@@ -276,13 +283,13 @@ export class SchemaCache {
     this._dataSourceExists.set(tableName, exists);
   }
 
-  addAll(pool: unknown): void {
-    withConnection(pool, () => {
-      const tables = this.tablesToCache(pool);
+  async addAll(pool: unknown): Promise<void> {
+    await withConnection(pool, async () => {
+      const tables = await this.tablesToCache(pool);
       for (const table of tables) {
-        this.add(pool, table);
+        await this.add(pool, table);
       }
-      this.version(pool);
+      await this.version(pool);
     });
   }
 
@@ -340,10 +347,10 @@ export class SchemaCache {
   }
 
   // Rails: tables_to_cache(pool) — gets data_sources from connection
-  private tablesToCache(pool: unknown): string[] {
-    return withConnection(pool, (connection) => {
+  private async tablesToCache(pool: unknown): Promise<string[]> {
+    return withConnection(pool, async (connection) => {
       if (typeof connection.dataSources === "function") {
-        return connection.dataSources() as string[];
+        return (await connection.dataSources()) as string[];
       }
       return [];
     });
@@ -378,27 +385,27 @@ export class SchemaReflection {
     return this;
   }
 
-  primaryKeys(pool: unknown, tableName: string): string | null | undefined {
+  async primaryKeys(pool: unknown, tableName: string): Promise<string | null | undefined> {
     return this.cache(pool).primaryKeys(pool, tableName);
   }
 
-  dataSourceExists(pool: unknown, name: string): boolean | undefined {
+  async dataSourceExists(pool: unknown, name: string): Promise<boolean | undefined> {
     return this.cache(pool).dataSourceExists(pool, name);
   }
 
-  add(pool: unknown, name: string): void {
-    this.cache(pool).add(pool, name);
+  async add(pool: unknown, name: string): Promise<void> {
+    return this.cache(pool).add(pool, name);
   }
 
-  dataSources(pool: unknown, name: string): boolean | undefined {
+  async dataSources(pool: unknown, name: string): Promise<boolean | undefined> {
     return this.cache(pool).dataSourceExists(pool, name);
   }
 
-  columns(pool: unknown, tableName: string): Column[] | undefined {
+  async columns(pool: unknown, tableName: string): Promise<Column[] | undefined> {
     return this.cache(pool).columns(pool, tableName);
   }
 
-  columnsHash(pool: unknown, tableName: string): Record<string, Column> | undefined {
+  async columnsHash(pool: unknown, tableName: string): Promise<Record<string, Column> | undefined> {
     return this.cache(pool).columnsHash(pool, tableName);
   }
 
@@ -406,11 +413,11 @@ export class SchemaReflection {
     return this.cache(pool).isColumnsHashCached(pool, tableName);
   }
 
-  indexes(pool: unknown, tableName: string): unknown[] {
+  async indexes(pool: unknown, tableName: string): Promise<unknown[]> {
     return this.cache(pool).indexes(pool, tableName);
   }
 
-  version(pool: unknown): string | number | null {
+  async version(pool: unknown): Promise<string | number | null> {
     return this.cache(pool).version(pool);
   }
 
@@ -427,9 +434,9 @@ export class SchemaReflection {
     return this._cache?.isCached(tableName) ?? false;
   }
 
-  dumpTo(pool: unknown, filename: string): void {
+  async dumpTo(pool: unknown, filename: string): Promise<void> {
     const freshCache = new SchemaCache();
-    freshCache.addAll(pool);
+    await freshCache.addAll(pool);
     freshCache.dumpTo(filename);
     this._cache = freshCache;
   }
@@ -478,27 +485,27 @@ export class BoundSchemaReflection {
     return this._schemaReflection.isCached(tableName);
   }
 
-  primaryKeys(tableName: string): string | null | undefined {
+  async primaryKeys(tableName: string): Promise<string | null | undefined> {
     return this._schemaReflection.primaryKeys(this._pool, tableName);
   }
 
-  dataSourceExists(name: string): boolean | undefined {
+  async dataSourceExists(name: string): Promise<boolean | undefined> {
     return this._schemaReflection.dataSourceExists(this._pool, name);
   }
 
-  add(name: string): void {
-    this._schemaReflection.add(this._pool, name);
+  async add(name: string): Promise<void> {
+    return this._schemaReflection.add(this._pool, name);
   }
 
-  dataSources(name: string): boolean | undefined {
+  async dataSources(name: string): Promise<boolean | undefined> {
     return this._schemaReflection.dataSources(this._pool, name);
   }
 
-  columns(tableName: string): Column[] | undefined {
+  async columns(tableName: string): Promise<Column[] | undefined> {
     return this._schemaReflection.columns(this._pool, tableName);
   }
 
-  columnsHash(tableName: string): Record<string, Column> | undefined {
+  async columnsHash(tableName: string): Promise<Record<string, Column> | undefined> {
     return this._schemaReflection.columnsHash(this._pool, tableName);
   }
 
@@ -506,11 +513,11 @@ export class BoundSchemaReflection {
     return this._schemaReflection.isColumnsHashCached(this._pool, tableName);
   }
 
-  indexes(tableName: string): unknown[] {
+  async indexes(tableName: string): Promise<unknown[]> {
     return this._schemaReflection.indexes(this._pool, tableName);
   }
 
-  version(): string | number | null {
+  async version(): Promise<string | number | null> {
     return this._schemaReflection.version(this._pool);
   }
 
@@ -522,8 +529,8 @@ export class BoundSchemaReflection {
     this._schemaReflection.clearDataSourceCacheBang(this._pool, name);
   }
 
-  dumpTo(filename: string): void {
-    this._schemaReflection.dumpTo(this._pool, filename);
+  async dumpTo(filename: string): Promise<void> {
+    return this._schemaReflection.dumpTo(this._pool, filename);
   }
 }
 

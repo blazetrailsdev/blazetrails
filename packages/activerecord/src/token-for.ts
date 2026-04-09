@@ -67,6 +67,9 @@ export class TokenDefinition {
   }
 
   messageVerifier(): MessageVerifier {
+    if (typeof _tokenForSecret === "function") {
+      return new MessageVerifier(resolveSecret());
+    }
     if (!_cachedVerifier) {
       _cachedVerifier = new MessageVerifier(resolveSecret());
     }

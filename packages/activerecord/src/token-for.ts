@@ -4,7 +4,6 @@
  * Mirrors: ActiveRecord::TokenFor
  */
 
-import { getCrypto } from "@blazetrails/activesupport";
 import { InvalidSignature, MessageVerifier } from "@blazetrails/activesupport/message-verifier";
 import type { Base } from "./base.js";
 
@@ -66,7 +65,7 @@ export class TokenDefinition {
   }
 
   messageVerifier(): MessageVerifier {
-    return new MessageVerifier(resolveSecret(), { digest: "sha256" });
+    return new MessageVerifier(resolveSecret());
   }
 
   payloadFor(model: Base): unknown[] {
@@ -85,25 +84,13 @@ export class TokenDefinition {
     token: string,
     finder: (id: unknown) => Promise<Base | null>,
   ): Promise<Base | null> {
-    let data: unknown;
-    try {
-      data = this.messageVerifier().verified(token, { purpose: this.fullPurpose() });
-    } catch {
-      return null;
-    }
-    if (data === null) return null;
-
-    if (!Array.isArray(data) || data.length === 0) return null;
-
-    const record = await finder(data[0]);
-    if (!record) return null;
-
-    const currentPayload = this.payloadFor(record);
-    const a = Buffer.from(JSON.stringify(currentPayload));
-    const b = Buffer.from(JSON.stringify(data));
-    if (a.length !== b.length || !getCrypto().timingSafeEqual(a, b)) return null;
-
-    return record;
+    const payload = this.messageVerifier().verified(token, {
+      purpose: this.fullPurpose(),
+    }) as unknown[] | null;
+    const record = payload ? await finder(payload[0]) : null;
+    return record && JSON.stringify(this.payloadFor(record)) === JSON.stringify(payload)
+      ? record
+      : null;
   }
 }
 
@@ -203,12 +190,9 @@ export async function findByTokenFor(
 ): Promise<Base | null> {
   const def = getDefinition(modelClass, purpose);
   if (!def) return null;
+  const pk = modelClass.primaryKey;
   return def.resolveToken(token, async (id) => {
-    try {
-      return await modelClass.find(id);
-    } catch {
-      return null;
-    }
+    return modelClass.findBy({ [typeof pk === "string" ? pk : pk[0]]: id });
   });
 }
 
@@ -222,9 +206,9 @@ export async function findByTokenForBang(
   purpose: string,
   token: string,
 ): Promise<Base> {
-  const record = await findByTokenFor(modelClass, purpose, token);
-  if (!record) {
-    throw new InvalidSignature();
-  }
-  return record;
+  const def = getDefinition(modelClass, purpose);
+  if (!def) throw new InvalidSignature();
+  const result = await def.resolveToken(token, (id) => modelClass.find(id));
+  if (!result) throw new InvalidSignature();
+  return result;
 }

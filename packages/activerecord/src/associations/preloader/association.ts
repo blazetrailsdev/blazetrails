@@ -28,7 +28,7 @@ export class Association {
     this.reflection = reflection;
     this._preloadScope = preloadScope ?? null;
     this._reflectionScope = reflectionScope ?? null;
-    this._associate = associateByDefault || !preloadScope;
+    this._associate = associateByDefault || preloadScope == null;
     this._run = false;
   }
 

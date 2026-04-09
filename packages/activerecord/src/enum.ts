@@ -10,7 +10,6 @@ import { camelize } from "@blazetrails/activesupport";
 interface EnumDefinition {
   attribute: string;
   mapping: Map<string, number>;
-  reverseMapping: Map<number, string>;
   type: EnumType;
 }
 
@@ -51,23 +50,20 @@ export function defineEnum(
   options?: { prefix?: boolean | string; suffix?: boolean | string },
 ): void {
   const mapping = new Map<string, number>();
-  const reverseMapping = new Map<number, string>();
 
   if (Array.isArray(valuesInput)) {
     valuesInput.forEach((name, index) => {
       mapping.set(name, index);
-      reverseMapping.set(index, name);
     });
   } else {
     for (const [name, value] of Object.entries(valuesInput)) {
       mapping.set(name, value);
-      reverseMapping.set(value, name);
     }
   }
 
   const defs = getEnumDefinitions(modelClass);
   const enumType = new EnumType(attribute, mapping, "integer");
-  const def: EnumDefinition = { attribute, mapping, reverseMapping, type: enumType };
+  const def: EnumDefinition = { attribute, mapping, type: enumType };
   defs.set(attribute, def);
 
   // Compute prefix/suffix for method names

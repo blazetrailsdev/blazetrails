@@ -44,6 +44,9 @@ export class Branch {
 
   get preloadedRecords(): Base[] {
     if (this._preloadedRecords !== undefined) return this._preloadedRecords;
+    if (this.parent == null) {
+      throw new Error("Root preloader branch requires preloadedRecords to be set before access");
+    }
     this._preloadedRecords = this.loaders.flatMap((l) => l.preloadedRecords);
     return this._preloadedRecords;
   }
@@ -156,7 +159,6 @@ export class Branch {
         this.association!,
       );
 
-      if (polymorphicParent && !reflection) continue;
       if (!reflection) continue;
 
       try {

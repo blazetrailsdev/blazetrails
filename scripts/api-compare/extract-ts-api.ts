@@ -324,11 +324,19 @@ function extractClass(
   }
 
   for (const member of node.members) {
-    // Skip private/protected and _-prefixed members
+    // Skip private/protected members
     if (hasModifier(member, ts.SyntaxKind.PrivateKeyword)) continue;
     if (hasModifier(member, ts.SyntaxKind.ProtectedKeyword)) continue;
     const memberName = getMemberName(member);
-    if (memberName?.startsWith("_")) continue;
+    // Skip _-prefixed non-method members (backing fields), but keep _-prefixed methods
+    // since Rails has public methods like _load_from, _reflect_on_association, etc.
+    if (
+      memberName?.startsWith("_") &&
+      !ts.isMethodDeclaration(member) &&
+      !ts.isGetAccessorDeclaration(member) &&
+      !ts.isSetAccessorDeclaration(member)
+    )
+      continue;
 
     const isStatic = hasModifier(member, ts.SyntaxKind.StaticKeyword);
     const line = member.getSourceFile().getLineAndCharacterOfPosition(member.getStart()).line + 1;

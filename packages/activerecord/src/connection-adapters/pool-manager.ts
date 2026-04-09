@@ -55,7 +55,10 @@ export class PoolManager {
       cb = roleOrCallback;
     } else {
       role = roleOrCallback;
-      cb = callback!;
+      if (typeof callback !== "function") {
+        throw new ArgumentError("`eachPoolConfig` requires a callback when a role is provided.");
+      }
+      cb = callback;
     }
 
     if (role != null) {

@@ -12,6 +12,7 @@
 
 import type { DatabaseAdapter } from "../../../adapter.js";
 import { ConnectionTimeoutError } from "../../../errors.js";
+import { include, type Included } from "@blazetrails/activesupport";
 
 /**
  * Mirrors: ActiveRecord::ConnectionAdapters::ConnectionPool::BiasableQueue::BiasedConditionVariable
@@ -133,18 +134,24 @@ export class BiasedConditionVariable {
 }
 
 /**
+ * Host interface for BiasableQueue mixin — the including class must
+ * expose a mutable `_cond` field.
+ */
+interface BiasableQueueHost {
+  _cond: BiasedConditionVariable;
+}
+
+/**
  * Mirrors: ActiveRecord::ConnectionAdapters::ConnectionPool::BiasableQueue
  *
  * In Rails this is a module included into ConnectionLeasingQueue that adds
  * `with_a_bias_for(thread)` to temporarily bias the queue's condition variable
- * toward a specific thread. Subclasses must expose a `_cond` field.
+ * toward a specific thread.
  */
-export class BiasableQueue {
-  static BiasedConditionVariable = BiasedConditionVariable;
+export const BiasableQueue = {
+  BiasedConditionVariable,
 
-  protected _cond!: BiasedConditionVariable;
-
-  withABiasFor<T>(context: unknown, fn: () => T): T {
+  withABiasFor<T>(this: BiasableQueueHost, context: unknown, fn: () => T): T {
     const previousCond = this._cond;
     const newCond = new BiasedConditionVariable(undefined, this._cond, context);
     this._cond = newCond;
@@ -154,8 +161,8 @@ export class BiasableQueue {
       this._cond = previousCond;
       newCond.transferWaitersTo(previousCond);
     }
-  }
-}
+  },
+};
 
 /**
  * Mirrors: ActiveRecord::ConnectionAdapters::ConnectionPool::Queue
@@ -262,12 +269,11 @@ export class Queue {
  * the queue's critical section, matching Rails where internal_poll calls
  * conn.lease before returning.
  */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type, @typescript-eslint/no-unsafe-declaration-merging
+export interface ConnectionLeasingQueue extends Included<typeof BiasableQueue> {}
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class ConnectionLeasingQueue extends Queue {
   private _leasedTo = new Map<DatabaseAdapter, string>();
-
-  withABiasFor<T>(context: unknown, fn: () => T): T {
-    return BiasableQueue.prototype.withABiasFor.call(this, context, fn) as T;
-  }
 
   protected override internalPoll(
     timeout?: number,
@@ -303,3 +309,6 @@ export class ConnectionLeasingQueue extends Queue {
     }
   }
 }
+
+// Rails: `include BiasableQueue` in ConnectionLeasingQueue
+include(ConnectionLeasingQueue, BiasableQueue);

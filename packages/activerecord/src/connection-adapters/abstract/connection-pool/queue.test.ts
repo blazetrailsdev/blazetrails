@@ -239,7 +239,7 @@ describe("ConnectionPool::BiasableQueue", () => {
     const c = fakeConn();
 
     let innerPromise: Promise<DatabaseAdapter>;
-    BiasableQueue.prototype.withABiasFor.call(q, "ctx", () => {
+    BiasableQueue.withABiasFor.call(q as any, "ctx", () => {
       innerPromise = q.poll(5) as Promise<DatabaseAdapter>;
     });
 
@@ -257,7 +257,7 @@ describe("ConnectionPool::BiasableQueue", () => {
       const c = fakeConn();
 
       let innerPromise: Promise<DatabaseAdapter>;
-      BiasableQueue.prototype.withABiasFor.call(q, "ctx", () => {
+      BiasableQueue.withABiasFor.call(q as any, "ctx", () => {
         innerPromise = q.poll(5) as Promise<DatabaseAdapter>;
       });
 

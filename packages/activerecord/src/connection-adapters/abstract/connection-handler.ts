@@ -4,7 +4,7 @@
  * Mirrors: ActiveRecord::ConnectionAdapters::ConnectionHandler
  */
 
-import { ConnectionPool } from "./connection-pool.js";
+import type { ConnectionPool } from "./connection-pool.js";
 import { DatabaseConfig } from "../../database-configurations/database-config.js";
 import { HashConfig } from "../../database-configurations/hash-config.js";
 import { DatabaseConfigurations } from "../../database-configurations.js";

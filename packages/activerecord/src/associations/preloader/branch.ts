@@ -281,22 +281,18 @@ export class Branch {
           );
       }
 
-      return [
-        new Branch({
-          parent: this,
-          association: assoc,
-          children: null,
-          associateByDefault: this.associateByDefault,
-          scope: this.scope,
-        }),
-      ];
+      throw new TypeError(`Invalid association specifier: ${typeof assoc}`);
     });
   }
 
   private _normalizeAssociationName(association: string | symbol | null): string | null {
     if (association == null) return null;
     if (typeof association === "symbol") {
-      return association.description ?? association.toString().slice(7, -1);
+      const description = association.description;
+      if (description == null || description.length === 0) {
+        throw new TypeError("Association symbol must have a non-empty description");
+      }
+      return description;
     }
     return String(association);
   }

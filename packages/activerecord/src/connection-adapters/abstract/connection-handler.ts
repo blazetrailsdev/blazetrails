@@ -24,7 +24,7 @@ export class ConnectionHandler {
   /**
    * Normalize an owner into a form suitable for PoolConfig.connectionDescriptor=.
    *
-   * Strings/symbols → ConnectionDescriptor. Classes pass through as-is so that
+   * Strings → ConnectionDescriptor. Classes pass through as-is so that
    * PoolConfig.connectionDescriptor= can call primaryClassQ() on them.
    *
    * Mirrors: ActiveRecord::ConnectionAdapters::ConnectionHandler#determine_owner_name

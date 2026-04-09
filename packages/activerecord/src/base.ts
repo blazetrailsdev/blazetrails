@@ -225,7 +225,8 @@ export class Base extends Model {
   }
 
   /**
-   * Returns true when this class IS Base (the top of the AR hierarchy).
+   * Returns true when this class's connection class resolves to Base —
+   * i.e. no ancestor between this class and Base has connectionClass set.
    *
    * Mirrors: ActiveRecord::Base.primary_class?
    */

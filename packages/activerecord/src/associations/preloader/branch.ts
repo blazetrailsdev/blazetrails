@@ -30,7 +30,7 @@ export class Branch {
   private _polymorphic: boolean | undefined;
 
   constructor(options: BranchOptions) {
-    this.association = options.association != null ? String(options.association) : null;
+    this.association = this._normalizeAssociationName(options.association);
     this.parent = options.parent;
     this.scope = options.scope;
     this.associateByDefault = options.associateByDefault;
@@ -60,7 +60,11 @@ export class Branch {
   }
 
   immediateFutureClasses(): (typeof Base)[] {
-    if (this.parent!.isDone()) {
+    if (this.parent == null) {
+      return [];
+    }
+
+    if (this.parent.isDone()) {
       const seen = new Set<typeof Base>();
       return this.loaders
         .flatMap((l) => l.futureClasses())
@@ -193,7 +197,9 @@ export class Branch {
         }
       }
 
-      const key = `${klass.name}::${reflectionScope ?? ""}`;
+      const scopeKey =
+        reflectionScope?.toSql?.() ?? (reflectionScope == null ? "" : String(reflectionScope));
+      const key = `${klass.name}::${scopeKey}`;
       const existing = groups.get(key);
       if (existing) {
         existing.records.push(record);
@@ -260,16 +266,18 @@ export class Branch {
       }
 
       if (typeof assoc === "object" && assoc !== null && !Array.isArray(assoc)) {
-        return Object.entries(assoc).map(
-          ([parent, child]) =>
-            new Branch({
-              parent: this,
-              association: parent,
-              children: child,
-              associateByDefault: this.associateByDefault,
-              scope: this.scope,
-            }),
-        );
+        return Reflect.ownKeys(assoc)
+          .filter((k): k is string | symbol => typeof k === "string" || typeof k === "symbol")
+          .map(
+            (parent) =>
+              new Branch({
+                parent: this,
+                association: parent,
+                children: (assoc as any)[parent],
+                associateByDefault: this.associateByDefault,
+                scope: this.scope,
+              }),
+          );
       }
 
       return [
@@ -284,11 +292,32 @@ export class Branch {
     });
   }
 
+  private _normalizeAssociationName(association: string | symbol | null): string | null {
+    if (association == null) return null;
+    if (typeof association === "symbol") {
+      return association.description ?? association.toString().slice(7, -1);
+    }
+    return String(association);
+  }
+
   private _preloaderFor(
     reflection: AbstractReflection,
   ): typeof Association | typeof ThroughAssociation {
     if ((reflection as any).options?.through) {
       return ThroughAssociation;
+    }
+    if ((reflection as any).isThroughReflection?.()) {
+      return ThroughAssociation;
+    }
+    // HABTM stores through in _associations, not on reflection
+    const model = (reflection as any).activeRecord;
+    if (model?._associations) {
+      const assocDef = (model._associations as any[]).find(
+        (a: any) => a.name === (reflection as any).name,
+      );
+      if (assocDef?.options?.through) {
+        return ThroughAssociation;
+      }
     }
     return Association;
   }

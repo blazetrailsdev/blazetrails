@@ -152,7 +152,7 @@ export class AbstractReflection {
   joinScopes(table: Table, predicateBuilder?: any, klass?: typeof Base, record?: any): any[] {
     if (this.scope) {
       const rel = this.buildScope(table, predicateBuilder, klass);
-      const result = (this as any).scopeFor?.(rel, record) ?? this.scope.call(null, rel, record);
+      const result = (this as any).scopeFor?.(rel, record) ?? this.scope.call(rel, record);
       return [result || rel];
     }
     return [];

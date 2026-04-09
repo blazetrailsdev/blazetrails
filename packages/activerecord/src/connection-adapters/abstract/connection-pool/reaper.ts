@@ -47,6 +47,7 @@ export class Reaper {
 
   static registerPool(pool: ReapablePool, frequency: number): void {
     if (!frequency || frequency <= 0 || !Number.isFinite(frequency)) return;
+    if (pool.isDiscarded?.()) return;
 
     if (!Reaper._timers.has(frequency)) {
       Reaper._timers.set(frequency, Reaper._spawnTimer(frequency));

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { Queue, ConnectionLeasingQueue, BiasedConditionVariable, BiasableQueue } from "./queue.js";
 import type { DatabaseAdapter } from "../../../adapter.js";
 import { ConnectionTimeoutError } from "../../../errors.js";
@@ -44,9 +44,15 @@ describe("ConnectionPool::Queue", () => {
   });
 
   it("poll with timeout throws ConnectionTimeoutError", async () => {
-    const q = new Queue();
-    const promise = q.poll(0.01) as Promise<DatabaseAdapter>;
-    await expect(promise).rejects.toThrow(ConnectionTimeoutError);
+    vi.useFakeTimers();
+    try {
+      const q = new Queue();
+      const promise = q.poll(5) as Promise<DatabaseAdapter>;
+      vi.advanceTimersByTime(5000);
+      await expect(promise).rejects.toThrow(ConnectionTimeoutError);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("fairness: no-wait poll blocked when waiters exist", async () => {
@@ -138,17 +144,35 @@ describe("ConnectionPool::BiasedConditionVariable", () => {
     expect(cv.signal(fakeConn())).toBe(false);
   });
 
-  it("broadcastOnBiased resolves local waiters", async () => {
+  it("broadcastOnBiased resolves local waiters and returns remainder", async () => {
     const cv = new BiasedConditionVariable();
     const p1 = cv.wait(1);
     const p2 = cv.wait(1);
 
     const c1 = fakeConn(1);
     const c2 = fakeConn(2);
-    cv.broadcastOnBiased([c1, c2]);
+    const c3 = fakeConn(3);
+    const remaining = cv.broadcastOnBiased([c1, c2, c3]);
 
     expect(await p1).toBe(c1);
     expect(await p2).toBe(c2);
+    expect(remaining).toEqual([c3]);
+  });
+
+  it("broadcast does not double-deliver connections", async () => {
+    const other = new BiasedConditionVariable();
+    const biased = new BiasedConditionVariable(undefined, other);
+
+    const pBiased = biased.wait(1);
+    const pOther = other.wait(1);
+
+    const c1 = fakeConn(1);
+    const c2 = fakeConn(2);
+    biased.broadcast([c1, c2]);
+
+    // c1 goes to biased, c2 goes to other — no double-delivery
+    expect(await pBiased).toBe(c1);
+    expect(await pOther).toBe(c2);
   });
 
   it("signal delegates to otherCond when no local waiters", async () => {
@@ -170,9 +194,7 @@ describe("ConnectionPool::BiasedConditionVariable", () => {
 
     const c1 = fakeConn(1);
     const c2 = fakeConn(2);
-    // First signal goes to biased (local) waiter
     expect(biased.signal(c1)).toBe(true);
-    // Second signal falls through to other
     expect(biased.signal(c2)).toBe(true);
 
     expect(await pBiased).toBe(c1);
@@ -196,17 +218,39 @@ describe("ConnectionPool::BiasableQueue", () => {
     expect(BiasableQueue.BiasedConditionVariable).toBe(BiasedConditionVariable);
   });
 
-  it("withABiasFor restores cond and wakes biased sleepers", async () => {
+  it("withABiasFor restores cond and transfers orphaned waiters", async () => {
     const q = new ConnectionLeasingQueue();
     const c = fakeConn();
 
-    // withABiasFor swaps cond, runs fn, restores cond
     let innerCond: unknown;
+    const outerCond = (q as any)._cond;
+
     q.withABiasFor("ctx", () => {
       innerCond = (q as any)._cond;
+      // innerCond is the temporary biased cond
+      expect(innerCond).not.toBe(outerCond);
     });
-    // After withABiasFor, cond should be restored
-    expect((q as any)._cond).not.toBe(innerCond);
+
+    // After withABiasFor, cond should be restored to the original
+    expect((q as any)._cond).toBe(outerCond);
+  });
+
+  it("withABiasFor migrates pending waiters to restored cond", async () => {
+    const q = new Queue();
+    const c = fakeConn();
+
+    // Create a waiter inside the biased section
+    let innerPromise: Promise<DatabaseAdapter>;
+    // Use BiasableQueue.prototype directly since Queue doesn't have withABiasFor
+    BiasableQueue.prototype.withABiasFor.call(q, "ctx", () => {
+      innerPromise = q.poll(5) as Promise<DatabaseAdapter>;
+    });
+
+    // The waiter was on the biased cond, but should have been
+    // transferred to the restored cond. An add() should reach it.
+    q.add(c);
+    const result = await innerPromise!;
+    expect(result).toBe(c);
   });
 });
 

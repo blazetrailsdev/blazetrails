@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import { Reaper } from "./connection-adapters/abstract/connection-pool/reaper.js";
 import type { ReapablePool } from "./connection-adapters/abstract/connection-pool/reaper.js";
 
@@ -30,13 +30,19 @@ function clearReaperState() {
 }
 
 describe("ReaperTest", () => {
-  afterEach(clearReaperState);
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    clearReaperState();
+    vi.useRealTimers();
+  });
 
   it("nil time", () => {
     const pool = makePool();
     const reaper = new Reaper(pool, 0);
     reaper.run();
-    // With frequency 0, run() should be a no-op — no timers registered
     expect((Reaper as any)._pools.size).toBe(0);
     expect((Reaper as any)._timers.size).toBe(0);
   });
@@ -60,48 +66,46 @@ describe("ReaperTest", () => {
     expect(reaper.frequency).toBe(100);
   });
 
-  it("connection pool starts reaper", async () => {
+  it("connection pool starts reaper", () => {
     const pool = makePool();
-    const reaper = new Reaper(pool, 0.001);
+    const reaper = new Reaper(pool, 60);
     reaper.run();
     expect((Reaper as any)._pools.size).toBe(1);
-    // Wait for the timer to fire at least once
-    await new Promise((r) => setTimeout(r, 15));
-    expect(pool.reaped).toBeGreaterThanOrEqual(1);
-    expect(pool.flushed).toBeGreaterThanOrEqual(1);
+
+    vi.advanceTimersByTime(60_000);
+    expect(pool.reaped).toBe(1);
+    expect(pool.flushed).toBe(1);
+
+    vi.advanceTimersByTime(60_000);
+    expect(pool.reaped).toBe(2);
+    expect(pool.flushed).toBe(2);
   });
 
-  it("reaper works after pool discard", async () => {
+  it("reaper works after pool discard", () => {
     const pool1 = makePool();
     const pool2 = makePool();
-    const freq = 0.001;
 
-    // Register two pools at the same frequency
-    new Reaper(pool1, freq).run();
-    new Reaper(pool2, freq).run();
+    new Reaper(pool1, 60).run();
+    new Reaper(pool2, 60).run();
 
-    await new Promise((r) => setTimeout(r, 15));
-    expect(pool1.reaped).toBeGreaterThanOrEqual(1);
-    expect(pool2.reaped).toBeGreaterThanOrEqual(1);
+    vi.advanceTimersByTime(60_000);
+    expect(pool1.reaped).toBe(1);
+    expect(pool2.reaped).toBe(1);
 
-    // Discard pool1 — pool2 should keep getting reaped
-    const pool1Reaped = pool1.reaped;
     pool1._discarded = true;
 
-    await new Promise((r) => setTimeout(r, 15));
-    // pool1 should not have been reaped again
-    expect(pool1.reaped).toBe(pool1Reaped);
-    // pool2 should still be reaped
-    expect(pool2.reaped).toBeGreaterThan(1);
+    vi.advanceTimersByTime(60_000);
+    expect(pool1.reaped).toBe(1);
+    expect(pool2.reaped).toBe(2);
   });
 
-  it("reap flush on discarded pool", async () => {
+  it("reap flush on discarded pool", () => {
     const pool = makePool();
     pool._discarded = true;
-    const reaper = new Reaper(pool, 0.001);
+    const reaper = new Reaper(pool, 60);
     reaper.run();
-    await new Promise((r) => setTimeout(r, 15));
-    // Discarded pools are filtered out before reap/flush
+
+    vi.advanceTimersByTime(60_000);
     expect(pool.reaped).toBe(0);
     expect(pool.flushed).toBe(0);
   });
@@ -110,15 +114,14 @@ describe("ReaperTest", () => {
     // N/A: Node.js does not fork processes the way Ruby does
   });
 
-  it("reaper does not reap discarded connection pools", async () => {
+  it("reaper does not reap discarded connection pools", () => {
     const pool = makePool();
-    const reaper = new Reaper(pool, 0.001);
+    const reaper = new Reaper(pool, 60);
     reaper.run();
 
-    // Immediately mark as discarded before first tick
     pool._discarded = true;
-    await new Promise((r) => setTimeout(r, 15));
 
+    vi.advanceTimersByTime(60_000);
     expect(pool.reaped).toBe(0);
     expect(pool.flushed).toBe(0);
   });

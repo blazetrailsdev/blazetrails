@@ -50,12 +50,19 @@ export class Reaper {
       Reaper._timers.set(frequency, Reaper._spawnTimer(frequency));
     }
 
-    let refs = Reaper._pools.get(frequency);
-    if (!refs) {
-      refs = [];
-      Reaper._pools.set(frequency, refs);
+    const refs = Reaper._pools.get(frequency) ?? [];
+    const alive = refs.filter((ref) => {
+      const p = ref.deref();
+      return p != null && !p.isDiscarded?.();
+    });
+
+    if (alive.some((ref) => ref.deref() === pool)) {
+      Reaper._pools.set(frequency, alive);
+      return;
     }
-    refs.push(new WeakRef(pool));
+
+    alive.push(new WeakRef(pool));
+    Reaper._pools.set(frequency, alive);
   }
 
   private static _spawnTimer(frequency: number): ReturnType<typeof setInterval> {

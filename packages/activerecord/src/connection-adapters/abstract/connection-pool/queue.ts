@@ -79,17 +79,30 @@ export class BiasedConditionVariable {
   }
 
   broadcast(connections: DatabaseAdapter[]): void {
-    this.broadcastOnBiased(connections);
-    if (this._otherCond) {
-      this._otherCond.broadcast(connections);
+    const remaining = this.broadcastOnBiased(connections);
+    if (this._otherCond && remaining.length > 0) {
+      this._otherCond.broadcast(remaining);
     }
   }
 
-  broadcastOnBiased(connections: DatabaseAdapter[]): void {
-    for (const conn of connections) {
-      const waiter = this._waiters.shift();
-      if (!waiter) break;
-      waiter(conn);
+  broadcastOnBiased(connections: DatabaseAdapter[]): DatabaseAdapter[] {
+    let i = 0;
+    while (i < connections.length && this._waiters.length > 0) {
+      const waiter = this._waiters.shift()!;
+      waiter(connections[i]);
+      i++;
+    }
+    return connections.slice(i);
+  }
+
+  /**
+   * Transfer all pending waiters to another condition variable.
+   * Used by withABiasFor cleanup to migrate orphaned waiters back to
+   * the restored cond so they can be signaled by future add() calls.
+   */
+  transferWaitersTo(target: BiasedConditionVariable): void {
+    while (this._waiters.length > 0) {
+      target._waiters.push(this._waiters.shift()!);
     }
   }
 }
@@ -114,7 +127,7 @@ export class BiasableQueue {
       return fn();
     } finally {
       this._cond = previousCond;
-      newCond.broadcastOnBiased([]);
+      newCond.transferWaitersTo(previousCond);
     }
   }
 }

@@ -1,37 +1,112 @@
 /**
- * Connection pool reaper — removes stale connections.
+ * Connection pool reaper — periodically reaps and flushes idle connections.
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::ConnectionPool::Reaper
+ *
+ * Every `frequency` seconds, the reaper calls `reap()` and `flush()` on each
+ * registered pool. A reaper instantiated with a zero or null frequency will
+ * never reap the connection pool.
+ *
+ * Rails uses a class-level registry (`@pools`, `@threads`) so that one timer
+ * is shared across all pools with the same frequency. We mirror this with
+ * static maps + `setInterval`.
  */
 
+export interface ReapablePool {
+  reap?(): void;
+  flush?(): void;
+  isDiscarded?(): boolean;
+  removeStaleConnections?(): void;
+}
+
 export class Reaper {
-  private _interval: number;
-  private _timer: ReturnType<typeof setInterval> | null = null;
-  private _pool: { removeStaleConnections?(): void };
+  private _pool: ReapablePool;
+  private _frequency: number;
 
-  constructor(pool: { removeStaleConnections?(): void }, interval: number) {
+  constructor(pool: ReapablePool, frequency: number) {
     this._pool = pool;
-    this._interval = interval;
+    this._frequency = frequency;
   }
 
-  get interval(): number {
-    return this._interval;
+  get pool(): ReapablePool {
+    return this._pool;
   }
 
-  start(): void {
-    if (this._interval <= 0 || this._timer) return;
-    this._timer = setInterval(() => {
-      this._pool.removeStaleConnections?.();
-    }, this._interval * 1000);
-    if (this._timer) {
-      (this._timer as any).unref?.();
+  get frequency(): number {
+    return this._frequency;
+  }
+
+  run(): void {
+    if (!this._frequency || this._frequency <= 0) return;
+    Reaper.registerPool(this._pool, this._frequency);
+  }
+
+  // --- Class-level registry (mirrors Rails @mutex/@pools/@threads) ---
+
+  private static _pools = new Map<number, WeakRef<ReapablePool>[]>();
+  private static _timers = new Map<number, ReturnType<typeof setInterval>>();
+
+  static registerPool(pool: ReapablePool, frequency: number): void {
+    if (!Reaper._timers.has(frequency)) {
+      Reaper._timers.set(frequency, Reaper._spawnTimer(frequency));
     }
+
+    let refs = Reaper._pools.get(frequency);
+    if (!refs) {
+      refs = [];
+      Reaper._pools.set(frequency, refs);
+    }
+    refs.push(new WeakRef(pool));
   }
 
-  stop(): void {
-    if (this._timer) {
-      clearInterval(this._timer);
-      this._timer = null;
+  private static _spawnTimer(frequency: number): ReturnType<typeof setInterval> {
+    const timer = setInterval(() => {
+      const refs = Reaper._pools.get(frequency);
+      if (!refs) {
+        Reaper._stopTimer(frequency);
+        return;
+      }
+
+      // Filter out GC'd or discarded pools
+      const alive = refs.filter((ref) => {
+        const p = ref.deref();
+        return p != null && !p.isDiscarded?.();
+      });
+
+      if (alive.length === 0) {
+        Reaper._pools.delete(frequency);
+        Reaper._stopTimer(frequency);
+        return;
+      }
+
+      Reaper._pools.set(frequency, alive);
+
+      for (const ref of alive) {
+        const p = ref.deref();
+        if (p) {
+          try {
+            p.reap?.();
+            p.flush?.();
+          } catch {
+            // WeakRef may have been collected between check and call
+          }
+        }
+      }
+    }, frequency * 1000);
+
+    // Don't keep the process alive just for reaping
+    if (typeof timer === "object" && "unref" in timer) {
+      (timer as NodeJS.Timeout).unref();
+    }
+
+    return timer;
+  }
+
+  private static _stopTimer(frequency: number): void {
+    const timer = Reaper._timers.get(frequency);
+    if (timer) {
+      clearInterval(timer);
+      Reaper._timers.delete(frequency);
     }
   }
 }

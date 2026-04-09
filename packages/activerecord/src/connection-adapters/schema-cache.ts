@@ -27,6 +27,32 @@ async function withConnection<T>(
 // Helper: rehydrate a column from plain JSON or pass through if already Column
 // ---------------------------------------------------------------------------
 
+function serializeColumn(col: any): ColumnJSON {
+  if (typeof col.toJSON === "function") return col.toJSON();
+  // Fallback for adapter-specific Column classes (e.g. PostgreSQL::Column)
+  // that don't extend the base Column
+  return {
+    name: col.name,
+    default: col.default,
+    sqlTypeMetadata:
+      col.sqlTypeMetadata?.toJSON?.() ??
+      (col.sqlType != null
+        ? {
+            sqlType: col.sqlType,
+            type: col.type ?? col.sqlType,
+            limit: col.limit ?? null,
+            precision: col.precision ?? null,
+            scale: col.scale ?? null,
+          }
+        : null),
+    null: col.null ?? true,
+    defaultFunction: col.defaultFunction ?? null,
+    collation: col.collation ?? null,
+    comment: col.comment ?? null,
+    primaryKey: col.primaryKey ?? false,
+  };
+}
+
 function rehydrateColumn(data: unknown): Column {
   if (data instanceof Column) return data;
   return Column.fromJSON(data as ColumnJSON);
@@ -45,11 +71,11 @@ export class SchemaCache {
   private _version: string | number | null = null;
 
   static _loadFrom(filename: string): SchemaCache | null {
-    const fs = getFs();
-    if (!fs.existsSync(filename)) return null;
-    const data = SchemaCache.read(filename, (content) => content);
-    if (typeof data !== "string") return null;
     try {
+      const fs = getFs();
+      if (!fs.existsSync(filename)) return null;
+      const data = SchemaCache.read(filename, (content) => content);
+      if (typeof data !== "string") return null;
       const parsed = JSON.parse(data);
       const cache = new SchemaCache();
       cache.initWith(parsed);
@@ -78,12 +104,11 @@ export class SchemaCache {
 
   encodeWith(coder: Record<string, unknown>): void {
     const byKey = (a: [string, unknown], b: [string, unknown]) => a[0].localeCompare(b[0]);
-    // Serialize Column instances to plain JSON for roundtrip
-    const columnsJSON: Record<string, ColumnJSON[]> = {};
-    for (const [table, cols] of [...this._columns].sort(byKey)) {
-      columnsJSON[table as string] = (cols as Column[]).map((c) => c.toJSON());
-    }
-    coder["columns"] = columnsJSON;
+    coder["columns"] = Object.fromEntries(
+      [...this._columns]
+        .sort(byKey)
+        .map(([table, cols]) => [table, cols.map((c) => serializeColumn(c))]),
+    );
     coder["primary_keys"] = Object.fromEntries([...this._primaryKeys].sort(byKey));
     coder["data_sources"] = Object.fromEntries([...this._dataSourceExists].sort(byKey));
     coder["indexes"] = Object.fromEntries([...this._indexes].sort(byKey));
@@ -321,11 +346,9 @@ export class SchemaCache {
   }
 
   marshalDump(): unknown[] {
-    // Serialize columns via toJSON for proper roundtrip
-    const columnsData: Record<string, ColumnJSON[]> = {};
-    for (const [table, cols] of this._columns) {
-      columnsData[table] = cols.map((c) => c.toJSON());
-    }
+    const columnsData = Object.fromEntries(
+      [...this._columns].map(([table, cols]) => [table, cols.map((c) => serializeColumn(c))]),
+    );
     return [
       this._version,
       columnsData,

@@ -92,12 +92,8 @@ export class Reaper {
       for (const ref of alive) {
         const p = ref.deref();
         if (p) {
-          try {
-            p.reap?.();
-            p.flush?.();
-          } catch {
-            // Pool may have been collected between filter and use
-          }
+          p.reap?.();
+          p.flush?.();
         }
       }
     }, frequency * 1000);

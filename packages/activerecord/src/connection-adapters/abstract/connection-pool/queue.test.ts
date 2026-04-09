@@ -220,7 +220,6 @@ describe("ConnectionPool::BiasableQueue", () => {
 
   it("withABiasFor restores cond and transfers orphaned waiters", async () => {
     const q = new ConnectionLeasingQueue();
-    const c = fakeConn();
 
     let innerCond: unknown;
     const outerCond = (q as any)._cond;

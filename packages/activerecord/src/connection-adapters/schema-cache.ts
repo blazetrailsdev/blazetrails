@@ -9,16 +9,27 @@ import { getFs, getPath } from "@blazetrails/activesupport";
 import type { Column } from "./column.js";
 
 // ---------------------------------------------------------------------------
+// Helper: run callback inside pool.withConnection if available
+// ---------------------------------------------------------------------------
+
+function withConnection<T>(pool: unknown, callback: (connection: any) => T): T {
+  if (pool && typeof (pool as any).withConnection === "function") {
+    return (pool as any).withConnection(callback);
+  }
+  return callback(pool);
+}
+
+// ---------------------------------------------------------------------------
 // SchemaCache
 // ---------------------------------------------------------------------------
 
 export class SchemaCache {
   private _columns = new Map<string, Column[]>();
-  private _columnsHash = new Map<string, Map<string, Column>>();
+  private _columnsHash = new Map<string, Record<string, Column>>();
   private _primaryKeys = new Map<string, string | null>();
   private _dataSourceExists = new Map<string, boolean>();
   private _indexes = new Map<string, unknown[]>();
-  private _version: string | null = null;
+  private _version: string | number | null = null;
 
   static _loadFrom(filename: string): SchemaCache | null {
     const fs = getFs();
@@ -90,14 +101,14 @@ export class SchemaCache {
       this._indexes = new Map(Object.entries(coder["indexes"] as Record<string, unknown[]>));
     }
 
-    this._version = (coder["version"] as string) ?? null;
+    this._version = (coder["version"] as string | number) ?? null;
 
-    // Derive columnsHash from columns
+    // Derive columnsHash from columns (Rails: derive_columns_hash_and_deduplicate_values)
     this._columnsHash.clear();
     for (const [table, cols] of this._columns) {
-      const hash = new Map<string, Column>();
+      const hash: Record<string, Column> = {};
       for (const col of cols) {
-        hash.set(col.name, col);
+        hash[col.name] = col;
       }
       this._columnsHash.set(table, hash);
     }
@@ -107,124 +118,128 @@ export class SchemaCache {
     return this._columns.has(tableName);
   }
 
-  primaryKeys(pool: unknown, tableName?: string): string | null | undefined {
-    if (tableName === undefined) {
-      tableName = pool as string;
-      pool = null;
-    }
+  primaryKeys(pool: unknown, tableName: string): string | null | undefined {
     if (this._primaryKeys.has(tableName)) {
       return this._primaryKeys.get(tableName);
     }
-    const connection = resolveConnection(pool);
-    if (connection && this.dataSourceExists(pool, tableName)) {
-      const pk = connection.primaryKey?.(tableName) ?? null;
-      this._primaryKeys.set(tableName, pk);
-      return pk;
-    }
-    return undefined;
+
+    return withConnection(pool, (connection) => {
+      if (this.dataSourceExists(pool, tableName)) {
+        const pk =
+          typeof connection.primaryKey === "function"
+            ? (connection.primaryKey(tableName) ?? null)
+            : null;
+        this._primaryKeys.set(tableName, pk);
+        return pk;
+      }
+      return undefined;
+    });
   }
 
-  dataSourceExists(pool: unknown, name?: string): boolean | undefined {
-    if (name === undefined) {
-      name = pool as string;
-      pool = null;
+  dataSourceExists(pool: unknown, name: string): boolean | undefined {
+    // Rails: eager-load all data sources on first cache miss
+    if (this._dataSourceExists.size === 0) {
+      const tables = this.tablesToCache(pool);
+      for (const source of tables) {
+        this._dataSourceExists.set(source, true);
+      }
     }
+
     if (this._dataSourceExists.has(name)) {
       return this._dataSourceExists.get(name);
     }
-    const connection = resolveConnection(pool);
-    if (connection && typeof connection.dataSourceExists === "function") {
-      const exists = connection.dataSourceExists(name);
-      this._dataSourceExists.set(name, exists);
-      return exists;
-    }
-    return undefined;
+
+    return withConnection(pool, (connection) => {
+      if (typeof connection.dataSourceExists === "function") {
+        const exists = connection.dataSourceExists(name);
+        this._dataSourceExists.set(name, exists);
+        return exists;
+      }
+      return undefined;
+    });
   }
 
-  add(pool: unknown, tableName?: string): void {
-    if (tableName === undefined) {
-      tableName = pool as string;
-      pool = null;
-    }
-    if (this.dataSourceExists(pool, tableName)) {
-      this.primaryKeys(pool, tableName);
-      this.columns(pool, tableName);
-      this.columnsHash(pool, tableName);
-      this.indexes(pool, tableName);
-    }
+  add(pool: unknown, tableName: string): void {
+    withConnection(pool, () => {
+      if (this.dataSourceExists(pool, tableName)) {
+        this.primaryKeys(pool, tableName);
+        this.columns(pool, tableName);
+        this.columnsHash(pool, tableName);
+        this.indexes(pool, tableName);
+      }
+    });
   }
 
-  columns(pool: unknown, tableName?: string): Column[] | undefined {
-    if (tableName === undefined) {
-      tableName = pool as string;
-      pool = null;
-    }
+  columns(pool: unknown, tableName: string): Column[] | undefined {
     if (this._columns.has(tableName)) {
       return this._columns.get(tableName);
     }
-    const connection = resolveConnection(pool);
-    if (connection && typeof connection.columns === "function") {
-      const cols = connection.columns(tableName);
-      this.setColumns(tableName, cols);
-      return cols;
-    }
-    return undefined;
+
+    return withConnection(pool, (connection) => {
+      if (typeof connection.columns === "function") {
+        const cols = connection.columns(tableName);
+        this.setColumns(tableName, cols);
+        return cols;
+      }
+      return undefined;
+    });
   }
 
-  columnsHash(pool: unknown, tableName?: string): Map<string, Column> | undefined {
-    if (tableName === undefined) {
-      tableName = pool as string;
-      pool = null;
-    }
+  columnsHash(pool: unknown, tableName: string): Record<string, Column> | undefined {
     if (this._columnsHash.has(tableName)) {
       return this._columnsHash.get(tableName);
     }
+
+    // Rails: @columns_hash[table_name] = columns(pool, table_name).index_by(&:name).freeze
     const cols = this.columns(pool, tableName);
     if (cols) {
-      return this._columnsHash.get(tableName);
+      const hash: Record<string, Column> = {};
+      for (const col of cols) {
+        hash[col.name] = col;
+      }
+      this._columnsHash.set(tableName, hash);
+      return hash;
     }
     return undefined;
   }
 
-  isColumnsHashCached(_pool: unknown, tableName?: string): boolean {
-    if (tableName === undefined) {
-      tableName = _pool as string;
-    }
+  isColumnsHashCached(_pool: unknown, tableName: string): boolean {
     return this._columnsHash.has(tableName);
   }
 
-  indexes(pool: unknown, tableName?: string): unknown[] {
-    if (tableName === undefined) {
-      tableName = pool as string;
-      pool = null;
-    }
+  indexes(pool: unknown, tableName: string): unknown[] {
     if (this._indexes.has(tableName)) {
       return this._indexes.get(tableName)!;
     }
-    const connection = resolveConnection(pool);
-    if (connection && typeof connection.indexes === "function") {
-      if (this.dataSourceExists(pool, tableName)) {
-        const idx = connection.indexes(tableName);
-        this._indexes.set(tableName, idx);
-        return idx;
+
+    return withConnection(pool, (connection) => {
+      if (typeof connection.indexes === "function") {
+        if (this.dataSourceExists(pool, tableName)) {
+          const idx = connection.indexes(tableName);
+          this._indexes.set(tableName, idx);
+          return idx;
+        }
       }
-    }
-    return [];
+      return [];
+    });
   }
 
-  version(pool?: unknown): string | null {
+  version(pool: unknown): string | number | null {
     if (this._version !== null) return this._version;
-    const connection = resolveConnection(pool);
-    if (connection && typeof connection.schemaVersion === "function") {
-      this._version = connection.schemaVersion();
-    }
+
+    return withConnection(pool, (connection) => {
+      if (typeof connection.schemaVersion === "function") {
+        this._version = connection.schemaVersion();
+      }
+      return this._version;
+    });
+  }
+
+  get schemaVersion(): string | number | null {
     return this._version;
   }
 
-  get schemaVersion(): string | null {
-    return this._version;
-  }
-
+  // Rails: [@columns, @columns_hash, @primary_keys, @data_sources].sum(&:size)
   get size(): number {
     return (
       this._columns.size +
@@ -234,7 +249,8 @@ export class SchemaCache {
     );
   }
 
-  clearDataSourceCacheBang(_pool: unknown, name: string): void {
+  // Rails: clear_data_source_cache!(_connection, name)
+  clearDataSourceCacheBang(_connection: unknown, name: string): void {
     this._columns.delete(name);
     this._columnsHash.delete(name);
     this._primaryKeys.delete(name);
@@ -244,9 +260,9 @@ export class SchemaCache {
 
   setColumns(tableName: string, cols: Column[]): void {
     this._columns.set(tableName, cols);
-    const hash = new Map<string, Column>();
+    const hash: Record<string, Column> = {};
     for (const col of cols) {
-      hash.set(col.name, col);
+      hash[col.name] = col;
     }
     this._columnsHash.set(tableName, hash);
     this._dataSourceExists.set(tableName, true);
@@ -261,14 +277,13 @@ export class SchemaCache {
   }
 
   addAll(pool: unknown): void {
-    const connection = resolveConnection(pool);
-    if (connection && typeof connection.dataSources === "function") {
-      const tables: string[] = connection.dataSources();
+    withConnection(pool, () => {
+      const tables = this.tablesToCache(pool);
       for (const table of tables) {
         this.add(pool, table);
       }
-    }
-    this.version(pool);
+      this.version(pool);
+    });
   }
 
   dumpTo(filename: string): void {
@@ -293,7 +308,7 @@ export class SchemaCache {
 
   marshalLoad(array: unknown[]): void {
     const [version, columns, _columnsHash, primaryKeys, dataSources, indexes] = array;
-    this._version = (version as string) ?? null;
+    this._version = (version as string | number) ?? null;
 
     this._columns = new Map(Object.entries((columns as Record<string, Column[]>) ?? {}));
     this._primaryKeys = new Map(
@@ -304,12 +319,12 @@ export class SchemaCache {
     );
     this._indexes = new Map(Object.entries((indexes as Record<string, unknown[]>) ?? {}));
 
-    // Derive columnsHash
+    // Derive columnsHash (Rails: derive_columns_hash_and_deduplicate_values)
     this._columnsHash.clear();
     for (const [table, cols] of this._columns) {
-      const hash = new Map<string, Column>();
+      const hash: Record<string, Column> = {};
       for (const col of cols) {
-        hash.set(col.name, col);
+        hash[col.name] = col;
       }
       this._columnsHash.set(table, hash);
     }
@@ -323,40 +338,16 @@ export class SchemaCache {
     this._indexes.clear();
     this._version = null;
   }
-}
 
-// ---------------------------------------------------------------------------
-// Helper: extract connection from pool
-// ---------------------------------------------------------------------------
-
-/**
- * Resolve a connection from a pool-like object.
- *
- * If pool has withConnection, it's a real pool — but we can't safely extract
- * the connection outside the callback scope. For synchronous cache-miss paths,
- * we check if pool itself is a connection (has columns/primaryKey methods).
- *
- * For proper pool support, callers should use pool.withConnection() directly.
- */
-function resolveConnection(pool: unknown): any {
-  if (!pool) return null;
-  // Pool might itself be a connection (e.g., FakePool-wrapped or direct adapter)
-  if (typeof (pool as any).columns === "function") {
-    return pool;
+  // Rails: tables_to_cache(pool) — gets data_sources from connection
+  private tablesToCache(pool: unknown): string[] {
+    return withConnection(pool, (connection) => {
+      if (typeof connection.dataSources === "function") {
+        return connection.dataSources() as string[];
+      }
+      return [];
+    });
   }
-  // Try to get connection from pool synchronously
-  if (typeof (pool as any).withConnection === "function") {
-    let conn: any = null;
-    try {
-      (pool as any).withConnection((c: any) => {
-        conn = c;
-      });
-    } catch {
-      // withConnection may be async-only
-    }
-    return conn;
-  }
-  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -365,12 +356,9 @@ function resolveConnection(pool: unknown): any {
 
 /**
  * Mirrors: ActiveRecord::ConnectionAdapters::SchemaReflection
- *
- * Wraps a SchemaCache. Introspection methods that consult the cache
- * and fall back to the database will be added as they are needed.
  */
 export class SchemaReflection {
-  static useSchemaCache = true;
+  static useSchemaCacheDump = true;
   static checkSchemaCacheDumpVersion = true;
 
   private _cache: SchemaCache | null;
@@ -410,7 +398,7 @@ export class SchemaReflection {
     return this.cache(pool).columns(pool, tableName);
   }
 
-  columnsHash(pool: unknown, tableName: string): Map<string, Column> | undefined {
+  columnsHash(pool: unknown, tableName: string): Record<string, Column> | undefined {
     return this.cache(pool).columnsHash(pool, tableName);
   }
 
@@ -422,7 +410,7 @@ export class SchemaReflection {
     return this.cache(pool).indexes(pool, tableName);
   }
 
-  version(pool: unknown): string | null {
+  version(pool: unknown): string | number | null {
     return this.cache(pool).version(pool);
   }
 
@@ -460,8 +448,6 @@ export class SchemaReflection {
 
 /**
  * Mirrors: ActiveRecord::ConnectionAdapters::BoundSchemaReflection
- *
- * Schema reflection bound to a specific connection pool.
  */
 export class BoundSchemaReflection {
   private _schemaReflection: SchemaReflection;
@@ -512,7 +498,7 @@ export class BoundSchemaReflection {
     return this._schemaReflection.columns(this._pool, tableName);
   }
 
-  columnsHash(tableName: string): Map<string, Column> | undefined {
+  columnsHash(tableName: string): Record<string, Column> | undefined {
     return this._schemaReflection.columnsHash(this._pool, tableName);
   }
 
@@ -524,7 +510,7 @@ export class BoundSchemaReflection {
     return this._schemaReflection.indexes(this._pool, tableName);
   }
 
-  version(): string | null {
+  version(): string | number | null {
     return this._schemaReflection.version(this._pool);
   }
 

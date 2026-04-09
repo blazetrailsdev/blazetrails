@@ -40,9 +40,11 @@ export class Connection {
 
   private resolveColumn(attrName: string): unknown | undefined {
     // Primary path (Rails): schema cache keyed by table name
-    const schemaCache = this._klass?.adapter?.schemaCache;
-    if (schemaCache?.dataSourceExists(this._tableName)) {
-      const column = schemaCache.columnsHash(this._tableName)?.get(attrName);
+    const adapter = this._klass?.adapter;
+    const schemaCache = adapter?.schemaCache;
+    if (schemaCache?.dataSourceExists(adapter, this._tableName)) {
+      const hash = schemaCache.columnsHash(adapter, this._tableName);
+      const column = hash?.[attrName];
       if (column) return column;
     }
 

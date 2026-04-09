@@ -166,7 +166,7 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
       const mixinMethods: MethodInfo[] = [];
 
       for (const prop of instanceType.getProperties()) {
-        if (prop.name.startsWith("_") || prop.name.startsWith("#")) continue;
+        if (prop.name.startsWith("#")) continue;
         if (prop.flags & ts.SymbolFlags.Prototype) continue;
         const decl = prop.valueDeclaration ?? prop.declarations?.[0];
         if (!decl) continue;
@@ -214,7 +214,7 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
     if (moduleSymbol) {
       const exports = checker.getExportsOfModule(moduleSymbol);
       for (const sym of exports) {
-        if (sym.name.startsWith("_")) continue;
+        // Keep _-prefixed exports — Rails has public methods like _load_from, _reflect_on_association
         if (fileFunctions.some((f) => f.name === sym.name)) continue;
         const resolved = sym.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym) : sym;
         const decl = resolved.valueDeclaration ?? resolved.declarations?.[0];
@@ -446,7 +446,7 @@ function extractInterface(
             const resolved = checker.getTypeAtLocation(type);
             for (const prop of resolved.getProperties()) {
               const propName = prop.getName();
-              if (propName.startsWith("_")) continue;
+              // Keep _-prefixed properties — Rails has public methods like _reflect_on_association
               const propType = checker.getTypeOfSymbolAtLocation(prop, type);
               const signatures = propType.getCallSignatures();
               if (signatures.length > 0) {
@@ -469,7 +469,7 @@ function extractInterface(
 
   for (const member of node.members) {
     const memberName = member.name && ts.isIdentifier(member.name) ? member.name.text : undefined;
-    if (!memberName || memberName.startsWith("_")) continue;
+    if (!memberName) continue;
 
     const line = member.getSourceFile().getLineAndCharacterOfPosition(member.getStart()).line + 1;
 

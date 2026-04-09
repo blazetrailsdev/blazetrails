@@ -151,7 +151,6 @@ export class Branch {
 
   groupedRecords(): Map<AbstractReflection, Base[]> {
     const h = new Map<AbstractReflection, Base[]>();
-    const polymorphicParent = !this.isRoot() && this.parent!.isPolymorphic();
 
     for (const record of this.sourceRecords) {
       const reflection = _reflectOnAssociation(

@@ -84,9 +84,8 @@ export class TokenDefinition {
     token: string,
     finder: (id: unknown) => Promise<Base | null>,
   ): Promise<Base | null> {
-    const payload = this.messageVerifier().verified(token, {
-      purpose: this.fullPurpose(),
-    }) as unknown[] | null;
+    const verified = this.messageVerifier().verified(token, { purpose: this.fullPurpose() });
+    const payload = Array.isArray(verified) && verified.length > 0 ? verified : null;
     const record = payload ? await finder(payload[0]) : null;
     return record && JSON.stringify(this.payloadFor(record)) === JSON.stringify(payload)
       ? record
@@ -192,7 +191,12 @@ export async function findByTokenFor(
   if (!def) return null;
   const pk = modelClass.primaryKey;
   return def.resolveToken(token, async (id) => {
-    return modelClass.findBy({ [typeof pk === "string" ? pk : pk[0]]: id });
+    if (typeof pk === "string") {
+      return modelClass.findBy({ [pk]: id });
+    }
+    if (!Array.isArray(id) || id.length !== pk.length) return null;
+    const conditions = Object.fromEntries(pk.map((key, i) => [key, id[i]]));
+    return modelClass.findBy(conditions);
   });
 }
 

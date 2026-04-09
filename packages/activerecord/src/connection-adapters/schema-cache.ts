@@ -478,9 +478,11 @@ export class SchemaReflection {
     return this._cache?.size ?? 0;
   }
 
-  clearDataSourceCacheBang(pool: unknown, name: string): void {
-    this.ensureSyncCache();
-    this._cache?.clearDataSourceCacheBang(pool, name);
+  // Rails: return if @cache.nil? && !possible_cache_available?
+  //        cache(pool).clear_data_source_cache!(pool, name)
+  async clearDataSourceCacheBang(pool: unknown, name: string): Promise<void> {
+    if (!this._cache && !this.possibleCacheAvailable()) return;
+    (await this.cache(pool)).clearDataSourceCacheBang(pool, name);
   }
 
   isCached(tableName: string): boolean {
@@ -648,8 +650,8 @@ export class BoundSchemaReflection {
     return this._schemaReflection.size(this._pool);
   }
 
-  clearDataSourceCacheBang(name: string): void {
-    this._schemaReflection.clearDataSourceCacheBang(this._pool, name);
+  async clearDataSourceCacheBang(name: string): Promise<void> {
+    return this._schemaReflection.clearDataSourceCacheBang(this._pool, name);
   }
 
   async dumpTo(filename: string): Promise<void> {

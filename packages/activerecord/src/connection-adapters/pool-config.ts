@@ -13,20 +13,22 @@ export class PoolConfig {
   readonly role: string;
   readonly shard: string;
   readonly dbConfig: DatabaseConfig;
+  readonly adapterFactory?: () => DatabaseAdapter;
   private _schemaCache: SchemaCache | null = null;
   private _pool: ConnectionPool | null = null;
-  adapterFactory?: () => DatabaseAdapter;
 
   constructor(
     dbConfig: DatabaseConfig,
     options: {
       role?: string;
       shard?: string;
+      adapterFactory?: () => DatabaseAdapter;
     } = {},
   ) {
     this.dbConfig = dbConfig;
     this.role = options.role ?? "writing";
     this.shard = options.shard ?? "default";
+    this.adapterFactory = options.adapterFactory;
   }
 
   get pool(): ConnectionPool {
@@ -38,6 +40,16 @@ export class PoolConfig {
       });
     }
     return this._pool;
+  }
+
+  get poolInitialized(): boolean {
+    return this._pool !== null;
+  }
+
+  disconnect(): void {
+    if (this._pool) {
+      this._pool.disconnect();
+    }
   }
 
   get schemaCache(): SchemaCache | null {

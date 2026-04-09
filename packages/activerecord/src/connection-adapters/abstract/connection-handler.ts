@@ -65,8 +65,11 @@ export class ConnectionHandler {
       this._disconnectPoolFromPoolManager(poolManager, role, shard);
     }
 
-    const poolConfig = new PoolConfig(dbConfig, { role, shard });
-    poolConfig.adapterFactory = options.adapterFactory;
+    const poolConfig = new PoolConfig(dbConfig, {
+      role,
+      shard,
+      adapterFactory: options.adapterFactory,
+    });
     poolManager.setPoolConfig(role, shard, poolConfig);
 
     Notifications.instrument("!connection.active_record", {
@@ -91,7 +94,9 @@ export class ConnectionHandler {
     const pools: ConnectionPool[] = [];
     for (const manager of this._connectionNameToPoolManager.values()) {
       for (const poolConfig of manager.poolConfigs()) {
-        pools.push(poolConfig.pool);
+        if (poolConfig.poolInitialized) {
+          pools.push(poolConfig.pool);
+        }
       }
     }
     return pools;
@@ -100,7 +105,7 @@ export class ConnectionHandler {
   get activeConnections(): boolean {
     for (const manager of this._connectionNameToPoolManager.values()) {
       for (const poolConfig of manager.poolConfigs()) {
-        if (poolConfig.pool.activeConnection) return true;
+        if (poolConfig.poolInitialized && poolConfig.pool.activeConnection) return true;
       }
     }
     return false;
@@ -112,13 +117,16 @@ export class ConnectionHandler {
     const poolManager = this._getPoolManager(owner);
     if (poolManager) {
       this._disconnectPoolFromPoolManager(poolManager, role, shard);
+      if (poolManager.roleNames.length === 0) {
+        this._connectionNameToPoolManager.delete(owner);
+      }
     }
   }
 
   clearAllConnections(): void {
     for (const manager of this._connectionNameToPoolManager.values()) {
       for (const poolConfig of manager.poolConfigs()) {
-        poolConfig.pool.disconnect();
+        poolConfig.disconnect();
       }
     }
     this._connectionNameToPoolManager.clear();
@@ -144,7 +152,7 @@ export class ConnectionHandler {
   ): void {
     const poolConfig = poolManager.removePoolConfig(role, shard);
     if (poolConfig) {
-      poolConfig.pool.disconnect();
+      poolConfig.disconnect();
     }
   }
 }

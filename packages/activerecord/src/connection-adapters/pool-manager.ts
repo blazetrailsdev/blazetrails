@@ -4,6 +4,7 @@
  * Mirrors: ActiveRecord::ConnectionAdapters::PoolManager
  */
 
+import { ArgumentError } from "@blazetrails/activemodel";
 import type { PoolConfig } from "./pool-config.js";
 
 export class PoolManager {
@@ -105,12 +106,5 @@ export class PoolManager {
       this._roleToShardMapping.set(role, shardMap);
     }
     shardMap.set(shard, poolConfig);
-  }
-}
-
-class ArgumentError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ArgumentError";
   }
 }

@@ -50,6 +50,13 @@ export class SchemaStatements {
     return quoteIdentifier(name, this.adapterName);
   }
 
+  protected _qt(tableName: string): string {
+    return tableName
+      .split(".")
+      .map((part) => this._qi(part))
+      .join(".");
+  }
+
   async createTable(
     name: string,
     optionsOrFn?:
@@ -857,10 +864,16 @@ export class SchemaStatements {
     } = {},
     fn?: (td: TableDefinition) => void,
   ): TableDefinition {
+    const hasCustomPk = options.primaryKey && options.id !== false;
     const td = new TableDefinition(tableName, {
-      id: options.id,
+      id: hasCustomPk ? false : options.id,
       adapterName: this.adapterName,
     });
+    if (hasCustomPk) {
+      const pkName = typeof options.primaryKey === "string" ? options.primaryKey : "id";
+      const pkType = (typeof options.id === "string" ? options.id : "primary_key") as ColumnType;
+      td.columns.unshift(new ColumnDefinition(pkName, pkType, { primaryKey: true }));
+    }
     if (fn) fn(td);
     return td;
   }
@@ -1006,7 +1019,15 @@ export class SchemaStatements {
     if (!result.name) {
       const unqualifiedFrom = (fromTable.split(".").at(-1) ?? fromTable).replace(/\./g, "_");
       const cols = Array.isArray(result.column) ? result.column : [result.column];
-      result.name = `fk_rails_${unqualifiedFrom}_${(cols as string[]).join("_")}`;
+      const fullName = `fk_rails_${unqualifiedFrom}_${(cols as string[]).join("_")}`;
+      if (fullName.length > 62) {
+        // Truncate and append a simple hash to stay within identifier limits
+        const hash = Array.from(fullName).reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0);
+        const hex = Math.abs(hash).toString(16).slice(0, 10);
+        result.name = `fk_rails_${hex}`;
+      } else {
+        result.name = fullName;
+      }
     }
 
     return result;
@@ -1044,7 +1065,7 @@ export class SchemaStatements {
   }
 
   async removeConstraint(tableName: string, constraintName: string): Promise<void> {
-    const sql = `ALTER TABLE ${this._qi(tableName)} DROP CONSTRAINT ${this._qi(constraintName)}`;
+    const sql = `ALTER TABLE ${this._qt(tableName)} DROP CONSTRAINT ${this._qi(constraintName)}`;
     await this.adapter.executeMutation(sql);
   }
 
@@ -1054,7 +1075,7 @@ export class SchemaStatements {
     const versions: string[] =
       typeof smTable.versions === "function" ? await smTable.versions() : (smTable.versions ?? []);
     if (versions.length === 0) return null;
-    const tableName = this._qi(smTable.tableName ?? "schema_migrations");
+    const tableName = this._qt(smTable.tableName ?? "schema_migrations");
     return versions
       .map((v: string) => {
         const escaped = String(v).replace(/'/g, "''");
@@ -1068,11 +1089,15 @@ export class SchemaStatements {
   }
 
   async assumeMigratedUptoVersion(version: number | string): Promise<void> {
-    const ver = typeof version === "number" ? version : parseInt(version, 10);
-    if (Number.isNaN(ver)) {
+    const verStr = String(version);
+    if (typeof version === "string" && !/^\d+$/.test(verStr)) {
       throw new Error(`Invalid migration version: ${version}`);
     }
-    const smTable = this._qi("schema_migrations");
+    const ver = typeof version === "number" ? version : parseInt(version, 10);
+
+    const smMigration = (this as any).pool?.schemaMigration;
+    const smTableName = smMigration?.tableName ?? "schema_migrations";
+    const smTable = this._qt(smTableName);
 
     // Query existing versions to avoid duplicates (cross-adapter compatible)
     const existing = new Set<string>();
@@ -1082,9 +1107,11 @@ export class SchemaStatements {
     }
 
     // Insert the target version if not already recorded
-    const verStr = String(ver).replace(/'/g, "''");
+    const escapedVer = String(ver).replace(/'/g, "''");
     if (!existing.has(String(ver))) {
-      await this.adapter.executeMutation(`INSERT INTO ${smTable} (version) VALUES ('${verStr}')`);
+      await this.adapter.executeMutation(
+        `INSERT INTO ${smTable} (version) VALUES ('${escapedVer}')`,
+      );
     }
 
     // If pool has migration context, also insert all migration versions below this one
@@ -1105,17 +1132,12 @@ export class SchemaStatements {
     return columns;
   }
 
-  async distinctRelationForPrimaryKey(relation: {
+  distinctRelationForPrimaryKey(relation: {
     primaryKey?: string | string[];
-    table?: { [key: string]: unknown };
     orderValues?: unknown[];
     reselect?: (...cols: unknown[]) => unknown;
     distinctBang?: () => unknown;
-    noneBang?: () => void;
-    where?: (conditions: Record<string, unknown>) => unknown;
-    limitValue?: number | null;
-    offsetValue?: number | null;
-  }): Promise<unknown> {
+  }): unknown {
     const pk = relation.primaryKey;
     if (!pk) return relation;
 
@@ -1226,7 +1248,7 @@ export class SchemaStatements {
       } else {
         if (sqlFragments.length > 0) {
           await this.adapter.executeMutation(
-            `ALTER TABLE ${this._qi(tableName)} ${sqlFragments.join(", ")}`,
+            `ALTER TABLE ${this._qt(tableName)} ${sqlFragments.join(", ")}`,
           );
           sqlFragments.length = 0;
         }
@@ -1236,13 +1258,15 @@ export class SchemaStatements {
         const method = (this as any)[command];
         if (typeof method === "function") {
           await method.call(this, ...args);
+        } else {
+          throw new Error(`Unknown bulk change command: ${command}`);
         }
       }
     }
 
     if (sqlFragments.length > 0) {
       await this.adapter.executeMutation(
-        `ALTER TABLE ${this._qi(tableName)} ${sqlFragments.join(", ")}`,
+        `ALTER TABLE ${this._qt(tableName)} ${sqlFragments.join(", ")}`,
       );
     }
     for (const proc of nonCombinable) await proc();

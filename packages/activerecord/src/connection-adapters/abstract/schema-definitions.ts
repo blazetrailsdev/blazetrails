@@ -460,13 +460,14 @@ export class TableDefinition {
     toTable: string,
     options: Partial<AddForeignKeyOptions> = {},
   ): ForeignKeyDefinition {
+    const pk = options.primaryKey ?? "id";
+    const col = options.column ?? `${singularize(toTable.split(".").at(-1) ?? toTable)}_${pk}`;
     return new ForeignKeyDefinition(
       this.tableName,
       toTable,
-      options.column ?? `${singularize(toTable.split(".").at(-1) ?? toTable)}_id`,
-      options.primaryKey ?? "id",
-      options.name ??
-        `fk_${this.tableName}_${options.column ?? `${singularize(toTable.split(".").at(-1) ?? toTable)}_id`}`,
+      col,
+      pk,
+      options.name ?? `fk_${this.tableName}_${col}`,
       options.onDelete,
       options.onUpdate,
     );

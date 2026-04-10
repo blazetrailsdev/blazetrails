@@ -181,7 +181,7 @@ export class SchemaStatements {
     const createDef = new CreateIndexDefinition(
       indexDef,
       options.ifNotExists ?? false,
-      options.algorithm,
+      this.indexAlgorithm(options.algorithm),
     );
     await this.adapter.executeMutation(this.schemaCreation.accept(createDef));
   }
@@ -362,8 +362,8 @@ export class SchemaStatements {
     toTable: string,
     options: AddForeignKeyOptions = {},
   ): Promise<void> {
-    const column = options.column ?? this.foreignKeyColumnFor(toTable, "id");
     const pk = options.primaryKey ?? "id";
+    const column = options.column ?? this.foreignKeyColumnFor(toTable, pk);
     const name = options.name ?? `fk_${fromTable}_${column}`;
     const fkDef = new ForeignKeyDefinition(
       fromTable,

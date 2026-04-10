@@ -126,11 +126,14 @@ export class QueryCacheAdapter implements DatabaseAdapter {
    */
   async withCache<T>(fn: () => Promise<T>): Promise<T> {
     const wasEnabled = this.cache.enabled;
+    const wasDirties = this.cache.dirties;
     this.cache.enabled = true;
+    this.cache.dirties = true;
     try {
       return await fn();
     } finally {
       this.cache.enabled = wasEnabled;
+      this.cache.dirties = wasDirties;
     }
   }
 
@@ -138,13 +141,17 @@ export class QueryCacheAdapter implements DatabaseAdapter {
    * Disable the query cache within a callback.
    * Mirrors: ActiveRecord::Base.uncached { ... }
    */
-  async uncached<T>(fn: () => Promise<T>): Promise<T> {
+  async uncached<T>(fn: () => Promise<T>, options: { dirties?: boolean } = {}): Promise<T> {
+    const { dirties = true } = options;
     const wasEnabled = this.cache.enabled;
+    const wasDirties = this.cache.dirties;
     this.cache.enabled = false;
+    this.cache.dirties = dirties;
     try {
       return await fn();
     } finally {
       this.cache.enabled = wasEnabled;
+      this.cache.dirties = wasDirties;
     }
   }
 
@@ -172,10 +179,6 @@ export class QueryCacheAdapter implements DatabaseAdapter {
   async execute(sql: string, binds?: unknown[]): Promise<Record<string, unknown>[]> {
     this._queryCount++;
 
-    if (!this.cache.enabled) {
-      return this.inner.execute(sql, binds);
-    }
-
     // Strip leading SQL comments (e.g. from QueryLogs prepend) before detecting statement type
     const trimmed = sql
       .trimStart()
@@ -183,12 +186,17 @@ export class QueryCacheAdapter implements DatabaseAdapter {
       .trimStart()
       .toUpperCase();
 
-    // Only cache SELECT and read-only WITH (CTE) queries.
-    // WITH can prefix write CTEs (WITH ... INSERT/UPDATE/DELETE), so check for those.
     const isSelect = trimmed.startsWith("SELECT");
     const isReadOnlyCte = trimmed.startsWith("WITH") && !/\b(INSERT|UPDATE|DELETE)\b/.test(trimmed);
+
+    // Write statements clear the cache regardless of whether caching is enabled,
+    // preventing stale results when the cache is re-enabled later.
     if (!isSelect && !isReadOnlyCte) {
       if (this.cache.dirties) this.cache.clear();
+      return this.inner.execute(sql, binds);
+    }
+
+    if (!this.cache.enabled) {
       return this.inner.execute(sql, binds);
     }
 

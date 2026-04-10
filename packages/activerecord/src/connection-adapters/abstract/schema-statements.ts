@@ -28,7 +28,7 @@ import { quoteIdentifier, quoteDefaultExpression } from "./quoting.js";
 import { Column } from "../column.js";
 import { SqlTypeMetadata } from "../sql-type-metadata.js";
 import { deduplicate } from "../deduplicable.js";
-import { singularize } from "@blazetrails/activesupport";
+import { singularize, getCrypto } from "@blazetrails/activesupport";
 import { SchemaDumper } from "./schema-dumper.js";
 
 export class SchemaStatements {
@@ -1025,17 +1025,7 @@ export class SchemaStatements {
       const cols = Array.isArray(result.column) ? result.column : [result.column];
       const fullName = `fk_rails_${unqualifiedFrom}_${(cols as string[]).join("_")}`;
       if (fullName.length > this.maxIndexNameSize()) {
-        // Deterministic hash matching Rails' fk_rails_<digest> pattern
-        let h1 = 0x811c9dc5;
-        let h2 = 0x01000193;
-        for (let i = 0; i < fullName.length; i++) {
-          const c = fullName.charCodeAt(i);
-          h1 = Math.imul(h1 ^ c, 0x01000193);
-          h2 = Math.imul(h2 ^ c, 0x1000193b);
-        }
-        const hex = ((h1 >>> 0).toString(16) + (h2 >>> 0).toString(16))
-          .padStart(16, "0")
-          .slice(0, 10);
+        const hex = getCrypto().createHash("sha256").update(fullName).digest("hex").slice(0, 10);
         result.name = `fk_rails_${hex}`;
       } else {
         result.name = fullName;
@@ -1249,10 +1239,10 @@ export class SchemaStatements {
     const sqlFragments: string[] = [];
     const nonCombinable: Array<() => Promise<void>> = [];
 
-    for (const [command, ...args] of operations) {
+    for (const [command, table, ...arguments_] of operations) {
       const forAlterMethod = (this as any)[`${command}ForAlter`];
       if (typeof forAlterMethod === "function") {
-        const result = forAlterMethod.call(this, ...args);
+        const result = forAlterMethod.call(this, table, ...arguments_);
         const results = Array.isArray(result) ? result : [result];
         for (const r of results) {
           if (typeof r === "string") {
@@ -1273,7 +1263,7 @@ export class SchemaStatements {
 
         const method = (this as any)[command];
         if (typeof method === "function") {
-          await method.call(this, ...args);
+          await method.call(this, table, ...arguments_);
         } else {
           throw new Error(`Unknown bulk change command: ${command}`);
         }

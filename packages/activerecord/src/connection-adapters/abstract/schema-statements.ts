@@ -1190,6 +1190,12 @@ export class SchemaStatements {
 
   indexAlgorithm(algorithm?: string): string | undefined {
     if (!algorithm) return undefined;
+    const valid = ["default", "concurrently"];
+    if (!valid.includes(algorithm.toLowerCase())) {
+      throw new Error(
+        `Algorithm must be one of the following: ${valid.map((a) => `'${a}'`).join(", ")}`,
+      );
+    }
     return algorithm;
   }
 

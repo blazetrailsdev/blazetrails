@@ -738,7 +738,8 @@ export class TableDefinition {
 
     if (this.options) sql += ` ${this.options}`;
     if (this.comment && this._adapterName === "mysql") {
-      sql += ` COMMENT ${quoteDefaultExpression(this.comment)}`;
+      const escaped = this.comment.replace(/'/g, "''");
+      sql += ` COMMENT '${escaped}'`;
     }
 
     return sql;
@@ -890,14 +891,9 @@ export class Table {
   }
 
   async removeForeignKey(
-    toTableOrOptions?: string | Record<string, unknown>,
-    options?: Record<string, unknown>,
+    toTableOrOptions?: string | { column?: string; name?: string },
   ): Promise<void> {
-    const merged =
-      typeof toTableOrOptions === "string" && options
-        ? { ...options, toTable: toTableOrOptions }
-        : toTableOrOptions;
-    return this._require("removeForeignKey").call(this._schema, this._tableName, merged);
+    return this._require("removeForeignKey").call(this._schema, this._tableName, toTableOrOptions);
   }
 
   async isForeignKeyExists(toTableOrOptions?: string | Record<string, unknown>): Promise<boolean> {

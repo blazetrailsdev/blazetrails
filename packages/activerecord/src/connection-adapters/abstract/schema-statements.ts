@@ -100,7 +100,19 @@ export class SchemaStatements {
     await this.adapter.executeMutation(td.toSql());
 
     for (const idx of td.indexes) {
-      await this.addIndex(name, idx.columns, { unique: idx.unique, name: idx.name });
+      await this.addIndex(name, idx.columns, {
+        unique: idx.unique,
+        name: idx.name,
+        where: idx.where,
+        order: idx.orders,
+        using: idx.using,
+        type: idx.type,
+        comment: idx.comment,
+        length: idx.lengths,
+        opclass: idx.opclasses,
+        include: idx.include,
+        nullsNotDistinct: idx.nullsNotDistinct,
+      });
     }
   }
 
@@ -156,6 +168,10 @@ export class SchemaStatements {
       type?: string;
       comment?: string;
       ifNotExists?: boolean;
+      length?: Record<string, number>;
+      opclass?: Record<string, string>;
+      include?: string[];
+      nullsNotDistinct?: boolean;
     } = {},
   ): Promise<void> {
     const cols = Array.isArray(columns) ? columns : [columns];

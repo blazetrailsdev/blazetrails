@@ -312,22 +312,33 @@ export class ConnectionPool implements ReapablePool {
   // --- Pin / Unpin ---
 
   async pinConnectionBang(_lockThread = false): Promise<void> {
+    const leasedConnection = this._connectionLease().connection;
+    const connection = this._pinnedConnection ?? leasedConnection ?? this.checkout();
+    const newlyCheckedOut = this._pinnedConnection === null && leasedConnection == null;
+
+    try {
+      if (this._connections && !this._connections.includes(connection)) {
+        this._connections.push(connection);
+      }
+
+      if (isTransactionAware(connection)) {
+        connection.verifyBang();
+        await connection.transactionManager.beginTransaction({
+          joinable: false,
+          _lazy: false,
+        });
+      }
+    } catch (error) {
+      if (newlyCheckedOut) {
+        this.checkin(connection);
+      }
+      throw error;
+    }
+
     if (!this._pinnedConnection) {
-      this._pinnedConnection = this._connectionLease().connection ?? this.checkout();
+      this._pinnedConnection = connection;
     }
     this._pinnedConnectionsDepth += 1;
-
-    if (this._connections && !this._connections.includes(this._pinnedConnection)) {
-      this._connections.push(this._pinnedConnection);
-    }
-
-    if (isTransactionAware(this._pinnedConnection)) {
-      this._pinnedConnection.verifyBang();
-      await this._pinnedConnection.transactionManager.beginTransaction({
-        joinable: false,
-        _lazy: false,
-      });
-    }
   }
 
   async unpinConnectionBang(): Promise<boolean> {
@@ -335,24 +346,24 @@ export class ConnectionPool implements ReapablePool {
       throw new Error(`There isn't a pinned connection`);
     }
 
-    let clean = true;
-    this._pinnedConnectionsDepth -= 1;
     const connection = this._pinnedConnection;
-    if (this._pinnedConnectionsDepth === 0) {
-      this._pinnedConnection = null;
-    }
+    let clean = true;
 
-    if (isTransactionAware(connection)) {
-      if (connection.transactionManager.currentTransaction.open) {
-        await connection.transactionManager.rollbackTransaction();
-      } else {
-        clean = false;
-        connection.resetBang();
+    try {
+      if (isTransactionAware(connection)) {
+        if (connection.transactionManager.currentTransaction.open) {
+          await connection.transactionManager.rollbackTransaction();
+        } else {
+          clean = false;
+          connection.resetBang();
+        }
       }
-    }
-
-    if (this._pinnedConnection === null) {
-      this.checkin(connection);
+    } finally {
+      this._pinnedConnectionsDepth -= 1;
+      if (this._pinnedConnectionsDepth === 0) {
+        this._pinnedConnection = null;
+        this.checkin(connection);
+      }
     }
 
     return clean;

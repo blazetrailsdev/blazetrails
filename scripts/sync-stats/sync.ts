@@ -333,6 +333,14 @@ async function migrateDb(adapter: SQLite3Adapter) {
           `CREATE INDEX index_raw_job_logs_on_run_id ON raw_job_logs (run_id)`,
         );
       }
+      if (await tableExists(adapter, "workflow_jobs")) {
+        await adapter.executeMutation(
+          `UPDATE raw_job_logs SET
+            run_id = (SELECT wj.run_id FROM workflow_jobs wj WHERE wj.id = raw_job_logs.job_id),
+            job_name = (SELECT wj.name FROM workflow_jobs wj WHERE wj.id = raw_job_logs.job_id)
+          WHERE run_id IS NULL OR job_name IS NULL`,
+        );
+      }
     } else {
       await ctx.createTable("raw_job_logs", { id: false }, (t) => {
         t.integer("job_id", { primaryKey: true });
@@ -421,6 +429,7 @@ async function migrateDb(adapter: SQLite3Adapter) {
         t.string("content");
         t.string("created_at");
         t.index(["reaction_id"], { unique: true });
+        t.index(["pr_number"]);
       });
     }
 
@@ -562,6 +571,7 @@ async function migrateDb(adapter: SQLite3Adapter) {
       t.string("content");
       t.string("created_at");
       t.index(["reaction_id"], { unique: true });
+      t.index(["pr_number"]);
     });
 
     await ctx.createTable("workflow_runs", { id: false }, (t) => {
@@ -888,6 +898,24 @@ async function syncPullRequests(mode: "latest" | "refresh"): Promise<number> {
       await Base.adapter.executeMutation(
         `UPDATE pull_requests SET is_draft = 0 WHERE is_draft IS NULL`,
       );
+    }
+
+    const openRows = await PullRequest.findBySql(
+      `SELECT number FROM pull_requests WHERE state = 'open' ORDER BY number DESC`,
+    );
+    if (openRows.length > 0) {
+      console.log(`Re-fetching ${openRows.length} open PRs to check for state changes...`);
+      for (const row of openRows) {
+        const num = row.readAttribute("number") as number;
+        try {
+          const pr = ghJson<GhPrData>(`pr view ${num} --repo ${REPO} --json ${fields}`);
+          await PullRequest.upsertAll([mapPr(pr)], { uniqueBy: "number" });
+        } catch (err) {
+          console.warn(
+            `  Failed to refresh PR #${num}: ${err instanceof Error ? err.message : err}`,
+          );
+        }
+      }
     }
   }
 
@@ -1334,40 +1362,6 @@ async function syncWorkflowRuns(mode: "latest" | "refresh"): Promise<number> {
                 { uniqueBy: ["job_id", "number"] },
               );
             }
-
-            const existingAnnotations = await Base.adapter.execute(
-              `SELECT COUNT(*) as cnt FROM check_annotations WHERE job_id = ?`,
-              [job.id],
-            );
-            if ((existingAnnotations[0] as { cnt: number }).cnt === 0) {
-              try {
-                const annotations = ghJson<GhCheckAnnotation[]>(
-                  `api repos/${REPO}/check-runs/${job.id}/annotations --paginate`,
-                );
-                if (annotations.length > 0) {
-                  await CheckAnnotation.adapter.executeMutation(
-                    `DELETE FROM check_annotations WHERE job_id = ?`,
-                    [job.id],
-                  );
-                  await CheckAnnotation.insertAll(
-                    annotations.map((a) => ({
-                      run_id: run.id,
-                      job_id: job.id,
-                      path: a.path,
-                      start_line: a.start_line,
-                      end_line: a.end_line,
-                      annotation_level: a.annotation_level,
-                      message: a.message,
-                      title: a.title ?? null,
-                    })),
-                  );
-                }
-              } catch (annErr) {
-                console.warn(
-                  `  Failed to fetch annotations for job ${job.id}: ${annErr instanceof Error ? annErr.message : annErr}`,
-                );
-              }
-            }
           }
         }
 
@@ -1534,6 +1528,56 @@ function parseApiCompareFromLogs(logs: string) {
     }
   }
   return results;
+}
+
+async function syncCheckAnnotations(mode: "latest" | "refresh") {
+  const limitClause = mode === "latest" ? "LIMIT 50" : "";
+  const jobsToSync = await Base.adapter.execute(`
+    SELECT wj.id as job_id, wr.id as run_id
+    FROM workflow_jobs wj
+    JOIN workflow_runs wr ON wr.id = wj.run_id
+    WHERE wj.conclusion IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM check_annotations ca WHERE ca.job_id = wj.id
+    )
+    ORDER BY wr.pr_number DESC, wj.id
+    ${limitClause}
+  `);
+
+  if (jobsToSync.length === 0) return;
+  console.log(`Backfilling annotations for ${jobsToSync.length} jobs...`);
+
+  for (const row of jobsToSync) {
+    const jobId = row.job_id as number;
+    const runId = row.run_id as number;
+    try {
+      const annotations = ghJson<GhCheckAnnotation[]>(
+        `api repos/${REPO}/check-runs/${jobId}/annotations --paginate`,
+      );
+      await CheckAnnotation.adapter.executeMutation(
+        `DELETE FROM check_annotations WHERE job_id = ?`,
+        [jobId],
+      );
+      if (annotations.length > 0) {
+        await CheckAnnotation.insertAll(
+          annotations.map((a) => ({
+            run_id: runId,
+            job_id: jobId,
+            path: a.path,
+            start_line: a.start_line,
+            end_line: a.end_line,
+            annotation_level: a.annotation_level,
+            message: a.message,
+            title: a.title ?? null,
+          })),
+        );
+      }
+    } catch (err) {
+      console.warn(
+        `  Failed to fetch annotations for job ${jobId}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+  }
 }
 
 async function syncJobLogs(mode: "latest" | "refresh"): Promise<number> {
@@ -1910,6 +1954,9 @@ async function main() {
 
     console.log("\n=== Syncing workflow runs ===");
     const runsSynced = await syncWorkflowRuns(fetchMode);
+
+    console.log("\n=== Syncing check annotations ===");
+    await syncCheckAnnotations(fetchMode);
 
     console.log("\n=== Syncing job logs ===");
     const logsFetched = await syncJobLogs(fetchMode);

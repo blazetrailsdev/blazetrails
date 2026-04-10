@@ -855,16 +855,13 @@ export class SchemaStatements {
     tableName: string,
     options: {
       id?: boolean | "uuid" | false;
-      primaryKey?: string | string[];
+      primaryKey?: string;
       force?: boolean;
       [key: string]: unknown;
     } = {},
     fn?: (td: TableDefinition) => void,
   ): TableDefinition {
-    if (Array.isArray(options.primaryKey)) {
-      throw new Error("Composite primary keys are not yet supported by buildCreateTableDefinition");
-    }
-    const hasCustomPk = typeof options.primaryKey === "string" && options.id !== false;
+    const hasCustomPk = !!options.primaryKey && options.id !== false;
     const td = new TableDefinition(tableName, {
       id: hasCustomPk ? false : options.id,
       adapterName: this.adapterName,
@@ -904,7 +901,8 @@ export class SchemaStatements {
   }
 
   private _findJoinTableName(table1: string, table2: string): string {
-    const [t1, t2] = [table1, table2].sort();
+    const unqualify = (name: string) => (name.split(".").at(-1) ?? name).replace(/\./g, "_");
+    const [t1, t2] = [unqualify(table1), unqualify(table2)].sort();
     const parts1 = t1.split("_");
     const parts2 = t2.split("_");
     // Remove common prefix (Rails dedup: music_artists + music_records → music_artists_records)
@@ -1115,9 +1113,9 @@ export class SchemaStatements {
     // If pool has migration context, also insert all migration versions below this one
     const migrationContext = (this.adapter as any).pool?.migrationContext;
     if (migrationContext) {
-      const allVersions: string[] = (migrationContext.migrations ?? []).map(
-        (m: { version: number | string }) => String(m.version),
-      );
+      const allVersions: string[] = (migrationContext.migrations ?? [])
+        .map((m: { version: number | string }) => String(m.version))
+        .filter((v: string) => /^\d+$/.test(v));
       const toInsert = allVersions.filter((v) => BigInt(v) < BigInt(ver) && !existing.has(v));
       for (const v of toInsert) {
         const vStr = v.replace(/'/g, "''");

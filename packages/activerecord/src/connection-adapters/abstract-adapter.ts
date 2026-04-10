@@ -9,6 +9,11 @@ import type { Nodes } from "@blazetrails/arel";
 import { ReadOnlyError } from "../errors.js";
 import { SchemaCache } from "./schema-cache.js";
 import { isWriteQuerySql, stripSqlComments } from "./sql-classification.js";
+import {
+  TransactionManager,
+  type Transaction,
+  type NullTransaction,
+} from "./abstract/transaction.js";
 
 /**
  * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter::Version
@@ -68,6 +73,7 @@ export class AbstractAdapter {
   private _idleSince = Date.now();
   protected _lastActivity = 0;
   protected _config: Record<string, unknown> = {};
+  _transactionManager: TransactionManager = new TransactionManager(this as any);
 
   pool: unknown = null;
   logger: unknown = null;
@@ -287,7 +293,34 @@ export class AbstractAdapter {
     this.clearCacheBang();
   }
 
-  resetTransaction(): void {}
+  resetTransaction(options?: { restore?: boolean }): void {
+    const oldState =
+      options?.restore && this._transactionManager?.isRestorable()
+        ? this._transactionManager
+        : null;
+
+    this._transactionManager = new TransactionManager(this as any);
+
+    if (oldState) {
+      this._transactionManager = oldState;
+      this._transactionManager.restoreTransactions();
+    }
+  }
+
+  get transactionManager(): TransactionManager {
+    return this._transactionManager;
+  }
+
+  currentTransaction(): Transaction | NullTransaction {
+    return this._transactionManager.currentTransaction;
+  }
+
+  async withinNewTransaction<T>(
+    opts: { isolation?: string | null; joinable?: boolean },
+    fn: (tx?: unknown) => Promise<T> | T,
+  ): Promise<T> {
+    return this._transactionManager.withinNewTransaction(opts, fn as any);
+  }
 
   close(): void {
     this.expire();

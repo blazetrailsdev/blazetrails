@@ -248,14 +248,34 @@ export class TransactionCallback {
 }
 
 /**
+ * Connection interface used by Transaction classes.
+ * Extends DatabaseAdapter with the DatabaseStatements methods that
+ * Transaction classes call. This avoids `as any` casts throughout.
+ */
+export interface TransactionConnection extends DatabaseAdapter {
+  beginDbTransaction?(): void | Promise<void>;
+  beginIsolatedDbTransaction?(isolation: string): void | Promise<void>;
+  beginDeferredTransaction?(isolation?: string | null): void | Promise<void>;
+  commitDbTransaction?(): void | Promise<void>;
+  rollbackDbTransaction?(): void | Promise<void>;
+  restartDbTransaction?(): void | Promise<void>;
+  resetIsolationLevel?(): void | Promise<void>;
+  supportsLazyTransactions?(): boolean;
+  supportsRestartDbTransaction?(): boolean;
+  addTransactionRecord?(record: unknown): void;
+  active?: boolean;
+  currentTransaction?(): Transaction | NullTransaction;
+}
+
+/**
  * Mirrors: ActiveRecord::ConnectionAdapters::Transaction
  */
 export class Transaction {
   readonly state = new TransactionState();
   private _callbacks: TransactionCallback[] | null = null;
   private _records: unknown[] | null = null;
-  private _lazyEnrollmentRecords: WeakMap<object, unknown> | null = null;
-  private _connection: DatabaseAdapter;
+  private _lazyEnrollmentRecords: Map<unknown, unknown> | null = null;
+  private _connection: TransactionConnection;
   private _joinable: boolean;
   readonly isolationLevel: string | null;
   private _materialized = false;
@@ -268,7 +288,7 @@ export class Transaction {
   static readonly Callback = TransactionCallback;
 
   constructor(
-    connection: DatabaseAdapter,
+    connection: TransactionConnection,
     options: {
       isolation?: string | null;
       joinable?: boolean;
@@ -288,7 +308,7 @@ export class Transaction {
     });
   }
 
-  get connection(): DatabaseAdapter {
+  get connection(): TransactionConnection {
     return this._connection;
   }
 
@@ -352,14 +372,16 @@ export class Transaction {
     if (ensureFinalize) {
       this._records.push(record);
     } else {
-      if (!this._lazyEnrollmentRecords) this._lazyEnrollmentRecords = new WeakMap();
-      this._lazyEnrollmentRecords.set(record as object, record);
+      if (!this._lazyEnrollmentRecords) this._lazyEnrollmentRecords = new Map();
+      this._lazyEnrollmentRecords.set(record, record);
     }
   }
 
   get records(): unknown[] | null {
     if (this._lazyEnrollmentRecords && this._records) {
-      // WeakMap doesn't have .values() — lazy records are best-effort
+      for (const value of this._lazyEnrollmentRecords.values()) {
+        this._records.push(value);
+      }
       this._lazyEnrollmentRecords = null;
     }
     return this._records;
@@ -390,17 +412,38 @@ export class Transaction {
   }
 
   async rollbackRecords(): Promise<void> {
-    if (this._records) {
-      const ite = this._uniqueRecords();
-      for (const record of ite) {
-        if (typeof (record as any).rolledbackBang === "function") {
-          await (record as any).rolledbackBang({
-            forceRestoreState: this.isFullRollback(),
-            shouldRunCallbacks: true,
-          });
+    const recs = this.records;
+    if (recs) {
+      const ite = this._uniqueRecords(recs);
+      const instanceMap = this._prepareInstancesToRunCallbacksOn(ite);
+
+      try {
+        while (ite.length > 0) {
+          const record = ite.shift()!;
+          const shouldRunCallbacks =
+            instanceMap.get(record) === record &&
+            typeof (record as any).isTriggerTransactionalCallbacks === "function" &&
+            (record as any).isTriggerTransactionalCallbacks();
+
+          if (typeof (record as any).rolledbackBang === "function") {
+            await (record as any).rolledbackBang({
+              forceRestoreState: this.isFullRollback(),
+              shouldRunCallbacks,
+            });
+          }
+        }
+      } finally {
+        for (const i of ite) {
+          if (typeof (i as any).rolledbackBang === "function") {
+            await (i as any).rolledbackBang({
+              forceRestoreState: this.isFullRollback(),
+              shouldRunCallbacks: false,
+            });
+          }
         }
       }
     }
+
     if (this._callbacks) {
       for (const cb of this._callbacks) {
         await cb.afterRollback();
@@ -410,9 +453,10 @@ export class Transaction {
 
   async beforeCommitRecords(): Promise<void> {
     if (this._runCommitCallbacks) {
-      if (this._records) {
-        const ite = this._uniqueRecords();
-        for (const record of ite) {
+      const recs = this.records;
+      if (recs) {
+        const unique = this._uniqueRecords(recs);
+        for (const record of unique) {
           if (typeof (record as any).beforeCommittedBang === "function") {
             await (record as any).beforeCommittedBang();
           }
@@ -427,19 +471,36 @@ export class Transaction {
   }
 
   async commitRecords(): Promise<void> {
-    if (this._records) {
-      const ite = this._uniqueRecords();
+    const recs = this.records;
+    if (recs) {
+      const ite = this._uniqueRecords(recs);
+
       if (this._runCommitCallbacks) {
-        for (const record of ite) {
-          if (typeof (record as any).committedBang === "function") {
-            await (record as any).committedBang({ shouldRunCallbacks: true });
+        const instanceMap = this._prepareInstancesToRunCallbacksOn(ite);
+
+        try {
+          while (ite.length > 0) {
+            const record = ite.shift()!;
+            const shouldRunCallbacks =
+              instanceMap.get(record) === record &&
+              typeof (record as any).isTriggerTransactionalCallbacks === "function" &&
+              (record as any).isTriggerTransactionalCallbacks();
+
+            if (typeof (record as any).committedBang === "function") {
+              await (record as any).committedBang({ shouldRunCallbacks });
+            }
+          }
+        } finally {
+          for (const i of ite) {
+            if (typeof (i as any).committedBang === "function") {
+              await (i as any).committedBang({ shouldRunCallbacks: false });
+            }
           }
         }
       } else {
-        for (const record of ite) {
-          if (typeof (this._connection as any).addTransactionRecord === "function") {
-            (this._connection as any).addTransactionRecord(record);
-          }
+        while (ite.length > 0) {
+          const record = ite.shift()!;
+          this._connection.addTransactionRecord?.(record);
         }
       }
     }
@@ -451,15 +512,17 @@ export class Transaction {
         }
       }
     } else if (this._callbacks) {
-      const current = (this._connection as any).currentTransaction?.();
-      if (current && typeof current.appendCallbacks === "function") {
+      const current = this._connection.currentTransaction?.();
+      if (current instanceof Transaction) {
         current.appendCallbacks(this._callbacks);
       }
     }
   }
 
   restart(): void {
-    // Subclasses override
+    // Overridden by RealTransaction, SavepointTransaction, RestartParentTransaction.
+    // Base implementation is intentionally empty — only subclasses that represent
+    // actual DB transactions have restart behavior.
   }
 
   isFullRollback(): boolean {
@@ -493,17 +556,58 @@ export class Transaction {
     }
   }
 
-  private _uniqueRecords(): unknown[] {
-    if (!this._records) return [];
+  private _uniqueRecords(recs: unknown[]): unknown[] {
     const seen = new Set<unknown>();
     const result: unknown[] = [];
-    for (const record of this._records) {
+    for (const record of recs) {
       if (!seen.has(record)) {
         seen.add(record);
         result.push(record);
       }
     }
     return result;
+  }
+
+  private _prepareInstancesToRunCallbacksOn(records: unknown[]): Map<unknown, unknown> {
+    const candidates = new Map<unknown, unknown>();
+    for (const record of records) {
+      if (
+        typeof (record as any).isTriggerTransactionalCallbacks === "function" &&
+        !(record as any).isTriggerTransactionalCallbacks()
+      ) {
+        continue;
+      }
+
+      const earlier = candidates.get(record);
+      if (
+        earlier &&
+        typeof (record as any).constructor?.runCommitCallbacksOnFirstSavedInstancesInTransaction !==
+          "undefined" &&
+        (record as any).constructor.runCommitCallbacksOnFirstSavedInstancesInTransaction
+      ) {
+        continue;
+      }
+
+      if (
+        earlier &&
+        typeof (earlier as any).isDestroyed === "function" &&
+        (earlier as any).isDestroyed() &&
+        (typeof (record as any).isDestroyed !== "function" || !(record as any).isDestroyed())
+      ) {
+        continue;
+      }
+
+      if (
+        earlier &&
+        typeof (earlier as any)._newRecordBeforeLastCommit !== "undefined" &&
+        (earlier as any)._newRecordBeforeLastCommit
+      ) {
+        (record as any)._newRecordBeforeLastCommit = true;
+      }
+
+      candidates.set(record, record);
+    }
+    return candidates;
   }
 }
 
@@ -514,7 +618,7 @@ export class RestartParentTransaction extends Transaction {
   private _parent: Transaction;
 
   constructor(
-    connection: DatabaseAdapter,
+    connection: TransactionConnection,
     parentTransaction: Transaction,
     options: { isolation?: string | null; joinable?: boolean; runCommitCallbacks?: boolean } = {},
   ) {
@@ -562,7 +666,7 @@ export class SavepointTransaction extends Transaction {
   readonly savepointName: string;
 
   constructor(
-    connection: DatabaseAdapter,
+    connection: TransactionConnection,
     savepointName: string,
     parentTransaction: Transaction,
     options: { isolation?: string | null; joinable?: boolean; runCommitCallbacks?: boolean } = {},
@@ -585,15 +689,18 @@ export class SavepointTransaction extends Transaction {
 
   restart(): void {
     if (!this.isMaterialized()) return;
+
     this._instrumenter.finish("restart");
     this._instrumenter.start();
+
     this.connection.rollbackToSavepoint(this.savepointName);
   }
 
   override async rollback(): Promise<void> {
     if (!this.state.isInvalidated()) {
-      if (this.isMaterialized()) {
-        await this.connection.rollbackToSavepoint(this.savepointName);
+      const conn = this.connection;
+      if (this.isMaterialized() && conn.active !== false) {
+        await conn.rollbackToSavepoint(this.savepointName);
       }
     }
     this.state.rollbackBang();
@@ -624,40 +731,35 @@ export class RealTransaction extends Transaction {
   override materializeBang(): void {
     if (this.joinable) {
       if (this.isolationLevel) {
-        (this.connection as any).beginIsolatedDbTransaction(this.isolationLevel);
+        this.connection.beginIsolatedDbTransaction?.(this.isolationLevel);
       } else {
-        (this.connection as any).beginDbTransaction();
+        this.connection.beginDbTransaction?.();
       }
     } else {
-      (this.connection as any).beginDeferredTransaction(this.isolationLevel);
+      this.connection.beginDeferredTransaction?.(this.isolationLevel);
     }
     super.materializeBang();
   }
 
   restart(): void {
     if (!this.isMaterialized()) return;
+
     this._instrumenter.finish("restart");
 
-    if (
-      typeof (this.connection as any).supportsRestartDbTransaction === "function" &&
-      (this.connection as any).supportsRestartDbTransaction()
-    ) {
+    if (this.connection.supportsRestartDbTransaction?.()) {
       this._instrumenter.start();
-      (this.connection as any).restartDbTransaction();
+      this.connection.restartDbTransaction?.();
     } else {
-      (this.connection as any).rollbackDbTransaction();
+      this.connection.rollbackDbTransaction?.();
       this.materializeBang();
     }
   }
 
   override async rollback(): Promise<void> {
     if (this.isMaterialized()) {
-      (this.connection as any).rollbackDbTransaction();
-      if (
-        this.isolationLevel &&
-        typeof (this.connection as any).resetIsolationLevel === "function"
-      ) {
-        (this.connection as any).resetIsolationLevel();
+      this.connection.rollbackDbTransaction?.();
+      if (this.isolationLevel) {
+        this.connection.resetIsolationLevel?.();
       }
     }
     this.state.fullRollbackBang();
@@ -668,12 +770,9 @@ export class RealTransaction extends Transaction {
 
   override async commit(): Promise<void> {
     if (this.isMaterialized()) {
-      (this.connection as any).commitDbTransaction();
-      if (
-        this.isolationLevel &&
-        typeof (this.connection as any).resetIsolationLevel === "function"
-      ) {
-        (this.connection as any).resetIsolationLevel();
+      this.connection.commitDbTransaction?.();
+      if (this.isolationLevel) {
+        this.connection.resetIsolationLevel?.();
       }
     }
     this.state.fullCommitBang();
@@ -688,14 +787,14 @@ export class RealTransaction extends Transaction {
  */
 export class TransactionManager {
   private _stack: (Transaction | NullTransaction)[] = [];
-  private _connection: DatabaseAdapter;
+  private _connection: TransactionConnection;
   private _hasUnmaterializedTransactions = false;
   private _materializingTransactions = false;
   private _lazyTransactionsEnabled = true;
 
   static readonly NULL_TRANSACTION = Object.freeze(new NullTransaction());
 
-  constructor(connection: DatabaseAdapter) {
+  constructor(connection: TransactionConnection) {
     this._connection = connection;
   }
 
@@ -707,10 +806,6 @@ export class TransactionManager {
 
   get openTransactions(): number {
     return this._stack.length;
-  }
-
-  get withinNewTransaction(): boolean {
-    return this._stack.length > 0;
   }
 
   async beginTransaction(
@@ -735,19 +830,18 @@ export class TransactionManager {
         runCommitCallbacks,
       });
     } else {
-      const parentTransaction = current instanceof Transaction ? current : undefined;
+      const parentTransaction = current as Transaction;
       transaction = new SavepointTransaction(
         this._connection,
         `active_record_${this._stack.length}`,
-        parentTransaction!,
+        parentTransaction,
         { isolation, joinable, runCommitCallbacks },
       );
     }
 
     if (!transaction.isMaterialized()) {
       if (
-        typeof (this._connection as any).supportsLazyTransactions === "function" &&
-        (this._connection as any).supportsLazyTransactions() &&
+        this._connection.supportsLazyTransactions?.() &&
         this.isLazyTransactionsEnabled() &&
         _lazy
       ) {
@@ -846,5 +940,42 @@ export class TransactionManager {
       }
     }
     await txn.rollbackRecords();
+  }
+
+  async withinNewTransaction<T>(
+    options: { isolation?: string | null; joinable?: boolean },
+    fn: (tx: ActiveRecordTransaction) => Promise<T> | T,
+  ): Promise<T> {
+    const transaction = await this.beginTransaction({
+      isolation: options.isolation,
+      joinable: options.joinable,
+    });
+    let result: T;
+    try {
+      result = await fn(transaction.userTransaction);
+    } catch (e) {
+      await this.rollbackTransaction();
+      if (!transaction.state.isCompleted()) {
+        transaction.incompleteBang();
+      }
+      throw e;
+    }
+
+    try {
+      await this.commitTransaction();
+    } catch (commitError) {
+      if (!transaction.state.isCompleted()) {
+        await this.rollbackTransaction(transaction);
+      }
+      if (!transaction.state.isCompleted()) {
+        transaction.incompleteBang();
+      }
+      throw commitError;
+    }
+
+    if (!transaction.state.isCompleted()) {
+      transaction.incompleteBang();
+    }
+    return result;
   }
 }

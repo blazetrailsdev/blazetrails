@@ -998,13 +998,15 @@ export class SchemaStatements {
       }
     } else {
       if (!result.column) {
-        result.column = this.foreignKeyColumnFor(toTable, "id");
+        const pk = typeof result.primaryKey === "string" ? result.primaryKey : "id";
+        result.column = this.foreignKeyColumnFor(toTable, pk);
       }
     }
 
     if (!result.name) {
+      const unqualifiedFrom = (fromTable.split(".").at(-1) ?? fromTable).replace(/\./g, "_");
       const cols = Array.isArray(result.column) ? result.column : [result.column];
-      result.name = `fk_rails_${fromTable}_${(cols as string[]).join("_")}`;
+      result.name = `fk_rails_${unqualifiedFrom}_${(cols as string[]).join("_")}`;
     }
 
     return result;
@@ -1054,7 +1056,10 @@ export class SchemaStatements {
     if (versions.length === 0) return null;
     const tableName = this._qi(smTable.tableName ?? "schema_migrations");
     return versions
-      .map((v: string) => `INSERT INTO ${tableName} (version) VALUES ('${v}');`)
+      .map((v: string) => {
+        const escaped = String(v).replace(/'/g, "''");
+        return `INSERT INTO ${tableName} (version) VALUES ('${escaped}');`;
+      })
       .join("\n");
   }
 
@@ -1064,6 +1069,9 @@ export class SchemaStatements {
 
   async assumeMigratedUptoVersion(version: number | string): Promise<void> {
     const ver = typeof version === "number" ? version : parseInt(version, 10);
+    if (Number.isNaN(ver)) {
+      throw new Error(`Invalid migration version: ${version}`);
+    }
     const smTable = this._qi("schema_migrations");
 
     // Query existing versions to avoid duplicates (cross-adapter compatible)
@@ -1074,8 +1082,9 @@ export class SchemaStatements {
     }
 
     // Insert the target version if not already recorded
+    const verStr = String(ver).replace(/'/g, "''");
     if (!existing.has(String(ver))) {
-      await this.adapter.executeMutation(`INSERT INTO ${smTable} (version) VALUES ('${ver}')`);
+      await this.adapter.executeMutation(`INSERT INTO ${smTable} (version) VALUES ('${verStr}')`);
     }
 
     // If pool has migration context, also insert all migration versions below this one
@@ -1086,7 +1095,8 @@ export class SchemaStatements {
       );
       const toInsert = allVersions.filter((v) => v < ver && !existing.has(String(v)));
       for (const v of toInsert) {
-        await this.adapter.executeMutation(`INSERT INTO ${smTable} (version) VALUES ('${v}')`);
+        const vStr = String(v).replace(/'/g, "''");
+        await this.adapter.executeMutation(`INSERT INTO ${smTable} (version) VALUES ('${vStr}')`);
       }
     }
   }
@@ -1231,7 +1241,9 @@ export class SchemaStatements {
     }
 
     if (sqlFragments.length > 0) {
-      await this.adapter.execute(`ALTER TABLE ${this._qi(tableName)} ${sqlFragments.join(", ")}`);
+      await this.adapter.executeMutation(
+        `ALTER TABLE ${this._qi(tableName)} ${sqlFragments.join(", ")}`,
+      );
     }
     for (const proc of nonCombinable) await proc();
   }

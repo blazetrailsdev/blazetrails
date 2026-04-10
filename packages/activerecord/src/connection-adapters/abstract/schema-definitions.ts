@@ -442,7 +442,7 @@ export class TableDefinition {
     for (let i = 0; i < expression.length; i++) {
       hash = ((hash << 5) - hash + expression.charCodeAt(i)) | 0;
     }
-    return `chk_rails_${(hash >>> 0).toString(16).padStart(8, "0")}`;
+    return `chk_${this.tableName}_${(hash >>> 0).toString(16).padStart(8, "0")}`;
   }
 
   newForeignKeyDefinition(
@@ -701,7 +701,21 @@ export class TableDefinition {
       return parts.join(" ");
     });
 
-    return `CREATE TABLE ${quoteTableName(this.tableName, this._adapterName)} (${columnDefs.join(", ")})`;
+    let sql = "CREATE";
+    if (this.temporary) sql += " TEMPORARY";
+    sql += " TABLE";
+    if (this.ifNotExists) sql += " IF NOT EXISTS";
+    sql += ` ${quoteTableName(this.tableName, this._adapterName)}`;
+
+    if (this.as) {
+      sql += ` AS ${this.as}`;
+    } else {
+      sql += ` (${columnDefs.join(", ")})`;
+    }
+
+    if (this.options) sql += ` ${this.options}`;
+
+    return sql;
   }
 }
 
@@ -845,7 +859,7 @@ export class Table {
     return this._require("removeReference").call(this._schema, this._tableName, name, options);
   }
 
-  async foreignKey(toTable: string, options?: Record<string, unknown>): Promise<void> {
+  async foreignKey(toTable: string, options?: Partial<AddForeignKeyOptions>): Promise<void> {
     return this._require("addForeignKey").call(this._schema, this._tableName, toTable, options);
   }
 
@@ -874,14 +888,21 @@ export class Table {
   }
 
   async removeCheckConstraint(
-    expressionOrOptions?: string | Record<string, unknown>,
-    options?: Record<string, unknown>,
+    expressionOrOptions?: string | { name?: string },
+    options?: { name?: string },
   ): Promise<void> {
-    const merged =
-      typeof expressionOrOptions === "string" && options
-        ? { ...options, expression: expressionOrOptions }
-        : expressionOrOptions;
-    return this._require("removeCheckConstraint").call(this._schema, this._tableName, merged);
+    if (typeof expressionOrOptions === "string") {
+      return this._require("removeCheckConstraint").call(
+        this._schema,
+        this._tableName,
+        options?.name ? options : expressionOrOptions,
+      );
+    }
+    return this._require("removeCheckConstraint").call(
+      this._schema,
+      this._tableName,
+      expressionOrOptions,
+    );
   }
 
   async isCheckConstraintExists(options?: Record<string, unknown>): Promise<boolean> {

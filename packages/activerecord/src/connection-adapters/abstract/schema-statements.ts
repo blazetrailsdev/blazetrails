@@ -160,6 +160,7 @@ export class SchemaStatements {
   ): Promise<void> {
     const cols = Array.isArray(columns) ? columns : [columns];
     const indexName = options.name ?? this.indexName(tableName, { column: cols });
+    this._validateIndexLength(tableName, indexName);
     const indexDef = new IndexDefinition(tableName, indexName, options.unique ?? false, cols, {
       where: options.where,
       orders: options.order ?? {},
@@ -1175,7 +1176,7 @@ export class SchemaStatements {
     if (limited.distinctBang) limited.distinctBang();
 
     // Execute the limited distinct query to get IDs
-    const arel = limited.arel ?? limited;
+    const arel = typeof limited.arel === "function" ? limited.arel() : limited;
     const sql = typeof arel === "string" ? arel : (arel?.toSql?.() ?? String(arel));
     const rows = await this.adapter.execute(sql);
     const pkLen = pkColumns.length;
@@ -1201,8 +1202,16 @@ export class SchemaStatements {
       }
     }
 
-    (relation as any).limitValue = null;
-    (relation as any).offsetValue = null;
+    if (typeof (relation as any).limitBang === "function") {
+      (relation as any).limitBang(null);
+    } else {
+      (relation as any)._limitValue = null;
+    }
+    if (typeof (relation as any).offsetBang === "function") {
+      (relation as any).offsetBang(null);
+    } else {
+      (relation as any)._offsetValue = null;
+    }
     return relation;
   }
 

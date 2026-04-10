@@ -807,4 +807,320 @@ export class SchemaStatements {
   typeToSql(type: ColumnType, options: ColumnOptions = {}): string {
     return this.schemaCreation.typeToSql(type, options);
   }
+
+  // ---------------------------------------------------------------------------
+  // Methods below match the Rails SchemaStatements API surface.
+  // ---------------------------------------------------------------------------
+
+  nativeDatabaseTypes(): Record<string, unknown> {
+    return {};
+  }
+
+  tableOptions(_tableName: string): Record<string, unknown> | null {
+    return null;
+  }
+
+  tableComment(_tableName: string): string | null {
+    return null;
+  }
+
+  tableAliasFor(tableName: string): string {
+    const maxLen = this.tableAliasLength();
+    return tableName.slice(0, maxLen).replace(/\./g, "_");
+  }
+
+  protected tableAliasLength(): number {
+    return 255;
+  }
+
+  async dataSources(): Promise<string[]> {
+    const t = await this.tables();
+    const v = await this.views();
+    return [...new Set([...t, ...v])];
+  }
+
+  async isDataSourceExists(name: string): Promise<boolean> {
+    if (!name) return false;
+    const sources = await this.dataSources();
+    return sources.includes(name);
+  }
+
+  buildCreateTableDefinition(
+    tableName: string,
+    options: {
+      id?: boolean | "uuid" | false;
+      primaryKey?: string | string[];
+      force?: boolean;
+      [key: string]: unknown;
+    } = {},
+    fn?: (td: TableDefinition) => void,
+  ): TableDefinition {
+    const td = new TableDefinition(tableName, {
+      id: options.id,
+      adapterName: this.adapterName,
+    });
+    if (fn) fn(td);
+    return td;
+  }
+
+  buildCreateJoinTableDefinition(
+    table1: string,
+    table2: string,
+    options: { columnOptions?: Record<string, unknown>; [key: string]: unknown } = {},
+    fn?: (td: TableDefinition) => void,
+  ): TableDefinition {
+    const joinTableName = [table1, table2].sort().join("_");
+    const { columnOptions = {}, ...rest } = options;
+
+    return this.buildCreateTableDefinition(joinTableName, { ...rest, id: false }, (td) => {
+      td.references(table1.replace(/s$/, ""), { null: false, index: false, ...columnOptions });
+      td.references(table2.replace(/s$/, ""), { null: false, index: false, ...columnOptions });
+      if (fn) fn(td);
+    });
+  }
+
+  async buildAddColumnDefinition(
+    tableName: string,
+    columnName: string,
+    type: ColumnType,
+    options: ColumnOptions & { ifNotExists?: boolean } = {},
+  ): Promise<AddColumnDefinition | null> {
+    if (options.ifNotExists && (await this.columnExists(tableName, columnName))) {
+      return null;
+    }
+    const { ifNotExists: _, ...colOpts } = options;
+    return new AddColumnDefinition(new ColumnDefinition(columnName, type, colOpts));
+  }
+
+  buildChangeColumnDefaultDefinition(
+    tableName: string,
+    columnName: string,
+    defaultOrChanges: unknown,
+  ): { tableName: string; columnName: string; newDefault: unknown } {
+    let newDefault: unknown;
+    if (
+      defaultOrChanges != null &&
+      typeof defaultOrChanges === "object" &&
+      "to" in (defaultOrChanges as Record<string, unknown>)
+    ) {
+      newDefault = (defaultOrChanges as { to: unknown }).to;
+    } else {
+      newDefault = defaultOrChanges;
+    }
+    return { tableName, columnName, newDefault };
+  }
+
+  buildCreateIndexDefinition(
+    tableName: string,
+    columnName: string | string[],
+    options: {
+      name?: string;
+      unique?: boolean;
+      where?: string;
+      using?: string;
+      type?: string;
+      algorithm?: string;
+      ifNotExists?: boolean;
+      [key: string]: unknown;
+    } = {},
+  ): CreateIndexDefinition {
+    const columnNames = Array.isArray(columnName) ? columnName : [columnName];
+    const indexName = options.name ?? this.indexName(tableName, { column: columnNames });
+    const idx = new IndexDefinition(
+      tableName,
+      indexName,
+      !!options.unique,
+      columnNames,
+      options.where,
+    );
+    return new CreateIndexDefinition(idx, !!options.ifNotExists, options.algorithm);
+  }
+
+  async isIndexNameExists(tableName: string, indexName: string): Promise<boolean> {
+    const idxs = await this.indexes(tableName);
+    return idxs.some((idx) => idx.name === indexName);
+  }
+
+  foreignKeyColumnFor(tableName: string, columnName = "id"): string {
+    const name = tableName.replace(/^.*\./, "");
+    const singular = name.replace(/s$/, "");
+    return `${singular}_${columnName}`;
+  }
+
+  foreignKeyOptions(
+    _fromTable: string,
+    toTable: string,
+    options: Record<string, unknown> = {},
+  ): Record<string, unknown> {
+    const result = { ...options };
+    if (!result.column) {
+      result.column = this.foreignKeyColumnFor(toTable, "id");
+    }
+    return result;
+  }
+
+  async checkConstraints(_tableName: string): Promise<CheckConstraintDefinition[]> {
+    throw new Error("checkConstraints is not implemented for this adapter");
+  }
+
+  checkConstraintOptions(
+    _tableName: string,
+    _expression: string,
+    options: Record<string, unknown> = {},
+  ): Record<string, unknown> {
+    return { ...options };
+  }
+
+  async isCheckConstraintExists(
+    tableName: string,
+    options: { name?: string; expression?: string },
+  ): Promise<boolean> {
+    if (!options.name && !options.expression) {
+      throw new Error("At least one of :name or :expression must be supplied");
+    }
+    try {
+      const constraints = await this.checkConstraints(tableName);
+      return constraints.some((c) => {
+        if (options.name && c.name === options.name) return true;
+        if (options.expression && c.expression === options.expression) return true;
+        return false;
+      });
+    } catch {
+      return false;
+    }
+  }
+
+  async removeConstraint(tableName: string, constraintName: string): Promise<void> {
+    const sql = `ALTER TABLE ${this._qi(tableName)} DROP CONSTRAINT ${this._qi(constraintName)}`;
+    await this.adapter.execute(sql);
+  }
+
+  dumpSchemaInformation(): string | null {
+    return null;
+  }
+
+  internalStringOptionsForPrimaryKey(): Record<string, unknown> {
+    return { primaryKey: true };
+  }
+
+  async assumeMigratedUptoVersion(version: number | string): Promise<void> {
+    const ver = typeof version === "string" ? parseInt(version, 10) : version;
+    const smTable = this._qi("schema_migrations");
+    await this.adapter.execute(
+      `INSERT INTO ${smTable} (version) VALUES ('${ver}') ON CONFLICT DO NOTHING`,
+    );
+  }
+
+  columnsForDistinct(columns: string, _orders?: string[]): string {
+    return columns;
+  }
+
+  distinctRelationForPrimaryKey(relation: unknown): unknown {
+    return relation;
+  }
+
+  updateTableDefinition(tableName: string, base: unknown): Table {
+    return new Table(tableName, base as SchemaStatements);
+  }
+
+  addIndexOptions(
+    tableName: string,
+    columnName: string | string[],
+    options: {
+      name?: string;
+      ifNotExists?: boolean;
+      internal?: boolean;
+      unique?: boolean;
+      where?: string;
+      using?: string;
+      type?: string;
+      algorithm?: string;
+      [key: string]: unknown;
+    } = {},
+  ): [IndexDefinition, string | undefined, boolean] {
+    const columnNames = Array.isArray(columnName) ? columnName : [columnName];
+    const indexName = options.name ?? this.indexName(tableName, { column: columnNames });
+    const idx = new IndexDefinition(
+      tableName,
+      indexName,
+      !!options.unique,
+      columnNames,
+      options.where,
+    );
+    return [idx, this.indexAlgorithm(options.algorithm), !!options.ifNotExists];
+  }
+
+  indexAlgorithm(algorithm?: string): string | undefined {
+    if (!algorithm) return undefined;
+    return algorithm;
+  }
+
+  quotedColumnsForIndex(columnNames: string[], _options: Record<string, unknown> = {}): string {
+    return columnNames.map((name) => this._qi(name)).join(", ");
+  }
+
+  isOptionsIncludeDefault(options: Record<string, unknown>): boolean {
+    return "default" in options && !(options.null === false && options.default == null);
+  }
+
+  async changeTableComment(
+    _tableName: string,
+    _commentOrChanges: string | null | { from?: string; to?: string },
+  ): Promise<void> {
+    throw new Error(`${this.adapterName} does not support changing table comments`);
+  }
+
+  async changeColumnComment(
+    _tableName: string,
+    _columnName: string,
+    _commentOrChanges: string | null | { from?: string; to?: string },
+  ): Promise<void> {
+    throw new Error(`${this.adapterName} does not support changing column comments`);
+  }
+
+  createSchemaDumper(_options: Record<string, unknown> = {}): unknown {
+    return null;
+  }
+
+  isUseForeignKeys(): boolean {
+    return true;
+  }
+
+  async bulkChangeTable(
+    tableName: string,
+    operations: Array<[string, ...unknown[]]>,
+  ): Promise<void> {
+    for (const [command, ...args] of operations) {
+      const method = (this as any)[command];
+      if (typeof method === "function") {
+        await method.call(this, ...args);
+      }
+    }
+  }
+
+  validTableDefinitionOptions(): string[] {
+    return ["temporary", "ifNotExists", "options", "as", "comment", "charset", "collation"];
+  }
+
+  validColumnDefinitionOptions(): string[] {
+    return [
+      "limit",
+      "precision",
+      "scale",
+      "default",
+      "null",
+      "collation",
+      "comment",
+      "primaryKey",
+      "ifNotExists",
+    ];
+  }
+
+  validPrimaryKeyOptions(): string[] {
+    return ["limit", "default", "precision"];
+  }
+
+  maxIndexNameSize(): number {
+    return 62;
+  }
 }

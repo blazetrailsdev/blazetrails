@@ -105,9 +105,7 @@ export class SchemaCreation {
       if (change.defaultValue == null) {
         parts.push(`ALTER COLUMN ${col} DROP DEFAULT`);
       } else {
-        parts.push(
-          `ALTER COLUMN ${col} SET DEFAULT ${quoteDefaultExpression(change.defaultValue)}`,
-        );
+        parts.push(`ALTER COLUMN ${col} SET${quoteDefaultExpression(change.defaultValue)}`);
       }
     }
 

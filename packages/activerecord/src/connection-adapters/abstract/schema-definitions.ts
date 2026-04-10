@@ -738,7 +738,10 @@ export class TableDefinition {
       const tableElements = [...columnDefs];
       for (const chk of this.checkConstraints) {
         let chkSql = `CONSTRAINT ${quoteIdentifier(chk.name, this._adapterName)} CHECK (${chk.expression})`;
-        if (!chk.validate && this._adapterName === "postgres") {
+        if (!chk.validate) {
+          if (this._adapterName !== "postgres") {
+            throw new Error("Check constraint validate: false is only supported on PostgreSQL");
+          }
           chkSql += " NOT VALID";
         }
         tableElements.push(chkSql);

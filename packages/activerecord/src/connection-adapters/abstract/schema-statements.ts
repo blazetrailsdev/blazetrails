@@ -20,6 +20,7 @@ import {
   ForeignKeyDefinition,
   CheckConstraintDefinition,
   type AddForeignKeyOptions,
+  type AddIndexOptions,
   type ColumnType,
   type ColumnOptions,
 } from "./schema-definitions.js";
@@ -161,21 +162,7 @@ export class SchemaStatements {
   async addIndex(
     tableName: string,
     columns: string | string[],
-    options: {
-      unique?: boolean;
-      name?: string;
-      where?: string;
-      order?: Record<string, string>;
-      using?: string;
-      type?: string;
-      comment?: string;
-      ifNotExists?: boolean;
-      length?: Record<string, number>;
-      opclass?: Record<string, string>;
-      include?: string[];
-      nullsNotDistinct?: boolean;
-      algorithm?: string;
-    } = {},
+    options: AddIndexOptions = {},
   ): Promise<void> {
     const cols = Array.isArray(columns) ? columns : [columns];
     const indexName = options.name ?? this.indexName(tableName, { column: cols });
@@ -375,7 +362,7 @@ export class SchemaStatements {
     toTable: string,
     options: AddForeignKeyOptions = {},
   ): Promise<void> {
-    const column = options.column ?? `${toTable.replace(/s$/, "")}_id`;
+    const column = options.column ?? this.foreignKeyColumnFor(toTable, "id");
     const pk = options.primaryKey ?? "id";
     const name = options.name ?? `fk_${fromTable}_${column}`;
     const fkDef = new ForeignKeyDefinition(

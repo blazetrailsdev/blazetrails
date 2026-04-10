@@ -1,4 +1,5 @@
 import { quoteIdentifier, quoteTableName, quoteDefaultExpression } from "./quoting.js";
+import { singularize } from "@blazetrails/activesupport";
 
 /**
  * Column type mapping.
@@ -389,10 +390,10 @@ export class TableDefinition {
   column(
     name: string,
     type: ColumnType,
-    options: ColumnOptions & { index?: boolean | Record<string, unknown> } = {},
+    options: Omit<ColumnOptions, "index"> & { index?: boolean | Record<string, unknown> } = {},
   ): this {
     const { index, ...colOpts } = options;
-    this.columns.push(new ColumnDefinition(name, type, colOpts));
+    this.columns.push(new ColumnDefinition(name, type, colOpts as ColumnOptions));
     if (index) {
       const indexOpts = typeof index === "object" ? index : {};
       this.index([name], indexOpts as { unique?: boolean; name?: string });
@@ -419,7 +420,7 @@ export class TableDefinition {
     return new ForeignKeyDefinition(
       this.tableName,
       toTable,
-      options.column ?? `${toTable.replace(/s$/, "")}_id`,
+      options.column ?? `${singularize(toTable.split(".").at(-1) ?? toTable)}_id`,
       options.primaryKey ?? "id",
       options.name ?? `fk_${this.tableName}_${toTable}`,
       options.onDelete,
@@ -744,10 +745,10 @@ export class Table {
   async column(
     columnName: string,
     type: ColumnType,
-    options: ColumnOptions & { index?: boolean | Record<string, unknown> } = {},
+    options: Omit<ColumnOptions, "index"> & { index?: boolean | Record<string, unknown> } = {},
   ): Promise<void> {
     const { index: indexOpt, ...colOpts } = options;
-    await this._schema.addColumn(this._tableName, columnName, type, colOpts);
+    await this._schema.addColumn(this._tableName, columnName, type, colOpts as ColumnOptions);
     if (indexOpt) {
       const opts = typeof indexOpt === "object" ? indexOpt : {};
       await this._schema.addIndex(this._tableName, columnName, opts);
@@ -758,69 +759,109 @@ export class Table {
     return this._schema.columnExists!(this._tableName, columnName, type);
   }
 
+  private _require<K extends keyof SchemaStatementsLike>(
+    method: K,
+  ): NonNullable<SchemaStatementsLike[K]> {
+    const fn = this._schema[method];
+    if (!fn) throw new Error(`${method} is not supported by the current schema backend`);
+    return fn as NonNullable<SchemaStatementsLike[K]>;
+  }
+
   async isIndexExists(
     columnName: string | string[],
     options?: Record<string, unknown>,
   ): Promise<boolean> {
-    return this._schema.indexExists!(this._tableName, columnName, options);
+    return this._require("indexExists").call(this._schema, this._tableName, columnName, options);
   }
 
   async renameIndex(oldName: string, newName: string): Promise<void> {
-    return this._schema.renameIndex!(this._tableName, oldName, newName);
+    return this._require("renameIndex").call(this._schema, this._tableName, oldName, newName);
   }
 
   async change(columnName: string, type: ColumnType, options?: ColumnOptions): Promise<void> {
-    return this._schema.changeColumn!(this._tableName, columnName, type, options);
+    return this._require("changeColumn").call(
+      this._schema,
+      this._tableName,
+      columnName,
+      type,
+      options,
+    );
   }
 
   async changeDefault(columnName: string, defaultOrChanges: unknown): Promise<void> {
-    return this._schema.changeColumnDefault!(this._tableName, columnName, defaultOrChanges);
+    return this._require("changeColumnDefault").call(
+      this._schema,
+      this._tableName,
+      columnName,
+      defaultOrChanges,
+    );
   }
 
   async changeNull(columnName: string, isNull: boolean, defaultValue?: unknown): Promise<void> {
-    return this._schema.changeColumnNull!(this._tableName, columnName, isNull, defaultValue);
+    return this._require("changeColumnNull").call(
+      this._schema,
+      this._tableName,
+      columnName,
+      isNull,
+      defaultValue,
+    );
   }
 
   async removeTimestamps(options?: ColumnOptions): Promise<void> {
-    return this._schema.removeTimestamps!(this._tableName, options);
+    return this._require("removeTimestamps").call(this._schema, this._tableName, options);
   }
 
   async removeReferences(name: string, options?: Record<string, unknown>): Promise<void> {
-    return this._schema.removeReference!(this._tableName, name, options);
+    return this._require("removeReference").call(this._schema, this._tableName, name, options);
   }
 
   async foreignKey(toTable: string, options?: Record<string, unknown>): Promise<void> {
-    return this._schema.addForeignKey!(this._tableName, toTable, options);
+    return this._require("addForeignKey").call(this._schema, this._tableName, toTable, options);
   }
 
   async removeForeignKey(
     toTableOrOptions?: string | Record<string, unknown>,
     options?: Record<string, unknown>,
   ): Promise<void> {
-    return this._schema.removeForeignKey!(this._tableName, toTableOrOptions, options);
+    return this._require("removeForeignKey").call(
+      this._schema,
+      this._tableName,
+      toTableOrOptions,
+      options,
+    );
   }
 
   async isForeignKeyExists(toTableOrOptions?: string | Record<string, unknown>): Promise<boolean> {
-    return this._schema.foreignKeyExists!(this._tableName, toTableOrOptions);
+    return this._require("foreignKeyExists").call(this._schema, this._tableName, toTableOrOptions);
   }
 
   async checkConstraint(expression: string, options?: Record<string, unknown>): Promise<void> {
-    return this._schema.addCheckConstraint!(this._tableName, expression, options);
+    return this._require("addCheckConstraint").call(
+      this._schema,
+      this._tableName,
+      expression,
+      options,
+    );
   }
 
   async removeCheckConstraint(
     expressionOrOptions?: string | Record<string, unknown>,
     options?: Record<string, unknown>,
   ): Promise<void> {
-    return this._schema.removeCheckConstraint!(this._tableName, expressionOrOptions, options);
+    return this._require("removeCheckConstraint").call(
+      this._schema,
+      this._tableName,
+      expressionOrOptions,
+      options,
+    );
   }
 
   async isCheckConstraintExists(options?: Record<string, unknown>): Promise<boolean> {
-    return this._schema.isCheckConstraintExists!(this._tableName, options);
+    return this._require("isCheckConstraintExists").call(this._schema, this._tableName, options);
   }
 
   async primaryKey(): Promise<string | null> {
-    return this._schema.primaryKey!(this._tableName);
+    return this._require("primaryKey").call(this._schema, this._tableName);
   }
 
   async add(columnName: string, type: ColumnType, options?: ColumnOptions): Promise<void> {

@@ -368,9 +368,10 @@ export class TableDefinition {
     primaryKey?: string,
     _options: Record<string, unknown> = {},
   ): void {
-    // Remove any existing PK columns
-    const existingPkIdx = this.columns.findIndex((c) => c.options.primaryKey);
-    if (existingPkIdx >= 0) this.columns.splice(existingPkIdx, 1);
+    // Remove all existing PK columns
+    for (let i = this.columns.length - 1; i >= 0; i--) {
+      if (this.columns[i].options.primaryKey) this.columns.splice(i, 1);
+    }
 
     if (id === false) return;
 
@@ -406,11 +407,19 @@ export class TableDefinition {
       new CheckConstraintDefinition(
         this.tableName,
         expression,
-        options.name ?? `chk_${this.tableName}_${expression.slice(0, 20)}`,
+        options.name ?? this._checkConstraintName(expression),
         options.validate ?? true,
       ),
     );
     return this;
+  }
+
+  private _checkConstraintName(expression: string): string {
+    let hash = 0;
+    for (let i = 0; i < expression.length; i++) {
+      hash = ((hash << 5) - hash + expression.charCodeAt(i)) | 0;
+    }
+    return `chk_rails_${(hash >>> 0).toString(16).padStart(8, "0")}`;
   }
 
   newForeignKeyDefinition(
@@ -422,7 +431,8 @@ export class TableDefinition {
       toTable,
       options.column ?? `${singularize(toTable.split(".").at(-1) ?? toTable)}_id`,
       options.primaryKey ?? "id",
-      options.name ?? `fk_${this.tableName}_${toTable}`,
+      options.name ??
+        `fk_${this.tableName}_${options.column ?? `${singularize(toTable.split(".").at(-1) ?? toTable)}_id`}`,
       options.onDelete,
       options.onUpdate,
     );
@@ -435,7 +445,7 @@ export class TableDefinition {
     return new CheckConstraintDefinition(
       this.tableName,
       expression,
-      options.name ?? `chk_${this.tableName}_${expression.slice(0, 20)}`,
+      options.name ?? this._checkConstraintName(expression),
       options.validate ?? true,
     );
   }
@@ -756,7 +766,7 @@ export class Table {
   }
 
   async isColumnExists(columnName: string, type?: ColumnType): Promise<boolean> {
-    return this._schema.columnExists!(this._tableName, columnName, type);
+    return this._require("columnExists").call(this._schema, this._tableName, columnName, type);
   }
 
   private _require<K extends keyof SchemaStatementsLike>(
@@ -823,12 +833,11 @@ export class Table {
     toTableOrOptions?: string | Record<string, unknown>,
     options?: Record<string, unknown>,
   ): Promise<void> {
-    return this._require("removeForeignKey").call(
-      this._schema,
-      this._tableName,
-      toTableOrOptions,
-      options,
-    );
+    const merged =
+      typeof toTableOrOptions === "string" && options
+        ? { ...options, toTable: toTableOrOptions }
+        : toTableOrOptions;
+    return this._require("removeForeignKey").call(this._schema, this._tableName, merged);
   }
 
   async isForeignKeyExists(toTableOrOptions?: string | Record<string, unknown>): Promise<boolean> {
@@ -848,12 +857,11 @@ export class Table {
     expressionOrOptions?: string | Record<string, unknown>,
     options?: Record<string, unknown>,
   ): Promise<void> {
-    return this._require("removeCheckConstraint").call(
-      this._schema,
-      this._tableName,
-      expressionOrOptions,
-      options,
-    );
+    const merged =
+      typeof expressionOrOptions === "string" && options
+        ? { ...options, expression: expressionOrOptions }
+        : expressionOrOptions;
+    return this._require("removeCheckConstraint").call(this._schema, this._tableName, merged);
   }
 
   async isCheckConstraintExists(options?: Record<string, unknown>): Promise<boolean> {

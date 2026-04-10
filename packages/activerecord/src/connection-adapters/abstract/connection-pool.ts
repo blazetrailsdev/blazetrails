@@ -16,7 +16,8 @@ import type { TransactionManager } from "./transaction.js";
 
 /**
  * A connection that supports transaction management.
- * AbstractAdapter satisfies this interface; the pool uses it for pin/unpin.
+ * Adapters extending AbstractAdapter and implementing DatabaseAdapter satisfy
+ * this interface; the pool uses it for pin/unpin.
  */
 interface TransactionAwareConnection extends DatabaseAdapter {
   transactionManager: TransactionManager;
@@ -582,5 +583,11 @@ export class ConnectionPool implements ReapablePool {
 }
 
 function isTransactionAware(conn: DatabaseAdapter): conn is TransactionAwareConnection {
-  return "transactionManager" in conn && "verifyBang" in conn && "resetBang" in conn;
+  const c = conn as Partial<TransactionAwareConnection>;
+  return (
+    typeof c.verifyBang === "function" &&
+    typeof c.resetBang === "function" &&
+    typeof c.transactionManager === "object" &&
+    c.transactionManager !== null
+  );
 }

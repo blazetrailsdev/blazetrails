@@ -28,6 +28,8 @@ import { quoteIdentifier, quoteDefaultExpression } from "./quoting.js";
 import { Column } from "../column.js";
 import { SqlTypeMetadata } from "../sql-type-metadata.js";
 import { deduplicate } from "../deduplicable.js";
+import { singularize } from "@blazetrails/activesupport";
+import { SchemaDumper } from "./schema-dumper.js";
 
 export class SchemaStatements {
   private _schemaCreation?: SchemaCreation;
@@ -866,17 +868,51 @@ export class SchemaStatements {
   buildCreateJoinTableDefinition(
     table1: string,
     table2: string,
-    options: { columnOptions?: Record<string, unknown>; [key: string]: unknown } = {},
+    options: {
+      columnOptions?: Record<string, unknown>;
+      tableName?: string;
+      [key: string]: unknown;
+    } = {},
     fn?: (td: TableDefinition) => void,
   ): TableDefinition {
-    const joinTableName = [table1, table2].sort().join("_");
-    const { columnOptions = {}, ...rest } = options;
+    const joinTableName = options.tableName ?? this._findJoinTableName(table1, table2);
+    const { columnOptions = {}, tableName: _, ...rest } = options;
+    const mergedColOpts = { null: false, index: false, ...columnOptions };
+
+    const t1Ref = this._referenceNameForTable(table1);
+    const t2Ref = this._referenceNameForTable(table2);
 
     return this.buildCreateTableDefinition(joinTableName, { ...rest, id: false }, (td) => {
-      td.references(table1.replace(/s$/, ""), { null: false, index: false, ...columnOptions });
-      td.references(table2.replace(/s$/, ""), { null: false, index: false, ...columnOptions });
+      td.references(t1Ref, mergedColOpts);
+      td.references(t2Ref, mergedColOpts);
       if (fn) fn(td);
     });
+  }
+
+  private _findJoinTableName(table1: string, table2: string): string {
+    const [t1, t2] = [table1, table2].sort();
+    const parts1 = t1.split("_");
+    const parts2 = t2.split("_");
+    // Remove common prefix (Rails dedup: music_artists + music_records → music_artists_records)
+    let commonLen = 0;
+    while (
+      commonLen < parts1.length - 1 &&
+      commonLen < parts2.length - 1 &&
+      parts1[commonLen] === parts2[commonLen]
+    ) {
+      commonLen++;
+    }
+    if (commonLen > 0) {
+      const prefix = parts1.slice(0, commonLen).join("_");
+      const suffix1 = parts1.slice(commonLen).join("_");
+      const suffix2 = parts2.slice(commonLen).join("_");
+      return `${prefix}_${suffix1}_${suffix2}`;
+    }
+    return `${t1}_${t2}`;
+  }
+
+  private _referenceNameForTable(tableName: string): string {
+    return singularize(tableName.replace(/^.*_/, ""));
   }
 
   async buildAddColumnDefinition(
@@ -943,19 +979,33 @@ export class SchemaStatements {
 
   foreignKeyColumnFor(tableName: string, columnName = "id"): string {
     const name = tableName.replace(/^.*\./, "");
-    const singular = name.replace(/s$/, "");
-    return `${singular}_${columnName}`;
+    return `${singularize(name)}_${columnName}`;
   }
 
   foreignKeyOptions(
-    _fromTable: string,
+    fromTable: string,
     toTable: string,
     options: Record<string, unknown> = {},
   ): Record<string, unknown> {
     const result = { ...options };
-    if (!result.column) {
-      result.column = this.foreignKeyColumnFor(toTable, "id");
+
+    if (Array.isArray(result.primaryKey)) {
+      if (!result.column) {
+        result.column = (result.primaryKey as string[]).map((pk) =>
+          this.foreignKeyColumnFor(toTable, pk),
+        );
+      }
+    } else {
+      if (!result.column) {
+        result.column = this.foreignKeyColumnFor(toTable, "id");
+      }
     }
+
+    if (!result.name) {
+      const cols = Array.isArray(result.column) ? result.column : [result.column];
+      result.name = `fk_rails_${fromTable}_${(cols as string[]).join("_")}`;
+    }
+
     return result;
   }
 
@@ -995,8 +1045,16 @@ export class SchemaStatements {
     await this.adapter.execute(sql);
   }
 
-  dumpSchemaInformation(): string | null {
-    return null;
+  async dumpSchemaInformation(): Promise<string | null> {
+    const smTable = (this as any).pool?.schemaMigration;
+    if (!smTable) return null;
+    const versions: string[] =
+      typeof smTable.versions === "function" ? await smTable.versions() : (smTable.versions ?? []);
+    if (versions.length === 0) return null;
+    const tableName = this._qi(smTable.tableName ?? "schema_migrations");
+    return versions
+      .map((v: string) => `INSERT INTO ${tableName} (version) VALUES ('${v}');`)
+      .join("\n");
   }
 
   internalStringOptionsForPrimaryKey(): Record<string, unknown> {
@@ -1004,19 +1062,62 @@ export class SchemaStatements {
   }
 
   async assumeMigratedUptoVersion(version: number | string): Promise<void> {
-    const ver = typeof version === "string" ? parseInt(version, 10) : version;
+    const ver = typeof version === "number" ? version : parseInt(version, 10);
     const smTable = this._qi("schema_migrations");
+
+    // Insert the target version if not already recorded
     await this.adapter.execute(
       `INSERT INTO ${smTable} (version) VALUES ('${ver}') ON CONFLICT DO NOTHING`,
     );
+
+    // If pool has migration context, also insert all migration versions below this one
+    const migrationContext = (this as any).pool?.migrationContext;
+    if (migrationContext) {
+      const migrated: number[] =
+        typeof migrationContext.getAllVersions === "function"
+          ? await migrationContext.getAllVersions()
+          : [];
+      const allVersions: number[] = (migrationContext.migrations ?? []).map(
+        (m: { version: number }) => m.version,
+      );
+      const toInsert = allVersions.filter((v) => v < ver && !migrated.includes(v));
+      for (const v of toInsert) {
+        await this.adapter.execute(
+          `INSERT INTO ${smTable} (version) VALUES ('${v}') ON CONFLICT DO NOTHING`,
+        );
+      }
+    }
   }
 
   columnsForDistinct(columns: string, _orders?: string[]): string {
     return columns;
   }
 
-  distinctRelationForPrimaryKey(relation: unknown): unknown {
-    return relation;
+  async distinctRelationForPrimaryKey(relation: {
+    primaryKey?: string | string[];
+    table?: { [key: string]: unknown };
+    orderValues?: unknown[];
+    reselect?: (...cols: unknown[]) => unknown;
+    distinctBang?: () => unknown;
+    noneBang?: () => void;
+    where?: (conditions: Record<string, unknown>) => unknown;
+    limitValue?: number | null;
+    offsetValue?: number | null;
+  }): Promise<unknown> {
+    const pk = relation.primaryKey;
+    if (!pk) return relation;
+
+    const pkColumns = Array.isArray(pk) ? pk : [pk];
+    const values = this.columnsForDistinct(
+      pkColumns.join(", "),
+      (relation.orderValues as string[]) ?? [],
+    );
+
+    let limited: any = relation;
+    if (limited.reselect) limited = limited.reselect(values);
+    if (limited.distinctBang) limited.distinctBang();
+
+    return limited;
   }
 
   updateTableDefinition(tableName: string, base: unknown): Table {
@@ -1078,24 +1179,59 @@ export class SchemaStatements {
     throw new Error(`${this.adapterName} does not support changing column comments`);
   }
 
-  createSchemaDumper(_options: Record<string, unknown> = {}): unknown {
-    return null;
+  createSchemaDumper(options: Record<string, unknown> = {}): SchemaDumper {
+    return SchemaDumper.create(this as any, options);
   }
 
   isUseForeignKeys(): boolean {
-    return true;
+    const adapter = this.adapter as any;
+    const supportsForeignKeys =
+      typeof adapter.supportsForeignKeys === "function" ? adapter.supportsForeignKeys() : true;
+    const foreignKeysEnabled =
+      typeof adapter.foreignKeysEnabled === "function" ? adapter.foreignKeysEnabled() : true;
+    return supportsForeignKeys && foreignKeysEnabled;
   }
 
   async bulkChangeTable(
     tableName: string,
     operations: Array<[string, ...unknown[]]>,
   ): Promise<void> {
+    const sqlFragments: string[] = [];
+    const nonCombinable: Array<() => Promise<void>> = [];
+
     for (const [command, ...args] of operations) {
-      const method = (this as any)[command];
-      if (typeof method === "function") {
-        await method.call(this, ...args);
+      const forAlterMethod = (this as any)[`${command}ForAlter`];
+      if (typeof forAlterMethod === "function") {
+        const result = forAlterMethod.call(this, ...args);
+        const results = Array.isArray(result) ? result : [result];
+        for (const r of results) {
+          if (typeof r === "string") {
+            sqlFragments.push(r);
+          } else if (typeof r === "function") {
+            nonCombinable.push(r);
+          }
+        }
+      } else {
+        if (sqlFragments.length > 0) {
+          await this.adapter.execute(
+            `ALTER TABLE ${this._qi(tableName)} ${sqlFragments.join(", ")}`,
+          );
+          sqlFragments.length = 0;
+        }
+        for (const proc of nonCombinable) await proc();
+        nonCombinable.length = 0;
+
+        const method = (this as any)[command];
+        if (typeof method === "function") {
+          await method.call(this, ...args);
+        }
       }
     }
+
+    if (sqlFragments.length > 0) {
+      await this.adapter.execute(`ALTER TABLE ${this._qi(tableName)} ${sqlFragments.join(", ")}`);
+    }
+    for (const proc of nonCombinable) await proc();
   }
 
   validTableDefinitionOptions(): string[] {

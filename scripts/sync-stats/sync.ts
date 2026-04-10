@@ -1580,6 +1580,64 @@ async function syncCheckAnnotations(mode: "latest" | "refresh") {
   }
 }
 
+async function syncWorkflowSteps(mode: "latest" | "refresh") {
+  const limitClause = mode === "latest" ? "LIMIT 20" : "";
+  const runsToSync = await Base.adapter.execute(`
+    SELECT DISTINCT wr.id as run_id, wr.pr_number
+    FROM workflow_runs wr
+    JOIN workflow_jobs wj ON wj.run_id = wr.id
+    WHERE wj.conclusion IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM workflow_steps ws WHERE ws.job_id = wj.id
+    )
+    ORDER BY wr.pr_number DESC, wr.id
+    ${limitClause}
+  `);
+
+  if (runsToSync.length === 0) return;
+  console.log(`Backfilling workflow steps for ${runsToSync.length} runs...`);
+
+  for (const row of runsToSync) {
+    const runId = row.run_id as number;
+    try {
+      const jobsResp = ghJson<{ jobs: GhWorkflowJob[] }>(
+        `api repos/${REPO}/actions/runs/${runId}/jobs?per_page=100`,
+      );
+      for (const job of jobsResp.jobs) {
+        if (job.steps && job.steps.length > 0) {
+          await WorkflowStep.upsertAll(
+            job.steps.map((step) => {
+              const stepDuration =
+                step.started_at && step.completed_at
+                  ? Math.round(
+                      (new Date(step.completed_at).getTime() -
+                        new Date(step.started_at).getTime()) /
+                        1000,
+                    )
+                  : null;
+              return {
+                job_id: job.id,
+                name: step.name,
+                status: step.status,
+                conclusion: step.conclusion,
+                number: step.number,
+                started_at: step.started_at,
+                completed_at: step.completed_at,
+                duration_seconds: stepDuration,
+              };
+            }),
+            { uniqueBy: ["job_id", "number"] },
+          );
+        }
+      }
+    } catch (err) {
+      console.warn(
+        `  Failed to backfill steps for run ${runId}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+  }
+}
+
 async function syncJobLogs(mode: "latest" | "refresh"): Promise<number> {
   const limitClause = mode === "latest" ? "LIMIT 50" : "";
   const jobsToFetch = await Base.adapter.execute(`
@@ -1957,6 +2015,9 @@ async function main() {
 
     console.log("\n=== Syncing check annotations ===");
     await syncCheckAnnotations(fetchMode);
+
+    console.log("\n=== Syncing workflow steps ===");
+    await syncWorkflowSteps(fetchMode);
 
     console.log("\n=== Syncing job logs ===");
     const logsFetched = await syncJobLogs(fetchMode);

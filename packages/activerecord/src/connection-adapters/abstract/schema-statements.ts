@@ -1061,8 +1061,9 @@ export class SchemaStatements {
         if (options.expression && c.expression === options.expression) return true;
         return false;
       });
-    } catch {
-      return false;
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith("NotImplementedError")) return false;
+      throw e;
     }
   }
 
@@ -1114,6 +1115,7 @@ export class SchemaStatements {
       await this.adapter.executeMutation(
         `INSERT INTO ${smTable} (version) VALUES ('${escapedVer}')`,
       );
+      existing.add(ver);
     }
 
     // If pool has migration context, also insert all migration versions below this one
@@ -1122,10 +1124,13 @@ export class SchemaStatements {
       const allVersions: string[] = (migrationContext.migrations ?? [])
         .map((m: { version: number | string }) => String(m.version))
         .filter((v: string) => /^\d+$/.test(v));
-      const toInsert = allVersions.filter((v) => BigInt(v) < BigInt(ver) && !existing.has(v));
+      const toInsert = [...new Set(allVersions)].filter(
+        (v) => BigInt(v) < BigInt(ver) && !existing.has(v),
+      );
       for (const v of toInsert) {
         const vStr = v.replace(/'/g, "''");
         await this.adapter.executeMutation(`INSERT INTO ${smTable} (version) VALUES ('${vStr}')`);
+        existing.add(v);
       }
     }
   }
@@ -1190,13 +1195,15 @@ export class SchemaStatements {
 
   indexAlgorithm(algorithm?: string): string | undefined {
     if (!algorithm) return undefined;
+    const normalized = algorithm.toLowerCase();
     const valid = ["default", "concurrently"];
-    if (!valid.includes(algorithm.toLowerCase())) {
+    if (!valid.includes(normalized)) {
       throw new Error(
         `Algorithm must be one of the following: ${valid.map((a) => `'${a}'`).join(", ")}`,
       );
     }
-    return algorithm;
+    if (normalized === "default") return undefined;
+    return normalized;
   }
 
   quotedColumnsForIndex(columnNames: string[], _options: Record<string, unknown> = {}): string {

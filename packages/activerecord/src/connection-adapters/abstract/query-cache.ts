@@ -1,5 +1,5 @@
 import { QueryCacheStore } from "../../query-cache.js";
-import { selectAll as baseSelectAll, type DatabaseStatementsHost } from "./database-statements.js";
+import type { DatabaseStatementsHost } from "./database-statements.js";
 
 const DEFAULT_SIZE = 100;
 
@@ -140,7 +140,7 @@ export class ConnectionPoolConfiguration {
 
   get queryCache(): Store {
     return this._threadQueryCaches.computeIfAbsent("default", () => {
-      return new Store(this._queryCacheMaxSize ?? undefined);
+      return new Store(this._queryCacheMaxSize ?? 0);
     });
   }
 }
@@ -257,29 +257,43 @@ export function clearQueryCache(this: QueryCacheHost): void {
 }
 
 /**
- * Cached override for selectAll. When the query cache is enabled and the
- * query is not locked (FOR UPDATE), results are served from cache.
+ * Creates a cached selectAll that wraps the original. When the query cache
+ * is enabled and the query is not locked (FOR UPDATE), results are served
+ * from cache. Otherwise delegates to the original.
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::QueryCache#select_all
  */
-export async function selectAll(
+export function selectAll(
+  original: (
+    sql: string,
+    name?: string | null,
+    binds?: unknown[],
+  ) => Promise<Record<string, unknown>[]>,
+): (
   this: QueryCacheHost,
   sql: string,
   name?: string | null,
   binds?: unknown[],
-): Promise<Record<string, unknown>[]> {
-  const qc = this._queryCache;
-  if (qc?.enabled) {
-    if (/\bFOR\s+(UPDATE|SHARE|NO\s+KEY\s+UPDATE|KEY\s+SHARE)\b/i.test(sql)) {
-      return baseSelectAll.call(this, sql, name, binds);
-    }
+) => Promise<Record<string, unknown>[]> {
+  return async function cachedSelectAll(
+    this: QueryCacheHost,
+    sql: string,
+    name?: string | null,
+    binds?: unknown[],
+  ): Promise<Record<string, unknown>[]> {
+    const qc = this._queryCache;
+    if (qc?.enabled) {
+      if (/\bFOR\s+(UPDATE|SHARE|NO\s+KEY\s+UPDATE|KEY\s+SHARE)\b/i.test(sql)) {
+        return original.call(this, sql, name, binds);
+      }
 
-    const key = binds && binds.length > 0 ? JSON.stringify([sql, binds]) : sql;
-    return qc.computeIfAbsent(key, async () => {
-      return baseSelectAll.call(this, sql, name, binds);
-    });
-  }
-  return baseSelectAll.call(this, sql, name, binds);
+      const key = binds && binds.length > 0 ? JSON.stringify([sql, binds]) : sql;
+      return qc.computeIfAbsent(key, async () => {
+        return original.call(this, sql, name, binds);
+      });
+    }
+    return original.call(this, sql, name, binds);
+  };
 }
 
 /**
@@ -299,8 +313,8 @@ export function dirtiesQueryCache(
     if (typeof original !== "function") continue;
 
     _base.prototype[methodName] = function (this: QueryCacheHost, ...args: unknown[]) {
-      if ((this.pool as any)?.dirtiesQueryCache) {
-        this._queryCache?.clear();
+      if (this._queryCache?.dirties) {
+        this._queryCache.clear();
       }
       return original.apply(this, args);
     };

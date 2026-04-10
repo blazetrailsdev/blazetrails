@@ -1196,14 +1196,23 @@ export class SchemaStatements {
   indexAlgorithm(algorithm?: string): string | undefined {
     if (!algorithm) return undefined;
     const normalized = algorithm.toLowerCase();
-    const valid = ["default", "concurrently"];
-    if (!valid.includes(normalized)) {
-      throw new Error(
-        `Algorithm must be one of the following: ${valid.map((a) => `'${a}'`).join(", ")}`,
-      );
-    }
     if (normalized === "default") return undefined;
-    return normalized;
+
+    const adapterAlgorithms =
+      typeof (this.adapter as any).indexAlgorithms === "function"
+        ? ((this.adapter as any).indexAlgorithms() as Record<string, string>)
+        : null;
+
+    if (adapterAlgorithms && normalized in adapterAlgorithms) {
+      return adapterAlgorithms[normalized];
+    }
+
+    const valid = adapterAlgorithms
+      ? ["default", ...Object.keys(adapterAlgorithms)]
+      : ["default", "concurrently"];
+    throw new Error(
+      `Algorithm must be one of the following: ${valid.map((a) => `'${a}'`).join(", ")}`,
+    );
   }
 
   quotedColumnsForIndex(columnNames: string[], _options: Record<string, unknown> = {}): string {

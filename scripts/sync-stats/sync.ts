@@ -243,10 +243,13 @@ class CompareLog extends Base {
 class RawJobLog extends Base {
   static {
     this.tableName = "raw_job_logs";
+    this.primaryKey = "job_id";
     this.attribute("job_id", "integer");
+    this.attribute("run_id", "integer");
+    this.attribute("job_name", "string");
     this.attribute("merge_commit_sha", "string");
     this.attribute("pr_number", "integer");
-    this.attribute("log_output", "string");
+    this.attribute("log_output", "text");
   }
 }
 
@@ -296,13 +299,23 @@ async function migrateDb(adapter: SQLite3Adapter) {
         t.index(["merge_commit_sha", "step_name"], { unique: true });
       });
     }
-    if (!(await tableExists(adapter, "raw_job_logs"))) {
-      await ctx.createTable("raw_job_logs", {}, (t) => {
-        t.integer("job_id");
+    const jobLogCols = (await tableExists(adapter, "raw_job_logs"))
+      ? await adapter.execute(`PRAGMA table_info(raw_job_logs)`)
+      : [];
+    if (
+      !(await tableExists(adapter, "raw_job_logs")) ||
+      !jobLogCols.some((c: any) => c.name === "run_id")
+    ) {
+      await adapter.executeMutation(`DROP TABLE IF EXISTS raw_job_logs`);
+      await ctx.createTable("raw_job_logs", { id: false }, (t) => {
+        t.integer("job_id", { primaryKey: true });
+        t.integer("run_id");
+        t.string("job_name");
         t.string("merge_commit_sha");
         t.integer("pr_number");
         t.text("log_output");
-        t.index(["merge_commit_sha"], { unique: true });
+        t.index(["merge_commit_sha"]);
+        t.index(["run_id"]);
       });
     }
 
@@ -588,12 +601,15 @@ async function migrateDb(adapter: SQLite3Adapter) {
       t.index(["merge_commit_sha", "step_name"], { unique: true });
     });
 
-    await ctx.createTable("raw_job_logs", {}, (t) => {
-      t.integer("job_id");
+    await ctx.createTable("raw_job_logs", { id: false }, (t) => {
+      t.integer("job_id", { primaryKey: true });
+      t.integer("run_id");
+      t.string("job_name");
       t.string("merge_commit_sha");
       t.integer("pr_number");
       t.text("log_output");
-      t.index(["merge_commit_sha"], { unique: true });
+      t.index(["merge_commit_sha"]);
+      t.index(["run_id"]);
     });
 
     await ctx.createTable("sync_log", {}, (t) => {
@@ -1469,37 +1485,91 @@ function parseApiCompareFromLogs(logs: string) {
   return results;
 }
 
-async function syncCompareStats(mode: "latest" | "refresh"): Promise<number> {
-  const limitClause = mode === "latest" ? "LIMIT 10" : "";
-  const runsToProcess = await WorkflowRun.findBySql(`
-    SELECT DISTINCT wr.id, wr.head_sha, wr.pr_number
-    FROM workflow_runs wr
-    JOIN workflow_jobs wj ON wj.run_id = wr.id
+async function syncJobLogs(mode: "latest" | "refresh"): Promise<number> {
+  const limitClause = mode === "latest" ? "LIMIT 50" : "";
+  const jobsToFetch = await Base.adapter.execute(`
+    SELECT wj.id as job_id, wj.run_id, wj.name as job_name,
+           wr.head_sha, wr.pr_number
+    FROM workflow_jobs wj
+    JOIN workflow_runs wr ON wr.id = wj.run_id
+    WHERE wj.conclusion IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM raw_job_logs rjl WHERE rjl.job_id = wj.id
+    )
+    ORDER BY wr.pr_number DESC, wj.run_id, wj.id
+    ${limitClause}
+  `);
+
+  if (jobsToFetch.length === 0) {
+    console.log("All job logs already synced");
+    return 0;
+  }
+
+  console.log(`Fetching logs for ${jobsToFetch.length} jobs...`);
+  let fetched = 0;
+
+  for (const job of jobsToFetch) {
+    const jobId = job.job_id as number;
+    const runId = job.run_id as number;
+    const jobName = job.job_name as string;
+    const headSha = job.head_sha as string;
+    const prNumber = job.pr_number as number;
+
+    try {
+      const logs = gh(`api repos/${REPO}/actions/jobs/${jobId}/logs`);
+      await RawJobLog.upsertAll(
+        [
+          {
+            job_id: jobId,
+            run_id: runId,
+            job_name: jobName,
+            merge_commit_sha: headSha,
+            pr_number: prNumber,
+            log_output: logs,
+          },
+        ],
+        { uniqueBy: "job_id" },
+      );
+      fetched++;
+      if (fetched % 25 === 0) {
+        console.log(`  Fetched ${fetched}/${jobsToFetch.length} job logs...`);
+      }
+    } catch (err) {
+      console.warn(
+        `  Failed to fetch logs for job ${jobId} "${jobName}" (PR #${prNumber}): ${err instanceof Error ? err.message : err}`,
+      );
+    }
+  }
+
+  console.log(`  Fetched ${fetched} job logs`);
+  return fetched;
+}
+
+async function syncCompareStats(): Promise<number> {
+  const runsToProcess = await Base.adapter.execute(`
+    SELECT DISTINCT rjl.job_id, rjl.merge_commit_sha, rjl.pr_number
+    FROM raw_job_logs rjl
+    JOIN workflow_jobs wj ON wj.id = rjl.job_id
     WHERE wj.name = 'Rails API/Test Comparison'
     AND wj.conclusion = 'success'
     AND (
       NOT EXISTS (
         SELECT 1 FROM test_compare_stats tcs
-        WHERE tcs.merge_commit_sha = wr.head_sha
+        WHERE tcs.merge_commit_sha = rjl.merge_commit_sha
       )
       OR NOT EXISTS (
         SELECT 1 FROM api_compare_stats acs
-        WHERE acs.merge_commit_sha = wr.head_sha
+        WHERE acs.merge_commit_sha = rjl.merge_commit_sha
       )
       OR EXISTS (
         WITH expected(step_name) AS (VALUES ('api_compare'), ('test_compare'))
         SELECT 1 FROM expected e
         LEFT JOIN compare_logs cl
-          ON cl.merge_commit_sha = wr.head_sha AND cl.step_name = e.step_name
+          ON cl.merge_commit_sha = rjl.merge_commit_sha AND cl.step_name = e.step_name
         WHERE cl.step_name IS NULL
       )
-      OR NOT EXISTS (
-        SELECT 1 FROM raw_job_logs rjl
-        WHERE rjl.merge_commit_sha = wr.head_sha
-      )
     )
-    ORDER BY wr.pr_number DESC
-    ${limitClause}
+    ORDER BY rjl.pr_number DESC
   `);
 
   if (runsToProcess.length === 0) {
@@ -1507,92 +1577,77 @@ async function syncCompareStats(mode: "latest" | "refresh"): Promise<number> {
     return 0;
   }
 
-  console.log(`Parsing CI logs for ${runsToProcess.length} workflow runs...`);
+  console.log(`Parsing compare stats from ${runsToProcess.length} job logs...`);
   let parsed = 0;
 
   for (const row of runsToProcess) {
-    const runId = row.readAttribute("id") as number;
-    const headSha = row.readAttribute("head_sha") as string;
-    const prNumber = row.readAttribute("pr_number") as number;
+    const jobId = row.job_id as number;
+    const headSha = row.merge_commit_sha as string;
+    const prNumber = row.pr_number as number;
 
-    const jobRows = await Base.adapter.execute(
-      `SELECT id FROM workflow_jobs WHERE run_id = ? AND name = ? AND conclusion = 'success' ORDER BY completed_at DESC LIMIT 1`,
-      [runId, "Rails API/Test Comparison"],
+    const logRows = await Base.adapter.execute(
+      `SELECT log_output FROM raw_job_logs WHERE job_id = ?`,
+      [jobId],
     );
-    if (jobRows.length === 0) continue;
-    const jobId = jobRows[0].id as number;
+    if (logRows.length === 0) continue;
+    const logs = logRows[0].log_output as string;
 
-    try {
-      const logs = gh(`api repos/${REPO}/actions/jobs/${jobId}/logs`);
-
-      // Store full raw job log for future re-parsing
-      await RawJobLog.upsertAll(
-        [{ job_id: jobId, merge_commit_sha: headSha, pr_number: prNumber, log_output: logs }],
-        { uniqueBy: ["merge_commit_sha"] },
+    const stepLogs = extractStepLogs(logs);
+    if (stepLogs.size > 0) {
+      await CompareLog.upsertAll(
+        [...stepLogs.entries()].map(([stepName, output]) => ({
+          merge_commit_sha: headSha,
+          pr_number: prNumber,
+          step_name: stepName,
+          log_output: output,
+        })),
+        { uniqueBy: ["merge_commit_sha", "step_name"] },
       );
+    }
 
-      // Store raw step logs
-      const stepLogs = extractStepLogs(logs);
-      if (stepLogs.size > 0) {
-        await CompareLog.upsertAll(
-          [...stepLogs.entries()].map(([stepName, output]) => ({
-            merge_commit_sha: headSha,
-            pr_number: prNumber,
-            step_name: stepName,
-            log_output: output,
-          })),
-          { uniqueBy: ["merge_commit_sha", "step_name"] },
-        );
-      }
+    const testStats = parseTestCompareFromLogs(logs);
+    if (testStats.size > 0) {
+      await TestCompareStat.upsertAll(
+        [...testStats.entries()].map(([pkg, s]) => ({
+          merge_commit_sha: headSha,
+          pr_number: prNumber,
+          package: pkg,
+          matched: s.matched,
+          total: s.total,
+          percent: s.percent,
+          skipped: s.skipped,
+          files_mapped: s.filesMapped,
+          files_total: s.filesTotal,
+          misplaced: s.misplaced,
+        })),
+        { uniqueBy: ["merge_commit_sha", "package"] },
+      );
+    }
 
-      const testStats = parseTestCompareFromLogs(logs);
-      if (testStats.size > 0) {
-        await TestCompareStat.upsertAll(
-          [...testStats.entries()].map(([pkg, s]) => ({
-            merge_commit_sha: headSha,
-            pr_number: prNumber,
-            package: pkg,
-            matched: s.matched,
-            total: s.total,
-            percent: s.percent,
-            skipped: s.skipped,
-            files_mapped: s.filesMapped,
-            files_total: s.filesTotal,
-            misplaced: s.misplaced,
-          })),
-          { uniqueBy: ["merge_commit_sha", "package"] },
-        );
-      }
+    const apiStats = parseApiCompareFromLogs(logs);
+    if (apiStats.size > 0) {
+      await ApiCompareStat.upsertAll(
+        [...apiStats.entries()].map(([pkg, s]) => ({
+          merge_commit_sha: headSha,
+          pr_number: prNumber,
+          package: pkg,
+          matched: s.matched,
+          total: s.total,
+          percent: s.percent,
+          misplaced: s.misplaced,
+          missing: s.missing,
+        })),
+        { uniqueBy: ["merge_commit_sha", "package"] },
+      );
+    }
 
-      const apiStats = parseApiCompareFromLogs(logs);
-      if (apiStats.size > 0) {
-        await ApiCompareStat.upsertAll(
-          [...apiStats.entries()].map(([pkg, s]) => ({
-            merge_commit_sha: headSha,
-            pr_number: prNumber,
-            package: pkg,
-            matched: s.matched,
-            total: s.total,
-            percent: s.percent,
-            misplaced: s.misplaced,
-            missing: s.missing,
-          })),
-          { uniqueBy: ["merge_commit_sha", "package"] },
-        );
-      }
-
-      if (stepLogs.size > 0 || testStats.size > 0 || apiStats.size > 0) {
-        parsed++;
-        const totalTests = [...testStats.values()].reduce((sum, s) => sum + s.matched, 0);
-        const totalApi = [...apiStats.values()].reduce((sum, s) => sum + s.matched, 0);
-        const logSteps = [...stepLogs.keys()].join(", ");
-        console.log(
-          `  PR #${prNumber}: ${testStats.size} test packages (${totalTests} matched), ${apiStats.size} api packages (${totalApi} matched), logs: [${logSteps}]`,
-        );
-      }
-    } catch (err) {
-      console.warn(
-        `  Failed to fetch logs for job ${jobId} (PR #${prNumber}): ${err instanceof Error ? err.message : err}`,
+    if (stepLogs.size > 0 || testStats.size > 0 || apiStats.size > 0) {
+      parsed++;
+      const totalTests = [...testStats.values()].reduce((sum, s) => sum + s.matched, 0);
+      const totalApi = [...apiStats.values()].reduce((sum, s) => sum + s.matched, 0);
+      const logSteps = [...stepLogs.keys()].join(", ");
+      console.log(
+        `  PR #${prNumber}: ${testStats.size} test packages (${totalTests} matched), ${apiStats.size} api packages (${totalApi} matched), logs: [${logSteps}]`,
       );
     }
   }
@@ -1676,12 +1731,11 @@ async function printSummary(mode: "latest" | "refresh") {
   }
 
   console.log(`  Workflow runs: ${runCount}`);
-  console.log(`  Workflow jobs: ${jobCount}`);
+  console.log(`  Workflow jobs: ${jobCount} (${rawLogCount} logs fetched)`);
   console.log(`  Workflow steps: ${stepCount}`);
   console.log(`  Commits with test:compare stats: ${testStatCount}`);
   console.log(`  Commits with api:compare stats: ${apiStatCount}`);
   console.log(`  Commits with compare logs: ${logCount}`);
-  console.log(`  Raw job logs: ${rawLogCount}`);
   console.log(`  Database: ${DB_PATH}`);
 
   const latestTestStats = await TestCompareStat.findBySql(`
@@ -1794,14 +1848,17 @@ async function main() {
     console.log("\n=== Syncing workflow runs ===");
     const runsSynced = await syncWorkflowRuns(fetchMode);
 
+    console.log("\n=== Syncing job logs ===");
+    const logsFetched = await syncJobLogs(fetchMode);
+
     console.log("\n=== Syncing compare stats from CI logs ===");
-    const logsParsed = await syncCompareStats(fetchMode);
+    const logsParsed = await syncCompareStats();
 
     await SyncLog.create({
       synced_at: new Date().toISOString(),
       prs_synced: prsSynced,
       runs_synced: runsSynced,
-      logs_parsed: logsParsed,
+      logs_parsed: logsParsed + logsFetched,
     });
 
     await printSummary(mode === "refresh" ? "refresh" : "latest");

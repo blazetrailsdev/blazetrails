@@ -122,15 +122,22 @@ export class SchemaCreation {
     parts.push(
       `${quoteIdentifier(index.name, this.adapterName)} ON ${quoteTableName(index.table, this.adapterName)}`,
     );
+    if (index.using) parts.push(`USING ${index.using}`);
     const columnsSql = index.columns.map((c) => {
       let col = quoteIdentifier(c, this.adapterName);
+      if (index.lengths[c]) col += `(${index.lengths[c]})`;
       if (this.supportsIndexSortOrder()) {
         const order = index.orders[c];
         if (order) col += ` ${order.toUpperCase()}`;
       }
+      if (index.opclasses[c]) col += ` ${index.opclasses[c]}`;
       return col;
     });
     parts.push(`(${columnsSql.join(", ")})`);
+    if (index.include && index.include.length > 0) {
+      const includeCols = index.include.map((c) => quoteIdentifier(c, this.adapterName));
+      parts.push(`INCLUDE (${includeCols.join(", ")})`);
+    }
     if (this.supportsPartialIndex() && index.where) parts.push(`WHERE ${index.where}`);
     return parts.join(" ");
   }

@@ -103,6 +103,29 @@ export interface ColumnOptions {
   array?: boolean;
 }
 
+export interface AddIndexOptions {
+  unique?: boolean;
+  name?: string;
+  where?: string;
+  order?: Record<string, string>;
+  using?: string;
+  type?: string;
+  comment?: string;
+  ifNotExists?: boolean;
+  length?: Record<string, number>;
+  opclass?: Record<string, string>;
+  include?: string[];
+  nullsNotDistinct?: boolean;
+  algorithm?: string;
+}
+
+export interface AddReferenceOptions extends ColumnOptions {
+  polymorphic?: boolean;
+  foreignKey?: boolean;
+  type?: ColumnType;
+  index?: boolean;
+}
+
 /**
  * Mirrors: ActiveRecord::ConnectionAdapters::IndexDefinition
  */
@@ -391,13 +414,13 @@ export class TableDefinition {
   column(
     name: string,
     type: ColumnType,
-    options: Omit<ColumnOptions, "index"> & { index?: boolean | Record<string, unknown> } = {},
+    options: Omit<ColumnOptions, "index"> & { index?: boolean | AddIndexOptions } = {},
   ): this {
     const { index, ...colOpts } = options;
     this.columns.push(new ColumnDefinition(name, type, colOpts as ColumnOptions));
     if (index) {
-      const indexOpts = typeof index === "object" ? index : {};
-      this.index([name], indexOpts as { unique?: boolean; name?: string });
+      const indexOpts: { unique?: boolean; name?: string } = typeof index === "object" ? index : {};
+      this.index([name], indexOpts);
     }
     return this;
   }
@@ -732,16 +755,13 @@ export class Table {
   async rename(oldName: string, newName: string): Promise<void> {
     await this._schema.renameColumn(this._tableName, oldName, newName);
   }
-  async index(
-    columns: string | string[],
-    options?: { unique?: boolean; name?: string },
-  ): Promise<void> {
+  async index(columns: string | string[], options?: AddIndexOptions): Promise<void> {
     await this._schema.addIndex(this._tableName, columns, options);
   }
   async removeIndex(options: { column?: string | string[]; name?: string }): Promise<void> {
     await this._schema.removeIndex(this._tableName, options);
   }
-  async references(name: string, options?: Record<string, unknown>): Promise<void> {
+  async references(name: string, options?: AddReferenceOptions): Promise<void> {
     await this._schema.addReference(this._tableName, name, options);
   }
   async timestamps(options?: ColumnOptions): Promise<void> {
@@ -755,12 +775,12 @@ export class Table {
   async column(
     columnName: string,
     type: ColumnType,
-    options: Omit<ColumnOptions, "index"> & { index?: boolean | Record<string, unknown> } = {},
+    options: Omit<ColumnOptions, "index"> & { index?: boolean | AddIndexOptions } = {},
   ): Promise<void> {
     const { index: indexOpt, ...colOpts } = options;
     await this._schema.addColumn(this._tableName, columnName, type, colOpts as ColumnOptions);
     if (indexOpt) {
-      const opts = typeof indexOpt === "object" ? indexOpt : {};
+      const opts: AddIndexOptions = typeof indexOpt === "object" ? indexOpt : {};
       await this._schema.addIndex(this._tableName, columnName, opts);
     }
   }
@@ -821,7 +841,7 @@ export class Table {
     return this._require("removeTimestamps").call(this._schema, this._tableName, options);
   }
 
-  async removeReferences(name: string, options?: Record<string, unknown>): Promise<void> {
+  async removeReferences(name: string, options?: AddReferenceOptions): Promise<void> {
     return this._require("removeReference").call(this._schema, this._tableName, name, options);
   }
 
@@ -894,25 +914,13 @@ export interface SchemaStatementsLike {
     options?: { ifExists?: boolean },
   ): Promise<void>;
   renameColumn(tableName: string, oldName: string, newName: string): Promise<void>;
-  addIndex(
-    tableName: string,
-    columns: string | string[],
-    options?: Record<string, unknown>,
-  ): Promise<void>;
+  addIndex(tableName: string, columns: string | string[], options?: AddIndexOptions): Promise<void>;
   removeIndex(
     tableName: string,
     options?: { column?: string | string[]; name?: string },
   ): Promise<void>;
-  addReference(
-    tableName: string,
-    refName: string,
-    options?: Record<string, unknown>,
-  ): Promise<void>;
-  removeReference(
-    tableName: string,
-    refName: string,
-    options?: Record<string, unknown>,
-  ): Promise<void>;
+  addReference(tableName: string, refName: string, options?: AddReferenceOptions): Promise<void>;
+  removeReference(tableName: string, refName: string, options?: AddReferenceOptions): Promise<void>;
   addTimestamps(tableName: string, options?: ColumnOptions): Promise<void>;
   removeTimestamps(tableName: string, options?: ColumnOptions): Promise<void>;
   columnExists?(tableName: string, columnName: string, type?: ColumnType): Promise<boolean>;

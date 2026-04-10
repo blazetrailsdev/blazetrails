@@ -21,6 +21,7 @@ export class QueryCacheStore {
   private _map = new Map<string, Record<string, unknown>[]>();
   private _maxSize: number;
   enabled = false;
+  dirties = true;
 
   constructor(maxSize: number = DEFAULT_MAX_SIZE) {
     this._maxSize = maxSize;

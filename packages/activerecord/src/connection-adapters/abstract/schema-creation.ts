@@ -115,7 +115,11 @@ export class SchemaCreation {
   protected visitCreateIndexDefinition(o: CreateIndexDefinition): string {
     const index = o.index;
     const parts: string[] = ["CREATE"];
-    if (index.unique) parts.push("UNIQUE");
+    if (index.type) {
+      parts.push(index.type.toUpperCase());
+    } else if (index.unique) {
+      parts.push("UNIQUE");
+    }
     parts.push("INDEX");
     if (o.algorithm) parts.push(o.algorithm);
     if (o.ifNotExists) parts.push("IF NOT EXISTS");
@@ -138,6 +142,7 @@ export class SchemaCreation {
       const includeCols = index.include.map((c) => quoteIdentifier(c, this.adapterName));
       parts.push(`INCLUDE (${includeCols.join(", ")})`);
     }
+    if (index.nullsNotDistinct) parts.push("NULLS NOT DISTINCT");
     if (this.supportsPartialIndex() && index.where) parts.push(`WHERE ${index.where}`);
     return parts.join(" ");
   }

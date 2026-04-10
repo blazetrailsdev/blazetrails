@@ -1143,7 +1143,7 @@ export class SchemaStatements {
     }
   }
 
-  columnsForDistinct(columns: string, _orders?: string[]): string {
+  columnsForDistinct(columns: string | string[], _orders?: string[]): string | string[] {
     return columns;
   }
 
@@ -1165,12 +1165,13 @@ export class SchemaStatements {
     const pkColumns = Array.isArray(pk) ? pk : [pk];
     const quotedPkColumns = pkColumns.map((col) => this._qi(col));
     const values = this.columnsForDistinct(
-      quotedPkColumns.join(", "),
+      quotedPkColumns,
       (relation.orderValues as string[]) ?? [],
     );
 
     let limited: any = relation;
-    if (limited.reselect) limited = limited.reselect(values);
+    const selectValues = Array.isArray(values) ? values : [values];
+    if (limited.reselect) limited = limited.reselect(...selectValues);
     if (limited.distinctBang) limited.distinctBang();
 
     // Execute the limited distinct query to get IDs

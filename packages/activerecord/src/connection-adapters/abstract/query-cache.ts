@@ -76,9 +76,7 @@ export class ConnectionPoolConfiguration {
   }
 
   checkoutAndVerify(connection: QueryCacheHost): QueryCacheHost {
-    if (!connection._queryCache) {
-      connection._queryCache = this.queryCache;
-    }
+    connection._queryCache = this.queryCache;
     return connection;
   }
 

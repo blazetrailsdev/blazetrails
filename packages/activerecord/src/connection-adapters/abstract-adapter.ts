@@ -14,7 +14,16 @@ import {
   type Transaction,
   type NullTransaction,
 } from "./abstract/transaction.js";
-import { Store } from "./abstract/query-cache.js";
+import {
+  Store,
+  queryCacheEnabled as queryCacheEnabledGet,
+  cache as cacheMixin,
+  enableQueryCacheBang as enableQueryCacheBangMixin,
+  uncached as uncachedMixin,
+  disableQueryCacheBang as disableQueryCacheBangMixin,
+  clearQueryCache as clearQueryCacheMixin,
+  type QueryCacheHost,
+} from "./abstract/query-cache.js";
 
 /**
  * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter::Version
@@ -83,6 +92,7 @@ export class AbstractAdapter {
   lock: unknown = null;
 
   // --- QueryCache mixin (mirrors ActiveRecord::ConnectionAdapters::QueryCache) ---
+  // Single source of truth lives in abstract/query-cache.ts; these delegate.
 
   private _ensureQueryCache(): Store {
     if (!this._queryCache) {
@@ -100,75 +110,31 @@ export class AbstractAdapter {
   }
 
   get queryCacheEnabled(): boolean {
-    return this._queryCache?.enabled ?? false;
+    return queryCacheEnabledGet.call(this as unknown as QueryCacheHost);
   }
 
   async cache<T>(fn: () => T | Promise<T>): Promise<T> {
-    const pool = this.pool as any;
-    if (pool?.enableQueryCache) {
-      return pool.enableQueryCache(fn);
-    }
-    const qc = this._ensureQueryCache();
-    const oldEnabled = qc.enabled;
-    const oldDirties = qc.dirties;
-    qc.enabled = true;
-    qc.dirties = true;
-    try {
-      return await fn();
-    } finally {
-      qc.enabled = oldEnabled;
-      qc.dirties = oldDirties;
-    }
+    this._ensureQueryCache();
+    return cacheMixin.call(this as unknown as QueryCacheHost, fn) as Promise<T>;
   }
 
   enableQueryCacheBang(): void {
-    const pool = this.pool as any;
-    if (pool?.enableQueryCacheBang) {
-      pool.enableQueryCacheBang();
-      return;
-    }
-    const qc = this._ensureQueryCache();
-    qc.enabled = true;
-    qc.dirties = true;
+    this._ensureQueryCache();
+    enableQueryCacheBangMixin.call(this as unknown as QueryCacheHost);
   }
 
   async uncached<T>(fn: () => T | Promise<T>, options: { dirties?: boolean } = {}): Promise<T> {
-    const { dirties = true } = options;
-    const pool = this.pool as any;
-    if (pool?.disableQueryCache) {
-      return pool.disableQueryCache(fn, { dirties });
-    }
-    const qc = this._ensureQueryCache();
-    const oldEnabled = qc.enabled;
-    const oldDirties = qc.dirties;
-    qc.enabled = false;
-    qc.dirties = dirties;
-    try {
-      return await fn();
-    } finally {
-      qc.enabled = oldEnabled;
-      qc.dirties = oldDirties;
-    }
+    this._ensureQueryCache();
+    return uncachedMixin.call(this as unknown as QueryCacheHost, fn, options) as Promise<T>;
   }
 
   disableQueryCacheBang(): void {
-    const pool = this.pool as any;
-    if (pool?.disableQueryCacheBang) {
-      pool.disableQueryCacheBang();
-      return;
-    }
-    const qc = this._ensureQueryCache();
-    qc.enabled = false;
-    qc.dirties = true;
+    this._ensureQueryCache();
+    disableQueryCacheBangMixin.call(this as unknown as QueryCacheHost);
   }
 
   clearQueryCache(): void {
-    const pool = this.pool as any;
-    if (pool?.clearQueryCache) {
-      pool.clearQueryCache();
-      return;
-    }
-    this._queryCache?.clear();
+    clearQueryCacheMixin.call(this as unknown as QueryCacheHost);
   }
 
   // --- End QueryCache mixin ---

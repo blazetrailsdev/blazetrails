@@ -188,7 +188,7 @@ export class QueryCacheAdapter implements DatabaseAdapter {
     const isSelect = trimmed.startsWith("SELECT");
     const isReadOnlyCte = trimmed.startsWith("WITH") && !/\b(INSERT|UPDATE|DELETE)\b/.test(trimmed);
     if (!isSelect && !isReadOnlyCte) {
-      this.cache.clear();
+      if (this.cache.dirties) this.cache.clear();
       return this.inner.execute(sql, binds);
     }
 

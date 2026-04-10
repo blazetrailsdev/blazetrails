@@ -24,7 +24,7 @@ import {
 } from "./schema-definitions.js";
 import { SchemaCreation } from "./schema-creation.js";
 import { detectAdapterName } from "../../adapter-name.js";
-import { quoteIdentifier, quoteDefaultExpression } from "./quoting.js";
+import { quoteIdentifier, quoteDefaultExpression, quoteTableName } from "./quoting.js";
 import { Column } from "../column.js";
 import { SqlTypeMetadata } from "../sql-type-metadata.js";
 import { deduplicate } from "../deduplicable.js";
@@ -51,10 +51,7 @@ export class SchemaStatements {
   }
 
   protected _qt(tableName: string): string {
-    return tableName
-      .split(".")
-      .map((part) => this._qi(part))
-      .join(".");
+    return quoteTableName(tableName, this.adapterName);
   }
 
   async createTable(
@@ -1220,7 +1217,7 @@ export class SchemaStatements {
   }
 
   createSchemaDumper(options: Record<string, unknown> = {}): SchemaDumper {
-    return SchemaDumper.create(this as any, options);
+    return SchemaDumper.create(this as Parameters<typeof SchemaDumper.create>[0], options);
   }
 
   isUseForeignKeys(): boolean {
@@ -1234,7 +1231,7 @@ export class SchemaStatements {
 
   async bulkChangeTable(
     tableName: string,
-    operations: Array<[string, ...unknown[]]>,
+    operations: Array<[string, string, ...unknown[]]>,
   ): Promise<void> {
     const sqlFragments: string[] = [];
     const nonCombinable: Array<() => Promise<void>> = [];

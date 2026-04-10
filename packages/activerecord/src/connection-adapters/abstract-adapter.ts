@@ -14,6 +14,7 @@ import {
   type Transaction,
   type NullTransaction,
 } from "./abstract/transaction.js";
+import { Store } from "./abstract/query-cache.js";
 
 /**
  * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter::Version
@@ -75,9 +76,99 @@ export class AbstractAdapter {
   protected _config: Record<string, unknown> = {};
   _transactionManager: TransactionManager = new TransactionManager(this as any);
 
+  _queryCache: Store | null = null;
+
   pool: unknown = null;
   logger: unknown = null;
   lock: unknown = null;
+
+  // --- QueryCache mixin (mirrors ActiveRecord::ConnectionAdapters::QueryCache) ---
+
+  get queryCache(): Store | null {
+    return this._queryCache;
+  }
+
+  set queryCache(value: Store | null) {
+    this._queryCache = value;
+  }
+
+  get queryCacheEnabled(): boolean {
+    return this._queryCache?.enabled ?? false;
+  }
+
+  async cache<T>(fn: () => T | Promise<T>): Promise<T> {
+    const pool = this.pool as any;
+    if (pool?.enableQueryCache) {
+      return pool.enableQueryCache(fn);
+    }
+    const qc = this._queryCache;
+    if (!qc) return fn() as Promise<T>;
+    const oldEnabled = qc.enabled;
+    const oldDirties = qc.dirties;
+    qc.enabled = true;
+    qc.dirties = true;
+    try {
+      return await fn();
+    } finally {
+      qc.enabled = oldEnabled;
+      qc.dirties = oldDirties;
+    }
+  }
+
+  enableQueryCacheBang(): void {
+    const pool = this.pool as any;
+    if (pool?.enableQueryCacheBang) {
+      pool.enableQueryCacheBang();
+      return;
+    }
+    if (this._queryCache) {
+      this._queryCache.enabled = true;
+      this._queryCache.dirties = true;
+    }
+  }
+
+  async uncached<T>(fn: () => T | Promise<T>, options: { dirties?: boolean } = {}): Promise<T> {
+    const { dirties = true } = options;
+    const pool = this.pool as any;
+    if (pool?.disableQueryCache) {
+      return pool.disableQueryCache(fn, { dirties });
+    }
+    const qc = this._queryCache;
+    if (!qc) return fn() as Promise<T>;
+    const oldEnabled = qc.enabled;
+    const oldDirties = qc.dirties;
+    qc.enabled = false;
+    qc.dirties = dirties;
+    try {
+      return await fn();
+    } finally {
+      qc.enabled = oldEnabled;
+      qc.dirties = oldDirties;
+    }
+  }
+
+  disableQueryCacheBang(): void {
+    const pool = this.pool as any;
+    if (pool?.disableQueryCacheBang) {
+      pool.disableQueryCacheBang();
+      return;
+    }
+    if (this._queryCache) {
+      this._queryCache.enabled = false;
+      this._queryCache.dirties = true;
+    }
+  }
+
+  clearQueryCache(): void {
+    const pool = this.pool as any;
+    if (pool?.clearQueryCache) {
+      pool.clearQueryCache();
+      return;
+    }
+    this._queryCache?.clear();
+  }
+
+  // --- End QueryCache mixin ---
 
   get inUse(): boolean {
     return this._inUse;

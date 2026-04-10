@@ -211,7 +211,7 @@ export class QueryCacheAdapter implements DatabaseAdapter {
 
   async executeMutation(sql: string, binds?: unknown[]): Promise<number> {
     this._queryCount++;
-    this.cache.clear();
+    if (this.cache.dirties) this.cache.clear();
     return this.inner.executeMutation(sql, binds);
   }
 
@@ -224,7 +224,7 @@ export class QueryCacheAdapter implements DatabaseAdapter {
   }
 
   async rollback(): Promise<void> {
-    this.cache.clear();
+    if (this.cache.dirties) this.cache.clear();
     return this.inner.rollback();
   }
 
@@ -237,7 +237,7 @@ export class QueryCacheAdapter implements DatabaseAdapter {
   }
 
   async rollbackToSavepoint(name: string): Promise<void> {
-    this.cache.clear();
+    if (this.cache.dirties) this.cache.clear();
     return this.inner.rollbackToSavepoint(name);
   }
 

@@ -84,6 +84,13 @@ export class AbstractAdapter {
 
   // --- QueryCache mixin (mirrors ActiveRecord::ConnectionAdapters::QueryCache) ---
 
+  private _ensureQueryCache(): Store {
+    if (!this._queryCache) {
+      this._queryCache = new Store();
+    }
+    return this._queryCache;
+  }
+
   get queryCache(): Store | null {
     return this._queryCache;
   }
@@ -101,8 +108,7 @@ export class AbstractAdapter {
     if (pool?.enableQueryCache) {
       return pool.enableQueryCache(fn);
     }
-    const qc = this._queryCache;
-    if (!qc) return fn() as Promise<T>;
+    const qc = this._ensureQueryCache();
     const oldEnabled = qc.enabled;
     const oldDirties = qc.dirties;
     qc.enabled = true;
@@ -121,10 +127,9 @@ export class AbstractAdapter {
       pool.enableQueryCacheBang();
       return;
     }
-    if (this._queryCache) {
-      this._queryCache.enabled = true;
-      this._queryCache.dirties = true;
-    }
+    const qc = this._ensureQueryCache();
+    qc.enabled = true;
+    qc.dirties = true;
   }
 
   async uncached<T>(fn: () => T | Promise<T>, options: { dirties?: boolean } = {}): Promise<T> {
@@ -133,8 +138,7 @@ export class AbstractAdapter {
     if (pool?.disableQueryCache) {
       return pool.disableQueryCache(fn, { dirties });
     }
-    const qc = this._queryCache;
-    if (!qc) return fn() as Promise<T>;
+    const qc = this._ensureQueryCache();
     const oldEnabled = qc.enabled;
     const oldDirties = qc.dirties;
     qc.enabled = false;
@@ -153,10 +157,9 @@ export class AbstractAdapter {
       pool.disableQueryCacheBang();
       return;
     }
-    if (this._queryCache) {
-      this._queryCache.enabled = false;
-      this._queryCache.dirties = true;
-    }
+    const qc = this._ensureQueryCache();
+    qc.enabled = false;
+    qc.dirties = true;
   }
 
   clearQueryCache(): void {

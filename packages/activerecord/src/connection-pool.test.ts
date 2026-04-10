@@ -536,7 +536,7 @@ it("pin connection nesting", async () => {
   expect(conn1.transactionManager.openTransactions).toBe(0);
 });
 
-it("pin connection preserves an existing lease after unpin", async () => {
+it("pin connection reuses leased connection and checks in on unpin", async () => {
   const pool = makeTransactionAwarePool(5);
   const leased = pool.leaseConnection() as TransactionAwareTestAdapter;
 
@@ -550,9 +550,8 @@ it("pin connection preserves an existing lease after unpin", async () => {
   expect(clean).toBe(true);
   expect(leased.transactionManager.openTransactions).toBe(0);
 
-  // Lease should still be intact — activeConnection returns the same connection
-  expect(pool.activeConnection).toBe(leased);
-  pool.releaseConnection();
+  // Pinning takes ownership — connection is checked in on final unpin (matches Rails)
+  expect(pool.stat().idle).toBe(1);
 });
 
 it.skip("pin connection nesting lock", () => {

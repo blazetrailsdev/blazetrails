@@ -159,7 +159,14 @@ export class TransactionInstrumenter {
     }
     if (this._event) {
       this._event.finish();
-      Notifications.publish("transaction.active_record", this._event.payload);
+      // Publish with the finished event's payload including timing and outcome.
+      // Ideally we'd publish the Event instance directly (like Rails' handle.finish),
+      // but Notifications.publish creates a new Event. The payload carries the
+      // outcome; duration can be derived from the event's time/end if needed.
+      Notifications.publish("transaction.active_record", {
+        ...this._event.payload,
+        duration: this._event.duration,
+      });
     }
   }
 }
@@ -378,7 +385,8 @@ export class Transaction {
   }
 
   get records(): unknown[] | null {
-    if (this._lazyEnrollmentRecords && this._records) {
+    if (this._lazyEnrollmentRecords) {
+      if (!this._records) this._records = [];
       for (const value of this._lazyEnrollmentRecords.values()) {
         this._records.push(value);
       }

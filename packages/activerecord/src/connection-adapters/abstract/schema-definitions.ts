@@ -144,6 +144,8 @@ export class IndexDefinition {
   readonly nullsNotDistinct?: boolean;
   readonly comment?: string;
   readonly valid: boolean;
+  readonly algorithm?: string;
+  readonly ifNotExists?: boolean;
 
   constructor(
     table: string,
@@ -158,6 +160,8 @@ export class IndexDefinition {
       type?: string;
       using?: string;
       include?: string[];
+      algorithm?: string;
+      ifNotExists?: boolean;
       nullsNotDistinct?: boolean;
       comment?: string;
       valid?: boolean;
@@ -177,6 +181,8 @@ export class IndexDefinition {
     this.nullsNotDistinct = options.nullsNotDistinct;
     this.comment = options.comment;
     this.valid = options.valid ?? true;
+    this.algorithm = options.algorithm;
+    this.ifNotExists = options.ifNotExists;
   }
 
   columnOptions(): {
@@ -607,6 +613,8 @@ export class TableDefinition {
         include: options.include,
         nullsNotDistinct: options.nullsNotDistinct,
         comment: options.comment,
+        algorithm: options.algorithm,
+        ifNotExists: options.ifNotExists,
       }),
     );
     return this;
@@ -724,14 +732,19 @@ export class TableDefinition {
     } else {
       const tableElements = [...columnDefs];
       for (const chk of this.checkConstraints) {
-        tableElements.push(
-          `CONSTRAINT ${quoteIdentifier(chk.name, this._adapterName)} CHECK (${chk.expression})`,
-        );
+        let chkSql = `CONSTRAINT ${quoteIdentifier(chk.name, this._adapterName)} CHECK (${chk.expression})`;
+        if (!chk.validate && this._adapterName === "postgres") {
+          chkSql += " NOT VALID";
+        }
+        tableElements.push(chkSql);
       }
       for (const fk of this.foreignKeys) {
-        tableElements.push(
-          `CONSTRAINT ${quoteIdentifier(fk.name, this._adapterName)} FOREIGN KEY (${quoteIdentifier(fk.column, this._adapterName)}) REFERENCES ${quoteTableName(fk.toTable, this._adapterName)} (${quoteIdentifier(fk.primaryKey, this._adapterName)})`,
-        );
+        let fkSql = `CONSTRAINT ${quoteIdentifier(fk.name, this._adapterName)} FOREIGN KEY (${quoteIdentifier(fk.column, this._adapterName)}) REFERENCES ${quoteTableName(fk.toTable, this._adapterName)} (${quoteIdentifier(fk.primaryKey, this._adapterName)})`;
+        if (fk.onDelete)
+          fkSql += ` ON DELETE ${fk.onDelete.toUpperCase().replace("NULLIFY", "SET NULL").replace("NO_ACTION", "NO ACTION")}`;
+        if (fk.onUpdate)
+          fkSql += ` ON UPDATE ${fk.onUpdate.toUpperCase().replace("NULLIFY", "SET NULL").replace("NO_ACTION", "NO ACTION")}`;
+        tableElements.push(fkSql);
       }
       sql += ` (${tableElements.join(", ")})`;
     }

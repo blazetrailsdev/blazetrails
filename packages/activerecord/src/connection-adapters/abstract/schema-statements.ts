@@ -112,6 +112,8 @@ export class SchemaStatements {
         opclass: idx.opclasses,
         include: idx.include,
         nullsNotDistinct: idx.nullsNotDistinct,
+        algorithm: idx.algorithm,
+        ifNotExists: idx.ifNotExists,
       });
     }
   }
@@ -172,6 +174,7 @@ export class SchemaStatements {
       opclass?: Record<string, string>;
       include?: string[];
       nullsNotDistinct?: boolean;
+      algorithm?: string;
     } = {},
   ): Promise<void> {
     const cols = Array.isArray(columns) ? columns : [columns];
@@ -180,11 +183,19 @@ export class SchemaStatements {
     const indexDef = new IndexDefinition(tableName, indexName, options.unique ?? false, cols, {
       where: options.where,
       orders: options.order ?? {},
-      using: options.using as string | undefined,
-      type: options.type as string | undefined,
-      comment: options.comment as string | undefined,
+      lengths: options.length ?? {},
+      opclasses: options.opclass ?? {},
+      using: options.using,
+      type: options.type,
+      comment: options.comment,
+      include: options.include,
+      nullsNotDistinct: options.nullsNotDistinct,
     });
-    const createDef = new CreateIndexDefinition(indexDef, options.ifNotExists ?? false);
+    const createDef = new CreateIndexDefinition(
+      indexDef,
+      options.ifNotExists ?? false,
+      options.algorithm,
+    );
     await this.adapter.executeMutation(this.schemaCreation.accept(createDef));
   }
 

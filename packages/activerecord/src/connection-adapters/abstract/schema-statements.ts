@@ -1025,9 +1025,17 @@ export class SchemaStatements {
       const cols = Array.isArray(result.column) ? result.column : [result.column];
       const fullName = `fk_rails_${unqualifiedFrom}_${(cols as string[]).join("_")}`;
       if (fullName.length > this.maxIndexNameSize()) {
-        // Truncate and append a simple hash to stay within identifier limits
-        const hash = Array.from(fullName).reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0);
-        const hex = Math.abs(hash).toString(16).slice(0, 10);
+        // Deterministic hash matching Rails' fk_rails_<digest> pattern
+        let h1 = 0x811c9dc5;
+        let h2 = 0x01000193;
+        for (let i = 0; i < fullName.length; i++) {
+          const c = fullName.charCodeAt(i);
+          h1 = Math.imul(h1 ^ c, 0x01000193);
+          h2 = Math.imul(h2 ^ c, 0x1000193b);
+        }
+        const hex = ((h1 >>> 0).toString(16) + (h2 >>> 0).toString(16))
+          .padStart(16, "0")
+          .slice(0, 10);
         result.name = `fk_rails_${hex}`;
       } else {
         result.name = fullName;
@@ -1145,8 +1153,9 @@ export class SchemaStatements {
     if (!pk) return relation;
 
     const pkColumns = Array.isArray(pk) ? pk : [pk];
+    const quotedPkColumns = pkColumns.map((col) => this._qi(col));
     const values = this.columnsForDistinct(
-      pkColumns.join(", "),
+      quotedPkColumns.join(", "),
       (relation.orderValues as string[]) ?? [],
     );
 

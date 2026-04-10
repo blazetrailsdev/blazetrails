@@ -520,9 +520,7 @@ export class Transaction {
   }
 
   restart(): void {
-    // Overridden by RealTransaction, SavepointTransaction, RestartParentTransaction.
-    // Base implementation is intentionally empty — only subclasses that represent
-    // actual DB transactions have restart behavior.
+    // No-op: subclasses (RealTransaction, SavepointTransaction) override with actual restart logic
   }
 
   isFullRollback(): boolean {

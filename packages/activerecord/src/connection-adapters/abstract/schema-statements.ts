@@ -25,7 +25,7 @@ import {
 } from "./schema-definitions.js";
 import { SchemaCreation } from "./schema-creation.js";
 import { detectAdapterName } from "../../adapter-name.js";
-import { quoteIdentifier, quoteDefaultExpression, quoteTableName } from "./quoting.js";
+import { quoteIdentifier, quoteDefaultExpression, quoteTableName, quote } from "./quoting.js";
 import { Column } from "../column.js";
 import { SqlTypeMetadata } from "../sql-type-metadata.js";
 import { deduplicate } from "../deduplicable.js";
@@ -1079,13 +1079,16 @@ export class SchemaStatements {
     const versions: string[] =
       typeof smTable.versions === "function" ? await smTable.versions() : (smTable.versions ?? []);
     if (versions.length === 0) return null;
-    const tableName = this._qt(smTable.tableName ?? "schema_migrations");
-    return versions
-      .map((v: string) => {
-        const escaped = String(v).replace(/'/g, "''");
-        return `INSERT INTO ${tableName} (version) VALUES ('${escaped}');`;
-      })
-      .join("\n");
+    return this._insertVersionsSql(smTable.tableName ?? "schema_migrations", versions);
+  }
+
+  private _insertVersionsSql(tableName: string, versions: string | string[]): string {
+    const smTable = this._qt(tableName);
+    if (Array.isArray(versions)) {
+      const rows = versions.reverse().map((v) => `(${quote(v)})`);
+      return `INSERT INTO ${smTable} (version) VALUES\n${rows.join(",\n")};`;
+    }
+    return `INSERT INTO ${smTable} (version) VALUES (${quote(versions)});`;
   }
 
   internalStringOptionsForPrimaryKey(): Record<string, unknown> {
@@ -1097,41 +1100,39 @@ export class SchemaStatements {
     if (!/^\d+$/.test(ver)) {
       throw new Error(`Invalid migration version: ${version}`);
     }
+    const verNum = parseInt(ver, 10);
 
-    const smMigration = (this.adapter as any).pool?.schemaMigration;
-    const smTableName = smMigration?.tableName ?? "schema_migrations";
+    const pool = (this.adapter as any).pool;
+    const smTableName = pool?.schemaMigration?.tableName ?? "schema_migrations";
     const smTable = this._qt(smTableName);
 
-    // Query existing versions to avoid duplicates (cross-adapter compatible)
-    const existing = new Set<string>();
-    const rows = await this.adapter.execute(`SELECT version FROM ${smTable}`);
-    for (const row of rows) {
-      existing.add(String((row as Record<string, unknown>).version));
+    const migrationContext = pool?.migrationContext;
+    const migrated: number[] = migrationContext
+      ? typeof migrationContext.getAllVersions === "function"
+        ? await migrationContext.getAllVersions()
+        : []
+      : [];
+    const allVersions: number[] = migrationContext
+      ? (migrationContext.migrations ?? []).map((m: { version: number }) => m.version)
+      : [];
+
+    // Insert the target version if not already migrated
+    if (!migrated.includes(verNum)) {
+      await this.adapter.executeMutation(`INSERT INTO ${smTable} (version) VALUES (${quote(ver)})`);
     }
 
-    // Insert the target version if not already recorded
-    const escapedVer = ver.replace(/'/g, "''");
-    if (!existing.has(ver)) {
-      await this.adapter.executeMutation(
-        `INSERT INTO ${smTable} (version) VALUES ('${escapedVer}')`,
-      );
-      existing.add(ver);
-    }
-
-    // If pool has migration context, also insert all migration versions below this one
-    const migrationContext = (this.adapter as any).pool?.migrationContext;
-    if (migrationContext) {
-      const allVersions: string[] = (migrationContext.migrations ?? [])
-        .map((m: { version: number | string }) => String(m.version))
-        .filter((v: string) => /^\d+$/.test(v));
-      const toInsert = [...new Set(allVersions)].filter(
-        (v) => BigInt(v) < BigInt(ver) && !existing.has(v),
-      );
-      for (const v of toInsert) {
-        const vStr = v.replace(/'/g, "''");
-        await this.adapter.executeMutation(`INSERT INTO ${smTable} (version) VALUES ('${vStr}')`);
-        existing.add(v);
+    // Insert all known migration versions below the target that haven't been run
+    const inserting = allVersions.filter((v) => v < verNum && !migrated.includes(v));
+    if (inserting.length > 0) {
+      const duplicate = inserting.find((v) => inserting.filter((x) => x === v).length > 1);
+      if (duplicate !== undefined) {
+        throw new Error(
+          `Duplicate migration ${duplicate}. Please renumber your migrations to resolve the conflict.`,
+        );
       }
+      await this.adapter.executeMutation(
+        this._insertVersionsSql(smTableName, inserting.map(String)),
+      );
     }
   }
 

@@ -514,19 +514,26 @@ it("unpin connection returns whether transaction has been rolledback", async () 
 it("pin connection nesting", async () => {
   const pool = makeTransactionAwarePool(5);
   await pool.pinConnectionBang();
-  const conn1 = pool.checkout();
+  const conn1 = pool.checkout() as TransactionAwareTestAdapter;
+  expect(conn1.transactionManager.openTransactions).toBe(1);
+  expect(conn1.transactionManager.currentTransaction.joinable).toBe(false);
 
+  // Nested pin opens a second transaction (savepoint-level in Rails)
   await pool.pinConnectionBang();
   const conn2 = pool.checkout();
   expect(conn1).toBe(conn2);
+  expect(conn1.transactionManager.openTransactions).toBe(2);
 
-  // First unpin doesn't check in the connection
+  // First unpin rolls back the inner transaction but keeps connection pinned
   await pool.unpinConnectionBang();
+  expect(conn1.transactionManager.openTransactions).toBe(1);
+  expect(conn1.transactionManager.currentTransaction.open).toBe(true);
   const conn3 = pool.checkout();
   expect(conn3).toBe(conn1);
 
-  // Second unpin checks it in
+  // Second unpin rolls back the outer transaction and checks in
   await pool.unpinConnectionBang();
+  expect(conn1.transactionManager.openTransactions).toBe(0);
 });
 
 it.skip("pin connection nesting lock", () => {

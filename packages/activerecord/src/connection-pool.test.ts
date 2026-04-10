@@ -536,6 +536,25 @@ it("pin connection nesting", async () => {
   expect(conn1.transactionManager.openTransactions).toBe(0);
 });
 
+it("pin connection preserves an existing lease after unpin", async () => {
+  const pool = makeTransactionAwarePool(5);
+  const leased = pool.leaseConnection() as TransactionAwareTestAdapter;
+
+  await pool.pinConnectionBang();
+  const pinned = pool.checkout() as TransactionAwareTestAdapter;
+  expect(pinned).toBe(leased);
+  expect(leased.transactionManager.openTransactions).toBe(1);
+  expect(leased.transactionManager.currentTransaction.joinable).toBe(false);
+
+  const clean = await pool.unpinConnectionBang();
+  expect(clean).toBe(true);
+  expect(leased.transactionManager.openTransactions).toBe(0);
+
+  // Lease should still be intact — activeConnection returns the same connection
+  expect(pool.activeConnection).toBe(leased);
+  pool.releaseConnection();
+});
+
 it.skip("pin connection nesting lock", () => {
   /* needs thread locking */
 });

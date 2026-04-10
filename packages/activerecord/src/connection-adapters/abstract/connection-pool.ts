@@ -205,6 +205,7 @@ export class ConnectionPool implements ReapablePool {
   private _lastCheckinAt = new Map<DatabaseAdapter, number>();
   private _pinnedConnection: DatabaseAdapter | null = null;
   private _pinnedConnectionsDepth = 0;
+  private _pinnedConnectionCheckedOut = false;
 
   constructor(poolConfig: PoolConfig) {
     this.poolConfig = poolConfig;
@@ -337,6 +338,7 @@ export class ConnectionPool implements ReapablePool {
 
     if (!this._pinnedConnection) {
       this._pinnedConnection = connection;
+      this._pinnedConnectionCheckedOut = newlyCheckedOut;
     }
     this._pinnedConnectionsDepth += 1;
   }
@@ -361,8 +363,12 @@ export class ConnectionPool implements ReapablePool {
     } finally {
       this._pinnedConnectionsDepth -= 1;
       if (this._pinnedConnectionsDepth === 0) {
+        const wasCheckedOut = this._pinnedConnectionCheckedOut;
         this._pinnedConnection = null;
-        this.checkin(connection);
+        this._pinnedConnectionCheckedOut = false;
+        if (wasCheckedOut) {
+          this.checkin(connection);
+        }
       }
     }
 
@@ -487,6 +493,7 @@ export class ConnectionPool implements ReapablePool {
   disconnect(): void {
     this._pinnedConnection = null;
     this._pinnedConnectionsDepth = 0;
+    this._pinnedConnectionCheckedOut = false;
     if (this._connections) this._connections.length = 0;
     if (this._available) this._available.length = 0;
     this._checkedOut.clear();
@@ -502,6 +509,7 @@ export class ConnectionPool implements ReapablePool {
     if (this.isDiscarded()) return;
     this._pinnedConnection = null;
     this._pinnedConnectionsDepth = 0;
+    this._pinnedConnectionCheckedOut = false;
     this._connections = null;
     this._available = null;
     this._leases = null;

@@ -191,6 +191,8 @@ export class ConnectionPool implements ReapablePool {
   private _leases: LeaseRegistry | null = new LeaseRegistry();
   private _idleTimeout: number | null;
   private _lastCheckinAt = new Map<DatabaseAdapter, number>();
+  private _pinnedConnection: DatabaseAdapter | null = null;
+  private _pinnedConnectionsDepth = 0;
 
   constructor(poolConfig: PoolConfig) {
     this.poolConfig = poolConfig;
@@ -295,9 +297,67 @@ export class ConnectionPool implements ReapablePool {
     return false;
   }
 
+  // --- Pin / Unpin ---
+
+  async pinConnectionBang(_lockThread = false): Promise<void> {
+    if (!this._pinnedConnection) {
+      this._pinnedConnection = this._connectionLease().connection ?? this.checkout();
+    }
+    this._pinnedConnectionsDepth += 1;
+
+    if (this._connections && !this._connections.includes(this._pinnedConnection)) {
+      this._connections.push(this._pinnedConnection);
+    }
+
+    const conn = this._pinnedConnection as any;
+    if (conn.verifyBang) conn.verifyBang();
+    if (conn.transactionManager) {
+      await conn.transactionManager.beginTransaction({ joinable: false, _lazy: false });
+    }
+  }
+
+  async unpinConnectionBang(): Promise<boolean> {
+    if (!this._pinnedConnection) {
+      throw new Error(`There isn't a pinned connection`);
+    }
+
+    let clean = true;
+    this._pinnedConnectionsDepth -= 1;
+    const connection = this._pinnedConnection;
+    if (this._pinnedConnectionsDepth === 0) {
+      this._pinnedConnection = null;
+    }
+
+    const conn = connection as any;
+    if (conn.transactionManager) {
+      if (conn.transactionManager.currentTransaction.open) {
+        await conn.transactionManager.rollbackTransaction();
+      } else {
+        clean = false;
+        if (conn.resetBang) conn.resetBang();
+      }
+    }
+
+    if (this._pinnedConnection === null) {
+      if (conn.stealBang) conn.stealBang();
+      this.checkin(connection);
+    }
+
+    return clean;
+  }
+
   // --- Checkout / Checkin ---
 
   checkout(): DatabaseAdapter {
+    if (this._pinnedConnection) {
+      const conn = this._pinnedConnection as any;
+      if (conn.verifyBang) conn.verifyBang();
+      if (this._connections && !this._connections.includes(this._pinnedConnection)) {
+        this._connections.push(this._pinnedConnection);
+      }
+      return this._pinnedConnection;
+    }
+
     if (this.isDiscarded()) {
       throw new ConnectionNotEstablished("Connection pool has been discarded");
     }
@@ -325,6 +385,7 @@ export class ConnectionPool implements ReapablePool {
   }
 
   checkin(conn: DatabaseAdapter): void {
+    if (this._pinnedConnection === conn) return;
     this._connectionLease().clear(conn);
     if (this._checkedOut.has(conn)) {
       this._checkedOut.delete(conn);

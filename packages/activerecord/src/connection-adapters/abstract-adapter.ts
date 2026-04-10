@@ -375,6 +375,10 @@ export class AbstractAdapter {
     return this._transactionManager.currentTransaction;
   }
 
+  isTransactionOpen(): boolean {
+    return this._transactionManager.currentTransaction.open;
+  }
+
   async withinNewTransaction<T>(
     opts: { isolation?: string | null; joinable?: boolean },
     fn: (tx?: unknown) => Promise<T> | T,

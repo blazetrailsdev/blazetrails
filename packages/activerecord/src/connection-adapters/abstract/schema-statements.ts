@@ -832,7 +832,7 @@ export class SchemaStatements {
   }
 
   protected tableAliasLength(): number {
-    return 255;
+    return 64;
   }
 
   async dataSources(): Promise<string[]> {
@@ -843,8 +843,8 @@ export class SchemaStatements {
 
   async isDataSourceExists(name: string): Promise<boolean> {
     if (!name) return false;
-    const sources = await this.dataSources();
-    return sources.includes(name);
+    if (await this.tableExists(name)) return true;
+    return this.viewExists(name);
   }
 
   buildCreateTableDefinition(
@@ -912,7 +912,8 @@ export class SchemaStatements {
   }
 
   private _referenceNameForTable(tableName: string): string {
-    return singularize(tableName.replace(/^.*_/, ""));
+    const unqualified = tableName.split(".").at(-1) ?? tableName;
+    return singularize(unqualified);
   }
 
   async buildAddColumnDefinition(
@@ -1042,7 +1043,7 @@ export class SchemaStatements {
 
   async removeConstraint(tableName: string, constraintName: string): Promise<void> {
     const sql = `ALTER TABLE ${this._qi(tableName)} DROP CONSTRAINT ${this._qi(constraintName)}`;
-    await this.adapter.execute(sql);
+    await this.adapter.executeMutation(sql);
   }
 
   async dumpSchemaInformation(): Promise<string | null> {
@@ -1065,26 +1066,27 @@ export class SchemaStatements {
     const ver = typeof version === "number" ? version : parseInt(version, 10);
     const smTable = this._qi("schema_migrations");
 
+    // Query existing versions to avoid duplicates (cross-adapter compatible)
+    const existing = new Set<string>();
+    const rows = await this.adapter.execute(`SELECT version FROM ${smTable}`);
+    for (const row of rows) {
+      existing.add(String((row as Record<string, unknown>).version));
+    }
+
     // Insert the target version if not already recorded
-    await this.adapter.execute(
-      `INSERT INTO ${smTable} (version) VALUES ('${ver}') ON CONFLICT DO NOTHING`,
-    );
+    if (!existing.has(String(ver))) {
+      await this.adapter.executeMutation(`INSERT INTO ${smTable} (version) VALUES ('${ver}')`);
+    }
 
     // If pool has migration context, also insert all migration versions below this one
     const migrationContext = (this as any).pool?.migrationContext;
     if (migrationContext) {
-      const migrated: number[] =
-        typeof migrationContext.getAllVersions === "function"
-          ? await migrationContext.getAllVersions()
-          : [];
       const allVersions: number[] = (migrationContext.migrations ?? []).map(
         (m: { version: number }) => m.version,
       );
-      const toInsert = allVersions.filter((v) => v < ver && !migrated.includes(v));
+      const toInsert = allVersions.filter((v) => v < ver && !existing.has(String(v)));
       for (const v of toInsert) {
-        await this.adapter.execute(
-          `INSERT INTO ${smTable} (version) VALUES ('${v}') ON CONFLICT DO NOTHING`,
-        );
+        await this.adapter.executeMutation(`INSERT INTO ${smTable} (version) VALUES ('${v}')`);
       }
     }
   }
@@ -1213,7 +1215,7 @@ export class SchemaStatements {
         }
       } else {
         if (sqlFragments.length > 0) {
-          await this.adapter.execute(
+          await this.adapter.executeMutation(
             `ALTER TABLE ${this._qi(tableName)} ${sqlFragments.join(", ")}`,
           );
           sqlFragments.length = 0;

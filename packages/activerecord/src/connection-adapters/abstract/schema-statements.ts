@@ -12,6 +12,7 @@ import type { DatabaseAdapter } from "../../adapter.js";
 import {
   TableDefinition,
   Table,
+  AlterTable,
   IndexDefinition,
   ColumnDefinition,
   AddColumnDefinition,
@@ -933,19 +934,21 @@ export class SchemaStatements {
     columnName: string,
     type: ColumnType,
     options: ColumnOptions & { ifNotExists?: boolean } = {},
-  ): Promise<AddColumnDefinition | null> {
+  ): Promise<AlterTable | null> {
     if (options.ifNotExists && (await this.columnExists(tableName, columnName))) {
       return null;
     }
     const { ifNotExists: _, ...colOpts } = options;
-    return new AddColumnDefinition(new ColumnDefinition(columnName, type, colOpts));
+    const at = new AlterTable(tableName);
+    at.addColumn(columnName, type, colOpts);
+    return at;
   }
 
   buildChangeColumnDefaultDefinition(
     tableName: string,
     columnName: string,
     defaultOrChanges: unknown,
-  ): { tableName: string; columnName: string; newDefault: unknown } {
+  ): AlterTable {
     let newDefault: unknown;
     if (
       defaultOrChanges != null &&
@@ -956,7 +959,9 @@ export class SchemaStatements {
     } else {
       newDefault = defaultOrChanges;
     }
-    return { tableName, columnName, newDefault };
+    const at = new AlterTable(tableName);
+    at.changeColumnDefault(columnName, newDefault);
+    return at;
   }
 
   buildCreateIndexDefinition(
@@ -1062,8 +1067,9 @@ export class SchemaStatements {
   }
 
   async removeConstraint(tableName: string, constraintName: string): Promise<void> {
-    const sql = `ALTER TABLE ${this._qt(tableName)} DROP CONSTRAINT ${this._qi(constraintName)}`;
-    await this.adapter.executeMutation(sql);
+    const at = new AlterTable(tableName);
+    at.dropConstraint(constraintName);
+    await this.adapter.executeMutation(this.schemaCreation.accept(at));
   }
 
   async dumpSchemaInformation(): Promise<string | null> {

@@ -1151,8 +1151,8 @@ export class SchemaStatements {
     return limited;
   }
 
-  updateTableDefinition(tableName: string, base: unknown): Table {
-    return new Table(tableName, base as SchemaStatements);
+  updateTableDefinition(tableName: string, base?: unknown): Table {
+    return new Table(tableName, (base ?? this) as SchemaStatements);
   }
 
   addIndexOptions(

@@ -348,7 +348,7 @@ export class Transaction {
     return this._materialized;
   }
 
-  materializeBang(): void {
+  async materializeBang(): Promise<void> {
     this._materialized = true;
     this._instrumenter.start();
   }
@@ -359,11 +359,11 @@ export class Transaction {
     }
   }
 
-  restoreBang(): void {
+  async restoreBang(): Promise<void> {
     if (this.isMaterialized()) {
       this.incompleteBang();
       this._materialized = false;
-      this.materializeBang();
+      await this.materializeBang();
     }
   }
 
@@ -519,7 +519,7 @@ export class Transaction {
     }
   }
 
-  restart(): void {
+  async restart(): Promise<void> {
     // No-op: subclasses (RealTransaction, SavepointTransaction) override with actual restart logic
   }
 
@@ -631,21 +631,21 @@ export class RestartParentTransaction extends Transaction {
     parentTransaction.state.addChild(this.state);
   }
 
-  override materializeBang(): void {
-    this._parent.materializeBang();
+  override async materializeBang(): Promise<void> {
+    await this._parent.materializeBang();
   }
 
   override isMaterialized(): boolean {
     return this._parent.isMaterialized();
   }
 
-  restart(): void {
-    this._parent.restart();
+  async restart(): Promise<void> {
+    await this._parent.restart();
   }
 
   override async rollback(): Promise<void> {
     this.state.rollbackBang();
-    this._parent.restart();
+    await this._parent.restart();
   }
 
   override async commit(): Promise<void> {
@@ -680,18 +680,18 @@ export class SavepointTransaction extends Transaction {
     this.savepointName = savepointName;
   }
 
-  override materializeBang(): void {
-    this.connection.createSavepoint(this.savepointName);
-    super.materializeBang();
+  override async materializeBang(): Promise<void> {
+    await this.connection.createSavepoint(this.savepointName);
+    await super.materializeBang();
   }
 
-  restart(): void {
+  async restart(): Promise<void> {
     if (!this.isMaterialized()) return;
 
     this._instrumenter.finish("restart");
     this._instrumenter.start();
 
-    this.connection.rollbackToSavepoint(this.savepointName);
+    await this.connection.rollbackToSavepoint(this.savepointName);
   }
 
   override async rollback(): Promise<void> {
@@ -726,38 +726,38 @@ export class SavepointTransaction extends Transaction {
  * Mirrors: ActiveRecord::ConnectionAdapters::RealTransaction
  */
 export class RealTransaction extends Transaction {
-  override materializeBang(): void {
+  override async materializeBang(): Promise<void> {
     if (this.joinable) {
       if (this.isolationLevel) {
-        this.connection.beginIsolatedDbTransaction?.(this.isolationLevel);
+        await this.connection.beginIsolatedDbTransaction?.(this.isolationLevel);
       } else {
-        this.connection.beginDbTransaction?.();
+        await this.connection.beginDbTransaction?.();
       }
     } else {
-      this.connection.beginDeferredTransaction?.(this.isolationLevel);
+      await this.connection.beginDeferredTransaction?.(this.isolationLevel);
     }
-    super.materializeBang();
+    await super.materializeBang();
   }
 
-  restart(): void {
+  async restart(): Promise<void> {
     if (!this.isMaterialized()) return;
 
     this._instrumenter.finish("restart");
 
     if (this.connection.supportsRestartDbTransaction?.()) {
       this._instrumenter.start();
-      this.connection.restartDbTransaction?.();
+      await this.connection.restartDbTransaction?.();
     } else {
-      this.connection.rollbackDbTransaction?.();
-      this.materializeBang();
+      await this.connection.rollbackDbTransaction?.();
+      await this.materializeBang();
     }
   }
 
   override async rollback(): Promise<void> {
     if (this.isMaterialized()) {
-      this.connection.rollbackDbTransaction?.();
+      await this.connection.rollbackDbTransaction?.();
       if (this.isolationLevel) {
-        this.connection.resetIsolationLevel?.();
+        await this.connection.resetIsolationLevel?.();
       }
     }
     this.state.fullRollbackBang();
@@ -768,9 +768,9 @@ export class RealTransaction extends Transaction {
 
   override async commit(): Promise<void> {
     if (this.isMaterialized()) {
-      this.connection.commitDbTransaction?.();
+      await this.connection.commitDbTransaction?.();
       if (this.isolationLevel) {
-        this.connection.resetIsolationLevel?.();
+        await this.connection.resetIsolationLevel?.();
       }
     }
     this.state.fullCommitBang();
@@ -845,7 +845,7 @@ export class TransactionManager {
       ) {
         this._hasUnmaterializedTransactions = true;
       } else {
-        transaction.materializeBang();
+        await transaction.materializeBang();
       }
     }
 
@@ -853,8 +853,8 @@ export class TransactionManager {
     return transaction;
   }
 
-  disableLazyTransactionsBang(): void {
-    this.materializeTransactions();
+  async disableLazyTransactionsBang(): Promise<void> {
+    await this.materializeTransactions();
     this._lazyTransactionsEnabled = false;
   }
 
@@ -873,11 +873,11 @@ export class TransactionManager {
     }
   }
 
-  restoreTransactions(): boolean {
+  async restoreTransactions(): Promise<boolean> {
     if (!this.isRestorable()) return false;
     for (const t of this._stack) {
       if (t instanceof Transaction) {
-        t.restoreBang();
+        await t.restoreBang();
       }
     }
     return true;
@@ -890,7 +890,7 @@ export class TransactionManager {
     });
   }
 
-  materializeTransactions(): void {
+  async materializeTransactions(): Promise<void> {
     if (this._materializingTransactions) return;
 
     if (this._hasUnmaterializedTransactions) {
@@ -898,7 +898,7 @@ export class TransactionManager {
         this._materializingTransactions = true;
         for (const t of this._stack) {
           if (t instanceof Transaction && !t.isMaterialized()) {
-            t.materializeBang();
+            await t.materializeBang();
           }
         }
       } finally {

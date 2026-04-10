@@ -293,7 +293,7 @@ export class AbstractAdapter {
     this.clearCacheBang();
   }
 
-  resetTransaction(options?: { restore?: boolean }): void {
+  async resetTransaction(options?: { restore?: boolean }): Promise<void> {
     const oldState =
       options?.restore && this._transactionManager?.isRestorable()
         ? this._transactionManager
@@ -303,7 +303,7 @@ export class AbstractAdapter {
 
     if (oldState) {
       this._transactionManager = oldState;
-      this._transactionManager.restoreTransactions();
+      await this._transactionManager.restoreTransactions();
     }
   }
 

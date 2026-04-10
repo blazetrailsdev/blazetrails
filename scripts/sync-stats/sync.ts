@@ -6,6 +6,7 @@ import { Base, MigrationContext } from "@blazetrails/activerecord";
 import { SQLite3Adapter } from "@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js";
 
 const REPO = "blazetrailsdev/blazetrails";
+const [REPO_OWNER, REPO_NAME] = REPO.split("/");
 const DB_PATH = join(homedir(), "github", "blazetrailsdev", "stats.db");
 mkdirSync(dirname(DB_PATH), { recursive: true });
 
@@ -305,8 +306,28 @@ async function migrateDb(adapter: SQLite3Adapter) {
     }
     if (await tableExists(adapter, "raw_job_logs")) {
       if (!(await columnExists(adapter, "raw_job_logs", "run_id"))) {
-        await adapter.executeMutation(`ALTER TABLE raw_job_logs ADD COLUMN run_id INTEGER`);
-        await adapter.executeMutation(`ALTER TABLE raw_job_logs ADD COLUMN job_name TEXT`);
+        await adapter.executeMutation(
+          `CREATE TABLE raw_job_logs_new (
+            job_id INTEGER PRIMARY KEY,
+            run_id INTEGER,
+            job_name TEXT,
+            merge_commit_sha TEXT,
+            pr_number INTEGER,
+            log_output TEXT
+          )`,
+        );
+        await adapter.executeMutation(
+          `INSERT OR IGNORE INTO raw_job_logs_new (job_id, merge_commit_sha, pr_number, log_output)
+           SELECT job_id, merge_commit_sha, pr_number, log_output FROM raw_job_logs`,
+        );
+        await adapter.executeMutation(`DROP TABLE raw_job_logs`);
+        await adapter.executeMutation(`ALTER TABLE raw_job_logs_new RENAME TO raw_job_logs`);
+        await adapter.executeMutation(
+          `CREATE INDEX index_raw_job_logs_on_merge_commit_sha ON raw_job_logs (merge_commit_sha)`,
+        );
+        await adapter.executeMutation(
+          `CREATE INDEX index_raw_job_logs_on_run_id ON raw_job_logs (run_id)`,
+        );
       }
     } else {
       await ctx.createTable("raw_job_logs", { id: false }, (t) => {
@@ -362,7 +383,7 @@ async function migrateDb(adapter: SQLite3Adapter) {
         t.integer("pr_number");
         t.string("reviewer");
         t.string("reviewer_type");
-        t.index(["pr_number", "reviewer"], { unique: true });
+        t.index(["pr_number", "reviewer", "reviewer_type"], { unique: true });
       });
     }
 
@@ -410,6 +431,7 @@ async function migrateDb(adapter: SQLite3Adapter) {
         t.text("message");
         t.string("title");
         t.index(["run_id"]);
+        t.index(["job_id"]);
       });
     }
 
@@ -508,7 +530,7 @@ async function migrateDb(adapter: SQLite3Adapter) {
       t.integer("pr_number");
       t.string("reviewer");
       t.string("reviewer_type");
-      t.index(["pr_number", "reviewer"], { unique: true });
+      t.index(["pr_number", "reviewer", "reviewer_type"], { unique: true });
     });
 
     await ctx.createTable("pr_linked_issues", {}, (t) => {
@@ -588,6 +610,7 @@ async function migrateDb(adapter: SQLite3Adapter) {
       t.text("message");
       t.string("title");
       t.index(["run_id"]);
+      t.index(["job_id"]);
     });
 
     await ctx.createTable("test_compare_stats", {}, (t) => {
@@ -1041,7 +1064,9 @@ async function syncPrRequestedReviewers() {
         records.push({ pr_number: number, reviewer: team.slug, reviewer_type: "team" });
       }
       if (records.length > 0) {
-        await PrRequestedReviewer.upsertAll(records, { uniqueBy: ["pr_number", "reviewer"] });
+        await PrRequestedReviewer.upsertAll(records, {
+          uniqueBy: ["pr_number", "reviewer", "reviewer_type"],
+        });
       }
       await PullRequest.where({ number }).updateAll({ reviewers_synced: 1 });
     } catch (err) {
@@ -1074,7 +1099,7 @@ async function syncPrLinkedIssues() {
           };
         };
       }>(
-        `api graphql -f query='{ repository(owner:"blazetrailsdev", name:"blazetrails") { pullRequest(number: ${number}) { closingIssuesReferences(first:50) { nodes { number title state } } } } }'`,
+        `api graphql -f query='{ repository(owner:"${REPO_OWNER}", name:"${REPO_NAME}") { pullRequest(number: ${number}) { closingIssuesReferences(first:50) { nodes { number title state } } } } }'`,
       );
       const nodes = resp.data.repository.pullRequest.closingIssuesReferences.nodes;
       if (nodes.length > 0) {
@@ -1110,6 +1135,10 @@ async function syncPrTimelineEvents() {
     try {
       const events = ghJson<GhTimelineEvent[]>(
         `api repos/${REPO}/issues/${number}/timeline --paginate`,
+      );
+      await PrTimelineEvent.adapter.executeMutation(
+        `DELETE FROM pr_timeline_events WHERE pr_number = ?`,
+        [number],
       );
       if (events.length > 0) {
         await PrTimelineEvent.insertAll(

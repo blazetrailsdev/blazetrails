@@ -1164,11 +1164,7 @@ export class SchemaStatements {
     if (!pk) return relation;
 
     const pkColumns = Array.isArray(pk) ? pk : [pk];
-    const quotedPkColumns = pkColumns.map((col) => this._qi(col));
-    const values = this.columnsForDistinct(
-      quotedPkColumns,
-      (relation.orderValues as string[]) ?? [],
-    );
+    const values = this.columnsForDistinct(pkColumns, (relation.orderValues as string[]) ?? []);
 
     let limited: any = relation;
     const selectValues = Array.isArray(values) ? values : [values];

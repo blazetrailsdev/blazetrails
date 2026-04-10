@@ -419,7 +419,7 @@ export class TableDefinition {
     const { index, ...colOpts } = options;
     this.columns.push(new ColumnDefinition(name, type, colOpts as ColumnOptions));
     if (index) {
-      const indexOpts: { unique?: boolean; name?: string } = typeof index === "object" ? index : {};
+      const indexOpts: AddIndexOptions = typeof index === "object" ? index : {};
       this.index([name], indexOpts);
     }
     return this;
@@ -594,9 +594,21 @@ export class TableDefinition {
     return this;
   }
 
-  index(columns: string[], options: { unique?: boolean; name?: string } = {}): this {
+  index(columns: string[], options: AddIndexOptions = {}): this {
     const name = options.name ?? `index_${this.tableName}_on_${columns.join("_and_")}`;
-    this.indexes.push(new IndexDefinition(this.tableName, name, options.unique ?? false, columns));
+    this.indexes.push(
+      new IndexDefinition(this.tableName, name, options.unique ?? false, columns, {
+        where: options.where,
+        orders: options.order,
+        lengths: options.length,
+        opclasses: options.opclass,
+        type: options.type,
+        using: options.using,
+        include: options.include,
+        nullsNotDistinct: options.nullsNotDistinct,
+        comment: options.comment,
+      }),
+    );
     return this;
   }
 
@@ -710,10 +722,24 @@ export class TableDefinition {
     if (this.as) {
       sql += ` AS ${this.as}`;
     } else {
-      sql += ` (${columnDefs.join(", ")})`;
+      const tableElements = [...columnDefs];
+      for (const chk of this.checkConstraints) {
+        tableElements.push(
+          `CONSTRAINT ${quoteIdentifier(chk.name, this._adapterName)} CHECK (${chk.expression})`,
+        );
+      }
+      for (const fk of this.foreignKeys) {
+        tableElements.push(
+          `CONSTRAINT ${quoteIdentifier(fk.name, this._adapterName)} FOREIGN KEY (${quoteIdentifier(fk.column, this._adapterName)}) REFERENCES ${quoteTableName(fk.toTable, this._adapterName)} (${quoteIdentifier(fk.primaryKey, this._adapterName)})`,
+        );
+      }
+      sql += ` (${tableElements.join(", ")})`;
     }
 
     if (this.options) sql += ` ${this.options}`;
+    if (this.comment && this._adapterName === "mysql") {
+      sql += ` COMMENT ${quoteDefaultExpression(this.comment)}`;
+    }
 
     return sql;
   }
@@ -799,8 +825,8 @@ export class Table {
     }
   }
 
-  async isColumnExists(columnName: string, type?: ColumnType): Promise<boolean> {
-    return this._require("columnExists").call(this._schema, this._tableName, columnName, type);
+  async isColumnExists(columnName: string): Promise<boolean> {
+    return this._require("columnExists").call(this._schema, this._tableName, columnName);
   }
 
   private _require<K extends keyof SchemaStatementsLike>(

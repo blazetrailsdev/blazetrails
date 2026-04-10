@@ -451,6 +451,11 @@ export class TableDefinition {
     return `chk_${this.tableName}_${(hash >>> 0).toString(16).padStart(8, "0")}`;
   }
 
+  foreignKey(toTable: string, options: Partial<AddForeignKeyOptions> = {}): this {
+    this.foreignKeys.push(this.newForeignKeyDefinition(toTable, options));
+    return this;
+  }
+
   newForeignKeyDefinition(
     toTable: string,
     options: Partial<AddForeignKeyOptions> = {},
@@ -940,7 +945,9 @@ export class Table {
     );
   }
 
-  async isCheckConstraintExists(options?: Record<string, unknown>): Promise<boolean> {
+  async isCheckConstraintExists(
+    options: { name?: string; expression?: string } = {},
+  ): Promise<boolean> {
     return this._require("isCheckConstraintExists").call(this._schema, this._tableName, options);
   }
 

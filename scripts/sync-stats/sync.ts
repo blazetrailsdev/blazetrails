@@ -306,7 +306,10 @@ async function migrateDb(adapter: SQLite3Adapter) {
       });
     }
     if (await tableExists(adapter, "raw_job_logs")) {
-      if (!(await columnExists(adapter, "raw_job_logs", "run_id"))) {
+      if (
+        !(await columnExists(adapter, "raw_job_logs", "run_id")) ||
+        !(await columnExists(adapter, "raw_job_logs", "job_name"))
+      ) {
         await adapter.executeMutation(
           `CREATE TABLE raw_job_logs_new (
             job_id INTEGER PRIMARY KEY,
@@ -869,18 +872,22 @@ async function syncPullRequests(mode: "latest" | "refresh"): Promise<number> {
   }
 
   if (mode === "refresh") {
-    const staleRows = await PullRequest.findBySql(
-      `SELECT number FROM pull_requests WHERE state IS NULL OR is_draft IS NULL ORDER BY number DESC LIMIT 500`,
+    const staleCount = await Base.adapter.execute(
+      `SELECT COUNT(*) as cnt FROM pull_requests WHERE state IS NULL`,
     );
-    if (staleRows.length > 0) {
-      console.log(`Backfilling state/is_draft for ${staleRows.length} existing PRs...`);
-      const staleNumbers = staleRows.map((r) => r.readAttribute("number") as number);
-      const stalePrs = ghJson<GhPrData[]>(
-        `pr list --repo ${REPO} --state all --limit ${staleNumbers.length} --json ${fields} --jq '[.[] | select(${staleNumbers.map((n) => `.number == ${n}`).join(" or ")})]'`,
+    const cnt = (staleCount[0] as { cnt: number }).cnt;
+    if (cnt > 0) {
+      console.log(`Backfilling state for ${cnt} existing PRs from merged_at/closed_at...`);
+      await Base.adapter.executeMutation(
+        `UPDATE pull_requests SET state = CASE
+          WHEN merged_at IS NOT NULL THEN 'merged'
+          WHEN closed_at IS NOT NULL THEN 'closed'
+          ELSE 'open'
+        END WHERE state IS NULL`,
       );
-      if (stalePrs.length > 0) {
-        await PullRequest.upsertAll(stalePrs.map(mapPr), { uniqueBy: "number" });
-      }
+      await Base.adapter.executeMutation(
+        `UPDATE pull_requests SET is_draft = 0 WHERE is_draft IS NULL`,
+      );
     }
   }
 
@@ -1187,8 +1194,11 @@ async function syncPrReactions() {
       const reactions = ghJson<GhReactionData[]>(
         `api repos/${REPO}/issues/${number}/reactions --paginate`,
       );
+      await PrReaction.adapter.executeMutation(`DELETE FROM pr_reactions WHERE pr_number = ?`, [
+        number,
+      ]);
       if (reactions.length > 0) {
-        await PrReaction.upsertAll(
+        await PrReaction.insertAll(
           reactions.map((r) => ({
             reaction_id: r.id,
             pr_number: number,
@@ -1196,7 +1206,6 @@ async function syncPrReactions() {
             content: r.content,
             created_at: r.created_at,
           })),
-          { uniqueBy: "reaction_id" },
         );
       }
       await PullRequest.where({ number }).updateAll({ reactions_synced: 1 });
@@ -1591,11 +1600,20 @@ async function syncJobLogs(mode: "latest" | "refresh"): Promise<number> {
 async function syncCompareStats(mode: "latest" | "refresh"): Promise<number> {
   const limitClause = mode === "latest" ? "LIMIT 50" : "";
   const runsToProcess = await Base.adapter.execute(`
-    SELECT DISTINCT rjl.job_id, rjl.merge_commit_sha, rjl.pr_number
+    SELECT rjl.job_id, rjl.merge_commit_sha, rjl.pr_number
     FROM raw_job_logs rjl
     JOIN workflow_jobs wj ON wj.id = rjl.job_id
     WHERE wj.name = 'Rails API/Test Comparison'
     AND wj.conclusion = 'success'
+    AND rjl.job_id = (
+      SELECT rjl2.job_id FROM raw_job_logs rjl2
+      JOIN workflow_jobs wj2 ON wj2.id = rjl2.job_id
+      WHERE rjl2.merge_commit_sha = rjl.merge_commit_sha
+      AND wj2.name = 'Rails API/Test Comparison'
+      AND wj2.conclusion = 'success'
+      ORDER BY wj2.completed_at DESC
+      LIMIT 1
+    )
     AND (
       NOT EXISTS (
         SELECT 1 FROM test_compare_stats tcs

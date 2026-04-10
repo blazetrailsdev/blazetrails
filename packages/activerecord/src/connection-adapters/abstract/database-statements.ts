@@ -901,6 +901,10 @@ export async function rawExecQuery(
   if (!this.rawExecute) {
     throw new Error("rawExecQuery requires rawExecute on the adapter");
   }
+  // Materialize lazy transactions before executing SQL, matching Rails'
+  // with_raw_connection which calls materialize_transactions.
+  const tm = (this as any)._transactionManager as TransactionManager | undefined;
+  if (tm) await tm.materializeTransactions();
   const rawResult = await this.rawExecute(sql, name ?? "SQL", binds);
   return this.castResult ? this.castResult(rawResult) : rawResult;
 }
@@ -917,6 +921,9 @@ export async function internalExecQuery(
   name?: string | null,
   binds?: unknown[],
 ): Promise<unknown> {
+  // Materialize lazy transactions before executing SQL
+  const tm = (this as any)._transactionManager as TransactionManager | undefined;
+  if (tm) await tm.materializeTransactions();
   if (this?.internalExecute) {
     const rawResult = await this.internalExecute(sql, name ?? "SQL", binds);
     return this.castResult ? this.castResult(rawResult) : rawResult;

@@ -424,10 +424,11 @@ export class Transaction {
     if (recs) {
       const ite = this._uniqueRecords(recs);
       const instanceMap = this._prepareInstancesToRunCallbacksOn(ite);
+      let idx = 0;
 
       try {
-        while (ite.length > 0) {
-          const record = ite.shift()!;
+        for (; idx < ite.length; idx++) {
+          const record = ite[idx];
           const shouldRunCallbacks =
             instanceMap.get(record) === record &&
             typeof (record as any).isTriggerTransactionalCallbacks === "function" &&
@@ -441,7 +442,8 @@ export class Transaction {
           }
         }
       } finally {
-        for (const i of ite) {
+        for (; idx < ite.length; idx++) {
+          const i = ite[idx];
           if (typeof (i as any).rolledbackBang === "function") {
             await (i as any).rolledbackBang({
               forceRestoreState: this.isFullRollback(),
@@ -485,10 +487,11 @@ export class Transaction {
 
       if (this._runCommitCallbacks) {
         const instanceMap = this._prepareInstancesToRunCallbacksOn(ite);
+        let idx = 0;
 
         try {
-          while (ite.length > 0) {
-            const record = ite.shift()!;
+          for (; idx < ite.length; idx++) {
+            const record = ite[idx];
             const shouldRunCallbacks =
               instanceMap.get(record) === record &&
               typeof (record as any).isTriggerTransactionalCallbacks === "function" &&
@@ -499,15 +502,15 @@ export class Transaction {
             }
           }
         } finally {
-          for (const i of ite) {
+          for (; idx < ite.length; idx++) {
+            const i = ite[idx];
             if (typeof (i as any).committedBang === "function") {
               await (i as any).committedBang({ shouldRunCallbacks: false });
             }
           }
         }
       } else {
-        while (ite.length > 0) {
-          const record = ite.shift()!;
+        for (const record of ite) {
           this._connection.addTransactionRecord?.(record);
         }
       }

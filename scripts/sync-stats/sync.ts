@@ -46,7 +46,7 @@ class PullRequest extends Base {
     this.attribute("time_open_seconds", "integer");
     this.attribute("review_decision", "string");
     this.attribute("state", "string");
-    this.attribute("is_draft", "boolean");
+    this.attribute("is_draft", "integer");
     this.attribute("reviewers_synced", "integer", { default: 0 });
     this.attribute("linked_issues_synced", "integer", { default: 0 });
     this.attribute("timeline_synced", "integer", { default: 0 });
@@ -285,7 +285,8 @@ async function columnExists(
   table: string,
   column: string,
 ): Promise<boolean> {
-  const cols = await adapter.execute(`PRAGMA table_info(${table})`);
+  const quoted = `"${table.replace(/"/g, '""')}"`;
+  const cols = await adapter.execute(`PRAGMA table_info(${quoted})`);
   return cols.some((c: any) => c.name === column);
 }
 
@@ -825,7 +826,7 @@ async function syncPullRequests(mode: "latest" | "refresh"): Promise<number> {
     "isDraft",
   ].join(",");
 
-  const limit = mode === "latest" ? 100 : 1000;
+  const limit = mode === "latest" ? 100 : 5000;
   const allPrs = ghJson<GhPrData[]>(
     `pr list --repo ${REPO} --state all --limit ${limit} --json ${fields} --jq '[.[] | select(.number > ${lastSynced})]'`,
   );
@@ -1088,20 +1089,31 @@ async function syncPrLinkedIssues() {
   for (const pr of prsToSync) {
     const number = pr.readAttribute("number") as number;
     try {
-      const resp = ghJson<{
-        data: {
-          repository: {
-            pullRequest: {
-              closingIssuesReferences: {
-                nodes: { number: number; title: string; state: string }[];
+      const nodes: { number: number; title: string; state: string }[] = [];
+      let after: string | null = null;
+      let hasNextPage = false;
+      do {
+        const afterArg = after ? `, after:"${after}"` : "";
+        const resp = ghJson<{
+          data: {
+            repository: {
+              pullRequest: {
+                closingIssuesReferences: {
+                  nodes: { number: number; title: string; state: string }[];
+                  pageInfo: { hasNextPage: boolean; endCursor: string | null };
+                };
               };
             };
           };
-        };
-      }>(
-        `api graphql -f query='{ repository(owner:"${REPO_OWNER}", name:"${REPO_NAME}") { pullRequest(number: ${number}) { closingIssuesReferences(first:50) { nodes { number title state } } } } }'`,
-      );
-      const nodes = resp.data.repository.pullRequest.closingIssuesReferences.nodes;
+        }>(
+          `api graphql -f query='{ repository(owner:"${REPO_OWNER}", name:"${REPO_NAME}") { pullRequest(number: ${number}) { closingIssuesReferences(first:50${afterArg}) { nodes { number title state } pageInfo { hasNextPage endCursor } } } } }'`,
+        );
+        const connection = resp.data.repository.pullRequest.closingIssuesReferences;
+        nodes.push(...connection.nodes);
+        hasNextPage = connection.pageInfo.hasNextPage;
+        after = connection.pageInfo.endCursor;
+      } while (hasNextPage);
+
       if (nodes.length > 0) {
         await PrLinkedIssue.upsertAll(
           nodes.map((n) => ({
@@ -1576,7 +1588,8 @@ async function syncJobLogs(mode: "latest" | "refresh"): Promise<number> {
   return fetched;
 }
 
-async function syncCompareStats(): Promise<number> {
+async function syncCompareStats(mode: "latest" | "refresh"): Promise<number> {
+  const limitClause = mode === "latest" ? "LIMIT 50" : "";
   const runsToProcess = await Base.adapter.execute(`
     SELECT DISTINCT rjl.job_id, rjl.merge_commit_sha, rjl.pr_number
     FROM raw_job_logs rjl
@@ -1601,6 +1614,7 @@ async function syncCompareStats(): Promise<number> {
       )
     )
     ORDER BY rjl.pr_number DESC
+    ${limitClause}
   `);
 
   if (runsToProcess.length === 0) {
@@ -1883,7 +1897,7 @@ async function main() {
     const logsFetched = await syncJobLogs(fetchMode);
 
     console.log("\n=== Syncing compare stats from CI logs ===");
-    const logsParsed = await syncCompareStats();
+    const logsParsed = await syncCompareStats(fetchMode);
 
     await SyncLog.create({
       synced_at: new Date().toISOString(),

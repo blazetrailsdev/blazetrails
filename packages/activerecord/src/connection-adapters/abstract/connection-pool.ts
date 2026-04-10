@@ -12,6 +12,17 @@ import { ConnectionNotEstablished, ConnectionTimeoutError } from "../../errors.j
 import { SchemaReflection } from "../schema-cache.js";
 import { Reaper, type ReapablePool } from "./connection-pool/reaper.js";
 import { getAsyncContext, type AsyncContext } from "@blazetrails/activesupport";
+import type { TransactionManager } from "./transaction.js";
+
+/**
+ * A connection that supports transaction management.
+ * AbstractAdapter satisfies this interface; the pool uses it for pin/unpin.
+ */
+interface TransactionAwareConnection extends DatabaseAdapter {
+  transactionManager: TransactionManager;
+  verifyBang(): void;
+  resetBang(): void;
+}
 
 let _contextIdCounter = 0;
 let _contextStorage: AsyncContext<number> | null = null;
@@ -309,10 +320,12 @@ export class ConnectionPool implements ReapablePool {
       this._connections.push(this._pinnedConnection);
     }
 
-    const conn = this._pinnedConnection as any;
-    if (conn.verifyBang) conn.verifyBang();
-    if (conn.transactionManager) {
-      await conn.transactionManager.beginTransaction({ joinable: false, _lazy: false });
+    if (isTransactionAware(this._pinnedConnection)) {
+      this._pinnedConnection.verifyBang();
+      await this._pinnedConnection.transactionManager.beginTransaction({
+        joinable: false,
+        _lazy: false,
+      });
     }
   }
 
@@ -328,18 +341,16 @@ export class ConnectionPool implements ReapablePool {
       this._pinnedConnection = null;
     }
 
-    const conn = connection as any;
-    if (conn.transactionManager) {
-      if (conn.transactionManager.currentTransaction.open) {
-        await conn.transactionManager.rollbackTransaction();
+    if (isTransactionAware(connection)) {
+      if (connection.transactionManager.currentTransaction.open) {
+        await connection.transactionManager.rollbackTransaction();
       } else {
         clean = false;
-        if (conn.resetBang) conn.resetBang();
+        connection.resetBang();
       }
     }
 
     if (this._pinnedConnection === null) {
-      if (conn.stealBang) conn.stealBang();
       this.checkin(connection);
     }
 
@@ -350,8 +361,9 @@ export class ConnectionPool implements ReapablePool {
 
   checkout(): DatabaseAdapter {
     if (this._pinnedConnection) {
-      const conn = this._pinnedConnection as any;
-      if (conn.verifyBang) conn.verifyBang();
+      if (isTransactionAware(this._pinnedConnection)) {
+        this._pinnedConnection.verifyBang();
+      }
       if (this._connections && !this._connections.includes(this._pinnedConnection)) {
         this._connections.push(this._pinnedConnection);
       }
@@ -461,6 +473,8 @@ export class ConnectionPool implements ReapablePool {
   // --- Lifecycle ---
 
   disconnect(): void {
+    this._pinnedConnection = null;
+    this._pinnedConnectionsDepth = 0;
     if (this._connections) this._connections.length = 0;
     if (this._available) this._available.length = 0;
     this._checkedOut.clear();
@@ -474,6 +488,8 @@ export class ConnectionPool implements ReapablePool {
 
   discardBang(): void {
     if (this.isDiscarded()) return;
+    this._pinnedConnection = null;
+    this._pinnedConnectionsDepth = 0;
     this._connections = null;
     this._available = null;
     this._leases = null;
@@ -563,4 +579,8 @@ export class ConnectionPool implements ReapablePool {
     }
     return this._leases.get(String(executionContextId()));
   }
+}
+
+function isTransactionAware(conn: DatabaseAdapter): conn is TransactionAwareConnection {
+  return "transactionManager" in conn && "verifyBang" in conn && "resetBang" in conn;
 }

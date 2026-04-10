@@ -864,15 +864,19 @@ export class SchemaStatements {
     } = {},
     fn?: (td: TableDefinition) => void,
   ): TableDefinition {
-    const hasCustomPk = options.primaryKey && options.id !== false;
+    if (Array.isArray(options.primaryKey)) {
+      throw new Error("Composite primary keys are not yet supported by buildCreateTableDefinition");
+    }
+    const hasCustomPk = typeof options.primaryKey === "string" && options.id !== false;
     const td = new TableDefinition(tableName, {
       id: hasCustomPk ? false : options.id,
       adapterName: this.adapterName,
     });
     if (hasCustomPk) {
-      const pkName = typeof options.primaryKey === "string" ? options.primaryKey : "id";
       const pkType = (typeof options.id === "string" ? options.id : "primary_key") as ColumnType;
-      td.columns.unshift(new ColumnDefinition(pkName, pkType, { primaryKey: true }));
+      td.columns.unshift(
+        new ColumnDefinition(options.primaryKey as string, pkType, { primaryKey: true }),
+      );
     }
     if (fn) fn(td);
     return td;
@@ -1020,7 +1024,7 @@ export class SchemaStatements {
       const unqualifiedFrom = (fromTable.split(".").at(-1) ?? fromTable).replace(/\./g, "_");
       const cols = Array.isArray(result.column) ? result.column : [result.column];
       const fullName = `fk_rails_${unqualifiedFrom}_${(cols as string[]).join("_")}`;
-      if (fullName.length > 62) {
+      if (fullName.length > this.maxIndexNameSize()) {
         // Truncate and append a simple hash to stay within identifier limits
         const hash = Array.from(fullName).reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0);
         const hex = Math.abs(hash).toString(16).slice(0, 10);
@@ -1034,7 +1038,7 @@ export class SchemaStatements {
   }
 
   async checkConstraints(_tableName: string): Promise<CheckConstraintDefinition[]> {
-    throw new Error("checkConstraints is not implemented for this adapter");
+    throw new Error("NotImplementedError: checkConstraints is not implemented");
   }
 
   checkConstraintOptions(
@@ -1070,7 +1074,7 @@ export class SchemaStatements {
   }
 
   async dumpSchemaInformation(): Promise<string | null> {
-    const smTable = (this as any).pool?.schemaMigration;
+    const smTable = (this.adapter as any).pool?.schemaMigration;
     if (!smTable) return null;
     const versions: string[] =
       typeof smTable.versions === "function" ? await smTable.versions() : (smTable.versions ?? []);
@@ -1089,13 +1093,12 @@ export class SchemaStatements {
   }
 
   async assumeMigratedUptoVersion(version: number | string): Promise<void> {
-    const verStr = String(version);
-    if (typeof version === "string" && !/^\d+$/.test(verStr)) {
+    const ver = String(version);
+    if (!/^\d+$/.test(ver)) {
       throw new Error(`Invalid migration version: ${version}`);
     }
-    const ver = typeof version === "number" ? version : parseInt(version, 10);
 
-    const smMigration = (this as any).pool?.schemaMigration;
+    const smMigration = (this.adapter as any).pool?.schemaMigration;
     const smTableName = smMigration?.tableName ?? "schema_migrations";
     const smTable = this._qt(smTableName);
 
@@ -1107,22 +1110,22 @@ export class SchemaStatements {
     }
 
     // Insert the target version if not already recorded
-    const escapedVer = String(ver).replace(/'/g, "''");
-    if (!existing.has(String(ver))) {
+    const escapedVer = ver.replace(/'/g, "''");
+    if (!existing.has(ver)) {
       await this.adapter.executeMutation(
         `INSERT INTO ${smTable} (version) VALUES ('${escapedVer}')`,
       );
     }
 
     // If pool has migration context, also insert all migration versions below this one
-    const migrationContext = (this as any).pool?.migrationContext;
+    const migrationContext = (this.adapter as any).pool?.migrationContext;
     if (migrationContext) {
-      const allVersions: number[] = (migrationContext.migrations ?? []).map(
-        (m: { version: number }) => m.version,
+      const allVersions: string[] = (migrationContext.migrations ?? []).map(
+        (m: { version: number | string }) => String(m.version),
       );
-      const toInsert = allVersions.filter((v) => v < ver && !existing.has(String(v)));
+      const toInsert = allVersions.filter((v) => BigInt(v) < BigInt(ver) && !existing.has(v));
       for (const v of toInsert) {
-        const vStr = String(v).replace(/'/g, "''");
+        const vStr = v.replace(/'/g, "''");
         await this.adapter.executeMutation(`INSERT INTO ${smTable} (version) VALUES ('${vStr}')`);
       }
     }
@@ -1202,7 +1205,9 @@ export class SchemaStatements {
     _tableName: string,
     _commentOrChanges: string | null | { from?: string; to?: string },
   ): Promise<void> {
-    throw new Error(`${this.adapterName} does not support changing table comments`);
+    throw new Error(
+      `NotImplementedError: ${this.adapterName} does not support changing table comments`,
+    );
   }
 
   async changeColumnComment(
@@ -1210,7 +1215,9 @@ export class SchemaStatements {
     _columnName: string,
     _commentOrChanges: string | null | { from?: string; to?: string },
   ): Promise<void> {
-    throw new Error(`${this.adapterName} does not support changing column comments`);
+    throw new Error(
+      `NotImplementedError: ${this.adapterName} does not support changing column comments`,
+    );
   }
 
   createSchemaDumper(options: Record<string, unknown> = {}): SchemaDumper {

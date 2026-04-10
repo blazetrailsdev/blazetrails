@@ -296,9 +296,12 @@ export class AbstractAdapter {
   resetTransaction(): void;
   resetTransaction(options: { restore: true }): Promise<void>;
   resetTransaction(options?: { restore?: boolean }): void | Promise<void> {
-    if (options?.restore && this._transactionManager?.isRestorable()) {
-      const oldState = this._transactionManager;
-      return oldState.restoreTransactions().then(() => {});
+    if (options?.restore) {
+      if (this._transactionManager?.isRestorable()) {
+        return this._transactionManager.restoreTransactions().then(() => {});
+      }
+      this._transactionManager = new TransactionManager(this as any);
+      return Promise.resolve();
     }
 
     this._transactionManager = new TransactionManager(this as any);

@@ -956,21 +956,14 @@ function normalizeResult(result: unknown): Result {
     return new Result(r.columns ?? [], r.rows);
   }
   if (Array.isArray(result)) {
-    const rows = result.map((row) =>
-      Array.isArray(row)
-        ? row
-        : typeof row === "object" && row !== null
-          ? Object.values(row)
-          : [row],
-    );
-    const columns =
-      result.length > 0 &&
-      typeof result[0] === "object" &&
-      result[0] !== null &&
-      !Array.isArray(result[0])
-        ? Object.keys(result[0] as Record<string, unknown>)
-        : [];
-    return new Result(columns, rows);
+    if (result.length === 0) return new Result([], []);
+    const first = result[0];
+    const isHashRow = typeof first === "object" && first !== null && !Array.isArray(first);
+    if (isHashRow) {
+      return Result.fromRowHashes(result as Record<string, unknown>[]);
+    }
+    const rows = result.map((row) => (Array.isArray(row) ? row : [row]));
+    return new Result([], rows);
   }
   return new Result([], []);
 }

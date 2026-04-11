@@ -1,4 +1,4 @@
-import { getCrypto } from "@blazetrails/activesupport";
+import { getCrypto, pluralize, underscore } from "@blazetrails/activesupport";
 import {
   Table,
   SelectManager,
@@ -1327,7 +1327,10 @@ export class Relation<T extends Base> {
     if (this._eagerLoadAssociations.length > 0 || promotedIncludes.length > 0) {
       const originalEager = this._eagerLoadAssociations;
       const originalIncludes = this._includesAssociations;
-      this._eagerLoadAssociations = [...originalEager, ...promotedIncludes];
+      // Dedupe: JoinDependency.addAssociation does not dedupe and would
+      // emit multiple LEFT OUTER JOINs with different aliases for the
+      // same association, inflating row counts.
+      this._eagerLoadAssociations = [...new Set([...originalEager, ...promotedIncludes])];
       this._includesAssociations = originalIncludes.filter(
         (name) => !promotedIncludes.includes(name),
       );
@@ -1390,18 +1393,24 @@ export class Relation<T extends Base> {
           ).toLowerCase(),
         ]),
     );
+    const alreadyEagerLoaded = new Set(this._eagerLoadAssociations);
     const modelAssociations: Array<{ name: string; options?: { className?: string } }> =
       ((this._modelClass as unknown as { _associations?: unknown })._associations as
         | Array<{ name: string; options?: { className?: string } }>
         | undefined) ?? [];
+    const seen = new Set<string>();
     const promoted: string[] = [];
     for (const name of this._includesAssociations) {
+      if (seen.has(name) || alreadyEagerLoaded.has(name)) continue;
       const assoc = modelAssociations.find((a) => a.name === name);
       if (!assoc) continue;
       const targetTable = this._tableNameForAssociation(assoc);
       if (!targetTable) continue;
       const lower = targetTable.toLowerCase();
-      if (refs.has(lower) && !alreadyJoined.has(lower)) promoted.push(name);
+      if (refs.has(lower) && !alreadyJoined.has(lower)) {
+        promoted.push(name);
+        seen.add(name);
+      }
     }
     return promoted;
   }
@@ -1412,14 +1421,13 @@ export class Relation<T extends Base> {
   }): string | null {
     const className = assoc.options?.className;
     if (className) {
-      const target = (
-        this._modelClass as unknown as { subclasses?: Map<string, unknown> }
-      ).subclasses?.get?.(className) as { tableName?: string } | undefined;
+      const target = modelRegistry.get(className) as { tableName?: string } | undefined;
       if (target?.tableName) return target.tableName;
     }
-    // Fallback: pluralize the association name (simple heuristic — same as
-    // Rails' default when class_name is not specified).
-    return assoc.name.endsWith("s") ? assoc.name : `${assoc.name}s`;
+    // Fallback: pluralize + underscore the association name, matching Rails'
+    // default when class_name is not specified
+    // (e.g. :category -> categories, :authorProfile -> author_profiles).
+    return pluralize(underscore(assoc.name));
   }
 
   private async _executeEagerLoad(): Promise<void> {

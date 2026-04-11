@@ -14,6 +14,9 @@ import { Reaper, type ReapablePool } from "./connection-pool/reaper.js";
 import { ConnectionLeasingQueue } from "./connection-pool/queue.js";
 import { getAsyncContext, type AsyncContext } from "@blazetrails/activesupport";
 import type { TransactionManager } from "./transaction.js";
+import { SchemaMigration } from "../../schema-migration.js";
+import { InternalMetadata } from "../../internal-metadata.js";
+import { MigrationContext } from "../../migration.js";
 
 /**
  * A connection that supports transaction management.
@@ -181,15 +184,15 @@ export class LeaseRegistry {
  * Base.connectionHandler which creates a circular dependency at module level.
  * Wired up when ConnectionHandler is complete (PR 6).
  */
-export const ExecutorHooks = {
-  run(): void {
+export class ExecutorHooks {
+  static run(): void {
     // noop — matches Rails
-  },
+  }
 
-  complete(): void {
-    // Wired up in PR 6 when ConnectionHandler.eachConnectionPool exists
-  },
-};
+  static complete(): void {
+    // Wired up when ConnectionHandler.eachConnectionPool exists
+  }
+}
 
 export class ConnectionPool implements ReapablePool {
   readonly poolConfig: PoolConfig;
@@ -259,6 +262,24 @@ export class ConnectionPool implements ReapablePool {
 
   get connectionDescriptor(): ConnectionDescriptor {
     return this.poolConfig.connectionDescriptor;
+  }
+
+  // --- Migration / Schema ---
+
+  get migrationsPaths(): string[] {
+    return (this.dbConfig as any).migrationsPaths ?? ["db/migrate"];
+  }
+
+  get schemaMigration(): SchemaMigration {
+    return new SchemaMigration(this as any);
+  }
+
+  get internalMetadata(): InternalMetadata {
+    return new InternalMetadata(this as any);
+  }
+
+  get migrationContext(): MigrationContext {
+    return new MigrationContext(this as any);
   }
 
   // --- Pool state ---

@@ -72,7 +72,7 @@ export class IndexedRow {
 
   equals(other: unknown): boolean {
     if (other instanceof IndexedRow) {
-      return this.#row === other.#row && this.#columnIndexes === other.#columnIndexes;
+      return this === other;
     }
     if (other && typeof other === "object") {
       const hash = this.toHash();
@@ -163,6 +163,7 @@ export class Result {
   first(n?: number): Record<string, unknown> | Record<string, unknown>[] | undefined {
     const rows = this.#getHashRows();
     if (n === undefined) return rows[0];
+    if (n < 0) throw new Error("negative array size");
     return rows.slice(0, n);
   }
 
@@ -171,6 +172,7 @@ export class Result {
   last(n?: number): Record<string, unknown> | Record<string, unknown>[] | undefined {
     const rows = this.#getHashRows();
     if (n === undefined) return rows[rows.length - 1];
+    if (n < 0) throw new Error("negative array size");
     return n >= rows.length ? rows.slice() : rows.slice(rows.length - n);
   }
 

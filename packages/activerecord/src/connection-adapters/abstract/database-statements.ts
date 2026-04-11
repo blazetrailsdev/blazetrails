@@ -16,11 +16,7 @@ import { Result } from "../../result.js";
 export interface DatabaseStatementsHost {
   preparedStatements?: boolean;
   execute?(sql: string, name?: string | null): Promise<unknown>;
-  selectAll?(
-    sql: string,
-    name?: string | null,
-    binds?: unknown[],
-  ): Promise<Record<string, unknown>[]>;
+  selectAll?(sql: string, name?: string | null, binds?: unknown[]): Promise<Result>;
   internalExecute?(sql: string, name?: string, binds?: unknown[]): Promise<unknown>;
   rawExecute?(sql: string, name?: string, binds?: unknown[]): Promise<unknown>;
   castResult?(rawResult: unknown): Result;
@@ -133,11 +129,7 @@ export function cacheableQuery(
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#select_all
  */
-export function selectAll(
-  sql: string,
-  _name?: string | null,
-  _binds?: unknown[],
-): Promise<Record<string, unknown>[]> {
+export function selectAll(sql: string, _name?: string | null, _binds?: unknown[]): Promise<Result> {
   throw new Error("selectAll must be implemented by adapter subclass");
 }
 
@@ -146,14 +138,15 @@ export function selectAll(
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#select_one
  */
-export function selectOne(
+export async function selectOne(
   this: DatabaseStatementsHost | void,
   sql: string,
   name?: string | null,
   binds?: unknown[],
 ): Promise<Record<string, unknown> | undefined> {
   const doSelect = (this as DatabaseStatementsHost)?.selectAll ?? selectAll;
-  return doSelect(sql, name, binds).then((rows) => rows[0]);
+  const result = await doSelect(sql, name, binds);
+  return result.first();
 }
 
 /**
@@ -189,14 +182,15 @@ export function selectValues(
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#select_rows
  */
-export function selectRows(
+export async function selectRows(
   this: DatabaseStatementsHost | void,
   sql: string,
   name?: string | null,
   binds?: unknown[],
 ): Promise<unknown[][]> {
   const doSelect = (this as DatabaseStatementsHost)?.selectAll ?? selectAll;
-  return doSelect(sql, name, binds).then((rows) => rows.map((row) => Object.values(row)));
+  const result = await doSelect(sql, name, binds);
+  return result.rows;
 }
 
 /**

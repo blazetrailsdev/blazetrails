@@ -460,20 +460,35 @@ function getColumnsHash(host: SchemaHost): Record<string, any> {
  * on any class that includes the Concern. Grouping them here keeps the
  * mixin surface colocated with the implementations.
  *
- * Not included: `resolveTableName`, `buildPkWhere`, `buildPkWhereNode` —
- * these are internal helpers (resolveTableName backs the `tableName` getter;
- * the two `buildPkWhere*` functions back the underscored `_buildPkWhere*`
- * accessors on Base). They use the `this:` convention for internal
- * consistency but are not surfaced as Rails-style class methods.
- * Also not (yet) included: the 16 `this: SchemaHost`-typed helpers below
- * (`deriveJoinTableName`, `quotedTableName`, `resetTableName`, etc.) that
- * Rails exposes as class methods but aren't currently wired onto Base.
- * Exposing them will follow in a separate PR.
+ * Not included:
+ * - `resolveTableName`, `buildPkWhere`, `buildPkWhereNode` — internal helpers
+ *   that back the `tableName` getter and the underscore-prefixed
+ *   `_buildPkWhere*` accessors. They use the `this:` convention for internal
+ *   consistency but aren't Rails-style class methods.
+ * - `realInheritanceColumn` — internal setter alias; `Base` already exposes
+ *   `inheritanceColumn` as a getter/setter.
+ * - `loadSchema` — private lifecycle hook in Rails; called automatically
+ *   rather than by user code.
  */
 export const ClassMethods = {
+  // Mirrors: ActiveRecord::ModelSchema::ClassMethods
   columnNames,
   hasAttributeDefinition,
   columnsHash,
   contentColumns,
   createTable,
+  deriveJoinTableName,
+  quotedTableName,
+  resetTableName,
+  fullTableNamePrefix,
+  fullTableNameSuffix,
+  resetSequenceName,
+  isPrefetchPrimaryKey,
+  nextSequenceValue,
+  attributesBuilder,
+  columns,
+  yamlEncoder,
+  columnForAttribute,
+  symbolColumnToString,
+  resetColumnInformation,
 };

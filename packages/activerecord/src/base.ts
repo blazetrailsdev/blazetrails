@@ -498,6 +498,20 @@ export class Base extends Model {
   declare static hasAttributeDefinition: typeof ModelSchema.hasAttributeDefinition;
   declare static columnsHash: typeof ModelSchema.columnsHash;
   declare static contentColumns: typeof ModelSchema.contentColumns;
+  declare static deriveJoinTableName: typeof ModelSchema.deriveJoinTableName;
+  declare static quotedTableName: typeof ModelSchema.quotedTableName;
+  declare static resetTableName: typeof ModelSchema.resetTableName;
+  declare static fullTableNamePrefix: typeof ModelSchema.fullTableNamePrefix;
+  declare static fullTableNameSuffix: typeof ModelSchema.fullTableNameSuffix;
+  declare static resetSequenceName: typeof ModelSchema.resetSequenceName;
+  declare static isPrefetchPrimaryKey: typeof ModelSchema.isPrefetchPrimaryKey;
+  declare static nextSequenceValue: typeof ModelSchema.nextSequenceValue;
+  declare static attributesBuilder: typeof ModelSchema.attributesBuilder;
+  declare static columns: typeof ModelSchema.columns;
+  declare static yamlEncoder: typeof ModelSchema.yamlEncoder;
+  declare static columnForAttribute: typeof ModelSchema.columnForAttribute;
+  declare static symbolColumnToString: typeof ModelSchema.symbolColumnToString;
+  declare static resetColumnInformation: typeof ModelSchema.resetColumnInformation;
 
   /**
    * Return the STI inheritance column name, if STI is enabled.

@@ -296,7 +296,7 @@ describe("RelationTest", () => {
     it("having with hash form", () => {
       const sql = Post.all().group("category").having({ count: 5 }).toSql();
       expect(sql).toContain("HAVING");
-      expect(sql).toContain("count = 5");
+      expect(sql).toContain(`"count" = 5`);
     });
   });
 

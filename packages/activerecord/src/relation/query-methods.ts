@@ -4,40 +4,12 @@
  *
  * Mirrors: ActiveRecord::QueryMethods
  */
-import { Nodes } from "@blazetrails/arel";
+import { Nodes, Visitors } from "@blazetrails/arel";
 import { FromClause } from "./from-clause.js";
 import { WhereClause } from "./where-clause.js";
 import { IrreversibleOrderError } from "../errors.js";
 import { sanitizeSqlArray } from "../sanitization.js";
 import { quote } from "../connection-adapters/abstract/quoting.js";
-
-export class QueryMethods {
-  static readonly MULTI_VALUE_METHODS = [
-    "includes",
-    "eagerLoad",
-    "preload",
-    "select",
-    "group",
-    "order",
-    "joins",
-    "leftOuterJoins",
-    "references",
-    "extending",
-    "unscope",
-    "optimizerHints",
-    "annotate",
-  ] as const;
-
-  static readonly SINGLE_VALUE_METHODS = [
-    "limit",
-    "offset",
-    "lock",
-    "readonly",
-    "reordering",
-    "distinct",
-    "strictLoading",
-  ] as const;
-}
 
 /**
  * Interface for the scope that WhereChain delegates to.
@@ -114,6 +86,7 @@ interface QueryMethodsHost {
   _isStrictLoading: boolean;
   _annotations: string[];
   _optimizerHints: string[];
+  _referencesValues: string[];
   _fromClause: FromClause;
   _createWithAttrs: Record<string, unknown>;
   _extending: Array<Record<string, Function>>;
@@ -146,7 +119,10 @@ function preloadBang(this: QueryMethodsHost, ...associations: string[]): any {
   return this;
 }
 
-function referencesBang(this: QueryMethodsHost, ..._tables: string[]): any {
+function referencesBang(this: QueryMethodsHost, ...tables: string[]): any {
+  for (const t of tables) {
+    if (t && !this._referencesValues.includes(t)) this._referencesValues.push(t);
+  }
   return this;
 }
 
@@ -174,6 +150,32 @@ function reselectBang(this: QueryMethodsHost, ...columns: any[]): any {
   this._selectColumns = columns.map((c: any) =>
     typeof c === "object" && c !== null && "value" in c ? c : String(c),
   );
+  return this;
+}
+
+/**
+ * Union additional select columns into the existing list. Mirrors Rails'
+ * private `_select!` which uses `select_values |= fields.flatten`.
+ */
+function _selectBang(this: QueryMethodsHost, ...columns: any[]): any {
+  const flat = columns.flat(Infinity);
+  const normalized = flat.map((c: any) =>
+    typeof c === "object" && c !== null && "value" in c ? c : String(c),
+  );
+  if (this._selectColumns === null) {
+    this._selectColumns = normalized;
+  } else {
+    const seen = new Set(
+      this._selectColumns.map((c) => (typeof c === "string" ? c : (c as any).value)),
+    );
+    for (const col of normalized) {
+      const key = typeof col === "string" ? col : (col as any).value;
+      if (!seen.has(key)) {
+        this._selectColumns.push(col);
+        seen.add(key);
+      }
+    }
+  }
   return this;
 }
 
@@ -229,42 +231,123 @@ function reorderBang(
   return this;
 }
 
-function unscopeBang(this: QueryMethodsHost, ...types: Array<string>): any {
-  for (const type of types) {
-    switch (type) {
-      case "where":
-        this._whereClause = WhereClause.empty();
-        break;
-      case "order":
-        this._orderClauses = [];
-        break;
-      case "limit":
-        this._limitValue = null;
-        break;
-      case "offset":
-        this._offsetValue = null;
-        break;
-      case "group":
-        this._groupColumns = [];
-        break;
-      case "having":
-        this._havingClauses = [];
-        break;
-      case "select":
-        this._selectColumns = null;
-        break;
-      case "distinct":
-        this._isDistinct = false;
-        break;
-      case "lock":
-        this._lockValue = null;
-        break;
-      case "readonly":
-        this._isReadonly = false;
-        break;
-      case "from":
-        this._fromClause = FromClause.empty();
-        break;
+/**
+ * Valid argument values for `unscope` — matches Rails' VALID_UNSCOPING_VALUES.
+ * `left_joins` is accepted as an alias for `leftOuterJoins` (matching Rails).
+ */
+export type UnscopeType =
+  | "where"
+  | "select"
+  | "group"
+  | "order"
+  | "lock"
+  | "limit"
+  | "offset"
+  | "joins"
+  | "leftOuterJoins"
+  | "includes"
+  | "from"
+  | "readonly"
+  | "having"
+  | "optimizerHints"
+  | "annotate";
+
+const VALID_UNSCOPING_VALUES: ReadonlySet<string> = new Set([
+  "where",
+  "select",
+  "group",
+  "order",
+  "lock",
+  "limit",
+  "offset",
+  "joins",
+  "left_outer_joins",
+  "leftOuterJoins",
+  "includes",
+  "from",
+  "readonly",
+  "having",
+  "optimizer_hints",
+  "optimizerHints",
+  "annotate",
+]);
+
+function unscopeBang(
+  this: QueryMethodsHost,
+  ...types: Array<string | { where: string | string[] }>
+): any {
+  for (const scope of types) {
+    if (typeof scope === "string") {
+      const key = scope === "left_joins" ? "leftOuterJoins" : scope;
+      if (!VALID_UNSCOPING_VALUES.has(key)) {
+        throw new Error(
+          `Called unscope() with invalid unscoping argument '${scope}'. Valid arguments are: ${[...VALID_UNSCOPING_VALUES].join(", ")}.`,
+        );
+      }
+      switch (key) {
+        case "where":
+          this._whereClause = WhereClause.empty();
+          break;
+        case "order":
+          this._orderClauses = [];
+          break;
+        case "limit":
+          this._limitValue = null;
+          break;
+        case "offset":
+          this._offsetValue = null;
+          break;
+        case "group":
+          this._groupColumns = [];
+          break;
+        case "having":
+          this._havingClauses = [];
+          break;
+        case "select":
+          this._selectColumns = null;
+          break;
+        case "lock":
+          this._lockValue = null;
+          break;
+        case "readonly":
+          this._isReadonly = false;
+          break;
+        case "from":
+          this._fromClause = FromClause.empty();
+          break;
+        case "joins":
+          this._joinClauses = [];
+          this._rawJoins = [];
+          break;
+        case "left_outer_joins":
+        case "leftOuterJoins":
+          this._joinClauses = this._joinClauses.filter((j) => j.type !== "left");
+          break;
+        case "includes":
+          this._includesAssociations = [];
+          this._eagerLoadAssociations = [];
+          this._preloadAssociations = [];
+          break;
+        case "optimizer_hints":
+        case "optimizerHints":
+          this._optimizerHints = [];
+          break;
+        case "annotate":
+          this._annotations = [];
+          break;
+      }
+    } else if (scope && typeof scope === "object") {
+      for (const [key, target] of Object.entries(scope)) {
+        if (key !== "where") {
+          throw new Error(`Hash arguments in .unscope(*args) must have :where as the key.`);
+        }
+        const targets = Array.isArray(target) ? target : [target];
+        this._whereClause = this._whereClause.except(...targets);
+      }
+    } else {
+      throw new Error(
+        `Unrecognized scoping: ${JSON.stringify(scope)}. Use .unscope(where: :attribute_name) or one of ${[...VALID_UNSCOPING_VALUES].join(", ")}.`,
+      );
     }
   }
   return this;
@@ -285,6 +368,13 @@ function leftOuterJoinsBang(this: QueryMethodsHost, ...args: string[]): any {
 }
 
 function whereBang(this: QueryMethodsHost, opts: any, ...rest: unknown[]): any {
+  if (opts == null) return this;
+
+  if (opts instanceof Nodes.Node) {
+    this._whereClause.predicates.push(opts);
+    return this;
+  }
+
   if (typeof opts === "string") {
     let sql: string;
     if (
@@ -293,7 +383,6 @@ function whereBang(this: QueryMethodsHost, opts: any, ...rest: unknown[]): any {
       rest[0] !== null &&
       !Array.isArray(rest[0])
     ) {
-      // Named binds: where("age > :min", { min: 18 })
       sql = opts;
       const namedBinds = rest[0] as Record<string, unknown>;
       for (const [name, value] of Object.entries(namedBinds)) {
@@ -301,24 +390,41 @@ function whereBang(this: QueryMethodsHost, opts: any, ...rest: unknown[]): any {
         sql = sql.replace(new RegExp(`:${escaped}\\b`, "g"), quote(value));
       }
     } else if (rest.length > 0) {
-      // Positional binds: where("age > ?", 18)
       sql = sanitizeSqlArray(opts, ...rest);
     } else {
       sql = opts;
     }
     if (sql.trim()) this._whereClause.predicates.push(new Nodes.SqlLiteral(sql));
-  } else if (opts instanceof Nodes.Node) {
-    this._whereClause.predicates.push(opts);
-  } else if (typeof opts === "object" && opts !== null) {
-    const castConditions: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(opts as Record<string, unknown>)) {
-      castConditions[key] = Array.isArray(value)
+    return this;
+  }
+
+  if (typeof opts !== "object" || Array.isArray(opts)) {
+    const err = new Error(`Unsupported argument type: ${typeof opts} (${String(opts)})`);
+    err.name = "ArgumentError";
+    throw err;
+  }
+
+  const cast: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(opts as Record<string, unknown>)) {
+    if (isRelationLike(value)) {
+      cast[key] = value;
+    } else {
+      cast[key] = Array.isArray(value)
         ? value.map((v) => this._castWhereValue(key, v))
         : this._castWhereValue(key, value);
     }
-    this._whereClause.predicates.push(...this.predicateBuilder.buildFromHash(castConditions));
   }
+  this._whereClause.predicates.push(...this.predicateBuilder.buildFromHash(cast));
   return this;
+}
+
+function isRelationLike(value: unknown): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { _whereClause?: unknown })._whereClause === "object" &&
+    typeof (value as { toSql?: unknown }).toSql === "function"
+  );
 }
 
 function invertWhereBang(this: QueryMethodsHost): any {
@@ -326,23 +432,147 @@ function invertWhereBang(this: QueryMethodsHost): any {
   return this;
 }
 
+/**
+ * Names of the relation fields that are structurally compared by and!/or!.
+ * Mirrors Rails' STRUCTURAL_VALUE_METHODS (Relation::VALUE_METHODS minus
+ * extending, where, having, unscope, references, annotate, optimizer_hints).
+ */
+const STRUCTURAL_FIELDS: ReadonlyArray<[string, keyof QueryMethodsHost]> = [
+  ["includes", "_includesAssociations"],
+  ["eagerLoad", "_eagerLoadAssociations"],
+  ["preload", "_preloadAssociations"],
+  ["select", "_selectColumns"],
+  ["group", "_groupColumns"],
+  ["order", "_orderClauses"],
+  ["joins", "_joinClauses"],
+  ["leftOuterJoins", "_rawJoins"],
+  ["limit", "_limitValue"],
+  ["offset", "_offsetValue"],
+  ["lock", "_lockValue"],
+  ["distinct", "_isDistinct"],
+  ["readonly", "_isReadonly"],
+  ["strictLoading", "_isStrictLoading"],
+  ["from", "_fromClause"],
+  ["createWith", "_createWithAttrs"],
+];
+
+function structurallyIncompatibleValuesFor(
+  self: QueryMethodsHost,
+  other: QueryMethodsHost,
+): string[] {
+  const incompat: string[] = [];
+  for (const [label, field] of STRUCTURAL_FIELDS) {
+    const a = self[field] as unknown;
+    const b = other[field] as unknown;
+    if (Array.isArray(a) && Array.isArray(b)) {
+      const ua = [...new Set(a.map((x) => JSON.stringify(x)))].sort();
+      const ub = [...new Set(b.map((x) => JSON.stringify(x)))].sort();
+      if (ua.length !== ub.length || ua.some((v, i) => v !== ub[i])) incompat.push(label);
+    } else if (JSON.stringify(a) !== JSON.stringify(b)) {
+      incompat.push(label);
+    }
+  }
+  return incompat;
+}
+
+function assertRelationForCombining(other: unknown, methodName: string): void {
+  if (
+    !other ||
+    typeof other !== "object" ||
+    typeof (other as { _whereClause?: unknown })._whereClause !== "object"
+  ) {
+    const err = new Error(
+      `You have passed ${typeof other} object to #${methodName}. Pass an ActiveRecord::Relation object instead.`,
+    );
+    err.name = "ArgumentError";
+    throw err;
+  }
+}
+
+function assertStructurallyCompatible(
+  self: QueryMethodsHost,
+  other: QueryMethodsHost,
+  methodName: string,
+): void {
+  const incompat = structurallyIncompatibleValuesFor(self, other);
+  if (incompat.length > 0) {
+    const err = new Error(
+      `Relation passed to #${methodName} must be structurally compatible. Incompatible values: [${incompat.map((v) => `:${v}`).join(", ")}]`,
+    );
+    err.name = "ArgumentError";
+    throw err;
+  }
+}
+
+/**
+ * Returns true if `self` and `other` are structurally compatible for
+ * and!/or! combining — exposed as a helper so Relation#structurally_compatible?
+ * can share the same check.
+ */
+export function areStructurallyCompatible(self: unknown, other: unknown): boolean {
+  if (
+    !self ||
+    typeof self !== "object" ||
+    !other ||
+    typeof other !== "object" ||
+    typeof (self as { _whereClause?: unknown })._whereClause !== "object" ||
+    typeof (other as { _whereClause?: unknown })._whereClause !== "object"
+  ) {
+    return false;
+  }
+  return (
+    structurallyIncompatibleValuesFor(self as QueryMethodsHost, other as QueryMethodsHost)
+      .length === 0
+  );
+}
+
 function andBang(this: QueryMethodsHost, other: any): any {
+  assertRelationForCombining(other, "and");
+  assertStructurallyCompatible(this, other, "and");
   this._whereClause = this._whereClause.merge(other._whereClause);
+  // Having and references are stored as string[] here; union/dedupe.
+  const unionStrings = (a: string[], b: string[]): string[] => [...new Set([...a, ...b])];
+  this._havingClauses = unionStrings(this._havingClauses, other._havingClauses);
+  this._referencesValues = unionStrings(this._referencesValues, other._referencesValues);
   return this;
 }
 
 function orBang(this: QueryMethodsHost, other: any): any {
+  assertRelationForCombining(other, "or");
+  assertStructurallyCompatible(this, other, "or");
   this._orRelations = [...this._orRelations, other];
+  const unionStrings = (a: string[], b: string[]): string[] => [...new Set([...a, ...b])];
+  this._referencesValues = unionStrings(this._referencesValues, other._referencesValues);
   return this;
 }
 
-function havingBang(this: QueryMethodsHost, condition: string | Record<string, unknown>): any {
-  if (typeof condition === "string") {
-    this._havingClauses.push(condition);
-  } else {
-    for (const [key, value] of Object.entries(condition)) {
-      this._havingClauses.push(`${key} = ${quote(value)}`);
-    }
+function havingBang(
+  this: QueryMethodsHost,
+  opts: string | Record<string, unknown> | Nodes.Node,
+  ...rest: unknown[]
+): any {
+  if (opts == null || (typeof opts === "string" && opts.trim() === "")) return this;
+
+  if (typeof opts === "string") {
+    const sql = rest.length > 0 ? sanitizeSqlArray(opts, ...rest) : opts;
+    this._havingClauses.push(sql);
+    return this;
+  }
+
+  if (opts instanceof Nodes.Node) {
+    this._havingClauses.push(new Visitors.ToSql().compile(opts));
+    return this;
+  }
+
+  const cast: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(opts)) {
+    cast[key] = Array.isArray(value)
+      ? value.map((v) => this._castWhereValue(key, v))
+      : this._castWhereValue(key, value);
+  }
+  const visitor = new Visitors.ToSql();
+  for (const node of this.predicateBuilder.buildFromHash(cast)) {
+    this._havingClauses.push(visitor.compile(node));
   }
   return this;
 }
@@ -505,6 +735,7 @@ export const QueryMethodBangs = {
   withBang,
   withRecursiveBang,
   reselectBang,
+  _selectBang,
   groupBang,
   regroupBang,
   orderBang,

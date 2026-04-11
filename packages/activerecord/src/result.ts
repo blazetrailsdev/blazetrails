@@ -184,16 +184,17 @@ export class Result {
 
   castValues(typeOverrides: ColumnTypes | ColumnType[] = {}): unknown[] {
     const overridesArray = Array.isArray(typeOverrides) ? typeOverrides : null;
-    const overridesHash = overridesArray ? EMPTY_COLUMN_TYPES : (typeOverrides as ColumnTypes);
 
     if (this.columns.length === 1) {
-      const type = overridesArray?.[0] ?? this.#columnType(this.columns[0], 0, overridesHash);
+      const type = overridesArray
+        ? overridesArray[0]
+        : this.#columnType(this.columns[0], 0, typeOverrides as ColumnTypes);
       return this.rows.map((row) => type.deserialize(row[0]));
     }
 
-    const types = this.columns.map(
-      (name, i) => overridesArray?.[i] ?? this.#columnType(name, i, overridesHash),
-    );
+    const types = overridesArray
+      ? overridesArray
+      : this.columns.map((name, i) => this.#columnType(name, i, typeOverrides as ColumnTypes));
 
     return this.rows.map((row) => row.map((value, i) => types[i].deserialize(value)));
   }

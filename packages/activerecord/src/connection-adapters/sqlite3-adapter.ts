@@ -132,14 +132,13 @@ export class SQLite3Adapter
    */
   async executeMutation(sql: string, binds: unknown[] = []): Promise<number> {
     await this._transactionManager.materializeTransactions();
-    this._transactionManager.dirtyCurrentTransaction();
-
     if (this._preventWrites) {
       throw new ReadOnlyError("Write query attempted while preventing writes");
     }
     try {
       const stmt = this.db.prepare(sql);
       const result = stmt.run(...binds);
+      this._transactionManager.dirtyCurrentTransaction();
 
       // For INSERT, return the last inserted rowid
       if (sql.trimStart().toUpperCase().startsWith("INSERT")) {
@@ -156,6 +155,10 @@ export class SQLite3Adapter
   /**
    * Begin a transaction.
    */
+  async beginDeferredTransaction(): Promise<void> {
+    return this.beginDbTransaction();
+  }
+
   async beginDbTransaction(): Promise<void> {
     if (!this._inTransaction) {
       this.db.exec("BEGIN");

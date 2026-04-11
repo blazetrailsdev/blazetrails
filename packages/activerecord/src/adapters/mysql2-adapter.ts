@@ -130,6 +130,10 @@ export class Mysql2Adapter extends AdapterBase implements DatabaseAdapter {
     return this.beginTransaction();
   }
 
+  async beginDeferredTransaction(): Promise<void> {
+    return this.beginTransaction();
+  }
+
   /**
    * Commit the current transaction and release the connection.
    */

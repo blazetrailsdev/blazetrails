@@ -14,6 +14,7 @@ import { PoolManager } from "../pool-manager.js";
 import type { DatabaseAdapter } from "../../adapter.js";
 import { AdapterNotSpecified, ConnectionNotDefined } from "../../errors.js";
 import type { QueryCachePool } from "./query-cache.js";
+import { ExecutorHooks } from "./connection-pool.js";
 import { Notifications } from "@blazetrails/activesupport";
 
 export { ConnectionDescriptor };
@@ -26,6 +27,7 @@ export class ConnectionHandler {
   constructor() {
     this._connectionNameToPoolManager = new Map();
     this._preventWrites = false;
+    ExecutorHooks.setConnectionHandler(this);
   }
 
   get preventWrites(): boolean {

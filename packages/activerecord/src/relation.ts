@@ -1419,14 +1419,20 @@ export class Relation<T extends Base> {
     name: string;
     options?: { className?: string };
   }): string | null {
-    const className = assoc.options?.className;
-    if (className) {
-      const target = modelRegistry.get(className) as { tableName?: string } | undefined;
+    // Prefer an explicit class_name, then Rails-style inferred class name
+    // (classify(singularize(assoc_name))) looked up in the model registry.
+    // This respects a model's customized tableName instead of always
+    // pluralizing the association name (which misses cases like
+    // `static _tableName = "writers"` on the associated model).
+    const explicitClassName = assoc.options?.className;
+    const inferredClassName = _camelize(_singularize(assoc.name));
+    for (const candidate of [explicitClassName, inferredClassName]) {
+      if (!candidate) continue;
+      const target = modelRegistry.get(candidate) as { tableName?: string } | undefined;
       if (target?.tableName) return target.tableName;
     }
-    // Fallback: pluralize + underscore the association name, matching Rails'
-    // default when class_name is not specified
-    // (e.g. :category -> categories, :authorProfile -> author_profiles).
+    // Fallback: pluralize + underscore the association name when the
+    // associated model isn't registered yet (e.g. during test bootstrap).
     return _pluralize(_toUnderscore(assoc.name));
   }
 

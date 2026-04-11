@@ -335,14 +335,16 @@ function unscopeBang(
     } else if (scope && typeof scope === "object") {
       for (const [key, target] of Object.entries(scope)) {
         if (key !== "where") {
-          throw argumentError(`Hash arguments in .unscope(*args) must have :where as the key.`);
+          throw argumentError(
+            `Object arguments to unscope() must use "where" as the key, e.g. unscope({ where: "column_name" }).`,
+          );
         }
         const targets = Array.isArray(target) ? target : [target];
         this._whereClause = this._whereClause.except(...targets);
       }
     } else {
       throw argumentError(
-        `Unrecognized scoping: ${JSON.stringify(scope)}. Use .unscope(where: :attribute_name) or one of ${[...VALID_UNSCOPING_VALUES].join(", ")}.`,
+        `Unrecognized scoping: ${JSON.stringify(scope)}. Use unscope({ where: "column_name" }) or one of: ${[...VALID_UNSCOPING_VALUES].join(", ")}.`,
       );
     }
   }

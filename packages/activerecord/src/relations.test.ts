@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { Base, Relation, Range, RecordNotFound, SoleRecordExceeded } from "./index.js";
 import { createTestAdapter } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
@@ -6,6 +6,12 @@ import type { DatabaseAdapter } from "./adapter.js";
 function freshAdapter(): DatabaseAdapter {
   return createTestAdapter();
 }
+
+// Ensure spies and mocks created inside individual tests don't leak
+// across tests (e.g. vi.spyOn usages in the references/eager load tests).
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 // ─── Shared model setup ───
 

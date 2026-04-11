@@ -184,13 +184,15 @@ export class LeaseRegistry {
  * Base.connectionHandler which creates a circular dependency at module level.
  * Wired up when ConnectionHandler is complete (PR 6).
  */
-export class ExecutorHooks {
-  private static _connectionHandler: {
-    eachConnectionPool(role: string | null | undefined, cb: (pool: ConnectionPool) => void): void;
-  } | null = null;
+type ConnectionHandlerLike = {
+  eachConnectionPool(role: string | null | undefined, cb: (pool: ConnectionPool) => void): void;
+};
 
-  static setConnectionHandler(handler: typeof ExecutorHooks._connectionHandler): void {
-    ExecutorHooks._connectionHandler = handler;
+export class ExecutorHooks {
+  private static _getConnectionHandler: (() => ConnectionHandlerLike | null) | null = null;
+
+  static setConnectionHandlerResolver(resolver: () => ConnectionHandlerLike | null): void {
+    ExecutorHooks._getConnectionHandler = resolver;
   }
 
   static run(): void {
@@ -198,8 +200,9 @@ export class ExecutorHooks {
   }
 
   static complete(): void {
-    if (!ExecutorHooks._connectionHandler) return;
-    ExecutorHooks._connectionHandler.eachConnectionPool(null, (pool) => {
+    const handler = ExecutorHooks._getConnectionHandler?.();
+    if (!handler) return;
+    handler.eachConnectionPool(null, (pool) => {
       const connection = pool.activeConnection;
       if (connection) {
         const txn =

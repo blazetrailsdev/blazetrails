@@ -88,7 +88,7 @@ export class SQLite3Adapter
    */
   async execute(sql: string, binds: unknown[] = []): Promise<Record<string, unknown>[]> {
     await this._transactionManager.materializeTransactions();
-    
+
     try {
       const stmt = this.db.prepare(sql);
       return stmt.all(...binds) as Record<string, unknown>[];
@@ -133,7 +133,7 @@ export class SQLite3Adapter
   async executeMutation(sql: string, binds: unknown[] = []): Promise<number> {
     await this._transactionManager.materializeTransactions();
     this._transactionManager.dirtyCurrentTransaction();
-    
+
     if (this._preventWrites) {
       throw new ReadOnlyError("Write query attempted while preventing writes");
     }
@@ -193,7 +193,6 @@ export class SQLite3Adapter
    * Create a savepoint (nested transaction).
    */
   async createSavepoint(name: string): Promise<void> {
-    
     this.db.exec(`SAVEPOINT "${name}"`);
   }
 
@@ -208,7 +207,6 @@ export class SQLite3Adapter
    * Rollback to a savepoint.
    */
   async rollbackToSavepoint(name: string): Promise<void> {
-    
     this.db.exec(`ROLLBACK TO SAVEPOINT "${name}"`);
   }
 

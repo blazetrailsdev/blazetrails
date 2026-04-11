@@ -706,7 +706,6 @@ export class SavepointTransaction extends Transaction {
   }
 
   override async rollback(): Promise<void> {
-    
     if (!this.state.isInvalidated()) {
       const conn = this.connection;
       if (this.isMaterialized() && conn.active !== false) {
@@ -940,7 +939,7 @@ export class TransactionManager {
 
   async rollbackTransaction(transaction?: Transaction): Promise<void> {
     const txn = transaction || this._stack[this._stack.length - 1];
-    
+
     if (!(txn instanceof Transaction)) return;
 
     try {

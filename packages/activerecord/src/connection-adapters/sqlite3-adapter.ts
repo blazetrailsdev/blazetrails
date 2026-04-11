@@ -87,7 +87,7 @@ export class SQLite3Adapter
    * Execute a SELECT query and return rows.
    */
   async execute(sql: string, binds: unknown[] = []): Promise<Record<string, unknown>[]> {
-    await this._transactionManager.materializeTransactions();
+    await this.materializeTransactions();
 
     try {
       const stmt = this.db.prepare(sql);
@@ -131,14 +131,14 @@ export class SQLite3Adapter
    * Execute an INSERT/UPDATE/DELETE and return affected rows or insert ID.
    */
   async executeMutation(sql: string, binds: unknown[] = []): Promise<number> {
-    await this._transactionManager.materializeTransactions();
+    await this.materializeTransactions();
     if (this._preventWrites) {
       throw new ReadOnlyError("Write query attempted while preventing writes");
     }
     try {
       const stmt = this.db.prepare(sql);
       const result = stmt.run(...binds);
-      this._transactionManager.dirtyCurrentTransaction();
+      this.dirtyCurrentTransaction();
 
       // For INSERT, return the last inserted rowid
       if (sql.trimStart().toUpperCase().startsWith("INSERT")) {

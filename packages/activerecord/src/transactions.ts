@@ -76,38 +76,32 @@ export async function transaction<T>(
     typeof (adapter as any).withinNewTransaction === "function" &&
     !(currentTransaction() === null && adapter.inTransaction)
   ) {
-    const isOutermost = currentTransaction() === null && !adapter.inTransaction;
-    let releaseLock = isOutermost ? await acquireAdapterLock(adapter) : null;
-
-    try {
-      const result = await dbTransaction.call(
-        adapter as any,
-        async (userTx?: unknown) => {
-          let internalTx: Transaction;
-          if (userTx instanceof Transaction) {
-            internalTx = userTx;
-          } else if (userTx && (userTx as any)._internalTransaction instanceof Transaction) {
-            internalTx = (userTx as any)._internalTransaction;
-          } else {
-            const tmCurrent = (adapter as any).currentTransaction?.();
-            internalTx = tmCurrent instanceof Transaction ? tmCurrent : new Transaction(adapter);
-          }
-          return getTransactionStorage().run(internalTx, () => fn(internalTx));
-        },
-        {
-          requiresNew: options?.requiresNew,
-          isolation: options?.isolation,
-          joinable: options?.joinable,
-        },
-      );
-      // Release lock before returning so afterCommit callbacks from
-      // TransactionManager don't deadlock if they start new transactions.
-      releaseLock?.();
-      releaseLock = null;
-      return result as T | undefined;
-    } finally {
-      releaseLock?.();
-    }
+    // No per-adapter lock needed: TransactionManager's join-or-savepoint
+    // logic handles concurrent callers. The second caller either joins the
+    // existing transaction (if joinable) or creates a SavepointTransaction.
+    // Locking here would deadlock because withinNewTransaction runs
+    // commit/rollback callbacks before returning.
+    const result = await dbTransaction.call(
+      adapter as any,
+      async (userTx?: unknown) => {
+        let internalTx: Transaction;
+        if (userTx instanceof Transaction) {
+          internalTx = userTx;
+        } else if (userTx && (userTx as any)._internalTransaction instanceof Transaction) {
+          internalTx = (userTx as any)._internalTransaction;
+        } else {
+          const tmCurrent = (adapter as any).currentTransaction?.();
+          internalTx = tmCurrent instanceof Transaction ? tmCurrent : new Transaction(adapter);
+        }
+        return getTransactionStorage().run(internalTx, () => fn(internalTx));
+      },
+      {
+        requiresNew: options?.requiresNew,
+        isolation: options?.isolation,
+        joinable: options?.joinable,
+      },
+    );
+    return result as T | undefined;
   }
 
   // Fallback for simple adapters without TransactionManager:

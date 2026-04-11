@@ -8,6 +8,7 @@ import { sql as arelSql, Nodes } from "@blazetrails/arel";
 import { TransactionIsolationError } from "../../errors.js";
 import { quote, quoteTableName, quoteColumnName } from "./quoting.js";
 import { TransactionManager } from "./transaction.js";
+import { Result } from "../../result.js";
 
 /**
  * Host interface for DatabaseStatements mixin methods that need adapter context.
@@ -22,7 +23,7 @@ export interface DatabaseStatementsHost {
   ): Promise<Record<string, unknown>[]>;
   internalExecute?(sql: string, name?: string, binds?: unknown[]): Promise<unknown>;
   rawExecute?(sql: string, name?: string, binds?: unknown[]): Promise<unknown>;
-  castResult?(rawResult: unknown): { rows: unknown[][] };
+  castResult?(rawResult: unknown): Result;
   affectedRows?(rawResult: unknown): number;
   isWriteQuery?(sql: string): boolean;
   currentTransaction?(): {
@@ -237,7 +238,7 @@ export async function query(
   binds?: unknown[],
 ): Promise<unknown[][]> {
   const result = await internalExecQuery.call(this, sql, name ?? "SQL", binds);
-  return (result as any).rows ?? [];
+  return result.rows;
 }
 
 /**
@@ -269,7 +270,7 @@ export function execQuery(
   sql: string,
   name: string = "SQL",
   binds: unknown[] = [],
-): Promise<unknown> {
+): Promise<Result> {
   return internalExecQuery.call(this as DatabaseStatementsHost, sql, name, binds);
 }
 
@@ -283,7 +284,7 @@ export function execInsert(
   sql: string,
   name?: string | null,
   binds: unknown[] = [],
-): Promise<unknown> {
+): Promise<Result> {
   return internalExecQuery.call(this as DatabaseStatementsHost, sql, name ?? "SQL", binds);
 }
 
@@ -342,7 +343,7 @@ export function execInsertAll(
   this: DatabaseStatementsHost | void,
   sql: string,
   name: string = "SQL",
-): Promise<unknown> {
+): Promise<Result> {
   return internalExecQuery.call(this as DatabaseStatementsHost, sql, name);
 }
 
@@ -897,7 +898,7 @@ export async function rawExecQuery(
   sql: string,
   name?: string | null,
   binds?: unknown[],
-): Promise<unknown> {
+): Promise<Result> {
   if (!this.rawExecute) {
     throw new Error("rawExecQuery requires rawExecute on the adapter");
   }
@@ -906,7 +907,7 @@ export async function rawExecQuery(
   const tm = (this as any)._transactionManager as TransactionManager | undefined;
   if (tm) await tm.materializeTransactions();
   const rawResult = await this.rawExecute(sql, name ?? "SQL", binds);
-  return this.castResult ? this.castResult(rawResult) : rawResult;
+  return this.castResult ? this.castResult(rawResult) : normalizeResult(rawResult);
 }
 
 /**
@@ -920,13 +921,13 @@ export async function internalExecQuery(
   sql: string,
   name?: string | null,
   binds?: unknown[],
-): Promise<unknown> {
+): Promise<Result> {
   // Materialize lazy transactions before executing SQL
   const tm = (this as any)._transactionManager as TransactionManager | undefined;
   if (tm) await tm.materializeTransactions();
   if (this?.internalExecute) {
     const rawResult = await this.internalExecute(sql, name ?? "SQL", binds);
-    return this.castResult ? this.castResult(rawResult) : rawResult;
+    return this.castResult ? this.castResult(rawResult) : normalizeResult(rawResult);
   }
   if (binds && binds.length > 0) {
     throw new Error(
@@ -941,27 +942,35 @@ export async function internalExecQuery(
 
 // --- Private helpers ---
 
-function normalizeResult(result: unknown): { rows: unknown[][] } {
+function normalizeResult(result: unknown): Result {
+  if (result instanceof Result) return result;
   if (
     typeof result === "object" &&
     result !== null &&
     "rows" in result &&
     Array.isArray((result as any).rows)
   ) {
-    return result as { rows: unknown[][] };
+    const r = result as { rows: unknown[][]; columns?: string[] };
+    return new Result(r.columns ?? [], r.rows);
   }
   if (Array.isArray(result)) {
-    return {
-      rows: result.map((row) =>
-        Array.isArray(row)
-          ? row
-          : typeof row === "object" && row !== null
-            ? Object.values(row)
-            : [row],
-      ),
-    };
+    const rows = result.map((row) =>
+      Array.isArray(row)
+        ? row
+        : typeof row === "object" && row !== null
+          ? Object.values(row)
+          : [row],
+    );
+    const columns =
+      result.length > 0 &&
+      typeof result[0] === "object" &&
+      result[0] !== null &&
+      !Array.isArray(result[0])
+        ? Object.keys(result[0] as Record<string, unknown>)
+        : [];
+    return new Result(columns, rows);
   }
-  return { rows: [] };
+  return new Result([], []);
 }
 
 function singleValueFromRows(rows: unknown[][]): unknown {

@@ -1,4 +1,6 @@
 export { Base } from "./base.js";
+export { Result, IndexedRow } from "./result.js";
+export type { ColumnType as ResultColumnType, ColumnTypes as ResultColumnTypes } from "./result.js";
 export * as Type from "./type.js";
 export { Relation, Range } from "./relation.js";
 export { QueryAttribute } from "./relation/query-attribute.js";

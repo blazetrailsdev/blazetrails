@@ -155,25 +155,23 @@ function reselectBang(this: QueryMethodsHost, ...columns: any[]): any {
 
 /**
  * Union additional select columns into the existing list. Mirrors Rails'
- * private `_select!` which uses `select_values |= fields.flatten`.
+ * private `_select!` which uses `select_values |= fields.flatten` — the
+ * `|=` form unique-unions both sides, so duplicates are dropped even on
+ * the first assignment (when select_values was empty).
  */
 function _selectBang(this: QueryMethodsHost, ...columns: any[]): any {
   const flat = columns.flat(Infinity);
   const normalized = flat.map((c: any) =>
     typeof c === "object" && c !== null && "value" in c ? c : String(c),
   );
-  if (this._selectColumns === null) {
-    this._selectColumns = normalized;
-  } else {
-    const seen = new Set(
-      this._selectColumns.map((c) => (typeof c === "string" ? c : (c as any).value)),
-    );
-    for (const col of normalized) {
-      const key = typeof col === "string" ? col : (col as any).value;
-      if (!seen.has(key)) {
-        this._selectColumns.push(col);
-        seen.add(key);
-      }
+  if (this._selectColumns === null) this._selectColumns = [];
+  const keyOf = (c: unknown) => (typeof c === "string" ? c : (c as { value: string }).value);
+  const seen = new Set(this._selectColumns.map(keyOf));
+  for (const col of normalized) {
+    const key = keyOf(col);
+    if (!seen.has(key)) {
+      this._selectColumns.push(col);
+      seen.add(key);
     }
   }
   return this;
@@ -255,7 +253,7 @@ export type UnscopeType =
   | "optimizerHints"
   | "annotate";
 
-const VALID_UNSCOPING_VALUES: ReadonlySet<UnscopeType> = new Set<UnscopeType>([
+export const VALID_UNSCOPING_VALUES: ReadonlySet<UnscopeType> = new Set<UnscopeType>([
   "where",
   "select",
   "group",

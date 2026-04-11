@@ -27,6 +27,7 @@ import {
   WhereChain,
   QueryMethodBangs,
   areStructurallyCompatible,
+  VALID_UNSCOPING_VALUES,
   type UnscopeType,
 } from "./relation/query-methods.js";
 import { Batches } from "./relation/batches.js";
@@ -710,19 +711,7 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::SpawnMethods#only
    */
   only(...types: Array<UnscopeType>): Relation<T> {
-    const allTypes: UnscopeType[] = [
-      "where",
-      "order",
-      "limit",
-      "offset",
-      "group",
-      "having",
-      "select",
-      "lock",
-      "readonly",
-      "from",
-    ];
-    const toRemove = allTypes.filter((t) => !types.includes(t));
+    const toRemove = [...VALID_UNSCOPING_VALUES].filter((t) => !types.includes(t));
     return this.unscope(...toRemove);
   }
 

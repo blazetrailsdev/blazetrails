@@ -90,7 +90,7 @@ import {
 import { ScopeRegistry } from "./scoping.js";
 
 import { Default as DefaultScoping } from "./scoping/default.js";
-import { Named as NamedScoping } from "./scoping/named.js";
+import * as NamedScoping from "./scoping/named.js";
 import { AssociationNotFoundError } from "./associations/errors.js";
 import { BelongsToAssociation } from "./associations/belongs-to-association.js";
 import { BelongsToPolymorphicAssociation } from "./associations/belongs-to-polymorphic-association.js";
@@ -148,12 +148,10 @@ export function _setOnAdapterSetHook(hook: ((modelClass: any) => void) | null): 
  * Mirrors: ActiveRecord::Base
  */
 export class Base extends Model {
+  // --- Translation mixin (wired via extend() after class) ---
+  declare static lookupAncestors: typeof Translation.lookupAncestors;
   static get i18nScope(): string {
-    return Translation.i18nScope(this);
-  }
-
-  static lookupAncestors(): Array<typeof Base> {
-    return Translation.lookupAncestors(this);
+    return Translation.i18nScope.call(this);
   }
 
   // -- Class-level configuration --
@@ -640,14 +638,8 @@ export class Base extends Model {
   // -- Readonly attributes --
   static _readonlyAttributes: Set<string> = new Set();
 
-  /**
-   * Mark attributes as readonly — they can be set on create but not on update.
-   *
-   * Mirrors: ActiveRecord::Base.attr_readonly
-   */
-  static attrReadonly(...attributes: string[]): void {
-    ReadonlyAttributes.attrReadonly(this, ...attributes);
-  }
+  // --- ReadonlyAttributes mixin (wired via extend() after class) ---
+  declare static attrReadonly: typeof ReadonlyAttributes.attrReadonly;
 
   /**
    * Return the list of readonly attribute names.
@@ -655,7 +647,7 @@ export class Base extends Model {
    * Mirrors: ActiveRecord::Base.readonly_attributes
    */
   static get readonlyAttributes(): string[] {
-    return ReadonlyAttributes.readonlyAttributes(this);
+    return ReadonlyAttributes.readonlyAttributes.call(this);
   }
 
   // -- Encrypted attributes --
@@ -912,15 +904,10 @@ export class Base extends Model {
    * The extension object adds extra methods to the returned relation
    * when the scope is invoked.
    *
-   * Mirrors: ActiveRecord::Base.scope (with extension block)
+   * Mirrors: ActiveRecord::Base.scope (with extension block).
+   * Wired via extend() after class.
    */
-  static scope(
-    name: string,
-    fn: (rel: any, ...args: any[]) => any,
-    extension?: Record<string, Function>,
-  ): void {
-    NamedScoping.defineScope(this, name, fn, extension);
-  }
+  declare static scope: typeof NamedScoping.scope;
 
   // -- Scoping --
 
@@ -1304,11 +1291,9 @@ export class Base extends Model {
   /**
    * Touch all records matching conditions (update timestamps).
    *
-   * Mirrors: ActiveRecord::Relation#touch_all
+   * Mirrors: ActiveRecord::Relation#touch_all. Wired via extend() after class.
    */
-  static async touchAll(...names: string[]): Promise<number> {
-    return Timestamp.touchAll(this, ...names);
-  }
+  declare static touchAll: typeof Timestamp.touchAll;
 
   /**
    * Return the second record.
@@ -1725,52 +1710,13 @@ export class Base extends Model {
   /**
    * Increment counter columns for a record by primary key.
    *
-   * Mirrors: ActiveRecord::Base.increment_counter
+   * Mirrors: ActiveRecord::Base.increment_counter / decrement_counter /
+   * update_counters / reset_counters. Wired via extend() after class.
    */
-  static async incrementCounter(
-    attribute: string,
-    id: unknown,
-    by: number = 1,
-    options?: { touch?: boolean | string | string[] },
-  ): Promise<number> {
-    return CounterCache.incrementCounter(this, attribute, id, by, options);
-  }
-
-  /**
-   * Decrement counter columns for a record by primary key.
-   *
-   * Mirrors: ActiveRecord::Base.decrement_counter
-   */
-  static async decrementCounter(
-    attribute: string,
-    id: unknown,
-    by: number = 1,
-    options?: { touch?: boolean | string | string[] },
-  ): Promise<number> {
-    return CounterCache.decrementCounter(this, attribute, id, by, options);
-  }
-
-  /**
-   * Update counter columns for one or more records.
-   *
-   * Mirrors: ActiveRecord::Base.update_counters
-   */
-  static async updateCounters(
-    id: unknown | unknown[],
-    counters: Record<string, number>,
-    options?: { touch?: boolean | string | string[] },
-  ): Promise<number> {
-    return CounterCache.updateCounters(this, id, counters, options);
-  }
-
-  /**
-   * Reset counter caches by recounting the actual associated records.
-   *
-   * Mirrors: ActiveRecord::Base.reset_counters
-   */
-  static async resetCounters(id: unknown, ...counterNames: string[]): Promise<void> {
-    return CounterCache.resetCounters(this, id, ...counterNames);
-  }
+  declare static incrementCounter: typeof CounterCache.incrementCounter;
+  declare static decrementCounter: typeof CounterCache.decrementCounter;
+  declare static updateCounters: typeof CounterCache.updateCounters;
+  declare static resetCounters: typeof CounterCache.resetCounters;
 
   /**
    * Instantiate a model from a database row (marks it as persisted).
@@ -2558,22 +2504,20 @@ export class Base extends Model {
 
   /**
    * Reload the record with a pessimistic lock (SELECT ... FOR UPDATE).
+   * `with_lock` wraps a block in a transaction and locks the record first.
    *
-   * Mirrors: ActiveRecord::Base#lock!
+   * Mirrors: ActiveRecord::Base#lock! and ActiveRecord::Base#with_lock.
+   * Wired via include() after class. Declared with `this` return polymorphism
+   * so chained calls and `withLock` callbacks see the subclass type.
    */
-  async lockBang(lockClause: string = "FOR UPDATE"): Promise<this> {
-    await LockingPessimistic.lockBang(this, lockClause);
-    return this;
-  }
-
-  async withLock(lock: string, fn: (record: this) => Promise<void> | void): Promise<void>;
-  async withLock(fn: (record: this) => Promise<void> | void): Promise<void>;
-  async withLock(
-    lockOrFn?: string | ((record: this) => Promise<void> | void),
-    fn?: (record: this) => Promise<void> | void,
-  ): Promise<void> {
-    return LockingPessimistic.withLock(this, lockOrFn as any, fn as any);
-  }
+  /**
+   * Wired via include() after class. The module functions use
+   * `<T extends Base>(this: T, ...)` generics so subclasses see
+   * `this`-polymorphic types — User.lockBang() returns Promise<User>,
+   * User.withLock(cb) gives cb a User record.
+   */
+  declare lockBang: typeof LockingPessimistic.lockBang;
+  declare withLock: typeof LockingPessimistic.withLock;
 
   declare toParam: () => string | null;
 
@@ -2665,11 +2609,9 @@ export class Base extends Model {
    * columns) without changing other attributes. Skips validations
    * and callbacks.
    *
-   * Mirrors: ActiveRecord::Base#touch
+   * Mirrors: ActiveRecord::Base#touch. Wired via include() after class.
    */
-  async touch(...names: string[]): Promise<boolean> {
-    return Timestamp.touch(this, ...names);
-  }
+  declare touch: typeof Timestamp.touch;
 
   /**
    * Update a single attribute and save, skipping validations.
@@ -3106,6 +3048,11 @@ export class Base extends Model {
 
 extend(Base, ConnectionHandling.ClassMethods);
 extend(Base, Querying);
+extend(Base, Translation.ClassMethods);
+extend(Base, ReadonlyAttributes.ClassMethods);
+extend(Base, CounterCache.ClassMethods);
+extend(Base, Timestamp.ClassMethods);
+extend(Base, NamedScoping.ClassMethods);
 
 include(Base, {
   // Core
@@ -3126,3 +3073,5 @@ include(Base, {
   // PrimaryKey
   toKey: _toKey,
 });
+include(Base, LockingPessimistic.InstanceMethods);
+include(Base, Timestamp.InstanceMethods);

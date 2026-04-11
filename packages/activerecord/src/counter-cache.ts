@@ -13,19 +13,19 @@ import { quoteIdentifier } from "./connection-adapters/abstract/quoting.js";
  * Mirrors: ActiveRecord::CounterCache::ClassMethods#increment_counter
  */
 export async function incrementCounter(
-  modelClass: typeof Base,
+  this: typeof Base,
   attribute: string,
   id: unknown,
   by: number = 1,
   options?: { touch?: boolean | string | string[] },
 ): Promise<number> {
-  const table = modelClass.arelTable;
+  const table = this.arelTable;
   const touchClause = buildTouchClause(options?.touch);
   const quotedAttr = quoteIdentifier(attribute);
   const idBinds = Array.isArray(id) ? id : [id];
   const binds: unknown[] = [by, ...idBinds];
-  const sql = `UPDATE ${quoteIdentifier(table.name)} SET ${quotedAttr} = COALESCE(${quotedAttr}, 0) + ?${touchClause} WHERE ${buildPkPlaceholder(modelClass)}`;
-  return modelClass.adapter.executeMutation(sql, binds);
+  const sql = `UPDATE ${quoteIdentifier(table.name)} SET ${quotedAttr} = COALESCE(${quotedAttr}, 0) + ?${touchClause} WHERE ${buildPkPlaceholder(this)}`;
+  return this.adapter.executeMutation(sql, binds);
 }
 
 /**
@@ -34,13 +34,13 @@ export async function incrementCounter(
  * Mirrors: ActiveRecord::CounterCache::ClassMethods#decrement_counter
  */
 export async function decrementCounter(
-  modelClass: typeof Base,
+  this: typeof Base,
   attribute: string,
   id: unknown,
   by: number = 1,
   options?: { touch?: boolean | string | string[] },
 ): Promise<number> {
-  return incrementCounter(modelClass, attribute, id, -by, options);
+  return incrementCounter.call(this, attribute, id, -by, options);
 }
 
 /**
@@ -49,12 +49,12 @@ export async function decrementCounter(
  * Mirrors: ActiveRecord::CounterCache::ClassMethods#update_counters
  */
 export async function updateCounters(
-  modelClass: typeof Base,
+  this: typeof Base,
   id: unknown | unknown[],
   counters: Record<string, number>,
   options?: { touch?: boolean | string | string[] },
 ): Promise<number> {
-  const table = modelClass.arelTable;
+  const table = this.arelTable;
   const touchClause = buildTouchClause(options?.touch);
   const binds: unknown[] = [];
   const setClause =
@@ -68,10 +68,10 @@ export async function updateCounters(
   const tableName = quoteIdentifier(table.name);
 
   const ids = Array.isArray(id) ? id : [id];
-  if (Array.isArray(modelClass.primaryKey)) {
+  if (Array.isArray(this.primaryKey)) {
     const tuples = Array.isArray(ids[0]) ? (ids as unknown[][]) : [ids as unknown[]];
     const whereParts = tuples.map((t) => {
-      const pk = modelClass.primaryKey as string[];
+      const pk = this.primaryKey as string[];
       return `(${pk
         .map((col) => {
           binds.push(t[pk.indexOf(col)]);
@@ -80,7 +80,7 @@ export async function updateCounters(
         .join(" AND ")})`;
     });
     const sql = `UPDATE ${tableName} SET ${setClause} WHERE ${whereParts.join(" OR ")}`;
-    return modelClass.adapter.executeMutation(sql, binds);
+    return this.adapter.executeMutation(sql, binds);
   }
 
   const placeholders = ids
@@ -89,8 +89,8 @@ export async function updateCounters(
     })
     .join(", ");
   binds.push(...ids);
-  const sql = `UPDATE ${tableName} SET ${setClause} WHERE ${quoteIdentifier(modelClass.primaryKey as string)} IN (${placeholders})`;
-  return modelClass.adapter.executeMutation(sql, binds);
+  const sql = `UPDATE ${tableName} SET ${setClause} WHERE ${quoteIdentifier(this.primaryKey as string)} IN (${placeholders})`;
+  return this.adapter.executeMutation(sql, binds);
 }
 
 /**
@@ -99,12 +99,12 @@ export async function updateCounters(
  * Mirrors: ActiveRecord::CounterCache::ClassMethods#reset_counters
  */
 export async function resetCounters(
-  modelClass: typeof Base,
+  this: typeof Base,
   id: unknown,
   ...counterNames: string[]
 ): Promise<void> {
-  const record = await modelClass.find(id);
-  const assocDefs = (modelClass as any)._associations as
+  const record = await this.find(id);
+  const assocDefs = (this as any)._associations as
     | Array<{ type: string; name: string; options: any }>
     | undefined;
   const hasManyAssocs = assocDefs?.filter((a) => a.type === "hasMany") ?? [];
@@ -114,14 +114,14 @@ export async function resetCounters(
     let counterColumn: string;
 
     if (assoc) {
-      counterColumn = resolveCounterColumn(modelClass, assoc, counterName);
+      counterColumn = resolveCounterColumn(this, assoc, counterName);
     } else {
       if (counterName.endsWith("_count")) {
         assoc = hasManyAssocs.find((a) => a.name === counterName.slice(0, -6));
       }
       if (!assoc) {
         for (const candidate of hasManyAssocs) {
-          const col = resolveCounterColumn(modelClass, candidate, candidate.name);
+          const col = resolveCounterColumn(this, candidate, candidate.name);
           if (col === counterName) {
             assoc = candidate;
             break;
@@ -130,10 +130,10 @@ export async function resetCounters(
       }
       if (!assoc) {
         throw new Error(
-          `'${counterName}' is not a valid counter name or hasMany association on ${modelClass.name}`,
+          `'${counterName}' is not a valid counter name or hasMany association on ${this.name}`,
         );
       }
-      counterColumn = resolveCounterColumn(modelClass, assoc, assoc.name);
+      counterColumn = resolveCounterColumn(this, assoc, assoc.name);
     }
 
     const count = await countHasMany(record, assoc.name, assoc.options);
@@ -159,8 +159,7 @@ function buildTouchClause(touch?: boolean | string | string[]): string {
 
 /**
  * Mirrors: ActiveRecord::CounterCache::ClassMethods#counter_cache_column?
- */
-/**
+ *
  * Rails: _counter_cache_columns.include?(name)
  * Checks associations for belongs_to with counter_cache.
  */
@@ -195,3 +194,14 @@ function getCounterCacheColumns(modelClass: typeof Base): Set<string> {
   (modelClass as any)._counterCacheColumns = cols;
   return cols;
 }
+
+/**
+ * Module methods wired onto Base as static methods via `extend()` in base.ts.
+ * Mirrors Rails' `ActiveSupport::Concern#ClassMethods` convention.
+ */
+export const ClassMethods = {
+  incrementCounter,
+  decrementCounter,
+  updateCounters,
+  resetCounters,
+};

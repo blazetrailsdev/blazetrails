@@ -322,8 +322,13 @@ export class ConnectionPool implements ReapablePool {
     return this._internalMetadata;
   }
 
+  private _migrationContext?: MigrationContext;
+
   get migrationContext(): MigrationContext {
-    return new MigrationContext(this._getAdapterProxy());
+    if (!this._migrationContext) {
+      this._migrationContext = new MigrationContext(this._getAdapterProxy());
+    }
+    return this._migrationContext;
   }
 
   // --- Pool state ---

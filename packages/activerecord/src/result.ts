@@ -218,10 +218,10 @@ export class Result {
 
   #getHashRows(): Record<string, unknown>[] {
     if (this.#hashRows) return this.#hashRows;
-    const idx = this.columnIndexes;
+    const entries = Object.entries(this.columnIndexes);
     this.#hashRows = this.rows.map((row) => {
       const obj: Record<string, unknown> = {};
-      for (const [key, i] of Object.entries(idx)) obj[key] = row[i];
+      for (const [key, i] of entries) obj[key] = row[i];
       return obj;
     });
     return this.#hashRows;

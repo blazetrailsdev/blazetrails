@@ -47,7 +47,7 @@ export class SQLite3Adapter
 
   private db: Database.Database;
   override get active(): boolean {
-    return this.db !== null && this.db !== undefined;
+    return this.db?.open ?? false;
   }
   private _inTransaction = false;
   private _savepointCounter = 0;

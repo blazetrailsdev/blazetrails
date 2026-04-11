@@ -640,6 +640,7 @@ export class Base extends Model {
 
   // --- ReadonlyAttributes mixin (wired via extend() after class) ---
   declare static attrReadonly: typeof ReadonlyAttributes.attrReadonly;
+  declare static readonlyAttributeQ: typeof ReadonlyAttributes.readonlyAttributeQ;
 
   /**
    * Return the list of readonly attribute names.
@@ -904,10 +905,13 @@ export class Base extends Model {
    * The extension object adds extra methods to the returned relation
    * when the scope is invoked.
    *
-   * Mirrors: ActiveRecord::Base.scope (with extension block).
-   * Wired via extend() after class.
+   * Mirrors: ActiveRecord::Scoping::Named::ClassMethods. Wired via extend()
+   * after class.
    */
   declare static scope: typeof NamedScoping.scope;
+  declare static scopeForAssociation: typeof NamedScoping.scopeForAssociation;
+  declare static defaultScoped: typeof NamedScoping.defaultScoped;
+  declare static defaultExtensions: typeof NamedScoping.defaultExtensions;
 
   // -- Scoping --
 
@@ -1710,13 +1714,14 @@ export class Base extends Model {
   /**
    * Increment counter columns for a record by primary key.
    *
-   * Mirrors: ActiveRecord::Base.increment_counter / decrement_counter /
-   * update_counters / reset_counters. Wired via extend() after class.
+   * Mirrors: ActiveRecord::CounterCache::ClassMethods. Wired via extend()
+   * after class.
    */
   declare static incrementCounter: typeof CounterCache.incrementCounter;
   declare static decrementCounter: typeof CounterCache.decrementCounter;
   declare static updateCounters: typeof CounterCache.updateCounters;
   declare static resetCounters: typeof CounterCache.resetCounters;
+  declare static counterCacheColumnQ: typeof CounterCache.counterCacheColumnQ;
 
   /**
    * Instantiate a model from a database row (marks it as persisted).

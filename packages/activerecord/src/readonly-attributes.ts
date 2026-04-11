@@ -38,8 +38,9 @@ export function readonlyAttributes(this: typeof Base): string[] {
  * Check if a specific attribute is readonly.
  *
  * Mirrors: ActiveRecord::ReadonlyAttributes::ClassMethods#readonly_attribute?
+ * (The `Q` suffix mirrors Ruby's `?` predicate convention.)
  */
-export function readonlyAttribute(this: typeof Base, attribute: string): boolean {
+export function readonlyAttributeQ(this: typeof Base, attribute: string): boolean {
   return ((this as any)._readonlyAttributes as Set<string> | undefined)?.has(attribute) ?? false;
 }
 
@@ -48,9 +49,11 @@ export function readonlyAttribute(this: typeof Base, attribute: string): boolean
  * Mirrors Rails' `ActiveSupport::Concern#ClassMethods` convention.
  *
  * Note: `readonlyAttributes` is exposed on Base as a getter for ergonomic
- * property access, so it stays as a hand-rolled delegate in base.ts rather
- * than being mixed in here. `readonlyAttribute` is not yet wired onto Base.
+ * property access (TS idiom for what Rails exposes as a bare method call),
+ * so it stays as a hand-rolled delegate in base.ts rather than being mixed
+ * in here.
  */
 export const ClassMethods = {
   attrReadonly,
+  readonlyAttributeQ,
 };

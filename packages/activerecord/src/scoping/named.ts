@@ -83,4 +83,7 @@ export function defaultExtensions(this: NamedHost): any[] {
  */
 export const ClassMethods = {
   scope,
+  scopeForAssociation,
+  defaultScoped,
+  defaultExtensions,
 };

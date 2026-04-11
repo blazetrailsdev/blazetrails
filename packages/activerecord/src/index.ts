@@ -88,7 +88,7 @@ export {
   updateCounters,
   resetCounters,
 } from "./counter-cache.js";
-export { attrReadonly, readonlyAttributes, readonlyAttribute } from "./readonly-attributes.js";
+export { attrReadonly, readonlyAttributes, readonlyAttributeQ } from "./readonly-attributes.js";
 export { touch, touchAll } from "./timestamp.js";
 // establishConnection requires node:fs — use subpath: @blazetrails/activerecord/connection-handling
 // signedId requires MessageVerifier (node:crypto) — use subpath: @blazetrails/activerecord/signed-id

@@ -158,23 +158,26 @@ function buildTouchClause(touch?: boolean | string | string[]): string {
 }
 
 /**
- * Mirrors: ActiveRecord::CounterCache::ClassMethods#counter_cache_column?
+ * Check whether a column is a counter-cache column — i.e. any belongs_to
+ * association on this class was declared with `counter_cache:` that
+ * resolves to this column name.
  *
- * Rails: _counter_cache_columns.include?(name)
- * Checks associations for belongs_to with counter_cache.
+ * Mirrors: ActiveRecord::CounterCache::ClassMethods#counter_cache_column?
+ * (The `Q` suffix mirrors Ruby's `?` predicate convention.)
  */
-export function isCounterCacheColumn(modelClass: typeof Base, columnName: string): boolean {
-  const counterCols = getCounterCacheColumns(modelClass);
+export function counterCacheColumnQ(this: typeof Base, columnName: string): boolean {
+  const counterCols = getCounterCacheColumns(this);
   return counterCols.has(columnName);
 }
 
 /**
- * Rails: populates _counter_cache_columns from belongs_to reflections
- * that have counter_cache enabled.
+ * Populate the cached set of counter-cache columns from `belongs_to`
+ * reflections that have `counter_cache` enabled. Invoked lazily by
+ * `counterCacheColumnQ`; exposed for Rails parity with
+ * `ActiveRecord::CounterCache#load_schema!`.
  */
-export function loadSchemaBang(modelClass: typeof Base): void {
-  // Force population of counter cache columns set
-  getCounterCacheColumns(modelClass);
+export function loadSchemaBang(this: typeof Base): void {
+  getCounterCacheColumns(this);
 }
 
 function getCounterCacheColumns(modelClass: typeof Base): Set<string> {
@@ -204,4 +207,5 @@ export const ClassMethods = {
   decrementCounter,
   updateCounters,
   resetCounters,
+  counterCacheColumnQ,
 };

@@ -373,14 +373,18 @@ function whereBang(this: QueryMethodsHost, opts: any, ...rest: unknown[]): any {
 
   if (typeof opts === "string") {
     let sql: string;
-    if (
-      rest.length === 1 &&
-      typeof rest[0] === "object" &&
-      rest[0] !== null &&
-      !Array.isArray(rest[0])
-    ) {
+    // Mirrors Rails sanitize_sql_array: named binds only when the first
+    // extra value is a plain Hash AND the statement contains `:word`
+    // tokens. Otherwise treat as positional binds via sanitizeSqlArray.
+    // This prevents misclassifying positional binds whose value happens
+    // to be a non-plain object like Date or Range.
+    const firstBind = rest[0];
+    const isNamedBinds =
+      rest.length === 1 && isPlainObject(firstBind) && /:[a-zA-Z_]\w*/.test(opts);
+
+    if (isNamedBinds) {
       sql = opts;
-      const namedBinds = rest[0] as Record<string, unknown>;
+      const namedBinds = firstBind as Record<string, unknown>;
       for (const [name, value] of Object.entries(namedBinds)) {
         const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         sql = sql.replace(new RegExp(`:${escaped}\\b`, "g"), quote(value));

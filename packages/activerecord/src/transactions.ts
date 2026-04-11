@@ -69,12 +69,15 @@ export async function transaction<T>(
   const adapter = modelClass.adapter;
 
   // If the adapter supports the full TransactionManager path, use it.
-  if (typeof (adapter as any).withinNewTransaction === "function") {
-    // Serialize outermost transactions — matches Rails where each thread
-    // gets its own connection. Nested transactions skip the lock since
-    // they run inside the outer transaction's locked scope.
-    const isOutermost = currentTransaction() === null;
-    const releaseLock = isOutermost ? await acquireAdapterLock(adapter) : null;
+  // Also check adapter.inTransaction to detect external transactions
+  // (e.g., fixtures) that TransactionManager doesn't know about — fall
+  // through to the fallback which handles nesting via savepoints.
+  if (
+    typeof (adapter as any).withinNewTransaction === "function" &&
+    !(currentTransaction() === null && adapter.inTransaction)
+  ) {
+    const isOutermost = currentTransaction() === null && !adapter.inTransaction;
+    let releaseLock = isOutermost ? await acquireAdapterLock(adapter) : null;
 
     try {
       const result = await dbTransaction.call(
@@ -97,6 +100,10 @@ export async function transaction<T>(
           joinable: options?.joinable,
         },
       );
+      // Release lock before returning so afterCommit callbacks from
+      // TransactionManager don't deadlock if they start new transactions.
+      releaseLock?.();
+      releaseLock = null;
       return result as T | undefined;
     } finally {
       releaseLock?.();
@@ -160,6 +167,8 @@ async function _transactionFallback<T>(
       }
     }
     await tx.commit();
+    releaseLock?.();
+    releaseLock = null;
     await tx.runAfterCommitCallbacks();
     return result;
   } catch (error) {

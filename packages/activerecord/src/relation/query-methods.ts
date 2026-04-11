@@ -414,12 +414,18 @@ function whereBang(this: QueryMethodsHost, opts: any, ...rest: unknown[]): any {
   return this;
 }
 
+/**
+ * True for values that PredicateBuilder will route through its
+ * RelationHandler (subquery IN/NOT IN). Mirrors the shape check in
+ * `PredicateBuilder#isRelation`: a Relation exposes `_modelClass` and a
+ * `toArel()` method.
+ */
 function isRelationLike(value: unknown): boolean {
   return (
     typeof value === "object" &&
     value !== null &&
-    typeof (value as { _whereClause?: unknown })._whereClause === "object" &&
-    typeof (value as { toSql?: unknown }).toSql === "function"
+    "_modelClass" in (value as object) &&
+    typeof (value as { toArel?: unknown }).toArel === "function"
   );
 }
 
@@ -441,11 +447,13 @@ function argumentError(message: string): Error {
 /**
  * Structural deep equality used by and!/or! compatibility checks.
  *
- * Handles primitives via ===, arrays element-wise, plain objects key-wise,
- * and class instances by delegating to an `eql` method (Arel nodes) or
- * an `equals` method when available. JSON.stringify is intentionally
- * avoided — Arel nodes carry methods and circular refs that don't survive
- * serialization, which led to false matches.
+ * Handles primitives via ===, arrays element-wise, Date via getTime,
+ * plain objects key-wise, and class instances by delegating to an `eql`
+ * method (Arel nodes) or an `equals` method when available. Non-plain
+ * objects without a comparator are considered incompatible unless they
+ * are the same reference — falling back to enumerable-key comparison
+ * would incorrectly treat e.g. `new Date(0)` and `new Date(1)` as equal
+ * since their internal state is not enumerable.
  */
 function deepEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
@@ -462,19 +470,29 @@ function deepEqual(a: unknown, b: unknown): boolean {
   }
   if (Array.isArray(b)) return false;
 
+  if (a instanceof Date) return b instanceof Date && a.getTime() === b.getTime();
+  if (b instanceof Date) return false;
+
   const aAny = a as { eql?: (x: unknown) => boolean; equals?: (x: unknown) => boolean };
   if (typeof aAny.eql === "function") return aAny.eql(b);
   if (typeof aAny.equals === "function") return aAny.equals(b);
 
-  const ak = Object.keys(a as object).sort();
-  const bk = Object.keys(b as object).sort();
+  if (!isPlainObject(a) || !isPlainObject(b)) return false;
+
+  const ak = Object.keys(a).sort();
+  const bk = Object.keys(b).sort();
   if (ak.length !== bk.length) return false;
   for (let i = 0; i < ak.length; i++) {
     if (ak[i] !== bk[i]) return false;
-    if (!deepEqual((a as Record<string, unknown>)[ak[i]], (b as Record<string, unknown>)[bk[i]]))
-      return false;
+    if (!deepEqual(a[ak[i]], b[bk[i]])) return false;
   }
   return true;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
 }
 
 /**
@@ -606,9 +624,13 @@ function havingBang(
 
   const cast: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(opts)) {
-    cast[key] = Array.isArray(value)
-      ? value.map((v) => this._castWhereValue(key, v))
-      : this._castWhereValue(key, value);
+    if (isRelationLike(value)) {
+      cast[key] = value;
+    } else {
+      cast[key] = Array.isArray(value)
+        ? value.map((v) => this._castWhereValue(key, v))
+        : this._castWhereValue(key, value);
+    }
   }
   this._havingClause.predicates.push(...this.predicateBuilder.buildFromHash(cast));
   return this;

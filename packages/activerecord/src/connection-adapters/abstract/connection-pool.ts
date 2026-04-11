@@ -285,20 +285,45 @@ export class ConnectionPool implements ReapablePool {
 
   // --- Migration / Schema ---
 
+  private _schemaMigration?: SchemaMigration;
+  private _internalMetadata?: InternalMetadata;
+  private _adapterProxy?: DatabaseAdapter;
+
+  private _getAdapterProxy(): DatabaseAdapter {
+    if (!this._adapterProxy) {
+      const pool = this;
+      this._adapterProxy = new Proxy({} as DatabaseAdapter, {
+        get(_target, prop) {
+          if (prop === "adapterName") return (pool.poolConfig as any).adapterClass ?? "sqlite";
+          return (...args: unknown[]) => {
+            return pool.withConnection((conn) => (conn as any)[prop](...args));
+          };
+        },
+      });
+    }
+    return this._adapterProxy;
+  }
+
   get migrationsPaths(): string[] {
     return (this.dbConfig as any).migrationsPaths ?? ["db/migrate"];
   }
 
   get schemaMigration(): SchemaMigration {
-    return new SchemaMigration(this as any);
+    if (!this._schemaMigration) {
+      this._schemaMigration = new SchemaMigration(this._getAdapterProxy());
+    }
+    return this._schemaMigration;
   }
 
   get internalMetadata(): InternalMetadata {
-    return new InternalMetadata(this as any);
+    if (!this._internalMetadata) {
+      this._internalMetadata = new InternalMetadata(this._getAdapterProxy());
+    }
+    return this._internalMetadata;
   }
 
   get migrationContext(): MigrationContext {
-    return new MigrationContext(this as any);
+    return new MigrationContext(this._getAdapterProxy());
   }
 
   // --- Pool state ---

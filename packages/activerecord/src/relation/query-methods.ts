@@ -4,7 +4,7 @@
  *
  * Mirrors: ActiveRecord::QueryMethods
  */
-import { Nodes, Visitors } from "@blazetrails/arel";
+import { Nodes } from "@blazetrails/arel";
 import { FromClause } from "./from-clause.js";
 import { WhereClause } from "./where-clause.js";
 import { IrreversibleOrderError } from "../errors.js";
@@ -74,8 +74,7 @@ interface QueryMethodsHost {
   _isDistinct: boolean;
   _distinctOnColumns: string[];
   _groupColumns: string[];
-  _orRelations: any[];
-  _havingClauses: string[];
+  _havingClause: WhereClause;
   _isNone: boolean;
   _lockValue: string | null;
   _joinClauses: Array<{ type: "inner" | "left"; table: string; on: string }>;
@@ -302,7 +301,7 @@ function unscopeBang(
           this._groupColumns = [];
           break;
         case "having":
-          this._havingClauses = [];
+          this._havingClause = WhereClause.empty();
           break;
         case "select":
           this._selectColumns = null;
@@ -446,7 +445,6 @@ const STRUCTURAL_FIELDS: ReadonlyArray<[string, keyof QueryMethodsHost]> = [
   ["group", "_groupColumns"],
   ["order", "_orderClauses"],
   ["joins", "_joinClauses"],
-  ["leftOuterJoins", "_rawJoins"],
   ["limit", "_limitValue"],
   ["offset", "_offsetValue"],
   ["lock", "_lockValue"],
@@ -530,10 +528,12 @@ export function areStructurallyCompatible(self: unknown, other: unknown): boolea
 function andBang(this: QueryMethodsHost, other: any): any {
   assertRelationForCombining(other, "and");
   assertStructurallyCompatible(this, other, "and");
+  // Mirrors Rails: where_clause |= other.where_clause;
+  //                having_clause |= other.having_clause;
+  //                references_values |= other.references_values
   this._whereClause = this._whereClause.merge(other._whereClause);
-  // Having and references are stored as string[] here; union/dedupe.
+  this._havingClause = this._havingClause.merge(other._havingClause);
   const unionStrings = (a: string[], b: string[]): string[] => [...new Set([...a, ...b])];
-  this._havingClauses = unionStrings(this._havingClauses, other._havingClauses);
   this._referencesValues = unionStrings(this._referencesValues, other._referencesValues);
   return this;
 }
@@ -541,7 +541,11 @@ function andBang(this: QueryMethodsHost, other: any): any {
 function orBang(this: QueryMethodsHost, other: any): any {
   assertRelationForCombining(other, "or");
   assertStructurallyCompatible(this, other, "or");
-  this._orRelations = [...this._orRelations, other];
+  // Mirrors Rails: where_clause = where_clause.or(other.where_clause);
+  //                having_clause = having_clause.or(other.having_clause);
+  //                references_values |= other.references_values
+  this._whereClause = this._whereClause.or(other._whereClause);
+  this._havingClause = this._havingClause.or(other._havingClause);
   const unionStrings = (a: string[], b: string[]): string[] => [...new Set([...a, ...b])];
   this._referencesValues = unionStrings(this._referencesValues, other._referencesValues);
   return this;
@@ -556,12 +560,12 @@ function havingBang(
 
   if (typeof opts === "string") {
     const sql = rest.length > 0 ? sanitizeSqlArray(opts, ...rest) : opts;
-    this._havingClauses.push(sql);
+    this._havingClause.predicates.push(new Nodes.SqlLiteral(sql));
     return this;
   }
 
   if (opts instanceof Nodes.Node) {
-    this._havingClauses.push(new Visitors.ToSql().compile(opts));
+    this._havingClause.predicates.push(opts);
     return this;
   }
 
@@ -571,10 +575,7 @@ function havingBang(
       ? value.map((v) => this._castWhereValue(key, v))
       : this._castWhereValue(key, value);
   }
-  const visitor = new Visitors.ToSql();
-  for (const node of this.predicateBuilder.buildFromHash(cast)) {
-    this._havingClauses.push(visitor.compile(node));
-  }
+  this._havingClause.predicates.push(...this.predicateBuilder.buildFromHash(cast));
   return this;
 }
 

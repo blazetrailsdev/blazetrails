@@ -61,8 +61,7 @@ export class Relation<T extends Base> {
   private _isDistinct = false;
   private _distinctOnColumns: string[] = [];
   private _groupColumns: string[] = [];
-  private _orRelations: Relation<T>[] = [];
-  private _havingClauses: string[] = [];
+  _havingClause: WhereClause = WhereClause.empty();
   private _isNone = false;
   private _lockValue: string | null = null;
   private _setOperation: {
@@ -349,9 +348,8 @@ export class Relation<T extends Base> {
   whereAny(...conditions: Record<string, unknown>[]): Relation<T> {
     if (conditions.length === 0) return this;
     if (conditions.length === 1) return this.where(conditions[0]);
-    // Build a chain: where(cond1).or(where(cond2)).or(where(cond3))...
-    const makeRel = (cond: Record<string, unknown>) => {
-      const r = this._clone();
+
+    const buildClause = (cond: Record<string, unknown>): WhereClause => {
       const cast: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(cond)) {
         cast[key] =
@@ -361,17 +359,15 @@ export class Relation<T extends Base> {
               ? value.map((v) => this._castWhereValue(key, v))
               : this._castWhereValue(key, value);
       }
-      r._whereClause = new WhereClause(this.predicateBuilder.buildFromHash(cast));
-      r._orRelations = [];
-      return r;
+      return new WhereClause(this.predicateBuilder.buildFromHash(cast));
     };
-    let combined = makeRel(conditions[0]);
+
+    let combined = buildClause(conditions[0]);
     for (let i = 1; i < conditions.length; i++) {
-      combined = combined.or(makeRel(conditions[i]));
+      combined = combined.or(buildClause(conditions[i]));
     }
     const rel = this._clone();
-    rel._whereClause = combined._whereClause;
-    rel._orRelations = [...rel._orRelations, ...combined._orRelations];
+    if (combined.predicates.length > 0) rel._whereClause.predicates.push(combined.ast);
     return rel;
   }
 
@@ -1420,7 +1416,7 @@ export class Relation<T extends Base> {
 
     if (this._isDistinct) manager.distinct();
     for (const col of this._groupColumns) manager.group(col);
-    for (const clause of this._havingClauses) manager.having(new Nodes.SqlLiteral(clause));
+    if (!this._havingClause.isEmpty()) manager.having(this._havingClause.ast);
     if (this._lockValue) manager.lock(this._lockValue);
 
     // When LIMIT/OFFSET is present, use a subquery for parent IDs to avoid
@@ -2279,9 +2275,7 @@ export class Relation<T extends Base> {
       manager.group(col);
     }
 
-    for (const clause of this._havingClauses) {
-      manager.having(new Nodes.SqlLiteral(clause));
-    }
+    if (!this._havingClause.isEmpty()) manager.having(this._havingClause.ast);
 
     if (this._lockValue) {
       manager.lock(this._lockValue);
@@ -2338,24 +2332,9 @@ export class Relation<T extends Base> {
   }
 
   private _applyWheresToManager(manager: SelectManager, table: Table): void {
-    if (this._orRelations.length > 0) {
-      // Collect all branches: this relation's wheres + each OR relation's wheres
-      const allBranches: (Nodes.Node | null)[] = [
-        this._combineNodes(this._collectAllWhereNodes(table, this)),
-      ];
-      for (const orRel of this._orRelations) {
-        allBranches.push(this._combineNodes(this._collectAllWhereNodes(table, orRel)));
-      }
-      const nonNull = allBranches.filter((n): n is Nodes.Node => n !== null);
-      if (nonNull.length > 0) {
-        const combined = nonNull.reduce((left, right) => new Nodes.Or(left, right));
-        manager.where(new Nodes.Grouping(combined));
-      }
-    } else {
-      const allNodes = this._collectAllWhereNodes(table, this);
-      for (const node of allNodes) {
-        manager.where(node);
-      }
+    const allNodes = this._collectAllWhereNodes(table, this);
+    for (const node of allNodes) {
+      manager.where(node);
     }
   }
 
@@ -2795,7 +2774,7 @@ export class Relation<T extends Base> {
       order: [...this._orderClauses],
       joins: [...this._joinClauses],
       where: this._whereClause.clone(),
-      having: [...this._havingClauses],
+      having: this._havingClause.clone(),
       limit: this._limitValue,
       offset: this._offsetValue,
       lock: this._lockValue,
@@ -2824,7 +2803,7 @@ export class Relation<T extends Base> {
       this._selectColumns === null &&
       !this._isDistinct &&
       this._groupColumns.length === 0 &&
-      this._havingClauses.length === 0 &&
+      this._havingClause.isEmpty() &&
       this._joinClauses.length === 0 &&
       this._rawJoins.length === 0 &&
       this._includesAssociations.length === 0 &&
@@ -2987,8 +2966,7 @@ export class Relation<T extends Base> {
     rel._isDistinct = this._isDistinct;
     rel._distinctOnColumns = [...this._distinctOnColumns];
     rel._groupColumns = [...this._groupColumns];
-    rel._havingClauses = [...this._havingClauses];
-    rel._orRelations = [...this._orRelations];
+    rel._havingClause = this._havingClause.clone();
     rel._isNone = this._isNone;
     rel._lockValue = this._lockValue;
     rel._setOperation = this._setOperation;

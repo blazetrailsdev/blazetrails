@@ -1,4 +1,4 @@
-import { getCrypto, pluralize, underscore } from "@blazetrails/activesupport";
+import { getCrypto } from "@blazetrails/activesupport";
 import {
   Table,
   SelectManager,
@@ -1427,7 +1427,7 @@ export class Relation<T extends Base> {
     // Fallback: pluralize + underscore the association name, matching Rails'
     // default when class_name is not specified
     // (e.g. :category -> categories, :authorProfile -> author_profiles).
-    return pluralize(underscore(assoc.name));
+    return _pluralize(_toUnderscore(assoc.name));
   }
 
   private async _executeEagerLoad(): Promise<void> {

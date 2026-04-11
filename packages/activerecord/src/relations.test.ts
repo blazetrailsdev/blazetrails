@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { Base, Relation, Range, RecordNotFound, SoleRecordExceeded } from "./index.js";
 import { createTestAdapter } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
@@ -5851,24 +5851,92 @@ describe("RelationTest", () => {
     expect(sql).toContain("GROUP BY");
   });
 
-  it("references triggers eager loading", () => {
-    class Post extends Base {
+  it("references triggers eager loading", async () => {
+    const { Associations, registerModel } = await import("./associations.js");
+    const a = freshAdapter();
+    class RefAuthor extends Base {
       static {
-        this.attribute("title", "string");
-        this.adapter = adapter;
+        this._tableName = "ref_authors";
+        this.attribute("name", "string");
+        this.adapter = a;
       }
     }
-    expect(Post.all()).toBeInstanceOf(Relation);
+    class RefPost extends Base {
+      static {
+        this._tableName = "ref_posts";
+        this.attribute("title", "string");
+        this.attribute("ref_author_id", "integer");
+        this.adapter = a;
+      }
+    }
+    Associations.belongsTo.call(RefPost, "refAuthor", {
+      className: "RefAuthor",
+      foreignKey: "ref_author_id",
+    });
+    registerModel("RefAuthor", RefAuthor);
+    registerModel("RefPost", RefPost);
+
+    const author = await RefAuthor.create({ name: "Dean" });
+    await RefPost.create({ title: "First", ref_author_id: author.id });
+
+    const execSpy = vi.spyOn(a, "execute");
+    execSpy.mockClear();
+
+    const posts = await RefPost.all().includes("refAuthor").references("ref_authors").toArray();
+
+    expect(posts).toHaveLength(1);
+    // Eager load fires a single query (base JOIN author) rather than
+    // base + separate preload. The JOIN's SQL contains the associated
+    // table name, so we can assert both count and shape.
+    const readCalls = execSpy.mock.calls.filter(([sql]) => /ref_posts/.test(String(sql)));
+    expect(readCalls).toHaveLength(1);
+    expect(String(readCalls[0][0])).toMatch(/LEFT OUTER JOIN ["`]?ref_authors["`]?/i);
   });
 
-  it("references doesnt trigger eager loading if reference not included", () => {
-    class Post extends Base {
+  it("references doesnt trigger eager loading if reference not included", async () => {
+    const { Associations, registerModel } = await import("./associations.js");
+    const a = freshAdapter();
+    class RefAuthor2 extends Base {
       static {
-        this.attribute("title", "string");
-        this.adapter = adapter;
+        this._tableName = "ref_authors2";
+        this.attribute("name", "string");
+        this.adapter = a;
       }
     }
-    expect(Post.all()).toBeInstanceOf(Relation);
+    class RefPost2 extends Base {
+      static {
+        this._tableName = "ref_posts2";
+        this.attribute("title", "string");
+        this.attribute("ref_author2_id", "integer");
+        this.adapter = a;
+      }
+    }
+    Associations.belongsTo.call(RefPost2, "refAuthor2", {
+      className: "RefAuthor2",
+      foreignKey: "ref_author2_id",
+    });
+    registerModel("RefAuthor2", RefAuthor2);
+    registerModel("RefPost2", RefPost2);
+
+    const author = await RefAuthor2.create({ name: "Dean" });
+    await RefPost2.create({ title: "First", ref_author2_id: author.id });
+
+    const execSpy = vi.spyOn(a, "execute");
+    execSpy.mockClear();
+
+    // references a table that is NOT in the includes list — no promotion.
+    // Preload path: one base query + one preload query for the association.
+    const posts = await RefPost2.all()
+      .includes("refAuthor2")
+      .references("some_other_table")
+      .toArray();
+
+    expect(posts).toHaveLength(1);
+    const baseCall = execSpy.mock.calls.find(([sql]) => /ref_posts2/.test(String(sql)));
+    expect(baseCall).toBeDefined();
+    // Base query should NOT have a JOIN for ref_authors2 since the reference
+    // didn't match.
+    expect(String(baseCall![0])).not.toMatch(/LEFT OUTER JOIN ["`]?ref_authors2["`]?/i);
   });
 
   it("order triggers eager loading", () => {

@@ -84,6 +84,7 @@ export class SQLite3Adapter
    * Execute a SELECT query and return rows.
    */
   async execute(sql: string, binds: unknown[] = []): Promise<Record<string, unknown>[]> {
+    await this._transactionManager.materializeTransactions();
     try {
       const stmt = this.db.prepare(sql);
       return stmt.all(...binds) as Record<string, unknown>[];
@@ -126,6 +127,8 @@ export class SQLite3Adapter
    * Execute an INSERT/UPDATE/DELETE and return affected rows or insert ID.
    */
   async executeMutation(sql: string, binds: unknown[] = []): Promise<number> {
+    await this._transactionManager.materializeTransactions();
+    this._transactionManager.dirtyCurrentTransaction();
     if (this._preventWrites) {
       throw new ReadOnlyError("Write query attempted while preventing writes");
     }
@@ -153,6 +156,10 @@ export class SQLite3Adapter
     this._inTransaction = true;
   }
 
+  async beginDbTransaction(): Promise<void> {
+    return this.beginTransaction();
+  }
+
   /**
    * Commit the current transaction.
    */
@@ -161,12 +168,20 @@ export class SQLite3Adapter
     this._inTransaction = false;
   }
 
+  async commitDbTransaction(): Promise<void> {
+    return this.commit();
+  }
+
   /**
    * Rollback the current transaction.
    */
   async rollback(): Promise<void> {
     this.db.exec("ROLLBACK");
     this._inTransaction = false;
+  }
+
+  async rollbackDbTransaction(): Promise<void> {
+    return this.rollback();
   }
 
   /**

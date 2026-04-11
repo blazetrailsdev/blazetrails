@@ -628,8 +628,6 @@ class SchemaAdapter extends DatabaseStatementsMixin(class {}) implements Databas
   }
 
   async beginTransaction(): Promise<void> {
-    // Run pending DDL before starting a transaction, because DDL in MySQL
-    // causes implicit commits which destroy savepoints and break nesting.
     await this.setup();
     return this.inner.beginTransaction();
   }

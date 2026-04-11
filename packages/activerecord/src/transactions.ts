@@ -361,7 +361,7 @@ export async function withTransactionReturningStatus<T>(
   // operation succeeds).
   const r = record as any;
   r._transactionAction = undefined;
-  r._newRecordBeforeLastCommit = false;
+  r._newRecordBeforeLastCommit = r._newRecord ?? record.isNewRecord?.() ?? false;
   r._triggerUpdateCallback = false;
   r._triggerDestroyCallback = false;
 

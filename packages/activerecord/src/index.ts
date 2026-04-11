@@ -83,10 +83,12 @@ export {
 } from "./inheritance.js";
 // hasSecurePassword requires node:crypto — use subpath: @blazetrails/activerecord/secure-password
 // CounterCache, ReadonlyAttributes, Timestamp, Locking::Pessimistic, and
-// Translation are consumed via `User.incrementCounter(...)`, `User.touch()`,
-// etc. on the Base class (mixed in via activesupport extend/include) and are
-// no longer exported as standalone free functions — their `this:`-typed
-// signatures are only callable as methods on a Base subclass.
+// Translation are consumed via the Base mixins — class methods like
+// `User.incrementCounter(...)`, `User.touchAll(...)`, `User.attrReadonly(...)`,
+// and instance methods like `user.touch()`, `user.lockBang()`,
+// `user.withLock(cb)`. They are no longer exported as standalone free
+// functions — their `this:`-typed signatures are only callable on a Base
+// subclass (statics) or a Base instance (instance methods).
 // establishConnection requires node:fs — use subpath: @blazetrails/activerecord/connection-handling
 // signedId requires MessageVerifier (node:crypto) — use subpath: @blazetrails/activerecord/signed-id
 export {

@@ -171,10 +171,15 @@ export function counterCacheColumnQ(this: typeof Base, columnName: string): bool
 }
 
 /**
- * Populate the cached set of counter-cache columns from `belongs_to`
- * reflections that have `counter_cache` enabled. Invoked lazily by
- * `counterCacheColumnQ`; exposed for Rails parity with
- * `ActiveRecord::CounterCache#load_schema!`.
+ * Eagerly populate the cached set of counter-cache columns from
+ * `belongs_to` reflections that have `counter_cache` enabled.
+ *
+ * Mirrors the column-set bookkeeping that Rails'
+ * `ActiveRecord::CounterCache#load_schema!` performs (a private extension
+ * point inside `ClassMethods`). Not currently part of `ClassMethods`
+ * because, like in Rails, it's an internal hook into the schema loader
+ * rather than a user-facing class method — `counterCacheColumnQ` lazily
+ * primes the same cache via `getCounterCacheColumns` on first read.
  */
 export function loadSchemaBang(this: typeof Base): void {
   getCounterCacheColumns(this);

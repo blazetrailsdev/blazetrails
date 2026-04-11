@@ -2513,9 +2513,9 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Locking::Pessimistic#lock! and #with_lock.
    * Wired via include() after class. The module functions use
-   * `<T extends Base>(this: T, ...)` generics so subclasses see
-   * `this`-polymorphic types — `User.lockBang()` returns `Promise<User>`,
-   * `User.withLock(cb)` gives `cb` a `User` record.
+   * `<T extends Base>(this: T, ...)` generics so subclass instances see
+   * `this`-polymorphic types — `user.lockBang()` returns `Promise<User>`
+   * (when `user: User`), and `user.withLock(cb)` gives `cb` a `User` record.
    */
   declare lockBang: typeof LockingPessimistic.lockBang;
   declare withLock: typeof LockingPessimistic.withLock;

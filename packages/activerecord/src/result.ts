@@ -33,13 +33,33 @@ export class IndexedRow {
     return Object.keys(this.#columnIndexes).length;
   }
 
+  get length(): number {
+    return this.size;
+  }
+
   keys(): string[] {
     return Object.keys(this.#columnIndexes);
+  }
+
+  eachKey(block: (key: string) => void): void {
+    for (const key of Object.keys(this.#columnIndexes)) block(key);
+  }
+
+  hasKey(column: string): boolean {
+    return Object.prototype.hasOwnProperty.call(this.#columnIndexes, column);
   }
 
   get(column: string): unknown {
     const i = this.#columnIndexes[column];
     return i === undefined ? undefined : this.#row[i];
+  }
+
+  fetch(column: string, fallback?: () => unknown): unknown {
+    if (Object.prototype.hasOwnProperty.call(this.#columnIndexes, column)) {
+      return this.#row[this.#columnIndexes[column]];
+    }
+    if (fallback) return fallback();
+    throw new Error(`key not found: "${column}"`);
   }
 
   toHash(): Record<string, unknown> {
@@ -48,6 +68,20 @@ export class IndexedRow {
       out[key] = this.#row[index];
     }
     return out;
+  }
+
+  equals(other: unknown): boolean {
+    if (other instanceof IndexedRow) {
+      return this.#row === other.#row && this.#columnIndexes === other.#columnIndexes;
+    }
+    if (other && typeof other === "object") {
+      const hash = this.toHash();
+      const otherObj = other as Record<string, unknown>;
+      const keys = Object.keys(hash);
+      if (keys.length !== Object.keys(otherObj).length) return false;
+      return keys.every((k) => hash[k] === otherObj[k]);
+    }
+    return false;
   }
 }
 
@@ -68,6 +102,22 @@ export class Result {
 
   static empty(): Result {
     return EMPTY;
+  }
+
+  /**
+   * Builds a Result from the row-hash shape returned by our driver-level
+   * `execute()` methods. Column order is taken from the keys of the first
+   * row; empty inputs produce an empty Result.
+   */
+  static fromRowHashes(rows: Record<string, unknown>[]): Result {
+    if (rows.length === 0) return new Result([], []);
+    const columns = Object.keys(rows[0]);
+    const rowArrays = rows.map((row) => columns.map((col) => row[col]));
+    return new Result(columns, rowArrays);
+  }
+
+  [Symbol.iterator](): IterableIterator<Record<string, unknown>> {
+    return this.#getHashRows()[Symbol.iterator]();
   }
 
   includesColumn(name: string): boolean {
@@ -101,6 +151,11 @@ export class Result {
 
   toArray(): Record<string, unknown>[] {
     return this.#getHashRows();
+  }
+
+  at(idx: number): Record<string, unknown> | undefined {
+    const rows = this.#getHashRows();
+    return idx < 0 ? rows[rows.length + idx] : rows[idx];
   }
 
   first(): Record<string, unknown> | undefined;

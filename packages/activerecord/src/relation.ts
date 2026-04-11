@@ -1317,9 +1317,26 @@ export class Relation<T extends Base> {
     if (this._isNone) return [];
     if (this._loaded) return [...this._records];
 
+    // Rails: `includes(:assoc).references(:assocs_table)` promotes the
+    // matching includes to eager_load so the JOIN is present — otherwise
+    // a raw where condition referring to that table would fail.
+    // See ActiveRecord::Relation#references_eager_loaded_tables?
+    const promotedIncludes = this._includesToPromoteFromReferences();
+
     // Eager load via single JOIN query when eager_load associations are specified
-    if (this._eagerLoadAssociations.length > 0) {
-      await this._executeEagerLoad();
+    if (this._eagerLoadAssociations.length > 0 || promotedIncludes.length > 0) {
+      const originalEager = this._eagerLoadAssociations;
+      const originalIncludes = this._includesAssociations;
+      this._eagerLoadAssociations = [...originalEager, ...promotedIncludes];
+      this._includesAssociations = originalIncludes.filter(
+        (name) => !promotedIncludes.includes(name),
+      );
+      try {
+        await this._executeEagerLoad();
+      } finally {
+        this._eagerLoadAssociations = originalEager;
+        this._includesAssociations = originalIncludes;
+      }
     } else {
       const sql = this._toSql();
       const result = await this._modelClass.adapter.selectAll(sql, "Load");
@@ -1339,13 +1356,70 @@ export class Relation<T extends Base> {
       }
     }
 
-    // Preload associations via separate queries (includes + preload)
-    const preloadAssocs = [...this._includesAssociations, ...this._preloadAssociations];
+    // Preload associations via separate queries (includes + preload minus
+    // any includes we already eager-loaded above)
+    const preloadAssocs = [
+      ...this._includesAssociations.filter((n) => !promotedIncludes.includes(n)),
+      ...this._preloadAssociations,
+    ];
     if (preloadAssocs.length > 0 && this._records.length > 0) {
       await this._preloadAssociationsForRecords(this._records, preloadAssocs);
     }
 
     return [...this._records];
+  }
+
+  /**
+   * Returns the subset of `includes` associations whose target table is
+   * named in `references_values` but is not already in the join list.
+   *
+   * Mirrors Rails' logic in `references_eager_loaded_tables?`: references
+   * is a hint to the loader that the where clause mentions certain tables,
+   * so the loader must JOIN them rather than run a separate preload query.
+   */
+  private _includesToPromoteFromReferences(): string[] {
+    if (this._referencesValues.length === 0) return [];
+    if (this._includesAssociations.length === 0) return [];
+    const refs = new Set(this._referencesValues.map((t) => t.toLowerCase()));
+    const alreadyJoined = new Set(
+      this._joinClauses
+        .map((j) => j.table.toLowerCase())
+        .concat([
+          String(
+            (this._modelClass as unknown as { tableName?: string }).tableName ?? "",
+          ).toLowerCase(),
+        ]),
+    );
+    const modelAssociations: Array<{ name: string; options?: { className?: string } }> =
+      ((this._modelClass as unknown as { _associations?: unknown })._associations as
+        | Array<{ name: string; options?: { className?: string } }>
+        | undefined) ?? [];
+    const promoted: string[] = [];
+    for (const name of this._includesAssociations) {
+      const assoc = modelAssociations.find((a) => a.name === name);
+      if (!assoc) continue;
+      const targetTable = this._tableNameForAssociation(assoc);
+      if (!targetTable) continue;
+      const lower = targetTable.toLowerCase();
+      if (refs.has(lower) && !alreadyJoined.has(lower)) promoted.push(name);
+    }
+    return promoted;
+  }
+
+  private _tableNameForAssociation(assoc: {
+    name: string;
+    options?: { className?: string };
+  }): string | null {
+    const className = assoc.options?.className;
+    if (className) {
+      const target = (
+        this._modelClass as unknown as { subclasses?: Map<string, unknown> }
+      ).subclasses?.get?.(className) as { tableName?: string } | undefined;
+      if (target?.tableName) return target.tableName;
+    }
+    // Fallback: pluralize the association name (simple heuristic — same as
+    // Rails' default when class_name is not specified).
+    return assoc.name.endsWith("s") ? assoc.name : `${assoc.name}s`;
   }
 
   private async _executeEagerLoad(): Promise<void> {
@@ -2773,6 +2847,7 @@ export class Relation<T extends Base> {
       from: this._fromClause,
       annotations: [...this._annotations],
       optimizerHints: [...this._optimizerHints],
+      references: [...this._referencesValues],
       extending: [...this._extending],
       with: [...this._ctes],
       createWith: { ...this._createWithAttrs },

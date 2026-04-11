@@ -70,29 +70,37 @@ export async function transaction<T>(
 
   // If the adapter supports the full TransactionManager path, use it.
   if (typeof (adapter as any).withinNewTransaction === "function") {
-    const result = await dbTransaction.call(
-      adapter as any,
-      async (userTx?: unknown) => {
-        let internalTx: Transaction;
-        if (userTx instanceof Transaction) {
-          internalTx = userTx;
-        } else if (userTx && (userTx as any)._internalTransaction instanceof Transaction) {
-          internalTx = (userTx as any)._internalTransaction;
-        } else {
-          // When userTx is NULL_TRANSACTION (joinable: false) or unknown,
-          // get the real transaction from the adapter's TransactionManager
-          const tmCurrent = (adapter as any).currentTransaction?.();
-          internalTx = tmCurrent instanceof Transaction ? tmCurrent : new Transaction(adapter);
-        }
-        return getTransactionStorage().run(internalTx, () => fn(internalTx));
-      },
-      {
-        requiresNew: options?.requiresNew,
-        isolation: options?.isolation,
-        joinable: options?.joinable,
-      },
-    );
-    return result as T | undefined;
+    // Serialize outermost transactions — matches Rails where each thread
+    // gets its own connection. Nested transactions skip the lock since
+    // they run inside the outer transaction's locked scope.
+    const isOutermost = currentTransaction() === null;
+    const releaseLock = isOutermost ? await acquireAdapterLock(adapter) : null;
+
+    try {
+      const result = await dbTransaction.call(
+        adapter as any,
+        async (userTx?: unknown) => {
+          let internalTx: Transaction;
+          if (userTx instanceof Transaction) {
+            internalTx = userTx;
+          } else if (userTx && (userTx as any)._internalTransaction instanceof Transaction) {
+            internalTx = (userTx as any)._internalTransaction;
+          } else {
+            const tmCurrent = (adapter as any).currentTransaction?.();
+            internalTx = tmCurrent instanceof Transaction ? tmCurrent : new Transaction(adapter);
+          }
+          return getTransactionStorage().run(internalTx, () => fn(internalTx));
+        },
+        {
+          requiresNew: options?.requiresNew,
+          isolation: options?.isolation,
+          joinable: options?.joinable,
+        },
+      );
+      return result as T | undefined;
+    } finally {
+      releaseLock?.();
+    }
   }
 
   // Fallback for simple adapters without TransactionManager:

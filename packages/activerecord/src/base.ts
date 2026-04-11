@@ -2508,18 +2508,14 @@ export class Base extends Model {
   }
 
   /**
-   * Reload the record with a pessimistic lock (SELECT ... FOR UPDATE).
-   * `with_lock` wraps a block in a transaction and locks the record first.
+   * Reload the record with a pessimistic lock (SELECT ... FOR UPDATE), and
+   * `with_lock` wraps a block in a transaction that first locks the record.
    *
-   * Mirrors: ActiveRecord::Base#lock! and ActiveRecord::Base#with_lock.
-   * Wired via include() after class. Declared with `this` return polymorphism
-   * so chained calls and `withLock` callbacks see the subclass type.
-   */
-  /**
+   * Mirrors: ActiveRecord::Locking::Pessimistic#lock! and #with_lock.
    * Wired via include() after class. The module functions use
    * `<T extends Base>(this: T, ...)` generics so subclasses see
-   * `this`-polymorphic types — User.lockBang() returns Promise<User>,
-   * User.withLock(cb) gives cb a User record.
+   * `this`-polymorphic types — `User.lockBang()` returns `Promise<User>`,
+   * `User.withLock(cb)` gives `cb` a `User` record.
    */
   declare lockBang: typeof LockingPessimistic.lockBang;
   declare withLock: typeof LockingPessimistic.withLock;

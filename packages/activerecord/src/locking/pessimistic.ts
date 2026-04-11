@@ -50,8 +50,19 @@ export async function lockBang<T extends Base>(
 /**
  * Wraps a block in a transaction, reloading the record with a lock.
  *
- * Mirrors: ActiveRecord::Locking::Pessimistic#with_lock
+ * Mirrors: ActiveRecord::Locking::Pessimistic#with_lock. Like Rails,
+ * the block is required — calling `withLock("FOR UPDATE")` with no
+ * callback is a compile error (and a runtime error, as a safety net).
  */
+export async function withLock<T extends Base>(
+  this: T,
+  fn: (record: T) => Promise<void> | void,
+): Promise<void>;
+export async function withLock<T extends Base>(
+  this: T,
+  lockClause: string,
+  fn: (record: T) => Promise<void> | void,
+): Promise<void>;
 export async function withLock<T extends Base>(
   this: T,
   lockOrFn: string | ((record: T) => Promise<void> | void),

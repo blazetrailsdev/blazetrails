@@ -23,6 +23,25 @@ function getTransactionStorage(): AsyncContext<Transaction | null> {
   return _transactionStorage;
 }
 
+// Per-adapter mutex: serializes outermost transactions for the fallback path.
+// Matches Rails where each thread gets its own connection.
+const _adapterLocks = new WeakMap<object, Promise<void>>();
+
+async function acquireAdapterLock(adapter: object): Promise<() => void> {
+  while (_adapterLocks.has(adapter)) {
+    await _adapterLocks.get(adapter);
+  }
+  let release!: () => void;
+  const lock = new Promise<void>((resolve) => {
+    release = () => {
+      _adapterLocks.delete(adapter);
+      resolve();
+    };
+  });
+  _adapterLocks.set(adapter, lock);
+  return release;
+}
+
 /**
  * Get the currently active transaction, if any.
  */
@@ -89,6 +108,7 @@ async function _transactionFallback<T>(
 
   const tx = new Transaction(adapter);
   const nested = currentTransaction() !== null || adapter.inTransaction;
+  let releaseLock = nested ? null : await acquireAdapterLock(adapter);
 
   let result: T;
   try {
@@ -102,6 +122,8 @@ async function _transactionFallback<T>(
         try {
           await adapter.rollbackToSavepoint(spName);
         } catch {}
+        releaseLock?.();
+        releaseLock = null;
         await tx.rollback();
         await tx.runAfterRollbackCallbacks();
         if (error instanceof Rollback) return undefined;
@@ -116,6 +138,8 @@ async function _transactionFallback<T>(
         try {
           await adapter.rollback();
         } catch {}
+        releaseLock?.();
+        releaseLock = null;
         await tx.rollback();
         await tx.runAfterRollbackCallbacks();
         if (error instanceof Rollback) return undefined;
@@ -128,6 +152,8 @@ async function _transactionFallback<T>(
   } catch (error) {
     if (error instanceof Rollback) return undefined;
     throw error;
+  } finally {
+    releaseLock?.();
   }
 }
 

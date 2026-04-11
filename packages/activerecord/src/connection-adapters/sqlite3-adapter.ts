@@ -46,6 +46,9 @@ export class SQLite3Adapter
   }
 
   private db: Database.Database;
+  override get active(): boolean {
+    return this.db !== null && this.db !== undefined;
+  }
   private _inTransaction = false;
   private _savepointCounter = 0;
   private _readonly: boolean;
@@ -85,6 +88,7 @@ export class SQLite3Adapter
    */
   async execute(sql: string, binds: unknown[] = []): Promise<Record<string, unknown>[]> {
     await this._transactionManager.materializeTransactions();
+    
     try {
       const stmt = this.db.prepare(sql);
       return stmt.all(...binds) as Record<string, unknown>[];
@@ -129,6 +133,7 @@ export class SQLite3Adapter
   async executeMutation(sql: string, binds: unknown[] = []): Promise<number> {
     await this._transactionManager.materializeTransactions();
     this._transactionManager.dirtyCurrentTransaction();
+    
     if (this._preventWrites) {
       throw new ReadOnlyError("Write query attempted while preventing writes");
     }
@@ -151,43 +156,44 @@ export class SQLite3Adapter
   /**
    * Begin a transaction.
    */
+  async beginDbTransaction(): Promise<void> {
+    if (!this._inTransaction) {
+      this.db.exec("BEGIN");
+      this._inTransaction = true;
+    }
+  }
+
   async beginTransaction(): Promise<void> {
     this.db.exec("BEGIN");
     this._inTransaction = true;
   }
 
-  async beginDbTransaction(): Promise<void> {
-    return this.beginTransaction();
-  }
-
   /**
    * Commit the current transaction.
    */
-  async commit(): Promise<void> {
+  async commitDbTransaction(): Promise<void> {
     this.db.exec("COMMIT");
     this._inTransaction = false;
   }
 
-  async commitDbTransaction(): Promise<void> {
-    return this.commit();
+  async commit(): Promise<void> {
+    return this.commitDbTransaction();
   }
 
-  /**
-   * Rollback the current transaction.
-   */
-  async rollback(): Promise<void> {
+  async rollbackDbTransaction(): Promise<void> {
     this.db.exec("ROLLBACK");
     this._inTransaction = false;
   }
 
-  async rollbackDbTransaction(): Promise<void> {
-    return this.rollback();
+  async rollback(): Promise<void> {
+    return this.rollbackDbTransaction();
   }
 
   /**
    * Create a savepoint (nested transaction).
    */
   async createSavepoint(name: string): Promise<void> {
+    
     this.db.exec(`SAVEPOINT "${name}"`);
   }
 
@@ -202,6 +208,7 @@ export class SQLite3Adapter
    * Rollback to a savepoint.
    */
   async rollbackToSavepoint(name: string): Promise<void> {
+    
     this.db.exec(`ROLLBACK TO SAVEPOINT "${name}"`);
   }
 

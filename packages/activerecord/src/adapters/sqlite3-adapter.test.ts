@@ -456,6 +456,7 @@ describe("SqliteAdapter", () => {
     });
 
     it("savepoint rolls back inner transaction only", async () => {
+      
       await transaction(Account, async () => {
         await Account.create({ name: "Alice", balance: 100 });
 
@@ -471,6 +472,7 @@ describe("SqliteAdapter", () => {
         await Account.create({ name: "Charlie", balance: 300 });
       });
 
+      
       const rows = await adapter.execute(`SELECT * FROM "accounts" ORDER BY "name"`);
       expect(rows).toHaveLength(2);
       expect(rows[0].name).toBe("Alice");

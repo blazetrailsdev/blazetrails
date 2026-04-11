@@ -10,6 +10,7 @@ import { WhereClause } from "./where-clause.js";
 import { IrreversibleOrderError } from "../errors.js";
 import { sanitizeSqlArray } from "../sanitization.js";
 import { quote } from "../connection-adapters/abstract/quoting.js";
+import { JoinDependency } from "../associations/join-dependency.js";
 
 /**
  * Interface for the scope that WhereChain delegates to.
@@ -720,8 +721,17 @@ function excludingBang(this: QueryMethodsHost, records: any[]): any {
   return this;
 }
 
-function constructJoinDependency(this: QueryMethodsHost, _associations: any, _joinType: any): any {
-  return { associations: _associations, joinType: _joinType, model: this._modelClass };
+function constructJoinDependency(
+  this: QueryMethodsHost,
+  associations: string | string[],
+  _joinType?: unknown,
+): JoinDependency {
+  const jd = new JoinDependency(this._modelClass);
+  const names = Array.isArray(associations) ? associations : [associations];
+  for (const name of names) {
+    if (typeof name === "string") jd.addAssociation(name);
+  }
+  return jd;
 }
 
 // ---------------------------------------------------------------------------

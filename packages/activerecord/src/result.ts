@@ -235,4 +235,6 @@ export class Result {
   }
 }
 
-const EMPTY = new Result([], [], EMPTY_COLUMN_TYPES);
+const EMPTY_COLUMNS = Object.freeze([]) as unknown as string[];
+const EMPTY_ROWS = Object.freeze([]) as unknown as unknown[][];
+const EMPTY = Object.freeze(new Result(EMPTY_COLUMNS, EMPTY_ROWS, EMPTY_COLUMN_TYPES)) as Result;

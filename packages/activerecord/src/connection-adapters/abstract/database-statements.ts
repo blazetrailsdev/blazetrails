@@ -25,6 +25,7 @@ export interface DatabaseStatementsHost {
   rawExecute?(sql: string, name?: string, binds?: unknown[]): Promise<unknown>;
   castResult?(rawResult: unknown): Result;
   affectedRows?(rawResult: unknown): number;
+  lastInsertedId?(result: Result): unknown;
   isWriteQuery?(sql: string): boolean;
   currentTransaction?(): {
     open: boolean;
@@ -372,9 +373,10 @@ export async function insert(
   _sequenceName?: string | null,
   binds: unknown[] = [],
 ): Promise<unknown> {
+  const host = this as DatabaseStatementsHost;
   const [sql, resolvedBinds] = toSqlAndBinds(arel, binds);
-  const value = await execInsert.call(this, sql, name, resolvedBinds);
-  return idValue ?? value;
+  const result = await execInsert.call(this, sql, name, resolvedBinds);
+  return idValue ?? host?.lastInsertedId?.(result);
 }
 
 /**

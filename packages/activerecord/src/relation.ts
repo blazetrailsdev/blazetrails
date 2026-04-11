@@ -37,6 +37,7 @@ import { FromClause } from "./relation/from-clause.js";
 import { TableMetadata } from "./table-metadata.js";
 import { WhereClause, predicatesWithWrappedSqlLiterals } from "./relation/where-clause.js";
 import { BatchEnumerator } from "./relation/batches/batch-enumerator.js";
+import { touchAttributesWithTime } from "./timestamp.js";
 
 /**
  * Relation — the lazy, chainable query interface.
@@ -2686,25 +2687,49 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Update counters on matching records.
+   * Increment/decrement counter columns for all records matching this
+   * relation. Values can be positive (increment) or negative (decrement).
    *
-   * Mirrors: ActiveRecord::Relation#update_counters
+   * If `options.touch` is given, updates the named timestamp columns
+   * (and `updated_at`/`updated_on` by default) at the same time — matching
+   * Rails' `Relation#update_counters(counters, touch:)` behavior.
+   *
+   * Mirrors: ActiveRecord::Relation#update_counters. For each counter
+   * column, builds an Arel `COALESCE("col", 0) + N` expression via
+   * `NamedFunction` + `UnqualifiedColumn` + `Addition`. The COALESCE
+   * wrapper keeps NULL counters from propagating through the arithmetic.
    */
-  async updateCounters(counters: Record<string, number>): Promise<number> {
+  async updateCounters(
+    counters: Record<string, number>,
+    options?: { touch?: boolean | string | string[] },
+  ): Promise<number> {
     if (this._isNone) return 0;
+
     const table = this._modelClass.arelTable;
-    const updateValues: [InstanceType<typeof Nodes.Node>, unknown][] = Object.entries(counters).map(
-      ([key, val]) => {
-        const col = table.get(key);
-        const coalesced = new Nodes.NamedFunction("COALESCE", [col, new Nodes.Quoted(0)]);
-        return [col, new Nodes.Addition(coalesced, new Nodes.Quoted(val))];
-      },
-    );
-    const um = new UpdateManager().table(table).set(updateValues);
-    for (const cond of this._buildWhereStrings(table)) {
-      um.where(arelSql(cond));
+    const updates: Record<string, unknown> = {};
+
+    for (const [counterName, value] of Object.entries(counters)) {
+      const unqual = new Nodes.UnqualifiedColumn(table.get(counterName));
+      const coalesced = new Nodes.NamedFunction("COALESCE", [unqual, new Nodes.Quoted(0)]);
+      updates[counterName] = new Nodes.Addition(coalesced, new Nodes.Quoted(value));
     }
-    return this._modelClass.adapter.executeMutation(um.toSql());
+
+    if (options?.touch) {
+      // `touch: []` is an explicit "skip timestamp updates" signal. Rails'
+      // counter_cache test `update counters doesn't touch timestamps with
+      // touch: []` asserts this behavior (its Rails implementation is
+      // incidentally a no-op because the test never reloads the record).
+      const isEmptyArray = Array.isArray(options.touch) && options.touch.length === 0;
+      if (!isEmptyArray) {
+        const names = options.touch === true ? [] : ([] as string[]).concat(options.touch);
+        const touchUpdates = touchAttributesWithTime.call(this._modelClass, ...names);
+        for (const [col, time] of Object.entries(touchUpdates)) {
+          updates[col] = arelSql(`'${time.toISOString()}'`);
+        }
+      }
+    }
+
+    return this.updateAll(updates);
   }
 
   /**

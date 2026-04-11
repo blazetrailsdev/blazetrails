@@ -1295,7 +1295,10 @@ export class Base extends Model {
   /**
    * Touch all records matching conditions (update timestamps).
    *
-   * Mirrors: ActiveRecord::Relation#touch_all. Wired via extend() after class.
+   * Mirrors: ActiveRecord::Base.touch_all — a class-level entry point that
+   * delegates to `all().touchAll(...)` (Rails wires it up through
+   * `Querying::QUERYING_METHODS`, whose implementation lives on Relation).
+   * Wired via extend() after class.
    */
   declare static touchAll: typeof Timestamp.touchAll;
 

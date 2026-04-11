@@ -76,10 +76,13 @@ export async function transaction<T>(
         let internalTx: Transaction;
         if (userTx instanceof Transaction) {
           internalTx = userTx;
-        } else if (userTx && typeof (userTx as any)._internalTransaction !== "undefined") {
-          internalTx = (userTx as any)._internalTransaction ?? new Transaction(adapter);
+        } else if (userTx && (userTx as any)._internalTransaction instanceof Transaction) {
+          internalTx = (userTx as any)._internalTransaction;
         } else {
-          internalTx = new Transaction(adapter);
+          // When userTx is NULL_TRANSACTION (joinable: false) or unknown,
+          // get the real transaction from the adapter's TransactionManager
+          const tmCurrent = (adapter as any).currentTransaction?.();
+          internalTx = tmCurrent instanceof Transaction ? tmCurrent : new Transaction(adapter);
         }
         return getTransactionStorage().run(internalTx, () => fn(internalTx));
       },
@@ -171,9 +174,8 @@ export async function savepoint<T>(
   modelClass: typeof Base,
   _name: string,
   fn: () => Promise<T>,
-): Promise<T> {
-  const result = await transaction(modelClass, async () => fn(), { requiresNew: true });
-  return result as T;
+): Promise<T | undefined> {
+  return transaction(modelClass, async () => fn(), { requiresNew: true });
 }
 
 // ---------------------------------------------------------------------------

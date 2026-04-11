@@ -185,12 +185,31 @@ export class LeaseRegistry {
  * Wired up when ConnectionHandler is complete (PR 6).
  */
 export class ExecutorHooks {
+  private static _connectionHandler: {
+    eachConnectionPool(role: string | null | undefined, cb: (pool: ConnectionPool) => void): void;
+  } | null = null;
+
+  static setConnectionHandler(handler: typeof ExecutorHooks._connectionHandler): void {
+    ExecutorHooks._connectionHandler = handler;
+  }
+
   static run(): void {
     // noop — matches Rails
   }
 
   static complete(): void {
-    // Wired up when ConnectionHandler.eachConnectionPool exists
+    if (!ExecutorHooks._connectionHandler) return;
+    ExecutorHooks._connectionHandler.eachConnectionPool(null, (pool) => {
+      const connection = pool.activeConnection;
+      if (connection) {
+        const txn =
+          (connection as any).currentTransaction?.() ??
+          (connection as any).transactionManager?.currentTransaction;
+        if (txn && (txn.closed || !txn.joinable)) {
+          pool.releaseConnection();
+        }
+      }
+    });
   }
 }
 

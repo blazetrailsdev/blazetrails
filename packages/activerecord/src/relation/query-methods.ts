@@ -232,8 +232,11 @@ function reorderBang(
 }
 
 /**
- * Valid argument values for `unscope` — matches Rails' VALID_UNSCOPING_VALUES.
- * `left_joins` is accepted as an alias for `leftOuterJoins` (matching Rails).
+ * Valid argument values for `unscope`. The TS API is camelCase only —
+ * no Rails snake_case aliases. Mirrors Rails' VALID_UNSCOPING_VALUES set
+ * (where, select, group, order, lock, limit, offset, joins,
+ *  left_outer_joins, includes, from, readonly, having, optimizer_hints,
+ *  annotate) translated to TS naming.
  */
 export type UnscopeType =
   | "where"
@@ -252,7 +255,7 @@ export type UnscopeType =
   | "optimizerHints"
   | "annotate";
 
-const VALID_UNSCOPING_VALUES: ReadonlySet<string> = new Set([
+const VALID_UNSCOPING_VALUES: ReadonlySet<UnscopeType> = new Set<UnscopeType>([
   "where",
   "select",
   "group",
@@ -261,13 +264,11 @@ const VALID_UNSCOPING_VALUES: ReadonlySet<string> = new Set([
   "limit",
   "offset",
   "joins",
-  "left_outer_joins",
   "leftOuterJoins",
   "includes",
   "from",
   "readonly",
   "having",
-  "optimizer_hints",
   "optimizerHints",
   "annotate",
 ]);
@@ -278,13 +279,12 @@ function unscopeBang(
 ): any {
   for (const scope of types) {
     if (typeof scope === "string") {
-      const key = scope === "left_joins" ? "leftOuterJoins" : scope;
-      if (!VALID_UNSCOPING_VALUES.has(key)) {
-        throw new Error(
+      if (!VALID_UNSCOPING_VALUES.has(scope as UnscopeType)) {
+        throw argumentError(
           `Called unscope() with invalid unscoping argument '${scope}'. Valid arguments are: ${[...VALID_UNSCOPING_VALUES].join(", ")}.`,
         );
       }
-      switch (key) {
+      switch (scope as UnscopeType) {
         case "where":
           this._whereClause = WhereClause.empty();
           break;
@@ -319,7 +319,6 @@ function unscopeBang(
           this._joinClauses = [];
           this._rawJoins = [];
           break;
-        case "left_outer_joins":
         case "leftOuterJoins":
           this._joinClauses = this._joinClauses.filter((j) => j.type !== "left");
           break;
@@ -328,7 +327,6 @@ function unscopeBang(
           this._eagerLoadAssociations = [];
           this._preloadAssociations = [];
           break;
-        case "optimizer_hints":
         case "optimizerHints":
           this._optimizerHints = [];
           break;
@@ -339,13 +337,13 @@ function unscopeBang(
     } else if (scope && typeof scope === "object") {
       for (const [key, target] of Object.entries(scope)) {
         if (key !== "where") {
-          throw new Error(`Hash arguments in .unscope(*args) must have :where as the key.`);
+          throw argumentError(`Hash arguments in .unscope(*args) must have :where as the key.`);
         }
         const targets = Array.isArray(target) ? target : [target];
         this._whereClause = this._whereClause.except(...targets);
       }
     } else {
-      throw new Error(
+      throw argumentError(
         `Unrecognized scoping: ${JSON.stringify(scope)}. Use .unscope(where: :attribute_name) or one of ${[...VALID_UNSCOPING_VALUES].join(", ")}.`,
       );
     }
@@ -433,6 +431,55 @@ function invertWhereBang(this: QueryMethodsHost): any {
 }
 
 /**
+ * Constructs an Error tagged with name "ArgumentError" so callers can
+ * catch it the same way they would catch Rails' ArgumentError.
+ */
+function argumentError(message: string): Error {
+  const err = new Error(message);
+  err.name = "ArgumentError";
+  return err;
+}
+
+/**
+ * Structural deep equality used by and!/or! compatibility checks.
+ *
+ * Handles primitives via ===, arrays element-wise, plain objects key-wise,
+ * and class instances by delegating to an `eql` method (Arel nodes) or
+ * an `equals` method when available. JSON.stringify is intentionally
+ * avoided — Arel nodes carry methods and circular refs that don't survive
+ * serialization, which led to false matches.
+ */
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a == null || b == null) return false;
+  if (typeof a !== typeof b) return false;
+  if (typeof a !== "object") return false;
+
+  if (Array.isArray(a)) {
+    if (!Array.isArray(b) || a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (!deepEqual(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  if (Array.isArray(b)) return false;
+
+  const aAny = a as { eql?: (x: unknown) => boolean; equals?: (x: unknown) => boolean };
+  if (typeof aAny.eql === "function") return aAny.eql(b);
+  if (typeof aAny.equals === "function") return aAny.equals(b);
+
+  const ak = Object.keys(a as object).sort();
+  const bk = Object.keys(b as object).sort();
+  if (ak.length !== bk.length) return false;
+  for (let i = 0; i < ak.length; i++) {
+    if (ak[i] !== bk[i]) return false;
+    if (!deepEqual((a as Record<string, unknown>)[ak[i]], (b as Record<string, unknown>)[bk[i]]))
+      return false;
+  }
+  return true;
+}
+
+/**
  * Names of the relation fields that are structurally compared by and!/or!.
  * Mirrors Rails' STRUCTURAL_VALUE_METHODS (Relation::VALUE_METHODS minus
  * extending, where, having, unscope, references, annotate, optimizer_hints).
@@ -463,28 +510,29 @@ function structurallyIncompatibleValuesFor(
   for (const [label, field] of STRUCTURAL_FIELDS) {
     const a = self[field] as unknown;
     const b = other[field] as unknown;
-    if (Array.isArray(a) && Array.isArray(b)) {
-      const ua = [...new Set(a.map((x) => JSON.stringify(x)))].sort();
-      const ub = [...new Set(b.map((x) => JSON.stringify(x)))].sort();
-      if (ua.length !== ub.length || ua.some((v, i) => v !== ub[i])) incompat.push(label);
-    } else if (JSON.stringify(a) !== JSON.stringify(b)) {
-      incompat.push(label);
-    }
+    if (!deepEqual(a, b)) incompat.push(label);
   }
   return incompat;
 }
 
+function isRelationForCombining(value: unknown): value is QueryMethodsHost {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Partial<QueryMethodsHost> & { _whereClause?: { merge?: unknown } };
+  return (
+    typeof v._whereClause === "object" &&
+    v._whereClause !== null &&
+    typeof (v._whereClause as { merge?: unknown }).merge === "function" &&
+    typeof v._havingClause === "object" &&
+    v._havingClause !== null &&
+    Array.isArray(v._referencesValues)
+  );
+}
+
 function assertRelationForCombining(other: unknown, methodName: string): void {
-  if (
-    !other ||
-    typeof other !== "object" ||
-    typeof (other as { _whereClause?: unknown })._whereClause !== "object"
-  ) {
-    const err = new Error(
+  if (!isRelationForCombining(other)) {
+    throw argumentError(
       `You have passed ${typeof other} object to #${methodName}. Pass an ActiveRecord::Relation object instead.`,
     );
-    err.name = "ArgumentError";
-    throw err;
   }
 }
 
@@ -495,11 +543,9 @@ function assertStructurallyCompatible(
 ): void {
   const incompat = structurallyIncompatibleValuesFor(self, other);
   if (incompat.length > 0) {
-    const err = new Error(
+    throw argumentError(
       `Relation passed to #${methodName} must be structurally compatible. Incompatible values: [${incompat.map((v) => `:${v}`).join(", ")}]`,
     );
-    err.name = "ArgumentError";
-    throw err;
   }
 }
 
@@ -509,20 +555,8 @@ function assertStructurallyCompatible(
  * can share the same check.
  */
 export function areStructurallyCompatible(self: unknown, other: unknown): boolean {
-  if (
-    !self ||
-    typeof self !== "object" ||
-    !other ||
-    typeof other !== "object" ||
-    typeof (self as { _whereClause?: unknown })._whereClause !== "object" ||
-    typeof (other as { _whereClause?: unknown })._whereClause !== "object"
-  ) {
-    return false;
-  }
-  return (
-    structurallyIncompatibleValuesFor(self as QueryMethodsHost, other as QueryMethodsHost)
-      .length === 0
-  );
+  if (!isRelationForCombining(self) || !isRelationForCombining(other)) return false;
+  return structurallyIncompatibleValuesFor(self, other).length === 0;
 }
 
 function andBang(this: QueryMethodsHost, other: any): any {

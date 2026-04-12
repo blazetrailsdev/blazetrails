@@ -2730,7 +2730,7 @@ export class Relation<T extends Base> {
         const names = options.touch === true ? [] : ([] as string[]).concat(options.touch);
         const touchUpdates = touchAttributesWithTime.call(this._modelClass, ...names);
         for (const [col, time] of Object.entries(touchUpdates)) {
-          updates[col] = arelSql(`'${time.toISOString()}'`);
+          updates[col] = new Nodes.Quoted(time);
         }
       }
     }

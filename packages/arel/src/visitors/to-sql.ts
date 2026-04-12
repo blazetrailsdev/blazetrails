@@ -1194,7 +1194,10 @@ export class ToSql implements NodeVisitor<SQLString> {
   private visitUnqualifiedColumn(node: Nodes.UnqualifiedColumn): SQLString {
     // Mirrors Arel's visit_Arel_Nodes_UnqualifiedColumn — strips the table
     // qualifier so `SET col = col + 1` works in UPDATE statements.
-    const attr = node.attribute as Nodes.Attribute;
+    const attr = node.attribute as Partial<Nodes.Attribute> | undefined;
+    if (!attr || typeof attr.name !== "string") {
+      throw new UnsupportedVisitError("UnqualifiedColumn must wrap an Attribute node with a name");
+    }
     this.collector.append(`"${attr.name}"`);
     return this.collector;
   }

@@ -2735,6 +2735,11 @@ export class Relation<T extends Base> {
       }
     }
 
+    // Nothing to update (e.g. `updateCounters({})` or
+    // `updateCounters({}, { touch: [] })`) — skip updateAll, which would
+    // otherwise build an UPDATE with no SET clause and produce invalid SQL.
+    if (Object.keys(updates).length === 0) return 0;
+
     return this.updateAll(updates);
   }
 

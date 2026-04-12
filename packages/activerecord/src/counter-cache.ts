@@ -1,5 +1,5 @@
 import type { Base } from "./base.js";
-import { Nodes } from "@blazetrails/arel";
+import { Nodes, sql as arelSql } from "@blazetrails/arel";
 
 /**
  * Counter cache operations for ActiveRecord models.
@@ -70,6 +70,10 @@ export async function updateCounters(
  * - single PK, array of ids → `"id" IN (5, 6, 7)`
  * - composite PK, one tuple → `("a" = 1 AND "b" = 2)`
  * - composite PK, array of tuples → `("a" = 1 AND "b" = 2) OR ("a" = 3 AND "b" = 4)`
+ *
+ * Returns the always-false `1=0` sentinel (matching
+ * `ModelSchema.buildPkWhereNode`) when the id list is empty, when a
+ * composite tuple has the wrong arity, or when any value is null/undefined.
  */
 function buildPkPredicate(
   modelClass: typeof Base,
@@ -79,17 +83,27 @@ function buildPkPredicate(
   const pk = modelClass.primaryKey;
 
   if (Array.isArray(pk)) {
+    if (!Array.isArray(id)) return arelSql("1=0");
     const ids = id as unknown[];
+    if (ids.length === 0) return arelSql("1=0");
     const tuples = Array.isArray(ids[0]) ? (ids as unknown[][]) : [ids];
-    const groupings: InstanceType<typeof Nodes.Node>[] = tuples.map((tuple) => {
+    const groupings: InstanceType<typeof Nodes.Node>[] = [];
+    for (const tuple of tuples) {
+      if (!Array.isArray(tuple) || tuple.length !== pk.length) return arelSql("1=0");
+      if (tuple.some((v) => v === null || v === undefined)) return arelSql("1=0");
       const conditions = pk.map((col, i) => table.get(col).eq(tuple[i]));
-      return new Nodes.Grouping(new Nodes.And(conditions));
-    });
+      groupings.push(new Nodes.Grouping(new Nodes.And(conditions)));
+    }
     return groupings.reduce((left, right) => new Nodes.Or(left, right));
   }
 
   const attr = table.get(pk);
-  return Array.isArray(id) ? attr.in(id) : attr.eq(id);
+  if (Array.isArray(id)) {
+    if (id.length === 0) return arelSql("1=0");
+    return attr.in(id);
+  }
+  if (id === null || id === undefined) return arelSql("1=0");
+  return attr.eq(id);
 }
 
 /**

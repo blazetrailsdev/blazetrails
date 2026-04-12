@@ -43,6 +43,9 @@ export class Merger {
     rel._joinClauses.push(...this.other._joinClauses);
     rel._rawJoins.push(...this.other._rawJoins);
     rel._annotations.push(...this.other._annotations);
+    for (const ref of this.other._referencesValues) {
+      if (!rel._referencesValues.includes(ref)) rel._referencesValues.push(ref);
+    }
     return rel;
   }
 }

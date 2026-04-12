@@ -100,6 +100,7 @@ function buildPkPredicate(
   const attr = table.get(pk);
   if (Array.isArray(id)) {
     if (id.length === 0) return arelSql("1=0");
+    if (id.some((value) => value === null || value === undefined)) return arelSql("1=0");
     return attr.in(id);
   }
   if (id === null || id === undefined) return arelSql("1=0");

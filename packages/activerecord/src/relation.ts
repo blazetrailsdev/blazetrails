@@ -1325,21 +1325,8 @@ export class Relation<T extends Base> {
 
     // Eager load via single JOIN query when eager_load associations are specified
     if (this._eagerLoadAssociations.length > 0 || promotedIncludes.length > 0) {
-      const originalEager = this._eagerLoadAssociations;
-      const originalIncludes = this._includesAssociations;
-      // Dedupe: JoinDependency.addAssociation does not dedupe and would
-      // emit multiple LEFT OUTER JOINs with different aliases for the
-      // same association, inflating row counts.
-      this._eagerLoadAssociations = [...new Set([...originalEager, ...promotedIncludes])];
-      this._includesAssociations = originalIncludes.filter(
-        (name) => !promotedIncludes.includes(name),
-      );
-      try {
-        await this._executeEagerLoad();
-      } finally {
-        this._eagerLoadAssociations = originalEager;
-        this._includesAssociations = originalIncludes;
-      }
+      const allEager = [...new Set([...this._eagerLoadAssociations, ...promotedIncludes])];
+      await this._executeEagerLoad(allEager);
     } else {
       const sql = this._toSql();
       const result = await this._modelClass.adapter.selectAll(sql, "Load");
@@ -1399,7 +1386,8 @@ export class Relation<T extends Base> {
     return this._includesAssociations.filter((name) => !alreadyEagerLoaded.has(name));
   }
 
-  private async _executeEagerLoad(): Promise<void> {
+  private async _executeEagerLoad(eagerAssocs?: string[]): Promise<void> {
+    const eagerAssociations = eagerAssocs ?? this._eagerLoadAssociations;
     const basePk = (this._modelClass as any).primaryKey ?? "id";
     if (
       Array.isArray(basePk) ||
@@ -1410,7 +1398,7 @@ export class Relation<T extends Base> {
       const sql = this._toSql();
       const result = await this._modelClass.adapter.selectAll(sql, "Eager Load");
       this._records = result.toArray().map((row) => this._modelClass._instantiate(row) as T);
-      await this._preloadAssociationsForRecords(this._records, this._eagerLoadAssociations);
+      await this._preloadAssociationsForRecords(this._records, eagerAssociations);
       return;
     }
 
@@ -1418,7 +1406,7 @@ export class Relation<T extends Base> {
     const jd = new JoinDependency(this._modelClass);
 
     const fallbackAssocs: string[] = [];
-    for (const assocName of this._eagerLoadAssociations) {
+    for (const assocName of eagerAssociations) {
       if (assocName.includes(".")) {
         // Nested paths fall back to preload until per-level grouping is implemented
         fallbackAssocs.push(assocName);

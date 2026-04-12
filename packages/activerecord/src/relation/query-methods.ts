@@ -395,7 +395,10 @@ function whereBang(this: QueryMethodsHost, opts: any, ...rest: unknown[]): any {
       const namedBinds = firstBind as Record<string, unknown>;
       for (const [name, value] of Object.entries(namedBinds)) {
         const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        sql = sql.replace(new RegExp(`(?<!:):${escaped}\\b`, "g"), quote(value));
+        const replacement = Array.isArray(value)
+          ? value.map((v) => quote(v)).join(", ")
+          : quote(value);
+        sql = sql.replace(new RegExp(`(?<!:):${escaped}\\b`, "g"), replacement);
       }
     } else if (rest.length > 0) {
       sql = sanitizeSqlArray(opts, ...rest);

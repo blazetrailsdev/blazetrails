@@ -548,13 +548,18 @@ function structurallyIncompatibleValuesFor(
 
 function isRelationForCombining(value: unknown): value is QueryMethodsHost {
   if (!value || typeof value !== "object") return false;
-  const v = value as Partial<QueryMethodsHost> & { _whereClause?: { merge?: unknown } };
+  const v = value as Record<string, unknown>;
+  const wc = v._whereClause as Record<string, unknown> | undefined;
+  const hc = v._havingClause as Record<string, unknown> | undefined;
   return (
-    typeof v._whereClause === "object" &&
-    v._whereClause !== null &&
-    typeof (v._whereClause as { merge?: unknown }).merge === "function" &&
-    typeof v._havingClause === "object" &&
-    v._havingClause !== null &&
+    typeof wc === "object" &&
+    wc !== null &&
+    typeof wc.merge === "function" &&
+    typeof wc.or === "function" &&
+    typeof hc === "object" &&
+    hc !== null &&
+    typeof hc.merge === "function" &&
+    typeof hc.or === "function" &&
     Array.isArray(v._referencesValues)
   );
 }

@@ -494,12 +494,19 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Add HAVING clause. Accepts raw SQL string or hash form.
+   * Add HAVING clause. Accepts raw SQL string (with optional bind values),
+   * a hash of column/value pairs, or an Arel node.
    *
    * Mirrors: ActiveRecord::Relation#having
    */
-  having(condition: string | Record<string, unknown>): Relation<T> {
-    return this._clone().havingBang(condition);
+  having(condition: string, ...binds: unknown[]): Relation<T>;
+  having(condition: Record<string, unknown>): Relation<T>;
+  having(condition: Nodes.Node): Relation<T>;
+  having(
+    condition: string | Record<string, unknown> | Nodes.Node,
+    ...binds: unknown[]
+  ): Relation<T> {
+    return this._clone().havingBang(condition, ...binds);
   }
 
   /**

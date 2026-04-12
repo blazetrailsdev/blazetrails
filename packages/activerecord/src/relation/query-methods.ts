@@ -812,7 +812,7 @@ function constructJoinDependency(
   const names = Array.isArray(associations) ? associations : [associations];
   for (const name of names) {
     if (typeof name !== "string") continue;
-    const node = jd.addAssociation(name);
+    const node = name.includes(".") ? jd.addNestedAssociation(name) : jd.addAssociation(name);
     if (!node) {
       throw argumentError(
         `Association named '${name}' was not found on ${(this._modelClass as any).name ?? "model"}; perhaps you misspelled it?`,

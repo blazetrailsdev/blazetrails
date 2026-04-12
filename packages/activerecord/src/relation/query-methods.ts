@@ -375,14 +375,20 @@ function whereBang(this: QueryMethodsHost, opts: any, ...rest: unknown[]): any {
 
   if (typeof opts === "string") {
     let sql: string;
-    // Mirrors Rails sanitize_sql_array: named binds only when the first
-    // extra value is a plain Hash AND the statement contains `:word`
-    // tokens. Otherwise treat as positional binds via sanitizeSqlArray.
-    // This prevents misclassifying positional binds whose value happens
-    // to be a non-plain object like Date or Range.
+    // Named binds only when:
+    //   - the first extra value is a plain Hash, AND
+    //   - the statement contains `:word` tokens NOT preceded by another
+    //     `:` (so PostgreSQL casts like `payload::jsonb` don't match), AND
+    //   - the statement does not contain `?` (positional always wins
+    //     when both styles are present, matching common user intent and
+    //     avoiding the `::jsonb @> ?` footgun).
+    // Non-plain objects like Date/Range always route through
+    // sanitizeSqlArray's positional-bind path.
     const firstBind = rest[0];
+    const hasPositional = opts.includes("?");
+    const hasNamedToken = /(?<!:):[a-zA-Z_]\w*/.test(opts);
     const isNamedBinds =
-      rest.length === 1 && isPlainObject(firstBind) && /:[a-zA-Z_]\w*/.test(opts);
+      rest.length === 1 && isPlainObject(firstBind) && hasNamedToken && !hasPositional;
 
     if (isNamedBinds) {
       sql = opts;

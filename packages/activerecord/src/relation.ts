@@ -1373,18 +1373,16 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Returns the subset of `includes` associations whose target table is
-   * named in `references_values` but is not already in the join list.
-   *
-   * Mirrors Rails' logic in `references_eager_loaded_tables?`: references
-   * is a hint to the loader that the where clause mentions certain tables,
-   * so the loader must JOIN them rather than run a separate preload query.
+   * Rails all-or-nothing promotion: if ANY references_values entry
+   * refers to a table that is NOT already joined, ALL includes get
+   * promoted to eager_load. See `references_eager_loaded_tables?`
+   * in Rails relation.rb — the check is boolean, not per-association.
    */
   private _includesToPromoteFromReferences(): string[] {
     if (this._referencesValues.length === 0) return [];
     if (this._includesAssociations.length === 0) return [];
-    const refs = new Set(this._referencesValues.map((t) => t.toLowerCase()));
-    const alreadyJoined = new Set(
+
+    const joinedTables = new Set(
       this._joinClauses
         .map((j) => j.table.toLowerCase())
         .concat([
@@ -1393,26 +1391,12 @@ export class Relation<T extends Base> {
           ).toLowerCase(),
         ]),
     );
+    const refs = this._referencesValues.map((t) => t.toLowerCase());
+    const hasUnjoined = refs.some((ref) => !joinedTables.has(ref));
+    if (!hasUnjoined) return [];
+
     const alreadyEagerLoaded = new Set(this._eagerLoadAssociations);
-    const modelAssociations: Array<{ name: string; options?: { className?: string } }> =
-      ((this._modelClass as unknown as { _associations?: unknown })._associations as
-        | Array<{ name: string; options?: { className?: string } }>
-        | undefined) ?? [];
-    const seen = new Set<string>();
-    const promoted: string[] = [];
-    for (const name of this._includesAssociations) {
-      if (seen.has(name) || alreadyEagerLoaded.has(name)) continue;
-      const assoc = modelAssociations.find((a) => a.name === name);
-      if (!assoc) continue;
-      const targetTable = this._tableNameForAssociation(assoc);
-      if (!targetTable) continue;
-      const lower = targetTable.toLowerCase();
-      if (refs.has(lower) && !alreadyJoined.has(lower)) {
-        promoted.push(name);
-        seen.add(name);
-      }
-    }
-    return promoted;
+    return this._includesAssociations.filter((name) => !alreadyEagerLoaded.has(name));
   }
 
   private _tableNameForAssociation(assoc: {

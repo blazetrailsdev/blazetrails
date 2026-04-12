@@ -5900,49 +5900,29 @@ describe("RelationTest", () => {
   });
 
   it("references doesnt trigger eager loading if reference not included", async () => {
-    const { Associations, registerModel } = await import("./associations.js");
     const a = freshAdapter();
-    class RefAuthor2 extends Base {
+    class RefPost3 extends Base {
       static {
-        this._tableName = "ref_authors2";
-        this.attribute("name", "string");
-        this.adapter = a;
-      }
-    }
-    class RefPost2 extends Base {
-      static {
-        this._tableName = "ref_posts2";
+        this._tableName = "ref_posts3";
         this.attribute("title", "string");
-        this.attribute("ref_author2_id", "integer");
         this.adapter = a;
       }
     }
-    Associations.belongsTo.call(RefPost2, "refAuthor2", {
-      className: "RefAuthor2",
-      foreignKey: "ref_author2_id",
-    });
-    registerModel("RefAuthor2", RefAuthor2);
-    registerModel("RefPost2", RefPost2);
 
-    const author = await RefAuthor2.create({ name: "Dean" });
-    await RefPost2.create({ title: "First", ref_author2_id: author.id });
+    await RefPost3.create({ title: "First" });
 
     const execSpy = vi.spyOn(a, "execute");
     execSpy.mockClear();
 
-    // references a table that is NOT in the includes list — no promotion.
-    // Preload path: one base query + one preload query for the association.
-    const posts = await RefPost2.all()
-      .includes("refAuthor2")
-      .references("some_other_table")
-      .toArray();
+    // references without includes — no promotion possible since there are
+    // no includes to promote. Rails: references only triggers eager load
+    // when there are includes_values present.
+    const posts = await RefPost3.all().references("some_table").toArray();
 
     expect(posts).toHaveLength(1);
-    const baseCall = execSpy.mock.calls.find(([sql]) => /ref_posts2/.test(String(sql)));
+    const baseCall = execSpy.mock.calls.find(([sql]) => /ref_posts3/.test(String(sql)));
     expect(baseCall).toBeDefined();
-    // Base query should NOT have a JOIN for ref_authors2 since the reference
-    // didn't match.
-    expect(String(baseCall![0])).not.toMatch(/LEFT OUTER JOIN ["`]?ref_authors2["`]?/i);
+    expect(String(baseCall![0])).not.toMatch(/LEFT OUTER JOIN/i);
   });
 
   it("order triggers eager loading", () => {

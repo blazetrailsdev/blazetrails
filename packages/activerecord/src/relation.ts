@@ -2708,10 +2708,16 @@ export class Relation<T extends Base> {
     const table = this._modelClass.arelTable;
     const updates: Record<string, unknown> = {};
 
+    // Mirrors Rails' `_increment_attribute` — wrap the column in a COALESCE
+    // (treating NULL as 0) and then add/subtract the binding. Rails uses
+    // `Subtraction` for negative values and `Addition` for positive ones so
+    // the generated SQL reads `col - 3` rather than `col + -3`.
     for (const [counterName, value] of Object.entries(counters)) {
       const unqual = new Nodes.UnqualifiedColumn(table.get(counterName));
       const coalesced = new Nodes.NamedFunction("COALESCE", [unqual, new Nodes.Quoted(0)]);
-      updates[counterName] = new Nodes.Addition(coalesced, new Nodes.Quoted(value));
+      const bind = new Nodes.Quoted(Math.abs(value));
+      updates[counterName] =
+        value < 0 ? new Nodes.Subtraction(coalesced, bind) : new Nodes.Addition(coalesced, bind);
     }
 
     if (options?.touch) {

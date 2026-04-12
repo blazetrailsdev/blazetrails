@@ -94,7 +94,8 @@ function buildPkPredicate(
       const conditions = pk.map((col, i) => table.get(col).eq(tuple[i]));
       groupings.push(new Nodes.Grouping(new Nodes.And(conditions)));
     }
-    return groupings.reduce((left, right) => new Nodes.Or(left, right));
+    if (groupings.length === 1) return groupings[0];
+    return new Nodes.Grouping(groupings.reduce((left, right) => new Nodes.Or(left, right)));
   }
 
   const attr = table.get(pk);

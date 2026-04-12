@@ -642,6 +642,10 @@ function havingBang(
     return this;
   }
 
+  if (typeof opts !== "object" || Array.isArray(opts)) {
+    throw argumentError(`Unsupported argument type for having: ${typeof opts} (${String(opts)})`);
+  }
+
   const cast: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(opts)) {
     if (isRelationLike(value)) {
@@ -807,7 +811,13 @@ function constructJoinDependency(
   const jd = new JoinDependency(this._modelClass);
   const names = Array.isArray(associations) ? associations : [associations];
   for (const name of names) {
-    if (typeof name === "string") jd.addAssociation(name);
+    if (typeof name !== "string") continue;
+    const node = jd.addAssociation(name);
+    if (!node) {
+      throw argumentError(
+        `Association named '${name}' was not found on ${(this._modelClass as any).name ?? "model"}; perhaps you misspelled it?`,
+      );
+    }
   }
   return jd;
 }

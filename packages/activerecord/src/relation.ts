@@ -62,6 +62,7 @@ export class Relation<T extends Base> {
   private _isDistinct = false;
   private _distinctOnColumns: string[] = [];
   private _groupColumns: string[] = [];
+  /** @internal */
   _havingClause: WhereClause = WhereClause.empty();
   private _isNone = false;
   private _lockValue: string | null = null;

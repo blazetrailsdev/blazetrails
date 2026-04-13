@@ -20,7 +20,7 @@ export interface ValidatorContract {
   validate(record: AnyRecord, attribute: string, value: unknown, errors: Errors): void;
 }
 
-function evaluateCondition(record: AnyRecord, cond: ConditionFn): boolean {
+export function evaluateCondition(record: AnyRecord, cond: ConditionFn): boolean {
   if (typeof cond === "function") return cond(record);
   const method = record[cond];
   if (typeof method === "function") return method.call(record);

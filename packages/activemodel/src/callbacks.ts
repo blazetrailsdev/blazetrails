@@ -156,7 +156,7 @@ function resolveCallback(
     throw new ArgumentError(`Callback object must implement ${methodName} or ${camelMethod}`);
   }
   if (timing === "around") {
-    return ((record: AnyRecord, proceed: () => void | Promise<void>) =>
+    return ((record: AnyRecord, proceed: () => void) =>
       method.call(fnOrObject, record, proceed)) as AroundCallbackFn;
   }
   return ((record: AnyRecord) => method.call(fnOrObject, record)) as CallbackFn;
@@ -166,10 +166,7 @@ function resolveCallback(
  * Callback types.
  */
 export type CallbackFn = (record: AnyRecord) => void | boolean | Promise<void | boolean>;
-export type AroundCallbackFn = (
-  record: AnyRecord,
-  proceed: () => void | Promise<void>,
-) => void | Promise<void>;
+export type AroundCallbackFn = (record: AnyRecord, proceed: () => void) => void;
 
 export type CallbackTiming = "before" | "after" | "around";
 export type CallbackEvent = string;
@@ -189,14 +186,13 @@ interface CallbackEntry {
 }
 
 /**
- * Callbacks mixin — lifecycle hooks on models.
+ * Callbacks — lifecycle hooks on models.
  *
  * Mirrors: ActiveModel::Callbacks
  *
- * The primary API is async (run/runBefore/runAfter) which properly
- * awaits promise-returning callbacks. Sync variants (runSync/
- * runBeforeSync/runAfterSync) exist for contexts that can't be async
- * (constructors, synchronous validation).
+ * All callbacks are synchronous, matching Rails where callbacks
+ * are synchronous Ruby methods. The run/runBefore/runAfter methods
+ * execute callbacks in registration order.
  */
 export class CallbackChain {
   private callbacks: CallbackEntry[] = [];
@@ -235,6 +231,10 @@ export class CallbackChain {
     return true;
   }
 
+  clearEvent(event: CallbackEvent): void {
+    this.callbacks = this.callbacks.filter((c) => c.event !== event);
+  }
+
   clone(): CallbackChain {
     const copy = new CallbackChain();
     copy.callbacks = [...this.callbacks];
@@ -242,64 +242,14 @@ export class CallbackChain {
   }
 
   /**
-   * Run callbacks for a given event around an async block.
-   * Awaits the block and all callbacks. Returns false if a before
-   * callback resolves to false or if an around callback does not
-   * call proceed().
+   * Run callbacks for a given event around a block.
+   * Returns false if a before callback returns false (halting)
+   * or if an around callback does not call proceed().
+   *
+   * Mirrors: ActiveSupport::Callbacks#run_callbacks
    */
-  async run(
-    event: CallbackEvent,
-    record: AnyRecord,
-    block: () => void | Promise<void>,
-  ): Promise<boolean> {
-    if (!(await this.runBefore(event, record))) return false;
-
-    const arounds = this.callbacks.filter(
-      (c) => c.timing === "around" && c.event === event && this._shouldRun(c, record),
-    );
-
-    let blockExecuted = false;
-    const trackedBlock = async () => {
-      await block();
-      blockExecuted = true;
-    };
-
-    let chain: () => void | Promise<void> = trackedBlock;
-    for (const cb of [...arounds].reverse()) {
-      const prev = chain;
-      chain = async () => {
-        let pendingProceed: Promise<void> | undefined;
-        const wrappedProceed = () => {
-          const result = prev();
-          if (result && typeof (result as Promise<void>).then === "function") {
-            pendingProceed = result as Promise<void>;
-          }
-          return result;
-        };
-        try {
-          await (cb.fn as AroundCallbackFn)(record, wrappedProceed);
-          if (pendingProceed) await pendingProceed;
-        } catch (aroundError) {
-          if (pendingProceed) await pendingProceed.catch(() => {});
-          throw aroundError;
-        }
-      };
-    }
-    await chain();
-
-    if (!blockExecuted) return false;
-
-    await this.runAfter(event, record);
-
-    return true;
-  }
-
-  /**
-   * Synchronous variant of run() for contexts that can't be async
-   * (constructors, synchronous validation). Does not await promises.
-   */
-  runSync(event: CallbackEvent, record: AnyRecord, block: () => void): boolean {
-    if (!this.runBeforeSync(event, record)) return false;
+  run(event: CallbackEvent, record: AnyRecord, block: () => void): boolean {
+    if (!this.runBefore(event, record)) return false;
 
     const arounds = this.callbacks.filter(
       (c) => c.timing === "around" && c.event === event && this._shouldRun(c, record),
@@ -312,29 +262,18 @@ export class CallbackChain {
     }
     chain();
 
-    this.runAfterSync(event, record);
+    this.runAfter(event, record);
 
     return true;
   }
 
   /**
-   * Run before callbacks, awaiting async callbacks.
-   * Returns false if a callback resolves to false (halting the chain).
+   * Run before callbacks for a given event.
+   * Returns false if any callback returns false (halting the chain).
+   *
+   * Mirrors: ActiveSupport::Callbacks — before filter chain
    */
-  async runBefore(event: CallbackEvent, record: AnyRecord): Promise<boolean> {
-    const befores = this.callbacks.filter((c) => c.timing === "before" && c.event === event);
-    for (const cb of befores) {
-      if (!this._shouldRun(cb, record)) continue;
-      const result = await (cb.fn as CallbackFn)(record);
-      if (result === false) return false;
-    }
-    return true;
-  }
-
-  /**
-   * Synchronous before callbacks. Does not await promises.
-   */
-  runBeforeSync(event: CallbackEvent, record: AnyRecord): boolean {
+  runBefore(event: CallbackEvent, record: AnyRecord): boolean {
     const befores = this.callbacks.filter((c) => c.timing === "before" && c.event === event);
     for (const cb of befores) {
       if (!this._shouldRun(cb, record)) continue;
@@ -345,24 +284,38 @@ export class CallbackChain {
   }
 
   /**
-   * Run after callbacks, awaiting async callbacks.
+   * Run after callbacks for a given event.
+   *
+   * Mirrors: ActiveSupport::Callbacks — after filter chain
    */
-  async runAfter(event: CallbackEvent, record: AnyRecord): Promise<void> {
-    const afters = this.callbacks.filter((c) => c.timing === "after" && c.event === event);
-    for (const cb of afters) {
-      if (!this._shouldRun(cb, record)) continue;
-      await (cb.fn as CallbackFn)(record);
-    }
-  }
-
-  /**
-   * Synchronous after callbacks. Does not await promises.
-   */
-  runAfterSync(event: CallbackEvent, record: AnyRecord): void {
+  runAfter(event: CallbackEvent, record: AnyRecord): void {
     const afters = this.callbacks.filter((c) => c.timing === "after" && c.event === event);
     for (const cb of afters) {
       if (!this._shouldRun(cb, record)) continue;
       (cb.fn as CallbackFn)(record);
+    }
+  }
+
+  // -- Async variants for persistence lifecycle (save/create/update/destroy) --
+  // These exist because activerecord's before_destroy/before_save callbacks
+  // can trigger cascading DB operations (dependent: :destroy) which are
+  // inherently async in Node.js. Validation callbacks use the sync API above.
+
+  async runBeforeAsync(event: CallbackEvent, record: AnyRecord): Promise<boolean> {
+    const befores = this.callbacks.filter((c) => c.timing === "before" && c.event === event);
+    for (const cb of befores) {
+      if (!this._shouldRun(cb, record)) continue;
+      const result = await (cb.fn as CallbackFn)(record);
+      if (result === false) return false;
+    }
+    return true;
+  }
+
+  async runAfterAsync(event: CallbackEvent, record: AnyRecord): Promise<void> {
+    const afters = this.callbacks.filter((c) => c.timing === "after" && c.event === event);
+    for (const cb of afters) {
+      if (!this._shouldRun(cb, record)) continue;
+      await (cb.fn as CallbackFn)(record);
     }
   }
 }

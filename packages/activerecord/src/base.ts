@@ -1749,7 +1749,7 @@ export class Base extends Model {
       record._strictLoading = true;
     }
     // Fire after_find callbacks
-    this._callbackChain.runAfterSync("find", record);
+    this._callbackChain.runAfter("find", record);
     return record;
   }
 
@@ -2119,7 +2119,7 @@ export class Base extends Model {
     const { autosaveBelongsTo, autosaveChildren } = await import("./autosave-association.js");
 
     let saved = false;
-    if (!(await ctor._callbackChain.runBefore("save", this))) return false;
+    if (!(await ctor._callbackChain.runBeforeAsync("save", this))) return false;
 
     const belongsToOk = await autosaveBelongsTo(this);
     if (!belongsToOk) {
@@ -2129,40 +2129,43 @@ export class Base extends Model {
 
     const wasNewRecord = this._newRecord;
     if (this._newRecord) {
-      const createResult = await ctor._callbackChain.run("create", this, async () => {
-        this._performInsert();
-        if (this._pendingOperation) {
-          await this._pendingOperation;
-          this._pendingOperation = null;
-        }
-        this._previouslyNewRecord = true;
-        this._newRecord = false;
-        this.changesApplied();
-        saved = true;
-      });
-      if (!createResult) saved = false;
+      if (!(await ctor._callbackChain.runBeforeAsync("create", this))) {
+        this._skipTouch = false;
+        return false;
+      }
+      this._performInsert();
+      if (this._pendingOperation) {
+        await this._pendingOperation;
+        this._pendingOperation = null;
+      }
+      this._previouslyNewRecord = true;
+      this._newRecord = false;
+      this.changesApplied();
+      saved = true;
+      await ctor._callbackChain.runAfterAsync("create", this);
     } else {
-      const updateResult = await ctor._callbackChain.run("update", this, async () => {
-        this._performUpdate();
-        if (this._pendingOperation) {
-          await this._pendingOperation;
-          this._pendingOperation = null;
-        }
-        this._previouslyNewRecord = false;
-        this.changesApplied();
-        saved = true;
-      });
-      if (!updateResult) saved = false;
+      if (!(await ctor._callbackChain.runBeforeAsync("update", this))) {
+        this._skipTouch = false;
+        return false;
+      }
+      this._performUpdate();
+      if (this._pendingOperation) {
+        await this._pendingOperation;
+        this._pendingOperation = null;
+      }
+      this._previouslyNewRecord = false;
+      this.changesApplied();
+      saved = true;
+      await ctor._callbackChain.runAfterAsync("update", this);
     }
     this._skipTouch = false;
 
     if (saved) {
-      // Set transaction action and tracking flags for callback filtering
       this._transactionAction = wasNewRecord ? "create" : "update";
       (this as any)._newRecordBeforeLastCommit = wasNewRecord;
       (this as any)._triggerUpdateCallback = !wasNewRecord;
 
-      await ctor._callbackChain.runAfter("save", this);
+      await ctor._callbackChain.runAfterAsync("save", this);
 
       if (wasNewRecord) {
         const { updateCounterCaches } = await import("./associations.js");
@@ -2388,36 +2391,36 @@ export class Base extends Model {
     const ctor = this.constructor as typeof Base;
 
     let didDelete = false;
-    const halted = !(await ctor._callbackChain.run("destroy", this, async () => {
-      const table = ctor.arelTable;
-      const pk = this.id;
-      if (!(Array.isArray(pk) ? pk.every((v) => v == null) : pk == null)) {
-        const dm = new DeleteManager().from(table).where(ctor._buildPkWhereNode(pk));
-        const lockCol = ctor.lockingColumn;
-        if (ctor.lockingEnabled) {
-          const currentVersion = this.readAttribute(lockCol);
-          if (currentVersion == null) {
-            dm.where(table.get(lockCol).isNull());
-          } else {
-            dm.where(table.get(lockCol).eq(Number(currentVersion) || 0));
-          }
-        }
+    if (!(await ctor._callbackChain.runBeforeAsync("destroy", this))) return false;
 
-        const affected = await ctor.adapter.execDelete(dm.toSql(), "Destroy");
-        if (ctor.lockingEnabled && affected === 0) {
-          throw new StaleObjectError(this, "destroy");
+    const table = ctor.arelTable;
+    const pk = this.id;
+    if (!(Array.isArray(pk) ? pk.every((v) => v == null) : pk == null)) {
+      const dm = new DeleteManager().from(table).where(ctor._buildPkWhereNode(pk));
+      const lockCol = ctor.lockingColumn;
+      if (ctor.lockingEnabled) {
+        const currentVersion = this.readAttribute(lockCol);
+        if (currentVersion == null) {
+          dm.where(table.get(lockCol).isNull());
+        } else {
+          dm.where(table.get(lockCol).eq(Number(currentVersion) || 0));
         }
-        didDelete = affected > 0;
       }
 
-      this._destroyed = true;
-      this._frozen = true;
-      this._collectionProxies.clear();
-      this._preloadedAssociations.clear();
-      this._associationInstances.clear();
-    }));
+      const affected = await ctor.adapter.execDelete(dm.toSql(), "Destroy");
+      if (ctor.lockingEnabled && affected === 0) {
+        throw new StaleObjectError(this, "destroy");
+      }
+      didDelete = affected > 0;
+    }
 
-    if (halted) return false;
+    this._destroyed = true;
+    this._frozen = true;
+    this._collectionProxies.clear();
+    this._preloadedAssociations.clear();
+    this._associationInstances.clear();
+
+    await ctor._callbackChain.runAfterAsync("destroy", this);
 
     if (didDelete) {
       this._transactionAction = "destroy";
@@ -2428,7 +2431,7 @@ export class Base extends Model {
       await updateCounterCaches(this, "decrement");
     }
 
-    return didDelete || !halted;
+    return didDelete || this._destroyed;
   }
 
   /**

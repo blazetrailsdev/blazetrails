@@ -424,7 +424,9 @@ export class Model {
       new (options: Record<string, unknown>): ValidatorBase | { validate(record: AnyRecord): void };
     }>) {
       const validator = new klass(rest);
-      if (typeof (validator as AnyRecord).checkValidityBang === "function") {
+      if (typeof (validator as AnyRecord).checkValidity === "function") {
+        (validator as AnyRecord).checkValidity();
+      } else if (typeof (validator as AnyRecord).checkValidityBang === "function") {
         (validator as AnyRecord).checkValidityBang();
       }
       this._ensureOwnValidators();
@@ -470,10 +472,8 @@ export class Model {
    */
   static validatorsOn(attribute: string): Array<ValidatorBase | EachValidator> {
     return this._validators.filter((v) => {
-      if (v instanceof EachValidator) {
-        return v.attributes.includes(attribute);
-      }
-      return false;
+      const attributes = (v as AnyRecord).attributes;
+      return Array.isArray(attributes) && attributes.includes(attribute);
     });
   }
 
@@ -963,7 +963,7 @@ export class Model {
     this._validationContext = contextStr ?? this._validationContext;
 
     try {
-      const completed = ctor._callbackChain.run("validation", this, () => {
+      const completed = ctor._callbackChain.runCallbacks("validation", this, () => {
         this._runValidateCallbacks();
       });
       if (!completed) return false;
@@ -1422,7 +1422,7 @@ export class Model {
   // -- Callbacks helper for subclasses --
 
   runCallbacks(event: string, block: () => void): boolean {
-    return (this.constructor as typeof Model)._callbackChain.run(event, this, block);
+    return (this.constructor as typeof Model)._callbackChain.runCallbacks(event, this, block);
   }
 }
 

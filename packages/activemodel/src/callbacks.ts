@@ -203,9 +203,11 @@ interface CallbackEntry {
  *
  * Mirrors: ActiveModel::Callbacks
  *
- * All callbacks are synchronous, matching Rails where callbacks
- * are synchronous Ruby methods. The run/runBefore/runAfter methods
- * execute callbacks in registration order.
+ * The primary API is synchronous, matching Rails where callbacks are
+ * synchronous Ruby methods. runCallbacks/runBefore/runAfter execute
+ * callbacks in registration order and do not await returned Promises.
+ * For persistence events where callbacks or blocks are asynchronous,
+ * use the async variants (runCallbacksAsync/runBeforeAsync/runAfterAsync).
  */
 export class CallbackChain {
   private callbacks: CallbackEntry[] = [];
@@ -261,7 +263,7 @@ export class CallbackChain {
    *
    * Mirrors: ActiveSupport::Callbacks#run_callbacks
    */
-  run(event: CallbackEvent, record: AnyRecord, block: () => void): boolean {
+  runCallbacks(event: CallbackEvent, record: AnyRecord, block: () => void): boolean {
     if (!this.runBefore(event, record)) return false;
 
     const arounds = this.callbacks.filter(
@@ -322,7 +324,7 @@ export class CallbackChain {
   // can trigger cascading DB operations (dependent: :destroy) which are
   // inherently async in Node.js. Validation callbacks use the sync API above.
 
-  async runAsync(
+  async runCallbacksAsync(
     event: CallbackEvent,
     record: AnyRecord,
     block: () => void | Promise<void>,

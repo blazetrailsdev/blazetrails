@@ -2129,7 +2129,7 @@ export class Base extends Model {
 
     const wasNewRecord = this._newRecord;
     if (this._newRecord) {
-      const createResult = await ctor._callbackChain.runAsync("create", this, async () => {
+      const createResult = await ctor._callbackChain.runCallbacksAsync("create", this, async () => {
         this._performInsert();
         if (this._pendingOperation) {
           await this._pendingOperation;
@@ -2142,7 +2142,7 @@ export class Base extends Model {
       });
       if (!createResult) saved = false;
     } else {
-      const updateResult = await ctor._callbackChain.runAsync("update", this, async () => {
+      const updateResult = await ctor._callbackChain.runCallbacksAsync("update", this, async () => {
         this._performUpdate();
         if (this._pendingOperation) {
           await this._pendingOperation;
@@ -2387,7 +2387,7 @@ export class Base extends Model {
     const ctor = this.constructor as typeof Base;
 
     let didDelete = false;
-    const destroyResult = await ctor._callbackChain.runAsync("destroy", this, async () => {
+    const destroyResult = await ctor._callbackChain.runCallbacksAsync("destroy", this, async () => {
       const table = ctor.arelTable;
       const pk = this.id;
       if (!(Array.isArray(pk) ? pk.every((v) => v == null) : pk == null)) {
@@ -2427,7 +2427,7 @@ export class Base extends Model {
       await updateCounterCaches(this, "decrement");
     }
 
-    return didDelete || this._destroyed;
+    return true;
   }
 
   /**

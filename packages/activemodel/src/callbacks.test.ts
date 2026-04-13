@@ -318,7 +318,7 @@ describe("CallbackChain.run", () => {
     chain.register("after", "save", () => {
       log.push("after");
     });
-    chain.run("save", {}, () => {
+    chain.runCallbacks("save", {}, () => {
       log.push("block:start");
       log.push("block:end");
     });
@@ -335,7 +335,7 @@ describe("CallbackChain.run", () => {
     chain.register("after", "save", () => {
       log.push("after");
     });
-    const result = chain.run("save", {}, () => {
+    const result = chain.runCallbacks("save", {}, () => {
       log.push("block");
     });
     expect(result).toBe(false);
@@ -353,7 +353,7 @@ describe("CallbackChain.run", () => {
     chain.register("after", "save", () => {
       log.push("after");
     });
-    chain.run("save", {}, () => {
+    chain.runCallbacks("save", {}, () => {
       log.push("block");
     });
     expect(log).toEqual(["around:before", "block", "around:after", "after"]);
@@ -369,7 +369,7 @@ describe("CallbackChain.run", () => {
     chain.register("after", "save", () => {
       log.push("after");
     });
-    const result = chain.run("save", {}, () => {
+    const result = chain.runCallbacks("save", {}, () => {
       log.push("block");
     });
     expect(result).toBe(false);
@@ -385,7 +385,7 @@ describe("CallbackChain.run", () => {
     chain.register("after", "save", () => {
       log.push("after2");
     });
-    chain.run("save", {}, () => {
+    chain.runCallbacks("save", {}, () => {
       log.push("block");
     });
     expect(log).toEqual(["block", "after1", "after2"]);

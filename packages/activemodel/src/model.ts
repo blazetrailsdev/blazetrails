@@ -402,42 +402,56 @@ export class Model {
    * Mirrors: ActiveModel::Validations.validates_with
    */
   static validatesWith(
-    validatorClass: {
-      new (options: Record<string, unknown>): ValidatorBase | { validate(record: AnyRecord): void };
-    },
-    options: ConditionalOptions & { strict?: boolean; [key: string]: unknown } = {},
+    ...args: Array<
+      | {
+          new (
+            options: Record<string, unknown>,
+          ): ValidatorBase | { validate(record: AnyRecord): void };
+        }
+      | (ConditionalOptions & { strict?: boolean; [key: string]: unknown })
+    >
   ): void {
-    const { if: ifOpt, unless: unlessOpt, on: onOpt, strict: isStrict, ...rest } = options;
-    const validator = new validatorClass(rest);
-    if (typeof (validator as AnyRecord).checkValidityBang === "function") {
-      (validator as AnyRecord).checkValidityBang();
-    }
-    this._ensureOwnValidators();
-    this._validators.push(validator as ValidatorBase);
+    const last = args[args.length - 1];
+    const options: ConditionalOptions & { strict?: boolean; [key: string]: unknown } =
+      typeof last === "function"
+        ? {}
+        : ((args.pop() as ConditionalOptions & { strict?: boolean; [key: string]: unknown }) ?? {});
 
+    const { if: ifOpt, unless: unlessOpt, on: onOpt, strict: isStrict, ...rest } = options;
     const conditions = this._buildValidateConditions({ if: ifOpt, unless: unlessOpt, on: onOpt });
 
-    let callbackFn: CallbackFn;
-    if (isStrict) {
-      callbackFn = (record: AnyRecord) => {
-        const origErrors = record.errors;
-        const tempErrors = new Errors(record);
-        record.errors = tempErrors;
-        try {
-          validator.validate(record);
-        } finally {
-          record.errors = origErrors;
-        }
-        if (tempErrors.any) {
-          throw new StrictValidationFailed(tempErrors.fullMessages.join(", "));
-        }
-      };
-    } else {
-      callbackFn = (record: AnyRecord) => validator.validate(record);
-    }
+    for (const klass of args as Array<{
+      new (options: Record<string, unknown>): ValidatorBase | { validate(record: AnyRecord): void };
+    }>) {
+      const validator = new klass(rest);
+      if (typeof (validator as AnyRecord).checkValidityBang === "function") {
+        (validator as AnyRecord).checkValidityBang();
+      }
+      this._ensureOwnValidators();
+      this._validators.push(validator as ValidatorBase);
 
-    this._ensureOwnCallbacks();
-    this._callbackChain.register("before", "validate", callbackFn, conditions);
+      let callbackFn: CallbackFn;
+      if (isStrict) {
+        callbackFn = (record: AnyRecord) => {
+          const origErrors = record.errors;
+          const tempErrors = new Errors(record);
+          record.errors = tempErrors;
+          try {
+            validator.validate(record);
+          } finally {
+            record.errors = origErrors;
+          }
+          if (tempErrors.any) {
+            throw new StrictValidationFailed(tempErrors.fullMessages.join(", "));
+          }
+        };
+      } else {
+        callbackFn = (record: AnyRecord) => validator.validate(record);
+      }
+
+      this._ensureOwnCallbacks();
+      this._callbackChain.register("before", "validate", callbackFn, conditions);
+    }
   }
 
   /**

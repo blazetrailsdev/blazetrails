@@ -2129,34 +2129,30 @@ export class Base extends Model {
 
     const wasNewRecord = this._newRecord;
     if (this._newRecord) {
-      if (!(await ctor._callbackChain.runBeforeAsync("create", this))) {
-        this._skipTouch = false;
-        return false;
-      }
-      this._performInsert();
-      if (this._pendingOperation) {
-        await this._pendingOperation;
-        this._pendingOperation = null;
-      }
-      this._previouslyNewRecord = true;
-      this._newRecord = false;
-      this.changesApplied();
-      saved = true;
-      await ctor._callbackChain.runAfterAsync("create", this);
+      const createResult = await ctor._callbackChain.runAsync("create", this, async () => {
+        this._performInsert();
+        if (this._pendingOperation) {
+          await this._pendingOperation;
+          this._pendingOperation = null;
+        }
+        this._previouslyNewRecord = true;
+        this._newRecord = false;
+        this.changesApplied();
+        saved = true;
+      });
+      if (!createResult) saved = false;
     } else {
-      if (!(await ctor._callbackChain.runBeforeAsync("update", this))) {
-        this._skipTouch = false;
-        return false;
-      }
-      this._performUpdate();
-      if (this._pendingOperation) {
-        await this._pendingOperation;
-        this._pendingOperation = null;
-      }
-      this._previouslyNewRecord = false;
-      this.changesApplied();
-      saved = true;
-      await ctor._callbackChain.runAfterAsync("update", this);
+      const updateResult = await ctor._callbackChain.runAsync("update", this, async () => {
+        this._performUpdate();
+        if (this._pendingOperation) {
+          await this._pendingOperation;
+          this._pendingOperation = null;
+        }
+        this._previouslyNewRecord = false;
+        this.changesApplied();
+        saved = true;
+      });
+      if (!updateResult) saved = false;
     }
     this._skipTouch = false;
 
@@ -2391,36 +2387,36 @@ export class Base extends Model {
     const ctor = this.constructor as typeof Base;
 
     let didDelete = false;
-    if (!(await ctor._callbackChain.runBeforeAsync("destroy", this))) return false;
-
-    const table = ctor.arelTable;
-    const pk = this.id;
-    if (!(Array.isArray(pk) ? pk.every((v) => v == null) : pk == null)) {
-      const dm = new DeleteManager().from(table).where(ctor._buildPkWhereNode(pk));
-      const lockCol = ctor.lockingColumn;
-      if (ctor.lockingEnabled) {
-        const currentVersion = this.readAttribute(lockCol);
-        if (currentVersion == null) {
-          dm.where(table.get(lockCol).isNull());
-        } else {
-          dm.where(table.get(lockCol).eq(Number(currentVersion) || 0));
+    const destroyResult = await ctor._callbackChain.runAsync("destroy", this, async () => {
+      const table = ctor.arelTable;
+      const pk = this.id;
+      if (!(Array.isArray(pk) ? pk.every((v) => v == null) : pk == null)) {
+        const dm = new DeleteManager().from(table).where(ctor._buildPkWhereNode(pk));
+        const lockCol = ctor.lockingColumn;
+        if (ctor.lockingEnabled) {
+          const currentVersion = this.readAttribute(lockCol);
+          if (currentVersion == null) {
+            dm.where(table.get(lockCol).isNull());
+          } else {
+            dm.where(table.get(lockCol).eq(Number(currentVersion) || 0));
+          }
         }
+
+        const affected = await ctor.adapter.execDelete(dm.toSql(), "Destroy");
+        if (ctor.lockingEnabled && affected === 0) {
+          throw new StaleObjectError(this, "destroy");
+        }
+        didDelete = affected > 0;
       }
 
-      const affected = await ctor.adapter.execDelete(dm.toSql(), "Destroy");
-      if (ctor.lockingEnabled && affected === 0) {
-        throw new StaleObjectError(this, "destroy");
-      }
-      didDelete = affected > 0;
-    }
+      this._destroyed = true;
+      this._frozen = true;
+      this._collectionProxies.clear();
+      this._preloadedAssociations.clear();
+      this._associationInstances.clear();
+    });
 
-    this._destroyed = true;
-    this._frozen = true;
-    this._collectionProxies.clear();
-    this._preloadedAssociations.clear();
-    this._associationInstances.clear();
-
-    await ctor._callbackChain.runAfterAsync("destroy", this);
+    if (!destroyResult) return false;
 
     if (didDelete) {
       this._transactionAction = "destroy";

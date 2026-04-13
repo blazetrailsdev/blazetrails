@@ -301,6 +301,39 @@ export class CallbackChain {
   // can trigger cascading DB operations (dependent: :destroy) which are
   // inherently async in Node.js. Validation callbacks use the sync API above.
 
+  async runAsync(
+    event: CallbackEvent,
+    record: AnyRecord,
+    block: () => void | Promise<void>,
+  ): Promise<boolean> {
+    if (!(await this.runBeforeAsync(event, record))) return false;
+
+    const arounds = this.callbacks.filter(
+      (c) => c.timing === "around" && c.event === event && this._shouldRun(c, record),
+    );
+
+    let blockExecuted = false;
+    const trackedBlock = async () => {
+      await block();
+      blockExecuted = true;
+    };
+
+    let chain: () => void | Promise<void> = trackedBlock;
+    for (const cb of [...arounds].reverse()) {
+      const prev = chain;
+      chain = async () => {
+        await (cb.fn as AroundCallbackFn)(record, prev as () => void);
+      };
+    }
+    await chain();
+
+    if (!blockExecuted) return false;
+
+    await this.runAfterAsync(event, record);
+
+    return true;
+  }
+
   async runBeforeAsync(event: CallbackEvent, record: AnyRecord): Promise<boolean> {
     const befores = this.callbacks.filter((c) => c.timing === "before" && c.event === event);
     for (const cb of befores) {

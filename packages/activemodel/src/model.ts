@@ -424,10 +424,12 @@ export class Model {
       new (options: Record<string, unknown>): ValidatorBase | { validate(record: AnyRecord): void };
     }>) {
       const validator = new klass(rest);
-      if (typeof (validator as AnyRecord).checkValidity === "function") {
-        (validator as AnyRecord).checkValidity();
-      } else if (typeof (validator as AnyRecord).checkValidityBang === "function") {
-        (validator as AnyRecord).checkValidityBang();
+      if (!(validator instanceof EachValidator)) {
+        if (typeof (validator as AnyRecord).checkValidity === "function") {
+          (validator as AnyRecord).checkValidity();
+        } else if (typeof (validator as AnyRecord).checkValidityBang === "function") {
+          (validator as AnyRecord).checkValidityBang();
+        }
       }
       this._ensureOwnValidators();
       this._validators.push(validator as ValidatorBase);

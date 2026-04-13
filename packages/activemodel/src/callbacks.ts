@@ -167,9 +167,9 @@ function resolveCallback(
  *
  * CallbackFn allows Promise returns because the same callback chain serves
  * both sync events (validation, initialize) and async events (save, destroy).
- * The sync API (run/runBefore/runAfter) ignores Promise returns — only use
- * sync callbacks on sync events. The async API (runAsync/runBeforeAsync/
- * runAfterAsync) properly awaits Promises.
+ * The sync API (runCallbacks/runBefore/runAfter) ignores Promise returns —
+ * only use sync callbacks on sync events. The async API
+ * (runCallbacksAsync/runBeforeAsync/runAfterAsync) properly awaits Promises.
  *
  * AroundCallbackFn's proceed() returns void | Promise<void> because the
  * wrapped block may be async (e.g., DB operations in persistence). Around

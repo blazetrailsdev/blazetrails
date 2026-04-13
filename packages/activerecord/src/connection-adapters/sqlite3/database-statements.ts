@@ -9,6 +9,7 @@
  */
 
 import type { Result } from "../../result.js";
+import { stripSqlComments } from "../sql-classification.js";
 
 // Matches Rails' build_read_query_regexp(:pragma) which combines
 // DEFAULT_READ_QUERY [:begin, :commit, :explain, :release, :rollback, :savepoint, :select, :with]
@@ -18,6 +19,7 @@ const READ_QUERY =
 
 type ExecutableAdapter = {
   execute(sql: string, binds?: unknown[]): Promise<unknown>;
+  executeMutation(sql: string, binds?: unknown[]): Promise<unknown>;
 };
 
 export interface DatabaseStatements {
@@ -30,33 +32,33 @@ export interface DatabaseStatements {
 }
 
 export function isWriteQuery(sql: string): boolean {
-  return !READ_QUERY.test(sql);
+  return !READ_QUERY.test(stripSqlComments(sql));
 }
 
 export async function beginDbTransaction(adapter: ExecutableAdapter): Promise<void> {
-  await adapter.execute("BEGIN IMMEDIATE TRANSACTION");
+  await adapter.executeMutation("BEGIN IMMEDIATE TRANSACTION");
 }
 
 export async function beginDeferredTransaction(
   adapter: ExecutableAdapter,
   _isolation?: string | null,
 ): Promise<void> {
-  await adapter.execute("BEGIN DEFERRED TRANSACTION");
+  await adapter.executeMutation("BEGIN DEFERRED TRANSACTION");
 }
 
 export async function beginIsolatedDbTransaction(
   adapter: ExecutableAdapter,
   _isolation: string,
 ): Promise<void> {
-  await adapter.execute("BEGIN DEFERRED TRANSACTION");
+  await adapter.executeMutation("BEGIN DEFERRED TRANSACTION");
 }
 
 export async function commitDbTransaction(adapter: ExecutableAdapter): Promise<void> {
-  await adapter.execute("COMMIT TRANSACTION");
+  await adapter.executeMutation("COMMIT TRANSACTION");
 }
 
 export async function execRollbackDbTransaction(adapter: ExecutableAdapter): Promise<void> {
-  await adapter.execute("ROLLBACK TRANSACTION");
+  await adapter.executeMutation("ROLLBACK TRANSACTION");
 }
 
 export function highPrecisionCurrentTimestamp(): string {

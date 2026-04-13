@@ -403,14 +403,14 @@ export class SchemaStatements {
     const ifExists = typeof toTableOrOptions === "object" && toTableOrOptions?.ifExists === true;
     let name: string;
     if (typeof toTableOrOptions === "string") {
-      const column = `${toTableOrOptions.replace(/s$/, "")}_id`;
+      const column = this.foreignKeyColumnFor(toTableOrOptions);
       name = `fk_${fromTable}_${column}`;
     } else if (toTableOrOptions?.name) {
       name = toTableOrOptions.name;
     } else if (toTableOrOptions?.column) {
       name = `fk_${fromTable}_${toTableOrOptions.column}`;
     } else if (toTableOrOptions?.toTable) {
-      const column = `${toTableOrOptions.toTable.replace(/s$/, "")}_id`;
+      const column = this.foreignKeyColumnFor(toTableOrOptions.toTable);
       name = `fk_${fromTable}_${column}`;
     } else {
       throw new Error("removeForeignKey requires a target table or options");

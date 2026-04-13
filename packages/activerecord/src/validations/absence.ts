@@ -10,11 +10,7 @@ import { AbsenceValidator as BaseAbsenceValidator } from "@blazetrails/activemod
 export class AbsenceValidator extends BaseAbsenceValidator {
   validateEach(record: any, attribute: string, value: unknown): void {
     let associationOrValue = value;
-    // Rails: record.class._reflect_on_association(attribute)
-    if (
-      record.constructor._reflectOnAssociation?.(attribute) ??
-      record.constructor._associations?.some((a: any) => a.name === attribute)
-    ) {
+    if (record.constructor._reflectOnAssociation?.(attribute)) {
       const arr = Array.isArray(value) ? value : value != null ? [value] : [];
       associationOrValue = arr.filter(
         (v: any) => !(typeof v?.markedForDestruction === "function" && v.markedForDestruction()),

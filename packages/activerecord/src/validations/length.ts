@@ -13,9 +13,7 @@ export class LengthValidator extends BaseLengthValidator {
     // readAttributeForValidation resolves collection proxies to their
     // target arrays, so we check via association reflection whether
     // the attribute is an association and filter destroyed records.
-    const isAssoc =
-      record.constructor._reflectOnAssociation?.(attribute) ??
-      record.constructor._associations?.some((a: any) => a.name === attribute);
+    const isAssoc = record.constructor._reflectOnAssociation?.(attribute);
     if (isAssoc && Array.isArray(value)) {
       associationOrValue = value.filter(
         (v: any) => !(typeof v?.markedForDestruction === "function" && v.markedForDestruction()),

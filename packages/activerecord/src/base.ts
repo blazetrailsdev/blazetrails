@@ -688,6 +688,13 @@ export class Base extends Model {
    * Registers AssociatedValidator through validatesWith (matching Rails'
    * validates_with pattern) so on:/if:/unless:/message: options all work.
    */
+  /**
+   * Mirrors: ActiveRecord::Reflection::ClassMethods#_reflect_on_association
+   */
+  static _reflectOnAssociation(name: string): any {
+    return (this as any)._reflections?.[name] ?? null;
+  }
+
   static validatesAssociated(...args: (string | Record<string, unknown>)[]): void {
     const last = args[args.length - 1];
     const opts =

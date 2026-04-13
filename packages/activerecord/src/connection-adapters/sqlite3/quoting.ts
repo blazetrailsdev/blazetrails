@@ -93,9 +93,10 @@ export function quoteDefaultExpression(value: unknown): string {
   if (value === undefined || value === null) return "NULL";
   if (typeof value === "function") {
     const result = (value as () => unknown)();
+    if (result === undefined || result === null) return "NULL";
     const str = String(result);
-    if (/^\w+\(/.test(str)) return `(${str})`;
-    return quote(result);
+    if (/^\w+\(.*\)$/.test(str)) return `(${str})`;
+    return str;
   }
   return quote(value);
 }

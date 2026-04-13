@@ -53,12 +53,11 @@ export function execute(sql: string): string {
   return sql;
 }
 
-export function resetIsolationLevel(
+export async function resetIsolationLevel(
   adapter: { execute(sql: string, binds?: unknown[]): Promise<unknown> },
   previousReadUncommitted: number | null,
 ): Promise<void> {
   if (previousReadUncommitted !== null) {
-    return adapter.execute(`PRAGMA read_uncommitted=${previousReadUncommitted}`) as Promise<any>;
+    await adapter.execute(`PRAGMA read_uncommitted=${previousReadUncommitted}`);
   }
-  return Promise.resolve();
 }

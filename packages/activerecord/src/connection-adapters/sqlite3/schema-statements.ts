@@ -23,45 +23,67 @@ export interface SchemaStatements {
   foreignKeys(tableName: string): Promise<unknown[]>;
 }
 
+interface SQLite3SchemaAdapter extends DatabaseAdapter {
+  addForeignKey(
+    fromTable: string,
+    toTable: string,
+    options?: Record<string, unknown>,
+  ): Promise<void>;
+  removeForeignKey(
+    fromTable: string,
+    toTableOrOptions?: string | Record<string, unknown>,
+  ): Promise<void>;
+  checkConstraints(tableName: string): Promise<CheckConstraintDefinition[]>;
+  addCheckConstraint(
+    tableName: string,
+    expression: string,
+    options?: Record<string, unknown>,
+  ): Promise<void>;
+  removeCheckConstraint(
+    tableName: string,
+    expressionOrOptions?: string | Record<string, unknown>,
+  ): Promise<void>;
+}
+
 export async function addForeignKey(
-  adapter: DatabaseAdapter,
+  adapter: SQLite3SchemaAdapter,
   fromTable: string,
   toTable: string,
   options?: Record<string, unknown>,
 ): Promise<void> {
-  return (adapter as any).addForeignKey(fromTable, toTable, options);
+  return adapter.addForeignKey(fromTable, toTable, options);
 }
 
 export async function removeForeignKey(
-  adapter: DatabaseAdapter,
+  adapter: SQLite3SchemaAdapter,
   fromTable: string,
   toTableOrOptions?: string | Record<string, unknown>,
 ): Promise<void> {
-  return (adapter as any).removeForeignKey(fromTable, toTableOrOptions);
+  return adapter.removeForeignKey(fromTable, toTableOrOptions);
 }
 
 export async function checkConstraints(
-  adapter: DatabaseAdapter,
+  adapter: SQLite3SchemaAdapter,
   tableName: string,
 ): Promise<CheckConstraintDefinition[]> {
-  return (adapter as any).checkConstraints(tableName);
+  return adapter.checkConstraints(tableName);
 }
 
 export async function addCheckConstraint(
-  adapter: DatabaseAdapter,
+  adapter: SQLite3SchemaAdapter,
   tableName: string,
   expression: string,
   options?: Record<string, unknown>,
 ): Promise<void> {
-  return (adapter as any).addCheckConstraint(tableName, expression, options);
+  return adapter.addCheckConstraint(tableName, expression, options);
 }
 
 export async function removeCheckConstraint(
-  adapter: DatabaseAdapter,
+  adapter: SQLite3SchemaAdapter,
   tableName: string,
   expressionOrOptions?: string | Record<string, unknown>,
 ): Promise<void> {
-  return (adapter as any).removeCheckConstraint(tableName, expressionOrOptions);
+  return adapter.removeCheckConstraint(tableName, expressionOrOptions);
 }
 
 export async function isVirtualTableExists(

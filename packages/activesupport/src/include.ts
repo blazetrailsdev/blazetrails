@@ -26,8 +26,8 @@ type Module = Record<string, Function>;
  * Symbol keys for Ruby's Module#included and Module#extended callbacks.
  * Using symbols avoids collisions with real method names.
  */
-export const included = Symbol("included");
-export const extended = Symbol("extended");
+export const included = Symbol.for("@blazetrails/activesupport:included");
+export const extended = Symbol.for("@blazetrails/activesupport:extended");
 
 /**
  * Derive instance method types from an included module object.
@@ -37,7 +37,12 @@ export const extended = Symbol("extended");
  *   export interface Relation<T> extends Included<typeof QueryMethodBangs> {}
  */
 export type Included<M extends Module> = {
-  [K in keyof M]: M[K] extends (this: any, ...args: infer A) => infer R ? (...args: A) => R : never;
+  [K in keyof M as K extends string ? K : never]: M[K] extends (
+    this: any,
+    ...args: infer A
+  ) => infer R
+    ? (...args: A) => R
+    : never;
 };
 
 export function include(klass: AnyClass, mod: Module): void {
@@ -72,7 +77,12 @@ export function include(klass: AnyClass, mod: Module): void {
  *   const TypedBase = Base as unknown as BaseStatic;
  */
 export type Extended<M extends Module> = {
-  [K in keyof M]: M[K] extends (this: any, ...args: infer A) => infer R ? (...args: A) => R : never;
+  [K in keyof M as K extends string ? K : never]: M[K] extends (
+    this: any,
+    ...args: infer A
+  ) => infer R
+    ? (...args: A) => R
+    : never;
 };
 
 /**

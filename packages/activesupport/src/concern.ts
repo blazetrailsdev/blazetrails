@@ -39,11 +39,20 @@ const PREPENDED_BLOCK = Symbol("prependedBlock");
  * semantics have no equivalent in the plain include() helper.
  */
 function prependMethods(klass: any, methods: Record<string, Function>): void {
+  const descriptor = {
+    value: undefined as any,
+    writable: true,
+    configurable: true,
+    enumerable: false,
+  };
   for (const [name, fn] of Object.entries(methods)) {
-    if (klass.prototype[name]) {
-      klass.prototype[`_super_${name}`] = klass.prototype[name];
+    const existing = klass.prototype[name];
+    if (existing) {
+      descriptor.value = existing;
+      Object.defineProperty(klass.prototype, `_super_${name}`, descriptor);
     }
-    klass.prototype[name] = fn;
+    descriptor.value = fn;
+    Object.defineProperty(klass.prototype, name, descriptor);
   }
 }
 

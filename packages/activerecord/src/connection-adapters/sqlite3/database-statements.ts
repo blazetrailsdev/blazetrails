@@ -6,8 +6,11 @@
 
 import type { Result } from "../../result.js";
 
+// Matches Rails' build_read_query_regexp(:pragma) which combines
+// DEFAULT_READ_QUERY [:begin, :commit, :explain, :release, :rollback, :savepoint, :select, :with]
+// with SQLite3's :pragma addition.
 const READ_QUERY =
-  /^\s*(SELECT|PRAGMA|EXPLAIN|DESCRIBE|DESC|SHOW|WITH(?:\s+RECURSIVE)?(?:\s+\w+\s+AS\s*\([\s\S]*?\))*\s+SELECT)\b/i;
+  /^(?:[(\s]|\/\*[\s\S]*?\*\/)*(?:begin|commit|explain|release|rollback|savepoint|select|with|pragma)\b/i;
 
 export interface DatabaseStatements {
   execQuery(sql: string, name?: string | null): Promise<Result>;

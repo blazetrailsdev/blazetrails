@@ -46,12 +46,15 @@ export class UserProvidedDefault extends FromUser {
    * defaults re-evaluate — called by AttributeSet.deepDup.
    */
   dupForDeepClone(): UserProvidedDefault {
-    return new UserProvidedDefault(
-      this.name,
-      this.userProvidedValue,
-      this.type,
-      this.getOriginalAttribute(),
-    );
+    // Functions re-evaluate on each construction. Non-function objects need
+    // cloning to prevent cross-instance mutation (JS has no Ruby-style dup
+    // that copies value semantics for built-in types).
+    const val = this.userProvidedValue;
+    const clonedVal =
+      typeof val === "function" || val === null || typeof val !== "object"
+        ? val
+        : structuredClone(val);
+    return new UserProvidedDefault(this.name, clonedVal, this.type, this.getOriginalAttribute());
   }
 
   marshalDump(): [string, unknown, Type, Attribute | null] {

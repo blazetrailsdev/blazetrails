@@ -1637,8 +1637,8 @@ describe("AttributeMethodsTest", () => {
     expect(types).toHaveProperty("id");
     expect(types).toHaveProperty("name");
     expect(types).toHaveProperty("age");
-    expect((types as any).name.cast("42")).toBe("42");
-    expect((types as any).age.cast("42")).toBe(42);
+    expect(types["name"].cast("42")).toBe("42");
+    expect(types["age"].cast("42")).toBe(42);
   });
 });
 

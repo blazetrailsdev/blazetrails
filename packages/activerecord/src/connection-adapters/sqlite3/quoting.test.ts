@@ -37,6 +37,11 @@ describe("SQLite3::Quoting", () => {
       expect(matcher.test('name AS "full_name"')).toBe(true);
     });
 
+    it("matches column with alias without AS keyword", () => {
+      expect(matcher.test("name full_name")).toBe(true);
+      expect(matcher.test('name "alias"')).toBe(true);
+    });
+
     it("matches comma-separated columns", () => {
       expect(matcher.test("name, age")).toBe(true);
       expect(matcher.test("name, age, email")).toBe(true);
@@ -80,6 +85,11 @@ describe("SQLite3::Quoting", () => {
       expect(matcher.test("COALESCE((SELECT password FROM users), 1)")).toBe(false);
       expect(matcher.test("func(1 UNION SELECT secret)")).toBe(false);
       expect(matcher.test("func(DROP TABLE users)")).toBe(false);
+    });
+
+    it("allows SQL keywords inside string literals in function args", () => {
+      expect(matcher.test("IFNULL(name, 'from')")).toBe(true);
+      expect(matcher.test("COALESCE(x, 'select')")).toBe(true);
       expect(matcher.test("name/**/UNION/**/SELECT")).toBe(false);
     });
 

@@ -145,8 +145,9 @@ function skipBalancedParens(s: string, pos: number): number {
     i++;
   }
   if (depth !== 0) return -1;
-  // Reject if the paren contents contain dangerous SQL keywords
-  const contents = s.slice(start, i - 1);
+  // Strip string literals before checking for dangerous keywords
+  // so that IFNULL(name, 'from') is not rejected.
+  const contents = s.slice(start, i - 1).replace(/'[^']*'/g, "");
   if (DANGEROUS_KEYWORDS.test(contents)) return -1;
   return i;
 }
@@ -223,17 +224,32 @@ function matchColumnList(s: string, allowOrder: boolean): boolean {
     if (exprEnd === -1) return false;
     i = skipWhitespace(s, exprEnd);
 
-    // optional AS alias
-    if (/^AS\b/i.test(s.slice(i))) {
-      i = skipWhitespace(s, i + 2);
-      if (s[i] === '"') {
+    // optional [AS] alias — Rails: (?:(?:\s+AS)?\s+(?:\w+|"\w+"))?
+    {
+      const saved = i;
+      let hasAs = false;
+      if (/^AS\b/i.test(s.slice(i))) {
+        i = skipWhitespace(s, i + 2);
+        hasAs = true;
+      }
+      // Try to consume an alias identifier (not a keyword or comma)
+      const peek = s.slice(i);
+      if (peek[0] === '"') {
         const end = skipQuotedIdentifier(s, i);
-        if (end === -1) return false;
-        i = skipWhitespace(s, end);
+        if (end !== -1) {
+          i = skipWhitespace(s, end);
+        } else if (hasAs) {
+          return false; // AS without valid alias
+        }
       } else {
-        const alias = s.slice(i).match(/^\w+/);
-        if (!alias) return false;
-        i = skipWhitespace(s, i + alias[0].length);
+        const alias = peek.match(/^\w+/);
+        if (alias && !/^(?:ASC|DESC|COLLATE|NULLS|,)\b/i.test(alias[0])) {
+          i = skipWhitespace(s, i + alias[0].length);
+        } else if (hasAs) {
+          return false; // AS without valid alias
+        } else {
+          i = saved; // no alias found, backtrack
+        }
       }
     }
 

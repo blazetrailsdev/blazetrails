@@ -138,18 +138,33 @@ function skipBalancedParens(s: string, pos: number): number {
   return depth === 0 ? i : -1;
 }
 
+function skipQuotedIdentifier(s: string, pos: number): number {
+  if (s[pos] !== '"') return -1;
+  let i = pos + 1;
+  while (i < s.length) {
+    if (s[i] === '"') {
+      if (s[i + 1] === '"') {
+        i += 2; // escaped ""
+      } else {
+        return i + 1;
+      }
+    } else {
+      i++;
+    }
+  }
+  return -1; // unclosed quote
+}
+
 function matchColumnExpr(s: string, pos: number): number {
   let i = pos;
   // optional table qualifier: word. or "word".
   if (s[i] === '"') {
-    const close = s.indexOf('"', i + 1);
-    if (close === -1) return -1;
-    if (s[close + 1] === ".") {
-      // "table".column — consume qualifier
-      i = close + 2;
+    const end = skipQuotedIdentifier(s, i);
+    if (end === -1) return -1;
+    if (s[end] === ".") {
+      i = end + 1;
     } else {
-      // just "column" — no qualifier
-      return close + 1;
+      return end;
     }
   } else {
     const m = s.slice(i).match(/^\w+/);
@@ -167,9 +182,7 @@ function matchColumnExpr(s: string, pos: number): number {
   }
   // column name after qualifier: word or "word", or function call: word(...)
   if (s[i] === '"') {
-    const close = s.indexOf('"', i + 1);
-    if (close === -1) return -1;
-    return close + 1;
+    return skipQuotedIdentifier(s, i);
   }
   const nameMatch = s.slice(i).match(/^\w+/);
   if (!nameMatch) return -1;
@@ -201,9 +214,9 @@ function matchColumnList(s: string, allowOrder: boolean): boolean {
     if (/^AS\b/i.test(s.slice(i))) {
       i = skipWhitespace(s, i + 2);
       if (s[i] === '"') {
-        const close = s.indexOf('"', i + 1);
-        if (close === -1) return false;
-        i = skipWhitespace(s, close + 1);
+        const end = skipQuotedIdentifier(s, i);
+        if (end === -1) return false;
+        i = skipWhitespace(s, end);
       } else {
         const alias = s.slice(i).match(/^\w+/);
         if (!alias) return false;

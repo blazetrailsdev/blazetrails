@@ -22,6 +22,11 @@ describe("SQLite3::Quoting", () => {
       expect(matcher.test('"name"')).toBe(true);
     });
 
+    it("matches quoted identifiers with escaped quotes", () => {
+      expect(matcher.test('"a""b"')).toBe(true);
+      expect(matcher.test('"table"."col""name"')).toBe(true);
+    });
+
     it("matches table-qualified columns", () => {
       expect(matcher.test("users.name")).toBe(true);
       expect(matcher.test('"users".name')).toBe(true);

@@ -913,11 +913,12 @@ export class SQLite3Adapter
 
     const existingFks = await this.foreignKeys(fromTable);
     const fkNames = this._parseForeignKeyNames(fromTable);
+    const { bare: bareFrom } = this._splitTableName(fromTable);
 
     const fkToRemove = existingFks.find((fk) => {
       const fkCol = Array.isArray(fk.column) ? fk.column[0] : fk.column;
       if (name) {
-        const parsedName = fkNames.get(fkCol) ?? `fk_${fromTable}_${fkCol}`;
+        const parsedName = fkNames.get(fkCol) ?? `fk_${bareFrom}_${fkCol}`;
         return parsedName === name;
       }
       if (column) return fkCol === column;
@@ -942,15 +943,16 @@ export class SQLite3Adapter
   async addCheckConstraint(
     tableName: string,
     expression: string,
-    options: { name?: string } = {},
+    options: { name?: string; validate?: boolean } = {},
   ): Promise<void> {
+    const { name } = options;
     await this.alterTable(
       tableName,
       () => {},
       undefined,
       undefined,
       (definition) => {
-        definition.checkConstraint(expression, options);
+        definition.checkConstraint(expression, { name });
       },
     );
   }
@@ -1097,8 +1099,8 @@ export class SQLite3Adapter
         let fkSql = "";
         if (fkDef.name) fkSql += `CONSTRAINT ${quoteColumnName(fkDef.name)} `;
         fkSql += `FOREIGN KEY(${quoteColumnName(fkDef.column)}) REFERENCES ${quoteTableName(fkDef.toTable)}(${quoteColumnName(fkDef.primaryKey)})`;
-        if (fkDef.onDelete) fkSql += ` ON DELETE ${fkDef.onDelete}`;
-        if (fkDef.onUpdate) fkSql += ` ON UPDATE ${fkDef.onUpdate}`;
+        if (fkDef.onDelete) fkSql += ` ON DELETE ${normalizeReferentialAction(fkDef.onDelete)}`;
+        if (fkDef.onUpdate) fkSql += ` ON UPDATE ${normalizeReferentialAction(fkDef.onUpdate)}`;
         colDefs.push(fkSql);
       }
       for (const chkDef of tmpDef.checkConstraints) {
@@ -1114,7 +1116,7 @@ export class SQLite3Adapter
     // Use savepoint if already inside a transaction (e.g. migration),
     // since SQLite doesn't allow nested BEGIN.
     const alreadyInTransaction = this._inTransaction;
-    const savepointName = `alter_table_${bareTable}`;
+    const savepointName = `alter_table_${bareTable.replace(/[^a-zA-Z0-9_]/g, "_")}`;
     if (alreadyInTransaction) {
       await this.createSavepoint(savepointName);
     } else {
@@ -1204,4 +1206,16 @@ export class SQLite3Integer {
     const v = BigInt(value);
     return v >= SQLite3Integer.MIN && v <= SQLite3Integer.MAX;
   }
+}
+
+const REFERENTIAL_ACTION_MAP: Record<string, string> = {
+  nullify: "SET NULL",
+  cascade: "CASCADE",
+  restrict: "RESTRICT",
+  set_default: "SET DEFAULT",
+  no_action: "NO ACTION",
+};
+
+function normalizeReferentialAction(action: string): string {
+  return REFERENTIAL_ACTION_MAP[action.toLowerCase()] ?? action.toUpperCase();
 }

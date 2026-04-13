@@ -394,6 +394,7 @@ export class SchemaStatements {
     if (typeof adapter.removeForeignKey === "function") {
       return adapter.removeForeignKey(fromTable, toTableOrOptions);
     }
+    const ifExists = typeof toTableOrOptions === "object" && toTableOrOptions?.ifExists === true;
     let name: string;
     if (typeof toTableOrOptions === "string") {
       const column = `${toTableOrOptions.replace(/s$/, "")}_id`;
@@ -402,11 +403,15 @@ export class SchemaStatements {
       name = toTableOrOptions.name;
     } else if (toTableOrOptions?.column) {
       name = `fk_${fromTable}_${toTableOrOptions.column}`;
+    } else if (toTableOrOptions?.toTable) {
+      const column = `${toTableOrOptions.toTable.replace(/s$/, "")}_id`;
+      name = `fk_${fromTable}_${column}`;
     } else {
       throw new Error("removeForeignKey requires a target table or options");
     }
+    const ifExistsSql = ifExists ? " IF EXISTS" : "";
     await this.adapter.executeMutation(
-      `ALTER TABLE ${this._qi(fromTable)} DROP CONSTRAINT ${this._qi(name)}`,
+      `ALTER TABLE ${this._qi(fromTable)} DROP CONSTRAINT${ifExistsSql} ${this._qi(name)}`,
     );
   }
 
@@ -435,6 +440,8 @@ export class SchemaStatements {
     if (typeof adapter.removeCheckConstraint === "function") {
       return adapter.removeCheckConstraint(tableName, expressionOrOptions);
     }
+    const ifExists =
+      typeof expressionOrOptions === "object" && expressionOrOptions?.ifExists === true;
     let name: string;
     if (typeof expressionOrOptions === "string") {
       name = this._checkConstraintName(tableName, expressionOrOptions);
@@ -443,8 +450,9 @@ export class SchemaStatements {
     } else {
       throw new Error("removeCheckConstraint requires either an expression or { name } option");
     }
+    const ifExistsSql = ifExists ? " IF EXISTS" : "";
     await this.adapter.executeMutation(
-      `ALTER TABLE ${this._qi(tableName)} DROP CONSTRAINT ${this._qi(name)}`,
+      `ALTER TABLE ${this._qi(tableName)} DROP CONSTRAINT${ifExistsSql} ${this._qi(name)}`,
     );
   }
 

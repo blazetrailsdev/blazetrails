@@ -799,6 +799,43 @@ export class SQLite3Adapter
     return base;
   }
 
+  private _getCreateTableSql(tableName: string): string | null {
+    const { schema, bare } = this._splitTableName(tableName);
+    let sql: string;
+    if (schema) {
+      sql =
+        schema.toLowerCase() === "temp"
+          ? `SELECT sql FROM sqlite_temp_master WHERE type='table' AND name=${quoteString(bare)}`
+          : `SELECT sql FROM ${quoteColumnName(schema)}.sqlite_master WHERE type='table' AND name=${quoteString(bare)}`;
+    } else {
+      sql = `SELECT sql FROM sqlite_temp_master WHERE type='table' AND name=${quoteString(bare)}
+             UNION ALL
+             SELECT sql FROM sqlite_master WHERE type='table' AND name=${quoteString(bare)}`;
+    }
+    const row = this.db.prepare(sql).get() as { sql: string } | undefined;
+    return row?.sql ?? null;
+  }
+
+  /**
+   * Parse FK constraint names from CREATE TABLE SQL.
+   * SQLite's PRAGMA foreign_key_list doesn't expose names, but the
+   * CREATE TABLE DDL does when CONSTRAINT <name> was used.
+   * Returns a map from column name → constraint name.
+   */
+  private _parseForeignKeyNames(tableName: string): Map<string, string> {
+    const createSql = this._getCreateTableSql(tableName);
+    const names = new Map<string, string>();
+    if (!createSql) return names;
+    const regex = /CONSTRAINT\s+(?:"((?:[^"]|"")*)"|(\w+))\s+FOREIGN\s+KEY\s*\(\s*"?(\w+)"?\s*\)/gi;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(createSql)) !== null) {
+      const name = match[1] ? match[1].replace(/""/g, '"') : match[2];
+      const col = match[3];
+      names.set(col, name);
+    }
+    return names;
+  }
+
   private quoteDefault(value: unknown): string {
     if (value === null) return "NULL";
     if (typeof value === "string") return quoteString(value);
@@ -818,21 +855,14 @@ export class SQLite3Adapter
    * Mirrors: ActiveRecord::ConnectionAdapters::SQLite3::SchemaStatements#check_constraints
    */
   async checkConstraints(tableName: string): Promise<CheckConstraintDefinition[]> {
-    const { bare } = this._splitTableName(tableName);
-    const row = this.db
-      .prepare(
-        `SELECT sql FROM sqlite_master WHERE type='table' AND name=${quoteString(bare)}
-         UNION ALL
-         SELECT sql FROM sqlite_temp_master WHERE type='table' AND name=${quoteString(bare)}`,
-      )
-      .get() as { sql: string } | undefined;
-    if (!row?.sql) return [];
+    const row = this._getCreateTableSql(tableName);
+    if (!row) return [];
 
     const results: CheckConstraintDefinition[] = [];
     const regex =
       /CONSTRAINT\s+(?:"((?:[^"]|"")*)"|(\w+))\s+CHECK\s*\(((?:[^()]|\((?:[^()]|\([^()]*\))*\))*)\)/gi;
     let match: RegExpExecArray | null;
-    while ((match = regex.exec(row.sql)) !== null) {
+    while ((match = regex.exec(row)) !== null) {
       const name = match[1] ? match[1].replace(/""/g, '"') : match[2];
       results.push(new CheckConstraintDefinition(tableName, match[3].trim(), name));
     }
@@ -882,10 +912,14 @@ export class SQLite3Adapter
     }
 
     const existingFks = await this.foreignKeys(fromTable);
+    const fkNames = this._parseForeignKeyNames(fromTable);
 
     const fkToRemove = existingFks.find((fk) => {
       const fkCol = Array.isArray(fk.column) ? fk.column[0] : fk.column;
-      if (name) return `fk_${fromTable}_${fkCol}` === name;
+      if (name) {
+        const parsedName = fkNames.get(fkCol) ?? `fk_${fromTable}_${fkCol}`;
+        return parsedName === name;
+      }
       if (column) return fkCol === column;
       if (explicitToTable) return fk.toTable === explicitToTable;
       return false;
@@ -1031,14 +1065,20 @@ export class SQLite3Adapter
     const fks = overrideForeignKeys ?? (await this.foreignKeys(tableName));
     const checks = overrideCheckConstraints ?? (await this.checkConstraints(tableName));
 
+    // PRAGMA foreign_key_list doesn't expose constraint names, but the
+    // CREATE TABLE DDL does. Parse names so they survive the rebuild.
+    const fkNames = this._parseForeignKeyNames(tableName);
+
     for (const fk of fks) {
       const cols = Array.isArray(fk.column) ? fk.column : [fk.column];
-      // Skip FKs referencing columns that no longer exist
       if (!cols.every((c) => colNames.includes(c))) continue;
       const pks = Array.isArray(fk.primaryKey) ? fk.primaryKey : [fk.primaryKey];
       const colList = cols.map((c) => quoteColumnName(c)).join(", ");
       const pkList = pks.map((c) => quoteColumnName(c)).join(", ");
-      let fkSql = `FOREIGN KEY(${colList}) REFERENCES ${quoteTableName(fk.toTable)}(${pkList})`;
+      let fkSql = "";
+      const fkName = fkNames.get(cols[0]) ?? `fk_${bareTable}_${cols[0]}`;
+      fkSql += `CONSTRAINT ${quoteColumnName(fkName)} `;
+      fkSql += `FOREIGN KEY(${colList}) REFERENCES ${quoteTableName(fk.toTable)}(${pkList})`;
       if (fk.onDelete) fkSql += ` ON DELETE ${fk.onDelete}`;
       if (fk.onUpdate) fkSql += ` ON UPDATE ${fk.onUpdate}`;
       colDefs.push(fkSql);
@@ -1071,7 +1111,15 @@ export class SQLite3Adapter
       .filter((n) => colNames.includes(n));
 
     // Rails: transaction { disable_referential_integrity { move_table(...) } }
-    this.db.exec("BEGIN");
+    // Use savepoint if already inside a transaction (e.g. migration),
+    // since SQLite doesn't allow nested BEGIN.
+    const alreadyInTransaction = this._inTransaction;
+    const savepointName = `alter_table_${bareTable}`;
+    if (alreadyInTransaction) {
+      await this.createSavepoint(savepointName);
+    } else {
+      await this.beginTransaction();
+    }
     try {
       await this.disableReferentialIntegrity(async () => {
         this.db.exec(`CREATE TABLE ${qTmp} (${colDefs.join(", ")})`);
@@ -1082,9 +1130,17 @@ export class SQLite3Adapter
         this.db.exec(`DROP TABLE ${qTable}`);
         this.db.exec(`ALTER TABLE ${qTmp} RENAME TO ${quoteColumnName(bareTable)}`);
       });
-      this.db.exec("COMMIT");
+      if (alreadyInTransaction) {
+        await this.releaseSavepoint(savepointName);
+      } else {
+        await this.commit();
+      }
     } catch (err) {
-      this.db.exec("ROLLBACK");
+      if (alreadyInTransaction) {
+        await this.rollbackToSavepoint(savepointName);
+      } else {
+        await this.rollback();
+      }
       throw err;
     }
 

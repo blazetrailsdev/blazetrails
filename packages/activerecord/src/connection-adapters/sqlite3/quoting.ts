@@ -144,13 +144,28 @@ function matchColumnExpr(s: string, pos: number): number {
   if (s[i] === '"') {
     const close = s.indexOf('"', i + 1);
     if (close === -1) return -1;
-    i = close + 1;
-    if (s[i] === ".") i++;
+    if (s[close + 1] === ".") {
+      // "table".column — consume qualifier
+      i = close + 2;
+    } else {
+      // just "column" — no qualifier
+      return close + 1;
+    }
   } else {
-    const m = s.slice(i).match(/^\w+\./);
-    if (m) i += m[0].length;
+    const m = s.slice(i).match(/^\w+/);
+    if (!m) return -1;
+    if (s[i + m[0].length] === ".") {
+      // table.column — consume qualifier
+      i += m[0].length + 1;
+    } else if (s[i + m[0].length] === "(") {
+      // function call: word(...)
+      return skipBalancedParens(s, i + m[0].length);
+    } else {
+      // just a column name
+      return i + m[0].length;
+    }
   }
-  // column name: word or "word", or function call: word(...)
+  // column name after qualifier: word or "word", or function call: word(...)
   if (s[i] === '"') {
     const close = s.indexOf('"', i + 1);
     if (close === -1) return -1;

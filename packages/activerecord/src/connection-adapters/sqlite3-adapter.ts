@@ -829,10 +829,12 @@ export class SQLite3Adapter
     if (!row?.sql) return [];
 
     const results: CheckConstraintDefinition[] = [];
-    const regex = /CONSTRAINT\s+"?(\w+)"?\s+CHECK\s*\(((?:[^()]|\((?:[^()]|\([^()]*\))*\))*)\)/gi;
+    const regex =
+      /CONSTRAINT\s+(?:"((?:[^"]|"")*)"|(\w+))\s+CHECK\s*\(((?:[^()]|\((?:[^()]|\([^()]*\))*\))*)\)/gi;
     let match: RegExpExecArray | null;
     while ((match = regex.exec(row.sql)) !== null) {
-      results.push(new CheckConstraintDefinition(tableName, match[2].trim(), match[1]));
+      const name = match[1] ? match[1].replace(/""/g, '"') : match[2];
+      results.push(new CheckConstraintDefinition(tableName, match[3].trim(), name));
     }
     return results;
   }
@@ -864,34 +866,28 @@ export class SQLite3Adapter
     toTableOrOptions?: string | { column?: string; name?: string },
   ): Promise<void> {
     const existingFks = await this.foreignKeys(fromTable);
-    let toTable: string | undefined;
+    let explicitToTable: string | undefined;
     let column: string | undefined;
     let name: string | undefined;
 
     if (typeof toTableOrOptions === "string") {
-      toTable = toTableOrOptions;
+      explicitToTable = toTableOrOptions;
     } else if (toTableOrOptions) {
       column = toTableOrOptions.column;
       name = toTableOrOptions.name;
-      if (column) {
-        toTable = column.replace(/_id$/, "");
-        toTable = toTable.endsWith("s") ? toTable : toTable + "s";
-      }
     }
 
     const fkToRemove = existingFks.find((fk) => {
-      if (name) {
-        const fkCol = Array.isArray(fk.column) ? fk.column[0] : fk.column;
-        return `fk_${fromTable}_${fkCol}` === name;
-      }
-      if (toTable) return fk.toTable === toTable;
-      if (column) return (Array.isArray(fk.column) ? fk.column[0] : fk.column) === column;
+      const fkCol = Array.isArray(fk.column) ? fk.column[0] : fk.column;
+      if (name) return `fk_${fromTable}_${fkCol}` === name;
+      if (column) return fkCol === column;
+      if (explicitToTable) return fk.toTable === explicitToTable;
       return false;
     });
 
     if (!fkToRemove) {
       throw new Error(
-        `Table '${fromTable}' has no foreign key for ${toTable || JSON.stringify(toTableOrOptions)}`,
+        `Table '${fromTable}' has no foreign key for ${explicitToTable || JSON.stringify(toTableOrOptions)}`,
       );
     }
 
@@ -1048,7 +1044,9 @@ export class SQLite3Adapter
       const tmpDef = new TableDefinition(bareTable);
       extraDefinition(tmpDef);
       for (const fkDef of tmpDef.foreignKeys) {
-        let fkSql = `FOREIGN KEY(${quoteColumnName(fkDef.column)}) REFERENCES ${quoteTableName(fkDef.toTable)}(${quoteColumnName(fkDef.primaryKey)})`;
+        let fkSql = "";
+        if (fkDef.name) fkSql += `CONSTRAINT ${quoteColumnName(fkDef.name)} `;
+        fkSql += `FOREIGN KEY(${quoteColumnName(fkDef.column)}) REFERENCES ${quoteTableName(fkDef.toTable)}(${quoteColumnName(fkDef.primaryKey)})`;
         if (fkDef.onDelete) fkSql += ` ON DELETE ${fkDef.onDelete}`;
         if (fkDef.onUpdate) fkSql += ` ON UPDATE ${fkDef.onUpdate}`;
         colDefs.push(fkSql);

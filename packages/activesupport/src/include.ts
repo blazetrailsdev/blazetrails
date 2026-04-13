@@ -23,6 +23,13 @@ type AnyClass = new (...args: any[]) => any;
 type Module = Record<string, Function>;
 
 /**
+ * Symbol keys for Ruby's Module#included and Module#extended callbacks.
+ * Using symbols avoids collisions with real method names.
+ */
+export const included = Symbol("included");
+export const extended = Symbol("extended");
+
+/**
  * Derive instance method types from an included module object.
  * Strips the `this` parameter from each function signature.
  *
@@ -46,6 +53,11 @@ export function include(klass: AnyClass, mod: Module): void {
     };
   }
   Object.defineProperties(klass.prototype, descriptors);
+
+  // Ruby's Module#included(base) — fires after methods are copied
+  if (typeof (mod as any)[included] === "function") {
+    (mod as any)[included](klass);
+  }
 }
 
 /**
@@ -84,5 +96,10 @@ export function extend(klass: AnyClass | object, mod: Module): void {
       configurable: true,
       enumerable: false,
     });
+  }
+
+  // Ruby's Module#extended(base) — fires after methods are copied
+  if (typeof (mod as any)[extended] === "function") {
+    (mod as any)[extended](klass);
   }
 }

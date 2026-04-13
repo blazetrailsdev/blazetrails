@@ -10,6 +10,7 @@
 
 import type { DatabaseAdapter } from "../../adapter.js";
 import type { CheckConstraintDefinition } from "../abstract/schema-definitions.js";
+import { quoteColumnName } from "./quoting.js";
 import { SchemaCreation } from "./schema-creation.js";
 import { SchemaDumper as AbstractSchemaDumper } from "../abstract/schema-dumper.js";
 import { SchemaDumper } from "./schema-dumper.js";
@@ -92,8 +93,7 @@ function resolveMasterTable(tableName: string): { masterTable: string; name: str
   const schema = tableName.slice(0, dotIdx);
   const name = tableName.slice(dotIdx + 1);
   if (schema === "temp") return { masterTable: "sqlite_temp_master", name };
-  const escaped = schema.replace(/"/g, '""');
-  return { masterTable: `"${escaped}".sqlite_master`, name };
+  return { masterTable: `${quoteColumnName(schema)}.sqlite_master`, name };
 }
 
 export async function isVirtualTableExists(

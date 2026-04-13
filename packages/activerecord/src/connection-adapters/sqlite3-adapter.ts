@@ -817,15 +817,10 @@ export class SQLite3Adapter
   }
 
   /**
-   * Parse FK constraint names from CREATE TABLE SQL.
-   * SQLite's PRAGMA foreign_key_list doesn't expose names, but the
-   * CREATE TABLE DDL does when CONSTRAINT <name> was used.
-   * Returns a map from column name → constraint name.
-   */
-  /**
-   * Parse FK constraint names from CREATE TABLE SQL. Returns a map
-   * keyed by the comma-joined column list (e.g. "a,b" for composites
-   * or just "col" for single-column FKs).
+   * Parse FK constraint names from CREATE TABLE SQL. PRAGMA
+   * foreign_key_list doesn't expose names, but the DDL does when
+   * CONSTRAINT <name> was used. Returns a map keyed by the
+   * comma-joined column list (e.g. "a,b" for composites).
    */
   private _parseForeignKeyNames(tableName: string): Map<string, string> {
     const createSql = this._getCreateTableSql(tableName);
@@ -919,6 +914,10 @@ export class SQLite3Adapter
       ifExists = toTableOrOptions.ifExists === true;
     }
 
+    if (!explicitToTable && !column && !name) {
+      throw new Error("removeForeignKey requires a target table or options");
+    }
+
     const existingFks = await this.foreignKeys(fromTable);
     const fkNames = this._parseForeignKeyNames(fromTable);
     const { bare: bareFrom } = this._splitTableName(fromTable);
@@ -973,6 +972,15 @@ export class SQLite3Adapter
     tableName: string,
     expressionOrOptions?: string | { name?: string; ifExists?: boolean },
   ): Promise<void> {
+    if (
+      expressionOrOptions === undefined ||
+      (typeof expressionOrOptions === "object" &&
+        !expressionOrOptions?.name &&
+        !expressionOrOptions?.ifExists)
+    ) {
+      throw new Error("removeCheckConstraint requires either an expression or { name } option");
+    }
+
     const ifExists =
       typeof expressionOrOptions === "object" && expressionOrOptions?.ifExists === true;
     const existingChecks = await this.checkConstraints(tableName);

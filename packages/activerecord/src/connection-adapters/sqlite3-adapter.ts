@@ -988,7 +988,8 @@ export class SQLite3Adapter
     let nameToRemove: string | undefined;
 
     if (typeof expressionOrOptions === "string") {
-      const found = existingChecks.find((c) => c.expression === expressionOrOptions);
+      const normalized = expressionOrOptions.trim();
+      const found = existingChecks.find((c) => c.expression === normalized);
       nameToRemove = found?.name;
     } else if (expressionOrOptions?.name) {
       nameToRemove = expressionOrOptions.name;

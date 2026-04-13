@@ -25,13 +25,13 @@ type AnyConversionHost = any;
  */
 export function _toPartialPath(this: AnyConversionHost): string {
   if (!this._cachedToPartialPath) {
-    if (typeof this.modelName !== "undefined") {
-      const mn = typeof this.modelName === "function" ? this.modelName() : this.modelName;
-      this._cachedToPartialPath = `${mn.collection}/_${mn.element}`;
+    if (this.modelName != null) {
+      const mn = this.modelName;
+      this._cachedToPartialPath = `${mn.collection}/${mn.element}`;
     } else {
       const element = underscore(this.name);
       const collection = tableize(this.name);
-      this._cachedToPartialPath = `${collection}/_${element}`;
+      this._cachedToPartialPath = `${collection}/${element}`;
     }
   }
   return this._cachedToPartialPath;

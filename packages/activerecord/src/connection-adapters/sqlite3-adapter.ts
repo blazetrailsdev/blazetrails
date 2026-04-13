@@ -1149,6 +1149,7 @@ export class SQLite3Adapter
     } catch (err) {
       if (alreadyInTransaction) {
         await this.rollbackToSavepoint(savepointName);
+        await this.releaseSavepoint(savepointName);
       } else {
         await this.rollback();
       }

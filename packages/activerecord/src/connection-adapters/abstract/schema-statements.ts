@@ -362,9 +362,15 @@ export class SchemaStatements {
     toTable: string,
     options: AddForeignKeyOptions = {},
   ): Promise<void> {
-    // Adapters like SQLite3 override this to use alter_table (table rebuild)
+    // SQLite can't ALTER TABLE ADD CONSTRAINT — delegate to its rebuild-
+    // based implementation. Gate on checkConstraints (which only rebuild-
+    // adapters implement) to avoid routing to adapters like PostgreSQL whose
+    // addForeignKey is a partial override that drops onDelete/onUpdate.
     const adapter = this.adapter as any;
-    if (typeof adapter.addForeignKey === "function") {
+    if (
+      typeof adapter.addForeignKey === "function" &&
+      typeof adapter.checkConstraints === "function"
+    ) {
       return adapter.addForeignKey(fromTable, toTable, options);
     }
     const pk = options.primaryKey ?? "id";

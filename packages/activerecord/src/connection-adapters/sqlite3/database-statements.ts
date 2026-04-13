@@ -78,6 +78,6 @@ export async function resetIsolationLevel(
   previousReadUncommitted: number | null,
 ): Promise<void> {
   if (previousReadUncommitted !== null) {
-    await adapter.execute(`PRAGMA read_uncommitted=${previousReadUncommitted}`);
+    await adapter.executeMutation(`PRAGMA read_uncommitted=${previousReadUncommitted}`);
   }
 }

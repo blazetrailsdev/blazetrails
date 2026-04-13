@@ -97,10 +97,12 @@ export function quotedBinary(value: Uint8Array | ArrayBuffer): string {
 }
 
 export function quoteDefaultExpression(value: unknown): string {
-  if (value === undefined || value === null) return "NULL";
+  if (value === undefined) return "";
+  if (value === null) return "NULL";
   if (typeof value === "function") {
     const result = (value as () => unknown)();
-    if (result === undefined || result === null) return "NULL";
+    if (result === undefined) return "";
+    if (result === null) return "NULL";
     const str = String(result);
     if (/^\w+\(.*\)$/.test(str)) return `(${str})`;
     return str;
@@ -121,8 +123,9 @@ export function typeCast(value: unknown): unknown {
 
 // Rails uses recursive regex \g<2> to match nested function calls like
 // COALESCE(a, b) or COUNT(DISTINCT name). JS doesn't support recursive
-// patterns, so we use a regex that allows balanced parentheses to any
-// depth by matching non-paren content or nested paren groups.
+// patterns, so this regex supports one level of nested parentheses
+// (e.g. func(inner(arg))) by matching non-paren content plus a single
+// level of nested paren groups inside the function call.
 const PAREN_EXPR = `(?:\\w+\\([^()]*(?:\\([^()]*\\)[^()]*)*\\))`;
 const COLUMN_EXPR = `(?:(?:\\w+\\.|"\\w+"\\.)?(\\w+|"\\w+")|${PAREN_EXPR})`;
 

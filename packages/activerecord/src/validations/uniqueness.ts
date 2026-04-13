@@ -28,7 +28,7 @@ export class UniquenessValidator extends EachValidator {
       const scopes = Array.isArray(scope) ? scope : [scope];
       if (!scopes.every((s) => typeof s === "string")) {
         throw new Error(
-          `${scope} is not supported format for :scope option. ` +
+          `${scope} is not a supported format for :scope option. ` +
             "Pass a string or an array of strings instead: `scope: 'userId'`",
         );
       }

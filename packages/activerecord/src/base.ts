@@ -2891,7 +2891,8 @@ export class Base extends Model {
    * Mirrors: ActiveModel::Validations#read_attribute_for_validation
    *
    * Rails aliases this to `send`, so calling it with an association name
-   * returns the association proxy. We check association caches first,
+   * returns the association target (loaded records). We resolve from
+   * association caches first,
    * falling back to readAttribute for regular columns.
    */
   readAttributeForValidation(attribute: string): unknown {

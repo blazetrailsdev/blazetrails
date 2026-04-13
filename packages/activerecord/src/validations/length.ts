@@ -2,18 +2,22 @@
  * Mirrors: ActiveRecord::Validations::LengthValidator
  *
  * Extends ActiveModel's LengthValidator with association awareness —
- * if the value responds to loaded? and is loaded, records marked for
- * destruction are excluded from the length count.
+ * if the attribute is an association, records marked for destruction
+ * are excluded from the length count.
  */
 import { LengthValidator as BaseLengthValidator } from "@blazetrails/activemodel";
 
 export class LengthValidator extends BaseLengthValidator {
   validateEach(record: any, attribute: string, value: unknown): void {
     let associationOrValue = value;
-    // Rails: association_or_value.respond_to?(:loaded?) && association_or_value.loaded?
-    if (value != null && typeof (value as any).loaded === "function" && (value as any).loaded()) {
-      const target: any[] = (value as any).target ?? [];
-      associationOrValue = target.filter(
+    // readAttributeForValidation resolves collection proxies to their
+    // target arrays, so we check via association reflection whether
+    // the attribute is an association and filter destroyed records.
+    const isAssoc =
+      record.constructor._reflectOnAssociation?.(attribute) ??
+      record.constructor._associations?.some((a: any) => a.name === attribute);
+    if (isAssoc && Array.isArray(value)) {
+      associationOrValue = value.filter(
         (v: any) => !(typeof v?.markedForDestruction === "function" && v.markedForDestruction()),
       );
     }

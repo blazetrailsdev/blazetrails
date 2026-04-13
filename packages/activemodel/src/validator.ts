@@ -83,7 +83,7 @@ export class EachValidator extends Validator {
   validate(record: AnyRecord): void {
     for (const attribute of this.attributes) {
       // Rails: record.read_attribute_for_validation(attribute)
-      // Defaults to send(attr) — for AR associations returns the proxy.
+      // Defaults to send(attr) — AR overrides to resolve associations.
       const value =
         typeof record.readAttributeForValidation === "function"
           ? record.readAttributeForValidation(attribute)

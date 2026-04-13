@@ -386,7 +386,9 @@ export class SchemaStatements {
 
   async removeForeignKey(
     fromTable: string,
-    toTableOrOptions?: string | { column?: string; name?: string },
+    toTableOrOptions?:
+      | string
+      | { column?: string; name?: string; toTable?: string; ifExists?: boolean },
   ): Promise<void> {
     const adapter = this.adapter as any;
     if (typeof adapter.removeForeignKey === "function") {
@@ -427,7 +429,7 @@ export class SchemaStatements {
 
   async removeCheckConstraint(
     tableName: string,
-    expressionOrOptions?: string | { name?: string },
+    expressionOrOptions?: string | { name?: string; ifExists?: boolean },
   ): Promise<void> {
     const adapter = this.adapter as any;
     if (typeof adapter.removeCheckConstraint === "function") {

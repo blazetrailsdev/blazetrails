@@ -1086,7 +1086,16 @@ export class SQLite3Adapter
       colDefs.push(fkSql);
     }
 
+    const removedColumns = tableInfo
+      .map((c) => c.name as string)
+      .filter((n) => !colNames.includes(n));
     for (const chk of checks) {
+      // Skip check constraints that reference columns no longer in the table
+      // (mirrors the FK handling above which skips FKs for removed columns)
+      const referencesRemovedCol = removedColumns.some((col) =>
+        new RegExp(`\\b${col.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(chk.expression),
+      );
+      if (referencesRemovedCol) continue;
       colDefs.push(`CONSTRAINT ${quoteColumnName(chk.name)} CHECK (${chk.expression})`);
     }
 

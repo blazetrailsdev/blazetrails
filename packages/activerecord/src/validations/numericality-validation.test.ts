@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { Base } from "../index.js";
+import { NumericalityValidator } from "./numericality.js";
 
 import { createTestAdapter } from "../test-adapter.js";
 import type { DatabaseAdapter } from "../adapter.js";
@@ -104,5 +105,42 @@ describe("NumericalityValidationTest", () => {
     }
     const w = new Widget2({});
     expect(w.isValid()).toBe(true);
+  });
+  it("validates column precision overflow", () => {
+    // Uses AR NumericalityValidator (imported at top)
+    class Decimal extends Base {
+      static {
+        this.attribute("amount", "decimal");
+        this.adapter = adapter;
+        this.validatesWith(NumericalityValidator, { attributes: ["amount"] });
+      }
+      static typeForAttribute(name: string): any {
+        if (name === "amount") return { precision: 5, scale: 2 };
+        return null;
+      }
+    }
+    const d = new Decimal({ amount: 999.99 });
+    expect(d.isValid()).toBe(true);
+
+    const d2 = new Decimal({ amount: 1000 });
+    expect(d2.isValid()).toBe(false);
+    expect(d2.errors.fullMessagesFor("amount").length).toBeGreaterThan(0);
+  });
+  it("validates column scale overflow", () => {
+    // Uses AR NumericalityValidator (imported at top)
+    class Decimal extends Base {
+      static {
+        this.attribute("amount", "decimal");
+        this.adapter = adapter;
+        this.validatesWith(NumericalityValidator, { attributes: ["amount"] });
+      }
+      static typeForAttribute(name: string): any {
+        if (name === "amount") return { precision: 5, scale: 2 };
+        return null;
+      }
+    }
+    const d = new Decimal({ amount: "1.234" });
+    expect(d.isValid()).toBe(false);
+    expect(d.errors.fullMessagesFor("amount").length).toBeGreaterThan(0);
   });
 });

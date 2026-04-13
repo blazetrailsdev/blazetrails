@@ -31,6 +31,10 @@ import {
 import { getFs } from "@blazetrails/activesupport";
 import { quoteString, quoteTableName, quoteColumnName } from "./sqlite3/quoting.js";
 import { DatabaseStatementsMixin } from "./database-statements-mixin.js";
+import {
+  CheckConstraintDefinition,
+  type AddForeignKeyOptions,
+} from "./abstract/schema-definitions.js";
 
 /**
  * SQLite adapter — connects ActiveRecord to a real SQLite database.
@@ -807,11 +811,154 @@ export class SQLite3Adapter
     return quoteString(String(value));
   }
 
+  // --- FK / Check constraint operations (SQLite requires table rebuild) ---
+
+  /**
+   * Parse CHECK constraints from the CREATE TABLE SQL.
+   * Mirrors: ActiveRecord::ConnectionAdapters::SQLite3::SchemaStatements#check_constraints
+   */
+  async checkConstraints(tableName: string): Promise<CheckConstraintDefinition[]> {
+    const { bare } = this._splitTableName(tableName);
+    const row = this.db
+      .prepare(
+        `SELECT sql FROM sqlite_master WHERE type='table' AND name=${quoteString(bare)}
+         UNION ALL
+         SELECT sql FROM sqlite_temp_master WHERE type='table' AND name=${quoteString(bare)}`,
+      )
+      .get() as { sql: string } | undefined;
+    if (!row?.sql) return [];
+
+    const results: CheckConstraintDefinition[] = [];
+    const regex = /CONSTRAINT\s+"?(\w+)"?\s+CHECK\s*\(((?:[^()]|\((?:[^()]|\([^()]*\))*\))*)\)/gi;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(row.sql)) !== null) {
+      results.push(new CheckConstraintDefinition(tableName, match[2].trim(), match[1]));
+    }
+    return results;
+  }
+
+  /**
+   * Mirrors: ActiveRecord::ConnectionAdapters::SQLite3::SchemaStatements#add_foreign_key
+   */
+  async addForeignKey(
+    fromTable: string,
+    toTable: string,
+    options: AddForeignKeyOptions = {},
+  ): Promise<void> {
+    await this.alterTable(
+      fromTable,
+      () => {},
+      undefined,
+      undefined,
+      (definition) => {
+        definition.foreignKey(toTable, options);
+      },
+    );
+  }
+
+  /**
+   * Mirrors: ActiveRecord::ConnectionAdapters::SQLite3::SchemaStatements#remove_foreign_key
+   */
+  async removeForeignKey(
+    fromTable: string,
+    toTableOrOptions?: string | { column?: string; name?: string },
+  ): Promise<void> {
+    const existingFks = await this.foreignKeys(fromTable);
+    let toTable: string | undefined;
+    let column: string | undefined;
+    let name: string | undefined;
+
+    if (typeof toTableOrOptions === "string") {
+      toTable = toTableOrOptions;
+    } else if (toTableOrOptions) {
+      column = toTableOrOptions.column;
+      name = toTableOrOptions.name;
+      if (column) {
+        toTable = column.replace(/_id$/, "");
+        toTable = toTable.endsWith("s") ? toTable : toTable + "s";
+      }
+    }
+
+    const fkToRemove = existingFks.find((fk) => {
+      if (name) {
+        const fkCol = Array.isArray(fk.column) ? fk.column[0] : fk.column;
+        return `fk_${fromTable}_${fkCol}` === name;
+      }
+      if (toTable) return fk.toTable === toTable;
+      if (column) return (Array.isArray(fk.column) ? fk.column[0] : fk.column) === column;
+      return false;
+    });
+
+    if (!fkToRemove) {
+      throw new Error(
+        `Table '${fromTable}' has no foreign key for ${toTable || JSON.stringify(toTableOrOptions)}`,
+      );
+    }
+
+    const remainingFks = existingFks.filter((fk) => fk !== fkToRemove);
+    await this.alterTable(fromTable, () => {}, remainingFks);
+  }
+
+  /**
+   * Mirrors: ActiveRecord::ConnectionAdapters::SQLite3::SchemaStatements#add_check_constraint
+   */
+  async addCheckConstraint(
+    tableName: string,
+    expression: string,
+    options: { name?: string } = {},
+  ): Promise<void> {
+    await this.alterTable(
+      tableName,
+      () => {},
+      undefined,
+      undefined,
+      (definition) => {
+        definition.checkConstraint(expression, options);
+      },
+    );
+  }
+
+  /**
+   * Mirrors: ActiveRecord::ConnectionAdapters::SQLite3::SchemaStatements#remove_check_constraint
+   */
+  async removeCheckConstraint(
+    tableName: string,
+    expressionOrOptions?: string | { name?: string },
+  ): Promise<void> {
+    const existingChecks = await this.checkConstraints(tableName);
+    let nameToRemove: string | undefined;
+
+    if (typeof expressionOrOptions === "string") {
+      const found = existingChecks.find((c) => c.expression === expressionOrOptions);
+      nameToRemove = found?.name;
+    } else if (expressionOrOptions?.name) {
+      nameToRemove = expressionOrOptions.name;
+    }
+
+    if (!nameToRemove) {
+      throw new Error(
+        `Table '${tableName}' has no check constraint matching ${JSON.stringify(expressionOrOptions)}`,
+      );
+    }
+
+    const remainingChecks = existingChecks.filter((c) => c.name !== nameToRemove);
+    await this.alterTable(tableName, () => {}, undefined, remainingChecks);
+  }
+
   // --- Private: alter_table copy strategy (Rails: SQLite3Adapter#alter_table) ---
 
   private async alterTable(
     tableName: string,
     modify: (columns: Record<string, Record<string, unknown>>) => void,
+    overrideForeignKeys?: Array<{
+      column: string | string[];
+      primaryKey: string | string[];
+      toTable: string;
+      onDelete: string | null;
+      onUpdate: string | null;
+    }>,
+    overrideCheckConstraints?: CheckConstraintDefinition[],
+    extraDefinition?: (def: import("./abstract/schema-definitions.js").TableDefinition) => void,
   ): Promise<void> {
     const { schema, bare: bareTable } = this._splitTableName(tableName);
     const pragmaPrefix = schema ? `${quoteColumnName(schema)}.` : "";
@@ -873,23 +1020,60 @@ export class SQLite3Adapter
       colDefs.push(`PRIMARY KEY(${pkColumns.map((n) => quoteColumnName(n)).join(", ")})`);
     }
 
+    // Preserve foreign keys and check constraints across the rebuild.
+    // Rails: alter_table(table_name, foreign_keys(...), check_constraints(...))
+    const fks = overrideForeignKeys ?? (await this.foreignKeys(tableName));
+    const checks = overrideCheckConstraints ?? (await this.checkConstraints(tableName));
+
+    for (const fk of fks) {
+      const cols = Array.isArray(fk.column) ? fk.column : [fk.column];
+      // Skip FKs referencing columns that no longer exist
+      if (!cols.every((c) => colNames.includes(c))) continue;
+      const pks = Array.isArray(fk.primaryKey) ? fk.primaryKey : [fk.primaryKey];
+      const colList = cols.map((c) => quoteColumnName(c)).join(", ");
+      const pkList = pks.map((c) => quoteColumnName(c)).join(", ");
+      let fkSql = `FOREIGN KEY(${colList}) REFERENCES ${quoteTableName(fk.toTable)}(${pkList})`;
+      if (fk.onDelete) fkSql += ` ON DELETE ${fk.onDelete}`;
+      if (fk.onUpdate) fkSql += ` ON UPDATE ${fk.onUpdate}`;
+      colDefs.push(fkSql);
+    }
+
+    for (const chk of checks) {
+      colDefs.push(`CONSTRAINT ${quoteColumnName(chk.name)} CHECK (${chk.expression})`);
+    }
+
+    // Apply any extra definitions (e.g. new FK/check from add operations)
+    if (extraDefinition) {
+      const { TableDefinition } = await import("./abstract/schema-definitions.js");
+      const tmpDef = new TableDefinition(bareTable);
+      extraDefinition(tmpDef);
+      for (const fkDef of tmpDef.foreignKeys) {
+        let fkSql = `FOREIGN KEY(${quoteColumnName(fkDef.column)}) REFERENCES ${quoteTableName(fkDef.toTable)}(${quoteColumnName(fkDef.primaryKey)})`;
+        if (fkDef.onDelete) fkSql += ` ON DELETE ${fkDef.onDelete}`;
+        if (fkDef.onUpdate) fkSql += ` ON UPDATE ${fkDef.onUpdate}`;
+        colDefs.push(fkSql);
+      }
+      for (const chkDef of tmpDef.checkConstraints) {
+        colDefs.push(`CONSTRAINT ${quoteColumnName(chkDef.name)} CHECK (${chkDef.expression})`);
+      }
+    }
+
     const originalColNames = tableInfo
       .map((c) => c.name as string)
       .filter((n) => colNames.includes(n));
 
-    this.db.exec(`CREATE TABLE ${qTmp} (${colDefs.join(", ")})`);
-    if (originalColNames.length > 0) {
-      const selectCols = originalColNames.map((n) => quoteColumnName(n)).join(", ");
-      this.db.exec(`INSERT INTO ${qTmp} (${selectCols}) SELECT ${selectCols} FROM ${qTable}`);
-    }
-    this.db.exec(`DROP TABLE ${qTable}`);
-    // RENAME TO requires unqualified name
-    this.db.exec(`ALTER TABLE ${qTmp} RENAME TO ${quoteColumnName(bareTable)}`);
+    await this.disableReferentialIntegrity(async () => {
+      this.db.exec(`CREATE TABLE ${qTmp} (${colDefs.join(", ")})`);
+      if (originalColNames.length > 0) {
+        const selectCols = originalColNames.map((n) => quoteColumnName(n)).join(", ");
+        this.db.exec(`INSERT INTO ${qTmp} (${selectCols}) SELECT ${selectCols} FROM ${qTable}`);
+      }
+      this.db.exec(`DROP TABLE ${qTable}`);
+      this.db.exec(`ALTER TABLE ${qTmp} RENAME TO ${quoteColumnName(bareTable)}`);
+    });
 
-    // Recreate indexes, adjusting table name references
+    // Recreate indexes
     for (const sql of indexDefs) {
-      // Index SQL references the original table name — no adjustment needed
-      // since we renamed tmpTable back to tableName
       try {
         this.db.exec(sql);
       } catch (err) {

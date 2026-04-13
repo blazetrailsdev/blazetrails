@@ -362,6 +362,11 @@ export class SchemaStatements {
     toTable: string,
     options: AddForeignKeyOptions = {},
   ): Promise<void> {
+    // Adapters like SQLite3 override this to use alter_table (table rebuild)
+    const adapter = this.adapter as any;
+    if (typeof adapter.addForeignKey === "function") {
+      return adapter.addForeignKey(fromTable, toTable, options);
+    }
     const pk = options.primaryKey ?? "id";
     const column = options.column ?? this.foreignKeyColumnFor(toTable, pk);
     const name = options.name ?? `fk_${fromTable}_${column}`;
@@ -383,6 +388,10 @@ export class SchemaStatements {
     fromTable: string,
     toTableOrOptions?: string | { column?: string; name?: string },
   ): Promise<void> {
+    const adapter = this.adapter as any;
+    if (typeof adapter.removeForeignKey === "function") {
+      return adapter.removeForeignKey(fromTable, toTableOrOptions);
+    }
     let name: string;
     if (typeof toTableOrOptions === "string") {
       const column = `${toTableOrOptions.replace(/s$/, "")}_id`;
@@ -404,6 +413,10 @@ export class SchemaStatements {
     expression: string,
     options: { name?: string; validate?: boolean } = {},
   ): Promise<void> {
+    const adapter = this.adapter as any;
+    if (typeof adapter.addCheckConstraint === "function") {
+      return adapter.addCheckConstraint(tableName, expression, options);
+    }
     const name = options.name ?? this._checkConstraintName(tableName, expression);
     const validate = options.validate !== false;
     const chkDef = new CheckConstraintDefinition(tableName, expression, name, validate);
@@ -416,6 +429,10 @@ export class SchemaStatements {
     tableName: string,
     expressionOrOptions?: string | { name?: string },
   ): Promise<void> {
+    const adapter = this.adapter as any;
+    if (typeof adapter.removeCheckConstraint === "function") {
+      return adapter.removeCheckConstraint(tableName, expressionOrOptions);
+    }
     let name: string;
     if (typeof expressionOrOptions === "string") {
       name = this._checkConstraintName(tableName, expressionOrOptions);
@@ -1057,7 +1074,11 @@ export class SchemaStatements {
     return result;
   }
 
-  async checkConstraints(_tableName: string): Promise<CheckConstraintDefinition[]> {
+  async checkConstraints(tableName: string): Promise<CheckConstraintDefinition[]> {
+    const adapter = this.adapter as any;
+    if (typeof adapter.checkConstraints === "function") {
+      return adapter.checkConstraints(tableName);
+    }
     throw new Error("NotImplementedError: checkConstraints is not implemented");
   }
 

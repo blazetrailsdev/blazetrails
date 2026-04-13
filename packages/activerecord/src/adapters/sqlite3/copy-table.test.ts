@@ -108,4 +108,105 @@ describe("CopyTableTest", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].sum).toBe(3);
   });
+
+  it("alter table preserves foreign keys", async () => {
+    adapter.exec(`CREATE TABLE "authors" ("id" INTEGER PRIMARY KEY, "name" TEXT)`);
+    adapter.exec(
+      `CREATE TABLE "posts" ("id" INTEGER PRIMARY KEY, "title" TEXT, "author_id" INTEGER,
+       FOREIGN KEY("author_id") REFERENCES "authors"("id") ON DELETE CASCADE)`,
+    );
+    await adapter.executeMutation(`INSERT INTO "authors" ("name") VALUES ('Dean')`);
+    await adapter.executeMutation(`INSERT INTO "posts" ("title", "author_id") VALUES ('Hi', 1)`);
+
+    // Trigger alterTable by adding a column (which uses the copy strategy)
+    adapter.exec(`ALTER TABLE "posts" ADD COLUMN "body" TEXT`);
+    // Verify FK survived by checking PRAGMA
+    const fks = await adapter.foreignKeys("posts");
+    expect(fks).toHaveLength(1);
+    expect(fks[0].toTable).toBe("authors");
+    expect(fks[0].onDelete).toBe("CASCADE");
+  });
+
+  it("add foreign key via alter table rebuild", async () => {
+    adapter.exec(`CREATE TABLE "tags" ("id" INTEGER PRIMARY KEY, "label" TEXT)`);
+    adapter.exec(
+      `CREATE TABLE "taggings" ("id" INTEGER PRIMARY KEY, "tag_id" INTEGER, "post_id" INTEGER)`,
+    );
+
+    await adapter.addForeignKey("taggings", "tags", { column: "tag_id" });
+
+    const fks = await adapter.foreignKeys("taggings");
+    expect(fks).toHaveLength(1);
+    expect(fks[0].toTable).toBe("tags");
+    expect(fks[0].column).toBe("tag_id");
+  });
+
+  it("remove foreign key via alter table rebuild", async () => {
+    adapter.exec(`CREATE TABLE "categories" ("id" INTEGER PRIMARY KEY, "name" TEXT)`);
+    adapter.exec(
+      `CREATE TABLE "items" ("id" INTEGER PRIMARY KEY, "category_id" INTEGER,
+       FOREIGN KEY("category_id") REFERENCES "categories"("id"))`,
+    );
+
+    let fks = await adapter.foreignKeys("items");
+    expect(fks).toHaveLength(1);
+
+    await adapter.removeForeignKey("items", "categories");
+
+    fks = await adapter.foreignKeys("items");
+    expect(fks).toHaveLength(0);
+
+    // Data should survive the rebuild
+    await adapter.executeMutation(`INSERT INTO "items" ("category_id") VALUES (99)`);
+    const rows = await adapter.execute(`SELECT * FROM "items"`);
+    expect(rows).toHaveLength(1);
+  });
+
+  it("add check constraint via alter table rebuild", async () => {
+    adapter.exec(`CREATE TABLE "products" ("id" INTEGER PRIMARY KEY, "price" REAL)`);
+    await adapter.executeMutation(`INSERT INTO "products" ("price") VALUES (10.0)`);
+
+    await adapter.addCheckConstraint("products", "price > 0", { name: "price_positive" });
+
+    const checks = await adapter.checkConstraints("products");
+    expect(checks).toHaveLength(1);
+    expect(checks[0].name).toBe("price_positive");
+    expect(checks[0].expression).toBe("price > 0");
+
+    // Data should survive
+    const rows = await adapter.execute(`SELECT * FROM "products"`);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].price).toBe(10.0);
+  });
+
+  it("remove check constraint via alter table rebuild", async () => {
+    adapter.exec(
+      `CREATE TABLE "accounts" ("id" INTEGER PRIMARY KEY, "balance" REAL,
+       CONSTRAINT balance_non_negative CHECK (balance >= 0))`,
+    );
+
+    let checks = await adapter.checkConstraints("accounts");
+    expect(checks).toHaveLength(1);
+
+    await adapter.removeCheckConstraint("accounts", { name: "balance_non_negative" });
+
+    checks = await adapter.checkConstraints("accounts");
+    expect(checks).toHaveLength(0);
+  });
+
+  it("check constraints round-trip through alter table", async () => {
+    adapter.exec(
+      `CREATE TABLE "orders" ("id" INTEGER PRIMARY KEY, "qty" INTEGER, "status" TEXT,
+       CONSTRAINT qty_positive CHECK (qty > 0),
+       CONSTRAINT valid_status CHECK (status IN ('pending','shipped','delivered')))`,
+    );
+
+    // Force a table rebuild by adding a column
+    adapter.exec(`ALTER TABLE "orders" ADD COLUMN "note" TEXT`);
+
+    const checks = await adapter.checkConstraints("orders");
+    expect(checks).toHaveLength(2);
+    const names = checks.map((c) => c.name).sort();
+    expect(names).toEqual(["qty_positive", "valid_status"]);
+  });
 });

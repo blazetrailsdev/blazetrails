@@ -822,16 +822,24 @@ export class SQLite3Adapter
    * CREATE TABLE DDL does when CONSTRAINT <name> was used.
    * Returns a map from column name → constraint name.
    */
+  /**
+   * Parse FK constraint names from CREATE TABLE SQL. Returns a map
+   * keyed by the comma-joined column list (e.g. "a,b" for composites
+   * or just "col" for single-column FKs).
+   */
   private _parseForeignKeyNames(tableName: string): Map<string, string> {
     const createSql = this._getCreateTableSql(tableName);
     const names = new Map<string, string>();
     if (!createSql) return names;
-    const regex = /CONSTRAINT\s+(?:"((?:[^"]|"")*)"|(\w+))\s+FOREIGN\s+KEY\s*\(\s*"?(\w+)"?\s*\)/gi;
+    const regex = /CONSTRAINT\s+(?:"((?:[^"]|"")*)"|(\w+))\s+FOREIGN\s+KEY\s*\(([^)]+)\)/gi;
     let match: RegExpExecArray | null;
     while ((match = regex.exec(createSql)) !== null) {
       const name = match[1] ? match[1].replace(/""/g, '"') : match[2];
-      const col = match[3];
-      names.set(col, name);
+      const colList = match[3]
+        .split(",")
+        .map((c) => c.trim().replace(/^"|"$/g, ""))
+        .join(",");
+      names.set(colList, name);
     }
     return names;
   }
@@ -916,12 +924,13 @@ export class SQLite3Adapter
     const { bare: bareFrom } = this._splitTableName(fromTable);
 
     const fkToRemove = existingFks.find((fk) => {
-      const fkCol = Array.isArray(fk.column) ? fk.column[0] : fk.column;
+      const fkCols = Array.isArray(fk.column) ? fk.column : [fk.column];
+      const fkKey = fkCols.join(",");
       if (name) {
-        const parsedName = fkNames.get(fkCol) ?? `fk_${bareFrom}_${fkCol}`;
+        const parsedName = fkNames.get(fkKey) ?? `fk_${bareFrom}_${fkCols.join("_")}`;
         return parsedName === name;
       }
-      if (column) return fkCol === column;
+      if (column) return fkCols.includes(column);
       if (explicitToTable) return fk.toTable === explicitToTable;
       return false;
     });
@@ -1078,7 +1087,8 @@ export class SQLite3Adapter
       const colList = cols.map((c) => quoteColumnName(c)).join(", ");
       const pkList = pks.map((c) => quoteColumnName(c)).join(", ");
       let fkSql = "";
-      const fkName = fkNames.get(cols[0]) ?? `fk_${bareTable}_${cols[0]}`;
+      const fkKey = cols.join(",");
+      const fkName = fkNames.get(fkKey) ?? `fk_${bareTable}_${cols.join("_")}`;
       fkSql += `CONSTRAINT ${quoteColumnName(fkName)} `;
       fkSql += `FOREIGN KEY(${colList}) REFERENCES ${quoteTableName(fk.toTable)}(${pkList})`;
       if (fk.onDelete) fkSql += ` ON DELETE ${fk.onDelete}`;
@@ -1141,6 +1151,20 @@ export class SQLite3Adapter
         this.db.exec(`DROP TABLE ${qTable}`);
         this.db.exec(`ALTER TABLE ${qTmp} RENAME TO ${quoteColumnName(bareTable)}`);
       });
+
+      // Recreate indexes inside the transaction so failures roll back
+      // the entire rebuild rather than leaving a partially-migrated table.
+      for (const sql of indexDefs) {
+        try {
+          this.db.exec(sql);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "";
+          if (!msg.includes("no such column") && !msg.includes("already exists")) {
+            throw err;
+          }
+        }
+      }
+
       if (alreadyInTransaction) {
         await this.releaseSavepoint(savepointName);
       } else {
@@ -1154,18 +1178,6 @@ export class SQLite3Adapter
         await this.rollback();
       }
       throw err;
-    }
-
-    // Recreate indexes
-    for (const sql of indexDefs) {
-      try {
-        this.db.exec(sql);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "";
-        if (!msg.includes("no such column") && !msg.includes("already exists")) {
-          throw err;
-        }
-      }
     }
 
     this.schemaCache.clear();

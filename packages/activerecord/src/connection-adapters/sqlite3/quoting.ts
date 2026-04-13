@@ -123,28 +123,109 @@ export function typeCast(value: unknown): unknown {
 
 // Rails uses recursive regex \g<2> to match nested function calls like
 // COALESCE(a, b) or COUNT(DISTINCT name). JS doesn't support recursive
-// patterns, so this regex supports one level of nested parentheses
-// (e.g. func(inner(arg))) by matching non-paren content plus a single
-// level of nested paren groups inside the function call.
-const PAREN_EXPR = `(?:\\w+\\([^()]*(?:\\([^()]*\\)[^()]*)*\\))`;
-const COLUMN_EXPR = `(?:(?:\\w+\\.|"\\w+"\\.)?(\\w+|"\\w+")|${PAREN_EXPR})`;
+// regex patterns, so we use a function-based matcher that walks balanced
+// parentheses to arbitrary depth.
 
-export const COLUMN_NAME_MATCHER = new RegExp(
-  `^(?:${COLUMN_EXPR}(?:(?:\\s+AS)?\\s+(?:\\w+|"\\w+"))?)` +
-    `(?:\\s*,\\s*${COLUMN_EXPR}(?:(?:\\s+AS)?\\s+(?:\\w+|"\\w+"))?)*$`,
-  "i",
-);
+function skipBalancedParens(s: string, pos: number): number {
+  if (s[pos] !== "(") return -1;
+  let depth = 1;
+  let i = pos + 1;
+  while (i < s.length && depth > 0) {
+    if (s[i] === "(") depth++;
+    else if (s[i] === ")") depth--;
+    i++;
+  }
+  return depth === 0 ? i : -1;
+}
 
-export const COLUMN_NAME_WITH_ORDER_MATCHER = new RegExp(
-  `^(?:${COLUMN_EXPR}(?:\\s+COLLATE\\s+(?:\\w+|"\\w+"))?(?:\\s+ASC|\\s+DESC)?(?:\\s+NULLS\\s+(?:FIRST|LAST))?)` +
-    `(?:\\s*,\\s*${COLUMN_EXPR}(?:\\s+COLLATE\\s+(?:\\w+|"\\w+"))?(?:\\s+ASC|\\s+DESC)?(?:\\s+NULLS\\s+(?:FIRST|LAST))?)*$`,
-  "i",
-);
+function matchColumnExpr(s: string, pos: number): number {
+  let i = pos;
+  // optional table qualifier: word. or "word".
+  if (s[i] === '"') {
+    const close = s.indexOf('"', i + 1);
+    if (close === -1) return -1;
+    i = close + 1;
+    if (s[i] === ".") i++;
+  } else {
+    const m = s.slice(i).match(/^\w+\./);
+    if (m) i += m[0].length;
+  }
+  // column name: word or "word", or function call: word(...)
+  if (s[i] === '"') {
+    const close = s.indexOf('"', i + 1);
+    if (close === -1) return -1;
+    return close + 1;
+  }
+  const nameMatch = s.slice(i).match(/^\w+/);
+  if (!nameMatch) return -1;
+  i += nameMatch[0].length;
+  // function call with balanced parens
+  if (s[i] === "(") {
+    const end = skipBalancedParens(s, i);
+    if (end === -1) return -1;
+    return end;
+  }
+  return i;
+}
 
-export function columnNameMatcher(): RegExp {
+function skipWhitespace(s: string, pos: number): number {
+  while (pos < s.length && /\s/.test(s[pos])) pos++;
+  return pos;
+}
+
+function matchColumnList(s: string, allowOrder: boolean): boolean {
+  let i = skipWhitespace(s, 0);
+  if (i >= s.length) return false;
+
+  while (true) {
+    const exprEnd = matchColumnExpr(s, i);
+    if (exprEnd === -1) return false;
+    i = skipWhitespace(s, exprEnd);
+
+    // optional AS alias
+    if (/^AS\b/i.test(s.slice(i))) {
+      i = skipWhitespace(s, i + 2);
+      if (s[i] === '"') {
+        const close = s.indexOf('"', i + 1);
+        if (close === -1) return false;
+        i = skipWhitespace(s, close + 1);
+      } else {
+        const alias = s.slice(i).match(/^\w+/);
+        if (!alias) return false;
+        i = skipWhitespace(s, i + alias[0].length);
+      }
+    }
+
+    if (allowOrder) {
+      if (/^COLLATE\b/i.test(s.slice(i))) {
+        i = skipWhitespace(s, i + 7);
+        const coll = s.slice(i).match(/^(?:\w+|"\w+")/);
+        if (!coll) return false;
+        i = skipWhitespace(s, i + coll[0].length);
+      }
+      if (/^(?:ASC|DESC)\b/i.test(s.slice(i))) {
+        i = skipWhitespace(s, i + s.slice(i).match(/^(?:ASC|DESC)/i)![0].length);
+      }
+      if (/^NULLS\s+(?:FIRST|LAST)\b/i.test(s.slice(i))) {
+        const nm = s.slice(i).match(/^NULLS\s+(?:FIRST|LAST)/i)!;
+        i = skipWhitespace(s, i + nm[0].length);
+      }
+    }
+
+    if (i >= s.length) return true;
+    if (s[i] !== ",") return false;
+    i = skipWhitespace(s, i + 1);
+  }
+}
+
+// Exposed as RegExp-like objects with .test() for API compat with Rails
+export const COLUMN_NAME_MATCHER = { test: (s: string) => matchColumnList(s, false) };
+export const COLUMN_NAME_WITH_ORDER_MATCHER = { test: (s: string) => matchColumnList(s, true) };
+
+export function columnNameMatcher(): { test(s: string): boolean } {
   return COLUMN_NAME_MATCHER;
 }
 
-export function columnNameWithOrderMatcher(): RegExp {
+export function columnNameWithOrderMatcher(): { test(s: string): boolean } {
   return COLUMN_NAME_WITH_ORDER_MATCHER;
 }

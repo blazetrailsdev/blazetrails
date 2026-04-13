@@ -1062,15 +1062,23 @@ export class SQLite3Adapter
       .map((c) => c.name as string)
       .filter((n) => colNames.includes(n));
 
-    await this.disableReferentialIntegrity(async () => {
-      this.db.exec(`CREATE TABLE ${qTmp} (${colDefs.join(", ")})`);
-      if (originalColNames.length > 0) {
-        const selectCols = originalColNames.map((n) => quoteColumnName(n)).join(", ");
-        this.db.exec(`INSERT INTO ${qTmp} (${selectCols}) SELECT ${selectCols} FROM ${qTable}`);
-      }
-      this.db.exec(`DROP TABLE ${qTable}`);
-      this.db.exec(`ALTER TABLE ${qTmp} RENAME TO ${quoteColumnName(bareTable)}`);
-    });
+    // Rails: transaction { disable_referential_integrity { move_table(...) } }
+    this.db.exec("BEGIN");
+    try {
+      await this.disableReferentialIntegrity(async () => {
+        this.db.exec(`CREATE TABLE ${qTmp} (${colDefs.join(", ")})`);
+        if (originalColNames.length > 0) {
+          const selectCols = originalColNames.map((n) => quoteColumnName(n)).join(", ");
+          this.db.exec(`INSERT INTO ${qTmp} (${selectCols}) SELECT ${selectCols} FROM ${qTable}`);
+        }
+        this.db.exec(`DROP TABLE ${qTable}`);
+        this.db.exec(`ALTER TABLE ${qTmp} RENAME TO ${quoteColumnName(bareTable)}`);
+      });
+      this.db.exec("COMMIT");
+    } catch (err) {
+      this.db.exec("ROLLBACK");
+      throw err;
+    }
 
     // Recreate indexes
     for (const sql of indexDefs) {

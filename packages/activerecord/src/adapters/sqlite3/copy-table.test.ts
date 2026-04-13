@@ -112,19 +112,26 @@ describe("CopyTableTest", () => {
   it("alter table preserves foreign keys", async () => {
     adapter.exec(`CREATE TABLE "authors" ("id" INTEGER PRIMARY KEY, "name" TEXT)`);
     adapter.exec(
-      `CREATE TABLE "posts" ("id" INTEGER PRIMARY KEY, "title" TEXT, "author_id" INTEGER,
+      `CREATE TABLE "posts" ("id" INTEGER PRIMARY KEY, "title" TEXT, "body" TEXT, "author_id" INTEGER,
        FOREIGN KEY("author_id") REFERENCES "authors"("id") ON DELETE CASCADE)`,
     );
     await adapter.executeMutation(`INSERT INTO "authors" ("name") VALUES ('Dean')`);
-    await adapter.executeMutation(`INSERT INTO "posts" ("title", "author_id") VALUES ('Hi', 1)`);
+    await adapter.executeMutation(
+      `INSERT INTO "posts" ("title", "body", "author_id") VALUES ('Hi', 'content', 1)`,
+    );
 
-    // Trigger alterTable by adding a column (which uses the copy strategy)
-    adapter.exec(`ALTER TABLE "posts" ADD COLUMN "body" TEXT`);
-    // Verify FK survived by checking PRAGMA
+    // removeColumn triggers the copy-table strategy (unlike ADD COLUMN
+    // which is a native SQLite op that doesn't rebuild the table)
+    await adapter.removeColumn("posts", "body");
+
     const fks = await adapter.foreignKeys("posts");
     expect(fks).toHaveLength(1);
     expect(fks[0].toTable).toBe("authors");
     expect(fks[0].onDelete).toBe("CASCADE");
+
+    const rows = await adapter.execute(`SELECT * FROM "posts"`);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].title).toBe("Hi");
   });
 
   it("add foreign key via alter table rebuild", async () => {
@@ -196,17 +203,22 @@ describe("CopyTableTest", () => {
 
   it("check constraints round-trip through alter table", async () => {
     adapter.exec(
-      `CREATE TABLE "orders" ("id" INTEGER PRIMARY KEY, "qty" INTEGER, "status" TEXT,
+      `CREATE TABLE "orders" ("id" INTEGER PRIMARY KEY, "qty" INTEGER, "status" TEXT, "note" TEXT,
        CONSTRAINT qty_positive CHECK (qty > 0),
        CONSTRAINT valid_status CHECK (status IN ('pending','shipped','delivered')))`,
     );
+    await adapter.executeMutation(`INSERT INTO "orders" ("qty", "status") VALUES (1, 'pending')`);
 
-    // Force a table rebuild by adding a column
-    adapter.exec(`ALTER TABLE "orders" ADD COLUMN "note" TEXT`);
+    // removeColumn forces a table rebuild via alterTable (unlike ADD COLUMN)
+    await adapter.removeColumn("orders", "note");
 
     const checks = await adapter.checkConstraints("orders");
     expect(checks).toHaveLength(2);
     const names = checks.map((c) => c.name).sort();
     expect(names).toEqual(["qty_positive", "valid_status"]);
+
+    const rows = await adapter.execute(`SELECT * FROM "orders"`);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].qty).toBe(1);
   });
 });

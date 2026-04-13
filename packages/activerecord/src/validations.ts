@@ -7,9 +7,12 @@
  */
 import { ActiveRecordError } from "./errors.js";
 
-// Re-export validators that don't create circular imports.
+// Re-export all validators matching Rails' require at bottom of validations.rb
+export { AbsenceValidator } from "./validations/absence.js";
 export { AssociatedValidator } from "./validations/associated.js";
+export { LengthValidator } from "./validations/length.js";
 export { NumericalityValidator } from "./validations/numericality.js";
+export { PresenceValidator } from "./validations/presence.js";
 export { UniquenessValidator } from "./validations/uniqueness.js";
 
 /**

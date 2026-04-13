@@ -77,6 +77,9 @@ describe("SQLite3::Quoting", () => {
       expect(matcher.test("name OR 1=1")).toBe(false);
       expect(matcher.test("* FROM users WHERE 1=1")).toBe(false);
       expect(matcher.test("name, (SELECT password FROM users)")).toBe(false);
+      expect(matcher.test("COALESCE((SELECT password FROM users), 1)")).toBe(false);
+      expect(matcher.test("func(1 UNION SELECT secret)")).toBe(false);
+      expect(matcher.test("func(DROP TABLE users)")).toBe(false);
       expect(matcher.test("name/**/UNION/**/SELECT")).toBe(false);
     });
 

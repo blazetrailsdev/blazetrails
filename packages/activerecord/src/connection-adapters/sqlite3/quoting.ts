@@ -126,16 +126,26 @@ export function typeCast(value: unknown): unknown {
 // regex patterns, so we use a function-based matcher that walks balanced
 // parentheses to arbitrary depth.
 
+// SQL keywords that should never appear inside function arguments
+// in a column name context — prevents subquery injection.
+const DANGEROUS_KEYWORDS =
+  /\b(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|UNION|INTO|FROM|WHERE|EXEC|EXECUTE)\b/i;
+
 function skipBalancedParens(s: string, pos: number): number {
   if (s[pos] !== "(") return -1;
   let depth = 1;
   let i = pos + 1;
+  const start = i;
   while (i < s.length && depth > 0) {
     if (s[i] === "(") depth++;
     else if (s[i] === ")") depth--;
     i++;
   }
-  return depth === 0 ? i : -1;
+  if (depth !== 0) return -1;
+  // Reject if the paren contents contain dangerous SQL keywords
+  const contents = s.slice(start, i - 1);
+  if (DANGEROUS_KEYWORDS.test(contents)) return -1;
+  return i;
 }
 
 function skipQuotedIdentifier(s: string, pos: number): number {

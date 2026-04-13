@@ -953,6 +953,9 @@ export class SQLite3Adapter
     expression: string,
     options: { name?: string; validate?: boolean } = {},
   ): Promise<void> {
+    if (options.validate === false) {
+      throw new Error("validate: false is only supported on PostgreSQL");
+    }
     const { name } = options;
     await this.alterTable(
       tableName,
@@ -974,9 +977,7 @@ export class SQLite3Adapter
   ): Promise<void> {
     if (
       expressionOrOptions === undefined ||
-      (typeof expressionOrOptions === "object" &&
-        !expressionOrOptions?.name &&
-        !expressionOrOptions?.ifExists)
+      (typeof expressionOrOptions === "object" && !expressionOrOptions?.name)
     ) {
       throw new Error("removeCheckConstraint requires either an expression or { name } option");
     }

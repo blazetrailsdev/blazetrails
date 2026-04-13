@@ -119,11 +119,24 @@ export function typeCast(value: unknown): unknown {
   throw new TypeError(`can't cast ${Object.prototype.toString.call(value)} to a SQLite3 type`);
 }
 
-export const COLUMN_NAME_MATCHER =
-  /^(?:(?:\w+\.)?"?(?:\w+)"?(?:\s+AS\s+"?\w+"?)?\s*)(?:,\s*(?:\w+\.)?"?(?:\w+)"?(?:\s+AS\s+"?\w+"?)?\s*)*$/i;
+// Rails uses recursive regex \g<2> to match nested function calls like
+// COALESCE(a, b) or COUNT(DISTINCT name). JS doesn't support recursive
+// patterns, so we use a regex that allows balanced parentheses to any
+// depth by matching non-paren content or nested paren groups.
+const PAREN_EXPR = `(?:\\w+\\([^()]*(?:\\([^()]*\\)[^()]*)*\\))`;
+const COLUMN_EXPR = `(?:(?:\\w+\\.|"\\w+"\\.)?(\\w+|"\\w+")|${PAREN_EXPR})`;
 
-export const COLUMN_NAME_WITH_ORDER_MATCHER =
-  /^(?:(?:\w+\.)?"?(?:\w+)"?(?:\s+COLLATE\s+\w+)?(?:\s+ASC|\s+DESC)?(?:\s+NULLS\s+(?:FIRST|LAST))?\s*)(?:,\s*(?:\w+\.)?"?(?:\w+)"?(?:\s+COLLATE\s+\w+)?(?:\s+ASC|\s+DESC)?(?:\s+NULLS\s+(?:FIRST|LAST))?\s*)*$/i;
+export const COLUMN_NAME_MATCHER = new RegExp(
+  `^(?:${COLUMN_EXPR}(?:(?:\\s+AS)?\\s+(?:\\w+|"\\w+"))?)` +
+    `(?:\\s*,\\s*${COLUMN_EXPR}(?:(?:\\s+AS)?\\s+(?:\\w+|"\\w+"))?)*$`,
+  "i",
+);
+
+export const COLUMN_NAME_WITH_ORDER_MATCHER = new RegExp(
+  `^(?:${COLUMN_EXPR}(?:\\s+COLLATE\\s+(?:\\w+|"\\w+"))?(?:\\s+ASC|\\s+DESC)?(?:\\s+NULLS\\s+(?:FIRST|LAST))?)` +
+    `(?:\\s*,\\s*${COLUMN_EXPR}(?:\\s+COLLATE\\s+(?:\\w+|"\\w+"))?(?:\\s+ASC|\\s+DESC)?(?:\\s+NULLS\\s+(?:FIRST|LAST))?)*$`,
+  "i",
+);
 
 export function columnNameMatcher(): RegExp {
   return COLUMN_NAME_MATCHER;

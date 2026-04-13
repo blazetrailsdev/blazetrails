@@ -256,14 +256,35 @@ function matchColumnList(s: string, allowOrder: boolean): boolean {
   }
 }
 
-// Exposed as RegExp-like objects with .test() for API compat with Rails
-export const COLUMN_NAME_MATCHER = { test: (s: string) => matchColumnList(s, false) };
-export const COLUMN_NAME_WITH_ORDER_MATCHER = { test: (s: string) => matchColumnList(s, true) };
+class ColumnMatcher extends RegExp {
+  private readonly _allowOrder: boolean;
 
-export function columnNameMatcher(): { test(s: string): boolean } {
+  constructor(allowOrder: boolean) {
+    super(".*");
+    this._allowOrder = allowOrder;
+  }
+
+  override test(s: string): boolean {
+    return matchColumnList(s, this._allowOrder);
+  }
+
+  override exec(s: string): RegExpExecArray | null {
+    if (!this.test(s)) return null;
+    const match = [s] as RegExpExecArray;
+    match.index = 0;
+    match.input = s;
+    match.groups = undefined;
+    return match;
+  }
+}
+
+export const COLUMN_NAME_MATCHER: RegExp = new ColumnMatcher(false);
+export const COLUMN_NAME_WITH_ORDER_MATCHER: RegExp = new ColumnMatcher(true);
+
+export function columnNameMatcher(): RegExp {
   return COLUMN_NAME_MATCHER;
 }
 
-export function columnNameWithOrderMatcher(): { test(s: string): boolean } {
+export function columnNameWithOrderMatcher(): RegExp {
   return COLUMN_NAME_WITH_ORDER_MATCHER;
 }

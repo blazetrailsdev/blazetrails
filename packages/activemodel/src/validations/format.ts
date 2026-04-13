@@ -29,10 +29,7 @@ export class FormatValidator extends EachValidator {
   }
 
   validateEach(record: AnyRecord, attribute: string, value: unknown): void {
-    if (value === null || value === undefined) {
-      if (this.options.allowNil) return;
-      return;
-    }
+    if (value === null || value === undefined) return;
     const str = String(value);
     if (this.options.with) {
       const re = this.resolveRegexp(

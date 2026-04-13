@@ -863,19 +863,25 @@ export class SQLite3Adapter
    */
   async removeForeignKey(
     fromTable: string,
-    toTableOrOptions?: string | { column?: string; name?: string },
+    toTableOrOptions?:
+      | string
+      | { column?: string; name?: string; toTable?: string; ifExists?: boolean },
   ): Promise<void> {
-    const existingFks = await this.foreignKeys(fromTable);
     let explicitToTable: string | undefined;
     let column: string | undefined;
     let name: string | undefined;
+    let ifExists = false;
 
     if (typeof toTableOrOptions === "string") {
       explicitToTable = toTableOrOptions;
     } else if (toTableOrOptions) {
       column = toTableOrOptions.column;
       name = toTableOrOptions.name;
+      explicitToTable = toTableOrOptions.toTable;
+      ifExists = toTableOrOptions.ifExists === true;
     }
+
+    const existingFks = await this.foreignKeys(fromTable);
 
     const fkToRemove = existingFks.find((fk) => {
       const fkCol = Array.isArray(fk.column) ? fk.column[0] : fk.column;
@@ -886,6 +892,7 @@ export class SQLite3Adapter
     });
 
     if (!fkToRemove) {
+      if (ifExists) return;
       throw new Error(
         `Table '${fromTable}' has no foreign key for ${explicitToTable || JSON.stringify(toTableOrOptions)}`,
       );
@@ -919,8 +926,10 @@ export class SQLite3Adapter
    */
   async removeCheckConstraint(
     tableName: string,
-    expressionOrOptions?: string | { name?: string },
+    expressionOrOptions?: string | { name?: string; ifExists?: boolean },
   ): Promise<void> {
+    const ifExists =
+      typeof expressionOrOptions === "object" && expressionOrOptions?.ifExists === true;
     const existingChecks = await this.checkConstraints(tableName);
     let nameToRemove: string | undefined;
 
@@ -932,6 +941,7 @@ export class SQLite3Adapter
     }
 
     if (!nameToRemove) {
+      if (ifExists) return;
       throw new Error(
         `Table '${tableName}' has no check constraint matching ${JSON.stringify(expressionOrOptions)}`,
       );

@@ -221,4 +221,40 @@ describe("CopyTableTest", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].qty).toBe(1);
   });
+
+  it("remove foreign key with ifExists does not throw when missing", async () => {
+    adapter.exec(`CREATE TABLE "widgets" ("id" INTEGER PRIMARY KEY, "name" TEXT)`);
+    // No FK exists — should silently return instead of throwing
+    await expect(
+      adapter.removeForeignKey("widgets", { column: "nonexistent_id", ifExists: true }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("remove foreign key with ifExists throws when not set", async () => {
+    adapter.exec(`CREATE TABLE "gadgets" ("id" INTEGER PRIMARY KEY, "name" TEXT)`);
+    await expect(adapter.removeForeignKey("gadgets", { column: "nonexistent_id" })).rejects.toThrow(
+      /has no foreign key/,
+    );
+  });
+
+  it("remove foreign key via toTable option", async () => {
+    adapter.exec(`CREATE TABLE "publishers" ("id" INTEGER PRIMARY KEY, "name" TEXT)`);
+    adapter.exec(
+      `CREATE TABLE "books" ("id" INTEGER PRIMARY KEY, "publisher_id" INTEGER,
+       FOREIGN KEY("publisher_id") REFERENCES "publishers"("id"))`,
+    );
+    let fks = await adapter.foreignKeys("books");
+    expect(fks).toHaveLength(1);
+
+    await adapter.removeForeignKey("books", { toTable: "publishers" });
+    fks = await adapter.foreignKeys("books");
+    expect(fks).toHaveLength(0);
+  });
+
+  it("remove check constraint with ifExists does not throw when missing", async () => {
+    adapter.exec(`CREATE TABLE "things" ("id" INTEGER PRIMARY KEY, "val" INTEGER)`);
+    await expect(
+      adapter.removeCheckConstraint("things", { name: "nonexistent", ifExists: true }),
+    ).resolves.toBeUndefined();
+  });
 });

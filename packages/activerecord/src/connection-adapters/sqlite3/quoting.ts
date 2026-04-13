@@ -74,6 +74,9 @@ export function quote(value: unknown): string {
   if (value instanceof Uint8Array || value instanceof ArrayBuffer) {
     return quotedBinary(value);
   }
+  if (typeof value === "function" && value.name) {
+    return quoteString(value.name);
+  }
   throw new TypeError(`can't quote ${Object.prototype.toString.call(value)}`);
 }
 

@@ -113,7 +113,7 @@ export function typeCast(value: unknown): unknown {
   if (typeof value === "boolean") return value ? unquotedTrue() : unquotedFalse();
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   if (typeof value === "string" || typeof value === "bigint") return value;
-  if (typeof value === "symbol") return value.description;
+  if (typeof value === "symbol") return value.description ?? null;
   if (value instanceof Date || value instanceof Uint8Array || value instanceof ArrayBuffer)
     return value;
   throw new TypeError(`can't cast ${Object.prototype.toString.call(value)} to a SQLite3 type`);

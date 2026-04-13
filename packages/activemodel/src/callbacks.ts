@@ -156,7 +156,7 @@ function resolveCallback(
     throw new ArgumentError(`Callback object must implement ${methodName} or ${camelMethod}`);
   }
   if (timing === "around") {
-    return ((record: AnyRecord, proceed: () => void) =>
+    return ((record: AnyRecord, proceed: () => void | Promise<void>) =>
       method.call(fnOrObject, record, proceed)) as AroundCallbackFn;
   }
   return ((record: AnyRecord) => method.call(fnOrObject, record)) as CallbackFn;
@@ -164,9 +164,22 @@ function resolveCallback(
 
 /**
  * Callback types.
+ *
+ * CallbackFn allows Promise returns because the same callback chain serves
+ * both sync events (validation, initialize) and async events (save, destroy).
+ * The sync API (run/runBefore/runAfter) ignores Promise returns — only use
+ * sync callbacks on sync events. The async API (runAsync/runBeforeAsync/
+ * runAfterAsync) properly awaits Promises.
+ *
+ * AroundCallbackFn's proceed() returns void | Promise<void> because the
+ * wrapped block may be async (e.g., DB operations in persistence). Around
+ * callbacks that wrap async blocks should await proceed().
  */
 export type CallbackFn = (record: AnyRecord) => void | boolean | Promise<void | boolean>;
-export type AroundCallbackFn = (record: AnyRecord, proceed: () => void) => void;
+export type AroundCallbackFn = (
+  record: AnyRecord,
+  proceed: () => void | Promise<void>,
+) => void | Promise<void>;
 
 export type CallbackTiming = "before" | "after" | "around";
 export type CallbackEvent = string;
@@ -255,12 +268,20 @@ export class CallbackChain {
       (c) => c.timing === "around" && c.event === event && this._shouldRun(c, record),
     );
 
-    let chain = block;
+    let blockExecuted = false;
+    const trackedBlock = () => {
+      block();
+      blockExecuted = true;
+    };
+
+    let chain: () => void = trackedBlock;
     for (const cb of [...arounds].reverse()) {
       const prev = chain;
       chain = () => (cb.fn as AroundCallbackFn)(record, prev);
     }
     chain();
+
+    if (!blockExecuted) return false;
 
     this.runAfter(event, record);
 
@@ -318,11 +339,29 @@ export class CallbackChain {
       blockExecuted = true;
     };
 
+    // Build the around chain. Each around callback wraps the previous.
+    // The pendingProceed pattern ensures that even if a sync around callback
+    // calls proceed() without awaiting it, the async block's Promise is
+    // still awaited before moving on.
     let chain: () => void | Promise<void> = trackedBlock;
     for (const cb of [...arounds].reverse()) {
       const prev = chain;
       chain = async () => {
-        await (cb.fn as AroundCallbackFn)(record, prev as () => void);
+        let pendingProceed: Promise<void> | undefined;
+        const wrappedProceed = () => {
+          const result = prev();
+          if (result && typeof (result as Promise<void>).then === "function") {
+            pendingProceed = result as Promise<void>;
+          }
+          return result;
+        };
+        try {
+          await (cb.fn as AroundCallbackFn)(record, wrappedProceed);
+          if (pendingProceed) await pendingProceed;
+        } catch (aroundError) {
+          if (pendingProceed) await pendingProceed.catch(() => {});
+          throw aroundError;
+        }
       };
     }
     await chain();

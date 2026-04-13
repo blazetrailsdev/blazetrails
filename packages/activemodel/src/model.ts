@@ -47,6 +47,8 @@ import { AcceptanceValidator } from "./validations/acceptance.js";
 import { ConfirmationValidator } from "./validations/confirmation.js";
 import { ComparisonValidator } from "./validations/comparison.js";
 import { type AttributeDefinition, constructor as initAttrs, attribute } from "./attributes.js";
+import { _defaultAttributes } from "./attribute-registration.js";
+import { _toPartialPath } from "./conversion.js";
 
 interface ValidationEntry {
   attribute: string;
@@ -88,6 +90,8 @@ export class Model {
   // -- Attributes (Phase 1000) --
 
   static attribute = attribute;
+  static _defaultAttributes = _defaultAttributes;
+  static _toPartialPath = _toPartialPath;
 
   static attributeNames(): string[] {
     return Array.from(this._attributeDefinitions.entries())
@@ -1273,8 +1277,7 @@ export class Model {
   }
 
   toPartialPath(): string {
-    const mn = this.modelName;
-    return `${mn.collection}/_${mn.element}`;
+    return (this.constructor as typeof Model)._toPartialPath();
   }
 
   /**

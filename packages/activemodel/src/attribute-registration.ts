@@ -1,4 +1,6 @@
 import { Type } from "./type/value.js";
+import { AttributeSet } from "./attribute-set.js";
+import { buildDefaultAttributes, type AttributeDefinition } from "./attributes.js";
 
 /**
  * AttributeRegistration mixin — provides the static attribute() method
@@ -11,6 +13,7 @@ import { Type } from "./type/value.js";
  */
 export interface AttributeRegistrationClassMethods {
   attribute(name: string, typeName: string, options?: { default?: unknown }): void;
+  _defaultAttributes(): AttributeSet;
   decorateAttributes(names: string[] | null, decorator: (name: string, type: Type) => Type): void;
   attributeTypes(): Record<string, Type>;
   typeForAttribute(name: string): Type | null;
@@ -20,6 +23,15 @@ export type AttributeRegistration = AttributeRegistrationClassMethods;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyAttributeHost = any;
+
+export function _defaultAttributes(this: AnyAttributeHost): AttributeSet {
+  if (!this._cachedDefaultAttributes) {
+    this._cachedDefaultAttributes = buildDefaultAttributes(
+      this._attributeDefinitions as Map<string, AttributeDefinition>,
+    );
+  }
+  return this._cachedDefaultAttributes;
+}
 
 export function decorateAttributes(
   this: AnyAttributeHost,

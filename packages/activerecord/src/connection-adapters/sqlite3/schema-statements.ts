@@ -87,7 +87,7 @@ export async function removeCheckConstraint(
 }
 
 function resolveMasterTable(tableName: string): { masterTable: string; name: string } {
-  const dotIdx = tableName.indexOf(".");
+  const dotIdx = tableName.lastIndexOf(".");
   if (dotIdx === -1) return { masterTable: "sqlite_master", name: tableName };
   const schema = tableName.slice(0, dotIdx);
   const name = tableName.slice(dotIdx + 1);

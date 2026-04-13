@@ -64,7 +64,12 @@ export function quote(value: unknown): string {
     return String(value);
   }
   if (typeof value === "bigint") return String(value);
-  if (typeof value === "symbol") return quoteString(value.description ?? "");
+  if (typeof value === "symbol") {
+    if (value.description === undefined) {
+      throw new TypeError("can't quote a Symbol without a description");
+    }
+    return quoteString(value.description);
+  }
   if (value instanceof Date) return quotedTimeUtc(value);
   if (value instanceof Uint8Array || value instanceof ArrayBuffer) {
     return quotedBinary(value);
@@ -114,10 +119,11 @@ export function typeCast(value: unknown): unknown {
   throw new TypeError(`can't cast ${Object.prototype.toString.call(value)} to a SQLite3 type`);
 }
 
-export const COLUMN_NAME_MATCHER = /^(?:\w+\.)?"?(?:\w+)"?(?:\s+AS\s+"?\w+"?)?\s*(?:$|,)/i;
+export const COLUMN_NAME_MATCHER =
+  /^(?:(?:\w+\.)?"?(?:\w+)"?(?:\s+AS\s+"?\w+"?)?\s*)(?:,\s*(?:\w+\.)?"?(?:\w+)"?(?:\s+AS\s+"?\w+"?)?\s*)*$/i;
 
 export const COLUMN_NAME_WITH_ORDER_MATCHER =
-  /^(?:\w+\.)?"?(?:\w+)"?(?:\s+COLLATE\s+\w+)?(?:\s+ASC|\s+DESC)?(?:\s+NULLS\s+(?:FIRST|LAST))?\s*(?:$|,)/i;
+  /^(?:(?:\w+\.)?"?(?:\w+)"?(?:\s+COLLATE\s+\w+)?(?:\s+ASC|\s+DESC)?(?:\s+NULLS\s+(?:FIRST|LAST))?\s*)(?:,\s*(?:\w+\.)?"?(?:\w+)"?(?:\s+COLLATE\s+\w+)?(?:\s+ASC|\s+DESC)?(?:\s+NULLS\s+(?:FIRST|LAST))?\s*)*$/i;
 
 export function columnNameMatcher(): RegExp {
   return COLUMN_NAME_MATCHER;

@@ -33,10 +33,10 @@ export interface Attributes {
  * of the class-level `attribute` declaration.
  */
 export function attribute(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   this: {
     _attributeDefinitions: Map<string, AttributeDefinition>;
     prototype: object;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     _cachedDefaultAttributes?: any;
   },
   name: string,
@@ -89,16 +89,6 @@ export function buildDefaultAttributes(defs: Map<string, AttributeDefinition>): 
     }
   }
   return new AttributeSet(attrMap);
-}
-
-/**
- * Initialize instance attributes from the class-level default AttributeSet.
- *
- * Mirrors: ActiveModel::Attributes#initialize
- *   @attributes = self.class._default_attributes.deep_dup
- */
-export function constructor(defs: Map<string, AttributeDefinition>): AttributeSet {
-  return buildDefaultAttributes(defs).deepDup();
 }
 
 /**

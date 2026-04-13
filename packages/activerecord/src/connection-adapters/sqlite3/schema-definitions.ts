@@ -27,7 +27,7 @@ export class TableDefinition extends AbstractTableDefinition {
   }
 
   changeColumn(columnName: string, type: ColumnType, options: ColumnOptions = {}): void {
-    const col = new ColumnDefinition(columnName, type, options);
+    const col = this.newColumnDefinition(columnName, type, options);
     const idx = this.columns.findIndex((c) => c.name === columnName);
     if (idx >= 0) {
       this.columns.splice(idx, 1, col);

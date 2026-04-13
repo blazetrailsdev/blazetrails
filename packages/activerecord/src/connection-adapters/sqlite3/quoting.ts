@@ -57,17 +57,19 @@ export function quoteString(value: string): string {
 
 export function quote(value: unknown): string {
   if (value === null || value === undefined) return "NULL";
+  if (typeof value === "string") return quoteString(value);
   if (typeof value === "boolean") return value ? quotedTrue() : quotedFalse();
   if (typeof value === "number") {
     if (!Number.isFinite(value)) return quoteString(String(value));
     return String(value);
   }
   if (typeof value === "bigint") return String(value);
+  if (typeof value === "symbol") return quoteString(value.description ?? "");
   if (value instanceof Date) return quotedTimeUtc(value);
   if (value instanceof Uint8Array || value instanceof ArrayBuffer) {
     return quotedBinary(value);
   }
-  return quoteString(String(value));
+  throw new TypeError(`can't quote ${Object.prototype.toString.call(value)}`);
 }
 
 export function quoteTableNameForAssignment(_table: string, attr: string): string {
@@ -103,8 +105,13 @@ export function quoteDefaultExpression(value: unknown): string {
 
 export function typeCast(value: unknown): unknown {
   if (value === null || value === undefined) return null;
-  if (typeof value === "number" && !Number.isFinite(value)) return null;
-  return value;
+  if (typeof value === "boolean") return value ? unquotedTrue() : unquotedFalse();
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string" || typeof value === "bigint") return value;
+  if (typeof value === "symbol") return value.description;
+  if (value instanceof Date || value instanceof Uint8Array || value instanceof ArrayBuffer)
+    return value;
+  throw new TypeError(`can't cast ${Object.prototype.toString.call(value)} to a SQLite3 type`);
 }
 
 export const COLUMN_NAME_MATCHER = /^(?:\w+\.)?"?(?:\w+)"?(?:\s+AS\s+"?\w+"?)?\s*(?:$|,)/i;

@@ -2,6 +2,10 @@
  * SQLite3 database statements — SQLite-specific query execution.
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::SQLite3::DatabaseStatements
+ *
+ * In Rails these are instance methods on the DatabaseStatements module
+ * mixed into the adapter. Here they're standalone functions that accept
+ * an adapter for execution, matching the codebase's mixin pattern.
  */
 
 import type { Result } from "../../result.js";
@@ -11,6 +15,10 @@ import type { Result } from "../../result.js";
 // with SQLite3's :pragma addition.
 const READ_QUERY =
   /^(?:[(\s]|\/\*[\s\S]*?\*\/)*(?:begin|commit|explain|release|rollback|savepoint|select|with|pragma)\b/i;
+
+type ExecutableAdapter = {
+  execute(sql: string, binds?: unknown[]): Promise<unknown>;
+};
 
 export interface DatabaseStatements {
   execQuery(sql: string, name?: string | null): Promise<Result>;
@@ -25,36 +33,46 @@ export function isWriteQuery(sql: string): boolean {
   return !READ_QUERY.test(sql);
 }
 
-export function beginDbTransaction(): string {
-  return "BEGIN IMMEDIATE TRANSACTION";
+export async function beginDbTransaction(adapter: ExecutableAdapter): Promise<void> {
+  await adapter.execute("BEGIN IMMEDIATE TRANSACTION");
 }
 
-export function beginDeferredTransaction(_isolation?: string | null): string {
-  return "BEGIN DEFERRED TRANSACTION";
+export async function beginDeferredTransaction(
+  adapter: ExecutableAdapter,
+  _isolation?: string | null,
+): Promise<void> {
+  await adapter.execute("BEGIN DEFERRED TRANSACTION");
 }
 
-export function beginIsolatedDbTransaction(_isolation: string): string {
-  return "BEGIN DEFERRED TRANSACTION";
+export async function beginIsolatedDbTransaction(
+  adapter: ExecutableAdapter,
+  _isolation: string,
+): Promise<void> {
+  await adapter.execute("BEGIN DEFERRED TRANSACTION");
 }
 
-export function commitDbTransaction(): string {
-  return "COMMIT TRANSACTION";
+export async function commitDbTransaction(adapter: ExecutableAdapter): Promise<void> {
+  await adapter.execute("COMMIT TRANSACTION");
 }
 
-export function execRollbackDbTransaction(): string {
-  return "ROLLBACK TRANSACTION";
+export async function execRollbackDbTransaction(adapter: ExecutableAdapter): Promise<void> {
+  await adapter.execute("ROLLBACK TRANSACTION");
 }
 
 export function highPrecisionCurrentTimestamp(): string {
   return "STRFTIME('%Y-%m-%d %H:%M:%f', 'NOW')";
 }
 
-export function execute(sql: string): string {
-  return sql;
+export async function execute(
+  adapter: ExecutableAdapter,
+  sql: string,
+  binds?: unknown[],
+): Promise<unknown> {
+  return adapter.execute(sql, binds);
 }
 
 export async function resetIsolationLevel(
-  adapter: { execute(sql: string, binds?: unknown[]): Promise<unknown> },
+  adapter: ExecutableAdapter,
   previousReadUncommitted: number | null,
 ): Promise<void> {
   if (previousReadUncommitted !== null) {

@@ -86,13 +86,24 @@ export async function removeCheckConstraint(
   return adapter.removeCheckConstraint(tableName, expressionOrOptions);
 }
 
+function resolveMasterTable(tableName: string): { masterTable: string; name: string } {
+  const dotIdx = tableName.indexOf(".");
+  if (dotIdx === -1) return { masterTable: "sqlite_master", name: tableName };
+  const schema = tableName.slice(0, dotIdx);
+  const name = tableName.slice(dotIdx + 1);
+  if (schema === "temp") return { masterTable: "sqlite_temp_master", name };
+  const escaped = schema.replace(/"/g, '""');
+  return { masterTable: `"${escaped}".sqlite_master`, name };
+}
+
 export async function isVirtualTableExists(
   adapter: DatabaseAdapter,
   tableName: string,
 ): Promise<boolean> {
+  const { masterTable, name } = resolveMasterTable(tableName);
   const rows = await adapter.execute(
-    `SELECT name FROM sqlite_master WHERE type = 'table' AND name = ? AND sql LIKE '%VIRTUAL%'`,
-    [tableName],
+    `SELECT name FROM ${masterTable} WHERE type = 'table' AND name = ? AND sql LIKE '%VIRTUAL%'`,
+    [name],
   );
   return rows.length > 0;
 }

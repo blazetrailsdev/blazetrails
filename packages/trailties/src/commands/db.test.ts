@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createProgram } from "../cli.js";
 import { loadDatabaseConfig, connectAdapter, resolveEnv } from "../database.js";
 import { discoverMigrations } from "../migration-loader.js";
@@ -518,8 +518,6 @@ describe("db subcommand CLI actions", () => {
   let originalCwd: string;
   let logs: string[];
   let errs: string[];
-  let origLog: typeof console.log;
-  let origError: typeof console.error;
   let origExitCode: typeof process.exitCode;
 
   beforeEach(() => {
@@ -538,22 +536,21 @@ describe("db subcommand CLI actions", () => {
 
     logs = [];
     errs = [];
-    origLog = console.log;
-    origError = console.error;
     origExitCode = process.exitCode;
-    console.log = (...args: unknown[]) => {
+    // Use vi.spyOn so vi.restoreAllMocks() in afterEach reliably reverts
+    // any mutation even if an assertion throws mid-test.
+    vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
       logs.push(args.map((a) => String(a)).join(" "));
-    };
-    console.error = (...args: unknown[]) => {
+    });
+    vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {
       errs.push(args.map((a) => String(a)).join(" "));
-    };
+    });
     process.exitCode = undefined;
   });
 
   afterEach(() => {
     process.chdir(originalCwd);
-    console.log = origLog;
-    console.error = origError;
+    vi.restoreAllMocks();
     process.exitCode = origExitCode;
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });

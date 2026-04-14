@@ -26,13 +26,57 @@ async function closeAdapter(adapter: DatabaseAdapter): Promise<void> {
 async function withAdapter(
   fn: (adapter: DatabaseAdapter, raw: RawConfig) => Promise<void>,
 ): Promise<void> {
-  const config = await loadDatabaseConfig();
-  const adapter = await connectAdapter(config);
+  // Normalize the raw config once, before connecting. `connectAdapter`
+  // uses the adapter/database/url fields to choose a driver; later paths
+  // (`toDbConfig` → `DatabaseTasks.dumpSchema`) need the same resolved
+  // adapter so the connection and the schema handler agree. If we passed
+  // the unnormalized config to connectAdapter and the adapter-less
+  // variant to toDbConfig, a url-only `postgres://host/db` config would
+  // migrate against postgres but try to dump schema via sqlite3.
+  const raw = normalizeRawConfig(await loadDatabaseConfig());
+  const adapter = await connectAdapter(raw);
   try {
-    await fn(adapter, config);
+    await fn(adapter, raw);
   } finally {
     await closeAdapter(adapter);
   }
+}
+
+function normalizeRawConfig(raw: RawConfig): RawConfig {
+  const normalized: Record<string, unknown> = { ...raw };
+  if (!normalized.adapter) {
+    if (typeof normalized.url === "string") {
+      const inferred = inferAdapterFromUrl(normalized.url);
+      if (inferred) normalized.adapter = inferred;
+    }
+    if (!normalized.adapter) normalized.adapter = "sqlite3";
+  }
+  if (!normalized.database && typeof normalized.url === "string") {
+    const db = databaseFromUrl(normalized.url, normalized.adapter as string | undefined);
+    if (db) normalized.database = db;
+    try {
+      const parsed = new URL(normalized.url);
+      const protocol = parsed.protocol;
+      const isSqlite =
+        normalized.adapter === "sqlite3" ||
+        normalized.adapter === "sqlite" ||
+        protocol === "sqlite:" ||
+        protocol === "sqlite3:" ||
+        protocol === "file:";
+      if (!isSqlite) {
+        if (!normalized.host && parsed.hostname) normalized.host = parsed.hostname;
+        if (!normalized.username && parsed.username) {
+          normalized.username = decodeURIComponent(parsed.username);
+        }
+        if (!normalized.password && parsed.password) {
+          normalized.password = decodeURIComponent(parsed.password);
+        }
+      }
+    } catch {
+      // leave unparsed url as-is; adapters will surface the error
+    }
+  }
+  return normalized as RawConfig;
 }
 
 function migrationsDir(): string {
@@ -87,40 +131,13 @@ function inferAdapterFromUrl(url: string): string | undefined {
 }
 
 function toDbConfig(raw: RawConfig, envName: string = resolveEnv()): HashConfig {
-  const normalized: Record<string, unknown> = { ...raw };
-  if (!normalized.adapter) {
-    if (typeof normalized.url === "string") {
-      const inferred = inferAdapterFromUrl(normalized.url);
-      if (inferred) normalized.adapter = inferred;
-    }
-    if (!normalized.adapter) normalized.adapter = "sqlite3";
-  }
-  if (!normalized.database && typeof normalized.url === "string") {
-    const db = databaseFromUrl(normalized.url, normalized.adapter as string | undefined);
-    if (db) normalized.database = db;
-    try {
-      const parsed = new URL(normalized.url);
-      const protocol = parsed.protocol;
-      const isSqlite =
-        normalized.adapter === "sqlite3" ||
-        normalized.adapter === "sqlite" ||
-        protocol === "sqlite:" ||
-        protocol === "sqlite3:" ||
-        protocol === "file:";
-      if (!isSqlite) {
-        if (!normalized.host && parsed.hostname) normalized.host = parsed.hostname;
-        if (!normalized.username && parsed.username) {
-          normalized.username = decodeURIComponent(parsed.username);
-        }
-        if (!normalized.password && parsed.password) {
-          normalized.password = decodeURIComponent(parsed.password);
-        }
-      }
-    } catch {
-      // leave unparsed url as-is; adapters will surface the error
-    }
-  }
-  return new HashConfig(envName, "primary", normalized);
+  // `withAdapter` normalizes the config before handing it to callers, so
+  // this wrapper is a thin adapter from RawConfig to HashConfig. Re-run
+  // normalization defensively so external callers that build a
+  // HashConfig out-of-band still get adapter/database inference from a
+  // url-only config.
+  const normalized = normalizeRawConfig(raw);
+  return new HashConfig(envName, "primary", normalized as Record<string, unknown>);
 }
 
 /**

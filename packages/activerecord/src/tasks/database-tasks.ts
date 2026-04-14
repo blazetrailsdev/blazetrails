@@ -98,6 +98,13 @@ export class DatabaseTasks {
 
   static seedLoader: { loadSeed(): void | Promise<void> } | null = null;
   static schemaFormat: SchemaFormat = "ts";
+  /**
+   * Whether to run schema:dump automatically after every migration-writing
+   * task (migrate, rollback, migrate:up/down, forward, migrate:redo).
+   *
+   * Mirrors: ActiveRecord.dump_schema_after_migration (default true).
+   */
+  static dumpSchemaAfterMigration: boolean = true;
   static structureDumpFlags: string | string[] | Record<string, string | string[]> | null = null;
   static structureLoadFlags: string | string[] | Record<string, string | string[]> | null = null;
 

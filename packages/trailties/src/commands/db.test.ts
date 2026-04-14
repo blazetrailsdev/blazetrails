@@ -73,6 +73,36 @@ describe("DbCommand", () => {
     const db = program.commands.find((c) => c.name() === "db");
     expect(db?.commands.some((c) => c.name() === "schema:load")).toBe(true);
   });
+
+  it("has version subcommand", () => {
+    const program = createProgram();
+    const db = program.commands.find((c) => c.name() === "db");
+    expect(db?.commands.some((c) => c.name() === "version")).toBe(true);
+  });
+
+  it("has forward subcommand", () => {
+    const program = createProgram();
+    const db = program.commands.find((c) => c.name() === "db");
+    expect(db?.commands.some((c) => c.name() === "forward")).toBe(true);
+  });
+
+  it("has abort_if_pending_migrations subcommand", () => {
+    const program = createProgram();
+    const db = program.commands.find((c) => c.name() === "db");
+    expect(db?.commands.some((c) => c.name() === "abort_if_pending_migrations")).toBe(true);
+  });
+
+  it("has migrate:up subcommand", () => {
+    const program = createProgram();
+    const db = program.commands.find((c) => c.name() === "db");
+    expect(db?.commands.some((c) => c.name() === "migrate:up")).toBe(true);
+  });
+
+  it("has migrate:down subcommand", () => {
+    const program = createProgram();
+    const db = program.commands.find((c) => c.name() === "db");
+    expect(db?.commands.some((c) => c.name() === "migrate:down")).toBe(true);
+  });
 });
 
 describe("resolveEnv", () => {

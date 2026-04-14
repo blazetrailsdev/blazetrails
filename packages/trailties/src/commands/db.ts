@@ -123,6 +123,23 @@ function toDbConfig(raw: RawConfig, envName: string = resolveEnv()): HashConfig 
   return new HashConfig(envName, "primary", normalized);
 }
 
+/**
+ * Dump the schema to disk after a migration-writing task. Mirrors Rails'
+ * `db:_dump`: gated on `DatabaseTasks.dumpSchemaAfterMigration` and writes
+ * to `DatabaseTasks.schemaDumpPath(config)`.
+ */
+async function dumpSchemaAfterMigrate(adapter: DatabaseAdapter): Promise<void> {
+  if (!DatabaseTasks.dumpSchemaAfterMigration) return;
+  const raw = await loadDatabaseConfig();
+  const config = toDbConfig(raw);
+  const filename = DatabaseTasks.schemaDumpPath(config);
+  const language = DatabaseTasks.schemaFormat === "js" ? "js" : "ts";
+  const source = new AdapterSchemaSource(adapter);
+  const output = await SchemaDumper.dump(source, { language });
+  fs.mkdirSync(path.dirname(filename), { recursive: true });
+  fs.writeFileSync(filename, output);
+}
+
 async function runMigrate(adapter: DatabaseAdapter, targetVersion?: string): Promise<void> {
   const migrations = await discoverMigrations(migrationsDir());
   if (migrations.length === 0) {
@@ -137,6 +154,8 @@ async function runMigrate(adapter: DatabaseAdapter, targetVersion?: string): Pro
 
   const pending = await migrator.pendingMigrations();
   if (pending.length === 0) console.log("All migrations are up to date.");
+
+  await dumpSchemaAfterMigrate(adapter);
 }
 
 async function runRollback(adapter: DatabaseAdapter, steps: number): Promise<void> {
@@ -150,6 +169,8 @@ async function runRollback(adapter: DatabaseAdapter, steps: number): Promise<voi
   await migrator.rollback(steps);
 
   for (const line of migrator.output) console.log(line);
+
+  await dumpSchemaAfterMigrate(adapter);
 }
 
 async function runSeed(): Promise<void> {
@@ -269,6 +290,7 @@ export function dbCommand(): Command {
         const migrator = new Migrator(adapter, migrations);
         await migrator.forward(step);
         for (const line of migrator.output) console.log(line);
+        await dumpSchemaAfterMigrate(adapter);
       });
     });
 
@@ -294,11 +316,17 @@ export function dbCommand(): Command {
         const migrator = new Migrator(adapter, migrations);
         const pending = await migrator.pendingMigrations();
         if (pending.length > 0) {
+          // Match Rails' output verbatim:
+          //   "You have N pending migration[s]:"
+          //   "  %4d %s" per pending
+          //   abort with "Run `bin/rails db:migrate` to resolve this issue."
           console.error(
             `You have ${pending.length} pending migration${pending.length === 1 ? "" : "s"}:`,
           );
-          for (const m of pending) console.error(`  ${m.version} ${m.name}`);
-          console.error(`Run \`trails db:migrate\` to resolve this issue.`);
+          for (const m of pending) {
+            console.error(`  ${String(m.version).padStart(4, " ")} ${m.name}`);
+          }
+          console.error("Run `trails db:migrate` to resolve this issue.");
           process.exitCode = 1;
         }
       });
@@ -314,6 +342,7 @@ export function dbCommand(): Command {
         const migrator = new Migrator(adapter, migrations);
         await migrator.run("up", opts.version);
         for (const line of migrator.output) console.log(line);
+        await dumpSchemaAfterMigrate(adapter);
       });
     });
 
@@ -327,6 +356,7 @@ export function dbCommand(): Command {
         const migrator = new Migrator(adapter, migrations);
         await migrator.run("down", opts.version);
         for (const line of migrator.output) console.log(line);
+        await dumpSchemaAfterMigrate(adapter);
       });
     });
 

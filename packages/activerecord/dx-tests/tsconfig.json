@@ -1,23 +1,25 @@
 {
-  "extends": "../../../tsconfig.json",
   "compilerOptions": {
-    "composite": false,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
     "noEmit": true,
-    "rootDir": ".",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
     "paths": {
       "@blazetrails/activerecord": ["../src/index.ts"],
       "@blazetrails/activemodel": ["../../activemodel/src/index.ts"],
       "@blazetrails/arel": ["../../arel/src/index.ts"],
-      "@blazetrails/activesupport": ["../../activesupport/src/index.ts"]
+      "@blazetrails/activesupport": ["../../activesupport/src/index.ts"],
+      "@blazetrails/activesupport/message-verifier": ["../../activesupport/src/message-verifier.ts"]
     }
   },
-  "include": ["."],
-  "references": [
-    { "path": "../../activerecord" },
-    { "path": "../../activemodel" },
-    { "path": "../../arel" },
-    { "path": "../../activesupport" }
-  ]
+  "include": ["."]
 }

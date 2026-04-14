@@ -330,7 +330,11 @@ export function dbCommand(): Command {
             `You have ${pending.length} pending migration${pending.length === 1 ? "" : "s"}:`,
           );
           for (const m of pending) {
-            console.error(`  ${String(m.version).padStart(4, " ")} ${m.name}`);
+            // Rails prints `"  %4d %s" % [version, name]`, which emits the
+            // version as an integer (no leading zeros). Normalize via BigInt
+            // to match and to stay consistent with the rest of Migrator.
+            const version = String(BigInt(m.version));
+            console.error(`  ${version.padStart(4, " ")} ${m.name}`);
           }
           console.error("Run `trails db:migrate` to resolve this issue.");
           process.exitCode = 1;

@@ -1672,9 +1672,13 @@ export class Migrator {
     if (!proxy) {
       throw new UnknownMigrationVersionError(key);
     }
+    // `_appliedVersions()` stores keys normalized via BigInt, so we need to
+    // look up with the same normalization — `proxy.version` may still be the
+    // raw string (e.g. "001") which wouldn't match "1" in the applied set.
     const applied = await this._appliedVersions();
-    if (direction === "up" && applied.has(proxy.version)) return;
-    if (direction === "down" && !applied.has(proxy.version)) return;
+    const isApplied = applied.has(key);
+    if (direction === "up" && isApplied) return;
+    if (direction === "down" && !isApplied) return;
     await this._runMigration(proxy, direction);
   }
 

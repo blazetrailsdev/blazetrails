@@ -1,4 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { randomUUID } from "node:crypto";
 import { DatabaseTasks } from "./database-tasks.js";
 import { HashConfig } from "../database-configurations/hash-config.js";
 import { DatabaseConfigurations } from "../database-configurations.js";
@@ -835,5 +839,78 @@ describe("DatabaseTasksStructureDumpDispatchTest", () => {
     const config = new HashConfig("test", "primary", { adapter: "sqlite3" });
     await DatabaseTasks.structureDump(config, "out.sql", "--explicit");
     expect(received).toBe("--explicit");
+  });
+});
+
+describe("DatabaseTasksDumpSchemaFormatBranchingTest", () => {
+  const originalFormat = DatabaseTasks.schemaFormat;
+  const originalRoot = DatabaseTasks.root;
+
+  beforeEach(() => {
+    DatabaseTasks.clearRegisteredTasks();
+  });
+
+  afterEach(() => {
+    DatabaseTasks.clearRegisteredTasks();
+    DatabaseTasks.schemaFormat = originalFormat;
+    DatabaseTasks.root = originalRoot;
+  });
+
+  it("dump schema delegates to structureDump when schema format is sql", async () => {
+    const calls: Array<{ filename: string }> = [];
+    DatabaseTasks.registerTask("sqlite", {
+      structureDump: async (_c, filename) => {
+        calls.push({ filename });
+      },
+    });
+    DatabaseTasks.schemaFormat = "sql";
+    DatabaseTasks.dbDir = path.join(os.tmpdir(), `trails-dump-${randomUUID()}`);
+    try {
+      const config = new HashConfig("test", "primary", { adapter: "sqlite3" });
+      await DatabaseTasks.dumpSchema(config);
+      expect(calls.length).toBe(1);
+      expect(calls[0].filename.endsWith("structure.sql")).toBe(true);
+      expect(fs.existsSync(path.dirname(calls[0].filename))).toBe(true);
+    } finally {
+      fs.rmSync(DatabaseTasks.dbDir, { recursive: true, force: true });
+      DatabaseTasks.dbDir = "db";
+    }
+  });
+});
+
+describe("DatabaseTasksLoadSchemaRubyFormatTest", () => {
+  const originalFormat = DatabaseTasks.schemaFormat;
+  const originalRoot = DatabaseTasks.root;
+
+  afterEach(() => {
+    DatabaseTasks.schemaFormat = originalFormat;
+    DatabaseTasks.root = originalRoot;
+    DatabaseTasks.setAdapter(null);
+  });
+
+  it("load schema imports the schema module for ruby format", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trails-schema-"));
+    const schemaFile = path.join(dir, "schema.mjs");
+    const markerFile = path.join(dir, "marker.txt");
+    fs.writeFileSync(
+      schemaFile,
+      `export default async function defineSchema() {\n` +
+        `  const fs = await import("node:fs");\n` +
+        `  fs.writeFileSync(${JSON.stringify(markerFile)}, "loaded");\n` +
+        `}\n`,
+    );
+
+    const adapter = createTestAdapter();
+    DatabaseTasks.setAdapter(adapter);
+    DatabaseTasks.schemaFormat = "ruby";
+
+    try {
+      const config = new HashConfig("test", "primary", { adapter: "sqlite3" });
+      await DatabaseTasks.loadSchema(config, "ruby", schemaFile);
+      expect(fs.existsSync(markerFile)).toBe(true);
+      expect(fs.readFileSync(markerFile, "utf8")).toBe("loaded");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

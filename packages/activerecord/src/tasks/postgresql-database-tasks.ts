@@ -15,15 +15,10 @@ import type { DatabaseAdapter } from "../adapter.js";
 import type { DatabaseConfig } from "../database-configurations/database-config.js";
 import { DatabaseAlreadyExists } from "../errors.js";
 import { DatabaseTasks } from "./database-tasks.js";
+import { coercePort } from "./task-utils.js";
 
 const DEFAULT_ENCODING = process.env.CHARSET ?? "utf8";
 const DUPLICATE_DATABASE = "42P04";
-
-function coercePort(value: unknown, fallback: number): number {
-  if (value === undefined || value === null || value === "") return fallback;
-  const n = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(n) ? n : fallback;
-}
 
 function isPGDuplicateDatabaseError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;

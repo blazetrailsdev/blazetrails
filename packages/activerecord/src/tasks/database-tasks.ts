@@ -8,12 +8,7 @@ import type { DatabaseConfig } from "../database-configurations/database-config.
 import { DatabaseConfigurations } from "../database-configurations.js";
 import { ProtectedEnvironmentError } from "../migration.js";
 import { getFs, getPath, getCrypto } from "@blazetrails/activesupport";
-
-function coercePort(value: unknown, fallback: number): number {
-  if (value === undefined || value === null || value === "") return fallback;
-  const n = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(n) ? n : fallback;
-}
+import { coercePort } from "./task-utils.js";
 
 export class DatabaseTasks {
   static get env(): string {
@@ -456,10 +451,7 @@ export class DatabaseTasks {
 
     const path = getPath();
     const absolute = path.isAbsolute(filename) ? filename : path.resolve(this.root, filename);
-    const forwardSlashed = absolute.replace(/\\/g, "/");
-    const href = forwardSlashed.startsWith("/")
-      ? `file://${forwardSlashed}`
-      : `file:///${forwardSlashed}`;
+    const href = path.pathToFileURL(absolute).href;
     const mod = (await import(href)) as {
       default?: (ctx: unknown) => Promise<void> | void;
     };

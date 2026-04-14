@@ -9,6 +9,7 @@ import type { DatabaseAdapter } from "../adapter.js";
 import type { DatabaseConfig } from "../database-configurations/database-config.js";
 import { DatabaseAlreadyExists } from "../errors.js";
 import { DatabaseTasks } from "./database-tasks.js";
+import { coercePort } from "./task-utils.js";
 
 const ER_DB_CREATE_EXISTS = 1007;
 
@@ -172,6 +173,12 @@ export class MySQLDatabaseTasks {
     return fromUrl !== undefined ? String(fromUrl) : undefined;
   }
 
+  /**
+   * Build argv for mysql/mysqldump. The password is deliberately NOT placed
+   * in argv (it would otherwise be visible in `ps` to other local users);
+   * callers should read the password via env (MYSQL_PWD) — set in
+   * {@link commandEnv}.
+   */
   private prepareCommandOptions(): string[] {
     const args: string[] = [];
     const flagMap: Array<{ flag: string; key: string; fromUrl?: boolean }> = [
@@ -179,7 +186,6 @@ export class MySQLDatabaseTasks {
       { flag: "--port", key: "port", fromUrl: true },
       { flag: "--socket", key: "socket", fromUrl: true },
       { flag: "--user", key: "username", fromUrl: true },
-      { flag: "--password", key: "password", fromUrl: true },
       { flag: "--default-character-set", key: "encoding" },
       { flag: "--ssl-ca", key: "sslca" },
       { flag: "--ssl-cert", key: "sslcert" },
@@ -199,14 +205,33 @@ export class MySQLDatabaseTasks {
     return args;
   }
 
+  private commandEnv(): NodeJS.ProcessEnv {
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    const password = this.resolvedField("password");
+    if (password !== undefined) env.MYSQL_PWD = password;
+    return env;
+  }
+
   private async withAdmin<T>(fn: (admin: DatabaseAdapter) => Promise<T>): Promise<T> {
     const { Mysql2Adapter } = await import("../adapters/mysql2-adapter.js");
-    const adapter = new Mysql2Adapter({
-      host: this.resolvedField("host") ?? "localhost",
-      port: Number(this.resolvedField("port") ?? 3306),
+    const socket = this.resolvedField("socket");
+    const adminConfig: {
+      host?: string;
+      port?: number;
+      user?: string;
+      password?: string;
+      socketPath?: string;
+    } = {
       user: this.resolvedField("username"),
       password: this.resolvedField("password"),
-    });
+    };
+    if (socket) {
+      adminConfig.socketPath = socket;
+    } else {
+      adminConfig.host = this.resolvedField("host") ?? "localhost";
+      adminConfig.port = coercePort(this.resolvedField("port"), 3306);
+    }
+    const adapter = new Mysql2Adapter(adminConfig);
     try {
       return await fn(adapter);
     } finally {
@@ -219,6 +244,7 @@ export class MySQLDatabaseTasks {
     const result: SpawnSyncResult = getChildProcess().spawnSync(cmd, args, {
       encoding: "utf8",
       input: stdin,
+      env: this.commandEnv(),
     });
     if (result.error || result.status !== 0 || result.signal) {
       const details: string[] = [];

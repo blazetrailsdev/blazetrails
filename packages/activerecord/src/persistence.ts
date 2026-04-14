@@ -118,16 +118,19 @@ export async function _insertRecord(
   returning?: string[],
 ): Promise<number> {
   const table = (this as any).arelTable;
+  const tableName = table?.name ?? (this as any).tableName;
   const cols = Object.keys(values);
   if (cols.length === 0) {
-    const pk = Array.isArray(this.primaryKey) ? this.primaryKey[0] : this.primaryKey;
-    const sql = `INSERT INTO "${table.name}" DEFAULT VALUES`;
+    const sql = `INSERT INTO "${tableName}" DEFAULT VALUES`;
     return connection.executeMutation(sql);
   }
   const quotedCols = cols.map((c) => `"${c}"`).join(", ");
   const placeholders = cols.map(() => "?").join(", ");
   const binds = cols.map((c) => values[c]);
-  const sql = `INSERT INTO "${table.name}" (${quotedCols}) VALUES (${placeholders})`;
+  let sql = `INSERT INTO "${tableName}" (${quotedCols}) VALUES (${placeholders})`;
+  if (returning && returning.length > 0) {
+    sql += ` RETURNING ${returning.map((c) => `"${c}"`).join(", ")}`;
+  }
   return connection.executeMutation(sql, binds);
 }
 

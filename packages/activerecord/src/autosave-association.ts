@@ -4,6 +4,9 @@ import type { AssociationDefinition } from "./associations.js";
 import { underscore } from "@blazetrails/activesupport";
 
 const MARKED_FOR_DESTRUCTION = Symbol.for("blazetrails.markedForDestruction");
+const DESTROYED_BY_ASSOCIATION = Symbol.for("blazetrails.destroyedByAssociation");
+const VALIDATING_BELONGS_TO_FOR = Symbol.for("blazetrails.validatingBelongsToFor");
+const AUTOSAVING_BELONGS_TO_FOR = Symbol.for("blazetrails.autosavingBelongsToFor");
 
 /**
  * Mark a record to be destroyed when the parent saves.
@@ -30,6 +33,106 @@ export function isMarkedForDestruction(record: Base): boolean {
  */
 export function isDestroyable(record: Base): boolean {
   return !record.isNewRecord() && isMarkedForDestruction(record);
+}
+
+/**
+ * Records the association that is being destroyed and destroying this
+ * record in the process. Used to avoid updating counter caches unnecessarily.
+ *
+ * Mirrors: ActiveRecord::AutosaveAssociation#destroyed_by_association=
+ */
+export function setDestroyedByAssociation(record: Base, reflection: unknown): void {
+  (record as any).destroyedByAssociation = reflection;
+}
+
+/**
+ * Returns the association for the parent being destroyed.
+ *
+ * Mirrors: ActiveRecord::AutosaveAssociation#destroyed_by_association
+ */
+export function destroyedByAssociation(record: Base): unknown {
+  return (record as any).destroyedByAssociation;
+}
+
+/**
+ * Returns whether or not this record has been changed in any way
+ * (including whether any nested autosave associations are likewise changed).
+ *
+ * Mirrors: ActiveRecord::AutosaveAssociation#changed_for_autosave?
+ */
+export function isChangedForAutosave(record: Base): boolean {
+  return (
+    record.isNewRecord() ||
+    (typeof (record as any).hasChangesToSave === "function" &&
+      (record as any).hasChangesToSave()) ||
+    !!(record as any).changed ||
+    isMarkedForDestruction(record)
+  );
+}
+
+/**
+ * Mirrors: ActiveRecord::AutosaveAssociation#validating_belongs_to_for?
+ */
+export function isValidatingBelongsToFor(record: Base, association: unknown): boolean {
+  const map = (record as any)[VALIDATING_BELONGS_TO_FOR] as Map<unknown, boolean> | undefined;
+  return map?.get(association) ?? false;
+}
+
+/**
+ * Mirrors: ActiveRecord::AutosaveAssociation#autosaving_belongs_to_for?
+ */
+export function isAutosavingBelongsToFor(record: Base, association: unknown): boolean {
+  const map = (record as any)[AUTOSAVING_BELONGS_TO_FOR] as Map<unknown, boolean> | undefined;
+  return map?.get(association) ?? false;
+}
+
+function _setValidatingBelongsToFor(record: Base, association: unknown, value: boolean): void {
+  let map = (record as any)[VALIDATING_BELONGS_TO_FOR] as Map<unknown, boolean> | undefined;
+  if (!map) {
+    map = new Map();
+    (record as any)[VALIDATING_BELONGS_TO_FOR] = map;
+  }
+  if (value) map.set(association, true);
+  else map.delete(association);
+}
+
+function _setAutosavingBelongsToFor(record: Base, association: unknown, value: boolean): void {
+  let map = (record as any)[AUTOSAVING_BELONGS_TO_FOR] as Map<unknown, boolean> | undefined;
+  if (!map) {
+    map = new Map();
+    (record as any)[AUTOSAVING_BELONGS_TO_FOR] = map;
+  }
+  if (value) map.set(association, true);
+  else map.delete(association);
+}
+
+/**
+ * Mirrors: ActiveRecord::AutosaveAssociation::AssociationBuilderExtension.build
+ *
+ * Called by association builders during class definition to register
+ * autosave callbacks for the given reflection.
+ */
+export function build(model: typeof Base, reflection: AssociationDefinition): void {
+  if (reflection.options.autosave && reflection.options.validate === undefined) {
+    reflection.options.validate = true;
+  }
+}
+
+/**
+ * Mirrors: ActiveRecord::AutosaveAssociation::AssociationBuilderExtension.valid_options
+ */
+export function validOptions(): string[] {
+  return ["autosave"];
+}
+
+/**
+ * Clears autosave state on reload.
+ *
+ * Mirrors: ActiveRecord::AutosaveAssociation#reload
+ */
+export function clearAutosaveState(record: Base): void {
+  (record as any)[MARKED_FOR_DESTRUCTION] = false;
+  (record as any)[DESTROYED_BY_ASSOCIATION] = null;
 }
 
 /**
@@ -66,7 +169,12 @@ export function validateAssociations(record: Base, context?: string): void {
 
         if (!child.isNewRecord() && !child.changed) continue;
 
-        if (typeof child.isValid === "function" && !child.isValid(context)) {
+        // Rails: set validating_belongs_to_for around belongs_to validations
+        if (assoc.type === "belongsTo") _setValidatingBelongsToFor(record, assoc.name, true);
+        const isChildValid = typeof child.isValid === "function" ? child.isValid(context) : true;
+        if (assoc.type === "belongsTo") _setValidatingBelongsToFor(record, assoc.name, false);
+
+        if (!isChildValid) {
           const parentErrors = (record as any).errors;
           if (parentErrors) {
             if (assoc.options.autosave) {
@@ -277,10 +385,15 @@ async function _autosaveBelongsTo(record: Base, assoc: AssociationDefinition): P
   }
 
   if (assocRecord.isNewRecord() || assocRecord.changed) {
-    const saved = await assocRecord.save();
-    if (!saved) {
-      propagateErrors(record, assocRecord, assoc.name);
-      return false;
+    _setAutosavingBelongsToFor(record, assoc.name, true);
+    try {
+      const saved = await assocRecord.save();
+      if (!saved) {
+        propagateErrors(record, assocRecord, assoc.name);
+        return false;
+      }
+    } finally {
+      _setAutosavingBelongsToFor(record, assoc.name, false);
     }
 
     // Update FK on owner after saving the associated record

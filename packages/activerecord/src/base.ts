@@ -2506,6 +2506,9 @@ export class Base extends Model {
     this._collectionProxies.clear();
     this._preloadedAssociations.clear();
     this._associationInstances.clear();
+    // Rails: AutosaveAssociation#reload clears destruction/autosave state
+    (this as any)[Symbol.for("blazetrails.markedForDestruction")] = false;
+    this._destroyedByAssociation = null;
     return this;
   }
 
@@ -2975,6 +2978,18 @@ export class Base extends Model {
    */
   markedForDestruction(): boolean {
     return !!(this as any)[Symbol.for("blazetrails.markedForDestruction")];
+  }
+
+  /**
+   * Mirrors: ActiveRecord::AutosaveAssociation#changed_for_autosave?
+   */
+  changedForAutosave(): boolean {
+    return (
+      this.isNewRecord() ||
+      (typeof (this as any).hasChangesToSave === "function" && (this as any).hasChangesToSave()) ||
+      !!(this as any).changed ||
+      this.markedForDestruction()
+    );
   }
 
   /**

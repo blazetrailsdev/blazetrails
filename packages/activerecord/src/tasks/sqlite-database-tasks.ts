@@ -169,8 +169,11 @@ export class SQLiteDatabaseTasks {
     if (!database) {
       throw new Error("SQLite database configuration missing 'database' path");
     }
+    // Per PathAdapter contract, a missing isAbsolute means the adapter
+    // doesn't model relative/absolute distinctions (e.g. a VFS) — treat
+    // every path as already absolute.
     if (database === ":memory:") return database;
-    if (path.isAbsolute && path.isAbsolute(database)) return database;
+    if (!path.isAbsolute || path.isAbsolute(database)) return database;
     return path.join(this.root, database);
   }
 

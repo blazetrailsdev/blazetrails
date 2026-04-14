@@ -9,7 +9,12 @@
 export interface SpawnSyncOptions {
   input?: string | Uint8Array;
   env?: NodeJS.ProcessEnv;
-  encoding?: "utf8" | "utf-8" | null;
+  /**
+   * Output encoding for stdout/stderr. The adapter always returns decoded
+   * strings, so only UTF-8 variants are accepted here. If a caller needs
+   * raw bytes they should use `node:child_process` directly.
+   */
+  encoding?: "utf8" | "utf-8";
   cwd?: string;
 }
 
@@ -55,13 +60,10 @@ type NodeChildProcess = {
 function wrap(cp: NodeChildProcess): ChildProcessAdapter {
   return {
     spawnSync(cmd, args, options) {
-      // Only default encoding when it was left undefined. Preserve an
-      // explicit `null` so callers can opt out of string decoding.
-      const encoding = options && "encoding" in options ? options.encoding : "utf8";
       const result = cp.spawnSync(cmd, args, {
         input: options?.input,
         env: options?.env,
-        encoding,
+        encoding: options?.encoding ?? "utf8",
         cwd: options?.cwd,
       });
       return {

@@ -727,8 +727,10 @@ export class DatabaseTasks {
       const fromUrl = typeof c.url === "string" ? sqliteDatabaseFromUrl(String(c.url)) : undefined;
       const database = config.database ?? fromUrl ?? ":memory:";
       const path = getPath();
+      // Missing isAbsolute means the PathAdapter (e.g. a VFS) doesn't
+      // model relative/absolute — treat as already absolute.
       const resolved =
-        database === ":memory:" || (path.isAbsolute && path.isAbsolute(database))
+        database === ":memory:" || !path.isAbsolute || path.isAbsolute(database)
           ? database
           : path.resolve(this.root, database);
       return new SQLite3Adapter(resolved);

@@ -30,6 +30,7 @@ import {
   AttributeAssignmentError,
 } from "./errors.js";
 import { AssociatedValidator } from "./validations/associated.js";
+import { AutosaveAssociation } from "./autosave-association.js";
 import {
   RecordInvalid,
   isValid as validationsIsValid,
@@ -134,14 +135,6 @@ export function _setRelationCtor(ctor: new (modelClass: typeof Base) => any): vo
 /** @internal Called by relation.ts to register the scope proxy wrapper. */
 export function _setScopeProxyWrapper(wrapper: (rel: any) => any): void {
   _wrapWithScopeProxy = wrapper;
-}
-
-// Late-bound validateAssociations to break circular dependency with autosave.ts
-let _validateAssociationsFn: ((record: any, context?: string) => void) | null = null;
-
-/** @internal Called by autosave.ts to register validateAssociations. */
-export function _setValidateAssociationsFn(fn: (record: any, context?: string) => void): void {
-  _validateAssociationsFn = fn;
 }
 
 /** @internal Hook called when a model's adapter is set. Used by test-adapter.ts. */
@@ -2531,14 +2524,7 @@ export class Base extends Model {
   declare inspect: () => string;
   declare attributeForInspect: (attr: string) => string;
 
-  /**
-   * Returns true if the record has changes, is new, or is marked for destruction.
-   *
-   * Mirrors: ActiveRecord::AutosaveAssociation#changed_for_autosave?
-   */
-  isChangedForAutosave(): boolean {
-    return this.changedForAutosave();
-  }
+  // isChangedForAutosave, changedForAutosave — mixed in via include(Base, AutosaveAssociation)
 
   /**
    * Return a subset of the record's attributes as a plain object.
@@ -2939,8 +2925,9 @@ export class Base extends Model {
     const effectiveContext =
       context ?? this._validationContext ?? defaultValidationContext.call(this);
     const result = validationsIsValid.call(this, effectiveContext);
-    if (_validateAssociationsFn) {
-      _validateAssociationsFn(this, effectiveContext);
+    const ctor = this.constructor as any;
+    if (typeof ctor._validateAssociationsFn === "function") {
+      ctor._validateAssociationsFn(this, effectiveContext);
     }
     return result && !this.errors.any;
   }
@@ -2967,26 +2954,14 @@ export class Base extends Model {
     return this.isEqual(other);
   }
 
-  /**
-   * Mirrors: ActiveRecord::AutosaveAssociation#mark_for_destruction
-   */
-  markForDestruction(): void {
-    (this as any)[Symbol.for("blazetrails.markedForDestruction")] = true;
-  }
-
-  /**
-   * Mirrors: ActiveRecord::AutosaveAssociation#marked_for_destruction?
-   */
-  markedForDestruction(): boolean {
-    return !!(this as any)[Symbol.for("blazetrails.markedForDestruction")];
-  }
-
-  /**
-   * Mirrors: ActiveRecord::AutosaveAssociation#changed_for_autosave?
-   */
-  changedForAutosave(): boolean {
-    return _changedForAutosaveImpl(this);
-  }
+  // Mixed in via include(Base, AutosaveAssociation)
+  declare markForDestruction: () => void;
+  declare markedForDestruction: () => boolean;
+  declare changedForAutosave: () => boolean;
+  declare isChangedForAutosave: () => boolean;
+  declare isValidatingBelongsToFor: (association: unknown) => boolean;
+  declare isAutosavingBelongsToFor: (association: unknown) => boolean;
+  declare setDestroyedByAssociation: (reflection: unknown) => void;
 
   /**
    * Return the association object for the given name.
@@ -3104,38 +3079,6 @@ export class Base extends Model {
 // exact generics, `this` parameter, and return type of their implementations.
 // ---------------------------------------------------------------------------
 
-// Recursion-guarded implementation for changedForAutosave, matching
-// Rails' nested_records_changed_for_autosave? with @_already_called guard.
-const _changedForAutosaveSeen = new WeakSet<object>();
-function _changedForAutosaveImpl(record: any): boolean {
-  if (_changedForAutosaveSeen.has(record)) return false;
-  _changedForAutosaveSeen.add(record);
-  try {
-    if (
-      record.isNewRecord() ||
-      !!record.hasChangesToSave ||
-      !!record.changed ||
-      (typeof record.markedForDestruction === "function" && record.markedForDestruction())
-    ) {
-      return true;
-    }
-    const ctor = record.constructor;
-    const associations: any[] = ctor._associations ?? [];
-    for (const assoc of associations) {
-      if (!assoc.options?.autosave) continue;
-      const cached =
-        record._cachedAssociations?.get(assoc.name) ??
-        record._preloadedAssociations?.get(assoc.name);
-      if (!cached) continue;
-      const children: any[] = Array.isArray(cached) ? cached : [cached];
-      if (children.some((c: any) => _changedForAutosaveImpl(c))) return true;
-    }
-    return false;
-  } finally {
-    _changedForAutosaveSeen.delete(record);
-  }
-}
-
 extend(Base, ConnectionHandling.ClassMethods);
 extend(Base, Querying);
 extend(Base, Translation.ClassMethods);
@@ -3166,6 +3109,7 @@ include(Base, {
 });
 include(Base, LockingPessimistic.InstanceMethods);
 include(Base, Timestamp.InstanceMethods);
+include(Base, AutosaveAssociation);
 
 // Register Model.isValid as the super for the Validations module's isValid.
 // Breaks the recursion: Base.isValid → validations.isValid → Model.isValid.

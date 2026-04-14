@@ -153,6 +153,7 @@ export {
   ValueTooLong,
   PreparedStatementInvalid,
   NoDatabaseError,
+  DatabaseAlreadyExists,
   AttributeAssignmentError,
   TransactionIsolationError,
   IrreversibleOrderError,

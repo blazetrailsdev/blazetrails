@@ -8,6 +8,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { spawnSync } from "node:child_process";
+import type { DatabaseAdapter } from "../adapter.js";
 import type { DatabaseConfig } from "../database-configurations/database-config.js";
 import { DatabaseTasks } from "./database-tasks.js";
 
@@ -30,20 +31,31 @@ export class PostgreSQLDatabaseTasks {
     this.configurationHash = { ...dbConfig.configuration };
   }
 
-  async create(_connectionAlreadyEstablished = false): Promise<void> {
+  async create(connectionAlreadyEstablished = false): Promise<void> {
     const dbName = this.requireDatabaseName();
-    const encoding = String(this.configurationHash.encoding ?? DEFAULT_ENCODING);
-    const sql = `CREATE DATABASE "${dbName}" ENCODING '${encoding}'`;
-    await this.runOnSystemDb(sql);
+    const encoding = this.encoding();
+    const sql = `CREATE DATABASE "${this.escapeIdent(dbName)}" ENCODING '${this.escapeSingle(encoding)}'`;
+    const admin = await this.connectAdmin();
+    try {
+      await admin.executeMutation(sql);
+    } finally {
+      await this.closeAdapter(admin);
+    }
+    void connectionAlreadyEstablished;
   }
 
   async drop(): Promise<void> {
     const dbName = this.requireDatabaseName();
-    await this.runOnSystemDb(`DROP DATABASE IF EXISTS "${dbName}"`);
+    const admin = await this.connectAdmin();
+    try {
+      await admin.executeMutation(`DROP DATABASE IF EXISTS "${this.escapeIdent(dbName)}"`);
+    } finally {
+      await this.closeAdapter(admin);
+    }
   }
 
   charset(): string {
-    return String(this.configurationHash.encoding ?? DEFAULT_ENCODING);
+    return this.encoding();
   }
 
   collation(): string | null {
@@ -90,7 +102,39 @@ export class PostgreSQLDatabaseTasks {
       purge: async (config) => new PostgreSQLDatabaseTasks(config).purge(),
       charset: async (config) => new PostgreSQLDatabaseTasks(config).charset(),
       collation: async (config) => new PostgreSQLDatabaseTasks(config).collation(),
+      structureDump: async (config, filename, flags) =>
+        new PostgreSQLDatabaseTasks(config).structureDump(filename, flags),
+      structureLoad: async (config, filename, flags) =>
+        new PostgreSQLDatabaseTasks(config).structureLoad(filename, flags),
     });
+  }
+
+  private encoding(): string {
+    return String(this.configurationHash.encoding ?? DEFAULT_ENCODING);
+  }
+
+  private async connectAdmin(): Promise<DatabaseAdapter> {
+    const { PostgreSQLAdapter } = await import("../adapters/postgresql-adapter.js");
+    const c = this.configurationHash;
+    if (c.url) {
+      const parsed = new URL(String(c.url));
+      parsed.pathname = "/postgres";
+      return new PostgreSQLAdapter(parsed.toString());
+    }
+    return new PostgreSQLAdapter({
+      host: (c.host as string) ?? "localhost",
+      port: (c.port as number) ?? 5432,
+      database: "postgres",
+      user: c.username as string | undefined,
+      password: c.password as string | undefined,
+    });
+  }
+
+  private async closeAdapter(adapter: DatabaseAdapter): Promise<void> {
+    const maybeClose = (adapter as { close?: () => Promise<void> }).close;
+    if (typeof maybeClose === "function") {
+      await maybeClose.call(adapter);
+    }
   }
 
   private psqlEnv(): NodeJS.ProcessEnv {
@@ -105,14 +149,6 @@ export class PostgreSQLDatabaseTasks {
     if (c.sslkey !== undefined) env.PGSSLKEY = String(c.sslkey);
     if (c.sslrootcert !== undefined) env.PGSSLROOTCERT = String(c.sslrootcert);
     return env;
-  }
-
-  private async runOnSystemDb(sql: string): Promise<void> {
-    const args = ["--dbname", "postgres", "--command", sql];
-    const result = spawnSync("psql", args, { env: this.psqlEnv(), encoding: "utf8" });
-    if (result.status !== 0) {
-      throw new Error(`failed to execute: psql ${args.join(" ")}\n\n${result.stderr ?? ""}`);
-    }
   }
 
   private runCmd(cmd: string, args: string[], action: string): void {
@@ -144,5 +180,13 @@ export class PostgreSQLDatabaseTasks {
     const name = this.dbConfig.database;
     if (!name) throw new Error("PostgreSQL configuration missing 'database'");
     return name;
+  }
+
+  private escapeIdent(value: string): string {
+    return value.replace(/"/g, '""');
+  }
+
+  private escapeSingle(value: string): string {
+    return value.replace(/'/g, "''");
   }
 }

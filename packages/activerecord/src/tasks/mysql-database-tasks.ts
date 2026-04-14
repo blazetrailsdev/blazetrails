@@ -5,6 +5,7 @@
  */
 
 import { spawnSync } from "node:child_process";
+import type { DatabaseAdapter } from "../adapter.js";
 import type { DatabaseConfig } from "../database-configurations/database-config.js";
 import { DatabaseTasks } from "./database-tasks.js";
 
@@ -25,14 +26,18 @@ export class MySQLDatabaseTasks {
 
   async create(): Promise<void> {
     const opts = this.creationOptions();
-    const charset = opts.charset ? ` CHARACTER SET \`${opts.charset}\`` : "";
-    const collation = opts.collation ? ` COLLATE \`${opts.collation}\`` : "";
-    const sql = `CREATE DATABASE \`${this.requireDatabaseName()}\`${charset}${collation}`;
-    await this.runSystem(sql);
+    const charset = opts.charset ? ` CHARACTER SET \`${this.escapeIdent(opts.charset)}\`` : "";
+    const collation = opts.collation ? ` COLLATE \`${this.escapeIdent(opts.collation)}\`` : "";
+    const sql = `CREATE DATABASE \`${this.escapeIdent(this.requireDatabaseName())}\`${charset}${collation}`;
+    await this.withAdmin((admin) => admin.executeMutation(sql));
   }
 
   async drop(): Promise<void> {
-    await this.runSystem(`DROP DATABASE IF EXISTS \`${this.requireDatabaseName()}\``);
+    await this.withAdmin((admin) =>
+      admin.executeMutation(
+        `DROP DATABASE IF EXISTS \`${this.escapeIdent(this.requireDatabaseName())}\``,
+      ),
+    );
   }
 
   async purge(): Promise<void> {
@@ -79,6 +84,16 @@ export class MySQLDatabaseTasks {
       purge: async (config: DatabaseConfig) => new MySQLDatabaseTasks(config).purge(),
       charset: async (config: DatabaseConfig) => new MySQLDatabaseTasks(config).charset(),
       collation: async (config: DatabaseConfig) => new MySQLDatabaseTasks(config).collation(),
+      structureDump: async (
+        config: DatabaseConfig,
+        filename: string,
+        flags?: string | string[] | null,
+      ) => new MySQLDatabaseTasks(config).structureDump(filename, flags),
+      structureLoad: async (
+        config: DatabaseConfig,
+        filename: string,
+        flags?: string | string[] | null,
+      ) => new MySQLDatabaseTasks(config).structureLoad(filename, flags),
     };
     DatabaseTasks.registerTask(/mysql/, handler);
     DatabaseTasks.registerTask(/trilogy/, handler);
@@ -120,10 +135,23 @@ export class MySQLDatabaseTasks {
     return args;
   }
 
-  private async runSystem(sql: string): Promise<void> {
-    const args = this.prepareCommandOptions();
-    args.push("--execute", sql);
-    this.runCmd("mysql", args, "admin");
+  private async withAdmin<T>(fn: (admin: DatabaseAdapter) => Promise<T>): Promise<T> {
+    const { Mysql2Adapter } = await import("../adapters/mysql2-adapter.js");
+    const c = this.configurationHash;
+    const adapter = c.url
+      ? new Mysql2Adapter(String(c.url))
+      : new Mysql2Adapter({
+          host: (c.host as string) ?? "localhost",
+          port: (c.port as number) ?? 3306,
+          user: c.username as string | undefined,
+          password: c.password as string | undefined,
+        });
+    try {
+      return await fn(adapter);
+    } finally {
+      const close = (adapter as unknown as { close?: () => Promise<void> }).close;
+      if (typeof close === "function") await close.call(adapter);
+    }
   }
 
   private runCmd(cmd: string, args: string[], action: string): void {
@@ -142,5 +170,9 @@ export class MySQLDatabaseTasks {
     const name = this.dbConfig.database;
     if (!name) throw new Error("MySQL configuration missing 'database'");
     return name;
+  }
+
+  private escapeIdent(value: string): string {
+    return value.replace(/`/g, "``");
   }
 }

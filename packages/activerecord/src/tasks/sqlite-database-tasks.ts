@@ -56,12 +56,33 @@ export class SQLiteDatabaseTasks {
   }
 
   async purge(): Promise<void> {
+    await this.disconnect();
     try {
       await this.drop();
     } catch (error) {
       if (!(error instanceof NoDatabaseError)) throw error;
     }
     await this.create();
+    await this.reconnect();
+  }
+
+  private async disconnect(): Promise<void> {
+    try {
+      const { Base } = await import("../base.js");
+      const existing = (Base as unknown as { adapter?: { close?: () => Promise<void> } }).adapter;
+      if (existing && typeof existing.close === "function") await existing.close();
+    } catch {
+      // best effort
+    }
+  }
+
+  private async reconnect(): Promise<void> {
+    try {
+      const { Base } = await import("../base.js");
+      await Base.establishConnection({ adapter: "sqlite3", database: this.resolveDbPath() });
+    } catch {
+      // best effort
+    }
   }
 
   charset(): string {
@@ -106,6 +127,10 @@ export class SQLiteDatabaseTasks {
       drop: async (config) => new SQLiteDatabaseTasks(config).drop(),
       purge: async (config) => new SQLiteDatabaseTasks(config).purge(),
       charset: async (config) => new SQLiteDatabaseTasks(config).charset(),
+      structureDump: async (config, filename, flags) =>
+        new SQLiteDatabaseTasks(config).structureDump(filename, flags),
+      structureLoad: async (config, filename, flags) =>
+        new SQLiteDatabaseTasks(config).structureLoad(filename, flags),
     });
   }
 

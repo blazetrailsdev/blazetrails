@@ -6,7 +6,7 @@ import { createTestAdapter } from "../test-adapter.js";
 
 describe("DatabaseTasksCheckProtectedEnvironmentsTest", () => {
   it("raises an error when called with protected environment", async () => {
-    await expect(DatabaseTasks.checkProtectedEnvironments("production")).rejects.toThrow(
+    await expect(DatabaseTasks.checkProtectedEnvironmentsBang("production")).rejects.toThrow(
       /production/,
     );
   });

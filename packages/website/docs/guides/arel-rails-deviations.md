@@ -20,8 +20,8 @@ visitors, and so on.
 ## Naming and arguments
 
 Arel inherits the cross-cutting conventions described in the guides
-index: [method casing](./#method-casing) (camelCase everywhere) and
-[symbols/kwargs → options objects](./#symbols-kwargs). So Ruby's
+index: [method casing](./index.md#method-casing) (camelCase everywhere) and
+[symbols/kwargs → options objects](./index.md#symbols-kwargs). So Ruby's
 `Arel::Table.new(:users, as: "u")` becomes `new Table("users", { as:
 "u" })`. Nothing Arel-specific about this.
 

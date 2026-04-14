@@ -221,7 +221,7 @@ parse it yourself. We intentionally don't ship a half-implemented
 
 ## 10. Adapters (beyond the DB): `fs` and `crypto`
 
-See [Browser support via adapters](./#adapters) for the shared
+See [Browser support via adapters](./index.md#adapters) for the shared
 `FsAdapter` / `CryptoAdapter` primer. ActiveRecord is the heaviest
 consumer: signed IDs, message verifiers, schema cache persistence, and
 migration file I/O all route through `getFs()` / `getCrypto()` so they
@@ -229,7 +229,7 @@ keep working in the browser.
 
 ## 11. Callbacks: async all the way down
 
-See [Block APIs → callback functions](./#block-apis) for the shared
+See [Block APIs → callback functions](./index.md#block-apis) for the shared
 callback story. Worth emphasizing in ActiveRecord specifically: because
 callbacks here commonly need to hit the DB (`beforeSave` cascading to
 related records, etc.), they are almost always async. Always `await`
@@ -239,8 +239,8 @@ you.
 ## 12. Naming, bang methods, keyword args, symbols
 
 All cross-package — see the index for
-[method casing](./#method-casing), [bang methods](./#bang-methods),
-and [symbols/kwargs](./#symbols-kwargs). Every ActiveRecord API
+[method casing](./index.md#method-casing), [bang methods](./index.md#bang-methods),
+and [symbols/kwargs](./index.md#symbols-kwargs). Every ActiveRecord API
 follows them.
 
 ## Summary

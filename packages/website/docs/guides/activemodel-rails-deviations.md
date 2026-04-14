@@ -17,7 +17,7 @@ and serialization.
 
 ActiveModel is the heaviest user of the `include` / `extend` /
 `Included` / `Extended` mixin helpers. The full primer lives in the
-guides index: [Module mixins](./#module-mixins). In ActiveModel
+guides index: [Module mixins](./index.md#module-mixins). In ActiveModel
 specifically, the machinery is applied to wire up
 `AttributeMethods`, `Callbacks`, `Validations`, `Dirty`,
 `Serialization`, and friends onto `Model` / `Base`.
@@ -56,7 +56,7 @@ away.
 
 Rails callbacks are Ruby blocks; ours are (possibly-async) functions.
 The shared rationale and signatures live at
-[Block APIs → callback functions](./#block-apis). One ActiveModel-
+[Block APIs → callback functions](./index.md#block-apis). One ActiveModel-
 specific point: `before_save :do_thing` (Rails-style symbol reference
 to a method) is accepted as a method-name string or a direct function
 — either works. This is the module where `runCallbacks` lives
@@ -108,8 +108,8 @@ See `packages/activemodel/src/serialization.ts`.
 
 ## Small, systematic differences
 
-The cross-package conventions — [method casing](./#method-casing),
-[symbols/kwargs](./#symbols-kwargs), and [bang methods](./#bang-methods)
+The cross-package conventions — [method casing](./index.md#method-casing),
+[symbols/kwargs](./index.md#symbols-kwargs), and [bang methods](./index.md#bang-methods)
 — all apply. ActiveModel-specific wrinkles:
 
 - **`try :foo` → `?.`.** TypeScript's optional chaining replaces Ruby's

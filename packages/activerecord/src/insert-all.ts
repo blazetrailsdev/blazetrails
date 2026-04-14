@@ -15,6 +15,7 @@ export interface InsertAllOptions {
   onDuplicate?: "skip" | "update" | Nodes.SqlLiteral;
   updateOnly?: string | string[];
   uniqueBy?: string | string[];
+  returning?: string | string[] | Nodes.SqlLiteral | false;
   recordTimestamps?: boolean;
 }
 
@@ -24,6 +25,7 @@ export class InsertAll {
   readonly inserts: Record<string, unknown>[];
   readonly keys: Set<string>;
   readonly uniqueBy: string | string[] | undefined;
+  readonly returning: string | string[] | Nodes.SqlLiteral | false;
 
   onDuplicate: "skip" | "update" | undefined;
   updateOnly: string | string[] | undefined;
@@ -58,6 +60,20 @@ export class InsertAll {
     this._recordTimestamps = options.recordTimestamps ?? this.model.recordTimestamps;
     this.updateSql = undefined;
     this.onDuplicate = undefined;
+
+    if (options.returning !== undefined) {
+      this.returning =
+        options.returning === false ||
+        (Array.isArray(options.returning) && options.returning.length === 0)
+          ? false
+          : options.returning;
+    } else {
+      const supportsReturning =
+        typeof (connection as any).supportsInsertReturning === "function"
+          ? (connection as any).supportsInsertReturning()
+          : false;
+      this.returning = supportsReturning ? this.primaryKeys() : false;
+    }
 
     if (this.inserts.length === 0) {
       this.keys = new Set();
@@ -210,7 +226,7 @@ export class Builder {
   }
 
   returning(): string | undefined {
-    const ret = (this._insertAll as any).returning;
+    const ret = this._insertAll.returning;
     if (!ret) return undefined;
     if (ret instanceof Nodes.SqlLiteral) return String(ret);
     const cols = Array.isArray(ret) ? ret : [typeof ret === "string" ? ret : String(ret)];
@@ -329,6 +345,11 @@ export class Builder {
         );
         sql += assignments.join(",");
       }
+    }
+
+    const ret = this.returning();
+    if (ret) {
+      sql += ` RETURNING ${ret}`;
     }
 
     return sql;

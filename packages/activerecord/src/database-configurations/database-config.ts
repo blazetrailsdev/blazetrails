@@ -155,15 +155,15 @@ export class DatabaseConfig {
   }
 
   get pool(): number {
-    return Number(this.configuration.pool ?? 5);
+    return toInt(this.configuration.pool ?? 5);
   }
 
   get minThreads(): number {
-    return Number(this.configuration.minThreads ?? 0);
+    return toInt(this.configuration.minThreads ?? 0);
   }
 
   get maxThreads(): number {
-    return Number(this.configuration.maxThreads ?? this.pool);
+    return toInt(this.configuration.maxThreads ?? this.pool);
   }
 
   get maxQueue(): number {
@@ -171,20 +171,20 @@ export class DatabaseConfig {
   }
 
   get checkoutTimeout(): number {
-    return Number(this.configuration.checkoutTimeout ?? 5);
+    return toFloat(this.configuration.checkoutTimeout ?? 5);
   }
 
   get idleTimeout(): number | null {
     const raw = this.configuration.idleTimeout;
     if (raw === null) return null;
-    const timeout = raw === undefined ? 300 : Number(raw);
+    const timeout = raw === undefined ? 300 : toFloat(raw);
     return timeout > 0 ? timeout : null;
   }
 
   get reapingFrequency(): number | null {
     const raw = this.configuration.reapingFrequency;
     if (raw === null) return null;
-    const freq = raw === undefined ? 60 : Number(raw);
+    const freq = raw === undefined ? 60 : toFloat(raw);
     return freq > 0 ? freq : null;
   }
 
@@ -223,4 +223,16 @@ export class DatabaseConfig {
     if (this.adapter) await this.adapterClass();
     return true;
   }
+}
+
+// Mirrors Ruby's String#to_i / to_f — non-numeric values coerce to 0, matching
+// Rails' silent coercion for config values that may arrive as query strings.
+function toInt(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.trunc(n) : 0;
+}
+
+function toFloat(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
 }

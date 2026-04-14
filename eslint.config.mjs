@@ -74,6 +74,10 @@ export default defineConfig(
       "packages/activerecord/src/encryption/config.ts",
       "packages/activerecord/src/encryption/context.ts",
       "packages/activerecord/src/connection-handling.ts",
+      // Task runners shell out to database CLIs — node-only
+      "packages/activerecord/src/tasks/sqlite-database-tasks.ts",
+      "packages/activerecord/src/tasks/postgresql-database-tasks.ts",
+      "packages/activerecord/src/tasks/mysql-database-tasks.ts",
     ],
     plugins: {
       blazetrails: { rules: { "no-node-builtins": noNodeBuiltins } },

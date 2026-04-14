@@ -20,6 +20,10 @@ export class DatabaseTasks {
   static databaseConfiguration: DatabaseConfigurations | null = null;
   static dbDir: string = "db";
   static migrationsPath: string[] = ["db/migrate"];
+  static migrationsPaths: string[] = ["db/migrate"];
+  static fixturesPath: string = "test/fixtures";
+  static root: string = process.cwd();
+  static seedLoader: { loadSeed(): void | Promise<void> } | null = null;
   static schemaFormat: "ruby" | "sql" = "ruby";
 
   private static _registeredTasks: Array<{

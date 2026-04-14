@@ -91,6 +91,7 @@ export class InsertAll {
 
     this._verifyAttributes();
     this._configureDuplicateLogic(options.onDuplicate);
+    this._ensureValidOptionsForConnection();
   }
 
   async execute(): Promise<number> {
@@ -203,6 +204,18 @@ export class InsertAll {
     if (!this.uniqueBy) return [];
     return Array.isArray(this.uniqueBy) ? this.uniqueBy : [this.uniqueBy];
   }
+
+  private _ensureValidOptionsForConnection(): void {
+    if (
+      this.returning &&
+      typeof (this.connection as any).supportsInsertReturning === "function" &&
+      !(this.connection as any).supportsInsertReturning()
+    ) {
+      throw new Error(
+        `${(this.connection as any).constructor?.name ?? "Adapter"} does not support INSERT...RETURNING`,
+      );
+    }
+  }
 }
 
 /**
@@ -228,8 +241,8 @@ export class Builder {
   returning(): string | undefined {
     const ret = this._insertAll.returning;
     if (!ret) return undefined;
-    if (ret instanceof Nodes.SqlLiteral) return String(ret);
-    const cols = Array.isArray(ret) ? ret : [typeof ret === "string" ? ret : String(ret)];
+    if (ret instanceof Nodes.SqlLiteral) return ret.value;
+    const cols = Array.isArray(ret) ? ret : [ret];
     return cols
       .map((attr: string) => {
         const model = this._insertAll.model;

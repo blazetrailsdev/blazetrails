@@ -3063,9 +3063,7 @@ export class Relation<T extends Base> {
   }
 
   _execScope(fn: (...args: unknown[]) => unknown, ...args: unknown[]): Relation<T> {
-    const result = fn.call(this, ...args);
-    if (result == null) return this;
-    return result as Relation<T>;
+    return (fn.call(this, ...args) || this) as Relation<T>;
   }
 }
 

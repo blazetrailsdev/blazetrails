@@ -30,12 +30,10 @@ function _nestedRecordsChangedForAutosave(record: any): boolean {
     const associations: AssociationDefinition[] = record.constructor._associations ?? [];
     for (const assoc of associations) {
       if (!assoc.options.autosave) continue;
-      const proxy = record._collectionProxies?.get(assoc.name);
       const cached =
         record._cachedAssociations?.get(assoc.name) ??
-        record._preloadedAssociations?.get(assoc.name) ??
-        (proxy?.loaded ? proxy.target : undefined);
-      if (cached == null) continue;
+        record._preloadedAssociations?.get(assoc.name);
+      if (!cached) continue;
       const children: any[] = Array.isArray(cached) ? cached : [cached];
       if (
         children.some((c: any) =>
@@ -104,23 +102,33 @@ export const AutosaveAssociation = {
 function _setValidatingBelongsToFor(record: any, association: unknown, value: boolean): void {
   let map = record[VALIDATING_BELONGS_TO_FOR] as Map<string, boolean> | undefined;
   if (!map) {
+    if (!value) return;
     map = new Map();
     record[VALIDATING_BELONGS_TO_FOR] = map;
   }
   const key = _guardKey(association);
-  if (value) map.set(key, true);
-  else map.delete(key);
+  if (value) {
+    map.set(key, true);
+  } else {
+    map.delete(key);
+    if (map.size === 0) delete record[VALIDATING_BELONGS_TO_FOR];
+  }
 }
 
 function _setAutosavingBelongsToFor(record: any, association: unknown, value: boolean): void {
   let map = record[AUTOSAVING_BELONGS_TO_FOR] as Map<string, boolean> | undefined;
   if (!map) {
+    if (!value) return;
     map = new Map();
     record[AUTOSAVING_BELONGS_TO_FOR] = map;
   }
   const key = _guardKey(association);
-  if (value) map.set(key, true);
-  else map.delete(key);
+  if (value) {
+    map.set(key, true);
+  } else {
+    map.delete(key);
+    if (map.size === 0) delete record[AUTOSAVING_BELONGS_TO_FOR];
+  }
 }
 
 // ---------------------------------------------------------------------------

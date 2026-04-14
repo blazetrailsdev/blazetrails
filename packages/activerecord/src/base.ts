@@ -30,7 +30,7 @@ import {
   AttributeAssignmentError,
 } from "./errors.js";
 import { AssociatedValidator } from "./validations/associated.js";
-import { AutosaveAssociation } from "./autosave-association.js";
+import { AutosaveAssociation, clearAutosaveState } from "./autosave-association.js";
 import {
   RecordInvalid,
   isValid as validationsIsValid,
@@ -2501,11 +2501,7 @@ export class Base extends Model {
     this._preloadedAssociations.clear();
     this._associationInstances.clear();
     (this as any)._cachedAssociations?.clear();
-    // Rails: AutosaveAssociation#reload clears destruction/autosave state
-    (this as any)[Symbol.for("blazetrails.markedForDestruction")] = false;
-    this.destroyedByAssociation = null;
-    delete (this as any)[Symbol.for("blazetrails.validatingBelongsToFor")];
-    delete (this as any)[Symbol.for("blazetrails.autosavingBelongsToFor")];
+    clearAutosaveState(this);
     return this;
   }
 

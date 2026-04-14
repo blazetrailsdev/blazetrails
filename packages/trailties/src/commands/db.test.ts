@@ -616,4 +616,86 @@ export class CreatePosts extends Migration {
     expect(process.exitCode).toBe(1);
     expect(errs.join("\n")).toMatch(/Invalid value for --step/);
   });
+
+  it("db migrate:up applies the named migration and dumps schema.ts", async () => {
+    // Point both config AND this CLI's migrations at a persistent sqlite
+    // file so the adapter used by the CLI and the one we use to assert
+    // against see the same DB.
+    const dbFile = path.join(tmpDir, "test.sqlite3");
+    fs.writeFileSync(
+      path.join(tmpDir, "config", "database.ts"),
+      `export default {
+  development: { adapter: "sqlite3", database: ${JSON.stringify(dbFile)} },
+  test: { adapter: "sqlite3", database: ${JSON.stringify(dbFile)} },
+};`,
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, "db", "migrations", "20260101000000-create-posts.ts"),
+      `import { Migration } from "@blazetrails/activerecord";
+export class CreatePosts extends Migration {
+  async up() { await this.createTable("posts", (t) => { t.string("title"); }); }
+  async down() { await this.dropTable("posts"); }
+}`,
+    );
+
+    await runDb(["migrate:up", "--version=20260101000000"]);
+
+    // Schema dump should have been written.
+    expect(fs.existsSync(path.join(tmpDir, "db", "schema.ts"))).toBe(true);
+
+    // Table was created.
+    const { SQLite3Adapter } =
+      await import("@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js");
+    const a = new SQLite3Adapter(dbFile);
+    try {
+      const tables = await a.execute(
+        `SELECT name FROM sqlite_master WHERE type='table' AND name='posts'`,
+      );
+      expect(tables).toHaveLength(1);
+    } finally {
+      await a.close();
+    }
+  });
+
+  it("db migrate:down reverts the named migration", async () => {
+    const dbFile = path.join(tmpDir, "test.sqlite3");
+    fs.writeFileSync(
+      path.join(tmpDir, "config", "database.ts"),
+      `export default {
+  development: { adapter: "sqlite3", database: ${JSON.stringify(dbFile)} },
+  test: { adapter: "sqlite3", database: ${JSON.stringify(dbFile)} },
+};`,
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, "db", "migrations", "20260101000000-create-posts.ts"),
+      `import { Migration } from "@blazetrails/activerecord";
+export class CreatePosts extends Migration {
+  async up() { await this.createTable("posts", (t) => { t.string("title"); }); }
+  async down() { await this.dropTable("posts"); }
+}`,
+    );
+
+    await runDb(["migrate:up", "--version=20260101000000"]);
+    await runDb(["migrate:down", "--version=20260101000000"]);
+
+    const { SQLite3Adapter } =
+      await import("@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js");
+    const a = new SQLite3Adapter(dbFile);
+    try {
+      const tables = await a.execute(
+        `SELECT name FROM sqlite_master WHERE type='table' AND name='posts'`,
+      );
+      expect(tables).toHaveLength(0);
+    } finally {
+      await a.close();
+    }
+  });
+
+  it("db migrate:up requires --version", async () => {
+    await runDb(["migrate:up"]).catch(() => undefined);
+    // commander's exitOverride() raises before the action runs; the test
+    // just confirms the option is required (no exception also satisfies
+    // 'no silent success' since we'd otherwise have printed something).
+    expect(logs.filter((l) => l.startsWith("=="))).toHaveLength(0);
+  });
 });

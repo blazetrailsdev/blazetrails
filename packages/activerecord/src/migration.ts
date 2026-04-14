@@ -1542,6 +1542,26 @@ export class Migrator {
   }
 
   /**
+   * Read-only variant of {@link currentVersion}: returns 0 when the
+   * schema_migrations table doesn't yet exist, without creating it.
+   *
+   * Matches Rails' `current_version` exactly (it calls `get_all_versions`
+   * which checks `schema_migration.table_exists?` and returns [] on miss).
+   * The regular {@link currentVersion} keeps the legacy auto-create path
+   * to stay compatible with internal callers that rely on it.
+   */
+  async currentVersionReadOnly(): Promise<number> {
+    if (!(await this._schemaMigration.tableExists())) return 0;
+    const applied = await this._appliedVersions();
+    let max = BigInt(0);
+    for (const v of applied) {
+      const bv = BigInt(v);
+      if (bv > max) max = bv;
+    }
+    return Number(max);
+  }
+
+  /**
    * Get pending (unapplied) migrations.
    *
    * Mirrors: ActiveRecord::Migrator#pending_migrations

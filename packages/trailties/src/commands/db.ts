@@ -321,15 +321,13 @@ export function dbCommand(): Command {
     .action(async () => {
       // Don't discover or validate migration files — users should be able
       // to ask for the current version even when the migrations/ directory
-      // has a stale file. Note: Migrator.currentVersion() calls
-      // _ensureSchemaTable(), so the schema_migrations + ar_internal_metadata
-      // tables are created here if they don't already exist. That's a
-      // slight deviation from Rails' current_version (which returns 0
-      // without creating anything) but it's harmless: these tables are
-      // always created on the next migrate/rollback anyway.
+      // has a stale file. Use the read-only currentVersion path so running
+      // `trails db version` on a fresh/production DB doesn't silently
+      // create schema_migrations / ar_internal_metadata as a side effect
+      // (matches Rails' current_version contract).
       await withAdapter(async (adapter) => {
         const migrator = new Migrator(adapter, []);
-        const version = await migrator.currentVersion();
+        const version = await migrator.currentVersionReadOnly();
         console.log(`Current version: ${version}`);
       });
     });

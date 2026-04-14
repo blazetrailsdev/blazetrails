@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractBlocks } from "./check.js";
+import { type Block, extractBlocks, remapDiagnostics } from "./check.js";
 
 describe("extractBlocks", () => {
   it("pulls out ts and typescript blocks with correct start lines", () => {
@@ -92,5 +92,51 @@ describe("extractBlocks", () => {
     expect(blocks).toHaveLength(2);
     expect(blocks[0].code).toBe("const x = 1;");
     expect(blocks[1].code).toBe("const y = 2;");
+  });
+});
+
+describe("remapDiagnostics", () => {
+  const repoRoot = "/repo";
+  const block: Block = {
+    file: "/repo/packages/website/docs/guides/foo.md",
+    startLine: 42,
+    code: "// irrelevant",
+    skip: false,
+  };
+  const blocksByIdx = new Map<number, Block>([[7, block]]);
+
+  it("rewrites tsc paren-form diagnostics (file.ts(L,C))", () => {
+    const raw =
+      "/tmp/run-X/blocks/packages_website_docs_guides_foo_md__L42__7.ts(3,9): error TS2322: bad type";
+    expect(remapDiagnostics(raw, blocksByIdx, repoRoot)).toBe(
+      "packages/website/docs/guides/foo.md:44:9: error TS2322: bad type",
+    );
+  });
+
+  it("rewrites tsc colon-form diagnostics (file.ts:L:C)", () => {
+    const raw =
+      "/tmp/run-X/blocks/packages_website_docs_guides_foo_md__L42__7.ts:3:9 - error TS2322: bad type";
+    expect(remapDiagnostics(raw, blocksByIdx, repoRoot)).toBe(
+      "packages/website/docs/guides/foo.md:44:9 - error TS2322: bad type",
+    );
+  });
+
+  it("handles paths containing spaces", () => {
+    const raw =
+      "/Users/Jane Doe/repo/.tmp/run-X/blocks/packages_website_docs_guides_foo_md__L42__7.ts(3,9): error TS1234";
+    expect(remapDiagnostics(raw, blocksByIdx, repoRoot)).toBe(
+      "packages/website/docs/guides/foo.md:44:9: error TS1234",
+    );
+  });
+
+  it("leaves unrelated lines untouched", () => {
+    const raw = "some unrelated line\nanother one";
+    expect(remapDiagnostics(raw, blocksByIdx, repoRoot)).toBe(raw);
+  });
+
+  it("leaves matches with unknown idx unchanged", () => {
+    const raw =
+      "/tmp/run-X/blocks/packages_website_docs_guides_foo_md__L42__99.ts(3,9): error TS2322: bad type";
+    expect(remapDiagnostics(raw, blocksByIdx, repoRoot)).toBe(raw);
   });
 });

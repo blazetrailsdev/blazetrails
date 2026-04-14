@@ -48,7 +48,7 @@ export {};
 
 const BLOCK_SUFFIX = "\nexport {};\n";
 
-interface Block {
+export interface Block {
   file: string;
   startLine: number;
   code: string;
@@ -164,6 +164,36 @@ function validatePackageCoverage(): void {
   }
 }
 
+/**
+ * Rewrite tsc diagnostic locations so they point back at the source
+ * guide file and absolute line number. Handles both `foo.ts(L,C):`
+ * (tsc's default) and `foo.ts:L:C:` (tsc --pretty) forms.
+ */
+export function remapDiagnostics(
+  output: string,
+  blocksByIdx: Map<number, Block>,
+  repoRoot: string,
+): string {
+  // Matches both `path/blocks/<name>__L<start>__<idx>.ts(L,C)` and
+  // `path/blocks/<name>__L<start>__<idx>.ts:L:C`. `:L:C` is captured as
+  // groups 5/6; `(L,C)` as groups 7/8. Either group pair may be undefined.
+  const pattern =
+    /(?:[^\n]*?[\/\\])?blocks[\/\\]([^\n]*?)__L(\d+)__(\d+)\.ts(?::(\d+):(\d+)|\((\d+),(\d+)\))?/g;
+  return output.replace(
+    pattern,
+    (match, _name, _startStr, idxStr, colonL, colonC, parenL, parenC) => {
+      const block = blocksByIdx.get(parseInt(idxStr, 10));
+      if (!block) return match;
+      const lineOffsetStr = colonL ?? parenL;
+      const colStr = colonC ?? parenC;
+      const guide = path.relative(repoRoot, block.file);
+      if (!lineOffsetStr) return guide;
+      const absoluteLine = block.startLine + parseInt(lineOffsetStr, 10) - 1;
+      return colStr ? `${guide}:${absoluteLine}:${colStr}` : `${guide}:${absoluteLine}`;
+    },
+  );
+}
+
 function writeTsconfig(tmpDir: string): string {
   const tsconfigPath = path.join(tmpDir, "tsconfig.json");
   const config = {
@@ -252,9 +282,20 @@ function main(): void {
     `Type-checking ${checked.length} code block${checked.length === 1 ? "" : "s"} from ${mdFiles.length} guide${mdFiles.length === 1 ? "" : "s"}${skipped ? ` (${skipped} skipped)` : ""}…`,
   );
 
-  const result = spawnSync(TSC, ["-p", path.join(tmpRoot, "tsconfig.json")], {
+  // --pretty false forces the classic `file.ts(L,C):` diagnostic format
+  // so remapDiagnostics has a stable input to rewrite.
+  const result = spawnSync(TSC, ["-p", path.join(tmpRoot, "tsconfig.json"), "--pretty", "false"], {
     encoding: "utf8",
   });
+
+  if (result.error) {
+    console.error(`✗ Failed to start TypeScript compiler.`);
+    console.error(`  TSC: ${TSC}`);
+    console.error(`  cwd: ${process.cwd()}`);
+    console.error(`  ${result.error.name}: ${result.error.message}`);
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+    process.exit(1);
+  }
 
   const output = (result.stdout ?? "") + (result.stderr ?? "");
   if (result.status === 0) {
@@ -263,19 +304,7 @@ function main(): void {
     return;
   }
 
-  const remappedOutput = output.replace(
-    /(?:[^\n]*?[\/\\])?blocks[\/\\]([^\n]*?)__L(\d+)__(\d+)\.ts(\((\d+),(\d+)\))?/g,
-    (_match, _name, _startStr, idxStr, _paren, lineOffsetStr, col) => {
-      const lineOffset = lineOffsetStr ? parseInt(lineOffsetStr, 10) : 1;
-      const block = blocksByIdx.get(parseInt(idxStr, 10));
-      if (!block) return _match;
-      const absoluteLine = block.startLine + lineOffset - 1;
-      const guide = path.relative(REPO_ROOT, block.file);
-      return col ? `${guide}:${absoluteLine}:${col}` : `${guide}:${absoluteLine}`;
-    },
-  );
-
-  console.error(remappedOutput);
+  console.error(remapDiagnostics(output, blocksByIdx, REPO_ROOT));
   console.error(`✗ Guide code block type-check failed.`);
   fs.rmSync(tmpRoot, { recursive: true, force: true });
   process.exit(result.status ?? 1);

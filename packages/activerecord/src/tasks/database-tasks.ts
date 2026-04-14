@@ -502,13 +502,20 @@ export class DatabaseTasks {
     }
 
     const path = getPath();
-    if (!path.isAbsolute || !path.pathToFileURL) {
+    if (!path.pathToFileURL) {
       throw new Error(
-        "DatabaseTasks.loadSchema requires PathAdapter.isAbsolute and pathToFileURL. " +
-          "The configured PathAdapter does not provide them.",
+        "DatabaseTasks.loadSchema requires PathAdapter.pathToFileURL. " +
+          "The configured PathAdapter does not provide it.",
       );
     }
-    const absolute = path.isAbsolute(filename) ? filename : path.resolve(this.root, filename);
+    // Missing isAbsolute means the PathAdapter doesn't model relative vs.
+    // absolute (e.g. a VFS) — treat the incoming filename as already
+    // absolute in that case.
+    const absolute = path.isAbsolute
+      ? path.isAbsolute(filename)
+        ? filename
+        : path.resolve(this.root, filename)
+      : filename;
     const href = path.pathToFileURL(absolute).href;
     const mod = (await import(href)) as {
       default?: (ctx: unknown) => Promise<void> | void;

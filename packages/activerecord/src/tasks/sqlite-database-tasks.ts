@@ -173,10 +173,10 @@ export class SQLiteDatabaseTasks {
 
   private resolveDbPath(): string {
     const path = getPath();
-    const database = this.dbConfig.database;
-    if (!database) {
-      throw new Error("SQLite database configuration missing 'database' path");
-    }
+    // Align with DatabaseTasks._connectFor which defaults missing sqlite
+    // database to ":memory:" — makes create/drop no-ops on in-memory
+    // configs instead of throwing on otherwise-valid setups.
+    const database = this.dbConfig.database ?? ":memory:";
     // Per PathAdapter contract, a missing isAbsolute means the adapter
     // doesn't model relative/absolute distinctions (e.g. a VFS) — treat
     // every path as already absolute.

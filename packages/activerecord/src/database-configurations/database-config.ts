@@ -23,7 +23,7 @@ export interface DatabaseConfigOptions {
   queryCache?: boolean | "enabled" | "disabled";
   migrationsPaths?: string | string[];
   schemaCachePath?: string;
-  schemaDump?: string | false;
+  schemaDump?: string | false | null;
   databaseTasks?: boolean;
   useMetadataTable?: boolean;
   seeds?: boolean;

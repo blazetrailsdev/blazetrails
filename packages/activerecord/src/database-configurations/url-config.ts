@@ -17,15 +17,26 @@ export class UrlConfig extends HashConfig {
     url: string,
     configuration: DatabaseConfigOptions = {},
   ) {
-    let urlHash: DatabaseConfigOptions = {};
-    try {
-      urlHash = new ConnectionUrlResolver(url).toHash();
-    } catch {
-      // Non-standard URLs (e.g. SQLite ':memory:') are passed through to the
-      // adapter as-is. Rails raises here; we tolerate for backward-compat.
-    }
-    // Merge: URL-derived values + explicit overrides + url itself
-    super(envName, name, { ...urlHash, ...configuration, url });
+    super(envName, name, { ...configuration, ...buildUrlHash(url) });
     this.url = url;
   }
+}
+
+// Mirrors: UrlConfig#build_url_hash
+// jdbc:/http:/https: URLs are passed through untouched — they're adapter-specific
+// connection strings, not URIs we should decompose. Strings without a leading
+// scheme (e.g. SQLite ":memory:" or a bare filesystem path) are also passed
+// through — they're not URLs at all, and Rails' URI parser accepts them as
+// opaque but our JS URL parser doesn't.
+function buildUrlHash(url: string): DatabaseConfigOptions {
+  if (
+    !url ||
+    url.startsWith("jdbc:") ||
+    url.startsWith("http:") ||
+    url.startsWith("https:") ||
+    !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url)
+  ) {
+    return { url };
+  }
+  return new ConnectionUrlResolver(url).toHash();
 }

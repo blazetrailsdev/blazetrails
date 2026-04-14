@@ -117,7 +117,6 @@ export async function _insertRecord(
   this: PersistenceHost,
   connection: { executeMutation(sql: string, binds?: unknown[]): Promise<number> },
   values: Record<string, unknown>,
-  returning?: string[],
 ): Promise<number> {
   const table: ArelTable = (this as any).arelTable;
   const im = new InsertManager(table);
@@ -128,8 +127,6 @@ export async function _insertRecord(
   }
 
   const sql = entries.length > 0 ? im.toSql() : `${im.toSql()} DEFAULT VALUES`;
-  // Rails: connection.insert(im, ...) handles RETURNING per adapter.
-  // The returning parameter is passed through for adapters that support it.
   return connection.executeMutation(sql);
 }
 

@@ -119,6 +119,7 @@ See `activesupport/src/include.ts` for the API and
 - Do NOT use subagents unless explicitly requested. Do the work directly.
 - Do use worktrees for any changes. Leave the default worktree for the user.
 - Copilot automatically reviews every PR and every push, so no need to request review.
+  Copilot reviews can be found at `~/.btwhooks/data/github/blazetrailsdev/trails/$PR`.
 - Do open new PRs in draft status.
 - Do NOT add code comments that just describe what the line does. Only add
   comments when they provide additional value — a potential bug hidden, or

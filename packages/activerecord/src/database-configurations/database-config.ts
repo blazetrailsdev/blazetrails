@@ -209,10 +209,6 @@ export class DatabaseConfig {
     return val === undefined ? true : !!val;
   }
 
-  // --- Adapter resolution (Rails uses ActiveRecord::ConnectionAdapters.resolve) ---
-  // Not implemented here because adapter resolution in this codebase goes
-  // through Base.adapter (set per model class) rather than a global registry.
-
   /**
    * Mirrors: DatabaseConfig#validate!
    *

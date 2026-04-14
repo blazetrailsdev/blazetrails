@@ -4,6 +4,7 @@ import type { ConnectionPool } from "./connection-adapters/abstract/connection-p
 import { getFsAsync, getPathAsync } from "@blazetrails/activesupport";
 import { DatabaseConfigurations } from "./database-configurations.js";
 import { HashConfig } from "./database-configurations/hash-config.js";
+import { UrlConfig } from "./database-configurations/url-config.js";
 import { _setAdapterClassResolver } from "./database-configurations/database-config.js";
 import { resolve as resolveConnectionAdapter } from "./connection-adapters.js";
 import {
@@ -465,7 +466,14 @@ async function autoConnect(modelClass: typeof Base): Promise<void> {
     );
   }
 
-  const url = dbConfig.configuration.url || "";
+  // UrlConfig exposes the original URL via the `url` attr (Rails' attr_reader).
+  // For parseable URLs the URL is decomposed into the configuration hash and
+  // `configuration.url` is unset (matches Rails' build_url_hash), so prefer
+  // the attr when available.
+  const url =
+    (dbConfig instanceof UrlConfig ? dbConfig.url : undefined) ||
+    (dbConfig.configuration.url as string | undefined) ||
+    "";
   const adapterName = dbConfig.adapter || (url ? adapterNameFromUrl(url) : undefined);
   if (!adapterName) {
     throw new AdapterNotSpecified(
@@ -642,8 +650,7 @@ export const ClassMethods = {
 
 // Register adapter class resolver so DatabaseConfig#adapterClass and
 // #newConnection can resolve adapters (matching Rails'
-// ActiveRecord::ConnectionAdapters.resolve).
-_setAdapterClassResolver(async (adapterName) => {
-  const normalized = normalizeAdapterName(adapterName);
-  return _loadAdapter(normalized);
-});
+// ActiveRecord::ConnectionAdapters.resolve). Pass the adapter name through
+// unchanged — the registry handles canonical names and aliases, so caller
+// overrides like register("mysql2", ...) aren't shadowed by normalization.
+_setAdapterClassResolver(async (adapterName) => _loadAdapter(adapterName));

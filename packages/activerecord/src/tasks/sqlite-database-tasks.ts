@@ -103,11 +103,19 @@ export class SQLiteDatabaseTasks {
       const { SchemaDumper } = await import("../connection-adapters/abstract/schema-dumper.js");
       const ignoreTables = SchemaDumper.ignoreTables;
 
-      let query: string;
+      // Order so that dependencies resolve during structure_load: create
+      // tables + views first, then their indexes and triggers (which both
+      // reference those tables). Rails' equivalent orders by `type DESC`
+      // because its CLI path runs through sqlite3's shell which resolves
+      // forward-referenced triggers lazily; when re-executing as a script
+      // through better-sqlite3's `db.exec` the statements are applied
+      // strictly in order, so triggers-before-tables would fail.
+      const typeOrder =
+        "CASE type WHEN 'table' THEN 0 WHEN 'view' THEN 1 " +
+        "WHEN 'index' THEN 2 WHEN 'trigger' THEN 3 ELSE 4 END";
+      let where = "WHERE sql IS NOT NULL";
+
       if (ignoreTables.length > 0) {
-        // Resolve patterns against the live table list (Rails does the same —
-        // string names + regex patterns both need the current sqlite_master
-        // row to compare against).
         const tablesRows = (await adapter.execute(
           "SELECT tbl_name FROM sqlite_master WHERE type IN ('table','view','index','trigger')",
         )) as Array<Record<string, unknown>>;
@@ -119,21 +127,11 @@ export class SQLiteDatabaseTasks {
         );
         if (excluded.length > 0) {
           const list = excluded.map((n) => `'${n.replace(/'/g, "''")}'`).join(", ");
-          query =
-            `SELECT sql || ';' AS sql FROM sqlite_master ` +
-            `WHERE sql IS NOT NULL AND tbl_name NOT IN (${list}) ` +
-            `ORDER BY tbl_name, type DESC, name`;
-        } else {
-          query =
-            `SELECT sql || ';' AS sql FROM sqlite_master ` +
-            `WHERE sql IS NOT NULL ORDER BY tbl_name, type DESC, name`;
+          where += ` AND tbl_name NOT IN (${list})`;
         }
-      } else {
-        query =
-          `SELECT sql || ';' AS sql FROM sqlite_master ` +
-          `WHERE sql IS NOT NULL ORDER BY tbl_name, type DESC, name`;
       }
 
+      const query = `SELECT sql || ';' AS sql FROM sqlite_master ${where} ORDER BY ${typeOrder}, tbl_name, name`;
       const rows = (await adapter.execute(query)) as Array<Record<string, unknown>>;
       const output = rows.map((r) => String(r.sql ?? "")).join("\n");
       getFs().writeFileSync(filename, output);
@@ -147,8 +145,16 @@ export class SQLiteDatabaseTasks {
     const sql = getFs().readFileSync(filename, "utf8");
     const adapter = await this.connectAdapter();
     try {
-      for (const statement of splitSqlStatements(sql)) {
-        await adapter.executeMutation(statement);
+      // SQLite's `db.exec` runs an entire script in one shot, so it's safe
+      // for dumps containing trigger bodies (CREATE TRIGGER ... BEGIN ...;
+      // ...; END) where naive semicolon splitting would break.
+      const exec = (adapter as unknown as { exec?: (sql: string) => void }).exec;
+      if (typeof exec === "function") {
+        exec.call(adapter, sql);
+      } else {
+        for (const statement of splitSqlStatements(sql)) {
+          await adapter.executeMutation(statement);
+        }
       }
     } finally {
       await this.closeAdapter(adapter);

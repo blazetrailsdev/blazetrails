@@ -17,8 +17,13 @@ import { DatabaseAlreadyExists } from "../errors.js";
 import { DatabaseTasks } from "./database-tasks.js";
 import { coercePort } from "./task-utils.js";
 
-const DEFAULT_ENCODING = process.env.CHARSET ?? "utf8";
+const DEFAULT_ENCODING_FALLBACK = "utf8";
 const DUPLICATE_DATABASE = "42P04";
+
+function defaultEncoding(): string {
+  const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
+  return proc?.env?.CHARSET ?? DEFAULT_ENCODING_FALLBACK;
+}
 
 function isPGDuplicateDatabaseError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
@@ -134,13 +139,14 @@ export class PostgreSQLDatabaseTasks {
   }
 
   structureLoad(filename: string, extraFlags?: string | string[] | null): void {
+    const nullDevice = getOs().platform() === "win32" ? "NUL" : "/dev/null";
     const args = [
       "--set",
       ON_ERROR_STOP_1,
       "--quiet",
       "--no-psqlrc",
       "--output",
-      "/dev/null",
+      nullDevice,
       "--file",
       filename,
     ];
@@ -166,7 +172,7 @@ export class PostgreSQLDatabaseTasks {
   }
 
   private encoding(): string {
-    return String(this.configurationHash.encoding ?? DEFAULT_ENCODING);
+    return String(this.configurationHash.encoding ?? defaultEncoding());
   }
 
   private async connectAdmin(): Promise<DatabaseAdapter> {

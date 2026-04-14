@@ -7,6 +7,8 @@
 
 export interface OsAdapter {
   tmpdir(): string;
+  /** Normalized platform id, e.g. "linux", "darwin", "win32". */
+  platform(): string;
 }
 
 const registry = new Map<string, OsAdapter>();
@@ -37,8 +39,8 @@ function tryAutoRegisterNode(): boolean {
     const req = nodeModule.createRequire(
       typeof __filename !== "undefined" ? __filename : "file:///activesupport",
     );
-    const os = req("node:os") as { tmpdir: () => string };
-    registry.set("node", { tmpdir: () => os.tmpdir() });
+    const os = req("node:os") as { tmpdir: () => string; platform: () => string };
+    registry.set("node", { tmpdir: () => os.tmpdir(), platform: () => os.platform() });
     return true;
   } catch {
     return false;

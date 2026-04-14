@@ -1,4 +1,11 @@
+---
+title: "ActiveModel: Deviations from Rails"
+description: Module mixins via include/extend and Included/Extended, generated attribute methods, async-capable callbacks, encapsulated dirty tracking.
+---
+
 # ActiveModel: Deviations from Rails
+
+> **See also:** [Guides index](./index.md) · [Arel deviations](./arel-rails-deviations.md) · [ActiveRecord deviations](./activerecord-rails-deviations.md)
 
 ActiveModel sits between Arel (pure, synchronous) and ActiveRecord (async,
 I/O-heavy). Most of its surface is synchronous in both Rails and Trails, but
@@ -44,7 +51,7 @@ because `Included<>` usually does the job.
 
 ## Attribute methods: generated, not `method_missing`
 
-Rails' `ActiveModel::AttributeMethods` registers method *patterns*
+Rails' `ActiveModel::AttributeMethods` registers method _patterns_
 (`_changed?`, `_was`, `reset_`, etc.) and routes calls through
 `method_missing`. We can't do that in TypeScript without blinding the type
 checker, so Trails generates the methods at class-definition time and
@@ -78,7 +85,7 @@ Rails callbacks are Ruby blocks. Our callback signatures accept either
 sync or async functions:
 
 ```ts
-type CallbackFn       = (this: any, ...args: any[]) => void | Promise<void>;
+type CallbackFn = (this: any, ...args: any[]) => void | Promise<void>;
 type AroundCallbackFn = (this: any, fn: () => Promise<void>) => Promise<void>;
 ```
 
@@ -145,7 +152,7 @@ See `packages/activemodel/src/serialization.ts`.
   `validates("name", { presence: true })`. Ruby symbol literals have no
   JS equivalent.
 - **Keyword args → options object.** Same story: `validates("name", {
-  length: { minimum: 3, maximum: 20 } })`.
+length: { minimum: 3, maximum: 20 } })`.
 - **snake_case → camelCase.** `record.previous_changes` →
   `record.previousChanges`.
 - **`try :foo` → `?.`** TypeScript's optional chaining replaces Ruby's
@@ -156,17 +163,17 @@ See `packages/activemodel/src/serialization.ts`.
 
 ## Summary
 
-| Area | Rails | Trails |
-| --- | --- | --- |
-| Module inclusion | `include Mod`, `included do ... end` | `include(Klass, mod)` + `included` symbol hook; `Included<Mod>` for typing |
-| Module extension | `extend Mod`, `extended do ... end` | `extend(Klass, mod)` + `extended` symbol hook; `Extended<Mod>` for typing |
-| Attribute methods | `method_missing` + `define_method` | Generated methods in `_generatedMethods`; index signature for reads |
-| Dirty tracking | Scattered ivars | `DirtyTracker` instance at `_dirtyTracker` |
-| Callbacks | Blocks (`before_save do ... end`) | Async-capable functions; `runCallbacks` is async |
-| Validations | Synchronous | Sync signature; async validators collected on `_asyncValidationPromises` |
-| DSL sugar | Block receivers | One `Proxy` in `Model.withOptions` |
-| Serialization | Eager map over ivars | Same API, supports lazy attribute stores |
-| Symbols / kwargs / naming | `:symbol`, kwargs, snake_case | strings, options objects, camelCase |
+| Area                      | Rails                                | Trails                                                                     |
+| ------------------------- | ------------------------------------ | -------------------------------------------------------------------------- |
+| Module inclusion          | `include Mod`, `included do ... end` | `include(Klass, mod)` + `included` symbol hook; `Included<Mod>` for typing |
+| Module extension          | `extend Mod`, `extended do ... end`  | `extend(Klass, mod)` + `extended` symbol hook; `Extended<Mod>` for typing  |
+| Attribute methods         | `method_missing` + `define_method`   | Generated methods in `_generatedMethods`; index signature for reads        |
+| Dirty tracking            | Scattered ivars                      | `DirtyTracker` instance at `_dirtyTracker`                                 |
+| Callbacks                 | Blocks (`before_save do ... end`)    | Async-capable functions; `runCallbacks` is async                           |
+| Validations               | Synchronous                          | Sync signature; async validators collected on `_asyncValidationPromises`   |
+| DSL sugar                 | Block receivers                      | One `Proxy` in `Model.withOptions`                                         |
+| Serialization             | Eager map over ivars                 | Same API, supports lazy attribute stores                                   |
+| Symbols / kwargs / naming | `:symbol`, kwargs, snake_case        | strings, options objects, camelCase                                        |
 
 The rule of thumb: if a thing is synchronous and pure, ActiveModel looks
 essentially like Rails. The deviations cluster wherever Ruby used a

@@ -1,4 +1,11 @@
+---
+title: "ActiveRecord: Deviations from Rails"
+description: Async finders and persistence, transactions as async functions, AsyncLocalStorage for per-flow state, Proxy-based scope dispatch, pluggable fs/crypto adapters.
+---
+
 # ActiveRecord: Deviations from Rails
+
+> **See also:** [Guides index](./index.md) · [Arel deviations](./arel-rails-deviations.md) · [ActiveModel deviations](./activemodel-rails-deviations.md)
 
 ActiveRecord is where JavaScript's async single-threaded model has the
 biggest impact. Almost every DB-touching method in Rails is synchronous;
@@ -24,8 +31,8 @@ posts = user.posts.to_a    # sync
 Trails:
 
 ```ts
-const user  = await User.find(1);
-user.name   = "Dean";
+const user = await User.find(1);
+user.name = "Dean";
 await user.save();
 const posts = await user.posts.toArray();
 ```
@@ -165,7 +172,7 @@ but:
   the DB:
 
   ```ts
-  await post.draftBang();    // Rails: post.draft!
+  await post.draftBang(); // Rails: post.draft!
   ```
 
   `post.isDraft()` and `post.draft()` (setter without persist) stay
@@ -240,22 +247,22 @@ These are systematic, not per-method.
 
 ## Summary
 
-| Area | Rails | Trails |
-| --- | --- | --- |
-| Finders / reads | Sync | Async (`await` required) |
-| Persistence | Sync | Async |
-| Relation iteration | `to_a`, `each` (sync) | `toArray()`, `for await` |
-| Transactions | `transaction do ... end` | `await transaction(async (tx) => { ... })` |
-| Per-flow state | `Thread.current` | `AsyncLocalStorage` via `getAsyncContext()` |
-| Connection pool | Thread-checkout model | Per-handler pools, per-query acquisition |
-| Relation method dispatch | `method_missing` | `Proxy` wrapper (`wrapWithScopeProxy`) |
-| Scopes | Generated via `define_singleton_method` | `_scopes` Map + delegation |
-| Enum bang methods | Sync | Async (`draftBang()` hits DB) |
-| Ranges | `Range` | Plain `{ begin, end, excludeEnd }` |
-| Numerics | `Integer`/`Float`/`BigDecimal` | `number`/`bigint` only |
-| File / crypto access | Direct stdlib | Pluggable adapters for browser support |
-| Callbacks | Ruby blocks | Async functions |
-| Uniqueness validation | Sync DB hit | Async, coordinated via `_asyncValidationPromises` |
+| Area                     | Rails                                   | Trails                                            |
+| ------------------------ | --------------------------------------- | ------------------------------------------------- |
+| Finders / reads          | Sync                                    | Async (`await` required)                          |
+| Persistence              | Sync                                    | Async                                             |
+| Relation iteration       | `to_a`, `each` (sync)                   | `toArray()`, `for await`                          |
+| Transactions             | `transaction do ... end`                | `await transaction(async (tx) => { ... })`        |
+| Per-flow state           | `Thread.current`                        | `AsyncLocalStorage` via `getAsyncContext()`       |
+| Connection pool          | Thread-checkout model                   | Per-handler pools, per-query acquisition          |
+| Relation method dispatch | `method_missing`                        | `Proxy` wrapper (`wrapWithScopeProxy`)            |
+| Scopes                   | Generated via `define_singleton_method` | `_scopes` Map + delegation                        |
+| Enum bang methods        | Sync                                    | Async (`draftBang()` hits DB)                     |
+| Ranges                   | `Range`                                 | Plain `{ begin, end, excludeEnd }`                |
+| Numerics                 | `Integer`/`Float`/`BigDecimal`          | `number`/`bigint` only                            |
+| File / crypto access     | Direct stdlib                           | Pluggable adapters for browser support            |
+| Callbacks                | Ruby blocks                             | Async functions                                   |
+| Uniqueness validation    | Sync DB hit                             | Async, coordinated via `_asyncValidationPromises` |
 
 If something in Rails surprises you with its absence here, the most
 common cause is: "it was synchronous in Ruby and the JavaScript

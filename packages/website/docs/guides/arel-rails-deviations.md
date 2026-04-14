@@ -1,4 +1,11 @@
+---
+title: "Arel: Deviations from Rails"
+description: How Trails' Arel package differs from Rails Arel — naming, symbol branding, typed generics. No async deviations.
+---
+
 # Arel: Deviations from Rails
+
+> **See also:** [Guides index](./index.md) · [ActiveModel deviations](./activemodel-rails-deviations.md) · [ActiveRecord deviations](./activerecord-rails-deviations.md)
 
 Arel is the least-deviating package in Trails. It is a pure SQL AST builder
 with no I/O, so JavaScript's async/single-threaded model has almost no impact.
@@ -65,7 +72,7 @@ writing queries in Trails feels safer than in Rails.
 Arel is 100% synchronous in both Rails and Trails. Nothing in `packages/arel`
 returns a `Promise`. I/O happens in ActiveRecord's adapters, not here.
 
-## What is *not* different
+## What is _not_ different
 
 - AST node shape and naming (`Nodes::SelectStatement` → `SelectStatement`,
   same fields).
@@ -77,11 +84,11 @@ returns a `Promise`. I/O happens in ActiveRecord's adapters, not here.
 
 ## Summary
 
-| Area | Rails | Trails |
-| --- | --- | --- |
-| Method names | snake_case | camelCase |
-| Arguments | Ruby keyword args / symbols | Option objects / strings |
-| Node identity | `is_a?` / `respond_to?` | `Symbol.for` brands |
-| Dynamic attr access | `method_missing` on `Table` | Explicit `table.get("id")` |
-| Async | N/A (sync) | Same — still sync |
-| Typing | Dynamic | Generic `SelectManager<T>`, `Attribute<T>` |
+| Area                | Rails                       | Trails                                     |
+| ------------------- | --------------------------- | ------------------------------------------ |
+| Method names        | snake_case                  | camelCase                                  |
+| Arguments           | Ruby keyword args / symbols | Option objects / strings                   |
+| Node identity       | `is_a?` / `respond_to?`     | `Symbol.for` brands                        |
+| Dynamic attr access | `method_missing` on `Table` | Explicit `table.get("id")`                 |
+| Async               | N/A (sync)                  | Same — still sync                          |
+| Typing              | Dynamic                     | Generic `SelectManager<T>`, `Attribute<T>` |

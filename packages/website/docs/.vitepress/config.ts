@@ -13,13 +13,17 @@ export default defineConfig({
     siteTitle: "BlazeTrails",
     nav: [
       { text: "Docs", link: "/" },
-      { text: "Guides", link: "/guides/arel-rails-deviations" },
+      { text: "Guides", link: "/guides/" },
       { text: "Website", link: siteRoot },
       { text: "API Reference", link: "/api/@blazetrails/arel/README" },
     ],
 
     sidebar: {
       "/guides/": [
+        {
+          text: "Overview",
+          items: [{ text: "Guides", link: "/guides/" }],
+        },
         {
           text: "Rails Deviations",
           items: [

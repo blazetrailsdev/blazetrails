@@ -126,9 +126,9 @@ function toDbConfig(raw: RawConfig, envName: string = resolveEnv()): HashConfig 
 /**
  * Dump the schema to disk after a migration-writing task. Mirrors Rails'
  * `db:_dump`: gated on `DatabaseTasks.dumpSchemaAfterMigration`, and
- * delegates to `DatabaseTasks.dumpSchema(config)` so all three schema
- * formats (ts / js / sql) route through the same code path the standalone
- * `db:schema:dump` / `db:structure:dump` commands use.
+ * delegates to `DatabaseTasks.dumpSchema(config)` so ts / js / sql formats
+ * route through the same code path the standalone `trails db schema:dump`
+ * subcommand uses.
  */
 async function dumpSchemaAfterMigrate(adapter: DatabaseAdapter, raw: RawConfig): Promise<void> {
   if (!DatabaseTasks.dumpSchemaAfterMigration) return;

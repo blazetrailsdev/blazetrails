@@ -99,8 +99,12 @@ export class DatabaseTasks {
   static seedLoader: { loadSeed(): void | Promise<void> } | null = null;
   static schemaFormat: SchemaFormat = "ts";
   /**
-   * Whether to run schema:dump automatically after every migration-writing
-   * task (migrate, rollback, migrate:up/down, forward, migrate:redo).
+   * Gating flag for automatic schema dumps after a migration-writing task.
+   * DatabaseTasks itself only exposes `migrate()`; trailties' CLI layer
+   * reads this flag and chooses whether to call back into
+   * `DatabaseTasks.dumpSchema(config)` after its `db migrate`,
+   * `db rollback`, `db forward`, `db migrate:up`, `db migrate:down`, and
+   * `db migrate:redo` subcommands.
    *
    * Mirrors: ActiveRecord.dump_schema_after_migration (default true).
    */

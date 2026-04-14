@@ -221,7 +221,7 @@ export { DatabaseConfigurations } from "./database-configurations.js";
 export { ConnectionPool } from "./connection-adapters/abstract/connection-pool.js";
 export { ConnectionHandler } from "./connection-adapters/abstract/connection-handler.js";
 export { DatabaseTasks } from "./tasks/database-tasks.js";
-export type { DatabaseTaskHandler } from "./tasks/database-tasks.js";
+export type { DatabaseTaskHandler, SchemaFormat } from "./tasks/database-tasks.js";
 export { SQLiteDatabaseTasks } from "./tasks/sqlite-database-tasks.js";
 export { PostgreSQLDatabaseTasks } from "./tasks/postgresql-database-tasks.js";
 export { MySQLDatabaseTasks } from "./tasks/mysql-database-tasks.js";

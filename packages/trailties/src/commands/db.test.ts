@@ -328,8 +328,9 @@ describe("schema dump and load", () => {
       const defineSchema = new Function(
         "ctx",
         schema
+          .replace(/\/\*\*[\s\S]*?\*\/\s*/, "")
           .replace(
-            "export default async function defineSchema(ctx: any) {",
+            /export default async function defineSchema\(ctx(?:: any)?\) \{/,
             "return (async () => {",
           )
           .replace(/}$/, "})();"),

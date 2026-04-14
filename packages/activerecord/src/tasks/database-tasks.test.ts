@@ -878,7 +878,7 @@ describe("DatabaseTasksDumpSchemaFormatBranchingTest", () => {
   });
 });
 
-describe("DatabaseTasksLoadSchemaRubyFormatTest", () => {
+describe("DatabaseTasksLoadSchemaTsFormatTest", () => {
   const originalFormat = DatabaseTasks.schemaFormat;
   const originalRoot = DatabaseTasks.root;
 
@@ -888,7 +888,7 @@ describe("DatabaseTasksLoadSchemaRubyFormatTest", () => {
     DatabaseTasks.setAdapter(null);
   });
 
-  it("load schema imports the schema module for ruby format", async () => {
+  it("load schema imports the schema module for ts format", async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "trails-schema-"));
     const schemaFile = path.join(dir, "schema.mjs");
     const markerFile = path.join(dir, "marker.txt");
@@ -902,11 +902,11 @@ describe("DatabaseTasksLoadSchemaRubyFormatTest", () => {
 
     const adapter = createTestAdapter();
     DatabaseTasks.setAdapter(adapter);
-    DatabaseTasks.schemaFormat = "ruby";
+    DatabaseTasks.schemaFormat = "ts";
 
     try {
       const config = new HashConfig("test", "primary", { adapter: "sqlite3" });
-      await DatabaseTasks.loadSchema(config, "ruby", schemaFile);
+      await DatabaseTasks.loadSchema(config, "ts", schemaFile);
       expect(fs.existsSync(markerFile)).toBe(true);
       expect(fs.readFileSync(markerFile, "utf8")).toBe("loaded");
     } finally {

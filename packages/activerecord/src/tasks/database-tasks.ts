@@ -10,6 +10,20 @@ import { ProtectedEnvironmentError } from "../migration.js";
 import { getFs, getPath, getCrypto } from "@blazetrails/activesupport";
 import { coercePort } from "./task-utils.js";
 
+/**
+ * Schema file format.
+ *
+ * - `"ts"`: TypeScript DSL module (`db/schema.ts`), default.
+ * - `"js"`: JavaScript DSL module (`db/schema.js`) — for projects without a
+ *   TypeScript toolchain at runtime.
+ * - `"sql"`: Native SQL structure dump (`db/structure.sql`), via the
+ *   adapter's `structureDump`/`structureLoad`.
+ *
+ * Mirrors Rails' `ActiveRecord.schema_format` (`:ruby | :sql`) but swaps
+ * Ruby for TS/JS since trails has no Ruby runtime.
+ */
+export type SchemaFormat = "ts" | "js" | "sql";
+
 export class DatabaseTasks {
   static get env(): string {
     return DatabaseConfigurations.defaultEnv;
@@ -45,7 +59,7 @@ export class DatabaseTasks {
   static fixturesPath: string = "test/fixtures";
   static root: string = process.cwd();
   static seedLoader: { loadSeed(): void | Promise<void> } | null = null;
-  static schemaFormat: "ruby" | "sql" = "ruby";
+  static schemaFormat: SchemaFormat = "ts";
   static structureDumpFlags: string | string[] | Record<string, string | string[]> | null = null;
   static structureLoadFlags: string | string[] | Record<string, string | string[]> | null = null;
 
@@ -274,9 +288,9 @@ export class DatabaseTasks {
   static dumpSchemaFilename(config?: DatabaseConfig): string {
     const envSchema = process.env.SCHEMA?.trim();
     if (envSchema) return envSchema;
-    const isSql = this.schemaFormat === "sql";
-    const ext = isSql ? "sql" : "ts";
-    const base = isSql ? "structure" : "schema";
+    const format = this.schemaFormat;
+    const ext = format === "sql" ? "sql" : format;
+    const base = format === "sql" ? "structure" : "schema";
     if (config && config.name !== "primary") {
       return `${this.dbDir}/${config.name}_${base}.${ext}`;
     }
@@ -438,7 +452,7 @@ export class DatabaseTasks {
 
   static async loadSchema(
     config: DatabaseConfig,
-    format: "ruby" | "sql" = DatabaseTasks.schemaFormat,
+    format: SchemaFormat = DatabaseTasks.schemaFormat,
     file?: string,
   ): Promise<void> {
     const filename = file ?? this.schemaDumpPath(config);
@@ -469,7 +483,7 @@ export class DatabaseTasks {
   }
 
   static async loadSchemaCurrent(
-    format: "ruby" | "sql" = DatabaseTasks.schemaFormat,
+    format: SchemaFormat = DatabaseTasks.schemaFormat,
     file?: string,
     environment?: string,
   ): Promise<void> {
@@ -582,7 +596,7 @@ export class DatabaseTasks {
 
   static async schemaUpToDate(
     config: DatabaseConfig,
-    format: "ruby" | "sql" = DatabaseTasks.schemaFormat,
+    format: SchemaFormat = DatabaseTasks.schemaFormat,
     file?: string,
   ): Promise<boolean> {
     void format;
@@ -645,7 +659,7 @@ export class DatabaseTasks {
 
   static async reconstructFromSchema(
     config: DatabaseConfig,
-    format: "ruby" | "sql" = DatabaseTasks.schemaFormat,
+    format: SchemaFormat = DatabaseTasks.schemaFormat,
     file?: string,
   ): Promise<void> {
     const { NoDatabaseError } = await import("../errors.js");

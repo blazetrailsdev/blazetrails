@@ -96,9 +96,13 @@ describe("associations DX", () => {
     assertType<HasHasMany>(false as HasHasMany);
   });
 
-  it("KNOWN GAP: association accessors are not typed on the instance", () => {
-    // Ideally: post.author → Promise<Author | null>, author.posts → CollectionProxy<Post>.
-    type HasAuthorAccessor = "author" extends keyof Post ? true : false;
-    assertType<HasAuthorAccessor>(true as HasAuthorAccessor);
+  it("KNOWN GAP: association accessors return `unknown` via Model's index signature", () => {
+    // `Model` declares `[key: string]: unknown`, so `post.author` type-checks
+    // but resolves to `unknown` — no autocomplete, no narrowing. The ideal DX
+    // is `post.author: Promise<Author | null>` and `author.posts: CollectionProxy<Post>`.
+    const post = new Post({ title: "hi", author_id: 1, published: true });
+    expectTypeOf(post.author).toBeUnknown();
+    const author = new Author({ name: "dean" });
+    expectTypeOf(author.posts).toBeUnknown();
   });
 });

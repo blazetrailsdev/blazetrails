@@ -342,6 +342,14 @@ export function realInheritanceColumn(this: SchemaHost, value: string): void {
   this._inheritanceColumn = value;
 }
 
+export const _inheritanceColumn = realInheritanceColumn;
+
+export function _returningColumnsForInsert(this: SchemaHost): string[] {
+  const pk = this.primaryKey;
+  if (Array.isArray(pk)) return pk;
+  return pk ? [pk] : [];
+}
+
 export function resetSequenceName(this: SchemaHost): void {
   this._sequenceName = null;
 }

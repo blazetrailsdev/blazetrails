@@ -105,3 +105,65 @@ export function compositeQueryConstraintsList(this: PersistenceHost): string[] {
   const pk = this.primaryKey;
   return Array.isArray(pk) ? pk : [pk];
 }
+
+/**
+ * Builds and executes an INSERT for the given values.
+ *
+ * Mirrors: ActiveRecord::Persistence::ClassMethods#_insert_record
+ */
+export async function _insertRecord(
+  this: PersistenceHost,
+  connection: { executeMutation(sql: string, binds?: unknown[]): Promise<number> },
+  values: Record<string, unknown>,
+  returning?: string[],
+): Promise<number> {
+  const table = (this as any).arelTable;
+  const cols = Object.keys(values);
+  if (cols.length === 0) {
+    const pk = Array.isArray(this.primaryKey) ? this.primaryKey[0] : this.primaryKey;
+    const sql = `INSERT INTO "${table.name}" DEFAULT VALUES`;
+    return connection.executeMutation(sql);
+  }
+  const quotedCols = cols.map((c) => `"${c}"`).join(", ");
+  const placeholders = cols.map(() => "?").join(", ");
+  const binds = cols.map((c) => values[c]);
+  const sql = `INSERT INTO "${table.name}" (${quotedCols}) VALUES (${placeholders})`;
+  return connection.executeMutation(sql, binds);
+}
+
+/**
+ * Builds and executes an UPDATE with the given values and constraints.
+ *
+ * Mirrors: ActiveRecord::Persistence::ClassMethods#_update_record
+ */
+export async function _updateRecord(
+  this: PersistenceHost,
+  values: Record<string, unknown>,
+  constraints: Record<string, unknown>,
+): Promise<number> {
+  const table = (this as any).arelTable;
+  const setCols = Object.keys(values);
+  const setClause = setCols.map((c) => `"${c}" = ?`).join(", ");
+  const whereCols = Object.keys(constraints);
+  const whereClause = whereCols.map((c) => `"${c}" = ?`).join(" AND ");
+  const binds = [...setCols.map((c) => values[c]), ...whereCols.map((c) => constraints[c])];
+  const sql = `UPDATE "${table.name}" SET ${setClause} WHERE ${whereClause}`;
+  return (this as any).adapter.executeMutation(sql, binds);
+}
+
+/**
+ * Builds and executes a DELETE with the given constraints.
+ *
+ * Mirrors: ActiveRecord::Persistence::ClassMethods#_delete_record
+ */
+export async function _deleteRecord(
+  this: PersistenceHost,
+  constraints: Record<string, unknown>,
+): Promise<number> {
+  const table = (this as any).arelTable;
+  const whereCols = Object.keys(constraints);
+  const whereClause = whereCols.map((c) => `"${c}" = ?`).join(" AND ");
+  const binds = whereCols.map((c) => constraints[c]);
+  const sql = `DELETE FROM "${table.name}" WHERE ${whereClause}`;
+  return (this as any).adapter.executeMutation(sql, binds);
+}

@@ -341,6 +341,17 @@ export class MacroReflection extends AbstractReflection {
     return this._klassCache;
   }
 
+  _klass(className: string): typeof Base {
+    if (this.activeRecord.name.split(".").pop() === className) {
+      try {
+        return this.computeClass(className);
+      } catch {
+        // fall through
+      }
+    }
+    return this.computeClass(className);
+  }
+
   computeClass(name: string): typeof Base {
     const resolved = modelRegistry.get(name);
     if (!resolved) {

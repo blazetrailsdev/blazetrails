@@ -209,6 +209,14 @@ export class Builder {
     this._dialect = dialect;
   }
 
+  returning(): string | undefined {
+    const ret = (this._insertAll as any).returning;
+    if (!ret) return undefined;
+    if (typeof ret === "string") return ret;
+    const cols = Array.isArray(ret) ? ret : [ret];
+    return cols.map((attr: string) => `"${attr.replace(/"/g, '""')}"`).join(", ");
+  }
+
   toSql(): string {
     return this._dialect === "mysql" ? this._buildMysqlSql() : this._buildStandardSql();
   }

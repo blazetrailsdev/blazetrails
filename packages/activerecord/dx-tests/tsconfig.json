@@ -1,0 +1,23 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    "rootDir": ".",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "paths": {
+      "@blazetrails/activerecord": ["../src/index.ts"],
+      "@blazetrails/activemodel": ["../../activemodel/src/index.ts"],
+      "@blazetrails/arel": ["../../arel/src/index.ts"],
+      "@blazetrails/activesupport": ["../../activesupport/src/index.ts"]
+    }
+  },
+  "include": ["."],
+  "references": [
+    { "path": "../../activerecord" },
+    { "path": "../../activemodel" },
+    { "path": "../../arel" },
+    { "path": "../../activesupport" }
+  ]
+}

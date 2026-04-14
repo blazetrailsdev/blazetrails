@@ -4,6 +4,7 @@ import type { ConnectionPool } from "./connection-adapters/abstract/connection-p
 import { getFsAsync, getPathAsync } from "@blazetrails/activesupport";
 import { DatabaseConfigurations } from "./database-configurations.js";
 import { HashConfig } from "./database-configurations/hash-config.js";
+import { _setAdapterClassResolver } from "./database-configurations/database-config.js";
 import {
   AdapterNotFound,
   AdapterNotSpecified,
@@ -651,3 +652,11 @@ export const ClassMethods = {
   shardKeys,
   isSharded,
 };
+
+// Register adapter class resolver so DatabaseConfig#adapterClass and
+// #newConnection can resolve adapters (matching Rails'
+// ActiveRecord::ConnectionAdapters.resolve).
+_setAdapterClassResolver(async (adapterName) => {
+  const normalized = normalizeAdapterName(adapterName);
+  return _loadAdapter(normalized);
+});

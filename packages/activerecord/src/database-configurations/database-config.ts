@@ -41,6 +41,16 @@ export function _setDefaultEnvGetter(fn: () => string): void {
   _defaultEnvGetter = fn;
 }
 
+// Registered by connection-handling.ts so DatabaseConfig#adapterClass and
+// #newConnection can resolve adapter classes without a circular import.
+type AdapterClassResolver = (adapterName: string) => Promise<new (arg: unknown) => unknown>;
+let _adapterClassResolver: AdapterClassResolver | null = null;
+
+/** @internal Set by connection-handling.ts to break circular dependency */
+export function _setAdapterClassResolver(fn: AdapterClassResolver): void {
+  _adapterClassResolver = fn;
+}
+
 /**
  * Mirrors: ActiveRecord::DatabaseConfigurations::DatabaseConfig
  */
@@ -107,6 +117,33 @@ export class DatabaseConfig {
    */
   get seeds(): boolean {
     return false;
+  }
+
+  /**
+   * Mirrors: DatabaseConfig#adapter_class
+   *
+   * Returns the adapter class for this configuration. Resolved through the
+   * adapter loader registered by connection-handling.ts (mirroring Rails'
+   * ActiveRecord::ConnectionAdapters.resolve).
+   */
+  async adapterClass(): Promise<new (arg: unknown) => unknown> {
+    if (!_adapterClassResolver) {
+      throw new Error("Adapter class resolver not registered — import connection-handling first");
+    }
+    if (!this.adapter) {
+      throw new Error(`Database configuration missing adapter: ${this.inspect()}`);
+    }
+    return _adapterClassResolver(this.adapter);
+  }
+
+  /**
+   * Mirrors: DatabaseConfig#new_connection
+   *
+   * Creates a new adapter instance from this configuration.
+   */
+  async newConnection(): Promise<unknown> {
+    const Klass = await this.adapterClass();
+    return new Klass(this.configuration);
   }
 
   get host(): string | undefined {
@@ -179,13 +216,11 @@ export class DatabaseConfig {
   /**
    * Mirrors: DatabaseConfig#validate!
    *
-   * Validates the configuration. In Rails this attempts to resolve the
-   * adapter class; here we just check that an adapter is specified.
+   * Validates the configuration by resolving the adapter class.
+   * Returns true on success or throws.
    */
-  validateBang(): true {
-    if (!this.adapter) {
-      throw new Error(`Database configuration missing adapter: ${this.inspect()}`);
-    }
+  async validateBang(): Promise<true> {
+    if (this.adapter) await this.adapterClass();
     return true;
   }
 }

@@ -7,7 +7,7 @@ import { Base, Relation } from "@blazetrails/activerecord";
 class Post extends Base {
   declare title: string;
   declare published: boolean;
-  declare createdAt: Date;
+  declare created_at: Date;
 
   static {
     this.attribute("title", "string");

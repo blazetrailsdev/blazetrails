@@ -26,7 +26,7 @@ class Author extends Base {
 
 class Post extends Base {
   declare title: string;
-  declare authorId: number;
+  declare author_id: number;
   declare published: boolean;
 
   static {
@@ -40,7 +40,7 @@ class Post extends Base {
 
 class Comment extends Base {
   declare body: string;
-  declare postId: number;
+  declare post_id: number;
 
   static {
     this.attribute("body", "string");
@@ -51,7 +51,7 @@ class Comment extends Base {
 
 class Profile extends Base {
   declare bio: string;
-  declare authorId: number;
+  declare author_id: number;
 
   static {
     this.attribute("bio", "string");

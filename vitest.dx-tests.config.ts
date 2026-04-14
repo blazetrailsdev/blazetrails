@@ -1,5 +1,5 @@
 import { defineConfig } from "vitest/config";
-import baseVitestConfig from "./vitest.config.js";
+import baseVitestConfig from "./vitest.config";
 
 // Separate config for DX type tests. These are type-level assertions — no
 // runtime code runs. Vitest's typecheck mode compiles each *.test-d.ts and

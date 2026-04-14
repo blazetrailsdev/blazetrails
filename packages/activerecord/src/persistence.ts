@@ -6,6 +6,7 @@
  */
 
 import { InsertManager, UpdateManager, DeleteManager, Table as ArelTable } from "@blazetrails/arel";
+import { detectAdapterName } from "./adapter-name.js";
 
 interface PersistenceHost {
   new (attrs?: Record<string, unknown>): any;
@@ -126,7 +127,14 @@ export async function _insertRecord(
     im.insert(entries.map(([col, val]) => [table.get(col), val]));
   }
 
-  const sql = entries.length > 0 ? im.toSql() : `${im.toSql()} DEFAULT VALUES`;
+  let sql: string;
+  if (entries.length > 0) {
+    sql = im.toSql();
+  } else {
+    const dialect = detectAdapterName(connection as any);
+    const emptyValue = dialect === "mysql" ? "VALUES ()" : "DEFAULT VALUES";
+    sql = `${im.toSql()} ${emptyValue}`;
+  }
   return connection.executeMutation(sql);
 }
 

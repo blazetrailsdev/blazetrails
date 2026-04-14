@@ -499,4 +499,5 @@ export const ClassMethods = {
   columnForAttribute,
   symbolColumnToString,
   resetColumnInformation,
+  _returningColumnsForInsert,
 };

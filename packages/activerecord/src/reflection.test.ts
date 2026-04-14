@@ -688,9 +688,9 @@ describe("ReflectionTest", () => {
         this.adapter = adp;
       }
     }
+    registerModel("Library::Book", Book);
     registerModel("Author", Author);
-    registerModel("Book", Book);
-    Associations.hasMany.call(Author, "books", {});
+    Associations.hasMany.call(Author, "books", { className: "Library::Book" });
     const ref = reflectOnAssociation(Author, "books");
     expect(ref).not.toBeNull();
     expect(ref!.klass).toBe(Book);

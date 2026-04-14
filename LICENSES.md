@@ -2,13 +2,13 @@
 
 Trails uses two licenses, applied to different parts of the repository:
 
-| Artifact                                              | License   | File           |
-| ----------------------------------------------------- | --------- | -------------- |
-| Source code (everything under `packages/*/src/`)      | MIT       | `LICENSE`      |
-| Scripts, configs, build tooling                       | MIT       | `LICENSE`      |
-| Auto-generated API reference (`docs/api/`)            | MIT       | `LICENSE`      |
-| Hand-written documentation prose under `docs/guides/` | CC BY 4.0 | `LICENSE-docs` |
-| Code examples embedded in documentation               | MIT       | `LICENSE`      |
+| Artifact                                                               | License   | File           |
+| ---------------------------------------------------------------------- | --------- | -------------- |
+| Source code (everything under `packages/*/src/`)                       | MIT       | `LICENSE`      |
+| Scripts, configs, build tooling                                        | MIT       | `LICENSE`      |
+| Auto-generated API reference (`packages/website/docs/api/`)            | MIT       | `LICENSE`      |
+| Hand-written documentation prose under `packages/website/docs/guides/` | CC BY 4.0 | `LICENSE-docs` |
+| Code examples embedded in documentation                                | MIT       | `LICENSE`      |
 
 ## Why two licenses
 

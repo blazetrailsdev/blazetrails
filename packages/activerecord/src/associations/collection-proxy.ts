@@ -1277,7 +1277,8 @@ export class CollectionProxy<T extends Base = Base> {
   select(...columns: (string | Nodes.SqlLiteral)[]): Relation<T>;
   select(...args: any[]): Promise<T[]> | Relation<T> {
     if (args.length === 1 && typeof args[0] === "function") {
-      return this.loadTarget().then((records: Base[]) => records.filter(args[0]));
+      const predicate = args[0] as (record: T) => boolean;
+      return this.loadTarget().then((records) => records.filter(predicate));
     }
     return this.scope().select(...args);
   }

@@ -74,13 +74,20 @@ export function extractBlocks(filePath: string, content: string): ExtractResult 
   let blockLines: string[] = [];
   let blockSkip = false;
   let blockIsTs = false;
+  let blockIndent = 0;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (!inBlock) {
-      const openMatch = /^```(\S*)/.exec(line);
+      // CommonMark: fences may be indented up to 3 spaces. In practice
+      // guides nest blocks inside list items at deeper indents, so we
+      // accept any leading whitespace. The language tag is the first
+      // whitespace-separated token after the backticks.
+      const openMatch = /^(\s*)```(.*)$/.exec(line);
       if (openMatch) {
-        const lang = openMatch[1];
+        const indent = openMatch[1].length;
+        const info = openMatch[2].trim();
+        const lang = info.split(/\s+/)[0] ?? "";
         if (!lang) {
           untagged.push({ file: filePath, line: i + 1 });
         }
@@ -89,6 +96,7 @@ export function extractBlocks(filePath: string, content: string): ExtractResult 
         blockLines = [];
         blockSkip = false;
         blockIsTs = lang === "ts" || lang === "typescript";
+        blockIndent = indent;
         for (let j = i - 1; j >= 0; j--) {
           const prev = lines[j].trim();
           if (prev === "") continue;
@@ -97,7 +105,7 @@ export function extractBlocks(filePath: string, content: string): ExtractResult 
         }
       }
     } else {
-      if (/^```\s*$/.test(line)) {
+      if (/^\s*```\s*$/.test(line)) {
         if (blockIsTs) {
           blocks.push({
             file: filePath,
@@ -108,7 +116,13 @@ export function extractBlocks(filePath: string, content: string): ExtractResult 
         }
         inBlock = false;
       } else {
-        blockLines.push(line);
+        // Strip up to `blockIndent` leading spaces from each content
+        // line, matching how Markdown renderers reconstruct the block.
+        const strippedLine =
+          blockIndent > 0 && line.startsWith(" ".repeat(blockIndent))
+            ? line.slice(blockIndent)
+            : line;
+        blockLines.push(strippedLine);
       }
     }
   }

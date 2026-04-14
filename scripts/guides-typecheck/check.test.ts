@@ -58,6 +58,29 @@ describe("extractBlocks", () => {
     expect(blocks[0].skip).toBe(false);
   });
 
+  it("extracts indented fenced blocks and strips the fence's indent", () => {
+    const md = [
+      "- A list item with a nested block:", // 1
+      "", // 2
+      "  ```ts", // 3 — content starts on line 4
+      "  const x = 1;", // 4
+      "  ```", // 5
+    ].join("\n");
+    const { blocks, untagged } = extractBlocks("a.md", md);
+    expect(untagged).toHaveLength(0);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].code).toBe("const x = 1;");
+    expect(blocks[0].startLine).toBe(4);
+  });
+
+  it("accepts a language tag separated from backticks by whitespace", () => {
+    const md = ["``` ts", "const x = 1;", "```"].join("\n");
+    const { blocks, untagged } = extractBlocks("a.md", md);
+    expect(untagged).toHaveLength(0);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].code).toBe("const x = 1;");
+  });
+
   it("throws on an unterminated fenced block", () => {
     const md = ["```ts", "const x = 1;"].join("\n");
     expect(() => extractBlocks("a.md", md)).toThrow(/Unterminated fenced code block in a\.md/);

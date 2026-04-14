@@ -55,10 +55,13 @@ type NodeChildProcess = {
 function wrap(cp: NodeChildProcess): ChildProcessAdapter {
   return {
     spawnSync(cmd, args, options) {
+      // Only default encoding when it was left undefined. Preserve an
+      // explicit `null` so callers can opt out of string decoding.
+      const encoding = options && "encoding" in options ? options.encoding : "utf8";
       const result = cp.spawnSync(cmd, args, {
         input: options?.input,
         env: options?.env,
-        encoding: options?.encoding ?? "utf8",
+        encoding,
         cwd: options?.cwd,
       });
       return {
@@ -72,6 +75,16 @@ function wrap(cp: NodeChildProcess): ChildProcessAdapter {
   };
 }
 
+/**
+ * Sync auto-registration of the node implementation.
+ *
+ * Works under CommonJS (where `require` is a global). In pure Node ESM the
+ * sync path cannot synchronously pull in `node:child_process` without a
+ * top-level static import of `node:module` (which would break browser
+ * bundles that consume this package). Consumers running under ESM should
+ * call {@link getChildProcessAsync} instead — it uses dynamic
+ * `import("node:child_process")` and works everywhere.
+ */
 function tryAutoRegisterNode(): boolean {
   if (registry.has("node")) return true;
   if (nodeAttempted) return false;
@@ -80,16 +93,15 @@ function tryAutoRegisterNode(): boolean {
     if (typeof globalThis.process === "undefined" || !globalThis.process.versions?.node) {
       return false;
     }
-    const nodeModule =
-      typeof require !== "undefined"
-        ? // eslint-disable-next-line @typescript-eslint/no-require-imports
-          require("node:module")
-        : null;
-    if (!nodeModule) return false;
+    if (typeof require === "undefined") return false;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const nodeModule = require("node:module") as {
+      createRequire: (from: string | URL) => NodeRequire;
+    };
     const req = nodeModule.createRequire(
       typeof __filename !== "undefined" ? __filename : "file:///activesupport",
     );
-    const cp = req("node:child_process") as NodeChildProcess;
+    const cp = req("node:child_process") as unknown as NodeChildProcess;
     registry.set("node", wrap(cp));
     return true;
   } catch {

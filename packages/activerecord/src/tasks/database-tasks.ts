@@ -73,6 +73,22 @@ export class DatabaseTasks {
 
   static get root(): string {
     if (this._root !== null) return this._root;
+    return DatabaseTasks._resolveCwd();
+  }
+
+  /**
+   * Resolve the process's current working directory.
+   *
+   * Tries the fast synchronous fallback first (`globalThis.process.cwd()`)
+   * so the sync `root` getter works under Node ESM — where the sync
+   * `getOs()` auto-register can't synchronously pull in `node:os`. Falls
+   * through to `getOs().cwd()` only if `process` isn't available, so
+   * custom OsAdapters (e.g. browser / VFS) can still supply a logical
+   * root.
+   */
+  private static _resolveCwd(): string {
+    const proc = (globalThis as { process?: { cwd?: () => string } }).process;
+    if (proc && typeof proc.cwd === "function") return proc.cwd();
     return getOs().cwd();
   }
 

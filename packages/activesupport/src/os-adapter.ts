@@ -44,6 +44,15 @@ function wrap(os: NodeOs): OsAdapter {
   };
 }
 
+/**
+ * Sync auto-registration of the node implementation.
+ *
+ * Works under CommonJS. In pure Node ESM the sync path cannot synchronously
+ * pull in `node:os` without a top-level static import of `node:module`
+ * (which would break browser bundles). Consumers running under ESM should
+ * call {@link getOsAsync} instead — it uses dynamic `import("node:os")`
+ * and works everywhere.
+ */
 function tryAutoRegisterNode(): boolean {
   if (registry.has("node")) return true;
   if (nodeAttempted) return false;
@@ -52,12 +61,11 @@ function tryAutoRegisterNode(): boolean {
     if (typeof globalThis.process === "undefined" || !globalThis.process.versions?.node) {
       return false;
     }
-    const nodeModule =
-      typeof require !== "undefined"
-        ? // eslint-disable-next-line @typescript-eslint/no-require-imports
-          require("node:module")
-        : null;
-    if (!nodeModule) return false;
+    if (typeof require === "undefined") return false;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const nodeModule = require("node:module") as {
+      createRequire: (from: string | URL) => NodeRequire;
+    };
     const req = nodeModule.createRequire(
       typeof __filename !== "undefined" ? __filename : "file:///activesupport",
     );

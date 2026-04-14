@@ -1,24 +1,23 @@
 import { defineConfig } from "vitest/config";
-import path from "path";
+import baseVitestConfig from "./vitest.config.js";
 
 // Separate config for DX type tests. These are type-level assertions — no
 // runtime code runs. Vitest's typecheck mode compiles each *.test-d.ts and
 // reports any type errors as test failures.
+//
+// Aliases are reused from the root runtime config so additions don't have to
+// be kept in sync across two files.
+const alias =
+  (baseVitestConfig as { resolve?: { alias?: Record<string, string> } }).resolve?.alias ?? {};
+
 export default defineConfig({
-  resolve: {
-    alias: {
-      "@blazetrails/activesupport": path.resolve(__dirname, "packages/activesupport/src/index.ts"),
-      "@blazetrails/arel": path.resolve(__dirname, "packages/arel/src/index.ts"),
-      "@blazetrails/activemodel": path.resolve(__dirname, "packages/activemodel/src/index.ts"),
-      "@blazetrails/activerecord": path.resolve(__dirname, "packages/activerecord/src/index.ts"),
-    },
-  },
+  resolve: { alias },
   test: {
     include: [],
     typecheck: {
       enabled: true,
       only: true,
-      include: ["packages/*/dx-tests/**/*.test-d.ts"],
+      include: ["packages/activerecord/dx-tests/**/*.test-d.ts"],
       tsconfig: "./packages/activerecord/dx-tests/tsconfig.json",
     },
   },

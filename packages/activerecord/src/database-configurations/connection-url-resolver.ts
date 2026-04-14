@@ -35,10 +35,12 @@ export class ConnectionUrlResolver {
     // (relative path), we detect and handle as opaque.
     const schemeMatch = url.match(/^([a-zA-Z][a-zA-Z0-9+.-]*):(\/\/)?(.*)$/);
     if (!schemeMatch) {
-      throw new Error(`Invalid database URL: ${url}`);
+      throw new Error(`Invalid database URL: ${redactUrl(url)}`);
     }
 
-    const scheme = schemeMatch[1].replace(/-/g, "_");
+    // URI schemes are case-insensitive (RFC 3986 §3.1) — Ruby's URI parser
+    // lowercases on read. Match that so `Postgres://...` resolves correctly.
+    const scheme = schemeMatch[1].toLowerCase().replace(/-/g, "_");
     const hasAuthority = !!schemeMatch[2];
     const rest = schemeMatch[3];
 
@@ -54,7 +56,7 @@ export class ConnectionUrlResolver {
         this._opaque = null;
         this._query = this._parsed.search ? this._parsed.search.slice(1) : null;
       } catch {
-        throw new Error(`Invalid database URL: ${url}`);
+        throw new Error(`Invalid database URL: ${redactUrl(url)}`);
       }
     } else {
       // Opaque URI: scheme:path[?query]
@@ -137,4 +139,10 @@ export class ConnectionUrlResolver {
     }
     return path.startsWith("/") ? path.slice(1) : path;
   }
+}
+
+// Strip user:pass@ from scheme://user:pass@host... so errors can be safely
+// logged without leaking credentials embedded in connection URLs.
+function redactUrl(url: string): string {
+  return url.replace(/^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)[^@/]+@/, "$1***@");
 }

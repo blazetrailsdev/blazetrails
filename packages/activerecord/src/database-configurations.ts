@@ -128,7 +128,9 @@ export class DatabaseConfigurations {
       });
     }
     if (options.configKey) {
-      configs = configs.filter((c) => options.configKey! in c.configuration);
+      configs = configs.filter((c) =>
+        Object.prototype.hasOwnProperty.call(c.configuration, options.configKey!),
+      );
     }
     if (options.name) {
       const nameStr = String(options.name);

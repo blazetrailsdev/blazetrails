@@ -342,17 +342,10 @@ export class MacroReflection extends AbstractReflection {
   }
 
   _klass(className: string): typeof Base {
-    // Rails: when the active record's demodulized name matches the target
-    // class name (self-referential), try resolving as a top-level constant
-    // first (::ClassName in Ruby), falling back to namespaced resolution.
-    const demodulized = this.activeRecord.name.split(".").pop();
-    if (demodulized === className) {
-      try {
-        return this.computeClass(className);
-      } catch {
-        // fall through to standard resolution
-      }
-    }
+    // Rails uses this for namespace-aware resolution (tries ::ClassName
+    // before Module::ClassName). Our model registry is flat, so this
+    // delegates directly to computeClass. When namespace support is
+    // added, this should try top-level resolution first.
     return this.computeClass(className);
   }
 

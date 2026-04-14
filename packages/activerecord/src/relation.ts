@@ -1713,9 +1713,9 @@ export class Relation<T extends Base> {
       case "average":
         return this.average(column!);
       case "minimum":
-        return this.minimum(column!) as Promise<number | null | Record<string, number>>;
+        return this.minimum(column!);
       case "maximum":
-        return this.maximum(column!) as Promise<number | null | Record<string, number>>;
+        return this.maximum(column!);
       default:
         throw new Error(`Unknown calculation: ${operation}`);
     }

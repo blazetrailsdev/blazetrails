@@ -8,12 +8,61 @@ description: Translation patterns from Rails to Trails — the naming, async, an
 > **See also:** [Guides index](./index.md) · [Rails deviations](./activerecord-rails-deviations.md)
 
 A Rails developer opening any Trails guide should recognize the shape
-of the code immediately. This page is the translation reference. It
-covers the conventions every guide follows so they don't have to
-re-explain them per page.
+of the code immediately. This page is the translation reference.
 
-If you're writing a guide, copy from here. If you're reading one, this
-is the Rosetta stone.
+## The shape
+
+```ruby
+# Ruby / Rails
+class Post < ActiveRecord::Base
+  attribute :title, :string
+  attribute :published, :boolean, default: false
+
+  validates :title, presence: true, length: { minimum: 3 }
+
+  before_save :normalize_title
+
+  scope :published, -> { where(published: true) }
+
+  def normalize_title
+    self.title = title.strip
+  end
+end
+
+post = Post.create!(title: "Hello")
+post.update!(published: true)
+published = Post.published.order(:title).to_a
+```
+
+```ts
+// TypeScript / Trails
+import { Base } from "@blazetrails/activerecord";
+
+class Post extends Base {
+  title!: string;
+  published!: boolean;
+
+  static {
+    Post.attribute("title", "string");
+    Post.attribute("published", "boolean", { default: false });
+
+    Post.validates("title", { presence: true, length: { minimum: 3 } });
+
+    Post.beforeSave((record) => {
+      (record as Post).title = (record as Post).title.trim();
+    });
+
+    Post.scope("published", (rel: any) => rel.where({ published: true }));
+  }
+}
+
+const post = (await Post.createBang({ title: "Hello" })) as Post;
+await post.updateBang({ published: true });
+const published = await Post.where({ published: true }).order("title").toArray();
+```
+
+Everything below this point is that example broken into its
+component conventions, in case something looks unfamiliar.
 
 ## Method names are camelCase
 
@@ -68,48 +117,46 @@ prefix.
 
 ## DB calls are always `await`ed
 
-Every read, write, validation-with-I/O, and transaction in Trails
-returns a `Promise`. There is no synchronous escape hatch.
+Every read, write, validation-with-I/O, and transaction returns a
+`Promise`. There is no synchronous escape hatch — `save`, `find`,
+`create`, `update`, `destroy`, `toArray`, `count`, `exists`, and every
+enumeration method (`each`, `findEach`, `findInBatches`) are async.
 
 ```ts
-import { type Base } from "@blazetrails/activerecord";
-
-interface User extends Base {
-  name: string;
+// ✗ wrong — `save()` returns Promise<boolean>; this branches on a
+//   truthy Promise object, not the result.
+if (post.save()) {
+  console.log("saved");
 }
-declare const User: typeof Base;
 
-const user = (await User.find(1)) as User;
-user.name = "Dean";
-await user.save();
-
-for await (const _record of User.all().findEach()) {
-  // ...
+// ✓ right
+if (await post.save()) {
+  console.log("saved");
 }
 ```
 
-A common mistake: calling `.toArray()` or `.count()` on the same
-relation twice issues two round-trips. Preload, or cache the result.
-
-See [Rails deviations: async propagation](./index.md#async-propagation)
-for the full list of methods this affects.
+`isValid()` stays synchronous for signature parity with Rails, but
+DB-backed validators (like `uniqueness`) push their promises onto
+`record._asyncValidationPromises` — `save()` awaits them for you;
+bare `isValid()` callers don't get that for free. See
+[Rails deviations: async propagation](./index.md#async-propagation).
 
 ## Keyword args become one options object
 
 Ruby keyword arguments become a single options object, always the
 last argument.
 
+```ruby
+# Rails
+Post.where(published: true, archived: false).order(:title)
+
+validates :title, presence: true, length: { minimum: 3 }
+```
+
 ```ts
-import { type Base } from "@blazetrails/activerecord";
-
-declare const Post: typeof Base;
-
-// Rails:  Post.where(published: true, archived: false).order(:title)
-// Trails:
+// Trails
 Post.where({ published: true, archived: false }).order("title");
 
-// Rails:  validates :title, presence: true, length: { minimum: 3 }
-// Trails:
 Post.validates("title", { presence: true, length: { minimum: 3 } });
 ```
 
@@ -118,38 +165,34 @@ Post.validates("title", { presence: true, length: { minimum: 3 } });
 Ruby `:symbol` has no JS equivalent. All options and attribute names
 use string literals.
 
+```ruby
+# Rails
+enum status: { draft: 0, published: 1 }
+Post.where(status: :draft)
+```
+
 ```ts
-import { type Base } from "@blazetrails/activerecord";
-
-declare const Post: typeof Base;
-
-// Rails:  enum status: [:draft, :published]
-// Trails:
+// Trails
 Post.enum("status", { draft: 0, published: 1 });
-
-// Rails:  Post.where(status: :draft)
-// Trails:
 Post.where({ status: "draft" });
 ```
 
-## Blocks become functions
+## Blocks become async functions
 
-Ruby blocks become (possibly-async) callback functions. See
-[Block APIs → callback functions](./index.md#block-apis) for the
-full signatures.
+Ruby blocks become (possibly-async) callback functions. Most block
+APIs in Rails — `transaction`, `each`, callbacks, `find_each` — map
+to functions in Trails.
+
+```ruby
+# Rails
+Post.transaction do
+  post.save!
+  comment.save!
+end
+```
 
 ```ts
-import { type Base } from "@blazetrails/activerecord";
-
-declare const Post: typeof Base;
-
-// Rails:
-//   Post.transaction do
-//     post.save!
-//     comment.save!
-//   end
-//
-// Trails:
+// Trails — note: module-level function, not a static method
 import { transaction } from "@blazetrails/activerecord";
 
 await transaction(Post, async (_tx) => {
@@ -158,57 +201,44 @@ await transaction(Post, async (_tx) => {
 });
 ```
 
-The body is an async function. The model class is the first argument
-(module-level function, not a static method). See the
-[ActiveRecord deviations guide](./activerecord-rails-deviations.md)
-for why.
+See [Rails deviations: block APIs → callback functions](./index.md#block-apis)
+for callback signatures.
 
 ## Class bodies use `static {}`
 
-Rails puts class-level configuration in the class body directly
-(`validates :name, presence: true`). Trails puts the equivalent in a
-static initializer block.
+Rails puts class-level configuration in the class body directly.
+Trails puts the equivalent in a `static {}` initializer block.
 
 ```ts
 import { Model } from "@blazetrails/activemodel";
 
-// Rails:
-//   class Post < ActiveModel::Model
-//     attribute :title, :string
-//     validates :title, presence: true
-//   end
-//
-// Trails:
 class Post extends Model {
+  title!: string;
+
   static {
     Post.attribute("title", "string");
     Post.validates("title", { presence: true });
+    Post.beforeSave((record) => {
+      (record as Post).title = (record as Post).title.trim();
+    });
   }
 }
 ```
 
-The `static {}` block runs once when the class is first loaded, same
-as Ruby's class body.
+The block runs once when the class is first loaded, same as Ruby's
+class body.
 
-## Attributes are bracket-accessed internally, dot-accessed externally
+## Attribute access
 
-Rails exposes attributes as methods: `post.title`. Trails exposes
-them as properties: `post.title`. Same shape. The difference is
-explicit access for typed code:
+Rails exposes attributes as methods; Trails exposes them as
+properties. Same dot-shape for reads and writes. The difference
+surfaces when you need runtime-typed access for generic code.
 
-```ts
-import { type Base } from "@blazetrails/activerecord";
-
-declare const post: InstanceType<typeof Base>;
-
-// Rails:                   Trails:
-// post.title              post.title                // same
-// post[:title]            post.readAttribute("title")
-// post[:title] = "new"    post.writeAttribute("title", "new")
-```
-
-Use `readAttribute`/`writeAttribute` when you need runtime-typed
-access (generic code operating over unknown columns).
+| Rails                  | Trails                                |
+| ---------------------- | ------------------------------------- |
+| `post.title`           | `post.title`                          |
+| `post[:title]`         | `post.readAttribute("title")`         |
+| `post[:title] = "new"` | `post.writeAttribute("title", "new")` |
 
 ## Ranges are plain objects
 
@@ -216,48 +246,35 @@ Ruby `Range` (`1..10`, `1...10`) has no JS equivalent. Use
 `makeRange` from `@blazetrails/activesupport`.
 
 ```ts
-import { type Base } from "@blazetrails/activerecord";
 import { makeRange } from "@blazetrails/activesupport";
 
-declare const Post: typeof Base;
-
 // Rails:  Post.where(views: 100..1000)
-// Trails:
 Post.where({ views: makeRange(100, 1000) });
 
 // Rails:  Post.where(views: 100...1000)   # exclusive end
-// Trails:
 Post.where({ views: makeRange(100, 1000, true) });
 ```
 
-## Connection and transaction state is per-async-flow
+## Per-async-flow state instead of thread locals
 
-Rails uses thread locals. Trails uses `AsyncLocalStorage`. Practical
-effect: nested `await`s see the correct surrounding transaction and
-connection without you threading anything through. If you spawn
-unattached work (`setTimeout`, unawaited promises), you lose the
-context the same way Rails loses thread locals when you spawn a new
-thread.
-
-See [Rails deviations: async-context state](./activerecord-rails-deviations.md)
-for the underlying mechanism.
-
-## Type imports for writing examples
-
-Guides import real types from `@blazetrails/*`. In short illustrative
-snippets, the shared globals (`user`, `post`, `User`, `Post`,
-`AnyRecord`) are declared as `any` and don't need importing. For
-full examples, always import from the package:
+Rails uses thread locals for current transaction, connection role,
+`Current.user`. Trails uses `AsyncLocalStorage`, scoped per async
+flow.
 
 ```ts
-import { type Base } from "@blazetrails/activerecord";
-import { Model } from "@blazetrails/activemodel";
 import { transaction } from "@blazetrails/activerecord";
+
+declare function somethingThatAlsoHitsTheDb(): Promise<void>;
+
+await transaction(Post, async (_tx) => {
+  await post.saveBang(); // inside the transaction
+
+  // A nested await still sees the outer transaction, no threading
+  // needed — AsyncLocalStorage propagates across awaits.
+  await somethingThatAlsoHitsTheDb();
+});
 ```
 
-CI compiles every `ts` block in every guide against the real package
-types. If you add a guide example, run `pnpm guides:typecheck`
-locally before opening the PR. See
-[scripts/guides-typecheck/README.md](https://github.com/blazetrailsdev/trails/blob/main/scripts/guides-typecheck/README.md)
-for the check's contract and the `<!-- typecheck:skip -->` marker
-for intentionally broken examples.
+Caveat: if you spawn unattached work (`setTimeout`, unawaited
+promises), you lose the context — same way Rails loses thread locals
+when you spawn a new thread.

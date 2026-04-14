@@ -1119,7 +1119,7 @@ describe("RelationTest", () => {
 
     it("scope accessible from relation proxy", async () => {
       Article.scope("published", (rel: any) => rel.where({ status: "published" }));
-      const articles = await Article.all().published().toArray();
+      const articles = await (Article.all() as any).published().toArray();
       expect(articles).toHaveLength(2);
     });
 

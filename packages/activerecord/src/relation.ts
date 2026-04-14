@@ -46,6 +46,13 @@ import { BatchEnumerator } from "./relation/batches/batch-enumerator.js";
 import { touchAttributesWithTime } from "./timestamp.js";
 
 /**
+ * A Relation returned from `load()` / `reload()` — a normal Relation with
+ * the PromiseLike methods stripped so `await rel.load()` resolves to the
+ * relation itself rather than being recursively unwrapped to `T[]`.
+ */
+export type LoadedRelation<R> = Omit<R, "then" | "catch" | "finally">;
+
+/**
  * Relation — the lazy, chainable query interface.
  *
  * Mirrors: ActiveRecord::Relation
@@ -730,7 +737,12 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#extending
    */
-  extending(mod?: Record<string, Function> | ((rel: Relation<T>) => void)): Relation<T> {
+  extending<M extends Record<string, Function>>(mod: M): Relation<T> & M;
+  extending(fn: (rel: Relation<T>) => void): Relation<T>;
+  extending(): Relation<T>;
+  extending(
+    mod?: Record<string, Function> | ((rel: Relation<T>) => void),
+  ): Relation<T> | (Relation<T> & Record<string, Function>) {
     if (!mod) return this._clone();
     return this._clone().extendingBang(mod);
   }
@@ -1119,7 +1131,7 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#reload
    */
-  async reload(): Promise<this> {
+  async reload(): Promise<LoadedRelation<this>> {
     this.reset();
     await this.load();
     return stripThenable(this);
@@ -1312,7 +1324,7 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#load
    */
-  async load(): Promise<this> {
+  async load(): Promise<LoadedRelation<this>> {
     await this.toArray();
     return stripThenable(this);
   }
@@ -1678,7 +1690,7 @@ export class Relation<T extends Base> {
    */
   async calculate(
     operation: "count" | "sum" | "average" | "minimum" | "maximum",
-    column: string,
+    column?: string,
   ): Promise<number | null | Record<string, number>> {
     switch (operation) {
       case "count":

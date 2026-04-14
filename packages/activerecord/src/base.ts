@@ -11,6 +11,7 @@ import {
   star as arelStar,
 } from "@blazetrails/arel";
 import type { DatabaseAdapter } from "./adapter.js";
+import type { Relation } from "./relation.js";
 import {
   getInheritanceColumn,
   isStiSubclass,
@@ -849,7 +850,7 @@ export class Base extends Model {
       // Static method that delegates to the scope
       Object.defineProperty(this, methodBase, {
         value: function () {
-          return (this as typeof Base).all()[methodBase]();
+          return ((this as typeof Base).all() as any)[methodBase]();
         },
         writable: true,
         configurable: true,
@@ -1018,6 +1019,19 @@ export class Base extends Model {
     return value;
   }
 
+  // Overloads match Rails' behavior:
+  //   find(id)        → single record
+  //   find([id, ...]) → array of records
+  //   find(id, ...)   → variadic → array of records
+  // For composite primary keys, `find([shop_id, id])` returns a single record;
+  // in that case the tuple form is ambiguous with the array form — callers
+  // either cast, narrow, or use `.find_by` for clearer intent.
+  static find<T extends typeof Base>(this: T, ids: unknown[]): Promise<InstanceType<T>[]>;
+  static find<T extends typeof Base>(this: T, id: unknown): Promise<InstanceType<T>>;
+  static find<T extends typeof Base>(
+    this: T,
+    ...ids: unknown[]
+  ): Promise<InstanceType<T> | InstanceType<T>[]>;
   static async find(...ids: unknown[]): Promise<any> {
     // Variadic: User.find(1, 2, 3)
     if (ids.length > 1) {
@@ -1195,7 +1209,7 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.all
    */
-  static all(): any {
+  static all<T extends typeof Base>(this: T): Relation<InstanceType<T>> {
     const scope = this.currentScope;
     if (scope) {
       return scope._clone();
@@ -1208,7 +1222,7 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.from
    */
-  static from(source: string): any {
+  static from<T extends typeof Base>(this: T, source: string): Relation<InstanceType<T>> {
     return this.all().from(source);
   }
 
@@ -1217,9 +1231,20 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.where
    */
-  static where(conditions: Record<string, unknown>): any;
-  static where(sql: string, ...binds: unknown[]): any;
-  static where(conditionsOrSql: Record<string, unknown> | string, ...binds: unknown[]): any {
+  static where<T extends typeof Base>(
+    this: T,
+    conditions: Record<string, unknown>,
+  ): Relation<InstanceType<T>>;
+  static where<T extends typeof Base>(
+    this: T,
+    sql: string,
+    ...binds: unknown[]
+  ): Relation<InstanceType<T>>;
+  static where<T extends typeof Base>(
+    this: T,
+    conditionsOrSql: Record<string, unknown> | string,
+    ...binds: unknown[]
+  ): Relation<InstanceType<T>> {
     if (this.abstractClass) {
       throw new Error(`Cannot call where on abstract class ${this.name}`);
     }
@@ -1229,7 +1254,10 @@ export class Base extends Model {
     return this.all().where(conditionsOrSql);
   }
 
-  static whereNot(conditions: Record<string, unknown>): any {
+  static whereNot<T extends typeof Base>(
+    this: T,
+    conditions: Record<string, unknown>,
+  ): Relation<InstanceType<T>> {
     return this.all().whereNot(conditions);
   }
 
@@ -1255,7 +1283,7 @@ export class Base extends Model {
     options?: {
       uniqueBy?: string | string[];
       updateOnly?: string | string[];
-      onDuplicate?: unknown;
+      onDuplicate?: "update" | "skip" | Nodes.SqlLiteral;
     },
   ): Promise<number> {
     return this.all().upsertAll(records, options);

@@ -60,15 +60,17 @@ describe("query chaining DX", () => {
     expectTypeOf(await rel.createOrFindByBang({ title: "x" })).toEqualTypeOf<Post>();
   });
 
-  it("KNOWN GAP: Post.where returns `any` — ideally Relation<Post>", () => {
-    const chain = Post.where({ published: true });
-    expectTypeOf(chain).toBeAny();
-  });
-
-  it("hand-typed chain via `as Relation<Post>` preserves T through await", async () => {
-    const rel = Post.where({ published: true }) as Relation<Post>;
+  it("Post.where returns Relation<Post> — chain keeps the generic", async () => {
+    const rel = Post.where({ published: true });
+    expectTypeOf(rel).toMatchTypeOf<Relation<Post>>();
     const rows = await rel;
     expectTypeOf(rows).toEqualTypeOf<Post[]>();
+  });
+
+  it("Post.all() / Post.from(...) / Post.whereNot(...) preserve the generic", () => {
+    expectTypeOf(Post.all()).toMatchTypeOf<Relation<Post>>();
+    expectTypeOf(Post.from("posts")).toMatchTypeOf<Relation<Post>>();
+    expectTypeOf(Post.whereNot({ published: false })).toMatchTypeOf<Relation<Post>>();
   });
 
   it("Post.where accepts a Record or a SQL-string + binds", () => {

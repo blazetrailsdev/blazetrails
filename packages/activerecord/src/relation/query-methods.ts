@@ -45,6 +45,12 @@ export class WhereChain<R = any> {
   missing(...associationNames: string[]): R {
     return this._scope.whereMissing(...associationNames);
   }
+
+  exists(...args: unknown[]): Promise<boolean> {
+    return (this._scope as unknown as { exists(...args: unknown[]): Promise<boolean> }).exists(
+      ...args,
+    );
+  }
 }
 
 /**

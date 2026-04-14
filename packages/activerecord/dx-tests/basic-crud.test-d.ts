@@ -36,9 +36,14 @@ describe("basic CRUD DX — defining and using a model", () => {
     assertType<Promise<Base>>(User.create({ name: "dean", email: "d@example.com" }));
   });
 
-  it("User.find resolves — currently typed as `any`, a key DX gap", () => {
-    // In Rails: User.find(1) → User. Here it's declared as returning `any`.
-    expectTypeOf(User.find).returns.resolves.toBeAny();
+  it("User.find(id) resolves to a single User", async () => {
+    const u = await User.find(1);
+    expectTypeOf(u).toEqualTypeOf<User>();
+  });
+
+  it("User.find([ids]) resolves to User[]", async () => {
+    const users = await User.find([1, 2, 3]);
+    expectTypeOf(users).toEqualTypeOf<User[]>();
   });
 
   it("User.findBy / findByBang have concrete Base returns", () => {

@@ -3717,7 +3717,7 @@ describe("FinderTest", () => {
       await Item.create({ active: false });
       await Item.create({ active: true });
 
-      const items = await Item.all().active().toArray();
+      const items = await (Item.all() as any).active().toArray();
       expect(items).toHaveLength(2);
     });
   });

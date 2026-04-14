@@ -58,6 +58,11 @@ describe("extractBlocks", () => {
     expect(blocks[0].skip).toBe(false);
   });
 
+  it("throws on an unterminated fenced block", () => {
+    const md = ["```ts", "const x = 1;"].join("\n");
+    expect(() => extractBlocks("a.md", md)).toThrow(/Unterminated fenced code block in a\.md/);
+  });
+
   it("handles adjacent blocks without bleeding state", () => {
     const md = ["```ts", "const x = 1;", "```", "```ts", "const y = 2;", "```"].join("\n");
     const { blocks } = extractBlocks("a.md", md);

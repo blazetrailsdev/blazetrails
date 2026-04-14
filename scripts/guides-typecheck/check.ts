@@ -112,6 +112,11 @@ export function extractBlocks(filePath: string, content: string): ExtractResult 
       }
     }
   }
+  if (inBlock) {
+    throw new Error(
+      `Unterminated fenced code block in ${filePath} starting at line ${blockStart - 1}.`,
+    );
+  }
   return { blocks, untagged };
 }
 
@@ -175,10 +180,15 @@ function main(): void {
 
   validatePackageCoverage();
 
-  const mdFiles = fs
-    .readdirSync(GUIDES_DIR)
-    .filter((f) => f.endsWith(".md"))
-    .map((f) => path.join(GUIDES_DIR, f));
+  const mdFiles: string[] = [];
+  const walk = (dir: string): void => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.isFile() && entry.name.endsWith(".md")) mdFiles.push(full);
+    }
+  };
+  walk(GUIDES_DIR);
 
   const allBlocks: Block[] = [];
   const allUntagged: UntaggedBlock[] = [];
@@ -215,13 +225,13 @@ function main(): void {
   fs.writeFileSync(path.join(tmpRoot, "globals.d.ts"), GLOBALS_DTS);
   writeTsconfig(tmpRoot);
 
-  const blockPaths: { block: Block; tmpPath: string }[] = [];
+  const blocksByIdx = new Map<number, Block>();
   checked.forEach((block, idx) => {
     const rel = path.relative(REPO_ROOT, block.file).replace(/[^\w]/g, "_");
     const tmpName = `${rel}__L${block.startLine}__${idx}.ts`;
     const tmpPath = path.join(blocksDir, tmpName);
     fs.writeFileSync(tmpPath, block.code + BLOCK_SUFFIX);
-    blockPaths.push({ block, tmpPath });
+    blocksByIdx.set(idx, block);
   });
 
   console.log(
@@ -240,12 +250,13 @@ function main(): void {
   }
 
   const remappedOutput = output.replace(
-    /(?:\S+[\/\\])?blocks[\/\\](\S+?)__L(\d+)__\d+\.ts(\((\d+),(\d+)\))?/g,
-    (_match, _name, originalStart, _paren, lineOffsetStr, col) => {
+    /(?:\S+[\/\\])?blocks[\/\\](\S+?)__L(\d+)__(\d+)\.ts(\((\d+),(\d+)\))?/g,
+    (_match, _name, _startStr, idxStr, _paren, lineOffsetStr, col) => {
       const lineOffset = lineOffsetStr ? parseInt(lineOffsetStr, 10) : 1;
-      const absoluteLine = parseInt(originalStart, 10) + lineOffset - 1;
-      const match = blockPaths.find((p) => p.tmpPath.includes(`__L${originalStart}__`));
-      const guide = match ? path.relative(REPO_ROOT, match.block.file) : "<unknown>";
+      const block = blocksByIdx.get(parseInt(idxStr, 10));
+      if (!block) return _match;
+      const absoluteLine = block.startLine + lineOffset - 1;
+      const guide = path.relative(REPO_ROOT, block.file);
       return col ? `${guide}:${absoluteLine}:${col}` : `${guide}:${absoluteLine}`;
     },
   );

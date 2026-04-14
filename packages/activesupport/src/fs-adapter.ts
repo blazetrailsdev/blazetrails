@@ -42,6 +42,7 @@ export interface FsAdapter {
   ): number;
   closeSync(fd: number): void;
   copyFileSync(src: string, dest: string): void;
+  mkdtempSync(prefix: string): string;
 }
 
 export interface PathAdapter {
@@ -50,6 +51,7 @@ export interface PathAdapter {
   basename(p: string): string;
   resolve(...parts: string[]): string;
   extname(p: string): string;
+  isAbsolute(p: string): boolean;
   sep: string;
 }
 

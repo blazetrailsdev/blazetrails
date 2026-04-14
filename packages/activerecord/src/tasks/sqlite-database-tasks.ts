@@ -4,9 +4,7 @@
  * Mirrors: ActiveRecord::Tasks::SQLiteDatabaseTasks
  */
 
-import * as fs from "node:fs";
-import * as path from "node:path";
-import { spawnSync } from "node:child_process";
+import { getFs, getPath, getChildProcess, type SpawnSyncResult } from "@blazetrails/activesupport";
 import type { DatabaseConfig } from "../database-configurations/database-config.js";
 import { DatabaseTasks } from "./database-tasks.js";
 import { NoDatabaseError, DatabaseAlreadyExists } from "../errors.js";
@@ -25,6 +23,8 @@ export class SQLiteDatabaseTasks {
   }
 
   async create(): Promise<void> {
+    const fs = getFs();
+    const path = getPath();
     const dbPath = this.resolveDbPath();
     if (dbPath !== ":memory:" && fs.existsSync(dbPath)) {
       throw new DatabaseAlreadyExists(`Database '${dbPath}' already exists`);
@@ -36,6 +36,7 @@ export class SQLiteDatabaseTasks {
   }
 
   async drop(): Promise<void> {
+    const fs = getFs();
     const dbPath = this.resolveDbPath();
     if (dbPath === ":memory:") return;
     try {
@@ -105,14 +106,15 @@ export class SQLiteDatabaseTasks {
       args.push(...(Array.isArray(extraFlags) ? extraFlags : [extraFlags]));
     }
     args.push(this.resolveDbPath());
-    const sql = fs.readFileSync(filename, "utf8");
-    const result = spawnSync("sqlite3", args, { input: sql, encoding: "utf8" });
+    const sql = getFs().readFileSync(filename, "utf8");
+    const result = getChildProcess().spawnSync("sqlite3", args, { input: sql, encoding: "utf8" });
     if (result.error || result.status !== 0 || result.signal) {
       throw new Error(this.formatCmdError("sqlite3", args, result, "loading"));
     }
   }
 
   private resolveDbPath(): string {
+    const path = getPath();
     const database = this.dbConfig.database;
     if (!database) {
       throw new Error("SQLite database configuration missing 'database' path");
@@ -135,17 +137,17 @@ export class SQLiteDatabaseTasks {
   }
 
   private runCmd(cmd: string, args: string[], outFile: string): void {
-    const result = spawnSync(cmd, args, { encoding: "utf8" });
+    const result = getChildProcess().spawnSync(cmd, args, { encoding: "utf8" });
     if (result.error || result.status !== 0 || result.signal) {
       throw new Error(this.formatCmdError(cmd, args, result, "dumping"));
     }
-    fs.writeFileSync(outFile, result.stdout ?? "");
+    getFs().writeFileSync(outFile, result.stdout ?? "");
   }
 
   private formatCmdError(
     cmd: string,
     args: string[],
-    result: ReturnType<typeof spawnSync>,
+    result: SpawnSyncResult,
     action: string,
   ): string {
     const details: string[] = [];

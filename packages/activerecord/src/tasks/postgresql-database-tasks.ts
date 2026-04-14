@@ -4,10 +4,13 @@
  * Mirrors: ActiveRecord::Tasks::PostgreSQLDatabaseTasks
  */
 
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
-import { spawnSync } from "node:child_process";
+import {
+  getFs,
+  getOs,
+  getPath,
+  getChildProcess,
+  type SpawnSyncResult,
+} from "@blazetrails/activesupport";
 import type { DatabaseAdapter } from "../adapter.js";
 import type { DatabaseConfig } from "../database-configurations/database-config.js";
 import { DatabaseTasks } from "./database-tasks.js";
@@ -195,26 +198,19 @@ export class PostgreSQLDatabaseTasks {
   }
 
   private runCmd(cmd: string, args: string[], action: string): void {
-    const result = spawnSync(cmd, args, { env: this.psqlEnv(), encoding: "utf8" });
+    const result = getChildProcess().spawnSync(cmd, args, {
+      env: this.psqlEnv(),
+      encoding: "utf8",
+    });
     if (result.error || result.status !== 0 || result.signal) {
-      const details: string[] = [];
-      if (result.error) details.push(`Error: ${result.error.message}`);
-      if (result.status !== null && result.status !== 0) {
-        details.push(`Exit status: ${result.status}`);
-      }
-      if (result.signal) details.push(`Signal: ${result.signal}`);
-      if (result.stderr) details.push(`stderr:\n${result.stderr.trimEnd()}`);
-      if (result.stdout) details.push(`stdout:\n${result.stdout.trimEnd()}`);
-      throw new Error(
-        `failed to execute:\n${cmd} ${args.join(" ")}\n\n` +
-          (details.length ? `${details.join("\n\n")}\n\n` : "") +
-          `Make sure \`${cmd}\` is installed in your PATH and has proper permissions.\n` +
-          `(action: ${action})`,
-      );
+      throw new Error(formatCmdError(cmd, args, result, action));
     }
   }
 
   private removeSqlHeaderComments(filename: string): void {
+    const fs = getFs();
+    const path = getPath();
+    const os = getOs();
     const contents = fs.readFileSync(filename, "utf8");
     const lines = contents.split("\n");
     let i = 0;
@@ -244,4 +240,26 @@ export class PostgreSQLDatabaseTasks {
   private escapeSingle(value: string): string {
     return value.replace(/'/g, "''");
   }
+}
+
+function formatCmdError(
+  cmd: string,
+  args: string[],
+  result: SpawnSyncResult,
+  action: string,
+): string {
+  const details: string[] = [];
+  if (result.error) details.push(`Error: ${result.error.message}`);
+  if (result.status !== null && result.status !== 0) {
+    details.push(`Exit status: ${result.status}`);
+  }
+  if (result.signal) details.push(`Signal: ${result.signal}`);
+  if (result.stderr) details.push(`stderr:\n${String(result.stderr).trimEnd()}`);
+  if (result.stdout) details.push(`stdout:\n${String(result.stdout).trimEnd()}`);
+  return (
+    `failed to execute:\n${cmd} ${args.join(" ")}\n\n` +
+    (details.length ? `${details.join("\n\n")}\n\n` : "") +
+    `Make sure \`${cmd}\` is installed in your PATH and has proper permissions.\n` +
+    `(action: ${action})`
+  );
 }

@@ -4,8 +4,7 @@
  * Mirrors: ActiveRecord::Tasks::MySQLDatabaseTasks
  */
 
-import * as fs from "node:fs";
-import { spawnSync } from "node:child_process";
+import { getFs, getChildProcess, type SpawnSyncResult } from "@blazetrails/activesupport";
 import type { DatabaseAdapter } from "../adapter.js";
 import type { DatabaseConfig } from "../database-configurations/database-config.js";
 import { DatabaseTasks } from "./database-tasks.js";
@@ -99,7 +98,7 @@ export class MySQLDatabaseTasks {
     if (extraFlags) {
       args.unshift(...(Array.isArray(extraFlags) ? extraFlags : [extraFlags]));
     }
-    const sqlBody = fs.readFileSync(filename, "utf8");
+    const sqlBody = getFs().readFileSync(filename, "utf8");
     const stdin = `SET FOREIGN_KEY_CHECKS = 0;\n${sqlBody}\nSET FOREIGN_KEY_CHECKS = 1;\n`;
     this.runCmd("mysql", args, "loading", stdin);
   }
@@ -191,9 +190,10 @@ export class MySQLDatabaseTasks {
   }
 
   private runCmd(cmd: string, args: string[], action: string, stdin?: string): void {
-    const spawnOpts: Parameters<typeof spawnSync>[2] = { encoding: "utf8" };
-    if (stdin !== undefined) spawnOpts.input = stdin;
-    const result = spawnSync(cmd, args, spawnOpts);
+    const result: SpawnSyncResult = getChildProcess().spawnSync(cmd, args, {
+      encoding: "utf8",
+      input: stdin,
+    });
     if (result.error || result.status !== 0 || result.signal) {
       const details: string[] = [];
       if (result.error) details.push(`Error: ${result.error.message}`);

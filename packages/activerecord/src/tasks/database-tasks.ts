@@ -448,8 +448,10 @@ export class DatabaseTasks {
       return;
     }
 
-    const { pathToFileURL } = await import("node:url");
-    const mod = (await import(pathToFileURL(filename).href)) as {
+    const path = getPath();
+    const absolute = path.isAbsolute(filename) ? filename : path.join(this.root, filename);
+    const href = "file://" + absolute.replace(/\\/g, "/").replace(/^\//, "/");
+    const mod = (await import(href)) as {
       default?: (ctx: unknown) => Promise<void> | void;
     };
     const defineSchema = mod.default ?? (mod as unknown as (ctx: unknown) => Promise<void> | void);

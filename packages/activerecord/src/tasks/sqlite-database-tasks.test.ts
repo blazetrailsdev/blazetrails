@@ -84,4 +84,51 @@ describe("SQLiteDatabaseTasks", () => {
     SQLiteDatabaseTasks.register();
     expect(DatabaseTasks.resolveTask("sqlite3")).toBeDefined();
   });
+
+  it("test_structure_dump_and_load_round_trip_via_adapter", async () => {
+    const dbPath = tmpDbPath();
+    const dumpPath = path.join(os.tmpdir(), `trails-sqlite-dump-${randomUUID()}.sql`);
+    const loadDbPath = tmpDbPath();
+    created.push(dbPath, dumpPath, loadDbPath);
+
+    const sourceConfig = new HashConfig("development", "primary", {
+      adapter: "sqlite3",
+      database: dbPath,
+    });
+
+    const { SQLite3Adapter } = await import("../connection-adapters/sqlite3-adapter.js");
+    const seedAdapter = new SQLite3Adapter(dbPath);
+    await seedAdapter.executeMutation(
+      "CREATE TABLE widgets (id INTEGER PRIMARY KEY, name TEXT NOT NULL)",
+    );
+    await seedAdapter.executeMutation("CREATE INDEX index_widgets_on_name ON widgets(name)");
+    await (seedAdapter as unknown as { close(): Promise<void> }).close();
+
+    await new SQLiteDatabaseTasks(sourceConfig).structureDump(dumpPath);
+
+    const dumped = fs.readFileSync(dumpPath, "utf8");
+    expect(dumped).toMatch(/CREATE TABLE widgets/);
+    expect(dumped).toMatch(/index_widgets_on_name/);
+
+    const targetConfig = new HashConfig("development", "primary", {
+      adapter: "sqlite3",
+      database: loadDbPath,
+    });
+    fs.writeFileSync(loadDbPath, "");
+    await new SQLiteDatabaseTasks(targetConfig).structureLoad(dumpPath);
+
+    const loadedAdapter = new SQLite3Adapter(loadDbPath);
+    try {
+      const tables = (await loadedAdapter.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name",
+      )) as Array<{ name: string }>;
+      expect(tables.map((r) => r.name)).toContain("widgets");
+      const idx = (await loadedAdapter.execute(
+        "SELECT name FROM sqlite_master WHERE type='index' AND name='index_widgets_on_name'",
+      )) as unknown[];
+      expect(idx.length).toBe(1);
+    } finally {
+      await (loadedAdapter as unknown as { close(): Promise<void> }).close();
+    }
+  });
 });

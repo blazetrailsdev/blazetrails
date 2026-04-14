@@ -2,7 +2,7 @@
  * Child-process adapter — mirrors the Rails adapter pattern.
  *
  * Exposes a minimal synchronous `spawnSync`-like API so higher-level packages
- * (activerecord tasks, railties CLI) can shell out to external tools without
+ * (activerecord tasks, trailties CLI) can shell out to external tools without
  * taking a direct dependency on `node:child_process`.
  */
 

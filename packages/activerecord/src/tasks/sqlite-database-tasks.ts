@@ -1,10 +1,16 @@
 /**
  * SQLiteDatabaseTasks — SQLite-specific database lifecycle operations.
  *
- * Mirrors: ActiveRecord::Tasks::SQLiteDatabaseTasks
+ * Mirrors: ActiveRecord::Tasks::SQLiteDatabaseTasks.
+ *
+ * Unlike Rails (which shells out to the `sqlite3` CLI for structureDump /
+ * structureLoad), trails runs these operations through the SQLite3Adapter so
+ * the same code works under sqlite-wasm + the activesupport vfs adapter — no
+ * subprocess required.
  */
 
-import { getFs, getPath, getChildProcess, type SpawnSyncResult } from "@blazetrails/activesupport";
+import { getFs, getPath } from "@blazetrails/activesupport";
+import type { DatabaseAdapter } from "../adapter.js";
 import type { DatabaseConfig } from "../database-configurations/database-config.js";
 import { DatabaseTasks } from "./database-tasks.js";
 import { NoDatabaseError, DatabaseAlreadyExists } from "../errors.js";
@@ -90,26 +96,62 @@ export class SQLiteDatabaseTasks {
     return "UTF-8";
   }
 
-  structureDump(filename: string, extraFlags?: string | string[] | null): void {
-    const args: string[] = [];
-    if (extraFlags) {
-      args.push(...(Array.isArray(extraFlags) ? extraFlags : [extraFlags]));
+  async structureDump(filename: string, extraFlags?: string | string[] | null): Promise<void> {
+    void extraFlags;
+    const adapter = await this.connectAdapter();
+    try {
+      const { SchemaDumper } = await import("../connection-adapters/abstract/schema-dumper.js");
+      const ignoreTables = SchemaDumper.ignoreTables;
+
+      let query: string;
+      if (ignoreTables.length > 0) {
+        // Resolve patterns against the live table list (Rails does the same —
+        // string names + regex patterns both need the current sqlite_master
+        // row to compare against).
+        const tablesRows = (await adapter.execute(
+          "SELECT tbl_name FROM sqlite_master WHERE type IN ('table','view','index','trigger')",
+        )) as Array<Record<string, unknown>>;
+        const allTables = Array.from(
+          new Set(tablesRows.map((r) => String(r.tbl_name ?? "")).filter(Boolean)),
+        );
+        const excluded = allTables.filter((name) =>
+          ignoreTables.some((pat) => (pat instanceof RegExp ? pat.test(name) : pat === name)),
+        );
+        if (excluded.length > 0) {
+          const list = excluded.map((n) => `'${n.replace(/'/g, "''")}'`).join(", ");
+          query =
+            `SELECT sql || ';' AS sql FROM sqlite_master ` +
+            `WHERE sql IS NOT NULL AND tbl_name NOT IN (${list}) ` +
+            `ORDER BY tbl_name, type DESC, name`;
+        } else {
+          query =
+            `SELECT sql || ';' AS sql FROM sqlite_master ` +
+            `WHERE sql IS NOT NULL ORDER BY tbl_name, type DESC, name`;
+        }
+      } else {
+        query =
+          `SELECT sql || ';' AS sql FROM sqlite_master ` +
+          `WHERE sql IS NOT NULL ORDER BY tbl_name, type DESC, name`;
+      }
+
+      const rows = (await adapter.execute(query)) as Array<Record<string, unknown>>;
+      const output = rows.map((r) => String(r.sql ?? "")).join("\n");
+      getFs().writeFileSync(filename, output);
+    } finally {
+      await this.closeAdapter(adapter);
     }
-    args.push(this.resolveDbPath());
-    args.push(".schema --nosys");
-    this.runCmd("sqlite3", args, filename);
   }
 
-  structureLoad(filename: string, extraFlags?: string | string[] | null): void {
-    const args: string[] = [];
-    if (extraFlags) {
-      args.push(...(Array.isArray(extraFlags) ? extraFlags : [extraFlags]));
-    }
-    args.push(this.resolveDbPath());
+  async structureLoad(filename: string, extraFlags?: string | string[] | null): Promise<void> {
+    void extraFlags;
     const sql = getFs().readFileSync(filename, "utf8");
-    const result = getChildProcess().spawnSync("sqlite3", args, { input: sql, encoding: "utf8" });
-    if (result.error || result.status !== 0 || result.signal) {
-      throw new Error(this.formatCmdError("sqlite3", args, result, "loading"));
+    const adapter = await this.connectAdapter();
+    try {
+      for (const statement of splitSqlStatements(sql)) {
+        await adapter.executeMutation(statement);
+      }
+    } finally {
+      await this.closeAdapter(adapter);
     }
   }
 
@@ -121,6 +163,16 @@ export class SQLiteDatabaseTasks {
     }
     if (database === ":memory:" || path.isAbsolute(database)) return database;
     return path.join(this.root, database);
+  }
+
+  private async connectAdapter(): Promise<DatabaseAdapter> {
+    const { SQLite3Adapter } = await import("../connection-adapters/sqlite3-adapter.js");
+    return new SQLite3Adapter(this.resolveDbPath());
+  }
+
+  private async closeAdapter(adapter: DatabaseAdapter): Promise<void> {
+    const close = (adapter as { close?: () => Promise<void> }).close;
+    if (typeof close === "function") await close.call(adapter);
   }
 
   static register(): void {
@@ -135,34 +187,63 @@ export class SQLiteDatabaseTasks {
         new SQLiteDatabaseTasks(config).structureLoad(filename, flags),
     });
   }
+}
 
-  private runCmd(cmd: string, args: string[], outFile: string): void {
-    const result = getChildProcess().spawnSync(cmd, args, { encoding: "utf8" });
-    if (result.error || result.status !== 0 || result.signal) {
-      throw new Error(this.formatCmdError(cmd, args, result, "dumping"));
+/**
+ * Split a SQL script into individual statements on semicolon boundaries,
+ * respecting string literals ('...' and "..."), line comments (-- ...) and
+ * block comments (slash-star ... star-slash). Simple enough for
+ * structure-load files (which are DDL the adapter itself produced) but not a
+ * full SQL parser.
+ */
+function splitSqlStatements(sql: string): string[] {
+  const result: string[] = [];
+  let buf = "";
+  let i = 0;
+  const n = sql.length;
+  while (i < n) {
+    const ch = sql[i];
+    const next = sql[i + 1];
+    if (ch === "-" && next === "-") {
+      while (i < n && sql[i] !== "\n") i++;
+      continue;
     }
-    getFs().writeFileSync(outFile, result.stdout ?? "");
-  }
-
-  private formatCmdError(
-    cmd: string,
-    args: string[],
-    result: SpawnSyncResult,
-    action: string,
-  ): string {
-    const details: string[] = [];
-    if (result.error) details.push(`Error: ${result.error.message}`);
-    if (result.status !== null && result.status !== 0) {
-      details.push(`Exit status: ${result.status}`);
+    if (ch === "/" && next === "*") {
+      i += 2;
+      while (i < n - 1 && !(sql[i] === "*" && sql[i + 1] === "/")) i++;
+      i += 2;
+      continue;
     }
-    if (result.signal) details.push(`Signal: ${result.signal}`);
-    if (result.stderr) details.push(`stderr:\n${String(result.stderr).trimEnd()}`);
-    if (result.stdout) details.push(`stdout:\n${String(result.stdout).trimEnd()}`);
-    return (
-      `failed to execute:\n${cmd} ${args.join(" ")}\n\n` +
-      (details.length ? `${details.join("\n\n")}\n\n` : "") +
-      `Make sure \`${cmd}\` is installed in your PATH and has proper permissions.\n` +
-      `(action: ${action})`
-    );
+    if (ch === "'" || ch === '"') {
+      const quote = ch;
+      buf += ch;
+      i++;
+      while (i < n) {
+        buf += sql[i];
+        if (sql[i] === quote && sql[i + 1] !== quote) {
+          i++;
+          break;
+        }
+        if (sql[i] === quote && sql[i + 1] === quote) {
+          buf += sql[i + 1];
+          i += 2;
+          continue;
+        }
+        i++;
+      }
+      continue;
+    }
+    if (ch === ";") {
+      const stmt = buf.trim();
+      if (stmt) result.push(stmt);
+      buf = "";
+      i++;
+      continue;
+    }
+    buf += ch;
+    i++;
   }
+  const tail = buf.trim();
+  if (tail) result.push(tail);
+  return result;
 }

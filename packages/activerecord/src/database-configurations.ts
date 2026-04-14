@@ -3,8 +3,20 @@ import {
   type DatabaseConfigOptions,
   _setDefaultEnvGetter,
 } from "./database-configurations/database-config.js";
-import { HashConfig } from "./database-configurations/hash-config.js";
+import { HashConfig, _setPrimaryChecker } from "./database-configurations/hash-config.js";
+
+// Track the most recently created DatabaseConfigurations instance so
+// HashConfig.isPrimary() can check it globally. Matches Rails where
+// HashConfig#primary? calls Base.configurations.primary?(name).
+let _currentConfigurations: DatabaseConfigurations | null = null;
 import { UrlConfig } from "./database-configurations/url-config.js";
+
+export class InvalidConfigurationError extends Error {
+  constructor(message?: string) {
+    super(message);
+    this.name = "InvalidConfigurationError";
+  }
+}
 
 type RawConfigurations = Record<
   string,
@@ -13,8 +25,38 @@ type RawConfigurations = Record<
 
 const customHandlers = new Map<string, new (...args: any[]) => DatabaseConfig>();
 
+/**
+ * Handler callback — receives (envName, name, url, config) and returns a
+ * DatabaseConfig or null. Matches Rails' register_db_config_handler block.
+ */
+type DbConfigHandler = (
+  envName: string,
+  name: string,
+  url: string | undefined,
+  config: DatabaseConfigOptions,
+) => DatabaseConfig | null | undefined;
+
 export class DatabaseConfigurations {
   private static _defaultEnv: string = "development";
+
+  /**
+   * Mirrors: DatabaseConfigurations.db_config_handlers
+   *
+   * Registered handlers for building DatabaseConfig objects. Evaluated
+   * in reverse order — later registrations take precedence.
+   */
+  static dbConfigHandlers: DbConfigHandler[] = [];
+
+  /**
+   * Mirrors: DatabaseConfigurations.register_db_config_handler
+   *
+   * Registers a custom handler for building DatabaseConfig objects.
+   * Handlers receive (envName, name, url, config) and return a
+   * DatabaseConfig or null/undefined to pass through to the next handler.
+   */
+  static registerDbConfigHandler(handler: DbConfigHandler): void {
+    this.dbConfigHandlers.push(handler);
+  }
 
   static get defaultEnv(): string {
     return this._defaultEnv || "default";
@@ -32,20 +74,46 @@ export class DatabaseConfigurations {
     } else {
       this._configurations = this._buildConfigs(configurations);
     }
+    // Register this instance as the current one for HashConfig.isPrimary lookup
+    _currentConfigurations = this;
   }
 
+  /**
+   * Mirrors: DatabaseConfigurations#empty?
+   */
   get empty(): boolean {
     return this._configurations.length === 0;
+  }
+
+  /**
+   * Mirrors: DatabaseConfigurations#blank? (alias for empty?)
+   */
+  get blank(): boolean {
+    return this.empty;
+  }
+
+  /**
+   * Mirrors: DatabaseConfigurations#any? (delegates to configurations)
+   */
+  get any(): boolean {
+    return this._configurations.length > 0;
   }
 
   get configurations(): DatabaseConfig[] {
     return [...this._configurations];
   }
 
+  /**
+   * Mirrors: DatabaseConfigurations#configs_for
+   *
+   * Collects configs matching the given env/name/config_key filters.
+   * Respects include_hidden to include replicas and database_tasks: false configs.
+   */
   configsFor(
     options: {
       envName?: string;
       name?: string;
+      configKey?: string;
       includeHidden?: boolean;
     } = {},
   ): DatabaseConfig[] {
@@ -54,22 +122,68 @@ export class DatabaseConfigurations {
     if (options.envName) {
       configs = configs.filter((c) => c.envName === options.envName);
     }
+    if (!options.includeHidden) {
+      configs = configs.filter((c) => {
+        if (c.configuration._hidden === true) return false;
+        if (c instanceof HashConfig) return c.databaseTasks();
+        return true;
+      });
+    }
+    if (options.configKey) {
+      configs = configs.filter((c) => options.configKey! in c.configuration);
+    }
     if (options.name) {
       const nameStr = String(options.name);
       configs = configs.filter((c) => c.name === nameStr);
-    }
-    if (!options.includeHidden) {
-      configs = configs.filter((c) => c.configuration._hidden !== true);
     }
     return configs;
   }
 
   findDbConfig(envName: string): DatabaseConfig | undefined {
-    const currentEnvConfigs = this._configurations.filter((c) => c.envName === envName);
-    if (currentEnvConfigs.length > 0) {
-      return currentEnvConfigs[0];
+    const envStr = String(envName);
+    const matching = this._configurations.find(
+      (c) => c.forCurrentEnv && (c.envName === envStr || c.name === envStr),
+    );
+    if (matching) return matching;
+    return this._configurations.find((c) => c.envName === envStr);
+  }
+
+  /**
+   * Mirrors: DatabaseConfigurations#primary?
+   *
+   * True if the given name is "primary" or matches the first config for
+   * the default environment.
+   */
+  isPrimary(name: string): boolean {
+    if (name === "primary") return true;
+    const firstConfig = this.findDbConfig(DatabaseConfigurations.defaultEnv);
+    return !!firstConfig && name === firstConfig.name;
+  }
+
+  /**
+   * Mirrors: DatabaseConfigurations#resolve
+   *
+   * Resolves a string, hash, or existing DatabaseConfig into a DatabaseConfig.
+   * - DatabaseConfig: returned as-is
+   * - string: treated as a connection URL (UrlConfig)
+   * - hash: wrapped in a HashConfig
+   */
+  resolve(config: unknown): DatabaseConfig {
+    if (config instanceof DatabaseConfig) return config;
+    const defaultEnv = DatabaseConfigurations.defaultEnv;
+    if (typeof config === "string") {
+      return new UrlConfig(defaultEnv, "primary", config);
     }
-    return this._configurations[0];
+    if (typeof config === "object" && config !== null) {
+      const opts = config as DatabaseConfigOptions;
+      if (opts.url) {
+        return new UrlConfig(defaultEnv, "primary", opts.url, opts);
+      }
+      return new HashConfig(defaultEnv, "primary", opts);
+    }
+    throw new TypeError(
+      `Invalid type for configuration. Expected string, hash, or DatabaseConfig. Got ${typeof config}`,
+    );
   }
 
   static registerDbConfig(key: string, klass: new (...args: any[]) => DatabaseConfig): void {
@@ -185,3 +299,7 @@ export class DatabaseConfigurations {
 
 // Register the default env getter so DatabaseConfig.forCurrentEnv works
 _setDefaultEnvGetter(() => DatabaseConfigurations.defaultEnv);
+
+// Register the primary checker so HashConfig.isPrimary can consult the
+// current DatabaseConfigurations instance (matching Rails' global Base.configurations).
+_setPrimaryChecker((name) => _currentConfigurations?.isPrimary(name) ?? false);

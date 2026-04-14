@@ -27,7 +27,7 @@ features:
     details: Web server interface, middleware, request/response handling.
   - title: ActionPack
     details: Routing, controllers, cookies, and sessions (ActionDispatch + ActionController).
-  - title: Rails deviations
+  - title: Rails Deviations
     details: Where Trails diverges from Rails and why — async propagation, mixin helpers, browser adapters.
     link: /guides/
     linkText: Read the guides

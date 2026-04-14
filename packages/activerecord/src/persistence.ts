@@ -6,7 +6,6 @@
  */
 
 import { InsertManager, UpdateManager, DeleteManager, Table as ArelTable } from "@blazetrails/arel";
-import { detectAdapterName } from "./adapter-name.js";
 
 interface PersistenceHost {
   new (attrs?: Record<string, unknown>): any;
@@ -116,7 +115,12 @@ export function compositeQueryConstraintsList(this: PersistenceHost): string[] {
  */
 export async function _insertRecord(
   this: PersistenceHost,
-  connection: { executeMutation(sql: string, binds?: unknown[]): Promise<number> },
+  connection: {
+    insert?(arel: unknown, ...args: unknown[]): Promise<unknown>;
+    executeMutation?(sql: string, binds?: unknown[]): Promise<number>;
+    toSql?(arel: unknown): string;
+    emptyInsertStatementValue?(): string;
+  },
   values: Record<string, unknown>,
 ): Promise<number> {
   const table: ArelTable = (this as any).arelTable;
@@ -127,15 +131,18 @@ export async function _insertRecord(
     im.insert(entries.map(([col, val]) => [table.get(col), val]));
   }
 
-  let sql: string;
-  if (entries.length > 0) {
-    sql = im.toSql();
-  } else {
-    const dialect = detectAdapterName(connection as any);
-    const emptyValue = dialect === "mysql" ? "VALUES ()" : "DEFAULT VALUES";
-    sql = `${im.toSql()} ${emptyValue}`;
+  if (typeof connection.insert === "function") {
+    const result = await connection.insert(im);
+    return typeof result === "number" ? result : 0;
   }
-  return connection.executeMutation(sql);
+
+  // Fallback for simple adapters without insert()
+  const sql = connection.toSql ? connection.toSql(im) : im.toSql();
+  const finalSql =
+    entries.length > 0
+      ? sql
+      : `${sql} ${connection.emptyInsertStatementValue?.() ?? "DEFAULT VALUES"}`;
+  return connection.executeMutation!(finalSql);
 }
 
 /**
@@ -160,7 +167,12 @@ export async function _updateRecord(
     um.where(table.get(col).eq(val));
   }
 
-  return (this as any).adapter.executeMutation(um.toSql());
+  const adapter = (this as any).adapter;
+  if (typeof adapter.update === "function") {
+    return adapter.update(um);
+  }
+  const sql = adapter.toSql ? adapter.toSql(um) : um.toSql();
+  return adapter.executeMutation(sql);
 }
 
 /**
@@ -180,5 +192,10 @@ export async function _deleteRecord(
     dm.where(table.get(col).eq(val));
   }
 
-  return (this as any).adapter.executeMutation(dm.toSql());
+  const adapter = (this as any).adapter;
+  if (typeof adapter.delete === "function") {
+    return adapter.delete(dm);
+  }
+  const sql = adapter.toSql ? adapter.toSql(dm) : dm.toSql();
+  return adapter.executeMutation(sql);
 }

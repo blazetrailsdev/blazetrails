@@ -142,10 +142,20 @@ async function dumpSchemaAfterMigrate(adapter: DatabaseAdapter, raw: RawConfig):
   }
 }
 
+interface RunOptions {
+  /**
+   * When true, skip the post-task schema dump. Used by composite
+   * commands (e.g. `migrate:redo`) that want to dump once at the end
+   * instead of twice.
+   */
+  skipDump?: boolean;
+}
+
 async function runMigrate(
   adapter: DatabaseAdapter,
   raw: RawConfig,
   targetVersion?: string,
+  options: RunOptions = {},
 ): Promise<void> {
   const migrations = await discoverMigrations(migrationsDir());
   if (migrations.length === 0) {
@@ -161,10 +171,15 @@ async function runMigrate(
   const pending = await migrator.pendingMigrations();
   if (pending.length === 0) console.log("All migrations are up to date.");
 
-  await dumpSchemaAfterMigrate(adapter, raw);
+  if (!options.skipDump) await dumpSchemaAfterMigrate(adapter, raw);
 }
 
-async function runRollback(adapter: DatabaseAdapter, raw: RawConfig, steps: number): Promise<void> {
+async function runRollback(
+  adapter: DatabaseAdapter,
+  raw: RawConfig,
+  steps: number,
+  options: RunOptions = {},
+): Promise<void> {
   const migrations = await discoverMigrations(migrationsDir());
   if (migrations.length === 0) {
     console.log("No migrations found.");
@@ -176,7 +191,7 @@ async function runRollback(adapter: DatabaseAdapter, raw: RawConfig, steps: numb
 
   for (const line of migrator.output) console.log(line);
 
-  await dumpSchemaAfterMigrate(adapter, raw);
+  if (!options.skipDump) await dumpSchemaAfterMigrate(adapter, raw);
 }
 
 async function runSeed(): Promise<void> {
@@ -304,9 +319,14 @@ export function dbCommand(): Command {
     .command("version")
     .description("Print the current schema version")
     .action(async () => {
-      // Read only the schema_migrations table — don't discover or validate
-      // migration files. Users should be able to ask for the current
-      // version even when the migrations/ directory has a stale file.
+      // Don't discover or validate migration files — users should be able
+      // to ask for the current version even when the migrations/ directory
+      // has a stale file. Note: Migrator.currentVersion() calls
+      // _ensureSchemaTable(), so the schema_migrations + ar_internal_metadata
+      // tables are created here if they don't already exist. That's a
+      // slight deviation from Rails' current_version (which returns 0
+      // without creating anything) but it's harmless: these tables are
+      // always created on the next migrate/rollback anyway.
       await withAdapter(async (adapter) => {
         const migrator = new Migrator(adapter, []);
         const version = await migrator.currentVersion();
@@ -429,7 +449,9 @@ export function dbCommand(): Command {
         return;
       }
       await withAdapter(async (adapter, raw) => {
-        await runRollback(adapter, raw, step);
+        // Suppress the intermediate dump on rollback; runMigrate handles
+        // the single end-of-task dump.
+        await runRollback(adapter, raw, step, { skipDump: true });
         await runMigrate(adapter, raw);
       });
     });
@@ -483,44 +505,38 @@ export function dbCommand(): Command {
 
   cmd
     .command("schema:load")
-    .description("Load the schema from db/schema.ts into the database")
+    .description(
+      "Load the schema (format: DatabaseTasks.schemaFormat — ts/js/sql) into the database",
+    )
     .action(async () => {
-      const schemaCandidates = [
-        path.join(process.cwd(), "db", "schema.ts"),
-        path.join(process.cwd(), "db", "schema.js"),
-      ];
-      const schemaFile = schemaCandidates.find((f) => fs.existsSync(f));
-      if (!schemaFile) {
-        console.error("No schema file found at db/schema.ts or db/schema.js");
-        process.exitCode = 1;
-        return;
-      }
-
-      await withAdapter(async (adapter) => {
-        const { MigrationContext } = await import("@blazetrails/activerecord");
-        const ctx = new MigrationContext(adapter);
-        let mod: any;
+      await withAdapter(async (adapter, raw) => {
+        const config = toDbConfig(raw);
+        const filename = DatabaseTasks.schemaDumpPath(config);
+        if (!fs.existsSync(filename)) {
+          console.error(`No schema file found at ${filename}`);
+          process.exitCode = 1;
+          return;
+        }
+        const previous = DatabaseTasks.migrationConnection();
+        DatabaseTasks.setAdapter(adapter);
         try {
-          mod = await import(pathToFileURL(schemaFile).href);
-        } catch (error: any) {
-          if (schemaFile.endsWith(".ts")) {
+          console.log(`Loading schema from ${filename}...`);
+          await DatabaseTasks.loadSchema(config);
+          console.log("Schema loaded.");
+        } catch (error: unknown) {
+          if (filename.endsWith(".ts")) {
             const enhanced = new Error(
-              `Failed to load schema file "${schemaFile}". ` +
+              `Failed to load schema file "${filename}". ` +
                 `Ensure a TypeScript loader (tsx, ts-node) is configured, ` +
-                `or use a compiled db/schema.js instead.`,
+                `or set DatabaseTasks.schemaFormat = "js" / "sql".`,
             );
-            (enhanced as any).cause = error;
+            (enhanced as { cause?: unknown }).cause = error;
             throw enhanced;
           }
           throw error;
+        } finally {
+          DatabaseTasks.setAdapter(previous);
         }
-        const defineSchema = mod.default ?? mod;
-        if (typeof defineSchema !== "function") {
-          throw new Error(`Schema file must export a default function, got ${typeof defineSchema}`);
-        }
-        console.log("Loading schema...");
-        await defineSchema(ctx);
-        console.log("Schema loaded.");
       });
     });
 

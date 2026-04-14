@@ -148,8 +148,11 @@ export function validOptions(): string[] {
 }
 
 export function clearAutosaveState(record: Base): void {
-  (record as any)[MARKED_FOR_DESTRUCTION] = false;
-  (record as any).destroyedByAssociation = null;
+  const r = record as any;
+  r[MARKED_FOR_DESTRUCTION] = false;
+  r.destroyedByAssociation = null;
+  delete r[VALIDATING_BELONGS_TO_FOR];
+  delete r[AUTOSAVING_BELONGS_TO_FOR];
 }
 
 // ---------------------------------------------------------------------------

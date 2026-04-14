@@ -70,7 +70,7 @@ import * as LockingPessimistic from "./locking/pessimistic.js";
 import * as Translation from "./translation.js";
 import { sanitizeSqlArray, sanitizeSqlLike } from "./sanitization.js";
 import * as Querying from "./querying.js";
-import { include, extend } from "@blazetrails/activesupport";
+import { include, extend, type Included } from "@blazetrails/activesupport";
 import {
   hasAttribute as _hasAttribute,
   attributePresent as _attributePresent,
@@ -148,6 +148,7 @@ export function _setOnAdapterSetHook(hook: ((modelClass: any) => void) | null): 
  *
  * Mirrors: ActiveRecord::Base
  */
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class Base extends Model {
   // --- Translation mixin (wired via extend() after class) ---
   declare static lookupAncestors: typeof Translation.lookupAncestors;
@@ -2503,6 +2504,8 @@ export class Base extends Model {
     // Rails: AutosaveAssociation#reload clears destruction/autosave state
     (this as any)[Symbol.for("blazetrails.markedForDestruction")] = false;
     this.destroyedByAssociation = null;
+    delete (this as any)[Symbol.for("blazetrails.validatingBelongsToFor")];
+    delete (this as any)[Symbol.for("blazetrails.autosavingBelongsToFor")];
     return this;
   }
 
@@ -2523,8 +2526,6 @@ export class Base extends Model {
 
   declare inspect: () => string;
   declare attributeForInspect: (attr: string) => string;
-
-  // isChangedForAutosave, changedForAutosave — mixed in via include(Base, AutosaveAssociation)
 
   /**
    * Return a subset of the record's attributes as a plain object.
@@ -2954,15 +2955,6 @@ export class Base extends Model {
     return this.isEqual(other);
   }
 
-  // Mixed in via include(Base, AutosaveAssociation)
-  declare markForDestruction: () => void;
-  declare markedForDestruction: () => boolean;
-  declare changedForAutosave: () => boolean;
-  declare isChangedForAutosave: () => boolean;
-  declare isValidatingBelongsToFor: (association: unknown) => boolean;
-  declare isAutosavingBelongsToFor: (association: unknown) => boolean;
-  declare setDestroyedByAssociation: (reflection: unknown) => void;
-
   /**
    * Return the association object for the given name.
    *
@@ -3064,6 +3056,9 @@ export class Base extends Model {
     return this.hasAttributeDefinition(name);
   }
 }
+
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging, @typescript-eslint/no-empty-object-type
+export interface Base extends Included<typeof AutosaveAssociation> {}
 
 // ---------------------------------------------------------------------------
 // Ruby-style mixin wiring — one `extend` per module, mirroring Rails:

@@ -1667,14 +1667,14 @@ export class Migrator {
     // Normalize via BigInt like the constructor does so callers can pass
     // equivalent forms (leading zeros, `20260101000000` vs the string "20260101000000",
     // etc.) without hitting a spurious UnknownMigrationVersionError.
+    // The constructor already normalizes every migration's version via
+    // BigInt, so we only need to normalize the incoming targetVersion and
+    // compare directly against the proxy list.
     const key = String(BigInt(targetVersion));
-    const proxy = this._migrations.find((m) => String(BigInt(m.version)) === key);
+    const proxy = this._migrations.find((m) => m.version === key);
     if (!proxy) {
       throw new UnknownMigrationVersionError(key);
     }
-    // `_appliedVersions()` stores keys normalized via BigInt, so we need to
-    // look up with the same normalization — `proxy.version` may still be the
-    // raw string (e.g. "001") which wouldn't match "1" in the applied set.
     const applied = await this._appliedVersions();
     const isApplied = applied.has(key);
     if (direction === "up" && isApplied) return;

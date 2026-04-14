@@ -23,11 +23,13 @@ async function closeAdapter(adapter: DatabaseAdapter): Promise<void> {
   if (typeof maybeClose === "function") await maybeClose.call(adapter);
 }
 
-async function withAdapter(fn: (adapter: DatabaseAdapter) => Promise<void>): Promise<void> {
+async function withAdapter(
+  fn: (adapter: DatabaseAdapter, raw: RawConfig) => Promise<void>,
+): Promise<void> {
   const config = await loadDatabaseConfig();
   const adapter = await connectAdapter(config);
   try {
-    await fn(adapter);
+    await fn(adapter, config);
   } finally {
     await closeAdapter(adapter);
   }
@@ -128,9 +130,8 @@ function toDbConfig(raw: RawConfig, envName: string = resolveEnv()): HashConfig 
  * formats (ts / js / sql) route through the same code path the standalone
  * `db:schema:dump` / `db:structure:dump` commands use.
  */
-async function dumpSchemaAfterMigrate(adapter: DatabaseAdapter): Promise<void> {
+async function dumpSchemaAfterMigrate(adapter: DatabaseAdapter, raw: RawConfig): Promise<void> {
   if (!DatabaseTasks.dumpSchemaAfterMigration) return;
-  const raw = await loadDatabaseConfig();
   const config = toDbConfig(raw);
   const previous = DatabaseTasks.migrationConnection();
   DatabaseTasks.setAdapter(adapter);
@@ -141,7 +142,11 @@ async function dumpSchemaAfterMigrate(adapter: DatabaseAdapter): Promise<void> {
   }
 }
 
-async function runMigrate(adapter: DatabaseAdapter, targetVersion?: string): Promise<void> {
+async function runMigrate(
+  adapter: DatabaseAdapter,
+  raw: RawConfig,
+  targetVersion?: string,
+): Promise<void> {
   const migrations = await discoverMigrations(migrationsDir());
   if (migrations.length === 0) {
     console.log("No migrations found.");
@@ -156,10 +161,10 @@ async function runMigrate(adapter: DatabaseAdapter, targetVersion?: string): Pro
   const pending = await migrator.pendingMigrations();
   if (pending.length === 0) console.log("All migrations are up to date.");
 
-  await dumpSchemaAfterMigrate(adapter);
+  await dumpSchemaAfterMigrate(adapter, raw);
 }
 
-async function runRollback(adapter: DatabaseAdapter, steps: number): Promise<void> {
+async function runRollback(adapter: DatabaseAdapter, raw: RawConfig, steps: number): Promise<void> {
   const migrations = await discoverMigrations(migrationsDir());
   if (migrations.length === 0) {
     console.log("No migrations found.");
@@ -171,7 +176,7 @@ async function runRollback(adapter: DatabaseAdapter, steps: number): Promise<voi
 
   for (const line of migrator.output) console.log(line);
 
-  await dumpSchemaAfterMigrate(adapter);
+  await dumpSchemaAfterMigrate(adapter, raw);
 }
 
 async function runSeed(): Promise<void> {
@@ -254,7 +259,7 @@ export function dbCommand(): Command {
     .description("Run pending migrations")
     .option("--version <version>", "Migrate to a specific version")
     .action(async (opts) => {
-      await withAdapter((adapter) => runMigrate(adapter, opts.version));
+      await withAdapter((adapter, raw) => runMigrate(adapter, raw, opts.version));
     });
 
   cmd
@@ -268,7 +273,7 @@ export function dbCommand(): Command {
         process.exitCode = 1;
         return;
       }
-      await withAdapter((adapter) => runRollback(adapter, step));
+      await withAdapter((adapter, raw) => runRollback(adapter, raw, step));
     });
 
   cmd
@@ -282,7 +287,7 @@ export function dbCommand(): Command {
         process.exitCode = 1;
         return;
       }
-      await withAdapter(async (adapter) => {
+      await withAdapter(async (adapter, raw) => {
         const migrations = await discoverMigrations(migrationsDir());
         if (migrations.length === 0) {
           console.log("No migrations found.");
@@ -291,7 +296,7 @@ export function dbCommand(): Command {
         const migrator = new Migrator(adapter, migrations);
         await migrator.forward(step);
         for (const line of migrator.output) console.log(line);
-        await dumpSchemaAfterMigrate(adapter);
+        await dumpSchemaAfterMigrate(adapter, raw);
       });
     });
 
@@ -299,9 +304,11 @@ export function dbCommand(): Command {
     .command("version")
     .description("Print the current schema version")
     .action(async () => {
+      // Read only the schema_migrations table — don't discover or validate
+      // migration files. Users should be able to ask for the current
+      // version even when the migrations/ directory has a stale file.
       await withAdapter(async (adapter) => {
-        const migrations = await discoverMigrations(migrationsDir());
-        const migrator = new Migrator(adapter, migrations);
+        const migrator = new Migrator(adapter, []);
         const version = await migrator.currentVersion();
         console.log(`Current version: ${version}`);
       });
@@ -347,12 +354,12 @@ export function dbCommand(): Command {
     .description("Run a specific migration up (by version)")
     .requiredOption("--version <version>", "Migration version to run up")
     .action(async (opts) => {
-      await withAdapter(async (adapter) => {
+      await withAdapter(async (adapter, raw) => {
         const migrations = await discoverMigrations(migrationsDir());
         const migrator = new Migrator(adapter, migrations);
         await migrator.run("up", opts.version);
         for (const line of migrator.output) console.log(line);
-        await dumpSchemaAfterMigrate(adapter);
+        await dumpSchemaAfterMigrate(adapter, raw);
       });
     });
 
@@ -361,12 +368,12 @@ export function dbCommand(): Command {
     .description("Run a specific migration down (by version)")
     .requiredOption("--version <version>", "Migration version to run down")
     .action(async (opts) => {
-      await withAdapter(async (adapter) => {
+      await withAdapter(async (adapter, raw) => {
         const migrations = await discoverMigrations(migrationsDir());
         const migrator = new Migrator(adapter, migrations);
         await migrator.run("down", opts.version);
         for (const line of migrator.output) console.log(line);
-        await dumpSchemaAfterMigrate(adapter);
+        await dumpSchemaAfterMigrate(adapter, raw);
       });
     });
 
@@ -421,9 +428,9 @@ export function dbCommand(): Command {
         process.exitCode = 1;
         return;
       }
-      await withAdapter(async (adapter) => {
-        await runRollback(adapter, step);
-        await runMigrate(adapter);
+      await withAdapter(async (adapter, raw) => {
+        await runRollback(adapter, raw, step);
+        await runMigrate(adapter, raw);
       });
     });
 
@@ -433,8 +440,8 @@ export function dbCommand(): Command {
     .action(async () => {
       await runDrop();
       await runCreate();
-      await withAdapter(async (adapter) => {
-        await runMigrate(adapter);
+      await withAdapter(async (adapter, raw) => {
+        await runMigrate(adapter, raw);
         const { Base } = await import("@blazetrails/activerecord");
         Base.adapter = adapter;
         await runSeed();
@@ -446,8 +453,8 @@ export function dbCommand(): Command {
     .description("Create, migrate, and seed the database")
     .action(async () => {
       await runCreate();
-      await withAdapter(async (adapter) => {
-        await runMigrate(adapter);
+      await withAdapter(async (adapter, raw) => {
+        await runMigrate(adapter, raw);
         const { Base } = await import("@blazetrails/activerecord");
         Base.adapter = adapter;
         await runSeed();
@@ -460,8 +467,7 @@ export function dbCommand(): Command {
       "Dump the current database schema (format: DatabaseTasks.schemaFormat — ts/js/sql)",
     )
     .action(async () => {
-      await withAdapter(async (adapter) => {
-        const raw = await loadDatabaseConfig();
+      await withAdapter(async (adapter, raw) => {
         const config = toDbConfig(raw);
         const filename = DatabaseTasks.schemaDumpPath(config);
         const previous = DatabaseTasks.migrationConnection();

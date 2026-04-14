@@ -23,8 +23,6 @@ type RawConfigurations = Record<
   Record<string, DatabaseConfigOptions> | DatabaseConfigOptions
 >;
 
-const customHandlers = new Map<string, new (...args: any[]) => DatabaseConfig>();
-
 /**
  * Handler callback — receives (envName, name, url, config) and returns a
  * DatabaseConfig or null. Matches Rails' register_db_config_handler block.
@@ -186,14 +184,6 @@ export class DatabaseConfigurations {
     );
   }
 
-  static registerDbConfig(key: string, klass: new (...args: any[]) => DatabaseConfig): void {
-    customHandlers.set(key, klass);
-  }
-
-  static unregisterDbConfig(key: string): void {
-    customHandlers.delete(key);
-  }
-
   /**
    * Build a DatabaseConfigurations from the current environment.
    *
@@ -284,18 +274,33 @@ export class DatabaseConfigurations {
     name: string,
     config: DatabaseConfigOptions,
   ): DatabaseConfig {
-    for (const [key, klass] of customHandlers) {
-      if (key in config) {
-        return new klass(envName, name, config);
-      }
-    }
+    // Mirrors Rails: iterate handlers in reverse (most recently registered first),
+    // pull url out of config, and return the first non-null DatabaseConfig.
+    const url = config.url;
+    const configWithoutUrl = { ...config };
+    delete configWithoutUrl.url;
 
-    if (config.url) {
-      return new UrlConfig(envName, name, config.url, config);
+    for (let i = DatabaseConfigurations.dbConfigHandlers.length - 1; i >= 0; i--) {
+      const handler = DatabaseConfigurations.dbConfigHandlers[i];
+      const result = handler(envName, name, url, configWithoutUrl);
+      if (result) return result;
     }
-    return new HashConfig(envName, name, config);
+    throw new InvalidConfigurationError(`No db config handler matched for ${envName}/${name}`);
   }
 }
+
+// Mirrors Rails:
+//   register_db_config_handler do |env_name, name, url, config|
+//     if url
+//       UrlConfig.new(env_name, name, url, config)
+//     else
+//       HashConfig.new(env_name, name, config)
+//     end
+//   end
+DatabaseConfigurations.registerDbConfigHandler((envName, name, url, config) => {
+  if (url) return new UrlConfig(envName, name, url, config);
+  return new HashConfig(envName, name, config);
+});
 
 // Register the default env getter so DatabaseConfig.forCurrentEnv works
 _setDefaultEnvGetter(() => DatabaseConfigurations.defaultEnv);

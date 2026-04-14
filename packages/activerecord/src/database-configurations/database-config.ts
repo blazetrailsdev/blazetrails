@@ -101,26 +101,6 @@ export class DatabaseConfig {
   }
 
   /**
-   * Mirrors: DatabaseConfig#adapter_class
-   *
-   * Returns the resolved adapter class. Rails looks this up via a global
-   * registry; our adapter is set per-model class instead.
-   */
-  get adapterClass(): unknown {
-    return null;
-  }
-
-  /**
-   * Mirrors: DatabaseConfig#new_connection
-   *
-   * Creates a new adapter instance. Not implemented — this codebase
-   * instantiates adapters through connection-handling, not here.
-   */
-  newConnection(): unknown {
-    throw new Error("newConnection() not implemented — use Base.establishConnection instead");
-  }
-
-  /**
    * Mirrors: DatabaseConfig#seeds?
    *
    * Abstract on DatabaseConfig — HashConfig overrides with real logic.

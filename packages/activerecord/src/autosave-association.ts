@@ -137,7 +137,7 @@ export function isDestroyable(record: Base): boolean {
   return !record.isNewRecord() && isMarkedForDestruction(record);
 }
 
-export function build(_model: typeof Base, reflection: AssociationDefinition): void {
+export function build(_model: typeof Base, reflection: { options: Record<string, any> }): void {
   if (reflection.options.autosave && reflection.options.validate === undefined) {
     reflection.options.validate = true;
   }

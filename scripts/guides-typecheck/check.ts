@@ -264,7 +264,7 @@ function main(): void {
   }
 
   const remappedOutput = output.replace(
-    /(?:\S+[\/\\])?blocks[\/\\](\S+?)__L(\d+)__(\d+)\.ts(\((\d+),(\d+)\))?/g,
+    /(?:[^\n]*?[\/\\])?blocks[\/\\]([^\n]*?)__L(\d+)__(\d+)\.ts(\((\d+),(\d+)\))?/g,
     (_match, _name, _startStr, idxStr, _paren, lineOffsetStr, col) => {
       const lineOffset = lineOffsetStr ? parseInt(lineOffsetStr, 10) : 1;
       const block = blocksByIdx.get(parseInt(idxStr, 10));

@@ -206,7 +206,9 @@ export class MySQLDatabaseTasks {
   }
 
   private commandEnv(): NodeJS.ProcessEnv {
-    const env: NodeJS.ProcessEnv = { ...process.env };
+    const env: NodeJS.ProcessEnv = {
+      ...((globalThis as { process?: { env?: NodeJS.ProcessEnv } }).process?.env ?? {}),
+    };
     const password = this.resolvedField("password");
     if (password !== undefined) env.MYSQL_PWD = password;
     return env;

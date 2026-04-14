@@ -211,7 +211,9 @@ export class PostgreSQLDatabaseTasks {
   }
 
   private psqlEnv(): NodeJS.ProcessEnv {
-    const env: NodeJS.ProcessEnv = { ...process.env };
+    const env: NodeJS.ProcessEnv = {
+      ...((globalThis as { process?: { env?: NodeJS.ProcessEnv } }).process?.env ?? {}),
+    };
     const c = this.configurationHash;
     const host = this.dbConfig.host ?? this.urlParts.host;
     const port = c.port ?? this.urlParts.port;

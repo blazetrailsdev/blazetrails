@@ -2537,7 +2537,7 @@ export class Base extends Model {
    * Mirrors: ActiveRecord::AutosaveAssociation#changed_for_autosave?
    */
   isChangedForAutosave(): boolean {
-    return this.isNewRecord() || this.changed || this._destroyed;
+    return this.changedForAutosave();
   }
 
   /**
@@ -3113,7 +3113,7 @@ function _changedForAutosaveImpl(record: any): boolean {
   try {
     if (
       record.isNewRecord() ||
-      (typeof record.hasChangesToSave === "function" && record.hasChangesToSave()) ||
+      !!record.hasChangesToSave ||
       !!record.changed ||
       (typeof record.markedForDestruction === "function" && record.markedForDestruction())
     ) {

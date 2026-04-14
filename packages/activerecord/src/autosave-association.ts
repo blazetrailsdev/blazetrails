@@ -62,8 +62,7 @@ export function destroyedByAssociation(record: Base): unknown {
 export function isChangedForAutosave(record: Base): boolean {
   return (
     record.isNewRecord() ||
-    (typeof (record as any).hasChangesToSave === "function" &&
-      (record as any).hasChangesToSave()) ||
+    !!(record as any).hasChangesToSave ||
     !!(record as any).changed ||
     isMarkedForDestruction(record) ||
     _nestedRecordsChangedForAutosave(record)
@@ -141,7 +140,7 @@ function _setAutosavingBelongsToFor(record: Base, association: unknown, value: b
  * Called by association builders during class definition to register
  * autosave callbacks for the given reflection.
  */
-export function build(model: typeof Base, reflection: AssociationDefinition): void {
+export function build(_model: typeof Base, reflection: AssociationDefinition): void {
   if (reflection.options.autosave && reflection.options.validate === undefined) {
     reflection.options.validate = true;
   }

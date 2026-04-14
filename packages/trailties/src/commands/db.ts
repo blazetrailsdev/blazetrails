@@ -13,12 +13,10 @@ import {
   DatabaseTasks,
   HashConfig,
   Migrator,
-  SchemaDumper,
   DatabaseAlreadyExists,
   NoDatabaseError,
 } from "@blazetrails/activerecord";
 import type { DatabaseAdapter } from "@blazetrails/activerecord";
-import { AdapterSchemaSource } from "../schema-source.js";
 
 async function closeAdapter(adapter: DatabaseAdapter): Promise<void> {
   const maybeClose = (adapter as { close?: () => Promise<void> }).close;
@@ -324,8 +322,10 @@ export function dbCommand(): Command {
           // trails:
           //   "You have N pending migration[s]:"
           //   "  %4d %s" per pending
-          //   "Run `trails db:migrate` to resolve this issue."
-          // (Rails prints `bin/rails db:migrate`.)
+          //   "Run `trails db migrate` to resolve this issue."
+          // Rails prints `bin/rails db:migrate`; the trails CLI is
+          // commander-style (`trails db migrate`, space-separated), not
+          // rake-style colon namespaces.
           console.error(
             `You have ${pending.length} pending migration${pending.length === 1 ? "" : "s"}:`,
           );
@@ -336,7 +336,7 @@ export function dbCommand(): Command {
             const version = String(BigInt(m.version));
             console.error(`  ${version.padStart(4, " ")} ${m.name}`);
           }
-          console.error("Run `trails db:migrate` to resolve this issue.");
+          console.error("Run `trails db migrate` to resolve this issue.");
           process.exitCode = 1;
         }
       });
@@ -456,15 +456,22 @@ export function dbCommand(): Command {
 
   cmd
     .command("schema:dump")
-    .description("Dump the current database schema to db/schema.ts")
+    .description(
+      "Dump the current database schema (format: DatabaseTasks.schemaFormat — ts/js/sql)",
+    )
     .action(async () => {
       await withAdapter(async (adapter) => {
-        const source = new AdapterSchemaSource(adapter);
-        const output = await SchemaDumper.dump(source);
-        const schemaPath = path.join(process.cwd(), "db", "schema.ts");
-        fs.mkdirSync(path.dirname(schemaPath), { recursive: true });
-        fs.writeFileSync(schemaPath, output);
-        console.log(`Schema dumped to ${schemaPath}`);
+        const raw = await loadDatabaseConfig();
+        const config = toDbConfig(raw);
+        const filename = DatabaseTasks.schemaDumpPath(config);
+        const previous = DatabaseTasks.migrationConnection();
+        DatabaseTasks.setAdapter(adapter);
+        try {
+          await DatabaseTasks.dumpSchema(config);
+        } finally {
+          DatabaseTasks.setAdapter(previous);
+        }
+        console.log(`Schema dumped to ${filename}`);
       });
     });
 

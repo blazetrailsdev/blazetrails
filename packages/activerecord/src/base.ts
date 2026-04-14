@@ -679,14 +679,6 @@ export class Base extends Model {
   }
 
   /**
-   * Validate that all named associations are themselves valid.
-   *
-   * Mirrors: ActiveRecord::Validations::ClassMethods#validates_associated
-   *
-   * Registers AssociatedValidator through validatesWith (matching Rails'
-   * validates_with pattern) so on:/if:/unless:/message: options all work.
-   */
-  /**
    * Mirrors: ActiveRecord::Reflection::ClassMethods#_reflect_on_association
    */
   static _reflectOnAssociation(name: string): any {
@@ -701,44 +693,44 @@ export class Base extends Model {
    * association awareness (filtering destroyed records, column precision).
    */
   static override validates(attribute: string, rules: Record<string, unknown>): void {
-    // Swap AM validator classes for AR equivalents that handle associations
     const arRules = { ...rules };
+    const shared = extractShared(arRules);
+    const { allowNil: sharedAllowNil, allowBlank: sharedAllowBlank, ...sharedRest } = shared;
+
+    // Build options for an AR validator, respecting per-validator allowNil/allowBlank
+    // precedence (only apply shared value when per-validator option is undefined).
+    const buildOpts = (opts: Record<string, unknown>) => ({
+      attributes: [attribute],
+      ...opts,
+      ...sharedRest,
+      ...(opts.allowNil === undefined && sharedAllowNil !== undefined
+        ? { allowNil: sharedAllowNil }
+        : {}),
+      ...(opts.allowBlank === undefined && sharedAllowBlank !== undefined
+        ? { allowBlank: sharedAllowBlank }
+        : {}),
+    });
+
     if (arRules.presence) {
       const opts = arRules.presence === true ? {} : (arRules.presence as Record<string, unknown>);
       delete arRules.presence;
-      this.validatesWith(ARPresenceValidator, {
-        attributes: [attribute],
-        ...opts,
-        ...extractShared(arRules),
-      });
+      this.validatesWith(ARPresenceValidator, buildOpts(opts));
     }
     if (arRules.absence) {
       const opts = arRules.absence === true ? {} : (arRules.absence as Record<string, unknown>);
       delete arRules.absence;
-      this.validatesWith(ARAbsenceValidator, {
-        attributes: [attribute],
-        ...opts,
-        ...extractShared(arRules),
-      });
+      this.validatesWith(ARAbsenceValidator, buildOpts(opts));
     }
     if (arRules.length) {
       const opts = arRules.length as Record<string, unknown>;
       delete arRules.length;
-      this.validatesWith(ARLengthValidator, {
-        attributes: [attribute],
-        ...opts,
-        ...extractShared(arRules),
-      });
+      this.validatesWith(ARLengthValidator, buildOpts(opts));
     }
     if (arRules.numericality) {
       const opts =
         arRules.numericality === true ? {} : (arRules.numericality as Record<string, unknown>);
       delete arRules.numericality;
-      this.validatesWith(ARNumericalityValidator, {
-        attributes: [attribute],
-        ...opts,
-        ...extractShared(arRules),
-      });
+      this.validatesWith(ARNumericalityValidator, buildOpts(opts));
     }
     // Delegate remaining rules (inclusion, exclusion, format, etc.) to Model
     const hasRemaining = Object.keys(arRules).some(
@@ -749,6 +741,11 @@ export class Base extends Model {
     }
   }
 
+  /**
+   * Validates that all named associations are themselves valid.
+   *
+   * Mirrors: ActiveRecord::Validations::ClassMethods#validates_associated
+   */
   static validatesAssociated(...args: (string | Record<string, unknown>)[]): void {
     const last = args[args.length - 1];
     const opts =

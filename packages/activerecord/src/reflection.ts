@@ -565,8 +565,9 @@ export class AssociationReflection extends MacroReflection {
     const name = this.inverseName();
     if (!name) return null;
     if (this._inverseOfCache !== undefined) return this._inverseOfCache;
-    this._inverseOfCache = this.klass._reflectOnAssociation(name) ?? null;
-    return this._inverseOfCache!;
+    const result = this.klass._reflectOnAssociation(name) ?? null;
+    this._inverseOfCache = result;
+    return result;
   }
 
   private _inverseNameCache: string | null | undefined = undefined;
@@ -1117,8 +1118,9 @@ export class ThroughReflection extends AbstractReflection {
       return null;
     }
     try {
-      this._sourceReflectionCache = throughRef.klass._reflectOnAssociation(srcName) ?? null;
-      return this._sourceReflectionCache!;
+      const src = throughRef.klass._reflectOnAssociation(srcName) ?? null;
+      this._sourceReflectionCache = src;
+      return src;
     } catch {
       this._sourceReflectionCache = null;
       return null;
@@ -1127,8 +1129,9 @@ export class ThroughReflection extends AbstractReflection {
 
   get throughReflection(): AssociationReflection | ThroughReflection | null {
     if (this._throughReflectionCache !== undefined) return this._throughReflectionCache;
-    this._throughReflectionCache = this.activeRecord._reflectOnAssociation(this.through) ?? null;
-    return this._throughReflectionCache!;
+    const through = this.activeRecord._reflectOnAssociation(this.through) ?? null;
+    this._throughReflectionCache = through;
+    return through;
   }
 
   get joinTable(): string | null {

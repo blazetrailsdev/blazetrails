@@ -37,8 +37,19 @@ export function registerChildProcessAdapter(name: string, adapter: ChildProcessA
 let nodeAttempted = false;
 let nodeAsyncPromise: Promise<boolean> | null = null;
 
+// Node's child_process.spawnSync returns stdout/stderr as Buffer|string
+// depending on the encoding option. Keep the Node-side shape permissive and
+// normalize to string at the adapter boundary.
+type NodeSpawnSyncResult = {
+  status: number | null;
+  signal: NodeJS.Signals | null;
+  stdout: unknown;
+  stderr: unknown;
+  error?: Error;
+};
+
 type NodeChildProcess = {
-  spawnSync: (cmd: string, args: string[], opts?: unknown) => SpawnSyncResult;
+  spawnSync: (cmd: string, args: string[], opts?: unknown) => NodeSpawnSyncResult;
 };
 
 function wrap(cp: NodeChildProcess): ChildProcessAdapter {

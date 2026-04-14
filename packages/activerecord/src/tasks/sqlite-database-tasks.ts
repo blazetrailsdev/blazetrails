@@ -114,6 +114,7 @@ export class SQLiteDatabaseTasks {
         "CASE type WHEN 'table' THEN 0 WHEN 'view' THEN 1 " +
         "WHEN 'index' THEN 2 WHEN 'trigger' THEN 3 ELSE 4 END";
       let where = "WHERE sql IS NOT NULL";
+      let binds: unknown[] = [];
 
       if (ignoreTables.length > 0) {
         const tablesRows = (await adapter.execute(
@@ -126,13 +127,14 @@ export class SQLiteDatabaseTasks {
           ignoreTables.some((pat) => (pat instanceof RegExp ? pat.test(name) : pat === name)),
         );
         if (excluded.length > 0) {
-          const list = excluded.map((n) => `'${n.replace(/'/g, "''")}'`).join(", ");
-          where += ` AND tbl_name NOT IN (${list})`;
+          const placeholders = excluded.map(() => "?").join(", ");
+          where += ` AND tbl_name NOT IN (${placeholders})`;
+          binds = excluded;
         }
       }
 
       const query = `SELECT sql || ';' AS sql FROM sqlite_master ${where} ORDER BY ${typeOrder}, tbl_name, name`;
-      const rows = (await adapter.execute(query)) as Array<Record<string, unknown>>;
+      const rows = (await adapter.execute(query, binds)) as Array<Record<string, unknown>>;
       const output = rows.map((r) => String(r.sql ?? "")).join("\n");
       getFs().writeFileSync(filename, output);
     } finally {

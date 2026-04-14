@@ -10,6 +10,18 @@ import { ProtectedEnvironmentError } from "../migration.js";
 import { getFs, getPath, getCrypto, getOs } from "@blazetrails/activesupport";
 import { coercePort } from "./task-utils.js";
 
+function sqliteDatabaseFromUrl(url: string): string | undefined {
+  try {
+    const parsed = new URL(url);
+    const pathname = decodeURIComponent(parsed.pathname);
+    const host = parsed.host;
+    const resolved = host ? `${host}${pathname}` : pathname;
+    return resolved || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Schema file format.
  *
@@ -695,7 +707,9 @@ export class DatabaseTasks {
     if (!adapter) throw new Error("config missing adapter");
     if (/sqlite/.test(adapter)) {
       const { SQLite3Adapter } = await import("../connection-adapters/sqlite3-adapter.js");
-      const database = config.database ?? ":memory:";
+      const c = config.configuration;
+      const fromUrl = typeof c.url === "string" ? sqliteDatabaseFromUrl(String(c.url)) : undefined;
+      const database = config.database ?? fromUrl ?? ":memory:";
       const path = getPath();
       const resolved =
         database === ":memory:" || (path.isAbsolute && path.isAbsolute(database))

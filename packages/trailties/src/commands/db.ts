@@ -39,6 +39,31 @@ function migrationsDir(): string {
   return path.join(process.cwd(), "db", "migrations");
 }
 
+function databaseFromUrl(url: string, adapter?: string): string | undefined {
+  try {
+    const parsed = new URL(url);
+    const protocol = parsed.protocol;
+    const isSqlite =
+      adapter === "sqlite3" ||
+      adapter === "sqlite" ||
+      protocol === "sqlite:" ||
+      protocol === "sqlite3:" ||
+      protocol === "file:";
+    if (isSqlite) {
+      // SQLite URLs carry a filesystem path (often absolute). Preserve the
+      // leading slash and host prefix if any: `sqlite3:///tmp/app.sqlite3`
+      // -> `/tmp/app.sqlite3`; `sqlite3://./rel.sqlite3` -> `./rel.sqlite3`.
+      const host = parsed.host;
+      const pathname = decodeURIComponent(parsed.pathname);
+      return host ? `${host}${pathname}` : pathname;
+    }
+    const name = decodeURIComponent(parsed.pathname.replace(/^\/+/, ""));
+    return name || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function inferAdapterFromUrl(url: string): string | undefined {
   try {
     switch (new URL(url).protocol) {
@@ -71,16 +96,25 @@ function toDbConfig(raw: RawConfig, envName: string = resolveEnv()): HashConfig 
     if (!normalized.adapter) normalized.adapter = "sqlite3";
   }
   if (!normalized.database && typeof normalized.url === "string") {
+    const db = databaseFromUrl(normalized.url, normalized.adapter as string | undefined);
+    if (db) normalized.database = db;
     try {
       const parsed = new URL(normalized.url);
-      const name = decodeURIComponent(parsed.pathname.replace(/^\/+/, ""));
-      if (name) normalized.database = name;
-      if (!normalized.host && parsed.hostname) normalized.host = parsed.hostname;
-      if (!normalized.username && parsed.username) {
-        normalized.username = decodeURIComponent(parsed.username);
-      }
-      if (!normalized.password && parsed.password) {
-        normalized.password = decodeURIComponent(parsed.password);
+      const protocol = parsed.protocol;
+      const isSqlite =
+        normalized.adapter === "sqlite3" ||
+        normalized.adapter === "sqlite" ||
+        protocol === "sqlite:" ||
+        protocol === "sqlite3:" ||
+        protocol === "file:";
+      if (!isSqlite) {
+        if (!normalized.host && parsed.hostname) normalized.host = parsed.hostname;
+        if (!normalized.username && parsed.username) {
+          normalized.username = decodeURIComponent(parsed.username);
+        }
+        if (!normalized.password && parsed.password) {
+          normalized.password = decodeURIComponent(parsed.password);
+        }
       }
     } catch {
       // leave unparsed url as-is; adapters will surface the error

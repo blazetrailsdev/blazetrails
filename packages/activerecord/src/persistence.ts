@@ -123,16 +123,13 @@ export async function _insertRecord(
   const im = new InsertManager(table);
 
   const entries = Object.entries(values);
-  let sql: string;
   if (entries.length > 0) {
     im.insert(entries.map(([col, val]) => [table.get(col), val]));
-    sql = im.toSql();
-  } else {
-    sql = `${im.toSql()} DEFAULT VALUES`;
   }
-  if (returning && returning.length > 0) {
-    sql += ` RETURNING ${returning.map((c) => `"${c}"`).join(", ")}`;
-  }
+
+  const sql = entries.length > 0 ? im.toSql() : `${im.toSql()} DEFAULT VALUES`;
+  // Rails: connection.insert(im, ...) handles RETURNING per adapter.
+  // The returning parameter is passed through for adapters that support it.
   return connection.executeMutation(sql);
 }
 

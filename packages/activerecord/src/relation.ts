@@ -1272,7 +1272,7 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#presence
    */
-  async presence(): Promise<Relation<T> | null> {
+  async presence(): Promise<LoadedRelation<Relation<T>> | null> {
     return (await this.isAny()) ? stripThenable(this as Relation<T>) : null;
   }
 
@@ -1692,14 +1692,19 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#calculate
    */
   async calculate(operation: "count", column?: string): Promise<number | Record<string, number>>;
+  async calculate(operation: "sum", column: string): Promise<number | Record<string, number>>;
   async calculate(
-    operation: "sum" | "average" | "minimum" | "maximum",
+    operation: "average",
     column: string,
   ): Promise<number | null | Record<string, number>>;
   async calculate(
+    operation: "minimum" | "maximum",
+    column: string,
+  ): Promise<unknown | null | Record<string, unknown>>;
+  async calculate(
     operation: "count" | "sum" | "average" | "minimum" | "maximum",
     column?: string,
-  ): Promise<number | null | Record<string, number>> {
+  ): Promise<unknown | null | Record<string, unknown>> {
     switch (operation) {
       case "count":
         return this.count(column);
@@ -2212,7 +2217,7 @@ export class Relation<T extends Base> {
    */
   inBatches({
     batchSize = Batches.DEFAULT_BATCH_SIZE,
-  }: { batchSize?: number } = {}): BatchEnumerator<Relation<T>> {
+  }: { batchSize?: number } = {}): BatchEnumerator<LoadedRelation<Relation<T>>> {
     const self = this;
     const pk = this._modelClass.primaryKey;
     if (Array.isArray(pk)) {
@@ -2244,7 +2249,7 @@ export class Relation<T extends Base> {
           if (records.length < batchSize) break;
           lastId = (records[records.length - 1] as any).readAttribute(pk);
         }
-      } as () => AsyncGenerator<Relation<T>>,
+      } as () => AsyncGenerator<LoadedRelation<Relation<T>>>,
       batchSize,
     );
   }

@@ -5,6 +5,8 @@
  * Mirrors: ActiveRecord::Persistence::ClassMethods
  */
 
+import { InsertManager, UpdateManager, DeleteManager, Table as ArelTable } from "@blazetrails/arel";
+
 interface PersistenceHost {
   new (attrs?: Record<string, unknown>): any;
   _instantiate(row: Record<string, unknown>, columnTypes?: Record<string, any>): any;
@@ -117,21 +119,19 @@ export async function _insertRecord(
   values: Record<string, unknown>,
   returning?: string[],
 ): Promise<number> {
-  const table = (this as any).arelTable;
-  const tableName = table?.name ?? (this as any).tableName;
-  const cols = Object.keys(values);
-  if (cols.length === 0) {
-    const sql = `INSERT INTO "${tableName}" DEFAULT VALUES`;
-    return connection.executeMutation(sql);
+  const table: ArelTable = (this as any).arelTable;
+  const im = new InsertManager(table);
+
+  const entries = Object.entries(values);
+  if (entries.length > 0) {
+    im.insert(entries.map(([col, val]) => [table.get(col), val]));
   }
-  const quotedCols = cols.map((c) => `"${c}"`).join(", ");
-  const placeholders = cols.map(() => "?").join(", ");
-  const binds = cols.map((c) => values[c]);
-  let sql = `INSERT INTO "${tableName}" (${quotedCols}) VALUES (${placeholders})`;
+
+  let sql = im.toSql();
   if (returning && returning.length > 0) {
     sql += ` RETURNING ${returning.map((c) => `"${c}"`).join(", ")}`;
   }
-  return connection.executeMutation(sql, binds);
+  return connection.executeMutation(sql);
 }
 
 /**
@@ -144,14 +144,18 @@ export async function _updateRecord(
   values: Record<string, unknown>,
   constraints: Record<string, unknown>,
 ): Promise<number> {
-  const table = (this as any).arelTable;
-  const setCols = Object.keys(values);
-  const setClause = setCols.map((c) => `"${c}" = ?`).join(", ");
-  const whereCols = Object.keys(constraints);
-  const whereClause = whereCols.map((c) => `"${c}" = ?`).join(" AND ");
-  const binds = [...setCols.map((c) => values[c]), ...whereCols.map((c) => constraints[c])];
-  const sql = `UPDATE "${table.name}" SET ${setClause} WHERE ${whereClause}`;
-  return (this as any).adapter.executeMutation(sql, binds);
+  const table: ArelTable = (this as any).arelTable;
+  const um = new UpdateManager();
+  um.table(table);
+
+  const setEntries = Object.entries(values);
+  um.set(setEntries.map(([col, val]) => [table.get(col), val]));
+
+  for (const [col, val] of Object.entries(constraints)) {
+    um.where(table.get(col).eq(val));
+  }
+
+  return (this as any).adapter.executeMutation(um.toSql());
 }
 
 /**
@@ -163,10 +167,13 @@ export async function _deleteRecord(
   this: PersistenceHost,
   constraints: Record<string, unknown>,
 ): Promise<number> {
-  const table = (this as any).arelTable;
-  const whereCols = Object.keys(constraints);
-  const whereClause = whereCols.map((c) => `"${c}" = ?`).join(" AND ");
-  const binds = whereCols.map((c) => constraints[c]);
-  const sql = `DELETE FROM "${table.name}" WHERE ${whereClause}`;
-  return (this as any).adapter.executeMutation(sql, binds);
+  const table: ArelTable = (this as any).arelTable;
+  const dm = new DeleteManager();
+  dm.from(table);
+
+  for (const [col, val] of Object.entries(constraints)) {
+    dm.where(table.get(col).eq(val));
+  }
+
+  return (this as any).adapter.executeMutation(dm.toSql());
 }

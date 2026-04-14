@@ -168,11 +168,25 @@ async function runSeed(): Promise<void> {
   console.log("Seeds completed.");
 }
 
+/** Strip credentials from a DB URL before we log it. */
+function sanitizeUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.password) parsed.password = "***";
+    if (parsed.username && parsed.password === "***") {
+      // Keep username visible so operators can still identify the connection.
+    }
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
 function displayNameFor(config: HashConfig, raw: RawConfig): string {
   return (
     config.database ??
     (raw.database as string | undefined) ??
-    (typeof raw.url === "string" ? raw.url : undefined) ??
+    (typeof raw.url === "string" ? sanitizeUrl(raw.url) : undefined) ??
     `${config.adapter ?? "unknown"} database`
   );
 }

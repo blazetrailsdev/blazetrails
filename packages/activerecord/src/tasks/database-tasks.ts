@@ -484,7 +484,8 @@ export class DatabaseTasks {
     const path = getPath();
     const dir = path.dirname(filename);
     fs.mkdirSync(dir, { recursive: true });
-    const output = await SchemaDumper.dump(adapter);
+    const language = this.schemaFormat === "js" ? "js" : "ts";
+    const output = await SchemaDumper.dump(adapter, { language });
     fs.writeFileSync(filename, output);
   }
 

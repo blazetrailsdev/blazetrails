@@ -319,7 +319,9 @@ describe("schema dump and load", () => {
 
       // Dump schema
       const source = new AdapterSchemaSource(sourceAdapter);
-      const schema = await SchemaDumper.dump(source);
+      // Dump as JS so the JSDoc-annotated output is valid input to
+      // `new Function` below (no TS `import type` / annotation syntax).
+      const schema = await SchemaDumper.dump(source, { language: "js" });
       expect(schema).toContain("users");
       expect(schema).toContain("createTable");
 

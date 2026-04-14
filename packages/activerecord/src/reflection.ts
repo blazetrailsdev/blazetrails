@@ -342,11 +342,15 @@ export class MacroReflection extends AbstractReflection {
   }
 
   _klass(className: string): typeof Base {
-    if (this.activeRecord.name.split(".").pop() === className) {
+    // Rails: if the active record's demodulized name matches the class name,
+    // try resolving as a top-level constant first (::ClassName), falling back
+    // to the normal namespaced resolution.
+    const demodulized = this.activeRecord.name.split(".").pop();
+    if (demodulized === className) {
       try {
-        return this.computeClass(className);
+        return this.computeClass(this.activeRecord.name);
       } catch {
-        // fall through
+        // fall through to standard resolution
       }
     }
     return this.computeClass(className);

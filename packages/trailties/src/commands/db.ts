@@ -125,19 +125,22 @@ function toDbConfig(raw: RawConfig, envName: string = resolveEnv()): HashConfig 
 
 /**
  * Dump the schema to disk after a migration-writing task. Mirrors Rails'
- * `db:_dump`: gated on `DatabaseTasks.dumpSchemaAfterMigration` and writes
- * to `DatabaseTasks.schemaDumpPath(config)`.
+ * `db:_dump`: gated on `DatabaseTasks.dumpSchemaAfterMigration`, and
+ * delegates to `DatabaseTasks.dumpSchema(config)` so all three schema
+ * formats (ts / js / sql) route through the same code path the standalone
+ * `db:schema:dump` / `db:structure:dump` commands use.
  */
 async function dumpSchemaAfterMigrate(adapter: DatabaseAdapter): Promise<void> {
   if (!DatabaseTasks.dumpSchemaAfterMigration) return;
   const raw = await loadDatabaseConfig();
   const config = toDbConfig(raw);
-  const filename = DatabaseTasks.schemaDumpPath(config);
-  const language = DatabaseTasks.schemaFormat === "js" ? "js" : "ts";
-  const source = new AdapterSchemaSource(adapter);
-  const output = await SchemaDumper.dump(source, { language });
-  fs.mkdirSync(path.dirname(filename), { recursive: true });
-  fs.writeFileSync(filename, output);
+  const previous = DatabaseTasks.migrationConnection();
+  DatabaseTasks.setAdapter(adapter);
+  try {
+    await DatabaseTasks.dumpSchema(config);
+  } finally {
+    DatabaseTasks.setAdapter(previous);
+  }
 }
 
 async function runMigrate(adapter: DatabaseAdapter, targetVersion?: string): Promise<void> {
@@ -316,10 +319,13 @@ export function dbCommand(): Command {
         const migrator = new Migrator(adapter, migrations);
         const pending = await migrator.pendingMigrations();
         if (pending.length > 0) {
-          // Match Rails' output verbatim:
+          // Match Rails' output format (from activerecord/lib/active_record/
+          // railties/databases.rake), with the command name swapped for
+          // trails:
           //   "You have N pending migration[s]:"
           //   "  %4d %s" per pending
-          //   abort with "Run `bin/rails db:migrate` to resolve this issue."
+          //   "Run `trails db:migrate` to resolve this issue."
+          // (Rails prints `bin/rails db:migrate`.)
           console.error(
             `You have ${pending.length} pending migration${pending.length === 1 ? "" : "s"}:`,
           );

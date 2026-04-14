@@ -1664,10 +1664,13 @@ export class Migrator {
   async run(direction: "up" | "down", targetVersion: number | string): Promise<void> {
     this._validateTargetVersion(targetVersion);
     await this._ensureSchemaTable();
-    const key = String(targetVersion);
-    const proxy = this._migrations.find((m) => m.version === key);
+    // Normalize via BigInt like the constructor does so callers can pass
+    // equivalent forms (leading zeros, `20260101000000` vs the string "20260101000000",
+    // etc.) without hitting a spurious UnknownMigrationVersionError.
+    const key = String(BigInt(targetVersion));
+    const proxy = this._migrations.find((m) => String(BigInt(m.version)) === key);
     if (!proxy) {
-      throw new UnknownMigrationVersionError(Number(key));
+      throw new UnknownMigrationVersionError(key);
     }
     const applied = await this._appliedVersions();
     if (direction === "up" && applied.has(proxy.version)) return;

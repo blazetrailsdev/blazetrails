@@ -141,7 +141,7 @@ describe("PrimaryKeysTest", () => {
     await Topic.create({ title: "b" });
     const all = await Topic.all().toArray();
     const ids = all.map((t: any) => t.id);
-    const found = await Topic.find(...ids);
+    const found = await Topic.find(ids);
     expect(Array.isArray(found) ? found.length : 1).toBeGreaterThan(0);
   });
 

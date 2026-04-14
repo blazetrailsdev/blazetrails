@@ -1030,14 +1030,23 @@ export class Base extends Model {
   //   find(id, id, ...) → variadic → array of records
   static find<T extends typeof Base>(
     this: T,
-    ids: unknown[],
+    ids: [unknown, ...unknown[]],
   ): Promise<InstanceType<T> | InstanceType<T>[]>;
   static find<T extends typeof Base>(this: T, id: unknown): Promise<InstanceType<T>>;
   static find<T extends typeof Base>(
     this: T,
-    ...ids: unknown[]
-  ): Promise<InstanceType<T> | InstanceType<T>[]>;
+    id: unknown,
+    ...ids: [unknown, ...unknown[]]
+  ): Promise<InstanceType<T>[]>;
   static async find(...ids: unknown[]): Promise<any> {
+    if (ids.length === 0) {
+      throw new RecordNotFound(
+        `${this.name}: couldn't find all with an empty list of ids`,
+        this.name,
+        String(this.primaryKey),
+        [],
+      );
+    }
     // Variadic: User.find(1, 2, 3)
     if (ids.length > 1) {
       return this.find(ids);
@@ -1227,8 +1236,12 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.from
    */
-  static from<T extends typeof Base>(this: T, source: string): Relation<InstanceType<T>> {
-    return this.all().from(source);
+  static from<T extends typeof Base>(
+    this: T,
+    source: string | Relation<Base>,
+    subqueryName?: string,
+  ): Relation<InstanceType<T>> {
+    return this.all().from(source, subqueryName);
   }
 
   /**

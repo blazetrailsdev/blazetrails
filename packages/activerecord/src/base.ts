@@ -1020,13 +1020,18 @@ export class Base extends Model {
   }
 
   // Overloads match Rails' behavior:
-  //   find(id)        → single record
-  //   find([id, ...]) → array of records
-  //   find(id, ...)   → variadic → array of records
-  // For composite primary keys, `find([shop_id, id])` returns a single record;
-  // in that case the tuple form is ambiguous with the array form — callers
-  // either cast, narrow, or use `.findBy` for clearer intent.
-  static find<T extends typeof Base>(this: T, ids: unknown[]): Promise<InstanceType<T>[]>;
+  //   find(id)          → single record
+  //   find([id, ...])   → array of records (plural PK)
+  //                       OR a single record when the model has a composite
+  //                       primary key and the array is the tuple form
+  //                       (`find([shop_id, id])`). Because TS can't inspect
+  //                       `primaryKey` at the type level, the return is a
+  //                       union: callers narrow with `Array.isArray` or cast.
+  //   find(id, id, ...) → variadic → array of records
+  static find<T extends typeof Base>(
+    this: T,
+    ids: unknown[],
+  ): Promise<InstanceType<T> | InstanceType<T>[]>;
   static find<T extends typeof Base>(this: T, id: unknown): Promise<InstanceType<T>>;
   static find<T extends typeof Base>(
     this: T,
@@ -1349,7 +1354,8 @@ export class Base extends Model {
    */
   static async destroy(id: unknown | unknown[]): Promise<Base | Base[]> {
     if (Array.isArray(id)) {
-      const records = await this.find(id);
+      const found = await this.find(id);
+      const records = Array.isArray(found) ? found : [found];
       for (const record of records) {
         await record.destroy();
       }

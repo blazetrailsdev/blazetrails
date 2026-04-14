@@ -41,9 +41,12 @@ describe("basic CRUD DX — defining and using a model", () => {
     expectTypeOf(u).toEqualTypeOf<User>();
   });
 
-  it("User.find([ids]) resolves to User[]", async () => {
+  it("User.find([ids]) returns User | User[] — caller narrows (CPK ambiguity)", async () => {
+    // For simple primary keys `find([1,2,3])` returns User[] at runtime.
+    // For composite keys `find([shop_id, id])` returns a single User.
+    // TS can't statically inspect `primaryKey`, so the return is a union.
     const users = await User.find([1, 2, 3]);
-    expectTypeOf(users).toEqualTypeOf<User[]>();
+    expectTypeOf(users).toEqualTypeOf<User | User[]>();
   });
 
   it("User.findBy / findByBang have concrete Base returns", () => {

@@ -659,7 +659,7 @@ describe("CompositePrimaryKeyTest", () => {
     expect(o.id).toEqual([1, 42]);
     expect(o.isPersisted()).toBe(true);
 
-    const found = (await Order.find([1, 42])) as unknown as Order;
+    const found = (await Order.find([1, 42])) as Order;
     expect(found.name).toBe("Widget");
   });
 

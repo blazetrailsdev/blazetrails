@@ -740,6 +740,7 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#extending
    */
   extending<M extends Record<string, Function>>(mod: M): Relation<T> & M;
+  extending<M extends Record<string, Function>>(mod: M | undefined): Relation<T> & Partial<M>;
   extending(fn: (rel: Relation<T>) => void): Relation<T>;
   extending(): Relation<T>;
   extending(

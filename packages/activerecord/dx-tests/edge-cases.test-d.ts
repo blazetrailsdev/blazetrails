@@ -70,7 +70,7 @@ describe("edge cases — rough edges in current DX", () => {
     const w = await Widget.find(1);
     expectTypeOf(w).toEqualTypeOf<Widget>();
     const ws = await Widget.find([1, 2]);
-    expectTypeOf(ws).toEqualTypeOf<Widget[]>();
+    expectTypeOf(ws).toEqualTypeOf<Widget | Widget[]>();
     expectTypeOf(Widget.all()).toMatchTypeOf<
       import("@blazetrails/activerecord").Relation<Widget>
     >();

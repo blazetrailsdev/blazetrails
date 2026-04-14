@@ -214,15 +214,13 @@ function writeTsconfig(tmpDir: string): string {
     extends: path.relative(tmpDir, rootTsconfig),
     compilerOptions: {
       noEmit: true,
-      // Override settings incompatible with a one-off check:
+      // Override settings incompatible with a one-off check. rootDir
+      // and outDir from the root don't matter here because noEmit is
+      // true, so we leave them inherited.
       composite: false,
       declaration: false,
       declarationMap: false,
       sourceMap: false,
-      // rootDir from the root resolves to "."; our files aren't
-      // under it, so clear it.
-      rootDir: null,
-      outDir: null,
     },
     include: ["globals.d.ts", "blocks/**/*.ts"],
     // Root uses `references`; we're a leaf check, clear it.

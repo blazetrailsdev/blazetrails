@@ -7861,5 +7861,6 @@ describe("CollectionProxyDelegation", () => {
     expect(reflectOnAllAssociations(BtBlog).map((r) => r.name)).toContain("posts");
     expect(reflectOnAllAssociations(BtPost).map((r) => r.name)).toContain("bt_blog");
     expect(reflectOnAllAssociations(BtAuthor).map((r) => r.name)).toContain("bt_post");
+    expect(reflectOnAllAssociations(BtAuthor).map((r) => r.name)).toContain("bt_tags");
   });
 });

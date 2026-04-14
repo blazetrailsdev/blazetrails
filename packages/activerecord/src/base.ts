@@ -2076,7 +2076,7 @@ export class Base extends Model {
     return this.readAttribute(pk) as PrimaryKeyValue;
   }
 
-  set id(value: unknown) {
+  set id(value: PrimaryKeyValue) {
     const ctor = this.constructor as typeof Base;
     const pk = ctor.primaryKey;
     if (Array.isArray(pk)) {
@@ -2085,7 +2085,7 @@ export class Base extends Model {
           `Expected an array for composite primary key [${pk.join(", ")}], got ${value === null ? "null" : typeof value}`,
         );
       }
-      pk.forEach((col, i) => this.writeAttribute(col, (value as unknown[])[i]));
+      pk.forEach((col, i) => this.writeAttribute(col, value[i]));
     } else {
       this.writeAttribute(pk, value);
     }

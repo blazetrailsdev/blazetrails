@@ -168,15 +168,25 @@ async function runSeed(): Promise<void> {
   console.log("Seeds completed.");
 }
 
+function displayNameFor(config: HashConfig, raw: RawConfig): string {
+  return (
+    config.database ??
+    (raw.database as string | undefined) ??
+    (typeof raw.url === "string" ? raw.url : undefined) ??
+    `${config.adapter ?? "unknown"} database`
+  );
+}
+
 async function runCreate(): Promise<void> {
   const raw = await loadDatabaseConfig();
   const config = toDbConfig(raw);
+  const displayName = displayNameFor(config, raw);
   try {
     await DatabaseTasks.create(config);
-    if (config.database) console.log(`Created database '${config.database}'`);
+    console.log(`Created database '${displayName}'`);
   } catch (error) {
     if (error instanceof DatabaseAlreadyExists) {
-      console.error(`Database '${config.database}' already exists`);
+      console.error(`Database '${displayName}' already exists`);
       return;
     }
     throw error;
@@ -186,12 +196,13 @@ async function runCreate(): Promise<void> {
 async function runDrop(): Promise<void> {
   const raw = await loadDatabaseConfig();
   const config = toDbConfig(raw);
+  const displayName = displayNameFor(config, raw);
   try {
     await DatabaseTasks.drop(config);
-    if (config.database) console.log(`Dropped database '${config.database}'`);
+    console.log(`Dropped database '${displayName}'`);
   } catch (error) {
     if (error instanceof NoDatabaseError) {
-      console.error(`Database '${config.database}' does not exist`);
+      console.error(`Database '${displayName}' does not exist`);
       return;
     }
     throw error;

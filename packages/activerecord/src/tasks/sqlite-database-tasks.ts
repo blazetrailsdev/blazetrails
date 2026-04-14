@@ -124,7 +124,15 @@ export class SQLiteDatabaseTasks {
           new Set(tablesRows.map((r) => String(r.tbl_name ?? "")).filter(Boolean)),
         );
         const excluded = allTables.filter((name) =>
-          ignoreTables.some((pat) => (pat instanceof RegExp ? pat.test(name) : pat === name)),
+          ignoreTables.some((pat) => {
+            if (pat instanceof RegExp) {
+              // Reset lastIndex so global/sticky regex patterns don't
+              // produce false negatives across repeated .test() calls.
+              pat.lastIndex = 0;
+              return pat.test(name);
+            }
+            return pat === name;
+          }),
         );
         if (excluded.length > 0) {
           const placeholders = excluded.map(() => "?").join(", ");

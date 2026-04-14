@@ -106,6 +106,7 @@ import { ScopeRegistry } from "./scoping.js";
 import { Default as DefaultScoping } from "./scoping/default.js";
 import * as NamedScoping from "./scoping/named.js";
 import { AssociationNotFoundError } from "./associations/errors.js";
+import { Associations as _Associations } from "./associations.js";
 import { BelongsToAssociation } from "./associations/belongs-to-association.js";
 import { BelongsToPolymorphicAssociation } from "./associations/belongs-to-polymorphic-association.js";
 import { HasOneAssociation } from "./associations/has-one-association.js";
@@ -126,6 +127,19 @@ export function quoteSqlValue(v: unknown, asArray = false): string {
   if (typeof v === "object") return `'${JSON.stringify(v).replace(/'/g, "''")}'`;
   return `'${String(v).replace(/'/g, "''")}'`;
 }
+
+/**
+ * Value of a primary key on a persisted (or to-be-persisted) record.
+ *
+ * - `number` / `string` — the common scalar PK types (auto-increment ids, UUIDs).
+ * - `Array<string | number>` — composite primary key tuple.
+ * - `null` / `undefined` — unpersisted record, PK not yet assigned.
+ *
+ * Subclasses with a known PK type can narrow this via `declare id: number`.
+ *
+ * Mirrors: the value returned by `ActiveRecord::Base#id`.
+ */
+export type PrimaryKeyValue = string | number | Array<string | number> | null | undefined;
 
 // Late-bound Relation constructor to break circular dependency.
 // Set by relation.ts when it loads.
@@ -157,6 +171,12 @@ export function _setOnAdapterSetHook(hook: ((modelClass: any) => void) | null): 
 export class Base extends Model {
   // --- Translation mixin (wired via extend() after class) ---
   declare static lookupAncestors: typeof Translation.lookupAncestors;
+
+  // --- Associations (wired below after class body) ---
+  declare static belongsTo: typeof _Associations.belongsTo;
+  declare static hasOne: typeof _Associations.hasOne;
+  declare static hasMany: typeof _Associations.hasMany;
+  declare static hasAndBelongsToMany: typeof _Associations.hasAndBelongsToMany;
   static get i18nScope(): string {
     return Translation.i18nScope.call(this);
   }
@@ -1126,7 +1146,7 @@ export class Base extends Model {
         .toArray();
       // Ensure all IDs were found
       if (records.length !== castIds.length) {
-        const foundIds = new Set(records.map((r: Base) => r.id));
+        const foundIds = new Set<unknown>(records.map((r: Base) => r.id));
         const missing = castIds.filter((i) => !foundIds.has(i));
         throw new RecordNotFound(
           `${this.name} with ${this.primaryKey} in [${missing.join(", ")}] not found`,
@@ -2027,15 +2047,18 @@ export class Base extends Model {
   }
 
   /**
-   * The primary key value.
+   * The primary key value. Narrow to a more specific type via
+   * `declare id: number` (or similar) on subclasses when the PK type is known.
+   *
+   * Mirrors: ActiveRecord::Base#id
    */
-  get id(): unknown {
+  get id(): PrimaryKeyValue {
     const ctor = this.constructor as typeof Base;
     const pk = ctor.primaryKey;
     if (Array.isArray(pk)) {
-      return pk.map((col) => this.readAttribute(col));
+      return pk.map((col) => this.readAttribute(col)) as PrimaryKeyValue;
     }
-    return this.readAttribute(pk);
+    return this.readAttribute(pk) as PrimaryKeyValue;
   }
 
   set id(value: unknown) {
@@ -3211,6 +3234,12 @@ function extractShared(rules: Record<string, unknown>): Record<string, unknown> 
 
 extend(Base, ConnectionHandling.ClassMethods);
 extend(Base, Querying);
+extend(Base, {
+  belongsTo: _Associations.belongsTo,
+  hasOne: _Associations.hasOne,
+  hasMany: _Associations.hasMany,
+  hasAndBelongsToMany: _Associations.hasAndBelongsToMany,
+});
 extend(Base, Translation.ClassMethods);
 extend(Base, ReadonlyAttributes.ClassMethods);
 extend(Base, CounterCache.ClassMethods);

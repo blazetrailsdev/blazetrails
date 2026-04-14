@@ -123,11 +123,13 @@ export async function _insertRecord(
   const im = new InsertManager(table);
 
   const entries = Object.entries(values);
+  let sql: string;
   if (entries.length > 0) {
     im.insert(entries.map(([col, val]) => [table.get(col), val]));
+    sql = im.toSql();
+  } else {
+    sql = `${im.toSql()} DEFAULT VALUES`;
   }
-
-  let sql = im.toSql();
   if (returning && returning.length > 0) {
     sql += ` RETURNING ${returning.map((c) => `"${c}"`).join(", ")}`;
   }
@@ -144,11 +146,12 @@ export async function _updateRecord(
   values: Record<string, unknown>,
   constraints: Record<string, unknown>,
 ): Promise<number> {
+  const setEntries = Object.entries(values);
+  if (setEntries.length === 0) return 0;
+
   const table: ArelTable = (this as any).arelTable;
   const um = new UpdateManager();
   um.table(table);
-
-  const setEntries = Object.entries(values);
   um.set(setEntries.map(([col, val]) => [table.get(col), val]));
 
   for (const [col, val] of Object.entries(constraints)) {

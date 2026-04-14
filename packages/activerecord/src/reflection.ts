@@ -337,18 +337,18 @@ export class MacroReflection extends AbstractReflection {
       this._klassCache = this.options.anonymousClass as typeof Base;
       return this._klassCache;
     }
-    this._klassCache = this.computeClass(this.className);
+    this._klassCache = this._klass(this.className);
     return this._klassCache;
   }
 
   _klass(className: string): typeof Base {
-    // Rails: if the active record's demodulized name matches the class name,
-    // try resolving as a top-level constant first (::ClassName), falling back
-    // to the normal namespaced resolution.
+    // Rails: when the active record's demodulized name matches the target
+    // class name (self-referential), try resolving as a top-level constant
+    // first (::ClassName in Ruby), falling back to namespaced resolution.
     const demodulized = this.activeRecord.name.split(".").pop();
     if (demodulized === className) {
       try {
-        return this.computeClass(this.activeRecord.name);
+        return this.computeClass(className);
       } catch {
         // fall through to standard resolution
       }

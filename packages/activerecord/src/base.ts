@@ -700,8 +700,8 @@ export class Base extends Model {
     // Build options for an AR validator, respecting per-validator allowNil/allowBlank
     // precedence (only apply shared value when per-validator option is undefined).
     const buildOpts = (opts: Record<string, unknown>) => ({
-      attributes: [attribute],
       ...opts,
+      attributes: [attribute],
       ...sharedRest,
       ...(opts.allowNil === undefined && sharedAllowNil !== undefined
         ? { allowNil: sharedAllowNil }

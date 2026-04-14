@@ -75,18 +75,23 @@ export function extractBlocks(filePath: string, content: string): ExtractResult 
   let blockSkip = false;
   let blockIsTs = false;
   let blockIndent = 0;
+  let blockFence = "";
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (!inBlock) {
-      // CommonMark: fences may be indented up to 3 spaces. In practice
-      // guides nest blocks inside list items at deeper indents, so we
-      // accept any leading whitespace. The language tag is the first
-      // whitespace-separated token after the backticks.
-      const openMatch = /^(\s*)```(.*)$/.exec(line);
+      // CommonMark: fences use 3+ backticks (or tildes); opener and
+      // closer must share the same char and the closer length >= opener.
+      // We only handle backtick fences — guides don't use tilde fences.
+      // Fences may be indented up to 3 spaces per CommonMark; real
+      // guides nest under list items at deeper indents, so we accept
+      // any leading whitespace. The language is the first
+      // whitespace-separated token after the fence.
+      const openMatch = /^(\s*)(`{3,})(.*)$/.exec(line);
       if (openMatch) {
         const indent = openMatch[1].length;
-        const info = openMatch[2].trim();
+        const fence = openMatch[2];
+        const info = openMatch[3].trim();
         const lang = info.split(/\s+/)[0] ?? "";
         if (!lang) {
           untagged.push({ file: filePath, line: i + 1 });
@@ -97,6 +102,7 @@ export function extractBlocks(filePath: string, content: string): ExtractResult 
         blockSkip = false;
         blockIsTs = lang === "ts" || lang === "typescript";
         blockIndent = indent;
+        blockFence = fence;
         for (let j = i - 1; j >= 0; j--) {
           const prev = lines[j].trim();
           if (prev === "") continue;
@@ -105,7 +111,11 @@ export function extractBlocks(filePath: string, content: string): ExtractResult 
         }
       }
     } else {
-      if (/^\s*```\s*$/.test(line)) {
+      // Closer: same fence char, length >= opener, nothing but
+      // whitespace after.
+      const closeMatch = /^(\s*)(`{3,})\s*$/.exec(line);
+      const isCloser = closeMatch !== null && closeMatch[2].length >= blockFence.length;
+      if (isCloser) {
         if (blockIsTs) {
           blocks.push({
             file: filePath,
@@ -196,25 +206,27 @@ export function remapDiagnostics(
 
 function writeTsconfig(tmpDir: string): string {
   const tsconfigPath = path.join(tmpDir, "tsconfig.json");
-  // Match the root tsconfig.json so guide snippets type-check under
-  // the same module/resolution semantics as the real packages.
-  // Divergence here (e.g. "bundler" vs "Node16") risks snippets that
-  // pass CI but fail for real consumers.
+  // Extend the root tsconfig so guide snippets type-check under
+  // exactly the same compilerOptions as the real packages.
+  // Manually-duplicated options drift; inheriting is safer.
+  const rootTsconfig = path.join(REPO_ROOT, "tsconfig.json");
   const config = {
+    extends: path.relative(tmpDir, rootTsconfig),
     compilerOptions: {
-      target: "ES2022",
-      module: "Node16",
-      moduleResolution: "Node16",
-      strict: true,
       noEmit: true,
-      skipLibCheck: true,
-      esModuleInterop: true,
-      resolveJsonModule: true,
-      allowSyntheticDefaultImports: true,
-      isolatedModules: true,
-      typeRoots: [path.join(REPO_ROOT, "node_modules/@types")],
+      // Override settings incompatible with a one-off check:
+      composite: false,
+      declaration: false,
+      declarationMap: false,
+      sourceMap: false,
+      // rootDir from the root resolves to "."; our files aren't
+      // under it, so clear it.
+      rootDir: null,
+      outDir: null,
     },
     include: ["globals.d.ts", "blocks/**/*.ts"],
+    // Root uses `references`; we're a leaf check, clear it.
+    references: [],
   };
   fs.writeFileSync(tsconfigPath, JSON.stringify(config, null, 2));
   return tsconfigPath;

@@ -81,6 +81,21 @@ describe("extractBlocks", () => {
     expect(blocks[0].code).toBe("const x = 1;");
   });
 
+  it("handles 4+ backtick fences (fence containing ``` inside)", () => {
+    const md = [
+      "````ts", // 1 — content starts on line 2
+      "const s = `hello ${'world'}`;", // 2
+      "const example = '```';", // 3  <- fake 3-backtick closer; must NOT close
+      "````", // 4
+    ].join("\n");
+    const { blocks, untagged } = extractBlocks("a.md", md);
+    expect(untagged).toHaveLength(0);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].code).toBe(
+      ["const s = `hello ${'world'}`;", "const example = '```';"].join("\n"),
+    );
+  });
+
   it("throws on an unterminated fenced block", () => {
     const md = ["```ts", "const x = 1;"].join("\n");
     expect(() => extractBlocks("a.md", md)).toThrow(/Unterminated fenced code block in a\.md/);

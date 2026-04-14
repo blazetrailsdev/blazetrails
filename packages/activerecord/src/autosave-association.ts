@@ -30,10 +30,12 @@ function _nestedRecordsChangedForAutosave(record: any): boolean {
     const associations: AssociationDefinition[] = record.constructor._associations ?? [];
     for (const assoc of associations) {
       if (!assoc.options.autosave) continue;
+      const proxy = record._collectionProxies?.get(assoc.name);
       const cached =
         record._cachedAssociations?.get(assoc.name) ??
-        record._preloadedAssociations?.get(assoc.name);
-      if (!cached) continue;
+        record._preloadedAssociations?.get(assoc.name) ??
+        (proxy?.loaded ? proxy.target : undefined);
+      if (cached == null) continue;
       const children: any[] = Array.isArray(cached) ? cached : [cached];
       if (
         children.some((c: any) =>

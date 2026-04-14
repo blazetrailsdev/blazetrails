@@ -149,10 +149,7 @@ Trails, each `Base` subclass holds its own `_connectionHandler`, and
 pools are acquired per query rather than checked out per thread.
 `establishConnection` / `connectsTo` shape mirrors Rails; the
 underlying pool model is different because there are no threads to
-pool over. See `packages/activerecord/src/connection-handling.ts` and
-the [connections and pools
-notes](https://github.com/blazetrailsdev/trails/blob/main/docs/activerecord-connections-and-pools.md)
-for the full story.
+pool over. See `packages/activerecord/src/connection-handling.ts`.
 
 ## 5. Relation `method_missing` → typed `Proxy`
 

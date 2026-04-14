@@ -1049,6 +1049,16 @@ export class Base extends Model {
     }
     // Variadic: User.find(1, 2, 3)
     if (ids.length > 1) {
+      // Composite primary keys are ambiguous in the variadic-scalar form
+      // (`Model.find(1, 42)` could mean "tuple [1,42]" or "two scalar ids",
+      // neither of which matches the CPK tuple contract). Require an
+      // explicit array form so intent is unambiguous.
+      if (this.compositePrimaryKey && ids.every((i) => !Array.isArray(i))) {
+        throw new Error(
+          `${this.name} has a composite primary key (${String(this.primaryKey)}); ` +
+            `call find([...tuple]) or find([[...], [...]]) rather than variadic scalars.`,
+        );
+      }
       return this.find(ids);
     }
     const id = ids[0];
@@ -1238,7 +1248,7 @@ export class Base extends Model {
    */
   static from<T extends typeof Base>(
     this: T,
-    source: string | Relation<Base>,
+    source: string | Relation<any>,
     subqueryName?: string,
   ): Relation<InstanceType<T>> {
     return this.all().from(source, subqueryName);

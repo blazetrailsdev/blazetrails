@@ -34,10 +34,11 @@ tracks them in a `_generatedMethods` Set.
   holds the same prefix/suffix/proxy-target concept as Rails.
 - `match()` still exists for the cases where we need to split a method name
   back into its attribute.
-- The `[key: string]: unknown` index signature on `Base` means plain
-  attribute access (`user.name`) doesn't need a proxy — it's just a
-  property. The price is that TypeScript can't type it without a per-model
-  declaration; consumers usually declare their fields explicitly.
+- The `[key: string]: unknown` index signature on `Model`
+  (`packages/activemodel/src/model.ts:62`) means plain attribute access
+  (`user.name`) doesn't need a proxy — it's just a property. The price
+  is that TypeScript can't type it without a per-model declaration;
+  consumers usually declare their fields explicitly.
 
 Net effect: no `method_missing`, no `Proxy`, no runtime lookup on every
 access. Slightly less dynamic than Rails, significantly friendlier to the

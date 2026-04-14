@@ -1653,6 +1653,28 @@ export class Migrator {
     }
   }
 
+  /**
+   * Run exactly one migration (identified by `targetVersion`) in the given
+   * direction. Used by the `db:migrate:up` / `db:migrate:down` CLI paths
+   * where the user supplies a specific VERSION.
+   *
+   * Mirrors: ActiveRecord::MigrationContext#run (which builds a Migrator
+   * scoped to `target_version` and calls `#run`).
+   */
+  async run(direction: "up" | "down", targetVersion: number | string): Promise<void> {
+    this._validateTargetVersion(targetVersion);
+    await this._ensureSchemaTable();
+    const key = String(targetVersion);
+    const proxy = this._migrations.find((m) => m.version === key);
+    if (!proxy) {
+      throw new UnknownMigrationVersionError(Number(key));
+    }
+    const applied = await this._appliedVersions();
+    if (direction === "up" && applied.has(proxy.version)) return;
+    if (direction === "down" && !applied.has(proxy.version)) return;
+    await this._runMigration(proxy, direction);
+  }
+
   private async _migrateUp(targetVersion: number | string | null): Promise<void> {
     if (targetVersion !== null) this._validateTargetVersion(targetVersion);
     const target = targetVersion !== null ? BigInt(targetVersion) : null;

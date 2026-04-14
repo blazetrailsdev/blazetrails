@@ -298,6 +298,134 @@ export class CreatePosts extends Migration {
     );
     expect(tablesAfter).toHaveLength(0);
   });
+
+  it("forward moves the schema forward one migration", async () => {
+    const { SQLite3Adapter } =
+      await import("@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js");
+    adapter = new SQLite3Adapter(":memory:");
+
+    const a = "20260101000000-create-posts.ts";
+    const b = "20260102000000-create-comments.ts";
+    fs.writeFileSync(
+      path.join(tmpDir, a),
+      `import { Migration } from "@blazetrails/activerecord";
+export class CreatePosts extends Migration {
+  async up() { await this.createTable("posts", (t) => { t.string("title"); }); }
+  async down() { await this.dropTable("posts"); }
+}`,
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, b),
+      `import { Migration } from "@blazetrails/activerecord";
+export class CreateComments extends Migration {
+  async up() { await this.createTable("comments", (t) => { t.string("body"); }); }
+  async down() { await this.dropTable("comments"); }
+}`,
+    );
+
+    const migrations = await discoverMigrations(tmpDir);
+    const migrator = new Migrator(adapter, migrations);
+
+    await migrator.forward(1);
+    const posts = await adapter.execute(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name='posts'`,
+    );
+    expect(posts).toHaveLength(1);
+    const commentsAfterFirst = await adapter.execute(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name='comments'`,
+    );
+    expect(commentsAfterFirst).toHaveLength(0);
+
+    await migrator.forward(1);
+    const commentsAfterSecond = await adapter.execute(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name='comments'`,
+    );
+    expect(commentsAfterSecond).toHaveLength(1);
+  });
+
+  it("currentVersion reports the highest applied version", async () => {
+    const { SQLite3Adapter } =
+      await import("@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js");
+    adapter = new SQLite3Adapter(":memory:");
+
+    fs.writeFileSync(
+      path.join(tmpDir, "20260101000000-create-posts.ts"),
+      `import { Migration } from "@blazetrails/activerecord";
+export class CreatePosts extends Migration {
+  async up() { await this.createTable("posts", (t) => { t.string("title"); }); }
+  async down() { await this.dropTable("posts"); }
+}`,
+    );
+
+    const migrations = await discoverMigrations(tmpDir);
+    const migrator = new Migrator(adapter, migrations);
+
+    expect(await migrator.currentVersion()).toBe(0);
+    await migrator.migrate();
+    expect(await migrator.currentVersion()).toBe(20260101000000);
+  });
+
+  it("run executes a single migration up then down by version", async () => {
+    const { SQLite3Adapter } =
+      await import("@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js");
+    adapter = new SQLite3Adapter(":memory:");
+
+    fs.writeFileSync(
+      path.join(tmpDir, "20260101000000-create-widgets.ts"),
+      `import { Migration } from "@blazetrails/activerecord";
+export class CreateWidgets extends Migration {
+  async up() { await this.createTable("widgets", (t) => { t.string("name"); }); }
+  async down() { await this.dropTable("widgets"); }
+}`,
+    );
+
+    const migrations = await discoverMigrations(tmpDir);
+    const migrator = new Migrator(adapter, migrations);
+
+    await migrator.run("up", "20260101000000");
+    expect(
+      await adapter.execute(`SELECT name FROM sqlite_master WHERE type='table' AND name='widgets'`),
+    ).toHaveLength(1);
+
+    await migrator.run("down", "20260101000000");
+    expect(
+      await adapter.execute(`SELECT name FROM sqlite_master WHERE type='table' AND name='widgets'`),
+    ).toHaveLength(0);
+  });
+
+  it("run throws UnknownMigrationVersionError for missing versions", async () => {
+    const { SQLite3Adapter } =
+      await import("@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js");
+    const { UnknownMigrationVersionError } = await import("@blazetrails/activerecord");
+    adapter = new SQLite3Adapter(":memory:");
+
+    const migrator = new Migrator(adapter, []);
+    await expect(migrator.run("up", "99999999999999")).rejects.toBeInstanceOf(
+      UnknownMigrationVersionError,
+    );
+  });
+
+  it("pendingMigrations reflects abort_if_pending_migrations semantics", async () => {
+    const { SQLite3Adapter } =
+      await import("@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js");
+    adapter = new SQLite3Adapter(":memory:");
+
+    fs.writeFileSync(
+      path.join(tmpDir, "20260101000000-create-posts.ts"),
+      `import { Migration } from "@blazetrails/activerecord";
+export class CreatePosts extends Migration {
+  async up() { await this.createTable("posts", (t) => { t.string("title"); }); }
+  async down() { await this.dropTable("posts"); }
+}`,
+    );
+
+    const migrations = await discoverMigrations(tmpDir);
+    const migrator = new Migrator(adapter, migrations);
+
+    expect((await migrator.pendingMigrations()).length).toBe(1);
+    await migrator.migrate();
+    expect((await migrator.pendingMigrations()).length).toBe(0);
+  });
 });
 
 describe("schema dump and load", () => {

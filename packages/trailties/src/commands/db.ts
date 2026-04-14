@@ -250,6 +250,87 @@ export function dbCommand(): Command {
     });
 
   cmd
+    .command("forward")
+    .description("Move the schema forward N migrations (inverse of rollback)")
+    .option("--step <n>", "Number of migrations to apply", "1")
+    .action(async (opts) => {
+      const step = Number(opts.step);
+      if (!Number.isInteger(step) || step < 1) {
+        console.error(`Invalid value for --step: "${opts.step}". Expected a positive integer.`);
+        process.exitCode = 1;
+        return;
+      }
+      await withAdapter(async (adapter) => {
+        const migrations = await discoverMigrations(migrationsDir());
+        if (migrations.length === 0) {
+          console.log("No migrations found.");
+          return;
+        }
+        const migrator = new Migrator(adapter, migrations);
+        await migrator.forward(step);
+        for (const line of migrator.output) console.log(line);
+      });
+    });
+
+  cmd
+    .command("version")
+    .description("Print the current schema version")
+    .action(async () => {
+      await withAdapter(async (adapter) => {
+        const migrations = await discoverMigrations(migrationsDir());
+        const migrator = new Migrator(adapter, migrations);
+        const version = await migrator.currentVersion();
+        console.log(`Current version: ${version}`);
+      });
+    });
+
+  cmd
+    .command("abort_if_pending_migrations")
+    .description("Exit with non-zero status if any migrations are pending")
+    .action(async () => {
+      await withAdapter(async (adapter) => {
+        const migrations = await discoverMigrations(migrationsDir());
+        if (migrations.length === 0) return;
+        const migrator = new Migrator(adapter, migrations);
+        const pending = await migrator.pendingMigrations();
+        if (pending.length > 0) {
+          console.error(
+            `You have ${pending.length} pending migration${pending.length === 1 ? "" : "s"}:`,
+          );
+          for (const m of pending) console.error(`  ${m.version} ${m.name}`);
+          console.error(`Run \`trails db:migrate\` to resolve this issue.`);
+          process.exitCode = 1;
+        }
+      });
+    });
+
+  cmd
+    .command("migrate:up")
+    .description("Run a specific migration up (by version)")
+    .requiredOption("--version <version>", "Migration version to run up")
+    .action(async (opts) => {
+      await withAdapter(async (adapter) => {
+        const migrations = await discoverMigrations(migrationsDir());
+        const migrator = new Migrator(adapter, migrations);
+        await migrator.run("up", opts.version);
+        for (const line of migrator.output) console.log(line);
+      });
+    });
+
+  cmd
+    .command("migrate:down")
+    .description("Run a specific migration down (by version)")
+    .requiredOption("--version <version>", "Migration version to run down")
+    .action(async (opts) => {
+      await withAdapter(async (adapter) => {
+        const migrations = await discoverMigrations(migrationsDir());
+        const migrator = new Migrator(adapter, migrations);
+        await migrator.run("down", opts.version);
+        for (const line of migrator.output) console.log(line);
+      });
+    });
+
+  cmd
     .command("seed")
     .description("Run database seeds")
     .action(async () => {

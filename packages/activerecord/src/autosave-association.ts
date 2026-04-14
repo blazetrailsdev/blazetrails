@@ -199,11 +199,11 @@ export function validateAssociations(record: Base, context?: string): void {
 
         let isChildValid: boolean;
         if (assoc.type === "belongsTo") {
-          _setValidatingBelongsToFor(record, assoc.name, true);
+          _setValidatingBelongsToFor(record, assoc, true);
           try {
             isChildValid = typeof child.isValid === "function" ? child.isValid(context) : true;
           } finally {
-            _setValidatingBelongsToFor(record, assoc.name, false);
+            _setValidatingBelongsToFor(record, assoc, false);
           }
         } else {
           isChildValid = typeof child.isValid === "function" ? child.isValid(context) : true;
@@ -420,7 +420,7 @@ async function _autosaveBelongsTo(record: Base, assoc: AssociationDefinition): P
   }
 
   if (assocRecord.isNewRecord() || assocRecord.changed) {
-    _setAutosavingBelongsToFor(record, assoc.name, true);
+    _setAutosavingBelongsToFor(record, assoc, true);
     try {
       const saved = await assocRecord.save();
       if (!saved) {
@@ -428,7 +428,7 @@ async function _autosaveBelongsTo(record: Base, assoc: AssociationDefinition): P
         return false;
       }
     } finally {
-      _setAutosavingBelongsToFor(record, assoc.name, false);
+      _setAutosavingBelongsToFor(record, assoc, false);
     }
 
     // Update FK on owner after saving the associated record

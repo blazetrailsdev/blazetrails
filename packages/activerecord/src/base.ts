@@ -2509,7 +2509,7 @@ export class Base extends Model {
     (this as any)._cachedAssociations?.clear();
     // Rails: AutosaveAssociation#reload clears destruction/autosave state
     (this as any)[Symbol.for("blazetrails.markedForDestruction")] = false;
-    this._destroyedByAssociation = null;
+    this.destroyedByAssociation = null;
     return this;
   }
 

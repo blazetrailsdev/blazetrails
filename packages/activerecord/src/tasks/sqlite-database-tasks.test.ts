@@ -2,13 +2,14 @@ import { describe, it, expect, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { randomUUID } from "node:crypto";
 import { SQLiteDatabaseTasks } from "./sqlite-database-tasks.js";
 import { DatabaseTasks } from "./database-tasks.js";
 import { HashConfig } from "../database-configurations/hash-config.js";
 import { DatabaseAlreadyExists, NoDatabaseError } from "../errors.js";
 
 function tmpDbPath(): string {
-  return path.join(os.tmpdir(), `trails-sqlite-test-${process.pid}-${Date.now()}.sqlite3`);
+  return path.join(os.tmpdir(), `trails-sqlite-test-${process.pid}-${randomUUID()}.sqlite3`);
 }
 
 describe("SQLiteDatabaseTasks", () => {

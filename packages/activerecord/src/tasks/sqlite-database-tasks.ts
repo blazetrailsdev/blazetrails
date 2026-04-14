@@ -107,8 +107,8 @@ export class SQLiteDatabaseTasks {
     args.push(this.resolveDbPath());
     const sql = fs.readFileSync(filename, "utf8");
     const result = spawnSync("sqlite3", args, { input: sql, encoding: "utf8" });
-    if (result.status !== 0) {
-      throw new Error(`failed to execute:\nsqlite3 ${args.join(" ")}\n\n${result.stderr ?? ""}`);
+    if (result.error || result.status !== 0 || result.signal) {
+      throw new Error(this.formatCmdError("sqlite3", args, result, "loading"));
     }
   }
 
@@ -136,13 +136,31 @@ export class SQLiteDatabaseTasks {
 
   private runCmd(cmd: string, args: string[], outFile: string): void {
     const result = spawnSync(cmd, args, { encoding: "utf8" });
-    if (result.status !== 0) {
-      const msg =
-        `failed to execute:\n${cmd} ${args.join(" ")}\n\n` +
-        `Please check the output above for any errors and make sure that ` +
-        `\`${cmd}\` is installed in your PATH and has proper permissions.\n\n`;
-      throw new Error(msg);
+    if (result.error || result.status !== 0 || result.signal) {
+      throw new Error(this.formatCmdError(cmd, args, result, "dumping"));
     }
     fs.writeFileSync(outFile, result.stdout ?? "");
+  }
+
+  private formatCmdError(
+    cmd: string,
+    args: string[],
+    result: ReturnType<typeof spawnSync>,
+    action: string,
+  ): string {
+    const details: string[] = [];
+    if (result.error) details.push(`Error: ${result.error.message}`);
+    if (result.status !== null && result.status !== 0) {
+      details.push(`Exit status: ${result.status}`);
+    }
+    if (result.signal) details.push(`Signal: ${result.signal}`);
+    if (result.stderr) details.push(`stderr:\n${String(result.stderr).trimEnd()}`);
+    if (result.stdout) details.push(`stdout:\n${String(result.stdout).trimEnd()}`);
+    return (
+      `failed to execute:\n${cmd} ${args.join(" ")}\n\n` +
+      (details.length ? `${details.join("\n\n")}\n\n` : "") +
+      `Make sure \`${cmd}\` is installed in your PATH and has proper permissions.\n` +
+      `(action: ${action})`
+    );
   }
 }

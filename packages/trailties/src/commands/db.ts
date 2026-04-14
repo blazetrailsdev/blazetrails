@@ -40,7 +40,25 @@ function migrationsDir(): string {
 }
 
 function toDbConfig(raw: RawConfig, envName: string = resolveEnv()): HashConfig {
-  return new HashConfig(envName, "primary", raw as Record<string, unknown>);
+  const normalized: Record<string, unknown> = { ...raw };
+  if (!normalized.adapter) normalized.adapter = "sqlite3";
+  if (!normalized.database && typeof normalized.url === "string") {
+    try {
+      const parsed = new URL(normalized.url);
+      const name = decodeURIComponent(parsed.pathname.replace(/^\/+/, ""));
+      if (name) normalized.database = name;
+      if (!normalized.host && parsed.hostname) normalized.host = parsed.hostname;
+      if (!normalized.username && parsed.username) {
+        normalized.username = decodeURIComponent(parsed.username);
+      }
+      if (!normalized.password && parsed.password) {
+        normalized.password = decodeURIComponent(parsed.password);
+      }
+    } catch {
+      // leave unparsed url as-is; adapters will surface the error
+    }
+  }
+  return new HashConfig(envName, "primary", normalized);
 }
 
 async function runMigrate(adapter: DatabaseAdapter, targetVersion?: string): Promise<void> {

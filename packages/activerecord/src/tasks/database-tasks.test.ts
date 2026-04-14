@@ -72,11 +72,11 @@ describe("DatabaseTasksDumpSchemaCacheTest", () => {
     /* needs schema cache implementation */
   });
   it("cache dump default filename", () => {
-    expect(DatabaseTasks.dumpSchemaFilename()).toBe("db/schema.rb");
+    expect(DatabaseTasks.dumpSchemaFilename()).toBe("db/schema.ts");
   });
   it("cache dump default filename with custom db dir", () => {
     DatabaseTasks.dbDir = "custom_db";
-    expect(DatabaseTasks.dumpSchemaFilename()).toBe("custom_db/schema.rb");
+    expect(DatabaseTasks.dumpSchemaFilename()).toBe("custom_db/schema.ts");
   });
   it("cache dump alternate filename", () => {
     process.env.SCHEMA = "alt_schema.rb";
@@ -87,7 +87,7 @@ describe("DatabaseTasksDumpSchemaCacheTest", () => {
       adapter: "sqlite3",
       database: "animals.db",
     });
-    expect(DatabaseTasks.dumpSchemaFilename(config)).toBe("db/animals_schema.rb");
+    expect(DatabaseTasks.dumpSchemaFilename(config)).toBe("db/animals_schema.ts");
   });
   it("cache dump filename with path from the argument has precedence", () => {
     process.env.SCHEMA = "override.rb";
@@ -683,7 +683,7 @@ describe("DatabaseTaskCheckTargetVersionTest", () => {
 describe("DatabaseTasksCheckSchemaFileTest", () => {
   it("check schema file", () => {
     expect(() => DatabaseTasks.checkSchemaFile("")).toThrow();
-    expect(() => DatabaseTasks.checkSchemaFile("db/schema.rb")).not.toThrow();
+    expect(() => DatabaseTasks.checkSchemaFile("db/schema.ts")).not.toThrow();
   });
 });
 
@@ -702,7 +702,7 @@ describe("DatabaseTasksCheckSchemaFileMethods", () => {
   });
 
   it("check dump filename defaults", () => {
-    expect(DatabaseTasks.dumpSchemaFilename()).toBe("db/schema.rb");
+    expect(DatabaseTasks.dumpSchemaFilename()).toBe("db/schema.ts");
   });
 
   it("check dump filename with schema env", () => {
@@ -712,7 +712,7 @@ describe("DatabaseTasksCheckSchemaFileMethods", () => {
 
   it("check dump filename defaults for non primary databases", () => {
     const config = new HashConfig("test", "animals", { adapter: "sqlite3" });
-    expect(DatabaseTasks.dumpSchemaFilename(config)).toBe("db/animals_schema.rb");
+    expect(DatabaseTasks.dumpSchemaFilename(config)).toBe("db/animals_schema.ts");
   });
 
   it.skip("setting schema dump to nil", () => {

@@ -4,6 +4,7 @@
  * Mirrors: ActiveRecord::Tasks::MySQLDatabaseTasks
  */
 
+import * as fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import type { DatabaseAdapter } from "../adapter.js";
 import type { DatabaseConfig } from "../database-configurations/database-config.js";
@@ -11,9 +12,37 @@ import { DatabaseTasks } from "./database-tasks.js";
 
 type ConfigHash = Record<string, unknown>;
 
+interface UrlParts {
+  host?: string;
+  port?: string;
+  username?: string;
+  password?: string;
+  database?: string;
+  socket?: string;
+}
+
+function parseDbUrl(url: string | undefined): UrlParts {
+  if (!url) return {};
+  try {
+    const parsed = new URL(url);
+    const database = decodeURIComponent(parsed.pathname.replace(/^\/+/, ""));
+    return {
+      host: parsed.hostname || undefined,
+      port: parsed.port || undefined,
+      username: parsed.username ? decodeURIComponent(parsed.username) : undefined,
+      password: parsed.password ? decodeURIComponent(parsed.password) : undefined,
+      database: database || undefined,
+      socket: parsed.searchParams.get("socket") ?? undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
 export class MySQLDatabaseTasks {
   private readonly dbConfig: DatabaseConfig;
   private readonly configurationHash: ConfigHash;
+  private readonly urlParts: UrlParts;
 
   static usingDatabaseConfigurations(): boolean {
     return true;
@@ -22,6 +51,7 @@ export class MySQLDatabaseTasks {
   constructor(dbConfig: DatabaseConfig) {
     this.dbConfig = dbConfig;
     this.configurationHash = { ...dbConfig.configuration };
+    this.urlParts = parseDbUrl(this.configurationHash.url as string | undefined);
   }
 
   async create(): Promise<void> {
@@ -65,16 +95,13 @@ export class MySQLDatabaseTasks {
 
   structureLoad(filename: string, extraFlags?: string | string[] | null): void {
     const args = this.prepareCommandOptions();
-    args.push(
-      "--execute",
-      `SET FOREIGN_KEY_CHECKS = 0; SOURCE ${filename}; SET FOREIGN_KEY_CHECKS = 1`,
-      "--database",
-      this.requireDatabaseName(),
-    );
+    args.push("--database", this.requireDatabaseName());
     if (extraFlags) {
       args.unshift(...(Array.isArray(extraFlags) ? extraFlags : [extraFlags]));
     }
-    this.runCmd("mysql", args, "loading");
+    const sqlBody = fs.readFileSync(filename, "utf8");
+    const stdin = `SET FOREIGN_KEY_CHECKS = 0;\n${sqlBody}\nSET FOREIGN_KEY_CHECKS = 1;\n`;
+    this.runCmd("mysql", args, "loading", stdin);
   }
 
   static register(): void {
@@ -110,24 +137,36 @@ export class MySQLDatabaseTasks {
     return options;
   }
 
+  private resolvedField(name: keyof UrlParts): string | undefined {
+    const c = this.configurationHash;
+    const fromConfig = c[name as string];
+    if (fromConfig !== undefined && fromConfig !== null && fromConfig !== "") {
+      return String(fromConfig);
+    }
+    const fromUrl = this.urlParts[name];
+    return fromUrl !== undefined ? String(fromUrl) : undefined;
+  }
+
   private prepareCommandOptions(): string[] {
-    const mapping: Record<string, string> = {
-      host: "--host",
-      port: "--port",
-      socket: "--socket",
-      username: "--user",
-      password: "--password",
-      encoding: "--default-character-set",
-      sslca: "--ssl-ca",
-      sslcert: "--ssl-cert",
-      sslcapath: "--ssl-capath",
-      sslcipher: "--ssl-cipher",
-      sslkey: "--ssl-key",
-      ssl_mode: "--ssl-mode",
-    };
     const args: string[] = [];
-    for (const [opt, flag] of Object.entries(mapping)) {
-      const value = this.configurationHash[opt];
+    const flagMap: Array<{ flag: string; key: string; fromUrl?: boolean }> = [
+      { flag: "--host", key: "host", fromUrl: true },
+      { flag: "--port", key: "port", fromUrl: true },
+      { flag: "--socket", key: "socket", fromUrl: true },
+      { flag: "--user", key: "username", fromUrl: true },
+      { flag: "--password", key: "password", fromUrl: true },
+      { flag: "--default-character-set", key: "encoding" },
+      { flag: "--ssl-ca", key: "sslca" },
+      { flag: "--ssl-cert", key: "sslcert" },
+      { flag: "--ssl-capath", key: "sslcapath" },
+      { flag: "--ssl-cipher", key: "sslcipher" },
+      { flag: "--ssl-key", key: "sslkey" },
+      { flag: "--ssl-mode", key: "ssl_mode" },
+    ];
+    for (const { flag, key, fromUrl } of flagMap) {
+      const value = fromUrl
+        ? this.resolvedField(key as keyof UrlParts)
+        : (this.configurationHash[key] as string | number | undefined);
       if (value !== undefined && value !== null && value !== "") {
         args.push(`${flag}=${String(value)}`);
       }
@@ -137,15 +176,12 @@ export class MySQLDatabaseTasks {
 
   private async withAdmin<T>(fn: (admin: DatabaseAdapter) => Promise<T>): Promise<T> {
     const { Mysql2Adapter } = await import("../adapters/mysql2-adapter.js");
-    const c = this.configurationHash;
-    const adapter = c.url
-      ? new Mysql2Adapter(String(c.url))
-      : new Mysql2Adapter({
-          host: (c.host as string) ?? "localhost",
-          port: (c.port as number) ?? 3306,
-          user: c.username as string | undefined,
-          password: c.password as string | undefined,
-        });
+    const adapter = new Mysql2Adapter({
+      host: this.resolvedField("host") ?? "localhost",
+      port: Number(this.resolvedField("port") ?? 3306),
+      user: this.resolvedField("username"),
+      password: this.resolvedField("password"),
+    });
     try {
       return await fn(adapter);
     } finally {
@@ -154,20 +190,30 @@ export class MySQLDatabaseTasks {
     }
   }
 
-  private runCmd(cmd: string, args: string[], action: string): void {
-    const result = spawnSync(cmd, args, { encoding: "utf8" });
-    if (result.status !== 0) {
-      const msg =
+  private runCmd(cmd: string, args: string[], action: string, stdin?: string): void {
+    const spawnOpts: Parameters<typeof spawnSync>[2] = { encoding: "utf8" };
+    if (stdin !== undefined) spawnOpts.input = stdin;
+    const result = spawnSync(cmd, args, spawnOpts);
+    if (result.error || result.status !== 0 || result.signal) {
+      const details: string[] = [];
+      if (result.error) details.push(`Error: ${result.error.message}`);
+      if (result.status !== null && result.status !== 0) {
+        details.push(`Exit status: ${result.status}`);
+      }
+      if (result.signal) details.push(`Signal: ${result.signal}`);
+      if (result.stderr) details.push(`stderr:\n${String(result.stderr).trimEnd()}`);
+      if (result.stdout) details.push(`stdout:\n${String(result.stdout).trimEnd()}`);
+      throw new Error(
         `failed to execute: \`${cmd}\`\n` +
-        `Please check the output above for any errors and make sure that ` +
-        `\`${cmd}\` is installed in your PATH and has proper permissions.\n\n` +
-        `(action: ${action}, stderr: ${result.stderr ?? ""})`;
-      throw new Error(msg);
+          (details.length ? `${details.join("\n\n")}\n\n` : "") +
+          `Make sure \`${cmd}\` is installed in your PATH and has proper permissions.\n` +
+          `(action: ${action})`,
+      );
     }
   }
 
   private requireDatabaseName(): string {
-    const name = this.dbConfig.database;
+    const name = this.dbConfig.database ?? this.urlParts.database;
     if (!name) throw new Error("MySQL configuration missing 'database'");
     return name;
   }

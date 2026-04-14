@@ -18,9 +18,43 @@ const SQL_COMMENT_BEGIN = "--";
 
 type ConfigHash = Record<string, unknown>;
 
+interface UrlParts {
+  host?: string;
+  port?: string;
+  username?: string;
+  password?: string;
+  database?: string;
+  sslmode?: string;
+  sslcert?: string;
+  sslkey?: string;
+  sslrootcert?: string;
+}
+
+function parseDbUrl(url: string | undefined): UrlParts {
+  if (!url) return {};
+  try {
+    const parsed = new URL(url);
+    const database = decodeURIComponent(parsed.pathname.replace(/^\/+/, ""));
+    return {
+      host: parsed.hostname || undefined,
+      port: parsed.port || undefined,
+      username: parsed.username ? decodeURIComponent(parsed.username) : undefined,
+      password: parsed.password ? decodeURIComponent(parsed.password) : undefined,
+      database: database || undefined,
+      sslmode: parsed.searchParams.get("sslmode") ?? undefined,
+      sslcert: parsed.searchParams.get("sslcert") ?? undefined,
+      sslkey: parsed.searchParams.get("sslkey") ?? undefined,
+      sslrootcert: parsed.searchParams.get("sslrootcert") ?? undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
 export class PostgreSQLDatabaseTasks {
   private readonly dbConfig: DatabaseConfig;
   private readonly configurationHash: ConfigHash;
+  private readonly urlParts: UrlParts;
 
   static usingDatabaseConfigurations(): boolean {
     return true;
@@ -29,6 +63,7 @@ export class PostgreSQLDatabaseTasks {
   constructor(dbConfig: DatabaseConfig) {
     this.dbConfig = dbConfig;
     this.configurationHash = { ...dbConfig.configuration };
+    this.urlParts = parseDbUrl(this.configurationHash.url as string | undefined);
   }
 
   async create(connectionAlreadyEstablished = false): Promise<void> {
@@ -140,26 +175,42 @@ export class PostgreSQLDatabaseTasks {
   private psqlEnv(): NodeJS.ProcessEnv {
     const env: NodeJS.ProcessEnv = { ...process.env };
     const c = this.configurationHash;
-    if (this.dbConfig.host) env.PGHOST = this.dbConfig.host;
-    if (c.port !== undefined) env.PGPORT = String(c.port);
-    if (c.password !== undefined) env.PGPASSWORD = String(c.password);
-    if (c.username !== undefined) env.PGUSER = String(c.username);
-    if (c.sslmode !== undefined) env.PGSSLMODE = String(c.sslmode);
-    if (c.sslcert !== undefined) env.PGSSLCERT = String(c.sslcert);
-    if (c.sslkey !== undefined) env.PGSSLKEY = String(c.sslkey);
-    if (c.sslrootcert !== undefined) env.PGSSLROOTCERT = String(c.sslrootcert);
+    const host = this.dbConfig.host ?? this.urlParts.host;
+    const port = c.port ?? this.urlParts.port;
+    const password = c.password ?? this.urlParts.password;
+    const username = c.username ?? this.urlParts.username;
+    if (host) env.PGHOST = String(host);
+    if (port !== undefined) env.PGPORT = String(port);
+    if (password !== undefined) env.PGPASSWORD = String(password);
+    if (username !== undefined) env.PGUSER = String(username);
+    const sslmode = c.sslmode ?? this.urlParts.sslmode;
+    const sslcert = c.sslcert ?? this.urlParts.sslcert;
+    const sslkey = c.sslkey ?? this.urlParts.sslkey;
+    const sslrootcert = c.sslrootcert ?? this.urlParts.sslrootcert;
+    if (sslmode !== undefined) env.PGSSLMODE = String(sslmode);
+    if (sslcert !== undefined) env.PGSSLCERT = String(sslcert);
+    if (sslkey !== undefined) env.PGSSLKEY = String(sslkey);
+    if (sslrootcert !== undefined) env.PGSSLROOTCERT = String(sslrootcert);
     return env;
   }
 
   private runCmd(cmd: string, args: string[], action: string): void {
     const result = spawnSync(cmd, args, { env: this.psqlEnv(), encoding: "utf8" });
-    if (result.status !== 0) {
-      const msg =
+    if (result.error || result.status !== 0 || result.signal) {
+      const details: string[] = [];
+      if (result.error) details.push(`Error: ${result.error.message}`);
+      if (result.status !== null && result.status !== 0) {
+        details.push(`Exit status: ${result.status}`);
+      }
+      if (result.signal) details.push(`Signal: ${result.signal}`);
+      if (result.stderr) details.push(`stderr:\n${result.stderr.trimEnd()}`);
+      if (result.stdout) details.push(`stdout:\n${result.stdout.trimEnd()}`);
+      throw new Error(
         `failed to execute:\n${cmd} ${args.join(" ")}\n\n` +
-        `Please check the output above for any errors and make sure that ` +
-        `\`${cmd}\` is installed in your PATH and has proper permissions.\n\n` +
-        `(action: ${action})`;
-      throw new Error(msg);
+          (details.length ? `${details.join("\n\n")}\n\n` : "") +
+          `Make sure \`${cmd}\` is installed in your PATH and has proper permissions.\n` +
+          `(action: ${action})`,
+      );
     }
   }
 
@@ -170,14 +221,18 @@ export class PostgreSQLDatabaseTasks {
     while (i < lines.length && (lines[i].startsWith(SQL_COMMENT_BEGIN) || lines[i].trim() === "")) {
       i++;
     }
-    const tmp = path.join(os.tmpdir(), `uncommented_structure_${process.pid}.sql`);
-    fs.writeFileSync(tmp, lines.slice(i).join("\n"));
-    fs.copyFileSync(tmp, filename);
-    fs.unlinkSync(tmp);
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "uncommented_structure_"));
+    const tmp = path.join(tmpDir, "structure.sql");
+    try {
+      fs.writeFileSync(tmp, lines.slice(i).join("\n"));
+      fs.copyFileSync(tmp, filename);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   }
 
   private requireDatabaseName(): string {
-    const name = this.dbConfig.database;
+    const name = this.dbConfig.database ?? this.urlParts.database;
     if (!name) throw new Error("PostgreSQL configuration missing 'database'");
     return name;
   }

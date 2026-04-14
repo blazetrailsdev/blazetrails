@@ -23,8 +23,24 @@ export class DatabaseTasks {
   }
   static databaseConfiguration: DatabaseConfigurations | null = null;
   static dbDir: string = "db";
-  static migrationsPath: string[] = ["db/migrate"];
-  static migrationsPaths: string[] = ["db/migrate"];
+  private static _migrationsPaths: string[] = ["db/migrate"];
+
+  static get migrationsPath(): string[] {
+    return this._migrationsPaths;
+  }
+
+  static set migrationsPath(value: string[]) {
+    this._migrationsPaths = value;
+  }
+
+  static get migrationsPaths(): string[] {
+    return this._migrationsPaths;
+  }
+
+  static set migrationsPaths(value: string[]) {
+    this._migrationsPaths = value;
+  }
+
   static fixturesPath: string = "test/fixtures";
   static root: string = process.cwd();
   static seedLoader: { loadSeed(): void | Promise<void> } | null = null;
@@ -257,12 +273,13 @@ export class DatabaseTasks {
   static dumpSchemaFilename(config?: DatabaseConfig): string {
     const envSchema = process.env.SCHEMA?.trim();
     if (envSchema) return envSchema;
-    const ext = this.schemaFormat === "sql" ? "structure.sql" : "schema.rb";
+    const isSql = this.schemaFormat === "sql";
+    const ext = isSql ? "sql" : "ts";
+    const base = isSql ? "structure" : "schema";
     if (config && config.name !== "primary") {
-      const base = this.schemaFormat === "sql" ? "structure" : "schema";
-      return `${this.dbDir}/${config.name}_${base}.${this.schemaFormat === "sql" ? "sql" : "rb"}`;
+      return `${this.dbDir}/${config.name}_${base}.${ext}`;
     }
-    return `${this.dbDir}/${ext}`;
+    return `${this.dbDir}/${base}.${ext}`;
   }
 
   static checkSchemaFile(filename: string): void {
@@ -399,6 +416,9 @@ export class DatabaseTasks {
   static async dumpSchema(config: DatabaseConfig): Promise<void> {
     const filename = this.schemaDumpPath(config);
     if (this.schemaFormat === "sql") {
+      const fs = getFs();
+      const path = getPath();
+      fs.mkdirSync(path.dirname(filename), { recursive: true });
       await this.structureDump(config, filename);
       return;
     }

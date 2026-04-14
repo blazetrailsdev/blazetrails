@@ -924,7 +924,7 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.unscoped
    */
-  static unscoped(): any {
+  static unscoped<T extends typeof Base>(this: T): Relation<InstanceType<T>> {
     return DefaultScoping.unscoped(this, () => {
       if (!_RelationCtor) {
         throw new Error("Relation not loaded. Import relation.ts first.");
@@ -1649,7 +1649,7 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.distinct
    */
-  static distinct() {
+  static distinct<T extends typeof Base>(this: T): Relation<InstanceType<T>> {
     return this.all().distinct();
   }
 
@@ -1658,8 +1658,12 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.joins
    */
-  static joins(...args: any[]) {
-    return (this.all() as any).joins(...args);
+  static joins<T extends typeof Base>(
+    this: T,
+    tableOrSql?: string,
+    on?: string,
+  ): Relation<InstanceType<T>> {
+    return this.all().joins(tableOrSql, on);
   }
 
   /**
@@ -1667,8 +1671,12 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.left_joins
    */
-  static leftJoins(...args: any[]) {
-    return (this.all() as any).leftJoins(...args);
+  static leftJoins<T extends typeof Base>(
+    this: T,
+    table: string,
+    on?: string,
+  ): Relation<InstanceType<T>> {
+    return this.all().leftJoins(table, on);
   }
 
   /**
@@ -1676,8 +1684,12 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.left_outer_joins
    */
-  static leftOuterJoins(...args: any[]) {
-    return (this.all() as any).leftOuterJoins(...args);
+  static leftOuterJoins<T extends typeof Base>(
+    this: T,
+    table?: string,
+    on?: string,
+  ): Relation<InstanceType<T>> {
+    return this.all().leftOuterJoins(table, on);
   }
 
   /**
@@ -1685,7 +1697,7 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.none
    */
-  static none() {
+  static none<T extends typeof Base>(this: T): Relation<InstanceType<T>> {
     return this.all().none();
   }
 

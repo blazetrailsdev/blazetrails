@@ -3717,6 +3717,8 @@ describe("FinderTest", () => {
       await Item.create({ active: false });
       await Item.create({ active: true });
 
+      // Dynamic attribute-value scope: `.active()` is runtime-attached by the
+      // boolean attribute; not yet statically typed on Relation.
       const items = await (Item.all() as any).active().toArray();
       expect(items).toHaveLength(2);
     });

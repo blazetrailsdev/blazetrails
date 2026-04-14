@@ -2506,6 +2506,7 @@ export class Base extends Model {
     this._collectionProxies.clear();
     this._preloadedAssociations.clear();
     this._associationInstances.clear();
+    (this as any)._cachedAssociations?.clear();
     // Rails: AutosaveAssociation#reload clears destruction/autosave state
     (this as any)[Symbol.for("blazetrails.markedForDestruction")] = false;
     this._destroyedByAssociation = null;
@@ -2984,33 +2985,7 @@ export class Base extends Model {
    * Mirrors: ActiveRecord::AutosaveAssociation#changed_for_autosave?
    */
   changedForAutosave(): boolean {
-    if (
-      this.isNewRecord() ||
-      (typeof (this as any).hasChangesToSave === "function" && (this as any).hasChangesToSave()) ||
-      !!(this as any).changed ||
-      this.markedForDestruction()
-    ) {
-      return true;
-    }
-    // nested_records_changed_for_autosave? — check loaded autosave associations
-    const ctor = this.constructor as typeof Base;
-    const associations: any[] = (ctor as any)._associations ?? [];
-    for (const assoc of associations) {
-      if (!assoc.options?.autosave) continue;
-      const cached =
-        (this as any)._cachedAssociations?.get(assoc.name) ??
-        (this as any)._preloadedAssociations?.get(assoc.name);
-      if (!cached) continue;
-      const children: any[] = Array.isArray(cached) ? cached : [cached];
-      if (
-        children.some(
-          (c: any) => typeof c.changedForAutosave === "function" && c.changedForAutosave(),
-        )
-      ) {
-        return true;
-      }
-    }
-    return false;
+    return _changedForAutosaveImpl(this);
   }
 
   /**
@@ -3128,6 +3103,38 @@ export class Base extends Model {
 // in the class body, so `Base.findBySql` and `Base.connectsTo` carry the
 // exact generics, `this` parameter, and return type of their implementations.
 // ---------------------------------------------------------------------------
+
+// Recursion-guarded implementation for changedForAutosave, matching
+// Rails' nested_records_changed_for_autosave? with @_already_called guard.
+const _changedForAutosaveSeen = new WeakSet<object>();
+function _changedForAutosaveImpl(record: any): boolean {
+  if (_changedForAutosaveSeen.has(record)) return false;
+  _changedForAutosaveSeen.add(record);
+  try {
+    if (
+      record.isNewRecord() ||
+      (typeof record.hasChangesToSave === "function" && record.hasChangesToSave()) ||
+      !!record.changed ||
+      (typeof record.markedForDestruction === "function" && record.markedForDestruction())
+    ) {
+      return true;
+    }
+    const ctor = record.constructor;
+    const associations: any[] = ctor._associations ?? [];
+    for (const assoc of associations) {
+      if (!assoc.options?.autosave) continue;
+      const cached =
+        record._cachedAssociations?.get(assoc.name) ??
+        record._preloadedAssociations?.get(assoc.name);
+      if (!cached) continue;
+      const children: any[] = Array.isArray(cached) ? cached : [cached];
+      if (children.some((c: any) => _changedForAutosaveImpl(c))) return true;
+    }
+    return false;
+  } finally {
+    _changedForAutosaveSeen.delete(record);
+  }
+}
 
 extend(Base, ConnectionHandling.ClassMethods);
 extend(Base, Querying);

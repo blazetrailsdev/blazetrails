@@ -198,10 +198,17 @@ export function validateAssociations(record: Base, context?: string): void {
 
         if (!child.isNewRecord() && !child.changed) continue;
 
-        // Rails: set validating_belongs_to_for around belongs_to validations
-        if (assoc.type === "belongsTo") _setValidatingBelongsToFor(record, assoc.name, true);
-        const isChildValid = typeof child.isValid === "function" ? child.isValid(context) : true;
-        if (assoc.type === "belongsTo") _setValidatingBelongsToFor(record, assoc.name, false);
+        let isChildValid: boolean;
+        if (assoc.type === "belongsTo") {
+          _setValidatingBelongsToFor(record, assoc.name, true);
+          try {
+            isChildValid = typeof child.isValid === "function" ? child.isValid(context) : true;
+          } finally {
+            _setValidatingBelongsToFor(record, assoc.name, false);
+          }
+        } else {
+          isChildValid = typeof child.isValid === "function" ? child.isValid(context) : true;
+        }
 
         if (!isChildValid) {
           const parentErrors = (record as any).errors;

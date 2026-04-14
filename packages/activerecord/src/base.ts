@@ -1041,7 +1041,7 @@ export class Base extends Model {
   static async find(...ids: unknown[]): Promise<any> {
     if (ids.length === 0) {
       throw new RecordNotFound(
-        `${this.name}: couldn't find all with an empty list of ids`,
+        `Couldn't find ${this.name} with an empty list of ids`,
         this.name,
         String(this.primaryKey),
         [],
@@ -1054,10 +1054,12 @@ export class Base extends Model {
       // neither of which matches the CPK tuple contract). Require an
       // explicit array form so intent is unambiguous.
       if (this.compositePrimaryKey && ids.every((i) => !Array.isArray(i))) {
-        throw new Error(
+        const err = new Error(
           `${this.name} has a composite primary key (${String(this.primaryKey)}); ` +
             `call find([...tuple]) or find([[...], [...]]) rather than variadic scalars.`,
         );
+        err.name = "ArgumentError";
+        throw err;
       }
       return this.find(ids);
     }

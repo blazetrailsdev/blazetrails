@@ -167,7 +167,8 @@ export class SQLiteDatabaseTasks {
     if (!database) {
       throw new Error("SQLite database configuration missing 'database' path");
     }
-    if (database === ":memory:" || path.isAbsolute(database)) return database;
+    if (database === ":memory:") return database;
+    if (path.isAbsolute && path.isAbsolute(database)) return database;
     return path.join(this.root, database);
   }
 

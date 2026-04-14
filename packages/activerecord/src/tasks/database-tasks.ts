@@ -464,6 +464,12 @@ export class DatabaseTasks {
     }
 
     const path = getPath();
+    if (!path.isAbsolute || !path.pathToFileURL) {
+      throw new Error(
+        "DatabaseTasks.loadSchema requires PathAdapter.isAbsolute and pathToFileURL. " +
+          "The configured PathAdapter does not provide them.",
+      );
+    }
     const absolute = path.isAbsolute(filename) ? filename : path.resolve(this.root, filename);
     const href = path.pathToFileURL(absolute).href;
     const mod = (await import(href)) as {
@@ -679,7 +685,13 @@ export class DatabaseTasks {
     if (!adapter) throw new Error("config missing adapter");
     if (/sqlite/.test(adapter)) {
       const { SQLite3Adapter } = await import("../connection-adapters/sqlite3-adapter.js");
-      return new SQLite3Adapter(config.database ?? ":memory:");
+      const database = config.database ?? ":memory:";
+      const path = getPath();
+      const resolved =
+        database === ":memory:" || (path.isAbsolute && path.isAbsolute(database))
+          ? database
+          : path.resolve(this.root, database);
+      return new SQLite3Adapter(resolved);
     }
     if (/postgres/.test(adapter)) {
       const { PostgreSQLAdapter } = await import("../adapters/postgresql-adapter.js");

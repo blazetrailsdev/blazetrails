@@ -328,7 +328,11 @@ describe("schema dump and load", () => {
       const defineSchema = new Function(
         "ctx",
         schema
-          .replace(/\/\*\*[\s\S]*?\*\/\s*/, "")
+          // Strip only the header JSDoc (first /** ... */ before the
+          // export statement). Anchored to start-of-string with optional
+          // leading // line comments / blank lines so later block comments
+          // in the body aren't clobbered.
+          .replace(/^(?:\s*\/\/[^\n]*\n)*\s*\/\*\*[\s\S]*?\*\/\s*/, "")
           .replace(
             /export default async function defineSchema\(ctx(?:: any)?\) \{/,
             "return (async () => {",

@@ -256,7 +256,7 @@ export class MySQLDatabaseTasks {
       if (result.stderr) details.push(`stderr:\n${String(result.stderr).trimEnd()}`);
       if (result.stdout) details.push(`stdout:\n${String(result.stdout).trimEnd()}`);
       throw new Error(
-        `failed to execute: \`${cmd}\`\n` +
+        `failed to execute:\n${cmd} ${args.join(" ")}\n\n` +
           (details.length ? `${details.join("\n\n")}\n\n` : "") +
           `Make sure \`${cmd}\` is installed in your PATH and has proper permissions.\n` +
           `(action: ${action})`,

@@ -39,9 +39,37 @@ function migrationsDir(): string {
   return path.join(process.cwd(), "db", "migrations");
 }
 
+function inferAdapterFromUrl(url: string): string | undefined {
+  try {
+    switch (new URL(url).protocol) {
+      case "postgres:":
+      case "postgresql:":
+        return "postgresql";
+      case "mysql:":
+      case "mysql2:":
+      case "trilogy:":
+        return "mysql2";
+      case "sqlite:":
+      case "sqlite3:":
+      case "file:":
+        return "sqlite3";
+      default:
+        return undefined;
+    }
+  } catch {
+    return undefined;
+  }
+}
+
 function toDbConfig(raw: RawConfig, envName: string = resolveEnv()): HashConfig {
   const normalized: Record<string, unknown> = { ...raw };
-  if (!normalized.adapter) normalized.adapter = "sqlite3";
+  if (!normalized.adapter) {
+    if (typeof normalized.url === "string") {
+      const inferred = inferAdapterFromUrl(normalized.url);
+      if (inferred) normalized.adapter = inferred;
+    }
+    if (!normalized.adapter) normalized.adapter = "sqlite3";
+  }
   if (!normalized.database && typeof normalized.url === "string") {
     try {
       const parsed = new URL(normalized.url);

@@ -129,17 +129,27 @@ export class PostgreSQLDatabaseTasks {
   }
 
   structureDump(filename: string, extraFlags?: string | string[] | null): void {
-    const args = ["--schema-only", "--no-privileges", "--no-owner", "--file", filename];
+    // Use --dbname=NAME instead of a positional argument so database names
+    // beginning with "-" aren't parsed as pg_dump options.
+    const args = [
+      "--schema-only",
+      "--no-privileges",
+      "--no-owner",
+      "--file",
+      filename,
+      `--dbname=${this.requireDatabaseName()}`,
+    ];
     if (extraFlags) {
       args.push(...(Array.isArray(extraFlags) ? extraFlags : [extraFlags]));
     }
-    args.push(this.requireDatabaseName());
     this.runCmd("pg_dump", args, "dumping");
     this.removeSqlHeaderComments(filename);
   }
 
   structureLoad(filename: string, extraFlags?: string | string[] | null): void {
     const nullDevice = getOs().platform() === "win32" ? "NUL" : "/dev/null";
+    // --dbname=NAME avoids psql treating a db name starting with "-" as a
+    // flag.
     const args = [
       "--set",
       ON_ERROR_STOP_1,
@@ -149,11 +159,11 @@ export class PostgreSQLDatabaseTasks {
       nullDevice,
       "--file",
       filename,
+      `--dbname=${this.requireDatabaseName()}`,
     ];
     if (extraFlags) {
       args.push(...(Array.isArray(extraFlags) ? extraFlags : [extraFlags]));
     }
-    args.push(this.requireDatabaseName());
     this.runCmd("psql", args, "loading");
   }
 
@@ -240,6 +250,12 @@ export class PostgreSQLDatabaseTasks {
     let i = 0;
     while (i < lines.length && (lines[i].startsWith(SQL_COMMENT_BEGIN) || lines[i].trim() === "")) {
       i++;
+    }
+    if (!fs.mkdtempSync) {
+      throw new Error(
+        "PostgreSQLDatabaseTasks.structureDump requires FsAdapter.mkdtempSync. " +
+          "The configured FsAdapter does not provide it.",
+      );
     }
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "uncommented_structure_"));
     const tmp = path.join(tmpDir, "structure.sql");

@@ -27,6 +27,7 @@ export type { AsyncContext, AsyncContextAdapter } from "./async-context-adapter.
 export {
   registerChildProcessAdapter,
   getChildProcess,
+  getChildProcessAsync,
   childProcessAdapterConfig,
 } from "./child-process-adapter.js";
 export type {
@@ -35,7 +36,7 @@ export type {
   SpawnSyncResult,
 } from "./child-process-adapter.js";
 
-export { registerOsAdapter, getOs, osAdapterConfig } from "./os-adapter.js";
+export { registerOsAdapter, getOs, getOsAsync, osAdapterConfig } from "./os-adapter.js";
 export type { OsAdapter } from "./os-adapter.js";
 
 import { fsAdapterConfig } from "./fs-adapter.js";

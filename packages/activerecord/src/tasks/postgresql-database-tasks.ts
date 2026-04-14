@@ -6,9 +6,9 @@
 
 import {
   getFs,
-  getOs,
+  getOsAsync,
   getPath,
-  getChildProcess,
+  getChildProcessAsync,
   type SpawnSyncResult,
 } from "@blazetrails/activesupport";
 import type { DatabaseAdapter } from "../adapter.js";
@@ -128,7 +128,7 @@ export class PostgreSQLDatabaseTasks {
     await this.create(true);
   }
 
-  structureDump(filename: string, extraFlags?: string | string[] | null): void {
+  async structureDump(filename: string, extraFlags?: string | string[] | null): Promise<void> {
     // Use --dbname=NAME instead of a positional argument so database names
     // beginning with "-" aren't parsed as pg_dump options.
     const args = [
@@ -142,12 +142,13 @@ export class PostgreSQLDatabaseTasks {
     if (extraFlags) {
       args.push(...(Array.isArray(extraFlags) ? extraFlags : [extraFlags]));
     }
-    this.runCmd("pg_dump", args, "dumping");
-    this.removeSqlHeaderComments(filename);
+    await this.runCmd("pg_dump", args, "dumping");
+    await this.removeSqlHeaderComments(filename);
   }
 
-  structureLoad(filename: string, extraFlags?: string | string[] | null): void {
-    const nullDevice = getOs().platform() === "win32" ? "NUL" : "/dev/null";
+  async structureLoad(filename: string, extraFlags?: string | string[] | null): Promise<void> {
+    const os = await getOsAsync();
+    const nullDevice = os.platform() === "win32" ? "NUL" : "/dev/null";
     // --dbname=NAME avoids psql treating a db name starting with "-" as a
     // flag.
     const args = [
@@ -164,7 +165,7 @@ export class PostgreSQLDatabaseTasks {
     if (extraFlags) {
       args.push(...(Array.isArray(extraFlags) ? extraFlags : [extraFlags]));
     }
-    this.runCmd("psql", args, "loading");
+    await this.runCmd("psql", args, "loading");
   }
 
   static register(): void {
@@ -231,8 +232,9 @@ export class PostgreSQLDatabaseTasks {
     return env;
   }
 
-  private runCmd(cmd: string, args: string[], action: string): void {
-    const result = getChildProcess().spawnSync(cmd, args, {
+  private async runCmd(cmd: string, args: string[], action: string): Promise<void> {
+    const childProcess = await getChildProcessAsync();
+    const result = childProcess.spawnSync(cmd, args, {
       env: this.psqlEnv(),
       encoding: "utf8",
     });
@@ -241,10 +243,10 @@ export class PostgreSQLDatabaseTasks {
     }
   }
 
-  private removeSqlHeaderComments(filename: string): void {
+  private async removeSqlHeaderComments(filename: string): Promise<void> {
     const fs = getFs();
     const path = getPath();
-    const os = getOs();
+    const os = await getOsAsync();
     const contents = fs.readFileSync(filename, "utf8");
     const lines = contents.split("\n");
     let i = 0;

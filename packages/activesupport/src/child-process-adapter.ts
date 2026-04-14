@@ -35,6 +35,31 @@ export function registerChildProcessAdapter(name: string, adapter: ChildProcessA
 }
 
 let nodeAttempted = false;
+let nodeAsyncPromise: Promise<boolean> | null = null;
+
+type NodeChildProcess = {
+  spawnSync: (cmd: string, args: string[], opts?: unknown) => SpawnSyncResult;
+};
+
+function wrap(cp: NodeChildProcess): ChildProcessAdapter {
+  return {
+    spawnSync(cmd, args, options) {
+      const result = cp.spawnSync(cmd, args, {
+        input: options?.input,
+        env: options?.env,
+        encoding: options?.encoding ?? "utf8",
+        cwd: options?.cwd,
+      });
+      return {
+        status: result.status,
+        signal: result.signal,
+        stdout: typeof result.stdout === "string" ? result.stdout : String(result.stdout ?? ""),
+        stderr: typeof result.stderr === "string" ? result.stderr : String(result.stderr ?? ""),
+        error: result.error,
+      };
+    },
+  };
+}
 
 function tryAutoRegisterNode(): boolean {
   if (registry.has("node")) return true;
@@ -53,30 +78,31 @@ function tryAutoRegisterNode(): boolean {
     const req = nodeModule.createRequire(
       typeof __filename !== "undefined" ? __filename : "file:///activesupport",
     );
-    const cp = req("node:child_process") as {
-      spawnSync: (cmd: string, args: string[], opts?: unknown) => SpawnSyncResult;
-    };
-    registry.set("node", {
-      spawnSync(cmd, args, options) {
-        const result = cp.spawnSync(cmd, args, {
-          input: options?.input,
-          env: options?.env,
-          encoding: options?.encoding ?? "utf8",
-          cwd: options?.cwd,
-        });
-        return {
-          status: result.status,
-          signal: result.signal,
-          stdout: typeof result.stdout === "string" ? result.stdout : String(result.stdout ?? ""),
-          stderr: typeof result.stderr === "string" ? result.stderr : String(result.stderr ?? ""),
-          error: result.error,
-        };
-      },
-    });
+    const cp = req("node:child_process") as NodeChildProcess;
+    registry.set("node", wrap(cp));
     return true;
   } catch {
     return false;
   }
+}
+
+function tryAutoRegisterNodeAsync(): Promise<boolean> {
+  if (registry.has("node")) return Promise.resolve(true);
+  if (!nodeAsyncPromise) {
+    nodeAsyncPromise = (async () => {
+      try {
+        if (typeof globalThis.process === "undefined" || !globalThis.process.versions?.node) {
+          return false;
+        }
+        const cp = (await import("node:child_process")) as unknown as NodeChildProcess;
+        registry.set("node", wrap(cp));
+        return true;
+      } catch {
+        return false;
+      }
+    })();
+  }
+  return nodeAsyncPromise;
 }
 
 function resolve(): ChildProcessAdapter {
@@ -97,8 +123,26 @@ function resolve(): ChildProcessAdapter {
   );
 }
 
+async function resolveAsync(): Promise<ChildProcessAdapter> {
+  const name = currentAdapterName;
+  try {
+    return resolve();
+  } catch (error) {
+    if (name) throw error;
+    if (await tryAutoRegisterNodeAsync()) {
+      resolved = registry.get("node")!;
+      return resolved;
+    }
+    throw error;
+  }
+}
+
 export function getChildProcess(): ChildProcessAdapter {
   return resolve();
+}
+
+export async function getChildProcessAsync(): Promise<ChildProcessAdapter> {
+  return resolveAsync();
 }
 
 export const childProcessAdapterConfig = {

@@ -7,7 +7,7 @@
 import type { DatabaseConfig } from "../database-configurations/database-config.js";
 import { DatabaseConfigurations } from "../database-configurations.js";
 import { ProtectedEnvironmentError } from "../migration.js";
-import { getFs, getPath, getCrypto } from "@blazetrails/activesupport";
+import { getFs, getPath, getCrypto, getOs } from "@blazetrails/activesupport";
 import { coercePort } from "./task-utils.js";
 
 /**
@@ -57,7 +57,17 @@ export class DatabaseTasks {
   }
 
   static fixturesPath: string = "test/fixtures";
-  static root: string = process.cwd();
+  private static _root: string | null = null;
+
+  static get root(): string {
+    if (this._root !== null) return this._root;
+    return getOs().cwd();
+  }
+
+  static set root(value: string) {
+    this._root = value;
+  }
+
   static seedLoader: { loadSeed(): void | Promise<void> } | null = null;
   static schemaFormat: SchemaFormat = "ts";
   static structureDumpFlags: string | string[] | Record<string, string | string[]> | null = null;

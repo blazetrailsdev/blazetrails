@@ -4,7 +4,7 @@
  * Mirrors: ActiveRecord::Tasks::MySQLDatabaseTasks
  */
 
-import { getFs, getChildProcess, type SpawnSyncResult } from "@blazetrails/activesupport";
+import { getFs, getChildProcessAsync, type SpawnSyncResult } from "@blazetrails/activesupport";
 import type { DatabaseAdapter } from "../adapter.js";
 import type { DatabaseConfig } from "../database-configurations/database-config.js";
 import { DatabaseAlreadyExists } from "../errors.js";
@@ -109,17 +109,17 @@ export class MySQLDatabaseTasks {
     return (this.configurationHash.collation as string) ?? null;
   }
 
-  structureDump(filename: string, extraFlags?: string | string[] | null): void {
+  async structureDump(filename: string, extraFlags?: string | string[] | null): Promise<void> {
     const args = this.prepareCommandOptions();
     args.push("--result-file", filename, "--no-data", "--routines", "--skip-comments");
     args.push(this.requireDatabaseName());
     if (extraFlags) {
       args.unshift(...(Array.isArray(extraFlags) ? extraFlags : [extraFlags]));
     }
-    this.runCmd("mysqldump", args, "dumping");
+    await this.runCmd("mysqldump", args, "dumping");
   }
 
-  structureLoad(filename: string, extraFlags?: string | string[] | null): void {
+  async structureLoad(filename: string, extraFlags?: string | string[] | null): Promise<void> {
     const args = this.prepareCommandOptions();
     args.push("--database", this.requireDatabaseName());
     if (extraFlags) {
@@ -127,7 +127,7 @@ export class MySQLDatabaseTasks {
     }
     const sqlBody = getFs().readFileSync(filename, "utf8");
     const stdin = `SET FOREIGN_KEY_CHECKS = 0;\n${sqlBody}\nSET FOREIGN_KEY_CHECKS = 1;\n`;
-    this.runCmd("mysql", args, "loading", stdin);
+    await this.runCmd("mysql", args, "loading", stdin);
   }
 
   static register(): void {
@@ -240,8 +240,9 @@ export class MySQLDatabaseTasks {
     }
   }
 
-  private runCmd(cmd: string, args: string[], action: string, stdin?: string): void {
-    const result: SpawnSyncResult = getChildProcess().spawnSync(cmd, args, {
+  private async runCmd(cmd: string, args: string[], action: string, stdin?: string): Promise<void> {
+    const childProcess = await getChildProcessAsync();
+    const result: SpawnSyncResult = childProcess.spawnSync(cmd, args, {
       encoding: "utf8",
       input: stdin,
       env: this.commandEnv(),

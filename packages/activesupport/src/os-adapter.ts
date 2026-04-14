@@ -9,6 +9,12 @@ export interface OsAdapter {
   tmpdir(): string;
   /** Normalized platform id, e.g. "linux", "darwin", "win32". */
   platform(): string;
+  /**
+   * Current working directory. On Node this is `process.cwd()`. Adapters
+   * for non-Node runtimes should return the logical root they'd like
+   * relative paths resolved against.
+   */
+  cwd(): string;
 }
 
 const registry = new Map<string, OsAdapter>();
@@ -21,6 +27,21 @@ export function registerOsAdapter(name: string, adapter: OsAdapter): void {
 }
 
 let nodeAttempted = false;
+let nodeAsyncPromise: Promise<boolean> | null = null;
+
+type NodeOs = { tmpdir: () => string; platform: () => string };
+
+function wrap(os: NodeOs): OsAdapter {
+  return {
+    tmpdir: () => os.tmpdir(),
+    platform: () => os.platform(),
+    cwd: () => {
+      const proc = (globalThis as { process?: { cwd?: () => string } }).process;
+      if (proc && typeof proc.cwd === "function") return proc.cwd();
+      throw new Error("process.cwd() is unavailable in this runtime");
+    },
+  };
+}
 
 function tryAutoRegisterNode(): boolean {
   if (registry.has("node")) return true;
@@ -39,12 +60,31 @@ function tryAutoRegisterNode(): boolean {
     const req = nodeModule.createRequire(
       typeof __filename !== "undefined" ? __filename : "file:///activesupport",
     );
-    const os = req("node:os") as { tmpdir: () => string; platform: () => string };
-    registry.set("node", { tmpdir: () => os.tmpdir(), platform: () => os.platform() });
+    const os = req("node:os") as NodeOs;
+    registry.set("node", wrap(os));
     return true;
   } catch {
     return false;
   }
+}
+
+function tryAutoRegisterNodeAsync(): Promise<boolean> {
+  if (registry.has("node")) return Promise.resolve(true);
+  if (!nodeAsyncPromise) {
+    nodeAsyncPromise = (async () => {
+      try {
+        if (typeof globalThis.process === "undefined" || !globalThis.process.versions?.node) {
+          return false;
+        }
+        const os = (await import("node:os")) as unknown as NodeOs;
+        registry.set("node", wrap(os));
+        return true;
+      } catch {
+        return false;
+      }
+    })();
+  }
+  return nodeAsyncPromise;
 }
 
 function resolve(): OsAdapter {
@@ -65,8 +105,26 @@ function resolve(): OsAdapter {
   );
 }
 
+async function resolveAsync(): Promise<OsAdapter> {
+  const name = currentAdapterName;
+  try {
+    return resolve();
+  } catch (error) {
+    if (name) throw error;
+    if (await tryAutoRegisterNodeAsync()) {
+      resolved = registry.get("node")!;
+      return resolved;
+    }
+    throw error;
+  }
+}
+
 export function getOs(): OsAdapter {
   return resolve();
+}
+
+export async function getOsAsync(): Promise<OsAdapter> {
+  return resolveAsync();
 }
 
 export const osAdapterConfig = {

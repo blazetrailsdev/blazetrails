@@ -43,7 +43,7 @@ export function _setDefaultEnvGetter(fn: () => string): void {
 
 // Registered by connection-handling.ts so DatabaseConfig#adapterClass and
 // #newConnection can resolve adapter classes without a circular import.
-type AdapterClassResolver = (adapterName: string) => Promise<new (arg: unknown) => unknown>;
+type AdapterClassResolver = (adapterName: string) => Promise<new (...args: any[]) => unknown>;
 let _adapterClassResolver: AdapterClassResolver | null = null;
 
 /** @internal Set by connection-handling.ts to break circular dependency */
@@ -126,7 +126,7 @@ export class DatabaseConfig {
    * adapter loader registered by connection-handling.ts (mirroring Rails'
    * ActiveRecord::ConnectionAdapters.resolve).
    */
-  async adapterClass(): Promise<new (arg: unknown) => unknown> {
+  async adapterClass(): Promise<new (...args: any[]) => unknown> {
     if (!_adapterClassResolver) {
       throw new Error("Adapter class resolver not registered — import connection-handling first");
     }

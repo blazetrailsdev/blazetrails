@@ -5,6 +5,7 @@ import { getFsAsync, getPathAsync } from "@blazetrails/activesupport";
 import { DatabaseConfigurations } from "./database-configurations.js";
 import { HashConfig } from "./database-configurations/hash-config.js";
 import { _setAdapterClassResolver } from "./database-configurations/database-config.js";
+import { resolve as resolveConnectionAdapter } from "./connection-adapters.js";
 import {
   AdapterNotFound,
   AdapterNotSpecified,
@@ -367,24 +368,10 @@ function appendToConnectedToStack(entry: {
   connectedToStack().push(entry);
 }
 
-const _adapterCache: Record<string, new (...args: any[]) => DatabaseAdapter> = {};
-
-async function _loadAdapter(normalized: string): Promise<new (...args: any[]) => DatabaseAdapter> {
-  if (_adapterCache[normalized]) return _adapterCache[normalized];
-  let Cls: new (...args: any[]) => DatabaseAdapter;
-  if (normalized === "sqlite") {
-    Cls = (await import("./connection-adapters/sqlite3-adapter.js")).SQLite3Adapter;
-  } else if (normalized === "postgresql") {
-    Cls = (await import("./adapters/postgresql-adapter.js")).PostgreSQLAdapter;
-  } else if (normalized === "mysql") {
-    Cls = (await import("./adapters/mysql2-adapter.js")).Mysql2Adapter;
-  } else {
-    throw new AdapterNotFound(
-      `Unknown database adapter "${normalized}". Supported adapters: postgresql, mysql, sqlite`,
-    );
-  }
-  _adapterCache[normalized] = Cls;
-  return Cls;
+// Delegates to ConnectionAdapters.resolve, which holds the registry of
+// pre-registered and user-registered adapters.
+async function _loadAdapter(name: string): Promise<new (arg: unknown) => DatabaseAdapter> {
+  return resolveConnectionAdapter(name);
 }
 
 export async function establishConnection(

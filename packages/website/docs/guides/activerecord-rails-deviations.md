@@ -37,19 +37,27 @@ await user.save();
 const posts = await user.posts.toArray();
 ```
 
+> The examples below import `transaction` from `@blazetrails/activerecord`
+> and pass the model class explicitly. Rails' `User.transaction do ... end`
+> is a class method; Trails exports a module-level function instead.
+
 Every read and every write is a `Promise`. Concretely:
 
-- **Finders**: `find`, `findBy`, `first`, `last`, `take`, `exists?`,
+- **Finders**: `find`, `findBy`, `first`, `last`, `take`, `exists`,
   `count`, `sum`, `minimum`, `maximum`, `pluck`, `ids`, `each`,
   `findEach`, `findInBatches`, `inBatches` — all async. See
-  `packages/activerecord/src/relation/finder-methods.ts`.
+  `packages/activerecord/src/relation/finder-methods.ts` and
+  `packages/activerecord/src/relation.ts` (`exists`, `findEach`).
 - **Relation materialization**: `toArray()` replaces Rails' `to_a`/
   implicit `each`, and is async. Relations are lazy like in Rails, but
   you have to explicitly await the terminal operation.
-- **Persistence**: `save`, `save!`, `create`, `update`, `update!`,
-  `destroy`, `destroy!`, `toggle!`, `touch`, `updateColumn`,
-  `updateColumns`, `increment!`, `decrement!` — all async. See
-  `packages/activerecord/src/persistence.ts`.
+- **Persistence**: `save`, `saveBang`, `create`, `update`, `updateBang`,
+  `destroy`, `destroyBang`, `toggleBang`, `touch`, `updateColumn`,
+  `updateColumns`, `incrementBang`, `decrementBang` — all async. See
+  `packages/activerecord/src/base.ts` and
+  `packages/activerecord/src/persistence.ts`. The Rails bang
+  convention (`save!`, `destroy!`) becomes a `Bang` suffix because `!`
+  isn't a legal identifier character in JS/TS.
 - **Associations**: `user.posts`, `post.author` return relations/
   promises — accessing them is async because loading them is.
 - **Schema / connection calls**: every adapter method (`executeQuery`,
@@ -70,8 +78,10 @@ access through async drivers.
 - Sequencing matters. `user.posts.toArray()` and `user.posts.count()`
   are separate round-trips unless you preload. Accidentally awaiting
   the same relation twice issues two queries.
-- Iteration is async: `for await (const record of Model.findEach())`
-  rather than `Model.find_each do |record| ... end`.
+- Iteration is async: `for await (const record of Model.all().findEach())`
+  rather than `Model.find_each do |record| ... end`. `findEach` lives on
+  `Relation`, not `Base`, so you start from `.all()` (or any other
+  relation-returning call).
 
 ## 2. Transactions: function, not block
 
@@ -87,9 +97,11 @@ end
 Trails:
 
 ```ts
-await User.transaction(async (tx) => {
-  await user.save();
-  await post.save();
+import { transaction } from "@blazetrails/activerecord";
+
+await transaction(User, async (tx) => {
+  await user.saveBang();
+  await post.saveBang();
 });
 ```
 
@@ -97,6 +109,11 @@ The shape is intentionally close: both pass a body that runs inside a
 transaction and rolls back on any thrown error. The differences:
 
 - The body is an **async function**, not a block.
+- There's no static `User.transaction`. The module-level `transaction`
+  function takes the model class as its first argument so it can find
+  the right adapter. An instance-level `record.transaction(fn)` is also
+  available (mirrors `ActiveRecord::Base#transaction`, see
+  `packages/activerecord/src/base.ts`).
 - **Transaction state rides on `AsyncLocalStorage`**, not a thread
   local. Nested `await`s see the correct surrounding transaction
   because the async context propagates automatically. See
@@ -133,7 +150,9 @@ pools are acquired per query rather than checked out per thread.
 `establishConnection` / `connectsTo` shape mirrors Rails; the
 underlying pool model is different because there are no threads to
 pool over. See `packages/activerecord/src/connection-handling.ts` and
-`docs/activerecord-connections-and-pools.md` for the full story.
+the [connections and pools
+notes](https://github.com/blazetrailsdev/trails/blob/main/docs/activerecord-connections-and-pools.md)
+for the full story.
 
 ## 5. Relation `method_missing` → typed `Proxy`
 
@@ -205,45 +224,27 @@ parse it yourself. We intentionally don't ship a half-implemented
 
 ## 10. Adapters (beyond the DB): `fs` and `crypto`
 
-Rails uses `File`, `FileUtils`, `OpenSSL`, and `SecureRandom`
-directly. That is fine on servers and impossible in browsers.
-ActiveSupport ships two adapters consumed by ActiveRecord:
-
-- **`fs-adapter.ts`** — `FsAdapter` interface with `readFileSync`,
-  `writeFileSync`, `existsSync`, `mkdirSync`, etc. Auto-registers
-  `node:fs` + `node:path` at runtime when available. A browser host
-  registers an in-memory or OPFS-backed implementation.
-- **`crypto-adapter.ts`** — `CryptoAdapter` with `randomBytes`,
-  `randomUUID`, `createHash`, `createHmac`, `createCipheriv`,
-  `pbkdf2Sync`, `timingSafeEqual`. Auto-registers a Node-crypto
-  wrapper; browsers register a `window.crypto`-based adapter.
-
-Callers always go through `getFs()` / `getCrypto()` rather than
-importing `node:fs` / `node:crypto` directly. This is how signed IDs,
-message verifiers, schema cache persistence, and migration file I/O
-all keep working in the browser.
-
-More adapters are likely coming (e.g., process/env, timers) as
-browser surface area grows.
+See [Browser support via adapters](./#adapters) for the shared
+`FsAdapter` / `CryptoAdapter` primer. ActiveRecord is the heaviest
+consumer: signed IDs, message verifiers, schema cache persistence, and
+migration file I/O all route through `getFs()` / `getCrypto()` so they
+keep working in the browser.
 
 ## 11. Callbacks: async all the way down
 
-Already covered in the [ActiveModel doc](./activemodel-rails-deviations.md#callbacks-async-capable),
-but worth emphasizing here: because ActiveRecord callbacks commonly
-need to hit the DB (`beforeSave` cascading to related records, etc.),
-they are almost always async. Always `await` them when composing
-manually; `save()` / `destroy()` / etc. do it for you.
+See [Block APIs → callback functions](./#block-apis) for the shared
+callback story. Worth emphasizing in ActiveRecord specifically: because
+callbacks here commonly need to hit the DB (`beforeSave` cascading to
+related records, etc.), they are almost always async. Always `await`
+them when composing manually; `save()` / `destroy()` / etc. do it for
+you.
 
-## 12. Naming / keyword args / symbols
+## 12. Naming, bang methods, keyword args, symbols
 
-- `Model.where(name: "dean", active: true)` →
-  `Model.where({ name: "dean", active: true })`.
-- `has_many :posts, dependent: :destroy` →
-  `Model.hasMany("posts", { dependent: "destroy" })`. String literals
-  replace symbols throughout the options surface.
-- snake_case → camelCase everywhere.
-
-These are systematic, not per-method.
+All cross-package — see the index for
+[method casing](./#method-casing), [bang methods](./#bang-methods),
+and [symbols/kwargs](./#symbols-kwargs). Every ActiveRecord API
+follows them.
 
 ## Summary
 

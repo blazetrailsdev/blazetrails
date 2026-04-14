@@ -19,15 +19,11 @@ visitors, and so on.
 
 ## Naming and arguments
 
-- **snake_case → camelCase.** Every method is renamed (`project` stays
-  `project`, `take` stays `take`, but `order_by` → `orderBy`, `from_clause`
-  → `fromClause`, etc.). This is systematic across the whole codebase and
-  not called out individually elsewhere.
-- **Keyword args → options objects.** Ruby's `Arel::Table.new(:users, as: "u")`
-  becomes `new Table("users", { as: "u" })`. No `**opts` splatting.
-- **Symbols → strings.** Ruby passes `:users` to `Arel::Table.new`; we pass
-  `"users"`. JavaScript has a `Symbol` primitive but no `:foo` literal, and
-  symbols-as-identifiers is not idiomatic TS.
+Arel inherits the cross-cutting conventions described in the guides
+index: [method casing](./#method-casing) (camelCase everywhere) and
+[symbols/kwargs → options objects](./#symbols-kwargs). So Ruby's
+`Arel::Table.new(:users, as: "u")` becomes `new Table("users", { as:
+"u" })`. Nothing Arel-specific about this.
 
 ## Symbol branding instead of class checks
 
@@ -47,17 +43,19 @@ This is a pure-TS concern; Rails never needs it.
 
 Rails Arel uses `method_missing` in a few places (notably for attribute
 access on `Arel::Table`: `users[:id]`). We don't use `Proxy` anywhere in
-Arel. `Table#[]` is a real method that takes a string and returns an
-`Attribute`. The call site is:
+Arel. TypeScript can't express a `Table#[]` method the way Ruby does, so
+`Table` exposes explicit accessors that take a string and return an
+`Attribute`:
 
 ```ts
 // Rails:  users[:id]
-// Trails: users.get("id")   // or: users.attribute("id")
+// Trails: users.get("id")   // or: users.attr("id")
 ```
 
-We considered a `Proxy`-backed `Table` that would make `users.id` work, but
-chose the explicit accessor because the Proxy would defeat TypeScript's
-property checking on the surrounding class. Typing wins over syntax.
+Both are defined in `packages/arel/src/table.ts`. We considered a
+`Proxy`-backed `Table` that would make `users.id` work, but chose the
+explicit accessor because the Proxy would defeat TypeScript's property
+checking on the surrounding class. Typing wins over syntax.
 
 ## Generic typing of nodes
 
@@ -84,11 +82,11 @@ returns a `Promise`. I/O happens in ActiveRecord's adapters, not here.
 
 ## Summary
 
-| Area                | Rails                       | Trails                                     |
-| ------------------- | --------------------------- | ------------------------------------------ |
-| Method names        | snake_case                  | camelCase                                  |
-| Arguments           | Ruby keyword args / symbols | Option objects / strings                   |
-| Node identity       | `is_a?` / `respond_to?`     | `Symbol.for` brands                        |
-| Dynamic attr access | `method_missing` on `Table` | Explicit `table.get("id")`                 |
-| Async               | N/A (sync)                  | Same — still sync                          |
-| Typing              | Dynamic                     | Generic `SelectManager<T>`, `Attribute<T>` |
+| Area                | Rails                       | Trails                                          |
+| ------------------- | --------------------------- | ----------------------------------------------- |
+| Method names        | snake_case                  | camelCase                                       |
+| Arguments           | Ruby keyword args / symbols | Option objects / strings                        |
+| Node identity       | `is_a?` / `respond_to?`     | `Symbol.for` brands                             |
+| Dynamic attr access | `method_missing` on `Table` | Explicit `table.get("id")` / `table.attr("id")` |
+| Async               | N/A (sync)                  | Same — still sync                               |
+| Typing              | Dynamic                     | Generic `SelectManager<T>`, `Attribute<T>`      |

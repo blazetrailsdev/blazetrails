@@ -419,7 +419,10 @@ async function establishWithConfig(
   config?: Record<string, unknown>,
 ): Promise<void> {
   const normalized = normalizeAdapterName(adapterName);
-  const AdapterClass = await _loadAdapter(normalized);
+  // Pass the original adapter name to the registry so caller overrides
+  // like register("mysql2", ...) aren't shadowed by normalization.
+  // `normalized` is only used below for adapter-arg construction.
+  const AdapterClass = await _loadAdapter(adapterName);
 
   let adapterArg: unknown;
   if (normalized === "sqlite") {

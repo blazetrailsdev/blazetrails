@@ -177,7 +177,8 @@ export class DatabaseConfigurations {
     if (typeof config === "object" && config !== null) {
       const opts = config as DatabaseConfigOptions;
       if (opts.url) {
-        return new UrlConfig(defaultEnv, "primary", opts.url, opts);
+        const { url, ...configWithoutUrl } = opts;
+        return new UrlConfig(defaultEnv, "primary", url, configWithoutUrl);
       }
       return new HashConfig(defaultEnv, "primary", opts);
     }

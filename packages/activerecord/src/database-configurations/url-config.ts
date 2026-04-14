@@ -34,6 +34,9 @@ function buildUrlHash(url: string): DatabaseConfigOptions {
     url.startsWith("jdbc:") ||
     url.startsWith("http:") ||
     url.startsWith("https:") ||
+    // Windows drive-letter paths (e.g. "C:\\path\\db.sqlite3") are filesystem
+    // paths, not URLs, even though they have a single-letter "scheme".
+    /^[A-Za-z]:[\\/]/.test(url) ||
     !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url)
   ) {
     return { url };

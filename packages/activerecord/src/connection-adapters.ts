@@ -14,7 +14,11 @@ export interface ConnectionAdapters {
 // Mirrors Rails ConnectionAdapters @adapters Hash storing [class_name, path].
 // In TS we can't use String constantize, so we store loader functions instead.
 type AdapterLoader = () => Promise<new (...args: any[]) => DatabaseAdapter>;
+type AdapterClass = new (...args: any[]) => DatabaseAdapter;
 const adapters = new Map<string, AdapterLoader>();
+// Memoize the loader's result so resolve() is effectively a cached lookup
+// (like Rails' adapter registry). Cleared when a name is re-registered.
+const resolved = new Map<string, Promise<AdapterClass>>();
 
 /**
  * Mirrors: ActiveRecord::ConnectionAdapters.register
@@ -27,6 +31,7 @@ const adapters = new Map<string, AdapterLoader>();
  */
 export function register(name: string, loader: AdapterLoader): void {
   adapters.set(name, loader);
+  resolved.delete(name);
 }
 
 /**
@@ -34,9 +39,10 @@ export function register(name: string, loader: AdapterLoader): void {
  *
  * Resolves an adapter name to its class.
  */
-export async function resolve(
-  adapterName: string,
-): Promise<new (...args: any[]) => DatabaseAdapter> {
+export async function resolve(adapterName: string): Promise<AdapterClass> {
+  const cached = resolved.get(adapterName);
+  if (cached) return cached;
+
   const loader = adapters.get(adapterName);
   if (!loader) {
     const available = [...adapters.keys()].sort().join(", ");
@@ -45,7 +51,12 @@ export async function resolve(
         `Available adapters are: ${available}.`,
     );
   }
-  return loader();
+  const promise = loader().catch((err) => {
+    resolved.delete(adapterName);
+    throw err;
+  });
+  resolved.set(adapterName, promise);
+  return promise;
 }
 
 // Pre-registered adapters matching Rails' canonical names.

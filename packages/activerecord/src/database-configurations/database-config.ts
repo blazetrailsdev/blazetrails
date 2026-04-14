@@ -221,14 +221,26 @@ export class DatabaseConfig {
   }
 }
 
-// Mirrors Ruby's String#to_i / to_f — non-numeric values coerce to 0, matching
-// Rails' silent coercion for config values that may arrive as query strings.
+// Mirrors Ruby's String#to_i / to_f. Parses leading sign+digits/float prefix
+// and returns 0 for non-numeric input. Matches Rails behavior for config
+// values that may arrive as strings from query params or env vars, e.g.
+// "5abc".to_i == 5, "5.2abc".to_f == 5.2, "abc".to_i == 0.
 function toInt(value: unknown): number {
-  const n = Number(value);
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? Math.trunc(value) : 0;
+  }
+  const match = String(value).match(/^\s*[+-]?\d+/);
+  if (!match) return 0;
+  const n = Number(match[0]);
   return Number.isFinite(n) ? Math.trunc(n) : 0;
 }
 
 function toFloat(value: unknown): number {
-  const n = Number(value);
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+  const match = String(value).match(/^\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/);
+  if (!match) return 0;
+  const n = Number(match[0]);
   return Number.isFinite(n) ? n : 0;
 }

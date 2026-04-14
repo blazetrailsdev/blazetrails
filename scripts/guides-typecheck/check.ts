@@ -196,11 +196,15 @@ export function remapDiagnostics(
 
 function writeTsconfig(tmpDir: string): string {
   const tsconfigPath = path.join(tmpDir, "tsconfig.json");
+  // Match the root tsconfig.json so guide snippets type-check under
+  // the same module/resolution semantics as the real packages.
+  // Divergence here (e.g. "bundler" vs "Node16") risks snippets that
+  // pass CI but fail for real consumers.
   const config = {
     compilerOptions: {
       target: "ES2022",
-      module: "ESNext",
-      moduleResolution: "bundler",
+      module: "Node16",
+      moduleResolution: "Node16",
       strict: true,
       noEmit: true,
       skipLibCheck: true,

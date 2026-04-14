@@ -725,3 +725,115 @@ describe("DatabaseTasksCheckSchemaFileMethods", () => {
     expect(DatabaseTasks.dumpSchemaFilename(config)).toBe("override.rb");
   });
 });
+
+describe("DatabaseTasksStructureDumpDispatchTest", () => {
+  beforeEach(() => {
+    DatabaseTasks.clearRegisteredTasks();
+    DatabaseTasks.structureDumpFlags = null;
+    DatabaseTasks.structureLoadFlags = null;
+  });
+
+  afterEach(() => {
+    DatabaseTasks.clearRegisteredTasks();
+    DatabaseTasks.structureDumpFlags = null;
+    DatabaseTasks.structureLoadFlags = null;
+  });
+
+  it("structure_dump dispatches to registered handler", async () => {
+    const calls: Array<{ filename: string; flags: unknown }> = [];
+    DatabaseTasks.registerTask("sqlite", {
+      structureDump: async (_c, filename, flags) => {
+        calls.push({ filename, flags: flags ?? null });
+      },
+    });
+    const config = new HashConfig("test", "primary", { adapter: "sqlite3" });
+    await DatabaseTasks.structureDump(config, "out.sql");
+    expect(calls).toEqual([{ filename: "out.sql", flags: null }]);
+  });
+
+  it("structure_load dispatches to registered handler", async () => {
+    const calls: string[] = [];
+    DatabaseTasks.registerTask("sqlite", {
+      structureLoad: async (_c, filename) => {
+        calls.push(filename);
+      },
+    });
+    const config = new HashConfig("test", "primary", { adapter: "sqlite3" });
+    await DatabaseTasks.structureLoad(config, "in.sql");
+    expect(calls).toEqual(["in.sql"]);
+  });
+
+  it("structure_dump raises when adapter does not support it", async () => {
+    DatabaseTasks.registerTask("sqlite", { create: async () => {} });
+    const config = new HashConfig("test", "primary", { adapter: "sqlite3" });
+    await expect(DatabaseTasks.structureDump(config, "out.sql")).rejects.toThrow(
+      /does not support structureDump/,
+    );
+  });
+
+  it("structure_load raises when adapter does not support it", async () => {
+    DatabaseTasks.registerTask("sqlite", { create: async () => {} });
+    const config = new HashConfig("test", "primary", { adapter: "sqlite3" });
+    await expect(DatabaseTasks.structureLoad(config, "in.sql")).rejects.toThrow(
+      /does not support structureLoad/,
+    );
+  });
+
+  it("structure_dump passes flag string when structureDumpFlags is a string", async () => {
+    let received: unknown = "unset";
+    DatabaseTasks.structureDumpFlags = "--no-tablespaces";
+    DatabaseTasks.registerTask("sqlite", {
+      structureDump: async (_c, _f, flags) => {
+        received = flags;
+      },
+    });
+    const config = new HashConfig("test", "primary", { adapter: "sqlite3" });
+    await DatabaseTasks.structureDump(config, "out.sql");
+    expect(received).toBe("--no-tablespaces");
+  });
+
+  it("structure_dump selects adapter-specific flags from a hash", async () => {
+    let received: unknown = "unset";
+    DatabaseTasks.structureDumpFlags = {
+      sqlite3: ["--sqlite-only"],
+      postgresql: ["--pg-only"],
+    };
+    DatabaseTasks.registerTask("sqlite", {
+      structureDump: async (_c, _f, flags) => {
+        received = flags;
+      },
+    });
+    const config = new HashConfig("test", "primary", { adapter: "sqlite3" });
+    await DatabaseTasks.structureDump(config, "out.sql");
+    expect(received).toEqual(["--sqlite-only"]);
+  });
+
+  it("structure_load selects adapter-specific flags from a hash", async () => {
+    let received: unknown = "unset";
+    DatabaseTasks.structureLoadFlags = {
+      sqlite3: ["--quiet"],
+      postgresql: ["--verbose"],
+    };
+    DatabaseTasks.registerTask("sqlite", {
+      structureLoad: async (_c, _f, flags) => {
+        received = flags;
+      },
+    });
+    const config = new HashConfig("test", "primary", { adapter: "sqlite3" });
+    await DatabaseTasks.structureLoad(config, "in.sql");
+    expect(received).toEqual(["--quiet"]);
+  });
+
+  it("explicit extraFlags argument overrides configured structureDumpFlags", async () => {
+    let received: unknown = "unset";
+    DatabaseTasks.structureDumpFlags = "--default-flag";
+    DatabaseTasks.registerTask("sqlite", {
+      structureDump: async (_c, _f, flags) => {
+        received = flags;
+      },
+    });
+    const config = new HashConfig("test", "primary", { adapter: "sqlite3" });
+    await DatabaseTasks.structureDump(config, "out.sql", "--explicit");
+    expect(received).toBe("--explicit");
+  });
+});

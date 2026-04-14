@@ -13,9 +13,24 @@ import {
 } from "@blazetrails/activesupport";
 import type { DatabaseAdapter } from "../adapter.js";
 import type { DatabaseConfig } from "../database-configurations/database-config.js";
+import { DatabaseAlreadyExists } from "../errors.js";
 import { DatabaseTasks } from "./database-tasks.js";
 
 const DEFAULT_ENCODING = process.env.CHARSET ?? "utf8";
+const DUPLICATE_DATABASE = "42P04";
+
+function coercePort(value: unknown, fallback: number): number {
+  if (value === undefined || value === null || value === "") return fallback;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function isPGDuplicateDatabaseError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const e = error as { code?: unknown; message?: unknown };
+  if (e.code === DUPLICATE_DATABASE) return true;
+  return typeof e.message === "string" && e.message.includes("already exists");
+}
 const ON_ERROR_STOP_1 = "ON_ERROR_STOP=1";
 const SQL_COMMENT_BEGIN = "--";
 
@@ -76,6 +91,14 @@ export class PostgreSQLDatabaseTasks {
     const admin = await this.connectAdmin();
     try {
       await admin.executeMutation(sql);
+    } catch (error) {
+      if (isPGDuplicateDatabaseError(error)) {
+        throw new DatabaseAlreadyExists(`Database '${dbName}' already exists`, {
+          sql,
+          cause: error,
+        });
+      }
+      throw error;
     } finally {
       await this.closeAdapter(admin);
     }
@@ -161,7 +184,7 @@ export class PostgreSQLDatabaseTasks {
     }
     return new PostgreSQLAdapter({
       host: (c.host as string) ?? "localhost",
-      port: (c.port as number) ?? 5432,
+      port: coercePort(c.port, 5432),
       database: "postgres",
       user: c.username as string | undefined,
       password: c.password as string | undefined,

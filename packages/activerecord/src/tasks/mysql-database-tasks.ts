@@ -7,7 +7,22 @@
 import { getFs, getChildProcess, type SpawnSyncResult } from "@blazetrails/activesupport";
 import type { DatabaseAdapter } from "../adapter.js";
 import type { DatabaseConfig } from "../database-configurations/database-config.js";
+import { DatabaseAlreadyExists } from "../errors.js";
 import { DatabaseTasks } from "./database-tasks.js";
+
+const ER_DB_CREATE_EXISTS = 1007;
+
+function isMySQLDatabaseExistsError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const e = error as { code?: unknown; errno?: unknown; message?: unknown };
+  if (e.code === "ER_DB_CREATE_EXISTS") return true;
+  if (e.errno === ER_DB_CREATE_EXISTS) return true;
+  return (
+    typeof e.message === "string" &&
+    e.message.includes("Can't create database") &&
+    e.message.includes("database exists")
+  );
+}
 
 type ConfigHash = Record<string, unknown>;
 
@@ -57,8 +72,19 @@ export class MySQLDatabaseTasks {
     const opts = this.creationOptions();
     const charset = opts.charset ? ` CHARACTER SET \`${this.escapeIdent(opts.charset)}\`` : "";
     const collation = opts.collation ? ` COLLATE \`${this.escapeIdent(opts.collation)}\`` : "";
-    const sql = `CREATE DATABASE \`${this.escapeIdent(this.requireDatabaseName())}\`${charset}${collation}`;
-    await this.withAdmin((admin) => admin.executeMutation(sql));
+    const dbName = this.requireDatabaseName();
+    const sql = `CREATE DATABASE \`${this.escapeIdent(dbName)}\`${charset}${collation}`;
+    try {
+      await this.withAdmin((admin) => admin.executeMutation(sql));
+    } catch (error) {
+      if (isMySQLDatabaseExistsError(error)) {
+        throw new DatabaseAlreadyExists(`Database '${dbName}' already exists`, {
+          sql,
+          cause: error,
+        });
+      }
+      throw error;
+    }
   }
 
   async drop(): Promise<void> {

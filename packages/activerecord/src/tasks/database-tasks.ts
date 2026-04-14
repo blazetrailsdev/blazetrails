@@ -7,7 +7,13 @@
 import type { DatabaseConfig } from "../database-configurations/database-config.js";
 import { DatabaseConfigurations } from "../database-configurations.js";
 import { ProtectedEnvironmentError } from "../migration.js";
-import { getFs, getPath } from "@blazetrails/activesupport";
+import { getFs, getPath, getCrypto } from "@blazetrails/activesupport";
+
+function coercePort(value: unknown, fallback: number): number {
+  if (value === undefined || value === null || value === "") return fallback;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
 
 export class DatabaseTasks {
   static get env(): string {
@@ -449,8 +455,11 @@ export class DatabaseTasks {
     }
 
     const path = getPath();
-    const absolute = path.isAbsolute(filename) ? filename : path.join(this.root, filename);
-    const href = "file://" + absolute.replace(/\\/g, "/").replace(/^\//, "/");
+    const absolute = path.isAbsolute(filename) ? filename : path.resolve(this.root, filename);
+    const forwardSlashed = absolute.replace(/\\/g, "/");
+    const href = forwardSlashed.startsWith("/")
+      ? `file://${forwardSlashed}`
+      : `file:///${forwardSlashed}`;
     const mod = (await import(href)) as {
       default?: (ctx: unknown) => Promise<void> | void;
     };
@@ -512,12 +521,13 @@ export class DatabaseTasks {
   }
 
   static async prepareAll(): Promise<void> {
+    const { DatabaseAlreadyExists } = await import("../errors.js");
     const configs = this.configsFor(this._normalizeEnv());
     for (const config of configs) {
       try {
         await this.create(config);
-      } catch {
-        // already exists
+      } catch (error) {
+        if (!(error instanceof DatabaseAlreadyExists)) throw error;
       }
     }
     await this.migrateAll();
@@ -583,12 +593,30 @@ export class DatabaseTasks {
     format: "ruby" | "sql" = DatabaseTasks.schemaFormat,
     file?: string,
   ): Promise<boolean> {
+    void format;
     const filename = file ?? this.schemaDumpPath(config);
     const fs = getFs();
-    if (!fs.existsSync(filename)) return false;
-    void format;
-    void this._adapterInstance;
-    return true;
+    if (!fs.existsSync(filename)) return true;
+
+    const adapter = this._adapterInstance;
+    if (!adapter) return false;
+
+    const { InternalMetadata } = await import("../internal-metadata.js");
+    const metadata = new InternalMetadata(adapter);
+    if (!(await metadata.tableExists())) return false;
+
+    const storedSha1 = await metadata.get("schema_sha1");
+    if (!storedSha1) return false;
+
+    const fileSha1 = this._schemaSha1(filename);
+    return storedSha1 === fileSha1;
+  }
+
+  private static _schemaSha1(filename: string): string {
+    const contents = getFs().readFileSync(filename, "utf-8");
+    const hash = getCrypto().createHash("sha1");
+    hash.update(contents);
+    return hash.digest("hex");
   }
 
   static setupInitialDatabaseYaml(): Record<string, unknown> {
@@ -628,9 +656,11 @@ export class DatabaseTasks {
     format: "ruby" | "sql" = DatabaseTasks.schemaFormat,
     file?: string,
   ): Promise<void> {
+    const { NoDatabaseError } = await import("../errors.js");
     try {
       await this.purge(config);
-    } catch {
+    } catch (error) {
+      if (!(error instanceof NoDatabaseError)) throw error;
       await this.create(config);
     }
     await this.loadSchema(config, format, file);
@@ -651,7 +681,7 @@ export class DatabaseTasks {
       if (c.url) return new PostgreSQLAdapter(String(c.url));
       return new PostgreSQLAdapter({
         host: (c.host as string) ?? "localhost",
-        port: (c.port as number) ?? 5432,
+        port: coercePort(c.port, 5432),
         database: config.database,
         user: c.username as string | undefined,
         password: c.password as string | undefined,
@@ -663,7 +693,7 @@ export class DatabaseTasks {
       if (c.url) return new Mysql2Adapter(String(c.url));
       return new Mysql2Adapter({
         host: (c.host as string) ?? "localhost",
-        port: (c.port as number) ?? 3306,
+        port: coercePort(c.port, 3306),
         database: config.database,
         user: c.username as string | undefined,
         password: c.password as string | undefined,

@@ -273,9 +273,12 @@ export class NoDatabaseError extends StatementInvalid {
   }
 }
 
-export class DatabaseAlreadyExists extends ActiveRecordError {
-  constructor(message?: string) {
-    super(message ?? "Database already exists");
+export class DatabaseAlreadyExists extends StatementInvalid {
+  constructor(
+    message?: string,
+    options?: { sql?: string; binds?: unknown[]; connectionPool?: unknown; cause?: unknown },
+  ) {
+    super(message ?? "Database already exists", options);
     this.name = "DatabaseAlreadyExists";
   }
 }

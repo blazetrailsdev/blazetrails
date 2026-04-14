@@ -565,8 +565,8 @@ export class AssociationReflection extends MacroReflection {
     const name = this.inverseName();
     if (!name) return null;
     if (this._inverseOfCache !== undefined) return this._inverseOfCache;
-    this._inverseOfCache = _reflectOnAssociation(this.klass, name);
-    return this._inverseOfCache;
+    this._inverseOfCache = this.klass._reflectOnAssociation(name) ?? null;
+    return this._inverseOfCache!;
   }
 
   private _inverseNameCache: string | null | undefined = undefined;
@@ -592,11 +592,11 @@ export class AssociationReflection extends MacroReflection {
 
     let reflection: AssociationReflection | ThroughReflection | null | false;
     try {
-      reflection = _reflectOnAssociation(this.klass, inverseName);
+      reflection = this.klass._reflectOnAssociation(inverseName);
 
       if (!reflection && this.activeRecord.automaticallyInvertPluralAssociations) {
         const pluralInverseName = pluralize(inverseName);
-        reflection = _reflectOnAssociation(this.klass, pluralInverseName);
+        reflection = this.klass._reflectOnAssociation(pluralInverseName);
       }
     } catch (e: unknown) {
       // Rails: rescue NameError => error; raise unless error.name.to_s == class_name
@@ -807,7 +807,7 @@ export class AssociationReflection extends MacroReflection {
     if (this.hasInverse()) {
       const name = this.inverseName();
       if (!name) return null;
-      const inverseRelationship = _reflectOnAssociation(associatedClass, name);
+      const inverseRelationship = associatedClass._reflectOnAssociation(name);
       if (!inverseRelationship) {
         throw new Error(
           `Could not find the inverse association for ${this.name} (:${name} in ${associatedClass.name})`,
@@ -1095,8 +1095,8 @@ export class ThroughReflection extends AbstractReflection {
     if (throughRef) {
       try {
         const singular = singularize(this.name);
-        if (_reflectOnAssociation(throughRef.klass, singular)) return singular;
-        if (_reflectOnAssociation(throughRef.klass, this.name)) return this.name;
+        if (throughRef.klass._reflectOnAssociation(singular)) return singular;
+        if (throughRef.klass._reflectOnAssociation(this.name)) return this.name;
       } catch {
         /* klass resolution may fail */
       }
@@ -1117,8 +1117,8 @@ export class ThroughReflection extends AbstractReflection {
       return null;
     }
     try {
-      this._sourceReflectionCache = _reflectOnAssociation(throughRef.klass, srcName);
-      return this._sourceReflectionCache;
+      this._sourceReflectionCache = throughRef.klass._reflectOnAssociation(srcName) ?? null;
+      return this._sourceReflectionCache!;
     } catch {
       this._sourceReflectionCache = null;
       return null;
@@ -1127,8 +1127,8 @@ export class ThroughReflection extends AbstractReflection {
 
   get throughReflection(): AssociationReflection | ThroughReflection | null {
     if (this._throughReflectionCache !== undefined) return this._throughReflectionCache;
-    this._throughReflectionCache = _reflectOnAssociation(this.activeRecord, this.through);
-    return this._throughReflectionCache;
+    this._throughReflectionCache = this.activeRecord._reflectOnAssociation(this.through) ?? null;
+    return this._throughReflectionCache!;
   }
 
   get joinTable(): string | null {
@@ -1224,7 +1224,7 @@ export class ThroughReflection extends AbstractReflection {
     try {
       const singular = singularize(this.name);
       const candidates = [...new Set([singular, this.name])];
-      const matching = candidates.filter((n) => _reflectOnAssociation(throughRef.klass, n) != null);
+      const matching = candidates.filter((n) => throughRef.klass._reflectOnAssociation(n) != null);
 
       if (matching.length > 1) {
         throw new AmbiguousSourceReflectionForThroughAssociation(

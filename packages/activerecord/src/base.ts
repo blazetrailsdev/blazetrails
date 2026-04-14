@@ -30,6 +30,10 @@ import {
   AttributeAssignmentError,
 } from "./errors.js";
 import { AssociatedValidator } from "./validations/associated.js";
+import { AbsenceValidator as ARAbsenceValidator } from "./validations/absence.js";
+import { PresenceValidator as ARPresenceValidator } from "./validations/presence.js";
+import { LengthValidator as ARLengthValidator } from "./validations/length.js";
+import { NumericalityValidator as ARNumericalityValidator } from "./validations/numericality.js";
 import { AutosaveAssociation, clearAutosaveState } from "./autosave-association.js";
 import {
   RecordInvalid,
@@ -687,6 +691,62 @@ export class Base extends Model {
    */
   static _reflectOnAssociation(name: string): any {
     return (this as any)._reflections?.[name] ?? null;
+  }
+
+  /**
+   * Mirrors: ActiveRecord::Validations.validates
+   *
+   * Overrides Model.validates to use AR-specific validator classes for
+   * presence/absence/length/numericality. These AR validators add
+   * association awareness (filtering destroyed records, column precision).
+   */
+  static override validates(attribute: string, rules: Record<string, unknown>): void {
+    // Swap AM validator classes for AR equivalents that handle associations
+    const arRules = { ...rules };
+    if (arRules.presence) {
+      const opts = arRules.presence === true ? {} : (arRules.presence as Record<string, unknown>);
+      delete arRules.presence;
+      this.validatesWith(ARPresenceValidator, {
+        attributes: [attribute],
+        ...opts,
+        ...extractShared(arRules),
+      });
+    }
+    if (arRules.absence) {
+      const opts = arRules.absence === true ? {} : (arRules.absence as Record<string, unknown>);
+      delete arRules.absence;
+      this.validatesWith(ARAbsenceValidator, {
+        attributes: [attribute],
+        ...opts,
+        ...extractShared(arRules),
+      });
+    }
+    if (arRules.length) {
+      const opts = arRules.length as Record<string, unknown>;
+      delete arRules.length;
+      this.validatesWith(ARLengthValidator, {
+        attributes: [attribute],
+        ...opts,
+        ...extractShared(arRules),
+      });
+    }
+    if (arRules.numericality) {
+      const opts =
+        arRules.numericality === true ? {} : (arRules.numericality as Record<string, unknown>);
+      delete arRules.numericality;
+      this.validatesWith(ARNumericalityValidator, {
+        attributes: [attribute],
+        ...opts,
+        ...extractShared(arRules),
+      });
+    }
+    // Delegate remaining rules (inclusion, exclusion, format, etc.) to Model
+    const hasRemaining = Object.keys(arRules).some(
+      (k) => !["on", "if", "unless", "strict", "allowNil", "allowBlank"].includes(k),
+    );
+    if (hasRemaining) {
+      super.validates(attribute, arRules);
+    }
   }
 
   static validatesAssociated(...args: (string | Record<string, unknown>)[]): void {
@@ -3069,6 +3129,17 @@ export interface Base extends Included<typeof AutosaveAssociation> {}
 // in the class body, so `Base.findBySql` and `Base.connectsTo` carry the
 // exact generics, `this` parameter, and return type of their implementations.
 // ---------------------------------------------------------------------------
+
+function extractShared(rules: Record<string, unknown>): Record<string, unknown> {
+  const shared: Record<string, unknown> = {};
+  if (rules.on !== undefined) shared.on = rules.on;
+  if (rules.if !== undefined) shared.if = rules.if;
+  if (rules.unless !== undefined) shared.unless = rules.unless;
+  if (rules.strict) shared.strict = rules.strict;
+  if (rules.allowNil !== undefined) shared.allowNil = rules.allowNil;
+  if (rules.allowBlank !== undefined) shared.allowBlank = rules.allowBlank;
+  return shared;
+}
 
 extend(Base, ConnectionHandling.ClassMethods);
 extend(Base, Querying);

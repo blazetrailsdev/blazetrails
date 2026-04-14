@@ -4,7 +4,6 @@ import type { AssociationDefinition } from "./associations.js";
 import { underscore } from "@blazetrails/activesupport";
 
 const MARKED_FOR_DESTRUCTION = Symbol.for("blazetrails.markedForDestruction");
-const DESTROYED_BY_ASSOCIATION = Symbol.for("blazetrails.destroyedByAssociation");
 const VALIDATING_BELONGS_TO_FOR = Symbol.for("blazetrails.validatingBelongsToFor");
 const AUTOSAVING_BELONGS_TO_FOR = Symbol.for("blazetrails.autosavingBelongsToFor");
 
@@ -66,8 +65,38 @@ export function isChangedForAutosave(record: Base): boolean {
     (typeof (record as any).hasChangesToSave === "function" &&
       (record as any).hasChangesToSave()) ||
     !!(record as any).changed ||
-    isMarkedForDestruction(record)
+    isMarkedForDestruction(record) ||
+    _nestedRecordsChangedForAutosave(record)
   );
+}
+
+/**
+ * Mirrors: ActiveRecord::AutosaveAssociation (private) #nested_records_changed_for_autosave?
+ *
+ * Checks loaded autosave associations for changes without triggering lazy loads.
+ * Uses a recursion guard to prevent infinite loops.
+ */
+const _nestedCheckInProgress = new WeakSet<object>();
+
+function _nestedRecordsChangedForAutosave(record: Base): boolean {
+  if (_nestedCheckInProgress.has(record)) return false;
+  _nestedCheckInProgress.add(record);
+  try {
+    const ctor = record.constructor as typeof Base;
+    const associations: AssociationDefinition[] = (ctor as any)._associations ?? [];
+    for (const assoc of associations) {
+      if (!assoc.options.autosave) continue;
+      const cached =
+        (record as any)._cachedAssociations?.get(assoc.name) ??
+        (record as any)._preloadedAssociations?.get(assoc.name);
+      if (!cached) continue;
+      const children: Base[] = Array.isArray(cached) ? cached : [cached];
+      if (children.some((child) => isChangedForAutosave(child))) return true;
+    }
+    return false;
+  } finally {
+    _nestedCheckInProgress.delete(record);
+  }
 }
 
 /**
@@ -132,7 +161,7 @@ export function validOptions(): string[] {
  */
 export function clearAutosaveState(record: Base): void {
   (record as any)[MARKED_FOR_DESTRUCTION] = false;
-  (record as any)[DESTROYED_BY_ASSOCIATION] = null;
+  (record as any).destroyedByAssociation = null;
 }
 
 /**

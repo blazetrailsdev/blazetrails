@@ -19,6 +19,7 @@ export interface WhereChainScope<R> {
   whereNot(conditions: Record<string, unknown>): R;
   whereAssociated(...associationNames: string[]): R;
   whereMissing(...associationNames: string[]): R;
+  exists(conditions?: Record<string, unknown> | unknown): Promise<boolean>;
 }
 
 /**
@@ -46,10 +47,8 @@ export class WhereChain<R = any> {
     return this._scope.whereMissing(...associationNames);
   }
 
-  exists(...args: unknown[]): Promise<boolean> {
-    return (this._scope as unknown as { exists(...args: unknown[]): Promise<boolean> }).exists(
-      ...args,
-    );
+  exists(conditions?: Record<string, unknown> | unknown): Promise<boolean> {
+    return this._scope.exists(conditions);
   }
 }
 

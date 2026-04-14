@@ -47,10 +47,12 @@ import { touchAttributesWithTime } from "./timestamp.js";
 
 /**
  * A Relation returned from `load()` / `reload()` — a normal Relation with
- * the PromiseLike methods stripped so `await rel.load()` resolves to the
- * relation itself rather than being recursively unwrapped to `T[]`.
+ * `then` stripped so `await rel.load()` resolves to the relation itself
+ * rather than being recursively unwrapped through the thenable contract to
+ * `T[]`. (Matches `stripThenable` which only shadows `.then`; `.catch` and
+ * `.finally` aren't part of `Awaited<>`'s unwrap rules, so they stay.)
  */
-export type LoadedRelation<R> = Omit<R, "then" | "catch" | "finally">;
+export type LoadedRelation<R> = Omit<R, "then">;
 
 /**
  * Relation — the lazy, chainable query interface.
@@ -1688,6 +1690,11 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#calculate
    */
+  async calculate(operation: "count", column?: string): Promise<number | Record<string, number>>;
+  async calculate(
+    operation: "sum" | "average" | "minimum" | "maximum",
+    column: string,
+  ): Promise<number | null | Record<string, number>>;
   async calculate(
     operation: "count" | "sum" | "average" | "minimum" | "maximum",
     column?: string,

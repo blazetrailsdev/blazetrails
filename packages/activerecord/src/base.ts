@@ -1025,7 +1025,7 @@ export class Base extends Model {
   //   find(id, ...)   → variadic → array of records
   // For composite primary keys, `find([shop_id, id])` returns a single record;
   // in that case the tuple form is ambiguous with the array form — callers
-  // either cast, narrow, or use `.find_by` for clearer intent.
+  // either cast, narrow, or use `.findBy` for clearer intent.
   static find<T extends typeof Base>(this: T, ids: unknown[]): Promise<InstanceType<T>[]>;
   static find<T extends typeof Base>(this: T, id: unknown): Promise<InstanceType<T>>;
   static find<T extends typeof Base>(

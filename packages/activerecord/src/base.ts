@@ -129,17 +129,30 @@ export function quoteSqlValue(v: unknown, asArray = false): string {
 }
 
 /**
+ * A single column of a primary key.
+ *
+ * - `string` / `number` — the common scalar PK types (auto-increment ids, UUIDs).
+ * - `null` / `undefined` — column unset (e.g. a new record, or an unassigned
+ *   CPK column).
+ */
+export type PrimaryKeyScalar = string | number | null | undefined;
+
+/**
  * Value of a primary key on a persisted (or to-be-persisted) record.
  *
- * - `number` / `string` — the common scalar PK types (auto-increment ids, UUIDs).
- * - `Array<string | number>` — composite primary key tuple.
- * - `null` / `undefined` — unpersisted record, PK not yet assigned.
+ * - `PrimaryKeyScalar` — single-column primary key.
+ * - `PrimaryKeyScalar[]` — composite primary key tuple. Individual columns
+ *   may be null/undefined when the record isn't fully persisted
+ *   (e.g. `readAttribute` returned `null` for an unset CPK column).
  *
- * Subclasses with a known PK type can narrow this via `declare id: number`.
+ * When the concrete PK type is known, narrow at the use site (e.g.
+ * `record.id as number`) rather than redeclaring `id` on a subclass —
+ * `Base#id` is an accessor, and TS forbids overriding it with a
+ * differently-typed instance property.
  *
  * Mirrors: the value returned by `ActiveRecord::Base#id`.
  */
-export type PrimaryKeyValue = string | number | Array<string | number> | null | undefined;
+export type PrimaryKeyValue = PrimaryKeyScalar | PrimaryKeyScalar[];
 
 // Late-bound Relation constructor to break circular dependency.
 // Set by relation.ts when it loads.
@@ -2047,8 +2060,10 @@ export class Base extends Model {
   }
 
   /**
-   * The primary key value. Narrow to a more specific type via
-   * `declare id: number` (or similar) on subclasses when the PK type is known.
+   * The primary key value. When the concrete PK type is known, narrow it at
+   * the use site (e.g. `record.id as number`) rather than redeclaring `id`
+   * on a subclass — `id` is defined here as an accessor and TS forbids
+   * overriding an accessor with a differently-typed instance property.
    *
    * Mirrors: ActiveRecord::Base#id
    */

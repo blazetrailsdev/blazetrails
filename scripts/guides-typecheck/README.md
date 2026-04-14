@@ -18,6 +18,10 @@ pnpm build && pnpm guides:typecheck
 (Build is required so the `dist/*.d.ts` files exist for type
 resolution via each package's `exports` field.)
 
+Also enforces that every fenced block has a language tag — a bare
+` ``` ` with no language is rejected so nothing gets silently
+excluded from the check.
+
 ## Writing guide examples
 
 Every `ts` block is compiled as its own ES module. The following
@@ -30,6 +34,11 @@ don't need boilerplate:
 For anything else — including your own `Model`/`Base` subclasses —
 import from `@blazetrails/*` explicitly. That's also how real readers
 will copy the code, so it doubles as a sanity check on the example.
+
+**Each block is compiled in isolation.** A `class Post` defined in
+one block is not visible to the next. If two blocks need to share
+setup, either repeat the shared code or inline it with a comment like
+`// assuming Post is defined as above`.
 
 ## Skipping a block
 

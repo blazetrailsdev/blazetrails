@@ -206,6 +206,9 @@ importers:
       '@blazetrails/actionpack':
         specifier: workspace:*
         version: link:../../packages/actionpack
+      '@blazetrails/actionview':
+        specifier: workspace:*
+        version: link:../../packages/actionview
       '@blazetrails/activemodel':
         specifier: workspace:*
         version: link:../../packages/activemodel
@@ -221,6 +224,9 @@ importers:
       '@blazetrails/rack':
         specifier: workspace:*
         version: link:../../packages/rack
+      '@blazetrails/trailties':
+        specifier: workspace:*
+        version: link:../../packages/trailties
 
 packages:
 

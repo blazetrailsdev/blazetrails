@@ -10,6 +10,8 @@
     "@blazetrails/activesupport": "workspace:*",
     "@blazetrails/arel": "workspace:*",
     "@blazetrails/rack": "workspace:*",
-    "@blazetrails/actionpack": "workspace:*"
+    "@blazetrails/actionpack": "workspace:*",
+    "@blazetrails/actionview": "workspace:*",
+    "@blazetrails/trailties": "workspace:*"
   }
 }

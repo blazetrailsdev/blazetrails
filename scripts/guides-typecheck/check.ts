@@ -55,24 +55,40 @@ interface Block {
   skip: boolean;
 }
 
-function extractBlocks(filePath: string): Block[] {
-  const content = fs.readFileSync(filePath, "utf8");
+interface UntaggedBlock {
+  file: string;
+  line: number;
+}
+
+interface ExtractResult {
+  blocks: Block[];
+  untagged: UntaggedBlock[];
+}
+
+export function extractBlocks(filePath: string, content: string): ExtractResult {
   const lines = content.split("\n");
   const blocks: Block[] = [];
+  const untagged: UntaggedBlock[] = [];
   let inBlock = false;
   let blockStart = 0;
   let blockLines: string[] = [];
   let blockSkip = false;
+  let blockIsTs = false;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (!inBlock) {
-      const m = /^```(ts|typescript)(\s|$)/.exec(line);
-      if (m) {
+      const openMatch = /^```(\S*)/.exec(line);
+      if (openMatch) {
+        const lang = openMatch[1];
+        if (!lang) {
+          untagged.push({ file: filePath, line: i + 1 });
+        }
         inBlock = true;
-        blockStart = i + 1;
+        blockStart = i + 2;
         blockLines = [];
         blockSkip = false;
+        blockIsTs = lang === "ts" || lang === "typescript";
         for (let j = i - 1; j >= 0; j--) {
           const prev = lines[j].trim();
           if (prev === "") continue;
@@ -82,19 +98,51 @@ function extractBlocks(filePath: string): Block[] {
       }
     } else {
       if (/^```\s*$/.test(line)) {
-        blocks.push({
-          file: filePath,
-          startLine: blockStart,
-          code: blockLines.join("\n"),
-          skip: blockSkip,
-        });
+        if (blockIsTs) {
+          blocks.push({
+            file: filePath,
+            startLine: blockStart,
+            code: blockLines.join("\n"),
+            skip: blockSkip,
+          });
+        }
         inBlock = false;
       } else {
         blockLines.push(line);
       }
     }
   }
-  return blocks;
+  return { blocks, untagged };
+}
+
+function validatePackageCoverage(): void {
+  const packagesDir = path.join(REPO_ROOT, "packages");
+  const discovered: string[] = [];
+  for (const entry of fs.readdirSync(packagesDir)) {
+    const pkgJsonPath = path.join(packagesDir, entry, "package.json");
+    if (!fs.existsSync(pkgJsonPath)) continue;
+    const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf8")) as {
+      name?: string;
+      private?: boolean;
+    };
+    if (!pkg.name || !pkg.name.startsWith("@blazetrails/")) continue;
+    discovered.push(pkg.name);
+  }
+
+  const selfPkgPath = path.join(SCRIPT_DIR, "package.json");
+  const self = JSON.parse(fs.readFileSync(selfPkgPath, "utf8")) as {
+    dependencies?: Record<string, string>;
+  };
+  const declared = new Set(Object.keys(self.dependencies ?? {}));
+  const missing = discovered.filter(
+    (name) => !declared.has(name) && name !== "@blazetrails/website",
+  );
+  if (missing.length > 0) {
+    console.error(`✗ scripts/guides-typecheck/package.json is missing workspace deps for:`);
+    for (const m of missing) console.error(`  ${m}`);
+    console.error(`Add them as "workspace:*" so guide code blocks can import them, then re-run.`);
+    process.exit(1);
+  }
 }
 
 function writeTsconfig(tmpDir: string): string {
@@ -125,14 +173,28 @@ function main(): void {
     process.exit(1);
   }
 
+  validatePackageCoverage();
+
   const mdFiles = fs
     .readdirSync(GUIDES_DIR)
     .filter((f) => f.endsWith(".md"))
     .map((f) => path.join(GUIDES_DIR, f));
 
   const allBlocks: Block[] = [];
+  const allUntagged: UntaggedBlock[] = [];
   for (const file of mdFiles) {
-    allBlocks.push(...extractBlocks(file));
+    const { blocks, untagged } = extractBlocks(file, fs.readFileSync(file, "utf8"));
+    allBlocks.push(...blocks);
+    allUntagged.push(...untagged);
+  }
+
+  if (allUntagged.length > 0) {
+    console.error("✗ Found fenced code blocks without a language tag:");
+    for (const u of allUntagged) {
+      console.error(`  ${path.relative(REPO_ROOT, u.file)}:${u.line}`);
+    }
+    console.error("Every fenced block in a guide must declare its language (e.g. ```ts, ```sh).");
+    process.exit(1);
   }
 
   const checked = allBlocks.filter((b) => !b.skip);
@@ -194,4 +256,6 @@ function main(): void {
   process.exit(result.status ?? 1);
 }
 
-main();
+const isMainEntrypoint =
+  process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+if (isMainEntrypoint) main();

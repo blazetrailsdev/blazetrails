@@ -487,6 +487,23 @@ describeIfMysql("Mysql2Adapter", () => {
       expect(await adapter.primaryKey("widgets")).toBe("id");
     });
 
+    it("introspection accepts schema-qualified names", async () => {
+      // The implementation takes `schema.table` via parseMysqlName and
+      // routes through COALESCE(?, database()). Exercise that path so
+      // an accidental ordinal_position/seq_in_index swap or a missing
+      // ORDER BY change doesn't silently break qualified callers.
+      const rows = (await adapter.execute("SELECT DATABASE() AS db")) as Array<{
+        db?: string;
+        DB?: string;
+      }>;
+      const dbName = String(rows[0].db ?? rows[0].DB);
+      expect(await adapter.tableExists(`${dbName}.widgets`)).toBe(true);
+      expect(await adapter.tableExists(`\`${dbName}\`.\`widgets\``)).toBe(true);
+      expect(await adapter.primaryKey(`${dbName}.widgets`)).toBe("id");
+      const cols = await adapter.columns(`${dbName}.widgets`);
+      expect(cols.map((c) => c.name)).toEqual(["id", "name", "owner"]);
+    });
+
     it("columns() returns column metadata for every column", async () => {
       const cols = await adapter.columns("widgets");
       expect(cols.map((c) => c.name)).toEqual(["id", "name", "owner"]);

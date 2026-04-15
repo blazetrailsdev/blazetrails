@@ -261,7 +261,9 @@ export class Mysql2Adapter extends AdapterBase implements DatabaseAdapter {
   /**
    * Tables + views, deduped. Matches Rails'
    * `AbstractAdapter#data_sources` — the name SchemaCache.addAll calls
-   * through.
+   * through. information_schema.tables already returns distinct rows
+   * within a schema, but the Set pass is defensive + keeps the
+   * contract explicit for future callers.
    */
   async dataSources(): Promise<string[]> {
     const rows = await this.execute(
@@ -269,7 +271,7 @@ export class Mysql2Adapter extends AdapterBase implements DatabaseAdapter {
          WHERE table_schema = database()
          ORDER BY table_name`,
     );
-    return rows.map((r) => (r.name ?? r.NAME ?? r.TABLE_NAME) as string);
+    return [...new Set(rows.map((r) => (r.name ?? r.NAME ?? r.TABLE_NAME) as string))];
   }
 
   async tableExists(name: string): Promise<boolean> {
@@ -431,11 +433,15 @@ export class Mysql2Adapter extends AdapterBase implements DatabaseAdapter {
   /**
    * Split a `schema.table` or `` `schema`.`table` `` into `{schema, table}`.
    * Matches Rails' `extract_schema_qualified_name` regex from
-   * `mysql/schema_statements.rb`. Returns `schema: undefined` when
-   * `name` is an unqualified identifier.
+   * `mysql/schema_statements.rb`, with doubled-backtick escapes
+   * preserved inside the match so `` `my``table` `` is parsed as a
+   * single token. Returns `schema: undefined` when `name` is an
+   * unqualified identifier.
    */
   private parseMysqlName(name: string): { schema?: string; table: string } {
-    const parts = name.match(/[^`.\s]+|`[^`]*`/g) ?? [name];
+    // `[^`.\s]+` for bare identifiers, `` `(?:[^`]|``)*` `` for quoted
+    // identifiers where any `` inside the token is an escaped backtick.
+    const parts = name.match(/[^`.\s]+|`(?:[^`]|``)*`/g) ?? [name];
     const unquote = (s: string): string =>
       s.startsWith("`") && s.endsWith("`") ? s.slice(1, -1).replace(/``/g, "`") : s;
     if (parts.length >= 2) {

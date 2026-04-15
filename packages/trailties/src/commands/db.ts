@@ -358,6 +358,12 @@ export function dbCommand(): Command {
     .action(async () => {
       await withAdapter(async (adapter) => {
         const migrator = new Migrator(adapter, []);
+        // Rails: raise EnvironmentStorageError when
+        // internal_metadata.enabled? is false (use_metadata_table opt-out).
+        if (!migrator.internalMetadata.enabled) {
+          const { EnvironmentStorageError } = await import("@blazetrails/activerecord");
+          throw new EnvironmentStorageError();
+        }
         await migrator.internalMetadata.createTable();
         await migrator.internalMetadata.set("environment", migrator.currentEnvironment);
         console.log(`Stamped schema with environment: ${migrator.currentEnvironment}`);

@@ -28,6 +28,10 @@ export class NullInternalMetadata {
   async tableExists(): Promise<boolean> {
     return false;
   }
+
+  get enabled(): boolean {
+    return false;
+  }
 }
 
 export class InternalMetadata {
@@ -55,9 +59,22 @@ export class InternalMetadata {
     return InternalMetadata.TABLE_NAME;
   }
 
-  constructor(adapter: DatabaseAdapter) {
+  private _enabled: boolean;
+
+  constructor(adapter: DatabaseAdapter, options: { enabled?: boolean } = {}) {
     this._adapter = adapter;
     this.arelTable = new Table(this.tableName);
+    this._enabled = options.enabled ?? true;
+  }
+
+  /**
+   * Whether metadata storage is enabled for this configuration.
+   *
+   * Mirrors ActiveRecord::InternalMetadata#enabled? — false only when the
+   * db_config opts out via `use_metadata_table: false`. Defaults to true.
+   */
+  get enabled(): boolean {
+    return this._enabled;
   }
 
   async createTable(): Promise<void> {

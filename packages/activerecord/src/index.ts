@@ -241,6 +241,7 @@ export {
   EnvironmentStorageError,
   NoEnvironmentInSchemaError,
 } from "./migration.js";
+export { InternalMetadata, NullInternalMetadata } from "./internal-metadata.js";
 export type { MigrationProxy, MigrationLike } from "./migration.js";
 export type { DelegatedTypeOptions } from "./delegated-type.js";
 

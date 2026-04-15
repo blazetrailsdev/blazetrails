@@ -1809,9 +1809,12 @@ export class Migrator {
    * Mirrors: ActiveRecord::Tasks::DatabaseTasks.check_protected_environments!
    */
   async checkProtectedEnvironments(protectedEnvironments?: string[]): Promise<void> {
-    await this._ensureSchemaTable();
-    const stored = await this._internalMetadata.get("environment");
-    const env = stored ?? this._environment;
+    // Matches Rails: protected_environment? returns nil when nothing has
+    // been stamped yet, so a fresh DB under NODE_ENV=production doesn't
+    // trip the guard until it's actually been migrated and stamped.
+    // Read-only — no _ensureSchemaTable side effect.
+    const stored = await this.lastStoredEnvironment();
+    if (!stored) return;
 
     let envList = protectedEnvironments;
     if (!envList) {
@@ -1819,9 +1822,22 @@ export class Migrator {
       envList = Base.protectedEnvironments ?? ["production"];
     }
 
-    if (envList.includes(env)) {
-      throw new ProtectedEnvironmentError(env);
+    if (envList.includes(stored)) {
+      throw new ProtectedEnvironmentError(stored);
     }
+  }
+
+  /**
+   * Boolean mirror of {@link checkProtectedEnvironments}.
+   *
+   * Mirrors: ActiveRecord::MigrationContext#protected_environment?
+   */
+  async protectedEnvironment(): Promise<boolean> {
+    const stored = await this.lastStoredEnvironment();
+    if (!stored) return false;
+    const { Base } = await import("./base.js");
+    const list = Base.protectedEnvironments ?? ["production"];
+    return list.includes(stored);
   }
 
   get internalMetadata(): InternalMetadata {

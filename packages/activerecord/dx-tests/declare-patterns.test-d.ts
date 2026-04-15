@@ -147,7 +147,9 @@ class Article extends Base {
   // Plain in-memory setters (defineEnum only) — return void
   declare draft: () => void;
   declare published: () => void;
-  // Async persisting bang setters (defineEnum only) — return Promise<void>
+  // Async bang setters (defineEnum only). Sets the attribute in memory; if
+  // the record is already persisted, also calls `updateColumn(...)` — which
+  // bypasses validations and callbacks. For a new record, it's in-memory only.
   declare draftBang: () => Promise<void>;
   declare publishedBang: () => Promise<void>;
   // Class scopes (positive + negative, defineEnum only for `not*`)

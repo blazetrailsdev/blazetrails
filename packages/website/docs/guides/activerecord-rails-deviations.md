@@ -274,7 +274,10 @@ class Post extends Base {
   //                            the full CollectionProxy<Comment> API)
   declare isDraft: () => boolean; // enum predicate
   declare draft: () => void; // enum in-memory setter (defineEnum only)
-  declare draftBang: () => Promise<void>; // enum async persisting setter (defineEnum only)
+  declare draftBang: () => Promise<void>; // async (defineEnum only): sets
+  //                                         in-memory; if persisted, calls
+  //                                         updateColumn — bypasses
+  //                                         validations/callbacks
   declare static draft: () => Relation<Post>; // enum class scope
   declare static published: () => Relation<Post>; // enum class scope
   declare static notDraft: () => Relation<Post>; // enum `not*` scope (defineEnum only)

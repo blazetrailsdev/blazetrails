@@ -281,7 +281,9 @@ class Article extends Base {
   declare status: number;
   declare isDraft: () => boolean;
   declare draft: () => void; // plain in-memory setter
-  declare draftBang: () => Promise<void>; // async, persists via updateColumn
+  declare draftBang: () => Promise<void>; // async; in-memory on new records,
+  //                                         otherwise persists via updateColumn
+  //                                         (bypasses validations/callbacks)
   declare static draft: () => Relation<Article>;
   declare static notDraft: () => Relation<Article>;
   static {

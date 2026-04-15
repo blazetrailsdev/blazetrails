@@ -1214,7 +1214,7 @@ export class Base extends Model {
     const row = await this.adapter.selectOne(sql, "Find");
     if (!row) return null;
 
-    return this._instantiate(row) as InstanceType<T>;
+    return this._instantiate(row);
   }
 
   /**
@@ -1647,7 +1647,7 @@ export class Base extends Model {
     this: T,
     n?: number,
   ): Promise<InstanceType<T> | InstanceType<T>[] | null> {
-    return this.all().first(n as any);
+    return n === undefined ? this.all().first() : this.all().first(n);
   }
 
   /**
@@ -1670,7 +1670,7 @@ export class Base extends Model {
     this: T,
     n?: number,
   ): Promise<InstanceType<T> | InstanceType<T>[] | null> {
-    return this.all().last(n as any);
+    return n === undefined ? this.all().last() : this.all().last(n);
   }
 
   /**
@@ -1693,7 +1693,7 @@ export class Base extends Model {
     this: T,
     n?: number,
   ): Promise<InstanceType<T> | InstanceType<T>[] | null> {
-    return this.all().take(n as any);
+    return n === undefined ? this.all().take() : this.all().take(n);
   }
 
   /**
@@ -1945,15 +1945,18 @@ export class Base extends Model {
   /**
    * Instantiate a model from a database row (marks it as persisted).
    */
-  static _instantiate(row: Record<string, unknown>): Base {
+  static _instantiate<T extends typeof Base>(
+    this: T,
+    row: Record<string, unknown>,
+  ): InstanceType<T> {
     // If STI is enabled, delegate to the correct subclass
     const stiBase = getStiBase(this);
     const inheritanceCol = getInheritanceColumn(stiBase);
     if (inheritanceCol && row[inheritanceCol] && row[inheritanceCol] !== this.name) {
-      return instantiateSti(stiBase, row);
+      return instantiateSti(stiBase, row) as InstanceType<T>;
     }
 
-    const record = new this();
+    const record = new this() as InstanceType<T>;
     // Load DB values through deserialize (not cast) so encrypted types decrypt
     for (const [key, value] of Object.entries(row)) {
       record._attributes.writeFromDatabase(key, value);
@@ -3006,7 +3009,7 @@ export class Base extends Model {
     options?: { purpose?: string },
   ): Promise<InstanceType<T> | null> {
     const SignedIdModule = await loadSignedId();
-    return SignedIdModule.findSigned(this, signedId, options) as Promise<InstanceType<T> | null>;
+    return SignedIdModule.findSigned(this, signedId, options);
   }
 
   /**
@@ -3021,7 +3024,7 @@ export class Base extends Model {
     options?: { purpose?: string },
   ): Promise<InstanceType<T>> {
     const SignedIdModule = await loadSignedId();
-    return SignedIdModule.findSignedBang(this, signedId, options) as Promise<InstanceType<T>>;
+    return SignedIdModule.findSignedBang(this, signedId, options);
   }
 
   /**
@@ -3260,7 +3263,7 @@ export class Base extends Model {
         String(this.primaryKey),
         null,
       );
-    return r as InstanceType<T>;
+    return r;
   }
   static async findBy_<T extends typeof Base>(
     this: T,

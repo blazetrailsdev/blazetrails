@@ -9,7 +9,7 @@ import type { DatabaseConfig } from "../../database-configurations/database-conf
 import type { PoolConfig } from "../pool-config.js";
 import type { ConnectionDescriptor } from "./connection-descriptor.js";
 import { ConnectionNotEstablished, ConnectionTimeoutError } from "../../errors.js";
-import { SchemaReflection } from "../schema-cache.js";
+import { SchemaReflection, BoundSchemaReflection } from "../schema-cache.js";
 import { Reaper, type ReapablePool } from "./connection-pool/reaper.js";
 import { ConnectionLeasingQueue } from "./connection-pool/queue.js";
 import { getAsyncContext, type AsyncContext } from "@blazetrails/activesupport";
@@ -276,6 +276,26 @@ export class ConnectionPool implements ReapablePool {
 
   set schemaReflection(value: SchemaReflection) {
     this.poolConfig.schemaReflection = value;
+  }
+
+  /**
+   * Bound schema-cache handle for this pool. Mirrors Rails'
+   * `ConnectionPool#schema_cache`, which returns a
+   * `BoundSchemaReflection` wrapping the pool's SchemaReflection plus
+   * the pool itself. DatabaseTasks.dumpSchemaCache detects the
+   * reflection shape (dumpTo without addAll) and delegates straight
+   * to it — same code path Rails' `conn_or_pool.schema_cache.dump_to`
+   * drives.
+   *
+   * Memoized per-pool so callers consistently see the same reflection
+   * across invocations, matching Rails.
+   */
+  private _boundSchemaCache?: BoundSchemaReflection;
+  get schemaCache(): BoundSchemaReflection {
+    if (!this._boundSchemaCache) {
+      this._boundSchemaCache = new BoundSchemaReflection(this.schemaReflection, this);
+    }
+    return this._boundSchemaCache;
   }
 
   serverVersion(connection: DatabaseAdapter): unknown {

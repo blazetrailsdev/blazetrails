@@ -54,9 +54,28 @@ export class PoolConfig {
 
   get schemaReflection(): SchemaReflection {
     if (!this._schemaReflection) {
-      this._schemaReflection = new SchemaReflection(null);
+      // Rails: `SchemaReflection.new(db_config.lazy_schema_cache_path)` —
+      // the reflection remembers where to load its cache from on first
+      // access. HashConfig exposes lazySchemaCachePath when
+      // schemaCachePath is set, or falls back to
+      // `db/schema_cache.json`. A NullConfig or missing config leaves
+      // the cache path null, which is what SchemaReflection treats as
+      // "no persistent cache on disk" (possibleCacheAvailable → false).
+      const cachePath = this._lazySchemaCachePath();
+      this._schemaReflection = new SchemaReflection(cachePath);
     }
     return this._schemaReflection;
+  }
+
+  private _lazySchemaCachePath(): string | null {
+    const cfg = this.dbConfig as unknown as {
+      lazySchemaCachePath?: () => string | null | undefined;
+      schemaCachePath?: string | null;
+    };
+    if (typeof cfg?.lazySchemaCachePath === "function") {
+      return cfg.lazySchemaCachePath() ?? null;
+    }
+    return cfg?.schemaCachePath ?? null;
   }
 
   set schemaReflection(value: SchemaReflection) {

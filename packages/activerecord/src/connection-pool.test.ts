@@ -5,7 +5,7 @@ import {
 } from "./connection-adapters/abstract/connection-pool.js";
 import { ConnectionDescriptor } from "./connection-adapters/abstract/connection-descriptor.js";
 import { PoolConfig } from "./connection-adapters/pool-config.js";
-import { SchemaReflection } from "./connection-adapters/schema-cache.js";
+import { SchemaReflection, BoundSchemaReflection } from "./connection-adapters/schema-cache.js";
 import { HashConfig } from "./database-configurations/hash-config.js";
 import { createTestAdapter } from "./test-adapter.js";
 import { AbstractAdapter } from "./connection-adapters/abstract-adapter.js";
@@ -637,4 +637,88 @@ it("inspect does not show secrets", () => {
   const pool2 = new ConnectionPool(pc);
   expect(pool2.inspect()).toMatch(/shard="shard_one"/);
   expect(pool2.inspect()).toMatch(/role="reading"/);
+});
+
+describe("ConnectionPool schema cache", () => {
+  it("exposes a BoundSchemaReflection via pool.schemaCache", () => {
+    // Mirrors Rails ConnectionPool#schema_cache: returns a
+    // BoundSchemaReflection wrapping the pool's SchemaReflection +
+    // the pool itself. Previously pool.schemaCache was undefined on
+    // the real ConnectionPool class, so DatabaseTasks.dumpSchemaCache
+    // never hit the Rails reflection-delegation path.
+    const pool = makePool();
+    expect(pool.schemaCache).toBeInstanceOf(BoundSchemaReflection);
+  });
+
+  it("memoizes the bound reflection across calls", () => {
+    const pool = makePool();
+    expect(pool.schemaCache).toBe(pool.schemaCache);
+  });
+
+  it("BoundSchemaReflection.dumpTo(filename) round-trips through the pool", async () => {
+    // End-to-end Rails path: pool.schema_cache.dump_to(filename)
+    // allocates a fresh SchemaCache, addAll(pool) populates it via
+    // the pool's withConnection, dumpTo writes the JSON. Covers the
+    // full chain Rails uses for db:schema:cache:dump.
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const os = await import("node:os");
+    const { SQLite3Adapter } = await import("./connection-adapters/sqlite3-adapter.js");
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-pool-schema-"));
+    const dbFile = path.join(tmp, "pool.sqlite3");
+    const seeded = new SQLite3Adapter(dbFile);
+    try {
+      await seeded.executeMutation(
+        "CREATE TABLE gizmos (id INTEGER PRIMARY KEY, label TEXT NOT NULL)",
+      );
+    } finally {
+      await seeded.close();
+    }
+
+    const dbConfig = new HashConfig("test", "primary", {
+      adapter: "sqlite3",
+      database: dbFile,
+      reapingFrequency: null,
+    });
+    const pc = new PoolConfig(new ConnectionDescriptor("primary"), dbConfig, "writing", "default", {
+      adapterFactory: () => new SQLite3Adapter(dbFile),
+    });
+    const pool = new ConnectionPool(pc);
+    try {
+      const filename = path.join(tmp, "schema_cache.json");
+      await pool.schemaCache.dumpTo(filename);
+      const parsed = JSON.parse(fs.readFileSync(filename, "utf8")) as {
+        columns: Record<string, unknown[]>;
+      };
+      expect(Object.keys(parsed.columns)).toContain("gizmos");
+    } finally {
+      await pool.disconnect();
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("PoolConfig primes SchemaReflection with the config's schemaCachePath", () => {
+    // Rails: `SchemaReflection.new(db_config.lazy_schema_cache_path)`.
+    // HashConfig's lazySchemaCachePath returns the configured path
+    // (or defaultSchemaCachePath fallback), which the reflection
+    // remembers for its first on-disk load.
+    const dbConfig = new HashConfig("test", "primary", {
+      adapter: "sqlite3",
+      database: "test.db",
+      reapingFrequency: null,
+      schemaCachePath: "db/custom_cache.json",
+    });
+    const pc = new PoolConfig(new ConnectionDescriptor("primary"), dbConfig, "writing", "default", {
+      adapterFactory: createTestAdapter,
+    });
+    const reflection = pc.schemaReflection;
+    expect(reflection).toBeInstanceOf(SchemaReflection);
+    // Internal state check: the cache path reached the reflection.
+    // Reach in via a minimal cast — the field is private but the
+    // Rails-parity contract is 'reflection remembers its cache path',
+    // and this is the only way to assert it without exposing internals.
+    expect((reflection as unknown as { _cachePath: string | null })._cachePath).toBe(
+      "db/custom_cache.json",
+    );
+  });
 });

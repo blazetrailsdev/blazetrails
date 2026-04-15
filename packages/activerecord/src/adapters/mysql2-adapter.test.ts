@@ -572,13 +572,21 @@ describeIfMysql("Mysql2Adapter", () => {
       // would poison SchemaCache; wrapping the expression in parens
       // matches Rails' IndexDefinition display.
       //
-      // Gate on the capability probe rather than try/catching CREATE —
-      // a try/catch-all would also swallow permissions errors or a
-      // genuine syntax regression, silently letting the test pass.
-      const hasExpression = await (
-        adapter as unknown as { statisticsHasExpressionColumn(): Promise<boolean> }
-      ).statisticsHasExpressionColumn();
-      if (!hasExpression) return;
+      // Gate on a DB-side probe rather than try/catching CREATE (a
+      // blanket catch would also swallow permissions errors or a
+      // genuine syntax regression) and rather than reaching into a
+      // private adapter helper (couples the test to implementation
+      // details). Query information_schema.columns for
+      // STATISTICS.EXPRESSION directly — the column exists on MySQL
+      // 8.0.13+, absent on older MySQL and on MariaDB.
+      const capabilityRows = (await adapter.execute(
+        `SELECT 1 AS one FROM information_schema.columns
+           WHERE table_schema = 'information_schema'
+           AND table_name = 'STATISTICS'
+           AND column_name = 'EXPRESSION'
+           LIMIT 1`,
+      )) as Array<unknown>;
+      if (capabilityRows.length === 0) return;
 
       await adapter.exec("CREATE INDEX `widgets_on_lower_name` ON `widgets` ((LOWER(`name`)))");
       const idx = await adapter.indexes("widgets");

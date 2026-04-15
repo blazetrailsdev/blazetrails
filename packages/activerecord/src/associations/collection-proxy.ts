@@ -97,53 +97,65 @@ export class CollectionProxy<T extends Base = Base> {
     return this._target.at(index);
   }
 
-  map<U>(fn: (record: T, index: number, all: readonly T[]) => U): U[] {
-    return this._target.map(fn);
+  map<U>(fn: (record: T, index: number, all: readonly T[]) => U, thisArg?: unknown): U[] {
+    return this._target.map(fn, thisArg);
   }
 
-  filter(fn: (record: T, index: number, all: readonly T[]) => unknown): T[] {
-    return this._target.filter(fn);
+  filter(fn: (record: T, index: number, all: readonly T[]) => unknown, thisArg?: unknown): T[] {
+    return this._target.filter(fn, thisArg);
   }
 
-  forEach(fn: (record: T, index: number, all: readonly T[]) => void): void {
-    this._target.forEach(fn);
+  forEach(fn: (record: T, index: number, all: readonly T[]) => void, thisArg?: unknown): void {
+    this._target.forEach(fn, thisArg);
   }
 
-  some(fn: (record: T, index: number, all: readonly T[]) => unknown): boolean {
-    return this._target.some(fn);
+  some(fn: (record: T, index: number, all: readonly T[]) => unknown, thisArg?: unknown): boolean {
+    return this._target.some(fn, thisArg);
   }
 
-  every(fn: (record: T, index: number, all: readonly T[]) => unknown): boolean {
-    return this._target.every(fn);
+  every(fn: (record: T, index: number, all: readonly T[]) => unknown, thisArg?: unknown): boolean {
+    return this._target.every(fn, thisArg);
   }
 
-  includes(record: T, fromIndex?: number): boolean {
-    return this._target.includes(record, fromIndex);
-  }
+  // `includes` and `find` are intentionally NOT added — they would
+  // shadow `Relation#includes(...associations)` (eager-loading) and
+  // `Relation#find(id)` (PK lookup) on the AssociationProxy. Reach for
+  // membership / array-find via `Array.from(proxy).includes(...)` /
+  // `Array.from(proxy).find(...)` (or `proxy.target.includes(...)`).
+  // Matches Rails' priority — CollectionProxy preserves the Relation
+  // surface and lets array semantics route through `to_a`.
 
   slice(start?: number, end?: number): T[] {
     return this._target.slice(start, end);
   }
 
-  reduce<U>(fn: (acc: U, record: T, index: number, all: readonly T[]) => U, initial: U): U {
-    return this._target.reduce(fn, initial);
+  reduce(fn: (acc: T, record: T, index: number, all: readonly T[]) => T): T;
+  reduce<U>(fn: (acc: U, record: T, index: number, all: readonly T[]) => U, initial: U): U;
+  reduce(...args: [unknown, ...unknown[]]): unknown {
+    // Forward verbatim so Array.prototype.reduce sees the right arity
+    // (with vs. without an initial value picks different semantics).
+    return (this._target.reduce as (...a: unknown[]) => unknown)(...args);
   }
 
   indexOf(record: T, fromIndex?: number): number {
     return this._target.indexOf(record, fromIndex);
   }
 
-  flatMap<U>(fn: (record: T, index: number, all: readonly T[]) => U | readonly U[]): U[] {
-    return this._target.flatMap(fn);
+  flatMap<U>(
+    fn: (record: T, index: number, all: readonly T[]) => U | readonly U[],
+    thisArg?: unknown,
+  ): U[] {
+    return this._target.flatMap(fn, thisArg);
   }
 
   keys(): IterableIterator<number> {
     return this._target.keys();
   }
 
-  values(): IterableIterator<T> {
-    return this._target.values();
-  }
+  // `values()` is intentionally NOT added — it would shadow
+  // `Relation#values(): Record<string, unknown>` (query-state
+  // introspection used by the Relation merger). Use the proxy's
+  // built-in iteration (`for...of`, `[...proxy]`, `Array.from(proxy)`).
 
   entries(): IterableIterator<[number, T]> {
     return this._target.entries();

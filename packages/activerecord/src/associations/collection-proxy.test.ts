@@ -96,13 +96,38 @@ describe("CollectionProxy — array-likeness (Phase R.1)", () => {
     expect(seen).toEqual(["a", "b", "c"]);
   });
 
-  it("some / every / includes work", async () => {
+  it("some / every work", async () => {
     const blog = await blogWithPosts();
     const proxy = association<ApPost>(blog, "apPosts");
     expect(proxy.some((p) => p.title === "b")).toBe(true);
     expect(proxy.every((p) => p.title.length === 1)).toBe(true);
+  });
+
+  it("preserves Relation#includes (eager loading) — proxy.includes routes to Relation", async () => {
+    const blog = await blogWithPosts();
+    const proxy = association<ApPost>(blog, "apPosts") as any;
     const first = proxy.at(0)!;
-    expect(proxy.includes(first)).toBe(true);
+    // CollectionProxy intentionally does NOT define an Array-style
+    // includes — that would shadow Relation#includes(...associations).
+    // proxy.includes(...) falls through to Relation and builds an
+    // eager-loading Relation. Membership is via Array.from(proxy).
+    const rel = proxy.includes("apPosts");
+    expect(typeof rel?.where).toBe("function"); // it's a Relation, not a boolean
+    expect(Array.from(proxy as Iterable<ApPost>).includes(first)).toBe(true);
+    expect(proxy.target.includes(first)).toBe(true);
+  });
+
+  it("preserves Relation#values (query state) — proxy.values routes to Relation", async () => {
+    const blog = await blogWithPosts();
+    const proxy = association<ApPost>(blog, "apPosts") as any;
+    // CollectionProxy intentionally does NOT define an Array-style
+    // values() — that would shadow Relation#values which returns the
+    // query-state Record<string, unknown>. Iteration is via
+    // [Symbol.iterator] / spread / Array.from.
+    const v = proxy.values();
+    expect(typeof v).toBe("object");
+    expect(Array.isArray(v)).toBe(false); // confirms it's not the array iterator
+    expect([...(proxy as Iterable<ApPost>)].map((p) => p.title)).toEqual(["a", "b", "c"]);
   });
 
   it("slice returns a plain array shallow copy", async () => {
@@ -155,12 +180,33 @@ describe("CollectionProxy — array-likeness (Phase R.1)", () => {
     expect(arr.map((p) => p.title)).toEqual(["a", "b", "c"]);
   });
 
-  it("keys / values / entries work", async () => {
+  it("keys / entries work (values intentionally not added)", async () => {
     const blog = await blogWithPosts();
     const proxy = association<ApPost>(blog, "apPosts");
     expect([...proxy.keys()]).toEqual([0, 1, 2]);
-    expect([...proxy.values()].map((p) => p.title)).toEqual(["a", "b", "c"]);
     expect([...proxy.entries()].map(([i, p]) => `${i}:${p.title}`)).toEqual(["0:a", "1:b", "2:c"]);
+  });
+
+  it("array methods accept a thisArg (matches Array.prototype signatures)", async () => {
+    const blog = await blogWithPosts();
+    const proxy = association<ApPost>(blog, "apPosts");
+    const ctx = { suffix: "!" };
+    const titles = proxy.map(function (this: { suffix: string }, p) {
+      return p.title + this.suffix;
+    }, ctx);
+    expect(titles).toEqual(["a!", "b!", "c!"]);
+  });
+
+  it("reduce supports the no-initial overload (Array.prototype parity)", async () => {
+    const blog = await blogWithPosts();
+    const proxy = association<ApPost>(blog, "apPosts");
+    // Without an initial value, accumulator type is the element type (T).
+    // Use `_loaded` as a sentinel to grab the first record then concatenate.
+    const concat = proxy.reduce((acc, p) => {
+      // ts-ignore the lie: we're concatenating titles for a string demo
+      return { ...acc, title: (acc as ApPost).title + p.title } as ApPost;
+    });
+    expect(concat.title).toBe("abc");
   });
 
   it("Array.isArray returns false on the proxy (known limitation)", async () => {

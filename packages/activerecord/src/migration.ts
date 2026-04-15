@@ -1818,8 +1818,9 @@ export class Migrator {
     if (stored !== this._environment) {
       // Use the Rails-style (current, stored) constructor so the error
       // message stays consistent with DatabaseTasks'
-      // checkProtectedEnvironmentsBang and the NO_DATABASE_ENVIRONMENT_CHECK
-      // bypass line is baked into the shared template.
+      // checkProtectedEnvironmentsBang and the
+      // DISABLE_DATABASE_ENVIRONMENT_CHECK bypass line is baked into the
+      // shared template.
       throw new EnvironmentMismatchError(this._environment, stored);
     }
   }

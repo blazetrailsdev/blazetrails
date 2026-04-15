@@ -487,6 +487,14 @@ describeIfMysql("Mysql2Adapter", () => {
       expect(await adapter.primaryKey("widgets")).toBe("id");
     });
 
+    it("rejects three-part identifiers instead of silently truncating", async () => {
+      // MySQL doesn't have a nested catalog concept, so `a.b.c` is
+      // invalid input. The prior behavior silently took the first two
+      // parts, which pointed introspection at a completely different
+      // table. Fail loudly instead.
+      await expect(adapter.tableExists("a.b.c")).rejects.toThrow(/Invalid MySQL identifier/);
+    });
+
     it("introspection accepts schema-qualified names", async () => {
       // The implementation takes `schema.table` via parseMysqlName and
       // routes through COALESCE(?, database()). Exercise that path so

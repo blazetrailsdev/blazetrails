@@ -489,6 +489,12 @@ export class Mysql2Adapter extends AdapterBase implements DatabaseAdapter {
    * preserved inside the match so `` `my``table` `` is parsed as a
    * single token. Returns `schema: undefined` when `name` is an
    * unqualified identifier.
+   *
+   * Requires exactly one or two parts — a three-part name like
+   * `a.b.c` is invalid in MySQL (no nested catalog concept) and
+   * silently dropping `.c` would point introspection at the wrong
+   * table. Throws instead. Aligns with the PG parser's strictness in
+   * `packages/activerecord/src/connection-adapters/postgresql/utils.ts`.
    */
   private parseMysqlName(name: string): { schema?: string; table: string } {
     // `[^`.\s]+` for bare identifiers, `` `(?:[^`]|``)*` `` for quoted
@@ -496,10 +502,15 @@ export class Mysql2Adapter extends AdapterBase implements DatabaseAdapter {
     const parts = name.match(/[^`.\s]+|`(?:[^`]|``)*`/g) ?? [name];
     const unquote = (s: string): string =>
       s.startsWith("`") && s.endsWith("`") ? s.slice(1, -1).replace(/``/g, "`") : s;
-    if (parts.length >= 2) {
+    if (parts.length === 2) {
       return { schema: unquote(parts[0]), table: unquote(parts[1]) };
     }
-    return { table: unquote(parts[0] ?? name) };
+    if (parts.length === 1) {
+      return { table: unquote(parts[0]) };
+    }
+    throw new Error(
+      `Invalid MySQL identifier "${name}": expected "table" or "schema.table", got ${parts.length} parts.`,
+    );
   }
 
   /**

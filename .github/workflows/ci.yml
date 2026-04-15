@@ -96,7 +96,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: >
-          pnpm vitest run --no-file-parallelism
+          pnpm vitest run
           packages/arel
           packages/activemodel
           packages/activesupport

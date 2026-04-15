@@ -23,15 +23,30 @@ export function resolveEnv(): string {
 }
 
 /**
- * Load the database configuration for the given environment.
- * Looks for config/database.ts or src/config/database.ts in the cwd.
+ * Shape of the exported object in config/database.ts: each env key maps
+ * to a DatabaseConfig, plus a few optional top-level keys (e.g.
+ * schemaFormat). Kept loose (`unknown`) so callers inspect the keys
+ * they need without the type fighting them.
  */
-export async function loadDatabaseConfig(
-  env?: string,
-  cwd: string = process.cwd(),
-): Promise<DatabaseConfig> {
-  const resolvedEnv = env ?? resolveEnv();
+export interface DatabaseConfigModule {
+  [key: string]: unknown;
+  schemaFormat?: string;
+}
 
+/**
+ * Locate + import the app's `config/database.*`. Centralized so we only
+ * pay the dynamic-import cost once per CLI invocation — both
+ * loadDatabaseConfig and resolveSchemaFormat route through here. Node's
+ * ESM loader caches by URL, so repeat calls for the same path return
+ * the same module without re-running side effects.
+ *
+ * Returns `null` when no config file is present — callers decide whether
+ * that's an error (loadDatabaseConfig) or just absence (resolver
+ * falling through to existence inference).
+ */
+export async function loadDatabaseConfigModule(
+  cwd: string = process.cwd(),
+): Promise<{ path: string; module: DatabaseConfigModule } | null> {
   // Prefer .ts (source of truth) over .js (compiled)
   const candidates = [
     path.join(cwd, "config", "database.ts"),
@@ -47,36 +62,51 @@ export async function loadDatabaseConfig(
       break;
     }
   }
+  if (!configPath) return null;
 
-  if (!configPath) {
+  let mod: { default?: DatabaseConfigModule } & DatabaseConfigModule;
+  try {
+    mod = (await import(pathToFileURL(configPath).href)) as typeof mod;
+  } catch (error) {
+    const rel = path.relative(cwd, configPath);
+    const enhanced = new Error(
+      `Failed to load database config from "${rel}": ${(error as Error).message}. ` +
+        `Run with tsx (e.g., "npx tsx node_modules/.bin/trails").`,
+    );
+    (enhanced as { cause?: unknown }).cause = error;
+    throw enhanced;
+  }
+  const module = (mod.default ?? mod) as DatabaseConfigModule;
+  return { path: configPath, module };
+}
+
+/**
+ * Load the database configuration for the given environment.
+ * Looks for config/database.ts or src/config/database.ts in the cwd.
+ */
+export async function loadDatabaseConfig(
+  env?: string,
+  cwd: string = process.cwd(),
+): Promise<DatabaseConfig> {
+  const resolvedEnv = env ?? resolveEnv();
+  const loaded = await loadDatabaseConfigModule(cwd);
+  if (!loaded) {
     throw new Error(
       "No database config found. Expected config/database.ts (.js) or src/config/database.ts (.js)",
     );
   }
 
-  let mod: any;
-  try {
-    mod = await import(pathToFileURL(configPath).href);
-  } catch (error: any) {
-    const rel = path.relative(cwd, configPath);
-    const enhanced = new Error(
-      `Failed to load database config from "${rel}": ${error.message}. ` +
-        `Run with tsx (e.g., "npx tsx node_modules/.bin/trails").`,
-    );
-    (enhanced as any).cause = error;
-    throw enhanced;
-  }
-  const configs = mod.default ?? mod;
-
-  const envConfig = configs[resolvedEnv];
+  const envConfig = (loaded.module as Record<string, unknown>)[resolvedEnv] as
+    | DatabaseConfig
+    | undefined;
   if (!envConfig) {
     throw new Error(
       `No database configuration for environment "${resolvedEnv}". ` +
-        `Available: ${Object.keys(configs).join(", ")}`,
+        `Available: ${Object.keys(loaded.module).join(", ")}`,
     );
   }
 
-  return envConfig as DatabaseConfig;
+  return envConfig;
 }
 
 export type SchemaFormat = "ts" | "js" | "sql";
@@ -124,32 +154,17 @@ export async function resolveSchemaFormat(
   // `config.active_record.schema_format` in config/application.rb; trails
   // folds it into config/database.ts so the one file holds everything a
   // db command needs to know.
-  const candidates = [
-    path.join(cwd, "config", "database.ts"),
-    path.join(cwd, "config", "database.js"),
-    path.join(cwd, "src", "config", "database.ts"),
-    path.join(cwd, "src", "config", "database.js"),
-  ];
-  for (const candidate of candidates) {
-    if (!fs.existsSync(candidate)) continue;
-    try {
-      const mod = (await import(pathToFileURL(candidate).href)) as {
-        default?: { schemaFormat?: string };
-        schemaFormat?: string;
-      };
-      const configs = mod.default ?? mod;
-      const fromConfig = (configs as { schemaFormat?: string }).schemaFormat;
-      if (fromConfig) {
-        const normalized = fromConfig.toLowerCase();
-        if (normalized === "ts" || normalized === "js" || normalized === "sql") {
-          return normalized;
-        }
-      }
-    } catch {
-      // Fall through to inference — broken config files are surfaced by
-      // the main loadDatabaseConfig call, not this lookup.
-    }
-    break;
+  //
+  // Routes through the shared loader so we don't double-import the
+  // config file — Node's ESM cache already dedups by URL, but funneling
+  // both call sites through one function keeps error handling (the
+  // "failed to load config" rethrow) in one place and surfaces real
+  // import failures instead of silently falling through to inference.
+  const loaded = await loadDatabaseConfigModule(cwd);
+  if (loaded?.module.schemaFormat) {
+    // Validate strictly — an unknown value in config is a misconfig, not
+    // something we want to paper over with silent inference.
+    return normalize(loaded.module.schemaFormat, `schemaFormat in ${loaded.path}`);
   }
 
   const dbDir = path.join(cwd, "db");

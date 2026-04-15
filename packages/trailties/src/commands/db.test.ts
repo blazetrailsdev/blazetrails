@@ -284,6 +284,20 @@ describe("resolveSchemaFormat", () => {
     await expect(resolveSchemaFormat({}, tmpDir)).rejects.toThrow(/SCHEMA_FORMAT env var/);
   });
 
+  it("rejects an invalid schemaFormat in the config file", async () => {
+    // Previously we silently fell through to inference when config had
+    // a garbage value. Now the config path validates the same way as
+    // --format and SCHEMA_FORMAT — misconfig should be a loud error.
+    fs.writeFileSync(
+      path.join(tmpDir, "config", "database.ts"),
+      `export default {
+  schemaFormat: "yaml",
+  development: { adapter: "sqlite3", database: ":memory:" },
+};`,
+    );
+    await expect(resolveSchemaFormat({}, tmpDir)).rejects.toThrow(/schemaFormat in .*database\.ts/);
+  });
+
   it("reads top-level schemaFormat from config/database.ts", async () => {
     fs.writeFileSync(
       path.join(tmpDir, "config", "database.ts"),

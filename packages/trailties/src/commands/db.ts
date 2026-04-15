@@ -772,7 +772,7 @@ export function dbCommand(): Command {
   cmd
     .command("schema:dump")
     .description(
-      "Dump the current database schema (format precedence: --format > config.schemaFormat > existing schema.ts/js/structure.sql > ts)",
+      "Dump the current database schema (format precedence: --format > SCHEMA_FORMAT env > config.schemaFormat > existing schema.ts/js/structure.sql > ts)",
     )
     .option("--format <format>", "Override schema format: ts, js, or sql")
     .action(async (opts) => {
@@ -796,7 +796,7 @@ export function dbCommand(): Command {
   cmd
     .command("schema:load")
     .description(
-      "Load the schema (format precedence: --format > config.schemaFormat > existing schema.ts/js/structure.sql > ts)",
+      "Load the schema (format precedence: --format > SCHEMA_FORMAT env > config.schemaFormat > existing schema.ts/js/structure.sql > ts)",
     )
     .option("--format <format>", "Override schema format: ts, js, or sql")
     .action(async (opts) => {

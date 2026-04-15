@@ -910,4 +910,75 @@ export class CreatePosts extends Migration {
       await adapter.close();
     }
   });
+
+  it("Migrator with internalMetadataEnabled=false migrates without stamping", async () => {
+    const { Migrator } = await import("@blazetrails/activerecord");
+    const { SQLite3Adapter } =
+      await import("@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js");
+
+    const dbFile = path.join(tmpDir, "no-metadata-migrate.sqlite3");
+    const adapter = new SQLite3Adapter(dbFile);
+    try {
+      // Low-level MigrationLike shape (same pattern migrator.test.ts uses)
+      // — bypasses the Migration base class so the test doesn't depend on
+      // its schema-helper wiring.
+      const migrations = [
+        {
+          version: "20260101000000",
+          name: "CreateWidgets",
+          migration: () => ({
+            up: async (a: typeof adapter) => {
+              await a.executeMutation(`CREATE TABLE widgets (id INTEGER PRIMARY KEY, name TEXT)`);
+            },
+            down: async (a: typeof adapter) => {
+              await a.executeMutation(`DROP TABLE widgets`);
+            },
+          }),
+        },
+      ];
+      const migrator = new Migrator(adapter, migrations, {
+        internalMetadataEnabled: false,
+      });
+
+      // Migrate should succeed and NOT throw EnvironmentStorageError
+      // despite the stamping call site being hit.
+      await expect(migrator.migrate()).resolves.toBeUndefined();
+
+      // Table exists; metadata table does not.
+      const tables = (await adapter.execute(
+        `SELECT name FROM sqlite_master WHERE type='table' ORDER BY name`,
+      )) as Array<{ name: string }>;
+      const names = tables.map((t) => t.name);
+      expect(names).toContain("widgets");
+      expect(names).not.toContain("ar_internal_metadata");
+
+      // lastStoredEnvironment short-circuits to null when disabled.
+      expect(await migrator.lastStoredEnvironment()).toBeNull();
+    } finally {
+      await adapter.close();
+    }
+  });
+
+  it("lastStoredEnvironment returns null when metadata is disabled even if table exists", async () => {
+    const { Migrator, InternalMetadata } = await import("@blazetrails/activerecord");
+    const { SQLite3Adapter } =
+      await import("@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js");
+
+    const dbFile = path.join(tmpDir, "stale-metadata.sqlite3");
+    const adapter = new SQLite3Adapter(dbFile);
+    try {
+      // Seed a real metadata table + environment value with a separate
+      // enabled=true instance.
+      const enabledMeta = new InternalMetadata(adapter, { enabled: true });
+      await enabledMeta.createTable();
+      await enabledMeta.set("environment", "production");
+
+      // Disabled Migrator should still report null (no stale read).
+      const migrator = new Migrator(adapter, [], { internalMetadataEnabled: false });
+      expect(await migrator.lastStoredEnvironment()).toBeNull();
+      expect(await migrator.protectedEnvironment()).toBe(false);
+    } finally {
+      await adapter.close();
+    }
+  });
 });

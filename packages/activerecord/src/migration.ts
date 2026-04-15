@@ -1777,7 +1777,15 @@ export class Migrator {
     await this._strategy.exec(direction, migration, this._adapter);
     if (direction === "up") {
       await this._schemaMigration.recordVersion(proxy.version);
-      await this._internalMetadata.set("environment", this._environment);
+      // Skip stamping when internal metadata is disabled
+      // (`use_metadata_table: false`). Writing through a disabled
+      // InternalMetadata raises EnvironmentStorageError, which would
+      // otherwise break the migrate path for consumers that intentionally
+      // opt out. Rails' equivalent call site is similarly guarded via
+      // `internal_metadata.enabled?`.
+      if (this._internalMetadata.enabled) {
+        await this._internalMetadata.set("environment", this._environment);
+      }
     } else {
       await this._schemaMigration.deleteVersion(proxy.version);
     }
@@ -1795,7 +1803,11 @@ export class Migrator {
    * Mirrors: ActiveRecord::Tasks::DatabaseTasks.check_current_environment
    */
   async checkEnvironment(): Promise<void> {
-    if (process.env.DISABLE_DATABASE_ENVIRONMENT_CHECK === "1") return;
+    // Match Rails' `return if ENV["DISABLE_DATABASE_ENVIRONMENT_CHECK"]` —
+    // any non-empty value bypasses (consistent with DatabaseTasks'
+    // checkProtectedEnvironmentsBang so operators don't get mixed
+    // semantics across the two guards).
+    if (process.env.DISABLE_DATABASE_ENVIRONMENT_CHECK) return;
     await this._ensureSchemaTable();
     const stored = await this._internalMetadata.get("environment");
     if (stored === null) {
@@ -1896,11 +1908,15 @@ export class Migrator {
   }
 
   async lastStoredEnvironment(): Promise<string | null> {
+    // When metadata storage is explicitly opted out (`use_metadata_table:
+    // false`), treat the DB as unstamped even if a stale
+    // ar_internal_metadata table exists from a previous run — Rails'
+    // MigrationContext#last_stored_environment short-circuits on
+    // `internal_metadata.enabled?` before the table_exists? read.
+    if (!this._internalMetadata.enabled) return null;
     // Read-only: if ar_internal_metadata doesn't exist yet, the database
     // has never been stamped with an environment — return null without
-    // creating the table. Matches Rails'
-    // `MigrationContext#last_stored_environment` which short-circuits on
-    // `internal_metadata.table_exists?`.
+    // creating the table.
     if (!(await this._internalMetadata.tableExists())) return null;
     return this._internalMetadata.get("environment");
   }

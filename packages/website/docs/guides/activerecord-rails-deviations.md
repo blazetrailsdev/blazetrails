@@ -252,7 +252,13 @@ runtime (via `this.attribute`, `this.hasMany`, `this.scope`, `this.enum`)
 but the type system only sees them if you opt in with a `declare`:
 
 ```ts
-import { Base, Relation, defineEnum } from "@blazetrails/activerecord";
+import {
+  Base,
+  CollectionProxy,
+  Relation,
+  association,
+  defineEnum,
+} from "@blazetrails/activerecord";
 
 class Author extends Base {}
 class Comment extends Base {}

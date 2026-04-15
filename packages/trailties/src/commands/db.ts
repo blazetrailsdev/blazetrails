@@ -141,13 +141,12 @@ function toDbConfig(raw: RawConfig, envName: string = resolveEnv()): HashConfig 
 }
 
 /**
- * Run `fn` with `DatabaseTasks.databaseConfiguration` and the module-level
- * `DatabaseConfigurations.current` singleton temporarily pointed at a
- * DatabaseConfigurations built from `config`. Mirrors the capture/restore
- * pattern in `runProtectedEnvCheck` — lets us call into methods like
- * `DatabaseTasks.truncateAll` / `DatabaseTasks.prepareAll` that depend on
- * `configsFor` returning a non-empty list even when the CLI didn't
- * globally register configurations.
+ * Run `fn` with `DatabaseTasks.databaseConfiguration`, the module-level
+ * `DatabaseConfigurations.current` singleton, AND `DatabaseTasks.env`
+ * temporarily aligned with `config`. Captures/restores all three so
+ * callers can safely invoke methods like `DatabaseTasks.truncateAll(env)`
+ * that resolve the env via `_normalizeEnv()` (reads DatabaseTasks.env by
+ * default) and then call `configsFor` against it.
  */
 async function withRegisteredConfiguration<T>(
   config: HashConfig,
@@ -156,12 +155,15 @@ async function withRegisteredConfiguration<T>(
   const { DatabaseConfigurations } = await import("@blazetrails/activerecord");
   const previousTasksConfig = DatabaseTasks.databaseConfiguration;
   const previousCurrent = DatabaseConfigurations.current;
+  const previousEnv = DatabaseTasks.env;
   DatabaseTasks.databaseConfiguration = new DatabaseConfigurations([config]);
+  DatabaseTasks.env = config.envName;
   try {
     return await fn();
   } finally {
     DatabaseTasks.databaseConfiguration = previousTasksConfig;
     DatabaseConfigurations.current = previousCurrent;
+    DatabaseTasks.env = previousEnv;
   }
 }
 
@@ -537,29 +539,39 @@ export function dbCommand(): Command {
     .command("seed:replant")
     .description("Truncate all tables in the current environment and re-run seeds")
     .action(async () => {
-      await withAdapter(async (adapter, raw) => {
-        const config = toDbConfig(raw);
-        // Delegate through DatabaseTasks.truncateAll so the centralized
-        // protected-env check + multi-config iteration apply. Register
-        // the config first so configsFor returns a non-empty list.
-        await withRegisteredConfiguration(config, async () => {
-          await DatabaseTasks.truncateAll(config.envName);
-        });
+      // Run the truncate path first (no connection in the CLI — the
+      // DatabaseTasks.truncateAll handler opens/closes its own per-
+      // config connection). Open the seed adapter only after the
+      // protected-env guard has passed and the truncate has completed,
+      // so we don't double-connect.
+      const raw = normalizeRawConfig(await loadDatabaseConfig());
+      const config = toDbConfig(raw);
+      await withRegisteredConfiguration(config, async () => {
+        await DatabaseTasks.truncateAll(config.envName);
+      });
+
+      const adapter = await connectAdapter(raw);
+      try {
         const { Base } = await import("@blazetrails/activerecord");
         Base.adapter = adapter;
         await runSeed();
-      });
+      } finally {
+        await closeAdapter(adapter);
+      }
     });
 
   cmd
     .command("truncate_all")
     .description("Truncate all tables in the current environment")
     .action(async () => {
-      await withAdapter(async (_adapter, raw) => {
-        const config = toDbConfig(raw);
-        await withRegisteredConfiguration(config, async () => {
-          await DatabaseTasks.truncateAll(config.envName);
-        });
+      // No need for withAdapter — DatabaseTasks.truncateAll opens its
+      // own per-config connection. Connecting here first would create
+      // sqlite files as a side effect before the protected-env guard
+      // can abort.
+      const raw = normalizeRawConfig(await loadDatabaseConfig());
+      const config = toDbConfig(raw);
+      await withRegisteredConfiguration(config, async () => {
+        await DatabaseTasks.truncateAll(config.envName);
       });
     });
 
@@ -617,6 +629,15 @@ export function dbCommand(): Command {
       const raw = normalizeRawConfig(await loadDatabaseConfig("test"));
       const config = toDbConfig(raw, "test");
       await runProtectedEnvCheck(config, "test");
+      const filename = DatabaseTasks.schemaDumpPath(config);
+      if (!fs.existsSync(filename)) {
+        // Match the test:prepare / schema:load friendly-error path
+        // instead of letting loadSchema fail with a low-level dynamic-
+        // import error when there's nothing to load.
+        console.error(`No schema file found at ${filename}. Run \`trails db schema:dump\` first.`);
+        process.exitCode = 1;
+        return;
+      }
       await DatabaseTasks.purge(config);
       const adapter = await connectAdapter(raw);
       try {

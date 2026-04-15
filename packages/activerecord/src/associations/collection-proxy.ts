@@ -154,13 +154,18 @@ export class CollectionProxy<T extends Base = Base> {
     return this._target.every(predicate, thisArg);
   }
 
-  // `includes` and `find` are intentionally NOT added — they would
-  // shadow `Relation#includes(...associations)` (eager-loading) and
-  // `Relation#find(id)` (PK lookup) on the AssociationProxy. Reach for
-  // membership / array-find via `Array.from(proxy).includes(...)` /
-  // `Array.from(proxy).find(...)` (or `proxy.target.includes(...)`).
-  // Matches Rails' priority — CollectionProxy preserves the Relation
-  // surface and lets array semantics route through `to_a`.
+  // The Array-style `includes(record)` and `find(predicate)` overloads
+  // are intentionally NOT added:
+  //   - Array-style `includes(record)` would shadow
+  //     `Relation#includes(...associations)` (eager loading).
+  //   - Array-style `find(predicate)` would shadow this class's own
+  //     `async find(id)` and `Relation#find(id)` — the Rails-style
+  //     PK-lookup forms.
+  // Reach for Array semantics via `Array.from(proxy).includes(...)` /
+  // `Array.from(proxy).find(...)` (or `proxy.target.includes(...)` /
+  // `proxy.target.find(...)`). Matches Rails' priority — CollectionProxy
+  // preserves the Relation + PK-find surface and lets Array semantics
+  // route through `to_a`.
 
   slice(start?: number, end?: number): T[] {
     return this._target.slice(start, end);

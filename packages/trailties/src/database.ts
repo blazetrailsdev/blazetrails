@@ -85,12 +85,19 @@ export type SchemaFormat = "ts" | "js" | "sql";
  * Resolve the effective `schemaFormat` for CLI dump/load commands.
  *
  * Precedence (highest wins):
- *   1. Explicit CLI flag (`opts.format`)
- *   2. Top-level `schemaFormat` key in config/database.ts
- *   3. Existence inference — pick ts/js/sql based on which schema file
- *      is already present in `db/`. Lets users migrate to a different
- *      format by simply deleting the old file + dumping.
- *   4. Default "ts"
+ *   1. Explicit CLI flag (`opts.format`) — Rails' rake task arg equivalent
+ *   2. `SCHEMA_FORMAT` env var — matches Rails
+ *      `ENV.fetch("SCHEMA_FORMAT", ActiveRecord.schema_format).to_sym`
+ *      pattern used throughout `activerecord/lib/active_record/railties/
+ *      databases.rake`
+ *   3. Top-level `schemaFormat` key in config/database.ts — equivalent
+ *      of `ActiveRecord.schema_format` (set via
+ *      `config.active_record.schema_format` in Rails' application.rb)
+ *   4. Existence inference — pick ts/js/sql based on which schema file
+ *      is already present in `db/`. Trails-specific convenience so
+ *      deleting the old file + dumping migrates format without touching
+ *      config.
+ *   5. Default "ts"
  *
  * Returns the resolved format. Callers should assign it to
  * `DatabaseTasks.schemaFormat` before invoking dump/load.
@@ -99,13 +106,18 @@ export async function resolveSchemaFormat(
   opts: { format?: string } = {},
   cwd: string = process.cwd(),
 ): Promise<SchemaFormat> {
-  if (opts.format) {
-    const normalized = opts.format.toLowerCase();
+  const normalize = (raw: string, source: string): SchemaFormat => {
+    const normalized = raw.toLowerCase();
     if (normalized !== "ts" && normalized !== "js" && normalized !== "sql") {
-      throw new Error(`Invalid --format value "${opts.format}". Expected one of: ts, js, sql.`);
+      throw new Error(`Invalid ${source} value "${raw}". Expected one of: ts, js, sql.`);
     }
-    return normalized as SchemaFormat;
-  }
+    return normalized;
+  };
+
+  if (opts.format) return normalize(opts.format, "--format");
+
+  const envFormat = process.env.SCHEMA_FORMAT?.trim();
+  if (envFormat) return normalize(envFormat, "SCHEMA_FORMAT env var");
 
   // Inspect the config file for a top-level `schemaFormat` key (sibling
   // of the per-env configs). Rails sets this via

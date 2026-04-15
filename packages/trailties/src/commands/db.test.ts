@@ -225,15 +225,22 @@ describe("loadDatabaseConfig", () => {
 
 describe("resolveSchemaFormat", () => {
   let tmpDir: string;
+  const origSchemaFormatEnv = process.env.SCHEMA_FORMAT;
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "trails-sf-"));
     fs.mkdirSync(path.join(tmpDir, "config"), { recursive: true });
     fs.mkdirSync(path.join(tmpDir, "db"), { recursive: true });
+    // Phase 6 reads SCHEMA_FORMAT as a Rails-parity override; make sure
+    // tests start from a clean slot so a stray env var from the outer
+    // process doesn't flip results.
+    delete process.env.SCHEMA_FORMAT;
   });
 
   afterEach(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
+    if (origSchemaFormatEnv === undefined) delete process.env.SCHEMA_FORMAT;
+    else process.env.SCHEMA_FORMAT = origSchemaFormatEnv;
   });
 
   it("prefers an explicit --format flag over everything else", async () => {
@@ -254,6 +261,27 @@ describe("resolveSchemaFormat", () => {
     await expect(resolveSchemaFormat({ format: "yaml" }, tmpDir)).rejects.toThrow(
       /Invalid --format value/,
     );
+  });
+
+  it("honors SCHEMA_FORMAT env var below --format but above config", async () => {
+    // Matches Rails' rake: ENV.fetch("SCHEMA_FORMAT", ActiveRecord.schema_format).
+    fs.writeFileSync(
+      path.join(tmpDir, "config", "database.ts"),
+      `export default {
+  schemaFormat: "ts",
+  development: { adapter: "sqlite3", database: ":memory:" },
+};`,
+    );
+    process.env.SCHEMA_FORMAT = "sql";
+    // Env wins over config.
+    expect(await resolveSchemaFormat({}, tmpDir)).toBe("sql");
+    // --format still beats env.
+    expect(await resolveSchemaFormat({ format: "js" }, tmpDir)).toBe("js");
+  });
+
+  it("rejects invalid SCHEMA_FORMAT env values", async () => {
+    process.env.SCHEMA_FORMAT = "yaml";
+    await expect(resolveSchemaFormat({}, tmpDir)).rejects.toThrow(/SCHEMA_FORMAT env var/);
   });
 
   it("reads top-level schemaFormat from config/database.ts", async () => {

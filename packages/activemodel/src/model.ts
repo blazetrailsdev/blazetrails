@@ -571,7 +571,7 @@ export class Model {
   static beforeValidation<T extends typeof Model>(
     this: T,
     fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | CallbackObject,
-    conditions?: CallbackConditions,
+    conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
     this._ensureOwnCallbacks();
     this._callbackChain.register(
@@ -585,7 +585,7 @@ export class Model {
   static afterValidation<T extends typeof Model>(
     this: T,
     fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | CallbackObject,
-    conditions?: CallbackConditions,
+    conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
     this._ensureOwnCallbacks();
     this._callbackChain.register(
@@ -599,7 +599,7 @@ export class Model {
   static beforeSave<T extends typeof Model>(
     this: T,
     fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | CallbackObject,
-    conditions?: CallbackConditions,
+    conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
     _rejectOnOption(conditions);
     this._ensureOwnCallbacks();
@@ -609,7 +609,7 @@ export class Model {
   static afterSave<T extends typeof Model>(
     this: T,
     fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | CallbackObject,
-    conditions?: CallbackConditions,
+    conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
     _rejectOnOption(conditions);
     this._ensureOwnCallbacks();
@@ -619,7 +619,7 @@ export class Model {
   static beforeCreate<T extends typeof Model>(
     this: T,
     fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | CallbackObject,
-    conditions?: CallbackConditions,
+    conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
     _rejectOnOption(conditions);
     this._ensureOwnCallbacks();
@@ -629,7 +629,7 @@ export class Model {
   static afterCreate<T extends typeof Model>(
     this: T,
     fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | CallbackObject,
-    conditions?: CallbackConditions,
+    conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
     _rejectOnOption(conditions);
     this._ensureOwnCallbacks();
@@ -639,7 +639,7 @@ export class Model {
   static beforeUpdate<T extends typeof Model>(
     this: T,
     fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | CallbackObject,
-    conditions?: CallbackConditions,
+    conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
     _rejectOnOption(conditions);
     this._ensureOwnCallbacks();
@@ -649,7 +649,7 @@ export class Model {
   static afterUpdate<T extends typeof Model>(
     this: T,
     fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | CallbackObject,
-    conditions?: CallbackConditions,
+    conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
     _rejectOnOption(conditions);
     this._ensureOwnCallbacks();
@@ -659,7 +659,7 @@ export class Model {
   static beforeDestroy<T extends typeof Model>(
     this: T,
     fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | CallbackObject,
-    conditions?: CallbackConditions,
+    conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
     _rejectOnOption(conditions);
     this._ensureOwnCallbacks();
@@ -674,7 +674,7 @@ export class Model {
   static afterDestroy<T extends typeof Model>(
     this: T,
     fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | CallbackObject,
-    conditions?: CallbackConditions,
+    conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
     _rejectOnOption(conditions);
     this._ensureOwnCallbacks();
@@ -686,7 +686,7 @@ export class Model {
     fn:
       | ((record: InstanceType<T>, proceed: () => void | Promise<void>) => void | Promise<void>)
       | CallbackObject,
-    conditions?: CallbackConditions,
+    conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
     _rejectOnOption(conditions);
     this._ensureOwnCallbacks();
@@ -703,7 +703,7 @@ export class Model {
     fn:
       | ((record: InstanceType<T>, proceed: () => void | Promise<void>) => void | Promise<void>)
       | CallbackObject,
-    conditions?: CallbackConditions,
+    conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
     _rejectOnOption(conditions);
     this._ensureOwnCallbacks();
@@ -720,7 +720,7 @@ export class Model {
     fn:
       | ((record: InstanceType<T>, proceed: () => void | Promise<void>) => void | Promise<void>)
       | CallbackObject,
-    conditions?: CallbackConditions,
+    conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
     _rejectOnOption(conditions);
     this._ensureOwnCallbacks();
@@ -737,7 +737,7 @@ export class Model {
     fn:
       | ((record: InstanceType<T>, proceed: () => void | Promise<void>) => void | Promise<void>)
       | CallbackObject,
-    conditions?: CallbackConditions,
+    conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
     _rejectOnOption(conditions);
     this._ensureOwnCallbacks();
@@ -752,7 +752,7 @@ export class Model {
   static afterCommit<T extends typeof Model>(
     this: T,
     fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | CallbackObject,
-    conditions?: CallbackConditions,
+    conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
     if (conditions?.on !== undefined) {
       _validateOnCondition(conditions.on);
@@ -764,7 +764,7 @@ export class Model {
   static afterSaveCommit<T extends typeof Model>(
     this: T,
     fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | CallbackObject,
-    conditions?: CallbackConditions,
+    conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
     this.afterCommit(fn, { ...conditions, on: ["create", "update"] });
   }
@@ -772,7 +772,7 @@ export class Model {
   static afterCreateCommit<T extends typeof Model>(
     this: T,
     fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | CallbackObject,
-    conditions?: CallbackConditions,
+    conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
     this.afterCommit(fn, { ...conditions, on: "create" });
   }
@@ -780,7 +780,7 @@ export class Model {
   static afterUpdateCommit<T extends typeof Model>(
     this: T,
     fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | CallbackObject,
-    conditions?: CallbackConditions,
+    conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
     this.afterCommit(fn, { ...conditions, on: "update" });
   }
@@ -788,7 +788,7 @@ export class Model {
   static afterDestroyCommit<T extends typeof Model>(
     this: T,
     fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | CallbackObject,
-    conditions?: CallbackConditions,
+    conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
     this.afterCommit(fn, { ...conditions, on: "destroy" });
   }
@@ -796,7 +796,7 @@ export class Model {
   static afterRollback<T extends typeof Model>(
     this: T,
     fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | CallbackObject,
-    conditions?: CallbackConditions,
+    conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
     if (conditions?.on !== undefined) {
       _validateOnCondition(conditions.on);
@@ -813,7 +813,7 @@ export class Model {
   static afterInitialize<T extends typeof Model>(
     this: T,
     fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | CallbackObject,
-    conditions?: CallbackConditions,
+    conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
     this._ensureOwnCallbacks();
     this._callbackChain.register(
@@ -827,7 +827,7 @@ export class Model {
   static afterFind<T extends typeof Model>(
     this: T,
     fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | CallbackObject,
-    conditions?: CallbackConditions,
+    conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
     this._ensureOwnCallbacks();
     this._callbackChain.register("after", "find", fn as CallbackFn | CallbackObject, conditions);
@@ -836,7 +836,7 @@ export class Model {
   static afterTouch<T extends typeof Model>(
     this: T,
     fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | CallbackObject,
-    conditions?: CallbackConditions,
+    conditions?: CallbackConditions<InstanceType<T>>,
   ): void {
     this._ensureOwnCallbacks();
     this._callbackChain.register("after", "touch", fn as CallbackFn | CallbackObject, conditions);

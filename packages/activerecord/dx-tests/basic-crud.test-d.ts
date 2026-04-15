@@ -165,6 +165,19 @@ describe("basic CRUD DX — defining and using a model", () => {
         this.afterCommit((record) => {
           expectTypeOf(record).toEqualTypeOf<WithHooks>();
         });
+        // Conditions' `if` / `unless` predicates are typed too.
+        this.beforeSave(
+          (record) => {
+            expectTypeOf(record).toEqualTypeOf<WithHooks>();
+          },
+          {
+            if: (record) => {
+              expectTypeOf(record).toEqualTypeOf<WithHooks>();
+              return record.name.length > 0;
+            },
+            unless: (record) => record.name === "skip",
+          },
+        );
       }
     }
     assertType(WithHooks);

@@ -1222,6 +1222,9 @@ fs.writeFileSync(${JSON.stringify(seedMarker)}, String(prev + 1));`,
     expect(fs.existsSync(cachePath)).toBe(false);
     await runDb(["schema:cache:clear"]);
     expect(errs).toHaveLength(0);
+    // No "Cleared ..." log when nothing was deleted — the command
+    // previously logged unconditionally which falsely implied a deletion.
+    expect(logs.find((l) => l.includes("Cleared schema cache"))).toBeUndefined();
   });
 
   it("db schema:cache:dump captures user-created indexes", async () => {

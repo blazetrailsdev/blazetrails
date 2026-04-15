@@ -494,10 +494,13 @@ export class DatabaseTasks {
     // Rails: `conn_or_pool.schema_cache.dump_to(filename)`. On a real pool
     // `schema_cache` is a BoundSchemaReflection whose `dump_to` runs
     // `add_all(pool)` + write. Honor that when the caller wires up such a
-    // reflection — delegate straight to it. Adapter.schemaCache (plain
-    // SchemaCache with no bound pool) lacks `addAll`, so skip that path
-    // and let the fresh-cache fallback below do the populate+dump, which
-    // matches what Rails' BoundSchemaReflection.dump_to does internally.
+    // reflection — delegate straight to it. Adapter.schemaCache exposes a
+    // plain SchemaCache with no bound pool (SchemaCache DOES define
+    // `addAll`, but it takes a pool arg that the adapter-level getter
+    // can't supply), so don't treat that as the self-populating
+    // reflection path; let the fresh-cache fallback below drive the
+    // populate+dump, which is what BoundSchemaReflection.dump_to does
+    // internally.
     const reflection = (connOrPool as { schemaCache?: { dumpTo?: unknown; addAll?: unknown } })
       ?.schemaCache;
     if (

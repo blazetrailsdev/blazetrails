@@ -830,13 +830,14 @@ export function dbCommand(): Command {
 
   cmd
     .command("schema:cache:dump")
-    .description("Dump a db/schema_cache.json for every configuration in the current environment")
+    .description("Dump db/schema_cache.json for the primary database configuration")
     .action(async () => {
-      // Rails: `with_temporary_pool_for_each { |pool| dump_schema_cache(pool, filename) }`.
-      // Iterate every config in the env so multi-DB apps get one
-      // schema_cache.json per config. withTemporaryPoolForEach sets the
-      // migration connection for each pass, which is what dumpSchemaCache
-      // reads through.
+      // Rails iterates `with_temporary_pool_for_each { |pool| ... }` across
+      // every config in the env. trailties' loadDatabaseConfig only returns
+      // the primary config today, so `configsFor(envName)` — and therefore
+      // `withTemporaryPoolForEach` — sees exactly that one. The iterator
+      // shape is still Rails-faithful; it'll fan out automatically once the
+      // multi-DB config loader lands.
       const envName = resolveEnv();
       const raw = normalizeRawConfig(await loadDatabaseConfig(envName));
       const primary = toDbConfig(raw, envName);
@@ -853,17 +854,20 @@ export function dbCommand(): Command {
 
   cmd
     .command("schema:cache:clear")
-    .description(
-      "Delete the db/schema_cache.json file for every configuration in the current environment",
-    )
+    .description("Delete db/schema_cache.json for the primary database configuration")
     .action(async () => {
       // Rails: `configurations.configs_for(env_name: env).each { |c| clear_schema_cache(cache_dump_filename(c)) }`.
+      // trailties currently loads only the primary config; the loop is
+      // Rails-shaped and ready for multi-DB expansion.
       const envName = resolveEnv();
       const raw = normalizeRawConfig(await loadDatabaseConfig(envName));
       const primary = toDbConfig(raw, envName);
       await withRegisteredConfiguration(primary, async () => {
         for (const config of DatabaseTasks.configsFor(envName)) {
           const filename = DatabaseTasks.cacheDumpFilename(config);
+          // clearSchemaCache is a no-op on ENOENT; don't log "Cleared"
+          // unless we actually removed something.
+          if (!fs.existsSync(filename)) continue;
           DatabaseTasks.clearSchemaCache(filename);
           console.log(`Cleared schema cache at ${filename}`);
         }

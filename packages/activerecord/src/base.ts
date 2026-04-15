@@ -3000,9 +3000,13 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::SignedId.find_signed
    */
-  static async findSigned(signedId: string, options?: { purpose?: string }): Promise<Base | null> {
+  static async findSigned<T extends typeof Base>(
+    this: T,
+    signedId: string,
+    options?: { purpose?: string },
+  ): Promise<InstanceType<T> | null> {
     const SignedIdModule = await loadSignedId();
-    return SignedIdModule.findSigned(this, signedId, options);
+    return SignedIdModule.findSigned(this, signedId, options) as Promise<InstanceType<T> | null>;
   }
 
   /**
@@ -3011,9 +3015,13 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::SignedId.find_signed!
    */
-  static async findSignedBang(signedId: string, options?: { purpose?: string }): Promise<Base> {
+  static async findSignedBang<T extends typeof Base>(
+    this: T,
+    signedId: string,
+    options?: { purpose?: string },
+  ): Promise<InstanceType<T>> {
     const SignedIdModule = await loadSignedId();
-    return SignedIdModule.findSignedBang(this, signedId, options);
+    return SignedIdModule.findSignedBang(this, signedId, options) as Promise<InstanceType<T>>;
   }
 
   /**
@@ -3237,25 +3245,28 @@ export class Base extends Model {
   }
 
   // Underscore aliases for bang methods (Rails uses ! suffix, TS uses _ suffix)
-  static async first_(): Promise<Base> {
-    return (this as any).firstBang();
+  static async first_<T extends typeof Base>(this: T): Promise<InstanceType<T>> {
+    return this.firstBang();
   }
-  static async last_(): Promise<Base> {
-    return (this as any).lastBang();
+  static async last_<T extends typeof Base>(this: T): Promise<InstanceType<T>> {
+    return this.lastBang();
   }
-  static async take_(): Promise<Base> {
-    const r = await (this as any).all().take();
+  static async take_<T extends typeof Base>(this: T): Promise<InstanceType<T>> {
+    const r = await this.all().take();
     if (!r)
       throw new RecordNotFound(
-        `${(this as any).name} record not found`,
-        (this as any).name,
-        (this as any).primaryKey,
+        `${this.name} record not found`,
+        this.name,
+        String(this.primaryKey),
         null,
       );
-    return r;
+    return r as InstanceType<T>;
   }
-  static async findBy_(conditions: Record<string, unknown>): Promise<Base> {
-    return (this as any).findByBang(conditions);
+  static async findBy_<T extends typeof Base>(
+    this: T,
+    conditions: Record<string, unknown>,
+  ): Promise<InstanceType<T>> {
+    return this.findByBang(conditions);
   }
 
   previouslyNewRecord(): boolean {

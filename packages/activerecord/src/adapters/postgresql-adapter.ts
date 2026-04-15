@@ -806,7 +806,7 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
     // Rails' relkind 'r' + 'p' (plain + partitioned tables) — matches
     // `data_source_sql(name, type: "BASE TABLE")` in
     // `PostgreSQL::SchemaStatements#quoted_scope`.
-    return this._relkindExists(name, ["r", "p"]);
+    return this.relkindExists(name, ["r", "p"]);
   }
 
   /**
@@ -815,37 +815,45 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
    * materialized views as "view".
    */
   async viewExists(name: string): Promise<boolean> {
-    return this._relkindExists(name, ["v", "m"]);
+    return this.relkindExists(name, ["v", "m"]);
   }
 
   /**
    * Shared helper for table/view existence checks — lets both
-   * methods share Rails' pg_class-based predicate.
+   * methods share Rails' pg_class-based predicate. Uses
+   * `SELECT 1 ... LIMIT 1` so the planner short-circuits instead of
+   * counting every match.
    */
-  private async _relkindExists(name: string, relkinds: string[]): Promise<boolean> {
+  private async relkindExists(name: string, relkinds: string[]): Promise<boolean> {
     const { schema, table } = this.parseSchemaQualifiedName(name);
     if (schema) {
       // $1=schema, $2=table, $3..=relkinds
       const relPlaceholders = relkinds.map((_, i) => `$${i + 3}`).join(", ");
       const rows = await this.execute(
-        `SELECT COUNT(*) AS count FROM pg_class c
+        `SELECT 1 AS one FROM pg_class c
            LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
            WHERE n.nspname = $1 AND c.relname = $2
-           AND c.relkind IN (${relPlaceholders})`,
+           AND c.relkind IN (${relPlaceholders})
+           LIMIT 1`,
         [schema, table, ...relkinds],
       );
-      return Number(rows[0].count) > 0;
+      return rows.length > 0;
     }
-    // $1=name, $2..=relkinds
+    // $1=table, $2..=relkinds. Bind `table` (the unquoted identifier
+    // returned by parseSchemaQualifiedName), not the raw `name`
+    // argument — otherwise a quoted input like `"widgets"` gets
+    // compared against `relname = '"widgets"'` in pg_class, which
+    // never matches (the catalog stores names unquoted).
     const relPlaceholders = relkinds.map((_, i) => `$${i + 2}`).join(", ");
     const rows = await this.execute(
-      `SELECT COUNT(*) AS count FROM pg_class c
+      `SELECT 1 AS one FROM pg_class c
          LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
          WHERE n.nspname = ANY(current_schemas(false))
-         AND c.relname = $1 AND c.relkind IN (${relPlaceholders})`,
-      [name, ...relkinds],
+         AND c.relname = $1 AND c.relkind IN (${relPlaceholders})
+         LIMIT 1`,
+      [table, ...relkinds],
     );
-    return Number(rows[0].count) > 0;
+    return rows.length > 0;
   }
 
   async addIndex(

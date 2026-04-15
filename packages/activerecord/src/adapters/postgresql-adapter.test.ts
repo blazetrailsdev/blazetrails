@@ -578,6 +578,15 @@ describeIfPg("PostgreSQLAdapter", () => {
       expect(await adapter.tableExists("nonexistent")).toBe(false);
     });
 
+    it("tableExists()/viewExists() accept quoted identifiers", async () => {
+      // parseSchemaQualifiedName strips the surrounding quotes; without
+      // that step the pg_class lookup compares relname against the
+      // literal '"widgets"' and never matches. Regression guard so a
+      // future refactor doesn't silently break quoted callers.
+      expect(await adapter.tableExists('"widgets"')).toBe(true);
+      expect(await adapter.viewExists('"recent_widgets"')).toBe(true);
+    });
+
     it("viewExists() is true for views, false for tables", async () => {
       expect(await adapter.viewExists("recent_widgets")).toBe(true);
       expect(await adapter.viewExists("widgets")).toBe(false);

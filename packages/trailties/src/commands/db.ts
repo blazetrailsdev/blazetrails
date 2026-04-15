@@ -266,6 +266,67 @@ async function runRollback(
   if (!options.skipDump) await dumpSchemaAfterMigrate(adapter, raw);
 }
 
+/**
+ * Run a seed-running callback with `Base.adapter` temporarily set so
+ * seed files that touch ActiveRecord models work. Restores the previous
+ * `Base.adapter` on exit (including when the outer caller is about to
+ * close the provided adapter) so we don't leave `Base` pointing at a
+ * closed connection.
+ */
+async function withSeedAdapter(adapter: DatabaseAdapter, fn: () => Promise<void>): Promise<void> {
+  const { Base } = await import("@blazetrails/activerecord");
+  // Read/restore via the _adapter backing field so a previous null value
+  // can be re-assigned (the public setter is DatabaseAdapter, not
+  // DatabaseAdapter | null).
+  const previous = Base._adapter;
+  Base.adapter = adapter;
+  try {
+    await fn();
+  } finally {
+    Base._adapter = previous;
+  }
+}
+
+/**
+ * Purge the test DB and load the schema file. Shared implementation
+ * behind `trails db test:load_schema` and `trails db test:prepare` —
+ * Rails' `db:test:prepare` task just invokes `db:test:load_schema`, so
+ * keeping the flow in one helper prevents the two commands from
+ * drifting.
+ *
+ * Rails' chain: `test:load_schema → test:purge → DatabaseTasks.purge`
+ * (disconnect → drop → create → reconnect). We delegate to
+ * DatabaseTasks.purge to preserve the disconnect/reconnect semantics
+ * instead of hand-rolling drop+create.
+ */
+async function runTestLoadSchema(options: {
+  successMessage: (displayName: string, filename: string) => string;
+}): Promise<void> {
+  const raw = normalizeRawConfig(await loadDatabaseConfig("test"));
+  const config = toDbConfig(raw, "test");
+  await runProtectedEnvCheck(config, "test");
+  const filename = DatabaseTasks.schemaDumpPath(config);
+  if (!fs.existsSync(filename)) {
+    console.error(`No schema file found at ${filename}. Run \`trails db schema:dump\` first.`);
+    process.exitCode = 1;
+    return;
+  }
+  await DatabaseTasks.purge(config);
+  const adapter = await connectAdapter(raw);
+  try {
+    const previous = DatabaseTasks.migrationConnection();
+    DatabaseTasks.setAdapter(adapter);
+    try {
+      await DatabaseTasks.loadSchema(config);
+    } finally {
+      DatabaseTasks.setAdapter(previous);
+    }
+  } finally {
+    await closeAdapter(adapter);
+  }
+  console.log(options.successMessage(displayNameFor(config, raw), filename));
+}
+
 async function runSeed(): Promise<void> {
   const seedCandidates = [
     path.join(process.cwd(), "db", "seeds.ts"),
@@ -529,9 +590,7 @@ export function dbCommand(): Command {
     .description("Run database seeds")
     .action(async () => {
       await withAdapter(async (adapter) => {
-        const { Base } = await import("@blazetrails/activerecord");
-        Base.adapter = adapter;
-        await runSeed();
+        await withSeedAdapter(adapter, runSeed);
       });
     });
 
@@ -552,9 +611,7 @@ export function dbCommand(): Command {
 
       const adapter = await connectAdapter(raw);
       try {
-        const { Base } = await import("@blazetrails/activerecord");
-        Base.adapter = adapter;
-        await runSeed();
+        await withSeedAdapter(adapter, runSeed);
       } finally {
         await closeAdapter(adapter);
       }
@@ -608,9 +665,7 @@ export function dbCommand(): Command {
 
         await runMigrate(adapter, raw);
         if (wasFresh) {
-          const { Base } = await import("@blazetrails/activerecord");
-          Base.adapter = adapter;
-          await runSeed();
+          await withSeedAdapter(adapter, runSeed);
         }
       } finally {
         const close = (adapter as { close?: () => Promise<void> }).close;
@@ -622,71 +677,18 @@ export function dbCommand(): Command {
     .command("test:load_schema")
     .description("Purge the test DB and load the schema")
     .action(async () => {
-      // Rails: test:load_schema → test:purge → DatabaseTasks.purge →
-      // disconnect → drop → create → reconnect. Delegate to
-      // DatabaseTasks.purge so the disconnect/reconnect semantics are
-      // preserved instead of our own drop+create pair.
-      const raw = normalizeRawConfig(await loadDatabaseConfig("test"));
-      const config = toDbConfig(raw, "test");
-      await runProtectedEnvCheck(config, "test");
-      const filename = DatabaseTasks.schemaDumpPath(config);
-      if (!fs.existsSync(filename)) {
-        // Match the test:prepare / schema:load friendly-error path
-        // instead of letting loadSchema fail with a low-level dynamic-
-        // import error when there's nothing to load.
-        console.error(`No schema file found at ${filename}. Run \`trails db schema:dump\` first.`);
-        process.exitCode = 1;
-        return;
-      }
-      await DatabaseTasks.purge(config);
-      const adapter = await connectAdapter(raw);
-      try {
-        const previous = DatabaseTasks.migrationConnection();
-        DatabaseTasks.setAdapter(adapter);
-        try {
-          await DatabaseTasks.loadSchema(config);
-        } finally {
-          DatabaseTasks.setAdapter(previous);
-        }
-      } finally {
-        const close = (adapter as { close?: () => Promise<void> }).close;
-        if (typeof close === "function") await close.call(adapter);
-      }
-      console.log(`Loaded test schema into '${displayNameFor(config, raw)}'`);
+      await runTestLoadSchema({ successMessage: (d) => `Loaded test schema into '${d}'` });
     });
 
   cmd
     .command("test:prepare")
     .description("Prepare the test database (Rails parallel to db:test:prepare)")
     .action(async () => {
-      // Rails: test:prepare → test:load_schema. They're effectively the
-      // same command; test:prepare exists as a semantically-named entry
-      // point for dev/CI scripts. Delegate so behavior stays in one
-      // place.
-      const raw = normalizeRawConfig(await loadDatabaseConfig("test"));
-      const config = toDbConfig(raw, "test");
-      await runProtectedEnvCheck(config, "test");
-      const filename = DatabaseTasks.schemaDumpPath(config);
-      if (!fs.existsSync(filename)) {
-        console.error(`No schema file found at ${filename}. Run \`trails db schema:dump\` first.`);
-        process.exitCode = 1;
-        return;
-      }
-      await DatabaseTasks.purge(config);
-      const adapter = await connectAdapter(raw);
-      try {
-        const previous = DatabaseTasks.migrationConnection();
-        DatabaseTasks.setAdapter(adapter);
-        try {
-          await DatabaseTasks.loadSchema(config);
-        } finally {
-          DatabaseTasks.setAdapter(previous);
-        }
-      } finally {
-        const close = (adapter as { close?: () => Promise<void> }).close;
-        if (typeof close === "function") await close.call(adapter);
-      }
-      console.log(`Test database prepared (${filename})`);
+      // Rails db:test:prepare → db:test:load_schema. The two commands
+      // run the same flow — test:prepare exists as a semantically-named
+      // entry point for dev/CI scripts; the implementation delegates to
+      // the shared runTestLoadSchema helper.
+      await runTestLoadSchema({ successMessage: (_d, f) => `Test database prepared (${f})` });
     });
 
   cmd.command("create").description("Create the database").action(runCreate);
@@ -745,9 +747,7 @@ export function dbCommand(): Command {
       await runCreate();
       await withAdapter(async (adapter, raw) => {
         await runMigrate(adapter, raw);
-        const { Base } = await import("@blazetrails/activerecord");
-        Base.adapter = adapter;
-        await runSeed();
+        await withSeedAdapter(adapter, runSeed);
       });
     });
 
@@ -758,9 +758,7 @@ export function dbCommand(): Command {
       await runCreate();
       await withAdapter(async (adapter, raw) => {
         await runMigrate(adapter, raw);
-        const { Base } = await import("@blazetrails/activerecord");
-        Base.adapter = adapter;
-        await runSeed();
+        await withSeedAdapter(adapter, runSeed);
       });
     });
 

@@ -353,7 +353,6 @@ export class Mysql2Adapter extends AdapterBase implements DatabaseAdapter {
               numeric_precision AS num_precision,
               numeric_scale AS num_scale,
               column_key AS col_key,
-              extra AS col_extra,
               collation_name AS collation,
               column_comment AS comment
          FROM information_schema.columns
@@ -395,12 +394,18 @@ export class Mysql2Adapter extends AdapterBase implements DatabaseAdapter {
    * rather than Rails-MySQL's `SHOW KEYS` because the information_schema
    * query is cross-schema-capable without needing a qualified
    * `SHOW KEYS FROM schema.table` dance, and the output shape is all
-   * SchemaCache needs (name/columns/unique). Prefix lengths, per-column
-   * orders, fulltext/spatial `type`, and functional-index expressions
-   * — which Rails' MySQL `indexes` preserves via IndexDefinition — are
-   * intentionally omitted here: SchemaCache stores indexes as
-   * `unknown[]` and nothing in trails reads those fields yet. When a
-   * caller needs the full Rails shape we'll layer it on.
+   * SchemaCache needs (name/columns/unique).
+   *
+   * Functional-index expressions ARE surfaced: on MySQL 8.0.13+
+   * (detected via statisticsHasExpressionColumn) a row with
+   * `column_name IS NULL` carries its expression in `expression`, and
+   * we wrap it in parens in the output column list (matching Rails'
+   * IndexDefinition display). Prefix lengths, per-column orders, and
+   * fulltext/spatial `type` — which Rails' MySQL `indexes` preserves
+   * via IndexDefinition — are intentionally omitted here: SchemaCache
+   * stores indexes as `unknown[]` and nothing in trails reads those
+   * fields yet. When a caller needs the full Rails shape we'll layer
+   * it on.
    */
   async indexes(
     tableName: string,

@@ -265,6 +265,7 @@ class Comment extends Base {}
 
 class Post extends Base {
   declare title: string; // attribute
+  declare featured: boolean; // attribute (backs the named scope below)
   declare status: number; // enum is stored as an integer; defineEnum
   //                        does not override the accessor (unlike Base.enum)
   declare author: Author | null; // belongsTo reader (synchronous)
@@ -275,11 +276,13 @@ class Post extends Base {
   declare draft: () => void; // enum in-memory setter (defineEnum only)
   declare draftBang: () => Promise<void>; // enum async persisting setter (defineEnum only)
   declare static draft: () => Relation<Post>; // enum class scope
+  declare static published: () => Relation<Post>; // enum class scope
   declare static notDraft: () => Relation<Post>; // enum `not*` scope (defineEnum only)
-  declare static published: () => Relation<Post>; // named scope
+  declare static featured: () => Relation<Post>; // named scope (distinct from the enum above)
 
   static {
     this.attribute("title", "string");
+    this.attribute("featured", "boolean", { default: false });
     this.attribute("status", "integer"); // defineEnum only attaches methods;
     //                                       the underlying column still needs an attribute
     this.belongsTo("author");
@@ -289,7 +292,8 @@ class Post extends Base {
     // simpler Base.enum surface (no plain setter, sync bang returning
     // `this`, no not* scopes).
     defineEnum(this, "status", { draft: 0, published: 1 });
-    this.scope("published", (rel: Relation<Post>) => rel.where({ published: true }));
+    // Named scope — use a name that doesn't collide with an enum value above.
+    this.scope("featured", (rel: Relation<Post>) => rel.where({ featured: true }));
   }
 }
 ```

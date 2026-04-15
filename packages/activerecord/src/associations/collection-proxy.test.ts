@@ -81,11 +81,13 @@ describe("CollectionProxy — array-likeness (Phase R.1)", () => {
     expect(titles).toEqual(["a", "b", "c"]);
   });
 
-  it("supports numeric indexing (proxy[0])", async () => {
+  it("supports numeric indexing (proxy[0]) — typed via the index signature", async () => {
     const blog = await blogWithPosts();
-    const proxy = association<ApPost>(blog, "apPosts") as any;
-    expect(proxy[0].title).toBe("a");
-    expect(proxy[2].title).toBe("c");
+    const proxy = association<ApPost>(blog, "apPosts");
+    // No `as any` needed — CollectionProxy declares
+    // `[index: number]: T | undefined`. Out-of-range returns undefined.
+    expect(proxy[0]?.title).toBe("a");
+    expect(proxy[2]?.title).toBe("c");
     expect(proxy[99]).toBeUndefined();
   });
 

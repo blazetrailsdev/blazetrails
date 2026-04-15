@@ -22,6 +22,12 @@ import {
 } from "../associations.js";
 
 export interface CollectionProxy<T extends Base = Base> {
+  // Numeric indexing — `proxy[0]` reads the loaded target via the
+  // wrapCollectionProxy `get` trap. Declared here so consumers don't
+  // need `as any`. Out-of-range / unloaded indices return `undefined`,
+  // matching `Array<T>[i]` semantics under TS's standard lib.
+  [index: number]: T | undefined;
+
   // Thenable — makes CollectionProxy awaitable. Delegates to `load()`,
   // which both returns the loaded records AND hydrates `_target`, so
   // subsequent sync ops (`proxy.length`, `proxy[0]`, iteration) work

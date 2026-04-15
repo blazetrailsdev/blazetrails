@@ -38,13 +38,13 @@ export async function findBySql<T extends typeof Base>(
  * Rails: async_find_by_sql — same as find_by_sql but returns a Promise.
  * In our async-first codebase, this is identical to findBySql.
  */
-export function asyncFindBySql<T extends typeof Base>(
+export async function asyncFindBySql<T extends typeof Base>(
   this: T,
   sql: string | [string, ...unknown[]],
   binds: unknown[] = [],
   block?: (record: InstanceType<T>) => void,
 ): Promise<InstanceType<T>[]> {
-  return (findBySql as (...args: unknown[]) => Promise<InstanceType<T>[]>).call(
+  return findBySql.call<T, [typeof sql, typeof binds, typeof block], Promise<InstanceType<T>[]>>(
     this,
     sql,
     binds,

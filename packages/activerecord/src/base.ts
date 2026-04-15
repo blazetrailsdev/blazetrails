@@ -3072,7 +3072,7 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base#becomes!
    */
-  becomesBang(klass: typeof Base): Base {
+  becomesBang<K extends typeof Base>(klass: K): InstanceType<K> {
     const instance = this.becomes(klass);
     // Set the STI type column — find it from the base class
     const base = getStiBase(klass);

@@ -1,6 +1,6 @@
 export class Blog extends Base {
-  declare posts: Post[];
-  declare comments: Comment[];
+  declare posts: AssociationProxy<Post>;
+  declare comments: AssociationProxy<Comment>;
 
   static {
     this.hasMany("posts");

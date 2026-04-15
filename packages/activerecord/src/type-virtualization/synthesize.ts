@@ -60,8 +60,11 @@ function renderAttribute(call: AttributeCall): RenderedLine[] {
 }
 
 function renderCollectionAssoc(call: AssociationCall): RenderedLine[] {
+  // Post-Phase-R.2: collection readers return an AssociationProxy,
+  // not a plain `Target[]`. Matches what `blog.posts` returns at
+  // runtime and what `dx-tests/declare-patterns.test-d.ts` asserts.
   const target = resolveTarget(call);
-  return [line(`declare ${call.name}: ${target}[];`, call.name, false)];
+  return [line(`declare ${call.name}: AssociationProxy<${target}>;`, call.name, false)];
 }
 
 function renderSingularAssoc(call: AssociationCall): RenderedLine[] {

@@ -2,7 +2,7 @@ export class Post extends Base {
   declare title: string;
   declare published: boolean;
   declare author: Author | null;
-  declare comments: Comment[];
+  declare comments: AssociationProxy<Comment>;
   declare static published: () => Relation<Post>;
 
   static {

@@ -1,6 +1,6 @@
 export class Post extends Base {
   declare writer: Author | null;
-  declare remarks: Comment[];
+  declare remarks: AssociationProxy<Comment>;
 
   static {
     this.belongsTo("writer", { className: "Author" });

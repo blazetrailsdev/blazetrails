@@ -1,5 +1,5 @@
 export class Post extends Base {
-  declare tags: Tag[];
+  declare tags: AssociationProxy<Tag>;
 
   static {
     this.hasAndBelongsToMany("tags");

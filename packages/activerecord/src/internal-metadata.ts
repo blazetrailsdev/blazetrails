@@ -146,6 +146,11 @@ export class InternalMetadata {
   }
 
   async deleteAllEntries(): Promise<void> {
+    // Symmetric with get() / tableExists() / count() / createTable() /
+    // dropTable(): a disabled instance treats the store as empty — don't
+    // run a DELETE that would either mutate a supposedly-invisible store
+    // or throw against a missing table.
+    if (!this._enabled) return;
     const dm = new DeleteManager();
     dm.from(this.arelTable);
     await this._adapter.executeMutation(dm.toSql());

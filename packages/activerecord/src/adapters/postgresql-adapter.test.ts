@@ -589,6 +589,25 @@ describeIfPg("PostgreSQLAdapter", () => {
       expect(await adapter.dataSourceExists("nonexistent")).toBe(false);
     });
 
+    it("views() and viewExists() include materialized views (Rails relkind 'm')", async () => {
+      // Rails' PG data_source_sql maps VIEW -> relkind IN ('v','m'), so
+      // materialized views show up in views() and register with
+      // viewExists. Plain pg_views would miss them — the pg_class-based
+      // query we use catches both.
+      await adapter.exec('DROP MATERIALIZED VIEW IF EXISTS "widget_totals" CASCADE');
+      await adapter.exec(
+        `CREATE MATERIALIZED VIEW "widget_totals" AS SELECT COUNT(*) AS c FROM widgets`,
+      );
+      try {
+        const views = await adapter.views();
+        expect(views).toContain("widget_totals");
+        expect(await adapter.viewExists("widget_totals")).toBe(true);
+        expect(await adapter.tableExists("widget_totals")).toBe(false);
+      } finally {
+        await adapter.exec('DROP MATERIALIZED VIEW IF EXISTS "widget_totals" CASCADE');
+      }
+    });
+
     it("SchemaCache.addAll populates from PostgreSQL", async () => {
       // Integration with Phase 5's dumpSchemaCache path — PG now
       // exposes the full surface (dataSources/columns/primaryKey/

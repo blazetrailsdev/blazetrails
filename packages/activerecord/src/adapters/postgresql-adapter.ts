@@ -766,16 +766,22 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
   }
 
   /**
-   * List views visible on the current search_path. Mirrors Rails'
-   * `ActiveRecord::ConnectionAdapters::PostgreSQL::SchemaStatements#views`.
-   * `pg_views` filters out the system catalog schemas automatically when
-   * scoped to `current_schemas(false)`.
+   * List views visible on the current search_path, including
+   * materialized views. Mirrors Rails'
+   * `ActiveRecord::ConnectionAdapters::PostgreSQL::SchemaStatements#views`
+   * which uses `data_source_sql(type: "VIEW")` — relkind IN ('v','m').
+   * Plain `pg_views` would miss materialized views; querying `pg_class`
+   * directly catches both.
    */
   async views(): Promise<string[]> {
     const rows = await this.execute(
-      `SELECT viewname FROM pg_views WHERE schemaname = ANY(current_schemas(false)) ORDER BY viewname`,
+      `SELECT c.relname FROM pg_class c
+         LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = ANY(current_schemas(false))
+         AND c.relkind IN ('v', 'm')
+         ORDER BY c.relname`,
     );
-    return rows.map((r) => r.viewname as string);
+    return rows.map((r) => r.relname as string);
   }
 
   /**
@@ -797,41 +803,47 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
    * specifically need to exclude views (e.g. `drop_table`).
    */
   async tableExists(name: string): Promise<boolean> {
-    const { schema, table } = this.parseSchemaQualifiedName(name);
-    if (schema) {
-      const rows = await this.execute(
-        `SELECT COUNT(*) AS count FROM information_schema.tables ` +
-          `WHERE table_schema = $1 AND table_name = $2 AND table_type = 'BASE TABLE'`,
-        [schema, table],
-      );
-      return Number(rows[0].count) > 0;
-    }
-    const rows = await this.execute(
-      `SELECT COUNT(*) AS count FROM information_schema.tables ` +
-        `WHERE table_schema = ANY(current_schemas(false)) AND table_name = $1 AND table_type = 'BASE TABLE'`,
-      [name],
-    );
-    return Number(rows[0].count) > 0;
+    // Rails' relkind 'r' + 'p' (plain + partitioned tables) — matches
+    // `data_source_sql(name, type: "BASE TABLE")` in
+    // `PostgreSQL::SchemaStatements#quoted_scope`.
+    return this._relkindExists(name, ["r", "p"]);
   }
 
   /**
    * View-only existence check. Mirrors Rails'
-   * `SchemaStatements#view_exists?`.
+   * `SchemaStatements#view_exists?` which treats both views and
+   * materialized views as "view".
    */
   async viewExists(name: string): Promise<boolean> {
+    return this._relkindExists(name, ["v", "m"]);
+  }
+
+  /**
+   * Shared helper for table/view existence checks — lets both
+   * methods share Rails' pg_class-based predicate.
+   */
+  private async _relkindExists(name: string, relkinds: string[]): Promise<boolean> {
     const { schema, table } = this.parseSchemaQualifiedName(name);
     if (schema) {
+      // $1=schema, $2=table, $3..=relkinds
+      const relPlaceholders = relkinds.map((_, i) => `$${i + 3}`).join(", ");
       const rows = await this.execute(
-        `SELECT COUNT(*) AS count FROM information_schema.views ` +
-          `WHERE table_schema = $1 AND table_name = $2`,
-        [schema, table],
+        `SELECT COUNT(*) AS count FROM pg_class c
+           LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
+           WHERE n.nspname = $1 AND c.relname = $2
+           AND c.relkind IN (${relPlaceholders})`,
+        [schema, table, ...relkinds],
       );
       return Number(rows[0].count) > 0;
     }
+    // $1=name, $2..=relkinds
+    const relPlaceholders = relkinds.map((_, i) => `$${i + 2}`).join(", ");
     const rows = await this.execute(
-      `SELECT COUNT(*) AS count FROM information_schema.views ` +
-        `WHERE table_schema = ANY(current_schemas(false)) AND table_name = $1`,
-      [name],
+      `SELECT COUNT(*) AS count FROM pg_class c
+         LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
+         WHERE n.nspname = ANY(current_schemas(false))
+         AND c.relname = $1 AND c.relkind IN (${relPlaceholders})`,
+      [name, ...relkinds],
     );
     return Number(rows[0].count) > 0;
   }

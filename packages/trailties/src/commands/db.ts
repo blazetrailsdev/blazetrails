@@ -785,17 +785,16 @@ export function dbCommand(): Command {
         // any throw from resolve, schemaDumpPath, or setAdapter.
         const previousFormat = DatabaseTasks.schemaFormat;
         const previous = DatabaseTasks.migrationConnection();
-        let filename: string;
         try {
           DatabaseTasks.schemaFormat = await resolveSchemaFormat(opts);
-          filename = DatabaseTasks.schemaDumpPath(config);
+          const filename = DatabaseTasks.schemaDumpPath(config);
           DatabaseTasks.setAdapter(adapter);
           await DatabaseTasks.dumpSchema(config);
+          console.log(`Schema dumped to ${filename}`);
         } finally {
           DatabaseTasks.setAdapter(previous);
           DatabaseTasks.schemaFormat = previousFormat;
         }
-        console.log(`Schema dumped to ${filename}`);
       });
     });
 

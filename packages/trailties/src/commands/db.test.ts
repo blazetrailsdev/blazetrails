@@ -320,6 +320,20 @@ describe("resolveSchemaFormat", () => {
     await expect(resolveSchemaFormat({}, tmpDir)).rejects.toThrow(/schemaFormat in .*database\.ts/);
   });
 
+  it("rejects non-string schemaFormat values in config without crashing", async () => {
+    // schemaFormat is user-authored JS; TS can't prevent a number/bool
+    // from slipping in. normalize() now refuses with a source-labeled
+    // error instead of throwing a TypeError on .toLowerCase().
+    fs.writeFileSync(
+      path.join(tmpDir, "config", "database.ts"),
+      `export default {
+  schemaFormat: 42,
+  development: { adapter: "sqlite3", database: ":memory:" },
+};`,
+    );
+    await expect(resolveSchemaFormat({}, tmpDir)).rejects.toThrow(/schemaFormat in .*database\.ts/);
+  });
+
   it("filters top-level keys out of the 'Available envs' error message", async () => {
     // schemaFormat is a config-level setting, not a database environment —
     // including it in the error list would make users think they can

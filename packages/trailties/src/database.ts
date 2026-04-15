@@ -154,7 +154,16 @@ export async function resolveSchemaFormat(
   opts: { format?: string } = {},
   cwd: string = process.cwd(),
 ): Promise<SchemaFormat> {
-  const normalize = (raw: string, source: string): SchemaFormat => {
+  const normalize = (raw: unknown, source: string): SchemaFormat => {
+    // `schemaFormat` in config/database.ts is user-authored with only
+    // structural typing, so we can be handed a number, boolean, etc.
+    // Refuse with the same source-labeled error instead of blowing up
+    // when the unchecked input lacks `.toLowerCase`.
+    if (typeof raw !== "string") {
+      throw new Error(
+        `Invalid ${source} value ${JSON.stringify(raw)}. Expected one of: ts, js, sql.`,
+      );
+    }
     const normalized = raw.toLowerCase();
     if (normalized !== "ts" && normalized !== "js" && normalized !== "sql") {
       throw new Error(`Invalid ${source} value "${raw}". Expected one of: ts, js, sql.`);

@@ -252,6 +252,11 @@ runtime (via `this.attribute`, `this.hasMany`, `this.scope`, `this.enum`)
 but the type system only sees them if you opt in with a `declare`:
 
 ```ts
+import { Base, CollectionProxy, Relation } from "@blazetrails/activerecord";
+
+class Author extends Base {}
+class Comment extends Base {}
+
 class Post extends Base {
   declare title: string; // attribute
   declare author: Author | null; // belongsTo reader (synchronous)
@@ -267,7 +272,7 @@ class Post extends Base {
     this.belongsTo("author");
     this.hasMany("comments");
     this.enum("status", { draft: 0, published: 1 });
-    this.scope("published", (rel) => rel.where({ published: true }));
+    this.scope("published", (rel: Relation<Post>) => rel.where({ published: true }));
   }
 }
 ```

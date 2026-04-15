@@ -87,4 +87,20 @@ describe("SQLite3Adapter schema introspection", () => {
     }>;
     expect(indexes).toEqual([{ name: "widgets_on_name", columns: ["name"], unique: false }]);
   });
+
+  it("tableExists/dataSourceExists resolve schema-qualified names correctly", async () => {
+    // Companion to the PRAGMA test: sqlite_master lookups must route to
+    // `<schema>.sqlite_master` for ATTACHed DBs. Matching on
+    // `name='aux.widgets'` in the main catalog would return false even
+    // though the table does exist in aux.
+    const auxPath = path.join(tmpDir, "aux2.sqlite3");
+    await adapter.executeMutation(`ATTACH DATABASE '${auxPath}' AS aux`);
+    await adapter.executeMutation("CREATE TABLE aux.widgets (id INTEGER PRIMARY KEY)");
+    await adapter.executeMutation("CREATE VIEW aux.widget_view AS SELECT id FROM aux.widgets");
+
+    expect(await adapter.tableExists("aux.widgets")).toBe(true);
+    expect(await adapter.dataSourceExists("aux.widgets")).toBe(true);
+    expect(await adapter.dataSourceExists("aux.widget_view")).toBe(true);
+    expect(await adapter.tableExists("aux.missing")).toBe(false);
+  });
 });

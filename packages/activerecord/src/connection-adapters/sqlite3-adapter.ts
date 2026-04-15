@@ -885,16 +885,32 @@ export class SQLite3Adapter
     return [...new Set([...(await this.tables()), ...(await this.views())])];
   }
 
+  /**
+   * Resolve the sqlite_master reference for a possibly-schema-qualified
+   * name. SQLite stores each attached DB's schema in its own
+   * `<schema>.sqlite_master`; `aux.widgets` is row `name='widgets'` in
+   * `aux.sqlite_master`, never `name='aux.widgets'` in the main catalog.
+   */
+  private _sqliteMasterFor(name: string): { sqliteMaster: string; bare: string } {
+    const { schema, bare } = this._splitTableName(name);
+    return {
+      sqliteMaster: schema ? `${quoteColumnName(schema)}.sqlite_master` : "sqlite_master",
+      bare,
+    };
+  }
+
   async tableExists(name: string): Promise<boolean> {
+    const { sqliteMaster, bare } = this._sqliteMasterFor(name);
     const rows = (await this.execute(
-      `SELECT 1 AS one FROM sqlite_master WHERE type='table' AND name=${quoteString(name)}`,
+      `SELECT 1 AS one FROM ${sqliteMaster} WHERE type='table' AND name=${quoteString(bare)}`,
     )) as Array<{ one: number }>;
     return rows.length > 0;
   }
 
   async dataSourceExists(name: string): Promise<boolean> {
+    const { sqliteMaster, bare } = this._sqliteMasterFor(name);
     const rows = (await this.execute(
-      `SELECT 1 AS one FROM sqlite_master WHERE type IN ('table','view') AND name=${quoteString(name)}`,
+      `SELECT 1 AS one FROM ${sqliteMaster} WHERE type IN ('table','view') AND name=${quoteString(bare)}`,
     )) as Array<{ one: number }>;
     return rows.length > 0;
   }

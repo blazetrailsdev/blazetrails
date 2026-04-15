@@ -10,6 +10,7 @@ import type { PoolConfig } from "../pool-config.js";
 import type { ConnectionDescriptor } from "./connection-descriptor.js";
 import { ConnectionNotEstablished, ConnectionTimeoutError } from "../../errors.js";
 import { SchemaReflection, BoundSchemaReflection } from "../schema-cache.js";
+import { AbstractAdapter } from "../abstract-adapter.js";
 import { Reaper, type ReapablePool } from "./connection-pool/reaper.js";
 import { ConnectionLeasingQueue } from "./connection-pool/queue.js";
 import { getAsyncContext, type AsyncContext } from "@blazetrails/activesupport";
@@ -730,13 +731,19 @@ export class ConnectionPool implements ReapablePool {
     // every connection in this pool. Rails' AbstractAdapter has the
     // same owner/pool reference threaded in via its connection
     // constructor; trails' factory signature doesn't expose it, so
-    // we assign it post-hoc here. Only assign when the adapter
-    // actually supports the slot (AbstractAdapter declares
-    // `pool: unknown = null`) — adapters that don't can safely ignore
-    // the write since we guard with the `in` check.
-    const withPool = conn as unknown as { pool?: unknown };
-    if ("pool" in (conn as object)) {
-      withPool.pool = this;
+    // we assign it post-hoc here.
+    //
+    // CRITICAL: gate on `instanceof AbstractAdapter`, not a
+    // generic `"pool" in conn` duck-type. Several driver-backed
+    // adapters (PostgreSQLAdapter, Mysql2Adapter) declare their own
+    // `pool` field holding the underlying pg.Pool / mysql.Pool —
+    // writing `this` over that would clobber the driver pool and
+    // break every subsequent query. Only AbstractAdapter's
+    // `pool: unknown = null` slot is safe to commandeer for this
+    // back-reference, and it's the only class that actually reads
+    // it (via `this.pool.poolConfig.schemaCache` etc.).
+    if (conn instanceof AbstractAdapter) {
+      (conn as unknown as { pool: unknown }).pool = this;
     }
     return conn;
   }
@@ -748,9 +755,10 @@ export class ConnectionPool implements ReapablePool {
     this._available?.delete(conn);
     // Clear the back-reference we set in newConnection so a removed
     // adapter can't observe stale pool/poolConfig state post-eviction.
-    const withPool = conn as unknown as { pool?: unknown };
-    if ("pool" in (conn as object) && withPool.pool === this) {
-      withPool.pool = null;
+    // Mirror the same narrow gate — only touch AbstractAdapter's slot,
+    // never a driver-adapter's own `pool` field.
+    if (conn instanceof AbstractAdapter && (conn as unknown as { pool: unknown }).pool === this) {
+      (conn as unknown as { pool: unknown }).pool = null;
     }
 
     for (const [ctxId, pin] of this._pinnedConnections) {

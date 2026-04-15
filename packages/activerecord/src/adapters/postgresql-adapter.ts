@@ -765,6 +765,77 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
     return rows.map((r) => r.tablename as string);
   }
 
+  /**
+   * List views visible on the current search_path. Mirrors Rails'
+   * `ActiveRecord::ConnectionAdapters::PostgreSQL::SchemaStatements#views`.
+   * `pg_views` filters out the system catalog schemas automatically when
+   * scoped to `current_schemas(false)`.
+   */
+  async views(): Promise<string[]> {
+    const rows = await this.execute(
+      `SELECT viewname FROM pg_views WHERE schemaname = ANY(current_schemas(false)) ORDER BY viewname`,
+    );
+    return rows.map((r) => r.viewname as string);
+  }
+
+  /**
+   * Tables + views, deduped. Mirrors AbstractAdapter#data_sources. The
+   * name is what SchemaCache.addAll queries to build the initial
+   * dump — without this method the PG adapter is rejected by
+   * DatabaseTasks.dumpSchemaCache's capability check.
+   */
+  async dataSources(): Promise<string[]> {
+    const [tables, views] = await Promise.all([this.tables(), this.views()]);
+    return Array.from(new Set([...tables, ...views]));
+  }
+
+  /**
+   * Table-only existence check (no views). Mirrors Rails'
+   * `table_exists?` vs `data_source_exists?` distinction: a table is a
+   * data source but a data source isn't always a table. SchemaCache
+   * uses dataSourceExists; tableExists is here for callers that
+   * specifically need to exclude views (e.g. `drop_table`).
+   */
+  async tableExists(name: string): Promise<boolean> {
+    const { schema, table } = this.parseSchemaQualifiedName(name);
+    if (schema) {
+      const rows = await this.execute(
+        `SELECT COUNT(*) AS count FROM information_schema.tables ` +
+          `WHERE table_schema = $1 AND table_name = $2 AND table_type = 'BASE TABLE'`,
+        [schema, table],
+      );
+      return Number(rows[0].count) > 0;
+    }
+    const rows = await this.execute(
+      `SELECT COUNT(*) AS count FROM information_schema.tables ` +
+        `WHERE table_schema = ANY(current_schemas(false)) AND table_name = $1 AND table_type = 'BASE TABLE'`,
+      [name],
+    );
+    return Number(rows[0].count) > 0;
+  }
+
+  /**
+   * View-only existence check. Mirrors Rails'
+   * `SchemaStatements#view_exists?`.
+   */
+  async viewExists(name: string): Promise<boolean> {
+    const { schema, table } = this.parseSchemaQualifiedName(name);
+    if (schema) {
+      const rows = await this.execute(
+        `SELECT COUNT(*) AS count FROM information_schema.views ` +
+          `WHERE table_schema = $1 AND table_name = $2`,
+        [schema, table],
+      );
+      return Number(rows[0].count) > 0;
+    }
+    const rows = await this.execute(
+      `SELECT COUNT(*) AS count FROM information_schema.views ` +
+        `WHERE table_schema = ANY(current_schemas(false)) AND table_name = $1`,
+      [name],
+    );
+    return Number(rows[0].count) > 0;
+  }
+
   async addIndex(
     tableName: string,
     columns: string | string[],

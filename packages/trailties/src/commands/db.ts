@@ -778,12 +778,18 @@ export function dbCommand(): Command {
     .action(async (opts) => {
       await withAdapter(async (adapter, raw) => {
         const config = toDbConfig(raw);
+        // Capture the prior format BEFORE calling resolveSchemaFormat —
+        // the resolver can throw (bad --format / SCHEMA_FORMAT / config
+        // value) and we want the restore-in-finally path to run even
+        // then. Assigning inside the try keeps global state clean on
+        // any throw from resolve, schemaDumpPath, or setAdapter.
         const previousFormat = DatabaseTasks.schemaFormat;
-        DatabaseTasks.schemaFormat = await resolveSchemaFormat(opts);
-        const filename = DatabaseTasks.schemaDumpPath(config);
         const previous = DatabaseTasks.migrationConnection();
-        DatabaseTasks.setAdapter(adapter);
+        let filename: string;
         try {
+          DatabaseTasks.schemaFormat = await resolveSchemaFormat(opts);
+          filename = DatabaseTasks.schemaDumpPath(config);
+          DatabaseTasks.setAdapter(adapter);
           await DatabaseTasks.dumpSchema(config);
         } finally {
           DatabaseTasks.setAdapter(previous);
@@ -806,31 +812,32 @@ export function dbCommand(): Command {
         // it on check_protected_environments.
         await runProtectedEnvCheck(config, config.envName);
         const previousFormat = DatabaseTasks.schemaFormat;
-        DatabaseTasks.schemaFormat = await resolveSchemaFormat(opts);
-        const filename = DatabaseTasks.schemaDumpPath(config);
-        if (!fs.existsSync(filename)) {
-          console.error(`No schema file found at ${filename}`);
-          process.exitCode = 1;
-          DatabaseTasks.schemaFormat = previousFormat;
-          return;
-        }
         const previous = DatabaseTasks.migrationConnection();
-        DatabaseTasks.setAdapter(adapter);
         try {
-          console.log(`Loading schema from ${filename}...`);
-          await DatabaseTasks.loadSchema(config);
-          console.log("Schema loaded.");
-        } catch (error: unknown) {
-          if (filename.endsWith(".ts")) {
-            const enhanced = new Error(
-              `Failed to load schema file "${filename}". ` +
-                `Ensure a TypeScript loader (tsx, ts-node) is configured, ` +
-                `or set DatabaseTasks.schemaFormat = "js" / "sql".`,
-            );
-            (enhanced as { cause?: unknown }).cause = error;
-            throw enhanced;
+          DatabaseTasks.schemaFormat = await resolveSchemaFormat(opts);
+          const filename = DatabaseTasks.schemaDumpPath(config);
+          if (!fs.existsSync(filename)) {
+            console.error(`No schema file found at ${filename}`);
+            process.exitCode = 1;
+            return;
           }
-          throw error;
+          DatabaseTasks.setAdapter(adapter);
+          try {
+            console.log(`Loading schema from ${filename}...`);
+            await DatabaseTasks.loadSchema(config);
+            console.log("Schema loaded.");
+          } catch (error: unknown) {
+            if (filename.endsWith(".ts")) {
+              const enhanced = new Error(
+                `Failed to load schema file "${filename}". ` +
+                  `Ensure a TypeScript loader (tsx, ts-node) is configured, ` +
+                  `or set DatabaseTasks.schemaFormat = "js" / "sql".`,
+              );
+              (enhanced as { cause?: unknown }).cause = error;
+              throw enhanced;
+            }
+            throw error;
+          }
         } finally {
           DatabaseTasks.setAdapter(previous);
           DatabaseTasks.schemaFormat = previousFormat;

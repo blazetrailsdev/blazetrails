@@ -24,9 +24,10 @@ export function resolveEnv(): string {
 
 /**
  * Shape of the exported object in config/database.ts: each env key maps
- * to a DatabaseConfig, plus a few optional top-level keys (e.g.
- * schemaFormat). Kept loose (`unknown`) so callers inspect the keys
- * they need without the type fighting them.
+ * to a DatabaseConfig, plus the optional `schemaFormat` top-level key
+ * (the only non-env key we currently recognize — keep in sync with
+ * TOP_LEVEL_CONFIG_KEYS below). Kept loose (`unknown`) so callers
+ * inspect the keys they need without the type fighting them.
  */
 export interface DatabaseConfigModule {
   [key: string]: unknown;
@@ -34,10 +35,12 @@ export interface DatabaseConfigModule {
 }
 
 /**
- * Top-level keys that configure the CLI itself rather than naming a
- * database environment. The env-name lookup / "Available" error
+ * Non-environment top-level keys recognized in config/database.ts.
+ * Currently: `schemaFormat`. The env-name lookup / "Available" error
  * message excludes these so users don't see `schemaFormat` listed
- * alongside `development`/`test`/`production`.
+ * alongside `development`/`test`/`production`. When adding a new
+ * top-level key, update both this set and the DatabaseConfigModule
+ * shape above.
  */
 const TOP_LEVEL_CONFIG_KEYS = new Set<string>(["schemaFormat"]);
 
@@ -76,11 +79,14 @@ export async function loadDatabaseConfigModule(
   try {
     mod = (await import(pathToFileURL(configPath).href)) as typeof mod;
   } catch (error: unknown) {
-    const rel = path.relative(cwd, configPath);
+    const rel = path.relative(cwd, configPath) || configPath;
     // Extract a useful message even when user code throws a non-Error
     // (e.g. `throw "boom"` or `throw null`) — `(error as Error).message`
     // would produce `undefined` or crash.
-    const message = error instanceof Error ? error.message : String(error);
+    // Strip trailing punctuation from the inner message so the final
+    // string doesn't end up with a double period like "...message..".
+    const rawMessage = error instanceof Error ? error.message : String(error);
+    const message = rawMessage.replace(/[.!?]+$/, "");
     const enhanced = new Error(
       `Failed to load database config from "${rel}": ${message}. ` +
         `Run with tsx (e.g., "npx tsx node_modules/.bin/trails").`,
@@ -180,8 +186,10 @@ export async function resolveSchemaFormat(
   if (loaded && "schemaFormat" in loaded.module) {
     // Presence-based: an explicitly-set-but-garbage value (including an
     // empty string) is a misconfig that should throw, not silently fall
-    // through to inference.
-    return normalize(loaded.module.schemaFormat ?? "", `schemaFormat in ${loaded.path}`);
+    // through to inference. Use a relative path in the error source so
+    // it stays short and consistent with other config-loading errors.
+    const loadedRel = path.relative(cwd, loaded.path) || loaded.path;
+    return normalize(loaded.module.schemaFormat ?? "", `schemaFormat in ${loadedRel}`);
   }
 
   const dbDir = path.join(cwd, "db");

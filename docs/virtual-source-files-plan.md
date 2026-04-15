@@ -63,6 +63,20 @@ Other surfaces (`belongsTo` / `hasOne` returning the record or null,
 `scope` returning a Relation, attribute getters returning the typed
 value) already match Rails; no runtime change needed.
 
+**Pragmatic divergences left in place (out of scope for this plan):**
+
+- **Sync vs. lazy-load on `post.author`.** Rails' `post.author` triggers
+  a lazy SQL query if the association isn't loaded. JS has no
+  blocking-IO equivalent, so trails returns the currently-loaded value
+  (or `null`). Users wanting to ensure load call
+  `await post.loadAssociation("author")` (or use the explicit async
+  helper). Documented as a permanent deviation in
+  `docs/activerecord-rails-deviations.md`.
+- **Enum predicate / bang naming.** Rails: `post.draft?` / `post.draft!`.
+  TypeScript can't have `?` or `!` in identifiers, so trails uses
+  `post.isDraft()` / `post.draftBang()`. Permanent deviation; same
+  reason.
+
 ## Before / after
 
 **Before (today):**
@@ -280,19 +294,36 @@ Two sub-PRs, each independently testable:
 
 - **R.1 — make CollectionProxy a drop-in for arrays.** Add
   `Symbol.iterator`, `length`, numeric indexing (via the existing JS
-  Proxy), and the array prototype methods consumers actually use
-  (`map`, `filter`, `forEach`, `find`, `some`, `every`, `includes`,
-  `slice`, `reduce`, `at`). Each delegates to the loaded `_target`.
-  No reader change yet — just additive surface on CollectionProxy. All
-  existing tests stay green.
+  Proxy `get` trap on string-coerced numeric keys), and the array
+  prototype methods consumers actually use (`map`, `filter`, `forEach`,
+  `find`, `some`, `every`, `includes`, `slice`, `reduce`, `at`). Each
+  delegates to the loaded `_target`. **Iteration semantics:** sync
+  iteration / array-method calls operate on the already-loaded target
+  — they do not trigger a fresh DB load (JS has no blocking IO). For a
+  fresh load, `await blog.posts` first (the proxy's existing thenable
+  unchanged). No reader change yet — just additive surface on
+  CollectionProxy. All existing tests stay green.
+
 - **R.2 — swap the reader.** Override `defineReaders` in
   `packages/activerecord/src/associations/builder/collection-association.ts`
   so the `<name>` getter returns `association(this, name)` (the
-  AssociationProxy) instead of `this.association(name).reader`. Update
-  the in-repo test suite for any divergence the additive surface in R.1
-  didn't already cover. Update CLAUDE.md's declare catalog. The
-  AssociationProxy is awaitable, so async code paths
-  (`await blog.posts`) keep working unchanged.
+  AssociationProxy) instead of `this.association(name).reader`. Writers
+  (`blog.posts = [...]`) stay routed through `defineWriters` as today —
+  the array on the right is normalized into the proxy's `_target`.
+  Concrete update list:
+  - `packages/activerecord/src/associations/builder/collection-association.ts` (the reader override)
+  - `packages/activerecord/dx-tests/declare-patterns.test-d.ts` (lines ~62, ~175 — the `declare comments: Comment[]` pattern + matching test name)
+  - `packages/activerecord/dx-tests/associations.test-d.ts` (line ~101)
+  - `packages/activerecord/src/associations.test.ts` audit for `.posts.length` / `.posts.map(...)` / `for (const ... of blog.posts)` patterns (~3 hits today; all stay green via R.1's array-likeness)
+  - `CLAUDE.md` — the declare catalog snippet (`declare posts: Post[]` → `declare posts: AssociationProxy<Post>`); update the prose around "synchronous reader" too
+  - `docs/activerecord-rails-deviations.md` — record that the collection reader is now Rails-faithful (negative deviation removed)
+  - `AssociationProxy` is already exported from
+    `@blazetrails/activerecord` (verified — see
+    `packages/activerecord/src/index.ts`); no new export needed.
+
+  Side benefit: `blog.posts.published()` and other named scopes start
+  type-checking through the existing `AssociationProxy<T>` Proxy
+  delegation, matching Rails' `blog.posts.published`.
 
 **Phase R exit criteria:**
 
@@ -302,6 +333,8 @@ Two sub-PRs, each independently testable:
 - `blog.posts.where(...).order(...).limit(...)` works without the
   `association(blog, "posts")` helper.
 - CLAUDE.md updated; declare catalog references the new shape.
+- `pnpm api:compare` is unchanged or up (the swap removes a fidelity
+  divergence from the runtime; tests stay where they were).
 
 ### Phase 1a-fixup — flip virtualizer to `AssociationProxy<T>` 📋
 
@@ -416,18 +449,18 @@ against the post-R (Rails-faithful) shapes from day one.
 
 ## Risks
 
-| Risk                                                     | Mitigation                                                                                                   |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Risk                                                     | Mitigation                                                                                                                                                               |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Phase R breaks consumers of `blog.posts` as an array     | R.1 (additive array-likeness on CollectionProxy) lands first and stays green; R.2 only flips the reader once R.1 covers every consumer pattern in the in-repo test suite |
-| Virtualizer drifts from runtime behavior                 | Type registry is shared with runtime attribute typing; parity test runs in CI                                |
-| Bad target-class inference                               | Emitted `Foo` surfaces as a normal "cannot find name" error in the user's file; escape hatch is `className:` |
-| Consumers run `tsc` directly (not `trails-tsc`)          | Fail loud: unvirtualized program prints "Property 'title' does not exist" exactly as today; docs call out    |
-| Bundlers / other tools invoke `tsc` under the hood       | Audit common bundlers (tsup, vite, esbuild — most use their own parser, not `tsc`); doc the few that matter  |
-| `tsc --build` / composite project references             | `trails-tsc` intended to support `--build`; verify build-info caching with a composite fixture in Phase 1b   |
-| tsserver plugin depends on TS language-service internals | Pin supported TS range; re-test per TS minor release; keep plugin logic to public `LanguageServiceHost` API  |
-| Library consumers debugging "what TS sees"               | Ship `trails-tsc --print-virtualized <file>` to dump the synthesized source for any model                    |
-| Source maps / go-to-definition off by N lines            | Virtualizer splices text at known offsets; remap ranges via the delta table returned from `virtualize()`     |
-| Editor type mismatch during plugin boot                  | Plugin is purely additive — worst case during boot is the old "`unknown`" behavior, not a new wrong answer   |
+| Virtualizer drifts from runtime behavior                 | Type registry is shared with runtime attribute typing; parity test runs in CI                                                                                            |
+| Bad target-class inference                               | Emitted `Foo` surfaces as a normal "cannot find name" error in the user's file; escape hatch is `className:`                                                             |
+| Consumers run `tsc` directly (not `trails-tsc`)          | Fail loud: unvirtualized program prints "Property 'title' does not exist" exactly as today; docs call out                                                                |
+| Bundlers / other tools invoke `tsc` under the hood       | Audit common bundlers (tsup, vite, esbuild — most use their own parser, not `tsc`); doc the few that matter                                                              |
+| `tsc --build` / composite project references             | `trails-tsc` intended to support `--build`; verify build-info caching with a composite fixture in Phase 1b                                                               |
+| tsserver plugin depends on TS language-service internals | Pin supported TS range; re-test per TS minor release; keep plugin logic to public `LanguageServiceHost` API                                                              |
+| Library consumers debugging "what TS sees"               | Ship `trails-tsc --print-virtualized <file>` to dump the synthesized source for any model                                                                                |
+| Source maps / go-to-definition off by N lines            | Virtualizer splices text at known offsets; remap ranges via the delta table returned from `virtualize()`                                                                 |
+| Editor type mismatch during plugin boot                  | Plugin is purely additive — worst case during boot is the old "`unknown`" behavior, not a new wrong answer                                                               |
 
 ## Non-goals
 

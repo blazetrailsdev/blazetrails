@@ -369,8 +369,11 @@ export class DatabaseTasks {
    *   - Swallow NoDatabaseError (can't check a database that isn't there).
    */
   static async checkProtectedEnvironmentsBang(environment?: string): Promise<void> {
+    // Rails: `return if ENV["DISABLE_DATABASE_ENVIRONMENT_CHECK"]`.
+    // In Ruby "" is truthy, so any *present* value bypasses. JS "" is
+    // falsy, so we use a presence check to preserve Rails semantics.
     const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
-    if (proc?.env?.DISABLE_DATABASE_ENVIRONMENT_CHECK) return;
+    if (proc?.env?.DISABLE_DATABASE_ENVIRONMENT_CHECK !== undefined) return;
 
     const envName = this._normalizeEnv(environment);
     const { Base } = await import("../base.js");
@@ -394,7 +397,16 @@ export class DatabaseTasks {
       try {
         const adapter = await this._connectFor(config);
         try {
-          const migrator = new Migrator(adapter, []);
+          // Honor the config's use_metadata_table opt-out. When set to
+          // false, Rails treats the DB as unstamped and
+          // last_stored_environment returns nil — don't probe the
+          // ar_internal_metadata table even if it's there from a prior
+          // run with the flag enabled.
+          const useMetadataTable = (config.configuration as { useMetadataTable?: boolean })
+            .useMetadataTable;
+          const migrator = new Migrator(adapter, [], {
+            internalMetadataEnabled: useMetadataTable !== false,
+          });
           const stored = await migrator.lastStoredEnvironment();
           if (stored && protectedEnvs.includes(stored)) {
             throw new ProtectedEnvironmentError(stored);

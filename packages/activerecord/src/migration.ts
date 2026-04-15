@@ -1803,11 +1803,11 @@ export class Migrator {
    * Mirrors: ActiveRecord::Tasks::DatabaseTasks.check_current_environment
    */
   async checkEnvironment(): Promise<void> {
-    // Match Rails' `return if ENV["DISABLE_DATABASE_ENVIRONMENT_CHECK"]` —
-    // any non-empty value bypasses (consistent with DatabaseTasks'
-    // checkProtectedEnvironmentsBang so operators don't get mixed
-    // semantics across the two guards).
-    if (process.env.DISABLE_DATABASE_ENVIRONMENT_CHECK) return;
+    // Match Rails' `return if ENV["DISABLE_DATABASE_ENVIRONMENT_CHECK"]`.
+    // In Ruby, "" is truthy, so any *present* value (including empty
+    // string) bypasses the check. JS treats "" as falsy, so we use a
+    // presence check instead to preserve Rails semantics.
+    if (process.env.DISABLE_DATABASE_ENVIRONMENT_CHECK !== undefined) return;
     await this._ensureSchemaTable();
     const stored = await this._internalMetadata.get("environment");
     if (stored === null) {

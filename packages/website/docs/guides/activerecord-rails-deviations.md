@@ -262,10 +262,9 @@ class Post extends Base {
   declare author: Author | null; // belongsTo reader (synchronous)
   declare comments: CollectionProxy<Comment>; // hasMany reader
   declare isDraft: () => boolean; // enum predicate
-  declare draft: () => void; // enum in-memory setter
-  declare draftBang: () => Promise<void>; // enum persisting setter
-  declare static published: () => Relation<Post>; // named scope
+  declare draftBang: () => this; // enum in-memory bang setter (returns self)
   declare static draft: () => Relation<Post>; // enum class scope
+  declare static published: () => Relation<Post>; // named scope
 
   static {
     this.attribute("title", "string");

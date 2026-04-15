@@ -224,22 +224,24 @@ class Post extends Base {
 ```
 
 **Enums** (`this.enum(name, mapping)` generates a predicate + in-memory
-setter + persisting setter per value, plus class-level scopes):
+bang setter per value, plus a class-level scope per value):
 
 ```ts
 class Task extends Base {
   declare status: string;
   declare isLow: () => boolean;
-  declare low: () => void;
-  declare lowBang: () => Promise<void>;
+  declare lowBang: () => this; // in-memory; does not persist
   declare static low: () => Relation<Task>;
-  declare static notLow: () => Relation<Task>;
   static {
     this.attribute("status", "integer");
     this.enum("status", { low: 0, high: 1 });
   }
 }
 ```
+
+For a richer surface — async persisting bang setters, plain in-memory
+setters, and `not*` scopes — use `defineEnum(modelClass, ...)` from
+`@blazetrails/activerecord/enum.js` instead of `this.enum`.
 
 **Do not** redeclare `id` on subclasses — `Base#id` is an accessor
 (`PrimaryKeyValue`) and TS forbids overriding accessors with differently

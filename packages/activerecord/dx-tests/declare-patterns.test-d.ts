@@ -100,24 +100,25 @@ class Post extends Base {
   }
 }
 
-// --- Enum typing: `this.enum("status", {...})` generates predicate/setter/scope trio ---
+// --- Enum typing: `this.enum("status", {...})` generates a predicate and an
+// in-memory bang setter per value, plus a class-level scope per value.
+// (The `defineEnum(...)` helper in `enum.ts` generates a richer surface
+//  including async persisting bang setters, plain in-memory setters, and
+//  `not*` scopes; see its docs if you opt into that form.)
 class Task extends Base {
   declare status: string;
 
   // record.isLow() / record.isHigh() — boolean predicates
   declare isLow: () => boolean;
   declare isHigh: () => boolean;
-  // record.low() / record.high() — in-memory setters
-  declare low: () => void;
-  declare high: () => void;
-  // record.lowBang() / record.highBang() — persisting setters
-  declare lowBang: () => Promise<void>;
-  declare highBang: () => Promise<void>;
-  // Class-level enum scopes: Task.low() / Task.high() / Task.notLow() / Task.notHigh()
+  // record.lowBang() / record.highBang() — in-memory setters, return this.
+  // Not async, does not persist. Use `record.updateColumn("status", "low")`
+  // if you want a persisting one-liner.
+  declare lowBang: () => this;
+  declare highBang: () => this;
+  // Class-level enum scopes: Task.low() / Task.high()
   declare static low: () => Relation<Task>;
   declare static high: () => Relation<Task>;
-  declare static notLow: () => Relation<Task>;
-  declare static notHigh: () => Relation<Task>;
 
   static {
     this.attribute("status", "integer");
@@ -167,19 +168,14 @@ describe("declare patterns — typing runtime-attached members", () => {
     expectTypeOf(t.isLow()).toBeBoolean();
   });
 
-  it("enum setter (in-memory): `declare low: () => void`", () => {
+  it("enum bang setter: `declare lowBang: () => this` (in-memory, returns self)", () => {
     const t = new Task({ status: 0 });
-    expectTypeOf(t.low).toEqualTypeOf<() => void>();
-  });
-
-  it("enum setter (persisting): `declare lowBang: () => Promise<void>`", () => {
-    const t = new Task({ status: 0 });
-    expectTypeOf(t.lowBang).toEqualTypeOf<() => Promise<void>>();
+    expectTypeOf(t.lowBang()).toMatchTypeOf<Task>();
   });
 
   it("enum class scopes: `declare static low: () => Relation<Task>`", () => {
     expectTypeOf(Task.low).toEqualTypeOf<() => Relation<Task>>();
-    expectTypeOf(Task.notHigh()).toMatchTypeOf<Relation<Task>>();
+    expectTypeOf(Task.low()).toMatchTypeOf<Relation<Task>>();
   });
 
   it("without a declare, runtime members fall through to `unknown`", () => {

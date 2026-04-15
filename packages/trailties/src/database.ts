@@ -172,14 +172,170 @@ export async function loadDatabaseConfig(
     throw new Error(`No database configuration for environment "${resolvedEnv}". ${available}`);
   }
 
-  const envConfig = (loaded.module as Record<string, unknown>)[resolvedEnv] as
-    | DatabaseConfig
-    | undefined;
-  if (!envConfig) {
+  const envConfig = (loaded.module as Record<string, unknown>)[resolvedEnv];
+  if (envConfig === undefined) {
     throw new Error(`No database configuration for environment "${resolvedEnv}". ${available}`);
   }
 
-  return envConfig;
+  // Legacy single-DB layout: env value IS the config.
+  if (isFlatDatabaseConfig(envConfig)) return envConfig as DatabaseConfig;
+
+  // Multi-DB layout: pull the `primary` sub-config so single-adapter
+  // CLI commands (migrate, schema:dump, etc.) operate against it.
+  // Anything that needs to fan out across every named DB should call
+  // loadAllDatabaseConfigs directly.
+  if (envConfig !== null && typeof envConfig === "object") {
+    const primary = (envConfig as Record<string, unknown>).primary;
+    if (isFlatDatabaseConfig(primary)) return primary as DatabaseConfig;
+    const names = Object.keys(envConfig).join(", ");
+    throw new Error(
+      `Multi-database environment "${resolvedEnv}" has no "primary" sub-config. ` +
+        `Found: ${names || "(empty)"}. Either add a primary entry or use loadAllDatabaseConfigs.`,
+    );
+  }
+
+  throw new Error(
+    `Invalid database configuration for environment "${resolvedEnv}": ` +
+      `expected an object, got ${formatUnknown(envConfig)}.`,
+  );
+}
+
+/**
+ * Adapter-config field names that identify a node as a concrete
+ * DatabaseConfig rather than a nested name-keyed wrapper. Matches the
+ * keys Rails' `HashConfig` knows about (adapter, url, database, host,
+ * port, username, password) plus a few we recognize (pool, timeout).
+ * Used to distinguish Rails' multi-DB shape
+ *
+ *   development:
+ *     primary: { adapter, database, ... }
+ *     animals: { adapter, database, ... }
+ *
+ * from the legacy single-DB shape
+ *
+ *   development: { adapter, database, ... }
+ *
+ * without requiring the user to opt in — whichever layout they wrote
+ * Just Works.
+ */
+const ADAPTER_CONFIG_FIELDS = new Set<string>([
+  "adapter",
+  "url",
+  "database",
+  "host",
+  "port",
+  "username",
+  "password",
+  "socket",
+  "pool",
+  "timeout",
+  "sslmode",
+  "ssl",
+  "encoding",
+  "reconnect",
+  "replica",
+  "migrations_paths",
+  "migrationsPaths",
+  "schema_search_path",
+  "schemaSearchPath",
+]);
+
+/**
+ * Return true when `value` looks like a concrete DatabaseConfig rather
+ * than a nested `{ name: config, ... }` wrapper. Conservative: any of
+ * the adapter-config fields present → treat as a flat config.
+ */
+function isFlatDatabaseConfig(value: unknown): boolean {
+  if (value === null || typeof value !== "object") return false;
+  for (const key of Object.keys(value as object)) {
+    if (ADAPTER_CONFIG_FIELDS.has(key)) return true;
+  }
+  return false;
+}
+
+/**
+ * Named database configuration for the given environment. `name` is
+ * `"primary"` for legacy single-DB configs; for multi-DB layouts it
+ * matches the key under the env object (`primary`, `animals`, etc.).
+ */
+export interface NamedDatabaseConfig {
+  name: string;
+  config: DatabaseConfig;
+}
+
+/**
+ * Load every database configuration defined for the given environment.
+ * Supports two config shapes:
+ *
+ *   // Single-DB (legacy):
+ *   development: { adapter: "sqlite3", database: "db/dev.sqlite3" }
+ *
+ *   // Multi-DB (Rails-style):
+ *   development:
+ *     primary: { adapter: "postgresql", database: "app_dev" }
+ *     animals: { adapter: "postgresql", database: "app_animals_dev" }
+ *
+ * The shape is auto-detected by inspecting the env object: if any of
+ * its keys is a known adapter-config field (adapter, url, database,
+ * etc.) the env itself IS the config and gets returned as `"primary"`;
+ * otherwise each key/value pair is treated as a named sub-config.
+ *
+ * Mirrors: `ActiveRecord::DatabaseConfigurations#configs_for(env_name:)`
+ * which returns one HashConfig per named DB in an environment.
+ */
+export async function loadAllDatabaseConfigs(
+  env?: string,
+  cwd: string = process.cwd(),
+): Promise<NamedDatabaseConfig[]> {
+  const resolvedEnv = env ?? resolveEnv();
+  const loaded = await loadDatabaseConfigModule(cwd);
+  if (!loaded) {
+    throw new Error(
+      "No database config found. Expected config/database.ts (.js) or src/config/database.ts (.js)",
+    );
+  }
+
+  const envs = Object.keys(loaded.module).filter((k) => !TOP_LEVEL_CONFIG_KEYS.has(k));
+  const available = envs.length > 0 ? `Available: ${envs.join(", ")}` : "No environments defined";
+
+  if (TOP_LEVEL_CONFIG_KEYS.has(resolvedEnv)) {
+    throw new Error(`No database configuration for environment "${resolvedEnv}". ${available}`);
+  }
+
+  const raw = (loaded.module as Record<string, unknown>)[resolvedEnv];
+  if (raw === undefined) {
+    throw new Error(`No database configuration for environment "${resolvedEnv}". ${available}`);
+  }
+
+  if (isFlatDatabaseConfig(raw)) {
+    return [{ name: "primary", config: raw as DatabaseConfig }];
+  }
+
+  // Multi-DB: each key is a named sub-config. Validate every value is
+  // an object — a typo like `development: { primary: "postgres" }`
+  // would otherwise silently register a string as a HashConfig and
+  // crash on first use.
+  if (raw === null || typeof raw !== "object") {
+    throw new Error(
+      `Invalid database configuration for environment "${resolvedEnv}": ` +
+        `expected an object or named sub-configs, got ${formatUnknown(raw)}.`,
+    );
+  }
+  const entries = Object.entries(raw as Record<string, unknown>);
+  if (entries.length === 0) {
+    throw new Error(`Environment "${resolvedEnv}" has no database configurations defined.`);
+  }
+  const results: NamedDatabaseConfig[] = [];
+  for (const [name, sub] of entries) {
+    if (!isFlatDatabaseConfig(sub)) {
+      throw new Error(
+        `Invalid database configuration "${resolvedEnv}.${name}": ` +
+          `expected an adapter config (with adapter/url/database/...), got ${formatUnknown(sub)}.`,
+      );
+    }
+    results.push({ name, config: sub as DatabaseConfig });
+  }
+  return results;
 }
 
 export type SchemaFormat = "ts" | "js" | "sql";

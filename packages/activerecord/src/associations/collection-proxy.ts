@@ -73,6 +73,70 @@ export class CollectionProxy<T extends Base = Base> {
     return this._target;
   }
 
+  // ──────────────────────────────────────────────────────────────────
+  // Array-likeness — sync ops over the loaded target.
+  //
+  // Rails' CollectionProxy IS a Relation that's iterable / countable
+  // / array-shaped against the loaded records. JS has no blocking IO,
+  // so these methods do NOT trigger a fresh DB load — they read
+  // whatever's in `_target` (populated by `await proxy`,
+  // `await proxy.load()`, `Post.includes(...)`, or push / build /
+  // create through the proxy). For a fresh load, await the proxy
+  // first.
+  // ──────────────────────────────────────────────────────────────────
+
+  get length(): number {
+    return this._target.length;
+  }
+
+  [Symbol.iterator](): IterableIterator<T> {
+    return this._target[Symbol.iterator]();
+  }
+
+  at(index: number): T | undefined {
+    return this._target.at(index);
+  }
+
+  map<U>(fn: (record: T, index: number, all: readonly T[]) => U): U[] {
+    return this._target.map(fn);
+  }
+
+  filter(fn: (record: T, index: number, all: readonly T[]) => unknown): T[] {
+    return this._target.filter(fn);
+  }
+
+  forEach(fn: (record: T, index: number, all: readonly T[]) => void): void {
+    this._target.forEach(fn);
+  }
+
+  some(fn: (record: T, index: number, all: readonly T[]) => unknown): boolean {
+    return this._target.some(fn);
+  }
+
+  every(fn: (record: T, index: number, all: readonly T[]) => unknown): boolean {
+    return this._target.every(fn);
+  }
+
+  includes(record: T, fromIndex?: number): boolean {
+    return this._target.includes(record, fromIndex);
+  }
+
+  slice(start?: number, end?: number): T[] {
+    return this._target.slice(start, end);
+  }
+
+  reduce<U>(fn: (acc: U, record: T, index: number, all: readonly T[]) => U, initial: U): U {
+    return this._target.reduce(fn, initial);
+  }
+
+  indexOf(record: T, fromIndex?: number): number {
+    return this._target.indexOf(record, fromIndex);
+  }
+
+  flatMap<U>(fn: (record: T, index: number, all: readonly T[]) => U | readonly U[]): U[] {
+    return this._target.flatMap(fn);
+  }
+
   /** @internal Initialize from preloaded association data. */
   _hydrateFromPreload(records: T[]): void {
     // Preserve any unsaved in-memory records (from build/push before preload ran)

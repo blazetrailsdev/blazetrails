@@ -754,6 +754,7 @@ export class CreatePosts extends Migration {
       new HashConfig("production", "primary", { adapter: "sqlite3", database: dbFile }),
     ]);
     const previous = DatabaseTasks.databaseConfiguration;
+    const previousCurrent = DatabaseConfigurations.current;
     DatabaseTasks.databaseConfiguration = configurations;
     try {
       await expect(
@@ -763,12 +764,8 @@ export class CreatePosts extends Migration {
       // DatabaseConfigurations constructor registers itself as the
       // module-level current-configurations singleton — restore that too,
       // not just DatabaseTasks.databaseConfiguration.
-      if (previous) {
-        DatabaseTasks.databaseConfiguration = new DatabaseConfigurations(previous.configurations);
-      } else {
-        DatabaseTasks.databaseConfiguration = null;
-        new DatabaseConfigurations([]);
-      }
+      DatabaseTasks.databaseConfiguration = previous;
+      DatabaseConfigurations.current = previousCurrent;
     }
   });
 
@@ -797,18 +794,15 @@ export class CreatePosts extends Migration {
       new HashConfig("development", "primary", { adapter: "sqlite3", database: dbFile }),
     ]);
     const previous = DatabaseTasks.databaseConfiguration;
+    const previousCurrent = DatabaseConfigurations.current;
     DatabaseTasks.databaseConfiguration = configurations;
     try {
       await expect(
         DatabaseTasks.checkProtectedEnvironmentsBang("development"),
       ).rejects.toBeInstanceOf(EnvironmentMismatchError);
     } finally {
-      if (previous) {
-        DatabaseTasks.databaseConfiguration = new DatabaseConfigurations(previous.configurations);
-      } else {
-        DatabaseTasks.databaseConfiguration = null;
-        new DatabaseConfigurations([]);
-      }
+      DatabaseTasks.databaseConfiguration = previous;
+      DatabaseConfigurations.current = previousCurrent;
     }
   });
 
@@ -832,6 +826,7 @@ export class CreatePosts extends Migration {
       new HashConfig("production", "primary", { adapter: "sqlite3", database: dbFile }),
     ]);
     const previous = DatabaseTasks.databaseConfiguration;
+    const previousCurrent = DatabaseConfigurations.current;
     const origEnv = process.env.DISABLE_DATABASE_ENVIRONMENT_CHECK;
     DatabaseTasks.databaseConfiguration = configurations;
     process.env.DISABLE_DATABASE_ENVIRONMENT_CHECK = "1";
@@ -840,12 +835,8 @@ export class CreatePosts extends Migration {
         DatabaseTasks.checkProtectedEnvironmentsBang("production"),
       ).resolves.toBeUndefined();
     } finally {
-      if (previous) {
-        DatabaseTasks.databaseConfiguration = new DatabaseConfigurations(previous.configurations);
-      } else {
-        DatabaseTasks.databaseConfiguration = null;
-        new DatabaseConfigurations([]);
-      }
+      DatabaseTasks.databaseConfiguration = previous;
+      DatabaseConfigurations.current = previousCurrent;
       if (origEnv === undefined) delete process.env.DISABLE_DATABASE_ENVIRONMENT_CHECK;
       else process.env.DISABLE_DATABASE_ENVIRONMENT_CHECK = origEnv;
     }

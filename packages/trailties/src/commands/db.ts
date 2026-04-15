@@ -150,27 +150,22 @@ function toDbConfig(raw: RawConfig, envName: string = resolveEnv()): HashConfig 
  */
 async function runProtectedEnvCheck(config: HashConfig, envName: string): Promise<void> {
   const { DatabaseConfigurations } = await import("@blazetrails/activerecord");
-  const previous = DatabaseTasks.databaseConfiguration;
   // DatabaseConfigurations' constructor registers itself as the
-  // module-level "current configurations" singleton (HashConfig.isPrimary
-  // consults it), so swapping back DatabaseTasks.databaseConfiguration
-  // isn't enough on its own — the finally has to re-register whatever
-  // was current before this call, or construct an empty DatabaseConfigurations
-  // when nothing was set to avoid leaking our ephemeral one.
+  // module-level "current" singleton (HashConfig.isPrimary consults it),
+  // so swapping DatabaseTasks.databaseConfiguration isn't enough on its
+  // own. Capture BOTH slots — they may differ when other code (e.g.
+  // connection-handling) created a DatabaseConfigurations without
+  // assigning it to DatabaseTasks.databaseConfiguration — and restore
+  // both in finally instead of clobbering the singleton with an empty
+  // fallback.
+  const previousTasksConfig = DatabaseTasks.databaseConfiguration;
+  const previousCurrent = DatabaseConfigurations.current;
   DatabaseTasks.databaseConfiguration = new DatabaseConfigurations([config]);
   try {
     await DatabaseTasks.checkProtectedEnvironmentsBang(envName);
   } finally {
-    if (previous) {
-      // Re-constructing restores the singleton to `previous` because its
-      // constructor assigns _currentConfigurations = this.
-      DatabaseTasks.databaseConfiguration = new DatabaseConfigurations(previous.configurations);
-    } else {
-      DatabaseTasks.databaseConfiguration = null;
-      // Neutralize the ephemeral singleton so a later HashConfig.isPrimary
-      // lookup doesn't see our temporary DatabaseConfigurations.
-      new DatabaseConfigurations([]);
-    }
+    DatabaseTasks.databaseConfiguration = previousTasksConfig;
+    DatabaseConfigurations.current = previousCurrent;
   }
 }
 

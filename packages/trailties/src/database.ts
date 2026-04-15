@@ -177,80 +177,67 @@ export async function loadDatabaseConfig(
     throw new Error(`No database configuration for environment "${resolvedEnv}". ${available}`);
   }
 
-  // Legacy single-DB layout: env value IS the config.
-  if (isFlatDatabaseConfig(envConfig)) return envConfig as DatabaseConfig;
+  if (envConfig === null || typeof envConfig !== "object") {
+    throw new Error(
+      `Invalid database configuration for environment "${resolvedEnv}": ` +
+        `expected an object, got ${formatUnknown(envConfig)}.`,
+    );
+  }
+
+  // Legacy single-DB layout: the env value IS the config (Rails rule:
+  // not every sub-value is a Hash).
+  if (!isMultiDatabaseEnv(envConfig)) return envConfig as DatabaseConfig;
 
   // Multi-DB layout: pull the `primary` sub-config so single-adapter
   // CLI commands (migrate, schema:dump, etc.) operate against it.
   // Anything that needs to fan out across every named DB should call
   // loadAllDatabaseConfigs directly.
-  if (envConfig !== null && typeof envConfig === "object") {
-    const primary = (envConfig as Record<string, unknown>).primary;
-    if (isFlatDatabaseConfig(primary)) return primary as DatabaseConfig;
-    const names = Object.keys(envConfig).join(", ");
-    throw new Error(
-      `Multi-database environment "${resolvedEnv}" has no "primary" sub-config. ` +
-        `Found: ${names || "(empty)"}. Either add a primary entry or use loadAllDatabaseConfigs.`,
-    );
+  const primary = (envConfig as Record<string, unknown>).primary;
+  if (primary !== null && typeof primary === "object" && !Array.isArray(primary)) {
+    return primary as DatabaseConfig;
   }
-
+  const names = Object.keys(envConfig).join(", ");
   throw new Error(
-    `Invalid database configuration for environment "${resolvedEnv}": ` +
-      `expected an object, got ${formatUnknown(envConfig)}.`,
+    `Multi-database environment "${resolvedEnv}" has no "primary" sub-config. ` +
+      `Found: ${names || "(empty)"}. Either add a primary entry or use loadAllDatabaseConfigs.`,
   );
 }
 
 /**
- * Adapter-config field names that identify a node as a concrete
- * DatabaseConfig rather than a nested name-keyed wrapper. Matches the
- * keys Rails' `HashConfig` knows about (adapter, url, database, host,
- * port, username, password) plus a few we recognize (pool, timeout).
- * Used to distinguish Rails' multi-DB shape
+ * Distinguish Rails' multi-DB shape from the legacy single-DB shape:
  *
+ *   // multi-DB:
  *   development:
  *     primary: { adapter, database, ... }
  *     animals: { adapter, database, ... }
  *
- * from the legacy single-DB shape
- *
+ *   // single-DB:
  *   development: { adapter, database, ... }
  *
- * without requiring the user to opt in — whichever layout they wrote
- * Just Works.
+ * Mirrors Rails' rule from
+ * `DatabaseConfigurations#build_configs` (activerecord/lib/active_record/
+ * database_configurations.rb:205):
+ *
+ *     if config.is_a?(Hash) && config.values.all?(Hash)
+ *       walk_configs(env_name, config)     # multi-DB
+ *     else
+ *       build_db_config_from_raw_config(env_name, "primary", config)
+ *     end
+ *
+ * So an env value is treated as multi-DB iff it's a non-null object
+ * AND every value inside it is also a non-null object. A single
+ * string/number/boolean field inside the env collapses it back to
+ * single-DB — exactly matching Rails.
  */
-const ADAPTER_CONFIG_FIELDS = new Set<string>([
-  "adapter",
-  "url",
-  "database",
-  "host",
-  "port",
-  "username",
-  "password",
-  "socket",
-  "pool",
-  "timeout",
-  "sslmode",
-  "ssl",
-  "encoding",
-  "reconnect",
-  "replica",
-  "migrations_paths",
-  "migrationsPaths",
-  "schema_search_path",
-  "schemaSearchPath",
-]);
-
-/**
- * Return true when `value` looks like a concrete DatabaseConfig rather
- * than a nested `{ name: config, ... }` wrapper. Conservative: any of
- * the adapter-config fields present → treat as a flat config.
- */
-function isFlatDatabaseConfig(value: unknown): boolean {
+function isMultiDatabaseEnv(value: unknown): value is Record<string, object> {
   if (value === null || typeof value !== "object") return false;
-  for (const key of Object.keys(value as object)) {
-    if (ADAPTER_CONFIG_FIELDS.has(key)) return true;
-  }
-  return false;
+  // Matches Ruby's `.all? { Hash === _1 }` on hash values: vacuously
+  // true for an empty hash. An empty env still counts as multi-DB (with
+  // zero named sub-configs) — the caller catches that case and throws
+  // a clearer error than "single-DB with no fields".
+  return Object.values(value as object).every(
+    (v) => v !== null && typeof v === "object" && !Array.isArray(v),
+  );
 }
 
 /**
@@ -275,10 +262,11 @@ export interface NamedDatabaseConfig {
  *     primary: { adapter: "postgresql", database: "app_dev" }
  *     animals: { adapter: "postgresql", database: "app_animals_dev" }
  *
- * The shape is auto-detected by inspecting the env object: if any of
- * its keys is a known adapter-config field (adapter, url, database,
- * etc.) the env itself IS the config and gets returned as `"primary"`;
- * otherwise each key/value pair is treated as a named sub-config.
+ * Detection mirrors Rails' `DatabaseConfigurations#build_configs`:
+ * the env value is treated as multi-DB iff it's a non-null object AND
+ * every value inside it is also a non-null object. A single scalar
+ * field inside the env (e.g. `adapter: "sqlite3"`) collapses it back
+ * to single-DB — same rule as Rails' `config.values.all?(Hash)`.
  *
  * Mirrors: `ActiveRecord::DatabaseConfigurations#configs_for(env_name:)`
  * which returns one HashConfig per named DB in an environment.
@@ -307,35 +295,28 @@ export async function loadAllDatabaseConfigs(
     throw new Error(`No database configuration for environment "${resolvedEnv}". ${available}`);
   }
 
-  if (isFlatDatabaseConfig(raw)) {
-    return [{ name: "primary", config: raw as DatabaseConfig }];
-  }
-
-  // Multi-DB: each key is a named sub-config. Validate every value is
-  // an object — a typo like `development: { primary: "postgres" }`
-  // would otherwise silently register a string as a HashConfig and
-  // crash on first use.
   if (raw === null || typeof raw !== "object") {
     throw new Error(
       `Invalid database configuration for environment "${resolvedEnv}": ` +
-        `expected an object or named sub-configs, got ${formatUnknown(raw)}.`,
+        `expected an object, got ${formatUnknown(raw)}.`,
     );
   }
+
+  if (!isMultiDatabaseEnv(raw)) {
+    // Single-DB: the env value IS the config — matches Rails'
+    // `build_db_config_from_raw_config(env, "primary", config)`
+    // fallback when `config.values.all?(Hash)` is false.
+    return [{ name: "primary", config: raw as DatabaseConfig }];
+  }
+
+  // Multi-DB: each key is a named sub-config. isMultiDatabaseEnv
+  // already enforces entries.length > 0, but double-check explicitly
+  // so the message makes sense if someone refactors the predicate.
   const entries = Object.entries(raw as Record<string, unknown>);
   if (entries.length === 0) {
     throw new Error(`Environment "${resolvedEnv}" has no database configurations defined.`);
   }
-  const results: NamedDatabaseConfig[] = [];
-  for (const [name, sub] of entries) {
-    if (!isFlatDatabaseConfig(sub)) {
-      throw new Error(
-        `Invalid database configuration "${resolvedEnv}.${name}": ` +
-          `expected an adapter config (with adapter/url/database/...), got ${formatUnknown(sub)}.`,
-      );
-    }
-    results.push({ name, config: sub as DatabaseConfig });
-  }
-  return results;
+  return entries.map(([name, sub]) => ({ name, config: sub as DatabaseConfig }));
 }
 
 export type SchemaFormat = "ts" | "js" | "sql";

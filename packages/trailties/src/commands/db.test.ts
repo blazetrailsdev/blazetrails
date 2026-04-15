@@ -300,18 +300,25 @@ describe("loadAllDatabaseConfigs", () => {
     expect(all[1].config.database).toBe("db/animals.sqlite3");
   });
 
-  it("rejects non-object sub-configs in a multi-DB env", async () => {
+  it("treats an env with any non-object sub-value as single-DB (Rails all-values-are-hashes rule)", async () => {
+    // Matches Rails' `DatabaseConfigurations#build_configs`: unless every
+    // sub-value is a Hash, the whole env-level object is the primary
+    // config. Here `url` is a string, so the env-object is NOT walked
+    // as sub-configs — the whole thing becomes the single primary
+    // config. Trails mirrors this behavior exactly.
     fs.writeFileSync(
       path.join(tmpDir, "config", "database.ts"),
       `export default {
   development: {
-    primary: "postgres://host/db",
+    url: "postgres://host/db",
+    primary: { adapter: "sqlite3", database: "ignored.sqlite3" },
   },
 };`,
     );
-    await expect(loadAllDatabaseConfigs("development", tmpDir)).rejects.toThrow(
-      /Invalid database configuration "development.primary"/,
-    );
+    const all = await loadAllDatabaseConfigs("development", tmpDir);
+    expect(all).toHaveLength(1);
+    expect(all[0].name).toBe("primary");
+    expect((all[0].config as { url?: string }).url).toBe("postgres://host/db");
   });
 
   it("rejects an empty multi-DB env", async () => {

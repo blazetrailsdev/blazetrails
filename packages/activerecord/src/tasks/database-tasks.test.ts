@@ -956,6 +956,60 @@ describe("DatabaseTasks schema cache", () => {
     }
   });
 
+  it("dumpSchemaCache validates through withConnection when given a pool", async () => {
+    // Pool-shaped: methods live on the connection yielded by
+    // `withConnection`, not on the pool itself. Validation must go
+    // through the same pool.withConnection that SchemaCache.addAll uses,
+    // otherwise pools would incorrectly report missing methods.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-dstasks-"));
+    const filename = path.join(tmp, "schema_cache.json");
+    const connection = {
+      dataSources: async () => ["widgets"],
+      dataSourceExists: async () => true,
+      primaryKey: async () => "id",
+      columns: async () => [{ name: "id", default: null, null: false, primaryKey: true }],
+      indexes: async () => [],
+      schemaVersion: async () => null,
+    };
+    const pool = {
+      async withConnection<T>(cb: (c: unknown) => T | Promise<T>): Promise<T> {
+        return await cb(connection);
+      },
+    };
+    try {
+      await DatabaseTasks.dumpSchemaCache(pool, filename);
+      const parsed = JSON.parse(fs.readFileSync(filename, "utf8"));
+      expect(Object.keys(parsed.columns)).toEqual(["widgets"]);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("dumpSchemaCache delegates to a reflection-shaped schemaCache.dumpTo", async () => {
+    // Rails path: `conn_or_pool.schema_cache.dump_to(filename)` on a pool
+    // whose schema_cache is a BoundSchemaReflection. We detect the
+    // reflection by its `dumpTo` + absence of `addAll` (SchemaCache has
+    // both; reflections only have dumpTo).
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-dstasks-"));
+    const filename = path.join(tmp, "schema_cache.json");
+    let called = false;
+    const poolWithReflection = {
+      schemaCache: {
+        dumpTo: async (f: string) => {
+          called = true;
+          fs.writeFileSync(f, '{"delegated":true}');
+        },
+      },
+    };
+    try {
+      await DatabaseTasks.dumpSchemaCache(poolWithReflection, filename);
+      expect(called).toBe(true);
+      expect(JSON.parse(fs.readFileSync(filename, "utf8"))).toEqual({ delegated: true });
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
   it("clearSchemaCache removes the file when present", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-dstasks-"));
     const filename = path.join(tmp, "schema_cache.json");

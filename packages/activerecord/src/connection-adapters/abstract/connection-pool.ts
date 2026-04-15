@@ -276,6 +276,11 @@ export class ConnectionPool implements ReapablePool {
 
   set schemaReflection(value: SchemaReflection) {
     this.poolConfig.schemaReflection = value;
+    // Matches Rails' `schema_reflection=`: swap the underlying
+    // reflection AND bust the cached BoundSchemaReflection so the
+    // next schemaCache access wraps the new reflection, not the
+    // stale one.
+    this._boundSchemaCache = undefined;
   }
 
   /**

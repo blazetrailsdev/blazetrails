@@ -655,6 +655,19 @@ describe("ConnectionPool schema cache", () => {
     expect(pool.schemaCache).toBe(pool.schemaCache);
   });
 
+  it("swapping schemaReflection invalidates the cached BoundSchemaReflection", () => {
+    // Matches Rails' `ConnectionPool#schema_reflection=` which sets
+    // @schema_cache = nil after swapping so subsequent pool.schema_cache
+    // calls rebuild against the new reflection. Without this the
+    // bound wrapper would still point at the old reflection after a
+    // swap — subtle, rare in practice, but a real parity gap.
+    const pool = makePool();
+    const before = pool.schemaCache;
+    pool.schemaReflection = new SchemaReflection("db/other_cache.json");
+    const after = pool.schemaCache;
+    expect(after).not.toBe(before);
+  });
+
   it("BoundSchemaReflection.dumpTo(filename) round-trips through the pool", async () => {
     // End-to-end Rails path: pool.schema_cache.dump_to(filename)
     // allocates a fresh SchemaCache, addAll(pool) populates it via

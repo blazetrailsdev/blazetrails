@@ -148,12 +148,29 @@ function toDbConfig(raw: RawConfig, envName: string = resolveEnv()): HashConfig 
  * `EnvironmentMismatchError` and the protected-stamp case this PR cares
  * about.
  */
-async function resolveHandler(
+/**
+ * Run `fn` with `DatabaseTasks.databaseConfiguration` and the module-level
+ * `DatabaseConfigurations.current` singleton temporarily pointed at a
+ * DatabaseConfigurations built from `config`. Mirrors the capture/restore
+ * pattern in `runProtectedEnvCheck` — lets us call into methods like
+ * `DatabaseTasks.truncateAll` / `DatabaseTasks.prepareAll` that depend on
+ * `configsFor` returning a non-empty list even when the CLI didn't
+ * globally register configurations.
+ */
+async function withRegisteredConfiguration<T>(
   config: HashConfig,
-): Promise<import("@blazetrails/activerecord").DatabaseTaskHandler | undefined> {
-  const adapter = config.adapter;
-  if (!adapter) return undefined;
-  return DatabaseTasks.resolveTask(adapter);
+  fn: () => Promise<T>,
+): Promise<T> {
+  const { DatabaseConfigurations } = await import("@blazetrails/activerecord");
+  const previousTasksConfig = DatabaseTasks.databaseConfiguration;
+  const previousCurrent = DatabaseConfigurations.current;
+  DatabaseTasks.databaseConfiguration = new DatabaseConfigurations([config]);
+  try {
+    return await fn();
+  } finally {
+    DatabaseTasks.databaseConfiguration = previousTasksConfig;
+    DatabaseConfigurations.current = previousCurrent;
+  }
 }
 
 async function runProtectedEnvCheck(config: HashConfig, envName: string): Promise<void> {
@@ -523,11 +540,12 @@ export function dbCommand(): Command {
     .action(async () => {
       await withAdapter(async (adapter, raw) => {
         const config = toDbConfig(raw);
-        await runProtectedEnvCheck(config, config.envName);
-        const handler = await resolveHandler(config);
-        if (handler?.truncateAll) {
-          await handler.truncateAll(config);
-        }
+        // Delegate through DatabaseTasks.truncateAll so the centralized
+        // protected-env check + multi-config iteration apply. Register
+        // the config first so configsFor returns a non-empty list.
+        await withRegisteredConfiguration(config, async () => {
+          await DatabaseTasks.truncateAll(config.envName);
+        });
         const { Base } = await import("@blazetrails/activerecord");
         Base.adapter = adapter;
         await runSeed();
@@ -540,11 +558,9 @@ export function dbCommand(): Command {
     .action(async () => {
       await withAdapter(async (_adapter, raw) => {
         const config = toDbConfig(raw);
-        await runProtectedEnvCheck(config, config.envName);
-        const handler = await resolveHandler(config);
-        if (handler?.truncateAll) {
-          await handler.truncateAll(config);
-        }
+        await withRegisteredConfiguration(config, async () => {
+          await DatabaseTasks.truncateAll(config.envName);
+        });
       });
     });
 
@@ -563,7 +579,8 @@ export function dbCommand(): Command {
         // file/db exists. A sqlite DB "exists" as soon as anyone opens a
         // connection (better-sqlite3 creates the file on open), so
         // checking DatabaseTasks.create's success would almost always
-        // report not-fresh. Use the schema_migrations presence probe.
+        // report not-fresh. Use the schema_migrations presence probe,
+        // matching Rails' initialize_database contract.
         const preMigrator = new Migrator(adapter, []);
         const wasFresh = !(await preMigrator.schemaMigrationTableExists());
 
@@ -586,15 +603,14 @@ export function dbCommand(): Command {
     .command("test:load_schema")
     .description("Purge the test DB and load the schema")
     .action(async () => {
+      // Rails: test:load_schema → test:purge → DatabaseTasks.purge →
+      // disconnect → drop → create → reconnect. Delegate to
+      // DatabaseTasks.purge so the disconnect/reconnect semantics are
+      // preserved instead of our own drop+create pair.
       const raw = normalizeRawConfig(await loadDatabaseConfig("test"));
       const config = toDbConfig(raw, "test");
       await runProtectedEnvCheck(config, "test");
-      try {
-        await DatabaseTasks.drop(config);
-      } catch {
-        // ignore — test DB may not exist
-      }
-      await DatabaseTasks.create(config);
+      await DatabaseTasks.purge(config);
       const adapter = await connectAdapter(raw);
       try {
         const previous = DatabaseTasks.migrationConnection();
@@ -613,8 +629,12 @@ export function dbCommand(): Command {
 
   cmd
     .command("test:prepare")
-    .description("Prepare the test database (load schema from db/schema.ts / .js / structure.sql)")
+    .description("Prepare the test database (Rails parallel to db:test:prepare)")
     .action(async () => {
+      // Rails: test:prepare → test:load_schema. They're effectively the
+      // same command; test:prepare exists as a semantically-named entry
+      // point for dev/CI scripts. Delegate so behavior stays in one
+      // place.
       const raw = normalizeRawConfig(await loadDatabaseConfig("test"));
       const config = toDbConfig(raw, "test");
       await runProtectedEnvCheck(config, "test");
@@ -624,11 +644,7 @@ export function dbCommand(): Command {
         process.exitCode = 1;
         return;
       }
-      try {
-        await DatabaseTasks.create(config);
-      } catch {
-        // ignore — test DB may exist already
-      }
+      await DatabaseTasks.purge(config);
       const adapter = await connectAdapter(raw);
       try {
         const previous = DatabaseTasks.migrationConnection();

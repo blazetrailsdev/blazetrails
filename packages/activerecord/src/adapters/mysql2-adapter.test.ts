@@ -436,4 +436,83 @@ describeIfMysql("Mysql2Adapter", () => {
       expect(rows[0].num).toBe(1);
     });
   });
+
+  describe("schema introspection", () => {
+    beforeEach(async () => {
+      await adapter.exec("DROP VIEW IF EXISTS `recent_widgets`");
+      await adapter.exec("DROP TABLE IF EXISTS `widgets`");
+      await adapter.exec(
+        "CREATE TABLE `widgets` (`id` INT AUTO_INCREMENT PRIMARY KEY, `name` VARCHAR(255) NOT NULL, `owner` VARCHAR(255))",
+      );
+      await adapter.exec("CREATE INDEX `widgets_on_owner` ON `widgets` (`owner`)");
+      await adapter.exec(
+        "CREATE VIEW `recent_widgets` AS SELECT id, name FROM widgets ORDER BY id DESC",
+      );
+    });
+
+    afterEach(async () => {
+      await adapter.exec("DROP VIEW IF EXISTS `recent_widgets`");
+      await adapter.exec("DROP TABLE IF EXISTS `widgets`");
+    });
+
+    it("tables() lists BASE TABLEs only", async () => {
+      const tables = await adapter.tables();
+      expect(tables).toContain("widgets");
+      expect(tables).not.toContain("recent_widgets");
+    });
+
+    it("views() lists views only", async () => {
+      const views = await adapter.views();
+      expect(views).toContain("recent_widgets");
+      expect(views).not.toContain("widgets");
+    });
+
+    it("dataSources() is deduped tables + views", async () => {
+      const sources = await adapter.dataSources();
+      expect(sources).toContain("widgets");
+      expect(sources).toContain("recent_widgets");
+      expect(new Set(sources).size).toBe(sources.length);
+    });
+
+    it("tableExists() / viewExists() distinguish tables and views", async () => {
+      expect(await adapter.tableExists("widgets")).toBe(true);
+      expect(await adapter.tableExists("recent_widgets")).toBe(false);
+      expect(await adapter.viewExists("recent_widgets")).toBe(true);
+      expect(await adapter.viewExists("widgets")).toBe(false);
+      expect(await adapter.dataSourceExists("recent_widgets")).toBe(true);
+      expect(await adapter.dataSourceExists("nonexistent")).toBe(false);
+    });
+
+    it("primaryKey() returns the pk column name", async () => {
+      expect(await adapter.primaryKey("widgets")).toBe("id");
+    });
+
+    it("columns() returns column metadata for every column", async () => {
+      const cols = await adapter.columns("widgets");
+      expect(cols.map((c) => c.name)).toEqual(["id", "name", "owner"]);
+      const idCol = cols.find((c) => c.name === "id");
+      expect(idCol?.primaryKey).toBe(true);
+      expect(idCol?.null).toBe(false);
+      const nameCol = cols.find((c) => c.name === "name");
+      expect(nameCol?.null).toBe(false);
+      expect(nameCol?.sqlType?.startsWith("varchar")).toBe(true);
+    });
+
+    it("indexes() returns user-created indexes and skips PRIMARY", async () => {
+      const idx = await adapter.indexes("widgets");
+      expect(idx).toEqual([{ name: "widgets_on_owner", columns: ["owner"], unique: false }]);
+    });
+
+    it("SchemaCache.addAll populates from MySQL", async () => {
+      // Integration with Phase 5's dumpSchemaCache — MySQL now exposes
+      // the full surface (dataSources/columns/primaryKey/indexes) the
+      // capability guard requires.
+      const { SchemaCache } = await import("../connection-adapters/schema-cache.js");
+      const cache = new SchemaCache();
+      await cache.addAll(adapter);
+      const cols = await cache.columns(adapter, "widgets");
+      expect(cols?.map((c) => c.name)).toEqual(["id", "name", "owner"]);
+      expect(await cache.primaryKeys(adapter, "widgets")).toBe("id");
+    });
+  });
 });

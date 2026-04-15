@@ -1,6 +1,8 @@
 import mysql from "mysql2/promise";
 import type { DatabaseAdapter } from "../adapter.js";
 import { DatabaseStatementsMixin } from "../connection-adapters/database-statements-mixin.js";
+import { Column } from "../connection-adapters/column.js";
+import { SqlTypeMetadata } from "../connection-adapters/sql-type-metadata.js";
 
 const AdapterBase = DatabaseStatementsMixin(class {});
 
@@ -223,6 +225,214 @@ export class Mysql2Adapter extends AdapterBase implements DatabaseAdapter {
     } finally {
       this.releaseConn(conn);
     }
+  }
+
+  // ── Schema introspection ──
+  // Mirrors Rails' MySQL SchemaStatements (connection_adapters/mysql/
+  // schema_statements.rb + abstract_mysql_adapter.rb). All queries
+  // scope to the current database via information_schema.
+
+  /**
+   * List all BASE TABLEs in the current database, matching Rails'
+   * `data_source_sql(type: "BASE TABLE")` shape.
+   */
+  async tables(): Promise<string[]> {
+    const rows = await this.execute(
+      `SELECT table_name AS name FROM information_schema.tables
+         WHERE table_schema = database() AND table_type = 'BASE TABLE'
+         ORDER BY table_name`,
+    );
+    return rows.map((r) => (r.name ?? r.NAME ?? r.TABLE_NAME) as string);
+  }
+
+  /**
+   * List all VIEWs in the current database, matching Rails'
+   * `data_source_sql(type: "VIEW")`.
+   */
+  async views(): Promise<string[]> {
+    const rows = await this.execute(
+      `SELECT table_name AS name FROM information_schema.tables
+         WHERE table_schema = database() AND table_type = 'VIEW'
+         ORDER BY table_name`,
+    );
+    return rows.map((r) => (r.name ?? r.NAME ?? r.TABLE_NAME) as string);
+  }
+
+  /**
+   * Tables + views, deduped. Matches Rails'
+   * `AbstractAdapter#data_sources` — the name SchemaCache.addAll calls
+   * through.
+   */
+  async dataSources(): Promise<string[]> {
+    const rows = await this.execute(
+      `SELECT table_name AS name FROM information_schema.tables
+         WHERE table_schema = database()
+         ORDER BY table_name`,
+    );
+    return rows.map((r) => (r.name ?? r.NAME ?? r.TABLE_NAME) as string);
+  }
+
+  async tableExists(name: string): Promise<boolean> {
+    return this.informationSchemaExists(name, "BASE TABLE");
+  }
+
+  async viewExists(name: string): Promise<boolean> {
+    return this.informationSchemaExists(name, "VIEW");
+  }
+
+  async dataSourceExists(name: string): Promise<boolean> {
+    return this.informationSchemaExists(name, null);
+  }
+
+  private async informationSchemaExists(
+    name: string,
+    type: "BASE TABLE" | "VIEW" | null,
+  ): Promise<boolean> {
+    const { schema, table } = this.parseMysqlName(name);
+    const schemaBind = schema ?? null;
+    // Use `schema_placeholder OR database()` via COALESCE so the same
+    // query shape serves qualified + unqualified callers.
+    const typeClause = type ? "AND table_type = ?" : "";
+    const params: unknown[] = [schemaBind, table];
+    if (type) params.push(type);
+    const rows = await this.execute(
+      `SELECT 1 AS one FROM information_schema.tables
+         WHERE table_schema = COALESCE(?, database())
+         AND table_name = ?
+         ${typeClause}
+         LIMIT 1`,
+      params,
+    );
+    return rows.length > 0;
+  }
+
+  /**
+   * Return the single-column primary key name, or null for composite /
+   * no-PK tables. Matches Rails' `abstract_mysql_adapter#primary_keys`
+   * shape (which returns an array; we return a scalar for the common
+   * case and null for composite).
+   */
+  async primaryKey(tableName: string): Promise<string | null> {
+    const { schema, table } = this.parseMysqlName(tableName);
+    const rows = (await this.execute(
+      `SELECT column_name AS name FROM information_schema.key_column_usage
+         WHERE table_schema = COALESCE(?, database())
+         AND table_name = ?
+         AND constraint_name = 'PRIMARY'
+         ORDER BY ordinal_position`,
+      [schema ?? null, table],
+    )) as Array<{ name?: string; NAME?: string; COLUMN_NAME?: string }>;
+    const names = rows.map((r) => (r.name ?? r.NAME ?? r.COLUMN_NAME) as string);
+    if (names.length === 1) return names[0];
+    return null;
+  }
+
+  /**
+   * Return Column metadata for the named table. Reads from
+   * `information_schema.columns` — matches Rails' column introspection
+   * shape. Populates the fields SchemaCache serializes (name, default,
+   * null, sqlTypeMetadata, primaryKey).
+   */
+  async columns(tableName: string): Promise<Column[]> {
+    const { schema, table } = this.parseMysqlName(tableName);
+    const rows = (await this.execute(
+      `SELECT column_name AS name,
+              column_default AS default_value,
+              is_nullable AS nullable,
+              data_type AS type,
+              column_type AS full_type,
+              character_maximum_length AS char_len,
+              numeric_precision AS num_precision,
+              numeric_scale AS num_scale,
+              column_key AS col_key,
+              extra AS col_extra,
+              collation_name AS collation,
+              column_comment AS comment
+         FROM information_schema.columns
+         WHERE table_schema = COALESCE(?, database())
+         AND table_name = ?
+         ORDER BY ordinal_position`,
+      [schema ?? null, table],
+    )) as Array<Record<string, unknown>>;
+
+    return rows.map((r) => {
+      const name = String((r.name ?? r.NAME ?? r.COLUMN_NAME) as string);
+      const sqlType = String((r.full_type ?? r.FULL_TYPE ?? r.COLUMN_TYPE ?? "") as string);
+      const baseType = String((r.type ?? r.TYPE ?? r.DATA_TYPE ?? "") as string).toLowerCase();
+      const charLen = r.char_len ?? r.CHAR_LEN ?? r.CHARACTER_MAXIMUM_LENGTH;
+      const numPrec = r.num_precision ?? r.NUM_PRECISION ?? r.NUMERIC_PRECISION;
+      const numScale = r.num_scale ?? r.NUM_SCALE ?? r.NUMERIC_SCALE;
+      const meta = new SqlTypeMetadata({
+        sqlType,
+        type: baseType,
+        limit: charLen != null ? Number(charLen) : null,
+        precision: numPrec != null ? Number(numPrec) : null,
+        scale: numScale != null ? Number(numScale) : null,
+      });
+      const nullable =
+        String((r.nullable ?? r.NULLABLE ?? r.IS_NULLABLE ?? "YES") as string).toUpperCase() !==
+        "NO";
+      const colKey = String((r.col_key ?? r.COL_KEY ?? r.COLUMN_KEY ?? "") as string);
+      return new Column(name, r.default_value ?? r.DEFAULT_VALUE ?? null, meta, nullable, {
+        collation: (r.collation ?? r.COLLATION ?? null) as string | null,
+        comment: (r.comment ?? r.COMMENT ?? null) as string | null,
+        primaryKey: colKey === "PRI",
+      });
+    });
+  }
+
+  /**
+   * Return user-defined indexes for the given table. Matches Rails'
+   * MySQL SchemaStatements#indexes which reads from
+   * `information_schema.statistics` and filters out PRIMARY.
+   */
+  async indexes(
+    tableName: string,
+  ): Promise<Array<{ name: string; columns: string[]; unique: boolean }>> {
+    const { schema, table } = this.parseMysqlName(tableName);
+    const rows = (await this.execute(
+      `SELECT index_name AS name,
+              column_name AS col,
+              non_unique AS non_unique,
+              seq_in_index AS pos
+         FROM information_schema.statistics
+         WHERE table_schema = COALESCE(?, database())
+         AND table_name = ?
+         AND index_name <> 'PRIMARY'
+         ORDER BY index_name, seq_in_index`,
+      [schema ?? null, table],
+    )) as Array<Record<string, unknown>>;
+
+    const byIndex = new Map<string, { columns: string[]; unique: boolean }>();
+    for (const r of rows) {
+      const name = String((r.name ?? r.NAME ?? r.INDEX_NAME) as string);
+      const col = String((r.col ?? r.COL ?? r.COLUMN_NAME) as string);
+      const nonUnique = Number(r.non_unique ?? r.NON_UNIQUE ?? 0);
+      const entry = byIndex.get(name) ?? { columns: [], unique: nonUnique === 0 };
+      entry.columns.push(col);
+      byIndex.set(name, entry);
+    }
+    return Array.from(byIndex.entries()).map(([name, { columns, unique }]) => ({
+      name,
+      columns,
+      unique,
+    }));
+  }
+
+  /**
+   * Split a `schema.table` or `` `schema`.`table` `` into `{schema, table}`.
+   * Matches Rails' `extract_schema_qualified_name` regex from
+   * `mysql/schema_statements.rb`. Returns `schema: undefined` when
+   * `name` is an unqualified identifier.
+   */
+  private parseMysqlName(name: string): { schema?: string; table: string } {
+    const parts = name.match(/[^`.\s]+|`[^`]*`/g) ?? [name];
+    const unquote = (s: string): string =>
+      s.startsWith("`") && s.endsWith("`") ? s.slice(1, -1).replace(/``/g, "`") : s;
+    if (parts.length >= 2) {
+      return { schema: unquote(parts[0]), table: unquote(parts[1]) };
+    }
+    return { table: unquote(parts[0] ?? name) };
   }
 
   /**

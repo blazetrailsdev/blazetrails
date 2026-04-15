@@ -158,10 +158,22 @@ export interface VirtualizeResult {
   text: string;
   deltas: LineDelta[]; // injected-line offsets; consumed by diagnostic remapping
 }
-export function virtualize(originalText: string, fileName: string): VirtualizeResult;
+export interface VirtualizeOptions {
+  baseNames?: readonly string[]; // root class allow-list (default ["Base"])
+  prependImports?: readonly string[]; // `import type` lines to splice at file top
+}
+export function virtualize(
+  originalText: string,
+  fileName: string,
+  options?: VirtualizeOptions,
+): VirtualizeResult;
 ```
 
-Operation is purely syntactic; no `ts.Program` or `TypeChecker` is needed.
+Operation is purely syntactic; no `ts.Program` or `TypeChecker` is
+needed. The `prependImports` option lets the CLI / plugin shell — which
+does hold a `Program` — feed pre-resolved `import type` lines for
+target classes the user didn't import. See "Auto-import resolution"
+under Phase 1b.
 
 Steps:
 
@@ -213,9 +225,18 @@ Rules:
 2. Otherwise apply Rails inflection from `@blazetrails/activesupport`
    (`classify("posts")` → `Post`; `classify` already singularizes
    internally).
-3. If `Foo` isn't in scope in the user's file, TS raises
-   `Cannot find name 'Foo'`. The fix is an import in the user's source —
-   same as today. We do not auto-inject imports into the virtual file.
+3. If `Foo` is in scope in the user's file (already imported, or the
+   model class lives in the same file), TS resolves it normally.
+4. If `Foo` is **not** in scope, the CLI / plugin shell auto-injects
+   `import type { Foo } from "<relative-path>";` into the virtualized
+   text using the model-name → file-path map produced by the
+   symbol-aware walker (see Phase 1b). Result: zero-declare files also
+   need zero-import ceremony for sibling models.
+5. If `Foo` isn't in scope **and** isn't found in the program at all
+   (e.g. `hasMany("commentz")` typo, or a model outside the
+   compilation), TS raises `Cannot find name 'Commentz'` against the
+   injected declare. The user sees the exact missing name and fixes
+   the call site.
 
 `className: "..."` mirrors Rails' `class_name:`.
 
@@ -407,9 +428,55 @@ fixtures, no behavior change beyond the emitted declaration.
   `@blazetrails/activerecord/tsc` with `bin: trails-tsc`.
 - Compose the syntactic walker with the symbol-aware transitive-extends
   pass.
+- Wire **auto-import resolution** (see below) so target classes
+  referenced by `hasMany` / `belongsTo` / `hasOne` /
+  `hasAndBelongsToMany` resolve without the user adding sibling
+  imports.
 - Add `dx-tests/virtualized-patterns.test-d.ts` run under `trails-tsc`.
 - Two-package composite fixture to verify `trails-tsc --build` respects
   virtualization across project references and build-info caching.
+
+#### Auto-import resolution
+
+The walker's symbol-aware pass enumerates every Base-rooted class in
+the program and produces a model registry:
+
+```ts
+type ModelRegistry = Map<string, string>; // class name → absolute source path
+// e.g. { "Comment" → "/abs/comment.ts", "Author" → "/abs/author.ts" }
+```
+
+For each file being virtualized:
+
+1. Collect the set of target class names referenced by the file's
+   association calls (post-`className:` override / inflection).
+2. Subtract names already in scope in the user's file (existing
+   imports, local declarations, same-file classes).
+3. For each remaining name, look it up in the registry, compute the
+   relative path from the source file's directory to the target's
+   file (with the `.js` suffix ESM TypeScript wants), and build an
+   `import type { Name } from "<relative>";` line.
+4. Pass the resulting list as `VirtualizeOptions.prependImports`. The
+   virtualizer splices them at the top of the file before the rest
+   of the transform; `LineDelta` accounting absorbs the prepended
+   lines so diagnostic remap stays accurate.
+
+Why `import type`: the auto-injected imports are erased at runtime, so
+they cannot create new module-load cycles. They only exist for the
+checker's benefit.
+
+Failure modes:
+
+- Class name collisions (two `Comment` classes in different paths) —
+  the walker logs a diagnostic; the wrapper picks the one closest to
+  the source file by path distance, then by lexicographic order.
+  Document that the fix is `className:` on the association.
+- Class not in the program — no auto-import; TS surfaces
+  `Cannot find name 'X'` against the injected declare. User imports
+  it manually or fixes the typo.
+- User explicitly imports a different class with the same name (e.g.
+  a wrapper type) — their existing import wins; the wrapper does not
+  shadow it.
 
 **Phase 1b exit criteria:**
 

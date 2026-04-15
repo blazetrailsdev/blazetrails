@@ -259,6 +259,8 @@ class Comment extends Base {}
 
 class Post extends Base {
   declare title: string; // attribute
+  declare status: number; // enum is stored as an integer; defineEnum
+  //                        does not override the accessor (unlike Base.enum)
   declare author: Author | null; // belongsTo reader (synchronous)
   declare comments: Comment[]; // hasMany reader (synchronous array;
   //                            use `association(post, "comments")` for
@@ -272,6 +274,7 @@ class Post extends Base {
 
   static {
     this.attribute("title", "string");
+    this.attribute("status", "integer"); // must be declared before defineEnum
     this.belongsTo("author");
     this.hasMany("comments");
     // defineEnum (above, section 7) gives the full surface: plain setter,

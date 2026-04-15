@@ -266,7 +266,10 @@ class Task extends Base {
 
 // defineEnum — full surface
 class Article extends Base {
-  declare status: string;
+  // defineEnum does NOT override the attribute accessor: `status` stays
+  // the integer column. Use `readEnumValue(record, "status")` when you
+  // want the string label.
+  declare status: number;
   declare isDraft: () => boolean;
   declare draft: () => void; // plain in-memory setter
   declare draftBang: () => Promise<void>; // async, persists via updateColumn

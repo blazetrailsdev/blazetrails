@@ -135,8 +135,11 @@ class Task extends Base {
 
 // --- Enum typing (defineEnum form): richer surface with async persisting
 // bang setters, plain in-memory setters, and `not*` scopes.
+// Unlike Base.enum, defineEnum does NOT override the attribute accessor —
+// `record.status` still returns the underlying integer. Use `readEnumValue`
+// (exported from `@blazetrails/activerecord`) when you want the string label.
 class Article extends Base {
-  declare status: string;
+  declare status: number; // integer column — defineEnum leaves the accessor alone
 
   // Predicates (same as Base.enum)
   declare isDraft: () => boolean;

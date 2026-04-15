@@ -177,7 +177,10 @@ export async function loadDatabaseConfig(
     throw new Error(`No database configuration for environment "${resolvedEnv}". ${available}`);
   }
 
-  if (envConfig === null || typeof envConfig !== "object") {
+  // Reject arrays explicitly: they pass `typeof === "object"` but a
+  // `development: []` config is never valid and the downstream
+  // multi-DB error message would just confuse the user.
+  if (envConfig === null || typeof envConfig !== "object" || Array.isArray(envConfig)) {
     throw new Error(
       `Invalid database configuration for environment "${resolvedEnv}": ` +
         `expected an object, got ${formatUnknown(envConfig)}.`,
@@ -295,7 +298,10 @@ export async function loadAllDatabaseConfigs(
     throw new Error(`No database configuration for environment "${resolvedEnv}". ${available}`);
   }
 
-  if (raw === null || typeof raw !== "object") {
+  // Reject arrays explicitly: they pass `typeof === "object"` but
+  // would slip into the multi-DB path and produce a misleading error
+  // about no configurations defined.
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error(
       `Invalid database configuration for environment "${resolvedEnv}": ` +
         `expected an object, got ${formatUnknown(raw)}.`,
@@ -309,9 +315,11 @@ export async function loadAllDatabaseConfigs(
     return [{ name: "primary", config: raw as DatabaseConfig }];
   }
 
-  // Multi-DB: each key is a named sub-config. isMultiDatabaseEnv
-  // already enforces entries.length > 0, but double-check explicitly
-  // so the message makes sense if someone refactors the predicate.
+  // Multi-DB: each key is a named sub-config. isMultiDatabaseEnv is
+  // explicitly vacuously true for an empty object (matches Ruby's
+  // `[].all?` returning true), so this is the explicit empty-env
+  // check that produces a clear error instead of silently returning
+  // an empty array.
   const entries = Object.entries(raw as Record<string, unknown>);
   if (entries.length === 0) {
     throw new Error(`Environment "${resolvedEnv}" has no database configurations defined.`);

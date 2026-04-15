@@ -242,6 +242,18 @@ describe("loadDatabaseConfig", () => {
     expect(config.database).toBe("db/primary.sqlite3");
   });
 
+  it("rejects an array env value instead of silently falling through", async () => {
+    // Arrays are objects in JS; without an explicit guard the check
+    // would slip into multi-DB handling and confuse users with a
+    // 'no primary' error. Reject up front.
+    const configDir = path.join(tmpDir, "config");
+    fs.mkdirSync(configDir, { recursive: true });
+    fs.writeFileSync(path.join(configDir, "database.ts"), `export default { development: [] };`);
+    await expect(loadDatabaseConfig("development", tmpDir)).rejects.toThrow(
+      /Invalid database configuration for environment "development".*expected an object/,
+    );
+  });
+
   it("errors when a multi-DB env has no primary sub-config", async () => {
     const configDir = path.join(tmpDir, "config");
     fs.mkdirSync(configDir, { recursive: true });
@@ -331,7 +343,10 @@ describe("loadAllDatabaseConfigs", () => {
     );
   });
 
-  it("treats a url-only env value as single-DB (has adapter config fields)", async () => {
+  it("treats a url-only env value as single-DB (the string value fails Rails' all-hashes check)", async () => {
+    // Detection rule is `config.values.all?(Hash)`. Here the only
+    // value is a string, so the predicate is false and the whole env
+    // object becomes the single primary config.
     fs.writeFileSync(
       path.join(tmpDir, "config", "database.ts"),
       `export default {
@@ -342,6 +357,20 @@ describe("loadAllDatabaseConfigs", () => {
     expect(all).toHaveLength(1);
     expect(all[0].name).toBe("primary");
     expect(all[0].config.url).toBe("sqlite3:///tmp/dev.sqlite3");
+  });
+
+  it("rejects an array env value with a clear error", async () => {
+    // Arrays pass `typeof === 'object'` but a `development: []` config
+    // is never valid — catch it up front instead of letting it slip
+    // into the multi-DB path and producing a misleading
+    // 'no database configurations defined' error.
+    fs.writeFileSync(
+      path.join(tmpDir, "config", "database.ts"),
+      `export default { development: [] };`,
+    );
+    await expect(loadAllDatabaseConfigs("development", tmpDir)).rejects.toThrow(
+      /Invalid database configuration for environment "development".*expected an object/,
+    );
   });
 });
 

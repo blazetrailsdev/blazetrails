@@ -71,15 +71,20 @@ function formatUnknown(value: unknown): string {
 }
 
 /**
- * Locate + import the app's `config/database.*`. Centralized so we only
- * pay the dynamic-import cost once per CLI invocation — both
- * loadDatabaseConfig and resolveSchemaFormat route through here. Node's
- * ESM loader caches by URL, so repeat calls for the same path return
- * the same module without re-running side effects.
+ * Locate + import the app's `config/database.*`. Centralizing this keeps
+ * the lookup/import logic in one place — both loadDatabaseConfig and
+ * resolveSchemaFormat route through here. Node's ESM loader caches by
+ * URL, so repeat calls for the same path return the same module without
+ * re-running module side effects (the import() call itself still runs,
+ * it just resolves against the cache).
  *
  * Returns `null` when no config file is present — callers decide whether
  * that's an error (loadDatabaseConfig) or just absence (resolver
  * falling through to existence inference).
+ *
+ * Throws a source-labeled error when the config file loads but its
+ * default export isn't an object (e.g. `export default "oops"`), so
+ * downstream code doesn't need to defensively guard every key lookup.
  */
 export async function loadDatabaseConfigModule(
   cwd: string = process.cwd(),
@@ -101,7 +106,7 @@ export async function loadDatabaseConfigModule(
   }
   if (!configPath) return null;
 
-  let mod: { default?: DatabaseConfigModule } & DatabaseConfigModule;
+  let mod: { default?: unknown } & Record<string, unknown>;
   try {
     mod = (await import(pathToFileURL(configPath).href)) as typeof mod;
   } catch (error: unknown) {
@@ -122,8 +127,18 @@ export async function loadDatabaseConfigModule(
     (enhanced as { cause?: unknown }).cause = error;
     throw enhanced;
   }
-  const module = (mod.default ?? mod) as DatabaseConfigModule;
-  return { path: configPath, module };
+  // `export default "oops"` loads fine but leaves us with a non-object
+  // default that will crash downstream `in` / Object.keys lookups with
+  // a confusing TypeError. Check up front and throw a clear message
+  // with the offending value's repr.
+  const candidate = mod.default ?? mod;
+  if (candidate === null || (typeof candidate !== "object" && typeof candidate !== "function")) {
+    const rel = path.relative(cwd, configPath) || configPath;
+    throw new Error(
+      `Invalid database config in "${rel}": expected an object, got ${formatUnknown(candidate)}.`,
+    );
+  }
+  return { path: configPath, module: candidate as DatabaseConfigModule };
 }
 
 /**
@@ -142,16 +157,25 @@ export async function loadDatabaseConfig(
     );
   }
 
+  const envs = Object.keys(loaded.module).filter((k) => !TOP_LEVEL_CONFIG_KEYS.has(k));
+  // Distinguish "asked for 'production' but only have 'development'"
+  // from "config file defines no environments at all" — the latter
+  // would otherwise produce the confusing "Available: " with nothing
+  // after the colon.
+  const available = envs.length > 0 ? `Available: ${envs.join(", ")}` : "No environments defined";
+
+  // Explicitly reject env names that collide with top-level keys (e.g.
+  // `TRAILS_ENV=schemaFormat`). Without this, the lookup below would
+  // happily return the string "ts" as a DatabaseConfig and adapter
+  // resolution would crash with a confusing error downstream.
+  if (TOP_LEVEL_CONFIG_KEYS.has(resolvedEnv)) {
+    throw new Error(`No database configuration for environment "${resolvedEnv}". ${available}`);
+  }
+
   const envConfig = (loaded.module as Record<string, unknown>)[resolvedEnv] as
     | DatabaseConfig
     | undefined;
   if (!envConfig) {
-    const envs = Object.keys(loaded.module).filter((k) => !TOP_LEVEL_CONFIG_KEYS.has(k));
-    // Distinguish "asked for 'production' but only have 'development'"
-    // from "config file defines no environments at all" — the latter
-    // would otherwise produce the confusing "Available: " with nothing
-    // after the colon.
-    const available = envs.length > 0 ? `Available: ${envs.join(", ")}` : "No environments defined";
     throw new Error(`No database configuration for environment "${resolvedEnv}". ${available}`);
   }
 

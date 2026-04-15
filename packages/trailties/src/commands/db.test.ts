@@ -416,6 +416,32 @@ describe("resolveSchemaFormat", () => {
       /No environments defined/,
     );
   });
+
+  it("rejects env names that collide with top-level config keys", async () => {
+    // TRAILS_ENV=schemaFormat must not resolve to the string "ts" as a
+    // DatabaseConfig — adapter resolution would crash later with a
+    // confusing error. Reject up front instead.
+    fs.writeFileSync(
+      path.join(tmpDir, "config", "database.ts"),
+      `export default {
+  schemaFormat: "ts",
+  development: { adapter: "sqlite3", database: ":memory:" },
+};`,
+    );
+    await expect(loadDatabaseConfig("schemaFormat", tmpDir)).rejects.toThrow(
+      /No database configuration for environment "schemaFormat"/,
+    );
+  });
+
+  it("rejects a non-object default export with a source-named error", async () => {
+    // `export default "oops"` imports fine, but treating the string as
+    // a config would crash downstream `in`/Object.keys lookups. Surface
+    // it early with a clear message.
+    fs.writeFileSync(path.join(tmpDir, "config", "database.ts"), `export default "oops";`);
+    await expect(loadDatabaseConfig("development", tmpDir)).rejects.toThrow(
+      /Invalid database config in .*database\.ts.*"oops"/,
+    );
+  });
 });
 
 describe("discoverMigrations", () => {

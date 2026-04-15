@@ -868,7 +868,6 @@ export class DatabaseTasks {
     if (versions.length === 0) return;
 
     const quotedTable = `"${migration.tableName.replace(/"/g, '""')}"`;
-    const quotedColumn = `"${migration.primaryKey.replace(/"/g, '""')}"`;
     const quoted = versions
       // Rails inserts versions in reverse order so the final row has
       // the highest version — matches `versions.reverse.map`.
@@ -879,7 +878,11 @@ export class DatabaseTasks {
       // though no real version should contain one.
       .map((v) => `('${String(v).replace(/'/g, "''")}')`)
       .join(",\n");
-    const insertSql = `INSERT INTO ${quotedTable} (${quotedColumn}) VALUES\n${quoted};\n`;
+    // Rails hardcodes the column name `(version)` in
+    // insert_versions_sql — it never routes through quote_column_name
+    // or pool.schema_migration.primary_key, since the column is always
+    // literally `version`. Match that verbatim.
+    const insertSql = `INSERT INTO ${quotedTable} (version) VALUES\n${quoted};\n`;
     const fs = getFs();
     const existing = fs.readFileSync(filename, "utf-8");
     const separator = existing.endsWith("\n") ? "" : "\n";

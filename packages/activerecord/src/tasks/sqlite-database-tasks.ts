@@ -200,6 +200,18 @@ export class SQLiteDatabaseTasks {
         for (const row of rows) {
           await adapter.executeMutation(`DELETE FROM "${row.name.replace(/"/g, '""')}"`);
         }
+        // Match TRUNCATE/RESTART IDENTITY semantics by clearing the
+        // AUTOINCREMENT counters for the truncated tables. Rails'
+        // SQLite3Adapter#truncate_tables does the same thing.
+        // sqlite_sequence only exists once any AUTOINCREMENT column has
+        // been created — silently skip when it's absent.
+        const hasSequence = (await adapter.execute(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='sqlite_sequence'",
+        )) as Array<{ name: string }>;
+        if (hasSequence.length > 0 && rows.length > 0) {
+          const list = rows.map((r) => `'${r.name.replace(/'/g, "''")}'`).join(", ");
+          await adapter.executeMutation(`DELETE FROM sqlite_sequence WHERE name IN (${list})`);
+        }
       };
       if (typeof withFks.disableReferentialIntegrity === "function") {
         await withFks.disableReferentialIntegrity(run);

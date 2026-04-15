@@ -275,15 +275,21 @@ async function runRollback(
  */
 async function withSeedAdapter(adapter: DatabaseAdapter, fn: () => Promise<void>): Promise<void> {
   const { Base } = await import("@blazetrails/activerecord");
-  // Read/restore via the _adapter backing field so a previous null value
-  // can be re-assigned (the public setter is DatabaseAdapter, not
-  // DatabaseAdapter | null).
   const previous = Base._adapter;
   Base.adapter = adapter;
   try {
     await fn();
   } finally {
-    Base._adapter = previous;
+    // Preserve setter side effects (Base.adapter's setter fires the
+    // internal _onAdapterSet hook) when restoring a non-null adapter.
+    // Fall back to the backing field for a previous null because the
+    // public setter is typed as DatabaseAdapter, not DatabaseAdapter |
+    // null.
+    if (previous === null) {
+      Base._adapter = previous;
+    } else {
+      Base.adapter = previous;
+    }
   }
 }
 

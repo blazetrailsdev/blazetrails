@@ -380,11 +380,17 @@ export class DatabaseTasks {
     const protectedEnvs = Base.protectedEnvironments ?? ["production"];
 
     const configs = this.configsFor(envName);
-    // Fall back to checking the current env name directly when no
-    // DatabaseConfigurations is registered (e.g. in-memory tests /
-    // stand-alone CLI invocations with just DatabaseTasks.env set).
     if (configs.length === 0) {
-      if (protectedEnvs.includes(envName)) {
+      // Two reasons configsFor can come back empty:
+      //   (a) DatabaseTasks.databaseConfiguration was never set (e.g.
+      //       in-memory tests or a stand-alone CLI invocation with
+      //       just DatabaseTasks.env). Fall back to an env-name-only
+      //       check so a flat "production" still raises.
+      //   (b) DatabaseConfigurations is registered but has no entries
+      //       for this env. Rails' check_protected_environments! loops
+      //       over 0 configs and performs no checks — don't raise just
+      //       because the requested env is in the protected list.
+      if (!this.databaseConfiguration && protectedEnvs.includes(envName)) {
         throw new ProtectedEnvironmentError(envName);
       }
       return;

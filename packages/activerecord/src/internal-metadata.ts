@@ -104,6 +104,11 @@ export class InternalMetadata {
   }
 
   async dropTable(): Promise<void> {
+    // Symmetric with createTable / createTableAndSetFlags: silently no-op
+    // when metadata is disabled. Prevents a disabled instance from
+    // reaching over and dropping ar_internal_metadata that another
+    // config or adapter is actively using.
+    if (!this._enabled) return;
     await this._adapter.executeMutation(
       `DROP TABLE IF EXISTS ${quoteTableName(this.tableName, this._adapterName)}`,
     );

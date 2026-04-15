@@ -103,9 +103,7 @@ jobs:
           packages/rack
           packages/actionpack
           packages/actionview
-          packages/railties
           packages/trailties
-          packages/cli
           scripts/guides-typecheck
 
   sqlite-tests:

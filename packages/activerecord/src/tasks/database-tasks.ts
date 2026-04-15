@@ -839,13 +839,22 @@ export class DatabaseTasks {
    * Append `INSERT INTO schema_migrations (version) VALUES ...` rows to
    * an already-dumped structure.sql, mirroring Rails'
    * `ConnectionAdapters::SchemaStatements#dump_schema_information` that
-   * `DatabaseTasks.dump_schema` calls for the `:sql` format.
+   * `DatabaseTasks.dump_schema` calls for the `:sql` format. Gated on
+   * the schema_migrations table existing — a fresh DB has nothing to
+   * stamp.
    *
-   * Gated on both the migration adapter being set (so we have
-   * somewhere to query from) and the schema_migrations table existing
-   * (an all-fresh DB has nothing to stamp). Rails quotes its values via
-   * the connection's quote(); we lean on the adapter's own quote() so
-   * the generated SQL round-trips through the matching structureLoad.
+   * Identifier and value quoting:
+   * - Resolve the table name from SchemaMigration so a non-default
+   *   tableName (currently a static, but kept open for future override)
+   *   reaches the dump.
+   * - Use double-quoted identifiers and single-quoted SQL string
+   *   literals — the same convention SchemaMigration uses for its own
+   *   CREATE/DROP statements and what every adapter that currently
+   *   wires `structureDump` (sqlite3) accepts. MySQL's backtick
+   *   identifier quoting is intentionally not supported here yet:
+   *   MySQL structure dumps will route through `mysqldump` when that
+   *   adapter's introspection lands (Phase 10), and `mysqldump` emits
+   *   its own canonical INSERTs — this code path won't drive it.
    */
   private static async _appendSchemaInformation(filename: string): Promise<void> {
     const adapter = this._adapterInstance;
@@ -858,6 +867,8 @@ export class DatabaseTasks {
     const versions = await migration.allVersions();
     if (versions.length === 0) return;
 
+    const quotedTable = `"${migration.tableName.replace(/"/g, '""')}"`;
+    const quotedColumn = `"${migration.primaryKey.replace(/"/g, '""')}"`;
     const quoted = versions
       // Rails inserts versions in reverse order so the final row has
       // the highest version — matches `versions.reverse.map`.
@@ -868,7 +879,7 @@ export class DatabaseTasks {
       // though no real version should contain one.
       .map((v) => `('${String(v).replace(/'/g, "''")}')`)
       .join(",\n");
-    const insertSql = `INSERT INTO "schema_migrations" (version) VALUES\n${quoted};\n`;
+    const insertSql = `INSERT INTO ${quotedTable} (${quotedColumn}) VALUES\n${quoted};\n`;
     const fs = getFs();
     const existing = fs.readFileSync(filename, "utf-8");
     const separator = existing.endsWith("\n") ? "" : "\n";

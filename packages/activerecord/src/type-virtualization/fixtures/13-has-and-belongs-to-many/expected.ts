@@ -1,5 +1,5 @@
 export class Post extends Base {
-  declare tags: AssociationProxy<Tag>;
+  declare tags: import("@blazetrails/activerecord").AssociationProxy<Tag>;
 
   static {
     this.hasAndBelongsToMany("tags");

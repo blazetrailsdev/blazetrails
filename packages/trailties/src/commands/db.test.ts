@@ -760,7 +760,15 @@ export class CreatePosts extends Migration {
         DatabaseTasks.checkProtectedEnvironmentsBang("production"),
       ).rejects.toBeInstanceOf(ProtectedEnvironmentError);
     } finally {
-      DatabaseTasks.databaseConfiguration = previous;
+      // DatabaseConfigurations constructor registers itself as the
+      // module-level current-configurations singleton — restore that too,
+      // not just DatabaseTasks.databaseConfiguration.
+      if (previous) {
+        DatabaseTasks.databaseConfiguration = new DatabaseConfigurations(previous.configurations);
+      } else {
+        DatabaseTasks.databaseConfiguration = null;
+        new DatabaseConfigurations([]);
+      }
     }
   });
 
@@ -795,7 +803,12 @@ export class CreatePosts extends Migration {
         DatabaseTasks.checkProtectedEnvironmentsBang("development"),
       ).rejects.toBeInstanceOf(EnvironmentMismatchError);
     } finally {
-      DatabaseTasks.databaseConfiguration = previous;
+      if (previous) {
+        DatabaseTasks.databaseConfiguration = new DatabaseConfigurations(previous.configurations);
+      } else {
+        DatabaseTasks.databaseConfiguration = null;
+        new DatabaseConfigurations([]);
+      }
     }
   });
 
@@ -827,7 +840,12 @@ export class CreatePosts extends Migration {
         DatabaseTasks.checkProtectedEnvironmentsBang("production"),
       ).resolves.toBeUndefined();
     } finally {
-      DatabaseTasks.databaseConfiguration = previous;
+      if (previous) {
+        DatabaseTasks.databaseConfiguration = new DatabaseConfigurations(previous.configurations);
+      } else {
+        DatabaseTasks.databaseConfiguration = null;
+        new DatabaseConfigurations([]);
+      }
       if (origEnv === undefined) delete process.env.DISABLE_DATABASE_ENVIRONMENT_CHECK;
       else process.env.DISABLE_DATABASE_ENVIRONMENT_CHECK = origEnv;
     }

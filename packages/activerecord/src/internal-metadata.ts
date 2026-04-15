@@ -115,6 +115,10 @@ export class InternalMetadata {
   }
 
   async get(key: string): Promise<string | null> {
+    // When metadata is disabled, treat every key as unset without
+    // probing ar_internal_metadata — callers shouldn't observe stale
+    // rows from a previous run that had the flag enabled.
+    if (!this._enabled) return null;
     const entry = await this.selectEntry(key);
     if (!entry) return null;
     const value = entry[this.valueKey];
@@ -155,6 +159,10 @@ export class InternalMetadata {
   }
 
   async tableExists(): Promise<boolean> {
+    // When disabled, report the table as absent so callers don't
+    // accidentally trust it. The physical table may still exist on disk
+    // from a previous run; the flag is what drives semantic visibility.
+    if (!this._enabled) return false;
     try {
       const sm = new SelectManager(this.arelTable);
       sm.project(new Nodes.Quoted(1));

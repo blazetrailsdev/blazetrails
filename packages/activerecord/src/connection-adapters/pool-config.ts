@@ -85,15 +85,17 @@ export class PoolConfig {
    */
   private _lazySchemaCachePath(): string | null {
     const cfg = this.dbConfig as unknown as {
-      lazySchemaCachePath?: (dbDir?: string) => string | null | undefined;
       defaultSchemaCachePath?: (dbDir?: string) => string | null | undefined;
       schemaCachePath?: string | null;
     };
     const dbDir = this._resolveDbDir();
+    // Prefer an explicit schemaCachePath (user-authored); otherwise
+    // invoke defaultSchemaCachePath(dbDir) directly so it picks up
+    // the current DatabaseTasks.dbDir. We don't call
+    // HashConfig.lazySchemaCachePath() because it takes no dbDir arg
+    // and would hardcode the "db" default — defeating the alignment.
     let raw: string | null | undefined;
-    if (typeof cfg?.lazySchemaCachePath === "function") {
-      raw = cfg.lazySchemaCachePath(dbDir);
-    } else if (cfg?.schemaCachePath) {
+    if (cfg?.schemaCachePath) {
       raw = cfg.schemaCachePath;
     } else if (typeof cfg?.defaultSchemaCachePath === "function") {
       raw = cfg.defaultSchemaCachePath(dbDir);

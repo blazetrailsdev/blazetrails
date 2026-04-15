@@ -1,7 +1,6 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
-import { inspect } from "node:util";
 import type { DatabaseAdapter } from "@blazetrails/activerecord";
 
 export interface DatabaseConfig {
@@ -44,6 +43,32 @@ export interface DatabaseConfigModule {
  * shape above.
  */
 const TOP_LEVEL_CONFIG_KEYS = new Set<string>(["schemaFormat"]);
+
+/**
+ * Safely render an unknown value for inclusion in an error message.
+ * Total over every JS value: bigint -> `42n`, symbol -> `Symbol(foo)`,
+ * undefined/null -> `undefined`/`null`, objects fall back to a type tag
+ * when they can't be JSON-serialized (circular refs, thrown toJSON).
+ * No Node deps — this file sits at the boundary between trailties CLI
+ * code and the rest of the system, which should stay browser-safe.
+ */
+function formatUnknown(value: unknown): string {
+  if (value === null) return "null";
+  const type = typeof value;
+  if (type === "string") return JSON.stringify(value);
+  if (type === "bigint") return `${value as bigint}n`;
+  if (type === "symbol" || type === "function" || type === "undefined") return String(value);
+  if (type === "number" || type === "boolean") return String(value);
+  // Objects: prefer a JSON repr, fall back to a type tag if that
+  // blows up (circular ref, toJSON that throws, etc).
+  try {
+    return JSON.stringify(value);
+  } catch {
+    const proto = Object.getPrototypeOf(value as object);
+    const ctor = proto?.constructor?.name ?? "Object";
+    return `[object ${ctor}]`;
+  }
+}
 
 /**
  * Locate + import the app's `config/database.*`. Centralized so we only
@@ -164,22 +189,15 @@ export async function resolveSchemaFormat(
     // Refuse with the same source-labeled error instead of blowing up
     // when the unchecked input lacks `.toLowerCase`.
     if (typeof raw !== "string") {
-      // JSON.stringify can itself throw on bigint / circular values.
-      // util.inspect handles those (and returns a readable repr for
-      // non-string types like `42` → "42", `true` → "true"), so the
-      // fallback to String() stays as a last resort if inspect ever
-      // throws.
-      let formatted: string;
-      try {
-        formatted = inspect(raw, { breakLength: Infinity });
-      } catch {
-        try {
-          formatted = String(raw);
-        } catch {
-          formatted = "<unformattable>";
-        }
-      }
-      throw new Error(`Invalid ${source} value ${formatted}. Expected one of: ts, js, sql.`);
+      // Format the offending value for the error message. JSON.stringify
+      // throws on bigint / circular objects, and util.inspect would pull
+      // in a Node-only dep — neither is acceptable for code that sits
+      // in a package whose runtime surface should route through
+      // activesupport adapters. Roll our own minimal, total formatter:
+      // typeof-dispatched and always returns a string.
+      throw new Error(
+        `Invalid ${source} value ${formatUnknown(raw)}. Expected one of: ts, js, sql.`,
+      );
     }
     const normalized = raw.toLowerCase();
     if (normalized !== "ts" && normalized !== "js" && normalized !== "sql") {

@@ -22,12 +22,6 @@ import {
 } from "../associations.js";
 
 export interface CollectionProxy<T extends Base = Base> {
-  // Numeric indexing — `proxy[0]` reads the loaded target via the
-  // wrapCollectionProxy `get` trap. Declared here so consumers don't
-  // need `as any`. Out-of-range / unloaded indices return `undefined`,
-  // matching `Array<T>[i]` semantics under TS's standard lib.
-  [index: number]: T | undefined;
-
   // Thenable — makes CollectionProxy awaitable. Delegates to `load()`,
   // which both returns the loaded records AND hydrates `_target`, so
   // subsequent sync ops (`proxy.length`, `proxy[0]`, iteration) work
@@ -65,7 +59,18 @@ type DelegatedRelationMethods<T extends Base> = {
 export type AssociationProxy<
   T extends Base = Base,
   TExtensions extends Record<string, any> = Record<string, any>,
-> = CollectionProxy<T> & DelegatedRelationMethods<T> & TExtensions;
+> = CollectionProxy<T> &
+  DelegatedRelationMethods<T> &
+  TExtensions & {
+    // Numeric indexing — `proxy[0]` reads the loaded target via the
+    // `wrapCollectionProxy` `get` trap. Lives on AssociationProxy (not
+    // raw CollectionProxy) because the runtime support comes from the
+    // JS Proxy wrapper. A bare `new CollectionProxy(...)` does NOT
+    // support indexing — you'd get `undefined` at runtime.
+    // Out-of-range / unloaded indices return `undefined`, matching
+    // `Array<T>[i]` semantics under TS's standard lib.
+    readonly [index: number]: T | undefined;
+  };
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class CollectionProxy<T extends Base = Base> {
@@ -1417,6 +1422,8 @@ export class CollectionProxy<T extends Base = Base> {
 // Route `await proxy` through `load()` (not `toArray`) so the thenable
 // also hydrates `_target` — matches the documented contract that
 // `await proxy; proxy[0]` / `proxy.length` work after a single await.
-// `toArray()` stays available for "give me a fresh array now without
-// touching the cache" callers.
+// `toArray()` stays available for callers who want a fresh array
+// without hydrating this proxy's `_target` / `_loaded` (it still goes
+// through `loadHasMany`, which syncs into the record's association
+// instance cache — only this proxy's local cache is left untouched).
 applyThenable(CollectionProxy.prototype, "load");

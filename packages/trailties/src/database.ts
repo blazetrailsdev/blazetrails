@@ -79,6 +79,74 @@ export async function loadDatabaseConfig(
   return envConfig as DatabaseConfig;
 }
 
+export type SchemaFormat = "ts" | "js" | "sql";
+
+/**
+ * Resolve the effective `schemaFormat` for CLI dump/load commands.
+ *
+ * Precedence (highest wins):
+ *   1. Explicit CLI flag (`opts.format`)
+ *   2. Top-level `schemaFormat` key in config/database.ts
+ *   3. Existence inference — pick ts/js/sql based on which schema file
+ *      is already present in `db/`. Lets users migrate to a different
+ *      format by simply deleting the old file + dumping.
+ *   4. Default "ts"
+ *
+ * Returns the resolved format. Callers should assign it to
+ * `DatabaseTasks.schemaFormat` before invoking dump/load.
+ */
+export async function resolveSchemaFormat(
+  opts: { format?: string } = {},
+  cwd: string = process.cwd(),
+): Promise<SchemaFormat> {
+  if (opts.format) {
+    const normalized = opts.format.toLowerCase();
+    if (normalized !== "ts" && normalized !== "js" && normalized !== "sql") {
+      throw new Error(`Invalid --format value "${opts.format}". Expected one of: ts, js, sql.`);
+    }
+    return normalized as SchemaFormat;
+  }
+
+  // Inspect the config file for a top-level `schemaFormat` key (sibling
+  // of the per-env configs). Rails sets this via
+  // `config.active_record.schema_format` in config/application.rb; trails
+  // folds it into config/database.ts so the one file holds everything a
+  // db command needs to know.
+  const candidates = [
+    path.join(cwd, "config", "database.ts"),
+    path.join(cwd, "config", "database.js"),
+    path.join(cwd, "src", "config", "database.ts"),
+    path.join(cwd, "src", "config", "database.js"),
+  ];
+  for (const candidate of candidates) {
+    if (!fs.existsSync(candidate)) continue;
+    try {
+      const mod = (await import(pathToFileURL(candidate).href)) as {
+        default?: { schemaFormat?: string };
+        schemaFormat?: string;
+      };
+      const configs = mod.default ?? mod;
+      const fromConfig = (configs as { schemaFormat?: string }).schemaFormat;
+      if (fromConfig) {
+        const normalized = fromConfig.toLowerCase();
+        if (normalized === "ts" || normalized === "js" || normalized === "sql") {
+          return normalized;
+        }
+      }
+    } catch {
+      // Fall through to inference — broken config files are surfaced by
+      // the main loadDatabaseConfig call, not this lookup.
+    }
+    break;
+  }
+
+  const dbDir = path.join(cwd, "db");
+  if (fs.existsSync(path.join(dbDir, "structure.sql"))) return "sql";
+  if (fs.existsSync(path.join(dbDir, "schema.js"))) return "js";
+  if (fs.existsSync(path.join(dbDir, "schema.ts"))) return "ts";
+  return "ts";
+}
+
 /**
  * Create the appropriate database adapter from a config object.
  */

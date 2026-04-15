@@ -6,6 +6,7 @@ import {
   loadDatabaseConfig,
   connectAdapter,
   resolveEnv,
+  resolveSchemaFormat,
   type DatabaseConfig as RawConfig,
 } from "../database.js";
 import { discoverMigrations } from "../migration-loader.js";
@@ -771,11 +772,14 @@ export function dbCommand(): Command {
   cmd
     .command("schema:dump")
     .description(
-      "Dump the current database schema (format: DatabaseTasks.schemaFormat — ts/js/sql)",
+      "Dump the current database schema (format precedence: --format > config.schemaFormat > existing schema.ts/js/structure.sql > ts)",
     )
-    .action(async () => {
+    .option("--format <format>", "Override schema format: ts, js, or sql")
+    .action(async (opts) => {
       await withAdapter(async (adapter, raw) => {
         const config = toDbConfig(raw);
+        const previousFormat = DatabaseTasks.schemaFormat;
+        DatabaseTasks.schemaFormat = await resolveSchemaFormat(opts);
         const filename = DatabaseTasks.schemaDumpPath(config);
         const previous = DatabaseTasks.migrationConnection();
         DatabaseTasks.setAdapter(adapter);
@@ -783,6 +787,7 @@ export function dbCommand(): Command {
           await DatabaseTasks.dumpSchema(config);
         } finally {
           DatabaseTasks.setAdapter(previous);
+          DatabaseTasks.schemaFormat = previousFormat;
         }
         console.log(`Schema dumped to ${filename}`);
       });
@@ -791,18 +796,22 @@ export function dbCommand(): Command {
   cmd
     .command("schema:load")
     .description(
-      "Load the schema (format: DatabaseTasks.schemaFormat — ts/js/sql) into the database",
+      "Load the schema (format precedence: --format > config.schemaFormat > existing schema.ts/js/structure.sql > ts)",
     )
-    .action(async () => {
+    .option("--format <format>", "Override schema format: ts, js, or sql")
+    .action(async (opts) => {
       await withAdapter(async (adapter, raw) => {
         const config = toDbConfig(raw);
         // schema:load is destructive (replaces the schema) — Rails gates
         // it on check_protected_environments.
         await runProtectedEnvCheck(config, config.envName);
+        const previousFormat = DatabaseTasks.schemaFormat;
+        DatabaseTasks.schemaFormat = await resolveSchemaFormat(opts);
         const filename = DatabaseTasks.schemaDumpPath(config);
         if (!fs.existsSync(filename)) {
           console.error(`No schema file found at ${filename}`);
           process.exitCode = 1;
+          DatabaseTasks.schemaFormat = previousFormat;
           return;
         }
         const previous = DatabaseTasks.migrationConnection();
@@ -824,6 +833,7 @@ export function dbCommand(): Command {
           throw error;
         } finally {
           DatabaseTasks.setAdapter(previous);
+          DatabaseTasks.schemaFormat = previousFormat;
         }
       });
     });

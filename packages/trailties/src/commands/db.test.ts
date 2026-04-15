@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createProgram } from "../cli.js";
-import { loadDatabaseConfig, connectAdapter, resolveEnv } from "../database.js";
+import {
+  loadDatabaseConfig,
+  connectAdapter,
+  resolveEnv,
+  resolveSchemaFormat,
+} from "../database.js";
 import { discoverMigrations } from "../migration-loader.js";
 import { Migrator } from "@blazetrails/activerecord";
 import * as fs from "node:fs";
@@ -215,6 +220,77 @@ describe("loadDatabaseConfig", () => {
     await expect(loadDatabaseConfig("production", tmpDir)).rejects.toThrow(
       /No database configuration for environment "production"/,
     );
+  });
+});
+
+describe("resolveSchemaFormat", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "trails-sf-"));
+    fs.mkdirSync(path.join(tmpDir, "config"), { recursive: true });
+    fs.mkdirSync(path.join(tmpDir, "db"), { recursive: true });
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("prefers an explicit --format flag over everything else", async () => {
+    // Even with config.schemaFormat = "ts" and an existing structure.sql,
+    // --format=js must win (explicit intent beats inference).
+    fs.writeFileSync(
+      path.join(tmpDir, "config", "database.ts"),
+      `export default {
+  schemaFormat: "ts",
+  development: { adapter: "sqlite3", database: ":memory:" },
+};`,
+    );
+    fs.writeFileSync(path.join(tmpDir, "db", "structure.sql"), "");
+    expect(await resolveSchemaFormat({ format: "js" }, tmpDir)).toBe("js");
+  });
+
+  it("rejects invalid --format values", async () => {
+    await expect(resolveSchemaFormat({ format: "yaml" }, tmpDir)).rejects.toThrow(
+      /Invalid --format value/,
+    );
+  });
+
+  it("reads top-level schemaFormat from config/database.ts", async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, "config", "database.ts"),
+      `export default {
+  schemaFormat: "sql",
+  development: { adapter: "sqlite3", database: ":memory:" },
+};`,
+    );
+    expect(await resolveSchemaFormat({}, tmpDir)).toBe("sql");
+  });
+
+  it("infers sql when db/structure.sql exists and nothing else is set", async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, "config", "database.ts"),
+      `export default { development: { adapter: "sqlite3", database: ":memory:" } };`,
+    );
+    fs.writeFileSync(path.join(tmpDir, "db", "structure.sql"), "-- dump\n");
+    expect(await resolveSchemaFormat({}, tmpDir)).toBe("sql");
+  });
+
+  it("infers js when db/schema.js exists", async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, "config", "database.ts"),
+      `export default { development: { adapter: "sqlite3", database: ":memory:" } };`,
+    );
+    fs.writeFileSync(path.join(tmpDir, "db", "schema.js"), "");
+    expect(await resolveSchemaFormat({}, tmpDir)).toBe("js");
+  });
+
+  it("defaults to ts when nothing else applies", async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, "config", "database.ts"),
+      `export default { development: { adapter: "sqlite3", database: ":memory:" } };`,
+    );
+    expect(await resolveSchemaFormat({}, tmpDir)).toBe("ts");
   });
 });
 
@@ -1257,5 +1333,58 @@ fs.writeFileSync(${JSON.stringify(seedMarker)}, String(prev + 1));`,
     expect(parsed.indexes["users"]).toEqual([
       { name: "users_on_email", columns: ["email"], unique: true },
     ]);
+  });
+
+  it("db schema:dump --format=sql writes db/structure.sql", async () => {
+    const dbFile = path.join(tmpDir, "fmt.sqlite3");
+    fs.writeFileSync(
+      path.join(tmpDir, "config", "database.ts"),
+      `export default {
+  development: { adapter: "sqlite3", database: ${JSON.stringify(dbFile)} },
+  test: { adapter: "sqlite3", database: ${JSON.stringify(dbFile)} },
+};`,
+    );
+    const { SQLite3Adapter } =
+      await import("@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js");
+    const seed = new SQLite3Adapter(dbFile);
+    try {
+      await seed.executeMutation("CREATE TABLE widgets (id INTEGER PRIMARY KEY, name TEXT)");
+    } finally {
+      await seed.close();
+    }
+
+    await runDb(["schema:dump", "--format=sql"]);
+
+    // The --format flag should route through the structure-dump path,
+    // producing db/structure.sql — not db/schema.ts.
+    expect(fs.existsSync(path.join(tmpDir, "db", "structure.sql"))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, "db", "schema.ts"))).toBe(false);
+    const dumped = fs.readFileSync(path.join(tmpDir, "db", "structure.sql"), "utf8");
+    expect(dumped).toContain("CREATE TABLE widgets");
+  });
+
+  it("db schema:dump reads schemaFormat from config/database.ts", async () => {
+    const dbFile = path.join(tmpDir, "cfg.sqlite3");
+    fs.writeFileSync(
+      path.join(tmpDir, "config", "database.ts"),
+      `export default {
+  schemaFormat: "sql",
+  development: { adapter: "sqlite3", database: ${JSON.stringify(dbFile)} },
+  test: { adapter: "sqlite3", database: ${JSON.stringify(dbFile)} },
+};`,
+    );
+    const { SQLite3Adapter } =
+      await import("@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js");
+    const seed = new SQLite3Adapter(dbFile);
+    try {
+      await seed.executeMutation("CREATE TABLE items (id INTEGER PRIMARY KEY)");
+    } finally {
+      await seed.close();
+    }
+
+    await runDb(["schema:dump"]);
+
+    // No --format flag — config.schemaFormat drives it.
+    expect(fs.existsSync(path.join(tmpDir, "db", "structure.sql"))).toBe(true);
   });
 });

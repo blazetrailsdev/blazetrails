@@ -152,6 +152,10 @@ export class InternalMetadata {
   }
 
   async count(): Promise<number> {
+    // Symmetric with get() / tableExists(): a disabled instance reports
+    // an empty store, without probing ar_internal_metadata (which may
+    // not exist, or may carry stale rows from a prior enabled run).
+    if (!this._enabled) return 0;
     const sm = new SelectManager(this.arelTable);
     sm.project(new Nodes.NamedFunction("COUNT", [star]).as("cnt"));
     const rows = await this._adapter.execute(sm.toSql());

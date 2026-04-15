@@ -379,7 +379,14 @@ export class DatabaseTasks {
     const { Base } = await import("../base.js");
     const protectedEnvs = Base.protectedEnvironments ?? ["production"];
 
-    const configs = this.configsFor(envName);
+    // Include hidden / `databaseTasks: false` / replica configs so the
+    // guard is a superset of everything destructive callers like dropAll
+    // might touch — a hidden config stamped as production should still
+    // block the operation even though the regular configsFor filter
+    // would have hidden it.
+    const configs = this.databaseConfiguration
+      ? this.databaseConfiguration.configsFor({ envName, includeHidden: true })
+      : [];
     if (configs.length === 0) {
       // Two reasons configsFor can come back empty:
       //   (a) DatabaseTasks.databaseConfiguration was never set (e.g.
@@ -407,11 +414,11 @@ export class DatabaseTasks {
           // false, Rails treats the DB as unstamped and
           // last_stored_environment returns nil — don't probe the
           // ar_internal_metadata table even if it's there from a prior
-          // run with the flag enabled.
-          const useMetadataTable = (config.configuration as { useMetadataTable?: boolean })
-            .useMetadataTable;
+          // run with the flag enabled. Read via the DatabaseConfig
+          // getter so defaulting/coercion stays consistent across
+          // HashConfig / UrlConfig.
           const migrator = new Migrator(adapter, [], {
-            internalMetadataEnabled: useMetadataTable !== false,
+            internalMetadataEnabled: config.useMetadataTable,
           });
           const stored = await migrator.lastStoredEnvironment();
           if (stored && protectedEnvs.includes(stored)) {

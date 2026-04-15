@@ -169,7 +169,11 @@ runtime (via `this.attribute`, `this.hasMany`, `this.scope`, `this.enum`,
 ...) and aren't visible to the TypeScript type system by default.
 Because `Model` has an `[key: string]: unknown` index signature, access
 type-checks but falls through to `unknown`. Opt into static typing
-per-member with `declare`:
+per-member with `declare`. Every snippet below assumes:
+
+```ts
+import { Base, CollectionProxy, Relation } from "@blazetrails/activerecord";
+```
 
 **Attributes** (`this.attribute(name, type)`):
 

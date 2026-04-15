@@ -775,21 +775,31 @@ describe("ConnectionPool schema cache", () => {
     }
   });
 
-  it("PoolConfig normalizes blank schemaCachePath to null", () => {
-    // A schemaCachePath: "" in user config would otherwise reach
-    // SchemaReflection as "" and be passed to fs.existsSync, which
-    // behaves unexpectedly. Trim + empty-check → null so the
-    // reflection treats it as 'no persistent cache'.
-    const dbConfig = new HashConfig("test", "primary", {
-      adapter: "sqlite3",
-      database: "test.db",
-      reapingFrequency: null,
-      schemaCachePath: "   ",
-    });
-    const pc = new PoolConfig(new ConnectionDescriptor("primary"), dbConfig, "writing", "default", {
-      adapterFactory: createTestAdapter,
-    });
-    expect((pc.schemaReflection as unknown as { _cachePath: string | null })._cachePath).toBeNull();
+  it("PoolConfig treats blank/empty schemaCachePath as presence-based 'no cache'", () => {
+    // User explicitly setting schemaCachePath — even to '' or '   ' —
+    // is a deliberate 'no cache' signal. Presence check ('in' +
+    // != null) catches it before the defaultSchemaCachePath
+    // fallback, trim + empty-check normalizes to null. Otherwise
+    // '' would silently fall through to db/schema_cache.json,
+    // defeating the user's intent.
+    for (const blank of ["", "   "]) {
+      const dbConfig = new HashConfig("test", "primary", {
+        adapter: "sqlite3",
+        database: "test.db",
+        reapingFrequency: null,
+        schemaCachePath: blank,
+      });
+      const pc = new PoolConfig(
+        new ConnectionDescriptor("primary"),
+        dbConfig,
+        "writing",
+        "default",
+        { adapterFactory: createTestAdapter },
+      );
+      expect(
+        (pc.schemaReflection as unknown as { _cachePath: string | null })._cachePath,
+      ).toBeNull();
+    }
   });
 
   it("PoolConfig aligns SchemaReflection path with DatabaseTasks.dbDir", async () => {

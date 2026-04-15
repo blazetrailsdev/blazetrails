@@ -89,13 +89,19 @@ export class PoolConfig {
       schemaCachePath?: string | null;
     };
     const dbDir = this._resolveDbDir();
-    // Prefer an explicit schemaCachePath (user-authored); otherwise
-    // invoke defaultSchemaCachePath(dbDir) directly so it picks up
-    // the current DatabaseTasks.dbDir. We don't call
-    // HashConfig.lazySchemaCachePath() because it takes no dbDir arg
-    // and would hardcode the "db" default — defeating the alignment.
+    // Presence-based (not truthy): if the user explicitly set
+    // schemaCachePath — even to "" — that's a deliberate "no cache"
+    // signal. Fall through to defaultSchemaCachePath(dbDir) only when
+    // the user didn't supply a value at all. Matches Phase 6's
+    // resolveSchemaFormat treating empty strings as "explicitly
+    // unset" rather than "use a default".
+    //
+    // Calling defaultSchemaCachePath(dbDir) directly (not
+    // lazySchemaCachePath()) because that HashConfig method takes no
+    // dbDir arg and would hardcode "db", defeating the alignment
+    // with DatabaseTasks.dbDir.
     let raw: string | null | undefined;
-    if (cfg?.schemaCachePath) {
+    if (cfg && "schemaCachePath" in cfg && cfg.schemaCachePath != null) {
       raw = cfg.schemaCachePath;
     } else if (typeof cfg?.defaultSchemaCachePath === "function") {
       raw = cfg.defaultSchemaCachePath(dbDir);

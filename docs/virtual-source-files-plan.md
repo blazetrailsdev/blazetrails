@@ -28,7 +28,7 @@ has to also write these `declare` lines to get any typing:
 
 ```ts
 declare title: string;
-declare comments: AssociationProxy<Comment>;
+declare comments: Comment[]; // becomes AssociationProxy<Comment> after Phase R
 declare author: Author | null;
 declare static published: () => Relation<Post>;
 ```
@@ -54,10 +54,12 @@ The single divergence this plan addresses head-on:
   Rails (`activerecord/lib/active_record/associations/collection_association.rb#reader`):
   `@proxy ||= CollectionProxy.create(klass, self); @proxy.reset_scope`.
   CollectionProxy inherits from Relation and is awaitable / chainable.
-  Trails' `AssociationProxy<T>` (already implemented as a JS Proxy in
-  `packages/activerecord/src/associations/collection-proxy.ts`) is the
-  exact analog — it just isn't wired into the reader. Phase R below
-  swaps it in.
+  Trails' `AssociationProxy<T>` is the exact analog. The
+  `CollectionProxy` class lives in
+  `packages/activerecord/src/associations/collection-proxy.ts` and the
+  `new Proxy(...)` wrapper that adds Relation delegation is in
+  `packages/activerecord/src/associations.ts` (`wrapCollectionProxy`).
+  It just isn't wired into the reader. Phase R below swaps it in.
 
 Other surfaces (`belongsTo` / `hasOne` returning the record or null,
 `scope` returning a Relation, attribute getters returning the typed
@@ -85,17 +87,17 @@ A second divergence this plan addresses:
 
 ## Before / after
 
-**Before (today):**
+**Before (today — Phase R hasn't landed yet):**
 
 ```ts
 // post.ts
-import { Base, Relation, AssociationProxy } from "@blazetrails/activerecord";
+import { Base, Relation } from "@blazetrails/activerecord";
 import { Author } from "./author.js";
 import { Comment } from "./comment.js";
 
 class Post extends Base {
   declare title: string;
-  declare comments: AssociationProxy<Comment>;
+  declare comments: Comment[]; // Phase R will flip this to AssociationProxy<Comment>
   declare author: Author | null;
   declare static published: () => Relation<Post>;
 
@@ -176,7 +178,7 @@ Steps:
 
 ### Transitive extends
 
-`class Admin extends User extends Base` is real:
+`class Admin extends User` — where `User extends Base` — is real:
 
 - A **symbol-aware walker pass** (held by the CLI / plugin, not by
   `virtualize()` itself) holds a `ts.Program` / `TypeChecker`, resolves
@@ -209,7 +211,8 @@ Rules:
 
 1. If options include `className: "Foo"`, emit `Foo`.
 2. Otherwise apply Rails inflection from `@blazetrails/activesupport`
-   (`classify(singularize("posts"))` → `Post`).
+   (`classify("posts")` → `Post`; `classify` already singularizes
+   internally).
 3. If `Foo` isn't in scope in the user's file, TS raises
    `Cannot find name 'Foo'`. The fix is an import in the user's source —
    same as today. We do not auto-inject imports into the virtual file.
@@ -237,8 +240,9 @@ Rules:
 
 - **Same call surface.** `this.attribute(...)`, `this.hasMany(...)`, etc.
   read identically to Rails.
-- **Same naming conventions.** singularize / camelize / `class_name:`
-  come from `@blazetrails/activesupport`.
+- **Same naming conventions.** `classify` (which composes
+  `camelize(singularize(...))`) and `class_name:` come from
+  `@blazetrails/activesupport`.
 - **Same return shapes after Phase R.** `blog.posts` is the Rails-style
   CollectionProxy/AssociationProxy; `post.author` is the loaded record
   or null; `Post.published()` is a Relation.
@@ -293,8 +297,9 @@ for R — see the ordering note below.
 ### Phase R — Rails-fidelity runtime fix 📋 (new, top priority)
 
 Make `blog.posts` (and every collection association reader) return the
-existing `AssociationProxy<T>` instead of `Base[]`. This is the only
-runtime change in the plan. It's a pre-1.0 breaking change — by design.
+existing `AssociationProxy<T>` instead of `Base[]`, and adopt
+strict-loading semantics for singular readers. These are the runtime
+changes in the plan; both are pre-1.0 breaking changes — by design.
 
 Two sub-PRs, each independently testable:
 

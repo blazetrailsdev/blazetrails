@@ -62,6 +62,17 @@ describe("CollectionProxy — array-likeness (Phase R.1)", () => {
     expect(proxy.length).toBe(3);
   });
 
+  it("shadows Relation#length() — use proxy.count() for async count", async () => {
+    const blog = await blogWithPosts();
+    const proxy = association<ApPost>(blog, "apPosts") as any;
+    // `proxy.length` is now a sync number (mirrors Array / Rails).
+    expect(typeof proxy.length).toBe("number");
+    // For Relation's async count semantics, reach for .count() which still
+    // routes through to Relation via AssociationProxy delegation.
+    expect(typeof proxy.count).toBe("function");
+    expect(await proxy.count()).toBe(3);
+  });
+
   it("is iterable via `for ... of`", async () => {
     const blog = await blogWithPosts();
     const proxy = association<ApPost>(blog, "apPosts");

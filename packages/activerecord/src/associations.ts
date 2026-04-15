@@ -1329,6 +1329,8 @@ export function association<T extends Base = Base>(
  * 1. Own/prototype properties (CollectionProxy methods, extend methods)
  * 2. Relation query methods + named scopes (via scope()'s own proxy)
  */
+const NUMERIC_INDEX_PATTERN = /^(0|[1-9]\d*)$/;
+
 function wrapCollectionProxy<T extends Base = Base>(
   proxy: CollectionProxy<T>,
 ): AssociationProxy<T> {
@@ -1343,7 +1345,7 @@ function wrapCollectionProxy<T extends Base = Base>(
       // via the public `target` accessor. Matches array semantics; same
       // constraint as the other array-likeness on CollectionProxy (no fresh
       // load; await first if you need one).
-      if (typeof prop === "string" && /^(0|[1-9]\d*)$/.test(prop)) {
+      if (typeof prop === "string" && NUMERIC_INDEX_PATTERN.test(prop)) {
         return target.target[Number(prop)];
       }
 

@@ -85,6 +85,16 @@ export class CollectionProxy<T extends Base = Base> {
   // first.
   // ──────────────────────────────────────────────────────────────────
 
+  /**
+   * Sync count of the loaded target. Mirrors `Array.prototype.length`
+   * and Rails' `posts.length` (which blocks to load in Ruby). In trails,
+   * this reads `_target` — zero if nobody loaded. Await the proxy first
+   * (or `Post.includes(...)`) if you need a fresh load.
+   *
+   * Shadows `Relation#length()` (async, `Promise<number>`). For a Relation-
+   * style async count through the proxy, use `.count()` — which still
+   * routes through to Relation via the `AssociationProxy` delegation.
+   */
   get length(): number {
     return this._target.length;
   }

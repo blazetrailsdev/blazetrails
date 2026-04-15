@@ -137,6 +137,18 @@ export class CollectionProxy<T extends Base = Base> {
     return this._target.flatMap(fn);
   }
 
+  keys(): IterableIterator<number> {
+    return this._target.keys();
+  }
+
+  values(): IterableIterator<T> {
+    return this._target.values();
+  }
+
+  entries(): IterableIterator<[number, T]> {
+    return this._target.entries();
+  }
+
   /** @internal Initialize from preloaded association data. */
   _hydrateFromPreload(records: T[]): void {
     // Preserve any unsaved in-memory records (from build/push before preload ran)

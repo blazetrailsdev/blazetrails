@@ -154,4 +154,32 @@ describe("CollectionProxy — array-likeness (Phase R.1)", () => {
     const arr = await proxy;
     expect(arr.map((p) => p.title)).toEqual(["a", "b", "c"]);
   });
+
+  it("keys / values / entries work", async () => {
+    const blog = await blogWithPosts();
+    const proxy = association<ApPost>(blog, "apPosts");
+    expect([...proxy.keys()]).toEqual([0, 1, 2]);
+    expect([...proxy.values()].map((p) => p.title)).toEqual(["a", "b", "c"]);
+    expect([...proxy.entries()].map(([i, p]) => `${i}:${p.title}`)).toEqual(["0:a", "1:b", "2:c"]);
+  });
+
+  it("Array.isArray returns false on the proxy (known limitation)", async () => {
+    const blog = await blogWithPosts();
+    const proxy = association<ApPost>(blog, "apPosts");
+    // `Array.isArray` checks an internal slot that proxies cannot fake.
+    // Consumers of the post-R.2 reader who branch on Array.isArray must
+    // reach for the loaded target via `await` or `Array.from(...)`.
+    expect(Array.isArray(proxy)).toBe(false);
+    expect(Array.isArray(Array.from(proxy))).toBe(true);
+  });
+
+  it("does NOT shadow Relation#find (PK lookup) with Array#find", async () => {
+    const blog = await blogWithPosts();
+    const proxy = association<ApPost>(blog, "apPosts") as any;
+    // `find` falls through to Relation, which interprets it as a PK lookup.
+    // We intentionally don't add Array#find on CollectionProxy — Rails
+    // gives Relation#find the same priority.
+    const found = await proxy.find(blog.apPosts[0]?.id);
+    expect(found?.title).toBe("a");
+  });
 });

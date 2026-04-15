@@ -334,6 +334,22 @@ describe("resolveSchemaFormat", () => {
     await expect(resolveSchemaFormat({}, tmpDir)).rejects.toThrow(/schemaFormat in .*database\.ts/);
   });
 
+  it("formats non-string schemaFormat values without JSON.stringify crashing on bigint", async () => {
+    // A bigint in config would make JSON.stringify throw; normalize()
+    // uses util.inspect so the error message still reaches the user
+    // with a readable repr of the offending value.
+    fs.writeFileSync(
+      path.join(tmpDir, "config", "database.ts"),
+      `export default {
+  schemaFormat: 42n,
+  development: { adapter: "sqlite3", database: ":memory:" },
+};`,
+    );
+    await expect(resolveSchemaFormat({}, tmpDir)).rejects.toThrow(
+      /schemaFormat in .*database\.ts.*42n/s,
+    );
+  });
+
   it("filters top-level keys out of the 'Available envs' error message", async () => {
     // schemaFormat is a config-level setting, not a database environment —
     // including it in the error list would make users think they can
@@ -385,6 +401,19 @@ describe("resolveSchemaFormat", () => {
       `export default { development: { adapter: "sqlite3", database: ":memory:" } };`,
     );
     expect(await resolveSchemaFormat({}, tmpDir)).toBe("ts");
+  });
+
+  it("reports 'No environments defined' when config has only top-level keys", async () => {
+    // Without this branch the error ends with a bare 'Available: ' —
+    // technically accurate, visually confusing. Explicit wording makes
+    // the misconfiguration obvious.
+    fs.writeFileSync(
+      path.join(tmpDir, "config", "database.ts"),
+      `export default { schemaFormat: "ts" };`,
+    );
+    await expect(loadDatabaseConfig("development", tmpDir)).rejects.toThrow(
+      /No environments defined/,
+    );
   });
 });
 

@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
+import { inspect } from "node:util";
 import type { DatabaseAdapter } from "@blazetrails/activerecord";
 
 export interface DatabaseConfig {
@@ -119,9 +120,12 @@ export async function loadDatabaseConfig(
     | undefined;
   if (!envConfig) {
     const envs = Object.keys(loaded.module).filter((k) => !TOP_LEVEL_CONFIG_KEYS.has(k));
-    throw new Error(
-      `No database configuration for environment "${resolvedEnv}". Available: ${envs.join(", ")}`,
-    );
+    // Distinguish "asked for 'production' but only have 'development'"
+    // from "config file defines no environments at all" — the latter
+    // would otherwise produce the confusing "Available: " with nothing
+    // after the colon.
+    const available = envs.length > 0 ? `Available: ${envs.join(", ")}` : "No environments defined";
+    throw new Error(`No database configuration for environment "${resolvedEnv}". ${available}`);
   }
 
   return envConfig;
@@ -160,9 +164,22 @@ export async function resolveSchemaFormat(
     // Refuse with the same source-labeled error instead of blowing up
     // when the unchecked input lacks `.toLowerCase`.
     if (typeof raw !== "string") {
-      throw new Error(
-        `Invalid ${source} value ${JSON.stringify(raw)}. Expected one of: ts, js, sql.`,
-      );
+      // JSON.stringify can itself throw on bigint / circular values.
+      // util.inspect handles those (and returns a readable repr for
+      // non-string types like `42` → "42", `true` → "true"), so the
+      // fallback to String() stays as a last resort if inspect ever
+      // throws.
+      let formatted: string;
+      try {
+        formatted = inspect(raw, { breakLength: Infinity });
+      } catch {
+        try {
+          formatted = String(raw);
+        } catch {
+          formatted = "<unformattable>";
+        }
+      }
+      throw new Error(`Invalid ${source} value ${formatted}. Expected one of: ts, js, sql.`);
     }
     const normalized = raw.toLowerCase();
     if (normalized !== "ts" && normalized !== "js" && normalized !== "sql") {

@@ -1339,11 +1339,12 @@ function wrapCollectionProxy<T extends Base = Base>(
       if (prop in target) return value;
       if (typeof prop === "symbol") return value;
 
-      // Numeric indexing — `proxy[0]`, `proxy[1]` read the loaded target.
-      // Matches array semantics; same constraint as the other array-likeness
-      // on CollectionProxy (no fresh load; await first if you need one).
+      // Numeric indexing — `proxy[0]`, `proxy[1]` read the loaded target
+      // via the public `target` accessor. Matches array semantics; same
+      // constraint as the other array-likeness on CollectionProxy (no fresh
+      // load; await first if you need one).
       if (typeof prop === "string" && /^(0|[1-9]\d*)$/.test(prop)) {
-        return target._target[Number(prop)];
+        return target.target[Number(prop)];
       }
 
       if (target._record._strictLoading && !target._record._strictLoadingBypassCount) {

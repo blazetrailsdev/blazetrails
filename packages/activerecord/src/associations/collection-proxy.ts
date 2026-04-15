@@ -97,23 +97,23 @@ export class CollectionProxy<T extends Base = Base> {
     return this._target.at(index);
   }
 
-  map<U>(fn: (record: T, index: number, all: readonly T[]) => U, thisArg?: unknown): U[] {
+  map<U>(fn: (record: T, index: number, all: T[]) => U, thisArg?: unknown): U[] {
     return this._target.map(fn, thisArg);
   }
 
-  filter(fn: (record: T, index: number, all: readonly T[]) => unknown, thisArg?: unknown): T[] {
+  filter(fn: (record: T, index: number, all: T[]) => unknown, thisArg?: unknown): T[] {
     return this._target.filter(fn, thisArg);
   }
 
-  forEach(fn: (record: T, index: number, all: readonly T[]) => void, thisArg?: unknown): void {
+  forEach(fn: (record: T, index: number, all: T[]) => void, thisArg?: unknown): void {
     this._target.forEach(fn, thisArg);
   }
 
-  some(fn: (record: T, index: number, all: readonly T[]) => unknown, thisArg?: unknown): boolean {
+  some(fn: (record: T, index: number, all: T[]) => unknown, thisArg?: unknown): boolean {
     return this._target.some(fn, thisArg);
   }
 
-  every(fn: (record: T, index: number, all: readonly T[]) => unknown, thisArg?: unknown): boolean {
+  every(fn: (record: T, index: number, all: T[]) => unknown, thisArg?: unknown): boolean {
     return this._target.every(fn, thisArg);
   }
 
@@ -129,8 +129,8 @@ export class CollectionProxy<T extends Base = Base> {
     return this._target.slice(start, end);
   }
 
-  reduce(fn: (acc: T, record: T, index: number, all: readonly T[]) => T): T;
-  reduce<U>(fn: (acc: U, record: T, index: number, all: readonly T[]) => U, initial: U): U;
+  reduce(fn: (acc: T, record: T, index: number, all: T[]) => T): T;
+  reduce<U>(fn: (acc: U, record: T, index: number, all: T[]) => U, initial: U): U;
   reduce(...args: [unknown, ...unknown[]]): unknown {
     // Forward verbatim so Array.prototype.reduce sees the right arity
     // (with vs. without an initial value picks different semantics).
@@ -141,10 +141,7 @@ export class CollectionProxy<T extends Base = Base> {
     return this._target.indexOf(record, fromIndex);
   }
 
-  flatMap<U>(
-    fn: (record: T, index: number, all: readonly T[]) => U | readonly U[],
-    thisArg?: unknown,
-  ): U[] {
+  flatMap<U>(fn: (record: T, index: number, all: T[]) => U | readonly U[], thisArg?: unknown): U[] {
     return this._target.flatMap(fn, thisArg);
   }
 

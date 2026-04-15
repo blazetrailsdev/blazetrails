@@ -828,5 +828,40 @@ export function dbCommand(): Command {
       });
     });
 
+  cmd
+    .command("schema:cache:dump")
+    .description("Dump a db/schema_cache.json for every configuration in the current environment")
+    .action(async () => {
+      // Rails iterates configs_for(env_name: env) via with_temporary_pool_for_each
+      // so multi-DB apps get one schema_cache.json per config. Mirror that
+      // shape here — open a fresh adapter per config, derive the dump path
+      // from the config, delegate to DatabaseTasks.dumpSchemaCache.
+      const envName = resolveEnv();
+      const raw = normalizeRawConfig(await loadDatabaseConfig(envName));
+      const config = toDbConfig(raw, envName);
+      await withRegisteredConfiguration(config, async () => {
+        const adapter = await connectAdapter(raw);
+        try {
+          const filename = DatabaseTasks.cacheDumpFilename(config);
+          await DatabaseTasks.dumpSchemaCache(adapter, filename);
+          console.log(`Schema cache dumped to ${filename}`);
+        } finally {
+          await closeAdapter(adapter);
+        }
+      });
+    });
+
+  cmd
+    .command("schema:cache:clear")
+    .description("Delete the db/schema_cache.json file for the current environment")
+    .action(async () => {
+      const envName = resolveEnv();
+      const raw = normalizeRawConfig(await loadDatabaseConfig(envName));
+      const config = toDbConfig(raw, envName);
+      const filename = DatabaseTasks.cacheDumpFilename(config);
+      DatabaseTasks.clearSchemaCache(filename);
+      console.log(`Cleared schema cache at ${filename}`);
+    });
+
   return cmd;
 }

@@ -36,6 +36,8 @@ import {
   CheckConstraintDefinition,
   type AddForeignKeyOptions,
 } from "./abstract/schema-definitions.js";
+import { Column } from "./column.js";
+import { SqlTypeMetadata } from "./sql-type-metadata.js";
 
 /**
  * SQLite adapter — connects ActiveRecord to a real SQLite database.
@@ -854,6 +856,115 @@ export class SQLite3Adapter
     // SqlLiteral or objects with toSql
     if (typeof (value as any)?.toSql === "function") return String((value as any).toSql());
     return quoteString(String(value));
+  }
+
+  // --- Schema introspection (drives SchemaCache.addAll) ---
+
+  /**
+   * List user tables. Excludes SQLite's internal `sqlite_*` tables and
+   * matches Rails' SQLite3::SchemaStatements#tables filter.
+   */
+  async tables(): Promise<string[]> {
+    const rows = (await this.execute(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+    )) as Array<{ name: string }>;
+    return rows.map((r) => r.name);
+  }
+
+  async views(): Promise<string[]> {
+    const rows = (await this.execute(
+      "SELECT name FROM sqlite_master WHERE type='view' ORDER BY name",
+    )) as Array<{ name: string }>;
+    return rows.map((r) => r.name);
+  }
+
+  /**
+   * Tables + views, deduped. Mirrors AbstractAdapter#data_sources.
+   */
+  async dataSources(): Promise<string[]> {
+    return [...new Set([...(await this.tables()), ...(await this.views())])];
+  }
+
+  async tableExists(name: string): Promise<boolean> {
+    const rows = (await this.execute(
+      `SELECT 1 AS one FROM sqlite_master WHERE type='table' AND name=${quoteString(name)}`,
+    )) as Array<{ one: number }>;
+    return rows.length > 0;
+  }
+
+  async dataSourceExists(name: string): Promise<boolean> {
+    const rows = (await this.execute(
+      `SELECT 1 AS one FROM sqlite_master WHERE type IN ('table','view') AND name=${quoteString(name)}`,
+    )) as Array<{ one: number }>;
+    return rows.length > 0;
+  }
+
+  /**
+   * Return the single-column primary key name, or null for composite /
+   * rowid-only tables. Rails' SchemaCache stores the composite case as
+   * an array, but the common path for cache-dump is a scalar name.
+   */
+  async primaryKey(tableName: string): Promise<string | null> {
+    const rows = (await this.execute(`PRAGMA table_info(${quoteTableName(tableName)})`)) as Array<{
+      name: string;
+      pk: number;
+    }>;
+    const pks = rows.filter((r) => r.pk > 0).sort((a, b) => a.pk - b.pk);
+    if (pks.length === 1) return pks[0].name;
+    return null;
+  }
+
+  /**
+   * Return Column objects for the named table. Only the fields the
+   * schema cache actually serializes are populated — name, default,
+   * null, sqlTypeMetadata, primaryKey.
+   */
+  async columns(tableName: string): Promise<Column[]> {
+    const rows = (await this.execute(`PRAGMA table_info(${quoteTableName(tableName)})`)) as Array<{
+      name: string;
+      type: string;
+      notnull: number;
+      dflt_value: string | null;
+      pk: number;
+    }>;
+    return rows.map((r) => {
+      const sqlType = r.type || "";
+      const meta = new SqlTypeMetadata({
+        sqlType,
+        type: sqlType.toLowerCase(),
+        limit: null,
+        precision: null,
+        scale: null,
+      });
+      return new Column(r.name, r.dflt_value, meta, r.notnull === 0, {
+        primaryKey: r.pk > 0,
+      });
+    });
+  }
+
+  async indexes(tableName: string): Promise<unknown[]> {
+    const rows = (await this.execute(`PRAGMA index_list(${quoteTableName(tableName)})`)) as Array<{
+      name: string;
+      unique: number;
+      origin: string;
+    }>;
+    // Skip auto-indexes that SQLite generates for PRIMARY KEY / UNIQUE
+    // constraints — Rails' schema cache records user-defined indexes
+    // only, and the auto ones are redundant with the CREATE TABLE sql.
+    const userIndexes = rows.filter((r) => r.origin === "c");
+    const result: Array<{ name: string; columns: string[]; unique: boolean }> = [];
+    for (const idx of userIndexes) {
+      const cols = (await this.execute(`PRAGMA index_info(${quoteTableName(idx.name)})`)) as Array<{
+        name: string;
+        seqno: number;
+      }>;
+      result.push({
+        name: idx.name,
+        columns: cols.sort((a, b) => a.seqno - b.seqno).map((c) => c.name),
+        unique: idx.unique === 1,
+      });
+    }
+    return result;
   }
 
   // --- FK / Check constraint operations (SQLite requires table rebuild) ---

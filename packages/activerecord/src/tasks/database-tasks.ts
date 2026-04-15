@@ -479,11 +479,22 @@ export class DatabaseTasks {
     return `${this.dbDir}/schema_cache.json`;
   }
 
+  /**
+   * Dump the schema cache to `filename`. Mirrors Rails'
+   * `DatabaseTasks.dump_schema_cache`, which delegates to
+   * `conn_or_pool.schema_cache.dump_to(filename)`. In Rails the pool-side
+   * `schema_cache` is a `BoundSchemaReflection` whose `dump_to` allocates a
+   * fresh `SchemaCache`, `add_all`s every data source through the pool, then
+   * writes it. Our adapter's `schemaCache` getter returns a plain
+   * `SchemaCache`, so replicate the BoundSchemaReflection semantics here:
+   * always dump from a freshly-populated cache instead of serializing
+   * whatever incidental entries the in-memory cache accumulated.
+   */
   static async dumpSchemaCache(connOrPool: unknown, filename: string): Promise<void> {
-    const schemaCache = (connOrPool as any).schemaCache;
-    if (schemaCache && typeof schemaCache.dumpTo === "function") {
-      await schemaCache.dumpTo(filename);
-    }
+    const { SchemaCache } = await import("../connection-adapters/schema-cache.js");
+    const fresh = new SchemaCache();
+    await fresh.addAll(connOrPool);
+    fresh.dumpTo(filename);
   }
 
   static clearSchemaCache(filename: string): void {

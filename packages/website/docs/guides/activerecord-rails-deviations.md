@@ -281,7 +281,7 @@ class Post extends Base {
     // async bang, and not* scope. Use `this.enum(...)` instead for the
     // simpler Base.enum surface (no plain setter, sync bang returning
     // `this`, no not* scopes).
-    defineEnum(Post, "status", { draft: 0, published: 1 });
+    defineEnum(this, "status", { draft: 0, published: 1 });
     this.scope("published", (rel: Relation<Post>) => rel.where({ published: true }));
   }
 }

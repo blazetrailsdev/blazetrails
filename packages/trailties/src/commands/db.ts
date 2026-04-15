@@ -830,7 +830,8 @@ export function dbCommand(): Command {
               const enhanced = new Error(
                 `Failed to load schema file "${filename}". ` +
                   `Ensure a TypeScript loader (tsx, ts-node) is configured, ` +
-                  `or set DatabaseTasks.schemaFormat = "js" / "sql".`,
+                  `or choose a different schema format with --format js/sql, ` +
+                  `SCHEMA_FORMAT=js/sql, or config.schemaFormat.`,
               );
               (enhanced as { cause?: unknown }).cause = error;
               throw enhanced;

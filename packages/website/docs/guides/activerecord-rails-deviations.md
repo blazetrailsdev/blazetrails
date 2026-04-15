@@ -252,7 +252,7 @@ runtime (via `this.attribute`, `this.hasMany`, `this.scope`, `this.enum`)
 but the type system only sees them if you opt in with a `declare`:
 
 ```ts
-import { Base, CollectionProxy, Relation } from "@blazetrails/activerecord";
+import { Base, CollectionProxy, Relation, defineEnum } from "@blazetrails/activerecord";
 
 class Author extends Base {}
 class Comment extends Base {}
@@ -262,15 +262,21 @@ class Post extends Base {
   declare author: Author | null; // belongsTo reader (synchronous)
   declare comments: CollectionProxy<Comment>; // hasMany reader
   declare isDraft: () => boolean; // enum predicate
-  declare draftBang: () => this; // enum in-memory bang setter (returns self)
+  declare draft: () => void; // enum in-memory setter (defineEnum only)
+  declare draftBang: () => Promise<void>; // enum async persisting setter (defineEnum only)
   declare static draft: () => Relation<Post>; // enum class scope
+  declare static notDraft: () => Relation<Post>; // enum `not*` scope (defineEnum only)
   declare static published: () => Relation<Post>; // named scope
 
   static {
     this.attribute("title", "string");
     this.belongsTo("author");
     this.hasMany("comments");
-    this.enum("status", { draft: 0, published: 1 });
+    // defineEnum (above, section 7) gives the full surface: plain setter,
+    // async bang, and not* scope. Use `this.enum(...)` instead for the
+    // simpler Base.enum surface (no plain setter, sync bang returning
+    // `this`, no not* scopes).
+    defineEnum(Post, "status", { draft: 0, published: 1 });
     this.scope("published", (rel: Relation<Post>) => rel.where({ published: true }));
   }
 }

@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expectTypeOf } from "vitest";
-import { Base, CollectionProxy, Relation } from "@blazetrails/activerecord";
+import { Base, CollectionProxy, Relation, defineEnum } from "@blazetrails/activerecord";
 
 // --- Attribute typing: `this.attribute("name", "string")` + `declare name: string` ---
 // (Don't redeclare `id` — Base defines it as an accessor; narrow at the use
@@ -100,11 +100,9 @@ class Post extends Base {
   }
 }
 
-// --- Enum typing: `this.enum("status", {...})` generates a predicate and an
-// in-memory bang setter per value, plus a class-level scope per value.
-// (The `defineEnum(...)` helper in `enum.ts` generates a richer surface
-//  including async persisting bang setters, plain in-memory setters, and
-//  `not*` scopes; see its docs if you opt into that form.)
+// --- Enum typing (Base.enum form): `this.enum("status", {...})` generates
+// a predicate and an in-memory bang setter per value, plus a class-level
+// scope per value.
 class Task extends Base {
   declare status: string;
 
@@ -123,6 +121,32 @@ class Task extends Base {
   static {
     this.attribute("status", "integer");
     this.enum("status", { low: 0, high: 1 });
+  }
+}
+
+// --- Enum typing (defineEnum form): richer surface with async persisting
+// bang setters, plain in-memory setters, and `not*` scopes.
+class Article extends Base {
+  declare status: string;
+
+  // Predicates (same as Base.enum)
+  declare isDraft: () => boolean;
+  declare isPublished: () => boolean;
+  // Plain in-memory setters (defineEnum only) — return void
+  declare draft: () => void;
+  declare published: () => void;
+  // Async persisting bang setters (defineEnum only) — return Promise<void>
+  declare draftBang: () => Promise<void>;
+  declare publishedBang: () => Promise<void>;
+  // Class scopes (positive + negative, defineEnum only for `not*`)
+  declare static draft: () => Relation<Article>;
+  declare static published: () => Relation<Article>;
+  declare static notDraft: () => Relation<Article>;
+  declare static notPublished: () => Relation<Article>;
+
+  static {
+    this.attribute("status", "integer");
+    defineEnum(this, "status", { draft: 0, published: 1 });
   }
 }
 
@@ -168,14 +192,22 @@ describe("declare patterns — typing runtime-attached members", () => {
     expectTypeOf(t.isLow()).toBeBoolean();
   });
 
-  it("enum bang setter: `declare lowBang: () => this` (in-memory, returns self)", () => {
+  it("Base.enum bang setter: `declare lowBang: () => this` (in-memory, returns self)", () => {
     const t = new Task({ status: 0 });
     expectTypeOf(t.lowBang()).toMatchTypeOf<Task>();
   });
 
-  it("enum class scopes: `declare static low: () => Relation<Task>`", () => {
+  it("Base.enum class scopes: `declare static low: () => Relation<Task>`", () => {
     expectTypeOf(Task.low).toEqualTypeOf<() => Relation<Task>>();
     expectTypeOf(Task.low()).toMatchTypeOf<Relation<Task>>();
+  });
+
+  it("defineEnum adds plain setters + async bangs + not* scopes", async () => {
+    const a = new Article({ status: 0 });
+    expectTypeOf(a.draft).toEqualTypeOf<() => void>();
+    expectTypeOf(a.draftBang).toEqualTypeOf<() => Promise<void>>();
+    expectTypeOf(await a.draftBang()).toBeVoid();
+    expectTypeOf(Article.notDraft()).toMatchTypeOf<Relation<Article>>();
   });
 
   it("without a declare, runtime members fall through to `unknown`", () => {

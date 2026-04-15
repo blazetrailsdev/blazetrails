@@ -227,10 +227,19 @@ class Post extends Base {
 }
 ```
 
-**Enums** (`this.enum(name, mapping)` generates a predicate + in-memory
-bang setter per value, plus a class-level scope per value):
+**Enums** — two forms with different surfaces:
+
+- `this.enum(name, mapping)` (`Base.enum`) generates a predicate +
+  in-memory bang setter (returns `this`, no persistence) + class scope
+  per value.
+- `defineEnum(modelClass, name, mapping)` (`@blazetrails/activerecord`'s
+  `defineEnum`) generates the same + a plain in-memory setter + an async
+  persisting `*Bang` + `not*` class scopes per value. Use this when
+  you want bang methods to persist, matching Rails' `enum` semantics
+  (see section 7 of the ActiveRecord deviations guide).
 
 ```ts
+// Base.enum — simpler
 class Task extends Base {
   declare status: string;
   declare isLow: () => boolean;
@@ -241,11 +250,21 @@ class Task extends Base {
     this.enum("status", { low: 0, high: 1 });
   }
 }
-```
 
-For a richer surface — async persisting bang setters, plain in-memory
-setters, and `not*` scopes — use `defineEnum(modelClass, ...)` from
-`@blazetrails/activerecord/enum.js` instead of `this.enum`.
+// defineEnum — full surface
+class Article extends Base {
+  declare status: string;
+  declare isDraft: () => boolean;
+  declare draft: () => void; // plain in-memory setter
+  declare draftBang: () => Promise<void>; // async, persists via updateColumn
+  declare static draft: () => Relation<Article>;
+  declare static notDraft: () => Relation<Article>;
+  static {
+    this.attribute("status", "integer");
+    defineEnum(this, "status", { draft: 0, published: 1 });
+  }
+}
+```
 
 **Do not** redeclare `id` on subclasses — `Base#id` is an accessor
 (`PrimaryKeyValue`) and TS forbids overriding accessors with differently

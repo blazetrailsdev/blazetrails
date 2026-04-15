@@ -20,6 +20,11 @@ export class Mysql2Adapter extends AdapterBase implements DatabaseAdapter {
   private pool: mysql.Pool;
   private _conn: mysql.PoolConnection | null = null;
   private _inTransaction = false;
+  // Cached capability flag — information_schema.statistics.expression
+  // is MySQL 8.0.13+. Pre-8 MySQL and MariaDB (through at least 10.x)
+  // don't expose it, so we detect once and remember. `undefined` =
+  // not yet probed, `true`/`false` = result.
+  private _statisticsHasExpression: boolean | undefined;
 
   constructor(config: string | mysql.PoolOptions) {
     super();
@@ -401,10 +406,12 @@ export class Mysql2Adapter extends AdapterBase implements DatabaseAdapter {
     tableName: string,
   ): Promise<Array<{ name: string; columns: string[]; unique: boolean }>> {
     const { schema, table } = this.parseMysqlName(tableName);
+    const hasExpr = await this.statisticsHasExpressionColumn();
+    const exprSelect = hasExpr ? "expression AS expr" : "NULL AS expr";
     const rows = (await this.execute(
       `SELECT index_name AS name,
               column_name AS col,
-              expression AS expr,
+              ${exprSelect},
               non_unique AS non_unique,
               seq_in_index AS pos
          FROM information_schema.statistics
@@ -445,6 +452,34 @@ export class Mysql2Adapter extends AdapterBase implements DatabaseAdapter {
       columns,
       unique,
     }));
+  }
+
+  /**
+   * Check whether `information_schema.statistics` exposes an
+   * `expression` column. Added in MySQL 8.0.13; absent on earlier
+   * MySQL and on MariaDB (through 10.x). Probed once per adapter
+   * instance and memoized — the result can't change mid-connection.
+   */
+  private async statisticsHasExpressionColumn(): Promise<boolean> {
+    if (this._statisticsHasExpression !== undefined) {
+      return this._statisticsHasExpression;
+    }
+    try {
+      const rows = (await this.execute(
+        `SELECT 1 AS one FROM information_schema.columns
+           WHERE table_schema = 'information_schema'
+           AND table_name = 'STATISTICS'
+           AND column_name = 'EXPRESSION'
+           LIMIT 1`,
+      )) as Array<unknown>;
+      this._statisticsHasExpression = rows.length > 0;
+    } catch {
+      // Defensive: if the probe itself fails, assume no — we'll just
+      // miss functional index expressions, which matches pre-8 MySQL
+      // semantics anyway.
+      this._statisticsHasExpression = false;
+    }
+    return this._statisticsHasExpression;
   }
 
   /**

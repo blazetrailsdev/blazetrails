@@ -35,24 +35,50 @@ const describeIfMysql = mysqlAvailable ? describe : describe.skip;
 describeIfMysql("Mysql2Adapter", () => {
   let adapter: Mysql2Adapter;
 
+  // Tables touched by any test in this suite. Dropped on BOTH sides of
+  // each test so a crash that skips afterEach can't poison the next
+  // run (which was causing intermittent CI failures with
+  // ER_TABLE_EXISTS_ERROR on leftover `users`).
+  const TRACKED_TABLES = [
+    "books",
+    "authors",
+    "users",
+    "items",
+    "accounts",
+    "products",
+    "posts",
+    "widgets",
+    "bind_param_items",
+    "exec_test_tbl",
+  ];
+  const TRACKED_VIEWS = ["recent_widgets"];
+
+  const dropTrackedObjects = async (a: Mysql2Adapter): Promise<void> => {
+    for (const view of TRACKED_VIEWS) {
+      try {
+        await a.exec(`DROP VIEW IF EXISTS \`${view}\``);
+      } catch {
+        /* ignore */
+      }
+    }
+    for (const tbl of TRACKED_TABLES) {
+      try {
+        await a.exec(`DROP TABLE IF EXISTS \`${tbl}\``);
+      } catch {
+        /* ignore */
+      }
+    }
+  };
+
   beforeEach(async () => {
     adapter = new Mysql2Adapter(MYSQL_TEST_URL);
+    // Defensive pre-test cleanup: a previous run that crashed without
+    // hitting afterEach could leave tables behind.
+    await dropTrackedObjects(adapter);
   });
 
   afterEach(async () => {
-    try {
-      await adapter.exec("DROP TABLE IF EXISTS `books`");
-      await adapter.exec("DROP TABLE IF EXISTS `authors`");
-      await adapter.exec("DROP TABLE IF EXISTS `users`");
-      await adapter.exec("DROP TABLE IF EXISTS `items`");
-      await adapter.exec("DROP TABLE IF EXISTS `accounts`");
-      await adapter.exec("DROP TABLE IF EXISTS `products`");
-      await adapter.exec("DROP TABLE IF EXISTS `posts`");
-      await adapter.exec("DROP TABLE IF EXISTS `bind_param_items`");
-      await adapter.exec("DROP TABLE IF EXISTS `exec_test_tbl`");
-    } catch {
-      // ignore cleanup errors
-    }
+    await dropTrackedObjects(adapter);
     await adapter.close();
   });
 

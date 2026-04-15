@@ -489,11 +489,12 @@ export class Mysql2Adapter extends AdapterBase implements DatabaseAdapter {
    * requires exactly one part or two parts joined by a single dot,
    * respecting `` ` `` quoting and doubled-backtick escapes. Rejects
    * empty segments (`.widgets`, `a..b`, `db.widgets.`), extra parts
-   * (`a.b.c`), and unterminated quoted tokens. Matches the strictness
-   * of the PG parser at
+   * (`a.b.c`), and unterminated quoted tokens. This is intentionally
+   * stricter than the PG helper in
    * `packages/activerecord/src/connection-adapters/postgresql/utils.ts`
-   * so a typo surfaces instead of silently pointing introspection at
-   * the wrong table.
+   * (which tolerates empty segments and trailing parts) so a typo in
+   * a MySQL introspection call surfaces instead of silently pointing
+   * at the wrong table.
    */
   private parseMysqlName(name: string): { schema?: string; table: string } {
     const input = name.trim();

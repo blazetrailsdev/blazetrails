@@ -167,9 +167,17 @@ A dedicated `DX Type Tests` CI job runs on every push.
 Several things in ActiveRecord are attached to a class/instance at
 runtime (via `this.attribute`, `this.hasMany`, `this.scope`, `this.enum`,
 ...) and aren't visible to the TypeScript type system by default.
-Because `Model` has an `[key: string]: unknown` index signature, access
-type-checks but falls through to `unknown`. Opt into static typing
-per-member with `declare`. Every snippet below assumes:
+
+- **Instance members** (`record.name`, `post.comments`): `Model`'s
+  `[key: string]: unknown` index signature means the access type-checks
+  but resolves to `unknown`. Opt in with `declare name: string` etc.
+- **Static members** (`Post.published`, enum class scopes): there's no
+  static index signature, so without `declare static`, the access is a
+  `Property 'published' does not exist on type 'typeof Post'` error.
+  Always pair `this.scope(...)`, `this.enum(...)`, and
+  `defineEnum(...)` with a matching `declare static`.
+
+Every snippet below assumes:
 
 ```ts
 import {
@@ -178,6 +186,7 @@ import {
   Relation,
   association,
   defineEnum,
+  readEnumValue,
 } from "@blazetrails/activerecord";
 ```
 

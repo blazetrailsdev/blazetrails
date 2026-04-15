@@ -287,9 +287,18 @@ class Post extends Base {
 }
 ```
 
-Without `declare`, access type-checks (Model has `[key: string]: unknown`)
-but resolves to `unknown`. The compiled reference for every supported
-pattern lives in
+Without a matching `declare`:
+
+- **Instance access** (`record.title`, `post.comments`) type-checks via
+  `Model`'s `[key: string]: unknown` index signature and resolves to
+  `unknown`.
+- **Static access** (`Post.published`, enum class scopes like
+  `Post.draft`) is a `Property 'published' does not exist on type
+'typeof Post'` error — the class has no index signature. Always
+  pair `this.scope(...)`, `this.enum(...)`, or `defineEnum(...)` with
+  a matching `declare static`.
+
+The compiled reference for every supported pattern lives in
 `packages/activerecord/dx-tests/declare-patterns.test-d.ts`.
 
 Don't redeclare `id` — `Base#id` is an accessor typed as

@@ -228,7 +228,7 @@ describe("declare patterns — typing runtime-attached members", () => {
     expectTypeOf(Article.notDraft()).toMatchTypeOf<Relation<Article>>();
   });
 
-  it("without a declare, runtime members fall through to `unknown`", () => {
+  it("without a declare, instance members fall through to `unknown`; static members don't exist at all", () => {
     class Plain extends Base {
       static {
         this.attribute("name", "string");
@@ -237,8 +237,13 @@ describe("declare patterns — typing runtime-attached members", () => {
       }
     }
     const p = new Plain({ name: "x" });
+    // Instance members type-check via Model's `[key: string]: unknown`
+    // index signature, but resolve to `unknown`.
     expectTypeOf(p.name).toBeUnknown();
     expectTypeOf(p.posts).toBeUnknown();
-    expectTypeOf((Plain as typeof Plain & { active: unknown }).active).toBeUnknown();
+    // Static members have no index signature — without `declare static`,
+    // they don't exist on the class type. Assert that:
+    type HasActive = "active" extends keyof typeof Plain ? true : false;
+    expectTypeOf<HasActive>().toEqualTypeOf<false>();
   });
 });

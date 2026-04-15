@@ -12,6 +12,20 @@ import { AbstractAdapter } from "./connection-adapters/abstract-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
 import { Result } from "./result.js";
 
+/**
+ * Close any SQLite/underlying connections still pinned to the pool
+ * before unlinking the DB file. ConnectionPool.disconnect clears pool
+ * bookkeeping but doesn't close the adapter's file handle; on Windows
+ * that keeps the sqlite file open and rmSync fails.
+ */
+async function closePoolConnections(pool: ConnectionPool): Promise<void> {
+  for (const conn of pool.connections) {
+    const close = (conn as { close?: () => void | Promise<void> }).close;
+    if (typeof close === "function") await close.call(conn);
+  }
+  await pool.disconnect();
+}
+
 function makePool(size: number = 5): ConnectionPool {
   const dbConfig = new HashConfig("test", "primary", {
     adapter: "sqlite3",
@@ -664,17 +678,36 @@ describe("ConnectionPool schema cache", () => {
     // defined and (b) throw on assignment (read-only getter). The
     // fix routes the raw cache through pool.poolConfig.schemaCache,
     // and this test locks that in.
+    //
+    // Uses SQLite3Adapter (not createTestAdapter) because the latter
+    // is a DatabaseStatementsMixin stub without the AbstractAdapter
+    // schemaCache getter.
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const os = await import("node:os");
     const { SchemaCache } = await import("./connection-adapters/schema-cache.js");
-    const pool = makePool();
+    const { SQLite3Adapter } = await import("./connection-adapters/sqlite3-adapter.js");
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-raw-cache-"));
+    const dbFile = path.join(tmp, "raw.sqlite3");
+    const dbConfig = new HashConfig("test", "primary", {
+      adapter: "sqlite3",
+      database: dbFile,
+      reapingFrequency: null,
+    });
+    const pc = new PoolConfig(new ConnectionDescriptor("primary"), dbConfig, "writing", "default", {
+      adapterFactory: () => new SQLite3Adapter(dbFile),
+    });
+    const pool = new ConnectionPool(pc);
     try {
-      const cache = pool.withConnection((conn) => {
-        return (conn as unknown as { schemaCache: unknown }).schemaCache;
-      });
+      const cache = pool.withConnection(
+        (conn) => (conn as unknown as { schemaCache: unknown }).schemaCache,
+      );
       expect(cache).toBeInstanceOf(SchemaCache);
       expect(cache).not.toBe(pool.schemaCache); // bound reflection !== raw cache
       expect(pool.poolConfig.schemaCache).toBe(cache); // shared via poolConfig
     } finally {
-      await pool.disconnect();
+      await closePoolConnections(pool);
+      fs.rmSync(tmp, { recursive: true, force: true });
     }
   });
 
@@ -728,7 +761,7 @@ describe("ConnectionPool schema cache", () => {
       };
       expect(Object.keys(parsed.columns)).toContain("gizmos");
     } finally {
-      await pool.disconnect();
+      await closePoolConnections(pool);
       fs.rmSync(tmp, { recursive: true, force: true });
     }
   });

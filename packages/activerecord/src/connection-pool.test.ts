@@ -708,6 +708,12 @@ describe("ConnectionPool schema cache", () => {
       // reflection and failed on .clear()/.setColumns() etc.
       expect(cache).toBeInstanceOf(SchemaCache);
       expect(cache).not.toBe(pool.schemaCache);
+      // Verify the raw cache is actually shared through PoolConfig —
+      // ConnectionPool.newConnection now sets conn.pool = this so
+      // AbstractAdapter.schemaCache can write into
+      // pool.poolConfig.schemaCache and every connection sees the
+      // same instance.
+      expect(pool.poolConfig.schemaCache).toBe(cache);
     } finally {
       await closePoolConnections(pool);
       fs.rmSync(tmp, { recursive: true, force: true });

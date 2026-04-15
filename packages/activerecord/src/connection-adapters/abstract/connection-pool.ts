@@ -721,10 +721,24 @@ export class ConnectionPool implements ReapablePool {
   // --- Connection creation ---
 
   newConnection(): DatabaseAdapter {
-    if (this.poolConfig.adapterFactory) {
-      return this.poolConfig.adapterFactory();
+    if (!this.poolConfig.adapterFactory) {
+      throw new ConnectionNotEstablished("No adapter factory configured for connection pool");
     }
-    throw new ConnectionNotEstablished("No adapter factory configured for connection pool");
+    const conn = this.poolConfig.adapterFactory();
+    // Set the back-reference so AbstractAdapter#schemaCache can reach
+    // pool.poolConfig.schemaCache to share the raw SchemaCache across
+    // every connection in this pool. Rails' AbstractAdapter has the
+    // same owner/pool reference threaded in via its connection
+    // constructor; trails' factory signature doesn't expose it, so
+    // we assign it post-hoc here. Only assign when the adapter
+    // actually supports the slot (AbstractAdapter declares
+    // `pool: unknown = null`) — adapters that don't can safely ignore
+    // the write since we guard with the `in` check.
+    const withPool = conn as unknown as { pool?: unknown };
+    if ("pool" in (conn as object)) {
+      withPool.pool = this;
+    }
+    return conn;
   }
 
   remove(conn: DatabaseAdapter): void {
@@ -732,6 +746,12 @@ export class ConnectionPool implements ReapablePool {
     this._checkedOut.delete(conn);
     this._lastCheckinAt.delete(conn);
     this._available?.delete(conn);
+    // Clear the back-reference we set in newConnection so a removed
+    // adapter can't observe stale pool/poolConfig state post-eviction.
+    const withPool = conn as unknown as { pool?: unknown };
+    if ("pool" in (conn as object) && withPool.pool === this) {
+      withPool.pool = null;
+    }
 
     for (const [ctxId, pin] of this._pinnedConnections) {
       if (pin.connection === conn) {

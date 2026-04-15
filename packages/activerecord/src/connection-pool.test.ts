@@ -775,6 +775,52 @@ describe("ConnectionPool schema cache", () => {
     }
   });
 
+  it("PoolConfig normalizes blank schemaCachePath to null", () => {
+    // A schemaCachePath: "" in user config would otherwise reach
+    // SchemaReflection as "" and be passed to fs.existsSync, which
+    // behaves unexpectedly. Trim + empty-check → null so the
+    // reflection treats it as 'no persistent cache'.
+    const dbConfig = new HashConfig("test", "primary", {
+      adapter: "sqlite3",
+      database: "test.db",
+      reapingFrequency: null,
+      schemaCachePath: "   ",
+    });
+    const pc = new PoolConfig(new ConnectionDescriptor("primary"), dbConfig, "writing", "default", {
+      adapterFactory: createTestAdapter,
+    });
+    expect((pc.schemaReflection as unknown as { _cachePath: string | null })._cachePath).toBeNull();
+  });
+
+  it("PoolConfig aligns SchemaReflection path with DatabaseTasks.dbDir", async () => {
+    // When DatabaseTasks.dbDir is customized, the default cache path
+    // should follow — otherwise 'trails db schema:cache:dump' writes
+    // to <dbDir>/schema_cache.json while the reflection loads from
+    // db/schema_cache.json.
+    const { DatabaseTasks } = await import("./tasks/database-tasks.js");
+    const originalDbDir = DatabaseTasks.dbDir;
+    DatabaseTasks.dbDir = "custom_db_dir";
+    try {
+      const dbConfig = new HashConfig("test", "primary", {
+        adapter: "sqlite3",
+        database: "test.db",
+        reapingFrequency: null,
+      });
+      const pc = new PoolConfig(
+        new ConnectionDescriptor("primary"),
+        dbConfig,
+        "writing",
+        "default",
+        { adapterFactory: createTestAdapter },
+      );
+      const cachePath = (pc.schemaReflection as unknown as { _cachePath: string | null })
+        ._cachePath;
+      expect(cachePath).toBe("custom_db_dir/schema_cache.json");
+    } finally {
+      DatabaseTasks.dbDir = originalDbDir;
+    }
+  });
+
   it("PoolConfig primes SchemaReflection with the config's schemaCachePath", () => {
     // Rails: `SchemaReflection.new(db_config.lazy_schema_cache_path)`.
     // HashConfig's lazySchemaCachePath returns the configured path

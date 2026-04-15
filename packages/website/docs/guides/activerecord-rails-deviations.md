@@ -274,7 +274,8 @@ class Post extends Base {
 
   static {
     this.attribute("title", "string");
-    this.attribute("status", "integer"); // must be declared before defineEnum
+    this.attribute("status", "integer"); // defineEnum only attaches methods;
+    //                                       the underlying column still needs an attribute
     this.belongsTo("author");
     this.hasMany("comments");
     // defineEnum (above, section 7) gives the full surface: plain setter,
@@ -293,10 +294,9 @@ Without a matching `declare`:
   `Model`'s `[key: string]: unknown` index signature and resolves to
   `unknown`.
 - **Static access** (`Post.published`, enum class scopes like
-  `Post.draft`) is a `Property 'published' does not exist on type
-'typeof Post'` error — the class has no index signature. Always
-  pair `this.scope(...)`, `this.enum(...)`, or `defineEnum(...)` with
-  a matching `declare static`.
+  `Post.draft`) is a `Property 'published' does not exist on type 'typeof Post'`
+  error — the class has no index signature. Always pair `this.scope(...)`,
+  `this.enum(...)`, or `defineEnum(...)` with a matching `declare static`.
 
 The compiled reference for every supported pattern lives in
 `packages/activerecord/dx-tests/declare-patterns.test-d.ts`.

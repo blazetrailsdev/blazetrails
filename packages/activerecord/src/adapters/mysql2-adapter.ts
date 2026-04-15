@@ -308,18 +308,19 @@ export class Mysql2Adapter extends AdapterBase implements DatabaseAdapter {
 
   /**
    * Return the single-column primary key name, or null for composite /
-   * no-PK tables. Matches Rails' `abstract_mysql_adapter#primary_keys`
-   * shape (which returns an array; we return a scalar for the common
-   * case and null for composite).
+   * no-PK tables. Uses the same `information_schema.statistics` +
+   * `seq_in_index` shape Rails emits in
+   * `abstract_mysql_adapter#primary_keys` — works across all MySQL
+   * versions + MariaDB.
    */
   async primaryKey(tableName: string): Promise<string | null> {
     const { schema, table } = this.parseMysqlName(tableName);
     const rows = (await this.execute(
-      `SELECT column_name AS name FROM information_schema.key_column_usage
-         WHERE table_schema = COALESCE(?, database())
+      `SELECT column_name AS name FROM information_schema.statistics
+         WHERE index_name = 'PRIMARY'
+         AND table_schema = COALESCE(?, database())
          AND table_name = ?
-         AND constraint_name = 'PRIMARY'
-         ORDER BY ordinal_position`,
+         ORDER BY seq_in_index`,
       [schema ?? null, table],
     )) as Array<{ name?: string; NAME?: string; COLUMN_NAME?: string }>;
     const names = rows.map((r) => (r.name ?? r.NAME ?? r.COLUMN_NAME) as string);
@@ -382,9 +383,17 @@ export class Mysql2Adapter extends AdapterBase implements DatabaseAdapter {
   }
 
   /**
-   * Return user-defined indexes for the given table. Matches Rails'
-   * MySQL SchemaStatements#indexes which reads from
-   * `information_schema.statistics` and filters out PRIMARY.
+   * Return user-defined indexes for the given table. Trails uses
+   * `information_schema.statistics` (Rails' PG/SQLite parallel shape)
+   * rather than Rails-MySQL's `SHOW KEYS` because the information_schema
+   * query is cross-schema-capable without needing a qualified
+   * `SHOW KEYS FROM schema.table` dance, and the output shape is all
+   * SchemaCache needs (name/columns/unique). Prefix lengths, per-column
+   * orders, fulltext/spatial `type`, and functional-index expressions
+   * — which Rails' MySQL `indexes` preserves via IndexDefinition — are
+   * intentionally omitted here: SchemaCache stores indexes as
+   * `unknown[]` and nothing in trails reads those fields yet. When a
+   * caller needs the full Rails shape we'll layer it on.
    */
   async indexes(
     tableName: string,

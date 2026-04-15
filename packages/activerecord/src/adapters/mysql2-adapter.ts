@@ -404,6 +404,7 @@ export class Mysql2Adapter extends AdapterBase implements DatabaseAdapter {
     const rows = (await this.execute(
       `SELECT index_name AS name,
               column_name AS col,
+              expression AS expr,
               non_unique AS non_unique,
               seq_in_index AS pos
          FROM information_schema.statistics
@@ -417,10 +418,26 @@ export class Mysql2Adapter extends AdapterBase implements DatabaseAdapter {
     const byIndex = new Map<string, { columns: string[]; unique: boolean }>();
     for (const r of rows) {
       const name = String((r.name ?? r.NAME ?? r.INDEX_NAME) as string);
-      const col = String((r.col ?? r.COL ?? r.COLUMN_NAME) as string);
+      // MySQL 8+ functional indexes store NULL in column_name and the
+      // raw SQL expression in `expression`. Rails wraps those in parens
+      // for its IndexDefinition; we do the same so the entry is
+      // unambiguous and doesn't serialize as the literal string "null"
+      // (what String(null) would produce).
+      const rawCol = r.col ?? r.COL ?? r.COLUMN_NAME;
+      const rawExpr = r.expr ?? r.EXPR ?? r.EXPRESSION;
+      let column: string | null;
+      if (rawCol != null) {
+        column = String(rawCol);
+      } else if (rawExpr != null) {
+        const expr = String(rawExpr);
+        column = expr.startsWith("(") ? expr : `(${expr})`;
+      } else {
+        column = null;
+      }
+      if (column == null) continue;
       const nonUnique = Number(r.non_unique ?? r.NON_UNIQUE ?? 0);
       const entry = byIndex.get(name) ?? { columns: [], unique: nonUnique === 0 };
-      entry.columns.push(col);
+      entry.columns.push(column);
       byIndex.set(name, entry);
     }
     return Array.from(byIndex.entries()).map(([name, { columns, unique }]) => ({

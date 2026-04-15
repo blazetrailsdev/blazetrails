@@ -520,6 +520,27 @@ describeIfMysql("Mysql2Adapter", () => {
       expect(idx).toEqual([{ name: "widgets_on_owner", columns: ["owner"], unique: false }]);
     });
 
+    it("indexes() represents MySQL 8+ functional indexes via their expression", async () => {
+      // MySQL 8+ supports `CREATE INDEX ... ON t((expr))`; those rows
+      // have NULL column_name in information_schema.statistics and the
+      // expression in `expression`. Surfacing "null" as a column name
+      // would poison SchemaCache; wrapping the expression in parens
+      // matches Rails' IndexDefinition display. Older MySQL rejects
+      // functional indexes so skip gracefully on those.
+      try {
+        await adapter.exec("CREATE INDEX `widgets_on_lower_name` ON `widgets` ((LOWER(`name`)))");
+      } catch {
+        return; // pre-8.0 MySQL — feature not available
+      }
+      const idx = await adapter.indexes("widgets");
+      const functional = idx.find((i) => i.name === "widgets_on_lower_name");
+      expect(functional).toBeDefined();
+      // Either `(lower(`name`))` or similar — just assert it's parenthesized.
+      expect(functional!.columns).toHaveLength(1);
+      expect(functional!.columns[0].startsWith("(")).toBe(true);
+      expect(functional!.columns[0]).not.toBe("null");
+    });
+
     it("SchemaCache.addAll populates from MySQL", async () => {
       // Integration with Phase 5's dumpSchemaCache — MySQL now exposes
       // the full surface (dataSources/columns/primaryKey/indexes) the

@@ -1677,6 +1677,40 @@ export class CreatePosts extends Migration {
     }
   });
 
+  it("db schema:dump --format=sql works against ':memory:' sqlite by reusing the migration adapter", async () => {
+    // Regression for Copilot's #2 on PR 534. ":memory:" sqlite DBs
+    // aren't shared across connections — a fresh per-call adapter
+    // would see an empty DB, dump nothing, and any later
+    // _appendSchemaInformation call would write INSERTs into a
+    // structureless dump that fails to load. Fix routes structureDump
+    // through the migration adapter when one is set.
+    fs.writeFileSync(
+      path.join(tmpDir, "config", "database.ts"),
+      `export default {
+  schemaFormat: "sql",
+  development: { adapter: "sqlite3", database: ":memory:" },
+  test: { adapter: "sqlite3", database: ":memory:" },
+};`,
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, "db", "migrations", "20260101000000-create-things.ts"),
+      `import { Migration } from "@blazetrails/activerecord";
+export class CreateThings extends Migration {
+  async up() { await this.createTable("things", (t) => { t.string("name"); }); }
+  async down() { await this.dropTable("things"); }
+}`,
+    );
+
+    await runDb(["migrate"]);
+
+    const dumped = fs.readFileSync(path.join(tmpDir, "db", "structure.sql"), "utf8");
+    // The user table DDL proves structureDump saw real data; the
+    // schema_migrations CREATE proves the in-memory connection was
+    // actually queried (a fresh in-memory adapter would have neither).
+    expect(dumped).toContain("things");
+    expect(dumped).toMatch(/CREATE TABLE.*schema_migrations/);
+  });
+
   it("db schema:load --format=sql errors when structure.sql is missing", async () => {
     const dbFile = path.join(tmpDir, "missing.sqlite3");
     fs.writeFileSync(

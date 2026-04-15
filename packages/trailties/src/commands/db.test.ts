@@ -695,4 +695,141 @@ export class CreatePosts extends Migration {
     // 'no silent success' since we'd otherwise have printed something).
     expect(logs.filter((l) => l.startsWith("=="))).toHaveLength(0);
   });
+
+  it("db environment:set stamps the schema with the current env", async () => {
+    const dbFile = path.join(tmpDir, "test.sqlite3");
+    fs.writeFileSync(
+      path.join(tmpDir, "config", "database.ts"),
+      `export default {
+  development: { adapter: "sqlite3", database: ${JSON.stringify(dbFile)} },
+  test: { adapter: "sqlite3", database: ${JSON.stringify(dbFile)} },
+};`,
+    );
+
+    await runDb(["environment:set"]);
+
+    const { SQLite3Adapter } =
+      await import("@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js");
+    const a = new SQLite3Adapter(dbFile);
+    try {
+      const rows = await a.execute(
+        `SELECT value FROM ar_internal_metadata WHERE key = 'environment'`,
+      );
+      // Matches whatever NODE_ENV / TRAILS_ENV resolves to at test time
+      // (vitest sets NODE_ENV=test).
+      expect((rows[0] as { value: string }).value).toBe(resolveEnv());
+    } finally {
+      await a.close();
+    }
+    expect(logs.some((l) => l.includes("Stamped schema with environment"))).toBe(true);
+  });
+
+  it("db environment:check is a no-op for non-protected environments", async () => {
+    await runDb(["environment:check"]);
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it("checkProtectedEnvironmentsBang raises when stored env is protected", async () => {
+    const {
+      DatabaseTasks,
+      Migrator,
+      ProtectedEnvironmentError,
+      DatabaseConfigurations,
+      HashConfig,
+    } = await import("@blazetrails/activerecord");
+    const { SQLite3Adapter } =
+      await import("@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js");
+
+    const dbFile = path.join(tmpDir, "prod.sqlite3");
+    const adapter = new SQLite3Adapter(dbFile);
+    try {
+      const migrator = new Migrator(adapter, []);
+      await migrator.internalMetadata.createTable();
+      await migrator.internalMetadata.set("environment", "production");
+    } finally {
+      await adapter.close();
+    }
+
+    const configurations = new DatabaseConfigurations([
+      new HashConfig("production", "primary", { adapter: "sqlite3", database: dbFile }),
+    ]);
+    const previous = DatabaseTasks.databaseConfiguration;
+    DatabaseTasks.databaseConfiguration = configurations;
+    try {
+      await expect(
+        DatabaseTasks.checkProtectedEnvironmentsBang("production"),
+      ).rejects.toBeInstanceOf(ProtectedEnvironmentError);
+    } finally {
+      DatabaseTasks.databaseConfiguration = previous;
+    }
+  });
+
+  it("checkProtectedEnvironmentsBang raises EnvironmentMismatchError when stored != current", async () => {
+    const {
+      DatabaseTasks,
+      Migrator,
+      EnvironmentMismatchError,
+      DatabaseConfigurations,
+      HashConfig,
+    } = await import("@blazetrails/activerecord");
+    const { SQLite3Adapter } =
+      await import("@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js");
+
+    const dbFile = path.join(tmpDir, "staging.sqlite3");
+    const adapter = new SQLite3Adapter(dbFile);
+    try {
+      const migrator = new Migrator(adapter, []);
+      await migrator.internalMetadata.createTable();
+      await migrator.internalMetadata.set("environment", "staging");
+    } finally {
+      await adapter.close();
+    }
+
+    const configurations = new DatabaseConfigurations([
+      new HashConfig("development", "primary", { adapter: "sqlite3", database: dbFile }),
+    ]);
+    const previous = DatabaseTasks.databaseConfiguration;
+    DatabaseTasks.databaseConfiguration = configurations;
+    try {
+      await expect(
+        DatabaseTasks.checkProtectedEnvironmentsBang("development"),
+      ).rejects.toBeInstanceOf(EnvironmentMismatchError);
+    } finally {
+      DatabaseTasks.databaseConfiguration = previous;
+    }
+  });
+
+  it("DISABLE_DATABASE_ENVIRONMENT_CHECK bypasses the check", async () => {
+    const { DatabaseTasks, Migrator, DatabaseConfigurations, HashConfig } =
+      await import("@blazetrails/activerecord");
+    const { SQLite3Adapter } =
+      await import("@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js");
+
+    const dbFile = path.join(tmpDir, "prod2.sqlite3");
+    const adapter = new SQLite3Adapter(dbFile);
+    try {
+      const migrator = new Migrator(adapter, []);
+      await migrator.internalMetadata.createTable();
+      await migrator.internalMetadata.set("environment", "production");
+    } finally {
+      await adapter.close();
+    }
+
+    const configurations = new DatabaseConfigurations([
+      new HashConfig("production", "primary", { adapter: "sqlite3", database: dbFile }),
+    ]);
+    const previous = DatabaseTasks.databaseConfiguration;
+    const origEnv = process.env.DISABLE_DATABASE_ENVIRONMENT_CHECK;
+    DatabaseTasks.databaseConfiguration = configurations;
+    process.env.DISABLE_DATABASE_ENVIRONMENT_CHECK = "1";
+    try {
+      await expect(
+        DatabaseTasks.checkProtectedEnvironmentsBang("production"),
+      ).resolves.toBeUndefined();
+    } finally {
+      DatabaseTasks.databaseConfiguration = previous;
+      if (origEnv === undefined) delete process.env.DISABLE_DATABASE_ENVIRONMENT_CHECK;
+      else process.env.DISABLE_DATABASE_ENVIRONMENT_CHECK = origEnv;
+    }
+  });
 });

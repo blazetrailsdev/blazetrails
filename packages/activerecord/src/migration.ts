@@ -112,7 +112,19 @@ export class ProtectedEnvironmentError extends MigrationError {
 }
 
 export class EnvironmentMismatchError extends MigrationError {
-  constructor(message = "The environment does not match the stored environment.") {
+  /**
+   * Accept either a prebuilt message (one-arg) or `(current, stored)`
+   * separately (two-arg) matching Rails'
+   * `EnvironmentMismatchError.new(current:, stored:)`.
+   */
+  constructor(currentOrMessage?: string, stored?: string) {
+    const message =
+      stored !== undefined && currentOrMessage !== undefined
+        ? `You are attempting to modify a database that was last run in \`${stored}\` environment.\n` +
+          `You are running in \`${currentOrMessage}\` environment. ` +
+          `If you are sure you want to continue, first set the environment using:\n\n` +
+          `        trails db environment:set\n`
+        : (currentOrMessage ?? "The environment does not match the stored environment.");
     super(message);
     this.name = "EnvironmentMismatchError";
   }
@@ -1857,7 +1869,12 @@ export class Migrator {
   }
 
   async lastStoredEnvironment(): Promise<string | null> {
-    await this._ensureSchemaTable();
+    // Read-only: if ar_internal_metadata doesn't exist yet, the database
+    // has never been stamped with an environment — return null without
+    // creating the table. Matches Rails'
+    // `MigrationContext#last_stored_environment` which short-circuits on
+    // `internal_metadata.table_exists?`.
+    if (!(await this._internalMetadata.tableExists())) return null;
     return this._internalMetadata.get("environment");
   }
 

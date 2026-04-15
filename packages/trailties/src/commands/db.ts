@@ -267,9 +267,12 @@ async function runCreate(): Promise<void> {
 }
 
 async function runDrop(): Promise<void> {
-  const raw = await loadDatabaseConfig();
+  const raw = normalizeRawConfig(await loadDatabaseConfig());
   const config = toDbConfig(raw);
   const displayName = displayNameFor(config, raw);
+  // Rails db:drop is gated on check_protected_environments; we match.
+  // DISABLE_DATABASE_ENVIRONMENT_CHECK=1 is the Rails escape hatch.
+  await DatabaseTasks.checkProtectedEnvironmentsBang(config.envName);
   try {
     await DatabaseTasks.drop(config);
     console.log(`Dropped database '${displayName}'`);
@@ -346,6 +349,32 @@ export function dbCommand(): Command {
         const migrator = new Migrator(adapter, []);
         const version = await migrator.currentVersionReadOnly();
         console.log(`Current version: ${version}`);
+      });
+    });
+
+  cmd
+    .command("environment:set")
+    .description("Stamp the schema with the current environment name")
+    .action(async () => {
+      await withAdapter(async (adapter) => {
+        const migrator = new Migrator(adapter, []);
+        await migrator.internalMetadata.createTable();
+        await migrator.internalMetadata.set("environment", migrator.currentEnvironment);
+        console.log(`Stamped schema with environment: ${migrator.currentEnvironment}`);
+      });
+    });
+
+  cmd
+    .command("environment:check")
+    .description("Abort if the stored schema environment is protected")
+    .action(async () => {
+      await withAdapter(async (_adapter, raw) => {
+        try {
+          await DatabaseTasks.checkProtectedEnvironmentsBang((raw as { envName?: string }).envName);
+        } catch (error) {
+          console.error(error instanceof Error ? error.message : String(error));
+          process.exitCode = 1;
+        }
       });
     });
 
@@ -529,6 +558,9 @@ export function dbCommand(): Command {
     .action(async () => {
       await withAdapter(async (adapter, raw) => {
         const config = toDbConfig(raw);
+        // schema:load is destructive (replaces the schema) — Rails gates
+        // it on check_protected_environments.
+        await DatabaseTasks.checkProtectedEnvironmentsBang(config.envName);
         const filename = DatabaseTasks.schemaDumpPath(config);
         if (!fs.existsSync(filename)) {
           console.error(`No schema file found at ${filename}`);

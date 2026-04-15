@@ -352,12 +352,64 @@ export class DatabaseTasks {
     }
   }
 
+  /**
+   * Guard destructive tasks against being run against a database that was
+   * last stamped with a protected environment (e.g. production).
+   *
+   * Mirrors ActiveRecord::Tasks::DatabaseTasks.check_protected_environments!
+   * exactly:
+   *   - If DISABLE_DATABASE_ENVIRONMENT_CHECK is set in the environment,
+   *     this is a no-op (escape hatch for intentional production ops).
+   *   - For each config in the target environment, read the stored
+   *     `environment` key from InternalMetadata.
+   *   - Raise ProtectedEnvironmentError if that stored env is in
+   *     Base.protectedEnvironments.
+   *   - Raise EnvironmentMismatchError if a stored env exists but differs
+   *     from the current env.
+   *   - Swallow NoDatabaseError (can't check a database that isn't there).
+   */
   static async checkProtectedEnvironmentsBang(environment?: string): Promise<void> {
-    const env = this._normalizeEnv(environment);
+    const proc = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
+    if (proc?.env?.DISABLE_DATABASE_ENVIRONMENT_CHECK) return;
+
+    const envName = this._normalizeEnv(environment);
     const { Base } = await import("../base.js");
-    const protectedEnvs = Base.protectedEnvironments;
-    if (protectedEnvs.includes(env)) {
-      throw new ProtectedEnvironmentError(env);
+    const protectedEnvs = Base.protectedEnvironments ?? ["production"];
+
+    const configs = this.configsFor(envName);
+    // Fall back to checking the current env name directly when no
+    // DatabaseConfigurations is registered (e.g. in-memory tests /
+    // stand-alone CLI invocations with just DatabaseTasks.env set).
+    if (configs.length === 0) {
+      if (protectedEnvs.includes(envName)) {
+        throw new ProtectedEnvironmentError(envName);
+      }
+      return;
+    }
+
+    const { NoDatabaseError } = await import("../errors.js");
+    const { Migrator, EnvironmentMismatchError } = await import("../migration.js");
+
+    for (const config of configs) {
+      try {
+        const adapter = await this._connectFor(config);
+        try {
+          const migrator = new Migrator(adapter, []);
+          const stored = await migrator.lastStoredEnvironment();
+          if (stored && protectedEnvs.includes(stored)) {
+            throw new ProtectedEnvironmentError(stored);
+          }
+          if (stored && stored !== envName) {
+            throw new EnvironmentMismatchError(envName, stored);
+          }
+        } finally {
+          const close = (adapter as { close?: () => Promise<void> }).close;
+          if (typeof close === "function") await close.call(adapter);
+        }
+      } catch (error) {
+        if (error instanceof NoDatabaseError) continue;
+        throw error;
+      }
     }
   }
 

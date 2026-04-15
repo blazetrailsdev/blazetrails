@@ -336,8 +336,9 @@ describe("resolveSchemaFormat", () => {
 
   it("formats non-string schemaFormat values without JSON.stringify crashing on bigint", async () => {
     // A bigint in config would make JSON.stringify throw; normalize()
-    // uses util.inspect so the error message still reaches the user
-    // with a readable repr of the offending value.
+    // routes through the local formatUnknown() helper so the error
+    // message still reaches the user with a readable repr of the
+    // offending value ("42n" for bigint, per the helper's toString).
     fs.writeFileSync(
       path.join(tmpDir, "config", "database.ts"),
       `export default {

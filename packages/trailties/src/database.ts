@@ -108,10 +108,12 @@ export async function loadDatabaseConfigModule(
     const rel = path.relative(cwd, configPath) || configPath;
     // Extract a useful message even when user code throws a non-Error
     // (e.g. `throw "boom"` or `throw null`) — `(error as Error).message`
-    // would produce `undefined` or crash.
+    // would produce `undefined` or crash. Route non-Errors through
+    // formatUnknown so a thrown object with a poisoned toString()
+    // can't bring down the fallback path too.
     // Strip trailing punctuation from the inner message so the final
     // string doesn't end up with a double period like "...message..".
-    const rawMessage = error instanceof Error ? error.message : String(error);
+    const rawMessage = error instanceof Error ? error.message : formatUnknown(error);
     const message = rawMessage.replace(/[.!?]+$/, "");
     const enhanced = new Error(
       `Failed to load database config from "${rel}": ${message}. ` +

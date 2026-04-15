@@ -53,20 +53,36 @@ describeIfMysql("Mysql2Adapter", () => {
   ];
   const TRACKED_VIEWS = ["recent_widgets"];
 
-  const dropTrackedObjects = async (a: Mysql2Adapter): Promise<void> => {
-    for (const view of TRACKED_VIEWS) {
-      try {
-        await a.exec(`DROP VIEW IF EXISTS \`${view}\``);
-      } catch {
-        /* ignore */
+  // Drop via a dedicated mysql2 connection (not the adapter's pool) so
+  // `SET FOREIGN_KEY_CHECKS = 0` stays in scope for every subsequent
+  // DROP on the same connection. Going through the adapter would take
+  // a fresh pool connection per exec() and the SET would only apply
+  // to the first call. FK checks matter here because the shared
+  // test-adapter (packages/activerecord/src/test-adapter.ts) creates
+  // users/posts/etc. BEFORE this file runs and may add FK constraints
+  // that block a plain DROP TABLE, leaving leftovers that poison the
+  // very first test of each CI run.
+  const dropTrackedObjects = async (): Promise<void> => {
+    const conn = await mysql.createConnection({ uri: MYSQL_TEST_URL });
+    try {
+      await conn.query("SET FOREIGN_KEY_CHECKS = 0");
+      for (const view of TRACKED_VIEWS) {
+        try {
+          await conn.query(`DROP VIEW IF EXISTS \`${view}\``);
+        } catch {
+          /* ignore */
+        }
       }
-    }
-    for (const tbl of TRACKED_TABLES) {
-      try {
-        await a.exec(`DROP TABLE IF EXISTS \`${tbl}\``);
-      } catch {
-        /* ignore */
+      for (const tbl of TRACKED_TABLES) {
+        try {
+          await conn.query(`DROP TABLE IF EXISTS \`${tbl}\``);
+        } catch {
+          /* ignore */
+        }
       }
+      await conn.query("SET FOREIGN_KEY_CHECKS = 1");
+    } finally {
+      await conn.end();
     }
   };
 
@@ -74,11 +90,11 @@ describeIfMysql("Mysql2Adapter", () => {
     adapter = new Mysql2Adapter(MYSQL_TEST_URL);
     // Defensive pre-test cleanup: a previous run that crashed without
     // hitting afterEach could leave tables behind.
-    await dropTrackedObjects(adapter);
+    await dropTrackedObjects();
   });
 
   afterEach(async () => {
-    await dropTrackedObjects(adapter);
+    await dropTrackedObjects();
     await adapter.close();
   });
 

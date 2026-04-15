@@ -495,6 +495,18 @@ describeIfMysql("Mysql2Adapter", () => {
       await expect(adapter.tableExists("a.b.c")).rejects.toThrow(/Invalid MySQL identifier/);
     });
 
+    it("rejects identifiers with empty segments", async () => {
+      // Regex tokenization happily dropped `.widgets`, `a..b`, and
+      // `db.widgets.` as if they were valid. A whole-string parser
+      // now catches each as malformed — critical because those shapes
+      // would otherwise resolve to different tables than the caller
+      // thinks.
+      await expect(adapter.tableExists(".widgets")).rejects.toThrow(/Invalid MySQL identifier/);
+      await expect(adapter.tableExists("a..b")).rejects.toThrow(/Invalid MySQL identifier/);
+      await expect(adapter.tableExists("db.widgets.")).rejects.toThrow(/Invalid MySQL identifier/);
+      await expect(adapter.tableExists("")).rejects.toThrow(/Invalid MySQL identifier/);
+    });
+
     it("introspection accepts schema-qualified names", async () => {
       // The implementation takes `schema.table` via parseMysqlName and
       // routes through COALESCE(?, database()). Exercise that path so

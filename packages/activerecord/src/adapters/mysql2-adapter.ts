@@ -484,33 +484,67 @@ export class Mysql2Adapter extends AdapterBase implements DatabaseAdapter {
 
   /**
    * Split a `schema.table` or `` `schema`.`table` `` into `{schema, table}`.
-   * Matches Rails' `extract_schema_qualified_name` regex from
-   * `mysql/schema_statements.rb`, with doubled-backtick escapes
-   * preserved inside the match so `` `my``table` `` is parsed as a
-   * single token. Returns `schema: undefined` when `name` is an
-   * unqualified identifier.
    *
-   * Requires exactly one or two parts — a three-part name like
-   * `a.b.c` is invalid in MySQL (no nested catalog concept) and
-   * silently dropping `.c` would point introspection at the wrong
-   * table. Throws instead. Aligns with the PG parser's strictness in
-   * `packages/activerecord/src/connection-adapters/postgresql/utils.ts`.
+   * Whole-string parser (not regex-tokenize): walks the input once and
+   * requires exactly one part or two parts joined by a single dot,
+   * respecting `` ` `` quoting and doubled-backtick escapes. Rejects
+   * empty segments (`.widgets`, `a..b`, `db.widgets.`), extra parts
+   * (`a.b.c`), and unterminated quoted tokens. Matches the strictness
+   * of the PG parser at
+   * `packages/activerecord/src/connection-adapters/postgresql/utils.ts`
+   * so a typo surfaces instead of silently pointing introspection at
+   * the wrong table.
    */
   private parseMysqlName(name: string): { schema?: string; table: string } {
-    // `[^`.\s]+` for bare identifiers, `` `(?:[^`]|``)*` `` for quoted
-    // identifiers where any `` inside the token is an escaped backtick.
-    const parts = name.match(/[^`.\s]+|`(?:[^`]|``)*`/g) ?? [name];
+    const input = name.trim();
+    const invalid = (): never => {
+      throw new Error(`Invalid MySQL identifier "${name}": expected "table" or "schema.table".`);
+    };
     const unquote = (s: string): string =>
       s.startsWith("`") && s.endsWith("`") ? s.slice(1, -1).replace(/``/g, "`") : s;
-    if (parts.length === 2) {
-      return { schema: unquote(parts[0]), table: unquote(parts[1]) };
+
+    // Parse a single identifier token starting at `start`. Returns the
+    // raw token (with backticks kept, to preserve quote distinctness)
+    // and the index of the next unconsumed character. Throws on empty
+    // or unterminated tokens.
+    const parsePart = (start: number): { part: string; nextIndex: number } => {
+      if (start >= input.length) invalid();
+      if (input[start] === "`") {
+        let part = "`";
+        let i = start + 1;
+        while (i < input.length) {
+          if (input[i] === "`") {
+            if (input[i + 1] === "`") {
+              part += "``";
+              i += 2;
+              continue;
+            }
+            part += "`";
+            return { part, nextIndex: i + 1 };
+          }
+          part += input[i];
+          i += 1;
+        }
+        invalid(); // unterminated
+      }
+      let i = start;
+      while (i < input.length && input[i] !== "." && input[i] !== "`") {
+        i += 1;
+      }
+      if (i === start) invalid(); // empty
+      return { part: input.slice(start, i), nextIndex: i };
+    };
+
+    if (input.length === 0) invalid();
+
+    const first = parsePart(0);
+    if (first.nextIndex === input.length) {
+      return { table: unquote(first.part) };
     }
-    if (parts.length === 1) {
-      return { table: unquote(parts[0]) };
-    }
-    throw new Error(
-      `Invalid MySQL identifier "${name}": expected "table" or "schema.table", got ${parts.length} parts.`,
-    );
+    if (input[first.nextIndex] !== ".") invalid();
+    const second = parsePart(first.nextIndex + 1);
+    if (second.nextIndex !== input.length) invalid(); // extra content
+    return { schema: unquote(first.part), table: unquote(second.part) };
   }
 
   /**

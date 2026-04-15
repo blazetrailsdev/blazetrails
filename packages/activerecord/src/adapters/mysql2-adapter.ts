@@ -412,8 +412,7 @@ export class Mysql2Adapter extends AdapterBase implements DatabaseAdapter {
       `SELECT index_name AS name,
               column_name AS col,
               ${exprSelect},
-              non_unique AS non_unique,
-              seq_in_index AS pos
+              non_unique AS non_unique
          FROM information_schema.statistics
          WHERE table_schema = COALESCE(?, database())
          AND table_name = ?
@@ -538,14 +537,25 @@ export class Mysql2Adapter extends AdapterBase implements DatabaseAdapter {
 
     if (input.length === 0) invalid();
 
+    // unquote + re-validate non-empty: a quoted token like "``" lexes
+    // fine in parsePart (backticks match, body is empty) but unquotes
+    // to "", which would break COALESCE(?, database()) and make the
+    // introspection call silently scan the wrong catalog. Centralize
+    // the empty-check here so both bare and quoted forms are covered.
+    const checkNonEmpty = (part: string): string => {
+      const s = unquote(part);
+      if (s.length === 0) invalid();
+      return s;
+    };
+
     const first = parsePart(0);
     if (first.nextIndex === input.length) {
-      return { table: unquote(first.part) };
+      return { table: checkNonEmpty(first.part) };
     }
     if (input[first.nextIndex] !== ".") invalid();
     const second = parsePart(first.nextIndex + 1);
     if (second.nextIndex !== input.length) invalid(); // extra content
-    return { schema: unquote(first.part), table: unquote(second.part) };
+    return { schema: checkNonEmpty(first.part), table: checkNonEmpty(second.part) };
   }
 
   /**

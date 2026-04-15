@@ -507,6 +507,16 @@ describeIfMysql("Mysql2Adapter", () => {
       await expect(adapter.tableExists("")).rejects.toThrow(/Invalid MySQL identifier/);
     });
 
+    it("rejects empty *quoted* identifiers", async () => {
+      // Quoted tokens lex fine (``, `a`.``, ``.widgets all match the
+      // parser's quoted-token rule) but unquote to an empty string —
+      // which would break COALESCE(?, database()) and silently scan
+      // the wrong catalog. Validate non-empty after unquoting.
+      await expect(adapter.tableExists("``")).rejects.toThrow(/Invalid MySQL identifier/);
+      await expect(adapter.tableExists("``.widgets")).rejects.toThrow(/Invalid MySQL identifier/);
+      await expect(adapter.tableExists("`db`.``")).rejects.toThrow(/Invalid MySQL identifier/);
+    });
+
     it("introspection accepts schema-qualified names", async () => {
       // The implementation takes `schema.table` via parseMysqlName and
       // routes through COALESCE(?, database()). Exercise that path so
@@ -545,13 +555,17 @@ describeIfMysql("Mysql2Adapter", () => {
       // have NULL column_name in information_schema.statistics and the
       // expression in `expression`. Surfacing "null" as a column name
       // would poison SchemaCache; wrapping the expression in parens
-      // matches Rails' IndexDefinition display. Older MySQL rejects
-      // functional indexes so skip gracefully on those.
-      try {
-        await adapter.exec("CREATE INDEX `widgets_on_lower_name` ON `widgets` ((LOWER(`name`)))");
-      } catch {
-        return; // pre-8.0 MySQL — feature not available
-      }
+      // matches Rails' IndexDefinition display.
+      //
+      // Gate on the capability probe rather than try/catching CREATE —
+      // a try/catch-all would also swallow permissions errors or a
+      // genuine syntax regression, silently letting the test pass.
+      const hasExpression = await (
+        adapter as unknown as { statisticsHasExpressionColumn(): Promise<boolean> }
+      ).statisticsHasExpressionColumn();
+      if (!hasExpression) return;
+
+      await adapter.exec("CREATE INDEX `widgets_on_lower_name` ON `widgets` ((LOWER(`name`)))");
       const idx = await adapter.indexes("widgets");
       const functional = idx.find((i) => i.name === "widgets_on_lower_name");
       expect(functional).toBeDefined();

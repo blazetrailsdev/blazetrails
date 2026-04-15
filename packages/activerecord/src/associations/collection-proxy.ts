@@ -22,7 +22,11 @@ import {
 } from "../associations.js";
 
 export interface CollectionProxy<T extends Base = Base> {
-  // Thenable — makes CollectionProxy awaitable (delegates to toArray)
+  // Thenable — makes CollectionProxy awaitable. Delegates to `load()`,
+  // which both returns the loaded records AND hydrates `_target`, so
+  // subsequent sync ops (`proxy.length`, `proxy[0]`, iteration) work
+  // after a single `await proxy`. Wired at the bottom of the file via
+  // `applyThenable(CollectionProxy.prototype, "load")`.
   then<TResult1 = T[], TResult2 = never>(
     onfulfilled?: ((value: T[]) => TResult1 | PromiseLike<TResult1>) | null,
     onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null,

@@ -243,6 +243,44 @@ All cross-package — see the index for
 and [symbols/kwargs](./index.md#symbols-kwargs). Every ActiveRecord API
 follows them.
 
+## 13. Typing runtime-attached members with `declare`
+
+Rails defines attributes/associations/scopes/enums dynamically, so a
+Ruby author just writes `post.title`, `post.author`, `Post.published`
+and everything works. In TypeScript, the same calls are attached at
+runtime (via `this.attribute`, `this.hasMany`, `this.scope`, `this.enum`)
+but the type system only sees them if you opt in with a `declare`:
+
+```ts
+class Post extends Base {
+  declare title: string; // attribute
+  declare author: Author | null; // belongsTo reader (synchronous)
+  declare comments: CollectionProxy<Comment>; // hasMany reader
+  declare isDraft: () => boolean; // enum predicate
+  declare draft: () => void; // enum in-memory setter
+  declare draftBang: () => Promise<void>; // enum persisting setter
+  declare static published: () => Relation<Post>; // named scope
+  declare static draft: () => Relation<Post>; // enum class scope
+
+  static {
+    this.attribute("title", "string");
+    this.belongsTo("author");
+    this.hasMany("comments");
+    this.enum("status", { draft: 0, published: 1 });
+    this.scope("published", (rel) => rel.where({ published: true }));
+  }
+}
+```
+
+Without `declare`, access type-checks (Model has `[key: string]: unknown`)
+but resolves to `unknown`. The compiled reference for every supported
+pattern lives in
+`packages/activerecord/dx-tests/declare-patterns.test-d.ts`.
+
+Don't redeclare `id` — `Base#id` is an accessor typed as
+`PrimaryKeyValue`, and TS forbids overriding an accessor with a
+differently-typed property. Narrow at the use site: `record.id as number`.
+
 ## Summary
 
 | Area                     | Rails                                   | Trails                                            |

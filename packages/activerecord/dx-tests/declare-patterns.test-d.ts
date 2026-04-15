@@ -39,11 +39,21 @@ class Comment extends Base {
   }
 }
 
+class Tag extends Base {
+  declare name: string;
+  static {
+    this.attribute("name", "string");
+  }
+}
+
 class Author extends Base {
   declare name: string;
 
   // hasMany → CollectionProxy<Comment>
   declare comments: CollectionProxy<Comment>;
+
+  // hasAndBelongsToMany → CollectionProxy<Tag> (same shape as hasMany)
+  declare tags: CollectionProxy<Tag>;
 
   // hasOne → Profile | null (synchronous reader; returns the record directly)
   declare profile: Profile | null;
@@ -51,6 +61,7 @@ class Author extends Base {
   static {
     this.attribute("name", "string");
     this.hasMany("comments");
+    this.hasAndBelongsToMany("tags");
     this.hasOne("profile");
   }
 }
@@ -126,6 +137,12 @@ describe("declare patterns — typing runtime-attached members", () => {
     const author = new Author({ name: "dean" });
     expectTypeOf(author.comments).toMatchTypeOf<CollectionProxy<Comment>>();
     expectTypeOf(await author.comments.first()).toEqualTypeOf<Comment | null>();
+  });
+
+  it("hasAndBelongsToMany accessor: `declare tags: CollectionProxy<Tag>` (same shape)", async () => {
+    const author = new Author({ name: "dean" });
+    expectTypeOf(author.tags).toMatchTypeOf<CollectionProxy<Tag>>();
+    expectTypeOf(await author.tags.first()).toEqualTypeOf<Tag | null>();
   });
 
   it("belongsTo accessor: `declare author: Author | null` (synchronous reader)", () => {

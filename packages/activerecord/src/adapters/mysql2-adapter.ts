@@ -533,7 +533,13 @@ export class Mysql2Adapter extends AdapterBase implements DatabaseAdapter {
         invalid(); // unterminated
       }
       let i = start;
-      while (i < input.length && input[i] !== "." && input[i] !== "`") {
+      // Stop at `.`, the start of a quoted token, or any whitespace.
+      // MySQL only permits whitespace inside *backtick-quoted*
+      // identifiers; an unquoted "db .widgets" would therefore be
+      // invalid. Treating whitespace as a token boundary (rather than
+      // part of the name) lets the extra-content check downstream
+      // reject the input cleanly.
+      while (i < input.length && input[i] !== "." && input[i] !== "`" && !/\s/.test(input[i])) {
         i += 1;
       }
       if (i === start) invalid(); // empty

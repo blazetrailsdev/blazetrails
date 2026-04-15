@@ -507,6 +507,21 @@ describeIfMysql("Mysql2Adapter", () => {
       await expect(adapter.tableExists("")).rejects.toThrow(/Invalid MySQL identifier/);
     });
 
+    it("rejects unquoted identifiers containing whitespace", async () => {
+      // MySQL only permits whitespace inside backtick-quoted
+      // identifiers. Unquoted variants like 'db .widgets' or
+      // 'db. widgets' or 'wid gets' would previously have been
+      // silently accepted (producing lookups for bogus names like
+      // ' widgets'); now they throw.
+      await expect(adapter.tableExists("db .widgets")).rejects.toThrow(/Invalid MySQL identifier/);
+      await expect(adapter.tableExists("db. widgets")).rejects.toThrow(/Invalid MySQL identifier/);
+      await expect(adapter.tableExists("wid gets")).rejects.toThrow(/Invalid MySQL identifier/);
+      // But whitespace INSIDE a backtick-quoted identifier is valid
+      // — MySQL permits it and we must too.
+      // (No DB-side assertion here, just ensure it doesn't throw.)
+      expect(await adapter.tableExists("`not a real table`")).toBe(false);
+    });
+
     it("rejects empty *quoted* identifiers", async () => {
       // Quoted tokens lex fine (``, `a`.``, ``.widgets all match the
       // parser's quoted-token rule) but unquote to an empty string —

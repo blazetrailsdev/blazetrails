@@ -171,6 +171,31 @@ export class SQLiteDatabaseTasks {
     }
   }
 
+  /**
+   * Truncate every user table in the database — used by
+   * `DatabaseTasks.truncate_all` / `trails db seed:replant`. SQLite
+   * doesn't support TRUNCATE TABLE, so we DELETE FROM each user table
+   * then VACUUM (the Rails parallel is Arel::Truncate which falls back
+   * to DELETE for sqlite adapters).
+   *
+   * Skips schema_migrations and ar_internal_metadata so migration state
+   * and environment stamping survive.
+   */
+  async truncateAll(): Promise<void> {
+    const adapter = await this.connectAdapter();
+    try {
+      const rows = (await adapter.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' " +
+          "AND name <> 'schema_migrations' AND name <> 'ar_internal_metadata'",
+      )) as Array<{ name: string }>;
+      for (const row of rows) {
+        await adapter.executeMutation(`DELETE FROM "${row.name.replace(/"/g, '""')}"`);
+      }
+    } finally {
+      await this.closeAdapter(adapter);
+    }
+  }
+
   private resolveDbPath(): string {
     const path = getPath();
     // Align with DatabaseTasks._connectFor which defaults missing sqlite
@@ -201,6 +226,7 @@ export class SQLiteDatabaseTasks {
       drop: async (config) => new SQLiteDatabaseTasks(config).drop(),
       purge: async (config) => new SQLiteDatabaseTasks(config).purge(),
       charset: async (config) => new SQLiteDatabaseTasks(config).charset(),
+      truncateAll: async (config) => new SQLiteDatabaseTasks(config).truncateAll(),
       structureDump: async (config, filename, flags) =>
         new SQLiteDatabaseTasks(config).structureDump(filename, flags),
       structureLoad: async (config, filename, flags) =>

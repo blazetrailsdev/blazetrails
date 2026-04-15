@@ -130,6 +130,47 @@ export class MySQLDatabaseTasks {
     await this.runCmd("mysql", args, "loading", stdin);
   }
 
+  /**
+   * Truncate every user table in the current database, skipping
+   * schema_migrations and ar_internal_metadata. Disables FK checks for
+   * the duration so TRUNCATE order doesn't matter (matching Rails'
+   * Mysql2Adapter#truncate_tables behavior).
+   */
+  async truncateAll(): Promise<void> {
+    const { Mysql2Adapter } = await import("../adapters/mysql2-adapter.js");
+    const dbName = this.requireDatabaseName();
+    const adapter = new Mysql2Adapter({
+      host: this.resolvedField("host") ?? "localhost",
+      port: Number(this.resolvedField("port") ?? 3306),
+      database: dbName,
+      user: this.resolvedField("username"),
+      password: this.resolvedField("password"),
+    });
+    try {
+      const rows = (await adapter.execute(
+        "SELECT table_name FROM information_schema.tables WHERE table_schema = ? " +
+          "AND table_type = 'BASE TABLE' " +
+          "AND table_name NOT IN ('schema_migrations', 'ar_internal_metadata')",
+        [dbName],
+      )) as Array<{ table_name?: string; TABLE_NAME?: string }>;
+      const names = rows
+        .map((r) => r.table_name ?? r.TABLE_NAME)
+        .filter((n): n is string => typeof n === "string");
+      if (names.length === 0) return;
+      await adapter.executeMutation("SET FOREIGN_KEY_CHECKS = 0");
+      try {
+        for (const name of names) {
+          await adapter.executeMutation(`TRUNCATE TABLE \`${name.replace(/`/g, "``")}\``);
+        }
+      } finally {
+        await adapter.executeMutation("SET FOREIGN_KEY_CHECKS = 1");
+      }
+    } finally {
+      const close = (adapter as unknown as { close?: () => Promise<void> }).close;
+      if (typeof close === "function") await close.call(adapter);
+    }
+  }
+
   static register(): void {
     const handler = {
       create: async (config: DatabaseConfig) => new MySQLDatabaseTasks(config).create(),
@@ -137,6 +178,7 @@ export class MySQLDatabaseTasks {
       purge: async (config: DatabaseConfig) => new MySQLDatabaseTasks(config).purge(),
       charset: async (config: DatabaseConfig) => new MySQLDatabaseTasks(config).charset(),
       collation: async (config: DatabaseConfig) => new MySQLDatabaseTasks(config).collation(),
+      truncateAll: async (config: DatabaseConfig) => new MySQLDatabaseTasks(config).truncateAll(),
       structureDump: async (
         config: DatabaseConfig,
         filename: string,

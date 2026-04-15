@@ -148,6 +148,14 @@ function toDbConfig(raw: RawConfig, envName: string = resolveEnv()): HashConfig 
  * `EnvironmentMismatchError` and the protected-stamp case this PR cares
  * about.
  */
+async function resolveHandler(
+  config: HashConfig,
+): Promise<import("@blazetrails/activerecord").DatabaseTaskHandler | undefined> {
+  const adapter = config.adapter;
+  if (!adapter) return undefined;
+  return DatabaseTasks.resolveTask(adapter);
+}
+
 async function runProtectedEnvCheck(config: HashConfig, envName: string): Promise<void> {
   const { DatabaseConfigurations } = await import("@blazetrails/activerecord");
   // DatabaseConfigurations' constructor registers itself as the
@@ -507,6 +515,134 @@ export function dbCommand(): Command {
         Base.adapter = adapter;
         await runSeed();
       });
+    });
+
+  cmd
+    .command("seed:replant")
+    .description("Truncate all tables in the current environment and re-run seeds")
+    .action(async () => {
+      await withAdapter(async (adapter, raw) => {
+        const config = toDbConfig(raw);
+        await runProtectedEnvCheck(config, config.envName);
+        const handler = await resolveHandler(config);
+        if (handler?.truncateAll) {
+          await handler.truncateAll(config);
+        }
+        const { Base } = await import("@blazetrails/activerecord");
+        Base.adapter = adapter;
+        await runSeed();
+      });
+    });
+
+  cmd
+    .command("truncate_all")
+    .description("Truncate all tables in the current environment")
+    .action(async () => {
+      await withAdapter(async (_adapter, raw) => {
+        const config = toDbConfig(raw);
+        await runProtectedEnvCheck(config, config.envName);
+        const handler = await resolveHandler(config);
+        if (handler?.truncateAll) {
+          await handler.truncateAll(config);
+        }
+      });
+    });
+
+  cmd
+    .command("prepare")
+    .description(
+      "Create the database if it doesn't exist, run pending migrations, and seed when fresh",
+    )
+    .action(async () => {
+      await withAdapter(async (adapter, raw) => {
+        const config = toDbConfig(raw);
+        const { DatabaseAlreadyExists, Migrator } = await import("@blazetrails/activerecord");
+
+        // Rails measures "fresh" via
+        // `!schema_migration.table_exists?` — not via whether the DB
+        // file/db exists. A sqlite DB "exists" as soon as anyone opens a
+        // connection (better-sqlite3 creates the file on open), so
+        // checking DatabaseTasks.create's success would almost always
+        // report not-fresh. Use the schema_migrations presence probe.
+        const preMigrator = new Migrator(adapter, []);
+        const wasFresh = !(await preMigrator.schemaMigrationTableExists());
+
+        try {
+          await DatabaseTasks.create(config);
+          if (wasFresh) console.log(`Created database '${displayNameFor(config, raw)}'`);
+        } catch (error) {
+          if (!(error instanceof DatabaseAlreadyExists)) throw error;
+        }
+        await runMigrate(adapter, raw);
+        if (wasFresh) {
+          const { Base } = await import("@blazetrails/activerecord");
+          Base.adapter = adapter;
+          await runSeed();
+        }
+      });
+    });
+
+  cmd
+    .command("test:load_schema")
+    .description("Purge the test DB and load the schema")
+    .action(async () => {
+      const raw = normalizeRawConfig(await loadDatabaseConfig("test"));
+      const config = toDbConfig(raw, "test");
+      await runProtectedEnvCheck(config, "test");
+      try {
+        await DatabaseTasks.drop(config);
+      } catch {
+        // ignore — test DB may not exist
+      }
+      await DatabaseTasks.create(config);
+      const adapter = await connectAdapter(raw);
+      try {
+        const previous = DatabaseTasks.migrationConnection();
+        DatabaseTasks.setAdapter(adapter);
+        try {
+          await DatabaseTasks.loadSchema(config);
+        } finally {
+          DatabaseTasks.setAdapter(previous);
+        }
+      } finally {
+        const close = (adapter as { close?: () => Promise<void> }).close;
+        if (typeof close === "function") await close.call(adapter);
+      }
+      console.log(`Loaded test schema into '${displayNameFor(config, raw)}'`);
+    });
+
+  cmd
+    .command("test:prepare")
+    .description("Prepare the test database (load schema from db/schema.ts / .js / structure.sql)")
+    .action(async () => {
+      const raw = normalizeRawConfig(await loadDatabaseConfig("test"));
+      const config = toDbConfig(raw, "test");
+      await runProtectedEnvCheck(config, "test");
+      const filename = DatabaseTasks.schemaDumpPath(config);
+      if (!fs.existsSync(filename)) {
+        console.error(`No schema file found at ${filename}. Run \`trails db schema:dump\` first.`);
+        process.exitCode = 1;
+        return;
+      }
+      try {
+        await DatabaseTasks.create(config);
+      } catch {
+        // ignore — test DB may exist already
+      }
+      const adapter = await connectAdapter(raw);
+      try {
+        const previous = DatabaseTasks.migrationConnection();
+        DatabaseTasks.setAdapter(adapter);
+        try {
+          await DatabaseTasks.loadSchema(config);
+        } finally {
+          DatabaseTasks.setAdapter(previous);
+        }
+      } finally {
+        const close = (adapter as { close?: () => Promise<void> }).close;
+        if (typeof close === "function") await close.call(adapter);
+      }
+      console.log(`Test database prepared (${filename})`);
     });
 
   cmd.command("create").description("Create the database").action(runCreate);

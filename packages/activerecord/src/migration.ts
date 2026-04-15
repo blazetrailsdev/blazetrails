@@ -1416,11 +1416,22 @@ export class Migrator {
   constructor(
     adapter: DatabaseAdapter,
     migrations: MigrationProxy[],
-    options: { environment?: string; strategy?: ExecutionStrategy } = {},
+    options: {
+      environment?: string;
+      strategy?: ExecutionStrategy;
+      /**
+       * Set to false when the db_config opts out of metadata storage
+       * (Rails' `use_metadata_table: false`). environment stamping is a
+       * no-op / raises in `environment:set` when this is false.
+       */
+      internalMetadataEnabled?: boolean;
+    } = {},
   ) {
     this._adapter = adapter;
     this._schemaMigration = new SchemaMigration(adapter);
-    this._internalMetadata = new InternalMetadata(adapter);
+    this._internalMetadata = new InternalMetadata(adapter, {
+      enabled: options.internalMetadataEnabled ?? true,
+    });
     this._environment =
       options.environment ?? (process.env.NODE_ENV || DatabaseConfigurations.defaultEnv);
     this._strategy = options.strategy ?? new DefaultStrategy();

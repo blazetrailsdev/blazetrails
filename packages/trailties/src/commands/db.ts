@@ -356,17 +356,27 @@ export function dbCommand(): Command {
     .command("environment:set")
     .description("Stamp the schema with the current environment name")
     .action(async () => {
-      await withAdapter(async (adapter) => {
-        const migrator = new Migrator(adapter, []);
+      await withAdapter(async (adapter, raw) => {
+        // Use resolveEnv() so the stamped env matches what the trails
+        // CLI considers 'current' (TRAILS_ENV takes precedence over
+        // NODE_ENV). Without this, `TRAILS_ENV=production trails db
+        // environment:set` with NODE_ENV=development would stamp the DB
+        // as development and defeat the protected-env guard.
+        const envName = resolveEnv();
+        const internalMetadataEnabled =
+          (raw as { useMetadataTable?: boolean }).useMetadataTable !== false;
+        const migrator = new Migrator(adapter, [], {
+          environment: envName,
+          internalMetadataEnabled,
+        });
         // Rails: raise EnvironmentStorageError when
         // internal_metadata.enabled? is false (use_metadata_table opt-out).
         if (!migrator.internalMetadata.enabled) {
           const { EnvironmentStorageError } = await import("@blazetrails/activerecord");
           throw new EnvironmentStorageError();
         }
-        await migrator.internalMetadata.createTable();
-        await migrator.internalMetadata.set("environment", migrator.currentEnvironment);
-        console.log(`Stamped schema with environment: ${migrator.currentEnvironment}`);
+        await migrator.internalMetadata.createTableAndSetFlags(envName);
+        console.log(`Stamped schema with environment: ${envName}`);
       });
     });
 
@@ -374,9 +384,13 @@ export function dbCommand(): Command {
     .command("environment:check")
     .description("Abort if the stored schema environment is protected")
     .action(async () => {
-      await withAdapter(async (_adapter, raw) => {
+      await withAdapter(async () => {
+        // Pass resolveEnv() explicitly so the check runs against the
+        // environment the CLI is currently operating as. RawConfig
+        // doesn't carry envName — the previous `raw.envName` cast was a
+        // silent undefined that defaulted to DatabaseTasks.env.
         try {
-          await DatabaseTasks.checkProtectedEnvironmentsBang((raw as { envName?: string }).envName);
+          await DatabaseTasks.checkProtectedEnvironmentsBang(resolveEnv());
         } catch (error) {
           console.error(error instanceof Error ? error.message : String(error));
           process.exitCode = 1;

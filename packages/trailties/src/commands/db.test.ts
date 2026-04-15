@@ -866,26 +866,46 @@ export class CreatePosts extends Migration {
     }
   });
 
-  it("environment:set raises EnvironmentStorageError when internal metadata is disabled", async () => {
-    const { Migrator, EnvironmentStorageError } = await import("@blazetrails/activerecord");
+  it("InternalMetadata with enabled=false refuses set writes with EnvironmentStorageError", async () => {
+    const { EnvironmentStorageError, InternalMetadata } = await import("@blazetrails/activerecord");
     const { SQLite3Adapter } =
       await import("@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js");
 
     const dbFile = path.join(tmpDir, "disabled.sqlite3");
     const adapter = new SQLite3Adapter(dbFile);
     try {
-      const { InternalMetadata } = await import("@blazetrails/activerecord");
       const disabledMeta = new InternalMetadata(adapter, { enabled: false });
       expect(disabledMeta.enabled).toBe(false);
-      // The CLI command creates a Migrator that reads Base defaults; the
-      // public assertion we care about here is that the error class is
-      // exported and constructible, since the CLI wraps it.
-      expect(new EnvironmentStorageError()).toBeInstanceOf(Error);
-      // Guard on enabled is exercised via InternalMetadata.enabled, not
-      // Migrator.internalMetadata.enabled (Migrator currently constructs
-      // with default enabled=true — config-driven opt-out is follow-up
-      // surface). The test confirms the flag plumbing.
-      void Migrator;
+
+      // createTable + createTableAndSetFlags silently no-op (Rails'
+      // create_table_and_set_flags returns early when enabled? is false).
+      await expect(disabledMeta.createTable()).resolves.toBeUndefined();
+      await expect(disabledMeta.createTableAndSetFlags("production")).resolves.toBeUndefined();
+      expect(await disabledMeta.tableExists()).toBe(false);
+
+      // Direct `set` raises so callers that attempt a write through a
+      // disabled instance fail loudly.
+      await expect(disabledMeta.set("environment", "test")).rejects.toBeInstanceOf(
+        EnvironmentStorageError,
+      );
+    } finally {
+      await adapter.close();
+    }
+  });
+
+  it("Migrator plumbs internalMetadataEnabled=false through to InternalMetadata", async () => {
+    const { Migrator, EnvironmentStorageError } = await import("@blazetrails/activerecord");
+    const { SQLite3Adapter } =
+      await import("@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js");
+
+    const dbFile = path.join(tmpDir, "disabled-migrator.sqlite3");
+    const adapter = new SQLite3Adapter(dbFile);
+    try {
+      const migrator = new Migrator(adapter, [], { internalMetadataEnabled: false });
+      expect(migrator.internalMetadata.enabled).toBe(false);
+      await expect(
+        migrator.internalMetadata.set("environment", "production"),
+      ).rejects.toBeInstanceOf(EnvironmentStorageError);
     } finally {
       await adapter.close();
     }

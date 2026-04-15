@@ -78,6 +78,7 @@ export class InternalMetadata {
   }
 
   async createTable(): Promise<void> {
+    if (!this._enabled) return;
     const tsType = this._adapterName === "postgres" ? "TIMESTAMP" : "DATETIME";
     const q = (n: string) => this._q(n);
     await this._adapter.executeMutation(
@@ -87,6 +88,19 @@ export class InternalMetadata {
         `${q("created_at")} ${tsType} NOT NULL, ` +
         `${q("updated_at")} ${tsType} NOT NULL)`,
     );
+  }
+
+  /**
+   * Create the metadata table if needed and write the given environment
+   * (and optional schema SHA1) in one call. Matches Rails'
+   * `ActiveRecord::InternalMetadata#create_table_and_set_flags` — silently
+   * returns when `enabled?` is false.
+   */
+  async createTableAndSetFlags(environment: string, schemaSha1?: string): Promise<void> {
+    if (!this._enabled) return;
+    await this.createTable();
+    await this.set("environment", environment);
+    if (schemaSha1 !== undefined) await this.set("schema_sha1", schemaSha1);
   }
 
   async dropTable(): Promise<void> {
@@ -104,6 +118,14 @@ export class InternalMetadata {
   }
 
   async set(key: string, value: string): Promise<void> {
+    if (!this._enabled) {
+      // Rails' `environment:set` raises EnvironmentStorageError when
+      // internal_metadata is disabled; surface the same error here so
+      // callers that attempt to write through a disabled instance fail
+      // loudly rather than silently no-op.
+      const { EnvironmentStorageError } = await import("./migration.js");
+      throw new EnvironmentStorageError();
+    }
     const existing = await this.selectEntry(key);
     if (existing) {
       if (existing[this.valueKey] !== value) {

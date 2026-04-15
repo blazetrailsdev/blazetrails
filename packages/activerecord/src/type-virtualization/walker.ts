@@ -290,4 +290,3 @@ function objectKeys(obj: ts.ObjectLiteralExpression): string[] {
   }
   return keys;
 }
-

@@ -88,9 +88,7 @@ function renderEnum(info: ClassInfo, call: EnumCall): RenderedLine[] {
     const scopeName = camelize(methodBase, false);
     out.push(line(`declare ${predicate}: () => boolean;`, predicate, false));
     out.push(line(`declare ${bang}: () => this;`, bang, false));
-    out.push(
-      line(`declare static ${scopeName}: () => Relation<${info.name}>;`, scopeName, true),
-    );
+    out.push(line(`declare static ${scopeName}: () => Relation<${info.name}>;`, scopeName, true));
   }
   return out;
 }
@@ -108,9 +106,7 @@ function renderDefineEnum(info: ClassInfo, call: DefineEnumCall): RenderedLine[]
     out.push(line(`declare ${setter}: () => void;`, setter, false));
     out.push(line(`declare ${bang}: () => Promise<void>;`, bang, false));
     out.push(line(`declare static ${setter}: () => Relation<${info.name}>;`, setter, true));
-    out.push(
-      line(`declare static ${notScope}: () => Relation<${info.name}>;`, notScope, true),
-    );
+    out.push(line(`declare static ${notScope}: () => Relation<${info.name}>;`, notScope, true));
   }
   return out;
 }

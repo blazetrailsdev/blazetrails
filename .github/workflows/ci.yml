@@ -95,7 +95,18 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm vitest run --no-file-parallelism --exclude 'packages/activerecord/**'
+      - run: >
+          pnpm vitest run --no-file-parallelism
+          packages/arel
+          packages/activemodel
+          packages/activesupport
+          packages/rack
+          packages/actionpack
+          packages/actionview
+          packages/railties
+          packages/trailties
+          packages/cli
+          scripts/guides-typecheck
 
   sqlite-tests:
     name: SQLite Tests

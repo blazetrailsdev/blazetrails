@@ -1622,6 +1622,61 @@ export class CreateThings extends Migration {
     expect(dumped).toContain("things");
   });
 
+  it("db schema:dump --format=sql appends schema_migrations versions", async () => {
+    // Rails' dump_schema calls dump_schema_information after
+    // structure_dump so schema_migrations' version rows round-trip
+    // through load. Without this, loading structure.sql into a fresh DB
+    // leaves schema_migrations empty and every prior migration replays.
+    const dbFile = path.join(tmpDir, "migrations-dump.sqlite3");
+    fs.writeFileSync(
+      path.join(tmpDir, "config", "database.ts"),
+      `export default {
+  development: { adapter: "sqlite3", database: ${JSON.stringify(dbFile)} },
+  test: { adapter: "sqlite3", database: ${JSON.stringify(dbFile)} },
+};`,
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, "db", "migrations", "20260101000000-create-posts.ts"),
+      `import { Migration } from "@blazetrails/activerecord";
+export class CreatePosts extends Migration {
+  async up() { await this.createTable("posts", (t) => { t.string("title"); }); }
+  async down() { await this.dropTable("posts"); }
+}`,
+    );
+
+    await runDb(["migrate"]);
+    await runDb(["schema:dump", "--format=sql"]);
+
+    const dumped = fs.readFileSync(path.join(tmpDir, "db", "structure.sql"), "utf8");
+    expect(dumped).toMatch(/INSERT INTO "schema_migrations"/);
+    expect(dumped).toContain("20260101000000");
+
+    // Drop schema_migrations + the user table to prove load replays
+    // both the DDL and the version INSERTs.
+    const { SQLite3Adapter } =
+      await import("@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js");
+    const dropper = new SQLite3Adapter(dbFile);
+    try {
+      await dropper.executeMutation("DROP TABLE schema_migrations");
+      await dropper.executeMutation("DROP TABLE ar_internal_metadata");
+      await dropper.executeMutation("DROP TABLE posts");
+    } finally {
+      await dropper.close();
+    }
+
+    await runDb(["schema:load", "--format=sql"]);
+
+    const verify = new SQLite3Adapter(dbFile);
+    try {
+      const rows = (await verify.execute(
+        "SELECT version FROM schema_migrations ORDER BY version",
+      )) as Array<{ version: string }>;
+      expect(rows.map((r) => r.version)).toEqual(["20260101000000"]);
+    } finally {
+      await verify.close();
+    }
+  });
+
   it("db schema:load --format=sql errors when structure.sql is missing", async () => {
     const dbFile = path.join(tmpDir, "missing.sqlite3");
     fs.writeFileSync(

@@ -113,7 +113,11 @@ export class SQLiteDatabaseTasks {
       const typeOrder =
         "CASE type WHEN 'table' THEN 0 WHEN 'view' THEN 1 " +
         "WHEN 'index' THEN 2 WHEN 'trigger' THEN 3 ELSE 4 END";
-      let where = "WHERE sql IS NOT NULL";
+      // Skip SQLite internals (sqlite_sequence, sqlite_stat*, etc.)
+      // — their names are reserved, so re-emitting their CREATE
+      // statements during structureLoad would fail. Rails' .schema CLI
+      // path filters these implicitly; we replicate that here.
+      let where = "WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%'";
       let binds: unknown[] = [];
 
       if (ignoreTables.length > 0) {

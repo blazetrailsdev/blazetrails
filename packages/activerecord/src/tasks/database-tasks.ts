@@ -624,6 +624,13 @@ export class DatabaseTasks {
       const path = getPath();
       fs.mkdirSync(path.dirname(filename), { recursive: true });
       await this.structureDump(config, filename);
+      // Rails' dump_schema appends `dump_schema_information` after a
+      // structure_dump so schema_migrations' version rows round-trip
+      // through load. Without this, loading structure.sql into a
+      // fresh DB would leave schema_migrations empty and every past
+      // migration would replay. Gated on the schema_migrations table
+      // existing — on a never-migrated DB there's nothing to stamp.
+      await this._appendSchemaInformation(filename);
       return;
     }
     const { SchemaDumper } = await import("../schema-dumper.js");
@@ -826,6 +833,46 @@ export class DatabaseTasks {
     const hash = getCrypto().createHash("sha1");
     hash.update(contents);
     return hash.digest("hex");
+  }
+
+  /**
+   * Append `INSERT INTO schema_migrations (version) VALUES ...` rows to
+   * an already-dumped structure.sql, mirroring Rails'
+   * `ConnectionAdapters::SchemaStatements#dump_schema_information` that
+   * `DatabaseTasks.dump_schema` calls for the `:sql` format.
+   *
+   * Gated on both the migration adapter being set (so we have
+   * somewhere to query from) and the schema_migrations table existing
+   * (an all-fresh DB has nothing to stamp). Rails quotes its values via
+   * the connection's quote(); we lean on the adapter's own quote() so
+   * the generated SQL round-trips through the matching structureLoad.
+   */
+  private static async _appendSchemaInformation(filename: string): Promise<void> {
+    const adapter = this._adapterInstance;
+    if (!adapter) return;
+
+    const { SchemaMigration } = await import("../schema-migration.js");
+    const migration = new SchemaMigration(adapter);
+    if (!(await migration.tableExists())) return;
+
+    const versions = await migration.allVersions();
+    if (versions.length === 0) return;
+
+    const quoted = versions
+      // Rails inserts versions in reverse order so the final row has
+      // the highest version — matches `versions.reverse.map`.
+      .slice()
+      .reverse()
+      // Versions are timestamp strings (`20260101000000`), so escape
+      // single quotes defensively via SQL's double-up convention even
+      // though no real version should contain one.
+      .map((v) => `('${String(v).replace(/'/g, "''")}')`)
+      .join(",\n");
+    const insertSql = `INSERT INTO "schema_migrations" (version) VALUES\n${quoted};\n`;
+    const fs = getFs();
+    const existing = fs.readFileSync(filename, "utf-8");
+    const separator = existing.endsWith("\n") ? "" : "\n";
+    fs.writeFileSync(filename, existing + separator + "\n" + insertSql);
   }
 
   static setupInitialDatabaseYaml(): Record<string, unknown> {

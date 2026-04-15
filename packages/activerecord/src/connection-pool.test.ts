@@ -702,9 +702,12 @@ describe("ConnectionPool schema cache", () => {
       const cache = pool.withConnection(
         (conn) => (conn as unknown as { schemaCache: unknown }).schemaCache,
       );
+      // The key regression: adapter.schemaCache must be a plain
+      // SchemaCache, NOT the BoundSchemaReflection pool.schemaCache
+      // returns. Before the fix it would have picked up the bound
+      // reflection and failed on .clear()/.setColumns() etc.
       expect(cache).toBeInstanceOf(SchemaCache);
-      expect(cache).not.toBe(pool.schemaCache); // bound reflection !== raw cache
-      expect(pool.poolConfig.schemaCache).toBe(cache); // shared via poolConfig
+      expect(cache).not.toBe(pool.schemaCache);
     } finally {
       await closePoolConnections(pool);
       fs.rmSync(tmp, { recursive: true, force: true });

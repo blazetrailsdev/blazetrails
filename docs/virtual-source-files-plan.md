@@ -63,19 +63,25 @@ Other surfaces (`belongsTo` / `hasOne` returning the record or null,
 `scope` returning a Relation, attribute getters returning the typed
 value) already match Rails; no runtime change needed.
 
+A second divergence this plan addresses:
+
+- **Sync access to unloaded `post.author` silently returns `null`.**
+  Rails would have lazy-loaded; trails today returns `this.target` —
+  whatever happens to be cached. That's a footgun: `if (post.author)`
+  may be `false` because nobody preloaded, not because there is no
+  author. Phase R.3 below adopts the Rails-style strict-loading
+  posture: sync access to an unloaded association throws
+  `StrictLoadingViolationError` (the error type already exists in
+  trails, currently optional). The fix is preloading via
+  `Post.includes("author")` or an explicit `await loadAssociation(post, "author")`
+  — the same pattern Rails users already write to avoid N+1.
+
 **Pragmatic divergences left in place (out of scope for this plan):**
 
-- **Sync vs. lazy-load on `post.author`.** Rails' `post.author` triggers
-  a lazy SQL query if the association isn't loaded. JS has no
-  blocking-IO equivalent, so trails returns the currently-loaded value
-  (or `null`). Users wanting to ensure load call
-  `await post.loadAssociation("author")` (or use the explicit async
-  helper). Documented as a permanent deviation in
-  `docs/activerecord-rails-deviations.md`.
 - **Enum predicate / bang naming.** Rails: `post.draft?` / `post.draft!`.
   TypeScript can't have `?` or `!` in identifiers, so trails uses
-  `post.isDraft()` / `post.draftBang()`. Permanent deviation; same
-  reason.
+  `post.isDraft()` / `post.draftBang()`. Permanent deviation — TS
+  identifier rules.
 
 ## Before / after
 
@@ -325,6 +331,44 @@ Two sub-PRs, each independently testable:
   type-checking through the existing `AssociationProxy<T>` Proxy
   delegation, matching Rails' `blog.posts.published`.
 
+- **R.3 — strict-loading by default for singular associations.** Today
+  `post.author` returns `this.target` (the cached record or `null`) —
+  silently `null` when nobody preloaded. Rails-faithful posture: sync
+  access on an unloaded association throws
+  `StrictLoadingViolationError` with a message naming the association
+  and pointing at the fix (`Post.includes("author")` or
+  `await loadAssociation(post, "author")`). The error type is already
+  defined in trails (`packages/activerecord/src/errors.ts`); today
+  it's only thrown by `CollectionProxy` when `strictLoading` is opted
+  in. R.3 generalizes the rule:
+  - **Singular reader (`belongsTo` / `hasOne`):** sync access throws
+    if the association has never been loaded AND the FK is non-null.
+    Loaded-and-`null` (FK is null) returns `null` cleanly — that's a
+    real answer.
+  - **Collection reader (`hasMany` / HABTM):** the AssociationProxy
+    from R.2 is awaitable; iterating sync uses the loaded `_target`,
+    same as R.1. Strict loading on iterating-while-unloaded is a
+    natural follow-up but not required for R.3.
+  - **Per-instance opt-out:** `record.strictLoading = false` (matches
+    Rails' instance-level toggle).
+  - **Class-level opt-out:** `Post.strictLoadingByDefault = false`
+    (matches Rails' `self.strict_loading_by_default = false` on the
+    model).
+  - **Global opt-out:** initializer-style switch under
+    `ActiveRecord::Base` for project-wide off — symmetric with Rails'
+    `config.active_record.strict_loading_by_default = true`.
+  - Audit + update tests that rely on silent-`null` behavior. Likely
+    finds real latent bugs (the whole point).
+  - Synergy with `includes` / `preload`: those already populate the
+    cache, so preloaded records pass the sync-access check
+    transparently. The error message in the throw should reference
+    both the eager-load chain (`Post.includes("author")`) and the
+    one-off helper (`await loadAssociation(post, "author")`).
+
+  Virtualizer-side: no change. `declare author: Author | null;` stays
+  honest — at sync access time the value really is the loaded record
+  or `null` (or the access threw, which TS doesn't model anyway).
+
 **Phase R exit criteria:**
 
 - `blog.posts` returns the AssociationProxy at runtime.
@@ -335,6 +379,12 @@ Two sub-PRs, each independently testable:
 - CLAUDE.md updated; declare catalog references the new shape.
 - `pnpm api:compare` is unchanged or up (the swap removes a fidelity
   divergence from the runtime; tests stay where they were).
+- Sync access to an unloaded singular association throws
+  `StrictLoadingViolationError` by default; preloaded access returns
+  the record cleanly; FK-null access returns `null`.
+- Per-instance, per-class, and global strict-loading toggles all work
+  and match Rails' surface (`record.strictLoading`,
+  `Class.strictLoadingByDefault`, project-wide config switch).
 
 ### Phase 1a-fixup — flip virtualizer to `AssociationProxy<T>` 📋
 
@@ -413,7 +463,10 @@ Phase 0 ✅
    │       │
    │       └── Phase 1a-fixup ── needs Phase R
    │
-   ├── Phase R (R.1 → R.2)  ── pre-req for 1a-fixup, Phase 1b dx-tests, Phase 3
+   ├── Phase R (R.1 → R.2 → R.3)  ── pre-req for 1a-fixup, Phase 1b dx-tests, Phase 3
+   │      R.1 additive array-likeness on CollectionProxy
+   │      R.2 swap collection reader → AssociationProxy
+   │      R.3 strict-loading-by-default for singular associations
    │
    └── Phase 1b ── needs Phase 1a; benefits from R for honest dx-tests
             │
@@ -449,18 +502,19 @@ against the post-R (Rails-faithful) shapes from day one.
 
 ## Risks
 
-| Risk                                                     | Mitigation                                                                                                                                                               |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Phase R breaks consumers of `blog.posts` as an array     | R.1 (additive array-likeness on CollectionProxy) lands first and stays green; R.2 only flips the reader once R.1 covers every consumer pattern in the in-repo test suite |
-| Virtualizer drifts from runtime behavior                 | Type registry is shared with runtime attribute typing; parity test runs in CI                                                                                            |
-| Bad target-class inference                               | Emitted `Foo` surfaces as a normal "cannot find name" error in the user's file; escape hatch is `className:`                                                             |
-| Consumers run `tsc` directly (not `trails-tsc`)          | Fail loud: unvirtualized program prints "Property 'title' does not exist" exactly as today; docs call out                                                                |
-| Bundlers / other tools invoke `tsc` under the hood       | Audit common bundlers (tsup, vite, esbuild — most use their own parser, not `tsc`); doc the few that matter                                                              |
-| `tsc --build` / composite project references             | `trails-tsc` intended to support `--build`; verify build-info caching with a composite fixture in Phase 1b                                                               |
-| tsserver plugin depends on TS language-service internals | Pin supported TS range; re-test per TS minor release; keep plugin logic to public `LanguageServiceHost` API                                                              |
-| Library consumers debugging "what TS sees"               | Ship `trails-tsc --print-virtualized <file>` to dump the synthesized source for any model                                                                                |
-| Source maps / go-to-definition off by N lines            | Virtualizer splices text at known offsets; remap ranges via the delta table returned from `virtualize()`                                                                 |
-| Editor type mismatch during plugin boot                  | Plugin is purely additive — worst case during boot is the old "`unknown`" behavior, not a new wrong answer                                                               |
+| Risk                                                      | Mitigation                                                                                                                                                                                                                             |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phase R breaks consumers of `blog.posts` as an array      | R.1 (additive array-likeness on CollectionProxy) lands first and stays green; R.2 only flips the reader once R.1 covers every consumer pattern in the in-repo test suite                                                               |
+| R.3 strict loading surfaces latent bugs in existing tests | Expected and intended — silent-null bugs are the whole reason for R.3. Audit pass updates real bugs; remaining cases that legitimately want "loaded-or-null without a throw" use `record.strictLoading = false` or eager-load up front |
+| Virtualizer drifts from runtime behavior                  | Type registry is shared with runtime attribute typing; parity test runs in CI                                                                                                                                                          |
+| Bad target-class inference                                | Emitted `Foo` surfaces as a normal "cannot find name" error in the user's file; escape hatch is `className:`                                                                                                                           |
+| Consumers run `tsc` directly (not `trails-tsc`)           | Fail loud: unvirtualized program prints "Property 'title' does not exist" exactly as today; docs call out                                                                                                                              |
+| Bundlers / other tools invoke `tsc` under the hood        | Audit common bundlers (tsup, vite, esbuild — most use their own parser, not `tsc`); doc the few that matter                                                                                                                            |
+| `tsc --build` / composite project references              | `trails-tsc` intended to support `--build`; verify build-info caching with a composite fixture in Phase 1b                                                                                                                             |
+| tsserver plugin depends on TS language-service internals  | Pin supported TS range; re-test per TS minor release; keep plugin logic to public `LanguageServiceHost` API                                                                                                                            |
+| Library consumers debugging "what TS sees"                | Ship `trails-tsc --print-virtualized <file>` to dump the synthesized source for any model                                                                                                                                              |
+| Source maps / go-to-definition off by N lines             | Virtualizer splices text at known offsets; remap ranges via the delta table returned from `virtualize()`                                                                                                                               |
+| Editor type mismatch during plugin boot                   | Plugin is purely additive — worst case during boot is the old "`unknown`" behavior, not a new wrong answer                                                                                                                             |
 
 ## Non-goals
 

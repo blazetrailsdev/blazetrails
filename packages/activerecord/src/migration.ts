@@ -1816,11 +1816,11 @@ export class Migrator {
       );
     }
     if (stored !== this._environment) {
-      throw new EnvironmentMismatchError(
-        `You are attempting to modify a database that was last used in the '${stored}' environment. ` +
-          `You are running in the '${this._environment}' environment. ` +
-          `If you are sure you want to continue, run with DISABLE_DATABASE_ENVIRONMENT_CHECK=1.`,
-      );
+      // Use the Rails-style (current, stored) constructor so the error
+      // message stays consistent with DatabaseTasks'
+      // checkProtectedEnvironmentsBang and the NO_DATABASE_ENVIRONMENT_CHECK
+      // bypass line is baked into the shared template.
+      throw new EnvironmentMismatchError(this._environment, stored);
     }
   }
 

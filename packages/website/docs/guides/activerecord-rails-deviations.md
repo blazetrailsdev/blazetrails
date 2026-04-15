@@ -271,11 +271,10 @@ class Post extends Base {
   //                        does not override the accessor (unlike Base.enum)
   declare author: Author | null; // belongsTo reader (synchronous)
   declare comments: AssociationProxy<Comment>;
-  //                // hasMany reader — chainable (`.where(...)`),
-  //                // awaitable (`await post.comments` → `Comment[]`),
-  //                // and array-shaped over the loaded target
-  //                // (`for...of`, `.length`, `.map`, `[0]`).
-  //                // Same as what `association(post, "comments")` returns.
+  // hasMany reader — chainable (`.where(...)`), awaitable
+  // (`await post.comments` → `Comment[]`), and array-shaped over the
+  // loaded target (`for...of`, `.length`, `.map`, `[0]`). Same object
+  // as what `association(post, "comments")` returns.
   declare isDraft: () => boolean; // enum predicate
   declare draft: () => void; // enum in-memory setter (defineEnum only)
   declare draftBang: () => Promise<void>; // async (defineEnum only): sets

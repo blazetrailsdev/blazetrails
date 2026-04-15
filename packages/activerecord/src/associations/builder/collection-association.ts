@@ -83,7 +83,7 @@ export class CollectionAssociation extends Association {
 
   // Phase R.2: collection association readers return the AssociationProxy
   // — the same chainable, awaitable, array-shaped surface Rails'
-  // `posts.first.posts` returns. Matches Rails'
+  // `blog.posts` returns. Matches Rails'
   // `activerecord/lib/active_record/associations/collection_association.rb#reader`
   // (`@proxy ||= CollectionProxy.create(klass, self).reset_scope`).
   //

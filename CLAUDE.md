@@ -162,12 +162,29 @@ the assertion flips and signals the test should be tightened.
 
 A dedicated `DX Type Tests` CI job runs on every push.
 
-### Typed association accessors
+### The `declare` pattern for typed runtime-attached members
 
-`hasMany`/`hasAndBelongsToMany` runtime-attach a `CollectionProxy` onto the
-instance. Because `Model` has an `[key: string]: unknown` index signature,
-access like `blog.posts` type-checks but falls through to `unknown`. Opt
-into static typing per-association by declaring the field:
+Several things in ActiveRecord are attached to a class/instance at
+runtime (via `this.attribute`, `this.hasMany`, `this.scope`, `this.enum`,
+...) and aren't visible to the TypeScript type system by default.
+Because `Model` has an `[key: string]: unknown` index signature, access
+type-checks but falls through to `unknown`. Opt into static typing
+per-member with `declare`:
+
+**Attributes** (`this.attribute(name, type)`):
+
+```ts
+class User extends Base {
+  declare name: string;
+  declare admin: boolean;
+  static {
+    this.attribute("name", "string");
+    this.attribute("admin", "boolean", { default: false });
+  }
+}
+```
+
+**has_many / HABTM** (`this.hasMany(name)`):
 
 ```ts
 class Blog extends Base {
@@ -176,11 +193,62 @@ class Blog extends Base {
     this.hasMany("posts");
   }
 }
-
-const blog = new Blog({ name: "dean" });
-await blog.posts.first(); // Promise<Post | null>
 ```
 
+**belongs_to / has_one** (synchronous reader — returns the record, not a Promise):
+
+```ts
+class Post extends Base {
+  declare author: Author | null;
+  static {
+    this.belongsTo("author");
+  }
+}
+class Author extends Base {
+  declare profile: Profile | null;
+  static {
+    this.hasOne("profile");
+  }
+}
+```
+
+**Named scopes** (`this.scope(name, fn)` — class-level):
+
+```ts
+class Post extends Base {
+  declare static published: () => Relation<Post>;
+  static {
+    this.scope("published", (rel) => rel.where({ published: true }));
+  }
+}
+```
+
+**Enums** (`this.enum(name, mapping)` generates a predicate + in-memory
+setter + persisting setter per value, plus class-level scopes):
+
+```ts
+class Task extends Base {
+  declare status: string;
+  declare isLow: () => boolean;
+  declare low: () => void;
+  declare lowBang: () => Promise<void>;
+  declare static low: () => Relation<Task>;
+  declare static notLow: () => Relation<Task>;
+  static {
+    this.attribute("status", "integer");
+    this.enum("status", { low: 0, high: 1 });
+  }
+}
+```
+
+**Do not** redeclare `id` on subclasses — `Base#id` is an accessor
+(`PrimaryKeyValue`) and TS forbids overriding accessors with differently
+typed instance properties. Narrow at the use site instead:
+`record.id as number`.
+
+See `packages/activerecord/dx-tests/declare-patterns.test-d.ts` for the
+canonical, compiled reference for every pattern.
+
 `CollectionProxy<T>` and `AssociationProxy<T>` are both generic in the
-element type. Without the `declare`, the accessor still resolves to
-`unknown` (same as before).
+element type. Without the `declare`, any of these runtime-attached
+members still resolves to `unknown`.

@@ -84,8 +84,9 @@ describe("CollectionProxy — array-likeness (Phase R.1)", () => {
   it("supports numeric indexing (proxy[0]) — typed via the index signature", async () => {
     const blog = await blogWithPosts();
     const proxy = association<ApPost>(blog, "apPosts");
-    // No `as any` needed — CollectionProxy declares
-    // `[index: number]: T | undefined`. Out-of-range returns undefined.
+    // No `as any` needed — AssociationProxy declares
+    // `[index: number]: T | undefined` (the runtime support comes from
+    // `wrapCollectionProxy`'s `get` trap). Out-of-range returns undefined.
     expect(proxy[0]?.title).toBe("a");
     expect(proxy[2]?.title).toBe("c");
     expect(proxy[99]).toBeUndefined();
@@ -249,12 +250,14 @@ describe("CollectionProxy — array-likeness (Phase R.1)", () => {
     expect(Array.isArray(Array.from(proxy))).toBe(true);
   });
 
-  it("does NOT shadow Relation#find (PK lookup) with Array#find", async () => {
+  it("preserves PK-lookup `find(id)` — Array-style find(predicate) intentionally not added", async () => {
     const blog = await blogWithPosts();
     const proxy = association<ApPost>(blog, "apPosts") as any;
-    // `find` falls through to Relation, which interprets it as a PK lookup.
-    // We intentionally don't add Array#find on CollectionProxy — Rails
-    // gives Relation#find the same priority.
+    // CollectionProxy already defines `async find(id): Promise<T | T[]>`
+    // (the Rails-style PK lookup form), and that's what `proxy.find(...)`
+    // resolves to. We intentionally do NOT add an Array-style
+    // `find(predicate)` overload — it would shadow the PK lookup.
+    // For Array semantics use `Array.from(proxy).find(p => ...)`.
     const found = await proxy.find(blog.apPosts[0]?.id);
     expect(found?.title).toBe("a");
   });

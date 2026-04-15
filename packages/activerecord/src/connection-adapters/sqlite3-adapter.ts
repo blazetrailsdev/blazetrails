@@ -903,12 +903,18 @@ export class SQLite3Adapter
    * Return the single-column primary key name, or null for composite /
    * rowid-only tables. Rails' SchemaCache stores the composite case as
    * an array, but the common path for cache-dump is a scalar name.
+   *
+   * Uses the `PRAGMA schema.table_info(table)` form for schema-qualified
+   * names (e.g. `temp.widgets`). The `PRAGMA table_info("schema"."table")`
+   * form does NOT work — SQLite treats the whole quoted string as a
+   * single table name and returns no rows.
    */
   async primaryKey(tableName: string): Promise<string | null> {
-    const rows = (await this.execute(`PRAGMA table_info(${quoteTableName(tableName)})`)) as Array<{
-      name: string;
-      pk: number;
-    }>;
+    const { schema, bare } = this._splitTableName(tableName);
+    const pragmaPrefix = schema ? `${quoteColumnName(schema)}.` : "";
+    const rows = (await this.execute(
+      `PRAGMA ${pragmaPrefix}table_info(${quoteColumnName(bare)})`,
+    )) as Array<{ name: string; pk: number }>;
     const pks = rows.filter((r) => r.pk > 0).sort((a, b) => a.pk - b.pk);
     if (pks.length === 1) return pks[0].name;
     return null;
@@ -920,7 +926,11 @@ export class SQLite3Adapter
    * null, sqlTypeMetadata, primaryKey.
    */
   async columns(tableName: string): Promise<Column[]> {
-    const rows = (await this.execute(`PRAGMA table_info(${quoteTableName(tableName)})`)) as Array<{
+    const { schema, bare } = this._splitTableName(tableName);
+    const pragmaPrefix = schema ? `${quoteColumnName(schema)}.` : "";
+    const rows = (await this.execute(
+      `PRAGMA ${pragmaPrefix}table_info(${quoteColumnName(bare)})`,
+    )) as Array<{
       name: string;
       type: string;
       notnull: number;
@@ -943,21 +953,22 @@ export class SQLite3Adapter
   }
 
   async indexes(tableName: string): Promise<unknown[]> {
-    const rows = (await this.execute(`PRAGMA index_list(${quoteTableName(tableName)})`)) as Array<{
-      name: string;
-      unique: number;
-      origin: string;
-    }>;
+    const { schema, bare } = this._splitTableName(tableName);
+    const pragmaPrefix = schema ? `${quoteColumnName(schema)}.` : "";
+    const rows = (await this.execute(
+      `PRAGMA ${pragmaPrefix}index_list(${quoteColumnName(bare)})`,
+    )) as Array<{ name: string; unique: number; origin: string }>;
     // Skip auto-indexes that SQLite generates for PRIMARY KEY / UNIQUE
     // constraints — Rails' schema cache records user-defined indexes
     // only, and the auto ones are redundant with the CREATE TABLE sql.
     const userIndexes = rows.filter((r) => r.origin === "c");
     const result: Array<{ name: string; columns: string[]; unique: boolean }> = [];
     for (const idx of userIndexes) {
-      const cols = (await this.execute(`PRAGMA index_info(${quoteTableName(idx.name)})`)) as Array<{
-        name: string;
-        seqno: number;
-      }>;
+      // index_info takes the bare index name; the schema qualifier, if
+      // any, comes before the PRAGMA keyword — same shape as above.
+      const cols = (await this.execute(
+        `PRAGMA ${pragmaPrefix}index_info(${quoteColumnName(idx.name)})`,
+      )) as Array<{ name: string; seqno: number }>;
       result.push({
         name: idx.name,
         columns: cols.sort((a, b) => a.seqno - b.seqno).map((c) => c.name),

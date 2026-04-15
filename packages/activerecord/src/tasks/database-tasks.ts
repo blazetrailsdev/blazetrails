@@ -491,6 +491,25 @@ export class DatabaseTasks {
    * whatever incidental entries the in-memory cache accumulated.
    */
   static async dumpSchemaCache(connOrPool: unknown, filename: string): Promise<void> {
+    // SchemaCache.addAll calls connection.dataSources() and then, for each
+    // table, connection.columns / primaryKey / indexes. Silently skipping
+    // an adapter that doesn't implement those would produce an empty
+    // schema_cache.json, which is worse than failing loudly — surface the
+    // gap so users pick it up in CI instead of noticing a stale cache in
+    // production. Only SQLite has the full introspection surface today;
+    // PG/MySQL will pick this path up once their adapters expose the
+    // same method set.
+    const required = ["dataSources", "columns", "primaryKey", "indexes"] as const;
+    const missing = required.filter(
+      (m) => typeof (connOrPool as Record<string, unknown>)[m] !== "function",
+    );
+    if (missing.length > 0) {
+      throw new Error(
+        `dumpSchemaCache requires the adapter to implement [${missing.join(", ")}]. ` +
+          `The current adapter exposes neither a pool-level schemaCache nor the ` +
+          `direct introspection API needed to populate one.`,
+      );
+    }
     const { SchemaCache } = await import("../connection-adapters/schema-cache.js");
     const fresh = new SchemaCache();
     await fresh.addAll(connOrPool);

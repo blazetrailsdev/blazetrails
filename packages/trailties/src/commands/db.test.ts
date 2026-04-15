@@ -1223,4 +1223,36 @@ fs.writeFileSync(${JSON.stringify(seedMarker)}, String(prev + 1));`,
     await runDb(["schema:cache:clear"]);
     expect(errs).toHaveLength(0);
   });
+
+  it("db schema:cache:dump captures user-created indexes", async () => {
+    const dbFile = path.join(tmpDir, "idx.sqlite3");
+    fs.writeFileSync(
+      path.join(tmpDir, "config", "database.ts"),
+      `export default {
+  development: { adapter: "sqlite3", database: ${JSON.stringify(dbFile)} },
+  test: { adapter: "sqlite3", database: ${JSON.stringify(dbFile)} },
+};`,
+    );
+    const { SQLite3Adapter } =
+      await import("@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js");
+    const seed = new SQLite3Adapter(dbFile);
+    try {
+      await seed.executeMutation(
+        "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT NOT NULL)",
+      );
+      await seed.executeMutation("CREATE UNIQUE INDEX users_on_email ON users (email)");
+    } finally {
+      await seed.close();
+    }
+
+    await runDb(["schema:cache:dump"]);
+
+    const cachePath = path.join(tmpDir, "db", "schema_cache.json");
+    const parsed = JSON.parse(fs.readFileSync(cachePath, "utf8")) as {
+      indexes: Record<string, Array<{ name: string; columns: string[]; unique: boolean }>>;
+    };
+    expect(parsed.indexes["users"]).toEqual([
+      { name: "users_on_email", columns: ["email"], unique: true },
+    ]);
+  });
 });

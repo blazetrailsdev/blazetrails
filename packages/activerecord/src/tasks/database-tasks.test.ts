@@ -914,3 +914,67 @@ describe("DatabaseTasksLoadSchemaTsFormatTest", () => {
     }
   });
 });
+
+describe("DatabaseTasks schema cache", () => {
+  it("dumpSchemaCache writes tables from a freshly introspected adapter", async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-dstasks-"));
+    const filename = path.join(tmp, "schema_cache.json");
+    const stubAdapter = {
+      dataSources: async () => ["widgets"],
+      tables: async () => ["widgets"],
+      views: async () => [],
+      dataSourceExists: async (name: string) => name === "widgets",
+      primaryKey: async () => "id",
+      columns: async () => [
+        { name: "id", default: null, null: false, primaryKey: true },
+        { name: "name", default: null, null: true, primaryKey: false },
+      ],
+      indexes: async () => [],
+      schemaVersion: async () => "20260101000000",
+    };
+    try {
+      await DatabaseTasks.dumpSchemaCache(stubAdapter, filename);
+      const parsed = JSON.parse(fs.readFileSync(filename, "utf8"));
+      expect(Object.keys(parsed.columns)).toEqual(["widgets"]);
+      expect(parsed.data_sources["widgets"]).toBe(true);
+      expect(parsed.primary_keys["widgets"]).toBe("id");
+      expect(parsed.version).toBe("20260101000000");
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("dumpSchemaCache throws when the adapter lacks introspection methods", async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-dstasks-"));
+    const filename = path.join(tmp, "schema_cache.json");
+    try {
+      await expect(DatabaseTasks.dumpSchemaCache({}, filename)).rejects.toThrow(
+        /dataSources.*columns.*primaryKey.*indexes/,
+      );
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("clearSchemaCache removes the file when present", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-dstasks-"));
+    const filename = path.join(tmp, "schema_cache.json");
+    fs.writeFileSync(filename, "{}");
+    try {
+      DatabaseTasks.clearSchemaCache(filename);
+      expect(fs.existsSync(filename)).toBe(false);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("clearSchemaCache is a no-op when the file is absent", () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-dstasks-"));
+    const filename = path.join(tmp, "schema_cache.json");
+    try {
+      expect(() => DatabaseTasks.clearSchemaCache(filename)).not.toThrow();
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+});

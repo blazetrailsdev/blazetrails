@@ -832,35 +832,42 @@ export function dbCommand(): Command {
     .command("schema:cache:dump")
     .description("Dump a db/schema_cache.json for every configuration in the current environment")
     .action(async () => {
-      // Rails iterates configs_for(env_name: env) via with_temporary_pool_for_each
-      // so multi-DB apps get one schema_cache.json per config. Mirror that
-      // shape here — open a fresh adapter per config, derive the dump path
-      // from the config, delegate to DatabaseTasks.dumpSchemaCache.
+      // Rails: `with_temporary_pool_for_each { |pool| dump_schema_cache(pool, filename) }`.
+      // Iterate every config in the env so multi-DB apps get one
+      // schema_cache.json per config. withTemporaryPoolForEach sets the
+      // migration connection for each pass, which is what dumpSchemaCache
+      // reads through.
       const envName = resolveEnv();
       const raw = normalizeRawConfig(await loadDatabaseConfig(envName));
-      const config = toDbConfig(raw, envName);
-      await withRegisteredConfiguration(config, async () => {
-        const adapter = await connectAdapter(raw);
-        try {
+      const primary = toDbConfig(raw, envName);
+      await withRegisteredConfiguration(primary, async () => {
+        await DatabaseTasks.withTemporaryPoolForEach(envName, async (config) => {
+          const adapter = DatabaseTasks.migrationConnection();
+          if (!adapter) return;
           const filename = DatabaseTasks.cacheDumpFilename(config);
           await DatabaseTasks.dumpSchemaCache(adapter, filename);
           console.log(`Schema cache dumped to ${filename}`);
-        } finally {
-          await closeAdapter(adapter);
-        }
+        });
       });
     });
 
   cmd
     .command("schema:cache:clear")
-    .description("Delete the db/schema_cache.json file for the current environment")
+    .description(
+      "Delete the db/schema_cache.json file for every configuration in the current environment",
+    )
     .action(async () => {
+      // Rails: `configurations.configs_for(env_name: env).each { |c| clear_schema_cache(cache_dump_filename(c)) }`.
       const envName = resolveEnv();
       const raw = normalizeRawConfig(await loadDatabaseConfig(envName));
-      const config = toDbConfig(raw, envName);
-      const filename = DatabaseTasks.cacheDumpFilename(config);
-      DatabaseTasks.clearSchemaCache(filename);
-      console.log(`Cleared schema cache at ${filename}`);
+      const primary = toDbConfig(raw, envName);
+      await withRegisteredConfiguration(primary, async () => {
+        for (const config of DatabaseTasks.configsFor(envName)) {
+          const filename = DatabaseTasks.cacheDumpFilename(config);
+          DatabaseTasks.clearSchemaCache(filename);
+          console.log(`Cleared schema cache at ${filename}`);
+        }
+      });
     });
 
   return cmd;

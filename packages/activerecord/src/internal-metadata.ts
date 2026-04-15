@@ -7,6 +7,7 @@
 import type { DatabaseAdapter } from "./adapter.js";
 import { detectAdapterName } from "./adapter-name.js";
 import { quoteIdentifier, quoteTableName } from "./connection-adapters/abstract/quoting.js";
+import { EnvironmentStorageError } from "./migration-errors.js";
 import {
   Table,
   SelectManager,
@@ -131,8 +132,8 @@ export class InternalMetadata {
       // Rails' `environment:set` raises EnvironmentStorageError when
       // internal_metadata is disabled; surface the same error here so
       // callers that attempt to write through a disabled instance fail
-      // loudly rather than silently no-op.
-      const { EnvironmentStorageError } = await import("./migration.js");
+      // loudly rather than silently no-op. Imported statically from
+      // migration-errors.ts to avoid a circular dep with migration.ts.
       throw new EnvironmentStorageError();
     }
     const existing = await this.selectEntry(key);

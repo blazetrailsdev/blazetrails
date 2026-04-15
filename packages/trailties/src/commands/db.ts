@@ -416,7 +416,9 @@ export function dbCommand(): Command {
 
   cmd
     .command("environment:check")
-    .description("Abort if the stored schema environment is protected")
+    .description(
+      "Abort if the stored schema environment is protected or does not match the current environment",
+    )
     .action(async () => {
       // Don't go through withAdapter — we don't want to open a connection
       // here. The guard itself connects per-config (and swallows

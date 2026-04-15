@@ -1194,7 +1194,10 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.find_by
    */
-  static async findBy(conditions: Record<string, unknown>): Promise<Base | null> {
+  static async findBy<T extends typeof Base>(
+    this: T,
+    conditions: Record<string, unknown>,
+  ): Promise<InstanceType<T> | null> {
     const table = this.arelTable;
     const manager = table.project("*");
 
@@ -1211,7 +1214,7 @@ export class Base extends Model {
     const row = await this.adapter.selectOne(sql, "Find");
     if (!row) return null;
 
-    return this._instantiate(row);
+    return this._instantiate(row) as InstanceType<T>;
   }
 
   /**
@@ -1219,7 +1222,10 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.find_by!
    */
-  static async findByBang(conditions: Record<string, unknown>): Promise<Base> {
+  static async findByBang<T extends typeof Base>(
+    this: T,
+    conditions: Record<string, unknown>,
+  ): Promise<InstanceType<T>> {
     const record = await this.findBy(conditions);
     if (!record) {
       throw new RecordNotFound(`${this.name} not found`, this.name);
@@ -1233,7 +1239,11 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.find_by_* dynamic finders
    */
-  static async findByAttribute(attribute: string, value: unknown): Promise<Base | null> {
+  static async findByAttribute<T extends typeof Base>(
+    this: T,
+    attribute: string,
+    value: unknown,
+  ): Promise<InstanceType<T> | null> {
     return this.findBy({ [attribute]: value });
   }
 
@@ -1259,7 +1269,10 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.find_sole_by
    */
-  static async findSoleBy(conditions: Record<string, unknown>): Promise<Base> {
+  static async findSoleBy<T extends typeof Base>(
+    this: T,
+    conditions: Record<string, unknown>,
+  ): Promise<InstanceType<T>> {
     return this.all().where(conditions).sole();
   }
 
@@ -1381,7 +1394,10 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.destroy_by
    */
-  static async destroyBy(conditions: Record<string, unknown>): Promise<Base[]> {
+  static async destroyBy<T extends typeof Base>(
+    this: T,
+    conditions: Record<string, unknown>,
+  ): Promise<InstanceType<T>[]> {
     return this.all().where(conditions).destroyAll();
   }
 
@@ -1399,7 +1415,11 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.update(id, attrs)
    */
-  static async update(id: unknown, attrs: Record<string, unknown>): Promise<Base> {
+  static async update<T extends typeof Base>(
+    this: T,
+    id: unknown,
+    attrs: Record<string, unknown>,
+  ): Promise<InstanceType<T>> {
     const record = await this.find(id);
     await record.update(attrs);
     return record;
@@ -1410,7 +1430,10 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.destroy(id)
    */
-  static async destroy(id: unknown | unknown[]): Promise<Base | Base[]> {
+  static async destroy<T extends typeof Base>(
+    this: T,
+    id: unknown | unknown[],
+  ): Promise<InstanceType<T> | InstanceType<T>[]> {
     if (Array.isArray(id)) {
       const found = await this.find(id);
       const records = Array.isArray(found) ? found : [found];
@@ -1429,7 +1452,7 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.destroy_all
    */
-  static async destroyAll(): Promise<Base[]> {
+  static async destroyAll<T extends typeof Base>(this: T): Promise<InstanceType<T>[]> {
     return this.all().destroyAll();
   }
 
@@ -1438,7 +1461,11 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.update!
    */
-  static async updateBang(id: unknown, attrs: Record<string, unknown>): Promise<Base> {
+  static async updateBang<T extends typeof Base>(
+    this: T,
+    id: unknown,
+    attrs: Record<string, unknown>,
+  ): Promise<InstanceType<T>> {
     const record = await this.find(id);
     await record.updateBang(attrs);
     return record;
@@ -1458,7 +1485,7 @@ export class Base extends Model {
    * Return the second record.
    * Mirrors: ActiveRecord::Base.second
    */
-  static async second(): Promise<Base | null> {
+  static async second<T extends typeof Base>(this: T): Promise<InstanceType<T> | null> {
     return this.all().second();
   }
 
@@ -1466,7 +1493,7 @@ export class Base extends Model {
    * Return the third record.
    * Mirrors: ActiveRecord::Base.third
    */
-  static async third(): Promise<Base | null> {
+  static async third<T extends typeof Base>(this: T): Promise<InstanceType<T> | null> {
     return this.all().third();
   }
 
@@ -1474,7 +1501,7 @@ export class Base extends Model {
    * Return the fourth record.
    * Mirrors: ActiveRecord::Base.fourth
    */
-  static async fourth(): Promise<Base | null> {
+  static async fourth<T extends typeof Base>(this: T): Promise<InstanceType<T> | null> {
     return this.all().fourth();
   }
 
@@ -1482,7 +1509,7 @@ export class Base extends Model {
    * Return the fifth record.
    * Mirrors: ActiveRecord::Base.fifth
    */
-  static async fifth(): Promise<Base | null> {
+  static async fifth<T extends typeof Base>(this: T): Promise<InstanceType<T> | null> {
     return this.all().fifth();
   }
 
@@ -1490,7 +1517,7 @@ export class Base extends Model {
    * Return the forty-second record.
    * Mirrors: ActiveRecord::Base.forty_two
    */
-  static async fortyTwo(): Promise<Base | null> {
+  static async fortyTwo<T extends typeof Base>(this: T): Promise<InstanceType<T> | null> {
     return this.all().fortyTwo();
   }
 
@@ -1498,7 +1525,7 @@ export class Base extends Model {
    * Return the second-to-last record.
    * Mirrors: ActiveRecord::Base.second_to_last
    */
-  static async secondToLast(): Promise<Base | null> {
+  static async secondToLast<T extends typeof Base>(this: T): Promise<InstanceType<T> | null> {
     return this.all().secondToLast();
   }
 
@@ -1506,7 +1533,7 @@ export class Base extends Model {
    * Return the third-to-last record.
    * Mirrors: ActiveRecord::Base.third_to_last
    */
-  static async thirdToLast(): Promise<Base | null> {
+  static async thirdToLast<T extends typeof Base>(this: T): Promise<InstanceType<T> | null> {
     return this.all().thirdToLast();
   }
 
@@ -1614,7 +1641,12 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.first
    */
-  static async first(n?: number): Promise<Base | Base[] | null> {
+  static async first<T extends typeof Base>(this: T): Promise<InstanceType<T> | null>;
+  static async first<T extends typeof Base>(this: T, n: number): Promise<InstanceType<T>[]>;
+  static async first<T extends typeof Base>(
+    this: T,
+    n?: number,
+  ): Promise<InstanceType<T> | InstanceType<T>[] | null> {
     return this.all().first(n as any);
   }
 
@@ -1623,7 +1655,7 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.first!
    */
-  static async firstBang(): Promise<Base> {
+  static async firstBang<T extends typeof Base>(this: T): Promise<InstanceType<T>> {
     return this.all().firstBang();
   }
 
@@ -1632,7 +1664,12 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.last
    */
-  static async last(n?: number): Promise<Base | Base[] | null> {
+  static async last<T extends typeof Base>(this: T): Promise<InstanceType<T> | null>;
+  static async last<T extends typeof Base>(this: T, n: number): Promise<InstanceType<T>[]>;
+  static async last<T extends typeof Base>(
+    this: T,
+    n?: number,
+  ): Promise<InstanceType<T> | InstanceType<T>[] | null> {
     return this.all().last(n as any);
   }
 
@@ -1641,7 +1678,7 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.last!
    */
-  static async lastBang(): Promise<Base> {
+  static async lastBang<T extends typeof Base>(this: T): Promise<InstanceType<T>> {
     return this.all().lastBang();
   }
 
@@ -1650,7 +1687,12 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.take
    */
-  static async take(n?: number): Promise<Base | Base[] | null> {
+  static async take<T extends typeof Base>(this: T): Promise<InstanceType<T> | null>;
+  static async take<T extends typeof Base>(this: T, n: number): Promise<InstanceType<T>[]>;
+  static async take<T extends typeof Base>(
+    this: T,
+    n?: number,
+  ): Promise<InstanceType<T> | InstanceType<T>[] | null> {
     return this.all().take(n as any);
   }
 
@@ -1659,7 +1701,7 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.sole
    */
-  static async sole(): Promise<Base> {
+  static async sole<T extends typeof Base>(this: T): Promise<InstanceType<T>> {
     return this.all().sole();
   }
 
@@ -1770,10 +1812,11 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.find_or_create_by
    */
-  static async findOrCreateBy(
+  static async findOrCreateBy<T extends typeof Base>(
+    this: T,
     conditions: Record<string, unknown>,
     extra?: Record<string, unknown>,
-  ): Promise<Base> {
+  ): Promise<InstanceType<T>> {
     const record = await this.findBy(conditions);
     if (record) return record;
     return this.create({ ...conditions, ...extra });
@@ -1784,13 +1827,14 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.find_or_initialize_by
    */
-  static async findOrInitializeBy(
+  static async findOrInitializeBy<T extends typeof Base>(
+    this: T,
     conditions: Record<string, unknown>,
     extra?: Record<string, unknown>,
-  ): Promise<Base> {
+  ): Promise<InstanceType<T>> {
     const record = await this.findBy(conditions);
     if (record) return record;
-    return new this({ ...conditions, ...extra });
+    return new this({ ...conditions, ...extra }) as InstanceType<T>;
   }
 
   /**
@@ -1799,10 +1843,11 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.create_or_find_by
    */
-  static async createOrFindBy(
+  static async createOrFindBy<T extends typeof Base>(
+    this: T,
     conditions: Record<string, unknown>,
     extra?: Record<string, unknown>,
-  ): Promise<Base> {
+  ): Promise<InstanceType<T>> {
     try {
       return await this.create({ ...conditions, ...extra });
     } catch {
@@ -1818,10 +1863,11 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.create_or_find_by!
    */
-  static async createOrFindByBang(
+  static async createOrFindByBang<T extends typeof Base>(
+    this: T,
     conditions: Record<string, unknown>,
     extra?: Record<string, unknown>,
-  ): Promise<Base> {
+  ): Promise<InstanceType<T>> {
     try {
       return await this.createBang({ ...conditions, ...extra });
     } catch (e) {
@@ -1837,8 +1883,8 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.new (Ruby convention)
    */
-  static new(attrs: Record<string, unknown> = {}): Base {
-    return new this(attrs);
+  static new<T extends typeof Base>(this: T, attrs: Record<string, unknown> = {}): InstanceType<T> {
+    return new this(attrs) as InstanceType<T>;
   }
 
   /**
@@ -1855,8 +1901,11 @@ export class Base extends Model {
     return attrs;
   }
 
-  static async create(attrs: Record<string, unknown> = {}): Promise<Base> {
-    const record = new this(this._mergeCurrentScopeAttrs(attrs));
+  static async create<T extends typeof Base>(
+    this: T,
+    attrs: Record<string, unknown> = {},
+  ): Promise<InstanceType<T>> {
+    const record = new this(this._mergeCurrentScopeAttrs(attrs)) as InstanceType<T>;
     await record.save();
     return record;
   }
@@ -1866,8 +1915,11 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.create!
    */
-  static async createBang(attrs: Record<string, unknown> = {}): Promise<Base> {
-    const record = new this(this._mergeCurrentScopeAttrs(attrs));
+  static async createBang<T extends typeof Base>(
+    this: T,
+    attrs: Record<string, unknown> = {},
+  ): Promise<InstanceType<T>> {
+    const record = new this(this._mergeCurrentScopeAttrs(attrs)) as InstanceType<T>;
     await record.saveBang();
     return record;
   }

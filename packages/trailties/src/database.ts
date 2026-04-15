@@ -34,6 +34,14 @@ export interface DatabaseConfigModule {
 }
 
 /**
+ * Top-level keys that configure the CLI itself rather than naming a
+ * database environment. The env-name lookup / "Available" error
+ * message excludes these so users don't see `schemaFormat` listed
+ * alongside `development`/`test`/`production`.
+ */
+const TOP_LEVEL_CONFIG_KEYS = new Set<string>(["schemaFormat"]);
+
+/**
  * Locate + import the app's `config/database.*`. Centralized so we only
  * pay the dynamic-import cost once per CLI invocation — both
  * loadDatabaseConfig and resolveSchemaFormat route through here. Node's
@@ -67,10 +75,14 @@ export async function loadDatabaseConfigModule(
   let mod: { default?: DatabaseConfigModule } & DatabaseConfigModule;
   try {
     mod = (await import(pathToFileURL(configPath).href)) as typeof mod;
-  } catch (error) {
+  } catch (error: unknown) {
     const rel = path.relative(cwd, configPath);
+    // Extract a useful message even when user code throws a non-Error
+    // (e.g. `throw "boom"` or `throw null`) — `(error as Error).message`
+    // would produce `undefined` or crash.
+    const message = error instanceof Error ? error.message : String(error);
     const enhanced = new Error(
-      `Failed to load database config from "${rel}": ${(error as Error).message}. ` +
+      `Failed to load database config from "${rel}": ${message}. ` +
         `Run with tsx (e.g., "npx tsx node_modules/.bin/trails").`,
     );
     (enhanced as { cause?: unknown }).cause = error;
@@ -100,9 +112,9 @@ export async function loadDatabaseConfig(
     | DatabaseConfig
     | undefined;
   if (!envConfig) {
+    const envs = Object.keys(loaded.module).filter((k) => !TOP_LEVEL_CONFIG_KEYS.has(k));
     throw new Error(
-      `No database configuration for environment "${resolvedEnv}". ` +
-        `Available: ${Object.keys(loaded.module).join(", ")}`,
+      `No database configuration for environment "${resolvedEnv}". Available: ${envs.join(", ")}`,
     );
   }
 
@@ -144,10 +156,14 @@ export async function resolveSchemaFormat(
     return normalized;
   };
 
-  if (opts.format) return normalize(opts.format, "--format");
+  // Presence-based, not truthy — `--format ""` and `SCHEMA_FORMAT=""`
+  // should error (caller clearly set the knob to something) rather than
+  // silently falling through to the next rung.
+  if (opts.format !== undefined) return normalize(opts.format, "--format");
 
-  const envFormat = process.env.SCHEMA_FORMAT?.trim();
-  if (envFormat) return normalize(envFormat, "SCHEMA_FORMAT env var");
+  if ("SCHEMA_FORMAT" in process.env) {
+    return normalize(process.env.SCHEMA_FORMAT ?? "", "SCHEMA_FORMAT env var");
+  }
 
   // Inspect the config file for a top-level `schemaFormat` key (sibling
   // of the per-env configs). Rails sets this via
@@ -161,10 +177,11 @@ export async function resolveSchemaFormat(
   // "failed to load config" rethrow) in one place and surfaces real
   // import failures instead of silently falling through to inference.
   const loaded = await loadDatabaseConfigModule(cwd);
-  if (loaded?.module.schemaFormat) {
-    // Validate strictly — an unknown value in config is a misconfig, not
-    // something we want to paper over with silent inference.
-    return normalize(loaded.module.schemaFormat, `schemaFormat in ${loaded.path}`);
+  if (loaded && "schemaFormat" in loaded.module) {
+    // Presence-based: an explicitly-set-but-garbage value (including an
+    // empty string) is a misconfig that should throw, not silently fall
+    // through to inference.
+    return normalize(loaded.module.schemaFormat ?? "", `schemaFormat in ${loaded.path}`);
   }
 
   const dbDir = path.join(cwd, "db");

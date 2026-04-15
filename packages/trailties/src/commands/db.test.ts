@@ -298,6 +298,44 @@ describe("resolveSchemaFormat", () => {
     await expect(resolveSchemaFormat({}, tmpDir)).rejects.toThrow(/schemaFormat in .*database\.ts/);
   });
 
+  it("treats empty-string overrides as present-and-invalid, not unset", async () => {
+    // --format="", SCHEMA_FORMAT="", schemaFormat: "" in config all
+    // represent an explicitly-set knob; they shouldn't silently fall
+    // through to inference. Detection is presence-based (`!== undefined`
+    // / `"KEY" in process.env` / `"schemaFormat" in module`) so a
+    // deliberately-empty value reaches the validator.
+    await expect(resolveSchemaFormat({ format: "" }, tmpDir)).rejects.toThrow(/Invalid --format/);
+
+    process.env.SCHEMA_FORMAT = "";
+    await expect(resolveSchemaFormat({}, tmpDir)).rejects.toThrow(/SCHEMA_FORMAT env var/);
+    delete process.env.SCHEMA_FORMAT;
+
+    fs.writeFileSync(
+      path.join(tmpDir, "config", "database.ts"),
+      `export default {
+  schemaFormat: "",
+  development: { adapter: "sqlite3", database: ":memory:" },
+};`,
+    );
+    await expect(resolveSchemaFormat({}, tmpDir)).rejects.toThrow(/schemaFormat in .*database\.ts/);
+  });
+
+  it("filters top-level keys out of the 'Available envs' error message", async () => {
+    // schemaFormat is a config-level setting, not a database environment —
+    // including it in the error list would make users think they can
+    // TRAILS_ENV=schemaFormat their way to a connection.
+    fs.writeFileSync(
+      path.join(tmpDir, "config", "database.ts"),
+      `export default {
+  schemaFormat: "ts",
+  development: { adapter: "sqlite3", database: ":memory:" },
+};`,
+    );
+    await expect(loadDatabaseConfig("production", tmpDir)).rejects.toThrow(
+      /Available: development$/,
+    );
+  });
+
   it("reads top-level schemaFormat from config/database.ts", async () => {
     fs.writeFileSync(
       path.join(tmpDir, "config", "database.ts"),

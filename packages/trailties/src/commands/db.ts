@@ -141,14 +141,6 @@ function toDbConfig(raw: RawConfig, envName: string = resolveEnv()): HashConfig 
 }
 
 /**
- * Run Rails' `check_protected_environments!` guard with a temporarily-
- * registered `DatabaseTasks.databaseConfiguration` so it actually consults
- * the stored env in `ar_internal_metadata`. Without the registration the
- * guard falls back to checking only the current env name, which misses
- * `EnvironmentMismatchError` and the protected-stamp case this PR cares
- * about.
- */
-/**
  * Run `fn` with `DatabaseTasks.databaseConfiguration` and the module-level
  * `DatabaseConfigurations.current` singleton temporarily pointed at a
  * DatabaseConfigurations built from `config`. Mirrors the capture/restore
@@ -173,6 +165,13 @@ async function withRegisteredConfiguration<T>(
   }
 }
 
+/**
+ * Run Rails' `check_protected_environments!` guard with a temporarily-
+ * registered `DatabaseTasks.databaseConfiguration` so it actually consults
+ * the stored env in `ar_internal_metadata`. Without the registration the
+ * guard falls back to checking only the current env name, which misses
+ * `EnvironmentMismatchError` and the protected-stamp case.
+ */
 async function runProtectedEnvCheck(config: HashConfig, envName: string): Promise<void> {
   const { DatabaseConfigurations } = await import("@blazetrails/activerecord");
   // DatabaseConfigurations' constructor registers itself as the
@@ -570,33 +569,41 @@ export function dbCommand(): Command {
       "Create the database if it doesn't exist, run pending migrations, and seed when fresh",
     )
     .action(async () => {
-      await withAdapter(async (adapter, raw) => {
-        const config = toDbConfig(raw);
-        const { DatabaseAlreadyExists, Migrator } = await import("@blazetrails/activerecord");
+      // Do NOT go through withAdapter — connectAdapter would try to
+      // connect to the target DB before we've had a chance to create
+      // it, which fails for pg/mysql when the DB doesn't exist yet.
+      // Create first, then connect.
+      const raw = normalizeRawConfig(await loadDatabaseConfig());
+      const config = toDbConfig(raw);
+      const { DatabaseAlreadyExists, Migrator } = await import("@blazetrails/activerecord");
 
-        // Rails measures "fresh" via
-        // `!schema_migration.table_exists?` — not via whether the DB
-        // file/db exists. A sqlite DB "exists" as soon as anyone opens a
-        // connection (better-sqlite3 creates the file on open), so
-        // checking DatabaseTasks.create's success would almost always
-        // report not-fresh. Use the schema_migrations presence probe,
-        // matching Rails' initialize_database contract.
-        const preMigrator = new Migrator(adapter, []);
-        const wasFresh = !(await preMigrator.schemaMigrationTableExists());
+      try {
+        await DatabaseTasks.create(config);
+        console.log(`Created database '${displayNameFor(config, raw)}'`);
+      } catch (error) {
+        if (!(error instanceof DatabaseAlreadyExists)) throw error;
+      }
 
-        try {
-          await DatabaseTasks.create(config);
-          if (wasFresh) console.log(`Created database '${displayNameFor(config, raw)}'`);
-        } catch (error) {
-          if (!(error instanceof DatabaseAlreadyExists)) throw error;
-        }
+      const adapter = await connectAdapter(raw);
+      try {
+        // Rails measures "fresh" via `!schema_migration.table_exists?`,
+        // matching its `initialize_database` contract. A sqlite DB file
+        // may have been created by either our DatabaseTasks.create call
+        // above or by better-sqlite3 on connect; the meaningful signal
+        // is whether migrations have been applied.
+        const migrator = new Migrator(adapter, []);
+        const wasFresh = !(await migrator.schemaMigrationTableExists());
+
         await runMigrate(adapter, raw);
         if (wasFresh) {
           const { Base } = await import("@blazetrails/activerecord");
           Base.adapter = adapter;
           await runSeed();
         }
-      });
+      } finally {
+        const close = (adapter as { close?: () => Promise<void> }).close;
+        if (typeof close === "function") await close.call(adapter);
+      }
     });
 
   cmd

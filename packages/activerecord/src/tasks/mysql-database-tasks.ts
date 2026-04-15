@@ -139,13 +139,29 @@ export class MySQLDatabaseTasks {
   async truncateAll(): Promise<void> {
     const { Mysql2Adapter } = await import("../adapters/mysql2-adapter.js");
     const dbName = this.requireDatabaseName();
-    const adapter = new Mysql2Adapter({
-      host: this.resolvedField("host") ?? "localhost",
-      port: Number(this.resolvedField("port") ?? 3306),
+    // Build the adapter config the same way withAdmin does: prefer a
+    // unix socket when the config provides one, coerce port safely so
+    // invalid/NaN values don't leak into mysql2.
+    const socket = this.resolvedField("socket");
+    const adapterConfig: {
+      host?: string;
+      port?: number;
+      database: string;
+      user?: string;
+      password?: string;
+      socketPath?: string;
+    } = {
       database: dbName,
       user: this.resolvedField("username"),
       password: this.resolvedField("password"),
-    });
+    };
+    if (socket) {
+      adapterConfig.socketPath = socket;
+    } else {
+      adapterConfig.host = this.resolvedField("host") ?? "localhost";
+      adapterConfig.port = coercePort(this.resolvedField("port"), 3306);
+    }
+    const adapter = new Mysql2Adapter(adapterConfig);
     try {
       const rows = (await adapter.execute(
         "SELECT table_name FROM information_schema.tables WHERE table_schema = ? " +

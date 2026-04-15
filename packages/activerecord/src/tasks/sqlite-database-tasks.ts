@@ -175,11 +175,16 @@ export class SQLiteDatabaseTasks {
    * Truncate every user table in the database — used by
    * `DatabaseTasks.truncate_all` / `trails db seed:replant`. SQLite
    * doesn't support TRUNCATE TABLE, so we DELETE FROM each user table
-   * then VACUUM (the Rails parallel is Arel::Truncate which falls back
-   * to DELETE for sqlite adapters).
+   * instead (the Rails parallel is Arel::Truncate which falls back to
+   * DELETE for sqlite adapters).
    *
-   * Skips schema_migrations and ar_internal_metadata so migration state
-   * and environment stamping survive.
+   * Skips schema_migrations and ar_internal_metadata so migration
+   * state and environment stamping survive.
+   *
+   * Wraps the per-table deletes in disableReferentialIntegrity so
+   * foreign-key constraints don't block deletion of a parent table
+   * while its children are still populated — matches the FK-safety
+   * the PG/MySQL truncateAll implementations provide.
    */
   async truncateAll(): Promise<void> {
     const adapter = await this.connectAdapter();
@@ -188,8 +193,18 @@ export class SQLiteDatabaseTasks {
         "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' " +
           "AND name <> 'schema_migrations' AND name <> 'ar_internal_metadata'",
       )) as Array<{ name: string }>;
-      for (const row of rows) {
-        await adapter.executeMutation(`DELETE FROM "${row.name.replace(/"/g, '""')}"`);
+      const withFks = adapter as DatabaseAdapter & {
+        disableReferentialIntegrity?: (fn: () => Promise<void>) => Promise<void>;
+      };
+      const run = async () => {
+        for (const row of rows) {
+          await adapter.executeMutation(`DELETE FROM "${row.name.replace(/"/g, '""')}"`);
+        }
+      };
+      if (typeof withFks.disableReferentialIntegrity === "function") {
+        await withFks.disableReferentialIntegrity(run);
+      } else {
+        await run();
       }
     } finally {
       await this.closeAdapter(adapter);

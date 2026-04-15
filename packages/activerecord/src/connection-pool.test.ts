@@ -655,6 +655,29 @@ describe("ConnectionPool schema cache", () => {
     expect(pool.schemaCache).toBe(pool.schemaCache);
   });
 
+  it("adapter.schemaCache reads the raw SchemaCache from poolConfig, not the bound reflection", async () => {
+    // Regression: Phase 11 made pool.schemaCache return a
+    // BoundSchemaReflection. AbstractAdapter#schemaCache previously
+    // reached into pool.schemaCache to store/share a raw SchemaCache
+    // instance — with the new getter that would (a) return a
+    // BoundSchemaReflection where .clear()/.setColumns() aren't
+    // defined and (b) throw on assignment (read-only getter). The
+    // fix routes the raw cache through pool.poolConfig.schemaCache,
+    // and this test locks that in.
+    const { SchemaCache } = await import("./connection-adapters/schema-cache.js");
+    const pool = makePool();
+    try {
+      const cache = pool.withConnection((conn) => {
+        return (conn as unknown as { schemaCache: unknown }).schemaCache;
+      });
+      expect(cache).toBeInstanceOf(SchemaCache);
+      expect(cache).not.toBe(pool.schemaCache); // bound reflection !== raw cache
+      expect(pool.poolConfig.schemaCache).toBe(cache); // shared via poolConfig
+    } finally {
+      await pool.disconnect();
+    }
+  });
+
   it("swapping schemaReflection invalidates the cached BoundSchemaReflection", () => {
     // Matches Rails' `ConnectionPool#schema_reflection=` which sets
     // @schema_cache = nil after swapping so subsequent pool.schema_cache

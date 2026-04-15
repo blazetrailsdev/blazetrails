@@ -191,6 +191,23 @@ describe("CollectionProxy — array-likeness (Phase R.1)", () => {
     expect(arr.map((p) => p.title)).toEqual(["a", "b", "c"]);
   });
 
+  it("await proxy hydrates `_target` so subsequent sync ops work", async () => {
+    // Build a blog/post pair WITHOUT pre-loading via blogWithPosts (which
+    // calls .load()). `await proxy` alone should be enough to make
+    // `proxy.length`, `proxy[0]`, iteration all work afterwards.
+    const blog = new ApBlog({ name: "Fresh" });
+    await blog.save();
+    for (const title of ["x", "y"]) {
+      const p = new ApPost({ title, ap_blog_id: blog.id as number });
+      await p.save();
+    }
+    const proxy = association<ApPost>(blog, "apPosts") as any;
+    await proxy;
+    expect(proxy.length).toBe(2);
+    expect(proxy[0]?.title).toBe("x");
+    expect([...proxy].map((p: ApPost) => p.title)).toEqual(["x", "y"]);
+  });
+
   it("keys / entries work (values intentionally not added)", async () => {
     const blog = await blogWithPosts();
     const proxy = association<ApPost>(blog, "apPosts");

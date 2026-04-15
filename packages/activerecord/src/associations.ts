@@ -1343,8 +1343,9 @@ function wrapCollectionProxy<T extends Base = Base>(
 
       // Numeric indexing — `proxy[0]`, `proxy[1]` read the loaded target
       // via the public `target` accessor. Matches array semantics; same
-      // constraint as the other array-likeness on CollectionProxy (no fresh
-      // load; await first if you need one).
+      // constraint as the other array-likeness on CollectionProxy: reads
+      // whatever's loaded. `await proxy` (or `await proxy.load()`) hydrates
+      // `_target` first if you need a fresh load.
       if (typeof prop === "string" && NUMERIC_INDEX_PATTERN.test(prop)) {
         return target.target[Number(prop)];
       }

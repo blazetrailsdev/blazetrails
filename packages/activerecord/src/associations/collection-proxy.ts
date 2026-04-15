@@ -111,8 +111,14 @@ export class CollectionProxy<T extends Base = Base> {
     return this._target.map(fn, thisArg);
   }
 
-  filter(fn: (record: T, index: number, all: T[]) => unknown, thisArg?: unknown): T[] {
-    return this._target.filter(fn, thisArg);
+  // filter has the standard type-predicate overload from Array<T>.
+  filter<S extends T>(
+    predicate: (record: T, index: number, all: T[]) => record is S,
+    thisArg?: unknown,
+  ): S[];
+  filter(predicate: (record: T, index: number, all: T[]) => unknown, thisArg?: unknown): T[];
+  filter(predicate: (record: T, index: number, all: T[]) => unknown, thisArg?: unknown): T[] {
+    return this._target.filter(predicate, thisArg);
   }
 
   forEach(fn: (record: T, index: number, all: T[]) => void, thisArg?: unknown): void {
@@ -123,8 +129,14 @@ export class CollectionProxy<T extends Base = Base> {
     return this._target.some(fn, thisArg);
   }
 
-  every(fn: (record: T, index: number, all: T[]) => unknown, thisArg?: unknown): boolean {
-    return this._target.every(fn, thisArg);
+  // every has the standard type-predicate overload from Array<T>.
+  every<S extends T>(
+    predicate: (record: T, index: number, all: T[]) => record is S,
+    thisArg?: unknown,
+  ): boolean;
+  every(predicate: (record: T, index: number, all: T[]) => unknown, thisArg?: unknown): boolean;
+  every(predicate: (record: T, index: number, all: T[]) => unknown, thisArg?: unknown): boolean {
+    return this._target.every(predicate, thisArg);
   }
 
   // `includes` and `find` are intentionally NOT added — they would
@@ -142,9 +154,10 @@ export class CollectionProxy<T extends Base = Base> {
   reduce(fn: (acc: T, record: T, index: number, all: T[]) => T): T;
   reduce<U>(fn: (acc: U, record: T, index: number, all: T[]) => U, initial: U): U;
   reduce(...args: [unknown, ...unknown[]]): unknown {
-    // Forward verbatim so Array.prototype.reduce sees the right arity
-    // (with vs. without an initial value picks different semantics).
-    return (this._target.reduce as (...a: unknown[]) => unknown)(...args);
+    // Forward verbatim with the array as receiver — reduce needs `this`
+    // to be the array. (with-vs-without initial value picks different
+    // semantics, hence the variadic forwarding.)
+    return (this._target.reduce as (...a: unknown[]) => unknown).apply(this._target, args);
   }
 
   indexOf(record: T, fromIndex?: number): number {
@@ -1391,4 +1404,9 @@ export class CollectionProxy<T extends Base = Base> {
   }
 }
 
-applyThenable(CollectionProxy.prototype);
+// Route `await proxy` through `load()` (not `toArray`) so the thenable
+// also hydrates `_target` — matches the documented contract that
+// `await proxy; proxy[0]` / `proxy.length` work after a single await.
+// `toArray()` stays available for "give me a fresh array now without
+// touching the cache" callers.
+applyThenable(CollectionProxy.prototype, "load");

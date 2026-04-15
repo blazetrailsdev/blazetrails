@@ -172,7 +172,13 @@ type-checks but falls through to `unknown`. Opt into static typing
 per-member with `declare`. Every snippet below assumes:
 
 ```ts
-import { Base, CollectionProxy, Relation } from "@blazetrails/activerecord";
+import {
+  Base,
+  CollectionProxy,
+  Relation,
+  association,
+  defineEnum,
+} from "@blazetrails/activerecord";
 ```
 
 **Attributes** (`this.attribute(name, type)`):
@@ -188,15 +194,22 @@ class User extends Base {
 }
 ```
 
-**has_many / HABTM** (`this.hasMany(name)`):
+**has_many / HABTM** (`this.hasMany(name)` — synchronous reader returns the
+loaded target array; use `association(record, name)` for the full async
+`CollectionProxy` API):
 
 ```ts
 class Blog extends Base {
-  declare posts: CollectionProxy<Post>;
+  declare posts: Post[]; // synchronous reader
   static {
     this.hasMany("posts");
   }
 }
+
+// Full async API — load, push, create, first, etc.
+const blog = new Blog();
+const proxy = association<Post>(blog, "posts"); // CollectionProxy<Post>
+await proxy.first();
 ```
 
 **belongs_to / has_one** (synchronous reader — returns the record, not a Promise):

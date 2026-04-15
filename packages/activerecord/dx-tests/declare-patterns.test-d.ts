@@ -9,7 +9,13 @@
  */
 
 import { describe, it, expectTypeOf } from "vitest";
-import { Base, CollectionProxy, Relation, defineEnum } from "@blazetrails/activerecord";
+import {
+  Base,
+  CollectionProxy,
+  Relation,
+  association,
+  defineEnum,
+} from "@blazetrails/activerecord";
 
 // --- Attribute typing: `this.attribute("name", "string")` + `declare name: string` ---
 // (Don't redeclare `id` — Base defines it as an accessor; narrow at the use
@@ -49,11 +55,14 @@ class Tag extends Base {
 class Author extends Base {
   declare name: string;
 
-  // hasMany → CollectionProxy<Comment>
-  declare comments: CollectionProxy<Comment>;
+  // hasMany → synchronous reader returning the loaded target array
+  // (the same shape as Rails' `author.comments` once loaded). Use
+  // `association(author, "comments")` to get the full CollectionProxy
+  // API (async load/first/create/push/etc).
+  declare comments: Comment[];
 
-  // hasAndBelongsToMany → CollectionProxy<Tag> (same shape as hasMany)
-  declare tags: CollectionProxy<Tag>;
+  // hasAndBelongsToMany → same shape as hasMany (array reader)
+  declare tags: Tag[];
 
   // hasOne → Profile | null (synchronous reader; returns the record directly)
   declare profile: Profile | null;
@@ -158,16 +167,22 @@ describe("declare patterns — typing runtime-attached members", () => {
     expectTypeOf(u.admin).toBeBoolean();
   });
 
-  it("hasMany accessor: `declare comments: CollectionProxy<Comment>`", async () => {
+  it("hasMany accessor: `declare comments: Comment[]` (synchronous reader)", async () => {
     const author = new Author({ name: "dean" });
-    expectTypeOf(author.comments).toMatchTypeOf<CollectionProxy<Comment>>();
-    expectTypeOf(await author.comments.first()).toEqualTypeOf<Comment | null>();
+    expectTypeOf(author.comments).toEqualTypeOf<Comment[]>();
   });
 
-  it("hasAndBelongsToMany accessor: `declare tags: CollectionProxy<Tag>` (same shape)", async () => {
+  it("full CollectionProxy API via `association(record, name)` helper", async () => {
     const author = new Author({ name: "dean" });
-    expectTypeOf(author.tags).toMatchTypeOf<CollectionProxy<Tag>>();
-    expectTypeOf(await author.tags.first()).toEqualTypeOf<Tag | null>();
+    const proxy = association<Comment>(author, "comments");
+    expectTypeOf(proxy).toMatchTypeOf<CollectionProxy<Comment>>();
+    expectTypeOf(await proxy.first()).toEqualTypeOf<Comment | null>();
+    expectTypeOf(await proxy.toArray()).toEqualTypeOf<Comment[]>();
+  });
+
+  it("hasAndBelongsToMany accessor: `declare tags: Tag[]` (same shape as hasMany)", async () => {
+    const author = new Author({ name: "dean" });
+    expectTypeOf(author.tags).toEqualTypeOf<Tag[]>();
   });
 
   it("belongsTo accessor: `declare author: Author | null` (synchronous reader)", () => {

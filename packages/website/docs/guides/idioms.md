@@ -59,7 +59,7 @@ class Post extends Base {
 
 const post = await Post.createBang({ title: "Hello" });
 await post.updateBang({ published: true });
-const published = await Post.where({ published: true }).order("title").toArray();
+const published = await Post.published().order("title").toArray();
 ```
 
 Everything below this point is that example broken into its

@@ -252,7 +252,7 @@ runtime (via `this.attribute`, `this.hasMany`, `this.scope`, `this.enum`)
 but the type system only sees them if you opt in with a `declare`:
 
 ```ts
-import { Base, CollectionProxy, Relation, defineEnum } from "@blazetrails/activerecord";
+import { Base, Relation, defineEnum } from "@blazetrails/activerecord";
 
 class Author extends Base {}
 class Comment extends Base {}
@@ -260,7 +260,9 @@ class Comment extends Base {}
 class Post extends Base {
   declare title: string; // attribute
   declare author: Author | null; // belongsTo reader (synchronous)
-  declare comments: CollectionProxy<Comment>; // hasMany reader
+  declare comments: Comment[]; // hasMany reader (synchronous array;
+  //                            use `association(post, "comments")` for
+  //                            the full CollectionProxy<Comment> API)
   declare isDraft: () => boolean; // enum predicate
   declare draft: () => void; // enum in-memory setter (defineEnum only)
   declare draftBang: () => Promise<void>; // enum async persisting setter (defineEnum only)

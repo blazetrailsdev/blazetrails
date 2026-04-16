@@ -29,6 +29,7 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
   private _client: pg.PoolClient | null = null;
   private _inTransaction = false;
   private _databaseVersion: number | null = null;
+  private _initialized = false;
 
   constructor(config: string | pg.PoolConfig) {
     super();
@@ -67,9 +68,20 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
   }
 
   /**
+   * Lazily fetch and cache server version + extension info on first use.
+   * Mirrors Rails' configure_connection which runs at checkout time.
+   */
+  private async _ensureInitialized(): Promise<void> {
+    if (this._initialized) return;
+    this._initialized = true;
+    await this.getDatabaseVersion();
+  }
+
+  /**
    * Execute a SELECT query and return rows.
    */
   async execute(sql: string, binds: unknown[] = []): Promise<Record<string, unknown>[]> {
+    await this._ensureInitialized();
     const client = await this.getClient();
     try {
       const result = await client.query(this.rewriteBinds(sql, binds), binds);
@@ -87,6 +99,7 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
    * `rowCount` is returned.
    */
   async executeMutation(sql: string, binds: unknown[] = []): Promise<number> {
+    await this._ensureInitialized();
     const client = await this.getClient();
     try {
       const pgSql = this.rewriteBinds(sql, binds);
@@ -295,8 +308,8 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
   }
 
   /**
-   * Synchronous version check. Throws if getDatabaseVersion() hasn't
-   * been called yet — callers must ensure the connection is initialized.
+   * Synchronous version check. Populated lazily on first query via
+   * _ensureInitialized(). Throws if accessed before any query has run.
    */
   get databaseVersion(): number {
     if (this._databaseVersion === null) {

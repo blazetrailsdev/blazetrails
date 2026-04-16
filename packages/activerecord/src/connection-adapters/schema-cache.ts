@@ -448,6 +448,17 @@ export class SchemaReflection {
     return this;
   }
 
+  /**
+   * Return the internal SchemaCache if already loaded, or null if no
+   * cache has been populated yet. Used by ConnectionPool to propagate
+   * the reflection's loaded cache into poolConfig.schemaCache so
+   * adapter-side consumers (AbstractAdapter.schemaCache) see the
+   * preloaded data from a schema_cache.json without hitting the DB.
+   */
+  get loadedCache(): SchemaCache | null {
+    return this._cache;
+  }
+
   async primaryKeys(pool: unknown, tableName: string): Promise<string | null | undefined> {
     return (await this.cache(pool)).primaryKeys(pool, tableName);
   }

@@ -790,9 +790,29 @@ export class ConnectionPool implements ReapablePool {
         queueMicrotask(() => {
           this.schemaCache
             .loadBang()
-            .catch(() => {
+            .then(() => {
+              // Propagate the loaded SchemaCache into
+              // poolConfig.schemaCache so adapter-side consumers
+              // (AbstractAdapter.schemaCache, TypeCaster::Connection)
+              // see the preloaded data without hitting the DB. The
+              // reflection is the primary store; poolConfig.schemaCache
+              // is the adapter-facing mirror.
+              const loaded = this.schemaReflection.loadedCache;
+              if (loaded && !this.poolConfig.schemaCache) {
+                this.poolConfig.schemaCache = loaded;
+              }
+            })
+            .catch((err) => {
               // loadCache swallows read/parse/version errors
               // internally; this is a belt-and-suspenders guard.
+              // Log enough context to diagnose if a future change
+              // introduces an unexpected rejection path.
+
+              console.warn(
+                `[trails] Failed to lazily load schema cache for pool ` +
+                  `${this.poolConfig.connectionSpecName}: ` +
+                  `${err instanceof Error ? err.message : String(err)}`,
+              );
             })
             .finally(resolve);
         });

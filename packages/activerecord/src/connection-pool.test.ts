@@ -802,7 +802,13 @@ describe("ConnectionPool schema cache", () => {
       pool.leaseConnection();
       pool.releaseConnection();
       await pool._lazyLoadPromise;
+      // BoundSchemaReflection side:
       expect(pool.schemaCache.isCached("gadgets")).toBe(true);
+      // Adapter-visible raw cache (poolConfig.schemaCache) — after
+      // lazy load the reflection's internal cache is propagated so
+      // adapter.schemaCache consumers see preloaded data without DB.
+      expect(pool.poolConfig.schemaCache).not.toBeNull();
+      expect(pool.poolConfig.schemaCache!.isCached("gadgets")).toBe(true);
     } finally {
       SchemaReflection.lazilyLoadSchemaCache = prevLazy;
       await closePoolConnections(pool);

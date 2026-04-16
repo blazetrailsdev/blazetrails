@@ -786,6 +786,63 @@ describe("ConnectionPool schema cache", () => {
     }
   });
 
+  it("rejects a stale schema cache when checkSchemaCacheDumpVersion is enabled", async () => {
+    // Rails: SchemaReflection.loadCache compares the cache file's
+    // version against connection.schemaVersion() and returns null
+    // (with a console.warn) when they disagree. The pool therefore
+    // won't pick up the stale cache. Tests the version-check half of
+    // Phase 12 end-to-end via the lazy-load path.
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const os = await import("node:os");
+    const { SQLite3Adapter } = await import("./connection-adapters/sqlite3-adapter.js");
+
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-stale-cache-"));
+    const dbFile = path.join(tmp, "stale.sqlite3");
+    const cacheFile = path.join(tmp, "schema_cache.json");
+    // Cache claims version 42, but connection.schemaVersion() defaults
+    // to 0 on AbstractAdapter. Mismatch → loadCache returns null.
+    fs.writeFileSync(
+      cacheFile,
+      JSON.stringify({
+        columns: { stale_thing: [{ name: "id" }] },
+        primary_keys: { stale_thing: "id" },
+        data_sources: { stale_thing: true },
+        indexes: {},
+        version: 42,
+      }),
+    );
+    const prevCheck = SchemaReflection.checkSchemaCacheDumpVersion;
+    const prevLazy = SchemaReflection.lazilyLoadSchemaCache;
+    const prevWarn = console.warn;
+    SchemaReflection.checkSchemaCacheDumpVersion = true;
+    SchemaReflection.lazilyLoadSchemaCache = true;
+    console.warn = () => {}; // quiet the expected mismatch warning
+
+    const dbConfig = new HashConfig("test", "primary", {
+      adapter: "sqlite3",
+      database: dbFile,
+      reapingFrequency: null,
+      schemaCachePath: cacheFile,
+    });
+    const pc = new PoolConfig(new ConnectionDescriptor("primary"), dbConfig, "writing", "default", {
+      adapterFactory: () => new SQLite3Adapter(dbFile),
+    });
+    const pool = new ConnectionPool(pc);
+    try {
+      pool.newConnection();
+      await new Promise<void>((r) => setImmediate(r));
+      // Mismatch → cache was rejected → table not reported as cached.
+      expect(pool.schemaCache.isCached("stale_thing")).toBe(false);
+    } finally {
+      SchemaReflection.checkSchemaCacheDumpVersion = prevCheck;
+      SchemaReflection.lazilyLoadSchemaCache = prevLazy;
+      console.warn = prevWarn;
+      await closePoolConnections(pool);
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
   it("does not lazy-load when the flag is off (default)", async () => {
     // Default: no file I/O at first-connection time. Apps that
     // don't opt in must not pay for the cache load path.

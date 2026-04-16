@@ -101,9 +101,15 @@ export function virtualize(
     // inserted: `-1` if the block is truly at the start of the file,
     // otherwise the line index of the last directive/blank line that
     // precedes the insertion point. This preserves `remapLine` for
-    // any leading directives (shebang / @ts-nocheck / triple-slash).
+    // any leading directives (shebang / @ts-nocheck / triple-slash)
+    // — including the edge case where the file ends at a directive
+    // with no trailing newline (in which case `split(/\r?\n/)`
+    // wouldn't produce a final empty element, so subtracting 2 would
+    // be off by one).
+    const before = text.slice(0, insertPos);
+    const newlineCount = (before.match(/\r?\n/g) ?? []).length;
     const insertedAtLine =
-      insertPos === 0 ? -1 : text.slice(0, insertPos).split(/\r?\n/).length - 2;
+      insertPos === 0 ? -1 : before.endsWith("\n") ? newlineCount - 1 : newlineCount;
     text = text.slice(0, insertPos) + importBlock + text.slice(insertPos);
     const prependedLines = prependImports.length;
     for (const d of deltas) {

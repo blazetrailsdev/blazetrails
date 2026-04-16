@@ -47,7 +47,13 @@ function collectTargetNames(info: ClassInfo, out: Set<string>): void {
       call.kind === "belongsTo" ||
       call.kind === "hasOne"
     ) {
-      out.add(resolveAssociationTarget(call as AssociationCall));
+      const assocCall = call as AssociationCall;
+      // Polymorphic belongsTo emits `Base` (not a user class) in
+      // `synthesize.ts`, so auto-injecting `import type { <Target> }`
+      // would be unused and can trigger noUnusedLocals/lint errors
+      // in user projects.
+      if (call.kind === "belongsTo" && assocCall.options["polymorphic"] === "true") continue;
+      out.add(resolveAssociationTarget(assocCall));
     }
   }
 }

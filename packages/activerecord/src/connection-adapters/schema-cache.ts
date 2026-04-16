@@ -449,11 +449,12 @@ export class SchemaReflection {
   }
 
   /**
-   * Return the internal SchemaCache if already loaded, or null if no
-   * cache has been populated yet. Used by ConnectionPool to propagate
-   * the reflection's loaded cache into poolConfig.schemaCache so
-   * adapter-side consumers (AbstractAdapter.schemaCache) see the
+   * @internal Return the internal SchemaCache if already loaded, or
+   * null if no cache has been populated yet. Used by ConnectionPool to
+   * propagate the reflection's loaded cache into poolConfig.schemaCache
+   * so adapter-side consumers (AbstractAdapter.schemaCache) see the
    * preloaded data from a schema_cache.json without hitting the DB.
+   * External callers should not mutate the returned cache.
    */
   get loadedCache(): SchemaCache | null {
     return this._cache;

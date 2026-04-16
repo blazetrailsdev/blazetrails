@@ -282,13 +282,17 @@ export class ConnectionPool implements ReapablePool {
     // next schemaCache access wraps the new reflection, not the
     // stale one.
     this._boundSchemaCache = undefined;
-    // Also reset the lazy-load guard so the new reflection's
-    // on-disk cache path gets loaded on the next first-connection
-    // event — without this, a swap followed by a fresh checkout
-    // would skip the load because _lazyLoadTriggered is still true
-    // from the old reflection.
+    // Also reset the lazy-load guard AND the raw cache so the new
+    // reflection's on-disk cache path gets loaded on the next first-
+    // connection event. Without resetting _lazyLoadTriggered the
+    // guard would still be true from the old reflection; without
+    // resetting poolConfig.schemaCache the `!this.poolConfig.schemaCache`
+    // guard in newConnection would prevent the new lazy-load from
+    // triggering, and adapter-side consumers would keep seeing stale
+    // cache data from the old reflection.
     this._lazyLoadTriggered = false;
     this._lazyLoadPromise = null;
+    this.poolConfig.schemaCache = null;
   }
 
   /**
@@ -827,9 +831,8 @@ export class ConnectionPool implements ReapablePool {
   private _lazyLoadTriggered = false;
 
   /**
-   * Exposed so tests (and eager-boot callers) can await the lazy
-   * load's completion instead of relying on timing. Null when no
-   * lazy load was triggered.
+   * @internal Exposed so tests (and eager-boot callers) can await the
+   * lazy load's completion. Null when no lazy load was triggered.
    */
   _lazyLoadPromise: Promise<void> | null = null;
 

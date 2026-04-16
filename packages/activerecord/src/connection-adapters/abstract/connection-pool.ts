@@ -282,6 +282,13 @@ export class ConnectionPool implements ReapablePool {
     // next schemaCache access wraps the new reflection, not the
     // stale one.
     this._boundSchemaCache = undefined;
+    // Also reset the lazy-load guard so the new reflection's
+    // on-disk cache path gets loaded on the next first-connection
+    // event — without this, a swap followed by a fresh checkout
+    // would skip the load because _lazyLoadTriggered is still true
+    // from the old reflection.
+    this._lazyLoadTriggered = false;
+    this._lazyLoadPromise = null;
   }
 
   /**
@@ -769,10 +776,26 @@ export class ConnectionPool implements ReapablePool {
       !this.poolConfig.schemaCache
     ) {
       this._lazyLoadTriggered = true;
-      this._lazyLoadPromise = this.schemaCache.loadBang().catch(() => {
-        // loadCache swallows read/parse/version errors internally;
-        // this is a belt-and-suspenders guard against an unexpected
-        // throw from BoundSchemaReflection/SchemaReflection glue.
+      // Defer the load to the next microtask so we don't re-enter
+      // the pool mid-checkout. SchemaReflection.loadCache calls
+      // pool.withConnection to query connection.schemaVersion() for
+      // the version check — if we called loadBang synchronously
+      // from inside newConnection (which is called from checkout),
+      // the outer lease hasn't been set yet and withConnection would
+      // trigger another checkout, potentially creating an extra
+      // connection or recursing. queueMicrotask defers until the
+      // current checkout finishes and the connection is available
+      // for reuse.
+      this._lazyLoadPromise = new Promise<void>((resolve) => {
+        queueMicrotask(() => {
+          this.schemaCache
+            .loadBang()
+            .catch(() => {
+              // loadCache swallows read/parse/version errors
+              // internally; this is a belt-and-suspenders guard.
+            })
+            .finally(resolve);
+        });
       });
     }
     return conn;

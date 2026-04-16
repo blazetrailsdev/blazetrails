@@ -776,47 +776,38 @@ export class ConnectionPool implements ReapablePool {
       !this.poolConfig.schemaCache
     ) {
       this._lazyLoadTriggered = true;
-      // Defer the load to the next microtask so we don't re-enter
-      // the pool mid-checkout. SchemaReflection.loadCache calls
-      // pool.withConnection to query connection.schemaVersion() for
-      // the version check — if we called loadBang synchronously
-      // from inside newConnection (which is called from checkout),
-      // the outer lease hasn't been set yet and withConnection would
-      // trigger another checkout, potentially creating an extra
-      // connection or recursing. queueMicrotask defers until the
-      // current checkout finishes and the connection is available
-      // for reuse.
-      this._lazyLoadPromise = new Promise<void>((resolve) => {
-        queueMicrotask(() => {
-          this.schemaCache
-            .loadBang()
-            .then(() => {
-              // Propagate the loaded SchemaCache into
-              // poolConfig.schemaCache so adapter-side consumers
-              // (AbstractAdapter.schemaCache, TypeCaster::Connection)
-              // see the preloaded data without hitting the DB. The
-              // reflection is the primary store; poolConfig.schemaCache
-              // is the adapter-facing mirror.
-              const loaded = this.schemaReflection.loadedCache;
-              if (loaded && !this.poolConfig.schemaCache) {
-                this.poolConfig.schemaCache = loaded;
-              }
-            })
-            .catch((err) => {
-              // loadCache swallows read/parse/version errors
-              // internally; this is a belt-and-suspenders guard.
-              // Log enough context to diagnose if a future change
-              // introduces an unexpected rejection path.
+      // Use BoundSchemaReflection.forLoneConnection so the version-
+      // check in loadCache routes through a FakePool that yields the
+      // just-created connection — never re-enters the real pool's
+      // checkout. Without this, pool size=1 would deadlock: loadCache
+      // calls pool.withConnection to query schemaVersion(), which tries
+      // to checkout a second connection that doesn't exist.
+      //
+      // The loneRef shares the same SchemaReflection as `this.schemaCache`,
+      // so a successful load populates both.
+      const loneRef = BoundSchemaReflection.forLoneConnection(this.schemaReflection, conn);
+      this._lazyLoadPromise = loneRef
+        .loadBang()
+        .then(() => {
+          // Propagate the loaded SchemaCache into poolConfig.schemaCache
+          // so adapter-side consumers (AbstractAdapter.schemaCache,
+          // TypeCaster::Connection) see the preloaded data.
+          const loaded = this.schemaReflection.loadedCache;
+          if (loaded && !this.poolConfig.schemaCache) {
+            this.poolConfig.schemaCache = loaded;
+          }
+        })
+        .catch((err) => {
+          // loadCache swallows read/parse/version errors internally;
+          // this is a belt-and-suspenders guard. Log enough context to
+          // diagnose if a future change adds an unexpected rejection.
 
-              console.warn(
-                `[trails] Failed to lazily load schema cache for pool ` +
-                  `${this.poolConfig.connectionSpecName}: ` +
-                  `${err instanceof Error ? err.message : String(err)}`,
-              );
-            })
-            .finally(resolve);
+          console.warn(
+            `[trails] Failed to lazily load schema cache for pool ` +
+              `${this.poolConfig.connectionSpecName}: ` +
+              `${err instanceof Error ? err.message : String(err)}`,
+          );
         });
-      });
     }
     return conn;
   }

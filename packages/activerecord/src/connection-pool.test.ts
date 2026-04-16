@@ -845,6 +845,9 @@ describe("ConnectionPool schema cache", () => {
     try {
       pool.leaseConnection();
       pool.releaseConnection();
+      // Verify lazy-load actually triggered so we're testing the
+      // version-mismatch rejection — not just the absence of a load.
+      expect(pool._lazyLoadPromise).not.toBeNull();
       await pool._lazyLoadPromise;
       expect(pool.schemaCache.isCached("stale_thing")).toBe(false);
     } finally {

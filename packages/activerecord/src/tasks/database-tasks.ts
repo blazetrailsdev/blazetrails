@@ -120,9 +120,9 @@ export class DatabaseTasks {
    * - Any other string: treat as a comma-separated list of schema names
    *
    * Typed as a union of the two known modes plus `string & {}` for
-   * custom comma-separated lists. A typo like "schema_serach_path"
-   * still compiles (it's a valid string) but IDE autocompletion
-   * surfaces the two recognized modes.
+   * custom comma-separated lists. A misspelled mode still compiles
+   * (it's a valid string) but IDE autocompletion surfaces the two
+   * recognized modes first.
    */
   static dumpSchemas: "schema_search_path" | "all" | (string & {}) = "schema_search_path";
 

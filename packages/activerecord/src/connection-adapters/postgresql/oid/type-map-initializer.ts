@@ -178,5 +178,8 @@ interface OidSubtype {
 }
 
 function toInt(value: number | string): number {
-  return typeof value === "number" ? value : Number.parseInt(value, 10);
+  // Mirrors Ruby's String#to_i: non-numeric strings coerce to 0 rather than NaN.
+  if (typeof value === "number") return Number.isFinite(value) ? Math.trunc(value) : 0;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed) ? 0 : parsed;
 }

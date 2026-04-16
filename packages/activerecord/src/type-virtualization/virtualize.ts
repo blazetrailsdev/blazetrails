@@ -82,7 +82,12 @@ export function virtualize(
   // `insertedAtLine` to be a virtual coordinate so multi-class files
   // (two injected declare blocks) remap correctly for lines after the
   // second block.
-  const sortedEdits = edits.slice().sort((a, b) => a.originalLine - b.originalLine);
+  // Sort by (originalLine, pos) so multiple injections on the same
+  // line (e.g., two one-line class declarations) compose in stable,
+  // file-order delta-cumulation for remapLine.
+  const sortedEdits = edits
+    .slice()
+    .sort((a, b) => a.originalLine - b.originalLine || a.pos - b.pos);
   let cumulative = 0;
   const deltas: LineDelta[] = sortedEdits.map((e) => {
     const d: LineDelta = { insertedAtLine: e.originalLine + cumulative, lineCount: e.lineCount };

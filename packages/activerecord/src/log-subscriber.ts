@@ -4,6 +4,33 @@ import {
   type Logger,
 } from "@blazetrails/activesupport";
 
+/**
+ * Compute byte length of a value, mirroring Rails' `to_s.bytesize`.
+ * Handles strings, Buffers, TypedArrays, and falls back to string conversion.
+ */
+function byteLength(value: unknown): number {
+  if (value == null) return 0;
+  if (typeof value === "string") {
+    return typeof Buffer !== "undefined"
+      ? Buffer.byteLength(value)
+      : new TextEncoder().encode(value).length;
+  }
+  if (typeof ArrayBuffer !== "undefined") {
+    if (value instanceof ArrayBuffer) return value.byteLength;
+    if (ArrayBuffer.isView(value)) return value.byteLength;
+  }
+  if (typeof (value as any).byteLength === "number") return (value as any).byteLength;
+  return byteLength(String(value));
+}
+
+/**
+ * JSON.stringify that handles bigint values (converts to string)
+ * so logging never throws on valid bind values.
+ */
+function safeJsonStringify(value: unknown): string {
+  return JSON.stringify(value, (_key, v) => (typeof v === "bigint" ? v.toString() : v));
+}
+
 let _baseResolver: (() => any) | null = null;
 
 /**
@@ -74,7 +101,7 @@ export class LogSubscriber extends BaseLogSubscriber {
         bindPairs.push(this._renderBind(attr, filteredParams));
       }
 
-      binds = `  ${JSON.stringify(bindPairs)}`;
+      binds = `  ${safeJsonStringify(bindPairs)}`;
     }
 
     const colorizedName = this._colorizePayloadName(name, payload.name as string | undefined);
@@ -150,10 +177,9 @@ export class LogSubscriber extends BaseLogSubscriber {
     // ActiveModel::Attribute — has type and value properties
     if (attr && typeof attr === "object" && "type" in attr && "value" in attr) {
       if (attr.type?.binary?.() && attr.value != null) {
-        const bytes =
-          typeof attr.valueForDatabase === "function"
-            ? String(attr.valueForDatabase()).length
-            : String(attr.value).length;
+        const raw =
+          typeof attr.valueForDatabase === "function" ? attr.valueForDatabase() : attr.value;
+        const bytes = byteLength(raw);
         value = `<${bytes} bytes of binary data>`;
       }
       return [attr.name ?? null, value];

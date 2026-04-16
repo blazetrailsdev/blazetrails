@@ -1,4 +1,4 @@
-import { Subscriber } from "./subscriber.js";
+import { Subscriber, getClassState } from "./subscriber.js";
 import type { Event } from "./notifications/instrumenter.js";
 import type { Logger } from "./logger.js";
 
@@ -84,29 +84,53 @@ export class LogSubscriber extends Subscriber {
     this._setEventLevels();
   }
 
+  protected static override _fetchPublicMethods(
+    subscriber: Subscriber,
+    inheritAll: boolean,
+  ): string[] {
+    // Exclude LogSubscriber's own instance methods, matching Rails'
+    // `subscriber.public_methods(inherit_all) - LogSubscriber.public_instance_methods(true)`
+    const baseKeys = new Set([
+      ...Object.getOwnPropertyNames(Subscriber.prototype),
+      ...Object.getOwnPropertyNames(LogSubscriber.prototype),
+    ]);
+    const keys = new Set<string>();
+    let proto = Object.getPrototypeOf(subscriber);
+
+    while (
+      proto &&
+      proto !== LogSubscriber.prototype &&
+      proto !== Subscriber.prototype &&
+      proto !== Object.prototype
+    ) {
+      for (const key of Object.getOwnPropertyNames(proto)) {
+        if (
+          key !== "constructor" &&
+          !baseKeys.has(key) &&
+          typeof (subscriber as any)[key] === "function"
+        ) {
+          keys.add(key);
+        }
+      }
+      if (!inheritAll) break;
+      proto = Object.getPrototypeOf(proto);
+    }
+
+    return Array.from(keys).map((k) => k.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase());
+  }
+
   private static _setEventLevels(): void {
-    const sub = this.subscribers[this.subscribers.length - 1] as LogSubscriber | undefined;
-    if (!sub) return;
-    const namespace = (this as any)._namespace;
+    if (this.subscribers.length === 0) return;
+    const namespace = getClassState(this).namespace;
     const levels = new Map<string, (logger: Logger) => boolean>();
     for (const [k, v] of this.logLevels) {
       levels.set(`${k}.${namespace}`, v);
     }
-    sub.eventLevels = levels;
-  }
-
-  protected static override _fetchPublicMethods(
-    subscriber: Subscriber,
-    _inheritAll: boolean,
-  ): string[] {
-    const baseKeys = new Set(Object.getOwnPropertyNames(LogSubscriber.prototype));
-    const proto = Object.getPrototypeOf(subscriber);
-    const keys = Object.getOwnPropertyNames(proto).filter(
-      (k) =>
-        k !== "constructor" && !baseKeys.has(k) && typeof (subscriber as any)[k] === "function",
-    );
-    // Convert camelCase to snake_case for event pattern matching
-    return keys.map((k) => k.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase());
+    for (const sub of this.subscribers) {
+      if (sub instanceof LogSubscriber) {
+        sub.eventLevels = new Map(levels);
+      }
+    }
   }
 
   // -- Instance state ------------------------------------------------------

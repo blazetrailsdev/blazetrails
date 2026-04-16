@@ -129,12 +129,14 @@ export class SchemaMigration {
    * Mark all migration versions up to `version` as run without
    * executing them. Used for legacy DB imports and test fixtures.
    *
-   * The canonical implementation lives on `SchemaStatements` (which
-   * has pool/migrationContext access for the full Rails semantics).
-   * This thin wrapper provides the same behavior for callers holding
-   * a SchemaMigration instance directly. Versions are normalized via
-   * BigInt so "001" and "1" are treated as the same version. Invalid
-   * (non-numeric) versions throw.
+   * A related implementation exists on `SchemaStatements` (which has
+   * pool/migrationContext access and uses parseInt-based normalization).
+   * This wrapper provides a standalone version for callers holding a
+   * SchemaMigration instance directly. It uses stricter validation
+   * (BigInt + /^\d+$/) and validates all inputs before any writes,
+   * whereas SchemaStatements may write before detecting duplicates.
+   * Versions are normalized via BigInt so "001" and "1" are treated
+   * as the same version.
    */
   async assumeMigratedUptoVersion(
     version: number | string,

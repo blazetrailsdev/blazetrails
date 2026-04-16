@@ -1787,13 +1787,10 @@ export class Migrator {
    */
   private _useTransaction(migration: MigrationLike): boolean {
     if (migration.disableDdlTransaction) return false;
-    // Check adapter support. SQLite returns true (DDL is transactional
-    // in SQLite), PG returns true, MySQL returns false. The abstract
-    // adapter defaults to false.
-    const supports = (this._adapter as { supportsDdlTransactions?: () => boolean })
-      .supportsDdlTransactions;
-    if (typeof supports === "function") return supports.call(this._adapter);
-    return false;
+    // Check adapter support via the DatabaseAdapter interface.
+    // SQLite returns true, PG returns true, MySQL returns false.
+    // Absent (undefined) defaults to false.
+    return this._adapter.supportsDdlTransactions?.() ?? false;
   }
 
   /**

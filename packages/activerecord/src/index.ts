@@ -56,6 +56,9 @@ export type { AssociationProxy } from "./associations/collection-proxy.js";
 export type { AssociationOptions } from "./associations.js";
 export { Transaction } from "./connection-adapters/abstract/transaction.js";
 export { ActiveRecordTransaction } from "./transaction.js";
+export { LogSubscriber } from "./log-subscriber.js";
+export { ExplainSubscriber } from "./explain-subscriber.js";
+export { ExplainRegistry } from "./explain-registry.js";
 export {
   transaction,
   savepoint,

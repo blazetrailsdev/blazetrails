@@ -1,0 +1,233 @@
+import { Subscriber } from "./subscriber.js";
+import type { Event } from "./notifications/instrumenter.js";
+import type { Logger } from "./logger.js";
+
+/**
+ * ActiveSupport::LogSubscriber — a Subscriber that dispatches events
+ * to a logger. Provides ANSI coloring helpers and log-level gating.
+ *
+ * Subclasses define methods like `sql(event)` and call `info()`/`debug()`
+ * from them. `attachTo` wires up the subscription.
+ */
+export class LogSubscriber extends Subscriber {
+  // -- ANSI color constants ------------------------------------------------
+
+  static readonly MODES: Record<string, number> = {
+    clear: 0,
+    bold: 1,
+    italic: 3,
+    underline: 4,
+  };
+
+  static readonly BLACK = "\x1b[30m";
+  static readonly RED = "\x1b[31m";
+  static readonly GREEN = "\x1b[32m";
+  static readonly YELLOW = "\x1b[33m";
+  static readonly BLUE = "\x1b[34m";
+  static readonly MAGENTA = "\x1b[35m";
+  static readonly CYAN = "\x1b[36m";
+  static readonly WHITE = "\x1b[37m";
+
+  // -- Class-level config --------------------------------------------------
+
+  static colorizeLogging = true;
+
+  /** Map of method → level-check function (set via subscribeLogLevel). */
+  static logLevels: Map<string, (logger: Logger) => boolean> = new Map();
+
+  static readonly LEVEL_CHECKS: Record<string, (logger: Logger) => boolean> = {
+    debug: (logger) => !(logger as any)["debug?"],
+    info: (logger) => !(logger as any)["info?"],
+    error: (logger) => !(logger as any)["error?"],
+  };
+
+  private static _logger: Logger | null = null;
+
+  static get logger(): Logger | null {
+    return this._logger;
+  }
+
+  static set logger(value: Logger | null) {
+    this._logger = value;
+  }
+
+  static logSubscribers(): Subscriber[] {
+    return this.subscribers;
+  }
+
+  static flushAll(): void {
+    const l = this.logger;
+    if (l && typeof (l as any).flush === "function") {
+      (l as any).flush();
+    }
+  }
+
+  static attachTo(
+    namespace: string,
+    subscriber?: Subscriber,
+    notifier?: any,
+    options?: { inheritAll?: boolean },
+  ): Subscriber {
+    const result = super.attachTo(namespace, subscriber, notifier, options);
+    this._setEventLevels();
+    return result;
+  }
+
+  /**
+   * Register a log-level gate for a method. When the logger level is above
+   * the gate, events for that method are silenced.
+   */
+  static subscribeLogLevel(method: string, level: string): void {
+    const check = this.LEVEL_CHECKS[level];
+    if (!check) throw new Error(`Unknown level check: ${level}`);
+    this.logLevels.set(method, check);
+    this._setEventLevels();
+  }
+
+  private static _setEventLevels(): void {
+    const sub = this.subscribers[this.subscribers.length - 1] as LogSubscriber | undefined;
+    if (!sub) return;
+    const namespace = (this as any)._namespace;
+    const levels = new Map<string, (logger: Logger) => boolean>();
+    for (const [k, v] of this.logLevels) {
+      levels.set(`${k}.${namespace}`, v);
+    }
+    sub.eventLevels = levels;
+  }
+
+  protected static override _fetchPublicMethods(
+    subscriber: Subscriber,
+    _inheritAll: boolean,
+  ): string[] {
+    const baseKeys = new Set(Object.getOwnPropertyNames(LogSubscriber.prototype));
+    const proto = Object.getPrototypeOf(subscriber);
+    const keys = Object.getOwnPropertyNames(proto).filter(
+      (k) =>
+        k !== "constructor" && !baseKeys.has(k) && typeof (subscriber as any)[k] === "function",
+    );
+    // Convert camelCase to snake_case for event pattern matching
+    return keys.map((k) => k.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase());
+  }
+
+  // -- Instance state ------------------------------------------------------
+
+  eventLevels: Map<string, (logger: Logger) => boolean> = new Map();
+
+  get logger(): Logger | null {
+    return (this.constructor as typeof LogSubscriber).logger;
+  }
+
+  get colorizeLogging(): boolean {
+    return (this.constructor as typeof LogSubscriber).colorizeLogging;
+  }
+
+  set colorizeLogging(value: boolean) {
+    (this.constructor as typeof LogSubscriber).colorizeLogging = value;
+  }
+
+  silenced(event: Event | string): boolean {
+    const l = this.logger;
+    if (!l) return true;
+    const name = typeof event === "string" ? event : event.name;
+    const check = this.eventLevels.get(name);
+    return check ? check(l) : false;
+  }
+
+  override call(event: Event): void {
+    if (!this.logger) return;
+    if (this.silenced(event)) return;
+    try {
+      super.call(event);
+    } catch (e: any) {
+      this._logException(event.name, e);
+    }
+  }
+
+  override publishEvent(event: Event): void {
+    if (!this.logger) return;
+    if (this.silenced(event)) return;
+    try {
+      super.publishEvent(event);
+    } catch (e: any) {
+      this._logException(event.name, e);
+    }
+  }
+
+  // -- Logging helpers (instance, proxied to logger) -----------------------
+
+  protected _info(message?: string | (() => string)): boolean {
+    const l = this.logger;
+    if (!l) return false;
+    return l.info(message);
+  }
+
+  protected _debug(message?: string | (() => string)): boolean {
+    const l = this.logger;
+    if (!l) return false;
+    return l.debug(message);
+  }
+
+  protected _warn(message?: string | (() => string)): boolean {
+    const l = this.logger;
+    if (!l) return false;
+    return l.warn(message);
+  }
+
+  protected _error(message?: string | (() => string)): boolean {
+    const l = this.logger;
+    if (!l) return false;
+    return l.error(message);
+  }
+
+  protected _fatal(message?: string | (() => string)): boolean {
+    const l = this.logger;
+    if (!l) return false;
+    return l.fatal(message);
+  }
+
+  protected _unknown(message?: string | (() => string)): boolean {
+    const l = this.logger;
+    if (!l) return false;
+    return l.unknown(message);
+  }
+
+  // -- Color helper --------------------------------------------------------
+
+  protected color(
+    text: string,
+    colorValue: string | symbol,
+    modeOptions: Record<string, boolean> = {},
+  ): string {
+    if (!this.colorizeLogging) return text;
+    let c: string;
+    if (typeof colorValue === "string" && colorValue.startsWith("\x1b")) {
+      c = colorValue;
+    } else {
+      const name = String(colorValue).toUpperCase();
+      c = (this.constructor as any)[name] ?? "";
+    }
+    const mode = this._modeFrom(modeOptions);
+    const clear = `\x1b[${LogSubscriber.MODES.clear}m`;
+    return `${mode}${c}${text}${clear}`;
+  }
+
+  private _modeFrom(options: Record<string, boolean>): string {
+    const modes: number[] = [];
+    for (const [key, val] of Object.entries(options)) {
+      if (val && LogSubscriber.MODES[key] !== undefined) {
+        modes.push(LogSubscriber.MODES[key]);
+      }
+    }
+    if (modes.length === 0) return "";
+    return `\x1b[${modes.join(";")}m`;
+  }
+
+  private _logException(name: string, e: Error): void {
+    const l = this.logger;
+    if (l) {
+      l.error(
+        `Could not log ${JSON.stringify(name)} event. ${e.constructor.name}: ${e.message} ${e.stack}`,
+      );
+    }
+  }
+}

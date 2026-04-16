@@ -963,15 +963,18 @@ describe("DatabaseTasks dumpSchema respects schemaDump gating", () => {
     await adapter.executeMutation("CREATE TABLE items (id INTEGER PRIMARY KEY)");
     DatabaseTasks.setAdapter(adapter);
     DatabaseTasks.schemaFormat = "ts";
+    const originalDbDir = DatabaseTasks.dbDir;
+    DatabaseTasks.dbDir = path.join(tmp, "db");
     try {
       const config = new HashConfig("test", "primary", {
         adapter: "sqlite3",
         schemaDump: false,
       });
       await DatabaseTasks.dumpSchema(config);
-      // Schema file should NOT have been created.
+      // Schema file should NOT have been created — gated by schemaDump: false.
       expect(fs.existsSync(path.join(tmp, "db", "schema.ts"))).toBe(false);
     } finally {
+      DatabaseTasks.dbDir = originalDbDir;
       await adapter.close();
       fs.rmSync(tmp, { recursive: true, force: true });
     }

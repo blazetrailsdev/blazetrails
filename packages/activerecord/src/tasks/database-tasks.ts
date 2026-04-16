@@ -619,11 +619,15 @@ export class DatabaseTasks {
 
   static async dumpSchema(config: DatabaseConfig): Promise<void> {
     // Rails: `return unless db_config.schema_dump` — lets per-config
-    // `schemaDump: false` suppress dumping (e.g. for read replicas
-    // or external DBs that shouldn't produce a schema file).
-    const cfgWithDump = config as unknown as { schemaDump?: (...args: unknown[]) => unknown };
-    if (typeof cfgWithDump.schemaDump === "function" && cfgWithDump.schemaDump() === false) {
-      return;
+    // `schemaDump: false` (or null) suppress dumping. HashConfig.schemaDump()
+    // returns `string | false | null`; false AND null both mean "don't dump".
+    // Pass the current format so the check matches what's being dumped.
+    const cfgWithDump = config as unknown as {
+      schemaDump?: (format?: string) => string | false | null;
+    };
+    if (typeof cfgWithDump.schemaDump === "function") {
+      const result = cfgWithDump.schemaDump(this.schemaFormat);
+      if (result === false || result === null) return;
     }
     const filename = this.schemaDumpPath(config);
     if (this.schemaFormat === "sql") {
@@ -712,6 +716,10 @@ export class DatabaseTasks {
   private static async _stampSchemaSha1(config: DatabaseConfig, filename: string): Promise<void> {
     const adapter = this._adapterInstance;
     if (!adapter) return;
+    // Respect useMetadataTable opt-out — if the config says don't use
+    // the metadata table, don't create one just to stamp the SHA1.
+    const useMetadata = (config as unknown as { useMetadataTable?: boolean }).useMetadataTable;
+    if (useMetadata === false) return;
     try {
       const { InternalMetadata } = await import("../internal-metadata.js");
       const metadata = new InternalMetadata(adapter);

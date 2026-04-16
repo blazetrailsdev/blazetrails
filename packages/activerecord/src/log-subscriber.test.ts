@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 
-import { LogSubscriber } from "./log-subscriber.js";
+import { LogSubscriber, setVerboseQueryLogs } from "./log-subscriber.js";
 import {
   LogSubscriber as BaseLogSubscriber,
   NotificationEvent as Event,
@@ -72,9 +72,20 @@ class MockLogger extends Logger {
   }
 }
 
+/**
+ * Test-only subclass that captures debug output, mirroring Rails'
+ * TestDebugLogSubscriber in the test file (not production code).
+ */
 class TestDebugLogSubscriber extends LogSubscriber {
+  debugs: string[] = [];
+
   override get logger(): Logger | null {
     return (this.constructor as typeof LogSubscriber).logger;
+  }
+
+  protected override _debugSql(message: string): boolean {
+    this.debugs.push(message);
+    return super._debugSql(message);
   }
 }
 
@@ -92,7 +103,7 @@ describe("LogSubscriberTest", () => {
 
   afterEach(() => {
     LogSubscriber.logger = null;
-    LogSubscriber.verboseQueryLogs = false;
+    setVerboseQueryLogs(false);
   });
 
   it("schema statements are ignored", () => {
@@ -262,14 +273,14 @@ describe("LogSubscriberTest", () => {
   it.skip("exists query logging", () => {});
 
   it("verbose query logs", () => {
-    LogSubscriber.verboseQueryLogs = true;
+    setVerboseQueryLogs(true);
     subscriber.sql(makeEvent({ sql: "hi mom!" }));
     expect(mockLogger.logged("debug").length).toBe(2);
     expect(mockLogger.logged("debug")[mockLogger.logged("debug").length - 1]).toMatch(/↳/);
   });
 
   it("verbose query with ignored callstack", () => {
-    LogSubscriber.verboseQueryLogs = true;
+    setVerboseQueryLogs(true);
     const original = (subscriber as any)._querySourceLocation;
     (subscriber as any)._querySourceLocation = () => null;
     subscriber.sql(makeEvent({ sql: "hi mom!" }));
@@ -367,11 +378,8 @@ describe("LogSubscriberTest", () => {
 function makeEvent(payload: Record<string, unknown>, durationMs = 0.9): Event {
   const start = new Date();
   const event = new Event("sql.active_record", start, payload);
-  // Event.duration is computed as end - start in ms.
-  // We need sub-millisecond precision, so we patch the end time directly.
   const end = new Date(start.getTime());
   event.finish(end);
-  // Override duration getter to return exact value
   Object.defineProperty(event, "duration", { get: () => durationMs, configurable: true });
   return event;
 }

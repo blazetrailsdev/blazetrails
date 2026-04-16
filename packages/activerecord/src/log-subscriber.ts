@@ -4,26 +4,35 @@ import {
   type Logger,
 } from "@blazetrails/activesupport";
 
+let _baseResolver: (() => any) | null = null;
+
+/**
+ * Set the resolver for ActiveRecord::Base, avoiding circular imports.
+ * Called from index.ts during module initialization.
+ */
+export function setBaseResolver(resolver: () => any): void {
+  _baseResolver = resolver;
+}
+
+function getBase(): any {
+  return _baseResolver?.() ?? null;
+}
+
+/** Module-level config mirroring `ActiveRecord.verbose_query_logs`. */
+let _verboseQueryLogs = false;
+export function getVerboseQueryLogs(): boolean {
+  return _verboseQueryLogs;
+}
+export function setVerboseQueryLogs(value: boolean): void {
+  _verboseQueryLogs = value;
+}
+
 /**
  * ActiveRecord::LogSubscriber — logs SQL queries with coloring, timing,
  * and bind parameter display. Mirrors Rails' ActiveRecord::LogSubscriber.
  */
 export class LogSubscriber extends BaseLogSubscriber {
   static readonly IGNORE_PAYLOAD_NAMES = ["SCHEMA", "EXPLAIN"];
-
-  debugs: string[] = [];
-
-  private static _verboseQueryLogs = false;
-
-  static get verboseQueryLogs(): boolean {
-    return this._verboseQueryLogs;
-  }
-
-  static set verboseQueryLogs(value: boolean) {
-    this._verboseQueryLogs = value;
-  }
-
-  // -- Event handlers ------------------------------------------------------
 
   strictLoadingViolation(event: Event): void {
     this._debug(() => {
@@ -61,15 +70,7 @@ export class LogSubscriber extends BaseLogSubscriber {
 
       for (let i = 0; i < (payload.binds as any[]).length; i++) {
         const attr = (payload.binds as any[])[i];
-        let attributeName: string | null = null;
-
-        if (attr && typeof attr.name === "string") {
-          attributeName = attr.name;
-        } else if (Array.isArray(attr) && attr[i] && typeof attr[i].name === "string") {
-          attributeName = attr[i].name;
-        }
-
-        const filteredParams = this._filter(attributeName, castedParams?.[i]);
+        const filteredParams = this._filter(this._extractAttributeName(attr, i), castedParams?.[i]);
         bindPairs.push(this._renderBind(attr, filteredParams));
       }
 
@@ -82,18 +83,23 @@ export class LogSubscriber extends BaseLogSubscriber {
       : sql;
 
     const message = `  ${colorizedName}  ${colorizedSql}${binds ?? ""}`;
-    this._doDebug(message);
+    this._debugSql(message);
+  }
+
+  override get logger(): Logger | null {
+    const B = getBase();
+    if (B?.logger) return B.logger as unknown as Logger;
+    return (this.constructor as typeof LogSubscriber).logger;
   }
 
   // -- Private helpers -----------------------------------------------------
 
-  private _doDebug(message: string): boolean {
-    this.debugs.push(message);
+  protected _debugSql(message: string): boolean {
     const l = this.logger;
     if (!l) return false;
     const result = l.debug(message);
 
-    if ((this.constructor as typeof LogSubscriber).verboseQueryLogs) {
+    if (_verboseQueryLogs) {
       this._logQuerySource();
     }
 
@@ -132,6 +138,12 @@ export class LogSubscriber extends BaseLogSubscriber {
   private _typeCastedBinds(castedBinds: unknown): any[] {
     if (typeof castedBinds === "function") return castedBinds();
     return (castedBinds as any[]) ?? [];
+  }
+
+  private _extractAttributeName(attr: any, _i: number): string | null {
+    if (attr && typeof attr.name === "string") return attr.name;
+    if (Array.isArray(attr) && attr[0] && typeof attr[0].name === "string") return attr[0].name;
+    return null;
   }
 
   private _renderBind(attr: any, value: unknown): [string | null, unknown] {
@@ -177,11 +189,18 @@ export class LogSubscriber extends BaseLogSubscriber {
     return BaseLogSubscriber.MAGENTA;
   }
 
-  override get logger(): Logger | null {
-    return (this.constructor as typeof LogSubscriber).logger;
-  }
-
-  private _filter(_name: string | null, value: unknown): unknown {
+  private _filter(name: string | null, value: unknown): unknown {
+    const B = getBase();
+    if (B && typeof B.inspectionFilter === "function") {
+      const filter = B.inspectionFilter();
+      if (filter && typeof filter.filterParam === "function") {
+        return filter.filterParam(name, value);
+      }
+    }
     return value;
   }
 }
+
+// Register log-level gates matching Rails' class-body `subscribe_log_level` calls.
+LogSubscriber.subscribeLogLevel("sql", "debug");
+LogSubscriber.subscribeLogLevel("strict_loading_violation", "debug");

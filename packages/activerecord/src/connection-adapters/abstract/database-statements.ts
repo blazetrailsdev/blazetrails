@@ -5,6 +5,7 @@
  */
 
 import { sql as arelSql, Nodes, Visitors } from "@blazetrails/arel";
+import { Notifications } from "@blazetrails/activesupport";
 import { TransactionIsolationError } from "../../errors.js";
 import { quote, quoteTableName, quoteColumnName } from "./quoting.js";
 import { TransactionManager } from "./transaction.js";
@@ -900,6 +901,34 @@ export function highPrecisionCurrentTimestamp(): Nodes.SqlLiteral {
 }
 
 /**
+ * Wraps query execution in a `sql.active_record` instrumentation event,
+ * mirroring Rails' `AbstractAdapter#log`.
+ */
+async function logSql<T>(
+  host: DatabaseStatementsHost,
+  sql: string,
+  name: string,
+  binds: unknown[] | undefined,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const payload: Record<string, unknown> = {
+    sql,
+    name,
+    binds: binds ?? [],
+    type_casted_binds: binds ?? [],
+    connection: host,
+    row_count: 0,
+  };
+  return Notifications.instrumentAsync("sql.active_record", payload, async () => {
+    const result = await fn();
+    if (result instanceof Result) {
+      payload.row_count = result.length;
+    }
+    return result;
+  }) as Promise<T>;
+}
+
+/**
  * Executes a raw query and returns an ActiveRecord::Result.
  * Delegates to rawExecute + castResult.
  *
@@ -914,12 +943,15 @@ export async function rawExecQuery(
   if (!this.rawExecute) {
     throw new Error("rawExecQuery requires rawExecute on the adapter");
   }
-  // Materialize lazy transactions before executing SQL, matching Rails'
-  // with_raw_connection which calls materialize_transactions.
-  const tm = (this as any)._transactionManager as TransactionManager | undefined;
-  if (tm) await tm.materializeTransactions();
-  const rawResult = await this.rawExecute(sql, name ?? "SQL", binds);
-  return this.castResult ? this.castResult(rawResult) : normalizeResult(rawResult);
+  const sqlName = name ?? "SQL";
+  return logSql(this, sql, sqlName, binds, async () => {
+    // Materialize lazy transactions before executing SQL, matching Rails'
+    // with_raw_connection which calls materialize_transactions.
+    const tm = (this as any)._transactionManager as TransactionManager | undefined;
+    if (tm) await tm.materializeTransactions();
+    const rawResult = await this.rawExecute!(sql, sqlName, binds);
+    return this.castResult ? this.castResult(rawResult) : normalizeResult(rawResult);
+  });
 }
 
 /**
@@ -934,22 +966,25 @@ export async function internalExecQuery(
   name?: string | null,
   binds?: unknown[],
 ): Promise<Result> {
-  // Materialize lazy transactions before executing SQL
-  const tm = (this as any)._transactionManager as TransactionManager | undefined;
-  if (tm) await tm.materializeTransactions();
-  if (this?.internalExecute) {
-    const rawResult = await this.internalExecute(sql, name ?? "SQL", binds);
-    return this.castResult ? this.castResult(rawResult) : normalizeResult(rawResult);
-  }
-  if (binds && binds.length > 0) {
-    throw new Error(
-      "internalExecQuery requires internalExecute on the adapter when binds are provided",
-    );
-  }
-  // Fallback: delegate through this.execute only when there are no binds
-  const doExecute = this?.execute ?? execute;
-  const result = await doExecute(sql);
-  return normalizeResult(result);
+  const sqlName = name ?? "SQL";
+  return logSql(this, sql, sqlName, binds, async () => {
+    // Materialize lazy transactions before executing SQL
+    const tm = (this as any)._transactionManager as TransactionManager | undefined;
+    if (tm) await tm.materializeTransactions();
+    if (this?.internalExecute) {
+      const rawResult = await this.internalExecute(sql, sqlName, binds);
+      return this.castResult ? this.castResult(rawResult) : normalizeResult(rawResult);
+    }
+    if (binds && binds.length > 0) {
+      throw new Error(
+        "internalExecQuery requires internalExecute on the adapter when binds are provided",
+      );
+    }
+    // Fallback: delegate through this.execute only when there are no binds
+    const doExecute = this?.execute ?? execute;
+    const result = await doExecute(sql);
+    return normalizeResult(result);
+  });
 }
 
 // --- Private helpers ---

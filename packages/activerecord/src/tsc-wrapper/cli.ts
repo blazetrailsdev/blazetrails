@@ -50,19 +50,29 @@ function handleBuildMode(args: string[]): void {
   const buildIdx = args.findIndex((a) => a === "--build" || a === "-b");
   if (buildIdx === -1) return;
 
-  // Everything after --build that isn't a known solution-builder
-  // flag is treated as a project path. tsc accepts multiple.
+  // Project paths are positional args AFTER --build. Flags that
+  // consume a value must skip that value so we don't treat `false`
+  // (from `--pretty false`) or similar as a project path.
+  const buildArgs = args.slice(buildIdx + 1);
   const verbose = args.includes("--verbose");
   const clean = args.includes("--clean");
-  const rest = args.filter((a, i) => {
-    if (i === buildIdx) return false;
-    if (a === "--verbose" || a === "--clean") return false;
-    return !a.startsWith("-");
-  });
+  const flagsWithValues = new Set(["--pretty"]);
+  const rest: string[] = [];
+  for (let i = 0; i < buildArgs.length; i++) {
+    const arg = buildArgs[i]!;
+    if (arg === "--verbose" || arg === "--clean") continue;
+    if (arg.startsWith("--pretty=")) continue;
+    if (flagsWithValues.has(arg)) {
+      if (i + 1 < buildArgs.length && !buildArgs[i + 1]!.startsWith("-")) i++;
+      continue;
+    }
+    if (arg.startsWith("-")) continue;
+    rest.push(arg);
+  }
   const rootConfigs = rest.length > 0 ? rest.map((p) => path.resolve(p)) : [process.cwd()];
 
   const fh = formatHost();
-  const pretty = ts.sys.writeOutputIsTTY?.() ?? false;
+  const pretty = parsePretty(args, {});
   let diagnostics = 0;
   const builder = createTrailsSolutionBuilder(rootConfigs, {
     verbose,

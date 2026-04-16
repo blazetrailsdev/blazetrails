@@ -118,8 +118,13 @@ export class DatabaseTasks {
    * - `"schema_search_path"` (default): use config's `schemaSearchPath`
    * - `"all"`: dump all schemas (no `--schema=` filter)
    * - Any other string: treat as a comma-separated list of schema names
+   *
+   * Typed as `DumpSchemasMode` — a union of the two known modes plus
+   * `string & {}` for custom comma-separated lists. A typo like
+   * "schema_serach_path" still compiles (it's a valid string) but
+   * IDE autocompletion surfaces the two recognized modes.
    */
-  static dumpSchemas: string = "schema_search_path";
+  static dumpSchemas: "schema_search_path" | "all" | (string & {}) = "schema_search_path";
 
   private static _registeredTasks: Array<{
     pattern: RegExp | string;

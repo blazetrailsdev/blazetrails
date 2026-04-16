@@ -152,7 +152,8 @@ export class PostgreSQLDatabaseTasks {
     // 2. SET search_path footer appended to the dump file
     // These are separated so dumpSchemas="all" still appends the footer.
     // Trails uses camelCase config keys throughout; no snake_case fallback.
-    const configuredSearchPath = this.configurationHash.schemaSearchPath as string | undefined;
+    const rawSearchPath = this.configurationHash.schemaSearchPath;
+    const configuredSearchPath = typeof rawSearchPath === "string" ? rawSearchPath : undefined;
 
     const dumpSchemas = DatabaseTasks.dumpSchemas;
     let schemaFilter: string | undefined;

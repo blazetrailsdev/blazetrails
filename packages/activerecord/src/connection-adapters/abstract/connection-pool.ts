@@ -793,7 +793,14 @@ export class ConnectionPool implements ReapablePool {
           // so adapter-side consumers (AbstractAdapter.schemaCache,
           // TypeCaster::Connection) see the preloaded data.
           const loaded = this.schemaReflection.loadedCache;
-          if (loaded && !this.poolConfig.schemaCache) {
+          if (loaded) {
+            // Always assign: poolConfig.schemaCache may have been
+            // populated with an empty SchemaCache during the in-flight
+            // load (e.g., AbstractAdapter.schemaCache accessed
+            // synchronously by TypeCaster::Connection before the
+            // promise resolved). Overwriting that empty cache with the
+            // fully-populated one is the correct outcome — the preloaded
+            // data should win.
             this.poolConfig.schemaCache = loaded;
           }
         })

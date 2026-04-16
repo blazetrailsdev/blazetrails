@@ -3,7 +3,7 @@
  * Mirrors: activerecord/test/cases/migration_test.rb
  *          activerecord/test/cases/invertible_migration_test.rb
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import { Base, MigrationContext, MigrationRunner, Migrator } from "./index.js";
 import { SchemaMigration } from "./schema-migration.js";
 import type { MigrationProxy } from "./migration.js";
@@ -2146,10 +2146,19 @@ describe("Migrator DDL transaction wrapping", () => {
   // (which auto-detects PG/MySQL in CI). These tests exercise the
   // Migrator's wrapping logic, not adapter-specific behavior, and must
   // not depend on an external DB connection.
+  const openAdapters: Array<{ close?: () => void | Promise<void> }> = [];
   async function makeSqliteBase() {
     const { SQLite3Adapter } = await import("./connection-adapters/sqlite3-adapter.js");
-    return new SQLite3Adapter(":memory:");
+    const adapter = new SQLite3Adapter(":memory:");
+    openAdapters.push(adapter);
+    return adapter;
   }
+  afterAll(async () => {
+    for (const a of openAdapters) {
+      if (typeof a.close === "function") await a.close();
+    }
+    openAdapters.length = 0;
+  });
 
   function makeDdlAdapter(calls: string[], opts: { supportsDdl?: boolean } = {}, base: any = null) {
     const target = base ?? createTestAdapter();

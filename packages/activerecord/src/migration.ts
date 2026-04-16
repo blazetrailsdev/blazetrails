@@ -1786,8 +1786,7 @@ export class Migrator {
    * `!migration.disable_ddl_transaction && connection.supports_ddl_transactions?`
    */
   private _useTransaction(migration: MigrationLike): boolean {
-    const disableDdl = (migration as { disableDdlTransaction?: boolean }).disableDdlTransaction;
-    if (disableDdl) return false;
+    if (migration.disableDdlTransaction) return false;
     // Check adapter support. SQLite returns true (DDL is transactional
     // in SQLite), PG returns true, MySQL returns false. The abstract
     // adapter defaults to false.

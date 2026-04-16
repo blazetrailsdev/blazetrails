@@ -137,21 +137,20 @@ export class SchemaMigration {
    * (non-numeric) versions throw.
    */
   async assumeMigratedUptoVersion(
-    version: string,
-    migrationVersions: string[] = [],
+    version: number | string,
+    migrationVersions: (number | string)[] = [],
   ): Promise<void> {
     // Validate + normalize ALL inputs before any writes so a bad
     // version or duplicate doesn't leave partial state.
-    // Reject signed/non-digit values that BigInt would accept
-    // (e.g. "-1", "+1") — migration versions must be non-negative
-    // digit strings, matching Migrator._validateTargetVersion.
-    if (!/^\d+$/.test(version)) {
-      throw new Error(`Invalid migration version: ${version}`);
+    const versionStr = String(version);
+    const versionsStr = migrationVersions.map(String);
+    if (!/^\d+$/.test(versionStr)) {
+      throw new Error(`Invalid migration version: ${versionStr}`);
     }
-    const normalized = String(BigInt(version));
+    const normalized = String(BigInt(versionStr));
     const versionNum = BigInt(normalized);
 
-    const candidates = migrationVersions.map((v) => {
+    const candidates = versionsStr.map((v) => {
       if (!/^\d+$/.test(v)) {
         throw new Error(`Invalid migration version: ${v}`);
       }

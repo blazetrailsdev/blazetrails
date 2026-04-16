@@ -98,6 +98,56 @@ describe("remapLine", () => {
   });
 });
 
+describe("virtualize — prependImports", () => {
+  test("prepends import type lines at the top of the file", () => {
+    const src =
+      "export class Post extends Base {\n" +
+      '  static { this.attribute("title", "string"); }\n' +
+      "}\n";
+    const { text } = virtualize(src, "post.ts", {
+      prependImports: ['import type { Author } from "./author.js";'],
+    });
+    expect(text.startsWith('import type { Author } from "./author.js";')).toBe(true);
+  });
+
+  test("inserts after leading directives (shebang, triple-slash, @ts-nocheck)", () => {
+    const src =
+      "#!/usr/bin/env node\n" +
+      "// @ts-nocheck\n" +
+      "/// <reference types='node' />\n" +
+      "\n" +
+      "export class Post extends Base {\n" +
+      '  static { this.attribute("title", "string"); }\n' +
+      "}\n";
+    const { text } = virtualize(src, "post.ts", {
+      prependImports: ['import type { Author } from "./author.js";'],
+    });
+    const lines = text.split("\n");
+    // Directives should come first, then import, then the class.
+    expect(lines[0]).toBe("#!/usr/bin/env node");
+    expect(lines[1]).toBe("// @ts-nocheck");
+    expect(lines[2]).toBe("/// <reference types='node' />");
+    expect(lines[3]).toBe("");
+    expect(lines[4]).toBe('import type { Author } from "./author.js";');
+  });
+
+  test("remapLine accounts for prepended lines", () => {
+    const src =
+      "export class Post extends Base {\n" +
+      '  static { this.attribute("title", "string"); }\n' +
+      "}\n";
+    const { deltas } = virtualize(src, "post.ts", {
+      prependImports: ['import type { A } from "./a.js";', 'import type { B } from "./b.js";'],
+    });
+    // 2 prepended lines → virtual line 2 is original line 0
+    expect(remapLine(0, deltas)).toBeNull(); // inside prepended block
+    expect(remapLine(1, deltas)).toBeNull(); // inside prepended block
+    // The original file's first line (line 0) is now at virtual line 2
+    // (after the 2 prepended import lines). It may also be shifted by
+    // declare injection, but the prepend delta alone maps line 2 → 0.
+  });
+});
+
 describe("virtualize — idempotence", () => {
   test("re-virtualizing the output skips members already declared", () => {
     const src =

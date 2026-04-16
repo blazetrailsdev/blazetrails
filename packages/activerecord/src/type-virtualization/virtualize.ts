@@ -27,7 +27,9 @@ export interface VirtualizeResult {
   deltas: LineDelta[];
 }
 
-export type VirtualizeOptions = WalkOptions;
+export interface VirtualizeOptions extends WalkOptions {
+  prependImports?: readonly string[];
+}
 
 export function virtualize(
   originalText: string,
@@ -71,7 +73,53 @@ export function virtualize(
     .sort((a, b) => a.originalLine - b.originalLine)
     .map((e) => ({ insertedAtLine: e.originalLine, lineCount: e.lineCount }));
 
+  // Insert auto-imported `import type` lines AFTER any leading
+  // directives (shebangs, triple-slash refs, @ts-nocheck) that must
+  // stay at the top of the file. Erased at runtime (type-only).
+  const prependImports = options.prependImports;
+  if (prependImports && prependImports.length > 0) {
+    const importBlock = prependImports.join("\n") + "\n";
+    const insertPos = findDirectiveEnd(text);
+    text = text.slice(0, insertPos) + importBlock + text.slice(insertPos);
+    // Shift all existing deltas down by the number of prepended lines.
+    const prependedLines = prependImports.length;
+    for (const d of deltas) {
+      d.insertedAtLine += prependedLines;
+    }
+    // Use insertedAtLine: -1 so remapLine correctly treats virtual
+    // lines 0..prependedLines-1 as "inside the injected range" (null)
+    // and virtual line prependedLines as original line 0.
+    deltas.unshift({ insertedAtLine: -1, lineCount: prependedLines });
+  }
+
   return { text, deltas };
+}
+
+/**
+ * Find the character offset AFTER any leading directives that must
+ * stay at the top of the file: shebangs (`#!`), triple-slash refs
+ * (`/// <reference ...>`), and TS comment directives (`// @ts-nocheck`
+ * etc.). Auto-imports are inserted at this offset so they don't break
+ * file-leading semantics.
+ */
+function findDirectiveEnd(text: string): number {
+  let pos = 0;
+  const lines = text.split("\n");
+  for (const line of lines) {
+    const trimmed = line.trimStart();
+    if (
+      trimmed.startsWith("#!") ||
+      trimmed.startsWith("/// <") ||
+      trimmed.startsWith("// @ts-") ||
+      trimmed.startsWith("/* @ts-") ||
+      trimmed === ""
+    ) {
+      pos += line.length + 1; // +1 for \n
+    } else {
+      break;
+    }
+  }
+  return pos;
 }
 
 /**

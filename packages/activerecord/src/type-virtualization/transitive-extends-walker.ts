@@ -14,12 +14,19 @@ import ts from "typescript";
  *
  * Runs once per program — the caller caches the result.
  */
+export interface WalkerResult {
+  baseNames: Set<string>;
+  /** className → absolute source file path */
+  modelRegistry: Map<string, string>;
+}
+
 export function collectBaseDescendants(
   program: ts.Program,
   rootNames: ReadonlySet<string> = new Set(["Base"]),
-): Set<string> {
+): WalkerResult {
   const checker = program.getTypeChecker();
-  const result = new Set<string>(rootNames);
+  const baseNames = new Set<string>(rootNames);
+  const modelRegistry = new Map<string, string>();
   const memo = new Map<ts.Symbol, boolean>();
 
   for (const sf of program.getSourceFiles()) {
@@ -27,12 +34,19 @@ export function collectBaseDescendants(
     ts.forEachChild(sf, (node) => {
       if (ts.isClassDeclaration(node) && node.name) {
         const sym = checker.getSymbolAtLocation(node.name);
-        if (sym) walkClass(sym, checker, rootNames, result, memo);
+        if (sym && walkClass(sym, checker, rootNames, baseNames, memo)) {
+          // If there's a name collision, pick the closest file by
+          // path length (heuristic for "least nested").
+          const existing = modelRegistry.get(sym.name);
+          if (!existing || sf.fileName.length < existing.length) {
+            modelRegistry.set(sym.name, sf.fileName);
+          }
+        }
       }
     });
   }
 
-  return result;
+  return { baseNames, modelRegistry };
 }
 
 function walkClass(

@@ -1782,6 +1782,60 @@ export class CreateDogs extends Migration {
     }
   });
 
+  it("db migrate respects migrationsPaths config override", async () => {
+    // A named DB can set migrationsPaths to override the default
+    // db/migrations_<name> convention. Verify the CLI discovers
+    // migrations from the configured path instead.
+    const primaryDb = path.join(tmpDir, "mp-primary.sqlite3");
+    const animalsDb = path.join(tmpDir, "mp-animals.sqlite3");
+    const customDir = "custom/animal_migrations";
+    fs.mkdirSync(path.join(tmpDir, customDir), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, "config", "database.ts"),
+      `export default {
+  development: {
+    primary: { adapter: "sqlite3", database: ${JSON.stringify(primaryDb)} },
+    animals: { adapter: "sqlite3", database: ${JSON.stringify(animalsDb)}, migrationsPaths: ${JSON.stringify(customDir)} },
+  },
+  test: {
+    primary: { adapter: "sqlite3", database: ${JSON.stringify(primaryDb)} },
+    animals: { adapter: "sqlite3", database: ${JSON.stringify(animalsDb)}, migrationsPaths: ${JSON.stringify(customDir)} },
+  },
+};`,
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, "db", "migrations", "20260101000000-create-users.ts"),
+      `import { Migration } from "@blazetrails/activerecord";
+export class CreateUsers extends Migration {
+  async up() { await this.createTable("users", (t) => { t.string("name"); }); }
+  async down() { await this.dropTable("users"); }
+}`,
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, customDir, "20260101000001-create-cats.ts"),
+      `import { Migration } from "@blazetrails/activerecord";
+export class CreateCats extends Migration {
+  async up() { await this.createTable("cats", (t) => { t.string("breed"); }); }
+  async down() { await this.dropTable("cats"); }
+}`,
+    );
+
+    await runDb(["create"]);
+    await runDb(["migrate", "--database=animals"]);
+
+    const { SQLite3Adapter } =
+      await import("@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js");
+    const a = new SQLite3Adapter(animalsDb);
+    try {
+      const cats = await a.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='cats'",
+      );
+      expect(cats).toHaveLength(1);
+    } finally {
+      await a.close();
+    }
+  });
+
   it("db schema:cache:dump fans out across every multi-DB config", async () => {
     // Rails multi-DB: each named sub-config gets its own
     // `db/<name>_schema_cache.json`. HashConfig.defaultSchemaCachePath

@@ -122,6 +122,20 @@ interface DatabaseOpts {
 }
 
 /**
+ * Presence-based validation for --database. Rejects empty strings so
+ * `--database=""` doesn't silently fan out across all DBs (which
+ * would be destructive for `drop`).
+ */
+function validateDatabaseFlag(opts: DatabaseOpts): string | undefined {
+  if (opts.database === undefined) return undefined;
+  const trimmed = opts.database.trim();
+  if (trimmed.length === 0) {
+    throw new Error("--database requires a non-empty name (e.g. --database=primary).");
+  }
+  return trimmed;
+}
+
+/**
  * Iterate every named database config in the current env, optionally
  * filtered to a single name via `--database`. Mirrors Rails'
  * `DatabaseTasks.for_each(databases) { |name| ... }` which generates
@@ -145,12 +159,13 @@ async function forEachDatabase(
   }) => Promise<void>,
 ): Promise<void> {
   const envName = resolveEnv();
+  const dbName = validateDatabaseFlag(opts);
   const allConfigs = await loadAllDatabaseConfigs(envName);
-  const targets = opts.database ? allConfigs.filter((c) => c.name === opts.database) : allConfigs;
-  if (targets.length === 0 && opts.database) {
+  const targets = dbName ? allConfigs.filter((c) => c.name === dbName) : allConfigs;
+  if (targets.length === 0 && dbName) {
     const available = allConfigs.map((c) => c.name).join(", ");
     throw new Error(
-      `No database configuration named "${opts.database}" in environment "${envName}". ` +
+      `No database configuration named "${dbName}" in environment "${envName}". ` +
         `Available: ${available || "(none)"}`,
     );
   }
@@ -177,12 +192,13 @@ async function forEachDatabaseConfig(
   fn: (ctx: { raw: RawConfig; config: HashConfig; name: string; prefix: string }) => Promise<void>,
 ): Promise<void> {
   const envName = resolveEnv();
+  const dbName = validateDatabaseFlag(opts);
   const allConfigs = await loadAllDatabaseConfigs(envName);
-  const targets = opts.database ? allConfigs.filter((c) => c.name === opts.database) : allConfigs;
-  if (targets.length === 0 && opts.database) {
+  const targets = dbName ? allConfigs.filter((c) => c.name === dbName) : allConfigs;
+  if (targets.length === 0 && dbName) {
     const available = allConfigs.map((c) => c.name).join(", ");
     throw new Error(
-      `No database configuration named "${opts.database}" in environment "${envName}". ` +
+      `No database configuration named "${dbName}" in environment "${envName}". ` +
         `Available: ${available || "(none)"}`,
     );
   }

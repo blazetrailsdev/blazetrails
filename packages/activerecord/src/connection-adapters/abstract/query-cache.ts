@@ -302,7 +302,7 @@ export function selectAll(
           cached: true,
           row_count: Array.isArray(cached) ? cached.length : 0,
         });
-        return cached;
+        return Array.isArray(cached) ? cached.map((r: any) => ({ ...r })) : cached;
       }
 
       // Cache miss — execute and store

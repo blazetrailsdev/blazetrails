@@ -215,7 +215,7 @@ export class QueryCacheAdapter implements DatabaseAdapter {
       // lookup_sql_cache / cache_sql cache-hit notifications.
       Notifications.instrument("sql.active_record", {
         sql,
-        name: "CACHE",
+        name: "SQL",
         binds: binds ?? [],
         type_casted_binds: binds ?? [],
         connection: this,

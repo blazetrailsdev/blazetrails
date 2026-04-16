@@ -28,7 +28,7 @@ describe("SQLite3Adapter schema introspection", () => {
     expect(await adapter.primaryKey("widgets")).toBe("id");
   });
 
-  it("primaryKey returns an array for composite primary keys", async () => {
+  it("primaryKey returns null for composite primary keys", async () => {
     await adapter.executeMutation(
       "CREATE TABLE memberships (user_id INTEGER, group_id INTEGER, PRIMARY KEY (user_id, group_id))",
     );

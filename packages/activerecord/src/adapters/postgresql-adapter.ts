@@ -508,7 +508,7 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
     // composite PKs come back in declaration order, not the
     // non-deterministic order pg_attribute happens to yield rows.
     // `array_position(i.indkey, a.attnum)` gives each column's
-    // 0-based index inside the index definition.
+    // 1-based position inside the index definition.
     const rows = await this.execute(
       `SELECT a.attname
        FROM pg_index i

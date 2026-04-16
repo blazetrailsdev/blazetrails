@@ -490,7 +490,7 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
     return idxs.some((idx) => idx.name === indexName);
   }
 
-  async primaryKey(tableName: string): Promise<string | null> {
+  async primaryKey(tableName: string): Promise<string | string[] | null> {
     const { schema, table } = this.parseSchemaQualifiedName(tableName);
 
     let tableCondition: string;
@@ -516,7 +516,8 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
     );
 
     if (rows.length === 0) return null;
-    return rows[0].attname as string;
+    if (rows.length === 1) return rows[0].attname as string;
+    return rows.map((r) => r.attname as string);
   }
 
   async pkAndSequenceFor(

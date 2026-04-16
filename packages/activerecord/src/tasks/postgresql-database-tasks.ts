@@ -146,8 +146,8 @@ export class PostgreSQLDatabaseTasks {
     // Rails: reads ActiveRecord.dump_schemas to decide which PG schemas
     // pg_dump includes. Trails equivalent: DatabaseTasks.dumpSchemas.
     //
-    // The configured search_path (from config.schemaSearchPath or
-    // config.schema_search_path) is used for TWO purposes:
+    // The configured search_path (from config.schemaSearchPath) is
+    // used for TWO purposes:
     // 1. --schema= filter args for pg_dump (when dumpSchemas isn't "all")
     // 2. SET search_path footer appended to the dump file
     // These are separated so dumpSchemas="all" still appends the footer.
@@ -202,7 +202,10 @@ export class PostgreSQLDatabaseTasks {
     // configured search_path (not the filtered schema list) so
     // dumpSchemas="all" still appends when a search_path is set.
     if (configuredSearchPath && configuredSearchPath.trim().length > 0) {
-      getFs().appendFileSync(filename, `SET search_path TO ${configuredSearchPath.trim()};\n\n`);
+      const sanitized = configuredSearchPath.trim().replace(/[;\n\r]/g, "");
+      if (sanitized.length > 0) {
+        getFs().appendFileSync(filename, `SET search_path TO ${sanitized};\n\n`);
+      }
     }
   }
 

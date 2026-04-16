@@ -107,21 +107,14 @@ function migrationsDirsForConfig(name: string, config: RawConfig): string[] {
 }
 
 /**
- * Discover migrations across multiple directories and merge/dedup
- * by version. Matches Rails' behavior when migrations_paths contains
- * multiple entries.
+ * Discover migrations across multiple directories and concatenate them.
+ * Duplicate-version validation is handled by Migrator (which throws
+ * DuplicateMigrationVersionError) so conflicting migrations are
+ * surfaced as errors instead of being silently skipped.
  */
 async function discoverMigrationsFromDirs(dirs: string[]): ReturnType<typeof discoverMigrations> {
   const all = await Promise.all(dirs.map((d) => discoverMigrations(d)));
-  const merged = all.flat();
-  // Dedup by version — first occurrence wins (matches Rails' behavior
-  // where a migration version can only appear once across all paths).
-  const seen = new Set<string>();
-  return merged.filter((m) => {
-    if (seen.has(m.version)) return false;
-    seen.add(m.version);
-    return true;
-  });
+  return all.flat();
 }
 
 interface DatabaseOpts {

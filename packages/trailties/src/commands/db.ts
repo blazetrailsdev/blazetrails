@@ -637,14 +637,17 @@ export function dbCommand(): Command {
   cmd
     .command("migrate")
     .description("Run pending migrations for all databases (or a specific one via --database)")
-    .option("--version <version>", "Migrate to a specific version")
+    .option("--version <version>", "Migrate to a specific version (also reads VERSION env)")
     .option("--database <name>", "Target a specific named database")
     .action(async (opts) => {
+      // Rails: ENV["VERSION"] is an alternative to the --version flag
+      // for CI scripts that set VERSION=20260101000000.
+      const targetVersion = opts.version ?? process.env.VERSION?.trim() ?? null;
       await forEachDatabase(opts, async (ctx) => {
         await withMigratorForDb(
           ctx,
           async (migrator) => {
-            await migrator.migrate(opts.version ?? null);
+            await migrator.migrate(targetVersion);
           },
           {
             afterOutput: async (migrator) => {

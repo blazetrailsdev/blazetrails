@@ -618,6 +618,13 @@ export class DatabaseTasks {
   }
 
   static async dumpSchema(config: DatabaseConfig): Promise<void> {
+    // Rails: `return unless db_config.schema_dump` — lets per-config
+    // `schemaDump: false` suppress dumping (e.g. for read replicas
+    // or external DBs that shouldn't produce a schema file).
+    const cfgWithDump = config as unknown as { schemaDump?: (...args: unknown[]) => unknown };
+    if (typeof cfgWithDump.schemaDump === "function" && cfgWithDump.schemaDump() === false) {
+      return;
+    }
     const filename = this.schemaDumpPath(config);
     if (this.schemaFormat === "sql") {
       const fs = getFs();
@@ -657,6 +664,7 @@ export class DatabaseTasks {
 
     if (format === "sql") {
       await this.structureLoad(config, filename);
+      await this._stampSchemaSha1(config, filename);
       return;
     }
 
@@ -690,6 +698,30 @@ export class DatabaseTasks {
     const { MigrationContext } = await import("../migration.js");
     const ctx = new MigrationContext(adapter);
     await defineSchema(ctx);
+    // Both format branches fall through to here — stamp schema_sha1.
+    await this._stampSchemaSha1(config, filename);
+  }
+
+  /**
+   * After loading a schema file, stamp ar_internal_metadata with the
+   * file's SHA1 so `schemaUpToDate` can skip purge+reload on
+   * subsequent `reconstructFromSchema` calls (the test:prepare fast
+   * path). Mirrors Rails' `load_schema` which calls
+   * `internal_metadata.create_table_and_set_flags(env, schema_sha1(file))`.
+   */
+  private static async _stampSchemaSha1(config: DatabaseConfig, filename: string): Promise<void> {
+    const adapter = this._adapterInstance;
+    if (!adapter) return;
+    try {
+      const { InternalMetadata } = await import("../internal-metadata.js");
+      const metadata = new InternalMetadata(adapter);
+      const sha1 = this._schemaSha1(filename);
+      await metadata.createTableAndSetFlags(config.envName, sha1);
+    } catch {
+      // Best effort — a failed stamp just means schemaUpToDate
+      // returns false next time, triggering a full reload instead
+      // of a truncate. No worse than before Phase 15.
+    }
   }
 
   static async loadSchemaCurrent(

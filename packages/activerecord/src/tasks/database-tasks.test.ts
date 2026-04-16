@@ -915,6 +915,69 @@ describe("DatabaseTasksLoadSchemaTsFormatTest", () => {
   });
 });
 
+describe("DatabaseTasks loadSchema stamps schema_sha1", () => {
+  it("stamps ar_internal_metadata with schema_sha1 after loadSchema", async () => {
+    // Mirrors Rails: load_schema calls
+    // internal_metadata.create_table_and_set_flags(env, schema_sha1(file))
+    // so schemaUpToDate can skip purge+reload on subsequent test:prepare.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-sha1-"));
+    const dbFile = path.join(tmp, "sha1.sqlite3");
+    const schemaFile = path.join(tmp, "schema.ts");
+    const markerFile = path.join(tmp, "loaded.txt");
+    fs.writeFileSync(
+      schemaFile,
+      `export default async function defineSchema(ctx) {
+  const fs = await import("node:fs");
+  fs.writeFileSync(${JSON.stringify(markerFile)}, "ok");
+}\n`,
+    );
+    const { SQLite3Adapter } = await import("../connection-adapters/sqlite3-adapter.js");
+    const adapter = new SQLite3Adapter(dbFile);
+    DatabaseTasks.setAdapter(adapter);
+    DatabaseTasks.schemaFormat = "ts";
+    try {
+      const config = new HashConfig("test", "primary", { adapter: "sqlite3" });
+      await DatabaseTasks.loadSchema(config, "ts", schemaFile);
+      // Schema was loaded:
+      expect(fs.existsSync(markerFile)).toBe(true);
+      // schema_sha1 was stamped:
+      const { InternalMetadata } = await import("../internal-metadata.js");
+      const metadata = new InternalMetadata(adapter);
+      const storedSha1 = await metadata.get("schema_sha1");
+      expect(storedSha1).toBeTruthy();
+      // And it matches the actual file hash:
+      expect(storedSha1).toBe(DatabaseTasks["_schemaSha1"](schemaFile));
+    } finally {
+      await adapter.close();
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("DatabaseTasks dumpSchema respects schemaDump gating", () => {
+  it("skips dump when config.schemaDump() returns false", async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-gate-"));
+    const dbFile = path.join(tmp, "gate.sqlite3");
+    const { SQLite3Adapter } = await import("../connection-adapters/sqlite3-adapter.js");
+    const adapter = new SQLite3Adapter(dbFile);
+    await adapter.executeMutation("CREATE TABLE items (id INTEGER PRIMARY KEY)");
+    DatabaseTasks.setAdapter(adapter);
+    DatabaseTasks.schemaFormat = "ts";
+    try {
+      const config = new HashConfig("test", "primary", {
+        adapter: "sqlite3",
+        schemaDump: false,
+      });
+      await DatabaseTasks.dumpSchema(config);
+      // Schema file should NOT have been created.
+      expect(fs.existsSync(path.join(tmp, "db", "schema.ts"))).toBe(false);
+    } finally {
+      await adapter.close();
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("DatabaseTasks schema cache", () => {
   it("dumpSchemaCache writes tables from a freshly introspected adapter", async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-dstasks-"));

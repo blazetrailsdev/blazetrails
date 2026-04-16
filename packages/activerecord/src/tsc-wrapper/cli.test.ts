@@ -290,6 +290,23 @@ describe("trails-tsc --build composite projects — Phase 1b.5", () => {
     });
   });
 
+  it("CLI binary --build exits 0 on the composite fixture", async () => {
+    const binPath = path.resolve(CURRENT_DIR, "../../dist/tsc-wrapper/cli.js");
+    // Same pattern as the Phase 1b.1 binary test: skip when dist
+    // isn't built (e.g., CI jobs that don't run `pnpm build`).
+    if (!fs.existsSync(binPath)) return;
+    const { execFileSync } = await import("node:child_process");
+    withTempComposite((dir) => {
+      const result = execFileSync("node", [binPath, "--build", path.join(dir, "tsconfig.json")], {
+        encoding: "utf8",
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      // Solution builder prints no output on a clean build.
+      expect(result).toBe("");
+      expect(fs.existsSync(path.join(dir, "app", "dist", "post.d.ts"))).toBe(true);
+    });
+  });
+
   it("re-build after editing a model reflects the new declares in dependents", () => {
     withTempComposite((dir) => {
       const firstDiags: ts.Diagnostic[] = [];

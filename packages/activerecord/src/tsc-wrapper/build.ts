@@ -7,7 +7,6 @@ import { remapDiagnostics } from "./remap.js";
 export interface TrailsSolutionBuilder {
   build(): ts.ExitStatus;
   clean(): ts.ExitStatus;
-  getHostForProject(configPath: string): TrailsCompilerHost | undefined;
 }
 
 export interface TrailsBuildOptions {
@@ -128,6 +127,5 @@ export function createTrailsSolutionBuilder(
   return {
     build: () => builder.build(),
     clean: () => builder.clean(),
-    getHostForProject: (configPath) => hostsByProject.get(path.resolve(configPath)),
   };
 }

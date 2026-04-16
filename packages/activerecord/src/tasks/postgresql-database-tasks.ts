@@ -166,24 +166,7 @@ export class PostgreSQLDatabaseTasks {
     }
 
     if (schemaFilter && schemaFilter.trim().length > 0) {
-      // Normalize entries: strip surrounding quotes, drop $user
-      // (not a real schema name — PG resolves it at runtime), and
-      // skip empty entries. spawnSync passes args without shell
-      // expansion, so literal '$user' would make pg_dump fail.
-      const schemas = schemaFilter
-        .split(",")
-        .map((s) => s.trim())
-        .map((s) => {
-          if (
-            s.length >= 2 &&
-            ((s.startsWith("'") && s.endsWith("'")) || (s.startsWith('"') && s.endsWith('"')))
-          ) {
-            return s.slice(1, -1).trim();
-          }
-          return s;
-        })
-        .filter((s) => s.length > 0 && s !== "$user");
-      for (const schema of schemas) {
+      for (const schema of normalizeSchemaSearchPath(schemaFilter)) {
         args.push(`--schema=${schema}`);
       }
     }
@@ -402,4 +385,27 @@ function formatCmdError(
     `Make sure \`${cmd}\` is installed in your PATH and has proper permissions.\n` +
     `(action: ${action})`
   );
+}
+
+/**
+ * Normalize a PG schema_search_path string into an array of schema
+ * names suitable for pg_dump `--schema=` args. Strips surrounding
+ * quotes, drops `$user` (PG runtime variable, not a real schema),
+ * and filters empties. Exported so the test can exercise the same
+ * code path instead of reimplementing the logic.
+ */
+export function normalizeSchemaSearchPath(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .map((s) => {
+      if (
+        s.length >= 2 &&
+        ((s.startsWith("'") && s.endsWith("'")) || (s.startsWith('"') && s.endsWith('"')))
+      ) {
+        return s.slice(1, -1).trim();
+      }
+      return s;
+    })
+    .filter((s) => s.length > 0 && s !== "$user");
 }

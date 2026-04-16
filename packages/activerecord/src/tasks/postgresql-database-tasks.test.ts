@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { PostgreSQLDatabaseTasks } from "./postgresql-database-tasks.js";
+import { PostgreSQLDatabaseTasks, normalizeSchemaSearchPath } from "./postgresql-database-tasks.js";
 import { DatabaseTasks } from "./database-tasks.js";
 import { HashConfig } from "../database-configurations/hash-config.js";
 
@@ -100,25 +100,16 @@ describe("PostgreSQLDatabaseTasks", () => {
 
   describe("structureDump schema filtering", () => {
     it("normalizes $user and quoted entries out of --schema= args", () => {
-      // The schema_search_path normalization logic strips surrounding
-      // quotes and drops $user (not a real schema — PG resolves it at
-      // runtime). Verify the normalization directly since pg_dump
-      // can't run in CI without a PG instance.
-      const raw = "'$user', public, \"custom\"";
-      const schemas = raw
-        .split(",")
-        .map((s) => s.trim())
-        .map((s) => {
-          if (
-            s.length >= 2 &&
-            ((s.startsWith("'") && s.endsWith("'")) || (s.startsWith('"') && s.endsWith('"')))
-          ) {
-            return s.slice(1, -1).trim();
-          }
-          return s;
-        })
-        .filter((s) => s.length > 0 && s !== "$user");
-      expect(schemas).toEqual(["public", "custom"]);
+      // Uses the exported normalizeSchemaSearchPath helper — same code
+      // path structureDump calls, so the test can't drift.
+      expect(normalizeSchemaSearchPath("'$user', public, \"custom\"")).toEqual([
+        "public",
+        "custom",
+      ]);
+    });
+
+    it("handles empty and whitespace-only entries", () => {
+      expect(normalizeSchemaSearchPath("  , public, ,")).toEqual(["public"]);
     });
   });
 });

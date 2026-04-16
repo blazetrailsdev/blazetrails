@@ -111,6 +111,15 @@ export class DatabaseTasks {
   static dumpSchemaAfterMigration: boolean = true;
   static structureDumpFlags: string | string[] | Record<string, string | string[]> | null = null;
   static structureLoadFlags: string | string[] | Record<string, string | string[]> | null = null;
+  /**
+   * Controls which PostgreSQL schemas pg_dump includes in a structure dump.
+   *
+   * Mirrors Rails' `ActiveRecord.dump_schemas` (default `:schema_search_path`):
+   * - `"schema_search_path"` (default): use config's `schemaSearchPath`
+   * - `"all"`: dump all schemas (no `--schema=` filter)
+   * - Any other string: treat as a comma-separated list of schema names
+   */
+  static dumpSchemas: string = "schema_search_path";
 
   private static _registeredTasks: Array<{
     pattern: RegExp | string;

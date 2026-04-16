@@ -142,8 +142,57 @@ export class PostgreSQLDatabaseTasks {
     if (extraFlags) {
       args.push(...(Array.isArray(extraFlags) ? extraFlags : [extraFlags]));
     }
+
+    // Rails: reads ActiveRecord.dump_schemas to decide which PG schemas
+    // to include in the dump. Can be :schema_search_path (use config's
+    // schema_search_path), :all (no filter), or a specific string.
+    // Trails' equivalent: DatabaseTasks.dumpSchemas (default:
+    // "schema_search_path"). If the config has a schemaSearchPath, split
+    // on commas and add --schema= per entry so pg_dump only includes
+    // those schemas instead of the entire database.
+    const { DatabaseTasks } = await import("./database-tasks.js");
+    const dumpSchemas = DatabaseTasks.dumpSchemas;
+    let searchPath: string | undefined;
+    if (dumpSchemas === "schema_search_path") {
+      searchPath =
+        (this.configurationHash.schemaSearchPath as string | undefined) ??
+        (this.configurationHash.schema_search_path as string | undefined);
+    } else if (dumpSchemas === "all") {
+      searchPath = undefined;
+    } else if (typeof dumpSchemas === "string") {
+      searchPath = dumpSchemas;
+    }
+    if (searchPath && searchPath.trim().length > 0) {
+      for (const schema of searchPath.split(",")) {
+        const trimmed = schema.trim();
+        if (trimmed.length > 0) args.push(`--schema=${trimmed}`);
+      }
+    }
+
+    // Rails: applies SchemaDumper.ignore_tables as -T exclusions.
+    const { SchemaDumper } = await import("../connection-adapters/abstract/schema-dumper.js");
+    const ignoreTables = SchemaDumper.ignoreTables;
+    if (ignoreTables.length > 0) {
+      for (const pattern of ignoreTables) {
+        if (typeof pattern === "string") {
+          args.push("-T", pattern);
+        }
+        // Regex patterns can't be expressed as pg_dump -T flags;
+        // they're handled by the Ruby-side adapter in Rails too,
+        // not the CLI. Skip them here.
+      }
+    }
+
     await this.runCmd("pg_dump", args, "dumping");
     await this.removeSqlHeaderComments(filename);
+
+    // Rails: appends `SET search_path TO <path>;` at the end of the
+    // dump so loading it restores the session search_path to what
+    // the app expects. Only when a search_path was configured.
+    if (searchPath && searchPath.trim().length > 0) {
+      const fs = getFs();
+      fs.appendFileSync(filename, `SET search_path TO ${searchPath.trim()};\n\n`);
+    }
   }
 
   async structureLoad(filename: string, extraFlags?: string | string[] | null): Promise<void> {

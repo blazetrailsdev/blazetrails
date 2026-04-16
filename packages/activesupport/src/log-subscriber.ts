@@ -103,7 +103,7 @@ export class LogSubscriber extends Subscriber {
     return this.subscribers;
   }
 
-  static flushAll(): void {
+  static flushAllBang(): void {
     const l = this.logger;
     if (l && typeof (l as any).flush === "function") {
       (l as any).flush();

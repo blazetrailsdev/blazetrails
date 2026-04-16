@@ -201,13 +201,13 @@ describe("SyncLogSubscriberTest", () => {
 
   it("flushes loggers", () => {
     MyLogSubscriber.attachTo("my_log_subscriber", logSubscriber);
-    LogSubscriber.flushAll();
+    LogSubscriber.flushAllBang();
     expect(logger.flushCount).toBe(1);
   });
 
   it("flushes the same logger just once", () => {
     MyLogSubscriber.attachTo("my_log_subscriber", logSubscriber);
-    LogSubscriber.flushAll();
+    LogSubscriber.flushAllBang();
     expect(logger.flushCount).toBe(1);
   });
 

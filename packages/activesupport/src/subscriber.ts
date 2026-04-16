@@ -83,6 +83,19 @@ export class Subscriber {
     return sub;
   }
 
+  /**
+   * Notify that a method was added to the class after attach_to.
+   * In Rails this is a Ruby hook (`method_added`) that auto-subscribes
+   * new public methods. Call manually in TS after dynamically adding
+   * event handler methods post-attachment.
+   */
+  static methodAdded(event: string): void {
+    const state = getState(this);
+    if (!state.notifier) return;
+    const snaked = event.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
+    this._addEventSubscriber(snaked, state);
+  }
+
   /** Detach a subscriber from its namespace. */
   static detachFrom(namespace: string, notifier: typeof Notifications = Notifications): void {
     const state = getState(this);

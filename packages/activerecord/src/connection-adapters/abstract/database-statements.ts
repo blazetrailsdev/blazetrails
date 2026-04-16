@@ -911,20 +911,34 @@ async function logSql<T>(
   binds: unknown[] | undefined,
   fn: () => Promise<T>,
 ): Promise<T> {
+  // Rails' log() separates binds (Attribute objects) from type_casted_binds
+  // (primitive values). type_casted_binds can be a lazy callable in Rails;
+  // here we pass the primitive values directly.
+  const bindArray = binds ?? [];
   const payload: Record<string, unknown> = {
     sql,
     name,
-    binds: binds ?? [],
-    type_casted_binds: binds ?? [],
+    binds: bindArray,
+    type_casted_binds: bindArray.map((b: any) =>
+      b && typeof b === "object" && "value" in b ? b.value : b,
+    ),
     connection: host,
     row_count: 0,
   };
   return Notifications.instrumentAsync("sql.active_record", payload, async () => {
-    const result = await fn();
-    if (result instanceof Result) {
-      payload.row_count = result.length;
+    try {
+      const result = await fn();
+      if (result instanceof Result) {
+        payload.row_count = result.length;
+      }
+      return result;
+    } catch (e: any) {
+      // Rails' Instrumenter sets payload[:exception] and [:exception_object]
+      // so subscribers (e.g. ExplainSubscriber) can detect failed queries.
+      payload.exception = e;
+      payload.exception_object = e;
+      throw e;
     }
-    return result;
   }) as Promise<T>;
 }
 

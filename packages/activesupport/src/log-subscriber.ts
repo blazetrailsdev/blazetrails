@@ -3,6 +3,34 @@ import type { Event } from "./notifications/instrumenter.js";
 import type { Logger } from "./logger.js";
 
 /**
+ * Check whether a logger has a given level enabled.
+ * Rails' LEVEL_CHECKS call `logger.debug?`, `logger.info?`, etc.
+ * Our Logger class defines these as getter properties (`get "debug?"()`),
+ * but Base.logger can be a simple duck-typed object without them.
+ * Treat missing predicates as "enabled" (not silenced) so logging
+ * isn't suppressed for valid loggers that lack ActiveSupport predicates.
+ */
+function isLevelEnabled(logger: Logger, level: string): boolean {
+  // Try Rails-style predicate getter: `debug?`, `info?`, etc.
+  const predicate = (logger as any)[`${level}?`];
+  if (typeof predicate === "boolean") return predicate;
+
+  // Try camelCase flag: `debugEnabled`, `infoEnabled`, etc.
+  const flag = (logger as any)[`${level}Enabled`];
+  if (typeof flag === "boolean") return flag;
+
+  // Try numeric level comparison (Logger.DEBUG=0, INFO=1, etc.)
+  if (typeof (logger as any).level === "number") {
+    const priorities: Record<string, number> = { debug: 0, info: 1, warn: 2, error: 3, fatal: 4 };
+    const required = priorities[level];
+    if (required !== undefined) return (logger as any).level <= required;
+  }
+
+  // No way to tell — assume enabled (don't suppress logging)
+  return true;
+}
+
+/**
  * ActiveSupport::LogSubscriber — a Subscriber that dispatches events
  * to a logger. Provides ANSI coloring helpers and log-level gating.
  *
@@ -49,9 +77,9 @@ export class LogSubscriber extends Subscriber {
   }
 
   static readonly LEVEL_CHECKS: Record<string, (logger: Logger) => boolean> = {
-    debug: (logger) => !(logger as any)["debug?"],
-    info: (logger) => !(logger as any)["info?"],
-    error: (logger) => !(logger as any)["error?"],
+    debug: (logger) => !isLevelEnabled(logger, "debug"),
+    info: (logger) => !isLevelEnabled(logger, "info"),
+    error: (logger) => !isLevelEnabled(logger, "error"),
   };
 
   private static _logger: Logger | null = null;

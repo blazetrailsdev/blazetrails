@@ -1718,7 +1718,9 @@ export class Migrator {
     }
 
     const migration = proxy.migration();
-    await this._strategy.exec(direction, migration, this._adapter);
+    await this._ddlTransaction(migration, async () => {
+      await this._strategy.exec(direction, migration, this._adapter);
+    });
     if (direction === "up") {
       await this._schemaMigration.recordVersion(proxy.version);
       // Skip stamping when internal metadata is disabled
@@ -1738,6 +1740,50 @@ export class Migrator {
       const action = direction === "up" ? "migrated" : "reverted";
       this._output.push(`== ${proxy.version} ${proxy.name}: ${action} ==`);
     }
+  }
+
+  /**
+   * Wrap the migration in a DDL transaction if the adapter supports
+   * it and the migration hasn't opted out. Mirrors Rails'
+   * `Migrator#ddl_transaction`:
+   *
+   *     def ddl_transaction(migration)
+   *       if use_transaction?(migration)
+   *         connection.transaction { yield }
+   *       else
+   *         yield
+   *       end
+   *     end
+   */
+  private async _ddlTransaction(migration: MigrationLike, fn: () => Promise<void>): Promise<void> {
+    if (this._useTransaction(migration)) {
+      await this._adapter.beginTransaction();
+      try {
+        await fn();
+        await this._adapter.commit();
+      } catch (e) {
+        await this._adapter.rollback();
+        throw e;
+      }
+    } else {
+      await fn();
+    }
+  }
+
+  /**
+   * Mirrors Rails' `Migrator#use_transaction?`:
+   * `!migration.disable_ddl_transaction && connection.supports_ddl_transactions?`
+   */
+  private _useTransaction(migration: MigrationLike): boolean {
+    // Check migration opt-out
+    const disableDdl = (migration as { disableDdlTransaction?: boolean }).disableDdlTransaction;
+    if (disableDdl) return false;
+    // Check adapter support — SQLite/MySQL don't support DDL in
+    // transactions; PG does.
+    const supports = (this._adapter as { supportsDdlTransactions?: () => boolean })
+      .supportsDdlTransactions;
+    if (typeof supports === "function") return supports.call(this._adapter);
+    return false;
   }
 
   /**

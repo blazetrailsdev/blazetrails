@@ -124,4 +124,57 @@ export class SchemaMigration {
       return isNaN(n) ? 0 : n;
     });
   }
+
+  /**
+   * Mark all migration versions up to `version` as run without
+   * executing them. Used for legacy DB imports and test fixtures.
+   *
+   * Mirrors Rails' `SchemaStatements#assume_migrated_upto_version`:
+   * inserts the target version + all known migrations below it into
+   * schema_migrations. Raises on duplicate migration versions.
+   *
+   * @param version - The version to assume as the "current" cutoff.
+   * @param migrationVersions - All known migration versions from
+   *   the migrations directory. Versions below `version` that aren't
+   *   already migrated get inserted.
+   */
+  async assumeMigratedUptoVersion(
+    version: string,
+    migrationVersions: string[] = [],
+  ): Promise<void> {
+    const migrated = new Set(await this.allVersions());
+
+    // Ensure the target version itself is recorded.
+    if (!migrated.has(version)) {
+      await this.createVersion(version);
+    }
+
+    // Insert all known migration versions below the target that
+    // haven't been migrated yet.
+    const versionNum = BigInt(version);
+    const inserting = migrationVersions
+      .filter((v) => {
+        try {
+          return BigInt(v) < versionNum;
+        } catch {
+          return false;
+        }
+      })
+      .filter((v) => !migrated.has(v));
+
+    // Rails checks for duplicate versions and raises.
+    const seen = new Set<string>();
+    for (const v of inserting) {
+      if (seen.has(v)) {
+        throw new Error(
+          `Duplicate migration ${v}. Please renumber your migrations to resolve the conflict.`,
+        );
+      }
+      seen.add(v);
+    }
+
+    for (const v of inserting) {
+      await this.createVersion(v);
+    }
+  }
 }

@@ -9,6 +9,7 @@
  * rollbacks automatically clear the cache.
  */
 
+import { Notifications } from "@blazetrails/activesupport";
 import type { DatabaseAdapter } from "./adapter.js";
 import { Result } from "./result.js";
 
@@ -207,15 +208,25 @@ export class QueryCacheAdapter implements DatabaseAdapter {
     }
 
     const key = cacheKey(sql, binds);
-    const wasHit = this.cache.get(key) !== undefined;
-    return this.cache
-      .computeIfAbsent(key, async () => {
-        return this.inner.execute(sql, binds);
-      })
-      .then((result) => {
-        if (wasHit) this._cacheHits++;
-        return result;
+    const cached = this.cache.get(key);
+    if (cached !== undefined) {
+      this._cacheHits++;
+      // Emit sql.active_record with cached: true, matching Rails'
+      // lookup_sql_cache / cache_sql cache-hit notifications.
+      Notifications.instrument("sql.active_record", {
+        sql,
+        name: "CACHE",
+        binds: binds ?? [],
+        type_casted_binds: binds ?? [],
+        connection: this,
+        cached: true,
+        row_count: cached.length,
       });
+      return cached.map((row) => ({ ...row }));
+    }
+    return this.cache.computeIfAbsent(key, async () => {
+      return this.inner.execute(sql, binds);
+    });
   }
 
   async executeMutation(sql: string, binds?: unknown[]): Promise<number> {

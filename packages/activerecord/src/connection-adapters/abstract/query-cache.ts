@@ -1,3 +1,4 @@
+import { Notifications } from "@blazetrails/activesupport";
 import { QueryCacheStore } from "../../query-cache.js";
 import type { DatabaseStatementsHost } from "./database-statements.js";
 
@@ -286,6 +287,25 @@ export function selectAll(
       }
 
       const key = binds && binds.length > 0 ? JSON.stringify([sql, binds]) : sql;
+
+      // Check for cache hit first (Rails: lookup_sql_cache)
+      const cached = qc.get(key);
+      if (cached !== undefined) {
+        // Emit sql.active_record with cached: true, matching Rails'
+        // lookup_sql_cache and cache_sql cache-hit notifications.
+        Notifications.instrument("sql.active_record", {
+          sql,
+          name: name ?? "SQL",
+          binds: binds ?? [],
+          type_casted_binds: binds ?? [],
+          connection: this,
+          cached: true,
+          row_count: Array.isArray(cached) ? cached.length : 0,
+        });
+        return cached;
+      }
+
+      // Cache miss — execute and store
       return qc.computeIfAbsent(key, async () => {
         return original.call(this, sql, name, binds);
       });

@@ -144,54 +144,64 @@ export class PostgreSQLDatabaseTasks {
     }
 
     // Rails: reads ActiveRecord.dump_schemas to decide which PG schemas
-    // to include in the dump. Can be :schema_search_path (use config's
-    // schema_search_path), :all (no filter), or a specific string.
-    // Trails' equivalent: DatabaseTasks.dumpSchemas (default:
-    // "schema_search_path"). If the config has a schemaSearchPath, split
-    // on commas and add --schema= per entry so pg_dump only includes
-    // those schemas instead of the entire database.
-    const { DatabaseTasks } = await import("./database-tasks.js");
+    // pg_dump includes. Trails equivalent: DatabaseTasks.dumpSchemas.
+    //
+    // The configured search_path (from config.schemaSearchPath or
+    // config.schema_search_path) is used for TWO purposes:
+    // 1. --schema= filter args for pg_dump (when dumpSchemas isn't "all")
+    // 2. SET search_path footer appended to the dump file
+    // These are separated so dumpSchemas="all" still appends the footer.
+    const configuredSearchPath = this.configurationHash.schemaSearchPath as string | undefined;
+
     const dumpSchemas = DatabaseTasks.dumpSchemas;
-    let searchPath: string | undefined;
+    let schemaFilter: string | undefined;
     if (dumpSchemas === "schema_search_path") {
-      searchPath =
-        (this.configurationHash.schemaSearchPath as string | undefined) ??
-        (this.configurationHash.schema_search_path as string | undefined);
+      schemaFilter = configuredSearchPath;
     } else if (dumpSchemas === "all") {
-      searchPath = undefined;
+      schemaFilter = undefined;
     } else if (typeof dumpSchemas === "string") {
-      searchPath = dumpSchemas;
+      schemaFilter = dumpSchemas;
     }
-    if (searchPath && searchPath.trim().length > 0) {
-      for (const schema of searchPath.split(",")) {
-        const trimmed = schema.trim();
-        if (trimmed.length > 0) args.push(`--schema=${trimmed}`);
+
+    if (schemaFilter && schemaFilter.trim().length > 0) {
+      // Normalize entries: strip surrounding quotes, drop $user
+      // (not a real schema name — PG resolves it at runtime), and
+      // skip empty entries. spawnSync passes args without shell
+      // expansion, so literal '$user' would make pg_dump fail.
+      const schemas = schemaFilter
+        .split(",")
+        .map((s) => s.trim())
+        .map((s) => {
+          if (
+            s.length >= 2 &&
+            ((s.startsWith("'") && s.endsWith("'")) || (s.startsWith('"') && s.endsWith('"')))
+          ) {
+            return s.slice(1, -1).trim();
+          }
+          return s;
+        })
+        .filter((s) => s.length > 0 && s !== "$user");
+      for (const schema of schemas) {
+        args.push(`--schema=${schema}`);
       }
     }
 
     // Rails: applies SchemaDumper.ignore_tables as -T exclusions.
     const { SchemaDumper } = await import("../connection-adapters/abstract/schema-dumper.js");
-    const ignoreTables = SchemaDumper.ignoreTables;
-    if (ignoreTables.length > 0) {
-      for (const pattern of ignoreTables) {
-        if (typeof pattern === "string") {
-          args.push("-T", pattern);
-        }
-        // Regex patterns can't be expressed as pg_dump -T flags;
-        // they're handled by the Ruby-side adapter in Rails too,
-        // not the CLI. Skip them here.
-      }
+    for (const pattern of SchemaDumper.ignoreTables) {
+      if (typeof pattern === "string") args.push("-T", pattern);
+      // Regex patterns can't be expressed as pg_dump -T flags.
     }
 
     await this.runCmd("pg_dump", args, "dumping");
     await this.removeSqlHeaderComments(filename);
 
     // Rails: appends `SET search_path TO <path>;` at the end of the
-    // dump so loading it restores the session search_path to what
-    // the app expects. Only when a search_path was configured.
-    if (searchPath && searchPath.trim().length > 0) {
-      const fs = getFs();
-      fs.appendFileSync(filename, `SET search_path TO ${searchPath.trim()};\n\n`);
+    // dump so loading it restores the session search_path. Uses the
+    // configured search_path (not the filtered schema list) so
+    // dumpSchemas="all" still appends when a search_path is set.
+    if (configuredSearchPath && configuredSearchPath.trim().length > 0) {
+      getFs().appendFileSync(filename, `SET search_path TO ${configuredSearchPath.trim()};\n\n`);
     }
   }
 

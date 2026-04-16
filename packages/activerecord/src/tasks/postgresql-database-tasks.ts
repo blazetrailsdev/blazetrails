@@ -403,7 +403,11 @@ export function normalizeSchemaSearchPath(raw: string): string[] {
         s.length >= 2 &&
         ((s.startsWith("'") && s.endsWith("'")) || (s.startsWith('"') && s.endsWith('"')))
       ) {
-        return s.slice(1, -1).trim();
+        const quote = s[0];
+        const inner = s.slice(1, -1).trim();
+        // Unescape doubled quotes inside quoted identifiers:
+        // "we""ird" → we"ird, 'it''s' → it's
+        return quote === '"' ? inner.replace(/""/g, '"') : inner.replace(/''/g, "'");
       }
       return s;
     })

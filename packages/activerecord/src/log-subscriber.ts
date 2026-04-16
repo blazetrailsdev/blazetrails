@@ -114,8 +114,10 @@ export class LogSubscriber extends BaseLogSubscriber {
   }
 
   override get logger(): Logger | null {
+    // Rails: `def logger; ActiveRecord::Base.logger; end`
+    // Returns Base.logger directly — null means logging disabled.
     const B = getBase();
-    if (B?.logger) return B.logger as unknown as Logger;
+    if (B && "logger" in B) return B.logger as Logger | null;
     return (this.constructor as typeof LogSubscriber).logger;
   }
 

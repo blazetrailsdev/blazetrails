@@ -32,8 +32,21 @@ export class LogSubscriber extends Subscriber {
 
   static colorizeLogging = true;
 
-  /** Map of method → level-check function (set via subscribeLogLevel). */
-  static logLevels: Map<string, (logger: Logger) => boolean> = new Map();
+  /**
+   * Per-class map of method → level-check function.
+   * Uses class_attribute semantics: each subclass gets its own copy
+   * when subscribeLogLevel is called, so AR LogSubscriber's levels
+   * don't bleed into ActionController LogSubscriber's levels.
+   */
+  static get logLevels(): Map<string, (logger: Logger) => boolean> {
+    const state = getClassState(this) as any;
+    if (!state._logLevels) state._logLevels = new Map();
+    return state._logLevels;
+  }
+
+  static set logLevels(value: Map<string, (logger: Logger) => boolean>) {
+    (getClassState(this) as any)._logLevels = value;
+  }
 
   static readonly LEVEL_CHECKS: Record<string, (logger: Logger) => boolean> = {
     debug: (logger) => !(logger as any)["debug?"],
@@ -120,17 +133,16 @@ export class LogSubscriber extends Subscriber {
   }
 
   private static _setEventLevels(): void {
-    if (this.subscribers.length === 0) return;
-    const namespace = getClassState(this).namespace;
+    // Rails: `subscriber.event_levels = log_levels.transform_keys { |k| "#{k}.#{namespace}" }`
+    // Only updates the subscriber from the most recent attachTo call.
+    const state = getClassState(this);
+    const sub = state.subscriber as LogSubscriber | undefined;
+    if (!sub) return;
     const levels = new Map<string, (logger: Logger) => boolean>();
     for (const [k, v] of this.logLevels) {
-      levels.set(`${k}.${namespace}`, v);
+      levels.set(`${k}.${state.namespace}`, v);
     }
-    for (const sub of this.subscribers) {
-      if (sub instanceof LogSubscriber) {
-        sub.eventLevels = new Map(levels);
-      }
-    }
+    sub.eventLevels = levels;
   }
 
   // -- Instance state ------------------------------------------------------

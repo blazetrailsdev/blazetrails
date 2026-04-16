@@ -68,7 +68,14 @@ export class LogSubscriber extends Subscriber {
    */
   static get logLevels(): Map<string, (logger: Logger) => boolean> {
     const state = getClassState(this) as any;
-    if (!state._logLevels) state._logLevels = new Map();
+    if (!state._logLevels) {
+      // class_attribute semantics: inherit parent's levels on first access
+      const parent = Object.getPrototypeOf(this) as typeof LogSubscriber | undefined;
+      state._logLevels =
+        parent && typeof parent === "function" && "logLevels" in parent
+          ? new Map(parent.logLevels)
+          : new Map();
+    }
     return state._logLevels;
   }
 

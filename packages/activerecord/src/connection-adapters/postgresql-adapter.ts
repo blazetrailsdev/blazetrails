@@ -42,7 +42,8 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
   /**
    * Rewrite `?` bind placeholders to PostgreSQL `$1, $2, ...` syntax.
    */
-  private rewriteBinds(sql: string): string {
+  private rewriteBinds(sql: string, binds?: unknown[]): string {
+    if (!binds || binds.length === 0) return sql;
     let idx = 0;
     return sql.replace(/\?/g, () => `$${++idx}`);
   }
@@ -71,7 +72,7 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
   async execute(sql: string, binds: unknown[] = []): Promise<Record<string, unknown>[]> {
     const client = await this.getClient();
     try {
-      const result = await client.query(this.rewriteBinds(sql), binds);
+      const result = await client.query(this.rewriteBinds(sql, binds), binds);
       return result.rows;
     } finally {
       this.releaseClient(client);
@@ -88,7 +89,7 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
   async executeMutation(sql: string, binds: unknown[] = []): Promise<number> {
     const client = await this.getClient();
     try {
-      const pgSql = this.rewriteBinds(sql);
+      const pgSql = this.rewriteBinds(sql, binds);
       const upper = sql.trimStart().toUpperCase();
 
       // For INSERT without RETURNING, append RETURNING id automatically
@@ -276,123 +277,114 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
   // Mirrors: PostgreSQLAdapter supports_* methods
   // ---------------------------------------------------------------------------
 
+  /**
+   * Fetch and cache the server version number. Call this after connecting
+   * (e.g. in configure_connection) to enable version-dependent predicates.
+   * Until called, version-dependent supports_* methods assume modern PG.
+   */
   async getDatabaseVersion(): Promise<number> {
     if (this._databaseVersion !== null) return this._databaseVersion;
     const rows = await this.execute("SHOW server_version_num");
     this._databaseVersion = parseInt(String(rows[0]?.server_version_num ?? "0"), 10);
+    // Eagerly populate optimizer hints flag (Rails does this lazily but
+    // we need it sync for supportsOptimizerHints)
+    if (this._hasOptimizerHints === null) {
+      this._hasOptimizerHints = await this.extensionAvailable("pg_hint_plan");
+    }
     return this._databaseVersion;
+  }
+
+  /**
+   * Synchronous version check. Returns the cached version, or
+   * assumes a modern PG (160000 = 16.0) if not yet fetched.
+   */
+  get databaseVersion(): number {
+    return this._databaseVersion ?? 160000;
   }
 
   supportsBulkAlter(): boolean {
     return true;
   }
-
   supportsIndexSortOrder(): boolean {
     return true;
   }
-
-  async supportsPartitionedIndexes(): Promise<boolean> {
-    return (await this.getDatabaseVersion()) >= 110000;
+  supportsPartitionedIndexes(): boolean {
+    return this.databaseVersion >= 110000;
   }
-
   supportsPartialIndex(): boolean {
     return true;
   }
-
-  async supportsIndexInclude(): Promise<boolean> {
-    return (await this.getDatabaseVersion()) >= 110000;
+  supportsIndexInclude(): boolean {
+    return this.databaseVersion >= 110000;
   }
-
   supportsExpressionIndex(): boolean {
     return true;
   }
-
   supportsTransactionIsolation(): boolean {
     return true;
   }
-
   supportsForeignKeys(): boolean {
     return true;
   }
-
   supportsCheckConstraints(): boolean {
     return true;
   }
-
   supportsExclusionConstraints(): boolean {
     return true;
   }
-
   supportsUniqueConstraints(): boolean {
     return true;
   }
-
   supportsValidateConstraints(): boolean {
     return true;
   }
-
   supportsDeferrableConstraints(): boolean {
     return true;
   }
-
   supportsViews(): boolean {
     return true;
   }
-
   supportsDatetimeWithPrecision(): boolean {
     return true;
   }
-
   supportsJson(): boolean {
     return true;
   }
-
   supportsComments(): boolean {
     return true;
   }
-
   supportsSavepoints(): boolean {
     return true;
   }
-
-  async supportsRestartDbTransaction(): Promise<boolean> {
-    return (await this.getDatabaseVersion()) >= 120000;
+  supportsRestartDbTransaction(): boolean {
+    return this.databaseVersion >= 120000;
   }
-
   supportsInsertReturning(): boolean {
     return true;
   }
-
-  async supportsInsertOnConflict(): Promise<boolean> {
-    return (await this.getDatabaseVersion()) >= 90500;
+  supportsInsertOnConflict(): boolean {
+    return this.databaseVersion >= 90500;
   }
-
-  async supportsInsertOnDuplicateSkip(): Promise<boolean> {
+  supportsInsertOnDuplicateSkip(): boolean {
     return this.supportsInsertOnConflict();
   }
-
-  async supportsInsertOnDuplicateUpdate(): Promise<boolean> {
+  supportsInsertOnDuplicateUpdate(): boolean {
     return this.supportsInsertOnConflict();
   }
-
-  async supportsInsertConflictTarget(): Promise<boolean> {
+  supportsInsertConflictTarget(): boolean {
     return this.supportsInsertOnConflict();
   }
-
-  async supportsVirtualColumns(): Promise<boolean> {
-    return (await this.getDatabaseVersion()) >= 120000;
+  supportsVirtualColumns(): boolean {
+    return this.databaseVersion >= 120000;
   }
-
-  async supportsIdentityColumns(): Promise<boolean> {
-    return (await this.getDatabaseVersion()) >= 100000;
+  supportsIdentityColumns(): boolean {
+    return this.databaseVersion >= 100000;
   }
-
-  async supportsNullsNotDistinct(): Promise<boolean> {
-    return (await this.getDatabaseVersion()) >= 150000;
+  supportsNullsNotDistinct(): boolean {
+    return this.databaseVersion >= 150000;
   }
-
-  async supportsNativePartitioning(): Promise<boolean> {
-    return (await this.getDatabaseVersion()) >= 100000;
+  supportsNativePartitioning(): boolean {
+    return this.databaseVersion >= 100000;
   }
 
   indexAlgorithms(): Record<string, string> {
@@ -402,38 +394,29 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
   supportsDdlTransactions(): boolean {
     return true;
   }
-
   supportsAdvisoryLocks(): boolean {
     return true;
   }
-
   supportsExplain(): boolean {
     return true;
   }
-
   supportsExtensions(): boolean {
     return true;
   }
-
   supportsMaterializedViews(): boolean {
     return true;
   }
-
   supportsForeignTables(): boolean {
     return true;
   }
-
-  async supportsPgcryptoUuid(): Promise<boolean> {
-    return (await this.getDatabaseVersion()) >= 90400;
+  supportsPgcryptoUuid(): boolean {
+    return this.databaseVersion >= 90400;
   }
 
   private _hasOptimizerHints: boolean | null = null;
 
-  async supportsOptimizerHints(): Promise<boolean> {
-    if (this._hasOptimizerHints === null) {
-      this._hasOptimizerHints = await this.extensionAvailable("pg_hint_plan");
-    }
-    return this._hasOptimizerHints;
+  supportsOptimizerHints(): boolean {
+    return this._hasOptimizerHints ?? false;
   }
 
   supportsCommonTableExpressions(): boolean {
@@ -548,7 +531,7 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
   }
 
   async enableExtension(name: string): Promise<void> {
-    await this.exec(`CREATE EXTENSION IF NOT EXISTS "${name}"`);
+    await this.exec(`CREATE EXTENSION IF NOT EXISTS ${this.quoteIdentifier(name)}`);
   }
 
   async disableExtension(
@@ -563,7 +546,7 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
         const originalSearchPath = rows[0]?.search_path as string;
         await client.query(`SELECT set_config('search_path', $1, false)`, [options.schema]);
         try {
-          await client.query(`DROP EXTENSION IF EXISTS "${name}"${cascade}`);
+          await client.query(`DROP EXTENSION IF EXISTS ${this.quoteIdentifier(name)}${cascade}`);
         } finally {
           await client.query(`SELECT set_config('search_path', $1, false)`, [
             originalSearchPath ?? "public",
@@ -573,7 +556,7 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
         this.releaseClient(client);
       }
     } else {
-      await this.exec(`DROP EXTENSION IF EXISTS "${name}"${cascade}`);
+      await this.exec(`DROP EXTENSION IF EXISTS ${this.quoteIdentifier(name)}${cascade}`);
     }
   }
 

@@ -208,7 +208,8 @@ export class LogSubscriber extends BaseLogSubscriber {
 
   private _sqlColor(sql: string): string {
     if (/^\s*rollback/im.test(sql)) return BaseLogSubscriber.RED;
-    if (/select .*for update/im.test(sql) || /^\s*lock/im.test(sql)) return BaseLogSubscriber.WHITE;
+    if (/select .*for update/ims.test(sql) || /^\s*lock/im.test(sql))
+      return BaseLogSubscriber.WHITE;
     if (/^\s*select/i.test(sql)) return BaseLogSubscriber.BLUE;
     if (/^\s*insert/i.test(sql)) return BaseLogSubscriber.GREEN;
     if (/^\s*update/i.test(sql)) return BaseLogSubscriber.YELLOW;

@@ -919,9 +919,12 @@ async function logSql<T>(
     sql,
     name,
     binds: bindArray,
-    type_casted_binds: bindArray.map((b: any) =>
-      b && typeof b === "object" && "value" in b ? b.value : b,
-    ),
+    type_casted_binds: bindArray.map((b: any) => {
+      if (b && typeof b === "object" && typeof b.valueForDatabase === "function") {
+        return b.valueForDatabase();
+      }
+      return b && typeof b === "object" && "value" in b ? b.value : b;
+    }),
     connection: host,
     row_count: 0,
   };

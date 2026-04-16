@@ -2142,11 +2142,20 @@ describe("addForeignKey with referential actions", () => {
 });
 
 describe("Migrator DDL transaction wrapping", () => {
-  function makeDdlAdapter(calls: string[], opts: { supportsDdl?: boolean } = {}) {
-    const base = createTestAdapter();
+  // Use a dedicated in-memory SQLite adapter instead of createTestAdapter
+  // (which auto-detects PG/MySQL in CI). These tests exercise the
+  // Migrator's wrapping logic, not adapter-specific behavior, and must
+  // not depend on an external DB connection.
+  async function makeSqliteBase() {
+    const { SQLite3Adapter } = await import("./connection-adapters/sqlite3-adapter.js");
+    return new SQLite3Adapter(":memory:");
+  }
+
+  function makeDdlAdapter(calls: string[], opts: { supportsDdl?: boolean } = {}, base: any = null) {
+    const target = base ?? createTestAdapter();
     // Proxy intercepts specific methods to track calls while
-    // preserving all of createTestAdapter's execute/executeMutation.
-    return new Proxy(base, {
+    // preserving all of the adapter's execute/executeMutation.
+    return new Proxy(target, {
       get(target, prop) {
         if (prop === "supportsDdlTransactions") {
           return opts.supportsDdl ? () => true : undefined;
@@ -2170,7 +2179,7 @@ describe("Migrator DDL transaction wrapping", () => {
 
   it("wraps migration in a transaction when adapter supports DDL transactions", async () => {
     const calls: string[] = [];
-    const adapter = makeDdlAdapter(calls, { supportsDdl: true });
+    const adapter = makeDdlAdapter(calls, { supportsDdl: true }, await makeSqliteBase());
     const migrations = [
       {
         version: "20260101000000",
@@ -2194,7 +2203,7 @@ describe("Migrator DDL transaction wrapping", () => {
 
   it("skips transaction when migration opts out via disableDdlTransaction", async () => {
     const calls: string[] = [];
-    const adapter = makeDdlAdapter(calls, { supportsDdl: true });
+    const adapter = makeDdlAdapter(calls, { supportsDdl: true }, await makeSqliteBase());
     const migrations = [
       {
         version: "20260101000000",
@@ -2217,7 +2226,7 @@ describe("Migrator DDL transaction wrapping", () => {
 
   it("skips transaction when adapter doesn't support DDL transactions", async () => {
     const calls: string[] = [];
-    const adapter = makeDdlAdapter(calls, { supportsDdl: false });
+    const adapter = makeDdlAdapter(calls, { supportsDdl: false }, await makeSqliteBase());
     const migrations = [
       {
         version: "20260101000000",
@@ -2238,7 +2247,7 @@ describe("Migrator DDL transaction wrapping", () => {
 
   it("calls rollback (not commit) when the migration throws", async () => {
     const calls: string[] = [];
-    const adapter = makeDdlAdapter(calls, { supportsDdl: true });
+    const adapter = makeDdlAdapter(calls, { supportsDdl: true }, await makeSqliteBase());
     const migrations = [
       {
         version: "20260101000000",
@@ -2260,7 +2269,7 @@ describe("Migrator DDL transaction wrapping", () => {
 
   it("skips wrapping when adapter is already in a transaction", async () => {
     const calls: string[] = [];
-    const base = createTestAdapter();
+    const base = await makeSqliteBase();
     const adapter = new Proxy(base, {
       get(target, prop) {
         if (prop === "supportsDdlTransactions") return () => true;

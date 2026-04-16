@@ -142,11 +142,20 @@ export class SchemaMigration {
   ): Promise<void> {
     // Validate + normalize ALL inputs before any writes so a bad
     // version or duplicate doesn't leave partial state.
-    const normalized = String(BigInt(version)); // throws on non-numeric
+    // Reject signed/non-digit values that BigInt would accept
+    // (e.g. "-1", "+1") — migration versions must be non-negative
+    // digit strings, matching Migrator._validateTargetVersion.
+    if (!/^\d+$/.test(version)) {
+      throw new Error(`Invalid migration version: ${version}`);
+    }
+    const normalized = String(BigInt(version));
     const versionNum = BigInt(normalized);
 
     const candidates = migrationVersions.map((v) => {
-      const n = String(BigInt(v)); // throws on non-numeric
+      if (!/^\d+$/.test(v)) {
+        throw new Error(`Invalid migration version: ${v}`);
+      }
+      const n = String(BigInt(v));
       return { original: v, normalized: n, num: BigInt(n) };
     });
 
@@ -161,7 +170,18 @@ export class SchemaMigration {
     }
 
     // All validation passed — now write.
-    const migrated = new Set(await this.allVersions());
+    // Normalize existing versions the same way so "001" in the DB
+    // matches "1" from the input.
+    const rawMigrated = await this.allVersions();
+    const migrated = new Set(
+      rawMigrated.map((v) => {
+        try {
+          return String(BigInt(v));
+        } catch {
+          return v;
+        }
+      }),
+    );
 
     if (!migrated.has(normalized)) {
       await this.createVersion(normalized);

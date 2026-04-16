@@ -1718,23 +1718,21 @@ export class Migrator {
     }
 
     const migration = proxy.migration();
+    // Rails wraps both the migration execution AND the version
+    // stamping inside the same ddl_transaction so they commit/rollback
+    // atomically. Without this, a committed migration + failed stamp
+    // would leave schema_migrations out of sync.
     await this._ddlTransaction(migration, async () => {
       await this._strategy.exec(direction, migration, this._adapter);
-    });
-    if (direction === "up") {
-      await this._schemaMigration.recordVersion(proxy.version);
-      // Skip stamping when internal metadata is disabled
-      // (`use_metadata_table: false`). Writing through a disabled
-      // InternalMetadata raises EnvironmentStorageError, which would
-      // otherwise break the migrate path for consumers that intentionally
-      // opt out. Rails' equivalent call site is similarly guarded via
-      // `internal_metadata.enabled?`.
-      if (this._internalMetadata.enabled) {
-        await this._internalMetadata.set("environment", this._environment);
+      if (direction === "up") {
+        await this._schemaMigration.recordVersion(proxy.version);
+        if (this._internalMetadata.enabled) {
+          await this._internalMetadata.set("environment", this._environment);
+        }
+      } else {
+        await this._schemaMigration.deleteVersion(proxy.version);
       }
-    } else {
-      await this._schemaMigration.deleteVersion(proxy.version);
-    }
+    });
 
     if (this.verbose) {
       const action = direction === "up" ? "migrated" : "reverted";

@@ -85,6 +85,96 @@ function migrationsDir(): string {
   return path.join(process.cwd(), "db", "migrations");
 }
 
+/**
+ * Resolve the migrations directory for a named database config.
+ * Mirrors Rails' per-DB migrations_paths: the user can set
+ * `migrationsPaths` in config/database.ts; otherwise primary
+ * defaults to `db/migrations` and named DBs default to
+ * `db/migrations_<name>`.
+ */
+function migrationsDirForConfig(name: string, config: RawConfig): string {
+  const paths = (config as { migrationsPaths?: string[] }).migrationsPaths;
+  if (paths && paths.length > 0) return path.resolve(process.cwd(), paths[0]);
+  if (name === "primary") return path.join(process.cwd(), "db", "migrations");
+  return path.join(process.cwd(), "db", `migrations_${name}`);
+}
+
+interface DatabaseOpts {
+  database?: string;
+}
+
+/**
+ * Iterate every named database config in the current env, optionally
+ * filtered to a single name via `--database`. Mirrors Rails'
+ * `DatabaseTasks.for_each(databases) { |name| ... }` which generates
+ * per-name rake tasks. Commander can't generate dynamic subcommands,
+ * so we use a `--database` flag instead.
+ *
+ * For each config: normalizes, builds a HashConfig, connects an adapter,
+ * runs `fn`, closes the adapter. `fn` receives the adapter, the raw
+ * config, the HashConfig, and the config name.
+ */
+async function forEachDatabase(
+  opts: DatabaseOpts,
+  fn: (ctx: {
+    adapter: DatabaseAdapter;
+    raw: RawConfig;
+    config: HashConfig;
+    name: string;
+    /** Prefix for log output — empty string for single-DB apps so
+     *  the output stays clean; "[name] " for multi-DB. */
+    prefix: string;
+  }) => Promise<void>,
+): Promise<void> {
+  const envName = resolveEnv();
+  const allConfigs = await loadAllDatabaseConfigs(envName);
+  const targets = opts.database ? allConfigs.filter((c) => c.name === opts.database) : allConfigs;
+  if (targets.length === 0 && opts.database) {
+    const available = allConfigs.map((c) => c.name).join(", ");
+    throw new Error(
+      `No database configuration named "${opts.database}" in environment "${envName}". ` +
+        `Available: ${available || "(none)"}`,
+    );
+  }
+  const multiDb = targets.length > 1;
+  for (const { name, config: rawConfig } of targets) {
+    const raw = normalizeRawConfig(rawConfig);
+    const hashConfig = new HashConfig(envName, name, raw as Record<string, unknown>);
+    const adapter = await connectAdapter(raw);
+    const prefix = multiDb ? `[${name}] ` : "";
+    try {
+      await fn({ adapter, raw, config: hashConfig, name, prefix });
+    } finally {
+      await closeAdapter(adapter);
+    }
+  }
+}
+
+/**
+ * Like forEachDatabase but doesn't connect an adapter — for commands
+ * like `create` and `drop` that need to operate BEFORE the DB exists.
+ */
+async function forEachDatabaseConfig(
+  opts: DatabaseOpts,
+  fn: (ctx: { raw: RawConfig; config: HashConfig; name: string }) => Promise<void>,
+): Promise<void> {
+  const envName = resolveEnv();
+  const allConfigs = await loadAllDatabaseConfigs(envName);
+  const targets = opts.database ? allConfigs.filter((c) => c.name === opts.database) : allConfigs;
+  if (targets.length === 0 && opts.database) {
+    const available = allConfigs.map((c) => c.name).join(", ");
+    throw new Error(
+      `No database configuration named "${opts.database}" in environment "${envName}". ` +
+        `Available: ${available || "(none)"}`,
+    );
+  }
+  for (const { name, config: rawConfig } of targets) {
+    const raw = normalizeRawConfig(rawConfig);
+    const hashConfig = new HashConfig(envName, name, raw as Record<string, unknown>);
+    await fn({ raw, config: hashConfig, name });
+  }
+}
+
 function databaseFromUrl(url: string, adapter?: string): string | undefined {
   try {
     const parsed = new URL(url);
@@ -398,39 +488,37 @@ function displayNameFor(config: HashConfig, raw: RawConfig): string {
   );
 }
 
-async function runCreate(): Promise<void> {
-  const raw = await loadDatabaseConfig();
-  const config = toDbConfig(raw);
-  const displayName = displayNameFor(config, raw);
-  try {
-    await DatabaseTasks.create(config);
-    console.log(`Created database '${displayName}'`);
-  } catch (error) {
-    if (error instanceof DatabaseAlreadyExists) {
-      console.error(`Database '${displayName}' already exists`);
-      return;
+async function runCreate(opts: DatabaseOpts = {}): Promise<void> {
+  await forEachDatabaseConfig(opts, async ({ raw, config }) => {
+    const displayName = displayNameFor(config, raw);
+    try {
+      await DatabaseTasks.create(config);
+      console.log(`Created database '${displayName}'`);
+    } catch (error) {
+      if (error instanceof DatabaseAlreadyExists) {
+        console.error(`Database '${displayName}' already exists`);
+        return;
+      }
+      throw error;
     }
-    throw error;
-  }
+  });
 }
 
-async function runDrop(): Promise<void> {
-  const raw = normalizeRawConfig(await loadDatabaseConfig());
-  const config = toDbConfig(raw);
-  const displayName = displayNameFor(config, raw);
-  // Rails db:drop is gated on check_protected_environments; we match.
-  // DISABLE_DATABASE_ENVIRONMENT_CHECK=1 is the Rails escape hatch.
-  await runProtectedEnvCheck(config, config.envName);
-  try {
-    await DatabaseTasks.drop(config);
-    console.log(`Dropped database '${displayName}'`);
-  } catch (error) {
-    if (error instanceof NoDatabaseError) {
-      console.error(`Database '${displayName}' does not exist`);
-      return;
+async function runDrop(opts: DatabaseOpts = {}): Promise<void> {
+  await forEachDatabaseConfig(opts, async ({ raw, config }) => {
+    const displayName = displayNameFor(config, raw);
+    await runProtectedEnvCheck(config, config.envName);
+    try {
+      await DatabaseTasks.drop(config);
+      console.log(`Dropped database '${displayName}'`);
+    } catch (error) {
+      if (error instanceof NoDatabaseError) {
+        console.error(`Database '${displayName}' does not exist`);
+        return;
+      }
+      throw error;
     }
-    throw error;
-  }
+  });
 }
 
 export function dbCommand(): Command {
@@ -439,16 +527,31 @@ export function dbCommand(): Command {
 
   cmd
     .command("migrate")
-    .description("Run pending migrations")
+    .description("Run pending migrations for all databases (or a specific one via --database)")
     .option("--version <version>", "Migrate to a specific version")
+    .option("--database <name>", "Target a specific named database")
     .action(async (opts) => {
-      await withAdapter((adapter, raw) => runMigrate(adapter, raw, opts.version));
+      await forEachDatabase(opts, async ({ adapter, raw, name, prefix }) => {
+        const mDir = migrationsDirForConfig(name, raw);
+        const migrations = await discoverMigrations(mDir);
+        if (migrations.length === 0) {
+          console.log(`${prefix}No migrations found.`);
+          return;
+        }
+        const migrator = new Migrator(adapter, migrations);
+        await migrator.migrate(opts.version ?? null);
+        for (const line of migrator.output) console.log(`${prefix}${line}`);
+        const pending = await migrator.pendingMigrations();
+        if (pending.length === 0) console.log(`${prefix}All migrations are up to date.`);
+        await dumpSchemaAfterMigrate(adapter, raw);
+      });
     });
 
   cmd
     .command("rollback")
     .description("Rollback migrations")
     .option("--step <n>", "Number of migrations to rollback", "1")
+    .option("--database <name>", "Target a specific named database")
     .action(async (opts) => {
       const step = Number(opts.step);
       if (!Number.isInteger(step) || step < 1) {
@@ -456,13 +559,25 @@ export function dbCommand(): Command {
         process.exitCode = 1;
         return;
       }
-      await withAdapter((adapter, raw) => runRollback(adapter, raw, step));
+      await forEachDatabase(opts, async ({ adapter, raw, name, prefix }) => {
+        const mDir = migrationsDirForConfig(name, raw);
+        const migrations = await discoverMigrations(mDir);
+        if (migrations.length === 0) {
+          console.log(`${prefix}No migrations found.`);
+          return;
+        }
+        const migrator = new Migrator(adapter, migrations);
+        await migrator.rollback(step);
+        for (const line of migrator.output) console.log(`${prefix}${line}`);
+        await dumpSchemaAfterMigrate(adapter, raw);
+      });
     });
 
   cmd
     .command("forward")
     .description("Move the schema forward N migrations (inverse of rollback)")
     .option("--step <n>", "Number of migrations to apply", "1")
+    .option("--database <name>", "Target a specific named database")
     .action(async (opts) => {
       const step = Number(opts.step);
       if (!Number.isInteger(step) || step < 1) {
@@ -470,15 +585,16 @@ export function dbCommand(): Command {
         process.exitCode = 1;
         return;
       }
-      await withAdapter(async (adapter, raw) => {
-        const migrations = await discoverMigrations(migrationsDir());
+      await forEachDatabase(opts, async ({ adapter, raw, name, prefix }) => {
+        const mDir = migrationsDirForConfig(name, raw);
+        const migrations = await discoverMigrations(mDir);
         if (migrations.length === 0) {
-          console.log("No migrations found.");
+          console.log(`${prefix}No migrations found.`);
           return;
         }
         const migrator = new Migrator(adapter, migrations);
         await migrator.forward(step);
-        for (const line of migrator.output) console.log(line);
+        for (const line of migrator.output) console.log(`${prefix}${line}`);
         await dumpSchemaAfterMigrate(adapter, raw);
       });
     });
@@ -486,17 +602,12 @@ export function dbCommand(): Command {
   cmd
     .command("version")
     .description("Print the current schema version")
-    .action(async () => {
-      // Don't discover or validate migration files — users should be able
-      // to ask for the current version even when the migrations/ directory
-      // has a stale file. Use the read-only currentVersion path so running
-      // `trails db version` on a fresh/production DB doesn't silently
-      // create schema_migrations / ar_internal_metadata as a side effect
-      // (matches Rails' current_version contract).
-      await withAdapter(async (adapter) => {
+    .option("--database <name>", "Target a specific named database")
+    .action(async (opts: DatabaseOpts) => {
+      await forEachDatabase(opts, async ({ adapter, prefix }) => {
         const migrator = new Migrator(adapter, []);
         const version = await migrator.currentVersionReadOnly();
-        console.log(`Current version: ${version}`);
+        console.log(`${prefix}Current version: ${version}`);
       });
     });
 
@@ -723,9 +834,17 @@ export function dbCommand(): Command {
       await runTestLoadSchema({ successMessage: (_d, f) => `Test database prepared (${f})` });
     });
 
-  cmd.command("create").description("Create the database").action(runCreate);
+  cmd
+    .command("create")
+    .description("Create database(s) — all in the env, or a specific one via --database")
+    .option("--database <name>", "Target a specific named database (e.g. primary, animals)")
+    .action(async (opts) => runCreate(opts));
 
-  cmd.command("drop").description("Drop the database").action(runDrop);
+  cmd
+    .command("drop")
+    .description("Drop database(s) — all in the env, or a specific one via --database")
+    .option("--database <name>", "Target a specific named database")
+    .action(async (opts) => runDrop(opts));
 
   cmd
     .command("migrate:status")

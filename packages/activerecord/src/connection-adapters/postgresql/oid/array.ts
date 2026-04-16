@@ -54,6 +54,11 @@ export class Array {
     if (value == null) return null;
     if (value instanceof Data) return this.typeCastArray(value.values, "deserialize") as unknown[];
     if (typeof value === "string") return this.parseArray(value, "deserialize");
+    // Divergence: Rails' deserialize only sees strings (PG::TextDecoder is run
+    // upstream). node-pg can return already-decoded JS arrays, so route them
+    // through the subtype here the same way cast() does.
+    if (globalThis.Array.isArray(value))
+      return this.typeCastArray(value, "deserialize") as unknown[];
     return value;
   }
 

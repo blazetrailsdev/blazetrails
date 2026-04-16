@@ -172,6 +172,7 @@ export class Subscriber {
       for (const key of Object.getOwnPropertyNames(proto)) {
         if (
           key !== "constructor" &&
+          !key.startsWith("_") &&
           !baseKeys.has(key) &&
           typeof (subscriber as any)[key] === "function"
         ) {

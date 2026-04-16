@@ -388,6 +388,27 @@ interface RunOptions {
   skipDump?: boolean;
 }
 
+/**
+ * Centralized Migrator construction so every CLI command stamps
+ * ar_internal_metadata.environment with the resolved TRAILS_ENV and
+ * respects useMetadataTable. Without this, `db migrate:up`,
+ * `db migrate:status`, etc. would default to NODE_ENV and potentially
+ * stamp a different env than `db migrate`.
+ */
+function createMigrator(
+  adapter: DatabaseAdapter,
+  migrations: Awaited<ReturnType<typeof discoverMigrations>>,
+  raw?: RawConfig,
+): Migrator {
+  const envName = resolveEnv();
+  const internalMetadataEnabled =
+    raw == null || (raw as { useMetadataTable?: boolean }).useMetadataTable !== false;
+  return new Migrator(adapter, migrations, {
+    environment: envName,
+    internalMetadataEnabled,
+  });
+}
+
 async function runMigrate(
   adapter: DatabaseAdapter,
   raw: RawConfig,
@@ -400,13 +421,7 @@ async function runMigrate(
     return;
   }
 
-  const envName = resolveEnv();
-  const internalMetadataEnabled =
-    (raw as { useMetadataTable?: boolean }).useMetadataTable !== false;
-  const migrator = new Migrator(adapter, migrations, {
-    environment: envName,
-    internalMetadataEnabled,
-  });
+  const migrator = createMigrator(adapter, migrations, raw);
   await migrator.migrate(targetVersion ?? null);
 
   for (const line of migrator.output) console.log(line);
@@ -429,7 +444,7 @@ async function runRollback(
     return;
   }
 
-  const migrator = new Migrator(adapter, migrations);
+  const migrator = createMigrator(adapter, migrations, raw);
   await migrator.rollback(steps);
 
   for (const line of migrator.output) console.log(line);
@@ -686,8 +701,8 @@ export function dbCommand(): Command {
     .description("Print the current schema version")
     .option("--database <name>", "Target a specific named database")
     .action(async (opts: DatabaseOpts) => {
-      await forEachDatabase(opts, async ({ adapter, prefix }) => {
-        const migrator = new Migrator(adapter, []);
+      await forEachDatabase(opts, async ({ adapter, prefix, raw: dbRaw }) => {
+        const migrator = createMigrator(adapter, [], dbRaw);
         const version = await migrator.currentVersionReadOnly();
         console.log(`${prefix}Current version: ${version}`);
       });
@@ -704,12 +719,7 @@ export function dbCommand(): Command {
         // environment:set` with NODE_ENV=development would stamp the DB
         // as development and defeat the protected-env guard.
         const envName = resolveEnv();
-        const internalMetadataEnabled =
-          (raw as { useMetadataTable?: boolean }).useMetadataTable !== false;
-        const migrator = new Migrator(adapter, [], {
-          environment: envName,
-          internalMetadataEnabled,
-        });
+        const migrator = createMigrator(adapter, [], raw);
         // Rails: raise EnvironmentStorageError when
         // internal_metadata.enabled? is false (use_metadata_table opt-out).
         if (!migrator.internalMetadata.enabled) {
@@ -748,10 +758,10 @@ export function dbCommand(): Command {
     .command("abort_if_pending_migrations")
     .description("Exit with non-zero status if any migrations are pending")
     .action(async () => {
-      await withAdapter(async (adapter) => {
+      await withAdapter(async (adapter, raw) => {
         const migrations = await discoverMigrations(migrationsDir());
         if (migrations.length === 0) return;
-        const migrator = new Migrator(adapter, migrations);
+        const migrator = createMigrator(adapter, migrations, raw);
         // Use the read-only pending check so running this in a
         // production-health-check context (e.g. before deploying) doesn't
         // silently create schema_migrations / ar_internal_metadata.
@@ -789,7 +799,7 @@ export function dbCommand(): Command {
     .action(async (opts) => {
       await withAdapter(async (adapter, raw) => {
         const migrations = await discoverMigrations(migrationsDir());
-        const migrator = new Migrator(adapter, migrations);
+        const migrator = createMigrator(adapter, migrations, raw);
         await migrator.run("up", opts.version);
         for (const line of migrator.output) console.log(line);
         await dumpSchemaAfterMigrate(adapter, raw);
@@ -803,7 +813,7 @@ export function dbCommand(): Command {
     .action(async (opts) => {
       await withAdapter(async (adapter, raw) => {
         const migrations = await discoverMigrations(migrationsDir());
-        const migrator = new Migrator(adapter, migrations);
+        const migrator = createMigrator(adapter, migrations, raw);
         await migrator.run("down", opts.version);
         for (const line of migrator.output) console.log(line);
         await dumpSchemaAfterMigrate(adapter, raw);
@@ -885,7 +895,7 @@ export function dbCommand(): Command {
         // may have been created by either our DatabaseTasks.create call
         // above or by better-sqlite3 on connect; the meaningful signal
         // is whether migrations have been applied.
-        const migrator = new Migrator(adapter, []);
+        const migrator = createMigrator(adapter, [], raw);
         const wasFresh = !(await migrator.schemaMigrationTableExists());
 
         await runMigrate(adapter, raw);
@@ -932,14 +942,14 @@ export function dbCommand(): Command {
     .command("migrate:status")
     .description("Show migration status")
     .action(async () => {
-      await withAdapter(async (adapter) => {
+      await withAdapter(async (adapter, raw) => {
         const migrations = await discoverMigrations(migrationsDir());
         if (migrations.length === 0) {
           console.log("No migrations found.");
           return;
         }
 
-        const migrator = new Migrator(adapter, migrations);
+        const migrator = createMigrator(adapter, migrations, raw);
         const statuses = await migrator.migrationsStatus();
 
         console.log("");

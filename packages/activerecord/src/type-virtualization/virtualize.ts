@@ -141,11 +141,26 @@ function findDirectiveEnd(text: string): number {
     const [full, line, terminator] = match;
     if (terminator === "" && line === "") break;
     const trimmed = line!.trimStart();
+    // File-leading directives we preserve above the auto-import block:
+    //   - shebangs (`#!...`)
+    //   - triple-slash reference directives (`/// <reference ...>`)
+    //   - whole-file TS pragmas `// @ts-nocheck` / `// @ts-check`
+    //     (NOT `// @ts-ignore` / `// @ts-expect-error`, which apply to
+    //     the NEXT statement — injecting imports between the pragma
+    //     and the statement would change behavior)
+    //   - single-line block-comment form `/* @ts-nocheck */` /
+    //     `/* @ts-check */` (multi-line `/* ... */` would require
+    //     scanning to `*/` to avoid splicing into the comment body)
+    //   - blank lines in between
+    const isSingleLineBlockPragma =
+      (trimmed.startsWith("/* @ts-nocheck") || trimmed.startsWith("/* @ts-check")) &&
+      trimmed.includes("*/");
     if (
       trimmed.startsWith("#!") ||
       trimmed.startsWith("/// <") ||
-      trimmed.startsWith("// @ts-") ||
-      trimmed.startsWith("/* @ts-") ||
+      trimmed.startsWith("// @ts-nocheck") ||
+      trimmed.startsWith("// @ts-check") ||
+      isSingleLineBlockPragma ||
       trimmed === ""
     ) {
       pos += full!.length;

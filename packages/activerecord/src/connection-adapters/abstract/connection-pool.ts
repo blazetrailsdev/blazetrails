@@ -813,7 +813,7 @@ export class ConnectionPool implements ReapablePool {
    * load's completion instead of relying on timing. Null when no
    * lazy load was triggered.
    */
-  _lazyLoadPromise: Promise<unknown> | null = null;
+  _lazyLoadPromise: Promise<void> | null = null;
 
   remove(conn: DatabaseAdapter): void {
     this._connectionLease().clear(conn);

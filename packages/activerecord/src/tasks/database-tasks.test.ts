@@ -922,12 +922,14 @@ describe("DatabaseTasks loadSchema stamps schema_sha1", () => {
     // so schemaUpToDate can skip purge+reload on subsequent test:prepare.
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-sha1-"));
     const dbFile = path.join(tmp, "sha1.sqlite3");
-    const schemaFile = path.join(tmp, "schema.ts");
+    // Use .mjs so Node can import it natively without a TS loader —
+    // keeps the test focused on SHA1 stamping, not loader config.
+    const schemaFile = path.join(tmp, "schema.mjs");
     const markerFile = path.join(tmp, "loaded.txt");
     fs.writeFileSync(
       schemaFile,
-      `export default async function defineSchema(ctx) {
-  const fs = await import("node:fs");
+      `import fs from "node:fs";
+export default async function defineSchema(ctx) {
   fs.writeFileSync(${JSON.stringify(markerFile)}, "ok");
 }\n`,
     );
@@ -945,8 +947,12 @@ describe("DatabaseTasks loadSchema stamps schema_sha1", () => {
       const metadata = new InternalMetadata(adapter);
       const storedSha1 = await metadata.get("schema_sha1");
       expect(storedSha1).toBeTruthy();
-      // And it matches the actual file hash:
-      expect(storedSha1).toBe(DatabaseTasks["_schemaSha1"](schemaFile));
+      // Compute the expected SHA1 the same way DatabaseTasks does
+      // (avoid accessing the private _schemaSha1 method directly).
+      const { createHash } = await import("node:crypto");
+      const contents = fs.readFileSync(schemaFile, "utf-8");
+      const expectedSha1 = createHash("sha1").update(contents).digest("hex");
+      expect(storedSha1).toBe(expectedSha1);
     } finally {
       await adapter.close();
       fs.rmSync(tmp, { recursive: true, force: true });

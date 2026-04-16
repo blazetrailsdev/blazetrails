@@ -641,8 +641,10 @@ export function dbCommand(): Command {
     .option("--database <name>", "Target a specific named database")
     .action(async (opts) => {
       // Rails: ENV["VERSION"] is an alternative to the --version flag
-      // for CI scripts that set VERSION=20260101000000.
-      const targetVersion = opts.version ?? process.env.VERSION?.trim() ?? null;
+      // for CI scripts that set VERSION=20260101000000. Normalize blank
+      // to null so an empty VERSION="" doesn't fail BigInt parsing.
+      const rawVersion = opts.version ?? process.env.VERSION?.trim();
+      const targetVersion = rawVersion && rawVersion.length > 0 ? rawVersion : null;
       await forEachDatabase(opts, async (ctx) => {
         await withMigratorForDb(
           ctx,

@@ -626,7 +626,11 @@ export class DatabaseTasks {
       schemaDump?: (format?: string) => string | false | null;
     };
     if (typeof cfgWithDump.schemaDump === "function") {
-      const result = cfgWithDump.schemaDump(this.schemaFormat);
+      // JS dumps use the same schema file path/config as TS; normalize
+      // so HashConfig.schemaDump (which recognizes ruby/sql/ts but not
+      // js) doesn't return null and accidentally suppress the dump.
+      const format = this.schemaFormat === "js" ? "ts" : this.schemaFormat;
+      const result = cfgWithDump.schemaDump(format);
       if (result === false || result === null) return;
     }
     const filename = this.schemaDumpPath(config);
@@ -718,8 +722,7 @@ export class DatabaseTasks {
     if (!adapter) return;
     // Respect useMetadataTable opt-out — if the config says don't use
     // the metadata table, don't create one just to stamp the SHA1.
-    const useMetadata = (config as unknown as { useMetadataTable?: boolean }).useMetadataTable;
-    if (useMetadata === false) return;
+    if (!config.useMetadataTable) return;
     try {
       const { InternalMetadata } = await import("../internal-metadata.js");
       const metadata = new InternalMetadata(adapter);

@@ -567,7 +567,13 @@ async function withMigratorForDb(
     config: HashConfig;
   },
   operation: (migrator: Migrator) => Promise<void>,
-  opts?: { skipDump?: boolean },
+  opts?: {
+    skipDump?: boolean;
+    /** Called after migrator.output has been logged — use for
+     *  messages that should appear after the migration output
+     *  (e.g. "All migrations are up to date."). */
+    afterOutput?: (migrator: Migrator) => void | Promise<void>;
+  },
 ): Promise<void> {
   const mDirs = migrationsDirsForConfig(ctx.name, ctx.raw);
   const migrations = await discoverMigrationsFromDirs(mDirs);
@@ -578,6 +584,7 @@ async function withMigratorForDb(
   const migrator = new Migrator(ctx.adapter, migrations);
   await operation(migrator);
   for (const line of migrator.output) console.log(`${ctx.prefix}${line}`);
+  if (opts?.afterOutput) await opts.afterOutput(migrator);
   if (!opts?.skipDump) await dumpSchemaAfterMigrate(ctx.adapter, ctx.raw, ctx.config);
 }
 
@@ -592,11 +599,20 @@ export function dbCommand(): Command {
     .option("--database <name>", "Target a specific named database")
     .action(async (opts) => {
       await forEachDatabase(opts, async (ctx) => {
-        await withMigratorForDb(ctx, async (migrator) => {
-          await migrator.migrate(opts.version ?? null);
-          const pending = await migrator.pendingMigrations();
-          if (pending.length === 0) console.log(`${ctx.prefix}All migrations are up to date.`);
-        });
+        await withMigratorForDb(
+          ctx,
+          async (migrator) => {
+            await migrator.migrate(opts.version ?? null);
+          },
+          {
+            afterOutput: async (migrator) => {
+              const pending = await migrator.pendingMigrations();
+              if (pending.length === 0) {
+                console.log(`${ctx.prefix}All migrations are up to date.`);
+              }
+            },
+          },
+        );
       });
     });
 

@@ -416,6 +416,18 @@ export class SchemaCache {
 export class SchemaReflection {
   static useSchemaCacheDump = true;
   static checkSchemaCacheDumpVersion = true;
+  /**
+   * Mirrors Rails' `ActiveRecord.lazily_load_schema_cache` (default
+   * false). When true, ConnectionPool.newConnection will kick off a
+   * fire-and-forget `schemaCache.loadBang()` on first connection —
+   * apps that commit `db/schema_cache.json` get it populated at boot
+   * without paying the introspection cost on every model load.
+   *
+   * Off by default because the load involves file I/O + optional
+   * schema-version validation; apps opt in by setting this to true
+   * (typically in production boot) the same way Rails exposes it.
+   */
+  static lazilyLoadSchemaCache = false;
 
   private _cache: SchemaCache | null;
   private _cachePath: string | null;

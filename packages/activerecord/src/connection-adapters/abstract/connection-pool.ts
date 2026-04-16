@@ -745,8 +745,45 @@ export class ConnectionPool implements ReapablePool {
     if (conn instanceof AbstractAdapter) {
       (conn as unknown as { pool: unknown }).pool = this;
     }
+    // Lazily load the on-disk schema cache when the first connection
+    // for this pool is adopted. Mirrors Rails'
+    // `ConnectionPool#adopt_connection`:
+    //
+    //     if @schema_cache.nil? && ActiveRecord.lazily_load_schema_cache
+    //       schema_cache.load!
+    //     end
+    //
+    // Trails' equivalent is `SchemaReflection.lazilyLoadSchemaCache`
+    // (static flag, off by default — apps opt in). The load is
+    // fire-and-forget because newConnection is sync and the load
+    // path involves `connection.schemaVersion()` introspection for
+    // version-check; errors are surfaced via console.warn by
+    // SchemaReflection.loadCache itself, so a failed cache load
+    // won't block the pool. First adoption is detected by
+    // `_lazyLoadTriggered` — only fires once per pool.
+    if (
+      SchemaReflection.lazilyLoadSchemaCache &&
+      !this._lazyLoadTriggered &&
+      !this.poolConfig.schemaCache
+    ) {
+      this._lazyLoadTriggered = true;
+      this.schemaCache.loadBang().catch((err) => {
+        // Rails lets SchemaReflection log-and-continue on load
+        // errors; mirror that behavior so a bad cache file doesn't
+        // crash the pool at first-checkout time.
+
+        console.warn(`Failed to lazily load schema cache: ${(err as Error).message}`);
+      });
+    }
     return conn;
   }
+
+  /**
+   * Set once per pool when the lazy-load trigger fires, so subsequent
+   * connections don't re-run the load. Mirrors Rails'
+   * `@schema_cache.nil?` guard on `adopt_connection`.
+   */
+  private _lazyLoadTriggered = false;
 
   remove(conn: DatabaseAdapter): void {
     this._connectionLease().clear(conn);

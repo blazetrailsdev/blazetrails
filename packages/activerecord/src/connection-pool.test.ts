@@ -733,6 +733,102 @@ describe("ConnectionPool schema cache", () => {
     expect(after).not.toBe(before);
   });
 
+  it("lazily loads the schema cache on first connection when enabled", async () => {
+    // Rails: ConnectionPool#adopt_connection calls
+    // schema_cache.load! on first adoption when
+    // ActiveRecord.lazily_load_schema_cache is true. Trails'
+    // equivalent flag is SchemaReflection.lazilyLoadSchemaCache.
+    // Load is fire-and-forget; this test triggers the first
+    // connection and awaits a microtask turn to observe the
+    // populated cache.
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const os = await import("node:os");
+    const { SQLite3Adapter } = await import("./connection-adapters/sqlite3-adapter.js");
+
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-lazy-load-"));
+    const dbFile = path.join(tmp, "lazy.sqlite3");
+    const cacheFile = path.join(tmp, "schema_cache.json");
+    fs.writeFileSync(
+      cacheFile,
+      JSON.stringify({
+        columns: { gadgets: [{ name: "id", null: false, primaryKey: true }] },
+        primary_keys: { gadgets: "id" },
+        data_sources: { gadgets: true },
+        indexes: {},
+        version: null,
+      }),
+    );
+    const prevCheck = SchemaReflection.checkSchemaCacheDumpVersion;
+    const prevLazy = SchemaReflection.lazilyLoadSchemaCache;
+    SchemaReflection.checkSchemaCacheDumpVersion = false;
+    SchemaReflection.lazilyLoadSchemaCache = true;
+
+    const dbConfig = new HashConfig("test", "primary", {
+      adapter: "sqlite3",
+      database: dbFile,
+      reapingFrequency: null,
+      schemaCachePath: cacheFile,
+    });
+    const pc = new PoolConfig(new ConnectionDescriptor("primary"), dbConfig, "writing", "default", {
+      adapterFactory: () => new SQLite3Adapter(dbFile),
+    });
+    const pool = new ConnectionPool(pc);
+    try {
+      pool.newConnection();
+      await new Promise<void>((r) => setImmediate(r));
+      expect(pool.schemaCache.isCached("gadgets")).toBe(true);
+    } finally {
+      SchemaReflection.checkSchemaCacheDumpVersion = prevCheck;
+      SchemaReflection.lazilyLoadSchemaCache = prevLazy;
+      await closePoolConnections(pool);
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("does not lazy-load when the flag is off (default)", async () => {
+    // Default: no file I/O at first-connection time. Apps that
+    // don't opt in must not pay for the cache load path.
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const os = await import("node:os");
+    const { SQLite3Adapter } = await import("./connection-adapters/sqlite3-adapter.js");
+
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-no-lazy-"));
+    const dbFile = path.join(tmp, "no_lazy.sqlite3");
+    const cacheFile = path.join(tmp, "schema_cache.json");
+    fs.writeFileSync(
+      cacheFile,
+      JSON.stringify({
+        columns: { widgets: [{ name: "id" }] },
+        primary_keys: { widgets: "id" },
+        data_sources: { widgets: true },
+        indexes: {},
+        version: null,
+      }),
+    );
+    expect(SchemaReflection.lazilyLoadSchemaCache).toBe(false);
+
+    const dbConfig = new HashConfig("test", "primary", {
+      adapter: "sqlite3",
+      database: dbFile,
+      reapingFrequency: null,
+      schemaCachePath: cacheFile,
+    });
+    const pc = new PoolConfig(new ConnectionDescriptor("primary"), dbConfig, "writing", "default", {
+      adapterFactory: () => new SQLite3Adapter(dbFile),
+    });
+    const pool = new ConnectionPool(pc);
+    try {
+      pool.newConnection();
+      await new Promise<void>((r) => setImmediate(r));
+      expect(pool.schemaCache.isCached("widgets")).toBe(false);
+    } finally {
+      await closePoolConnections(pool);
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
   it("BoundSchemaReflection.dumpTo(filename) round-trips through the pool", async () => {
     // End-to-end Rails path: pool.schema_cache.dump_to(filename)
     // allocates a fresh SchemaCache, addAll(pool) populates it via

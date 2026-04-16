@@ -74,7 +74,13 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
   private async _ensureInitialized(): Promise<void> {
     if (this._initialized) return;
     this._initialized = true;
-    await this.getDatabaseVersion();
+    try {
+      await this.getDatabaseVersion();
+    } catch {
+      // Version fetch can fail if called inside an aborted transaction
+      // or before the connection is fully ready. Will retry next time.
+      this._initialized = false;
+    }
   }
 
   /**
@@ -297,12 +303,29 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
    */
   async getDatabaseVersion(): Promise<number> {
     if (this._databaseVersion !== null) return this._databaseVersion;
-    const rows = await this.execute("SHOW server_version_num");
-    this._databaseVersion = parseInt(String(rows[0]?.server_version_num ?? "0"), 10);
-    // Eagerly populate optimizer hints flag (Rails does this lazily but
-    // we need it sync for supportsOptimizerHints)
+    // Use raw client directly to avoid re-entering execute() which could
+    // interfere with savepoint nesting in test adapters or wrappers.
+    const client = await this.getClient();
+    try {
+      const result = await client.query("SHOW server_version_num");
+      this._databaseVersion = parseInt(String(result.rows[0]?.server_version_num ?? "0"), 10);
+    } finally {
+      this.releaseClient(client);
+    }
+    // Eagerly populate optimizer hints flag
     if (this._hasOptimizerHints === null) {
-      this._hasOptimizerHints = await this.extensionAvailable("pg_hint_plan");
+      const client2 = await this.getClient();
+      try {
+        const result = await client2.query(
+          "SELECT COUNT(*) AS count FROM pg_available_extensions WHERE name = $1",
+          ["pg_hint_plan"],
+        );
+        this._hasOptimizerHints = Number(result.rows[0]?.count) > 0;
+      } catch {
+        this._hasOptimizerHints = false;
+      } finally {
+        this.releaseClient(client2);
+      }
     }
     return this._databaseVersion;
   }

@@ -706,8 +706,10 @@ export class DatabaseTasks {
     const { MigrationContext } = await import("../migration.js");
     const ctx = new MigrationContext(adapter);
     await defineSchema(ctx);
-    // Both format branches fall through to here — stamp schema_sha1.
-    await this._stampSchemaSha1(config, filename);
+    // Stamp using the resolved absolute path — `filename` may be
+    // relative and `_schemaSha1` reads the file via getFs(), so the
+    // path must match what was actually imported.
+    await this._stampSchemaSha1(config, absolute);
   }
 
   /**

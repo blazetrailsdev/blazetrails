@@ -400,7 +400,13 @@ async function runMigrate(
     return;
   }
 
-  const migrator = new Migrator(adapter, migrations);
+  const envName = resolveEnv();
+  const internalMetadataEnabled =
+    (raw as { useMetadataTable?: boolean }).useMetadataTable !== false;
+  const migrator = new Migrator(adapter, migrations, {
+    environment: envName,
+    internalMetadataEnabled,
+  });
   await migrator.migrate(targetVersion ?? null);
 
   for (const line of migrator.output) console.log(line);
@@ -601,7 +607,7 @@ async function withMigratorForDb(
   }
   const migrator = new Migrator(ctx.adapter, migrations, {
     environment: ctx.config.envName,
-    internalMetadataEnabled: (ctx.raw as { useMetadataTable?: boolean }).useMetadataTable !== false,
+    internalMetadataEnabled: ctx.config.useMetadataTable,
   });
   await operation(migrator);
   for (const line of migrator.output) console.log(`${ctx.prefix}${line}`);

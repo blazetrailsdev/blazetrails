@@ -1757,13 +1757,21 @@ export class Migrator {
    */
   private async _ddlTransaction(migration: MigrationLike, fn: () => Promise<void>): Promise<void> {
     if (this._useTransaction(migration)) {
-      await this._adapter.beginTransaction();
-      try {
+      // Skip wrapping if the adapter is already in a transaction
+      // (e.g. a caller wrapped the entire migrate in a transaction).
+      // Starting a nested BEGIN on adapters that don't support
+      // savepoints (like SQLite) would error.
+      if (this._adapter.inTransaction) {
         await fn();
-        await this._adapter.commit();
-      } catch (e) {
-        await this._adapter.rollback();
-        throw e;
+      } else {
+        await this._adapter.beginTransaction();
+        try {
+          await fn();
+          await this._adapter.commit();
+        } catch (e) {
+          await this._adapter.rollback();
+          throw e;
+        }
       }
     } else {
       await fn();
@@ -1775,11 +1783,11 @@ export class Migrator {
    * `!migration.disable_ddl_transaction && connection.supports_ddl_transactions?`
    */
   private _useTransaction(migration: MigrationLike): boolean {
-    // Check migration opt-out
     const disableDdl = (migration as { disableDdlTransaction?: boolean }).disableDdlTransaction;
     if (disableDdl) return false;
-    // Check adapter support — SQLite/MySQL don't support DDL in
-    // transactions; PG does.
+    // Check adapter support. SQLite returns true (DDL is transactional
+    // in SQLite), PG returns true, MySQL returns false. The abstract
+    // adapter defaults to false.
     const supports = (this._adapter as { supportsDdlTransactions?: () => boolean })
       .supportsDdlTransactions;
     if (typeof supports === "function") return supports.call(this._adapter);

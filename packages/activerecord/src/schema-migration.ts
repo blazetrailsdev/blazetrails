@@ -129,52 +129,46 @@ export class SchemaMigration {
    * Mark all migration versions up to `version` as run without
    * executing them. Used for legacy DB imports and test fixtures.
    *
-   * Mirrors Rails' `SchemaStatements#assume_migrated_upto_version`:
-   * inserts the target version + all known migrations below it into
-   * schema_migrations. Raises on duplicate migration versions.
-   *
-   * @param version - The version to assume as the "current" cutoff.
-   * @param migrationVersions - All known migration versions from
-   *   the migrations directory. Versions below `version` that aren't
-   *   already migrated get inserted.
+   * The canonical implementation lives on `SchemaStatements` (which
+   * has pool/migrationContext access for the full Rails semantics).
+   * This thin wrapper provides the same behavior for callers holding
+   * a SchemaMigration instance directly. Versions are normalized via
+   * BigInt so "001" and "1" are treated as the same version. Invalid
+   * (non-numeric) versions throw.
    */
   async assumeMigratedUptoVersion(
     version: string,
     migrationVersions: string[] = [],
   ): Promise<void> {
+    const normalized = String(BigInt(version)); // throws on non-numeric
     const migrated = new Set(await this.allVersions());
 
-    // Ensure the target version itself is recorded.
-    if (!migrated.has(version)) {
-      await this.createVersion(version);
+    if (!migrated.has(normalized)) {
+      await this.createVersion(normalized);
     }
 
-    // Insert all known migration versions below the target that
-    // haven't been migrated yet.
-    const versionNum = BigInt(version);
-    const inserting = migrationVersions
-      .filter((v) => {
-        try {
-          return BigInt(v) < versionNum;
-        } catch {
-          return false;
-        }
-      })
-      .filter((v) => !migrated.has(v));
+    const versionNum = BigInt(normalized);
+    // Validate + normalize all input versions up front.
+    const candidates = migrationVersions.map((v) => {
+      const n = String(BigInt(v)); // throws on non-numeric
+      return { original: v, normalized: n, num: BigInt(n) };
+    });
 
-    // Rails checks for duplicate versions and raises.
+    // Duplicate detection (matching Rails).
     const seen = new Set<string>();
-    for (const v of inserting) {
-      if (seen.has(v)) {
+    for (const { normalized: n, original } of candidates) {
+      if (seen.has(n)) {
         throw new Error(
-          `Duplicate migration ${v}. Please renumber your migrations to resolve the conflict.`,
+          `Duplicate migration ${original}. Please renumber your migrations to resolve the conflict.`,
         );
       }
-      seen.add(v);
+      seen.add(n);
     }
 
-    for (const v of inserting) {
-      await this.createVersion(v);
+    for (const { normalized: n, num } of candidates) {
+      if (num < versionNum && !migrated.has(n)) {
+        await this.createVersion(n);
+      }
     }
   }
 }

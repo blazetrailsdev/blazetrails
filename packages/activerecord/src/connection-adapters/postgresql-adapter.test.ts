@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import pg from "pg";
-import { PostgreSQLAdapter } from "../connection-adapters/postgresql-adapter.js";
+import { PostgreSQLAdapter } from "./postgresql-adapter.js";
 import {
   Base,
   transaction,

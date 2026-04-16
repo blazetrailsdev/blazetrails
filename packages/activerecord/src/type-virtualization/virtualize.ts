@@ -97,16 +97,19 @@ export function virtualize(
   if (prependImports && prependImports.length > 0) {
     const importBlock = prependImports.join("\n") + "\n";
     const insertPos = findDirectiveEnd(text);
+    // Compute the virtual line BEFORE which the import block is
+    // inserted: `-1` if the block is truly at the start of the file,
+    // otherwise the line index of the last directive/blank line that
+    // precedes the insertion point. This preserves `remapLine` for
+    // any leading directives (shebang / @ts-nocheck / triple-slash).
+    const insertedAtLine =
+      insertPos === 0 ? -1 : text.slice(0, insertPos).split(/\r?\n/).length - 2;
     text = text.slice(0, insertPos) + importBlock + text.slice(insertPos);
-    // Shift all existing deltas down by the number of prepended lines.
     const prependedLines = prependImports.length;
     for (const d of deltas) {
       d.insertedAtLine += prependedLines;
     }
-    // Use insertedAtLine: -1 so remapLine correctly treats virtual
-    // lines 0..prependedLines-1 as "inside the injected range" (null)
-    // and virtual line prependedLines as original line 0.
-    deltas.unshift({ insertedAtLine: -1, lineCount: prependedLines });
+    deltas.unshift({ insertedAtLine, lineCount: prependedLines });
   }
 
   return { text, deltas };
@@ -120,10 +123,18 @@ export function virtualize(
  * file-leading semantics.
  */
 function findDirectiveEnd(text: string): number {
+  // Scan line-by-line preserving the actual line terminator width
+  // (`\n` or `\r\n`) so the returned offset is a valid index in
+  // `text`. Stops at the first non-directive, non-blank line; also
+  // stops if the file ends without a trailing newline so we never
+  // overshoot `text.length`.
+  const lineRe = /([^\r\n]*)(\r?\n|$)/g;
   let pos = 0;
-  const lines = text.split("\n");
-  for (const line of lines) {
-    const trimmed = line.trimStart();
+  let match: RegExpExecArray | null;
+  while ((match = lineRe.exec(text)) !== null) {
+    const [full, line, terminator] = match;
+    if (terminator === "" && line === "") break;
+    const trimmed = line!.trimStart();
     if (
       trimmed.startsWith("#!") ||
       trimmed.startsWith("/// <") ||
@@ -131,7 +142,8 @@ function findDirectiveEnd(text: string): number {
       trimmed.startsWith("/* @ts-") ||
       trimmed === ""
     ) {
-      pos += line.length + 1; // +1 for \n
+      pos += full!.length;
+      if (terminator === "") break;
     } else {
       break;
     }

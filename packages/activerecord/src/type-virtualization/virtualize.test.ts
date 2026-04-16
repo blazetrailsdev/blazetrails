@@ -145,6 +145,27 @@ describe("virtualize — prependImports", () => {
     // The original file's first line (line 0) is now at virtual line 2.
     expect(remapLine(2, deltas)).toBe(0);
   });
+
+  test("remapLine preserves leading-directive lines when imports are inserted after them", () => {
+    const src =
+      "#!/usr/bin/env node\n" + //         L0 (original & virtual)
+      "// @ts-nocheck\n" + //              L1
+      "\n" + //                            L2
+      "export class Post extends Base {\n" + // L3
+      '  static { this.attribute("title", "string"); }\n' + // L4
+      "}\n"; //                            L5
+    const { deltas } = virtualize(src, "post.ts", {
+      prependImports: ['import type { Author } from "./author.js";'],
+    });
+    // Directive lines remain at their original line indices.
+    expect(remapLine(0, deltas)).toBe(0);
+    expect(remapLine(1, deltas)).toBe(1);
+    expect(remapLine(2, deltas)).toBe(2);
+    // The injected import sits at virtual line 3 — inside the block.
+    expect(remapLine(3, deltas)).toBeNull();
+    // Virtual line 4 is now the `export class Post...` line.
+    expect(remapLine(4, deltas)).toBe(3);
+  });
 });
 
 describe("virtualize — multiple classes", () => {

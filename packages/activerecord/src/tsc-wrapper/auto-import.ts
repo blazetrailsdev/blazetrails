@@ -58,14 +58,15 @@ function collectNamesInScope(sf: ts.SourceFile): Set<string> {
   for (const stmt of sf.statements) {
     if (ts.isImportDeclaration(stmt) && stmt.importClause) {
       const clause = stmt.importClause;
+      // Default and named imports introduce type-namespace bindings.
+      // Skip namespace imports (`import * as X from "..."`) — `X` is a
+      // namespace value, not a type-namespace binding that can satisfy
+      // an association target type reference, so we still need to
+      // auto-inject `import type { X }` in that case.
       if (clause.name) names.add(clause.name.text);
-      if (clause.namedBindings) {
-        if (ts.isNamedImports(clause.namedBindings)) {
-          for (const el of clause.namedBindings.elements) {
-            names.add(el.name.text);
-          }
-        } else if (ts.isNamespaceImport(clause.namedBindings)) {
-          names.add(clause.namedBindings.name.text);
+      if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+        for (const el of clause.namedBindings.elements) {
+          names.add(el.name.text);
         }
       }
       continue;

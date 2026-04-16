@@ -87,23 +87,31 @@ export function createTrailsSolutionBuilder(
     );
   };
 
+  // A composite host that delegates `getDeltasForFile` /
+  // `getOriginalText` to whichever per-project host owns a given
+  // absolute path. Lets `remapDiagnostics` remap a diagnostic whose
+  // primary file lives in project A AND whose `relatedInformation`
+  // entries point into project B's virtualized files.
+  const compositeRemapHost = {
+    getDeltasForFile(fileName: string) {
+      for (const host of hostsByProject.values()) {
+        const d = host.getDeltasForFile(fileName);
+        if (d) return d;
+      }
+      return undefined;
+    },
+    getOriginalText(fileName: string) {
+      for (const host of hostsByProject.values()) {
+        const t = host.getOriginalText(fileName);
+        if (t != null) return t;
+      }
+      return undefined;
+    },
+  } as unknown as TrailsCompilerHost;
+
   const reportDiagnostic: ts.DiagnosticReporter = (d) => {
     if (!buildOpts.onDiagnostic) return;
-    // The builder emits diagnostics keyed by file; remap against the
-    // host that owns that file (if any) before handing off.
-    const file = d.file;
-    if (!file) {
-      buildOpts.onDiagnostic(d);
-      return;
-    }
-    const resolved = path.resolve(file.fileName);
-    let remapped: ts.Diagnostic = d;
-    for (const host of hostsByProject.values()) {
-      if (host.getDeltasForFile(resolved)) {
-        remapped = remapDiagnostics([d], host)[0]!;
-        break;
-      }
-    }
+    const remapped = remapDiagnostics([d], compositeRemapHost)[0]!;
     buildOpts.onDiagnostic(remapped);
   };
 

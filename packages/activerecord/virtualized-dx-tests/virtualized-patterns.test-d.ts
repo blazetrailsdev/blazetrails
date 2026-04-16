@@ -83,13 +83,9 @@ class Task extends Base {
 class Article extends Base {
   static {
     this.attribute("status", "integer");
+    defineEnum(this, "status", { draft: 0, published: 1 });
   }
 }
-// Top-level `defineEnum(ClassName, ...)` — form the virtualizer walker
-// recognizes. The `defineEnum(this, ...)` static-block form is valid at
-// runtime but not yet picked up by the walker (parallel gap with
-// declare-patterns, which still needs hand-written declares for it).
-defineEnum(Article, "status", { draft: 0, published: 1 });
 
 describe("virtualized patterns — trails-tsc injects declares + auto-imports", () => {
   it("attributes resolve to their declared type", () => {

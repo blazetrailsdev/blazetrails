@@ -53,11 +53,11 @@ export class Array {
   deserialize(value: unknown): unknown {
     if (value == null) return null;
     if (value instanceof Data) return this.typeCastArray(value.values, "deserialize") as unknown[];
-    if (typeof value === "string") return this.parseArray(value);
+    if (typeof value === "string") return this.parseArray(value, "deserialize");
     return value;
   }
 
-  private parseArray(str: string): unknown[] {
+  private parseArray(str: string, method: "cast" | "deserialize" = "cast"): unknown[] {
     const trimmed = str.trim();
     if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return [];
     const inner = trimmed.slice(1, -1);
@@ -80,7 +80,7 @@ export class Array {
           i++;
         }
         i++; // closing quote
-        elements.push(this.subtype.cast(val));
+        elements.push(this.castElement(val, method));
       } else if (
         inner.substring(i, i + 4).toUpperCase() === "NULL" &&
         (i + 4 >= inner.length || inner[i + 4] === this.delimiter || inner[i + 4] === "}")
@@ -96,19 +96,25 @@ export class Array {
           if (inner[i] === "}") depth--;
           i++;
         }
-        elements.push(this.parseArray(inner.substring(start, i)));
+        elements.push(this.parseArray(inner.substring(start, i), method));
       } else {
         let val = "";
         while (i < inner.length && inner[i] !== this.delimiter) {
           val += inner[i];
           i++;
         }
-        elements.push(this.subtype.cast(val));
+        elements.push(this.castElement(val, method));
       }
       if (i < inner.length && inner[i] === this.delimiter) i++;
     }
 
     return elements;
+  }
+
+  private castElement(value: unknown, method: "cast" | "deserialize"): unknown {
+    if (method === "deserialize")
+      return this.subtype.deserialize?.(value) ?? this.subtype.cast(value);
+    return this.subtype.cast(value);
   }
 
   encode(values: readonly unknown[]): string {

@@ -86,21 +86,42 @@ function migrationsDir(): string {
 }
 
 /**
- * Resolve the migrations directory for a named database config.
+ * Resolve the migrations directories for a named database config.
  * Mirrors Rails' per-DB migrations_paths: the user can set
- * `migrationsPaths` in config/database.ts; otherwise primary
- * defaults to `db/migrations` and named DBs default to
- * `db/migrations_<name>`.
+ * `migrationsPaths` (string or string[]) in config/database.ts;
+ * otherwise primary defaults to `db/migrations` and named DBs
+ * default to `db/migrations_<name>`. Returns an array because
+ * Rails supports multiple directories per config.
  */
-function migrationsDirForConfig(name: string, config: RawConfig): string {
+function migrationsDirsForConfig(name: string, config: RawConfig): string[] {
   const raw = (config as { migrationsPaths?: string | string[] }).migrationsPaths;
-  if (typeof raw === "string" && raw.length > 0) return path.resolve(process.cwd(), raw);
+  if (typeof raw === "string" && raw.length > 0) return [path.resolve(process.cwd(), raw)];
   if (Array.isArray(raw)) {
-    const first = raw.find((p) => p.length > 0);
-    if (first) return path.resolve(process.cwd(), first);
+    const dirs = [
+      ...new Set(raw.filter((p) => p.length > 0).map((p) => path.resolve(process.cwd(), p))),
+    ];
+    if (dirs.length > 0) return dirs;
   }
-  if (name === "primary") return path.join(process.cwd(), "db", "migrations");
-  return path.join(process.cwd(), "db", `migrations_${name}`);
+  if (name === "primary") return [path.join(process.cwd(), "db", "migrations")];
+  return [path.join(process.cwd(), "db", `migrations_${name}`)];
+}
+
+/**
+ * Discover migrations across multiple directories and merge/dedup
+ * by version. Matches Rails' behavior when migrations_paths contains
+ * multiple entries.
+ */
+async function discoverMigrationsFromDirs(dirs: string[]): ReturnType<typeof discoverMigrations> {
+  const all = await Promise.all(dirs.map((d) => discoverMigrations(d)));
+  const merged = all.flat();
+  // Dedup by version — first occurrence wins (matches Rails' behavior
+  // where a migration version can only appear once across all paths).
+  const seen = new Set<string>();
+  return merged.filter((m) => {
+    if (seen.has(m.version)) return false;
+    seen.add(m.version);
+    return true;
+  });
 }
 
 interface DatabaseOpts {
@@ -531,6 +552,35 @@ async function runDrop(opts: DatabaseOpts = {}): Promise<void> {
   });
 }
 
+/**
+ * Shared helper for migrate/rollback/forward — discover migrations for
+ * the named DB, construct a Migrator, run the caller-provided operation,
+ * log output, and dump the schema. Extracts the pattern so the three
+ * commands can't drift.
+ */
+async function withMigratorForDb(
+  ctx: {
+    adapter: DatabaseAdapter;
+    raw: RawConfig;
+    name: string;
+    prefix: string;
+    config: HashConfig;
+  },
+  operation: (migrator: Migrator) => Promise<void>,
+  opts?: { skipDump?: boolean },
+): Promise<void> {
+  const mDirs = migrationsDirsForConfig(ctx.name, ctx.raw);
+  const migrations = await discoverMigrationsFromDirs(mDirs);
+  if (migrations.length === 0) {
+    console.log(`${ctx.prefix}No migrations found.`);
+    return;
+  }
+  const migrator = new Migrator(ctx.adapter, migrations);
+  await operation(migrator);
+  for (const line of migrator.output) console.log(`${ctx.prefix}${line}`);
+  if (!opts?.skipDump) await dumpSchemaAfterMigrate(ctx.adapter, ctx.raw, ctx.config);
+}
+
 export function dbCommand(): Command {
   const cmd = new Command("db");
   cmd.description("Database management commands");
@@ -541,19 +591,12 @@ export function dbCommand(): Command {
     .option("--version <version>", "Migrate to a specific version")
     .option("--database <name>", "Target a specific named database")
     .action(async (opts) => {
-      await forEachDatabase(opts, async ({ adapter, raw, name, prefix, config }) => {
-        const mDir = migrationsDirForConfig(name, raw);
-        const migrations = await discoverMigrations(mDir);
-        if (migrations.length === 0) {
-          console.log(`${prefix}No migrations found.`);
-          return;
-        }
-        const migrator = new Migrator(adapter, migrations);
-        await migrator.migrate(opts.version ?? null);
-        for (const line of migrator.output) console.log(`${prefix}${line}`);
-        const pending = await migrator.pendingMigrations();
-        if (pending.length === 0) console.log(`${prefix}All migrations are up to date.`);
-        await dumpSchemaAfterMigrate(adapter, raw, config);
+      await forEachDatabase(opts, async (ctx) => {
+        await withMigratorForDb(ctx, async (migrator) => {
+          await migrator.migrate(opts.version ?? null);
+          const pending = await migrator.pendingMigrations();
+          if (pending.length === 0) console.log(`${ctx.prefix}All migrations are up to date.`);
+        });
       });
     });
 
@@ -569,17 +612,10 @@ export function dbCommand(): Command {
         process.exitCode = 1;
         return;
       }
-      await forEachDatabase(opts, async ({ adapter, raw, name, prefix, config }) => {
-        const mDir = migrationsDirForConfig(name, raw);
-        const migrations = await discoverMigrations(mDir);
-        if (migrations.length === 0) {
-          console.log(`${prefix}No migrations found.`);
-          return;
-        }
-        const migrator = new Migrator(adapter, migrations);
-        await migrator.rollback(step);
-        for (const line of migrator.output) console.log(`${prefix}${line}`);
-        await dumpSchemaAfterMigrate(adapter, raw, config);
+      await forEachDatabase(opts, async (ctx) => {
+        await withMigratorForDb(ctx, async (migrator) => {
+          await migrator.rollback(step);
+        });
       });
     });
 
@@ -595,17 +631,10 @@ export function dbCommand(): Command {
         process.exitCode = 1;
         return;
       }
-      await forEachDatabase(opts, async ({ adapter, raw, name, prefix, config }) => {
-        const mDir = migrationsDirForConfig(name, raw);
-        const migrations = await discoverMigrations(mDir);
-        if (migrations.length === 0) {
-          console.log(`${prefix}No migrations found.`);
-          return;
-        }
-        const migrator = new Migrator(adapter, migrations);
-        await migrator.forward(step);
-        for (const line of migrator.output) console.log(`${prefix}${line}`);
-        await dumpSchemaAfterMigrate(adapter, raw, config);
+      await forEachDatabase(opts, async (ctx) => {
+        await withMigratorForDb(ctx, async (migrator) => {
+          await migrator.forward(step);
+        });
       });
     });
 
@@ -902,10 +931,15 @@ export function dbCommand(): Command {
 
   cmd
     .command("reset")
-    .description("Drop, create, migrate, and seed the database")
+    .description("Drop, create, migrate, and seed the primary database")
     .action(async () => {
-      await runDrop();
-      await runCreate();
+      // reset/setup operate on the primary DB only — they call
+      // runMigrate/runSeed via withAdapter (primary-only), so
+      // create/drop must also target primary for consistency.
+      // Multi-DB apps use `trails db create --database=<name>`
+      // + `trails db migrate --database=<name>` individually.
+      await runDrop({ database: "primary" });
+      await runCreate({ database: "primary" });
       await withAdapter(async (adapter, raw) => {
         await runMigrate(adapter, raw);
         await withSeedAdapter(adapter, runSeed);
@@ -914,9 +948,9 @@ export function dbCommand(): Command {
 
   cmd
     .command("setup")
-    .description("Create, migrate, and seed the database")
+    .description("Create, migrate, and seed the primary database")
     .action(async () => {
-      await runCreate();
+      await runCreate({ database: "primary" });
       await withAdapter(async (adapter, raw) => {
         await runMigrate(adapter, raw);
         await withSeedAdapter(adapter, runSeed);

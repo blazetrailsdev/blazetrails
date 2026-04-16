@@ -4,14 +4,19 @@
  * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::OID::Array
  */
 
+export interface ArraySubtype {
+  cast(value: unknown): unknown;
+  serialize(value: unknown): unknown;
+  deserialize?(value: unknown): unknown;
+  typeCastForSchema?(value: unknown): string;
+  map?(value: unknown, block?: (value: unknown) => unknown): unknown;
+}
+
 export class Array {
-  readonly subtype: { cast(value: unknown): unknown; serialize(value: unknown): unknown };
+  readonly subtype: ArraySubtype;
   readonly delimiter: string;
 
-  constructor(
-    subtype: { cast(value: unknown): unknown; serialize(value: unknown): unknown },
-    delimiter: string = ",",
-  ) {
+  constructor(subtype: ArraySubtype, delimiter: string = ",") {
     this.subtype = subtype;
     this.delimiter = delimiter;
   }
@@ -27,32 +32,15 @@ export class Array {
     return null;
   }
 
-  serialize(value: unknown): string | null {
+  serialize(value: unknown): Data | null {
     if (value == null) return null;
     if (!globalThis.Array.isArray(value)) return null;
-    const items = value.map((v) => {
-      const s = this.subtype.serialize(v);
-      if (s == null) return "NULL";
-      const str = String(s);
-      if (
-        str === "" ||
-        str.toUpperCase() === "NULL" ||
-        str.includes(this.delimiter) ||
-        str.includes('"') ||
-        str.includes("\\") ||
-        str.includes("{") ||
-        str.includes("}") ||
-        /\s/.test(str)
-      ) {
-        return `"${str.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
-      }
-      return str;
-    });
-    return `{${items.join(this.delimiter)}}`;
+    return new Data(this, this.typeCastArray(value, "serialize") as unknown[]);
   }
 
   deserialize(value: unknown): unknown[] | null {
     if (value == null) return null;
+    if (value instanceof Data) return this.typeCastArray(value.values, "deserialize") as unknown[];
     if (globalThis.Array.isArray(value)) return value.map((v) => this.subtype.cast(v));
     if (typeof value === "string") return this.parseArray(value);
     return null;
@@ -110,5 +98,72 @@ export class Array {
     }
 
     return elements;
+  }
+
+  encode(values: readonly unknown[]): string {
+    const items = values.map((value) => {
+      if (value == null) return "NULL";
+      if (globalThis.Array.isArray(value)) return this.encode(value);
+
+      const str = String(value);
+      if (
+        str === "" ||
+        str.toUpperCase() === "NULL" ||
+        str.includes(this.delimiter) ||
+        str.includes('"') ||
+        str.includes("\\") ||
+        str.includes("{") ||
+        str.includes("}") ||
+        /\s/.test(str)
+      ) {
+        return `"${str.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+      }
+      return str;
+    });
+    return `{${items.join(this.delimiter)}}`;
+  }
+
+  typeCastForSchema(value: unknown): string {
+    if (!globalThis.Array.isArray(value)) return JSON.stringify(value) ?? String(value);
+    return `[${value.map((item) => this.subtype.typeCastForSchema?.(item) ?? JSON.stringify(item) ?? String(item)).join(", ")}]`;
+  }
+
+  map(value: unknown, block?: (value: unknown) => unknown): unknown {
+    if (globalThis.Array.isArray(value)) return block ? value.map(block) : value;
+    return this.subtype.map ? this.subtype.map(value, block) : block ? block(value) : value;
+  }
+
+  isChangedInPlace(rawOldValue: unknown, newValue: unknown): boolean {
+    const oldValue = this.deserialize(rawOldValue);
+    return JSON.stringify(oldValue) !== JSON.stringify(newValue);
+  }
+
+  isForceEquality(value: unknown): boolean {
+    return globalThis.Array.isArray(value);
+  }
+
+  private typeCastArray(value: unknown, method: "cast" | "serialize" | "deserialize"): unknown {
+    if (globalThis.Array.isArray(value)) {
+      return value.map((item) => this.typeCastArray(item, method));
+    }
+
+    if (method === "deserialize")
+      return this.subtype.deserialize?.(value) ?? this.subtype.cast(value);
+    if (method === "cast") return this.subtype.cast(value);
+    return this.subtype.serialize(value);
+  }
+}
+
+export class Data {
+  readonly encoder: Array;
+  readonly values: unknown[];
+
+  constructor(encoder: Array, values: unknown[]) {
+    this.encoder = encoder;
+    this.values = values;
+  }
+
+  toString(): string {
+    return this.encoder.encode(this.values);
   }
 }

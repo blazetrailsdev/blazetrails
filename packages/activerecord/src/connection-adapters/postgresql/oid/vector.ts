@@ -5,6 +5,14 @@
  */
 
 export class Vector {
+  readonly delim: string;
+  readonly subtype: unknown;
+
+  constructor(delim: string = ",", subtype: unknown = null) {
+    this.delim = delim;
+    this.subtype = subtype;
+  }
+
   get type(): string {
     return "vector";
   }

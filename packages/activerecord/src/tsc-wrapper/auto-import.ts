@@ -36,6 +36,11 @@ export function resolveAutoImports(
     imports.push(`import type { ${name} } from "${relativePath}";`);
   }
 
+  // Sort for determinism — iteration order of `neededNames` depends
+  // on association discovery order, which shouldn't affect the
+  // virtualized text / line deltas.
+  imports.sort((a, b) => a.localeCompare(b));
+
   return imports;
 }
 
@@ -64,15 +69,21 @@ function collectNamesInScope(sf: ts.SourceFile): Set<string> {
   for (const stmt of sf.statements) {
     if (ts.isImportDeclaration(stmt) && stmt.importClause) {
       const clause = stmt.importClause;
-      // Default and named imports introduce type-namespace bindings.
-      // Skip namespace imports (`import * as X from "..."`) — `X` is a
-      // namespace value, not a type-namespace binding that can satisfy
-      // an association target type reference, so we still need to
-      // auto-inject `import type { X }` in that case.
+      // Any local import binding (default, named, OR namespace)
+      // suppresses auto-import generation for the same name. Even
+      // though `import * as X from "..."` binds `X` as a namespace
+      // (not a type-namespace binding that can satisfy the association
+      // target type), auto-injecting `import type { X }` next to it
+      // would produce a duplicate-identifier error, which is worse
+      // than the user-fixable "can't use namespace as type" diagnostic.
       if (clause.name) names.add(clause.name.text);
-      if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
-        for (const el of clause.namedBindings.elements) {
-          names.add(el.name.text);
+      if (clause.namedBindings) {
+        if (ts.isNamedImports(clause.namedBindings)) {
+          for (const el of clause.namedBindings.elements) {
+            names.add(el.name.text);
+          }
+        } else if (ts.isNamespaceImport(clause.namedBindings)) {
+          names.add(clause.namedBindings.name.text);
         }
       }
       continue;

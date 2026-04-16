@@ -4,6 +4,7 @@ import ts from "typescript";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import { createTrailsProgram } from "./program.js";
+import { createTrailsSolutionBuilder } from "./build.js";
 import { remapDiagnostics } from "./remap.js";
 import { virtualize } from "../type-virtualization/virtualize.js";
 
@@ -26,10 +27,68 @@ function handlePrintVirtualized(args: string[]): void {
   process.exit(0);
 }
 
+function parsePretty(args: string[], options: ts.CompilerOptions): boolean {
+  const prettyIndex = args.indexOf("--pretty");
+  const prettyFromArgs =
+    prettyIndex === -1 ? undefined : args[prettyIndex + 1] === "false" ? false : true;
+  const prettyFromOpts = typeof options.pretty === "boolean" ? options.pretty : undefined;
+  return prettyFromArgs ?? prettyFromOpts ?? ts.sys.writeOutputIsTTY?.() ?? false;
+}
+
+function formatHost(): ts.FormatDiagnosticsHost {
+  return {
+    getCurrentDirectory: () => process.cwd(),
+    getCanonicalFileName: (f) => (ts.sys.useCaseSensitiveFileNames ? f : f.toLowerCase()),
+    getNewLine: () => ts.sys.newLine,
+  };
+}
+
+function handleBuildMode(args: string[]): void {
+  // --build / -b must be the first arg for tsc compatibility, but be
+  // lenient: accept it anywhere so users can pass flags in either
+  // order.
+  const buildIdx = args.findIndex((a) => a === "--build" || a === "-b");
+  if (buildIdx === -1) return;
+
+  // Everything after --build that isn't a known solution-builder
+  // flag is treated as a project path. tsc accepts multiple.
+  const verbose = args.includes("--verbose");
+  const clean = args.includes("--clean");
+  const rest = args.filter((a, i) => {
+    if (i === buildIdx) return false;
+    if (a === "--verbose" || a === "--clean") return false;
+    return !a.startsWith("-");
+  });
+  const rootConfigs = rest.length > 0 ? rest.map((p) => path.resolve(p)) : [process.cwd()];
+
+  const fh = formatHost();
+  const pretty = ts.sys.writeOutputIsTTY?.() ?? false;
+  let diagnostics = 0;
+  const builder = createTrailsSolutionBuilder(rootConfigs, {
+    verbose,
+    onDiagnostic: (d) => {
+      diagnostics++;
+      const out = pretty
+        ? ts.formatDiagnosticsWithColorAndContext([d], fh)
+        : ts.formatDiagnostics([d], fh);
+      process.stderr.write(out);
+    },
+    onStatus: (d) => {
+      // Solution-builder status (informational, not diagnostics).
+      const msg = ts.flattenDiagnosticMessageText(d.messageText, ts.sys.newLine);
+      process.stdout.write(`${msg}${ts.sys.newLine}`);
+    },
+  });
+
+  const status = clean ? builder.clean() : builder.build();
+  process.exit(diagnostics > 0 ? 1 : status === ts.ExitStatus.Success ? 0 : 1);
+}
+
 function main(): void {
   const args = process.argv.slice(2);
 
   handlePrintVirtualized(args);
+  handleBuildMode(args);
 
   // Find -p / --project flag; default to ./tsconfig.json.
   // Error if the flag is present but no value follows (matches tsc).
@@ -54,16 +113,12 @@ function main(): void {
 
   const { program, host, configDiagnostics } = createTrailsProgram(configPath);
 
-  const formatHost: ts.FormatDiagnosticsHost = {
-    getCurrentDirectory: () => process.cwd(),
-    getCanonicalFileName: (f) => (ts.sys.useCaseSensitiveFileNames ? f : f.toLowerCase()),
-    getNewLine: () => ts.sys.newLine,
-  };
+  const fh = formatHost();
 
   // Config-level errors (bad tsconfig read / parse) — format and
   // exit before attempting to use the program.
   if (configDiagnostics.length > 0) {
-    process.stderr.write(ts.formatDiagnostics(configDiagnostics, formatHost));
+    process.stderr.write(ts.formatDiagnostics(configDiagnostics, fh));
     process.exit(1);
   }
 
@@ -85,17 +140,10 @@ function main(): void {
   const sorted = ts.sortAndDeduplicateDiagnostics(remapped);
 
   if (sorted.length > 0) {
-    // Mirror tsc's --pretty default: on when stdout is a TTY,
-    // off otherwise. Explicit --pretty true/false overrides.
-    const prettyIndex = args.indexOf("--pretty");
-    const prettyFromArgs =
-      prettyIndex === -1 ? undefined : args[prettyIndex + 1] === "false" ? false : true;
-    const pretty =
-      prettyFromArgs ?? program.getCompilerOptions().pretty ?? ts.sys.writeOutputIsTTY?.() ?? false;
+    const pretty = parsePretty(args, program.getCompilerOptions());
     const output = pretty
-      ? ts.formatDiagnosticsWithColorAndContext(sorted, formatHost)
-      : ts.formatDiagnostics(sorted, formatHost);
-
+      ? ts.formatDiagnosticsWithColorAndContext(sorted, fh)
+      : ts.formatDiagnostics(sorted, fh);
     process.stderr.write(output);
     process.exit(1);
   }

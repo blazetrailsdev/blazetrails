@@ -1,0 +1,133 @@
+import ts from "typescript";
+import * as path from "node:path";
+import { buildCompilerHost, type TrailsCompilerHost } from "./host.js";
+import { collectBaseDescendants } from "../type-virtualization/transitive-extends-walker.js";
+import { remapDiagnostics } from "./remap.js";
+
+export interface TrailsSolutionBuilder {
+  build(): ts.ExitStatus;
+  clean(): ts.ExitStatus;
+  getHostForProject(configPath: string): TrailsCompilerHost | undefined;
+}
+
+export interface TrailsBuildOptions {
+  /** Emit solution-builder status messages (e.g., "Building project..."). */
+  verbose?: boolean;
+  /** Called with each diagnostic AFTER virtualized-source remap. */
+  onDiagnostic?: (d: ts.Diagnostic) => void;
+  /** Called with each solution-builder status message. */
+  onStatus?: (d: ts.Diagnostic) => void;
+}
+
+/**
+ * Wrap `ts.createSolutionBuilder` so every project built with `-b`
+ * uses the trails-tsc virtualizing compiler host. Each project is
+ * processed in two passes (plain checker → walker → virtualizing
+ * host) exactly like `createTrailsProgram`, so transitive-extends
+ * and auto-import resolution work per-project.
+ *
+ * Auto-import resolution is scoped to each project's own source
+ * files — cross-project models referenced via `references:` still
+ * resolve through TypeScript's normal project-reference handling
+ * (the referencing project imports them explicitly, either because
+ * the user wrote the import or because the referenced project's
+ * emitted `.d.ts` declares them).
+ */
+export function createTrailsSolutionBuilder(
+  rootConfigs: readonly string[],
+  buildOpts: TrailsBuildOptions = {},
+): TrailsSolutionBuilder {
+  const hostsByProject = new Map<string, TrailsCompilerHost>();
+
+  const createProgram: ts.CreateProgram<ts.EmitAndSemanticDiagnosticsBuilderProgram> = (
+    rootNames,
+    options,
+    _defaultHost,
+    oldProgram,
+    configFileParsingDiagnostics,
+    projectReferences,
+  ) => {
+    if (!rootNames || !options) {
+      // Fall back to TS default when the solution builder hasn't
+      // resolved a config (shouldn't happen for well-formed
+      // projects, but keep the contract honest).
+      return ts.createEmitAndSemanticDiagnosticsBuilderProgram(
+        rootNames,
+        options,
+        _defaultHost,
+        oldProgram,
+        configFileParsingDiagnostics,
+        projectReferences,
+      );
+    }
+
+    // Pass 1: plain host — we only need a checker to walk extends
+    // chains and collect the per-project model registry.
+    const pass1Host = ts.createCompilerHost(options, true);
+    const pass1Program = ts.createProgram({
+      rootNames: [...rootNames],
+      options,
+      host: pass1Host,
+      projectReferences: projectReferences ? [...projectReferences] : undefined,
+    });
+    const { baseNames, modelRegistry } = collectBaseDescendants(pass1Program);
+
+    // Pass 2: virtualizing host + registry feed the real builder
+    // program. Cache the host per-project so diagnostics remap can
+    // look up deltas and original text after build completes.
+    const host = buildCompilerHost(options, [...baseNames], modelRegistry);
+    const configFilePath = options.configFilePath;
+    if (typeof configFilePath === "string") {
+      hostsByProject.set(path.resolve(configFilePath), host);
+    }
+    return ts.createEmitAndSemanticDiagnosticsBuilderProgram(
+      rootNames,
+      options,
+      host,
+      oldProgram,
+      configFileParsingDiagnostics,
+      projectReferences,
+    );
+  };
+
+  const reportDiagnostic: ts.DiagnosticReporter = (d) => {
+    if (!buildOpts.onDiagnostic) return;
+    // The builder emits diagnostics keyed by file; remap against the
+    // host that owns that file (if any) before handing off.
+    const file = d.file;
+    if (!file) {
+      buildOpts.onDiagnostic(d);
+      return;
+    }
+    const resolved = path.resolve(file.fileName);
+    let remapped: ts.Diagnostic = d;
+    for (const host of hostsByProject.values()) {
+      if (host.getDeltasForFile(resolved)) {
+        remapped = remapDiagnostics([d], host)[0]!;
+        break;
+      }
+    }
+    buildOpts.onDiagnostic(remapped);
+  };
+
+  const reportStatus: ts.DiagnosticReporter = (d) => {
+    buildOpts.onStatus?.(d);
+  };
+
+  const solutionHost = ts.createSolutionBuilderHost(
+    ts.sys,
+    createProgram,
+    reportDiagnostic,
+    reportStatus,
+  );
+
+  const builder = ts.createSolutionBuilder(solutionHost, [...rootConfigs], {
+    verbose: buildOpts.verbose ?? false,
+  });
+
+  return {
+    build: () => builder.build(),
+    clean: () => builder.clean(),
+    getHostForProject: (configPath) => hostsByProject.get(path.resolve(configPath)),
+  };
+}

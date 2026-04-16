@@ -15,7 +15,10 @@ export function buildCompilerHost(
   baseNames?: readonly string[],
   modelRegistry?: ReadonlyMap<string, string>,
 ): TrailsCompilerHost {
-  const baseHost = ts.createCompilerHost(options, true);
+  // Incremental host seeds `createHash` and attaches file versions —
+  // required by `ts.createEmitAndSemanticDiagnosticsBuilderProgram`
+  // (used by `--build`) and harmless for plain `createProgram`.
+  const baseHost = ts.createIncrementalCompilerHost(options);
   const deltaMap = new Map<string, VirtualizeResult["deltas"]>();
   const virtualizedTextCache = new Map<string, string>();
   const originalTextCache = new Map<string, string>();
@@ -83,6 +86,14 @@ export function buildCompilerHost(
         return sourceFileCache.get(resolved)!;
       }
       const sf = ts.createSourceFile(resolved, text, languageVersionOrOptions, true);
+      // `ts.EmitAndSemanticDiagnosticsBuilderProgram` (used by
+      // `--build`) asserts every source file has a `version`. When
+      // we produce our own virtualized SourceFile we must set it
+      // ourselves — hash the virtualized text so re-parsing
+      // identical text stays cache-stable.
+      (sf as ts.SourceFile & { version: string }).version = baseHost.createHash
+        ? baseHost.createHash(text)
+        : String(text.length);
       sourceFileCache.set(resolved, sf);
       return sf;
     },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Range } from "./range.js";
+import { Range, RangeType } from "./range.js";
 
 const integerSubtype = {
   cast: (value: unknown) => (value == null ? null : Number(value)),
@@ -17,7 +17,7 @@ describe("PostgreSQL::OID::Range", () => {
   });
 
   it("casts PostgreSQL range strings through the subtype", () => {
-    const type = new Range(integerSubtype, "int4range");
+    const type = new RangeType(integerSubtype, "int4range");
     const range = type.castValue("[1,10)") as Range;
 
     expect(range.begin).toBe(1);
@@ -26,13 +26,13 @@ describe("PostgreSQL::OID::Range", () => {
   });
 
   it("raises for excluded finite starts", () => {
-    const type = new Range(integerSubtype, "int4range");
+    const type = new RangeType(integerSubtype, "int4range");
 
     expect(() => type.castValue("(1,10]")).toThrow(/excluding the beginning/);
   });
 
   it("serializes range bounds through the subtype", () => {
-    const type = new Range(integerSubtype, "int4range");
+    const type = new RangeType(integerSubtype, "int4range");
     const range = type.serialize(new Range("1", "10", false)) as Range;
 
     expect(range.begin).toBe(1);
@@ -41,20 +41,20 @@ describe("PostgreSQL::OID::Range", () => {
   });
 
   it("serialize returns non-range values unchanged", () => {
-    const type = new Range(integerSubtype, "int4range");
+    const type = new RangeType(integerSubtype, "int4range");
 
     expect(type.serialize("not a range")).toBe("not a range");
   });
 
   it("castValue returns non-string values unchanged", () => {
-    const type = new Range(integerSubtype, "int4range");
+    const type = new RangeType(integerSubtype, "int4range");
     const value = { begin: 1, end: 10 };
 
     expect(type.castValue(value)).toBe(value);
   });
 
   it("keeps numeric infinite bounds when the opposite bound is numeric", () => {
-    const type = new Range(integerSubtype, "int4range");
+    const type = new RangeType(integerSubtype, "int4range");
     const range = type.castValue("[,10]") as Range;
 
     expect(range.begin).toBe(-Infinity);
@@ -63,7 +63,7 @@ describe("PostgreSQL::OID::Range", () => {
 
   it("uses subtype infinity values for unbounded ranges", () => {
     const infinityCalls: Array<{ negative?: boolean } | undefined> = [];
-    const type = new Range(
+    const type = new RangeType(
       {
         ...integerSubtype,
         infinity: (options?: { negative?: boolean }) => {
@@ -81,7 +81,7 @@ describe("PostgreSQL::OID::Range", () => {
   });
 
   it("maps range bounds", () => {
-    const type = new Range(integerSubtype, "int4range");
+    const type = new RangeType(integerSubtype, "int4range");
     const range = type.map(new Range(1, 10), (value) => Number(value) + 1);
 
     expect(range.begin).toBe(2);
@@ -89,7 +89,7 @@ describe("PostgreSQL::OID::Range", () => {
   });
 
   it("forces equality for range values", () => {
-    const type = new Range(integerSubtype, "int4range");
+    const type = new RangeType(integerSubtype, "int4range");
 
     expect(type.isForceEquality(new Range(1, 10))).toBe(true);
     expect(type.isForceEquality([1, 10])).toBe(false);

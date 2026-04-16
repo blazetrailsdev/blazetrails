@@ -1,41 +1,59 @@
 /**
- * PostgreSQL range type and range value.
+ * PostgreSQL range support.
  *
- * With primitive bounds, this remains the query value object used by
- * PredicateBuilder. With a subtype as the first argument, it behaves like
- * Rails' PostgreSQL::OID::Range type.
+ * Rails has two distinct classes:
+ *
+ *   - Ruby's core `::Range` — the query value with primitive begin/end bounds,
+ *     used everywhere in ActiveRecord (predicate builders, `where(x: 1..10)`,
+ *     etc).
+ *   - `ActiveRecord::ConnectionAdapters::PostgreSQL::OID::Range` — a
+ *     `Type::Value` that owns a subtype and a type name, and whose
+ *     `cast_value`/`serialize`/etc. return `::Range` instances.
+ *
+ * TypeScript has no `::Range` analog, so we expose:
+ *
+ *   - `Range` — query value class (matches core Ruby `::Range`).
+ *   - `RangeType` — the Type::Value wrapper (matches `OID::Range`). It owns
+ *     the subtype and emits `Range` instances from `castValue`/`serialize`.
  */
+
 export class Range {
   readonly begin: unknown;
   readonly end: unknown;
   readonly excludeEnd: boolean;
-  readonly subtype: RangeSubtype | null;
-  readonly type: string;
 
   constructor(begin: unknown, end?: unknown, excludeEnd: boolean = false) {
-    if (isRangeSubtype(begin) && typeof end === "string") {
-      this.subtype = begin;
-      this.type = end;
-      this.begin = null;
-      this.end = null;
-      this.excludeEnd = false;
-      return;
-    }
-
     this.begin = begin;
     this.end = end;
     this.excludeEnd = excludeEnd;
-    this.subtype = null;
-    this.type = "range";
+  }
+}
+
+export interface RangeSubtype {
+  cast(value: unknown): unknown;
+  serialize(value: unknown): unknown;
+  deserialize(value: unknown): unknown;
+  infinity?(options?: { negative?: boolean }): unknown;
+}
+
+/**
+ * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::OID::Range.
+ */
+export class RangeType {
+  readonly subtype: RangeSubtype;
+  readonly type: string;
+
+  constructor(subtype: RangeSubtype, type: string = "range") {
+    this.subtype = subtype;
+    this.type = type;
   }
 
   typeCastForSchema(value: unknown): string {
-    return String(value).replace(/Infinity/g, "::Float::INFINITY");
+    return inspect(value).replace(/Infinity/g, "::Float::INFINITY");
   }
 
   castValue(value: unknown): unknown {
     if (value == null || value === "empty" || value === "") return null;
-    if (value instanceof Range && !value.subtype) return value;
     if (typeof value !== "string") return value;
 
     const extracted = this.extractBounds(value);
@@ -62,7 +80,6 @@ export class Range {
 
   serialize(value: unknown): unknown {
     if (!(value instanceof Range)) return value;
-    if (value.subtype) return value;
     return new Range(
       this.typeCastSingleForDatabase(value.begin),
       this.typeCastSingleForDatabase(value.end),
@@ -79,14 +96,15 @@ export class Range {
   }
 
   private typeCastSingle(value: unknown): unknown {
-    if (isInfinity(value)) return value;
-    return this.subtype?.deserialize?.(value) ?? this.subtype?.cast(value) ?? value;
+    // Rails calls @subtype.deserialize directly — no cast fallback. If a
+    // subtype doesn't implement deserialize, surface that as a failure
+    // rather than silently routing through cast and producing a different
+    // shape than Rails would.
+    return isInfinity(value) ? value : this.subtype.deserialize(value);
   }
 
   private typeCastSingleForDatabase(value: unknown): unknown {
-    if (isInfinity(value)) return value;
-    const casted = this.subtype?.cast(value) ?? value;
-    return this.subtype?.serialize(casted) ?? casted;
+    return isInfinity(value) ? value : this.subtype.serialize(this.subtype.cast(value));
   }
 
   private extractBounds(value: string): {
@@ -109,24 +127,8 @@ export class Range {
   }
 
   private infinity(options?: { negative?: boolean }): unknown {
-    return this.subtype?.infinity?.(options) ?? (options?.negative ? -Infinity : Infinity);
+    return this.subtype.infinity?.(options) ?? (options?.negative ? -Infinity : Infinity);
   }
-}
-
-export interface RangeSubtype {
-  cast(value: unknown): unknown;
-  serialize(value: unknown): unknown;
-  deserialize?(value: unknown): unknown;
-  infinity?(options?: { negative?: boolean }): unknown;
-}
-
-function isRangeSubtype(value: unknown): value is RangeSubtype {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    typeof (value as { cast?: unknown }).cast === "function" &&
-    typeof (value as { serialize?: unknown }).serialize === "function"
-  );
 }
 
 function findSeparator(value: string): number {
@@ -166,4 +168,16 @@ function isInfinity(value: unknown): boolean {
 
 function infiniteFloatRangeCovers(value: unknown): boolean {
   return typeof value === "number" && !Number.isNaN(value);
+}
+
+/**
+ * Approximates Ruby's Object#inspect for primitives so schema dumps match
+ * Rails output: strings are double-quoted, dates are inspected, numbers/
+ * booleans/null/undefined render bare.
+ */
+function inspect(value: unknown): string {
+  if (value === null || value === undefined) return "nil";
+  if (typeof value === "string") return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  if (value instanceof Date) return value.toISOString();
+  return String(value);
 }

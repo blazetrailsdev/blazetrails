@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Array as OidArray } from "./array.js";
 import { Enum } from "./enum.js";
-import { Range } from "./range.js";
+import { RangeType } from "./range.js";
 import { TypeMapInitializer, type TypeMap } from "./type-map-initializer.js";
 import { Vector } from "./vector.js";
 
@@ -53,7 +53,7 @@ describe("PostgreSQL::OID::TypeMapInitializer", () => {
     ]);
 
     expect(store.lookup(1007)).toBeInstanceOf(OidArray);
-    expect(store.lookup(3904)).toBeInstanceOf(Range);
+    expect(store.lookup(3904)).toBeInstanceOf(RangeType);
     expect(store.lookup(5000)).toBeInstanceOf(Enum);
     expect(store.lookup(6000)).toBe(integerSubtype);
     const vector = store.lookup(7000) as Vector;
@@ -77,11 +77,11 @@ describe("PostgreSQL::OID::TypeMapInitializer", () => {
     ]);
 
     const array = store.lookup(1007, { scale: 2 }) as OidArray;
-    const range = store.lookup(3904, { scale: 4 }) as Range;
+    const range = store.lookup(3904, { scale: 4 }) as RangeType;
 
     expect(array).toBeInstanceOf(OidArray);
     expect((array.subtype as { metadata?: { scale?: number } }).metadata?.scale).toBe(2);
-    expect(range).toBeInstanceOf(Range);
+    expect(range).toBeInstanceOf(RangeType);
     expect((range.subtype as { metadata?: { scale?: number } }).metadata?.scale).toBe(4);
   });
 

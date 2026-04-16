@@ -6,7 +6,7 @@
 
 import { Array as OidArray } from "./array.js";
 import { Enum } from "./enum.js";
-import { Range } from "./range.js";
+import { RangeType, type RangeSubtype } from "./range.js";
 import { Vector } from "./vector.js";
 
 export interface TypeMap {
@@ -61,6 +61,9 @@ export class TypeMapInitializer {
   }
 
   queryConditionsForKnownTypeNames(): string {
+    // Divergence: Rails interpolates type names unescaped (they're internal
+    // keys, not user input). We single-quote-escape defensively since the
+    // output is still SQL and the cost is negligible.
     const knownTypeNames = this.storeKeys().map((key) => `'${String(key).replace(/'/g, "''")}'`);
     return `WHERE\n  t.typname IN (${knownTypeNames.join(", ")})\n`;
   }
@@ -71,6 +74,9 @@ export class TypeMapInitializer {
 
   queryConditionsForArrayTypes(): string {
     const knownTypeOids = this.storeKeys().filter((key) => typeof key !== "string");
+    // Divergence: Rails emits `t.typelem IN ()` for an empty OID set, which
+    // is invalid SQL. We short-circuit to `WHERE 1=0` to return zero rows
+    // instead of erroring.
     if (knownTypeOids.length === 0) return "WHERE\n  1=0\n";
     return `WHERE\n  t.typelem IN (${knownTypeOids.join(", ")})\n`;
   }
@@ -83,7 +89,11 @@ export class TypeMapInitializer {
     this.registerWithSubtype(
       row.oid,
       toInt(row.rngsubtype ?? 0),
-      (subtype) => new Range(subtype, row.typname),
+      // Rails' OID::Range#type_cast_single calls @subtype.deserialize. If the
+      // registered subtype doesn't implement deserialize, Ruby would raise
+      // NoMethodError at cast time; we preserve that failure mode rather than
+      // silently routing through cast.
+      (subtype) => new RangeType(subtype as unknown as RangeSubtype, row.typname),
     );
   }
 
@@ -129,6 +139,9 @@ export class TypeMapInitializer {
     targetOid: number,
     build: (subtype: OidSubtype) => unknown,
   ): void {
+    // Divergence: Rails assumes @store responds to lookup. If a TS TypeMap
+    // store omits it, the lazy builder below would silently receive
+    // undefined subtypes and produce confusing downstream errors. Fail fast.
     if (!this.store.lookup) {
       throw new Error(`TypeMap store must implement lookup() to register subtype-based OID ${oid}`);
     }
@@ -175,6 +188,7 @@ function extract<T>(values: T[], predicate: (value: T) => boolean): T[] {
 interface OidSubtype {
   cast(value: unknown): unknown;
   serialize(value: unknown): unknown;
+  deserialize?(value: unknown): unknown;
 }
 
 function toInt(value: number | string): number {

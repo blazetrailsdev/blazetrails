@@ -148,7 +148,7 @@ export function quote(value: unknown): string {
   if (value instanceof ArrayData) {
     return quoteString(value.toString());
   }
-  if (value instanceof Range && !value.subtype) {
+  if (value instanceof Range) {
     return quoteString(encodeRange(value));
   }
   return abstractQuote(value);
@@ -189,7 +189,7 @@ export function typeCast(value: unknown): unknown {
   if (value instanceof ArrayData) {
     return value.toString();
   }
-  if (value instanceof Range && !value.subtype) {
+  if (value instanceof Range) {
     return encodeRange(value);
   }
   if (typeof value === "bigint" || (typeof value === "number" && Number.isInteger(value))) {

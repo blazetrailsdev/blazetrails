@@ -21,20 +21,19 @@ import {
   association,
   defineEnum,
 } from "@blazetrails/activerecord";
+// `Comment` is intentionally NOT imported here — it lives in
+// `comment.ts` and is referenced as the `Author.hasMany("comments")`
+// target. `trails-tsc`'s auto-import pass must inject
+// `import type { Comment } from "./comment.js"` so BOTH the injected
+// `declare comments: AssociationProxy<Comment>` on Author AND the
+// `expectTypeOf(...)<AssociationProxy<Comment>>()` assertions below
+// resolve. If the auto-import pass regresses, this file fails CI.
 
 class User extends Base {
   static {
     this.attribute("name", "string");
     this.attribute("email", "string");
     this.attribute("admin", "boolean", { default: false });
-  }
-}
-
-class Comment extends Base {
-  static {
-    this.attribute("body", "string");
-    this.attribute("post_id", "integer");
-    this.belongsTo("post");
   }
 }
 

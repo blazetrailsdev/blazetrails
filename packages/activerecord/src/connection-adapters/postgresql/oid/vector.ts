@@ -8,24 +8,13 @@ export class Vector {
   readonly delim: string;
   readonly subtype: unknown;
 
-  constructor(delim: string = ",", subtype: unknown = null) {
+  constructor(delim: string, subtype: unknown) {
     this.delim = delim;
     this.subtype = subtype;
   }
 
-  get type(): string {
-    return "vector";
-  }
-
   cast(value: unknown): unknown {
+    // Rails currently leaves composite/vector values untouched.
     return value;
-  }
-
-  serialize(value: unknown): unknown {
-    return value;
-  }
-
-  deserialize(value: unknown): unknown {
-    return this.cast(value);
   }
 }

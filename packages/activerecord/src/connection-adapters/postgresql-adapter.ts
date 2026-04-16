@@ -295,11 +295,16 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
   }
 
   /**
-   * Synchronous version check. Returns the cached version, or
-   * assumes a modern PG (160000 = 16.0) if not yet fetched.
+   * Synchronous version check. Throws if getDatabaseVersion() hasn't
+   * been called yet — callers must ensure the connection is initialized.
    */
   get databaseVersion(): number {
-    return this._databaseVersion ?? 160000;
+    if (this._databaseVersion === null) {
+      throw new Error(
+        "databaseVersion is not available yet — call getDatabaseVersion() after connecting",
+      );
+    }
+    return this._databaseVersion;
   }
 
   supportsBulkAlter(): boolean {

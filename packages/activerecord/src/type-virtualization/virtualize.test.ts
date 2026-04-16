@@ -142,9 +142,8 @@ describe("virtualize — prependImports", () => {
     // 2 prepended lines → virtual line 2 is original line 0
     expect(remapLine(0, deltas)).toBeNull(); // inside prepended block
     expect(remapLine(1, deltas)).toBeNull(); // inside prepended block
-    // The original file's first line (line 0) is now at virtual line 2
-    // (after the 2 prepended import lines). It may also be shifted by
-    // declare injection, but the prepend delta alone maps line 2 → 0.
+    // The original file's first line (line 0) is now at virtual line 2.
+    expect(remapLine(2, deltas)).toBe(0);
   });
 });
 

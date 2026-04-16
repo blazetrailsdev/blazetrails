@@ -1,13 +1,17 @@
 import ts from "typescript";
 
 /**
- * Walk every top-level class declaration in the program and return
- * the set of class names whose `extends` chain transitively roots at
- * one of the configured base names (default: `["Base"]`).
+ * Walk every top-level class declaration in the program and return a
+ * `WalkerResult` with:
  *
- * The result includes the base names themselves, so `virtualize()`
- * can be called with `{ baseNames: [...result] }` and will handle
- * both direct and transitive descendants in one pass.
+ * - `baseNames` — the set of class names whose `extends` chain
+ *   transitively roots at one of the configured base names (default:
+ *   `["Base"]`). Includes the root names themselves, so
+ *   `virtualize()` can be called with `{ baseNames: [...baseNames] }`
+ *   and will handle both direct and transitive descendants in one pass.
+ * - `modelRegistry` — a `className → absolute source file path` map
+ *   used by the auto-import resolver to inject `import type { ... }`
+ *   lines for association targets referenced by name.
  *
  * Only top-level classes are considered — classes nested inside
  * functions or namespaces are not model declarations in practice.

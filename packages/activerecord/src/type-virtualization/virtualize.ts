@@ -13,9 +13,13 @@ import { synthesizeDeclares } from "./synthesize.js";
 
 export interface LineDelta {
   /**
-   * 0-indexed line in the ORIGINAL source where the injected block begins.
-   * Diagnostics reported at line > insertedAtLine + lineCount map back by
-   * subtracting lineCount.
+   * 0-indexed line in the ORIGINAL source where the injected block
+   * begins. The sentinel value `-1` means the block was prepended
+   * ABOVE line 0 (used by `prependImports` for auto-imports), so
+   * virtual lines `0..lineCount-1` are inside the injected range and
+   * virtual line `lineCount` maps back to original line 0.
+   * Diagnostics reported at line > insertedAtLine + lineCount map back
+   * by subtracting lineCount.
    */
   insertedAtLine: number;
   /** Number of lines the injected block spans. */

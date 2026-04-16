@@ -1,7 +1,7 @@
 import ts from "typescript";
 import * as path from "node:path";
 import { walk, type ClassInfo, type AssociationCall } from "../type-virtualization/walker.js";
-import { classify } from "@blazetrails/activesupport";
+import { resolveAssociationTarget } from "../type-virtualization/resolve-target.js";
 
 /**
  * For each file being virtualized, compute the set of target class
@@ -47,10 +47,7 @@ function collectTargetNames(info: ClassInfo, out: Set<string>): void {
       call.kind === "belongsTo" ||
       call.kind === "hasOne"
     ) {
-      const assocCall = call as AssociationCall;
-      const explicit = assocCall.options["className"];
-      const target = explicit ? stripQuotes(explicit) : classify(assocCall.name);
-      out.add(target);
+      out.add(resolveAssociationTarget(call as AssociationCall));
     }
   }
 }
@@ -105,12 +102,4 @@ function computeRelativeImport(fromFile: string, toFile: string): string {
   // Replace .ts extension with .js for ESM TypeScript imports
   rel = rel.replace(/\.tsx?$/, ".js");
   return rel;
-}
-
-function stripQuotes(s: string): string {
-  const first = s.charAt(0);
-  if ((first === '"' || first === "'" || first === "`") && s.endsWith(first)) {
-    return s.slice(1, -1);
-  }
-  return s;
 }

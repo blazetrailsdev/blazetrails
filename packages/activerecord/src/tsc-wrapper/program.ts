@@ -46,10 +46,11 @@ export function createTrailsProgram(configPath: string): TrailsProgram {
     };
   }
 
-  // Pass 1: create program with default virtualization (literal
-  // `extends Base` only). This gives us a checker to resolve the
-  // full extends chain.
-  const host1 = buildCompilerHost(parsed.options);
+  // Pass 1: create program with a plain compiler host (no
+  // virtualization / auto-import). We only need the checker here to
+  // resolve the full extends chain — doing the text transform twice
+  // would be wasted work.
+  const host1 = ts.createCompilerHost(parsed.options, true);
   const program1 = ts.createProgram({
     rootNames: parsed.fileNames,
     options: parsed.options,

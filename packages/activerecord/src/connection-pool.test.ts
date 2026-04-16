@@ -733,14 +733,48 @@ describe("ConnectionPool schema cache", () => {
     expect(after).not.toBe(before);
   });
 
+  // Realistic Column.toJSON shape for cache fixture files.
+  const realisticColumnJson = {
+    name: "id",
+    default: null,
+    sqlTypeMetadata: {
+      sqlType: "INTEGER",
+      type: "integer",
+      limit: null,
+      precision: null,
+      scale: null,
+    },
+    null: false,
+    defaultFunction: null,
+    collation: null,
+    comment: null,
+    primaryKey: true,
+  };
+
+  async function writeCacheFixture(
+    cacheFile: string,
+    tableName: string,
+    version: string | number | null,
+  ): Promise<void> {
+    const fsSync = await import("node:fs");
+    fsSync.writeFileSync(
+      cacheFile,
+      JSON.stringify({
+        columns: { [tableName]: [realisticColumnJson] },
+        primary_keys: { [tableName]: "id" },
+        data_sources: { [tableName]: true },
+        indexes: {},
+        version,
+      }),
+    );
+  }
+
   it("lazily loads the schema cache on first connection when enabled", async () => {
-    // Rails: ConnectionPool#adopt_connection calls
-    // schema_cache.load! on first adoption when
-    // ActiveRecord.lazily_load_schema_cache is true. Trails'
-    // equivalent flag is SchemaReflection.lazilyLoadSchemaCache.
-    // Load is fire-and-forget; this test triggers the first
-    // connection and awaits a microtask turn to observe the
-    // populated cache.
+    // Rails: ConnectionPool#adopt_connection calls schema_cache.load!
+    // on first adoption when ActiveRecord.lazily_load_schema_cache is
+    // true. Use version=0 so the version-check (enabled by default)
+    // passes against AbstractAdapter's schemaVersion() which returns 0.
+    // Await pool._lazyLoadPromise so we're not timing-dependent.
     const fs = await import("node:fs");
     const path = await import("node:path");
     const os = await import("node:os");
@@ -749,19 +783,9 @@ describe("ConnectionPool schema cache", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-lazy-load-"));
     const dbFile = path.join(tmp, "lazy.sqlite3");
     const cacheFile = path.join(tmp, "schema_cache.json");
-    fs.writeFileSync(
-      cacheFile,
-      JSON.stringify({
-        columns: { gadgets: [{ name: "id", null: false, primaryKey: true }] },
-        primary_keys: { gadgets: "id" },
-        data_sources: { gadgets: true },
-        indexes: {},
-        version: null,
-      }),
-    );
-    const prevCheck = SchemaReflection.checkSchemaCacheDumpVersion;
+    await writeCacheFixture(cacheFile, "gadgets", 0);
+
     const prevLazy = SchemaReflection.lazilyLoadSchemaCache;
-    SchemaReflection.checkSchemaCacheDumpVersion = false;
     SchemaReflection.lazilyLoadSchemaCache = true;
 
     const dbConfig = new HashConfig("test", "primary", {
@@ -775,11 +799,11 @@ describe("ConnectionPool schema cache", () => {
     });
     const pool = new ConnectionPool(pc);
     try {
-      pool.newConnection();
-      await new Promise<void>((r) => setImmediate(r));
+      pool.leaseConnection();
+      pool.releaseConnection();
+      await pool._lazyLoadPromise;
       expect(pool.schemaCache.isCached("gadgets")).toBe(true);
     } finally {
-      SchemaReflection.checkSchemaCacheDumpVersion = prevCheck;
       SchemaReflection.lazilyLoadSchemaCache = prevLazy;
       await closePoolConnections(pool);
       fs.rmSync(tmp, { recursive: true, force: true });
@@ -787,11 +811,7 @@ describe("ConnectionPool schema cache", () => {
   });
 
   it("rejects a stale schema cache when checkSchemaCacheDumpVersion is enabled", async () => {
-    // Rails: SchemaReflection.loadCache compares the cache file's
-    // version against connection.schemaVersion() and returns null
-    // (with a console.warn) when they disagree. The pool therefore
-    // won't pick up the stale cache. Tests the version-check half of
-    // Phase 12 end-to-end via the lazy-load path.
+    // Cache claims version 42; schemaVersion() returns 0 → mismatch.
     const fs = await import("node:fs");
     const path = await import("node:path");
     const os = await import("node:os");
@@ -800,24 +820,11 @@ describe("ConnectionPool schema cache", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-stale-cache-"));
     const dbFile = path.join(tmp, "stale.sqlite3");
     const cacheFile = path.join(tmp, "schema_cache.json");
-    // Cache claims version 42, but connection.schemaVersion() defaults
-    // to 0 on AbstractAdapter. Mismatch → loadCache returns null.
-    fs.writeFileSync(
-      cacheFile,
-      JSON.stringify({
-        columns: { stale_thing: [{ name: "id" }] },
-        primary_keys: { stale_thing: "id" },
-        data_sources: { stale_thing: true },
-        indexes: {},
-        version: 42,
-      }),
-    );
-    const prevCheck = SchemaReflection.checkSchemaCacheDumpVersion;
+    await writeCacheFixture(cacheFile, "stale_thing", 42);
+
     const prevLazy = SchemaReflection.lazilyLoadSchemaCache;
-    const prevWarn = console.warn;
-    SchemaReflection.checkSchemaCacheDumpVersion = true;
     SchemaReflection.lazilyLoadSchemaCache = true;
-    console.warn = () => {}; // quiet the expected mismatch warning
+    vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const dbConfig = new HashConfig("test", "primary", {
       adapter: "sqlite3",
@@ -830,22 +837,20 @@ describe("ConnectionPool schema cache", () => {
     });
     const pool = new ConnectionPool(pc);
     try {
-      pool.newConnection();
-      await new Promise<void>((r) => setImmediate(r));
-      // Mismatch → cache was rejected → table not reported as cached.
+      pool.leaseConnection();
+      pool.releaseConnection();
+      await pool._lazyLoadPromise;
       expect(pool.schemaCache.isCached("stale_thing")).toBe(false);
     } finally {
-      SchemaReflection.checkSchemaCacheDumpVersion = prevCheck;
       SchemaReflection.lazilyLoadSchemaCache = prevLazy;
-      console.warn = prevWarn;
+      vi.restoreAllMocks();
       await closePoolConnections(pool);
       fs.rmSync(tmp, { recursive: true, force: true });
     }
   });
 
   it("does not lazy-load when the flag is off (default)", async () => {
-    // Default: no file I/O at first-connection time. Apps that
-    // don't opt in must not pay for the cache load path.
+    // Default: no file I/O at first-connection time.
     const fs = await import("node:fs");
     const path = await import("node:path");
     const os = await import("node:os");
@@ -854,16 +859,7 @@ describe("ConnectionPool schema cache", () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-no-lazy-"));
     const dbFile = path.join(tmp, "no_lazy.sqlite3");
     const cacheFile = path.join(tmp, "schema_cache.json");
-    fs.writeFileSync(
-      cacheFile,
-      JSON.stringify({
-        columns: { widgets: [{ name: "id" }] },
-        primary_keys: { widgets: "id" },
-        data_sources: { widgets: true },
-        indexes: {},
-        version: null,
-      }),
-    );
+    await writeCacheFixture(cacheFile, "widgets", 0);
     expect(SchemaReflection.lazilyLoadSchemaCache).toBe(false);
 
     const dbConfig = new HashConfig("test", "primary", {
@@ -877,8 +873,10 @@ describe("ConnectionPool schema cache", () => {
     });
     const pool = new ConnectionPool(pc);
     try {
-      pool.newConnection();
-      await new Promise<void>((r) => setImmediate(r));
+      pool.leaseConnection();
+      pool.releaseConnection();
+      // _lazyLoadPromise is null when the flag is off.
+      expect(pool._lazyLoadPromise).toBeNull();
       expect(pool.schemaCache.isCached("widgets")).toBe(false);
     } finally {
       await closePoolConnections(pool);

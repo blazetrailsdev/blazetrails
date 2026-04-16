@@ -756,23 +756,23 @@ export class ConnectionPool implements ReapablePool {
     // Trails' equivalent is `SchemaReflection.lazilyLoadSchemaCache`
     // (static flag, off by default — apps opt in). The load is
     // fire-and-forget because newConnection is sync and the load
-    // path involves `connection.schemaVersion()` introspection for
-    // version-check; errors are surfaced via console.warn by
-    // SchemaReflection.loadCache itself, so a failed cache load
-    // won't block the pool. First adoption is detected by
-    // `_lazyLoadTriggered` — only fires once per pool.
+    // involves async work (schemaVersion introspection for version-
+    // check). SchemaReflection.loadCache already swallows errors
+    // internally (console.warn on version mismatch, returns null on
+    // file-not-found / parse failure), so the .catch here is purely
+    // defensive — it should never fire in practice. Callers can
+    // observe the pending/resolved load via _lazyLoadPromise (used
+    // by tests to await the actual completion instead of timing hacks).
     if (
       SchemaReflection.lazilyLoadSchemaCache &&
       !this._lazyLoadTriggered &&
       !this.poolConfig.schemaCache
     ) {
       this._lazyLoadTriggered = true;
-      this.schemaCache.loadBang().catch((err) => {
-        // Rails lets SchemaReflection log-and-continue on load
-        // errors; mirror that behavior so a bad cache file doesn't
-        // crash the pool at first-checkout time.
-
-        console.warn(`Failed to lazily load schema cache: ${(err as Error).message}`);
+      this._lazyLoadPromise = this.schemaCache.loadBang().catch(() => {
+        // loadCache swallows read/parse/version errors internally;
+        // this is a belt-and-suspenders guard against an unexpected
+        // throw from BoundSchemaReflection/SchemaReflection glue.
       });
     }
     return conn;
@@ -784,6 +784,13 @@ export class ConnectionPool implements ReapablePool {
    * `@schema_cache.nil?` guard on `adopt_connection`.
    */
   private _lazyLoadTriggered = false;
+
+  /**
+   * Exposed so tests (and eager-boot callers) can await the lazy
+   * load's completion instead of relying on timing. Null when no
+   * lazy load was triggered.
+   */
+  _lazyLoadPromise: Promise<unknown> | null = null;
 
   remove(conn: DatabaseAdapter): void {
     this._connectionLease().clear(conn);

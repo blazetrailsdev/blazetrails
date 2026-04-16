@@ -161,18 +161,24 @@ async function forEachDatabase(
   const envName = resolveEnv();
   const dbName = validateDatabaseFlag(opts);
   const allConfigs = await loadAllDatabaseConfigs(envName);
-  const targets = dbName ? allConfigs.filter((c) => c.name === dbName) : allConfigs;
-  if (targets.length === 0 && dbName) {
-    const available = allConfigs.map((c) => c.name).join(", ");
+  // Build HashConfigs first so we can filter by databaseTasks() —
+  // replicas and configs with databaseTasks: false should be skipped,
+  // matching Rails' configsFor(includeHidden: false) filter.
+  const all = allConfigs.map(({ name, config: rawConfig }) => {
+    const raw = normalizeRawConfig(rawConfig);
+    return { name, raw, hashConfig: new HashConfig(envName, name, raw as Record<string, unknown>) };
+  });
+  const taskable = all.filter((c) => c.hashConfig.databaseTasks());
+  const filtered = dbName ? taskable.filter((c) => c.name === dbName) : taskable;
+  if (filtered.length === 0 && dbName) {
+    const available = taskable.map((c) => c.name).join(", ");
     throw new Error(
       `No database configuration named "${dbName}" in environment "${envName}". ` +
         `Available: ${available || "(none)"}`,
     );
   }
-  const multiDb = targets.length > 1;
-  for (const { name, config: rawConfig } of targets) {
-    const raw = normalizeRawConfig(rawConfig);
-    const hashConfig = new HashConfig(envName, name, raw as Record<string, unknown>);
+  const multiDb = filtered.length > 1;
+  for (const { name, raw, hashConfig } of filtered) {
     const adapter = await connectAdapter(raw);
     const prefix = multiDb ? `[${name}] ` : "";
     try {
@@ -194,18 +200,21 @@ async function forEachDatabaseConfig(
   const envName = resolveEnv();
   const dbName = validateDatabaseFlag(opts);
   const allConfigs = await loadAllDatabaseConfigs(envName);
-  const targets = dbName ? allConfigs.filter((c) => c.name === dbName) : allConfigs;
-  if (targets.length === 0 && dbName) {
-    const available = allConfigs.map((c) => c.name).join(", ");
+  const all = allConfigs.map(({ name, config: rawConfig }) => {
+    const raw = normalizeRawConfig(rawConfig);
+    return { name, raw, hashConfig: new HashConfig(envName, name, raw as Record<string, unknown>) };
+  });
+  const taskable = all.filter((c) => c.hashConfig.databaseTasks());
+  const filtered = dbName ? taskable.filter((c) => c.name === dbName) : taskable;
+  if (filtered.length === 0 && dbName) {
+    const available = taskable.map((c) => c.name).join(", ");
     throw new Error(
       `No database configuration named "${dbName}" in environment "${envName}". ` +
         `Available: ${available || "(none)"}`,
     );
   }
-  const multiDb = targets.length > 1;
-  for (const { name, config: rawConfig } of targets) {
-    const raw = normalizeRawConfig(rawConfig);
-    const hashConfig = new HashConfig(envName, name, raw as Record<string, unknown>);
+  const multiDb = filtered.length > 1;
+  for (const { name, raw, hashConfig } of filtered) {
     const prefix = multiDb ? `[${name}] ` : "";
     await fn({ raw, config: hashConfig, name, prefix });
   }
@@ -590,7 +599,10 @@ async function withMigratorForDb(
     console.log(`${ctx.prefix}No migrations found.`);
     return;
   }
-  const migrator = new Migrator(ctx.adapter, migrations);
+  const migrator = new Migrator(ctx.adapter, migrations, {
+    environment: ctx.config.envName,
+    internalMetadataEnabled: (ctx.raw as { useMetadataTable?: boolean }).useMetadataTable !== false,
+  });
   await operation(migrator);
   for (const line of migrator.output) console.log(`${ctx.prefix}${line}`);
   if (opts?.afterOutput) await opts.afterOutput(migrator);

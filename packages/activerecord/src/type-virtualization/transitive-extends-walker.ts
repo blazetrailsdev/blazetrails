@@ -39,10 +39,17 @@ export function collectBaseDescendants(
       if (ts.isClassDeclaration(node) && node.name) {
         const sym = checker.getSymbolAtLocation(node.name);
         if (sym && walkClass(sym, checker, rootNames, baseNames, memo)) {
-          // If there's a name collision, pick the closest file by
-          // path length (heuristic for "least nested").
+          // If there's a name collision, pick the shortest path
+          // (heuristic for "least nested"), breaking ties
+          // lexicographically so the winner is deterministic across
+          // environments and TS versions that may iterate source
+          // files in different orders.
           const existing = modelRegistry.get(sym.name);
-          if (!existing || sf.fileName.length < existing.length) {
+          if (
+            !existing ||
+            sf.fileName.length < existing.length ||
+            (sf.fileName.length === existing.length && sf.fileName < existing)
+          ) {
             modelRegistry.set(sym.name, sf.fileName);
           }
         }

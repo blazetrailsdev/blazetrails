@@ -13,13 +13,18 @@ import { synthesizeDeclares } from "./synthesize.js";
 
 export interface LineDelta {
   /**
-   * 0-indexed line in the ORIGINAL source where the injected block
-   * begins. The sentinel value `-1` means the block was prepended
-   * ABOVE line 0 (used by `prependImports` for auto-imports), so
-   * virtual lines `0..lineCount-1` are inside the injected range and
-   * virtual line `lineCount` maps back to original line 0.
-   * Diagnostics reported at line > insertedAtLine + lineCount map back
-   * by subtracting lineCount.
+   * 0-indexed line in the VIRTUALIZED text where the injected block
+   * begins. The injected range spans
+   * `insertedAtLine + 1 .. insertedAtLine + lineCount`, and those
+   * virtual lines have no corresponding line in the original source.
+   *
+   * To map a later virtual line back to the original source,
+   * `remapLine` subtracts `lineCount` once the line is after the
+   * injected block; deltas are stacked in ascending virtual order so
+   * multi-class files and prepended imports compose correctly.
+   *
+   * The sentinel value `-1` means the block was prepended ABOVE
+   * virtual line 0 (used by `prependImports` for auto-imports).
    */
   insertedAtLine: number;
   /** Number of lines the injected block spans. */
@@ -72,10 +77,18 @@ export function virtualize(
     text = text.slice(0, e.pos) + e.text + text.slice(e.pos);
   }
 
-  const deltas: LineDelta[] = edits
-    .slice()
-    .sort((a, b) => a.originalLine - b.originalLine)
-    .map((e) => ({ insertedAtLine: e.originalLine, lineCount: e.lineCount }));
+  // Convert each edit's originalLine into a VIRTUAL line by accumulating
+  // the lineCount of all earlier injections. `remapLine` expects
+  // `insertedAtLine` to be a virtual coordinate so multi-class files
+  // (two injected declare blocks) remap correctly for lines after the
+  // second block.
+  const sortedEdits = edits.slice().sort((a, b) => a.originalLine - b.originalLine);
+  let cumulative = 0;
+  const deltas: LineDelta[] = sortedEdits.map((e) => {
+    const d: LineDelta = { insertedAtLine: e.originalLine + cumulative, lineCount: e.lineCount };
+    cumulative += e.lineCount;
+    return d;
+  });
 
   // Insert auto-imported `import type` lines AFTER any leading
   // directives (shebangs, triple-slash refs, @ts-nocheck) that must

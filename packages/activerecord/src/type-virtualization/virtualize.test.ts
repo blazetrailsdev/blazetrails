@@ -147,6 +147,39 @@ describe("virtualize — prependImports", () => {
   });
 });
 
+describe("virtualize — multiple classes", () => {
+  test("remapLine is correct for lines after the second injected block", () => {
+    // Two Base-descendant classes in one file. Each gets its own
+    // declare block injected after `{`. `remapLine` for user-written
+    // lines inside the SECOND class must account for BOTH blocks
+    // having shifted the file down.
+    const src =
+      "export class Post extends Base {\n" + //           L0
+      '  static { this.attribute("title", "string"); }\n' + // L1
+      "}\n" + //                                           L2
+      "\n" + //                                            L3
+      "export class Comment extends Base {\n" + //         L4
+      '  static { this.attribute("body", "string"); }\n' + //  L5
+      "}\n"; //                                            L6
+    const { text, deltas } = virtualize(src, "file.ts");
+    expect(deltas).toHaveLength(2);
+
+    const vLines = text.split("\n");
+    const commentBraceVLine = vLines.findIndex((l) => l.startsWith("export class Comment"));
+    expect(commentBraceVLine).toBeGreaterThan(4);
+    expect(remapLine(commentBraceVLine, deltas)).toBe(4);
+
+    // A line inside the Comment body (original line 5) should also
+    // remap correctly after both injections.
+    const commentBodyVLine = vLines.findIndex((l) => l.includes('this.attribute("body"'));
+    expect(remapLine(commentBodyVLine, deltas)).toBe(5);
+
+    // Injected lines (inside either block) return null.
+    expect(remapLine(deltas[0]!.insertedAtLine + 1, deltas)).toBeNull();
+    expect(remapLine(deltas[1]!.insertedAtLine + 1, deltas)).toBeNull();
+  });
+});
+
 describe("virtualize — idempotence", () => {
   test("re-virtualizing the output skips members already declared", () => {
     const src =

@@ -954,6 +954,44 @@ export default async function defineSchema(ctx) {
       const expectedSha1 = createHash("sha1").update(contents).digest("hex");
       expect(storedSha1).toBe(expectedSha1);
     } finally {
+      DatabaseTasks.setAdapter(null);
+      await adapter.close();
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it("stamps schema_sha1 after loadSchema with sql format", async () => {
+    // Covers the sql branch: structureLoad → _stampSchemaSha1.
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "trails-sha1-sql-"));
+    const dbFile = path.join(tmp, "sha1sql.sqlite3");
+    const structureFile = path.join(tmp, "structure.sql");
+    // Pre-populate a structure.sql with a simple table DDL.
+    fs.writeFileSync(structureFile, "CREATE TABLE gadgets (id INTEGER PRIMARY KEY);\n");
+    const { SQLite3Adapter } = await import("../connection-adapters/sqlite3-adapter.js");
+    const { SQLiteDatabaseTasks } = await import("./sqlite-database-tasks.js");
+    SQLiteDatabaseTasks.register();
+    const adapter = new SQLite3Adapter(dbFile);
+    DatabaseTasks.setAdapter(adapter);
+    try {
+      const config = new HashConfig("test", "primary", { adapter: "sqlite3", database: dbFile });
+      await DatabaseTasks.loadSchema(config, "sql", structureFile);
+      // Table was loaded:
+      const rows = await adapter.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='gadgets'",
+      );
+      expect(rows).toHaveLength(1);
+      // schema_sha1 was stamped:
+      const { InternalMetadata } = await import("../internal-metadata.js");
+      const metadata = new InternalMetadata(adapter);
+      const storedSha1 = await metadata.get("schema_sha1");
+      expect(storedSha1).toBeTruthy();
+      const { createHash } = await import("node:crypto");
+      const expected = createHash("sha1")
+        .update(fs.readFileSync(structureFile, "utf-8"))
+        .digest("hex");
+      expect(storedSha1).toBe(expected);
+    } finally {
+      DatabaseTasks.setAdapter(null);
       await adapter.close();
       fs.rmSync(tmp, { recursive: true, force: true });
     }
@@ -981,6 +1019,7 @@ describe("DatabaseTasks dumpSchema respects schemaDump gating", () => {
       expect(fs.existsSync(path.join(tmp, "db", "schema.ts"))).toBe(false);
     } finally {
       DatabaseTasks.dbDir = originalDbDir;
+      DatabaseTasks.setAdapter(null);
       await adapter.close();
       fs.rmSync(tmp, { recursive: true, force: true });
     }

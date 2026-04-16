@@ -728,10 +728,16 @@ export class DatabaseTasks {
       const metadata = new InternalMetadata(adapter);
       const sha1 = this._schemaSha1(filename);
       await metadata.createTableAndSetFlags(config.envName, sha1);
-    } catch {
+    } catch (error) {
       // Best effort — a failed stamp just means schemaUpToDate
       // returns false next time, triggering a full reload instead
-      // of a truncate. No worse than before Phase 15.
+      // of a truncate. No worse than before Phase 15. Log at debug
+      // level so failures are diagnosable without crashing the load.
+
+      console.debug?.(
+        `[trails] _stampSchemaSha1 failed for ${config.envName} (${filename})`,
+        error,
+      );
     }
   }
 

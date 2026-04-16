@@ -18,7 +18,7 @@ describe("PostgreSQL::OID::Range", () => {
 
   it("casts PostgreSQL range strings through the subtype", () => {
     const type = new Range(integerSubtype, "int4range");
-    const range = type.castValue("[1,10)")!;
+    const range = type.castValue("[1,10)") as Range;
 
     expect(range.begin).toBe(1);
     expect(range.end).toBe(10);
@@ -33,11 +33,51 @@ describe("PostgreSQL::OID::Range", () => {
 
   it("serializes range bounds through the subtype", () => {
     const type = new Range(integerSubtype, "int4range");
-    const range = type.serialize(new Range("1", "10", false))!;
+    const range = type.serialize(new Range("1", "10", false)) as Range;
 
     expect(range.begin).toBe(1);
     expect(range.end).toBe(10);
     expect(range.excludeEnd).toBe(false);
+  });
+
+  it("serialize returns non-range values unchanged", () => {
+    const type = new Range(integerSubtype, "int4range");
+
+    expect(type.serialize("not a range")).toBe("not a range");
+  });
+
+  it("castValue returns non-string values unchanged", () => {
+    const type = new Range(integerSubtype, "int4range");
+    const value = { begin: 1, end: 10 };
+
+    expect(type.castValue(value)).toBe(value);
+  });
+
+  it("keeps numeric infinite bounds when the opposite bound is numeric", () => {
+    const type = new Range(integerSubtype, "int4range");
+    const range = type.castValue("[,10]") as Range;
+
+    expect(range.begin).toBe(-Infinity);
+    expect(range.end).toBe(10);
+  });
+
+  it("uses subtype infinity values for unbounded ranges", () => {
+    const infinityCalls: Array<{ negative?: boolean } | undefined> = [];
+    const type = new Range(
+      {
+        ...integerSubtype,
+        infinity: (options?: { negative?: boolean }) => {
+          infinityCalls.push(options);
+          return options?.negative ? -Infinity : Infinity;
+        },
+      },
+      "tsrange",
+    );
+    const range = type.castValue("[,]") as Range;
+
+    expect(range.begin).toBe(-Infinity);
+    expect(range.end).toBe(Infinity);
+    expect(infinityCalls).toEqual([{ negative: true }, undefined]);
   });
 
   it("maps range bounds", () => {

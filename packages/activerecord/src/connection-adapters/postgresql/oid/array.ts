@@ -5,6 +5,7 @@
  */
 
 export interface ArraySubtype {
+  readonly type?: string | (() => string);
   cast(value: unknown): unknown;
   serialize(value: unknown): unknown;
   deserialize?(value: unknown): unknown;
@@ -22,28 +23,30 @@ export class Array {
   }
 
   get type(): string {
+    const subtypeType = this.subtype.type;
+    if (typeof subtypeType === "function") return subtypeType.call(this.subtype);
+    if (typeof subtypeType === "string") return subtypeType;
     return "array";
   }
 
-  cast(value: unknown): unknown[] | null {
+  cast(value: unknown): unknown {
     if (value == null) return null;
-    if (globalThis.Array.isArray(value)) return value.map((v) => this.subtype.cast(v));
+    if (globalThis.Array.isArray(value)) return this.typeCastArray(value, "cast");
     if (typeof value === "string") return this.parseArray(value);
-    return null;
+    return this.typeCastArray(value, "cast");
   }
 
-  serialize(value: unknown): Data | null {
+  serialize(value: unknown): unknown {
     if (value == null) return null;
-    if (!globalThis.Array.isArray(value)) return null;
+    if (!globalThis.Array.isArray(value)) return value;
     return new Data(this, this.typeCastArray(value, "serialize") as unknown[]);
   }
 
-  deserialize(value: unknown): unknown[] | null {
+  deserialize(value: unknown): unknown {
     if (value == null) return null;
     if (value instanceof Data) return this.typeCastArray(value.values, "deserialize") as unknown[];
-    if (globalThis.Array.isArray(value)) return value.map((v) => this.subtype.cast(v));
     if (typeof value === "string") return this.parseArray(value);
-    return null;
+    return value;
   }
 
   private parseArray(str: string): unknown[] {

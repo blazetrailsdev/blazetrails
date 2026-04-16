@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { Array as OidArray, Data } from "./array.js";
 
 const stringSubtype = {
+  type: "string",
   cast: (value: unknown) => (value == null ? null : String(value)),
   serialize: (value: unknown) => (value == null ? null : String(value)),
   deserialize: (value: unknown) => (value == null ? null : String(value)),
@@ -9,6 +10,18 @@ const stringSubtype = {
 };
 
 describe("PostgreSQL::OID::Array", () => {
+  it("delegates type to the subtype", () => {
+    const type = new OidArray(stringSubtype);
+
+    expect(type.type).toBe("string");
+  });
+
+  it("casts scalar values through the subtype", () => {
+    const type = new OidArray(stringSubtype);
+
+    expect(type.cast(1)).toBe("1");
+  });
+
   it("serialize returns Data with encoder and casted values", () => {
     const type = new OidArray(stringSubtype);
     const data = type.serialize(["a", "b"]) as Data;
@@ -17,6 +30,12 @@ describe("PostgreSQL::OID::Array", () => {
     expect(data.encoder).toBe(type);
     expect(data.values).toEqual(["a", "b"]);
     expect(String(data)).toBe("{a,b}");
+  });
+
+  it("serialize returns non-array values unchanged", () => {
+    const type = new OidArray(stringSubtype);
+
+    expect(type.serialize("not an array")).toBe("not an array");
   });
 
   it("typeCastForSchema formats array elements through the subtype", () => {

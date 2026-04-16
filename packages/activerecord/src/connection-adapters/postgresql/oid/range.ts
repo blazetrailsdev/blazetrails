@@ -33,18 +33,18 @@ export class Range {
     return String(value).replace(/Infinity/g, "::Float::INFINITY");
   }
 
-  castValue(value: unknown): Range | null {
+  castValue(value: unknown): unknown {
     if (value == null || value === "empty" || value === "") return null;
     if (value instanceof Range && !value.subtype) return value;
-    if (typeof value !== "string") return null;
+    if (typeof value !== "string") return value;
 
-    const extracted = extractBounds(value);
+    const extracted = this.extractBounds(value);
     const from = this.typeCastSingle(extracted.from);
     const to = this.typeCastSingle(extracted.to);
 
     if (!isInfinity(from) && extracted.excludeStart) {
       throw new Error(
-        `The Range object does not support excluding the beginning of a Range. (unsupported value: '${value}')`,
+        `The Ruby Range object does not support excluding the beginning of a Range. (unsupported value: '${value}')`,
       );
     }
 
@@ -52,16 +52,16 @@ export class Range {
     return new Range(begin, end, extracted.excludeEnd);
   }
 
-  cast(value: unknown): Range | null {
+  cast(value: unknown): unknown {
     return this.castValue(value);
   }
 
-  deserialize(value: unknown): Range | null {
+  deserialize(value: unknown): unknown {
     return this.castValue(value);
   }
 
-  serialize(value: unknown): Range | null {
-    if (!(value instanceof Range)) return null;
+  serialize(value: unknown): unknown {
+    if (!(value instanceof Range)) return value;
     if (value.subtype) return value;
     return new Range(
       this.typeCastSingleForDatabase(value.begin),
@@ -88,6 +88,29 @@ export class Range {
     const casted = this.subtype?.cast(value) ?? value;
     return this.subtype?.serialize(casted) ?? casted;
   }
+
+  private extractBounds(value: string): {
+    from: unknown;
+    to: unknown;
+    excludeStart: boolean;
+    excludeEnd: boolean;
+  } {
+    const fromTo = value.slice(1, -1);
+    const separator = findSeparator(fromTo);
+    const from = fromTo.slice(0, separator);
+    const to = fromTo.slice(separator + 1);
+
+    return {
+      from: from === "" || from === "-infinity" ? this.infinity({ negative: true }) : unquote(from),
+      to: to === "" || to === "infinity" ? this.infinity() : unquote(to),
+      excludeStart: value.startsWith("("),
+      excludeEnd: value.endsWith(")"),
+    };
+  }
+
+  private infinity(options?: { negative?: boolean }): unknown {
+    return this.subtype?.infinity?.(options) ?? (options?.negative ? -Infinity : Infinity);
+  }
 }
 
 export interface RangeSubtype {
@@ -104,25 +127,6 @@ function isRangeSubtype(value: unknown): value is RangeSubtype {
     typeof (value as { cast?: unknown }).cast === "function" &&
     typeof (value as { serialize?: unknown }).serialize === "function"
   );
-}
-
-function extractBounds(value: string): {
-  from: unknown;
-  to: unknown;
-  excludeStart: boolean;
-  excludeEnd: boolean;
-} {
-  const fromTo = value.slice(1, -1);
-  const separator = findSeparator(fromTo);
-  const from = fromTo.slice(0, separator);
-  const to = fromTo.slice(separator + 1);
-
-  return {
-    from: from === "" || from === "-infinity" ? -Infinity : unquote(from),
-    to: to === "" || to === "infinity" ? Infinity : unquote(to),
-    excludeStart: value.startsWith("("),
-    excludeEnd: value.endsWith(")"),
-  };
 }
 
 function findSeparator(value: string): number {
@@ -151,11 +155,15 @@ function unquote(value: string): string {
 
 function sanitizeBounds(from: unknown, to: unknown): [unknown, unknown] {
   return [
-    from === -Infinity && to !== Infinity ? null : from,
-    to === Infinity && from !== -Infinity ? null : to,
+    from === -Infinity && !infiniteFloatRangeCovers(to) ? null : from,
+    to === Infinity && !infiniteFloatRangeCovers(from) ? null : to,
   ];
 }
 
 function isInfinity(value: unknown): boolean {
   return value === Infinity || value === -Infinity;
+}
+
+function infiniteFloatRangeCovers(value: unknown): boolean {
+  return typeof value === "number" && !Number.isNaN(value);
 }

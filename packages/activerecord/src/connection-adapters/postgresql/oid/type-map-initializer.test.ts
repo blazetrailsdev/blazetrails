@@ -16,8 +16,11 @@ class TestStore implements TypeMap {
     this.mapping.set(oid, this.mapping.get(targetOid));
   }
 
-  lookup(oid: number | string): unknown {
-    return this.mapping.get(oid);
+  lookup(oid: number | string, ...args: unknown[]): unknown {
+    const value = this.mapping.get(oid);
+    if (typeof value === "function")
+      return (value as (...args: unknown[]) => unknown)(oid, ...args);
+    return value;
   }
 
   has(oid: number | string): boolean {
@@ -57,7 +60,29 @@ describe("PostgreSQL::OID::TypeMapInitializer", () => {
     expect(vector).toBeInstanceOf(Vector);
     expect(vector.delim).toBe(",");
     expect(vector.subtype).toBe(integerSubtype);
+    expect(vector.cast("[1,2,3]")).toBe("[1,2,3]");
     expect(store.lookup(8000)).toBe(integerSubtype);
+  });
+
+  it("registers array and range types lazily with lookup arguments", () => {
+    const store = new TestStore();
+    store.registerType(23, (_oid: number | string, metadata?: { scale?: number }) => ({
+      ...integerSubtype,
+      metadata,
+    }));
+
+    new TypeMapInitializer(store).run([
+      row({ oid: "1007", typname: "_int4", typinput: "array_in", typelem: "23" }),
+      row({ oid: "3904", typname: "int4range", typtype: "r", rngsubtype: "23" }),
+    ]);
+
+    const array = store.lookup(1007, { scale: 2 }) as OidArray;
+    const range = store.lookup(3904, { scale: 4 }) as Range;
+
+    expect(array).toBeInstanceOf(OidArray);
+    expect((array.subtype as { metadata?: { scale?: number } }).metadata?.scale).toBe(2);
+    expect(range).toBeInstanceOf(Range);
+    expect((range.subtype as { metadata?: { scale?: number } }).metadata?.scale).toBe(4);
   });
 
   it("builds query condition fragments", () => {

@@ -21,15 +21,15 @@ export interface TypeMap {
 }
 
 export interface PgTypeRow {
-  oid: number;
+  oid: number | string;
   typname: string;
-  typelem: number;
+  typelem: number | string;
   typdelim: string;
   typtype: string;
-  typbasetype: number;
-  typarray: number;
+  typbasetype: number | string;
+  typarray: number | string;
   typinput?: string;
-  rngsubtype?: number;
+  rngsubtype?: number | string;
 }
 
 export class TypeMapInitializer {
@@ -40,13 +40,13 @@ export class TypeMapInitializer {
   }
 
   run(records: PgTypeRow[]): void {
-    const nodes = records.filter((row) => !this.storeHas(row.oid));
+    const nodes = records.filter((row) => !this.storeHas(toInt(row.oid)));
     const mapped = extract(nodes, (row) => this.storeHas(row.typname));
     const ranges = extract(nodes, (row) => row.typtype === "r");
     const enums = extract(nodes, (row) => row.typtype === "e");
     const domains = extract(nodes, (row) => row.typtype === "d");
     const arrays = extract(nodes, (row) => row.typinput === "array_in");
-    const composites = extract(nodes, (row) => row.typelem > 0);
+    const composites = extract(nodes, (row) => toInt(row.typelem) !== 0);
 
     mapped.forEach((row) => this.registerMappedType(row));
     enums.forEach((row) => this.registerEnumType(row));
@@ -61,7 +61,8 @@ export class TypeMapInitializer {
   }
 
   queryConditionsForKnownTypeNames(): string {
-    return `WHERE\n  t.typname IN (${this.quotedKnownTypeNames().join(", ")})\n`;
+    const knownTypeNames = this.storeKeys().map((key) => `'${String(key).replace(/'/g, "''")}'`);
+    return `WHERE\n  t.typname IN (${knownTypeNames.join(", ")})\n`;
   }
 
   queryConditionsForKnownTypeTypes(): string {
@@ -69,66 +70,69 @@ export class TypeMapInitializer {
   }
 
   queryConditionsForArrayTypes(): string {
-    const knownTypeOids = this.storeKeys().filter((key) => typeof key === "number");
+    const knownTypeOids = this.storeKeys().filter((key) => typeof key !== "string");
     return `WHERE\n  t.typelem IN (${knownTypeOids.join(", ")})\n`;
   }
 
-  private registerBaseType(row: PgTypeRow): void {
-    this.store.registerType(row.oid, { name: row.typname });
-  }
-
   private registerMappedType(row: PgTypeRow): void {
-    this.store.aliasType(row.oid, row.typname);
+    this.aliasType(row.oid, row.typname);
   }
 
   private registerRangeType(row: PgTypeRow): void {
     this.registerWithSubtype(
       row.oid,
-      row.rngsubtype ?? 0,
+      toInt(row.rngsubtype ?? 0),
       (subtype) => new Range(subtype, row.typname),
     );
   }
 
   private registerEnumType(row: PgTypeRow): void {
-    this.store.registerType(row.oid, new Enum());
+    this.register(row.oid, new Enum());
   }
 
   private registerDomainType(row: PgTypeRow): void {
-    if (row.typbasetype > 0 && this.storeLookup(row.typbasetype)) {
-      this.store.aliasType(row.oid, row.typbasetype);
+    const baseType = this.storeLookup(toInt(row.typbasetype));
+    if (baseType) {
+      this.register(row.oid, baseType);
+    } else {
+      console.warn(`unknown base type (OID: ${row.typbasetype}) for domain ${row.typname}.`);
     }
   }
 
   private registerCompositeType(row: PgTypeRow): void {
-    const subtype = this.storeLookup(row.typelem);
-    if (subtype) this.store.registerType(row.oid, new Vector(row.typdelim, subtype));
+    const subtype = this.storeLookup(toInt(row.typelem));
+    if (subtype) this.register(row.oid, new Vector(row.typdelim, subtype));
   }
 
   private registerArrayType(row: PgTypeRow): void {
     this.registerWithSubtype(
       row.oid,
-      row.typelem,
+      toInt(row.typelem),
       (subtype) => new OidArray(subtype, row.typdelim),
     );
-    if (row.typarray > 0) {
-      this.registerWithSubtype(
-        row.typarray,
-        row.oid,
-        (subtype) => new OidArray(subtype, row.typdelim),
-      );
-    }
+  }
+
+  private register(
+    oid: number | string,
+    oidType: unknown | ((oid: number | string, ...args: unknown[]) => unknown),
+  ): void {
+    this.store.registerType(this.assertValidRegistration(oid, oidType), oidType);
+  }
+
+  private aliasType(oid: number | string, target: number | string): void {
+    this.store.aliasType(this.assertValidRegistration(oid, target), target);
   }
 
   private registerWithSubtype(
-    oid: number,
+    oid: number | string,
     targetOid: number,
-    build: (subtype: {
-      cast(value: unknown): unknown;
-      serialize(value: unknown): unknown;
-    }) => unknown,
+    build: (subtype: OidSubtype) => unknown,
   ): void {
-    const subtype = this.storeLookup(targetOid);
-    if (isSubtype(subtype)) this.store.registerType(oid, build(subtype));
+    if (this.storeHas(targetOid)) {
+      this.register(oid, (_oid: number | string, ...args: unknown[]) =>
+        build(this.storeLookup(targetOid, ...args) as OidSubtype),
+      );
+    }
   }
 
   private storeHas(key: number | string): boolean {
@@ -140,14 +144,16 @@ export class TypeMapInitializer {
     return this.store.keys?.() ?? [];
   }
 
-  private storeLookup(key: number | string): unknown {
-    return this.store.lookup?.(key);
+  private storeLookup(key: number | string, ...args: unknown[]): unknown {
+    return this.store.lookup?.(key, ...args);
   }
 
-  private quotedKnownTypeNames(): string[] {
-    return this.storeKeys()
-      .filter((key): key is string => typeof key === "string")
-      .map((key) => `'${key.replace(/'/g, "''")}'`);
+  private assertValidRegistration(
+    oid: number | string,
+    oidType: unknown | ((oid: number | string, ...args: unknown[]) => unknown),
+  ): number {
+    if (oidType == null) throw new Error(`can't register nil type for OID ${oid}`);
+    return toInt(oid);
   }
 }
 
@@ -162,13 +168,11 @@ function extract<T>(values: T[], predicate: (value: T) => boolean): T[] {
   return extracted;
 }
 
-function isSubtype(
-  value: unknown,
-): value is { cast(value: unknown): unknown; serialize(value: unknown): unknown } {
-  return (
-    value !== null &&
-    typeof value === "object" &&
-    typeof (value as { cast?: unknown }).cast === "function" &&
-    typeof (value as { serialize?: unknown }).serialize === "function"
-  );
+interface OidSubtype {
+  cast(value: unknown): unknown;
+  serialize(value: unknown): unknown;
+}
+
+function toInt(value: number | string): number {
+  return typeof value === "number" ? value : Number.parseInt(value, 10);
 }

@@ -1759,8 +1759,8 @@ export class Migrator {
     if (this._useTransaction(migration)) {
       // Skip wrapping if the adapter is already in a transaction
       // (e.g. a caller wrapped the entire migrate in a transaction).
-      // Starting a nested BEGIN on adapters that don't support
-      // savepoints (like SQLite) would error.
+      // Starting a nested BEGIN would error on adapters that issue
+      // raw BEGIN (vs savepoints).
       if (this._adapter.inTransaction) {
         await fn();
       } else {
@@ -1769,7 +1769,12 @@ export class Migrator {
           await fn();
           await this._adapter.commit();
         } catch (e) {
-          await this._adapter.rollback();
+          try {
+            await this._adapter.rollback();
+          } catch {
+            // Swallow rollback errors so the original migration
+            // error isn't masked.
+          }
           throw e;
         }
       }

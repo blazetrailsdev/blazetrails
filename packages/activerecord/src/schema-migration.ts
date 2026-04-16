@@ -140,21 +140,16 @@ export class SchemaMigration {
     version: string,
     migrationVersions: string[] = [],
   ): Promise<void> {
+    // Validate + normalize ALL inputs before any writes so a bad
+    // version or duplicate doesn't leave partial state.
     const normalized = String(BigInt(version)); // throws on non-numeric
-    const migrated = new Set(await this.allVersions());
-
-    if (!migrated.has(normalized)) {
-      await this.createVersion(normalized);
-    }
-
     const versionNum = BigInt(normalized);
-    // Validate + normalize all input versions up front.
+
     const candidates = migrationVersions.map((v) => {
       const n = String(BigInt(v)); // throws on non-numeric
       return { original: v, normalized: n, num: BigInt(n) };
     });
 
-    // Duplicate detection (matching Rails).
     const seen = new Set<string>();
     for (const { normalized: n, original } of candidates) {
       if (seen.has(n)) {
@@ -163,6 +158,13 @@ export class SchemaMigration {
         );
       }
       seen.add(n);
+    }
+
+    // All validation passed — now write.
+    const migrated = new Set(await this.allVersions());
+
+    if (!migrated.has(normalized)) {
+      await this.createVersion(normalized);
     }
 
     for (const { normalized: n, num } of candidates) {

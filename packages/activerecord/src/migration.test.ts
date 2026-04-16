@@ -2235,6 +2235,68 @@ describe("Migrator DDL transaction wrapping", () => {
     expect(calls).toContain("up");
     expect(calls).not.toContain("begin");
   });
+
+  it("calls rollback (not commit) when the migration throws", async () => {
+    const calls: string[] = [];
+    const adapter = makeDdlAdapter(calls, { supportsDdl: true });
+    const migrations = [
+      {
+        version: "20260101000000",
+        name: "test",
+        migration: () => ({
+          up: async () => {
+            throw new Error("boom");
+          },
+          down: async () => {},
+        }),
+      },
+    ];
+    const migrator = new Migrator(adapter as any, migrations as any);
+    await expect(migrator.migrate(null)).rejects.toThrow("boom");
+    expect(calls).toContain("begin");
+    expect(calls).toContain("rollback");
+    expect(calls).not.toContain("commit");
+  });
+
+  it("skips wrapping when adapter is already in a transaction", async () => {
+    const calls: string[] = [];
+    const base = createTestAdapter();
+    const adapter = new Proxy(base, {
+      get(target, prop) {
+        if (prop === "supportsDdlTransactions") return () => true;
+        if (prop === "inTransaction") return true; // already in txn
+        if (prop === "beginTransaction")
+          return async () => {
+            calls.push("begin");
+          };
+        if (prop === "commit")
+          return async () => {
+            calls.push("commit");
+          };
+        if (prop === "rollback")
+          return async () => {
+            calls.push("rollback");
+          };
+        return (target as any)[prop];
+      },
+    });
+    const migrations = [
+      {
+        version: "20260101000000",
+        name: "test",
+        migration: () => ({
+          up: async () => {
+            calls.push("up");
+          },
+          down: async () => {},
+        }),
+      },
+    ];
+    const migrator = new Migrator(adapter as any, migrations as any);
+    await migrator.migrate(null);
+    expect(calls).toContain("up");
+    expect(calls).not.toContain("begin"); // skipped — already in txn
+  });
 });
 
 describe("SchemaMigration.assumeMigratedUptoVersion", () => {
@@ -2269,5 +2331,37 @@ describe("SchemaMigration.assumeMigratedUptoVersion", () => {
     // 20260101000000 appears once, not twice
     expect(versions.filter((v) => v === "20260101000000")).toHaveLength(1);
     expect(versions).toContain("20260102000000");
+  });
+
+  it("throws on non-numeric version", async () => {
+    const adapter = createTestAdapter();
+    const sm = new SchemaMigration(adapter);
+    await sm.createTable();
+    await expect(sm.assumeMigratedUptoVersion("abc")).rejects.toThrow();
+  });
+
+  it("throws on non-numeric entry in migrationVersions", async () => {
+    const adapter = createTestAdapter();
+    const sm = new SchemaMigration(adapter);
+    await sm.createTable();
+    await expect(sm.assumeMigratedUptoVersion("20260102000000", ["abc"])).rejects.toThrow();
+    // No partial state — the target version should NOT have been inserted
+    // because validation runs before any writes.
+    const versions = await sm.allVersions();
+    expect(versions).not.toContain("20260102000000");
+  });
+
+  it("throws on duplicate versions without leaving partial state", async () => {
+    const adapter = createTestAdapter();
+    const sm = new SchemaMigration(adapter);
+    await sm.createTable();
+    await expect(
+      sm.assumeMigratedUptoVersion("20260103000000", [
+        "20260101000000",
+        "20260101000000", // duplicate
+      ]),
+    ).rejects.toThrow(/Duplicate migration/);
+    const versions = await sm.allVersions();
+    expect(versions).toHaveLength(0); // no partial writes
   });
 });

@@ -1709,6 +1709,17 @@ export class CreateDogs extends Migration {
     } finally {
       await aAdapter.close();
     }
+
+    // Schema dump fan-out: each named DB should get its own schema
+    // file — primary → db/schema.ts, animals → db/animals_schema.ts.
+    // Without the per-config HashConfig threading in
+    // dumpSchemaAfterMigrate, both would dump to db/schema.ts.
+    const primarySchema = path.join(tmpDir, "db", "schema.ts");
+    const animalsSchema = path.join(tmpDir, "db", "animals_schema.ts");
+    expect(fs.existsSync(primarySchema)).toBe(true);
+    expect(fs.existsSync(animalsSchema)).toBe(true);
+    expect(fs.readFileSync(primarySchema, "utf8")).toContain("users");
+    expect(fs.readFileSync(animalsSchema, "utf8")).toContain("dogs");
   });
 
   it("db migrate --database=animals targets only the named DB", async () => {

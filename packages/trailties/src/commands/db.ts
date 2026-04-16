@@ -93,8 +93,12 @@ function migrationsDir(): string {
  * `db/migrations_<name>`.
  */
 function migrationsDirForConfig(name: string, config: RawConfig): string {
-  const paths = (config as { migrationsPaths?: string[] }).migrationsPaths;
-  if (paths && paths.length > 0) return path.resolve(process.cwd(), paths[0]);
+  const raw = (config as { migrationsPaths?: string | string[] }).migrationsPaths;
+  if (typeof raw === "string" && raw.length > 0) return path.resolve(process.cwd(), raw);
+  if (Array.isArray(raw)) {
+    const first = raw.find((p) => p.length > 0);
+    if (first) return path.resolve(process.cwd(), first);
+  }
   if (name === "primary") return path.join(process.cwd(), "db", "migrations");
   return path.join(process.cwd(), "db", `migrations_${name}`);
 }
@@ -156,7 +160,7 @@ async function forEachDatabase(
  */
 async function forEachDatabaseConfig(
   opts: DatabaseOpts,
-  fn: (ctx: { raw: RawConfig; config: HashConfig; name: string }) => Promise<void>,
+  fn: (ctx: { raw: RawConfig; config: HashConfig; name: string; prefix: string }) => Promise<void>,
 ): Promise<void> {
   const envName = resolveEnv();
   const allConfigs = await loadAllDatabaseConfigs(envName);
@@ -168,10 +172,12 @@ async function forEachDatabaseConfig(
         `Available: ${available || "(none)"}`,
     );
   }
+  const multiDb = targets.length > 1;
   for (const { name, config: rawConfig } of targets) {
     const raw = normalizeRawConfig(rawConfig);
     const hashConfig = new HashConfig(envName, name, raw as Record<string, unknown>);
-    await fn({ raw, config: hashConfig, name });
+    const prefix = multiDb ? `[${name}] ` : "";
+    await fn({ raw, config: hashConfig, name, prefix });
   }
 }
 
@@ -315,9 +321,13 @@ async function runProtectedEnvCheck(config: HashConfig, envName: string): Promis
  * app that commits a structure.sql stays on sql through the whole
  * migrate → dump cycle.
  */
-async function dumpSchemaAfterMigrate(adapter: DatabaseAdapter, raw: RawConfig): Promise<void> {
+async function dumpSchemaAfterMigrate(
+  adapter: DatabaseAdapter,
+  raw: RawConfig,
+  hashConfig?: HashConfig,
+): Promise<void> {
   if (!DatabaseTasks.dumpSchemaAfterMigration) return;
-  const config = toDbConfig(raw);
+  const config = hashConfig ?? toDbConfig(raw);
   const previous = DatabaseTasks.migrationConnection();
   const previousFormat = DatabaseTasks.schemaFormat;
   try {
@@ -489,14 +499,14 @@ function displayNameFor(config: HashConfig, raw: RawConfig): string {
 }
 
 async function runCreate(opts: DatabaseOpts = {}): Promise<void> {
-  await forEachDatabaseConfig(opts, async ({ raw, config }) => {
+  await forEachDatabaseConfig(opts, async ({ raw, config, prefix }) => {
     const displayName = displayNameFor(config, raw);
     try {
       await DatabaseTasks.create(config);
-      console.log(`Created database '${displayName}'`);
+      console.log(`${prefix}Created database '${displayName}'`);
     } catch (error) {
       if (error instanceof DatabaseAlreadyExists) {
-        console.error(`Database '${displayName}' already exists`);
+        console.error(`${prefix}Database '${displayName}' already exists`);
         return;
       }
       throw error;
@@ -505,15 +515,15 @@ async function runCreate(opts: DatabaseOpts = {}): Promise<void> {
 }
 
 async function runDrop(opts: DatabaseOpts = {}): Promise<void> {
-  await forEachDatabaseConfig(opts, async ({ raw, config }) => {
+  await forEachDatabaseConfig(opts, async ({ raw, config, prefix }) => {
     const displayName = displayNameFor(config, raw);
     await runProtectedEnvCheck(config, config.envName);
     try {
       await DatabaseTasks.drop(config);
-      console.log(`Dropped database '${displayName}'`);
+      console.log(`${prefix}Dropped database '${displayName}'`);
     } catch (error) {
       if (error instanceof NoDatabaseError) {
-        console.error(`Database '${displayName}' does not exist`);
+        console.error(`${prefix}Database '${displayName}' does not exist`);
         return;
       }
       throw error;
@@ -531,7 +541,7 @@ export function dbCommand(): Command {
     .option("--version <version>", "Migrate to a specific version")
     .option("--database <name>", "Target a specific named database")
     .action(async (opts) => {
-      await forEachDatabase(opts, async ({ adapter, raw, name, prefix }) => {
+      await forEachDatabase(opts, async ({ adapter, raw, name, prefix, config }) => {
         const mDir = migrationsDirForConfig(name, raw);
         const migrations = await discoverMigrations(mDir);
         if (migrations.length === 0) {
@@ -543,7 +553,7 @@ export function dbCommand(): Command {
         for (const line of migrator.output) console.log(`${prefix}${line}`);
         const pending = await migrator.pendingMigrations();
         if (pending.length === 0) console.log(`${prefix}All migrations are up to date.`);
-        await dumpSchemaAfterMigrate(adapter, raw);
+        await dumpSchemaAfterMigrate(adapter, raw, config);
       });
     });
 
@@ -559,7 +569,7 @@ export function dbCommand(): Command {
         process.exitCode = 1;
         return;
       }
-      await forEachDatabase(opts, async ({ adapter, raw, name, prefix }) => {
+      await forEachDatabase(opts, async ({ adapter, raw, name, prefix, config }) => {
         const mDir = migrationsDirForConfig(name, raw);
         const migrations = await discoverMigrations(mDir);
         if (migrations.length === 0) {
@@ -569,7 +579,7 @@ export function dbCommand(): Command {
         const migrator = new Migrator(adapter, migrations);
         await migrator.rollback(step);
         for (const line of migrator.output) console.log(`${prefix}${line}`);
-        await dumpSchemaAfterMigrate(adapter, raw);
+        await dumpSchemaAfterMigrate(adapter, raw, config);
       });
     });
 
@@ -585,7 +595,7 @@ export function dbCommand(): Command {
         process.exitCode = 1;
         return;
       }
-      await forEachDatabase(opts, async ({ adapter, raw, name, prefix }) => {
+      await forEachDatabase(opts, async ({ adapter, raw, name, prefix, config }) => {
         const mDir = migrationsDirForConfig(name, raw);
         const migrations = await discoverMigrations(mDir);
         if (migrations.length === 0) {
@@ -595,7 +605,7 @@ export function dbCommand(): Command {
         const migrator = new Migrator(adapter, migrations);
         await migrator.forward(step);
         for (const line of migrator.output) console.log(`${prefix}${line}`);
-        await dumpSchemaAfterMigrate(adapter, raw);
+        await dumpSchemaAfterMigrate(adapter, raw, config);
       });
     });
 

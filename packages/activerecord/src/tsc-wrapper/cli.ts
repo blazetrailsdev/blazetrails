@@ -28,9 +28,29 @@ function handlePrintVirtualized(args: string[]): void {
 }
 
 function parsePretty(args: string[], options: ts.CompilerOptions): boolean {
-  const prettyIndex = args.indexOf("--pretty");
-  const prettyFromArgs =
-    prettyIndex === -1 ? undefined : args[prettyIndex + 1] === "false" ? false : true;
+  // Accept both `--pretty true|false` and `--pretty=true|false`; a
+  // bare `--pretty` with no following value means `true` (matches tsc).
+  const parseValue = (value: string | undefined): boolean | undefined => {
+    if (value === undefined) return true;
+    if (value === "true") return true;
+    if (value === "false") return false;
+    return undefined;
+  };
+  let prettyFromArgs: boolean | undefined;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (arg === "--pretty") {
+      prettyFromArgs = parseValue(args[i + 1]) ?? true;
+      break;
+    }
+    if (arg.startsWith("--pretty=")) {
+      const parsed = parseValue(arg.slice("--pretty=".length));
+      if (parsed !== undefined) {
+        prettyFromArgs = parsed;
+        break;
+      }
+    }
+  }
   const prettyFromOpts = typeof options.pretty === "boolean" ? options.pretty : undefined;
   return prettyFromArgs ?? prettyFromOpts ?? ts.sys.writeOutputIsTTY?.() ?? false;
 }

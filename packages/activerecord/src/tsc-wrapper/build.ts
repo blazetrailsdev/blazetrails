@@ -47,16 +47,14 @@ export function createTrailsSolutionBuilder(
     projectReferences,
   ) => {
     if (!rootNames || !options) {
-      // Fall back to TS default when the solution builder hasn't
-      // resolved a config (shouldn't happen for well-formed
-      // projects, but keep the contract honest).
-      return ts.createEmitAndSemanticDiagnosticsBuilderProgram(
-        rootNames,
-        options,
-        _defaultHost,
-        oldProgram,
-        configFileParsingDiagnostics,
-        projectReferences,
+      // Reuse the previous builder program if we have one — the
+      // solution builder only invokes createProgram without
+      // resolved inputs on a no-op incremental tick. Otherwise
+      // this is unreachable for a well-formed solution, so fail
+      // loudly rather than passing undefined into the TS factory.
+      if (oldProgram) return oldProgram;
+      throw new Error(
+        "createTrailsSolutionBuilder received unresolved rootNames or compiler options",
       );
     }
 

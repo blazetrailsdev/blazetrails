@@ -199,7 +199,9 @@ export function typeCast(value: unknown): unknown {
 }
 
 export function escapeBytea(value: Buffer | Uint8Array | string): string {
-  const buffer = typeof value === "string" ? Buffer.from(value) : Buffer.from(value);
+  // Treat string inputs as raw byte sequences ("binary") so callers passing
+  // pre-encoded binary strings don't get UTF-8 re-encoded.
+  const buffer = typeof value === "string" ? Buffer.from(value, "binary") : Buffer.from(value);
   return `\\x${buffer.toString("hex")}`;
 }
 

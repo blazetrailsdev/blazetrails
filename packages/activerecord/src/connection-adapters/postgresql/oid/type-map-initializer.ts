@@ -71,6 +71,7 @@ export class TypeMapInitializer {
 
   queryConditionsForArrayTypes(): string {
     const knownTypeOids = this.storeKeys().filter((key) => typeof key !== "string");
+    if (knownTypeOids.length === 0) return "WHERE\n  1=0\n";
     return `WHERE\n  t.typelem IN (${knownTypeOids.join(", ")})\n`;
   }
 
@@ -128,6 +129,9 @@ export class TypeMapInitializer {
     targetOid: number,
     build: (subtype: OidSubtype) => unknown,
   ): void {
+    if (!this.store.lookup) {
+      throw new Error(`TypeMap store must implement lookup() to register subtype-based OID ${oid}`);
+    }
     if (this.storeHas(targetOid)) {
       this.register(oid, (_oid: number | string, ...args: unknown[]) =>
         build(this.storeLookup(targetOid, ...args) as OidSubtype),

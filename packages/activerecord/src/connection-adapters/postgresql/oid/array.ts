@@ -4,6 +4,14 @@
  * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::OID::Array
  */
 
+function stableStringify(value: unknown): string {
+  try {
+    return JSON.stringify(value, (_k, v) => (typeof v === "bigint" ? `${v}n` : v)) ?? String(value);
+  } catch {
+    return String(value);
+  }
+}
+
 export interface ArraySubtype {
   readonly type?: string | (() => string);
   cast(value: unknown): unknown;
@@ -126,9 +134,20 @@ export class Array {
     return `{${items.join(this.delimiter)}}`;
   }
 
+  private formatValueForSchema(value: unknown): string {
+    const typeCastForSchema = this.subtype.typeCastForSchema;
+    if (typeCastForSchema) return typeCastForSchema(value);
+    if (typeof value === "bigint") return String(value);
+    try {
+      return JSON.stringify(value) ?? String(value);
+    } catch {
+      return String(value);
+    }
+  }
+
   typeCastForSchema(value: unknown): string {
-    if (!globalThis.Array.isArray(value)) return JSON.stringify(value) ?? String(value);
-    return `[${value.map((item) => this.subtype.typeCastForSchema?.(item) ?? JSON.stringify(item) ?? String(item)).join(", ")}]`;
+    if (!globalThis.Array.isArray(value)) return this.formatValueForSchema(value);
+    return `[${value.map((item) => this.formatValueForSchema(item)).join(", ")}]`;
   }
 
   map(value: unknown, block?: (value: unknown) => unknown): unknown {
@@ -138,7 +157,7 @@ export class Array {
 
   isChangedInPlace(rawOldValue: unknown, newValue: unknown): boolean {
     const oldValue = this.deserialize(rawOldValue);
-    return JSON.stringify(oldValue) !== JSON.stringify(newValue);
+    return stableStringify(oldValue) !== stableStringify(newValue);
   }
 
   isForceEquality(value: unknown): boolean {

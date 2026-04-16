@@ -29,7 +29,6 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
   private _client: pg.PoolClient | null = null;
   private _inTransaction = false;
   private _databaseVersion: number | null = null;
-  private _initialized = false;
 
   constructor(config: string | pg.PoolConfig) {
     super();
@@ -68,26 +67,9 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
   }
 
   /**
-   * Lazily fetch and cache server version + extension info on first use.
-   * Mirrors Rails' configure_connection which runs at checkout time.
-   */
-  private async _ensureInitialized(): Promise<void> {
-    if (this._initialized) return;
-    this._initialized = true;
-    try {
-      await this.getDatabaseVersion();
-    } catch {
-      // Version fetch can fail if called inside an aborted transaction
-      // or before the connection is fully ready. Will retry next time.
-      this._initialized = false;
-    }
-  }
-
-  /**
    * Execute a SELECT query and return rows.
    */
   async execute(sql: string, binds: unknown[] = []): Promise<Record<string, unknown>[]> {
-    await this._ensureInitialized();
     const client = await this.getClient();
     try {
       const result = await client.query(this.rewriteBinds(sql, binds), binds);
@@ -105,7 +87,6 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
    * `rowCount` is returned.
    */
   async executeMutation(sql: string, binds: unknown[] = []): Promise<number> {
-    await this._ensureInitialized();
     const client = await this.getClient();
     try {
       const pgSql = this.rewriteBinds(sql, binds);
@@ -297,9 +278,9 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
   // ---------------------------------------------------------------------------
 
   /**
-   * Fetch and cache the server version number. Call this after connecting
-   * (e.g. in configure_connection) to enable version-dependent predicates.
-   * Until called, version-dependent supports_* methods assume modern PG.
+   * Fetch and cache the server version number. Called automatically on
+   * the first query via _ensureInitialized(). Version-dependent
+   * supports_* methods throw if called before initialization.
    */
   async getDatabaseVersion(): Promise<number> {
     if (this._databaseVersion !== null) return this._databaseVersion;
@@ -791,16 +772,16 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
     const [pk, seq] = result;
     const qualifiedTable = this.quoteTableName(tableName);
     const qi = (s: string) => this.quoteIdentifier(s);
-    const qualifiedSeq = `${qi(seq.schema)}.${qi(seq.name)}`;
+    const seqName = `${seq.schema}.${seq.name}`;
 
     const maxRows = await this.execute(
       `SELECT COALESCE(MAX(${qi(pk)}), 0) AS max_val FROM ${qualifiedTable}`,
     );
     const maxVal = Number(maxRows[0].max_val);
     if (maxVal === 0) {
-      await this.exec(`SELECT setval('${qualifiedSeq}', 1, false)`);
+      await this.execute(`SELECT setval($1::regclass, 1, false)`, [seqName]);
     } else {
-      await this.exec(`SELECT setval('${qualifiedSeq}', ${maxVal}, true)`);
+      await this.execute(`SELECT setval($1::regclass, $2, true)`, [seqName, maxVal]);
     }
   }
 
@@ -808,9 +789,8 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
     const result = await this.pkAndSequenceFor(tableName);
     if (!result) return;
     const [, seq] = result;
-    const qi = (s: string) => this.quoteIdentifier(s);
-    const qualifiedSeq = `${qi(seq.schema)}.${qi(seq.name)}`;
-    await this.exec(`SELECT setval('${qualifiedSeq}', ${value})`);
+    const seqName = `${seq.schema}.${seq.name}`;
+    await this.execute(`SELECT setval($1::regclass, $2)`, [seqName, value]);
   }
 
   async renameIndex(tableName: string, oldName: string, newName: string): Promise<void> {

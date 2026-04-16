@@ -29,6 +29,38 @@ The adapter-specific modules (`postgresql/quoting.ts`, `mysql/quoting.ts`,
 schema operations — not the model/relation/sanitization paths that most
 user-facing queries go through.
 
+## Rails Source Reference
+
+The quoting system in Rails is spread across these files:
+
+- **Base quoting module**: `activerecord/lib/active_record/connection_adapters/abstract/quoting.rb`
+  — defines `quote`, `quote_string`, `quote_column_name`, `quote_table_name`,
+  `quote_table_name_for_assignment`, `quote_default_expression`, `type_cast`,
+  `quoted_true`/`quoted_false`, `quoted_date`, `quoted_time`, `quoted_binary`,
+  `sanitize_as_sql_comment`, `column_name_matcher`, `column_name_with_order_matcher`
+- **PostgreSQL overrides**: `activerecord/lib/active_record/connection_adapters/postgresql/quoting.rb`
+  — overrides `quote`, `quote_string`, `quote_table_name`, `quote_column_name`,
+  `quoted_date`, `quoted_binary`, `type_cast`, plus PG-specific `encode_array`,
+  `determine_encoding_of_strings_in_array`
+- **MySQL overrides**: `activerecord/lib/active_record/connection_adapters/abstract_mysql_adapter.rb`
+  (mixed in from `mysql/quoting.rb` in newer Rails) — overrides `quote`,
+  `quote_string`, `quote_column_name`, `quoted_date`, `quoted_binary`,
+  `quoted_true`/`quoted_false`, `type_cast`, `column_name_matcher`,
+  `column_name_with_order_matcher`
+- **SQLite3 overrides**: `activerecord/lib/active_record/connection_adapters/sqlite3/quoting.rb`
+  — overrides `quote`, `quote_string`, `quote_table_name`, `quote_column_name`,
+  `quoted_date`, `quoted_time`, `quoted_binary`, `type_cast`,
+  `quote_table_name_for_assignment`, `quote_default_expression`,
+  `column_name_matcher`, `column_name_with_order_matcher`
+- **Sanitization**: `activerecord/lib/active_record/sanitization.rb`
+  — `sanitize_sql_array` calls `connection.quote(value)` (not a standalone function)
+
+Key pattern: In Rails, `Quoting` is a module included into
+`AbstractAdapter`. Each concrete adapter (`PostgreSQLAdapter`,
+`AbstractMysqlAdapter`, `SQLite3Adapter`) overrides methods from the module.
+Call sites always go through `connection.quote(...)` — never a standalone
+function.
+
 ## Goal
 
 Every quoting call should go through the active connection adapter, matching
@@ -226,15 +258,27 @@ The standalone functions in `abstract/quoting.ts` remain as the base
 implementation (used by `AbstractAdapter` or as fallback), but nothing outside
 the adapter layer imports them directly.
 
-## Validation
+## Scope Estimates
 
-- `pnpm test` passes for all packages
-- `pnpm test:types` passes (no DX regressions)
-- `pnpm run api:compare` shows no regressions
-- Manual check: `quote(true)` returns `'t'`/`'f'` when PG adapter is active,
-  `1`/`0` for MySQL/SQLite
-- Grep for `from.*abstract/quoting` outside of `connection-adapters/` returns
-  zero results
+| Phase | Files touched                                                                                         | Methods added/changed                     | PR sizing notes                                                               |
+| ----- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------- |
+| 0     | 2 (PG + MySQL quoting modules)                                                                        | ~10 per adapter                           | Single PR — each adapter gets `quote()` + missing methods. ~20 methods total. |
+| 1     | 1 new interface + 3 adapter classes                                                                   | ~1 interface + 3 `implements`             | Can bundle with Phase 0 if under limit, otherwise standalone small PR.        |
+| 2     | 3 files (sanitization, query-methods, database-statements)                                            | ~5 function signatures change             | Single PR — the most impactful change.                                        |
+| 3     | 4 files (schema-creation, schema-statements, schema-definitions, PG schema-creation)                  | ~10 call sites                            | Single PR — mechanical rewiring.                                              |
+| 4     | 7 files (model-schema, migration, internal-metadata, schema, primary-key, alias-tracker, fixture-set) | ~15 call sites                            | Single PR — each file has 1–3 imports to rewire.                              |
+| 5     | 1 file (abstract/quoting.ts)                                                                          | Remove `adapter?` param from ~5 functions | Small cleanup PR.                                                             |
+
+## Acceptance Criteria
+
+The refactor is **done** when all of these hold:
+
+1. **No external imports of abstract quoting**: `grep -r 'from.*abstract/quoting' --include='*.ts' packages/activerecord/src/` returns only files within `connection-adapters/abstract/` itself.
+2. **Adapter-specific quoting is correct**: A test that creates a PG adapter and calls `adapter.quote(true)` returns `"'t'"`, MySQL returns `"1"`, SQLite returns `"1"`.
+3. **Full Quoting interface coverage**: Each adapter class (`PostgreSQLAdapter`, `AbstractMysqlAdapter`, `SQLite3Adapter`) satisfies `implements Quoting` with no type errors.
+4. **No `adapter?` string parameter**: `grep -r 'adapter.*sqlite.*postgres.*mysql' --include='*.ts' packages/activerecord/src/connection-adapters/abstract/quoting.ts` returns no results.
+5. **All existing tests pass**: `pnpm test` and `pnpm test:types` green across all packages.
+6. **No api:compare regressions**: `pnpm run api:compare` output is equal to or better than baseline.
 
 ## Notes
 

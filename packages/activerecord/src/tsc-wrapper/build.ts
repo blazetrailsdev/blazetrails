@@ -91,27 +91,34 @@ export function createTrailsSolutionBuilder(
   // `getOriginalText` to whichever per-project host owns a given
   // absolute path. Lets `remapDiagnostics` remap a diagnostic whose
   // primary file lives in project A AND whose `relatedInformation`
-  // entries point into project B's virtualized files.
+  // entries point into project B's virtualized files. Results are
+  // memoized per path so large solutions don't re-scan every host
+  // for every diagnostic.
+  const fileOwner = new Map<string, TrailsCompilerHost | null>();
+  const ownerOf = (fileName: string): TrailsCompilerHost | null => {
+    const cached = fileOwner.get(fileName);
+    if (cached !== undefined) return cached;
+    for (const host of hostsByProject.values()) {
+      if (host.getDeltasForFile(fileName) || host.getOriginalText(fileName) != null) {
+        fileOwner.set(fileName, host);
+        return host;
+      }
+    }
+    fileOwner.set(fileName, null);
+    return null;
+  };
   const compositeRemapHost = {
-    getDeltasForFile(fileName: string) {
-      for (const host of hostsByProject.values()) {
-        const d = host.getDeltasForFile(fileName);
-        if (d) return d;
-      }
-      return undefined;
-    },
-    getOriginalText(fileName: string) {
-      for (const host of hostsByProject.values()) {
-        const t = host.getOriginalText(fileName);
-        if (t != null) return t;
-      }
-      return undefined;
-    },
+    getDeltasForFile: (fileName: string) => ownerOf(fileName)?.getDeltasForFile(fileName),
+    getOriginalText: (fileName: string) => ownerOf(fileName)?.getOriginalText(fileName),
   } as unknown as TrailsCompilerHost;
+
+  // Share the original-SourceFile cache across every diagnostic so
+  // we only reparse each virtualized file once per build.
+  const originalSfCache = new Map<string, ts.SourceFile>();
 
   const reportDiagnostic: ts.DiagnosticReporter = (d) => {
     if (!buildOpts.onDiagnostic) return;
-    const remapped = remapDiagnostics([d], compositeRemapHost)[0]!;
+    const remapped = remapDiagnostics([d], compositeRemapHost, originalSfCache)[0]!;
     buildOpts.onDiagnostic(remapped);
   };
 

@@ -89,15 +89,16 @@ function handleBuildMode(args: string[]): void {
     if (arg.startsWith("-")) continue;
     rest.push(arg);
   }
-  const rootConfigs = rest.length > 0 ? rest.map((p) => path.resolve(p)) : [process.cwd()];
+  const rootConfigs =
+    rest.length > 0
+      ? rest.map((p) => path.resolve(p))
+      : [ts.findConfigFile(process.cwd(), ts.sys.fileExists) ?? path.resolve("tsconfig.json")];
 
   const fh = formatHost();
   const pretty = parsePretty(args, {});
-  let diagnostics = 0;
   const builder = createTrailsSolutionBuilder(rootConfigs, {
     verbose,
     onDiagnostic: (d) => {
-      diagnostics++;
       const out = pretty
         ? ts.formatDiagnosticsWithColorAndContext([d], fh)
         : ts.formatDiagnostics([d], fh);
@@ -111,7 +112,10 @@ function handleBuildMode(args: string[]): void {
   });
 
   const status = clean ? builder.clean() : builder.build();
-  process.exit(diagnostics > 0 ? 1 : status === ts.ExitStatus.Success ? 0 : 1);
+  // Preserve TS ExitStatus semantics (Success / DiagnosticsPresent_OutputsSkipped
+  // / InvalidProject_OutputsSkipped / ProjectReferenceCycle_OutputsSkipped) so
+  // callers scripting `trails-tsc --build` can distinguish them exactly like `tsc -b`.
+  process.exit(status);
 }
 
 function main(): void {

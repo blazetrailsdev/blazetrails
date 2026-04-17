@@ -84,3 +84,42 @@ export function asyncCountBySql(
 ): Promise<number> {
   return countBySql.call(this, sql);
 }
+
+/**
+ * Internal: execute a raw SQL query through the adapter.
+ * Mirrors: ActiveRecord::Querying._query_by_sql
+ */
+export async function _queryBySql(
+  this: typeof Base,
+  sql: string | [string, ...unknown[]],
+  binds: unknown[] = [],
+): Promise<Record<string, unknown>[]> {
+  let sanitized: string;
+  if (Array.isArray(sql)) {
+    sanitized = sanitizeSql(sql);
+  } else if (binds.length > 0) {
+    sanitized = sanitizeSql([sql, ...binds] as [string, ...unknown[]]);
+  } else {
+    sanitized = sql;
+  }
+  return this.adapter.execute(sanitized);
+}
+
+/**
+ * Internal: instantiate model objects from a result set.
+ * Mirrors: ActiveRecord::Querying._load_from_sql
+ */
+export function _loadFromSql<T extends typeof Base>(
+  this: T,
+  rows: Record<string, unknown>[],
+  block?: (record: InstanceType<T>) => void,
+): InstanceType<T>[] {
+  if (rows.length === 0) return [];
+
+  const payload = { record_count: rows.length, class_name: this.name };
+  const records = Notifications.instrument("instantiation.active_record", payload, () =>
+    rows.map((row) => this._instantiate(row)),
+  );
+  if (block) records.forEach(block);
+  return records;
+}

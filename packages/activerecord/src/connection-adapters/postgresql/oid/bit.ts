@@ -59,8 +59,12 @@ export class Bit extends Type<string> {
   }
 
   override serialize(value: unknown): Data | null {
+    // Rails: `Data.new(super) if value` — super is Type::Value#serialize which
+    // returns the value unchanged. Do NOT route through castValue here; the
+    // hex-notation normalisation only applies on read (cast/deserialize).
     if (value == null) return null;
-    return new Data(this.castValue(value) ?? "");
+    if (value instanceof Data) return value;
+    return new Data(typeof value === "string" ? value : String(value));
   }
 
   override deserialize(value: unknown): string | null {

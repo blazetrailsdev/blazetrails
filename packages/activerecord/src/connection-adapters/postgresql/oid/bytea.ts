@@ -8,6 +8,7 @@
  */
 
 import { BinaryType, BinaryData } from "@blazetrails/activemodel";
+import { unescapeBytea } from "../quoting.js";
 
 export class Bytea extends BinaryType {
   /**
@@ -16,21 +17,14 @@ export class Bytea extends BinaryType {
    *   return value.to_s if value.is_a?(Type::Binary::Data)
    *   PG::Connection.unescape_bytea(super)
    *
-   * PG's unescape_bytea handles hex (`\x...`) and legacy octal escapes.
-   * We delegate hex decoding locally and fall back to the parent for raw
-   * bytes / Data instances.
+   * `unescape_bytea` handles both hex (`\x...`) and legacy octal escape
+   * formats. We delegate to our shared `unescapeBytea` helper (the same
+   * one used by quoting.ts) so octal escapes aren't silently lost.
    */
   override deserialize(value: unknown): Uint8Array | null {
     if (value == null) return null;
     if (value instanceof BinaryData) return value.bytes;
-    if (typeof value === "string" && value.startsWith("\\x")) {
-      const hex = value.slice(2);
-      const bytes = new Uint8Array(hex.length / 2);
-      for (let i = 0; i < bytes.length; i++) {
-        bytes[i] = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-      }
-      return bytes;
-    }
+    if (typeof value === "string") return Uint8Array.from(unescapeBytea(value));
     return super.deserialize(value);
   }
 }

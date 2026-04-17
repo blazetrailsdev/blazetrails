@@ -68,6 +68,25 @@ describe("OID retrofits — Rails-faithful behavior", () => {
     expect(new Bit().cast("0xff")).toBe("11111111");
   });
 
+  it("Bit#serialize preserves hex notation (Rails: Data.new(super), not cast)", () => {
+    // Rails wraps the raw value in Data; the 0x→binary normalisation is a
+    // read-time behavior only. A serialized Data("0xff") round-trips as-is.
+    expect(new Bit().serialize("0xff")?.toString()).toBe("0xff");
+  });
+
+  it("Bytea#deserialize decodes legacy octal escapes", () => {
+    // Rails uses PG::Connection.unescape_bytea which handles octal as well.
+    const out = new Bytea().deserialize("a\\134\\000b") as Uint8Array;
+    expect(Array.from(out)).toEqual([0x61, 0x5c, 0x00, 0x62]);
+  });
+
+  it("Cidr#cast rejects invalid input like Rails IPAddr.new", () => {
+    expect(new Cidr().cast("not-an-ip")).toBeNull();
+    expect(new Cidr().cast("192.168.1.1")).toBe("192.168.1.1");
+    expect(new Cidr().cast("192.168.1.0/24")).toBe("192.168.1.0/24");
+    expect(new Cidr().cast("::1")).toBe("::1");
+  });
+
   it("Bytea#deserialize decodes hex escape", () => {
     const out = new Bytea().deserialize("\\x6869") as Uint8Array;
     expect(out).toBeInstanceOf(Uint8Array);

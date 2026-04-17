@@ -46,9 +46,25 @@ export class Cidr extends Type<string> {
     return oldValue !== newValue;
   }
 
+  /**
+   * Rails' cast_value uses `IPAddr.new(value)` and returns nil on
+   * ArgumentError. Without an IPAddr primitive in TS we do lightweight
+   * syntactic validation (IPv4 / IPv6 / optional /prefix) and reject
+   * anything that isn't a plausible CIDR-shaped string.
+   */
   protected castValue(value: unknown): string | null {
     if (value == null) return null;
-    if (typeof value === "string") return value === "" ? null : value;
-    return String(value);
+    if (typeof value !== "string") return String(value);
+    if (value === "") return null;
+    return isCidrShaped(value) ? value : null;
   }
+}
+
+const IPV4_OCTET = "(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)";
+const IPV4 = `${IPV4_OCTET}(?:\\.${IPV4_OCTET}){3}`;
+const IPV6 = "[0-9a-fA-F:]+"; // loose; Rails trusts IPAddr here too
+const CIDR_SHAPE = new RegExp(`^(?:${IPV4}|${IPV6})(?:/\\d{1,3})?$`);
+
+function isCidrShaped(value: string): boolean {
+  return CIDR_SHAPE.test(value);
 }

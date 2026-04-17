@@ -125,7 +125,7 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
   }): Promise<Type> {
     const oid = column.oid;
     if (oid == null) {
-      if (column.sqlType) return this.typeMap.lookup(column.sqlType);
+      if (column.sqlType) return this.typeMap.lookup(normalizeFormatType(column.sqlType));
       return new ValueType();
     }
     return this.getOidType(oid, column.fmod ?? -1, column.name ?? "", column.sqlType ?? "");
@@ -133,15 +133,18 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
 
   /**
    * Mirrors: PostgreSQLAdapter#exec_query. Executes a query and returns
-   * an ActiveRecord::Result with `column_types` populated from the
-   * adapter's type_map — each Field's dataTypeID resolves to a
-   * Type::Value via getOidType so callers iterating the Result (e.g.
-   * `result.cast`, `result.columnValues(col)`) get values
-   * deserialized through the right PG OID type.
+   * an ActiveRecord::Result with `columnTypes` populated from the
+   * adapter's type_map — each field's dataTypeID resolves to a
+   * Type::Value via getOidType so callers can use `result.castValues()`
+   * to deserialize values through the right PG OID type.
    *
-   * The mixin-level `execQuery` returns a Result with empty
-   * columnTypes; this override is the Rails-faithful PG version that
-   * actually populates them.
+   * `Result.each()` / `Result.toArray()` expose raw row values; this
+   * override's responsibility is to attach the right Type metadata so
+   * explicit casting has what it needs.
+   *
+   * The mixin-level execQuery returns a Result with empty columnTypes;
+   * this override is the Rails-faithful PG version that actually
+   * populates them.
    */
   override async execQuery(sql: string, _name?: string | null, binds?: unknown[]): Promise<Result> {
     const client = await this.getClient();
@@ -150,6 +153,17 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
       const fields = pgResult.fields ?? [];
       const rows = pgResult.rows as Record<string, unknown>[];
       if (fields.length === 0) return Result.fromRowHashes(rows);
+
+      // Batch-load any unknown dataTypeIDs in a single pg_type roundtrip.
+      // Without this, a SELECT with N distinct unknown OIDs would trigger
+      // N sequential getOidType → loadAdditionalTypes queries.
+      const missing = new Set<number>();
+      for (const f of fields) {
+        if (!this.typeMap.has(f.dataTypeID)) missing.add(f.dataTypeID);
+      }
+      if (missing.size > 0) {
+        await this.loadAdditionalTypes([...missing]);
+      }
 
       const columns = fields.map((f) => f.name);
       const columnTypes: Record<string, Type> = {};
@@ -1660,3 +1674,35 @@ export class MoneyDecoder {
     return negative ? -num : num;
   }
 }
+
+/**
+ * Normalize a `pg_catalog.format_type(...)` string to the typname the
+ * static type_map is keyed by. PG returns human-friendly forms like
+ * "integer" / "character varying(255)" / "bigint", but we register
+ * "int4" / "varchar" / "int8". Strip modifiers and alias common
+ * formatted names so the fallback path in lookupCastTypeFromColumn
+ * resolves well-known types.
+ */
+function normalizeFormatType(sqlType: string): string {
+  const base = sqlType
+    .replace(/\(.*\)/, "")
+    .replace(/\[\]$/, "")
+    .trim()
+    .toLowerCase();
+  return FORMAT_TYPE_ALIASES[base] ?? base;
+}
+
+const FORMAT_TYPE_ALIASES: Record<string, string> = {
+  smallint: "int2",
+  integer: "int4",
+  bigint: "int8",
+  real: "float4",
+  "double precision": "float8",
+  "character varying": "varchar",
+  character: "bpchar",
+  "timestamp without time zone": "timestamp",
+  "timestamp with time zone": "timestamptz",
+  "time without time zone": "time",
+  "time with time zone": "timetz",
+  boolean: "bool",
+};

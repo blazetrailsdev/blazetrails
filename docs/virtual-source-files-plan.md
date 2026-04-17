@@ -742,7 +742,31 @@ export = init;
 Plugin ships as the subpath export `@blazetrails/activerecord/tsserver-plugin`
 (one install, no version skew with `/tsc`), resolving to a compiled
 CJS file — tsserver's plugin loader requires CommonJS and
-`module.exports = factory` shape.
+`module.exports = factory` shape. A dedicated
+`tsconfig.tsserver-plugin.json` with `"module": "CommonJS"`,
+`"moduleResolution": "Node"`, and its own `outDir`
+(`dist/tsserver-plugin/`) emits the plugin artifact; the rest of
+`@blazetrails/activerecord` keeps emitting ESM. `package.json`'s
+`exports` map points the subpath at the CJS entry + its `.d.cts`.
+
+**Scopes explicitly deferred to later phases:**
+
+- **Inferred projects** (a file opened in the editor that isn't
+  covered by any `tsconfig.json`). tsserver creates a synthetic
+  project with no plugin config, so the plugin doesn't activate —
+  the user sees plain-`tsc` behavior. Documented in 2.6; opt-in for
+  future Phase 4+.
+- **Composite project references** (`"references": [...]` in
+  `tsconfig.json`). No extra plugin code needed: tsserver already
+  spins up a distinct language service per referenced project, each
+  of which loads the plugin via its own `tsconfig.json`. The 2.6
+  smoke suite exercises a two-project composite fixture lifted from
+  Phase 1b.5 to verify this.
+- **User-written `declare` escape hatches** continue to work
+  unchanged: `virtualize()` already skips injection for any member
+  name present on the class (`memberPresent` in
+  `synthesize.ts#renderCall`), so the plugin inherits this behavior
+  for free.
 
 ---
 

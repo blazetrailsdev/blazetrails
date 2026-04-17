@@ -107,6 +107,57 @@ describe("sync loadSchema / columnsHash", () => {
     expect(Object.prototype.hasOwnProperty.call(Circle, "_attributeDefinitions")).toBe(false);
   });
 
+  it("columnsHash on STI subclass returns cached Column objects from base adapter", () => {
+    class Shape extends Base {
+      static override tableName = "shapes";
+      static {
+        this.inheritanceColumn = "type";
+      }
+    }
+    class Circle extends Shape {}
+
+    const cols = { guid: { sqlType: "uuid", name: "guid", default: null } };
+    (Shape as unknown as { adapter: unknown }).adapter = makeAdapter(cols);
+
+    const hash = Circle.columnsHash();
+    expect(hash.guid).toBe(cols.guid);
+  });
+
+  it("synthesized columnsHash fallback filters ignoredColumns", () => {
+    class Widget extends Base {
+      static override tableName = "widgets";
+      static {
+        this.attribute("name", "string");
+        this.attribute("secret", "string");
+      }
+    }
+    (Widget as unknown as { _ignoredColumns: string[] })._ignoredColumns = ["secret"];
+
+    const hash = Widget.columnsHash();
+    expect(hash.name).toBeDefined();
+    expect(hash.secret).toBeUndefined();
+  });
+
+  it("resetColumnInformation on STI subclass resets the STI base", () => {
+    class Shape extends Base {
+      static override tableName = "shapes";
+      static {
+        this.inheritanceColumn = "type";
+      }
+    }
+    class Circle extends Shape {}
+
+    const cols = { guid: { sqlType: "uuid", name: "guid", default: null } };
+    (Shape as unknown as { adapter: unknown }).adapter = makeAdapter(cols);
+    Shape.columnsHash();
+    expect(Shape._attributeDefinitions.get("guid")?.source).toBe("schema");
+
+    (resetColumnInformation as unknown as (this: typeof Base) => void).call(Circle);
+
+    expect(Shape._attributeDefinitions.has("guid")).toBe(false);
+    expect((Shape as unknown as { _schemaLoaded: boolean })._schemaLoaded).toBe(false);
+  });
+
   it("resetColumnInformation drops schema-sourced defs but preserves user defs", () => {
     class Post extends Base {
       static override tableName = "posts";

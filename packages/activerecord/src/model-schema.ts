@@ -145,13 +145,21 @@ export function columnsHash(this: typeof Base): Record<string, ColumnLike> {
   }
   loadSchema.call(this as unknown as SchemaHost);
 
-  // Prefer the adapter's schema cache when populated — it carries richer
-  // Column objects than what we can synthesize from attribute defs.
-  let adapter: typeof Base.prototype extends never ? never : typeof this.adapter | null = null;
-  try {
-    adapter = this.adapter;
-  } catch {
-    adapter = null;
+  // STI-aware adapter + table resolution: adapter may live on the base
+  // OR the concrete subclass. Use the same candidate-list logic the
+  // schema loader uses so `Circle.columnsHash()` can still pull the
+  // cached Column objects from Shape's adapter.
+  const klass = this;
+  const stiTarget = isStiSubclass(klass) ? getStiBase(klass) : klass;
+  const candidates = stiTarget === klass ? [klass] : [stiTarget, klass];
+  let adapter: DatabaseAdapterLike | null = null;
+  for (const cand of candidates) {
+    try {
+      adapter = (cand as typeof Base).adapter as unknown as DatabaseAdapterLike;
+    } catch {
+      adapter = null;
+    }
+    if (adapter) break;
   }
   const cache = (adapter as unknown as { schemaCache?: unknown } | null)?.schemaCache as
     | {
@@ -159,8 +167,9 @@ export function columnsHash(this: typeof Base): Record<string, ColumnLike> {
         getCachedColumnsHash?: (t: string) => Record<string, ColumnLike> | undefined;
       }
     | undefined;
-  if (cache && typeof cache.isCached === "function" && cache.isCached(this.tableName)) {
-    const cached = cache.getCachedColumnsHash?.(this.tableName);
+  const table = stiTarget.tableName;
+  if (cache && typeof cache.isCached === "function" && cache.isCached(table)) {
+    const cached = cache.getCachedColumnsHash?.(table);
     if (cached) {
       const ignored = new Set(this.ignoredColumns ?? []);
       const filtered: Record<string, ColumnLike> = {};
@@ -172,12 +181,18 @@ export function columnsHash(this: typeof Base): Record<string, ColumnLike> {
     }
   }
 
+  // Synthesized fallback: filter ignoredColumns to match loadSchema's
+  // fallback and Rails behavior.
+  const ignored = new Set(this.ignoredColumns ?? []);
   const result: Record<string, ColumnLike> = {};
   for (const [name, def] of this._attributeDefinitions) {
+    if (ignored.has(name)) continue;
     result[name] = { name, type: def.type.name, default: def.defaultValue ?? null };
   }
   return result;
 }
+
+type DatabaseAdapterLike = { schemaCache?: unknown };
 
 /**
  * Return content columns (excluding PK, FKs, and timestamps).
@@ -476,6 +491,21 @@ export function symbolColumnToString(this: SchemaHost, name: string): string | u
  * attributes survive reload.
  */
 export function resetColumnInformation(this: SchemaHost): void {
+  // STI subclasses share the base's defs. Redirect the reset to the base
+  // so schema-sourced defs and accessors are actually cleared; clear the
+  // subclass-local caches too so any forked metadata is dropped.
+  if (isStiSubclass(this as unknown as typeof Base)) {
+    const subCaches = this as SchemaHost & { _cachedDefaultAttributes?: unknown };
+    subCaches._columnsHash = undefined;
+    subCaches._columns = undefined;
+    subCaches._attributesBuilder = undefined;
+    subCaches._schemaLoaded = false;
+    subCaches._cachedDefaultAttributes = null;
+    resetColumnInformation.call(
+      getStiBase(this as unknown as typeof Base) as unknown as SchemaHost,
+    );
+    return;
+  }
   this._columnsHash = undefined;
   this._columns = undefined;
   this._attributesBuilder = undefined;
@@ -512,13 +542,16 @@ export function loadSchema(this: SchemaHost): void {
   const reflected = loadSchemaFromCacheSync(this);
   if (reflected) return;
 
-  // Fallback: no schema cache — synthesize a columnsHash view over the
-  // existing attribute definitions so columns()/columnForAttribute()
-  // remain functional for fixture-only models.
-  if (!this._columnsHash && this._attributeDefinitions.size > 0) {
+  // Fallback: no schema cache — synthesize a columnsHash view. For STI
+  // subclasses, synthesize onto the STI base so the subclass doesn't
+  // fork _columnsHash (which would persist past a later base reflection).
+  const fallbackHost = isStiSubclass(this as unknown as typeof Base)
+    ? (getStiBase(this as unknown as typeof Base) as unknown as SchemaHost)
+    : this;
+  if (!fallbackHost._columnsHash && fallbackHost._attributeDefinitions.size > 0) {
     const hash: Record<string, any> = {};
-    const ignored = new Set(this._ignoredColumns ?? []);
-    for (const [name, def] of this._attributeDefinitions) {
+    const ignored = new Set(fallbackHost._ignoredColumns ?? []);
+    for (const [name, def] of fallbackHost._attributeDefinitions) {
       if (ignored.has(name)) continue;
       hash[name] = {
         name,
@@ -526,7 +559,7 @@ export function loadSchema(this: SchemaHost): void {
         default: def.defaultValue ?? null,
       };
     }
-    this._columnsHash = hash;
+    fallbackHost._columnsHash = hash;
   }
 }
 

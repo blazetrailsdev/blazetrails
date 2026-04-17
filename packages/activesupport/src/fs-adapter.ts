@@ -113,7 +113,7 @@ function tryAutoRegisterNode(): boolean {
     );
     const nodeFs = req("node:fs") as Omit<FsAdapter, "cwd" | "exists">;
     const fsPromises = req("node:fs/promises") as { access(p: string): Promise<void> };
-    const fs: FsAdapter = Object.assign(nodeFs, {
+    const fs: FsAdapter = Object.assign({}, nodeFs, {
       cwd: () => globalThis.process.cwd(),
       exists: (p: string) =>
         fsPromises.access(p).then(
@@ -153,7 +153,7 @@ function tryAutoRegisterNodeAsync(): Promise<boolean> {
         const fsPromises = (await import("node:fs/promises")) as unknown as {
           access(p: string): Promise<void>;
         };
-        const fs: FsAdapter = Object.assign(nodeFs, {
+        const fs: FsAdapter = Object.assign({}, nodeFs, {
           cwd: () => globalThis.process.cwd(),
           exists: (p: string) =>
             fsPromises.access(p).then(

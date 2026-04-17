@@ -15,12 +15,12 @@ export class Money extends DecimalType {
     return "money";
   }
 
-  constructor(options?: { precision?: number; limit?: number }) {
-    // Rails hard-codes `def scale; 2; end`. Pass scale=2 into the base
-    // options so precision-aware helpers see the right value. The base
-    // Type stores `scale` as a readonly field; in Ruby it's a method but
-    // semantically both resolve the same way at the call site.
-    super({ ...options, scale: 2 });
+  /**
+   * Rails: `def scale; 2; end`. Getter override of Type's scale —
+   * PG money always has 2 decimal places.
+   */
+  override get scale(): number {
+    return 2;
   }
 
   /**
@@ -32,6 +32,14 @@ export class Money extends DecimalType {
    * then delegates to super(value) which strips currency chars and casts.
    */
   override cast(value: unknown): string | null {
+    return this.castValue(value);
+  }
+
+  /**
+   * Rails' cast_value — exposed publicly so api:compare matches the
+   * Rails method name and callers can invoke the hook directly.
+   */
+  castValue(value: unknown): string | null {
     if (typeof value !== "string") return super.cast(value);
 
     // (4) (2.55) → -2.55

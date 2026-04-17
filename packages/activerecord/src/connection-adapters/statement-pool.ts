@@ -39,15 +39,54 @@ export class StatementPool<T = unknown> {
     return this._statements.has(key);
   }
 
-  delete(key: string): boolean {
-    return this._statements.delete(key);
+  delete(key: string): T | undefined {
+    const stmt = this._statements.get(key);
+    if (stmt !== undefined) {
+      this._statements.delete(key);
+      this.dealloc(stmt);
+    }
+    return stmt;
   }
 
   clear(): void {
+    for (const stmt of this._statements.values()) {
+      this.dealloc(stmt);
+    }
     this._statements.clear();
+  }
+
+  /**
+   * Clear without deallocating — only safe when the server has
+   * independently deallocated all statements (e.g. reconnect, DISCARD ALL).
+   *
+   * Mirrors: ActiveRecord::ConnectionAdapters::StatementPool#reset
+   */
+  reset(): void {
+    this._statements.clear();
+  }
+
+  /**
+   * Iterate over all [key, statement] pairs.
+   *
+   * Mirrors: ActiveRecord::ConnectionAdapters::StatementPool#each (Enumerable)
+   */
+  each(fn: (key: string, stmt: T) => void): void {
+    for (const [key, stmt] of this._statements) {
+      fn(key, stmt);
+    }
   }
 
   get keys(): string[] {
     return [...this._statements.keys()];
+  }
+
+  /**
+   * Deallocate a prepared statement. Subclasses override this to
+   * release adapter-specific resources (e.g. PG DEALLOCATE).
+   *
+   * Mirrors: ActiveRecord::ConnectionAdapters::StatementPool#dealloc
+   */
+  protected dealloc(_stmt: T): void {
+    // Base implementation is a no-op; adapter-specific pools override.
   }
 }

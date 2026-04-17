@@ -230,6 +230,28 @@ describe("sync loadSchema / columnsHash", () => {
     expect(Object.prototype.hasOwnProperty.call(Circle, "_columnsHash")).toBe(false);
   });
 
+  it("resetting the STI base propagates to subclasses (no stale _schemaLoaded shadow)", () => {
+    class Shape extends Base {
+      static override tableName = "shapes";
+      static {
+        this.inheritanceColumn = "type";
+      }
+    }
+    class Circle extends Shape {}
+
+    const cols = { guid: { sqlType: "uuid", name: "guid", default: null } };
+    (Shape as unknown as { adapter: unknown }).adapter = makeAdapter(cols);
+
+    // Load via subclass — flag should land on the base only.
+    Circle.columnsHash();
+    expect(Object.prototype.hasOwnProperty.call(Circle, "_schemaLoaded")).toBe(false);
+    expect((Shape as unknown as { _schemaLoaded: boolean })._schemaLoaded).toBe(true);
+
+    // Reset base — subclass inherits the reset via prototype chain.
+    (resetColumnInformation as unknown as (this: typeof Base) => void).call(Shape);
+    expect((Circle as unknown as { _schemaLoaded: boolean })._schemaLoaded).toBe(false);
+  });
+
   it("invalidates subclass-local caches when reflection lands on STI base", () => {
     class Shape extends Base {
       static override tableName = "shapes";

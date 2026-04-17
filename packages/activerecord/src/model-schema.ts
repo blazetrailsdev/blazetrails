@@ -447,8 +447,13 @@ export function attributesBuilder(this: SchemaHost): AttributeSetBuilder {
     }
   }
 
-  this._attributesBuilder = new AttributeSetBuilder(types, defaults);
-  return this._attributesBuilder;
+  // STI: write cache to the base so subclasses inherit via prototype
+  // chain, and a base reset propagates automatically.
+  const cacheHost = isStiSubclass(this as unknown as typeof Base)
+    ? (getStiBase(this as unknown as typeof Base) as unknown as SchemaHost)
+    : this;
+  cacheHost._attributesBuilder = new AttributeSetBuilder(types, defaults);
+  return cacheHost._attributesBuilder;
 }
 
 /**
@@ -458,8 +463,11 @@ export function columns(this: SchemaHost): any[] {
   if (this._columns) return this._columns;
   loadSchema.call(this);
   const hash = getColumnsHash(this);
-  this._columns = Object.values(hash);
-  return this._columns!;
+  const cacheHost = isStiSubclass(this as unknown as typeof Base)
+    ? (getStiBase(this as unknown as typeof Base) as unknown as SchemaHost)
+    : this;
+  cacheHost._columns = Object.values(hash);
+  return cacheHost._columns!;
 }
 
 export function yamlEncoder(this: SchemaHost): YAMLEncoder {
@@ -561,15 +569,18 @@ export function resetColumnInformation(this: SchemaHost): void {
  */
 export function loadSchema(this: SchemaHost): void {
   if (this._schemaLoaded) return;
-  this._schemaLoaded = true;
 
-  // Determine the class that actually owns the schema load — the STI
-  // base when `this` is a subclass. We mark BOTH as loaded so a later
-  // call on the base doesn't redundantly re-run reflection just because
-  // its own `_schemaLoaded` flag was never set.
+  // The class that actually owns the schema load — the STI base when
+  // `this` is a subclass. We set `_schemaLoaded` only on the workHost
+  // so subclasses inherit the flag via the prototype chain. Assigning
+  // on the subclass would shadow the base flag and prevent re-reflection
+  // when the base is reset. Delete any stale own-flag on the subclass.
   const workHost = isStiSubclass(this as unknown as typeof Base)
     ? (getStiBase(this as unknown as typeof Base) as unknown as SchemaHost)
     : this;
+  if (workHost !== this && Object.prototype.hasOwnProperty.call(this, "_schemaLoaded")) {
+    delete (this as unknown as Record<string, unknown>)._schemaLoaded;
+  }
 
   const reflected = loadSchemaFromCacheSync(this);
   if (reflected) {

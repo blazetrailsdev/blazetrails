@@ -1240,7 +1240,7 @@ export class ToSql implements NodeVisitor<SQLString> {
     return this.collector;
   }
 
-  private visitCasted(node: Nodes.Casted): SQLString {
+  protected visitCasted(node: Nodes.Casted): SQLString {
     const value = node.valueForDatabase();
     if (this._extractBinds) {
       this.collector.addBind(value);

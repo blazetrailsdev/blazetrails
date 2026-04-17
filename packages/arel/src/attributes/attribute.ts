@@ -105,16 +105,9 @@ export class Attribute extends Node {
       : false;
   }
 
-  private castValue(value: unknown): unknown {
-    if (value instanceof SqlLiteral) return value;
-    if (value instanceof Node) return value;
-    if (this.caster) return this.caster.typeCastForDatabase(value);
-    return value;
-  }
-
   private buildCasted(value: unknown): Node {
     if (value instanceof Node) return value;
-    if (value === null || value === undefined) return new Quoted(value);
+    if (value === null || value === undefined) return new Quoted(null);
     return new Casted(value, this);
   }
 

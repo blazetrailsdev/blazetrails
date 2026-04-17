@@ -511,7 +511,17 @@ export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
     this._attributeDefinitions = new Map(this._attributeDefinitions);
   }
 
+  const ignored = new Set(this._ignoredColumns ?? []);
   for (const [name, column] of Object.entries(hash)) {
+    // Honor Base.ignoredColumns — Rails' load_schema! excludes these too.
+    if (ignored.has(name)) {
+      const proto = (this as unknown as { prototype: object }).prototype;
+      if (Object.prototype.hasOwnProperty.call(proto, name)) {
+        delete (proto as Record<string, unknown>)[name];
+      }
+      this._attributeDefinitions.delete(name);
+      continue;
+    }
     const existing = this._attributeDefinitions.get(name);
     // Treat absent userProvided as true — externally-constructed defs
     // (pre-PR shape) are user-authored by definition; schema reflection
@@ -569,9 +579,19 @@ export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
     }
   }
 
-  // Invalidate caches that derive from _attributeDefinitions.
-  this._attributesBuilder = undefined;
-  (this as unknown as { _cachedDefaultAttributes?: unknown })._cachedDefaultAttributes = null;
+  // Invalidate every cache that derives from _attributeDefinitions —
+  // columns()/columnsHash()/columnForAttribute() would otherwise serve
+  // pre-reflection data forever.
+  const caches = this as unknown as {
+    _attributesBuilder?: unknown;
+    _cachedDefaultAttributes?: unknown;
+    _columnsHash?: unknown;
+    _columns?: unknown;
+  };
+  caches._attributesBuilder = undefined;
+  caches._cachedDefaultAttributes = null;
+  caches._columnsHash = undefined;
+  caches._columns = undefined;
 
   // Re-run pending encryption decorations so `encrypts :foo` declared before
   // schema load still wraps the adapter-resolved cast type. Mirrors the

@@ -144,6 +144,45 @@ describe("loadSchemaFromAdapter integration details", () => {
     expect((rec as unknown as { guid: string }).guid).toBe("abc-123");
   });
 
+  it("skips columns listed in _ignoredColumns (and removes their accessors)", async () => {
+    class Post extends Base {
+      static override tableName = "posts";
+    }
+    (Post as unknown as { _ignoredColumns: string[] })._ignoredColumns = ["secret"];
+    Object.defineProperty(Post.prototype, "secret", {
+      get() {
+        return "leaked";
+      },
+      configurable: true,
+    });
+
+    const adapter = makeAdapter(
+      { guid: { sqlType: "uuid" }, secret: { sqlType: "uuid" } },
+      { uuid: new UuidType() },
+    );
+    (Post as unknown as { adapter: unknown }).adapter = adapter;
+    await Post.loadSchema();
+
+    expect(Post._attributeDefinitions.has("secret")).toBe(false);
+    expect(Object.getOwnPropertyDescriptor(Post.prototype, "secret")).toBeUndefined();
+    expect(Post._attributeDefinitions.has("guid")).toBe(true);
+  });
+
+  it("invalidates _columnsHash and _columns after reflection", async () => {
+    class Post extends Base {
+      static override tableName = "posts";
+    }
+    (Post as unknown as { _columnsHash: unknown })._columnsHash = { stale: true };
+    (Post as unknown as { _columns: unknown })._columns = ["stale"];
+
+    const adapter = makeAdapter({ guid: { sqlType: "uuid" } }, { uuid: new UuidType() });
+    (Post as unknown as { adapter: unknown }).adapter = adapter;
+    await Post.loadSchema();
+
+    expect((Post as unknown as { _columnsHash: unknown })._columnsHash).toBeUndefined();
+    expect((Post as unknown as { _columns: unknown })._columns).toBeUndefined();
+  });
+
   it("treats externally-constructed defs without userProvided as user-authored (no overwrite)", async () => {
     class Post extends Base {
       static override tableName = "posts";

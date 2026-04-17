@@ -502,7 +502,7 @@ function main() {
 
     results.push({
       package: pkg,
-      rubyFiles: pkgInfo.files.length,
+      rubyFiles: pkgInfo.files.filter((f) => !isTestExcluded(f.file)).length,
       tsMapped,
       tsUnmapped,
       totalRubyTests: totalRuby,

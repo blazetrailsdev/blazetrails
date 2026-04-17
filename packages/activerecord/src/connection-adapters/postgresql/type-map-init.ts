@@ -19,6 +19,7 @@ import {
   Type,
 } from "@blazetrails/activemodel";
 
+import { DecimalWithoutScale } from "../../type/decimal-without-scale.js";
 import { HashLookupTypeMap } from "../../type/hash-lookup-type-map.js";
 import { Bit } from "./oid/bit.js";
 import { BitVarying } from "./oid/bit-varying.js";
@@ -46,7 +47,10 @@ import { Xml } from "./oid/xml.js";
  */
 export function extractLimit(sqlType: string | undefined): number | undefined {
   if (!sqlType) return undefined;
-  const match = /\(([^)]*)\)/.exec(sqlType);
+  // Rails uses a greedy `/\((.*)\)/` — captures to the LAST `)`. JS
+  // regexes are greedy by default; mirror that here rather than
+  // stopping at the first close paren.
+  const match = /\((.*)\)/.exec(sqlType);
   if (!match) return undefined;
   // Ruby's String#to_i returns 0 for empty / non-numeric leading chars.
   // Preserve that: parens present → always returns a number (0 on garbage);
@@ -146,11 +150,23 @@ export function initializeTypeMap(m: HashLookupTypeMap): void {
   m.registerType("circle", new SpecializedString("circle"));
 
   // Numeric: Rails picks Decimal vs DecimalWithoutScale based on fmod.
-  // We don't have DecimalWithoutScale yet; always use Decimal — matches
-  // Rails' non-integer numeric path.
+  //   if fmod && (fmod - 4 & 0xffff).zero?
+  //     Type::DecimalWithoutScale.new(precision: precision)
+  //   else
+  //     OID::Decimal.new(precision: precision, scale: scale)
+  //   end
+  // The scale bits of a numeric column's atttypmod live in the lower 16
+  // bits of (fmod - 4); when those are zero the column was declared
+  // with no scale (NUMERIC(p) / NUMERIC) and should use the integer-
+  // flavored DecimalWithoutScale.
   m.registerType("numeric", (_key, ...args) => {
+    const fmod = fmodFromArgs(args);
     const sqlType = sqlTypeFromArgs(args);
-    return new Decimal({ precision: extractPrecision(sqlType), scale: extractScale(sqlType) });
+    const precision = extractPrecision(sqlType);
+    if (fmod != null && ((fmod - 4) & 0xffff) === 0) {
+      return new DecimalWithoutScale({ precision }) as unknown as Decimal;
+    }
+    return new Decimal({ precision, scale: extractScale(sqlType) });
   });
 
   m.registerType("interval", (_key, ...args) => {
@@ -188,6 +204,18 @@ export function initializeInstanceTypeMap(
 function sqlTypeFromArgs(args: unknown[]): string | undefined {
   for (let i = args.length - 1; i >= 0; i--) {
     if (typeof args[i] === "string") return args[i] as string;
+  }
+  return undefined;
+}
+
+/**
+ * Extract the fmod arg from `(fmod, sql_type)` — HashLookupTypeMap
+ * forwards `(oid, fmod, sql_type)` to the registered block. The first
+ * numeric positional is fmod.
+ */
+function fmodFromArgs(args: unknown[]): number | undefined {
+  for (const a of args) {
+    if (typeof a === "number") return a;
   }
   return undefined;
 }

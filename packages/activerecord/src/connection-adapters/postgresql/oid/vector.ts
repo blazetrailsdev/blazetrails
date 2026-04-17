@@ -20,12 +20,12 @@ export class Vector extends Type<unknown> {
     this.subtype = subtype;
   }
 
-  override type(): string {
-    // Rails doesn't override `def type` on Vector; it inherits from
-    // Type::Value which returns nil. Return "vector" here so TS
-    // callers that inspect type() get a useful identifier.
-    return "vector";
-  }
+  // Rails' Vector inherits Type::Value#type which is `def type; end`
+  // (returns nil). Don't override — let the base class' type() return
+  // this.name ("vector"), matching Rails' effective behavior for
+  // callers that coerce nil to a typname string. If Rails-accurate
+  // `nil` is ever required, the base's return type needs widening
+  // first.
 
   cast(value: unknown): unknown {
     // Rails: `def cast(value); value; end`. Matches the FIXME'd

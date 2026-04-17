@@ -108,14 +108,19 @@ export function attribute(
 export function buildDefaultAttributes(defs: Map<string, AttributeDefinition>): AttributeSet {
   const attrMap = new Map<string, Attribute>();
   for (const [name, def] of defs) {
-    const base = Attribute.withCastValue(name, null, def.type);
     if (def.defaultValue != null) {
-      // withUserDefault creates a UserProvidedDefault that preserves function
-      // defaults and re-evaluates them on each deepDup — matching Rails'
-      // PendingDefault behavior where procs are called per-instance.
-      attrMap.set(name, base.withUserDefault(def.defaultValue));
+      if (def.userProvided) {
+        // Rails: user_provided_default: true → wraps the default so it is
+        // cast through the user-type (and procs re-evaluate per instance).
+        const base = Attribute.withCastValue(name, null, def.type);
+        attrMap.set(name, base.withUserDefault(def.defaultValue));
+      } else {
+        // Rails: user_provided_default: false → column default comes from
+        // the database; use fromDatabase so deserialize is applied.
+        attrMap.set(name, Attribute.fromDatabase(name, def.defaultValue, def.type));
+      }
     } else {
-      attrMap.set(name, base);
+      attrMap.set(name, Attribute.withCastValue(name, null, def.type));
     }
   }
   return new AttributeSet(attrMap);

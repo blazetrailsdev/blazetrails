@@ -130,6 +130,22 @@ describe("loadSchemaFromAdapter", () => {
   });
 });
 
+describe("set adapter auto-loads schema", () => {
+  it("awaiting Base.loadSchema() populates schema-sourced defs end-to-end", async () => {
+    class Post extends Base {
+      static override tableName = "posts";
+    }
+    const adapter = makeAdapter({ guid: { sqlType: "uuid" } }, { uuid: new UuidType() });
+    (Post as unknown as { adapter: unknown }).adapter = adapter;
+
+    await Post.loadSchema();
+
+    const def = Post._attributeDefinitions.get("guid");
+    expect(def?.type.name).toBe("uuid");
+    expect(def?.source).toBe("schema");
+  });
+});
+
 describe("attribute() userProvidedDefault option", () => {
   it("defaults to userProvided=true (source=user)", () => {
     class Foo extends Base {}

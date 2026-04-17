@@ -760,16 +760,13 @@ export function dbCommand(): Command {
           // commander-style (`trails db migrate`, space-separated), not
           // rake-style colon namespaces.
           console.error(
-            `You have ${pending.length} pending migration${pending.length === 1 ? "" : "s"}:`,
+            `${prefix}You have ${pending.length} pending migration${pending.length === 1 ? "" : "s"}:`,
           );
           for (const m of pending) {
-            // Rails prints `"  %4d %s" % [version, name]`, which emits the
-            // version as an integer (no leading zeros). Normalize via BigInt
-            // to match and to stay consistent with the rest of Migrator.
             const version = String(BigInt(m.version));
-            console.error(`  ${version.padStart(4, " ")} ${m.name}`);
+            console.error(`${prefix}  ${version.padStart(4, " ")} ${m.name}`);
           }
-          console.error("Run `trails db migrate` to resolve this issue.");
+          console.error(`${prefix}Run \`trails db migrate\` to resolve this issue.`);
           process.exitCode = 1;
         }
       });
@@ -943,7 +940,7 @@ export function dbCommand(): Command {
         const statuses = await migrator.migrationsStatus();
 
         console.log("");
-        console.log(`${prefix} Status   Migration ID    Migration Name`);
+        console.log(`${prefix}Status   Migration ID    Migration Name`);
         console.log(`${prefix}--------------------------------------------------`);
         for (const s of statuses) {
           const statusStr = s.status === "up" ? "  up  " : " down ";
@@ -1046,15 +1043,15 @@ export function dbCommand(): Command {
           DatabaseTasks.schemaFormat = await resolveSchemaFormat(opts);
           const filename = DatabaseTasks.schemaDumpPath(config);
           if (!fs.existsSync(filename)) {
-            console.error(`No schema file found at ${filename}`);
+            console.error(`${prefix}No schema file found at ${filename}`);
             process.exitCode = 1;
             return;
           }
           DatabaseTasks.setAdapter(adapter);
           try {
-            console.log(`Loading schema from ${filename}...`);
+            console.log(`${prefix}Loading schema from ${filename}...`);
             await DatabaseTasks.loadSchema(config);
-            console.log("Schema loaded.");
+            console.log(`${prefix}Schema loaded.`);
           } catch (error: unknown) {
             if (filename.endsWith(".ts")) {
               const enhanced = new Error(

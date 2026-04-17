@@ -348,12 +348,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     await this.materializeTransactions();
     const client = await this.getClient();
     try {
-      const pgSql = this.rewriteBinds(sql, binds);
-      const prepared = this._preparedQuery(pgSql, binds);
-      const result =
-        typeof prepared === "string"
-          ? await client.query(prepared, binds)
-          : await client.query(prepared);
+      const result = await client.query(this.rewriteBinds(sql, binds), binds);
       return result.rows;
     } finally {
       this.releaseClient(client);

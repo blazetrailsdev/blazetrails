@@ -51,7 +51,8 @@ export class ToSql implements NodeVisitor<SQLString> {
     const bindCollector = new Bind();
     this.collector = new Composite(sqlCollector, bindCollector) as unknown as SQLString;
     this.visit(node);
-    return [sqlCollector.value, bindCollector.value];
+    const binds = bindCollector.value.map((b) => (b instanceof Nodes.BindParam ? b.value : b));
+    return [sqlCollector.value, binds];
   }
 
   visit(node: Node): SQLString {

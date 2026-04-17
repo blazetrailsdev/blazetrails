@@ -57,6 +57,25 @@ export function toSql(
   arel: unknown,
   binds: unknown[] = [],
 ): string {
+  if (typeof arel === "string") return arel;
+
+  // Unwrap TreeManager → Node
+  let node = arel;
+  if (node && (node as any).ast != null && typeof (node as any).ast === "object") {
+    node = (node as any).ast;
+  }
+
+  // Use compile() (inlines values) for display SQL, matching Rails'
+  // to_sql under unprepared_statement. toSqlAndBinds uses
+  // compileWithBinds for execution (placeholders + bind array).
+  const visitor = (this as any)?.arelVisitor as Visitors.ToSql | undefined;
+  if (visitor && node instanceof Nodes.Node) {
+    return visitor.compile(node);
+  }
+  if (node && typeof (node as any).toSql === "function") {
+    return (node as any).toSql();
+  }
+
   const [sql] = toSqlAndBinds.call(this, arel, binds);
   return sql;
 }

@@ -31,6 +31,13 @@ export class Interval extends Type<Duration> {
         return null;
       }
     }
+    if (typeof value === "number") {
+      // Rails' cast_value lets numeric inputs fall through to super (identity),
+      // then serialize converts. TS is typed `Duration | null`, so we upgrade
+      // numeric seconds into a Duration here — same observable behaviour
+      // through the cast → serialize pipeline.
+      return Duration.build(value);
+    }
     return null;
   }
 
@@ -40,11 +47,13 @@ export class Interval extends Type<Duration> {
       return value.iso8601({ precision: this.precision ?? null });
     }
     if (typeof value === "number") {
-      // Rails: `Time - Time` yields a Float seconds count; build a Duration
-      // and ISO8601-serialize it so numeric inputs round-trip consistently.
+      // Rails: `Time - Time` yields a Float seconds count that reaches
+      // serialize directly (without going through cast). Keep a numeric
+      // branch so that path still round-trips.
       return Duration.build(value).iso8601({ precision: this.precision ?? null });
     }
-    return super.serialize(value) as string | null;
+    if (typeof value === "string") return value;
+    return null;
   }
 
   override typeCastForSchema(value: unknown): string {

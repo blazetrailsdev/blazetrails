@@ -45,9 +45,13 @@ describe("PostgresqlIntervalTest", () => {
   });
 
   it("interval type cast from numeric", () => {
-    // Rails: numeric seconds go through Duration.build and round-trip
-    // via iso8601.
-    const serialized = new Interval().serialize(3600);
-    expect(serialized).toBe(Duration.build(3600).iso8601());
+    // Rails: numeric seconds round-trip through Duration.build and iso8601.
+    // Verify both cast (FromUser path) and serialize (direct-to-DB path)
+    // handle the numeric case consistently.
+    const type = new Interval();
+    const cast = type.cast(3600);
+    expect(cast).toBeInstanceOf(Duration);
+    expect(type.serialize(cast)).toBe(Duration.build(3600).iso8601());
+    expect(type.serialize(3600)).toBe(Duration.build(3600).iso8601());
   });
 });

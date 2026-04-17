@@ -3,7 +3,7 @@ import { createProgram } from "./cli.js";
 import { VERSION } from "./version.js";
 
 describe("CLI", () => {
-  it("prints version with --version flag", () => {
+  it("prints version with -v flag", () => {
     const program = createProgram();
     program.exitOverride();
     let output = "";
@@ -13,9 +13,9 @@ describe("CLI", () => {
       },
     });
     try {
-      program.parse(["node", "trails", "--version"]);
+      program.parse(["node", "trails", "-v"]);
     } catch (e: any) {
-      // commander throws on --version
+      // commander throws on -v
     }
     expect(output.trim()).toBe(VERSION);
   });

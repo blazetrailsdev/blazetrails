@@ -1,10 +1,17 @@
 /**
- * Mirrors: ActiveRecord::Type::DecimalWithoutScale
+ * Mirrors: ActiveRecord::Type::DecimalWithoutScale.
  *
- * Rails: `class DecimalWithoutScale < ActiveModel::Type::BigInteger;
- * def type; :decimal; end; def type_cast_for_schema(value);
- * value.to_s.inspect; end`. Used for NUMERIC columns declared without
- * a scale — the value is an integer but reports as a decimal.
+ * Used for NUMERIC columns declared without a scale — the value is an
+ * integer but the type reports as `:decimal` for schema purposes.
+ *
+ * Rails:
+ *
+ * ```ruby
+ * class DecimalWithoutScale < ActiveModel::Type::BigInteger
+ *   def type; :decimal; end
+ *   def type_cast_for_schema(value); value.to_s.inspect; end
+ * end
+ * ```
  */
 
 import { BigIntegerType } from "@blazetrails/activemodel";

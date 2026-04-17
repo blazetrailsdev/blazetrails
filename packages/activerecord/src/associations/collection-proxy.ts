@@ -1,5 +1,19 @@
 import type { Base } from "../base.js";
 import type { Relation } from "../relation.js";
+import type { AssociationRelation as AssociationRelationType } from "./association-relation.js";
+import { wrapWithScopeProxy } from "../relation/delegation.js";
+
+// Late-bound AssociationRelation constructor to break circular imports
+// (association-relation.ts extends Relation, which would otherwise
+// transitively load before Base finishes initializing the Relation ctor
+// slot). Set by association-relation.ts when it loads.
+let _AssociationRelationCtor: (new (modelClass: any, assoc: any) => any) | null = null;
+/** @internal */
+export function _setAssociationRelationCtor(
+  ctor: new (modelClass: any, assoc: any) => AssociationRelationType<any>,
+): void {
+  _AssociationRelationCtor = ctor;
+}
 import { applyThenable, stripThenable } from "../relation/thenable.js";
 import { Table as ArelTable } from "@blazetrails/arel";
 import type { Nodes } from "@blazetrails/arel";
@@ -1054,7 +1068,7 @@ export class CollectionProxy<T extends Base = Base> {
 
   scope(): any {
     if (this._isThrough) {
-      return this._buildThroughScope();
+      return this._wrapAsAssociationRelation(this._buildThroughScope());
     }
 
     const rel = buildHasManyRelation(this._record, this._assocName, this._assocDef.options);
@@ -1065,9 +1079,23 @@ export class CollectionProxy<T extends Base = Base> {
       if (this._assocDef.options.scope) {
         emptyRel = this._assocDef.options.scope(emptyRel);
       }
-      return emptyRel.none();
+      return this._wrapAsAssociationRelation(emptyRel.none());
     }
-    return rel;
+    return this._wrapAsAssociationRelation(rel);
+  }
+
+  /**
+   * Promote a plain Relation produced by `buildHasManyRelation` /
+   * `_buildThroughScope` into an AssociationRelation bound to this proxy.
+   * Matching Rails' CollectionAssociation#scope — writes on the returned
+   * relation (build / create / create!) route back through the owning
+   * association so FK, inverse, and loaded target stay in sync.
+   */
+  private _wrapAsAssociationRelation(rel: any): any {
+    if (!_AssociationRelationCtor) return rel;
+    const ar = new _AssociationRelationCtor(rel._modelClass, this);
+    ar._copyStateFrom(rel);
+    return wrapWithScopeProxy(ar);
   }
 
   private _buildThroughScope(): any {

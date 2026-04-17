@@ -1,6 +1,7 @@
 import pg from "pg";
 import { type Type, ValueType } from "@blazetrails/activemodel";
 import { singularize, underscore } from "@blazetrails/activesupport";
+import { Result } from "../result.js";
 import { HashLookupTypeMap } from "../type/hash-lookup-type-map.js";
 import { getDefaultTimezone } from "../type/internal/timezone.js";
 import { splitQuotedIdentifier, Utils } from "./postgresql/utils.js";
@@ -111,6 +112,60 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
    * Rails' signature uses oids=nil to mean "reload everything we know";
    * pass an array of OIDs to target a specific miss.
    */
+  /**
+   * Mirrors: PostgreSQLAdapter#lookup_cast_type_from_column(column).
+   * Resolves a Column's OID (via its `oid` / `fmod` / `sqlType` metadata)
+   * to the registered Type::Value.
+   */
+  async lookupCastTypeFromColumn(column: {
+    oid?: number | null;
+    fmod?: number | null;
+    sqlType?: string | null;
+    name?: string;
+  }): Promise<Type> {
+    const oid = column.oid;
+    if (oid == null) {
+      if (column.sqlType) return this.typeMap.lookup(column.sqlType);
+      return new ValueType();
+    }
+    return this.getOidType(oid, column.fmod ?? -1, column.name ?? "", column.sqlType ?? "");
+  }
+
+  /**
+   * Mirrors: PostgreSQLAdapter#exec_query. Executes a query and returns
+   * an ActiveRecord::Result with `column_types` populated from the
+   * adapter's type_map — each Field's dataTypeID resolves to a
+   * Type::Value via getOidType so callers iterating the Result (e.g.
+   * `result.cast`, `result.columnValues(col)`) get values
+   * deserialized through the right PG OID type.
+   *
+   * The mixin-level `execQuery` returns a Result with empty
+   * columnTypes; this override is the Rails-faithful PG version that
+   * actually populates them.
+   */
+  override async execQuery(sql: string, _name?: string | null, binds?: unknown[]): Promise<Result> {
+    const client = await this.getClient();
+    try {
+      const pgResult = await client.query(this.rewriteBinds(sql, binds ?? []), binds ?? []);
+      const fields = pgResult.fields ?? [];
+      const rows = pgResult.rows as Record<string, unknown>[];
+      if (fields.length === 0) return Result.fromRowHashes(rows);
+
+      const columns = fields.map((f) => f.name);
+      const columnTypes: Record<string, Type> = {};
+      for (const f of fields) {
+        // fmod isn't on pg.FieldDef; Rails reads it from PG::Result#fmod(i)
+        // which isn't exposed by node-pg. Pass -1 so numeric/interval
+        // registrations fall into their default (scale-absent) branch.
+        columnTypes[f.name] = await this.getOidType(f.dataTypeID, -1, f.name, "");
+      }
+      const rowArrays = rows.map((row) => columns.map((col) => row[col]));
+      return new Result(columns, rowArrays, columnTypes);
+    } finally {
+      this.releaseClient(client);
+    }
+  }
+
   async loadAdditionalTypes(oids?: number[]): Promise<void> {
     const initializer = new TypeMapInitializer(this.typeMap);
     for await (const query of this.loadTypesQueries(initializer, oids)) {

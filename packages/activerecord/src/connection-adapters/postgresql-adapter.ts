@@ -1,5 +1,7 @@
 import pg from "pg";
+import { type Type, ValueType } from "@blazetrails/activemodel";
 import { singularize, underscore } from "@blazetrails/activesupport";
+import { HashLookupTypeMap } from "../type/hash-lookup-type-map.js";
 import { splitQuotedIdentifier, Utils } from "./postgresql/utils.js";
 import { Column } from "./postgresql/column.js";
 import { ExplainPrettyPrinter } from "./postgresql/explain-pretty-printer.js";
@@ -8,6 +10,10 @@ import {
   quoteColumnName as pgQuoteColumnName,
   quoteString as pgQuoteString,
 } from "./postgresql/quoting.js";
+import {
+  initializeInstanceTypeMap,
+  initializeTypeMap as staticInitializeTypeMap,
+} from "./postgresql/type-map-init.js";
 import type { DatabaseAdapter } from "../adapter.js";
 import { DatabaseStatementsMixin } from "./database-statements-mixin.js";
 
@@ -29,6 +35,7 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
   private _client: pg.PoolClient | null = null;
   private _inTransaction = false;
   private _databaseVersion: number | null = null;
+  private _typeMap: HashLookupTypeMap | null = null;
 
   constructor(config: string | pg.PoolConfig) {
     super();
@@ -37,6 +44,49 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
     } else {
       this.pool = new pg.Pool(config);
     }
+  }
+
+  /**
+   * Mirrors: PostgreSQLAdapter.initialize_type_map (class method).
+   * Seeds a HashLookupTypeMap with the ~30 known PG types by typname.
+   * Exposed as a static so tests and external callers can build their
+   * own type_map without instantiating the adapter.
+   */
+  static initializeTypeMap(m: HashLookupTypeMap): void {
+    staticInitializeTypeMap(m);
+  }
+
+  /**
+   * Mirrors: PostgreSQLAdapter#type_map. Lazily builds and caches the
+   * adapter's HashLookupTypeMap on first access. The map is populated
+   * by the instance-level initializer which layers `time`, `timestamp`,
+   * `timestamptz` (timezone-aware) on top of the class-level base.
+   */
+  get typeMap(): HashLookupTypeMap {
+    if (this._typeMap == null) {
+      this._typeMap = new HashLookupTypeMap();
+      initializeInstanceTypeMap(this._typeMap);
+    }
+    return this._typeMap;
+  }
+
+  /**
+   * Mirrors: PostgreSQLAdapter#get_oid_type(oid, fmod, column_name, sql_type).
+   * Looks up the Type::Value registered for a column's OID. User-defined
+   * types would be loaded via OID::TypeMapInitializer.run on miss (Rails'
+   * `load_additional_types`); for now we delegate to the registered
+   * fallback, which surfaces the missing type rather than silently
+   * treating it as a string.
+   */
+  getOidType(oid: number, fmod: number, columnName: string, sqlType: string = ""): Type {
+    return this.typeMap.fetch(oid, fmod, sqlType, () => {
+      console.warn(
+        `unknown OID ${oid}: failed to recognize type of '${columnName}'. It will be treated as String.`,
+      );
+      const fallback = new ValueType();
+      this.typeMap.registerType(oid, fallback);
+      return fallback;
+    });
   }
 
   /**

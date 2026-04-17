@@ -39,7 +39,9 @@ export class Money extends DecimalType {
    *   (2) $12.345.678,12    (EU-style with period grouping, comma decimal)
    *   (3) -$2.55            (negative with leading minus)
    *   (4) ($2.55)           (accounting-style parentheses)
-   * then delegates to super(value) which strips currency chars and casts.
+   * This method performs the locale-specific stripping and normalization
+   * itself, then delegates to DecimalType via super.cast(...) for
+   * numeric casting.
    */
   override cast(value: unknown): string | null {
     return this.castValue(value);

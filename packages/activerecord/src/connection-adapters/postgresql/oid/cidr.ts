@@ -69,16 +69,26 @@ export class Cidr extends Type<string> {
    *     "\"#{value}/#{value.prefix}\""
    *   end
    *
-   * We carry the prefix inline on the string (e.g. "192.168.1.0/24"),
-   * so quote string values as-is. Use JSON.stringify so any embedded
-   * quotes/backslashes (unlikely but possible) get properly escaped.
-   * Non-string inputs defer to Type#typeCastForSchema so we don't
-   * double-quote numbers or nil.
+   * Rails elides a host prefix (/32 for IPv4, /128 for IPv6) since
+   * that's implicit. Our string-based cidr carries the prefix inline,
+   * so strip /32 / /128 before quoting to match Rails' schema output.
+   * Use JSON.stringify so embedded quotes/backslashes escape properly.
+   * Non-string inputs defer to Type#typeCastForSchema.
    */
   override typeCastForSchema(value: unknown): string {
-    if (typeof value === "string") return JSON.stringify(value);
+    if (typeof value === "string") return JSON.stringify(elideHostPrefix(value));
     return super.typeCastForSchema(value);
   }
+}
+
+function elideHostPrefix(value: string): string {
+  const slash = value.indexOf("/");
+  if (slash === -1) return value;
+  const address = value.slice(0, slash);
+  const prefix = value.slice(slash + 1);
+  if (prefix === "32" && isIpv4(address)) return address;
+  if (prefix === "128" && isIpv6(address)) return address;
+  return value;
 }
 
 /**

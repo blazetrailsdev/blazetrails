@@ -3,6 +3,7 @@ import { type Type, ValueType } from "@blazetrails/activemodel";
 import { singularize, underscore } from "@blazetrails/activesupport";
 import { Visitors } from "@blazetrails/arel";
 import { Result } from "../result.js";
+import { StatementPool as GenericStatementPool } from "./statement-pool.js";
 import { HashLookupTypeMap } from "../type/hash-lookup-type-map.js";
 import { getDefaultTimezone } from "../type/internal/timezone.js";
 import { splitQuotedIdentifier, Utils } from "./postgresql/utils.js";
@@ -45,11 +46,13 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   private static _spCounter = 0;
+  private static _stmtCounter = 0;
   private _driverPool: pg.Pool | null;
   private _client: pg.PoolClient | null = null;
   private _inTransaction = false;
   private _databaseVersion: number | null = null;
   private _typeMap: HashLookupTypeMap | null = null;
+  private _statementPool = new GenericStatementPool<string>();
 
   constructor(config: string | pg.PoolConfig) {
     super();
@@ -345,11 +348,26 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     await this.materializeTransactions();
     const client = await this.getClient();
     try {
-      const result = await client.query(this.rewriteBinds(sql, binds), binds);
+      const pgSql = this.rewriteBinds(sql, binds);
+      const query = binds.length > 0 ? this._preparedQuery(pgSql, binds) : pgSql;
+      const result = await client.query(query, binds.length > 0 ? binds : undefined);
       return result.rows;
     } finally {
       this.releaseClient(client);
     }
+  }
+
+  private _preparedQuery(
+    sql: string,
+    binds: unknown[],
+  ): string | { name: string; text: string; values: unknown[] } {
+    if (!(this as any).preparedStatements) return sql;
+    let name = this._statementPool.get(sql);
+    if (!name) {
+      name = `a${++PostgreSQLAdapter._stmtCounter}`;
+      this._statementPool.set(sql, name);
+    }
+    return { name, text: sql, values: binds };
   }
 
   /**
@@ -526,6 +544,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * Close the connection pool.
    */
   async close(): Promise<void> {
+    // PG server forgets prepared statements when the connection closes,
+    // so reset() (no DEALLOCATE) is correct here.
+    this._statementPool.reset();
     if (this._advisoryLockClient) {
       this._advisoryLockClient.release();
       this._advisoryLockClient = null;

@@ -99,3 +99,25 @@ describe("StatementPoolTest", () => {
     expect(pool.has("c")).toBe(true);
   });
 });
+
+describe("SQLite3 StatementPool integration", () => {
+  it("caches prepared statements across execute calls", async () => {
+    const { SQLite3Adapter } = await import("../connection-adapters/sqlite3-adapter.js");
+    const adapter = new SQLite3Adapter(":memory:");
+    await adapter.executeMutation(
+      'CREATE TABLE "test_pool" ("id" INTEGER PRIMARY KEY, "name" TEXT)',
+    );
+    await adapter.executeMutation('INSERT INTO "test_pool" ("name") VALUES (?)', ["a"]);
+    await adapter.executeMutation('INSERT INTO "test_pool" ("name") VALUES (?)', ["b"]);
+
+    // Same SQL executed twice should hit the cached statement
+    const rows1 = await adapter.execute('SELECT * FROM "test_pool" WHERE "name" = ?', ["a"]);
+    const rows2 = await adapter.execute('SELECT * FROM "test_pool" WHERE "name" = ?', ["b"]);
+    expect(rows1).toHaveLength(1);
+    expect(rows1[0].name).toBe("a");
+    expect(rows2).toHaveLength(1);
+    expect(rows2[0].name).toBe("b");
+
+    adapter.disconnectBang();
+  });
+});

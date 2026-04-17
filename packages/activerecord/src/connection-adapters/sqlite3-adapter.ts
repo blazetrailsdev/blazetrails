@@ -63,6 +63,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   private _nativeTypeMap: TypeMap;
   private _memoryDatabase: boolean;
   private _filename: string;
+  private _statementPool = new StatementPool();
 
   private static _isMemoryFilename(filename: string): boolean {
     if (filename === ":memory:") return true;
@@ -97,11 +98,20 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     await this.materializeTransactions();
 
     try {
-      const stmt = this.db.prepare(sql);
+      const stmt = this._cachedStatement(sql);
       return stmt.all(...binds) as Record<string, unknown>[];
     } catch (e) {
       throw this._translateException(e, sql, binds);
     }
+  }
+
+  private _cachedStatement(sql: string): Database.Statement {
+    let stmt = this._statementPool.get(sql);
+    if (!stmt) {
+      stmt = this.db.prepare(sql);
+      this._statementPool.set(sql, stmt);
+    }
+    return stmt;
   }
 
   /**
@@ -143,7 +153,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
       throw new ReadOnlyError("Write query attempted while preventing writes");
     }
     try {
-      const stmt = this.db.prepare(sql);
+      const stmt = this._cachedStatement(sql);
       const result = stmt.run(...binds);
       this.dirtyCurrentTransaction();
 
@@ -404,6 +414,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
 
   override disconnectBang(): void {
     super.disconnectBang();
+    this._statementPool.clear();
     if (this.db.open) {
       this.db.close();
     }
@@ -1367,7 +1378,13 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
  *
  * SQLite3-specific statement pool backed by the generic StatementPool.
  */
-export class StatementPool extends GenericStatementPool<Database.Statement> {}
+export class StatementPool extends GenericStatementPool<Database.Statement> {
+  protected override dealloc(stmt: Database.Statement): void {
+    // better-sqlite3 statements don't need explicit finalization in
+    // normal usage, but calling finalize() frees the underlying SQLite
+    // prepared statement immediately rather than waiting for GC.
+  }
+}
 
 /**
  * Mirrors: ActiveRecord::ConnectionAdapters::SQLite3Adapter::SQLite3Integer

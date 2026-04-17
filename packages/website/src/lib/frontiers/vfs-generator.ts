@@ -66,6 +66,9 @@ function createVfsFsAdapter(vfs: VirtualFS): FsAdapter {
     cwd(): string {
       return "/";
     },
+    exists(path: string): Promise<boolean> {
+      return Promise.resolve(vfs.exists(path));
+    },
   };
 }
 

@@ -44,6 +44,8 @@ export interface FsAdapter {
   copyFileSync(src: string, dest: string): void;
   /** Current working directory. */
   cwd(): string;
+  /** Async existence check — avoids requiring existsSync in async code paths. */
+  exists(path: string): Promise<boolean>;
   /**
    * Create a unique temp directory (optional — not all filesystems support
    * atomic uniqueness). Only used by server-side database tasks; custom
@@ -109,9 +111,15 @@ function tryAutoRegisterNode(): boolean {
     const req = nodeModule.createRequire(
       typeof __filename !== "undefined" ? __filename : "file:///activesupport",
     );
-    const nodeFs = req("node:fs") as Omit<FsAdapter, "cwd">;
+    const nodeFs = req("node:fs") as Omit<FsAdapter, "cwd" | "exists">;
+    const fsPromises = req("node:fs/promises") as { access(p: string): Promise<void> };
     const fs: FsAdapter = Object.assign(nodeFs, {
       cwd: () => globalThis.process.cwd(),
+      exists: (p: string) =>
+        fsPromises.access(p).then(
+          () => true,
+          () => false,
+        ),
     }) as FsAdapter;
     const nodePath = req("node:path") as Required<Omit<PathAdapter, "pathToFileURL">>;
     const nodeUrl = req("node:url") as { pathToFileURL(p: string): URL };
@@ -141,9 +149,17 @@ function tryAutoRegisterNodeAsync(): Promise<boolean> {
         if (typeof globalThis.process === "undefined" || !globalThis.process.versions?.node) {
           return false;
         }
-        const nodeFs = (await import("node:fs")) as unknown as Omit<FsAdapter, "cwd">;
+        const nodeFs = (await import("node:fs")) as unknown as Omit<FsAdapter, "cwd" | "exists">;
+        const fsPromises = (await import("node:fs/promises")) as unknown as {
+          access(p: string): Promise<void>;
+        };
         const fs: FsAdapter = Object.assign(nodeFs, {
           cwd: () => globalThis.process.cwd(),
+          exists: (p: string) =>
+            fsPromises.access(p).then(
+              () => true,
+              () => false,
+            ),
         }) as FsAdapter;
         const nodePath = (await import("node:path")) as unknown as Required<
           Omit<PathAdapter, "pathToFileURL">

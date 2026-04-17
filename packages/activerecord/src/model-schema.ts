@@ -1,7 +1,12 @@
 import type { Base } from "./base.js";
 import { Nodes, sql as arelSql } from "@blazetrails/arel";
 import { pluralize, underscore } from "@blazetrails/activesupport";
-import { Attribute, AttributeSetBuilder, YAMLEncoder } from "@blazetrails/activemodel";
+import {
+  Attribute,
+  AttributeSetBuilder,
+  YAMLEncoder,
+  typeRegistry,
+} from "@blazetrails/activemodel";
 import { isStiSubclass, getStiBase } from "./inheritance.js";
 import { quote, quoteIdentifier, quoteTableName } from "./connection-adapters/abstract/quoting.js";
 import { detectAdapterName } from "./adapter-name.js";
@@ -461,6 +466,71 @@ function getColumnsHash(host: SchemaHost): Record<string, any> {
 }
 
 /**
+ * Register attribute definitions from the adapter's schema cache.
+ *
+ * Mirrors: ActiveRecord::ModelSchema#load_schema! — walks `columns_hash`
+ * and calls `define_attribute(..., user_provided_default: false)` for each
+ * column so the cast type comes from the adapter (e.g. PG OID map) rather
+ * than the generic ActiveModel type registry.
+ *
+ * Populates the schema cache if needed (async). User-declared attributes
+ * (`userProvided: true`) are NEVER overwritten — matching Rails where
+ * `attribute :foo, :bar` always wins over schema-reflected types.
+ */
+export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
+  if (this._abstractClass) return;
+  const adapter = this.adapter;
+  if (!adapter) return;
+  const cache = adapter.schemaCache;
+  if (!cache) return;
+  const table = (this as unknown as typeof Base).tableName;
+  const pool = adapter.pool ?? adapter;
+
+  if (typeof cache.dataSourceExists === "function") {
+    const exists = await cache.dataSourceExists(pool, table);
+    if (!exists) return;
+  }
+
+  let hash: Record<string, unknown> | undefined;
+  if (typeof cache.columnsHash === "function") {
+    hash = await cache.columnsHash(pool, table);
+  } else if (typeof cache.getCachedColumnsHash === "function") {
+    hash = cache.getCachedColumnsHash(table);
+  }
+  if (!hash) return;
+
+  // Copy-on-write: match the ownership check used elsewhere (attributes.ts,
+  // encryption.ts) so we mutate this class's own map, not the inherited one.
+  if (!Object.prototype.hasOwnProperty.call(this, "_attributeDefinitions")) {
+    this._attributeDefinitions = new Map(this._attributeDefinitions);
+  }
+
+  for (const [name, column] of Object.entries(hash)) {
+    const existing = this._attributeDefinitions.get(name);
+    if (existing?.userProvided) continue;
+
+    const castType =
+      typeof adapter.lookupCastTypeFromColumn === "function"
+        ? adapter.lookupCastTypeFromColumn(column)
+        : null;
+    const type = castType ?? typeRegistry.lookup("value");
+    const defaultValue = (column as { default?: unknown }).default ?? null;
+
+    this._attributeDefinitions.set(name, {
+      name,
+      type,
+      defaultValue,
+      userProvided: false,
+      source: "schema",
+    });
+  }
+
+  // Invalidate caches that derive from _attributeDefinitions.
+  this._attributesBuilder = undefined;
+  (this as unknown as { _cachedDefaultAttributes?: unknown })._cachedDefaultAttributes = null;
+}
+
+/**
  * Module methods wired onto Base as static methods via `extend()` in base.ts.
  *
  * Mirrors Rails' `ActiveSupport::Concern#ClassMethods` convention: a Concern
@@ -500,4 +570,5 @@ export const ClassMethods = {
   symbolColumnToString,
   resetColumnInformation,
   _returningColumnsForInsert,
+  loadSchemaFromAdapter,
 };

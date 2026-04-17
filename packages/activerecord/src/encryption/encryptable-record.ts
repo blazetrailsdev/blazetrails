@@ -59,6 +59,8 @@ export class EncryptableRecord {
           name,
           type: encryptedType,
           defaultValue: existingDef?.defaultValue ?? null,
+          userProvided: existingDef?.userProvided ?? true,
+          source: existingDef?.source ?? "user",
         });
       }
 

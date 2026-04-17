@@ -385,7 +385,11 @@ export class Base extends Model {
    * any pending encryption decorations (matching Rails' deferred
    * PendingDecorator pattern).
    */
-  static attribute(name: string, typeName: string, options?: { default?: unknown }): void {
+  static attribute(
+    name: string,
+    typeName: string,
+    options?: { default?: unknown; virtual?: boolean; userProvidedDefault?: boolean },
+  ): void {
     super.attribute(name, typeName, options);
     // If we just defined an "id" accessor on a subclass prototype, remove it
     // so Base.prototype.id (which handles CPK) is used instead.

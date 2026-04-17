@@ -144,6 +144,31 @@ describe("loadSchemaFromAdapter integration details", () => {
     expect((rec as unknown as { guid: string }).guid).toBe("abc-123");
   });
 
+  it("treats externally-constructed defs without userProvided as user-authored (no overwrite)", async () => {
+    class Post extends Base {
+      static override tableName = "posts";
+    }
+    // Simulate a downstream-style def that predates the userProvided field.
+    (Post as unknown as { _attributeDefinitions: Map<string, unknown> })._attributeDefinitions =
+      new Map([
+        [
+          "guid",
+          {
+            name: "guid",
+            type: typeRegistry.lookup("string"),
+            defaultValue: null,
+          },
+        ],
+      ]);
+
+    const adapter = makeAdapter({ guid: { sqlType: "uuid" } }, { uuid: new UuidType() });
+    (Post as unknown as { adapter: unknown }).adapter = adapter;
+    await Post.loadSchema();
+
+    const def = Post._attributeDefinitions.get("guid");
+    expect(def?.type.name).toBe("string");
+  });
+
   it("does not shadow Base.prototype.id when reflecting an id column", async () => {
     class Post extends Base {
       static override tableName = "posts";

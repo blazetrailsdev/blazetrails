@@ -513,7 +513,10 @@ export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
 
   for (const [name, column] of Object.entries(hash)) {
     const existing = this._attributeDefinitions.get(name);
-    if (existing?.userProvided) continue;
+    // Treat absent userProvided as true — externally-constructed defs
+    // (pre-PR shape) are user-authored by definition; schema reflection
+    // must never overwrite them.
+    if (existing && (existing.userProvided ?? true)) continue;
 
     const castType =
       typeof startingAdapter.lookupCastTypeFromColumn === "function"

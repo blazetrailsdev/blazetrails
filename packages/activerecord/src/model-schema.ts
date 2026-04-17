@@ -122,11 +122,6 @@ export function hasAttributeDefinition(this: typeof Base, name: string): boolean
 }
 
 /**
- * Return a hash of column definitions keyed by name.
- *
- * Mirrors: ActiveRecord::ModelSchema::ClassMethods#columns_hash
- */
-/**
  * Column-like shape returned by `columnsHash`. When the schema cache is
  * populated, entries are the adapter's full Column objects (`sqlType`,
  * `collation`, `comment`, nullable `type`, ...); otherwise a synthesized
@@ -140,6 +135,11 @@ export interface ColumnLike {
   [key: string]: unknown;
 }
 
+/**
+ * Return a hash of column definitions keyed by name.
+ *
+ * Mirrors: ActiveRecord::ModelSchema::ClassMethods#columns_hash
+ */
 export function columnsHash(this: typeof Base): Record<string, ColumnLike> {
   if (this.abstractClass) {
     throw new Error(`Cannot call columnsHash on abstract class ${this.name}`);
@@ -604,18 +604,6 @@ function getColumnsHash(host: SchemaHost): Record<string, any> {
 }
 
 /**
- * Register attribute definitions from the adapter's schema cache.
- *
- * Mirrors: ActiveRecord::ModelSchema#load_schema! — walks `columns_hash`
- * and calls `define_attribute(..., user_provided_default: false)` for each
- * column so the cast type comes from the adapter (e.g. PG OID map) rather
- * than the generic ActiveModel type registry.
- *
- * Populates the schema cache if needed (async). User-declared attributes
- * (`userProvided: true`) are NEVER overwritten — matching Rails where
- * `attribute :foo, :bar` always wins over schema-reflected types.
- */
-/**
  * Sync worker: apply a columns hash (already fetched from the schema
  * cache) to `_attributeDefinitions`. Shared by sync `loadSchema` and
  * async `loadSchemaFromAdapter`.
@@ -685,7 +673,7 @@ function applyColumnsHash(
       const scheme = existing.type.scheme;
       type = new SchemeEncryptedAttributeType({ scheme, castType: type });
     } else if (existing?.type instanceof EncryptorEncryptedAttributeType) {
-      type = new EncryptorEncryptedAttributeType(type, existing.type.encryptor);
+      type = existing.type.withInnerType(type);
     }
 
     const defaultValue = (column as { default?: unknown }).default ?? null;
@@ -781,6 +769,18 @@ function applyColumnsHash(
   }
 }
 
+/**
+ * Register attribute definitions from the adapter's schema cache.
+ *
+ * Mirrors: ActiveRecord::ModelSchema#load_schema! — walks `columns_hash`
+ * and calls `define_attribute(..., user_provided_default: false)` for each
+ * column so the cast type comes from the adapter (e.g. PG OID map) rather
+ * than the generic ActiveModel type registry.
+ *
+ * Populates the schema cache if needed (async). User-declared attributes
+ * (`userProvided: true`) are NEVER overwritten — matching Rails where
+ * `attribute :foo, :bar` always wins over schema-reflected types.
+ */
 export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
   if (this._abstractClass) return;
   // STI subclasses inherit the base's attribute defs — reflect onto the

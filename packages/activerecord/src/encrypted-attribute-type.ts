@@ -13,13 +13,22 @@ import type { Encryptor } from "./encryption.js";
 export class EncryptedAttributeType extends Type<unknown> {
   readonly name: string;
   readonly innerType: Type;
-  readonly encryptor: Encryptor;
+  private readonly encryptor: Encryptor;
 
   constructor(innerType: Type, encryptor: Encryptor) {
     super();
     this.innerType = innerType;
     this.encryptor = encryptor;
     this.name = innerType.name;
+  }
+
+  /**
+   * Return a fresh EncryptedAttributeType wrapping `innerType` with the
+   * same encryptor. Used by schema reflection to re-wrap with the
+   * adapter-resolved cast type without exposing the encryptor field.
+   */
+  withInnerType(innerType: Type): EncryptedAttributeType {
+    return new EncryptedAttributeType(innerType, this.encryptor);
   }
 
   cast(value: unknown): unknown {

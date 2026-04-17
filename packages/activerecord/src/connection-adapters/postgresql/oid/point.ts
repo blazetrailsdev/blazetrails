@@ -35,6 +35,15 @@ export class Point extends Type<PointValue> {
     return true;
   }
 
+  /**
+   * Rails' Mutable compares serialized forms so in-place mutation on a
+   * returned Point (e.g. a stored value being modified via reference)
+   * correctly marks the attribute dirty.
+   */
+  override isChangedInPlace(rawOldValue: unknown, newValue: unknown): boolean {
+    return rawOldValue !== this.serialize(newValue);
+  }
+
   cast(value: unknown): PointValue | null {
     if (value == null) return null;
     if (value instanceof PointValue) return value;

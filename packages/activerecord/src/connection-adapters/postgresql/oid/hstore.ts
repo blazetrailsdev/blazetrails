@@ -24,8 +24,16 @@ export class Hstore extends Type<Record<string, string | null>> {
     return true;
   }
 
+  /**
+   * Rails' Helpers::Mutable overrides cast as `deserialize(serialize(value))`,
+   * producing a fresh hash so in-place mutations on a subsequent value
+   * don't leak into the attribute's cached representation.
+   */
   cast(value: unknown): Record<string, string | null> | null {
-    return this.deserialize(value);
+    if (value == null) return null;
+    const serialized = this.serialize(value);
+    if (typeof serialized !== "string") return null;
+    return this.deserialize(serialized);
   }
 
   override deserialize(value: unknown): Record<string, string | null> | null {

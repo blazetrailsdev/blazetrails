@@ -496,7 +496,11 @@ async function runSeed(prefix = ""): Promise<void> {
   // without the query string, the second iteration sees a cached module
   // and skips execution entirely. Mirrors Rails' `load` semantics
   // (which always re-evaluates the file).
-  const url = getPath().pathToFileURL!(seedFile);
+  const pathToFileURL = getPath().pathToFileURL;
+  if (!pathToFileURL) {
+    throw new Error("Seed loading requires a path adapter with pathToFileURL support.");
+  }
+  const url = pathToFileURL(seedFile);
   url.searchParams.set("_t", `${++_seedImportCounter}`);
   await import(url.href);
   console.log(`${prefix}Seeds completed.`);

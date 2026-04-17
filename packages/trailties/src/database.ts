@@ -106,9 +106,13 @@ export async function loadDatabaseConfigModule(
 
   let mod: { default?: unknown } & Record<string, unknown>;
   try {
-    mod = (await import(getPath().pathToFileURL!(configPath).href)) as typeof mod;
+    const pathToFileURL = getPath().pathToFileURL;
+    if (!pathToFileURL) {
+      throw new Error("Config loading requires a path adapter with pathToFileURL support.");
+    }
+    mod = (await import(pathToFileURL(configPath).href)) as typeof mod;
   } catch (error: unknown) {
-    const rel = getPath().relative!(cwd, configPath) || configPath;
+    const rel = getPath().relative?.(cwd, configPath) || configPath;
     // Extract a useful message even when user code throws a non-Error
     // (e.g. `throw "boom"` or `throw null`) — `(error as Error).message`
     // would produce `undefined` or crash. Route non-Errors through
@@ -131,7 +135,7 @@ export async function loadDatabaseConfigModule(
   // with the offending value's repr.
   const candidate = mod.default ?? mod;
   if (candidate === null || (typeof candidate !== "object" && typeof candidate !== "function")) {
-    const rel = getPath().relative!(cwd, configPath) || configPath;
+    const rel = getPath().relative?.(cwd, configPath) || configPath;
     throw new Error(
       `Invalid database config in "${rel}": expected an object, got ${formatUnknown(candidate)}.`,
     );
@@ -401,7 +405,7 @@ export async function resolveSchemaFormat(
     // empty string) is a misconfig that should throw, not silently fall
     // through to inference. Use a relative path in the error source so
     // it stays short and consistent with other config-loading errors.
-    const loadedRel = getPath().relative!(cwd, loaded.path) || loaded.path;
+    const loadedRel = getPath().relative?.(cwd, loaded.path) || loaded.path;
     return normalize(loaded.module.schemaFormat ?? "", `schemaFormat in ${loadedRel}`);
   }
 

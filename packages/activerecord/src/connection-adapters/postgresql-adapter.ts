@@ -114,21 +114,41 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
    */
   /**
    * Mirrors: PostgreSQLAdapter#lookup_cast_type_from_column(column).
-   * Resolves a Column's OID (via its `oid` / `fmod` / `sqlType` metadata)
-   * to the registered Type::Value.
+   * Synchronous — only consults the already-populated type_map. Rails'
+   * get_oid_type auto-loads on miss because Ruby can block; TS callers
+   * of this method (e.g. the type-caster that runs during attribute
+   * reads) are sync, so missing OIDs resolve to a ValueType here and
+   * callers that need miss-loading should call `loadAdditionalTypes`
+   * first (as `execQuery` does).
    */
-  async lookupCastTypeFromColumn(column: {
+  lookupCastTypeFromColumn(column: {
     oid?: number | null;
     fmod?: number | null;
     sqlType?: string | null;
     name?: string;
-  }): Promise<Type> {
+  }): Type {
     const oid = column.oid;
     if (oid == null) {
-      if (column.sqlType) return this.typeMap.lookup(normalizeFormatType(column.sqlType));
+      if (column.sqlType) {
+        // Pass the original sqlType + fmod so registerClassWithLimit /
+        // numeric / interval factories can still extract limit /
+        // precision / scale from the modifier.
+        return this.typeMap.lookup(
+          normalizeFormatType(column.sqlType),
+          column.fmod ?? -1,
+          column.sqlType,
+        );
+      }
       return new ValueType();
     }
-    return this.getOidType(oid, column.fmod ?? -1, column.name ?? "", column.sqlType ?? "");
+    return this.typeMap.fetch(oid, column.fmod ?? -1, column.sqlType ?? "", () => {
+      console.warn(
+        `unknown OID ${oid}: failed to recognize type of '${column.name ?? ""}'. It will be treated as String.`,
+      );
+      const fallback = new ValueType();
+      this.typeMap.registerType(oid, fallback);
+      return fallback;
+    });
   }
 
   /**
@@ -149,10 +169,17 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
   override async execQuery(sql: string, _name?: string | null, binds?: unknown[]): Promise<Result> {
     const client = await this.getClient();
     try {
-      const pgResult = await client.query(this.rewriteBinds(sql, binds ?? []), binds ?? []);
+      // rowMode: "array" returns rows as positional arrays, preserving
+      // duplicate column names and matching the field-index order.
+      // Hash-keyed rows would collide on duplicate names and drop
+      // earlier values.
+      const pgResult = await client.query({
+        text: this.rewriteBinds(sql, binds ?? []),
+        values: binds ?? [],
+        rowMode: "array",
+      });
       const fields = pgResult.fields ?? [];
-      const rows = pgResult.rows as Record<string, unknown>[];
-      if (fields.length === 0) return Result.fromRowHashes(rows);
+      if (fields.length === 0) return Result.fromRowHashes([]);
 
       // Batch-load any unknown dataTypeIDs in a single pg_type roundtrip.
       // Without this, a SELECT with N distinct unknown OIDs would trigger
@@ -166,15 +193,22 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
       }
 
       const columns = fields.map((f) => f.name);
-      const columnTypes: Record<string, Type> = {};
-      for (const f of fields) {
+      // Store types under BOTH name and numeric index so Result's
+      // columnType lookup works with duplicate column names (columnType
+      // tries index first, then name).
+      const columnTypes: Record<string | number, Type> = {};
+      for (let i = 0; i < fields.length; i++) {
+        const f = fields[i];
         // fmod isn't on pg.FieldDef; Rails reads it from PG::Result#fmod(i)
         // which isn't exposed by node-pg. Pass -1 so numeric/interval
         // registrations fall into their default (scale-absent) branch.
-        columnTypes[f.name] = await this.getOidType(f.dataTypeID, -1, f.name, "");
+        const type = await this.getOidType(f.dataTypeID, -1, f.name, "");
+        columnTypes[i] = type;
+        columnTypes[f.name] = type;
       }
-      const rowArrays = rows.map((row) => columns.map((col) => row[col]));
-      return new Result(columns, rowArrays, columnTypes);
+      // pgResult.rows is already positional arrays thanks to rowMode.
+      const rowArrays = pgResult.rows as unknown[][];
+      return new Result(columns, rowArrays, columnTypes as Record<string, Type>);
     } finally {
       this.releaseClient(client);
     }

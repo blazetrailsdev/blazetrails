@@ -164,7 +164,7 @@ export function initializeTypeMap(m: HashLookupTypeMap): void {
     const sqlType = sqlTypeFromArgs(args);
     const precision = extractPrecision(sqlType);
     if (fmod != null && ((fmod - 4) & 0xffff) === 0) {
-      return new DecimalWithoutScale({ precision }) as unknown as Decimal;
+      return new DecimalWithoutScale({ precision });
     }
     return new Decimal({ precision, scale: extractScale(sqlType) });
   });

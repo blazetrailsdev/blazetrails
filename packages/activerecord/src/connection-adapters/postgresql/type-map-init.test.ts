@@ -14,6 +14,7 @@ import { Bit } from "./oid/bit.js";
 import { BitVarying } from "./oid/bit-varying.js";
 import { Bytea } from "./oid/bytea.js";
 import { Cidr } from "./oid/cidr.js";
+import { DecimalWithoutScale } from "../../type/decimal-without-scale.js";
 import { Decimal } from "./oid/decimal.js";
 import { Hstore } from "./oid/hstore.js";
 import { Inet } from "./oid/inet.js";
@@ -131,6 +132,15 @@ describe("initialize_type_map seeds the PG type_map with known types", () => {
     expect(type).toBeInstanceOf(Decimal);
     expect(type.precision).toBe(10);
     expect(type.scale).toBe(2);
+  });
+
+  it("registers numeric as DecimalWithoutScale when fmod scale bits are zero", () => {
+    // Rails: `if fmod && (fmod - 4 & 0xffff).zero?` — a scale-less NUMERIC(10)
+    // stores atttypmod where the low 16 bits of (fmod - 4) are zero.
+    // fmod = 4 → (4-4)&0xffff = 0 → DecimalWithoutScale.
+    const type = m.lookup("numeric", 4, "numeric(10)") as DecimalWithoutScale;
+    expect(type).toBeInstanceOf(DecimalWithoutScale);
+    expect(type.precision).toBe(10);
   });
 
   it("registers interval as Interval with precision", () => {

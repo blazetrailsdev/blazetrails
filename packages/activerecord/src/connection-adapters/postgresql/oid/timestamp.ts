@@ -13,8 +13,6 @@ export class Timestamp extends DateTime {
   override readonly name: string = "timestamp";
 
   override type(): string {
-    return (this as unknown as { realTypeUnlessAliased(t: string): string }).realTypeUnlessAliased(
-      "timestamp",
-    );
+    return this.realTypeUnlessAliased("timestamp");
   }
 }

@@ -30,4 +30,12 @@ describe("PostgreSQL::OID::Date", () => {
     expect(type.typeCastForSchema(Infinity)).toBe("::Float::INFINITY");
     expect(type.typeCastForSchema(-Infinity)).toBe("-::Float::INFINITY");
   });
+
+  it("cast_value is the Rails-named hook cast delegates to", () => {
+    // Direct cast_value call: same behavior as cast. Rails' cast_value
+    // is protected; we expose it publicly so callers that want to skip
+    // the nil-check in cast (Type::Value#cast) can reach the hook.
+    expect(type.castValue("infinity")).toBe(Infinity);
+    expect(type.castValue("2024-06-15")).toBeInstanceOf(Date);
+  });
 });

@@ -15,8 +15,6 @@ export class TimestampWithTimeZone extends DateTime {
   override readonly name: string = "timestamptz";
 
   override type(): string {
-    return (this as unknown as { realTypeUnlessAliased(t: string): string }).realTypeUnlessAliased(
-      "timestamptz",
-    );
+    return this.realTypeUnlessAliased("timestamptz");
   }
 }

@@ -91,6 +91,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
    * Execute a SELECT query and return rows.
    */
   async execute(sql: string, binds: unknown[] = []): Promise<Record<string, unknown>[]> {
+    await this.materializeTransactions();
     const conn = await this.getConn();
     try {
       const [rows] = await conn.query(this.mysqlQuote(sql), this.mysqlBinds(binds));
@@ -104,9 +105,11 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
    * Execute an INSERT/UPDATE/DELETE and return affected rows or insert ID.
    */
   async executeMutation(sql: string, binds: unknown[] = []): Promise<number> {
+    await this.materializeTransactions();
     const conn = await this.getConn();
     try {
       const [result] = await conn.query(this.mysqlQuote(sql), this.mysqlBinds(binds));
+      this.dirtyCurrentTransaction();
       const info = result as mysql.ResultSetHeader;
 
       // For INSERT, return the last inserted ID (or affected rows for multi-row)

@@ -324,6 +324,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * Execute a SELECT query and return rows.
    */
   async execute(sql: string, binds: unknown[] = []): Promise<Record<string, unknown>[]> {
+    await this.materializeTransactions();
     const client = await this.getClient();
     try {
       const result = await client.query(this.rewriteBinds(sql, binds), binds);
@@ -341,8 +342,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * `rowCount` is returned.
    */
   async executeMutation(sql: string, binds: unknown[] = []): Promise<number> {
+    await this.materializeTransactions();
     const client = await this.getClient();
     try {
+      this.dirtyCurrentTransaction();
       const pgSql = this.rewriteBinds(sql, binds);
       const upper = sql.trimStart().toUpperCase();
 

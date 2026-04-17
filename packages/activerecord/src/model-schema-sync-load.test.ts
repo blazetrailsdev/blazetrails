@@ -186,6 +186,32 @@ describe("sync loadSchema / columnsHash", () => {
     expect(Circle._attributeDefinitions.has("guid")).toBe(false);
   });
 
+  it("preserves subclass-declared attributes when unifying with STI base map", () => {
+    class Shape extends Base {
+      static override tableName = "shapes";
+      static {
+        this.inheritanceColumn = "type";
+      }
+    }
+    class Circle extends Shape {
+      static {
+        // User attribute declared on subclass — forks Circle's map.
+        this.attribute("radius", "integer");
+      }
+    }
+
+    const cols = { guid: { sqlType: "uuid", name: "guid", default: null } };
+    (Shape as unknown as { adapter: unknown }).adapter = makeAdapter(cols);
+
+    Circle.columnsHash();
+
+    // Merged: base reflects guid, subclass's radius survives.
+    expect(Circle._attributeDefinitions.get("guid")?.source).toBe("schema");
+    expect(Circle._attributeDefinitions.get("radius")?.userProvided).toBe(true);
+    expect(Shape._attributeDefinitions.get("radius")?.userProvided).toBe(true);
+    expect(Circle._attributeDefinitions).toBe(Shape._attributeDefinitions);
+  });
+
   it("invalidates subclass-local caches when reflection lands on STI base", () => {
     class Shape extends Base {
       static override tableName = "shapes";

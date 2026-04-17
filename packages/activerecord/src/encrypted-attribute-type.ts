@@ -13,7 +13,7 @@ import type { Encryptor } from "./encryption.js";
 export class EncryptedAttributeType extends Type<unknown> {
   readonly name: string;
   readonly innerType: Type;
-  private readonly encryptor: Encryptor;
+  readonly encryptor: Encryptor;
 
   constructor(innerType: Type, encryptor: Encryptor) {
     super();

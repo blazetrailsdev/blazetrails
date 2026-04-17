@@ -670,9 +670,7 @@ function applyColumnsHash(
       const scheme = existing.type.scheme;
       type = new SchemeEncryptedAttributeType({ scheme, castType: type });
     } else if (existing?.type instanceof EncryptorEncryptedAttributeType) {
-      const encryptor = (existing.type as unknown as { encryptor: unknown })
-        .encryptor as ConstructorParameters<typeof EncryptorEncryptedAttributeType>[1];
-      type = new EncryptorEncryptedAttributeType(type, encryptor);
+      type = new EncryptorEncryptedAttributeType(type, existing.type.encryptor);
     }
 
     const defaultValue = (column as { default?: unknown }).default ?? null;
@@ -724,13 +722,32 @@ function applyColumnsHash(
 
   applyPendingEncryptions(host);
 
-  // STI: if `encrypts()` was declared on the subclass, its pending
-  // encryptions live on that subclass. Unify the subclass's
-  // _attributeDefinitions with the base's (so the subclass doesn't
-  // shadow the newly reflected defs — STI note 2 in applyColumnsHash
-  // doc), then apply its pending encryptions over the shared map.
+  // STI: if the subclass previously forked _attributeDefinitions (via
+  // attribute()/decorateAttributes()/encrypts()), carry its entries
+  // into the shared base map before unifying references — naive
+  // reassignment would silently discard subclass-declared attributes.
+  // Precedence: subclass user-provided entries win over base non-user
+  // entries; otherwise base wins (Rails' STI shares attribute_types,
+  // but subclass declarations extend it).
   if (originatingHost && originatingHost !== host) {
-    originatingHost._attributeDefinitions = host._attributeDefinitions;
+    const baseDefs = host._attributeDefinitions;
+    const subDefs = originatingHost._attributeDefinitions;
+    if (
+      baseDefs instanceof Map &&
+      subDefs instanceof Map &&
+      subDefs !== baseDefs &&
+      Object.prototype.hasOwnProperty.call(originatingHost, "_attributeDefinitions")
+    ) {
+      for (const [name, def] of subDefs) {
+        const existing = baseDefs.get(name);
+        const subIsUser = (def.userProvided ?? true) === true;
+        const baseIsUser = existing ? (existing.userProvided ?? true) === true : false;
+        if (!existing || (subIsUser && !baseIsUser)) {
+          baseDefs.set(name, def);
+        }
+      }
+    }
+    originatingHost._attributeDefinitions = baseDefs;
     applyPendingEncryptions(originatingHost);
   }
 }

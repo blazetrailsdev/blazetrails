@@ -63,6 +63,9 @@ function createVfsFsAdapter(vfs: VirtualFS): FsAdapter {
     statSync(): { isDirectory(): boolean; isFile(): boolean } {
       return { isDirectory: () => false, isFile: () => true };
     },
+    cwd(): string {
+      return "/";
+    },
   };
 }
 

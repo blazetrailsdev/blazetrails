@@ -61,7 +61,7 @@ function normalizeRawConfig(raw: RawConfig): RawConfig {
 }
 
 function migrationsDir(): string {
-  return getPath().join(process.cwd(), "db", "migrations");
+  return getPath().join(getFs().cwd(), "db", "migrations");
 }
 
 /**
@@ -74,15 +74,15 @@ function migrationsDir(): string {
  */
 function migrationsDirsForConfig(name: string, config: RawConfig): string[] {
   const raw = (config as { migrationsPaths?: string | string[] }).migrationsPaths;
-  if (typeof raw === "string" && raw.length > 0) return [getPath().resolve(process.cwd(), raw)];
+  if (typeof raw === "string" && raw.length > 0) return [getPath().resolve(getFs().cwd(), raw)];
   if (Array.isArray(raw)) {
     const dirs = [
-      ...new Set(raw.filter((p) => p.length > 0).map((p) => getPath().resolve(process.cwd(), p))),
+      ...new Set(raw.filter((p) => p.length > 0).map((p) => getPath().resolve(getFs().cwd(), p))),
     ];
     if (dirs.length > 0) return dirs;
   }
-  if (name === "primary") return [getPath().join(process.cwd(), "db", "migrations")];
-  return [getPath().join(process.cwd(), "db", `migrations_${name}`)];
+  if (name === "primary") return [getPath().join(getFs().cwd(), "db", "migrations")];
+  return [getPath().join(getFs().cwd(), "db", `migrations_${name}`)];
 }
 
 /**
@@ -481,8 +481,8 @@ async function runTestLoadSchema(options: {
 let _seedImportCounter = 0;
 async function runSeed(prefix = ""): Promise<void> {
   const seedCandidates = [
-    getPath().join(process.cwd(), "db", "seeds.ts"),
-    getPath().join(process.cwd(), "db", "seeds.js"),
+    getPath().join(getFs().cwd(), "db", "seeds.ts"),
+    getPath().join(getFs().cwd(), "db", "seeds.js"),
   ];
   const seedFile = seedCandidates.find((f) => getFs().existsSync(f));
   if (!seedFile) {

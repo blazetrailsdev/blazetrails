@@ -85,7 +85,7 @@ function formatUnknown(value: unknown): string {
  * downstream code doesn't need to defensively guard every key lookup.
  */
 export async function loadDatabaseConfigModule(
-  cwd: string = process.cwd(),
+  cwd: string = getFs().cwd(),
 ): Promise<{ path: string; module: DatabaseConfigModule } | null> {
   // Prefer .ts (source of truth) over .js (compiled)
   const candidates = [
@@ -149,7 +149,7 @@ export async function loadDatabaseConfigModule(
  */
 export async function loadDatabaseConfig(
   env?: string,
-  cwd: string = process.cwd(),
+  cwd: string = getFs().cwd(),
 ): Promise<DatabaseConfig> {
   const resolvedEnv = env ?? resolveEnv();
   const loaded = await loadDatabaseConfigModule(cwd);
@@ -278,7 +278,7 @@ export interface NamedDatabaseConfig {
  */
 export async function loadAllDatabaseConfigs(
   env?: string,
-  cwd: string = process.cwd(),
+  cwd: string = getFs().cwd(),
 ): Promise<NamedDatabaseConfig[]> {
   const resolvedEnv = env ?? resolveEnv();
   const loaded = await loadDatabaseConfigModule(cwd);
@@ -354,7 +354,7 @@ export type SchemaFormat = "ts" | "js" | "sql";
  */
 export async function resolveSchemaFormat(
   opts: { format?: string } = {},
-  cwd: string = process.cwd(),
+  cwd: string = getFs().cwd(),
 ): Promise<SchemaFormat> {
   const normalize = (raw: unknown, source: string): SchemaFormat => {
     // `schemaFormat` in config/database.ts is user-authored with only

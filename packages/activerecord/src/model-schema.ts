@@ -188,7 +188,7 @@ export function columnsHash(this: typeof Base): Record<string, ColumnLike> {
   const result: Record<string, ColumnLike> = {};
   for (const [name, def] of this._attributeDefinitions) {
     if (ignored.has(name)) continue;
-    result[name] = { name, type: def.type.name, default: def.defaultValue ?? null };
+    result[name] = { name, type: def.type?.name ?? null, default: def.defaultValue ?? null };
   }
   return result;
 }

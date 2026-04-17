@@ -49,8 +49,8 @@ export class Hstore extends Type<Record<string, string | null>> {
   override serialize(value: unknown): string | null {
     if (value == null) return null;
     // Rails: `if value.is_a?(::Hash)` — only treat plain objects as a Hash.
-    // Date/Map/class instances fall through to super (identity) so they
-    // aren't accidentally stringified as an empty hstore.
+    // Date/Map/class instances are rejected by the else branch below
+    // rather than stringified as an empty hstore.
     if (isPlainObject(value)) {
       const hash = value as Record<string, unknown>;
       return Object.entries(hash)

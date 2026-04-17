@@ -35,7 +35,17 @@ export class Oid extends IntegerType {
   }
 
   override serialize(value: unknown): unknown {
-    const cast = this.cast(value);
-    return cast;
+    return this.cast(value);
+  }
+
+  /**
+   * IntegerType.isSerializable only checks the signed range for the
+   * expanded limit=8 — it'd green-light negatives and values past
+   * 0xffffffff, which cast would then turn into null. Gate both on
+   * the unsigned-32 window.
+   */
+  override isSerializable(value: unknown): boolean {
+    if (value == null) return true;
+    return this.cast(value) != null;
   }
 }

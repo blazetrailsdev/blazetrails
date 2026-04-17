@@ -99,10 +99,21 @@ export class Point extends Type<PointValue> {
     return super.typeCastForSchema(value);
   }
 
+  /**
+   * Rails uses `Float(x)` which raises on empty / whitespace input. JS
+   * `Number("")` returns 0, so `(,)` or `['', '']` would cast to `(0,0)`
+   * without this guard. Reject blank coordinates explicitly.
+   */
+  private toCoordinate(value: unknown): number | null {
+    if (typeof value === "string" && value.trim() === "") return null;
+    const n = Number(value);
+    return Number.isNaN(n) ? null : n;
+  }
+
   private buildPoint(x: unknown, y: unknown): PointValue | null {
-    const fx = Number(x);
-    const fy = Number(y);
-    if (Number.isNaN(fx) || Number.isNaN(fy)) return null;
+    const fx = this.toCoordinate(x);
+    const fy = this.toCoordinate(y);
+    if (fx == null || fy == null) return null;
     return new PointValue(fx, fy);
   }
 }

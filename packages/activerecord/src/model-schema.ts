@@ -655,11 +655,18 @@ function applyColumnsHash(
   const ignored = new Set(host._ignoredColumns ?? []);
   for (const [name, column] of Object.entries(hash)) {
     if (ignored.has(name)) {
+      // Remove the prototype accessor unconditionally so `name in record`
+      // respects the ignore. Only drop the attribute def when it's
+      // schema-sourced — user-declared defs survive `ignoredColumns`
+      // per base.test.ts semantics.
       const proto = (host as unknown as { prototype: object }).prototype;
       if (Object.prototype.hasOwnProperty.call(proto, name)) {
         delete (proto as Record<string, unknown>)[name];
       }
-      host._attributeDefinitions.delete(name);
+      const existing = host._attributeDefinitions.get(name);
+      if (!existing || (existing.userProvided ?? true) === false) {
+        host._attributeDefinitions.delete(name);
+      }
       continue;
     }
     const existing = host._attributeDefinitions.get(name);

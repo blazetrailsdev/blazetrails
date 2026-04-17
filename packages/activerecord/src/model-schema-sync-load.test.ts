@@ -185,6 +185,28 @@ describe("sync loadSchema / columnsHash", () => {
     expect(Circle._attributeDefinitions.has("guid")).toBe(false);
   });
 
+  it("invalidates subclass-local caches when reflection lands on STI base", () => {
+    class Shape extends Base {
+      static override tableName = "shapes";
+      static {
+        this.inheritanceColumn = "type";
+      }
+    }
+    class Circle extends Shape {}
+
+    // Pre-populate stale caches on the subclass.
+    (Circle as unknown as { _columnsHash: unknown })._columnsHash = { stale: true };
+    (Circle as unknown as { _columns: unknown })._columns = ["stale"];
+
+    const cols = { guid: { sqlType: "uuid", name: "guid", default: null } };
+    (Shape as unknown as { adapter: unknown }).adapter = makeAdapter(cols);
+
+    Circle.columnsHash();
+
+    expect((Circle as unknown as { _columnsHash: unknown })._columnsHash).toBeUndefined();
+    expect((Circle as unknown as { _columns: unknown })._columns).toBeUndefined();
+  });
+
   it("resetColumnInformation on STI subclass resets the STI base", () => {
     class Shape extends Base {
       static override tableName = "shapes";

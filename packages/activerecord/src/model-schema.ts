@@ -12,7 +12,8 @@ import { isStiSubclass, getStiBase } from "./inheritance.js";
 import { quote, quoteIdentifier, quoteTableName } from "./connection-adapters/abstract/quoting.js";
 import { detectAdapterName } from "./adapter-name.js";
 import { applyPendingEncryptions } from "./encryption.js";
-import { EncryptedAttributeType } from "./encryption/encrypted-attribute-type.js";
+import { EncryptedAttributeType as SchemeEncryptedAttributeType } from "./encryption/encrypted-attribute-type.js";
+import { EncryptedAttributeType as EncryptorEncryptedAttributeType } from "./encrypted-attribute-type.js";
 
 /**
  * Schema metadata for ActiveRecord models — table name, primary key,
@@ -631,6 +632,13 @@ function applyColumnsHash(
   host: SchemaHost,
   adapter: { lookupCastTypeFromColumn?: (c: unknown) => unknown },
   hash: Record<string, unknown>,
+  /**
+   * Class the load was originally triggered on. Differs from `host` in
+   * STI: reflection lands on the base, but any caches the subclass
+   * already populated (`_columns`, `_columnsHash`, `_attributesBuilder`)
+   * would otherwise stay stale indefinitely.
+   */
+  originatingHost?: SchemaHost,
 ): void {
   if (!Object.prototype.hasOwnProperty.call(host, "_attributeDefinitions")) {
     host._attributeDefinitions = new Map(host._attributeDefinitions);
@@ -655,9 +663,16 @@ function applyColumnsHash(
         : null;
     let type = (castType as Type | null) ?? typeRegistry.lookup("value");
 
-    if (existing?.type instanceof EncryptedAttributeType) {
+    // Preserve encryption wrappers across schema reflection — two
+    // distinct EncryptedAttributeType classes exist (scheme-based
+    // `encrypts()` macro vs encryptor-based internal path); handle both.
+    if (existing?.type instanceof SchemeEncryptedAttributeType) {
       const scheme = existing.type.scheme;
-      type = new EncryptedAttributeType({ scheme, castType: type });
+      type = new SchemeEncryptedAttributeType({ scheme, castType: type });
+    } else if (existing?.type instanceof EncryptorEncryptedAttributeType) {
+      const encryptor = (existing.type as unknown as { encryptor: unknown })
+        .encryptor as ConstructorParameters<typeof EncryptorEncryptedAttributeType>[1];
+      type = new EncryptorEncryptedAttributeType(type, encryptor);
     }
 
     const defaultValue = (column as { default?: unknown }).default ?? null;
@@ -691,16 +706,21 @@ function applyColumnsHash(
     }
   }
 
-  const caches = host as unknown as {
+  type CacheBag = {
     _attributesBuilder?: unknown;
     _cachedDefaultAttributes?: unknown;
     _columnsHash?: unknown;
     _columns?: unknown;
   };
-  caches._attributesBuilder = undefined;
-  caches._cachedDefaultAttributes = null;
-  caches._columnsHash = undefined;
-  caches._columns = undefined;
+  const invalidate = (h: SchemaHost) => {
+    const c = h as unknown as CacheBag;
+    c._attributesBuilder = undefined;
+    c._cachedDefaultAttributes = null;
+    c._columnsHash = undefined;
+    c._columns = undefined;
+  };
+  invalidate(host);
+  if (originatingHost && originatingHost !== host) invalidate(originatingHost);
 
   applyPendingEncryptions(host);
 }
@@ -757,7 +777,7 @@ export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
   }
   if (!currentAdapter) return;
 
-  applyColumnsHash(schemaHost, startingAdapter, hash);
+  applyColumnsHash(schemaHost, startingAdapter, hash, this);
 }
 
 /**
@@ -796,7 +816,7 @@ function loadSchemaFromCacheSync(host: SchemaHost): boolean {
       ? cache.getCachedColumnsHash(table)
       : undefined;
   if (!hash) return false;
-  applyColumnsHash(schemaHost, adapter, hash);
+  applyColumnsHash(schemaHost, adapter, hash, host);
   return true;
 }
 

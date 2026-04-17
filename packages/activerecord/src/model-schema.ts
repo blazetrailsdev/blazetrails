@@ -11,6 +11,7 @@ import { isStiSubclass, getStiBase } from "./inheritance.js";
 import { quote, quoteIdentifier, quoteTableName } from "./connection-adapters/abstract/quoting.js";
 import { detectAdapterName } from "./adapter-name.js";
 import { applyPendingEncryptions } from "./encryption.js";
+import { EncryptedAttributeType } from "./encryption/encrypted-attribute-type.js";
 
 /**
  * Schema metadata for ActiveRecord models — table name, primary key,
@@ -518,7 +519,15 @@ export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
       typeof startingAdapter.lookupCastTypeFromColumn === "function"
         ? startingAdapter.lookupCastTypeFromColumn(column)
         : null;
-    const type = castType ?? typeRegistry.lookup("value");
+    let type = castType ?? typeRegistry.lookup("value");
+
+    // Preserve an existing EncryptedAttributeType wrapper: re-wrap the
+    // fresh adapter-resolved cast type rather than discarding encryption.
+    if (existing?.type instanceof EncryptedAttributeType) {
+      const scheme = (existing.type as EncryptedAttributeType).scheme;
+      type = new EncryptedAttributeType({ scheme, castType: type });
+    }
+
     const defaultValue = (column as { default?: unknown }).default ?? null;
 
     this._attributeDefinitions.set(name, {
@@ -532,6 +541,17 @@ export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
     // Define the prototype accessor so `record.foo` routes through
     // readAttribute/writeAttribute. Mirrors what ActiveModel.attribute()
     // does for user-declared attrs (attributes.ts ~L56).
+    //
+    // Skip "id": Base.prototype.id is an accessor with composite-PK
+    // logic (base.ts). Defining an own "id" on a subclass prototype
+    // would shadow it — Base.attribute has the same skip (base.ts:392).
+    if (name === "id") {
+      const proto = (this as unknown as { prototype: object }).prototype;
+      if (Object.prototype.hasOwnProperty.call(proto, "id")) {
+        delete (proto as Record<string, unknown>).id;
+      }
+      continue;
+    }
     const proto = (this as unknown as { prototype: object }).prototype;
     if (!Object.prototype.hasOwnProperty.call(proto, name)) {
       Object.defineProperty(proto, name, {

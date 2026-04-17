@@ -16,10 +16,14 @@ export interface AttributeDefinition {
    * The distinction controls how defaults are materialized (user default vs.
    * database default) and whether schema reflection is allowed to overwrite
    * the definition — user-provided defs always win.
+   *
+   * Optional for backwards compatibility with downstream consumers that
+   * construct `AttributeDefinition` directly. When absent, treated as
+   * `true` (user-authored) — matching pre-load_schema behavior.
    */
-  userProvided: boolean;
+  userProvided?: boolean;
   /** Provenance tag — matches `userProvided` but kept explicit for clarity. */
-  source: "user" | "schema";
+  source?: "user" | "schema";
 }
 
 /**
@@ -108,8 +112,9 @@ export function attribute(
 export function buildDefaultAttributes(defs: Map<string, AttributeDefinition>): AttributeSet {
   const attrMap = new Map<string, Attribute>();
   for (const [name, def] of defs) {
+    const userProvided = def.userProvided ?? true;
     if (def.defaultValue != null) {
-      if (def.userProvided) {
+      if (userProvided) {
         // Rails: user_provided_default: true → wraps the default so it is
         // cast through the user-type (and procs re-evaluate per instance).
         const base = Attribute.withCastValue(name, null, def.type);

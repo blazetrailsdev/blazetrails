@@ -144,6 +144,22 @@ describe("loadSchemaFromAdapter integration details", () => {
     expect((rec as unknown as { guid: string }).guid).toBe("abc-123");
   });
 
+  it("does not shadow Base.prototype.id when reflecting an id column", async () => {
+    class Post extends Base {
+      static override tableName = "posts";
+    }
+    const adapter = makeAdapter({ id: { sqlType: "uuid" } }, { uuid: new UuidType() });
+    (Post as unknown as { adapter: unknown }).adapter = adapter;
+    await Post.loadSchema();
+
+    expect(Object.getOwnPropertyDescriptor(Post.prototype, "id")).toBeUndefined();
+    expect(Post._attributeDefinitions.get("id")?.source).toBe("schema");
+
+    const rec = new Post();
+    rec.writeAttribute("id", "abc-123");
+    expect((rec as unknown as { id: string }).id).toBe("abc-123");
+  });
+
   it("discards the load if the adapter is swapped mid-flight (race guard)", async () => {
     // Plain host object — avoids Base's adapter getter/setter side effects.
     let resolveColumns: (v: Record<string, unknown>) => void = () => {};

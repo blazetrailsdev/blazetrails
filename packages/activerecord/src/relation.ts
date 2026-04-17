@@ -98,6 +98,7 @@ export class Relation<T extends Base> {
   private _skipQueryCache = false;
   private _loaded = false;
   private _records: T[] = [];
+  private _loadAsyncPromise?: Promise<T[]>;
 
   private _table: Table | null = null;
 
@@ -1157,11 +1158,12 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#load_async
    */
   loadAsync(): Relation<T> {
-    // Start loading in background; result is cached when accessed
-    this.toArray().then((records) => {
-      this._loaded = true;
-      this._records = records;
-    });
+    // Kick off the load in the background and stash the in-flight promise.
+    // toArray() already caches _loaded/_records when it resolves, so no
+    // .then bookkeeping is needed. A later `await rel.toArray()` drains
+    // the stashed promise instead of issuing a second query — and carries
+    // any rejection to the awaiter, matching Rails' load_async behavior.
+    this._loadAsyncPromise ??= this.toArray();
     return this;
   }
 
@@ -1340,6 +1342,14 @@ export class Relation<T extends Base> {
   async toArray(): Promise<T[]> {
     if (this._isNone) return [];
     if (this._loaded) return [...this._records];
+    if (this._loadAsyncPromise) {
+      // A prior loadAsync() kicked off the query — hand out the in-flight
+      // promise so callers drain the same query (and carry its errors)
+      // instead of issuing a second one.
+      const p = this._loadAsyncPromise;
+      this._loadAsyncPromise = undefined;
+      return p;
+    }
 
     // Rails: `includes(:assoc).references(:assocs_table)` promotes the
     // matching includes to eager_load so the JOIN is present — otherwise

@@ -1,36 +1,66 @@
 /**
- * PostgreSQL date type.
+ * PostgreSQL date OID type.
  *
- * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::OID::Date
+ * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::OID::Date.
+ * Rails: `class Date < Type::Date`. Overrides cast_value to handle
+ * PG-specific string forms ("infinity" / "-infinity" / "… BC" for BCE
+ * dates) and type_cast_for_schema so those sentinels render as
+ * `::Float::INFINITY` / `-::Float::INFINITY` in schema dumps.
  */
 
-export class Date {
-  get type(): string {
-    return "date";
+import { DateType } from "@blazetrails/activemodel";
+
+export class Date extends DateType {
+  override readonly name: string = "date";
+
+  /**
+   * Rails' cast_value handles:
+   *   "infinity"         → Float::INFINITY
+   *   "-infinity"        → -Float::INFINITY
+   *   "0001-01-01 BC"    → date with a biased (Rails-style) year
+   *   everything else    → super (standard date parse)
+   *
+   * Rails returns Float::INFINITY from a Date type, which is dynamic
+   * Ruby. The TS signature is `Date | null`; the infinity sentinels
+   * are cast through `as unknown as Date` so callers that accept
+   * Rails' range-bound semantics still receive them. Check with
+   * `Number.isFinite` or `typeof === 'number'` before treating as a
+   * real Date.
+   */
+  override cast(value: unknown): globalThis.Date | null {
+    return this.castValue(value);
   }
 
-  cast(value: unknown): globalThis.Date | null {
-    if (value == null) return null;
-    if (value instanceof globalThis.Date) return value;
+  /**
+   * Rails' `cast_value` — the protected hook cast delegates to. Kept
+   * public here so subclasses (and tests) can call it directly, and so
+   * api:compare finds the method name that matches Rails.
+   */
+  castValue(value: unknown): globalThis.Date | null {
     if (typeof value === "string") {
-      if (value === "") return null;
-      const parsed = new globalThis.Date(value + "T00:00:00Z");
-      if (isNaN(parsed.getTime())) return null;
-      return parsed;
+      if (value === "infinity") return Infinity as unknown as globalThis.Date;
+      if (value === "-infinity") return -Infinity as unknown as globalThis.Date;
+      if (/ BC$/.test(value)) {
+        // Rails' cast_value rewrites "0044-03-15 BC" → "-0043-03-15"
+        // (year mapped as -year+1). JS's Date parser doesn't accept
+        // 4-digit negative years, so construct the Date manually.
+        const match = /^(\d+)-(\d{1,2})-(\d{1,2})/.exec(value);
+        if (!match) return null;
+        const year = -Number.parseInt(match[1], 10) + 1;
+        const month = Number.parseInt(match[2], 10) - 1;
+        const day = Number.parseInt(match[3], 10);
+        const d = new globalThis.Date(0);
+        d.setUTCFullYear(year, month, day);
+        d.setUTCHours(0, 0, 0, 0);
+        return d;
+      }
     }
-    return null;
+    return super.cast(value);
   }
 
-  serialize(value: unknown): string | null {
-    if (value == null) return null;
-    if (value instanceof globalThis.Date) {
-      return value.toISOString().split("T")[0];
-    }
-    if (typeof value === "string") return value;
-    return null;
-  }
-
-  deserialize(value: unknown): globalThis.Date | null {
-    return this.cast(value);
+  override typeCastForSchema(value: unknown): string {
+    if (value === Infinity) return "::Float::INFINITY";
+    if (value === -Infinity) return "-::Float::INFINITY";
+    return super.typeCastForSchema(value);
   }
 }

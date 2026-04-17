@@ -10,6 +10,7 @@ import {
   quoteColumnName as pgQuoteColumnName,
   quoteString as pgQuoteString,
 } from "./postgresql/quoting.js";
+import { TypeMapInitializer, type PgTypeRow } from "./postgresql/oid/type-map-initializer.js";
 import {
   initializeInstanceTypeMap,
   initializeTypeMap as staticInitializeTypeMap,
@@ -72,13 +73,20 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
 
   /**
    * Mirrors: PostgreSQLAdapter#get_oid_type(oid, fmod, column_name, sql_type).
-   * Looks up the Type::Value registered for a column's OID. User-defined
-   * types would be loaded via OID::TypeMapInitializer.run on miss (Rails'
-   * `load_additional_types`); for now we delegate to the registered
-   * fallback, which surfaces the missing type rather than silently
-   * treating it as a string.
+   * On miss, queries pg_type via `loadAdditionalTypes([oid])` and retries
+   * before falling back to a ValueType. Rails' get_oid_type is sync
+   * because Ruby's PG gem blocks; in Node we return a Promise so the
+   * underlying pg_type query can be awaited.
    */
-  getOidType(oid: number, fmod: number, columnName: string, sqlType: string = ""): Type {
+  async getOidType(
+    oid: number,
+    fmod: number,
+    columnName: string,
+    sqlType: string = "",
+  ): Promise<Type> {
+    if (!this.typeMap.has(oid)) {
+      await this.loadAdditionalTypes([oid]);
+    }
     return this.typeMap.fetch(oid, fmod, sqlType, () => {
       console.warn(
         `unknown OID ${oid}: failed to recognize type of '${columnName}'. It will be treated as String.`,
@@ -87,6 +95,59 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
       this.typeMap.registerType(oid, fallback);
       return fallback;
     });
+  }
+
+  /**
+   * Mirrors: PostgreSQLAdapter#load_additional_types(oids = nil). Queries
+   * pg_type for user-defined types (enums, domains, arrays, ranges,
+   * composites) and registers them via OID::TypeMapInitializer.run.
+   *
+   * Rails' signature uses oids=nil to mean "reload everything we know";
+   * pass an array of OIDs to target a specific miss.
+   */
+  async loadAdditionalTypes(oids?: number[]): Promise<void> {
+    const initializer = new TypeMapInitializer(
+      this.typeMap as unknown as ConstructorParameters<typeof TypeMapInitializer>[0],
+    );
+    for (const query of this.loadTypesQueries(initializer, oids)) {
+      const rows = (await this.execute(query)) as unknown as PgTypeRow[];
+      initializer.run(rows);
+    }
+  }
+
+  /**
+   * Mirrors: PostgreSQLAdapter#load_types_queries(initializer, oids).
+   * Builds the SQL queries that feed TypeMapInitializer.run. For a
+   * specific OID list emits one query; for a full reload emits three
+   * (by typname, typtype, array-of-known).
+   */
+  private loadTypesQueries(initializer: TypeMapInitializer, oids?: number[]): string[] {
+    const baseQuery = [
+      "SELECT t.oid, t.typname, t.typelem, t.typdelim, t.typinput,",
+      "       r.rngsubtype, t.typtype, t.typbasetype",
+      "FROM pg_type as t",
+      "LEFT JOIN pg_range as r ON oid = rngtypid",
+    ].join("\n");
+
+    if (oids && oids.length > 0) {
+      return [`${baseQuery}\nWHERE t.oid IN (${oids.join(", ")})`];
+    }
+    return [
+      `${baseQuery}\n${initializer.queryConditionsForKnownTypeNames()}`,
+      `${baseQuery}\n${initializer.queryConditionsForKnownTypeTypes()}`,
+      `${baseQuery}\n${initializer.queryConditionsForArrayTypes()}`,
+    ];
+  }
+
+  /**
+   * Mirrors: PostgreSQLAdapter#reload_type_map. Clears the memoized
+   * type_map and re-runs the instance initializer, matching Rails'
+   * reload_type_map behavior when new user-defined types have been
+   * created (CREATE TYPE, CREATE DOMAIN, etc).
+   */
+  async reloadTypeMap(): Promise<void> {
+    this._typeMap = null;
+    await this.loadAdditionalTypes();
   }
 
   /**

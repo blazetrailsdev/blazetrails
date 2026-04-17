@@ -118,7 +118,11 @@ function tryAutoRegisterNode(): boolean {
       exists: (p: string) =>
         fsPromises.access(p).then(
           () => true,
-          () => false,
+          (error: unknown) => {
+            const code = (error as { code?: string }).code;
+            if (code === "ENOENT" || code === "ENOTDIR") return false;
+            throw error;
+          },
         ),
     }) as FsAdapter;
     const nodePath = req("node:path") as Required<Omit<PathAdapter, "pathToFileURL">>;

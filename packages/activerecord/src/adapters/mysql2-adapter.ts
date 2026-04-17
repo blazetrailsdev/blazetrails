@@ -17,6 +17,10 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     return "Mysql2";
   }
 
+  override get active(): boolean {
+    return this._driverPool != null;
+  }
+
   private _driverPool: mysql.Pool;
   private _conn: mysql.PoolConnection | null = null;
   private _inTransaction = false;

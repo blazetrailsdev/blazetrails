@@ -33,6 +33,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return "PostgreSQL";
   }
 
+  override get active(): boolean {
+    return this._driverPool != null;
+  }
+
   private static _spCounter = 0;
   private _driverPool: pg.Pool;
   private _client: pg.PoolClient | null = null;

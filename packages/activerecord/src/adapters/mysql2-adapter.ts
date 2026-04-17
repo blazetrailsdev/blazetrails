@@ -21,6 +21,14 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     return this._driverPool != null;
   }
 
+  // Mirrors Rails' Mysql2Adapter#connected? — null raw connection means
+  // disconnected. (Rails also checks `@raw_connection.closed?`; our
+  // driver pool exposes no such predicate, so we rely on close() nulling
+  // the pool.)
+  override isConnected(): boolean {
+    return this._driverPool != null;
+  }
+
   private _driverPool: mysql.Pool | null;
   private _conn: mysql.PoolConnection | null = null;
   private _inTransaction = false;

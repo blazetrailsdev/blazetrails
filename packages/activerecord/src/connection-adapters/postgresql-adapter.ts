@@ -38,6 +38,12 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return this._driverPool != null;
   }
 
+  // Mirrors Rails' PostgreSQLAdapter#connected? — checks that the raw
+  // connection (pool in our case) exists and hasn't been finished.
+  override isConnected(): boolean {
+    return this._driverPool != null;
+  }
+
   private static _spCounter = 0;
   private _driverPool: pg.Pool | null;
   private _client: pg.PoolClient | null = null;

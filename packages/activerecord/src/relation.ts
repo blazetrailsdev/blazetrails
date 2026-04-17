@@ -99,6 +99,10 @@ export class Relation<T extends Base> {
   private _loaded = false;
   private _records: T[] = [];
   private _loadAsyncPromise?: Promise<T[]>;
+  // Monotonic token bumped on reset()/reload() so an in-flight toArray()
+  // that started before the reset can detect it lost the race and skip
+  // committing stale records/loaded state.
+  private _loadToken = 0;
 
   private _table: Table | null = null;
 
@@ -1127,9 +1131,11 @@ export class Relation<T extends Base> {
   reset(): this {
     this._loaded = false;
     this._records = [];
-    // Drop any in-flight loadAsync() — otherwise a stale load could
-    // resolve after a reset and re-populate stale records via
-    // toArray()'s cache path.
+    // Bump the load token and drop any in-flight loadAsync() promise —
+    // an already-running toArray() checks the token after its await and
+    // will skip committing if it lost the race, so a stale background
+    // load can't re-populate records after a reset.
+    this._loadToken += 1;
     this._loadAsyncPromise = undefined;
     return this;
   }
@@ -1362,21 +1368,30 @@ export class Relation<T extends Base> {
       return this._loadAsyncPromise;
     }
 
+    // Capture the load token before any await so we can detect if a
+    // reset() landed while the query was in flight and bail without
+    // clobbering the fresh state.
+    const token = this._loadToken;
+
     // Rails: `includes(:assoc).references(:assocs_table)` promotes the
     // matching includes to eager_load so the JOIN is present — otherwise
     // a raw where condition referring to that table would fail.
     // See ActiveRecord::Relation#references_eager_loaded_tables?
     const promotedIncludes = this._includesToPromoteFromReferences();
 
-    // Eager load via single JOIN query when eager_load associations are specified
+    let loadedRecords: T[];
     if (this._eagerLoadAssociations.length > 0 || promotedIncludes.length > 0) {
       const allEager = [...new Set([...this._eagerLoadAssociations, ...promotedIncludes])];
       await this._executeEagerLoad(allEager);
+      if (token !== this._loadToken) return [];
+      loadedRecords = this._records;
     } else {
       const sql = this._toSql();
       const result = await this._modelClass.adapter.selectAll(sql, "Load");
+      if (token !== this._loadToken) return [];
       const rows = result.toArray();
-      this._records = this._instrumentInstantiation(rows);
+      loadedRecords = this._instrumentInstantiation(rows);
+      this._records = loadedRecords;
     }
     this._loaded = true;
 
@@ -1400,6 +1415,7 @@ export class Relation<T extends Base> {
     ];
     if (preloadAssocs.length > 0 && this._records.length > 0) {
       await this._preloadAssociationsForRecords(this._records, preloadAssocs);
+      if (token !== this._loadToken) return [];
     }
 
     return [...this._records];

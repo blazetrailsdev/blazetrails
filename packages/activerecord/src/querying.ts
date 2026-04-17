@@ -19,25 +19,12 @@ export async function findBySql<T extends typeof Base>(
   binds: unknown[] = [],
   block?: (record: InstanceType<T>) => void,
 ): Promise<InstanceType<T>[]> {
-  // Rails passes binds to the connection for prepared statements.
-  // Our adapter uses string substitution, so merge binds into the SQL.
-  let sanitized: string;
-  if (Array.isArray(sql)) {
-    sanitized = sanitizeSql(sql);
-  } else if (binds.length > 0) {
-    sanitized = sanitizeSql([sql, ...binds] as [string, ...unknown[]]);
-  } else {
-    sanitized = sql;
-  }
-  const rows = await this.adapter.execute(sanitized);
-  if (rows.length === 0) return [];
-
-  const payload = { record_count: rows.length, class_name: this.name };
-  const records = Notifications.instrument("instantiation.active_record", payload, () =>
-    rows.map((row) => this._instantiate(row)),
+  const rows = await _queryBySql.call(this, sql, binds);
+  return _loadFromSql.call<T, [Record<string, unknown>[], typeof block], InstanceType<T>[]>(
+    this,
+    rows,
+    block,
   );
-  if (block) records.forEach(block);
-  return records;
 }
 
 /**

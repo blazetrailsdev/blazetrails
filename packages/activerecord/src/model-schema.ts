@@ -723,6 +723,16 @@ function applyColumnsHash(
   if (originatingHost && originatingHost !== host) invalidate(originatingHost);
 
   applyPendingEncryptions(host);
+
+  // STI: if `encrypts()` was declared on the subclass, its pending
+  // encryptions live on that subclass. Unify the subclass's
+  // _attributeDefinitions with the base's (so the subclass doesn't
+  // shadow the newly reflected defs — STI note 2 in applyColumnsHash
+  // doc), then apply its pending encryptions over the shared map.
+  if (originatingHost && originatingHost !== host) {
+    originatingHost._attributeDefinitions = host._attributeDefinitions;
+    applyPendingEncryptions(originatingHost);
+  }
 }
 
 export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
@@ -735,6 +745,7 @@ export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
   const schemaHost = isStiSubclass(klass) ? (getStiBase(klass) as unknown as SchemaHost) : this;
 
   let startingAdapter: SchemaHost["adapter"] | undefined;
+  let adapterOwner: SchemaHost | undefined;
   const candidates: SchemaHost[] = schemaHost === this ? [schemaHost] : [schemaHost, this];
   for (const cand of candidates) {
     try {
@@ -742,9 +753,12 @@ export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
     } catch {
       startingAdapter = undefined;
     }
-    if (startingAdapter) break;
+    if (startingAdapter) {
+      adapterOwner = cand;
+      break;
+    }
   }
-  if (!startingAdapter) return;
+  if (!startingAdapter || !adapterOwner) return;
   const cache = startingAdapter.schemaCache;
   if (!cache) return;
   const table = (schemaHost as unknown as typeof Base).tableName;
@@ -763,19 +777,17 @@ export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
   }
   if (!hash) return;
 
-  // Guard against adapter swaps during the async work above. Check both
-  // candidate hosts — whichever one supplied the adapter must still have it.
+  // Guard against adapter swaps during the async work above. Verify the
+  // *same* host that supplied startingAdapter still has it — checking
+  // other candidates would let a stale reflection slip through if the
+  // adapter moved.
   let currentAdapter: SchemaHost["adapter"] | undefined;
-  for (const cand of candidates) {
-    try {
-      currentAdapter = cand.adapter;
-    } catch {
-      currentAdapter = undefined;
-    }
-    if (currentAdapter === startingAdapter) break;
+  try {
+    currentAdapter = adapterOwner.adapter;
+  } catch {
     currentAdapter = undefined;
   }
-  if (!currentAdapter) return;
+  if (currentAdapter !== startingAdapter) return;
 
   applyColumnsHash(schemaHost, startingAdapter, hash, this);
 }

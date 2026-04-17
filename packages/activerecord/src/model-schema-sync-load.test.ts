@@ -78,12 +78,12 @@ describe("sync loadSchema / columnsHash", () => {
     (Shape as unknown as { adapter: unknown }).adapter = makeAdapter(cols);
     (Circle as unknown as { adapter: unknown }).adapter = makeAdapter(cols);
 
-    // Trigger load on subclass — must reflect on the STI base, not fork.
+    // Trigger load on subclass — must reflect on the STI base and
+    // subclass shares the base's map (same reference).
     Circle.columnsHash();
 
-    expect(Object.prototype.hasOwnProperty.call(Circle, "_attributeDefinitions")).toBe(false);
     expect(Shape._attributeDefinitions.get("guid")?.source).toBe("schema");
-    expect(Circle._attributeDefinitions.get("guid")?.source).toBe("schema");
+    expect(Circle._attributeDefinitions).toBe(Shape._attributeDefinitions);
   });
 
   it("STI reflection falls back to subclass adapter when base has none", () => {
@@ -102,9 +102,10 @@ describe("sync loadSchema / columnsHash", () => {
 
     Circle.columnsHash();
 
-    // Reflection should have landed on the STI base via subclass adapter.
+    // Reflection should have landed on the STI base via subclass adapter;
+    // subclass shares the base's map reference.
     expect(Shape._attributeDefinitions.get("guid")?.source).toBe("schema");
-    expect(Object.prototype.hasOwnProperty.call(Circle, "_attributeDefinitions")).toBe(false);
+    expect(Circle._attributeDefinitions).toBe(Shape._attributeDefinitions);
   });
 
   it("columnsHash on STI subclass returns cached Column objects from base adapter", () => {

@@ -73,6 +73,16 @@ describe("PostgreSQLAdapter#execQuery", () => {
     expect(result).toBeInstanceOf(Result);
     expect(result.length).toBe(0);
   });
+
+  it("selectAll delegates through execQuery so the PG override wins", async () => {
+    adapter = makeAdapter(async () => ({
+      rows: [{ guid: "A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11" }],
+      fields: [{ name: "guid", dataTypeID: UUID_OID }],
+    }));
+    const result = await adapter.selectAll("SELECT guid FROM users");
+    expect(result).toBeInstanceOf(Result);
+    expect(result.columnTypes.guid).toBeInstanceOf(Uuid);
+  });
 });
 
 describe("PostgreSQLAdapter#lookupCastTypeFromColumn", () => {

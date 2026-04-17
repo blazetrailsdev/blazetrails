@@ -413,26 +413,6 @@ async function runMigrate(
   if (!options.skipDump) await dumpSchemaAfterMigrate(adapter, raw);
 }
 
-async function runRollback(
-  adapter: DatabaseAdapter,
-  raw: RawConfig,
-  steps: number,
-  options: RunOptions = {},
-): Promise<void> {
-  const migrations = await discoverMigrations(migrationsDir());
-  if (migrations.length === 0) {
-    console.log("No migrations found.");
-    return;
-  }
-
-  const migrator = createMigrator(adapter, migrations, raw);
-  await migrator.rollback(steps);
-
-  for (const line of migrator.output) console.log(line);
-
-  if (!options.skipDump) await dumpSchemaAfterMigrate(adapter, raw);
-}
-
 /**
  * Run a seed-running callback with `Base.adapter` temporarily set so
  * seed files that touch ActiveRecord models work. Restores the previous
@@ -512,7 +492,14 @@ async function runSeed(prefix = ""): Promise<void> {
   }
 
   console.log(`${prefix}Running seeds...`);
-  await import(pathToFileURL(seedFile).href);
+  // Cache-bust the import so the seed file is re-evaluated for each
+  // database in a multi-DB fan-out. Node caches dynamic imports by URL;
+  // without the query string, the second iteration sees a cached module
+  // and skips execution entirely. Mirrors Rails' `load` semantics
+  // (which always re-evaluates the file).
+  const url = pathToFileURL(seedFile);
+  url.searchParams.set("_ts", String(Date.now()));
+  await import(url.href);
   console.log(`${prefix}Seeds completed.`);
 }
 
@@ -983,9 +970,11 @@ export function dbCommand(): Command {
       const primary: DatabaseOpts = { database: "primary" };
       await runDrop(primary);
       await runCreate(primary);
-      await forEachDatabase(primary, async ({ adapter, raw }) => {
-        await runMigrate(adapter, raw);
-        await withSeedAdapter(adapter, runSeed);
+      await forEachDatabase(primary, async (ctx) => {
+        await withMigratorForDb(ctx, async (migrator) => {
+          await migrator.migrate(null);
+        });
+        await withSeedAdapter(ctx.adapter, () => runSeed(ctx.prefix));
       });
     });
 
@@ -995,9 +984,11 @@ export function dbCommand(): Command {
     .action(async () => {
       const primary: DatabaseOpts = { database: "primary" };
       await runCreate(primary);
-      await forEachDatabase(primary, async ({ adapter, raw }) => {
-        await runMigrate(adapter, raw);
-        await withSeedAdapter(adapter, runSeed);
+      await forEachDatabase(primary, async (ctx) => {
+        await withMigratorForDb(ctx, async (migrator) => {
+          await migrator.migrate(null);
+        });
+        await withSeedAdapter(ctx.adapter, () => runSeed(ctx.prefix));
       });
     });
 

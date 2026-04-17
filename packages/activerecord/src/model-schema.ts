@@ -6,6 +6,7 @@ import {
   AttributeSetBuilder,
   YAMLEncoder,
   typeRegistry,
+  type Type,
 } from "@blazetrails/activemodel";
 import { isStiSubclass, getStiBase } from "./inheritance.js";
 import { quote, quoteIdentifier, quoteTableName } from "./connection-adapters/abstract/quoting.js";
@@ -130,6 +131,36 @@ export function columnsHash(
   if (this.abstractClass) {
     throw new Error(`Cannot call columnsHash on abstract class ${this.name}`);
   }
+  loadSchema.call(this as unknown as SchemaHost);
+
+  // Prefer the adapter's schema cache when populated — it carries richer
+  // Column objects (sqlType, collation, comment, ...) than what we can
+  // synthesize from attribute defs.
+  let adapter: typeof Base.prototype extends never ? never : typeof this.adapter | null = null;
+  try {
+    adapter = this.adapter;
+  } catch {
+    adapter = null;
+  }
+  const cache = (adapter as unknown as { schemaCache?: unknown } | null)?.schemaCache as
+    | {
+        isCached?: (t: string) => boolean;
+        getCachedColumnsHash?: (t: string) => Record<string, unknown> | undefined;
+      }
+    | undefined;
+  if (cache && typeof cache.isCached === "function" && cache.isCached(this.tableName)) {
+    const cached = cache.getCachedColumnsHash?.(this.tableName);
+    if (cached) {
+      const ignored = new Set(this.ignoredColumns ?? []);
+      const filtered: Record<string, { name: string; type: string; default: unknown }> = {};
+      for (const [k, v] of Object.entries(cached)) {
+        if (ignored.has(k)) continue;
+        filtered[k] = v as { name: string; type: string; default: unknown };
+      }
+      return filtered;
+    }
+  }
+
   const result: Record<string, { name: string; type: string; default: unknown }> = {};
   for (const [name, def] of this._attributeDefinitions) {
     result[name] = { name, type: def.type.name, default: def.defaultValue ?? null };
@@ -428,23 +459,50 @@ export function symbolColumnToString(this: SchemaHost, name: string): string | u
 
 /**
  * Rails: clears column cache, schema cache, reloads schema.
+ * Drops schema-sourced attribute defs so the next load re-reflects
+ * them; user-declared defs (source === "user") are preserved, matching
+ * Rails' reload_schema_from_cache behavior where user-provided
+ * attributes survive reload.
  */
 export function resetColumnInformation(this: SchemaHost): void {
   this._columnsHash = undefined;
   this._columns = undefined;
   this._attributesBuilder = undefined;
   this._schemaLoaded = false;
+  if (!Object.prototype.hasOwnProperty.call(this, "_attributeDefinitions")) return;
+  for (const [name, def] of Array.from(this._attributeDefinitions)) {
+    if ((def.userProvided ?? true) === false || def.source === "schema") {
+      this._attributeDefinitions.delete(name);
+      const proto = (this as unknown as { prototype: object }).prototype;
+      if (Object.prototype.hasOwnProperty.call(proto, name)) {
+        delete (proto as Record<string, unknown>)[name];
+      }
+    }
+  }
 }
 
 /**
- * Rails: loads schema from schema cache if not already loaded.
- * Our schema is defined via attribute() calls, so loading is
- * checking that _columnsHash is populated from attribute definitions.
+ * Mirrors: ActiveRecord::ModelSchema#load_schema
+ *
+ * Sync: consults the adapter's schema cache if it's already populated
+ * (no I/O), and reflects columns into `_attributeDefinitions`. For
+ * models without a backing table (test fixtures with only user
+ * `attribute()` declarations), falls back to synthesizing `_columnsHash`
+ * from existing defs so downstream readers continue to work.
+ *
+ * For a full async reflection (fetching from the adapter if the cache
+ * isn't populated), call `Base.loadSchema()` (base.ts).
  */
 export function loadSchema(this: SchemaHost): void {
   if (this._schemaLoaded) return;
   this._schemaLoaded = true;
 
+  const reflected = loadSchemaFromCacheSync(this);
+  if (reflected) return;
+
+  // Fallback: no schema cache — synthesize a columnsHash view over the
+  // existing attribute definitions so columns()/columnForAttribute()
+  // remain functional for fixture-only models.
   if (!this._columnsHash && this._attributeDefinitions.size > 0) {
     const hash: Record<string, any> = {};
     const ignored = new Set(this._ignoredColumns ?? []);
@@ -479,74 +537,47 @@ function getColumnsHash(host: SchemaHost): Record<string, any> {
  * (`userProvided: true`) are NEVER overwritten — matching Rails where
  * `attribute :foo, :bar` always wins over schema-reflected types.
  */
-export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
-  if (this._abstractClass) return;
-  const startingAdapter = this.adapter;
-  if (!startingAdapter) return;
-  const cache = startingAdapter.schemaCache;
-  if (!cache) return;
-  const table = (this as unknown as typeof Base).tableName;
-  const pool = startingAdapter.pool ?? startingAdapter;
-
-  if (typeof cache.dataSourceExists === "function") {
-    const exists = await cache.dataSourceExists(pool, table);
-    // Only bail on explicit false. `undefined` means the connection
-    // doesn't implement the probe — fall through and let columnsHash
-    // succeed or throw a real error.
-    if (exists === false) return;
+/**
+ * Sync worker: apply a columns hash (already fetched from the schema
+ * cache) to `_attributeDefinitions`. Shared by sync `loadSchema` and
+ * async `loadSchemaFromAdapter`.
+ */
+function applyColumnsHash(
+  host: SchemaHost,
+  adapter: { lookupCastTypeFromColumn?: (c: unknown) => unknown },
+  hash: Record<string, unknown>,
+): void {
+  if (!Object.prototype.hasOwnProperty.call(host, "_attributeDefinitions")) {
+    host._attributeDefinitions = new Map(host._attributeDefinitions);
   }
 
-  let hash: Record<string, unknown> | undefined;
-  if (typeof cache.columnsHash === "function") {
-    hash = await cache.columnsHash(pool, table);
-  } else if (typeof cache.getCachedColumnsHash === "function") {
-    hash = cache.getCachedColumnsHash(table);
-  }
-  if (!hash) return;
-
-  // Guard against adapter swaps during the async work above: if a different
-  // adapter was installed, discard this load rather than writing stale types.
-  if (this.adapter !== startingAdapter) return;
-
-  // Copy-on-write: match the ownership check used elsewhere (attributes.ts,
-  // encryption.ts) so we mutate this class's own map, not the inherited one.
-  if (!Object.prototype.hasOwnProperty.call(this, "_attributeDefinitions")) {
-    this._attributeDefinitions = new Map(this._attributeDefinitions);
-  }
-
-  const ignored = new Set(this._ignoredColumns ?? []);
+  const ignored = new Set(host._ignoredColumns ?? []);
   for (const [name, column] of Object.entries(hash)) {
-    // Honor Base.ignoredColumns — Rails' load_schema! excludes these too.
     if (ignored.has(name)) {
-      const proto = (this as unknown as { prototype: object }).prototype;
+      const proto = (host as unknown as { prototype: object }).prototype;
       if (Object.prototype.hasOwnProperty.call(proto, name)) {
         delete (proto as Record<string, unknown>)[name];
       }
-      this._attributeDefinitions.delete(name);
+      host._attributeDefinitions.delete(name);
       continue;
     }
-    const existing = this._attributeDefinitions.get(name);
-    // Treat absent userProvided as true — externally-constructed defs
-    // (pre-PR shape) are user-authored by definition; schema reflection
-    // must never overwrite them.
+    const existing = host._attributeDefinitions.get(name);
     if (existing && (existing.userProvided ?? true)) continue;
 
     const castType =
-      typeof startingAdapter.lookupCastTypeFromColumn === "function"
-        ? startingAdapter.lookupCastTypeFromColumn(column)
+      typeof adapter.lookupCastTypeFromColumn === "function"
+        ? adapter.lookupCastTypeFromColumn(column)
         : null;
-    let type = castType ?? typeRegistry.lookup("value");
+    let type = (castType as Type | null) ?? typeRegistry.lookup("value");
 
-    // Preserve an existing EncryptedAttributeType wrapper: re-wrap the
-    // fresh adapter-resolved cast type rather than discarding encryption.
     if (existing?.type instanceof EncryptedAttributeType) {
-      const scheme = (existing.type as EncryptedAttributeType).scheme;
+      const scheme = existing.type.scheme;
       type = new EncryptedAttributeType({ scheme, castType: type });
     }
 
     const defaultValue = (column as { default?: unknown }).default ?? null;
 
-    this._attributeDefinitions.set(name, {
+    host._attributeDefinitions.set(name, {
       name,
       type,
       defaultValue,
@@ -554,21 +585,14 @@ export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
       source: "schema",
     });
 
-    // Define the prototype accessor so `record.foo` routes through
-    // readAttribute/writeAttribute. Mirrors what ActiveModel.attribute()
-    // does for user-declared attrs (attributes.ts ~L56).
-    //
-    // Skip "id": Base.prototype.id is an accessor with composite-PK
-    // logic (base.ts). Defining an own "id" on a subclass prototype
-    // would shadow it — Base.attribute has the same skip (base.ts:392).
     if (name === "id") {
-      const proto = (this as unknown as { prototype: object }).prototype;
+      const proto = (host as unknown as { prototype: object }).prototype;
       if (Object.prototype.hasOwnProperty.call(proto, "id")) {
         delete (proto as Record<string, unknown>).id;
       }
       continue;
     }
-    const proto = (this as unknown as { prototype: object }).prototype;
+    const proto = (host as unknown as { prototype: object }).prototype;
     if (!Object.prototype.hasOwnProperty.call(proto, name)) {
       Object.defineProperty(proto, name, {
         get(this: { readAttribute(n: string): unknown }) {
@@ -582,10 +606,7 @@ export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
     }
   }
 
-  // Invalidate every cache that derives from _attributeDefinitions —
-  // columns()/columnsHash()/columnForAttribute() would otherwise serve
-  // pre-reflection data forever.
-  const caches = this as unknown as {
+  const caches = host as unknown as {
     _attributesBuilder?: unknown;
     _cachedDefaultAttributes?: unknown;
     _columnsHash?: unknown;
@@ -596,10 +617,64 @@ export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
   caches._columnsHash = undefined;
   caches._columns = undefined;
 
-  // Re-run pending encryption decorations so `encrypts :foo` declared before
-  // schema load still wraps the adapter-resolved cast type. Mirrors the
-  // applyPendingEncryptions call in Base.attribute (base.ts).
-  applyPendingEncryptions(this);
+  applyPendingEncryptions(host);
+}
+
+export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
+  if (this._abstractClass) return;
+  const startingAdapter = this.adapter;
+  if (!startingAdapter) return;
+  const cache = startingAdapter.schemaCache;
+  if (!cache) return;
+  const table = (this as unknown as typeof Base).tableName;
+  const pool = startingAdapter.pool ?? startingAdapter;
+
+  if (typeof cache.dataSourceExists === "function") {
+    const exists = await cache.dataSourceExists(pool, table);
+    if (exists === false) return;
+  }
+
+  let hash: Record<string, unknown> | undefined;
+  if (typeof cache.columnsHash === "function") {
+    hash = await cache.columnsHash(pool, table);
+  } else if (typeof cache.getCachedColumnsHash === "function") {
+    hash = cache.getCachedColumnsHash(table);
+  }
+  if (!hash) return;
+
+  // Guard against adapter swaps during the async work above.
+  if (this.adapter !== startingAdapter) return;
+
+  applyColumnsHash(this, startingAdapter, hash);
+}
+
+/**
+ * Sync counterpart: consult the already-populated schema cache only.
+ * Returns true if reflection happened; false when the cache is empty
+ * (caller may fall back to attribute-defs-derived metadata).
+ */
+function loadSchemaFromCacheSync(host: SchemaHost): boolean {
+  if (host._abstractClass) return false;
+  // `host.adapter` throws when no pool is configured (fixture-only models).
+  // Treat that as "no adapter, no reflection" rather than propagating.
+  let adapter: SchemaHost["adapter"];
+  try {
+    adapter = host.adapter;
+  } catch {
+    return false;
+  }
+  if (!adapter) return false;
+  const cache = adapter.schemaCache;
+  if (!cache || typeof cache.isCached !== "function") return false;
+  const table = (host as unknown as typeof Base).tableName;
+  if (!cache.isCached(table)) return false;
+  const hash =
+    typeof cache.getCachedColumnsHash === "function"
+      ? cache.getCachedColumnsHash(table)
+      : undefined;
+  if (!hash) return false;
+  applyColumnsHash(host, adapter, hash);
+  return true;
 }
 
 /**

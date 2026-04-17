@@ -1766,19 +1766,6 @@ export class MoneyDecoder {
 }
 
 /**
- * Normalize a `pg_catalog.format_type(...)` string to the typname the
- * static type_map is keyed by. PG returns human-friendly forms like
- * "integer" / "character varying(255)" / "bigint", but we register
- * "int4" / "varchar" / "int8". Strip size modifiers and alias common
- * formatted names so the fallback path in lookupCastTypeFromColumn
- * resolves well-known *scalar* types.
- *
- * Array types (e.g. "integer[]") are deliberately left as-is — they
- * don't have a static registration, so the lookup misses and returns
- * ValueType. Mapping them to the scalar typname (int4) would
- * incorrectly deserialize array values with a scalar type.
- */
-/**
  * Parse a raw `pg_attrdef` default expression into a literal value or a
  * SQL function expression. Mirrors Rails' PG `extract_value_from_default`
  * / `extract_default_function` split — so schema reflection can carry
@@ -1806,6 +1793,19 @@ function splitPgDefault(raw: string | null): { literal: unknown; fn: string | nu
   return { literal: null, fn: raw };
 }
 
+/**
+ * Normalize a `pg_catalog.format_type(...)` string to the typname the
+ * static type_map is keyed by. PG returns human-friendly forms like
+ * "integer" / "character varying(255)" / "bigint", but we register
+ * "int4" / "varchar" / "int8". Strip size modifiers and alias common
+ * formatted names so the fallback path in lookupCastTypeFromColumn
+ * resolves well-known *scalar* types.
+ *
+ * Array types (e.g. "integer[]") are deliberately left as-is — they
+ * don't have a static registration, so the lookup misses and returns
+ * ValueType. Mapping them to the scalar typname (int4) would
+ * incorrectly deserialize array values with a scalar type.
+ */
 function normalizeFormatType(sqlType: string): string {
   if (/\[\]\s*$/.test(sqlType)) return sqlType;
   const base = sqlType

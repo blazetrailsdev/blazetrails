@@ -9,6 +9,8 @@
 import { DecimalType } from "@blazetrails/activemodel";
 
 export class Money extends DecimalType {
+  override readonly name: string = "money";
+
   override type(): string {
     return "money";
   }

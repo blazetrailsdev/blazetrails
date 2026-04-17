@@ -31,11 +31,9 @@ export class Xml extends StringType {
    * Rails: `Data.new(super) if value`. super is Type::String#serialize
    * which stringifies the value; nil passes through. We return a Data
    * instance so quoting.ts' `value instanceof Data` check routes PG's
-   * `xml '...'` prefix correctly. TS-side the return type differs from
-   * StringType's `string | null`, so the override signature is widened
-   * to Data-or-null.
+   * `xml '...'` prefix correctly. StringType.serialize is typed as
+   * `unknown` so wrapper returns like this don't need suppression.
    */
-  // @ts-expect-error narrowed return: Xml serialises into a Data wrapper.
   override serialize(value: unknown): Data | null {
     if (value == null) return null;
     if (value instanceof Data) return value;

@@ -8,6 +8,8 @@
 import { JsonType } from "@blazetrails/activemodel";
 
 export class Jsonb extends JsonType {
+  override readonly name: string = "jsonb";
+
   override type(): string {
     return "jsonb";
   }

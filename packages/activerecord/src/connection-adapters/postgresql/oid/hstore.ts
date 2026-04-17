@@ -42,18 +42,21 @@ export class Hstore extends Type<Record<string, string | null>> {
       // Rails: `return value unless value.is_a?(::String)`.
       return value as Record<string, string | null>;
     }
+    if (value.trim() === "") return {};
     return parseHstoreString(value);
   }
 
   override serialize(value: unknown): string | null {
     if (value == null) return null;
-    if (typeof value === "object" && !Array.isArray(value)) {
+    // Rails: `if value.is_a?(::Hash)` — only treat plain objects as a Hash.
+    // Date/Map/class instances fall through to super (identity) so they
+    // aren't accidentally stringified as an empty hstore.
+    if (isPlainObject(value)) {
       const hash = value as Record<string, unknown>;
       return Object.entries(hash)
         .map(([k, v]) => `${escapeHstore(k)}=>${escapeHstore(v as string | null)}`)
         .join(", ");
     }
-    // Rails falls through to super when not a Hash.
     return super.serialize(value) as string | null;
   }
 
@@ -67,6 +70,13 @@ export class Hstore extends Type<Record<string, string | null>> {
     if (oldHash == null || newValue == null) return true;
     return !hashesEqual(oldHash, newValue as Record<string, unknown>);
   }
+}
+
+function isPlainObject(value: unknown): boolean {
+  if (value == null || typeof value !== "object") return false;
+  if (Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
 }
 
 function hashesEqual(a: Record<string, unknown>, b: Record<string, unknown>): boolean {

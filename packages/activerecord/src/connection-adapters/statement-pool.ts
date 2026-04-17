@@ -43,11 +43,10 @@ export class StatementPool<T = unknown> {
   }
 
   delete(key: string): T | undefined {
-    const stmt = this._statements.get(key);
-    if (stmt !== undefined) {
-      this._statements.delete(key);
-      this.dealloc(stmt);
-    }
+    if (!this._statements.has(key)) return undefined;
+    const stmt = this._statements.get(key) as T;
+    this._statements.delete(key);
+    this.dealloc(stmt);
     return stmt;
   }
 

@@ -121,7 +121,7 @@ export class QueryLogs {
         !trimmed.includes("query-logs") &&
         !trimmed.includes("activerecord/dist")
       ) {
-        const match = trimmed.match(/at\s+(?:.*?\s+\()?(.*?):(\d+):(\d+)\)?$/);
+        const match = trimmed.match(/at\s+(?:.*?\s+\()?(.+):(\d+):\d+\)?$/);
         if (match) return `${match[1]}:${match[2]}`;
       }
     }

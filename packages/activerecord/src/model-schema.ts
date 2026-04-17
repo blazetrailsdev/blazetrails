@@ -480,6 +480,7 @@ export function resetColumnInformation(this: SchemaHost): void {
   this._columns = undefined;
   this._attributesBuilder = undefined;
   this._schemaLoaded = false;
+  (this as SchemaHost & { _cachedDefaultAttributes?: unknown })._cachedDefaultAttributes = null;
   if (!Object.prototype.hasOwnProperty.call(this, "_attributeDefinitions")) return;
   for (const [name, def] of Array.from(this._attributeDefinitions)) {
     if ((def.userProvided ?? true) === false || def.source === "schema") {
@@ -633,19 +634,27 @@ function applyColumnsHash(
 
 export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
   if (this._abstractClass) return;
-  // STI subclasses inherit the base's attribute defs — delegate to the
-  // STI base so `Circle.loadSchema()` still reflects (via Shape) rather
-  // than silently no-op'ing.
+  // STI subclasses inherit the base's attribute defs — reflect onto the
+  // STI base without forking. Use whichever class has the adapter
+  // configured (base in normal Rails setup, but tolerate subclass-only
+  // configuration).
   const klass = this as unknown as typeof Base;
-  if (isStiSubclass(klass)) {
-    await loadSchemaFromAdapter.call(getStiBase(klass) as unknown as SchemaHost);
-    return;
+  const schemaHost = isStiSubclass(klass) ? (getStiBase(klass) as unknown as SchemaHost) : this;
+
+  let startingAdapter: SchemaHost["adapter"] | undefined;
+  const candidates: SchemaHost[] = schemaHost === this ? [schemaHost] : [schemaHost, this];
+  for (const cand of candidates) {
+    try {
+      startingAdapter = cand.adapter;
+    } catch {
+      startingAdapter = undefined;
+    }
+    if (startingAdapter) break;
   }
-  const startingAdapter = this.adapter;
   if (!startingAdapter) return;
   const cache = startingAdapter.schemaCache;
   if (!cache) return;
-  const table = (this as unknown as typeof Base).tableName;
+  const table = (schemaHost as unknown as typeof Base).tableName;
   const pool = startingAdapter.pool ?? startingAdapter;
 
   if (typeof cache.dataSourceExists === "function") {
@@ -661,10 +670,21 @@ export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
   }
   if (!hash) return;
 
-  // Guard against adapter swaps during the async work above.
-  if (this.adapter !== startingAdapter) return;
+  // Guard against adapter swaps during the async work above. Check both
+  // candidate hosts — whichever one supplied the adapter must still have it.
+  let currentAdapter: SchemaHost["adapter"] | undefined;
+  for (const cand of candidates) {
+    try {
+      currentAdapter = cand.adapter;
+    } catch {
+      currentAdapter = undefined;
+    }
+    if (currentAdapter === startingAdapter) break;
+    currentAdapter = undefined;
+  }
+  if (!currentAdapter) return;
 
-  applyColumnsHash(this, startingAdapter, hash);
+  applyColumnsHash(schemaHost, startingAdapter, hash);
 }
 
 /**
@@ -675,18 +695,23 @@ export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
 function loadSchemaFromCacheSync(host: SchemaHost): boolean {
   if (host._abstractClass) return false;
   // STI subclasses share the base's table and attribute defs. Reflecting
-  // on a subclass would fork _attributeDefinitions; instead, redirect to
-  // the STI base so subclasses still trigger (and inherit) reflection.
+  // on a subclass would fork _attributeDefinitions; instead, apply
+  // reflection to the STI base so subclasses inherit it.
   const schemaHost = isStiSubclass(host as unknown as typeof Base)
     ? (getStiBase(host as unknown as typeof Base) as unknown as SchemaHost)
     : host;
-  // `host.adapter` throws when no pool is configured (fixture-only models).
-  // Treat that as "no adapter, no reflection" rather than propagating.
-  let adapter: SchemaHost["adapter"];
-  try {
-    adapter = schemaHost.adapter;
-  } catch {
-    return false;
+  // Adapter may be configured on the base OR on the subclass. Try base
+  // first (Rails-normal), fall back to the originating host. Access can
+  // throw when no pool is configured; treat as "no adapter".
+  let adapter: SchemaHost["adapter"] | undefined;
+  const candidates = schemaHost === host ? [schemaHost] : [schemaHost, host];
+  for (const cand of candidates) {
+    try {
+      adapter = cand.adapter;
+    } catch {
+      adapter = undefined;
+    }
+    if (adapter) break;
   }
   if (!adapter) return false;
   const cache = adapter.schemaCache;

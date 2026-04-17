@@ -86,6 +86,27 @@ describe("sync loadSchema / columnsHash", () => {
     expect(Circle._attributeDefinitions.get("guid")?.source).toBe("schema");
   });
 
+  it("STI reflection falls back to subclass adapter when base has none", () => {
+    class Shape extends Base {
+      static override tableName = "shapes";
+      static {
+        this.inheritanceColumn = "type";
+        this.attribute("type", "string");
+      }
+    }
+    class Circle extends Shape {}
+
+    const cols = { guid: { sqlType: "uuid", name: "guid", default: null } };
+    // Adapter ONLY on the subclass (Shape has none).
+    (Circle as unknown as { adapter: unknown }).adapter = makeAdapter(cols);
+
+    Circle.columnsHash();
+
+    // Reflection should have landed on the STI base via subclass adapter.
+    expect(Shape._attributeDefinitions.get("guid")?.source).toBe("schema");
+    expect(Object.prototype.hasOwnProperty.call(Circle, "_attributeDefinitions")).toBe(false);
+  });
+
   it("resetColumnInformation drops schema-sourced defs but preserves user defs", () => {
     class Post extends Base {
       static override tableName = "posts";

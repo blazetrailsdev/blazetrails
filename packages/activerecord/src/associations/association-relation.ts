@@ -66,9 +66,9 @@ export class AssociationRelation<T extends Base> extends Relation<T> {
 
   /**
    * Build and persist an associated record, raising on validation failure.
-   * CollectionProxy#create returns the unsaved record on failure rather
-   * than throwing, so we surface that as RecordInvalid here to match
-   * `create!`.
+   * Delegates to `CollectionProxy#createBang`, which throws `RecordInvalid`
+   * directly so FK + loaded-target wiring stay in sync with the non-bang
+   * path.
    *
    * Mirrors: ActiveRecord::AssociationRelation#_create! / #create!
    */
@@ -117,8 +117,15 @@ export class AssociationRelation<T extends Base> extends Relation<T> {
       }
     }
 
-    const ownerStrict = (owner as unknown as { _strictLoading?: boolean })._strictLoading;
-    if (ownerStrict) {
+    const ownerAny = owner as unknown as {
+      _strictLoading?: boolean;
+      isStrictLoadingNPlusOneOnly?: () => boolean;
+    };
+    const nPlusOneOnly =
+      typeof ownerAny.isStrictLoadingNPlusOneOnly === "function" &&
+      ownerAny.isStrictLoadingNPlusOneOnly() &&
+      reflection.type === "hasMany";
+    if (nPlusOneOnly || ownerAny._strictLoading) {
       for (const r of records) {
         (r as unknown as { strictLoadingBang?: () => void }).strictLoadingBang?.();
       }

@@ -1112,7 +1112,19 @@ export class CollectionProxy<T extends Base = Base> {
    * association so FK, inverse, and loaded target stay in sync.
    */
   private _wrapAsAssociationRelation(rel: any): any {
-    if (!_AssociationRelationCtor) return rel;
+    if (!_AssociationRelationCtor) {
+      // Defensive: only reachable if a consumer deep-imports this file
+      // without loading the @blazetrails/activerecord package entry,
+      // which re-exports association-relation.ts (where the ctor
+      // self-registers). A direct side-effect import here would
+      // reintroduce the Base↔Relation↔AssociationRelation evaluation
+      // cycle we used late-binding to break in the first place.
+      throw new Error(
+        "AssociationRelation constructor has not been registered. Import " +
+          "from '@blazetrails/activerecord' (the package entry) rather than " +
+          "deep-importing './associations/collection-proxy.js'.",
+      );
+    }
     const ar = new _AssociationRelationCtor(rel._modelClass, this);
     ar._copyStateFrom(rel);
     return wrapWithScopeProxy(ar);

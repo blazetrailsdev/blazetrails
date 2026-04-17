@@ -501,6 +501,21 @@ export function resetColumnInformation(this: SchemaHost): void {
     subCaches._attributesBuilder = undefined;
     subCaches._schemaLoaded = false;
     subCaches._cachedDefaultAttributes = null;
+    // Scrub schema-sourced entries from any subclass-forked
+    // _attributeDefinitions too (from a prior attribute() /
+    // decorateAttributes / encrypts call). Without this, schema defs
+    // leak past the reset on subclasses that forked their own map.
+    if (Object.prototype.hasOwnProperty.call(this, "_attributeDefinitions")) {
+      for (const [name, def] of Array.from(this._attributeDefinitions)) {
+        if ((def.userProvided ?? true) === false || def.source === "schema") {
+          this._attributeDefinitions.delete(name);
+          const proto = (this as unknown as { prototype: object }).prototype;
+          if (Object.prototype.hasOwnProperty.call(proto, name)) {
+            delete (proto as Record<string, unknown>)[name];
+          }
+        }
+      }
+    }
     resetColumnInformation.call(
       getStiBase(this as unknown as typeof Base) as unknown as SchemaHost,
     );
@@ -596,15 +611,21 @@ function getColumnsHash(host: SchemaHost): Record<string, any> {
  * cache) to `_attributeDefinitions`. Shared by sync `loadSchema` and
  * async `loadSchemaFromAdapter`.
  *
- * STI note: for STI subclasses, `host` is the STI base, so the base's
+ * STI note 1: for STI subclasses, `host` is the STI base, so the base's
  * `_ignoredColumns` governs which columns get accessors on the shared
  * prototype. Per-subclass `ignoredColumns` is still honored at read
  * time in `columnsHash()` (filters the returned hash), but it cannot
  * retroactively remove a prototype accessor already defined on the
  * base — a consequence of TypeScript not having Ruby's method_missing.
- * Rails itself defines `ignored_columns` as a class_attribute that
- * inherits; real divergence between STI base and subclass ignoredColumns
- * is rare, but document the limit so callers aren't surprised.
+ *
+ * STI note 2: reflection is applied to the STI base only. If a subclass
+ * previously forked `_attributeDefinitions` (via its own `attribute()`,
+ * `decorateAttributes`, or `encrypts` call), its forked map shadows the
+ * base's, so newly-reflected schema types won't be visible on the
+ * subclass. The follow-up fix is to route STI-subclass `attribute()`
+ * writes through the base (Rails-faithful: STI subclasses share
+ * attribute_types), which belongs in a separate PR that touches
+ * Base.attribute and attribute-registration.
  */
 function applyColumnsHash(
   host: SchemaHost,

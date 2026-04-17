@@ -156,6 +156,35 @@ describe("sync loadSchema / columnsHash", () => {
     expect((Circle as unknown as { _schemaLoaded: boolean })._schemaLoaded).toBe(true);
   });
 
+  it("resetColumnInformation scrubs schema-sourced defs from a subclass-forked map", () => {
+    class Shape extends Base {
+      static override tableName = "shapes";
+      static {
+        this.inheritanceColumn = "type";
+      }
+    }
+    class Circle extends Shape {}
+
+    // Fork the subclass map and put a schema-sourced def in it directly.
+    (Circle as unknown as { _attributeDefinitions: Map<string, unknown> })._attributeDefinitions =
+      new Map([
+        [
+          "guid",
+          {
+            name: "guid",
+            type: { name: "uuid" },
+            defaultValue: null,
+            userProvided: false,
+            source: "schema",
+          },
+        ],
+      ]);
+
+    (resetColumnInformation as unknown as (this: typeof Base) => void).call(Circle);
+
+    expect(Circle._attributeDefinitions.has("guid")).toBe(false);
+  });
+
   it("resetColumnInformation on STI subclass resets the STI base", () => {
     class Shape extends Base {
       static override tableName = "shapes";

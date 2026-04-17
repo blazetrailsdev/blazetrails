@@ -133,14 +133,13 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
       }
       return new ValueType();
     }
-    return this.typeMap.fetch(oid, column.fmod ?? -1, column.sqlType ?? "", () => {
-      console.warn(
-        `unknown OID ${oid}: failed to recognize type of '${column.name ?? ""}'. It will be treated as String.`,
-      );
-      const fallback = new ValueType();
-      this.typeMap.registerType(oid, fallback);
-      return fallback;
-    });
+    // Rails' lookup_cast_type_from_column only *looks up* — it never
+    // mutates the type_map on miss. Registering a fallback here would
+    // poison the map: subsequent getOidType calls would see
+    // typeMap.has(oid)=true, skip loadAdditionalTypes, and never
+    // resolve the real type. Return a fresh ValueType on miss and
+    // leave miss-loading to getOidType / loadAdditionalTypes.
+    return this.typeMap.fetch(oid, column.fmod ?? -1, column.sqlType ?? "", () => new ValueType());
   }
 
   /**

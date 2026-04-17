@@ -70,7 +70,7 @@ interface PackageResult {
   percent: number;
   totalFiles: number;
   filesExist: number;
-  excludedFiles: number;
+  excludedFiles: string[];
   files: FileResult[];
 }
 
@@ -486,7 +486,7 @@ function main() {
       percent: pct,
       totalFiles,
       filesExist,
-      excludedFiles: excludedFiles.size,
+      excludedFiles: [...excludedFiles].sort(),
       files: fileResults,
     });
   }
@@ -525,7 +525,7 @@ function printReport(
 
     console.log(`\n${"=".repeat(100)}`);
     const excludedNote =
-      pkg.excludedFiles > 0 ? "  (some intentionally excluded, see excluded-files.ts)" : "";
+      pkg.excludedFiles.length > 0 ? "  (some intentionally excluded, see excluded-files.ts)" : "";
     console.log(
       `  ${pkg.package}  —  ${pkg.matched}/${pkg.totalMethods} methods (${pkg.percent}%)  |  files: ${pkg.filesExist}/${pkg.totalFiles}${excludedNote}`,
     );
@@ -554,11 +554,15 @@ function printReport(
           }
         }
       }
+
+      for (const excluded of pkg.excludedFiles) {
+        console.log(`  ${excluded.padEnd(55)} ${"(excluded)".padEnd(40)}`);
+      }
     }
   }
 
-  // Data layer summary (arel + activemodel + activerecord + activesupport)
-  const DATA_LAYER = new Set(["arel", "activemodel", "activerecord", "activesupport"]);
+  // Data layer summary (arel + activemodel + activerecord)
+  const DATA_LAYER = new Set(["arel", "activemodel", "activerecord"]);
   let dataTotal = 0;
   let dataMatched = 0;
   let dataFiles = 0;

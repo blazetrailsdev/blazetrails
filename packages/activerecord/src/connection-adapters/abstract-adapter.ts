@@ -8,7 +8,7 @@ import type { DatabaseAdapter } from "../adapter.js";
 import { type Nodes, Visitors } from "@blazetrails/arel";
 import { ReadOnlyError } from "../errors.js";
 import { SchemaCache } from "./schema-cache.js";
-import { isWriteQuerySql, stripSqlComments } from "./sql-classification.js";
+import { stripSqlComments } from "./sql-classification.js";
 import {
   TransactionManager,
   type Transaction,
@@ -24,6 +24,7 @@ import {
   clearQueryCache as clearQueryCacheMixin,
   type QueryCacheHost,
 } from "./abstract/query-cache.js";
+import { DatabaseStatementsMixin } from "./database-statements-mixin.js";
 
 /**
  * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter::Version
@@ -69,10 +70,14 @@ export class Version {
   }
 }
 
+// Rails: `class AbstractAdapter ... include DatabaseStatements`. We achieve
+// the same shape by mixing DatabaseStatements into the base chain here.
+const AbstractAdapterBase = DatabaseStatementsMixin(class {});
+
 /**
  * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter
  */
-export class AbstractAdapter {
+export class AbstractAdapter extends AbstractAdapterBase {
   static readonly Version = Version;
 
   private _connection: DatabaseAdapter | null = null;
@@ -289,10 +294,6 @@ export class AbstractAdapter {
   }
 
   // --- Private helpers ---
-
-  protected isWriteQuery(sql: string): boolean {
-    return isWriteQuerySql(sql);
-  }
 
   protected stripSqlComments(sql: string): string {
     return stripSqlComments(sql);
@@ -637,7 +638,7 @@ export class AbstractAdapter {
 
   async addEnumValue(_enumName: string, _value: string): Promise<void> {}
 
-  async renameEnumValue(_enumName: string, _oldValue: string, _newValue: string): Promise<void> {}
+  async renameEnumValue(..._args: unknown[]): Promise<void> {}
 
   async createVirtualTable(_name: string, _options?: unknown): Promise<void> {}
 
@@ -659,7 +660,7 @@ export class AbstractAdapter {
 
   // --- Extensions & algorithms ---
 
-  get extensions(): string[] {
+  extensions(): string[] | Promise<string[]> {
     return [];
   }
 
@@ -723,11 +724,11 @@ export class AbstractAdapter {
 
   // --- Version introspection ---
 
-  getDatabaseVersion(): Version {
+  getDatabaseVersion(): Version | number | Promise<Version | number> {
     return new Version("0.0.0");
   }
 
-  get databaseVersion(): Version {
+  get databaseVersion(): Version | number | Promise<Version | number> {
     return this.getDatabaseVersion();
   }
 

@@ -86,9 +86,12 @@ export class Point extends Type<PointValue> {
       const [x, y] = valuesArrayFromHash(value as Record<string, unknown>);
       return this.serialize(this.buildPoint(x, y));
     }
-    // Rails falls through to Type::Value#serialize (identity) for unknown
-    // inputs, but our declared return type is string | null — return null
-    // rather than lie about the runtime shape.
+    // Rails' else branch is `super` → Type::Value#serialize (identity).
+    // Pass through string inputs (e.g. migration defaults like
+    // "(12.2,13.3)") so quoteDefaultExpression doesn't turn them into
+    // DEFAULT NULL. Other scalars can't honestly satisfy the string | null
+    // contract, so null them out.
+    if (typeof value === "string") return value;
     return null;
   }
 

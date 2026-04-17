@@ -480,6 +480,7 @@ async function runTestLoadSchema(options: {
   console.log(options.successMessage(displayNameFor(config, raw), filename));
 }
 
+let _seedImportCounter = 0;
 async function runSeed(prefix = ""): Promise<void> {
   const seedCandidates = [
     path.join(process.cwd(), "db", "seeds.ts"),
@@ -498,7 +499,7 @@ async function runSeed(prefix = ""): Promise<void> {
   // and skips execution entirely. Mirrors Rails' `load` semantics
   // (which always re-evaluates the file).
   const url = pathToFileURL(seedFile);
-  url.searchParams.set("_ts", String(Date.now()));
+  url.searchParams.set("_t", `${++_seedImportCounter}`);
   await import(url.href);
   console.log(`${prefix}Seeds completed.`);
 }

@@ -32,10 +32,17 @@ describe("PostgreSQL::OID::Date", () => {
   });
 
   it("cast_value is the Rails-named hook cast delegates to", () => {
-    // Direct cast_value call: same behavior as cast. Rails' cast_value
-    // is protected; we expose it publicly so callers that want to skip
-    // the nil-check in cast (Type::Value#cast) can reach the hook.
+    // Direct cast_value call: same behavior as cast — exposed publicly
+    // so callers can invoke the Rails-named method by name (and so
+    // api:compare matches it).
     expect(type.castValue("infinity")).toBe(Infinity);
     expect(type.castValue("2024-06-15")).toBeInstanceOf(Date);
+  });
+
+  it("rejects BC dates with out-of-range month or day", () => {
+    // setUTCFullYear would silently roll Feb 30 into March; validate
+    // and return null instead.
+    expect(type.cast("0044-13-15 BC")).toBeNull();
+    expect(type.cast("0044-02-31 BC")).toBeNull();
   });
 });

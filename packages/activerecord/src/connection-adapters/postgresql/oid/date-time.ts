@@ -33,8 +33,14 @@ export class DateTime extends DateTimeType {
       if (value === "infinity") return Infinity as unknown as globalThis.Date;
       if (value === "-infinity") return -Infinity as unknown as globalThis.Date;
       if (/ BC$/.test(value)) {
+        // Accept: "YYYY-MM-DD BC" or "YYYY-MM-DD HH:MM:SS[.f] BC".
+        // Reject anything with a timezone suffix (e.g. "+02", "-05:30")
+        // on a BC timestamp — that's rare in PG output and supporting
+        // it correctly requires offset arithmetic we haven't needed yet.
         const match =
-          /^(\d+)-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{1,2}):(\d{1,2}(?:\.\d+)?))?/.exec(value);
+          /^(\d+)-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{1,2}):(\d{1,2}(?:\.\d+)?))?(?:\s+BC)$/.exec(
+            value,
+          );
         if (!match) return null;
         const year = -Number.parseInt(match[1], 10) + 1;
         const month = Number.parseInt(match[2], 10) - 1;
@@ -42,9 +48,35 @@ export class DateTime extends DateTimeType {
         const hour = match[4] ? Number.parseInt(match[4], 10) : 0;
         const minute = match[5] ? Number.parseInt(match[5], 10) : 0;
         const second = match[6] ? Number.parseFloat(match[6]) : 0;
+        // Reject out-of-range components — setUTC* silently normalises
+        // (month 13, day 32, second 60) and would produce valid Dates
+        // for malformed input.
+        if (
+          month < 0 ||
+          month > 11 ||
+          day < 1 ||
+          day > 31 ||
+          hour < 0 ||
+          hour > 23 ||
+          minute < 0 ||
+          minute > 59 ||
+          second < 0 ||
+          second >= 60
+        ) {
+          return null;
+        }
+        const wholeSeconds = Math.floor(second);
+        // Math.round avoids off-by-1ms drift from floating-point
+        // multiplication (e.g. 0.289 * 1000 = 288.999…).
+        const ms = Math.round((second - wholeSeconds) * 1000);
         const d = new globalThis.Date(0);
         d.setUTCFullYear(year, month, day);
-        d.setUTCHours(hour, minute, Math.floor(second), (second % 1) * 1000);
+        d.setUTCHours(hour, minute, wholeSeconds, ms);
+        // Guard against roll-over from Feb 31 etc. even after the
+        // upper-bound check (valid high day for wrong month).
+        if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month || d.getUTCDate() !== day) {
+          return null;
+        }
         return d;
       }
     }

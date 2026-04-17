@@ -27,6 +27,26 @@ describe("PostgreSQL::OID::DateTime", () => {
     expect(type.typeCastForSchema(Infinity)).toBe("::Float::INFINITY");
     expect(type.typeCastForSchema(-Infinity)).toBe("-::Float::INFINITY");
   });
+
+  it("rejects BC timestamps with out-of-range components", () => {
+    expect(type.cast("0044-13-01 00:00:00 BC")).toBeNull();
+    expect(type.cast("0044-02-31 00:00:00 BC")).toBeNull();
+    expect(type.cast("0044-01-01 25:00:00 BC")).toBeNull();
+    expect(type.cast("0044-01-01 00:00:60 BC")).toBeNull();
+  });
+
+  it("rejects BC timestamps with a timezone offset", () => {
+    // Offset handling on BC inputs is rare and requires arithmetic
+    // we haven't needed; reject explicitly rather than silently
+    // ignoring the offset.
+    expect(type.cast("0044-03-15 12:00:00+02 BC")).toBeNull();
+  });
+
+  it("preserves fractional seconds exactly via Math.round", () => {
+    // 0.289 * 1000 floats to 288.999… — Math.round keeps it at 289.
+    const d = type.cast("0044-03-15 12:00:00.289 BC") as Date;
+    expect(d.getUTCMilliseconds()).toBe(289);
+  });
 });
 
 describe("PostgreSQL::OID::Timestamp", () => {

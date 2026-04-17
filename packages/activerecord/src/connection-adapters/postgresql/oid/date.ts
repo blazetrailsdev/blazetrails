@@ -49,9 +49,18 @@ export class Date extends DateType {
         const year = -Number.parseInt(match[1], 10) + 1;
         const month = Number.parseInt(match[2], 10) - 1;
         const day = Number.parseInt(match[3], 10);
+        // Reject out-of-range components — setUTCFullYear silently
+        // normalises (month 13 → January of next year, day 32 → next
+        // month) which would turn malformed input into a valid Date.
+        if (month < 0 || month > 11 || day < 1 || day > 31) return null;
         const d = new globalThis.Date(0);
         d.setUTCFullYear(year, month, day);
         d.setUTCHours(0, 0, 0, 0);
+        // Verify the constructed date matches the requested components;
+        // setUTCFullYear would have rolled over for e.g. Feb 31.
+        if (d.getUTCFullYear() !== year || d.getUTCMonth() !== month || d.getUTCDate() !== day) {
+          return null;
+        }
         return d;
       }
     }

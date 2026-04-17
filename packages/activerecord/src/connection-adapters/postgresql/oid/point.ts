@@ -48,15 +48,20 @@ export class Point extends Type<PointValue> {
     if (value == null) return null;
     if (value instanceof PointValue) return value;
     if (typeof value === "string") {
-      if (value.trim() === "") return null;
-      let inner = value;
+      const trimmed = value.trim();
+      if (trimmed === "") return null;
+      let inner = trimmed;
       if (inner.startsWith("(") && inner.endsWith(")")) {
         inner = inner.slice(1, -1);
       }
-      const [x, y] = inner.split(",");
-      return this.buildPoint(x, y);
+      const parts = inner.split(",");
+      if (parts.length !== 2) return null;
+      return this.buildPoint(parts[0], parts[1]);
     }
     if (globalThis.Array.isArray(value)) {
+      // Rails: `when ::Array then build_point(*value)` — ArgumentError on
+      // non-2-element arrays. Mirror that by returning null.
+      if (value.length !== 2) return null;
       return this.buildPoint(value[0], value[1]);
     }
     if (typeof value === "object") {
@@ -74,6 +79,7 @@ export class Point extends Type<PointValue> {
       return `(${numberForPoint(value.x)},${numberForPoint(value.y)})`;
     }
     if (globalThis.Array.isArray(value)) {
+      if (value.length !== 2) return super.serialize(value) as string | null;
       return this.serialize(this.buildPoint(value[0], value[1]));
     }
     if (typeof value === "object") {

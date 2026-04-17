@@ -143,7 +143,6 @@ function parseHstoreString(value: string): Record<string, string | null> {
     const rawKey = value.slice(keyStart, i);
     i += 1;
 
-    // Rails accepts both "=>" and "=>".
     if (value[i] !== "=" || value[i + 1] !== ">") throw hstoreError(value);
     i += 2;
 

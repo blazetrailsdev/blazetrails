@@ -364,7 +364,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     sql: string,
     binds: unknown[],
   ): string | { name: string; text: string; values: unknown[] } {
-    if (!(this as any).preparedStatements) return sql;
+    if (!this.preparedStatements) return sql;
     let name = this._statementPool.get(sql);
     if (!name) {
       name = `a${++PostgreSQLAdapter._stmtCounter}`;

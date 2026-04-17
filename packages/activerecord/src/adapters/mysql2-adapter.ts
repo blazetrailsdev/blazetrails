@@ -110,7 +110,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       const quotedSql = this.mysqlQuote(sql);
       const mappedBinds = this.mysqlBinds(binds);
       const [rows] =
-        (this as any).preparedStatements && binds.length > 0
+        this.preparedStatements && binds.length > 0
           ? await conn.execute(quotedSql, mappedBinds as any[])
           : await conn.query(quotedSql, mappedBinds);
       return rows as Record<string, unknown>[];
@@ -129,7 +129,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       const quotedSql = this.mysqlQuote(sql);
       const mappedBinds = this.mysqlBinds(binds);
       const [result] =
-        (this as any).preparedStatements && binds.length > 0
+        this.preparedStatements && binds.length > 0
           ? await conn.execute(quotedSql, mappedBinds as any[])
           : await conn.query(quotedSql, mappedBinds);
       this.dirtyCurrentTransaction();

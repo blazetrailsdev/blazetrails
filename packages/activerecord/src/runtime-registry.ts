@@ -102,9 +102,10 @@ export function resetCachedQueriesCount(): number {
 // Subscribe to sql.active_record notifications, matching Rails:
 // ActiveSupport::Notifications.monotonic_subscribe("sql.active_record", ActiveRecord::RuntimeRegistry)
 Notifications.subscribe("sql.active_record", (event: NotificationEvent) => {
+  const lockWait = event.payload.lock_wait ?? event.payload.lockWait;
   record(event.payload.name as string | undefined, event.duration, {
     cached: event.payload.cached as boolean | undefined,
     async: event.payload.async as boolean | undefined,
-    lockWait: event.payload.lock_wait as number | undefined,
+    lockWait: lockWait === undefined ? undefined : Number(lockWait),
   });
 });

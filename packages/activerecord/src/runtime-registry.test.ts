@@ -77,7 +77,7 @@ describe("RuntimeRegistryTest", () => {
     Notifications.instrument("sql.active_record", { name: "User Load" }, () => {
       // simulate query work
     });
-    expect(stats().queriesCount).toBeGreaterThanOrEqual(1);
+    expect(stats().queriesCount).toBe(1);
     expect(stats().sqlRuntime).toBeGreaterThanOrEqual(0);
   });
 });

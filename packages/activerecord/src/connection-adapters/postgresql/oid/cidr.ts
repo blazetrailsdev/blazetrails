@@ -70,12 +70,14 @@ export class Cidr extends Type<string> {
    *   end
    *
    * We carry the prefix inline on the string (e.g. "192.168.1.0/24"),
-   * so quote the value as-is. Strings without a "/" are /32 (IPv4) or
-   * /128 (IPv6) by PG convention and quote exactly the same way.
+   * so quote string values as-is. Use JSON.stringify so any embedded
+   * quotes/backslashes (unlikely but possible) get properly escaped.
+   * Non-string inputs defer to Type#typeCastForSchema so we don't
+   * double-quote numbers or nil.
    */
   override typeCastForSchema(value: unknown): string {
-    if (value == null) return super.typeCastForSchema(value);
-    return `"${String(value)}"`;
+    if (typeof value === "string") return JSON.stringify(value);
+    return super.typeCastForSchema(value);
   }
 }
 

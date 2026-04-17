@@ -11,6 +11,16 @@ import { DecimalType } from "@blazetrails/activemodel";
 export class Money extends DecimalType {
   override readonly name: string = "money";
 
+  /**
+   * Narrow the constructor options: PG money has a hard-coded scale
+   * of 2 (see the getter below), so accepting a caller-supplied scale
+   * would be misleading. Precision and limit pass through to the
+   * DecimalType base.
+   */
+  constructor(options?: { precision?: number; limit?: number }) {
+    super(options);
+  }
+
   override type(): string {
     return "money";
   }

@@ -1,13 +1,15 @@
 import {
   BigIntegerType,
   BooleanType,
-  DateType,
   FloatType,
   IntegerType,
-  JsonType,
   StringType,
 } from "@blazetrails/activemodel";
 import { describe, expect, it } from "vitest";
+
+import { Date as ArDate } from "../../type/date.js";
+import { Json as ArJson } from "../../type/json.js";
+import { Text as ArText } from "../../type/text.js";
 
 import { HashLookupTypeMap } from "../../type/hash-lookup-type-map.js";
 import { Bit } from "./oid/bit.js";
@@ -74,14 +76,14 @@ describe("initialize_type_map seeds the PG type_map with known types", () => {
     ["oid", Oid],
     ["float4", FloatType],
     ["float8", FloatType],
-    ["text", StringType],
+    ["text", ArText],
     ["bool", BooleanType],
-    ["date", DateType],
+    ["date", ArDate],
     ["money", Money],
     ["bytea", Bytea],
     ["point", Point],
     ["hstore", Hstore],
-    ["json", JsonType],
+    ["json", ArJson],
     ["jsonb", Jsonb],
     ["cidr", Cidr],
     ["inet", Inet],

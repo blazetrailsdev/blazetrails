@@ -17,7 +17,9 @@ export class DecimalWithoutScale extends BigIntegerType {
   }
 
   override typeCastForSchema(value: unknown): string {
-    // Rails: `value.to_s.inspect` — double-quoted Ruby string literal.
-    return `"${String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+    // Rails: `value.to_s.inspect`. nil.to_s is "", so null/undefined
+    // should render as "" (quoted empty string), not "null"/"undefined".
+    const s = value == null ? "" : String(value);
+    return `"${s.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
   }
 }

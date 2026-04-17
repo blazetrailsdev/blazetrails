@@ -10,17 +10,18 @@
 import {
   BigIntegerType,
   BooleanType,
-  DateType,
   FloatType,
   IntegerType,
-  JsonType,
   StringType,
   TimeType,
   Type,
 } from "@blazetrails/activemodel";
 
+import { Date as ArDate } from "../../type/date.js";
 import { DecimalWithoutScale } from "../../type/decimal-without-scale.js";
 import { HashLookupTypeMap } from "../../type/hash-lookup-type-map.js";
+import { Json as ArJson } from "../../type/json.js";
+import { Text as ArText } from "../../type/text.js";
 import { Bit } from "./oid/bit.js";
 import { BitVarying } from "./oid/bit-varying.js";
 import { Bytea } from "./oid/bytea.js";
@@ -119,7 +120,7 @@ export function initializeTypeMap(m: HashLookupTypeMap): void {
   m.registerType("oid", new Oid());
   m.registerType("float4", new FloatType({ limit: 24 }));
   m.registerType("float8", new FloatType());
-  m.registerType("text", new StringType());
+  m.registerType("text", new ArText());
   registerClassWithLimit(m, "varchar", StringType);
   m.aliasType("char", "varchar");
   m.aliasType("name", "varchar");
@@ -127,12 +128,12 @@ export function initializeTypeMap(m: HashLookupTypeMap): void {
   m.registerType("bool", new BooleanType());
   registerClassWithLimit(m, "bit", Bit);
   registerClassWithLimit(m, "varbit", BitVarying);
-  m.registerType("date", new DateType());
+  m.registerType("date", new ArDate());
   m.registerType("money", new Money());
   m.registerType("bytea", new Bytea());
   m.registerType("point", new Point());
   m.registerType("hstore", new Hstore());
-  m.registerType("json", new JsonType());
+  m.registerType("json", new ArJson());
   m.registerType("jsonb", new Jsonb());
   m.registerType("cidr", new Cidr());
   m.registerType("inet", new Inet());

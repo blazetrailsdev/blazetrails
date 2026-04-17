@@ -500,20 +500,20 @@ async function runTestLoadSchema(options: {
   console.log(options.successMessage(displayNameFor(config, raw), filename));
 }
 
-async function runSeed(): Promise<void> {
+async function runSeed(prefix = ""): Promise<void> {
   const seedCandidates = [
     path.join(process.cwd(), "db", "seeds.ts"),
     path.join(process.cwd(), "db", "seeds.js"),
   ];
   const seedFile = seedCandidates.find((f) => fs.existsSync(f));
   if (!seedFile) {
-    console.log("No seeds file found at db/seeds.ts or db/seeds.js");
+    console.log(`${prefix}No seeds file found at db/seeds.ts or db/seeds.js`);
     return;
   }
 
-  console.log("Running seeds...");
+  console.log(`${prefix}Running seeds...`);
   await import(pathToFileURL(seedFile).href);
-  console.log("Seeds completed.");
+  console.log(`${prefix}Seeds completed.`);
 }
 
 /** Strip credentials from a DB URL before we log it. */
@@ -809,8 +809,8 @@ export function dbCommand(): Command {
     .description("Run database seeds")
     .option("--database <name>", "Target a specific named database")
     .action(async (opts: DatabaseOpts) => {
-      await forEachDatabase(opts, async ({ adapter }) => {
-        await withSeedAdapter(adapter, runSeed);
+      await forEachDatabase(opts, async ({ adapter, prefix }) => {
+        await withSeedAdapter(adapter, () => runSeed(prefix));
       });
     });
 

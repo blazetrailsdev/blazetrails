@@ -1127,6 +1127,10 @@ export class Relation<T extends Base> {
   reset(): this {
     this._loaded = false;
     this._records = [];
+    // Drop any in-flight loadAsync() — otherwise a stale load could
+    // resolve after a reset and re-populate stale records via
+    // toArray()'s cache path.
+    this._loadAsyncPromise = undefined;
     return this;
   }
 
@@ -1163,7 +1167,15 @@ export class Relation<T extends Base> {
     // .then bookkeeping is needed. A later `await rel.toArray()` drains
     // the stashed promise instead of issuing a second query — and carries
     // any rejection to the awaiter, matching Rails' load_async behavior.
-    this._loadAsyncPromise ??= this.toArray();
+    //
+    // Keep the promise cached for the full lifetime of the load (clear
+    // in finally) so concurrent callers share the one in-flight query
+    // instead of racing to fire additional ones.
+    if (!this._loadAsyncPromise && !this._loaded) {
+      this._loadAsyncPromise = this.toArray().finally(() => {
+        this._loadAsyncPromise = undefined;
+      });
+    }
     return this;
   }
 
@@ -1343,12 +1355,11 @@ export class Relation<T extends Base> {
     if (this._isNone) return [];
     if (this._loaded) return [...this._records];
     if (this._loadAsyncPromise) {
-      // A prior loadAsync() kicked off the query — hand out the in-flight
+      // A prior loadAsync() kicked off the query — share the in-flight
       // promise so callers drain the same query (and carry its errors)
-      // instead of issuing a second one.
-      const p = this._loadAsyncPromise;
-      this._loadAsyncPromise = undefined;
-      return p;
+      // instead of racing to issue additional ones. The promise clears
+      // itself in loadAsync's .finally once the load settles.
+      return this._loadAsyncPromise;
     }
 
     // Rails: `includes(:assoc).references(:assocs_table)` promotes the

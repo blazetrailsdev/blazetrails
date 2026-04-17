@@ -38,7 +38,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   private static _spCounter = 0;
-  private _driverPool: pg.Pool;
+  private _driverPool: pg.Pool | null;
   private _client: pg.PoolClient | null = null;
   private _inTransaction = false;
   private _databaseVersion: number | null = null;
@@ -311,6 +311,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    */
   private async getClient(): Promise<pg.PoolClient> {
     if (this._client) return this._client;
+    if (!this._driverPool) throw new Error("PostgreSQLAdapter: connection is closed");
     return this._driverPool.connect();
   }
 
@@ -401,6 +402,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * Begin a transaction. Acquires a dedicated client from the pool.
    */
   async beginTransaction(): Promise<void> {
+    if (!this._driverPool) throw new Error("PostgreSQLAdapter: connection is closed");
     this._client = await this._driverPool.connect();
     await this._client.query("BEGIN");
     this._inTransaction = true;
@@ -518,7 +520,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       this._client.release();
       this._client = null;
     }
-    await this._driverPool.end();
+    if (this._driverPool) {
+      await this._driverPool.end();
+      this._driverPool = null;
+    }
   }
 
   /**
@@ -533,6 +538,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * Escape hatch for advanced usage.
    */
   get raw(): pg.Pool {
+    if (!this._driverPool) throw new Error("PostgreSQLAdapter: connection is closed");
     return this._driverPool;
   }
 
@@ -690,6 +696,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   private _advisoryLockClient: pg.PoolClient | null = null;
 
   async getAdvisoryLock(lockId: number | string): Promise<boolean> {
+    if (!this._driverPool) throw new Error("PostgreSQLAdapter: connection is closed");
     const client = await this._driverPool.connect();
     try {
       const isNumeric = typeof lockId === "number";

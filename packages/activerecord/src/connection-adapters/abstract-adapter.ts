@@ -638,7 +638,10 @@ export class AbstractAdapter extends AbstractAdapterBase {
 
   async addEnumValue(_enumName: string, _value: string): Promise<void> {}
 
-  async renameEnumValue(_typeName: string, _options: { from: string; to: string }): Promise<void> {}
+  // Rails' `def rename_enum_value(...)` uses a splat so concrete adapters
+  // can define their own signature (PG takes `(type_name, **options)`).
+  // Keep the TS signature permissive to match.
+  async renameEnumValue(..._args: unknown[]): Promise<void> {}
 
   async createVirtualTable(_name: string, _options?: unknown): Promise<void> {}
 

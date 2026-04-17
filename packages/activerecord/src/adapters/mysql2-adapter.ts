@@ -21,7 +21,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     return this._driverPool != null;
   }
 
-  private _driverPool: mysql.Pool;
+  private _driverPool: mysql.Pool | null;
   private _conn: mysql.PoolConnection | null = null;
   private _inTransaction = false;
   // Cached capability flag — information_schema.statistics.expression
@@ -45,6 +45,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
    */
   private async getConn(): Promise<mysql.PoolConnection> {
     if (this._conn) return this._conn;
+    if (!this._driverPool) throw new Error("Mysql2Adapter: connection is closed");
     return this._driverPool.getConnection();
   }
 
@@ -135,6 +136,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
    * Begin a transaction. Acquires a dedicated connection from the pool.
    */
   async beginTransaction(): Promise<void> {
+    if (!this._driverPool) throw new Error("Mysql2Adapter: connection is closed");
     this._conn = await this._driverPool.getConnection();
     await this._conn.query("BEGIN");
     this._inTransaction = true;
@@ -585,6 +587,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
   private _advisoryLockConn: mysql.PoolConnection | null = null;
 
   async getAdvisoryLock(lockId: number | string): Promise<boolean> {
+    if (!this._driverPool) throw new Error("Mysql2Adapter: connection is closed");
     const conn = await this._driverPool.getConnection();
     try {
       const [rows] = await conn.query("SELECT GET_LOCK(?, 0) AS locked", [String(lockId)]);
@@ -625,7 +628,10 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
       this._conn.release();
       this._conn = null;
     }
-    await this._driverPool.end();
+    if (this._driverPool) {
+      await this._driverPool.end();
+      this._driverPool = null;
+    }
   }
 
   /**
@@ -644,6 +650,7 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
    * Escape hatch for advanced usage.
    */
   get raw(): mysql.Pool {
+    if (!this._driverPool) throw new Error("Mysql2Adapter: connection is closed");
     return this._driverPool;
   }
 }

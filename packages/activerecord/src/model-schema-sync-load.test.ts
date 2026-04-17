@@ -212,6 +212,24 @@ describe("sync loadSchema / columnsHash", () => {
     expect(Circle._attributeDefinitions).toBe(Shape._attributeDefinitions);
   });
 
+  it("reflection deletes own-caches on subclass so base rebuilds shine through", () => {
+    class Shape extends Base {
+      static override tableName = "shapes";
+      static {
+        this.inheritanceColumn = "type";
+      }
+    }
+    class Circle extends Shape {}
+
+    (Circle as unknown as { _columnsHash: unknown })._columnsHash = { stale: true };
+    const cols = { guid: { sqlType: "uuid", name: "guid", default: null } };
+    (Shape as unknown as { adapter: unknown }).adapter = makeAdapter(cols);
+
+    Circle.columnsHash();
+
+    expect(Object.prototype.hasOwnProperty.call(Circle, "_columnsHash")).toBe(false);
+  });
+
   it("invalidates subclass-local caches when reflection lands on STI base", () => {
     class Shape extends Base {
       static override tableName = "shapes";

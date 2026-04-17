@@ -497,11 +497,19 @@ export function resetColumnInformation(this: SchemaHost): void {
   // subclass-local caches too so any forked metadata is dropped.
   if (isStiSubclass(this as unknown as typeof Base)) {
     const subCaches = this as SchemaHost & { _cachedDefaultAttributes?: unknown };
-    subCaches._columnsHash = undefined;
-    subCaches._columns = undefined;
-    subCaches._attributesBuilder = undefined;
-    subCaches._schemaLoaded = false;
-    subCaches._cachedDefaultAttributes = null;
+    // Delete own properties rather than assigning undefined/false, so
+    // the subclass inherits the base's freshly-rebuilt caches via the
+    // prototype chain instead of shadowing them.
+    const sub = subCaches as unknown as Record<string, unknown>;
+    for (const key of [
+      "_columnsHash",
+      "_columns",
+      "_attributesBuilder",
+      "_schemaLoaded",
+      "_cachedDefaultAttributes",
+    ]) {
+      if (Object.prototype.hasOwnProperty.call(sub, key)) delete sub[key];
+    }
     // Scrub schema-sourced entries from any subclass-forked
     // _attributeDefinitions too (from a prior attribute() /
     // decorateAttributes / encrypts call). Without this, schema defs
@@ -710,15 +718,29 @@ function applyColumnsHash(
     _columnsHash?: unknown;
     _columns?: unknown;
   };
-  const invalidate = (h: SchemaHost) => {
-    const c = h as unknown as CacheBag;
-    c._attributesBuilder = undefined;
-    c._cachedDefaultAttributes = null;
-    c._columnsHash = undefined;
-    c._columns = undefined;
+  const invalidate = (h: SchemaHost, { deleteOwn }: { deleteOwn: boolean }) => {
+    const c = h as unknown as Record<string, unknown>;
+    if (deleteOwn) {
+      // Delete own properties so `h` inherits freshly-rebuilt caches
+      // from its prototype chain (used for the STI subclass case).
+      for (const key of [
+        "_attributesBuilder",
+        "_cachedDefaultAttributes",
+        "_columnsHash",
+        "_columns",
+      ]) {
+        if (Object.prototype.hasOwnProperty.call(c, key)) delete c[key];
+      }
+      return;
+    }
+    const bag = c as CacheBag;
+    bag._attributesBuilder = undefined;
+    bag._cachedDefaultAttributes = null;
+    bag._columnsHash = undefined;
+    bag._columns = undefined;
   };
-  invalidate(host);
-  if (originatingHost && originatingHost !== host) invalidate(originatingHost);
+  invalidate(host, { deleteOwn: false });
+  if (originatingHost && originatingHost !== host) invalidate(originatingHost, { deleteOwn: true });
 
   applyPendingEncryptions(host);
 

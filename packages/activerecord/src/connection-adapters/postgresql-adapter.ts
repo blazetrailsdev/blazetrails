@@ -161,51 +161,65 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
    * populates them.
    */
   override async execQuery(sql: string, _name?: string | null, binds?: unknown[]): Promise<Result> {
+    // Release the query client BEFORE any loadAdditionalTypes call —
+    // that path re-enters execute() and acquires its own pooled client,
+    // and holding both would consume 2 connections per query during
+    // type-map warmup.
+    interface ArrayQueryResult {
+      fields: Array<{ name: string; dataTypeID: number }>;
+      rows: unknown[][];
+    }
     const client = await this.getClient();
+    let pgResult: ArrayQueryResult;
     try {
       // rowMode: "array" returns rows as positional arrays, preserving
       // duplicate column names and matching the field-index order.
       // Hash-keyed rows would collide on duplicate names and drop
       // earlier values.
-      const pgResult = await client.query({
+      pgResult = (await client.query({
         text: this.rewriteBinds(sql, binds ?? []),
         values: binds ?? [],
         rowMode: "array",
-      });
-      const fields = pgResult.fields ?? [];
-      if (fields.length === 0) return Result.fromRowHashes([]);
-
-      // Batch-load any unknown dataTypeIDs in a single pg_type roundtrip.
-      // Without this, a SELECT with N distinct unknown OIDs would trigger
-      // N sequential getOidType → loadAdditionalTypes queries.
-      const missing = new Set<number>();
-      for (const f of fields) {
-        if (!this.typeMap.has(f.dataTypeID)) missing.add(f.dataTypeID);
-      }
-      if (missing.size > 0) {
-        await this.loadAdditionalTypes([...missing]);
-      }
-
-      const columns = fields.map((f) => f.name);
-      // Store types under BOTH name and numeric index so Result's
-      // columnType lookup works with duplicate column names (columnType
-      // tries index first, then name).
-      const columnTypes: Record<string | number, Type> = {};
-      for (let i = 0; i < fields.length; i++) {
-        const f = fields[i];
-        // fmod isn't on pg.FieldDef; Rails reads it from PG::Result#fmod(i)
-        // which isn't exposed by node-pg. Pass -1 so numeric/interval
-        // registrations fall into their default (scale-absent) branch.
-        const type = await this.getOidType(f.dataTypeID, -1, f.name, "");
-        columnTypes[i] = type;
-        columnTypes[f.name] = type;
-      }
-      // pgResult.rows is already positional arrays thanks to rowMode.
-      const rowArrays = pgResult.rows as unknown[][];
-      return new Result(columns, rowArrays, columnTypes as Record<string, Type>);
+      })) as unknown as ArrayQueryResult;
     } finally {
       this.releaseClient(client);
     }
+
+    const fields = pgResult.fields ?? [];
+    if (fields.length === 0) return Result.fromRowHashes([]);
+
+    // Batch-load any unknown dataTypeIDs in a single pg_type roundtrip.
+    // Without this, a SELECT with N distinct unknown OIDs would trigger
+    // N sequential getOidType → loadAdditionalTypes queries.
+    const missing = new Set<number>();
+    for (const f of fields) {
+      if (!this.typeMap.has(f.dataTypeID)) missing.add(f.dataTypeID);
+    }
+    if (missing.size > 0) {
+      await this.loadAdditionalTypes([...missing]);
+    }
+
+    const columns = fields.map((f) => f.name);
+    // Store types under BOTH name and numeric index so Result's
+    // columnType lookup works with duplicate column names. Skip the
+    // name entry when the field name is an integer-like string — JS
+    // object keys are all strings, so `{0: type, "0": other}` would
+    // collide and Result would pick the wrong type for one of them.
+    const columnTypes: Record<string | number, Type> = {};
+    for (let i = 0; i < fields.length; i++) {
+      const f = fields[i];
+      // fmod isn't on pg.FieldDef; Rails reads it from PG::Result#fmod(i)
+      // which isn't exposed by node-pg. Pass -1 so numeric/interval
+      // registrations fall into their default (scale-absent) branch.
+      const type = await this.getOidType(f.dataTypeID, -1, f.name, "");
+      columnTypes[i] = type;
+      if (!/^\d+$/.test(f.name)) {
+        columnTypes[f.name] = type;
+      }
+    }
+    // pgResult.rows is already positional arrays thanks to rowMode.
+    const rowArrays = pgResult.rows as unknown[][];
+    return new Result(columns, rowArrays, columnTypes as Record<string, Type>);
   }
 
   /**

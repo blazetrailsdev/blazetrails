@@ -96,8 +96,11 @@ export function toSqlAndBinds(
       );
     }
     const visitor = (this as any)?.arelVisitor as Visitors.ToSql | undefined;
-    const sql =
-      visitor && node instanceof Nodes.Node ? visitor.compile(node) : (node as any).toSql();
+    if (visitor && node instanceof Nodes.Node) {
+      const [sql, extractedBinds] = visitor.compileWithBinds(node);
+      return [sql, extractedBinds, preparable, allowRetry];
+    }
+    const sql = (node as any).toSql();
     return [sql, [], preparable, allowRetry];
   }
 

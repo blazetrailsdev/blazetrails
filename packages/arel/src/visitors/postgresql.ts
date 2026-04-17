@@ -80,9 +80,16 @@ export class PostgreSQLWithBinds extends PostgreSQL {
   }
 
   protected override visitBindParam(node: Nodes.BindParam): SQLString {
-    this.bindIndex += 1;
-    const value = node.value !== undefined ? node.value : node;
-    this.collector.addBind(value, () => `$${this.bindIndex}`);
+    if (this._extractBinds) {
+      this.bindIndex += 1;
+      const value = node.value !== undefined ? node.value : node;
+      this.collector.addBind(value, () => `$${this.bindIndex}`);
+    } else if (node.value !== undefined) {
+      this.collector.append(this.quote(node.value));
+    } else {
+      this.bindIndex += 1;
+      this.collector.append(`$${this.bindIndex}`);
+    }
     return this.collector;
   }
 }

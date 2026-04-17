@@ -18,9 +18,7 @@ import {
   initializeTypeMap as staticInitializeTypeMap,
 } from "./postgresql/type-map-init.js";
 import type { DatabaseAdapter } from "../adapter.js";
-import { DatabaseStatementsMixin } from "./database-statements-mixin.js";
-
-const AdapterBase = DatabaseStatementsMixin(class {});
+import { AbstractAdapter } from "./abstract-adapter.js";
 
 /**
  * PostgreSQL adapter — connects ActiveRecord to a real PostgreSQL database.
@@ -30,11 +28,13 @@ const AdapterBase = DatabaseStatementsMixin(class {});
  * Accepts either a connection string (`postgres://...`) or a `pg.PoolConfig`
  * object. Uses a connection pool internally for concurrent access.
  */
-export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
-  readonly adapterName = "PostgreSQL";
+export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapter {
+  override get adapterName(): string {
+    return "PostgreSQL";
+  }
 
   private static _spCounter = 0;
-  private pool: pg.Pool;
+  private _driverPool: pg.Pool;
   private _client: pg.PoolClient | null = null;
   private _inTransaction = false;
   private _databaseVersion: number | null = null;
@@ -43,9 +43,9 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
   constructor(config: string | pg.PoolConfig) {
     super();
     if (typeof config === "string") {
-      this.pool = new pg.Pool({ connectionString: config });
+      this._driverPool = new pg.Pool({ connectionString: config });
     } else {
-      this.pool = new pg.Pool(config);
+      this._driverPool = new pg.Pool(config);
     }
   }
 
@@ -307,7 +307,7 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
    */
   private async getClient(): Promise<pg.PoolClient> {
     if (this._client) return this._client;
-    return this.pool.connect();
+    return this._driverPool.connect();
   }
 
   /**
@@ -394,7 +394,7 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
    * Begin a transaction. Acquires a dedicated client from the pool.
    */
   async beginTransaction(): Promise<void> {
-    this._client = await this.pool.connect();
+    this._client = await this._driverPool.connect();
     await this._client.query("BEGIN");
     this._inTransaction = true;
   }
@@ -511,7 +511,7 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
       this._client.release();
       this._client = null;
     }
-    await this.pool.end();
+    await this._driverPool.end();
   }
 
   /**
@@ -526,7 +526,7 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
    * Escape hatch for advanced usage.
    */
   get raw(): pg.Pool {
-    return this.pool;
+    return this._driverPool;
   }
 
   // ---------------------------------------------------------------------------
@@ -683,7 +683,7 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
   private _advisoryLockClient: pg.PoolClient | null = null;
 
   async getAdvisoryLock(lockId: number | string): Promise<boolean> {
-    const client = await this.pool.connect();
+    const client = await this._driverPool.connect();
     try {
       const isNumeric = typeof lockId === "number";
       const sql = `SELECT pg_try_advisory_lock(${isNumeric ? "$1" : "hashtext($1)"}) AS locked`;

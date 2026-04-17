@@ -447,7 +447,12 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
 
     it("multiline", () => {
-      expect(parseHstore('"a"=>"b\\nc"')).toEqual({ a: "b\nc" });
+      // Rails' test_multiline does assert_cycle({"a\nb" => "c\nd"}). PG
+      // stores the newline as a literal character inside the quoted
+      // value, not as a \n escape. Round-trip through serializeHstore /
+      // parseHstore and assert the value is preserved.
+      const input = { "a\nb": "c\nd" };
+      expect(parseHstore(serializeHstore(input))).toEqual(input);
     });
 
     it.skip("hstore with serialized attributes", () => {

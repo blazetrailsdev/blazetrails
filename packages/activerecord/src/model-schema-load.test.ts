@@ -130,6 +130,51 @@ describe("loadSchemaFromAdapter", () => {
   });
 });
 
+describe("loadSchemaFromAdapter integration details", () => {
+  it("defines prototype accessors so record.column works", async () => {
+    class Post extends Base {
+      static override tableName = "posts";
+    }
+    const adapter = makeAdapter({ guid: { sqlType: "uuid" } }, { uuid: new UuidType() });
+    (Post as unknown as { adapter: unknown }).adapter = adapter;
+    await Post.loadSchema();
+
+    const rec = new Post();
+    rec.writeAttribute("guid", "abc-123");
+    expect((rec as unknown as { guid: string }).guid).toBe("abc-123");
+  });
+
+  it("discards the load if the adapter is swapped mid-flight (race guard)", async () => {
+    // Plain host object — avoids Base's adapter getter/setter side effects.
+    let resolveColumns: (v: Record<string, unknown>) => void = () => {};
+    const columnsPromise = new Promise<Record<string, unknown>>((r) => {
+      resolveColumns = r;
+    });
+    const firstAdapter = {
+      schemaCache: {
+        dataSourceExists: async () => true,
+        columnsHash: () => columnsPromise,
+      },
+      lookupCastTypeFromColumn: () => new UuidType(),
+    };
+    const secondAdapter = makeAdapter({}, {});
+    const host = {
+      adapter: firstAdapter,
+      tableName: "posts",
+      _attributeDefinitions: new Map(),
+      prototype: {},
+    };
+
+    const inflight = (loadSchemaFromAdapter as any).call(host);
+
+    host.adapter = secondAdapter as unknown as typeof host.adapter;
+    resolveColumns({ guid: { sqlType: "uuid" } });
+    await inflight;
+
+    expect(host._attributeDefinitions.has("guid")).toBe(false);
+  });
+});
+
 describe("set adapter auto-loads schema", () => {
   it("awaiting Base.loadSchema() populates schema-sourced defs end-to-end", async () => {
     class Post extends Base {

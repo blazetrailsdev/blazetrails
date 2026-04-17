@@ -10,6 +10,7 @@ import {
 import { isStiSubclass, getStiBase } from "./inheritance.js";
 import { quote, quoteIdentifier, quoteTableName } from "./connection-adapters/abstract/quoting.js";
 import { detectAdapterName } from "./adapter-name.js";
+import { applyPendingEncryptions } from "./encryption.js";
 
 /**
  * Schema metadata for ActiveRecord models — table name, primary key,
@@ -479,12 +480,12 @@ function getColumnsHash(host: SchemaHost): Record<string, any> {
  */
 export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
   if (this._abstractClass) return;
-  const adapter = this.adapter;
-  if (!adapter) return;
-  const cache = adapter.schemaCache;
+  const startingAdapter = this.adapter;
+  if (!startingAdapter) return;
+  const cache = startingAdapter.schemaCache;
   if (!cache) return;
   const table = (this as unknown as typeof Base).tableName;
-  const pool = adapter.pool ?? adapter;
+  const pool = startingAdapter.pool ?? startingAdapter;
 
   if (typeof cache.dataSourceExists === "function") {
     const exists = await cache.dataSourceExists(pool, table);
@@ -499,6 +500,10 @@ export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
   }
   if (!hash) return;
 
+  // Guard against adapter swaps during the async work above: if a different
+  // adapter was installed, discard this load rather than writing stale types.
+  if (this.adapter !== startingAdapter) return;
+
   // Copy-on-write: match the ownership check used elsewhere (attributes.ts,
   // encryption.ts) so we mutate this class's own map, not the inherited one.
   if (!Object.prototype.hasOwnProperty.call(this, "_attributeDefinitions")) {
@@ -510,8 +515,8 @@ export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
     if (existing?.userProvided) continue;
 
     const castType =
-      typeof adapter.lookupCastTypeFromColumn === "function"
-        ? adapter.lookupCastTypeFromColumn(column)
+      typeof startingAdapter.lookupCastTypeFromColumn === "function"
+        ? startingAdapter.lookupCastTypeFromColumn(column)
         : null;
     const type = castType ?? typeRegistry.lookup("value");
     const defaultValue = (column as { default?: unknown }).default ?? null;
@@ -523,11 +528,32 @@ export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
       userProvided: false,
       source: "schema",
     });
+
+    // Define the prototype accessor so `record.foo` routes through
+    // readAttribute/writeAttribute. Mirrors what ActiveModel.attribute()
+    // does for user-declared attrs (attributes.ts ~L56).
+    const proto = (this as unknown as { prototype: object }).prototype;
+    if (!Object.prototype.hasOwnProperty.call(proto, name)) {
+      Object.defineProperty(proto, name, {
+        get(this: { readAttribute(n: string): unknown }) {
+          return this.readAttribute(name);
+        },
+        set(this: { writeAttribute(n: string, v: unknown): void }, value: unknown) {
+          this.writeAttribute(name, value);
+        },
+        configurable: true,
+      });
+    }
   }
 
   // Invalidate caches that derive from _attributeDefinitions.
   this._attributesBuilder = undefined;
   (this as unknown as { _cachedDefaultAttributes?: unknown })._cachedDefaultAttributes = null;
+
+  // Re-run pending encryption decorations so `encrypts :foo` declared before
+  // schema load still wraps the adapter-resolved cast type. Mirrors the
+  // applyPendingEncryptions call in Base.attribute (base.ts).
+  applyPendingEncryptions(this);
 }
 
 /**

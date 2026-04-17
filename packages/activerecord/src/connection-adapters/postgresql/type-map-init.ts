@@ -39,24 +39,30 @@ import { TimestampWithTimeZone } from "./oid/timestamp-with-time-zone.js";
 import { Uuid } from "./oid/uuid.js";
 import { Xml } from "./oid/xml.js";
 
-/** Mirrors: PostgreSQLAdapter.extract_limit — `$1.to_i if sql_type =~ /\((.*)\)/`. */
+/**
+ * Mirrors: PostgreSQLAdapter.extract_limit — `$1.to_i if sql_type =~ /\((.*)\)/`.
+ * Rails captures everything between parens and lets `to_i` parse leading digits;
+ * that tolerates whitespace, trailing text, and comma-separated precision/scale.
+ */
 export function extractLimit(sqlType: string | undefined): number | undefined {
   if (!sqlType) return undefined;
-  const match = /\((\d+)\)/.exec(sqlType);
-  return match ? Number.parseInt(match[1], 10) : undefined;
+  const match = /\(([^)]*)\)/.exec(sqlType);
+  if (!match) return undefined;
+  const n = Number.parseInt(match[1].trim(), 10);
+  return Number.isNaN(n) ? undefined : n;
 }
 
 /** Mirrors: PostgreSQLAdapter.extract_precision — first number in `(p,s)` or `(p)`. */
 export function extractPrecision(sqlType: string | undefined): number | undefined {
   if (!sqlType) return undefined;
-  const match = /\((\d+)(?:,\d+)?\)/.exec(sqlType);
+  const match = /\(\s*(\d+)\s*(?:,\s*\d+\s*)?\)/.exec(sqlType);
   return match ? Number.parseInt(match[1], 10) : undefined;
 }
 
 /** Mirrors: PostgreSQLAdapter.extract_scale — second number in `(p,s)`. */
 export function extractScale(sqlType: string | undefined): number | undefined {
   if (!sqlType) return undefined;
-  const match = /\(\d+,(\d+)\)/.exec(sqlType);
+  const match = /\(\s*\d+\s*,\s*(\d+)\s*\)/.exec(sqlType);
   return match ? Number.parseInt(match[1], 10) : undefined;
 }
 
@@ -152,14 +158,20 @@ export function initializeTypeMap(m: HashLookupTypeMap): void {
 
 /**
  * Instance-level registrations that mirror Rails' instance
- * `initialize_type_map(m = type_map)` at lines 744–749. These depend on
- * the connection's `default_timezone`, so take it as an argument.
+ * `initialize_type_map(m = type_map)` at lines 744–749. Rails passes
+ * `timezone: @default_timezone` into `time` / `timestamp`; in TS the
+ * ActiveModel Type constructors don't yet thread a timezone option
+ * through, so the value is recorded on the registration but not acted
+ * on until the Type classes are extended. Signature kept for Rails
+ * parity and future plumbing.
  */
 export function initializeInstanceTypeMap(
   m: HashLookupTypeMap,
   defaultTimezone: "utc" | "local" = "utc",
 ): void {
   initializeTypeMap(m);
+  // TODO: activemodel Type classes don't yet honor `timezone` — these
+  // options are ignored until TimeType / Timestamp are extended.
   registerClassWithPrecision(m, "time", TimeType, { timezone: defaultTimezone });
   registerClassWithPrecision(m, "timestamp", Timestamp, { timezone: defaultTimezone });
   registerClassWithPrecision(m, "timestamptz", TimestampWithTimeZone);

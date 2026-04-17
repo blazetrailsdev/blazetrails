@@ -2,6 +2,7 @@ import pg from "pg";
 import { type Type, ValueType } from "@blazetrails/activemodel";
 import { singularize, underscore } from "@blazetrails/activesupport";
 import { HashLookupTypeMap } from "../type/hash-lookup-type-map.js";
+import { getDefaultTimezone } from "../type/internal/timezone.js";
 import { splitQuotedIdentifier, Utils } from "./postgresql/utils.js";
 import { Column } from "./postgresql/column.js";
 import { ExplainPrettyPrinter } from "./postgresql/explain-pretty-printer.js";
@@ -66,7 +67,12 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
   get typeMap(): HashLookupTypeMap {
     if (this._typeMap == null) {
       this._typeMap = new HashLookupTypeMap();
-      initializeInstanceTypeMap(this._typeMap);
+      // Rails threads @default_timezone into the instance initializer so
+      // time / timestamp registrations use the connection's timezone
+      // preference. We read the repo-wide default here so that
+      // setDefaultTimezone() is honored consistently with the quoting
+      // path.
+      initializeInstanceTypeMap(this._typeMap, getDefaultTimezone());
     }
     return this._typeMap;
   }
@@ -126,7 +132,7 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
       "SELECT t.oid, t.typname, t.typelem, t.typdelim, t.typinput,",
       "       r.rngsubtype, t.typtype, t.typbasetype",
       "FROM pg_type as t",
-      "LEFT JOIN pg_range as r ON oid = rngtypid",
+      "LEFT JOIN pg_range as r ON t.oid = r.rngtypid",
     ].join("\n");
 
     if (oids && oids.length > 0) {

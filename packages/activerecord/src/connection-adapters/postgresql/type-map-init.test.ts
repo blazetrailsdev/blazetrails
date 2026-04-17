@@ -53,6 +53,13 @@ describe("extract_limit / extract_precision / extract_scale", () => {
     expect(extractScale("numeric(10,2)")).toBe(2);
     expect(extractScale("numeric(10)")).toBeUndefined();
   });
+
+  it("tolerates whitespace inside the parens, like Rails' to_i", () => {
+    // Rails' /\((.*)\)/ + to_i accepts "varchar( 255 )" and "numeric(10, 2)".
+    expect(extractLimit("varchar( 255 )")).toBe(255);
+    expect(extractPrecision("numeric(10, 2)")).toBe(10);
+    expect(extractScale("numeric(10, 2)")).toBe(2);
+  });
 });
 
 describe("initialize_type_map seeds the PG type_map with known types", () => {

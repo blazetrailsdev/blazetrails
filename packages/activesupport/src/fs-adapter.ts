@@ -62,6 +62,8 @@ export interface PathAdapter {
    * absolute.
    */
   isAbsolute?(p: string): boolean;
+  /** Optional — compute a relative path from `from` to `to`. */
+  relative?(from: string, to: string): string;
   /**
    * Optional — convert an absolute filesystem path to a `file://` URL
    * (RFC 8089). Only used by server-side paths that call dynamic `import()`
@@ -115,6 +117,7 @@ function tryAutoRegisterNode(): boolean {
       resolve: (...parts) => nodePath.resolve(...parts),
       extname: (p) => nodePath.extname(p),
       isAbsolute: (p) => nodePath.isAbsolute(p),
+      relative: (from, to) => nodePath.relative(from, to),
       pathToFileURL: (p) => nodeUrl.pathToFileURL(p),
       sep: nodePath.sep,
     };
@@ -145,6 +148,7 @@ function tryAutoRegisterNodeAsync(): Promise<boolean> {
           resolve: (...parts) => nodePath.resolve(...parts),
           extname: (p) => nodePath.extname(p),
           isAbsolute: (p) => nodePath.isAbsolute(p),
+          relative: (from, to) => nodePath.relative(from, to),
           pathToFileURL: (p) => nodeUrl.pathToFileURL(p),
           sep: nodePath.sep,
         };

@@ -1,7 +1,5 @@
 import { Command } from "commander";
-import * as fs from "node:fs";
-import * as path from "node:path";
-import { pathToFileURL } from "node:url";
+import { getFs, getPath } from "@blazetrails/activesupport";
 import {
   loadDatabaseConfig,
   loadAllDatabaseConfigs,
@@ -63,7 +61,7 @@ function normalizeRawConfig(raw: RawConfig): RawConfig {
 }
 
 function migrationsDir(): string {
-  return path.join(process.cwd(), "db", "migrations");
+  return getPath().join(process.cwd(), "db", "migrations");
 }
 
 /**
@@ -76,15 +74,15 @@ function migrationsDir(): string {
  */
 function migrationsDirsForConfig(name: string, config: RawConfig): string[] {
   const raw = (config as { migrationsPaths?: string | string[] }).migrationsPaths;
-  if (typeof raw === "string" && raw.length > 0) return [path.resolve(process.cwd(), raw)];
+  if (typeof raw === "string" && raw.length > 0) return [getPath().resolve(process.cwd(), raw)];
   if (Array.isArray(raw)) {
     const dirs = [
-      ...new Set(raw.filter((p) => p.length > 0).map((p) => path.resolve(process.cwd(), p))),
+      ...new Set(raw.filter((p) => p.length > 0).map((p) => getPath().resolve(process.cwd(), p))),
     ];
     if (dirs.length > 0) return dirs;
   }
-  if (name === "primary") return [path.join(process.cwd(), "db", "migrations")];
-  return [path.join(process.cwd(), "db", `migrations_${name}`)];
+  if (name === "primary") return [getPath().join(process.cwd(), "db", "migrations")];
+  return [getPath().join(process.cwd(), "db", `migrations_${name}`)];
 }
 
 /**
@@ -459,7 +457,7 @@ async function runTestLoadSchema(options: {
   const config = toDbConfig(raw, "test");
   await runProtectedEnvCheck(config, "test");
   const filename = DatabaseTasks.schemaDumpPath(config);
-  if (!fs.existsSync(filename)) {
+  if (!getFs().existsSync(filename)) {
     console.error(`No schema file found at ${filename}. Run \`trails db schema:dump\` first.`);
     process.exitCode = 1;
     return;
@@ -483,10 +481,10 @@ async function runTestLoadSchema(options: {
 let _seedImportCounter = 0;
 async function runSeed(prefix = ""): Promise<void> {
   const seedCandidates = [
-    path.join(process.cwd(), "db", "seeds.ts"),
-    path.join(process.cwd(), "db", "seeds.js"),
+    getPath().join(process.cwd(), "db", "seeds.ts"),
+    getPath().join(process.cwd(), "db", "seeds.js"),
   ];
-  const seedFile = seedCandidates.find((f) => fs.existsSync(f));
+  const seedFile = seedCandidates.find((f) => getFs().existsSync(f));
   if (!seedFile) {
     console.log(`${prefix}No seeds file found at db/seeds.ts or db/seeds.js`);
     return;
@@ -498,7 +496,7 @@ async function runSeed(prefix = ""): Promise<void> {
   // without the query string, the second iteration sees a cached module
   // and skips execution entirely. Mirrors Rails' `load` semantics
   // (which always re-evaluates the file).
-  const url = pathToFileURL(seedFile);
+  const url = getPath().pathToFileURL!(seedFile);
   url.searchParams.set("_t", `${++_seedImportCounter}`);
   await import(url.href);
   console.log(`${prefix}Seeds completed.`);
@@ -1042,7 +1040,7 @@ export function dbCommand(): Command {
         try {
           DatabaseTasks.schemaFormat = await resolveSchemaFormat(opts);
           const filename = DatabaseTasks.schemaDumpPath(config);
-          if (!fs.existsSync(filename)) {
+          if (!getFs().existsSync(filename)) {
             console.error(`${prefix}No schema file found at ${filename}`);
             process.exitCode = 1;
             return;
@@ -1117,7 +1115,7 @@ export function dbCommand(): Command {
           const filename = DatabaseTasks.cacheDumpFilename(config);
           // clearSchemaCache is a no-op on ENOENT; don't log "Cleared"
           // unless we actually removed something.
-          if (!fs.existsSync(filename)) continue;
+          if (!getFs().existsSync(filename)) continue;
           DatabaseTasks.clearSchemaCache(filename);
           console.log(`Cleared schema cache at ${filename}`);
         }

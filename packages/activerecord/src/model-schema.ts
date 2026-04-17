@@ -490,7 +490,10 @@ export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
 
   if (typeof cache.dataSourceExists === "function") {
     const exists = await cache.dataSourceExists(pool, table);
-    if (!exists) return;
+    // Only bail on explicit false. `undefined` means the connection
+    // doesn't implement the probe — fall through and let columnsHash
+    // succeed or throw a real error.
+    if (exists === false) return;
   }
 
   let hash: Record<string, unknown> | undefined;

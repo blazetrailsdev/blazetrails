@@ -83,7 +83,7 @@ describe("loadSchemaFromAdapter", () => {
     expect(Model._attributeDefinitions.has("guid")).toBe(false);
   });
 
-  it("is a no-op when data source does not exist", async () => {
+  it("is a no-op when data source does not exist (explicit false)", async () => {
     const adapter = {
       schemaCache: {
         dataSourceExists: async () => false,
@@ -96,6 +96,21 @@ describe("loadSchemaFromAdapter", () => {
     await loadSchemaFromAdapter.call(Model);
 
     expect(Model._attributeDefinitions.has("guid")).toBe(false);
+  });
+
+  it("falls through when dataSourceExists returns undefined (probe not implemented)", async () => {
+    const adapter = {
+      schemaCache: {
+        dataSourceExists: async () => undefined,
+        columnsHash: async () => ({ guid: { sqlType: "uuid" } }),
+      },
+      lookupCastTypeFromColumn: () => new UuidType(),
+    };
+    (Model as unknown as { adapter: unknown }).adapter = adapter;
+
+    await loadSchemaFromAdapter.call(Model);
+
+    expect(Model._attributeDefinitions.get("guid")?.source).toBe("schema");
   });
 
   it("falls back to ValueType when adapter has no cast type", async () => {

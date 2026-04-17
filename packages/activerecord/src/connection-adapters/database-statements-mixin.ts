@@ -37,10 +37,7 @@ export function DatabaseStatementsMixin<T extends Constructor<any>>(Base: T) {
       // here means adapters that override execQuery (e.g. PostgreSQLAdapter,
       // which populates columnTypes via its type_map) have their override
       // picked up automatically, matching Rails' behavior.
-      type HasExecQuery = {
-        execQuery(sql: string, name?: string | null, binds?: unknown[]): Promise<Result>;
-      };
-      return (this as unknown as HasExecQuery).execQuery(sql, name, binds);
+      return this.execQuery(sql, name, binds);
     }
 
     async selectOne(

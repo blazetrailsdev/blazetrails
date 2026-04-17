@@ -105,14 +105,6 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
   }
 
   /**
-   * Mirrors: PostgreSQLAdapter#load_additional_types(oids = nil). Queries
-   * pg_type for user-defined types (enums, domains, arrays, ranges,
-   * composites) and registers them via OID::TypeMapInitializer.run.
-   *
-   * Rails' signature uses oids=nil to mean "reload everything we know";
-   * pass an array of OIDs to target a specific miss.
-   */
-  /**
    * Mirrors: PostgreSQLAdapter#lookup_cast_type_from_column(column).
    * Synchronous — only consults the already-populated type_map. Rails'
    * get_oid_type auto-loads on miss because Ruby can block; TS callers
@@ -158,9 +150,12 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
    * Type::Value via getOidType so callers can use `result.castValues()`
    * to deserialize values through the right PG OID type.
    *
-   * `Result.each()` / `Result.toArray()` expose raw row values; this
-   * override's responsibility is to attach the right Type metadata so
-   * explicit casting has what it needs.
+   * `Result.each()` / `Result.toArray()` build hash-shaped rows from
+   * columnIndexes, which still collapse duplicate column names —
+   * callers that need the raw positional values should read
+   * `result.rows` instead. This override's responsibility is to
+   * attach the right Type metadata so explicit casting has what it
+   * needs.
    *
    * The mixin-level execQuery returns a Result with empty columnTypes;
    * this override is the Rails-faithful PG version that actually
@@ -214,6 +209,14 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
     }
   }
 
+  /**
+   * Mirrors: PostgreSQLAdapter#load_additional_types(oids = nil). Queries
+   * pg_type for user-defined types (enums, domains, arrays, ranges,
+   * composites) and registers them via OID::TypeMapInitializer.run.
+   *
+   * Rails' signature uses oids=nil to mean "reload everything we know";
+   * pass an array of OIDs to target a specific miss.
+   */
   async loadAdditionalTypes(oids?: number[]): Promise<void> {
     const initializer = new TypeMapInitializer(this.typeMap);
     for await (const query of this.loadTypesQueries(initializer, oids)) {
@@ -1713,14 +1716,19 @@ export class MoneyDecoder {
  * Normalize a `pg_catalog.format_type(...)` string to the typname the
  * static type_map is keyed by. PG returns human-friendly forms like
  * "integer" / "character varying(255)" / "bigint", but we register
- * "int4" / "varchar" / "int8". Strip modifiers and alias common
+ * "int4" / "varchar" / "int8". Strip size modifiers and alias common
  * formatted names so the fallback path in lookupCastTypeFromColumn
- * resolves well-known types.
+ * resolves well-known *scalar* types.
+ *
+ * Array types (e.g. "integer[]") are deliberately left as-is — they
+ * don't have a static registration, so the lookup misses and returns
+ * ValueType. Mapping them to the scalar typname (int4) would
+ * incorrectly deserialize array values with a scalar type.
  */
 function normalizeFormatType(sqlType: string): string {
+  if (/\[\]\s*$/.test(sqlType)) return sqlType;
   const base = sqlType
     .replace(/\(.*\)/, "")
-    .replace(/\[\]$/, "")
     .trim()
     .toLowerCase();
   return FORMAT_TYPE_ALIASES[base] ?? base;

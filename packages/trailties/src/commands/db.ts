@@ -951,16 +951,24 @@ export function dbCommand(): Command {
         return;
       }
       await forEachDatabase(opts, async (ctx) => {
+        // Discover once, run rollback then migrate on the same
+        // migrator — avoids double "No migrations found." and
+        // produces the same post-migrate output as `db migrate`.
         await withMigratorForDb(
           ctx,
           async (migrator) => {
             await migrator.rollback(step);
+            await migrator.migrate(null);
           },
-          { skipDump: true },
+          {
+            afterOutput: async (migrator) => {
+              const pending = await migrator.pendingMigrations();
+              if (pending.length === 0) {
+                console.log(`${ctx.prefix}All migrations are up to date.`);
+              }
+            },
+          },
         );
-        await withMigratorForDb(ctx, async (migrator) => {
-          await migrator.migrate(null);
-        });
       });
     });
 

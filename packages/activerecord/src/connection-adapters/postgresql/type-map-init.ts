@@ -48,8 +48,11 @@ export function extractLimit(sqlType: string | undefined): number | undefined {
   if (!sqlType) return undefined;
   const match = /\(([^)]*)\)/.exec(sqlType);
   if (!match) return undefined;
+  // Ruby's String#to_i returns 0 for empty / non-numeric leading chars.
+  // Preserve that: parens present → always returns a number (0 on garbage);
+  // no parens → returns undefined (distinct from "0").
   const n = Number.parseInt(match[1].trim(), 10);
-  return Number.isNaN(n) ? undefined : n;
+  return Number.isNaN(n) ? 0 : n;
 }
 
 /** Mirrors: PostgreSQLAdapter.extract_precision — first number in `(p,s)` or `(p)`. */

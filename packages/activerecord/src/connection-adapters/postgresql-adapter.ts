@@ -112,22 +112,26 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
    * pass an array of OIDs to target a specific miss.
    */
   async loadAdditionalTypes(oids?: number[]): Promise<void> {
-    const initializer = new TypeMapInitializer(
-      this.typeMap as unknown as ConstructorParameters<typeof TypeMapInitializer>[0],
-    );
-    for (const query of this.loadTypesQueries(initializer, oids)) {
+    const initializer = new TypeMapInitializer(this.typeMap);
+    for await (const query of this.loadTypesQueries(initializer, oids)) {
       const rows = (await this.execute(query)) as unknown as PgTypeRow[];
       initializer.run(rows);
     }
   }
 
   /**
-   * Mirrors: PostgreSQLAdapter#load_types_queries(initializer, oids).
-   * Builds the SQL queries that feed TypeMapInitializer.run. For a
-   * specific OID list emits one query; for a full reload emits three
-   * (by typname, typtype, array-of-known).
+   * Mirrors: PostgreSQLAdapter#load_types_queries(initializer, oids). For a
+   * specific OID list yields one query; for a full reload yields three
+   * (by typname, typtype, array-of-known) — **in order**, because
+   * `queryConditionsForArrayTypes` depends on numeric OIDs registered
+   * by the first query (`aliasType(row.oid, row.typname)`). Ruby does
+   * this with `yield` inside a method; we use an async generator so
+   * each query is built fresh after the prior one has run.
    */
-  private loadTypesQueries(initializer: TypeMapInitializer, oids?: number[]): string[] {
+  private async *loadTypesQueries(
+    initializer: TypeMapInitializer,
+    oids?: number[],
+  ): AsyncGenerator<string, void, void> {
     const baseQuery = [
       "SELECT t.oid, t.typname, t.typelem, t.typdelim, t.typinput,",
       "       r.rngsubtype, t.typtype, t.typbasetype",
@@ -136,13 +140,26 @@ export class PostgreSQLAdapter extends AdapterBase implements DatabaseAdapter {
     ].join("\n");
 
     if (oids && oids.length > 0) {
-      return [`${baseQuery}\nWHERE t.oid IN (${oids.join(", ")})`];
+      // Validate every OID is a finite integer before interpolating
+      // into SQL. loadAdditionalTypes is public, so untrusted input
+      // could reach us.
+      const safe = oids.map((oid) => {
+        const n = Number(oid);
+        if (!Number.isInteger(n) || n < 0) {
+          throw new Error(`loadAdditionalTypes: invalid OID ${String(oid)}`);
+        }
+        return n;
+      });
+      yield `${baseQuery}\nWHERE t.oid IN (${safe.join(", ")})`;
+      return;
     }
-    return [
-      `${baseQuery}\n${initializer.queryConditionsForKnownTypeNames()}`,
-      `${baseQuery}\n${initializer.queryConditionsForKnownTypeTypes()}`,
-      `${baseQuery}\n${initializer.queryConditionsForArrayTypes()}`,
-    ];
+    yield `${baseQuery}\n${initializer.queryConditionsForKnownTypeNames()}`;
+    yield `${baseQuery}\n${initializer.queryConditionsForKnownTypeTypes()}`;
+    // Generated AFTER the prior two yields have been awaited and run,
+    // so the initializer has already registered numeric OIDs via
+    // aliasType. If we computed this up front, the array query would
+    // typically be empty and fall through to `WHERE 1=0`.
+    yield `${baseQuery}\n${initializer.queryConditionsForArrayTypes()}`;
   }
 
   /**

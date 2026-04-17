@@ -1,58 +1,101 @@
 /**
- * PostgreSQL point type — geometric point as { x, y } object.
+ * PostgreSQL point type — geometric (x, y) point.
  *
- * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::OID::Point
+ * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::OID::Point.
+ * Rails: `class Point < Type::Value; include Helpers::Mutable`. Plus a
+ * `ActiveRecord::Point = Struct.new(:x, :y)` value struct at the outer
+ * namespace. In TS we expose both as a `PointValue` class (Rails'
+ * struct) and the `Point` Type::Value (the OID class).
  */
 
-export interface PointValue {
-  x: number;
-  y: number;
+import { Type } from "@blazetrails/activemodel";
+
+/**
+ * Mirrors Rails' `ActiveRecord::Point = Struct.new(:x, :y)`.
+ */
+export class PointValue {
+  readonly x: number;
+  readonly y: number;
+
+  constructor(x: number, y: number) {
+    this.x = x;
+    this.y = y;
+  }
 }
 
-export class Point {
-  get type(): string {
+export class Point extends Type<PointValue> {
+  readonly name: string = "point";
+
+  override type(): string {
     return "point";
+  }
+
+  /** Rails' Helpers::Mutable sets mutable? = true. */
+  override isMutable(): boolean {
+    return true;
   }
 
   cast(value: unknown): PointValue | null {
     if (value == null) return null;
-    if (typeof value === "object" && value !== null && "x" in value && "y" in value) {
-      return { x: Number((value as PointValue).x), y: Number((value as PointValue).y) };
-    }
-    if (globalThis.Array.isArray(value) && value.length === 2) {
-      return { x: Number(value[0]), y: Number(value[1]) };
-    }
+    if (value instanceof PointValue) return value;
     if (typeof value === "string") {
-      if (value === "") return null;
-      return this.parsePoint(value);
+      if (value.trim() === "") return null;
+      let inner = value;
+      if (inner.startsWith("(") && inner.endsWith(")")) {
+        inner = inner.slice(1, -1);
+      }
+      const [x, y] = inner.split(",");
+      return this.buildPoint(x, y);
+    }
+    if (globalThis.Array.isArray(value)) {
+      return this.buildPoint(value[0], value[1]);
+    }
+    if (typeof value === "object") {
+      const hash = value as Record<string, unknown>;
+      if (Object.keys(hash).length === 0) return null;
+      const [x, y] = valuesArrayFromHash(hash);
+      return this.buildPoint(x, y);
     }
     return null;
   }
 
-  serialize(value: unknown): string | null {
+  override serialize(value: unknown): string | null {
     if (value == null) return null;
-    if (typeof value === "object" && value !== null && "x" in value && "y" in value) {
-      const p = value as PointValue;
-      return `(${p.x},${p.y})`;
+    if (value instanceof PointValue) {
+      return `(${numberForPoint(value.x)},${numberForPoint(value.y)})`;
     }
-    if (globalThis.Array.isArray(value) && value.length === 2) {
-      return `(${value[0]},${value[1]})`;
+    if (globalThis.Array.isArray(value)) {
+      return this.serialize(this.buildPoint(value[0], value[1]));
     }
-    if (typeof value === "string") return value;
-    return null;
+    if (typeof value === "object") {
+      const [x, y] = valuesArrayFromHash(value as Record<string, unknown>);
+      return this.serialize(this.buildPoint(x, y));
+    }
+    return super.serialize(value) as string | null;
   }
 
-  deserialize(value: unknown): PointValue | null {
-    return this.cast(value);
+  override typeCastForSchema(value: unknown): string {
+    if (value instanceof PointValue) {
+      return `[${value.x}, ${value.y}]`;
+    }
+    return super.typeCastForSchema(value);
   }
 
-  private parsePoint(str: string): PointValue | null {
-    const cleaned = str.replace(/[()]/g, "").trim();
-    const parts = cleaned.split(",").map((s) => s.trim());
-    if (parts.length !== 2) return null;
-    const x = parseFloat(parts[0]);
-    const y = parseFloat(parts[1]);
-    if (isNaN(x) || isNaN(y)) return null;
-    return { x, y };
+  private buildPoint(x: unknown, y: unknown): PointValue | null {
+    const fx = Number(x);
+    const fy = Number(y);
+    if (Number.isNaN(fx) || Number.isNaN(fy)) return null;
+    return new PointValue(fx, fy);
   }
+}
+
+/** Mirrors Rails' `number.to_s.delete_suffix(".0")` — drop trailing .0 on ints. */
+function numberForPoint(n: number): string {
+  const s = String(n);
+  return s.endsWith(".0") ? s.slice(0, -2) : s;
+}
+
+/** Mirrors Rails' `value.values_at(:x, "x").compact.first` for both keys. */
+function valuesArrayFromHash(hash: Record<string, unknown>): [unknown, unknown] {
+  return [hash.x ?? hash["x"], hash.y ?? hash["y"]];
 }

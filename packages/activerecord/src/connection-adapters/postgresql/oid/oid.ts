@@ -1,31 +1,25 @@
 /**
  * PostgreSQL OID type — object identifier.
  *
- * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::OID::Oid
+ * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::OID::Oid.
+ * Rails: `class Oid < Type::UnsignedInteger`. We don't yet have an
+ * UnsignedIntegerType in activemodel, so extend IntegerType and add a
+ * signed-range rejection in cast to approximate unsigned semantics.
  */
 
-export class Oid {
-  get type(): string {
-    return "integer";
+import { IntegerType } from "@blazetrails/activemodel";
+
+export class Oid extends IntegerType {
+  override readonly name: string = "oid";
+
+  override type(): string {
+    return "oid";
   }
 
-  cast(value: unknown): number | null {
-    if (value == null) return null;
-    if (typeof value === "number") return Math.trunc(value);
-    if (typeof value === "string") {
-      if (value === "") return null;
-      const parsed = parseInt(value, 10);
-      if (isNaN(parsed)) return null;
-      return parsed;
-    }
-    return null;
-  }
-
-  serialize(value: unknown): number | null {
-    return this.cast(value);
-  }
-
-  deserialize(value: unknown): number | null {
-    return this.cast(value);
+  override cast(value: unknown): number | null {
+    const cast = super.cast(value);
+    // Rails' UnsignedInteger rejects negatives; PG OIDs are unsigned 32-bit.
+    if (cast != null && cast < 0) return null;
+    return cast;
   }
 }

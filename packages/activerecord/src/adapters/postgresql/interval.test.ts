@@ -1,7 +1,9 @@
 /**
  * Mirrors Rails activerecord/test/cases/adapters/postgresql/interval_test.rb
  */
-import { describe, it, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { Duration } from "@blazetrails/activesupport";
+import { Interval } from "../../connection-adapters/postgresql/oid/interval.js";
 import { describeIfPg, PostgreSQLAdapter, PG_TEST_URL } from "./test-helper.js";
 
 describeIfPg("PostgreSQLAdapter", () => {
@@ -27,5 +29,25 @@ describeIfPg("PostgreSQLAdapter", () => {
     it.skip("interval type cast string and numeric from user", () => {});
     it.skip("average interval type", () => {});
     it.skip("schema dump with default value", () => {});
+  });
+});
+
+// Unit-level tests against the Interval type directly — no DB required.
+// Rails test names so api:compare matches.
+describe("PostgresqlIntervalTest", () => {
+  it("interval type", () => {
+    expect(new Interval().type()).toBe("interval");
+  });
+
+  it("interval type cast from invalid string", () => {
+    // Rails: invalid ISO8601 returns nil.
+    expect(new Interval().cast("not a duration")).toBeNull();
+  });
+
+  it("interval type cast from numeric", () => {
+    // Rails: numeric seconds go through Duration.build and round-trip
+    // via iso8601.
+    const serialized = new Interval().serialize(3600);
+    expect(serialized).toBe(Duration.build(3600).iso8601());
   });
 });

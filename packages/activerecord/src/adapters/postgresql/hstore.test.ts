@@ -3,7 +3,11 @@
  */
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest";
 import { describeIfPg, PostgreSQLAdapter, PG_TEST_URL } from "./test-helper.js";
-import { parseHstore, serializeHstore } from "../../connection-adapters/postgresql/oid/hstore.js";
+import {
+  Hstore,
+  parseHstore,
+  serializeHstore,
+} from "../../connection-adapters/postgresql/oid/hstore.js";
 
 describeIfPg("PostgreSQLAdapter", () => {
   let adapter: PostgreSQLAdapter;
@@ -467,5 +471,22 @@ describeIfPg("PostgreSQLAdapter", () => {
     it.skip("schema dump with shorthand", async () => {
       /* needs schema dumper */
     });
+  });
+});
+
+// Unit-level tests against Hstore — no DB required. Rails test names.
+describe("PostgresqlHstoreTest", () => {
+  it("deserialize", () => {
+    const type = new Hstore();
+    expect(type.deserialize('"a"=>"b", "c"=>"d"')).toEqual({ a: "b", c: "d" });
+    expect(type.deserialize('"a"=>NULL')).toEqual({ a: null });
+    expect(type.deserialize(null)).toBeNull();
+  });
+
+  it("serialize", () => {
+    const type = new Hstore();
+    expect(type.serialize({ a: "b" })).toBe('"a"=>"b"');
+    expect(type.serialize({ a: null })).toBe('"a"=>NULL');
+    expect(type.serialize({ a: "" })).toBe('"a"=>""');
   });
 });

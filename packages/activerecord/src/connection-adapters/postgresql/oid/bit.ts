@@ -75,8 +75,17 @@ export class Bit extends Type<string> {
   protected castValue(value: unknown): string | null {
     if (value == null) return null;
     if (typeof value === "string") {
-      // Rails: "0x..." hex notation → to_s(2) binary string.
-      if (/^0x/i.test(value)) return parseInt(value.slice(2), 16).toString(2);
+      // Rails: `value[2..-1].hex.to_s(2)` — uses Ruby's arbitrary-precision
+      // Integer, so bit strings longer than 53 bits round-trip losslessly.
+      // JS `parseInt` goes through Number; use BigInt so we don't silently
+      // corrupt long bit strings.
+      if (/^0x/i.test(value)) {
+        try {
+          return BigInt(value).toString(2);
+        } catch {
+          return value;
+        }
+      }
       return value;
     }
     return String(value);

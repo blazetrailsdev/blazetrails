@@ -622,6 +622,9 @@ function applyColumnsHash(
 
 export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
   if (this._abstractClass) return;
+  // STI subclasses inherit the base's attribute defs — skip reflection to
+  // avoid forking _attributeDefinitions.
+  if (isStiSubclass(this as unknown as typeof Base)) return;
   const startingAdapter = this.adapter;
   if (!startingAdapter) return;
   const cache = startingAdapter.schemaCache;
@@ -655,6 +658,10 @@ export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
  */
 function loadSchemaFromCacheSync(host: SchemaHost): boolean {
   if (host._abstractClass) return false;
+  // STI subclasses share the base's table and attribute defs. Reflecting
+  // on a subclass would fork _attributeDefinitions into a divergent copy.
+  // Rails' load_schema! runs on the STI base; subclasses inherit.
+  if (isStiSubclass(host as unknown as typeof Base)) return false;
   // `host.adapter` throws when no pool is configured (fixture-only models).
   // Treat that as "no adapter, no reflection" rather than propagating.
   let adapter: SchemaHost["adapter"];

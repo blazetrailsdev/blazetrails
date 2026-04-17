@@ -64,6 +64,33 @@ describe("sync loadSchema / columnsHash", () => {
     expect(hash.name.type).toBe("string");
   });
 
+  it("does not fork _attributeDefinitions on STI subclasses", () => {
+    class Shape extends Base {
+      static override tableName = "shapes";
+      static {
+        this.inheritanceColumn = "type";
+        this.attribute("type", "string");
+      }
+    }
+    class Circle extends Shape {}
+
+    const cols = { guid: { sqlType: "uuid", name: "guid", default: null } };
+    (Shape as unknown as { adapter: unknown }).adapter = makeAdapter(cols);
+    (Circle as unknown as { adapter: unknown }).adapter = makeAdapter(cols);
+
+    // Trigger load on subclass first — must be a no-op for reflection.
+    Circle.columnsHash();
+
+    const circleOwn = Object.prototype.hasOwnProperty.call(Circle, "_attributeDefinitions");
+    expect(circleOwn).toBe(false);
+
+    // Base should still reflect normally.
+    Shape.columnsHash();
+    expect(Shape._attributeDefinitions.get("guid")?.source).toBe("schema");
+    // Subclass sees the same defs via prototype chain.
+    expect(Circle._attributeDefinitions.get("guid")?.source).toBe("schema");
+  });
+
   it("resetColumnInformation drops schema-sourced defs but preserves user defs", () => {
     class Post extends Base {
       static override tableName = "posts";

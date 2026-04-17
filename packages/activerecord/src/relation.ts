@@ -1178,9 +1178,15 @@ export class Relation<T extends Base> {
     // in finally) so concurrent callers share the one in-flight query
     // instead of racing to fire additional ones.
     if (!this._loadAsyncPromise && !this._loaded) {
-      this._loadAsyncPromise = this.toArray().finally(() => {
+      const loadPromise = this.toArray().finally(() => {
         this._loadAsyncPromise = undefined;
       });
+      // Attach a no-op rejection handler so a failure here isn't treated
+      // as an unhandled rejection if nothing else awaits the relation.
+      // The stored promise still carries the rejection to explicit
+      // awaiters (.toArray(), etc.) via a separate chain.
+      void loadPromise.catch(() => {});
+      this._loadAsyncPromise = loadPromise;
     }
     return this;
   }

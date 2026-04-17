@@ -172,6 +172,13 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * populates them.
    */
   override async execQuery(sql: string, _name?: string | null, binds?: unknown[]): Promise<Result> {
+    // SELECTs enter here instead of execute(), so we materialize lazy
+    // transactions here too — otherwise SELECTs run against an ad-hoc
+    // pool client while pending-but-not-yet-BEGUN transactions stay
+    // un-materialized. Mirrors Rails' with_raw_connection materializing
+    // every query (abstract_adapter.rb:987).
+    await this.materializeTransactions();
+
     // Release the query client BEFORE any loadAdditionalTypes call —
     // that path re-enters execute() and acquires its own pooled client,
     // and holding both would consume 2 connections per query during

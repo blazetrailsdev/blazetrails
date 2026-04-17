@@ -2,7 +2,7 @@ export abstract class Type<T = unknown> {
   abstract readonly name: string;
   readonly precision?: number;
   readonly limit?: number;
-  protected _scale?: number;
+  protected readonly _scale?: number;
 
   constructor(options?: { precision?: number; scale?: number; limit?: number }) {
     if (options?.precision !== undefined) this.precision = options.precision;

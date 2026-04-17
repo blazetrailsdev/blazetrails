@@ -79,14 +79,17 @@ export class Point extends Type<PointValue> {
       return `(${numberForPoint(value.x)},${numberForPoint(value.y)})`;
     }
     if (globalThis.Array.isArray(value)) {
-      if (value.length !== 2) return super.serialize(value) as string | null;
+      if (value.length !== 2) return null;
       return this.serialize(this.buildPoint(value[0], value[1]));
     }
     if (typeof value === "object") {
       const [x, y] = valuesArrayFromHash(value as Record<string, unknown>);
       return this.serialize(this.buildPoint(x, y));
     }
-    return super.serialize(value) as string | null;
+    // Rails falls through to Type::Value#serialize (identity) for unknown
+    // inputs, but our declared return type is string | null — return null
+    // rather than lie about the runtime shape.
+    return null;
   }
 
   override typeCastForSchema(value: unknown): string {

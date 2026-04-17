@@ -57,7 +57,11 @@ export class Hstore extends Type<Record<string, string | null>> {
         .map(([k, v]) => `${escapeHstore(k)}=>${escapeHstore(v as string | null)}`)
         .join(", ");
     }
-    return super.serialize(value) as string | null;
+    // Rails' else branch returns value unchanged. Our declared return is
+    // string | null, so pass through only when it's already a string;
+    // anything else can't honestly satisfy the contract.
+    if (typeof value === "string") return value;
+    return null;
   }
 
   /**

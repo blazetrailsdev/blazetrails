@@ -9,8 +9,18 @@
 
 import { IntegerType } from "@blazetrails/activemodel";
 
+const PG_OID_MAX = 0xffffffff;
+
 export class Oid extends IntegerType {
   override readonly name: string = "oid";
+
+  constructor(options?: { limit?: number }) {
+    // PG OIDs are unsigned 32-bit. IntegerType's default signed range
+    // (limit=4 → max 2^31-1) rejects half the valid OID space at
+    // serialize time. Use limit=8 so the base range check permits the
+    // full unsigned-32 window; we clamp to it explicitly below.
+    super({ limit: options?.limit ?? 8 });
+  }
 
   override type(): string {
     return "oid";
@@ -19,7 +29,13 @@ export class Oid extends IntegerType {
   override cast(value: unknown): number | null {
     const cast = super.cast(value);
     // Rails' UnsignedInteger rejects negatives; PG OIDs are unsigned 32-bit.
-    if (cast != null && cast < 0) return null;
+    if (cast == null) return cast;
+    if (cast < 0 || cast > PG_OID_MAX) return null;
+    return cast;
+  }
+
+  override serialize(value: unknown): unknown {
+    const cast = this.cast(value);
     return cast;
   }
 }

@@ -2,9 +2,9 @@
  * PostgreSQL bit string type — casts PG bit strings.
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::OID::Bit
- *
- * Also exports Data class used internally for bit string representation.
  */
+
+import { Type } from "@blazetrails/activemodel";
 
 export class Data {
   readonly value: string;
@@ -15,6 +15,16 @@ export class Data {
 
   toString(): string {
     return this.value;
+  }
+
+  /** Mirrors Rails' Bit::Data#binary? */
+  isBinary(): boolean {
+    return /^[01]*$/.test(this.value);
+  }
+
+  /** Mirrors Rails' Bit::Data#hex? */
+  isHex(): boolean {
+    return /^[0-9A-F]*$/i.test(this.value);
   }
 
   toBinaryString(): string {
@@ -37,29 +47,34 @@ export class Data {
   }
 }
 
-export class Bit {
-  get type(): string {
+export class Bit extends Type<string> {
+  readonly name: string = "bit";
+
+  override type(): string {
     return "bit";
   }
 
-  cast(value: unknown): Data | null {
+  cast(value: unknown): string | null {
+    return this.castValue(value);
+  }
+
+  override serialize(value: unknown): Data | null {
     if (value == null) return null;
-    if (value instanceof Data) return value;
+    return new Data(this.castValue(value) ?? "");
+  }
+
+  override deserialize(value: unknown): string | null {
+    return this.castValue(value);
+  }
+
+  /** Rails' OID::Bit#cast_value */
+  protected castValue(value: unknown): string | null {
+    if (value == null) return null;
     if (typeof value === "string") {
-      if (value === "") return null;
-      return new Data(value);
+      // Rails: "0x..." hex notation → to_s(2) binary string.
+      if (/^0x/i.test(value)) return parseInt(value.slice(2), 16).toString(2);
+      return value;
     }
-    return null;
-  }
-
-  serialize(value: unknown): string | null {
-    if (value == null) return null;
-    if (value instanceof Data) return value.toString();
-    if (typeof value === "string") return value;
-    return null;
-  }
-
-  deserialize(value: unknown): Data | null {
-    return this.cast(value);
+    return String(value);
   }
 }

@@ -638,7 +638,7 @@ export class AbstractAdapter extends AbstractAdapterBase {
 
   async addEnumValue(_enumName: string, _value: string): Promise<void> {}
 
-  async renameEnumValue(..._args: unknown[]): Promise<void> {}
+  async renameEnumValue(_typeName: string, _options: { from: string; to: string }): Promise<void> {}
 
   async createVirtualTable(_name: string, _options?: unknown): Promise<void> {}
 
@@ -724,12 +724,24 @@ export class AbstractAdapter extends AbstractAdapterBase {
 
   // --- Version introspection ---
 
+  // Rails' `get_database_version` returns whatever the adapter uses to
+  // represent a server version. PG returns the `server_version` integer;
+  // SQLite returns a `Version`. Other adapters may be async (PG's
+  // implementation queries `SHOW server_version_num`).
   getDatabaseVersion(): Version | number | Promise<Version | number> {
     return new Version("0.0.0");
   }
 
-  get databaseVersion(): Version | number | Promise<Version | number> {
-    return this.getDatabaseVersion();
+  // Rails' `database_version` is a sync accessor (`pool.server_version(self)`
+  // caches the result). Overrides may narrow to `Version` or `number`.
+  get databaseVersion(): Version | number {
+    const v = this.getDatabaseVersion();
+    if (v instanceof Promise) {
+      throw new Error(
+        "databaseVersion is only available synchronously after getDatabaseVersion() has resolved; await getDatabaseVersion() first",
+      );
+    }
+    return v;
   }
 
   checkVersion(): void {}

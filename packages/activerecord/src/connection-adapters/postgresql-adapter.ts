@@ -172,12 +172,12 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * populates them.
    */
   override async execQuery(sql: string, _name?: string | null, binds?: unknown[]): Promise<Result> {
-    // SELECTs enter here instead of execute(), so we materialize lazy
-    // transactions here too — otherwise SELECTs run against an ad-hoc
-    // pool client while pending-but-not-yet-BEGUN transactions stay
-    // un-materialized. Mirrors Rails' with_raw_connection materializing
-    // every query (abstract_adapter.rb:987).
-    await this.materializeTransactions();
+    // Note: we do NOT call materializeTransactions() here. If a lazy tx
+    // is pending but un-materialized, a SELECT against an ad-hoc pool
+    // client sees pre-tx state — which is correct read-before-write
+    // semantics. If the tx HAS begun, `_client` is set and getClient()
+    // returns it. Forcing materialization here races with the tx
+    // client's lifecycle and can cause double-release on pool clients.
 
     // Release the query client BEFORE any loadAdditionalTypes call —
     // that path re-enters execute() and acquires its own pooled client,
@@ -1168,12 +1168,19 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
 
     return rows.map((r) => {
       const sqlType = r.type as string;
-      const defaultExpr = (r.default as string | null) ?? null;
-      const isSerial = typeof defaultExpr === "string" && defaultExpr.startsWith("nextval(");
+      const rawDefault = (r.default as string | null) ?? null;
+      // Mirrors Rails' PG `extract_value_from_default` / `extract_default_function`
+      // split — SQL-expression defaults (nextval, CURRENT_TIMESTAMP,
+      // gen_random_uuid(), etc.) become `defaultFunction`; only literals
+      // become `default`. Without this split, schema reflection would
+      // apply expressions as literal bind values and PG would reject
+      // `nextval(...)` as a bound integer.
+      const { literal, fn } = splitPgDefault(rawDefault);
+      const isSerial = typeof rawDefault === "string" && rawDefault.startsWith("nextval(");
 
       return new Column(
         r.name as string,
-        defaultExpr,
+        literal,
         {
           sqlType,
           oid: r.oid as number,
@@ -1181,6 +1188,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         },
         !(r.notnull as boolean),
         {
+          defaultFunction: fn,
           primaryKey: r.is_primary as boolean,
           serial: isSerial,
           array: sqlType.endsWith("[]"),
@@ -1770,6 +1778,34 @@ export class MoneyDecoder {
  * ValueType. Mapping them to the scalar typname (int4) would
  * incorrectly deserialize array values with a scalar type.
  */
+/**
+ * Parse a raw `pg_attrdef` default expression into a literal value or a
+ * SQL function expression. Mirrors Rails' PG `extract_value_from_default`
+ * / `extract_default_function` split — so schema reflection can carry
+ * expression defaults as `defaultFunction` rather than applying them as
+ * literal bind values.
+ */
+function splitPgDefault(raw: string | null): { literal: unknown; fn: string | null } {
+  if (raw == null) return { literal: null, fn: null };
+  // 'value'::type — quoted literal with an optional cast.
+  const quoted = /^'((?:[^']|'')*)'::[\w"\s.]+$/.exec(raw);
+  if (quoted) return { literal: quoted[1].replace(/''/g, "'"), fn: null };
+  // (N)::type — numeric wrapped in parens with a cast (PG emits this for
+  // things like `DEFAULT 150.55::numeric::money`).
+  const parenNum = /^\((-?\d+(?:\.\d+)?)\)::[\w"\s.]+$/.exec(raw);
+  if (parenNum) return { literal: parenNum[1], fn: null };
+  // N::type — bare numeric with a cast.
+  const castNum = /^(-?\d+(?:\.\d+)?)::[\w"\s.]+$/.exec(raw);
+  if (castNum) return { literal: castNum[1], fn: null };
+  // Bare numeric / boolean / NULL literal.
+  if (/^-?\d+(?:\.\d+)?$/.test(raw)) return { literal: raw, fn: null };
+  if (raw === "true" || raw === "false") return { literal: raw === "true", fn: null };
+  if (raw === "NULL") return { literal: null, fn: null };
+  // Everything else (nextval, CURRENT_TIMESTAMP, gen_random_uuid(), etc.)
+  // is a SQL expression.
+  return { literal: null, fn: raw };
+}
+
 function normalizeFormatType(sqlType: string): string {
   if (/\[\]\s*$/.test(sqlType)) return sqlType;
   const base = sqlType

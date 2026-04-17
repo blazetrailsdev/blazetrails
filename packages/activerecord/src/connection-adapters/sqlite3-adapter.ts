@@ -1378,13 +1378,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
  *
  * SQLite3-specific statement pool backed by the generic StatementPool.
  */
-export class StatementPool extends GenericStatementPool<Database.Statement> {
-  protected override dealloc(stmt: Database.Statement): void {
-    // better-sqlite3 statements don't need explicit finalization in
-    // normal usage, but calling finalize() frees the underlying SQLite
-    // prepared statement immediately rather than waiting for GC.
-  }
-}
+export class StatementPool extends GenericStatementPool<Database.Statement> {}
 
 /**
  * Mirrors: ActiveRecord::ConnectionAdapters::SQLite3Adapter::SQLite3Integer

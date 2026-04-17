@@ -350,7 +350,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     try {
       const pgSql = this.rewriteBinds(sql, binds);
       const query = binds.length > 0 ? this._preparedQuery(pgSql, binds) : pgSql;
-      const result = await client.query(query, binds.length > 0 ? binds : undefined);
+      const result =
+        typeof query === "string"
+          ? await client.query(query, binds.length > 0 ? binds : undefined)
+          : await client.query(query);
       return result.rows;
     } finally {
       this.releaseClient(client);

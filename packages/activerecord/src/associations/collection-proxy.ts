@@ -1125,7 +1125,7 @@ export class CollectionProxy<T extends Base = Base> {
           "deep-importing './associations/collection-proxy.js'.",
       );
     }
-    const ar = new _AssociationRelationCtor(rel._modelClass, this);
+    const ar = new _AssociationRelationCtor(rel.model, this);
     ar._copyStateFrom(rel);
     return wrapWithScopeProxy(ar);
   }

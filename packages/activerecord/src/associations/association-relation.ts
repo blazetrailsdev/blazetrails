@@ -37,7 +37,7 @@ export class AssociationRelation<T extends Base> extends Relation<T> {
    * through the association.
    */
   protected _newRelation(): Relation<T> {
-    return new AssociationRelation<T>((this as any)._modelClass as typeof Base, this._association);
+    return new AssociationRelation<T>(this.model, this._association);
   }
 
   /**
@@ -125,7 +125,7 @@ export class AssociationRelation<T extends Base> extends Relation<T> {
       typeof ownerAny.isStrictLoadingNPlusOneOnly === "function" &&
       ownerAny.isStrictLoadingNPlusOneOnly() &&
       reflection.type === "hasMany";
-    if (nPlusOneOnly || ownerAny._strictLoading) {
+    if (nPlusOneOnly || ownerAny._strictLoading || reflection.options.strictLoading) {
       for (const r of records) {
         (r as unknown as { strictLoadingBang?: () => void }).strictLoadingBang?.();
       }

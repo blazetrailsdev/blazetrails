@@ -125,17 +125,28 @@ export function hasAttributeDefinition(this: typeof Base, name: string): boolean
  *
  * Mirrors: ActiveRecord::ModelSchema::ClassMethods#columns_hash
  */
-export function columnsHash(
-  this: typeof Base,
-): Record<string, { name: string; type: string; default: unknown }> {
+/**
+ * Column-like shape returned by `columnsHash`. When the schema cache is
+ * populated, entries are the adapter's full Column objects (`sqlType`,
+ * `collation`, `comment`, nullable `type`, ...); otherwise a synthesized
+ * shape derived from attribute definitions.
+ */
+export interface ColumnLike {
+  name: string;
+  type?: string | null;
+  sqlType?: string;
+  default?: unknown;
+  [key: string]: unknown;
+}
+
+export function columnsHash(this: typeof Base): Record<string, ColumnLike> {
   if (this.abstractClass) {
     throw new Error(`Cannot call columnsHash on abstract class ${this.name}`);
   }
   loadSchema.call(this as unknown as SchemaHost);
 
   // Prefer the adapter's schema cache when populated — it carries richer
-  // Column objects (sqlType, collation, comment, ...) than what we can
-  // synthesize from attribute defs.
+  // Column objects than what we can synthesize from attribute defs.
   let adapter: typeof Base.prototype extends never ? never : typeof this.adapter | null = null;
   try {
     adapter = this.adapter;
@@ -145,23 +156,23 @@ export function columnsHash(
   const cache = (adapter as unknown as { schemaCache?: unknown } | null)?.schemaCache as
     | {
         isCached?: (t: string) => boolean;
-        getCachedColumnsHash?: (t: string) => Record<string, unknown> | undefined;
+        getCachedColumnsHash?: (t: string) => Record<string, ColumnLike> | undefined;
       }
     | undefined;
   if (cache && typeof cache.isCached === "function" && cache.isCached(this.tableName)) {
     const cached = cache.getCachedColumnsHash?.(this.tableName);
     if (cached) {
       const ignored = new Set(this.ignoredColumns ?? []);
-      const filtered: Record<string, { name: string; type: string; default: unknown }> = {};
+      const filtered: Record<string, ColumnLike> = {};
       for (const [k, v] of Object.entries(cached)) {
         if (ignored.has(k)) continue;
-        filtered[k] = v as { name: string; type: string; default: unknown };
+        filtered[k] = v;
       }
       return filtered;
     }
   }
 
-  const result: Record<string, { name: string; type: string; default: unknown }> = {};
+  const result: Record<string, ColumnLike> = {};
   for (const [name, def] of this._attributeDefinitions) {
     result[name] = { name, type: def.type.name, default: def.defaultValue ?? null };
   }
@@ -622,9 +633,14 @@ function applyColumnsHash(
 
 export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
   if (this._abstractClass) return;
-  // STI subclasses inherit the base's attribute defs — skip reflection to
-  // avoid forking _attributeDefinitions.
-  if (isStiSubclass(this as unknown as typeof Base)) return;
+  // STI subclasses inherit the base's attribute defs — delegate to the
+  // STI base so `Circle.loadSchema()` still reflects (via Shape) rather
+  // than silently no-op'ing.
+  const klass = this as unknown as typeof Base;
+  if (isStiSubclass(klass)) {
+    await loadSchemaFromAdapter.call(getStiBase(klass) as unknown as SchemaHost);
+    return;
+  }
   const startingAdapter = this.adapter;
   if (!startingAdapter) return;
   const cache = startingAdapter.schemaCache;
@@ -659,28 +675,30 @@ export async function loadSchemaFromAdapter(this: SchemaHost): Promise<void> {
 function loadSchemaFromCacheSync(host: SchemaHost): boolean {
   if (host._abstractClass) return false;
   // STI subclasses share the base's table and attribute defs. Reflecting
-  // on a subclass would fork _attributeDefinitions into a divergent copy.
-  // Rails' load_schema! runs on the STI base; subclasses inherit.
-  if (isStiSubclass(host as unknown as typeof Base)) return false;
+  // on a subclass would fork _attributeDefinitions; instead, redirect to
+  // the STI base so subclasses still trigger (and inherit) reflection.
+  const schemaHost = isStiSubclass(host as unknown as typeof Base)
+    ? (getStiBase(host as unknown as typeof Base) as unknown as SchemaHost)
+    : host;
   // `host.adapter` throws when no pool is configured (fixture-only models).
   // Treat that as "no adapter, no reflection" rather than propagating.
   let adapter: SchemaHost["adapter"];
   try {
-    adapter = host.adapter;
+    adapter = schemaHost.adapter;
   } catch {
     return false;
   }
   if (!adapter) return false;
   const cache = adapter.schemaCache;
   if (!cache || typeof cache.isCached !== "function") return false;
-  const table = (host as unknown as typeof Base).tableName;
+  const table = (schemaHost as unknown as typeof Base).tableName;
   if (!cache.isCached(table)) return false;
   const hash =
     typeof cache.getCachedColumnsHash === "function"
       ? cache.getCachedColumnsHash(table)
       : undefined;
   if (!hash) return false;
-  applyColumnsHash(host, adapter, hash);
+  applyColumnsHash(schemaHost, adapter, hash);
   return true;
 }
 

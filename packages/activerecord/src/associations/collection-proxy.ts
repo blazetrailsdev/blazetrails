@@ -102,6 +102,26 @@ export class CollectionProxy<T extends Base = Base> {
     return this._target;
   }
 
+  /** @internal Owner record — used by AssociationRelation. */
+  get owner(): Base {
+    return this._record;
+  }
+
+  /** @internal Association definition — used by AssociationRelation. */
+  get reflection(): AssociationDefinition {
+    return this._assocDef;
+  }
+
+  /** @internal Association name — used by AssociationRelation. */
+  get associationName(): string {
+    return this._assocName;
+  }
+
+  /** @internal Whether this is a through association — used by AssociationRelation. */
+  get isThrough(): boolean {
+    return !!this._assocDef.options.through;
+  }
+
   // ──────────────────────────────────────────────────────────────────
   // Array-likeness — sync ops over the loaded target.
   //

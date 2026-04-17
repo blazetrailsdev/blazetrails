@@ -95,4 +95,90 @@ describe("AssociationRelation", () => {
     expect(post.ar_blog_id).toBe(blog.id);
     expect(post.published).toBe(true);
   });
+
+  it("exposes the owner and reflection via proxyAssociation", async () => {
+    const blog = await freshBlog();
+    const proxy = association<ArPost>(blog, "arPosts");
+    const scope = proxy.where({ published: true }) as unknown as AssociationRelation<ArPost>;
+    expect(scope.proxyAssociation.owner).toBe(blog);
+    expect(scope.proxyAssociation.reflection.name).toBe("arPosts");
+    expect(scope.proxyAssociation.reflection.type).toBe("hasMany");
+  });
+
+  it("equals compares against a loaded array of records", async () => {
+    const blog = await freshBlog();
+    const proxy = association<ArPost>(blog, "arPosts");
+    await proxy.create({ title: "A", published: true });
+    await proxy.create({ title: "B", published: true });
+    await proxy.create({ title: "C", published: false });
+
+    const scope = proxy
+      .where({ published: true })
+      .order("title") as unknown as AssociationRelation<ArPost>;
+    const records = await scope.toArray();
+    expect(await scope.equals(records)).toBe(true);
+    expect(await scope.equals([])).toBe(false);
+  });
+
+  it("createBang throws RecordInvalid via the association on validation failure", async () => {
+    class ArValidatedPost extends Base {
+      declare ar_blog_id: number | null;
+      declare title: string;
+      static {
+        this.attribute("title", "string");
+        this.attribute("ar_blog_id", "integer");
+        this.validates("title", { presence: true });
+      }
+    }
+    class ArValidatedBlog extends Base {
+      declare name: string;
+      static {
+        this.attribute("name", "string");
+      }
+    }
+    ArValidatedBlog.hasMany("arValidatedPosts", { className: "ArValidatedPost" });
+    ArValidatedPost.adapter = adapter;
+    ArValidatedBlog.adapter = adapter;
+    registerModel(ArValidatedBlog);
+    registerModel(ArValidatedPost);
+
+    const blog = new ArValidatedBlog({ name: "v" });
+    await blog.save();
+    const proxy = association<ArValidatedPost>(blog, "arValidatedPosts");
+    const scope = proxy.where({}) as unknown as AssociationRelation<ArValidatedPost>;
+    await expect(scope.createBang({ title: "" })).rejects.toThrow(/title/i);
+  });
+
+  it("sets inverse_of on records loaded through the relation", async () => {
+    class ArInvBlog extends Base {
+      declare name: string;
+      static {
+        this.attribute("name", "string");
+      }
+    }
+    class ArInvPost extends Base {
+      declare ar_inv_blog_id: number | null;
+      declare title: string;
+      static {
+        this.attribute("title", "string");
+        this.attribute("ar_inv_blog_id", "integer");
+        this.belongsTo("arInvBlog", { className: "ArInvBlog" });
+      }
+    }
+    ArInvBlog.hasMany("arInvPosts", { className: "ArInvPost", inverseOf: "arInvBlog" });
+    ArInvBlog.adapter = adapter;
+    ArInvPost.adapter = adapter;
+    registerModel(ArInvBlog);
+    registerModel(ArInvPost);
+
+    const blog = new ArInvBlog({ name: "inv" });
+    await blog.save();
+    const proxy = association<ArInvPost>(blog, "arInvPosts");
+    await proxy.create({ title: "P1" });
+
+    const scope = proxy.where({}) as unknown as AssociationRelation<ArInvPost>;
+    const [post] = await scope.toArray();
+    const cache = (post as any)._cachedAssociations as Map<string, unknown> | undefined;
+    expect(cache?.get("arInvBlog")).toBe(blog);
+  });
 });

@@ -22,6 +22,16 @@ export class AssociationRelation<T extends Base> extends Relation<T> {
   }
 
   /**
+   * Public accessor for the owning association. Mirrors Rails'
+   * `ActiveRecord::AssociationRelation#proxy_association`, which extension
+   * blocks use to reach the owner (`proxy_association.owner`) and the
+   * reflection (`proxy_association.reflection`).
+   */
+  get proxyAssociation(): CollectionProxy<T> {
+    return this._association;
+  }
+
+  /**
    * Preserve the AssociationRelation subclass across `_clone()` so chains
    * like `blog.posts.where(...).order(...).create(...)` still route writes
    * through the association.
@@ -64,12 +74,57 @@ export class AssociationRelation<T extends Base> extends Relation<T> {
    */
   async createBang(attrs: Record<string, unknown> = {}): Promise<T> {
     const merged = { ...this._scopeAttributes(), ...attrs };
-    const record = (await this._association.create(merged)) as T;
-    if ((record as Base).isNewRecord()) {
-      const { RecordInvalid } = await import("../validations.js");
-      throw new RecordInvalid(record as Base);
+    return this._association.createBang(merged) as Promise<T>;
+  }
+
+  /**
+   * Array-style equality — compares against the relation's loaded records.
+   * Mirrors Rails' `AssociationRelation#==(other)`, which is defined as
+   * `other == records` so that `blog.posts == [p1, p2]` works in user code.
+   *
+   * TypeScript can't overload `==` / `===`, so this is surfaced as an
+   * explicit `equals` method.
+   */
+  async equals(other: Relation<T> | T[]): Promise<boolean> {
+    const ours = await this.toArray();
+    const theirs = Array.isArray(other) ? other : await other.toArray();
+    if (ours.length !== theirs.length) return false;
+    for (let i = 0; i < ours.length; i++) {
+      if (!ours[i].isEqual(theirs[i])) return false;
     }
-    return record;
+    return true;
+  }
+
+  /**
+   * Override the load path to propagate inverse_of and strict_loading onto
+   * records fetched through this relation — mirrors Rails'
+   * `AssociationRelation#exec_queries`, which calls
+   * `set_inverse_instance_from_queries` and applies `strict_loading!` when
+   * the owner or the reflection has it set. Without this, a record loaded
+   * via `blog.posts.where(...)` wouldn't cache `post.blog = blog` on the
+   * way back, so accessing the inverse would re-query.
+   */
+  async toArray(): Promise<T[]> {
+    const records = await super.toArray();
+    const owner = this._association.owner;
+    const reflection = this._association.reflection;
+    const inverseOf = reflection.options.inverseOf;
+
+    if (inverseOf && !reflection.options.polymorphic) {
+      for (const r of records) {
+        const cache = ((r as any)._cachedAssociations ??= new Map());
+        cache.set(inverseOf, owner);
+      }
+    }
+
+    const ownerStrict = (owner as unknown as { _strictLoading?: boolean })._strictLoading;
+    if (ownerStrict) {
+      for (const r of records) {
+        (r as unknown as { strictLoadingBang?: () => void }).strictLoadingBang?.();
+      }
+    }
+
+    return records;
   }
 }
 

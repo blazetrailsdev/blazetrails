@@ -65,10 +65,18 @@ export class DateTime extends DateTimeType {
         ) {
           return null;
         }
-        const wholeSeconds = Math.floor(second);
+        let wholeSeconds = Math.floor(second);
         // Math.round avoids off-by-1ms drift from floating-point
-        // multiplication (e.g. 0.289 * 1000 = 288.999…).
-        const ms = Math.round((second - wholeSeconds) * 1000);
+        // multiplication (e.g. 0.289 * 1000 = 288.999…). Round can
+        // also yield 1000 for inputs like 59.999999 — handle that
+        // carry explicitly rather than letting setUTCHours roll the
+        // timestamp forward.
+        let ms = Math.round((second - wholeSeconds) * 1000);
+        if (ms === 1000) {
+          ms = 0;
+          wholeSeconds += 1;
+          if (wholeSeconds >= 60) return null;
+        }
         const d = new globalThis.Date(0);
         d.setUTCFullYear(year, month, day);
         d.setUTCHours(hour, minute, wholeSeconds, ms);

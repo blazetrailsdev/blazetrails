@@ -47,6 +47,22 @@ describe("PostgreSQL::OID::DateTime", () => {
     const d = type.cast("0044-03-15 12:00:00.289 BC") as Date;
     expect(d.getUTCMilliseconds()).toBe(289);
   });
+
+  it("carries fractional-second rounding into whole seconds", () => {
+    // 0.9999 * 1000 rounds to 1000. Naive Math.round would pass 1000
+    // to setUTCHours and silently roll the timestamp forward by a
+    // second. Verify we carry into seconds instead.
+    const d = type.cast("0044-03-15 12:00:00.9999 BC") as Date;
+    expect(d.getUTCSeconds()).toBe(1);
+    expect(d.getUTCMilliseconds()).toBe(0);
+  });
+
+  it("rejects sub-second carry that would overflow the minute", () => {
+    // 59.9999 with carry → seconds = 60. That's invalid input per our
+    // second < 60 guard; return null rather than letting it roll into
+    // the next minute.
+    expect(type.cast("0044-03-15 12:00:59.9999 BC")).toBeNull();
+  });
 });
 
 describe("PostgreSQL::OID::Timestamp", () => {

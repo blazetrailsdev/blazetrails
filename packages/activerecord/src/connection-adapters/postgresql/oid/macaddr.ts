@@ -10,11 +10,10 @@
 import { StringType } from "@blazetrails/activemodel";
 
 export class Macaddr extends StringType {
-  // Inherited StringType.name = "string" at the property level; the
-  // user-facing type identifier is returned by type() below, matching
-  // Rails' `def type; :macaddr; end`.
+  override readonly name: string = "macaddr";
+
   override type(): string {
-    return "macaddr";
+    return this.name;
   }
 
   override isChanged(

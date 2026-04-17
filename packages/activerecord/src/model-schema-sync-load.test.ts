@@ -138,6 +138,24 @@ describe("sync loadSchema / columnsHash", () => {
     expect(hash.secret).toBeUndefined();
   });
 
+  it("marks STI base as _schemaLoaded when subclass triggered reflection", () => {
+    class Shape extends Base {
+      static override tableName = "shapes";
+      static {
+        this.inheritanceColumn = "type";
+      }
+    }
+    class Circle extends Shape {}
+
+    const cols = { guid: { sqlType: "uuid", name: "guid", default: null } };
+    (Shape as unknown as { adapter: unknown }).adapter = makeAdapter(cols);
+
+    Circle.columnsHash(); // subclass triggers, but work lands on base
+
+    expect((Shape as unknown as { _schemaLoaded: boolean })._schemaLoaded).toBe(true);
+    expect((Circle as unknown as { _schemaLoaded: boolean })._schemaLoaded).toBe(true);
+  });
+
   it("resetColumnInformation on STI subclass resets the STI base", () => {
     class Shape extends Base {
       static override tableName = "shapes";

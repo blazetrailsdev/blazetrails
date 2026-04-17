@@ -539,19 +539,27 @@ export function loadSchema(this: SchemaHost): void {
   if (this._schemaLoaded) return;
   this._schemaLoaded = true;
 
-  const reflected = loadSchemaFromCacheSync(this);
-  if (reflected) return;
-
-  // Fallback: no schema cache — synthesize a columnsHash view. For STI
-  // subclasses, synthesize onto the STI base so the subclass doesn't
-  // fork _columnsHash (which would persist past a later base reflection).
-  const fallbackHost = isStiSubclass(this as unknown as typeof Base)
+  // Determine the class that actually owns the schema load — the STI
+  // base when `this` is a subclass. We mark BOTH as loaded so a later
+  // call on the base doesn't redundantly re-run reflection just because
+  // its own `_schemaLoaded` flag was never set.
+  const workHost = isStiSubclass(this as unknown as typeof Base)
     ? (getStiBase(this as unknown as typeof Base) as unknown as SchemaHost)
     : this;
-  if (!fallbackHost._columnsHash && fallbackHost._attributeDefinitions.size > 0) {
+
+  const reflected = loadSchemaFromCacheSync(this);
+  if (reflected) {
+    workHost._schemaLoaded = true;
+    return;
+  }
+
+  // Fallback: no schema cache — synthesize a columnsHash view on the
+  // work host so subclasses don't fork _columnsHash (which would persist
+  // past a later base reflection).
+  if (!workHost._columnsHash && workHost._attributeDefinitions.size > 0) {
     const hash: Record<string, any> = {};
-    const ignored = new Set(fallbackHost._ignoredColumns ?? []);
-    for (const [name, def] of fallbackHost._attributeDefinitions) {
+    const ignored = new Set(workHost._ignoredColumns ?? []);
+    for (const [name, def] of workHost._attributeDefinitions) {
       if (ignored.has(name)) continue;
       hash[name] = {
         name,
@@ -559,8 +567,9 @@ export function loadSchema(this: SchemaHost): void {
         default: def.defaultValue ?? null,
       };
     }
-    fallbackHost._columnsHash = hash;
+    workHost._columnsHash = hash;
   }
+  workHost._schemaLoaded = true;
 }
 
 function getColumnsHash(host: SchemaHost): Record<string, any> {
@@ -586,6 +595,16 @@ function getColumnsHash(host: SchemaHost): Record<string, any> {
  * Sync worker: apply a columns hash (already fetched from the schema
  * cache) to `_attributeDefinitions`. Shared by sync `loadSchema` and
  * async `loadSchemaFromAdapter`.
+ *
+ * STI note: for STI subclasses, `host` is the STI base, so the base's
+ * `_ignoredColumns` governs which columns get accessors on the shared
+ * prototype. Per-subclass `ignoredColumns` is still honored at read
+ * time in `columnsHash()` (filters the returned hash), but it cannot
+ * retroactively remove a prototype accessor already defined on the
+ * base — a consequence of TypeScript not having Ruby's method_missing.
+ * Rails itself defines `ignored_columns` as a class_attribute that
+ * inherits; real divergence between STI base and subclass ignoredColumns
+ * is rare, but document the limit so callers aren't surprised.
  */
 function applyColumnsHash(
   host: SchemaHost,

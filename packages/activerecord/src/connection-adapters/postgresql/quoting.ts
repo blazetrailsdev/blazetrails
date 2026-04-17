@@ -248,9 +248,15 @@ export function unescapeBytea(value: string): Buffer {
       }
       const octal = value.slice(i + 1, i + 4);
       if (/^[0-7]{3}$/.test(octal)) {
-        bytes.push(parseInt(octal, 8));
-        i += 3;
-        continue;
+        const byte = parseInt(octal, 8);
+        // Bytea octal escapes are byte-sized (0o000..0o377). \400–\777 isn't
+        // valid PG output; treat those as a literal backslash + digits
+        // instead of quietly overflowing.
+        if (byte <= 0o377) {
+          bytes.push(byte);
+          i += 3;
+          continue;
+        }
       }
     }
     bytes.push(ch.charCodeAt(0));

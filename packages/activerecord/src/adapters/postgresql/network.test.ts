@@ -172,5 +172,7 @@ describe("PostgresqlNetworkTest", () => {
     expect(type.cast("192.168.1.0/24")).toBe("192.168.1.0/24");
     expect(type.cast("::1")).toBe("::1");
     expect(type.cast("2001:db8::/32")).toBe("2001:db8::/32");
+    // IPv4-embedded IPv6 is valid (e.g. IPv4-mapped addresses).
+    expect(type.cast("::ffff:192.168.0.1")).toBe("::ffff:192.168.0.1");
   });
 });

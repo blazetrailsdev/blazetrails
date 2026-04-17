@@ -62,42 +62,62 @@ export class Cidr extends Type<string> {
   }
 }
 
-const IPV4_OCTET = /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
-const IPV6_HEXTET = /^[0-9a-fA-F]{1,4}$/;
-const IPV6_CHARS = /^[0-9a-fA-F:]+$/;
-
+/**
+ * Lightweight IP syntax validator. Rails uses IPAddr.new (which rescues
+ * ArgumentError); we inline a parser here rather than pulling in
+ * `node:net.isIP` (blocked by a repo-wide no-Node-builtins lint rule
+ * for browser compat). Accepts IPv4, IPv6, and IPv4-embedded IPv6
+ * (e.g. ::ffff:192.168.0.1) — enough to match PG's input syntax.
+ */
 function isCidrShaped(value: string): boolean {
   const slash = value.indexOf("/");
   const address = slash === -1 ? value : value.slice(0, slash);
   const prefix = slash === -1 ? null : value.slice(slash + 1);
 
-  if (!address) return false;
-
   if (isIpv4(address)) {
-    return prefix == null ? true : isValidPrefix(prefix, 32);
+    return prefix == null || isValidPrefix(prefix, 32);
   }
   if (isIpv6(address)) {
-    return prefix == null ? true : isValidPrefix(prefix, 128);
+    return prefix == null || isValidPrefix(prefix, 128);
   }
   return false;
 }
+
+const IPV4_OCTET = /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
 
 function isIpv4(value: string): boolean {
   const parts = value.split(".");
   return parts.length === 4 && parts.every((p) => IPV4_OCTET.test(p));
 }
 
+const IPV6_HEXTET = /^[0-9a-fA-F]{1,4}$/;
+
 function isIpv6(value: string): boolean {
   if (!value.includes(":")) return false;
-  if (!IPV6_CHARS.test(value)) return false;
   const doubleColons = value.match(/::/g);
   if (doubleColons && doubleColons.length > 1) return false;
   if (value === "::") return true;
 
+  // Split the trailing IPv4 tail (e.g. ::ffff:192.168.0.1) out of the
+  // hextet sequence. It counts as 2 hextets toward the 8-group total.
+  const parts = value.split(":");
+  const last = parts[parts.length - 1];
+  let ipv4Tail = false;
+  if (last.includes(".")) {
+    if (!isIpv4(last)) return false;
+    ipv4Tail = true;
+    parts[parts.length - 1] = "0";
+    parts.push("0");
+  }
+
   if (value.includes("::")) {
     const [left, right] = value.split("::");
     const leftParts = left === "" ? [] : left.split(":");
-    const rightParts = right === "" ? [] : right.split(":");
+    let rightParts = right === "" ? [] : right.split(":");
+    if (ipv4Tail) {
+      // IPv4 tail already counted as two placeholder hextets above.
+      rightParts = rightParts.slice(0, -1).concat(["0", "0"]);
+    }
     if (
       leftParts.some((p) => !IPV6_HEXTET.test(p)) ||
       rightParts.some((p) => !IPV6_HEXTET.test(p))
@@ -107,7 +127,6 @@ function isIpv6(value: string): boolean {
     return leftParts.length + rightParts.length < 8;
   }
 
-  const parts = value.split(":");
   return parts.length === 8 && parts.every((p) => IPV6_HEXTET.test(p));
 }
 

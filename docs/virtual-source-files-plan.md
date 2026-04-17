@@ -728,7 +728,7 @@ independently testable and shippable:
 ```ts
 import type ts from "typescript/lib/tsserverlibrary";
 
-function init({ typescript: ts }: { typescript: typeof import("typescript") }) {
+function init({ typescript: ts }: { typescript: typeof import("typescript/lib/tsserverlibrary") }) {
   return {
     create(info: ts.server.PluginCreateInfo): ts.LanguageService {
       // sub-PRs below wire this up incrementally.
@@ -787,18 +787,23 @@ beyond a one-file text transform.
 - `packages/activerecord/src/tsserver-plugin/host-proxy.ts` wrapping
   `info.languageServiceHost` to override `getScriptSnapshot(fileName)`:
   1. Call the underlying host to get the original snapshot text.
-  2. If it doesn't need virtualization (no `static {` with
+  2. Read the current file version from
+     `info.languageServiceHost.getScriptVersion(fileName)` — the
+     snapshot itself doesn't carry a version, the host does.
+  3. If it doesn't need virtualization (no `static {` with
      `extends Base` — same fast pre-filter the CLI uses in
      `host.ts#STATIC_BLOCK_PATTERN` + `EXTENDS_IDENT` regex), return
      the original snapshot unchanged.
-  3. Otherwise call `virtualize(originalText, fileName, { baseNames })`.
-  4. Wrap the result in `ts.ScriptSnapshot.fromString(result.text)`.
-  5. Cache by `(fileName, originalSnapshot.version)` — when the
-     version changes, re-virtualize. Avoid re-parsing unchanged files.
+  4. Otherwise call `virtualize(originalText, fileName, { baseNames })`.
+  5. Wrap the result in `ts.ScriptSnapshot.fromString(result.text)`.
+  6. Cache by `(fileName, originalVersion)` — when the host's
+     script version changes, re-virtualize. Avoid re-parsing
+     unchanged files.
 - `packages/activerecord/src/tsserver-plugin/snapshot-cache.ts` — a
-  tiny `Map<string, { version: string; snapshot: ts.IScriptSnapshot; deltas: LineDelta[]; originalText: string }>`.
-  The LineDelta + originalText are needed by later sub-PRs for
-  remapping.
+  tiny `Map<string, { version: string; snapshot: ts.IScriptSnapshot; deltas: LineDelta[]; originalText: string }>`,
+  where `version` is the host's script version string for that
+  file. The LineDelta + originalText are needed by later sub-PRs
+  for remapping.
 - Override `LanguageServiceHost.getScriptVersion` too — return
   `<originalVersion>:<virtualizerVersion>` where `virtualizerVersion`
   is a monotonic counter bumped whenever the plugin's virtualization

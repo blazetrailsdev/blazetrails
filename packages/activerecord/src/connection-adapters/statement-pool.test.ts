@@ -85,6 +85,7 @@ describe("StatementPoolTest", () => {
     expect(pool.has("a")).toBe(false);
     expect(pool.has("b")).toBe(true);
     expect(pool.has("c")).toBe(true);
+    expect(dealloced).toEqual(["1"]);
   });
 
   it("LRU: get moves entry to end", () => {

@@ -28,9 +28,12 @@ export class StatementPool<T = unknown> {
   set(key: string, stmt: T): void {
     if (this._maxSize <= 0) return;
     this._statements.delete(key);
-    if (this._statements.size >= this._maxSize) {
+    while (this._statements.size >= this._maxSize) {
       const firstKey = this._statements.keys().next().value;
-      if (firstKey !== undefined) this._statements.delete(firstKey);
+      if (firstKey === undefined) break;
+      const evicted = this._statements.get(firstKey)!;
+      this._statements.delete(firstKey);
+      this.dealloc(evicted);
     }
     this._statements.set(key, stmt);
   }

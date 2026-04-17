@@ -1042,6 +1042,7 @@ export function dbCommand(): Command {
     .option("--format <format>", "Override schema format: ts, js, or sql")
     .option("--database <name>", "Target a specific named database")
     .action(async (opts) => {
+      const fs = await getFsAsync();
       await forEachDatabase(opts, async ({ adapter, config, prefix }) => {
         // schema:load is destructive — Rails gates on
         // check_protected_environments.
@@ -1051,7 +1052,7 @@ export function dbCommand(): Command {
         try {
           DatabaseTasks.schemaFormat = await resolveSchemaFormat(opts);
           const filename = DatabaseTasks.schemaDumpPath(config);
-          if (!(await (await getFsAsync()).exists(filename))) {
+          if (!(await fs.exists(filename))) {
             console.error(`${prefix}No schema file found at ${filename}`);
             process.exitCode = 1;
             return;
@@ -1115,6 +1116,7 @@ export function dbCommand(): Command {
     )
     .action(async () => {
       // Rails: `configurations.configs_for(env_name: env).each { |c| clear_schema_cache(cache_dump_filename(c)) }`.
+      const fs = await getFsAsync();
       const envName = resolveEnv();
       const named = await loadAllDatabaseConfigs(envName);
       const configs = named.map(
@@ -1126,7 +1128,7 @@ export function dbCommand(): Command {
           const filename = DatabaseTasks.cacheDumpFilename(config);
           // clearSchemaCache is a no-op on ENOENT; don't log "Cleared"
           // unless we actually removed something.
-          if (!(await (await getFsAsync()).exists(filename))) continue;
+          if (!(await fs.exists(filename))) continue;
           DatabaseTasks.clearSchemaCache(filename);
           console.log(`Cleared schema cache at ${filename}`);
         }

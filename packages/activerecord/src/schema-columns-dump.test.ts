@@ -205,9 +205,43 @@ describe("dumpSchemaColumns", () => {
       "export class User extends Base {\n" + '  static override tableName = "users";\n' + "}\n";
     const { text } = virtualize(src, "user.ts", { schemaColumnsByTable: dump });
 
-    expect(text).toMatch(/declare name:/);
-    expect(text).toMatch(/declare age:/);
+    // Columns declared via t.string() / t.integer() are nullable by
+    // default (no `null: false` passed), so the rich shape renders
+    // `T | null`.
+    expect(text).toMatch(/declare name: string \| null;/);
+    expect(text).toMatch(/declare age: number \| null;/);
     // `id` is skipped by the virtualizer (Base accessor handles it).
     expect(text).not.toMatch(/declare id:/);
+  });
+
+  it("end-to-end: NOT NULL → bare; nullable → `| null`; array element types carry through", async () => {
+    const { virtualize } = await import("./type-virtualization/virtualize.js");
+
+    // Fake adapter with mixed nullability and arrays — exercises the
+    // full chain without needing portable DDL (NOT NULL / array
+    // syntax varies across SQLite/PG/MySQL).
+    const fakeAdapter = {
+      async tables() {
+        return ["posts"];
+      },
+      async columns() {
+        return [
+          { name: "title", sqlType: "varchar(255)", null: false },
+          { name: "body", sqlType: "text", null: true },
+          { name: "tags", sqlType: "integer[]", null: false },
+          { name: "optional_tags", sqlType: "integer[]", null: true },
+        ];
+      },
+    } as unknown as Parameters<typeof dumpSchemaColumns>[0];
+
+    const dump = await dumpSchemaColumns(fakeAdapter);
+    const src =
+      "export class Post extends Base {\n" + '  static override tableName = "posts";\n' + "}\n";
+    const { text } = virtualize(src, "post.ts", { schemaColumnsByTable: dump });
+
+    expect(text).toMatch(/declare title: string;/);
+    expect(text).toMatch(/declare body: string \| null;/);
+    expect(text).toMatch(/declare tags: number\[\];/);
+    expect(text).toMatch(/declare optional_tags: number\[\] \| null;/);
   });
 });

@@ -427,16 +427,13 @@ export class Base extends Model {
   static set adapter(adapter: DatabaseAdapter) {
     this._adapter = adapter;
     if (_onAdapterSet) _onAdapterSet(this);
-    // Kick off schema reflection so the adapter's OID-resolved types
-    // populate _attributeDefinitions. Fire-and-forget; await
-    // Model.loadSchema() to synchronize when ordering matters. Errors are
-    // swallowed here (e.g. adapter closed before reflection completes) —
-    // the next Model.loadSchema() await will surface any real problem.
-    const state = this as unknown as { _schemaLoadPromise?: Promise<void> };
-
-    state._schemaLoadPromise = (ModelSchema.loadSchemaFromAdapter as any).call(this).catch(() => {
-      state._schemaLoadPromise = undefined;
-    });
+    // No longer kicks off a fire-and-forget schema reflection: the
+    // async query path races with the test's explicit pool client
+    // usage, causing double-release on adapters configured directly
+    // (non-pool). Schema reflection still runs via:
+    //   1. The sync loadSchema call in _instantiate (after the adapter
+    //      has naturally populated the schema cache via its first query).
+    //   2. An explicit `await Model.loadSchema()` when ordering matters.
   }
 
   /**

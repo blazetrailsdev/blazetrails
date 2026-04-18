@@ -29,8 +29,12 @@ describeIfMysql("Mysql2Adapter", () => {
       // End-to-end: the full ExplainRegistry → ExplainSubscriber →
       // adapter.explain pipeline only works on MySQL if execute()
       // emits sql.active_record. Without that, Relation#explain
-      // silently falls back to toSql() and reports zero collected
-      // queries.
+      // silently falls back to toSql() (which keeps Arel's
+      // double-quoted identifiers) rather than the payload SQL the
+      // driver saw (which goes through `mysqlQuote` → backticks).
+      // Asserting backticks is the thing that discriminates the two
+      // paths — plain "contains the table name" would pass either
+      // way.
       const { Base } = await import("../../index.js");
       class ExRelMysql extends Base {
         static {
@@ -46,8 +50,12 @@ describeIfMysql("Mysql2Adapter", () => {
         await ExRelMysql.create({ name: "r" });
         const plan = await ExRelMysql.all().explain();
         expect(typeof plan).toBe("string");
-        expect(plan.toLowerCase()).toContain("select");
-        expect(plan).toContain("ex_rel_mysqls");
+        // The captured SQL came from `payload.sql` (post-mysqlQuote),
+        // so it uses backtick-quoted identifiers. The fallback
+        // `toSql()` path would emit `"ex_rel_mysqls"` with double
+        // quotes instead.
+        expect(plan).toContain("`ex_rel_mysqls`");
+        expect(plan).not.toMatch(/"ex_rel_mysqls"/);
         // MySQL buildExplainClause header format:
         expect(plan).toMatch(/EXPLAIN.*for:/);
       } finally {
@@ -87,9 +95,17 @@ describeIfMysql("Mysql2Adapter", () => {
 
         const plan = await ExMysqlAuthor.all().preload("exMysqlBooks").explain();
         const blocks = plan.split("\n\n").filter((b) => /EXPLAIN/.test(b));
+        // The fallback path emits exactly one block (toSql() of the
+        // outer relation only, no preload query). Requiring ≥ 2
+        // blocks proves the preload query was captured through
+        // sql.active_record, not substituted from toSql().
         expect(blocks.length).toBeGreaterThanOrEqual(2);
-        expect(plan).toContain("ex_mysql_authors");
-        expect(plan).toContain("ex_mysql_books");
+        // Both blocks came from `payload.sql` and therefore carry
+        // backtick-quoted identifiers — the fallback form would use
+        // double quotes.
+        expect(plan).toContain("`ex_mysql_authors`");
+        expect(plan).toContain("`ex_mysql_books`");
+        expect(plan).not.toMatch(/"ex_mysql_(authors|books)"/);
       } finally {
         await adapter.exec(`DROP TABLE IF EXISTS \`ex_mysql_books\``);
         await adapter.exec(`DROP TABLE IF EXISTS \`ex_mysql_authors\``);

@@ -425,17 +425,33 @@ export class Base extends Model {
    * infrastructure. Prefer `establishConnection` for production use.
    */
   static set adapter(adapter: DatabaseAdapter) {
+    // Reassigning the same adapter is a no-op — avoid dropping reflected
+    // columns/types unnecessarily when user code re-sets the same ref.
+    if (this._adapter === adapter) {
+      return;
+    }
     this._adapter = adapter;
     if (_onAdapterSet) _onAdapterSet(this);
+
     // Full schema reset on adapter swap: drops schema-sourced defs and
     // their prototype accessors (preserves user-declared defs), and
     // clears every derived cache. Without this, a swap A → B could
     // leave stale columns reachable (e.g. columns that only existed in
     // A's schema) and `await Model.loadSchema()` would reuse the
     // resolved promise from adapter A and never pick up B's types.
-
-    (ModelSchema.resetColumnInformation as any).call(this);
-    (this as unknown as { _schemaLoadPromise?: Promise<void> })._schemaLoadPromise = undefined;
+    const invalidate = (klass: typeof Base) => {
+      (ModelSchema.resetColumnInformation as any).call(klass);
+      (klass as unknown as { _schemaLoadPromise?: Promise<void> })._schemaLoadPromise = undefined;
+    };
+    invalidate(this);
+    // Also invalidate descendants that inherit this adapter — otherwise
+    // a subclass that already called Subclass.loadSchema() keeps its
+    // own cached promise / columns from the old adapter.
+    for (const descendant of this.descendants) {
+      if (!Object.prototype.hasOwnProperty.call(descendant, "_adapter")) {
+        invalidate(descendant);
+      }
+    }
     // No longer kicks off a fire-and-forget schema reflection — the
     // async query path races with explicit pool client usage. Schema
     // reflection still runs via:

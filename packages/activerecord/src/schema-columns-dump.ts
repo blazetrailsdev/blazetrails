@@ -78,6 +78,13 @@ export async function dumpSchemaColumns(
  * falls back to `unknown` when it sees a key it doesn't recognize.
  */
 function normalizeRailsType(col: AdapterColumn): string {
+  // MySQL reports booleans as `tinyint(1)`. `sqlTypeMetadata.type` is the
+  // unparameterized base ("tinyint") → would map to integer, losing the
+  // boolean semantics. `sqlType` carries the full `tinyint(1)`. Rails
+  // treats any tinyint(1) as boolean, so honor that special case up front.
+  const fullSqlType = (col.sqlType ?? col.sqlTypeMetadata?.sqlType ?? "").toLowerCase();
+  if (/^\s*tinyint\s*\(\s*1\s*\)/.test(fullSqlType)) return "boolean";
+
   const candidate = col.sqlTypeMetadata?.type ?? col.sqlType ?? col.type ?? "";
   const raw = candidate.toLowerCase();
   if (!raw) return "value";
@@ -88,12 +95,11 @@ function normalizeRailsType(col: AdapterColumn): string {
   // narrowing would need a richer schema format than a single string.
   if (raw.endsWith("[]")) return "array";
 
-  // Strip the `(precision[, scale])` block IMMEDIATELY following the
-  // SQL type token, even when more suffix text follows — PG commonly
-  // reports `timestamp(3) without time zone`, `time(6) with time zone`
-  // (those normalize to `timestamp without time zone` / `time with time zone`
-  // below). Also handles plain `varchar(255)` / `numeric(10,2)`.
-  const base = raw.replace(/^\s*([^( \t]+)\s*\([^)]*\)(.*)$/, "$1$2").trim();
+  // Strip the first `(precision[, scale])` block from the string, even
+  // when the type name is MULTI-WORD (`character varying(255)` →
+  // `character varying`) or has trailing suffix text
+  // (`timestamp(3) without time zone` → `timestamp without time zone`).
+  const base = raw.replace(/\s*\([^)]*\)/, "").trim();
   return SQL_TO_RAILS[base] ?? base;
 }
 

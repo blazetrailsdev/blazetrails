@@ -114,6 +114,16 @@ describe("dumpSchemaColumns", () => {
           // PG array types
           { name: "tags", sqlType: "integer[]" },
           { name: "names", sqlType: "character varying[]" },
+          // PG multi-word type with inline precision (pg_catalog.format_type
+          // output for varchar).
+          { name: "email", sqlType: "character varying(255)" },
+          // MySQL boolean convention (tinyint(1)). sqlTypeMetadata.type
+          // is "tinyint" (→ integer) but sqlType is "tinyint(1)" (→ boolean).
+          {
+            name: "active_mysql",
+            sqlType: "tinyint(1)",
+            sqlTypeMetadata: { type: "tinyint" },
+          },
         ];
       },
     } as unknown as Parameters<typeof dumpSchemaColumns>[0];
@@ -133,6 +143,8 @@ describe("dumpSchemaColumns", () => {
       at_tz2: "time",
       tags: "array",
       names: "array",
+      email: "string",
+      active_mysql: "boolean",
     });
   });
 

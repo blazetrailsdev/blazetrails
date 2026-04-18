@@ -186,6 +186,13 @@ export class Associations {
   static _associations: AssociationDefinition[] = [];
 
   /**
+   * No-op in TypeScript: ESM imports are already eagerly evaluated, so there is
+   * no equivalent of Rails' autoload/require_dependency cycle to trigger here.
+   * Kept for API parity with `ActiveRecord::Associations.eager_load!`.
+   */
+  static eagerLoadBang(): void {}
+
+  /**
    * Define a belongs_to association.
    *
    * Mirrors: ActiveRecord::Associations::ClassMethods#belongs_to
@@ -233,6 +240,20 @@ export class Associations {
       modelRegistry,
     });
   }
+}
+
+/**
+ * Returns true if the given association has been loaded/cached on the record.
+ * Matches records set by inverse_of wiring, explicit writers (`setBelongsTo`,
+ * `setHasOne`, `setHasMany`) and the sync paths of the explicit loaders.
+ *
+ * Mirrors: ActiveRecord::Associations#association_cached?
+ */
+export function isAssociationCached(record: Base, assocName: string): boolean {
+  const cached = (record as any)._cachedAssociations as Map<string, unknown> | undefined;
+  if (cached?.has(assocName)) return true;
+  const preloaded = (record as any)._preloadedAssociations as Map<string, unknown> | undefined;
+  return preloaded?.has(assocName) ?? false;
 }
 
 /**

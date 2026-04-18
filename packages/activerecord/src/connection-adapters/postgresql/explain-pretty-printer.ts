@@ -10,6 +10,9 @@ export class ExplainPrettyPrinter {
 
     const lines = result.map((row) => {
       const queryPlan = row["QUERY PLAN"] ?? row.query_plan ?? row.queryplan ?? "";
+      if (queryPlan !== null && typeof queryPlan === "object") {
+        return JSON.stringify(queryPlan, null, 2);
+      }
       return String(queryPlan);
     });
 

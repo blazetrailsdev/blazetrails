@@ -317,69 +317,10 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     }
   }
 
-  /**
-   * Build the printed header prefix used by `Relation#explain`
-   * (e.g. `"EXPLAIN for:"` / `"EXPLAIN ANALYZE for:"`).
-   *
-   * Mirrors: ActiveRecord::ConnectionAdapters::MySQL::DatabaseStatements#build_explain_clause
-   */
-  buildExplainClause(options: ExplainOption[] = []): string {
-    if (options.length === 0) return "EXPLAIN for:";
-    return `EXPLAIN ${this._validateExplainOptions(options).join(" ")} for:`;
-  }
-
   // `quote()` and `typeCast()` are inherited from AbstractMysqlAdapter,
-  // which delegates to `mysql/quoting.ts`. No Mysql2-specific override
-  // needed — they'd be duplicates.
-
-  /**
-   * Boolean MySQL EXPLAIN flags. MySQL 8.0.18+ supports `EXPLAIN
-   * ANALYZE`; older versions and MariaDB support at least `EXTENDED`
-   * and `PARTITIONS`. Format is handled separately via the
-   * `{ format: ... }` hash since it requires a value.
-   */
-  private static readonly EXPLAIN_FLAGS = new Set(["analyze", "extended", "partitions"]);
-
-  /**
-   * Allowed values for the `format` keyword. MySQL 5.6+ supports
-   * `TRADITIONAL` (default) and `JSON`; 8.0.16+ adds `TREE`. Values
-   * come from user code, so the allowlist guards the SQL clause.
-   */
-  private static readonly EXPLAIN_FORMATS = new Set(["traditional", "json", "tree"]);
-
-  private _validateExplainOptions(options: ExplainOption[]): string[] {
-    return options.map((o) => {
-      if (typeof o === "string") {
-        const key = o.toLowerCase();
-        if (!Mysql2Adapter.EXPLAIN_FLAGS.has(key)) {
-          throw new Error(`Unknown MySQL EXPLAIN option: ${o}`);
-        }
-        return key.toUpperCase();
-      }
-      if (o.format !== undefined) {
-        const fmt = String(o.format).toLowerCase();
-        if (!Mysql2Adapter.EXPLAIN_FORMATS.has(fmt)) {
-          throw new Error(
-            `Unknown MySQL EXPLAIN format: ${o.format}. Allowed: traditional, json, tree.`,
-          );
-        }
-        // MySQL uses `FORMAT=X` (no space) rather than PG's `FORMAT X`.
-        return `FORMAT=${fmt.toUpperCase()}`;
-      }
-      throw new Error(`Unknown MySQL EXPLAIN option: ${JSON.stringify(o)}`);
-    });
-  }
-
-  /**
-   * Compose the actual `EXPLAIN ...` SQL clause that prefixes the query —
-   * distinct from `buildExplainClause`, which builds the printed header.
-   * Options are validated against the adapter's allowlist before
-   * interpolation.
-   */
-  private _explainStatementClause(options: ExplainOption[]): string {
-    if (options.length === 0) return "EXPLAIN";
-    return `EXPLAIN ${this._validateExplainOptions(options).join(" ")}`;
-  }
+  // which delegates to `mysql/quoting.ts`. `buildExplainClause`,
+  // `_explainStatementClause`, and `_validateExplainOptions` also live
+  // on AbstractMysqlAdapter so Trilogy inherits identical MySQL semantics.
 
   /**
    * Execute raw SQL (for DDL and other non-query statements).

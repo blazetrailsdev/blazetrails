@@ -663,9 +663,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         parts.push(key.toUpperCase());
         continue;
       }
-      if (typeof o.format !== "string") {
+      if (!o || typeof o !== "object" || typeof o.format !== "string") {
         throw new Error(
-          `Unknown PostgreSQL EXPLAIN option: ${JSON.stringify(o)} (hash requires a string 'format')`,
+          `Unknown PostgreSQL EXPLAIN option: ${JSON.stringify(o)} (expected a string flag or an object with a string 'format')`,
         );
       }
       if (seenFormat) {

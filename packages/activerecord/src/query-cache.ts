@@ -302,13 +302,15 @@ export class QueryCacheAdapter implements DatabaseAdapter {
       return inner.buildExplainClause(options);
     }
     if (options.length === 0) return "EXPLAIN for:";
-    if (options.some((o) => typeof o !== "string")) {
-      throw new Error(
-        "QueryCacheAdapter.buildExplainClause: wrapped adapter does not implement " +
-          "buildExplainClause() — non-string options cannot be rendered safely.",
-      );
-    }
-    const parts = options.map((o) => (o as string).toUpperCase());
+    // Wrapped adapter lacks buildExplainClause — we can safely render
+    // bare string flags, but the keyword hash shape is adapter-specific
+    // (PG: `FORMAT JSON`, MySQL: `FORMAT=JSON`) and we don't know which
+    // this adapter would accept. Drop the hash from the printed header
+    // rather than throw; `Relation#explain` can still succeed via the
+    // adapter's `explain(sql, binds, options)` if that's implemented.
+    const stringOptions = options.filter((o): o is string => typeof o === "string");
+    if (stringOptions.length === 0) return "EXPLAIN for:";
+    const parts = stringOptions.map((o) => o.toUpperCase());
     return `EXPLAIN (${parts.join(", ")}) for:`;
   }
 

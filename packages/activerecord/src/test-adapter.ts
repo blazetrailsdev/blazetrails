@@ -693,7 +693,7 @@ class SchemaAdapter extends DatabaseStatementsMixin(class {}) implements Databas
     if (options.length === 0) return "EXPLAIN for:";
     const parts = options.map((o) => {
       if (typeof o === "string") return o.toUpperCase();
-      if (typeof o.format !== "string") {
+      if (!o || typeof o !== "object" || typeof o.format !== "string") {
         throw new TypeError(
           `EXPLAIN option hash requires a string 'format'; got ${JSON.stringify(o)}`,
         );

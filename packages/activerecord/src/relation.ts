@@ -76,6 +76,11 @@ function validateExplainOptions(options: ExplainOption[]): void {
       }
       continue;
     }
+    if (!o || typeof o !== "object") {
+      throw new TypeError(
+        `EXPLAIN option must be a string flag or an options hash; got ${String(o)}`,
+      );
+    }
     if (seenHash) {
       throw new Error("EXPLAIN accepts at most one option hash");
     }
@@ -1852,7 +1857,7 @@ export class Relation<T extends Base> {
     if (options.length === 0) return "EXPLAIN for:";
     const parts = options.map((o) => {
       if (typeof o === "string") return o.toUpperCase();
-      if (typeof o.format !== "string") {
+      if (!o || typeof o !== "object" || typeof o.format !== "string") {
         throw new TypeError(
           `EXPLAIN option hash requires a string 'format'; got ${JSON.stringify(o)}`,
         );

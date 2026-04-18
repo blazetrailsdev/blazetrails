@@ -533,9 +533,9 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
         flags.push(key.toUpperCase());
         continue;
       }
-      if (typeof o.format !== "string") {
+      if (!o || typeof o !== "object" || typeof o.format !== "string") {
         throw new Error(
-          `Unknown MySQL EXPLAIN option: ${JSON.stringify(o)} (hash requires a string 'format')`,
+          `Unknown MySQL EXPLAIN option: ${JSON.stringify(o)} (expected a string flag or an object with a string 'format')`,
         );
       }
       if (formatClause !== undefined) {

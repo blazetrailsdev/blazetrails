@@ -7,19 +7,22 @@ import { createTrailsProgram } from "./program.js";
 import { createTrailsSolutionBuilder } from "./build.js";
 import { remapDiagnostics } from "./remap.js";
 import { virtualize } from "../type-virtualization/virtualize.js";
+import type { SchemaColumnValue } from "../type-virtualization/synthesize.js";
 
 /**
  * Load a schema-columns JSON file produced by the schema dumper.
- * Format: `{ "<table>": { "<column>": "<rails_type>", ... }, ... }`.
+ *
+ * Format (either shape per column, may mix in one file):
+ *   `{ "<table>": { "<column>": "<rails_type>", ... }, ... }` — legacy
+ *   `{ "<table>": { "<column>": { "type": "<rails_type>", "null"?: boolean, "arrayElementType"?: string }, ... }, ... }` — rich
+ *
+ * The rich shape — as emitted by `trails-schema-dump` — drives
+ * nullability (`T | null`) and typed array elements (`ElementTsType[]`)
+ * in the generated TypeScript declares.
  */
-type RichColumnValue = {
-  type: string;
-  null?: boolean;
-  arrayElementType?: string;
-};
-type SchemaColumnValue = string | RichColumnValue;
+type RichColumnValue = Extract<SchemaColumnValue, object>;
 
-function loadSchemaColumns(
+export function loadSchemaColumns(
   args: string[],
 ): Record<string, Record<string, SchemaColumnValue>> | undefined {
   let schemaPath: string | undefined;
@@ -328,10 +331,26 @@ function main(): void {
   process.exit(0);
 }
 
-try {
-  main();
-} catch (err: unknown) {
-  const msg = err instanceof Error ? err.message : String(err);
-  process.stderr.write(`trails-tsc: ${msg}\n`);
-  process.exit(1);
+// Run main() only when this module is invoked as a binary, not when
+// imported (e.g. by tests that exercise `loadSchemaColumns` directly).
+// `require.main === module` is the CommonJS form; `import.meta.url`
+// vs `process.argv[1]` covers the ESM form the tsc-wrapper ships.
+const invokedDirectly = (() => {
+  try {
+    const entry = process.argv[1];
+    if (!entry) return false;
+    return import.meta.url === `file://${path.resolve(entry)}`;
+  } catch {
+    return false;
+  }
+})();
+
+if (invokedDirectly) {
+  try {
+    main();
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`trails-tsc: ${msg}\n`);
+    process.exit(1);
+  }
 }

@@ -934,7 +934,15 @@ export class ToSql implements NodeVisitor<SQLString> {
     if (this._extractBinds) {
       this.collector.addBind(node.value !== undefined ? node.value : node);
     } else if (node.value !== undefined) {
-      this.collector.append(this.quote(node.value));
+      // Extract the database value from bind objects (QueryAttribute etc.)
+      const val =
+        node.value &&
+        typeof node.value === "object" &&
+        "valueForDatabase" in node.value &&
+        typeof (node.value as Record<string, unknown>).valueForDatabase === "function"
+          ? (node.value as { valueForDatabase(): unknown }).valueForDatabase()
+          : node.value;
+      this.collector.append(this.quote(val));
     } else {
       this.collector.addBind(node);
     }

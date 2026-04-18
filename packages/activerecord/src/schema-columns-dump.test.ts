@@ -72,6 +72,31 @@ describe("dumpSchemaColumns", () => {
     expect(Object.keys(dump.widgets)).toEqual(["alpha", "mike", "zulu"]);
   });
 
+  it("output feeds directly into trails-tsc's virtualizer (end-to-end)", async () => {
+    const { virtualize } = await import("./type-virtualization/virtualize.js");
+
+    const adapter = createTestAdapter();
+    await adapter.executeMutation(`
+      CREATE TABLE "users" (
+        "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+        "name" TEXT,
+        "age" INTEGER
+      )
+    `);
+
+    // Dump → use as virtualizer input, no hand-editing.
+    const dump = await dumpSchemaColumns(adapter);
+    const src =
+      "export class User extends Base {\n" + '  static override tableName = "users";\n' + "}\n";
+    const { text } = virtualize(src, "user.ts", { schemaColumnsByTable: dump });
+
+    // Schema-sourced declares land for the columns the dump produced.
+    expect(text).toMatch(/declare name:/);
+    expect(text).toMatch(/declare age:/);
+    // `id` is skipped by the virtualizer (Base accessor handles it).
+    expect(text).not.toMatch(/declare id:/);
+  });
+
   it("emits tables in stable (sorted) order", async () => {
     const adapter = createTestAdapter();
     await adapter.executeMutation(`CREATE TABLE "zebras" ("id" INTEGER PRIMARY KEY)`);

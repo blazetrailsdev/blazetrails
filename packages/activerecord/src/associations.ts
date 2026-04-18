@@ -593,7 +593,9 @@ export async function loadHasMany(
   // going through the full Reflection.create path).
   const reflection = ctor._reflectOnAssociation?.(assocName);
   let rel: any;
-  if (reflection && !options.as && !options.through) {
+  // `options.through` is handled by the early-return above, so we don't
+  // need to re-check it here.
+  if (reflection && !options.as) {
     // AssociationScope.scope already merges reflection.scope (the
     // user-supplied scope lambda) via _addConstraints, so don't double-
     // apply options.scope on this path.

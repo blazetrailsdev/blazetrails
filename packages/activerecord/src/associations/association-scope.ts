@@ -170,7 +170,7 @@ export class AssociationScope {
     // because `relation()` adds it for `finder_needs_type_condition?`
     // classes (`core.rb:431-435`). Our `Base.unscoped` doesn't wire STI
     // through `relation()` yet, so we re-add the type condition here.
-    let scope = (klass as unknown as { unscoped: () => unknown }).unscoped();
+    let scope: unknown = klass.unscoped();
     if (isStiSubclass(klass)) {
       const col = getInheritanceColumn(getStiBase(klass));
       if (col) {

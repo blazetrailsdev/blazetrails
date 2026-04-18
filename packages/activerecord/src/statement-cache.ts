@@ -193,10 +193,13 @@ export class StatementCache {
       cacheableQuery?(klass: unknown, arel: unknown): [unknown, unknown[]];
       preparedStatements?: boolean;
     },
-    callable: (params: Params) => { arel: { toSql(): string }; model: typeof Base },
+    callable: (params: Params) => {
+      arel: (() => { toSql(): string }) | { toSql(): string };
+      model: typeof Base;
+    },
   ): StatementCache {
     const relation = callable(new Params());
-    const arel = relation.arel;
+    const arel = typeof relation.arel === "function" ? relation.arel() : relation.arel;
 
     let queryBuilder: Query | PartialQuery;
     let binds: unknown[];

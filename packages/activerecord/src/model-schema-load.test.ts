@@ -3,6 +3,7 @@ import { ValueType, typeRegistry } from "@blazetrails/activemodel";
 type Type = ValueType;
 import { Base } from "./base.js";
 import { loadSchemaFromAdapter } from "./model-schema.js";
+import type { WrappedType } from "./encryption/wrapped-type.js";
 
 class UuidType extends ValueType {
   override readonly name = "uuid" as unknown as "value";
@@ -308,12 +309,11 @@ describe("set adapter auto-loads schema", () => {
 
 describe("schema reflection preserves any wrapper with withInnerType", () => {
   it("calls withInnerType on an existing non-user-provided wrapped type", async () => {
-    // Custom duck-typed wrapper — not an EncryptedAttributeType, just
-    // exposes the shared withInnerType contract. applyColumnsHash
-    // should route through it when preserving the wrapper on reflect.
-    const rewrappedWith: unknown[] = [];
-    class WrapperType extends ValueType {
-      override readonly name = "wrapper" as unknown as "value";
+    // Custom wrapper — not an EncryptedAttributeType, just implements
+    // the shared WrappedType contract. applyColumnsHash should route
+    // through it when preserving the wrapper on reflect.
+    const rewrappedWith: Type[] = [];
+    class WrapperType extends ValueType implements WrappedType {
       withInnerType(innerType: Type): WrapperType {
         rewrappedWith.push(innerType);
         return new WrapperType();

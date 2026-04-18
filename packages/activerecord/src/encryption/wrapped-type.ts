@@ -1,4 +1,4 @@
-import type { Type } from "@blazetrails/activemodel";
+import { Type } from "@blazetrails/activemodel";
 
 /**
  * Shared contract for types that wrap an inner cast type (e.g.
@@ -6,6 +6,12 @@ import type { Type } from "@blazetrails/activemodel";
  * `applyColumnsHash` — can preserve such wrappers across
  * adapter-resolved type changes by calling `withInnerType(newInner)`
  * without knowing the concrete class.
+ *
+ * Extends `Type` so consumers can assign the result back into any
+ * Type-typed slot without assertions. `withInnerType` returns `Type`
+ * (rather than `WrappedType`) because the replacement is conceptually
+ * "a Type that happens to still wrap" — narrowing back to the wrapper
+ * isn't what callers need.
  *
  * Both EncryptedAttributeType variants implement this:
  *   - `packages/activerecord/src/encrypted-attribute-type.ts`
@@ -16,15 +22,13 @@ import type { Type } from "@blazetrails/activemodel";
  * Future consolidation onto a single Rails-faithful class is tracked
  * in the attr-type-wiring follow-ups memory note.
  */
-export interface WrappedType {
-  withInnerType(innerType: Type): WrappedType;
+export interface WrappedType extends Type {
+  withInnerType(innerType: Type): Type;
 }
 
 /** Duck-typed predicate — narrows `t` to a `WrappedType`. */
 export function isWrappedType(t: unknown): t is WrappedType {
   return (
-    typeof t === "object" &&
-    t !== null &&
-    typeof (t as { withInnerType?: unknown }).withInnerType === "function"
+    t instanceof Type && typeof (t as { withInnerType?: unknown }).withInnerType === "function"
   );
 }

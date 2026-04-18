@@ -689,8 +689,9 @@ function applyColumnsHash(
     // EncryptedAttributeType variants implement `WrappedType`; any
     // future type implementing the same contract is automatically
     // supported. No `instanceof` branching on concrete classes.
-    if (isWrappedType(existing?.type)) {
-      type = existing.type.withInnerType(type) as typeof type;
+    const existingType = existing?.type;
+    if (isWrappedType(existingType)) {
+      type = existingType.withInnerType(type);
     }
 
     const defaultValue = (column as { default?: unknown }).default ?? null;

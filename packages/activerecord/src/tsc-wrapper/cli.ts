@@ -14,25 +14,46 @@ import { virtualize } from "../type-virtualization/virtualize.js";
  */
 function loadSchemaColumns(args: string[]): Record<string, Record<string, string>> | undefined {
   let schemaPath: string | undefined;
+  let schemaProvided = false;
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
     if (a === "--schema") {
-      schemaPath = args[i + 1];
+      schemaProvided = true;
+      const nextArg = args[i + 1];
+      if (!nextArg || nextArg.startsWith("-")) {
+        process.stderr.write("trails-tsc: --schema expects a file path.\n");
+        process.exit(1);
+      }
+      schemaPath = nextArg;
       break;
     }
     if (a.startsWith("--schema=")) {
-      schemaPath = a.slice("--schema=".length);
+      schemaProvided = true;
+      const value = a.slice("--schema=".length);
+      if (!value) {
+        process.stderr.write("trails-tsc: --schema expects a file path.\n");
+        process.exit(1);
+      }
+      schemaPath = value;
       break;
     }
   }
-  if (!schemaPath) return undefined;
+  if (!schemaProvided || !schemaPath) return undefined;
   const resolved = path.resolve(schemaPath);
   if (!fs.existsSync(resolved)) {
     process.stderr.write(`trails-tsc: --schema file not found: ${resolved}\n`);
     process.exit(1);
   }
+  let schemaJson: string;
   try {
-    return JSON.parse(fs.readFileSync(resolved, "utf8")) as Record<string, Record<string, string>>;
+    schemaJson = fs.readFileSync(resolved, "utf8");
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    process.stderr.write(`trails-tsc: failed to read --schema file: ${msg}\n`);
+    process.exit(1);
+  }
+  try {
+    return JSON.parse(schemaJson) as Record<string, Record<string, string>>;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     process.stderr.write(`trails-tsc: --schema file is not valid JSON: ${msg}\n`);

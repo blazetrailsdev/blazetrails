@@ -69,7 +69,7 @@ function renderSchemaColumnDeclares(
     // Skip "id" — Base already defines a PrimaryKeyValue accessor that
     // handles composite keys; re-declaring here would shadow it.
     if (col === "id") continue;
-    out.push(`declare ${col}: ${tsTypeFor(railsType)};`);
+    out.push(`${INDENT}declare ${col}: ${tsTypeFor(railsType)};`);
   }
   return out;
 }

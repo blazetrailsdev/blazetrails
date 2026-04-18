@@ -61,14 +61,18 @@ export class QueryCache {
     adapters: QueryCacheAdapter[] | (() => QueryCacheAdapter[]),
   ): void {
     const resolve = typeof adapters === "function" ? adapters : () => adapters;
-    executor.registerHook({
-      run() {
+
+    // Mirrors Rails' ExecutorHooks module with static run/complete
+    class ExecutorHooks {
+      static run() {
         QueryCache.run(resolve());
-      },
-      complete() {
+      }
+      static complete() {
         QueryCache.complete(resolve());
-      },
-    });
+      }
+    }
+
+    executor.registerHook(ExecutorHooks);
   }
 }
 

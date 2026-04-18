@@ -306,6 +306,52 @@ describe("set adapter auto-loads schema", () => {
   });
 });
 
+describe("schema reflection preserves any wrapper with withInnerType", () => {
+  it("calls withInnerType on an existing non-user-provided wrapped type", async () => {
+    // Custom duck-typed wrapper — not an EncryptedAttributeType, just
+    // exposes the shared withInnerType contract. applyColumnsHash
+    // should route through it when preserving the wrapper on reflect.
+    const rewrappedWith: unknown[] = [];
+    class WrapperType extends ValueType {
+      override readonly name = "wrapper" as unknown as "value";
+      withInnerType(innerType: Type): WrapperType {
+        rewrappedWith.push(innerType);
+        return new WrapperType();
+      }
+    }
+
+    class Post extends Base {
+      static override tableName = "posts";
+    }
+    const adapter = makeAdapter({ payload: { sqlType: "uuid" } }, { uuid: new UuidType() });
+    // Set adapter first (it resets column info), THEN seed a
+    // schema-sourced wrapper so the adapter-setter's reset doesn't
+    // clobber it before reflection runs.
+    (Post as unknown as { adapter: unknown }).adapter = adapter;
+    (Post as unknown as { _attributeDefinitions: Map<string, unknown> })._attributeDefinitions =
+      new Map([
+        [
+          "payload",
+          {
+            name: "payload",
+            type: new WrapperType(),
+            defaultValue: null,
+            userProvided: false,
+            source: "schema",
+          },
+        ],
+      ]);
+
+    await loadSchemaFromAdapter.call(Post);
+
+    // The wrapper's withInnerType received the freshly-reflected
+    // UuidType, and the wrapper was preserved on the def.
+    expect(rewrappedWith).toHaveLength(1);
+    expect((rewrappedWith[0] as ValueType).name).toBe("uuid");
+    expect(Post._attributeDefinitions.get("payload")?.type).toBeInstanceOf(WrapperType);
+  });
+});
+
 describe("attribute() userProvidedDefault option", () => {
   it("defaults to userProvided=true (source=user)", () => {
     class Foo extends Base {}

@@ -32,7 +32,9 @@ describe("dumpSchemaColumns", () => {
     // Concrete Rails type assertions — trails-tsc keys on these exact
     // strings, so raw SQL types (TEXT, VARCHAR, int4) would silently
     // make the virtualizer emit `unknown`. Tests lock the mapping.
-    expect(dump.users.id).toBe("integer");
+    // `id` is integer on SQLite/PG but big_integer on MariaDB — both
+    // map to TS `number` in the virtualizer, so accept either.
+    expect(["integer", "big_integer"]).toContain(dump.users.id);
     expect(dump.users.name).toBe("string");
     expect(dump.users.age).toBe("integer");
     expect(dump.users.created_at).toBe("datetime");

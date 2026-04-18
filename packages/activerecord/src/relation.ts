@@ -58,6 +58,32 @@ import { rubyInspectArray } from "./relation/ruby-inspect.js";
 export type LoadedRelation<R> = Omit<R, "then">;
 
 /**
+ * Enforce Rails' `extract_options!` shape on variadic `explain(...)`
+ * inputs: at most one hash option, and if present it must be the last
+ * positional argument. This keeps adapters (especially MySQL, whose
+ * `EXPLAIN FORMAT=X ANALYZE` is invalid) from receiving orderings they
+ * can't render.
+ */
+function validateExplainOptions(options: ExplainOption[]): void {
+  let seenHash = false;
+  for (let i = 0; i < options.length; i++) {
+    const o = options[i];
+    if (typeof o === "string") {
+      if (seenHash) {
+        throw new Error(
+          "EXPLAIN option hash must be the last argument (Rails' extract_options! semantics)",
+        );
+      }
+      continue;
+    }
+    if (seenHash) {
+      throw new Error("EXPLAIN accepts at most one option hash");
+    }
+    seenHash = true;
+  }
+}
+
+/**
  * Relation — the lazy, chainable query interface.
  *
  * Mirrors: ActiveRecord::Relation
@@ -1637,20 +1663,25 @@ export class Relation<T extends Base> {
    * subscriber captures every `sql.active_record` notification, and
    * `exec_explain` runs EXPLAIN against each captured SQL.
    *
-   * `options` mirrors Rails' variadic form — a mix of flag strings and
-   * a trailing keyword hash. The keyword hash currently supports
-   * `format: "json" | "yaml" | "xml" | "text"` on PG / MySQL; adapters
-   * that don't support a key throw. Examples:
+   * `options` is a mix of flag strings and an optional trailing keyword
+   * hash. Supported keyword options are adapter-specific — PG and MySQL
+   * each allowlist their own set of `format` values, SQLite ignores
+   * options entirely. Ruby's `extract_options!` allows at most one
+   * trailing Hash; we enforce the same shape here so MySQL's
+   * order-sensitive SQL (`EXPLAIN FORMAT=JSON ANALYZE` is invalid) can't
+   * be produced by accident. Examples:
    *
    *     await Post.all().explain("analyze", "verbose")
    *     // → EXPLAIN (ANALYZE, VERBOSE) for: SELECT …
    *
    *     await Post.all().explain("analyze", { format: "json" })
-   *     // → EXPLAIN (ANALYZE, FORMAT JSON) for: SELECT …
+   *     // → EXPLAIN (ANALYZE, FORMAT JSON) for: SELECT …  (PG)
+   *     // → EXPLAIN ANALYZE FORMAT=JSON for: SELECT …     (MySQL)
    *
    * Mirrors: ActiveRecord::Relation#explain
    */
   async explain(...options: ExplainOption[]): Promise<string> {
+    validateExplainOptions(options);
     const { queries } = await ExplainRegistry.collectingQueries(() => this.toArray());
     return this._execExplain(queries, options);
   }
@@ -1819,9 +1850,15 @@ export class Relation<T extends Base> {
       return adapter.buildExplainClause(options);
     }
     if (options.length === 0) return "EXPLAIN for:";
-    const parts = options.map((o) =>
-      typeof o === "string" ? o.toUpperCase() : `FORMAT ${String(o.format).toUpperCase()}`,
-    );
+    const parts = options.map((o) => {
+      if (typeof o === "string") return o.toUpperCase();
+      if (typeof o.format !== "string") {
+        throw new TypeError(
+          `EXPLAIN option hash requires a string 'format'; got ${JSON.stringify(o)}`,
+        );
+      }
+      return `FORMAT ${o.format.toUpperCase()}`;
+    });
     return `EXPLAIN (${parts.join(", ")}) for:`;
   }
 

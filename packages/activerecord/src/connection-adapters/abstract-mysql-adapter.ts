@@ -522,26 +522,37 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
 
   protected _validateExplainOptions(options: ExplainOption[]): string[] {
     const ctor = this.constructor as typeof AbstractMysqlAdapter;
-    return options.map((o) => {
+    const flags: string[] = [];
+    let formatClause: string | undefined;
+    for (const o of options) {
       if (typeof o === "string") {
         const key = o.toLowerCase();
         if (!ctor.EXPLAIN_FLAGS.has(key)) {
           throw new Error(`Unknown MySQL EXPLAIN option: ${o}`);
         }
-        return key.toUpperCase();
+        flags.push(key.toUpperCase());
+        continue;
       }
-      if (o.format !== undefined) {
-        const fmt = String(o.format).toLowerCase();
-        if (!ctor.EXPLAIN_FORMATS.has(fmt)) {
-          throw new Error(
-            `Unknown MySQL EXPLAIN format: ${o.format}. Allowed: traditional, json, tree.`,
-          );
-        }
-        // MySQL uses `FORMAT=X` (no space) rather than PG's `FORMAT X`.
-        return `FORMAT=${fmt.toUpperCase()}`;
+      if (typeof o.format !== "string") {
+        throw new Error(
+          `Unknown MySQL EXPLAIN option: ${JSON.stringify(o)} (hash requires a string 'format')`,
+        );
       }
-      throw new Error(`Unknown MySQL EXPLAIN option: ${JSON.stringify(o)}`);
-    });
+      if (formatClause !== undefined) {
+        throw new Error("MySQL EXPLAIN accepts at most one FORMAT option");
+      }
+      const fmt = o.format.toLowerCase();
+      if (!ctor.EXPLAIN_FORMATS.has(fmt)) {
+        throw new Error(
+          `Unknown MySQL EXPLAIN format: ${o.format}. Allowed: traditional, json, tree.`,
+        );
+      }
+      // MySQL uses `FORMAT=X` (no space) rather than PG's `FORMAT X`.
+      // FORMAT must come last in MySQL syntax; flags-first normalization
+      // prevents `EXPLAIN FORMAT=JSON ANALYZE ...` (invalid).
+      formatClause = `FORMAT=${fmt.toUpperCase()}`;
+    }
+    return formatClause === undefined ? flags : [...flags, formatClause];
   }
 
   /**

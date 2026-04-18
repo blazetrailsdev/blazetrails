@@ -107,9 +107,15 @@ export class AbstractAdapter extends AbstractAdapterBase {
    */
   buildExplainClause(options: ExplainOption[] = []): string {
     if (options.length === 0) return "EXPLAIN for:";
-    const parts = options.map((o) =>
-      typeof o === "string" ? o.toUpperCase() : `FORMAT ${String(o.format).toUpperCase()}`,
-    );
+    const parts = options.map((o) => {
+      if (typeof o === "string") return o.toUpperCase();
+      if (o && typeof o === "object" && typeof o.format === "string") {
+        return `FORMAT ${o.format.toUpperCase()}`;
+      }
+      throw new TypeError(
+        `EXPLAIN option hash requires a string 'format'; got ${JSON.stringify(o)}`,
+      );
+    });
     return `EXPLAIN (${parts.join(", ")}) for:`;
   }
 

@@ -652,25 +652,35 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   private static readonly EXPLAIN_FORMATS = new Set(["text", "xml", "json", "yaml"]);
 
   private _validateExplainOptions(options: ExplainOption[]): string[] {
-    return options.map((o) => {
+    const parts: string[] = [];
+    let seenFormat = false;
+    for (const o of options) {
       if (typeof o === "string") {
         const key = o.toLowerCase();
         if (!PostgreSQLAdapter.EXPLAIN_FLAGS.has(key)) {
           throw new Error(`Unknown PostgreSQL EXPLAIN option: ${o}`);
         }
-        return key.toUpperCase();
+        parts.push(key.toUpperCase());
+        continue;
       }
-      if (o.format !== undefined) {
-        const fmt = String(o.format).toLowerCase();
-        if (!PostgreSQLAdapter.EXPLAIN_FORMATS.has(fmt)) {
-          throw new Error(
-            `Unknown PostgreSQL EXPLAIN format: ${o.format}. Allowed: text, xml, json, yaml.`,
-          );
-        }
-        return `FORMAT ${fmt.toUpperCase()}`;
+      if (typeof o.format !== "string") {
+        throw new Error(
+          `Unknown PostgreSQL EXPLAIN option: ${JSON.stringify(o)} (hash requires a string 'format')`,
+        );
       }
-      throw new Error(`Unknown PostgreSQL EXPLAIN option: ${JSON.stringify(o)}`);
-    });
+      if (seenFormat) {
+        throw new Error("PostgreSQL EXPLAIN accepts at most one FORMAT option");
+      }
+      const fmt = o.format.toLowerCase();
+      if (!PostgreSQLAdapter.EXPLAIN_FORMATS.has(fmt)) {
+        throw new Error(
+          `Unknown PostgreSQL EXPLAIN format: ${o.format}. Allowed: text, xml, json, yaml.`,
+        );
+      }
+      parts.push(`FORMAT ${fmt.toUpperCase()}`);
+      seenFormat = true;
+    }
+    return parts;
   }
 
   /**

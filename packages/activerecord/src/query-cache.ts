@@ -302,9 +302,13 @@ export class QueryCacheAdapter implements DatabaseAdapter {
       return inner.buildExplainClause(options);
     }
     if (options.length === 0) return "EXPLAIN for:";
-    const parts = options.map((o) =>
-      typeof o === "string" ? o.toUpperCase() : `FORMAT ${String(o.format).toUpperCase()}`,
-    );
+    if (options.some((o) => typeof o !== "string")) {
+      throw new Error(
+        "QueryCacheAdapter.buildExplainClause: wrapped adapter does not implement " +
+          "buildExplainClause() — non-string options cannot be rendered safely.",
+      );
+    }
+    const parts = options.map((o) => (o as string).toUpperCase());
     return `EXPLAIN (${parts.join(", ")}) for:`;
   }
 

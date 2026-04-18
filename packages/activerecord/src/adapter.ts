@@ -10,7 +10,7 @@ import type { Result } from "./result.js";
  * Mirrors: the `options` array shape used by Rails'
  * `ActiveRecord::Relation#explain` and its adapter `build_explain_clause`.
  */
-export type ExplainOption = string | { format?: string };
+export type ExplainOption = string | { format: string };
 
 /**
  * Database adapter interface — pluggable backends.

@@ -1,6 +1,7 @@
 import { Type, StringType } from "@blazetrails/activemodel";
 import type { Scheme } from "./scheme.js";
 import type { Encryptor } from "./encryptor.js";
+import type { WrappedType } from "./wrapped-type.js";
 import { isEncryptionDisabled, isProtectedMode } from "./context.js";
 import { Configurable } from "./configurable.js";
 import { Encryption as EncryptionError } from "./errors.js";
@@ -12,7 +13,7 @@ import { Encryption as EncryptionError } from "./errors.js";
  *
  * Mirrors: ActiveRecord::Encryption::EncryptedAttributeType
  */
-export class EncryptedAttributeType extends Type {
+export class EncryptedAttributeType extends Type implements WrappedType {
   readonly name = "encrypted";
   readonly scheme: Scheme;
   readonly castType: Type;

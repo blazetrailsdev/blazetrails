@@ -12,23 +12,7 @@ import { isStiSubclass, getStiBase } from "./inheritance.js";
 import { quote, quoteIdentifier, quoteTableName } from "./connection-adapters/abstract/quoting.js";
 import { detectAdapterName } from "./adapter-name.js";
 import { applyPendingEncryptions } from "./encryption.js";
-import type { Type as AttributeTypeT } from "@blazetrails/activemodel";
-
-/**
- * Duck-type predicate: does `t` expose the shared
- * `withInnerType(type): this` contract both EncryptedAttributeType
- * variants implement? Narrows so schema reflection can preserve any
- * encryption wrapper without branching on concrete classes.
- */
-function hasWithInnerType(
-  t: unknown,
-): t is { withInnerType(innerType: AttributeTypeT): AttributeTypeT } {
-  return (
-    typeof t === "object" &&
-    t !== null &&
-    typeof (t as { withInnerType?: unknown }).withInnerType === "function"
-  );
-}
+import { isWrappedType } from "./encryption/wrapped-type.js";
 
 /**
  * Schema metadata for ActiveRecord models — table name, primary key,
@@ -702,12 +686,11 @@ function applyColumnsHash(
     let type = (castType as Type | null) ?? typeRegistry.lookup("value");
 
     // Preserve encryption wrappers across schema reflection. Both
-    // EncryptedAttributeType variants (encryptor-based / scheme-based)
-    // expose `withInnerType(type)` so we don't need to branch on
-    // `instanceof` here — duck-typing keeps us class-agnostic and
-    // consumers of either `encrypts()` entry point are preserved.
-    if (hasWithInnerType(existing?.type)) {
-      type = existing.type.withInnerType(type);
+    // EncryptedAttributeType variants implement `WrappedType`; any
+    // future type implementing the same contract is automatically
+    // supported. No `instanceof` branching on concrete classes.
+    if (isWrappedType(existing?.type)) {
+      type = existing.type.withInnerType(type) as typeof type;
     }
 
     const defaultValue = (column as { default?: unknown }).default ?? null;

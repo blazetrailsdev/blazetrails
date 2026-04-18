@@ -538,7 +538,11 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * reused without binds).
    */
   private _shouldPrepare(binds: unknown[]): boolean {
-    return this.preparedStatements && binds.length > 0;
+    // `statementLimit = 0` disables caching (matches Rails: when the
+    // limit is 0, `PostgreSQL::StatementPool#set` is a no-op so
+    // allocating a name would leak unbounded server-side PREPAREs).
+    // Fall through to anonymous parameterized queries in that case.
+    return this.preparedStatements && binds.length > 0 && this._statementLimit > 0;
   }
 
   /**
@@ -661,7 +665,15 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
                 return Number(result.rows[0][firstCol]);
               }
               return result.rowCount ?? 0;
-            } catch {
+            } catch (err) {
+              // Cached-plan failures must propagate to the
+              // transaction-retry machinery (Rails raises
+              // PreparedStatementCacheExpired for exactly this
+              // reason — retrying inside an aborted txn would fail
+              // with 25P02). Everything else falls through to the
+              // "retry without RETURNING" path this catch was
+              // originally written for.
+              if (err instanceof PreparedStatementCacheExpired) throw err;
               if (useSavepoint) {
                 await client.query(`ROLLBACK TO SAVEPOINT "${spName}"`).catch(() => {});
                 await client.query(`RELEASE SAVEPOINT "${spName}"`).catch(() => {});
@@ -924,7 +936,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     // The pool objects become unreachable once pg releases the
     // corresponding clients anyway — this is about breaking our
     // own reference, not an explicit detach step per pool.
-    this._statementPools = new WeakMap();
+    this._statementPools = new WeakMap<pg.PoolClient, StatementPool>();
     if (this._driverPool) {
       await this._driverPool.end();
       this._driverPool = null;

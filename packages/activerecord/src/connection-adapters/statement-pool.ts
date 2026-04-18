@@ -26,6 +26,11 @@ export class StatementPool<T = unknown> {
    * behavior when `statement_limit` is changed mid-session.
    */
   setMaxSize(maxSize: number): void {
+    if (!Number.isInteger(maxSize) || maxSize < 0) {
+      throw new RangeError(
+        `StatementPool#setMaxSize expected a finite non-negative integer; got ${String(maxSize)}`,
+      );
+    }
     this._maxSize = maxSize;
     while (this._statements.size > this._maxSize) {
       const firstKey = this._statements.keys().next().value;

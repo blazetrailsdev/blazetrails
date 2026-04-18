@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { Base, registerModel } from "../index.js";
+import { Base, registerModel, enableSti, registerSubclass } from "../index.js";
 import { Associations } from "../associations.js";
 import { AssociationScope, ReflectionProxy } from "./association-scope.js";
 import { createTestAdapter } from "../test-adapter.js";
@@ -110,6 +110,89 @@ describe("AssociationScope", () => {
     expect(proxy.klass).toBe(AsPost);
     // Rails' all_includes; block returns nil → we return null.
     expect(proxy.allIncludes()).toBeNull();
+  });
+
+  it("applies reflection.scope lambda exactly once (no double-apply)", () => {
+    class CountAuthor extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    let calls = 0;
+    class CountPost extends Base {
+      static {
+        this.attribute("count_author_id", "integer");
+        this.attribute("published", "boolean");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(CountAuthor);
+    registerModel(CountPost);
+    Associations.hasMany.call(CountAuthor, "count_posts", {
+      className: "CountPost",
+      foreignKey: "count_author_id",
+      scope: (rel: any) => {
+        calls++;
+        return rel.where({ published: true });
+      },
+    });
+
+    const author = new CountAuthor({ id: 5 });
+    const reflection = (CountAuthor as any)._reflectOnAssociation("count_posts");
+    const scope: any = AssociationScope.scope({
+      owner: author,
+      reflection,
+      klass: reflection.klass,
+    });
+
+    // The lambda must run exactly once — _addConstraints applies it via
+    // reflection.scope; the loader path must not re-apply options.scope.
+    expect(calls).toBe(1);
+    expect(scope.toSql()).toMatch(/"published"\s*=\s*TRUE/i);
+  });
+
+  it("applies STI type_condition on subclass targets (compensates for our unscoped)", () => {
+    // Rails' klass.unscoped applies STI type_condition via core.rb's
+    // relation() override; ours doesn't, so AssociationScope re-adds it.
+    class StiOwner extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class StiBase extends Base {
+      static {
+        this.attribute("type", "string");
+        this.attribute("sti_owner_id", "integer");
+        this._tableName = "sti_things";
+        this.adapter = adapter;
+        enableSti(StiBase);
+      }
+    }
+    class StiSpecial extends StiBase {
+      static {
+        this.adapter = adapter;
+        registerModel(StiSpecial);
+        registerSubclass(StiSpecial);
+      }
+    }
+    registerModel(StiOwner);
+    registerModel(StiBase);
+    Associations.hasMany.call(StiOwner, "sti_specials", {
+      className: "StiSpecial",
+      foreignKey: "sti_owner_id",
+    });
+
+    const owner = new StiOwner({ id: 3 });
+    const reflection = (StiOwner as any)._reflectOnAssociation("sti_specials");
+    const scope: any = AssociationScope.scope({
+      owner,
+      reflection,
+      klass: reflection.klass,
+    });
+
+    expect(scope.toSql()).toMatch(/"type"\s*=\s*'StiSpecial'/);
   });
 
   it("scope() raises for through chains (PR 1 limitation)", () => {

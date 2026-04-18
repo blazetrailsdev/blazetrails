@@ -1,5 +1,6 @@
 import type { Base } from "../base.js";
 import type { AssociationReflection, AbstractReflection } from "../reflection.js";
+import { isStiSubclass, getStiBase, getInheritanceColumn, descendants } from "../inheritance.js";
 
 /**
  * Lambda applied to each FK/type bind value before it reaches the
@@ -164,13 +165,21 @@ export class AssociationScope {
    */
   scope(association: AssociationScopeable): unknown {
     const { owner, reflection, klass } = association;
-    // Rails uses `klass.unscoped` here (association_scope.rb:23) but
-    // their `unscoped` STILL applies the STI `type_condition` because
-    // `relation()` adds it for `finder_needs_type_condition?` classes
-    // (see `core.rb:431-435`). Our `Base.unscoped` doesn't yet wire STI
-    // type filtering through `relation()`, so until that lands we use
-    // `.all()` — which already includes the STI filter on subclasses.
-    let scope = (klass as unknown as { all: () => unknown }).all();
+    // Rails: `klass.unscoped` (association_scope.rb:23). Rails' unscoped
+    // bypasses default_scope but STILL applies the STI `type_condition`
+    // because `relation()` adds it for `finder_needs_type_condition?`
+    // classes (`core.rb:431-435`). Our `Base.unscoped` doesn't wire STI
+    // through `relation()` yet, so we re-add the type condition here.
+    let scope = (klass as unknown as { unscoped: () => unknown }).unscoped();
+    if (isStiSubclass(klass)) {
+      const col = getInheritanceColumn(getStiBase(klass));
+      if (col) {
+        const stiNames = [klass.name, ...descendants(klass).map((d: typeof Base) => d.name)];
+        scope = (scope as { where: (c: Record<string, unknown>) => unknown }).where({
+          [col]: stiNames.length === 1 ? stiNames[0] : stiNames,
+        });
+      }
+    }
     const chain = this._getChain(reflection);
     scope = this._addConstraints(scope, owner, chain);
     if (!reflection.isCollection()) {

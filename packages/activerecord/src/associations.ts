@@ -594,6 +594,9 @@ export async function loadHasMany(
   const reflection = ctor._reflectOnAssociation?.(assocName);
   let rel: any;
   if (reflection && !options.as && !options.through) {
+    // AssociationScope.scope already merges reflection.scope (the
+    // user-supplied scope lambda) via _addConstraints, so don't double-
+    // apply options.scope on this path.
     rel = AssociationScope.scope({
       owner: record,
       reflection,
@@ -601,9 +604,9 @@ export async function loadHasMany(
     });
   } else {
     rel = (targetModel as any).all().where({ [foreignKey]: pkValue });
-  }
-  if (options.scope) {
-    rel = options.scope(rel);
+    if (options.scope) {
+      rel = options.scope(rel);
+    }
   }
   const results: Base[] = await rel.toArray();
 

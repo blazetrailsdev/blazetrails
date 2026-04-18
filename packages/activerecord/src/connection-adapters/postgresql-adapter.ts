@@ -441,25 +441,25 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     if (!pool) {
       pool = new StatementPool(client, this._statementLimit);
       this._statementPools.set(client, pool);
-    } else if (pool.maxSize !== this._statementLimit) {
-      // Lazy sync for a pool that existed before `statementLimit`
-      // changed. Resizing here (instead of clearing the WeakMap on
-      // limit change) preserves the counter and sql→name mapping,
-      // which must stay in step with the still-PREPAREd statements
-      // on the reused pg.PoolClient.
-      pool.setMaxSize(this._statementLimit);
     }
+    // Matches Rails: statement_limit is read at pool construction
+    // time. A mid-session change to `adapter.statementLimit` is
+    // applied to the currently-active pool by the setter; other
+    // per-client pools keep the limit they were built with. Syncing
+    // them here would stomp on direct setMaxSize calls from tests or
+    // callers that want a tighter bound than the adapter default.
     return pool;
   }
 
   /**
-   * Tear down the statement pool attached to `client`. Called on
-   * commit / rollback / close. Detaching stops late DEALLOCATE calls
-   * from racing with a released client, AND we drop the WeakMap entry
-   * so a later checkout that hands back the same pg.PoolClient wrapper
-   * gets a fresh pool. Without the delete, `_poolFor` would return the
-   * silently-detached pool and DEALLOCATE would become a no-op,
-   * leaking server-side prepared statements.
+   * Tear down the statement pool attached to `client`. Called from
+   * `close()` only — commit / rollback intentionally keep the pool
+   * attached because PG prepared statements are session-scoped, not
+   * transaction-scoped (see Rails' PG::StatementPool, which only
+   * clears on disconnect). Detaching here stops late DEALLOCATE
+   * calls from racing with a released client, AND we drop the
+   * WeakMap entry so a later checkout that hands back the same
+   * pg.PoolClient wrapper gets a fresh pool.
    */
   private _releaseStatementPool(client: pg.PoolClient): void {
     const pool = this._statementPools.get(client);

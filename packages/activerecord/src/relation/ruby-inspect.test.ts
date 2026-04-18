@@ -34,6 +34,17 @@ describe("rubyInspect", () => {
     expect(rubyInspectArray([true, false, 0])).toBe("[true, false, 0]");
   });
 
+  it("escapes common control characters the way Ruby's String#inspect does", () => {
+    expect(rubyInspect("line1\nline2")).toBe('"line1\\nline2"');
+    expect(rubyInspect("col1\tcol2")).toBe('"col1\\tcol2"');
+    expect(rubyInspect("cr\r\n")).toBe('"cr\\r\\n"');
+    expect(rubyInspect("null\0char")).toBe('"null\\0char"');
+    expect(rubyInspect("esc\x1bseq")).toBe('"esc\\eseq"');
+    // Output stays single-line so an EXPLAIN header can't span
+    // multiple lines based on bind contents.
+    expect(rubyInspect("a\nb")).not.toContain("\n");
+  });
+
   it("handles nested arrays", () => {
     expect(
       rubyInspectArray([

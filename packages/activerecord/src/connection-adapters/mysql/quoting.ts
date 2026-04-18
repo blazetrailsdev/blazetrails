@@ -118,8 +118,10 @@ export function typecastForDatabase(value: unknown): unknown {
 
 /**
  * Cast a value to the primitive form MySQL drivers expect for binds.
- * Booleans become 1/0, Dates are rendered as date strings, strings
- * and numbers pass through unchanged.
+ * Booleans become 1/0, Dates are rendered as an **unquoted**
+ * `YYYY-MM-DD HH:MM:SS` string (Rails' `value.to_formatted_s(:db)`
+ * form — it's `quote()`'s job to add the surrounding single quotes,
+ * not `typeCast`'s), strings and numbers pass through unchanged.
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::MySQL::Quoting#type_cast
  */
@@ -130,6 +132,11 @@ export function typeCast(value: unknown): unknown {
   if (value === null || value === undefined) return value;
   if (typeof value === "number" || typeof value === "bigint") return value;
   if (typeof value === "string") return value;
-  if (value instanceof Date) return quotedDate(value);
+  if (value instanceof Date) {
+    // MySQL's `quotedDate` wraps with single quotes; strip them for the
+    // unquoted-primitive contract that typeCast guarantees.
+    const quoted = quotedDate(value);
+    return quoted.startsWith("'") && quoted.endsWith("'") ? quoted.slice(1, -1) : quoted;
+  }
   throw new TypeError(`can't cast ${(value as object).constructor?.name ?? typeof value}`);
 }

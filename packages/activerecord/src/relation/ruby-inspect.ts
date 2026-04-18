@@ -24,8 +24,25 @@ export function rubyInspect(value: unknown): string {
   if (typeof value === "number") return String(value);
   if (typeof value === "bigint") return String(value);
   if (typeof value === "string") {
-    // Ruby's string inspect: wrap in `"`, escape `"` and `\`.
-    return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+    // Ruby's String#inspect: wrap in `"`, escape `"` and `\`, plus the
+    // common control characters (`\n`, `\r`, `\t`, `\f`, `\b`, `\v`,
+    // `\0`, `\a`, `\e`). Without these, a bind containing a literal
+    // newline would render across multiple lines in the EXPLAIN
+    // header and diverge from Ruby's single-line output.
+    /* eslint-disable no-control-regex */
+    return `"${value
+      .replace(/\\/g, "\\\\")
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, "\\n")
+      .replace(/\r/g, "\\r")
+      .replace(/\t/g, "\\t")
+      .replace(/\f/g, "\\f")
+      .replace(/\x08/g, "\\b")
+      .replace(/\v/g, "\\v")
+      .replace(/\0/g, "\\0")
+      .replace(/\x07/g, "\\a")
+      .replace(/\x1b/g, "\\e")}"`;
+    /* eslint-enable no-control-regex */
   }
   if (Array.isArray(value)) return rubyInspectArray(value);
   // Fallback — matches Ruby's `Object#inspect` which gives `#<Class …>`

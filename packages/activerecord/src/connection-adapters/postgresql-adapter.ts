@@ -91,19 +91,20 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   set statementLimit(value: number) {
+    if (!Number.isInteger(value) || value < 0) {
+      throw new RangeError(
+        `statementLimit must be a finite non-negative integer; got ${String(value)}`,
+      );
+    }
     this._statementLimit = value;
     // Resize the active transaction client's pool immediately so a
-    // mid-session change is visible. Drop references to any other
-    // cached pools so the next `_poolFor` call constructs a fresh
-    // one with the new limit — we can't iterate a WeakMap to resize
-    // them in place, and old entries become unreachable once pg
-    // releases the client anyway.
-    const activeClient = this._client;
-    const activePool = activeClient ? this._statementPools.get(activeClient) : undefined;
-    activePool?.setMaxSize(value);
-    this._statementPools = new WeakMap<pg.PoolClient, StatementPool>();
-    if (activeClient && activePool) {
-      this._statementPools.set(activeClient, activePool);
+    // mid-session change is visible. Non-active pools are synced
+    // lazily in `_poolFor` on next acquisition — we can't iterate a
+    // WeakMap, and dropping entries would orphan their counter /
+    // sql→name mapping while server-side PREPAREd statements still
+    // exist on the reusable pg.PoolClient, risking name collisions.
+    if (this._client) {
+      this._statementPools.get(this._client)?.setMaxSize(value);
     }
   }
 
@@ -440,6 +441,13 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     if (!pool) {
       pool = new StatementPool(client, this._statementLimit);
       this._statementPools.set(client, pool);
+    } else if (pool.maxSize !== this._statementLimit) {
+      // Lazy sync for a pool that existed before `statementLimit`
+      // changed. Resizing here (instead of clearing the WeakMap on
+      // limit change) preserves the counter and sql→name mapping,
+      // which must stay in step with the still-PREPAREd statements
+      // on the reused pg.PoolClient.
+      pool.setMaxSize(this._statementLimit);
     }
     return pool;
   }
@@ -497,7 +505,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         if (this._inTransaction) {
           throw new PreparedStatementCacheExpired(
             (e as { message?: string })?.message ?? "cached plan expired",
-            { cause: e },
+            { sql, binds, cause: e },
           );
         }
         return await attempt();
@@ -713,7 +721,13 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   async commit(): Promise<void> {
     if (!this._client) throw new Error("No active transaction");
     await this._client.query("COMMIT");
-    this._releaseStatementPool(this._client);
+    // Keep the per-client StatementPool attached through the pg.Pool
+    // checkin/checkout cycle. PG prepared statements are session-
+    // scoped, not transaction-scoped (COMMIT/ROLLBACK don't drop
+    // them), so detaching here and rebuilding on next checkout would
+    // reset the counter → `a1` collides with the still-prepared `a1`
+    // on the server. Matches Rails, which only clears its
+    // StatementPool on disconnect, not on commit.
     this._client.release();
     this._client = null;
     this._inTransaction = false;
@@ -729,7 +743,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   async rollback(): Promise<void> {
     if (!this._client) throw new Error("No active transaction");
     await this._client.query("ROLLBACK");
-    this._releaseStatementPool(this._client);
+    // See commit() — ROLLBACK doesn't drop server-side prepared
+    // statements, so we keep the pool attached to the pg.PoolClient
+    // for the duration of the connection's life.
     this._client.release();
     this._client = null;
     this._inTransaction = false;

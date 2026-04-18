@@ -16,6 +16,10 @@ export class StatementPool<T = unknown> {
     return this._statements.size;
   }
 
+  get maxSize(): number {
+    return this._maxSize;
+  }
+
   /**
    * Shrink (or grow) the LRU bound. Shrinking evicts the
    * least-recently-used statements via `dealloc` — matches Rails'

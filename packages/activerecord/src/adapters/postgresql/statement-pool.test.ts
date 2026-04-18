@@ -99,8 +99,12 @@ describeIfPg("PostgreSQLAdapter", () => {
       await adapter.execute("SELECT $1::int", [1]);
       const pool = adapter._statementPoolForTest()!;
       await adapter.rollback();
-      // Client has been released; DEALLOCATE against a detached pool
-      // must be a no-op rather than an unhandled rejection.
+      await adapter.close();
+      // After close the driver pool has ended the client, so DEALLOCATE
+      // can't route anywhere. The fire-and-forget catch in dealloc()
+      // must swallow the failure rather than surface an unhandled
+      // rejection. Mirrors Rails' PG::StatementPool#dealloc which
+      // rescues PG::InvalidSqlStatementName and connection errors.
       expect(() => pool.clear()).not.toThrow();
     });
 

@@ -8,6 +8,7 @@
  * transaction handling, and advisory lock support.
  */
 
+import { inspectExplainOption } from "../adapter.js";
 import type { ExplainOption } from "../adapter.js";
 import { AbstractAdapter, Version } from "./abstract-adapter.js";
 import type { Nodes } from "@blazetrails/arel";
@@ -535,7 +536,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
       }
       if (!o || typeof o !== "object" || typeof o.format !== "string") {
         throw new Error(
-          `Unknown MySQL EXPLAIN option: ${JSON.stringify(o)} (expected a string flag or an object with a string 'format')`,
+          `Unknown MySQL EXPLAIN option: ${inspectExplainOption(o)} (expected a string flag or an object with a string 'format')`,
         );
       }
       if (formatClause !== undefined) {

@@ -13,6 +13,34 @@ import type { Result } from "./result.js";
 export type ExplainOption = string | { format: string };
 
 /**
+ * Safely stringify an arbitrary value for inclusion in an EXPLAIN
+ * validation error message. Uses `util.inspect` (which handles circular
+ * references), so even objects constructed with `as any` can't crash the
+ * validator before its intended error reaches the caller.
+ */
+export function inspectExplainOption(o: unknown): string {
+  if (o === null) return "null";
+  if (o === undefined) return "undefined";
+  if (typeof o !== "object") return String(o);
+  // JSON.stringify with a circular-ref-safe replacer. `as any` callers
+  // can hand us arbitrary shapes, and a raw JSON.stringify would throw
+  // on self-referencing structures — masking the validation error the
+  // caller actually needs to see.
+  const seen = new WeakSet<object>();
+  try {
+    return JSON.stringify(o, (_k, v) => {
+      if (v !== null && typeof v === "object") {
+        if (seen.has(v as object)) return "[Circular]";
+        seen.add(v as object);
+      }
+      return v;
+    });
+  } catch {
+    return String(o);
+  }
+}
+
+/**
  * Database adapter interface — pluggable backends.
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter

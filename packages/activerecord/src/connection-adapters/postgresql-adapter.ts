@@ -20,6 +20,7 @@ import {
   initializeInstanceTypeMap,
   initializeTypeMap as staticInitializeTypeMap,
 } from "./postgresql/type-map-init.js";
+import { inspectExplainOption } from "../adapter.js";
 import type { DatabaseAdapter, ExplainOption } from "../adapter.js";
 import { AbstractAdapter } from "./abstract-adapter.js";
 import { typeCastedBinds } from "./abstract/database-statements.js";
@@ -665,7 +666,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       }
       if (!o || typeof o !== "object" || typeof o.format !== "string") {
         throw new Error(
-          `Unknown PostgreSQL EXPLAIN option: ${JSON.stringify(o)} (expected a string flag or an object with a string 'format')`,
+          `Unknown PostgreSQL EXPLAIN option: ${inspectExplainOption(o)} (expected a string flag or an object with a string 'format')`,
         );
       }
       if (seenFormat) {

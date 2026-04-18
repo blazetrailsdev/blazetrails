@@ -45,6 +45,7 @@ import { WhereClause, predicatesWithWrappedSqlLiterals } from "./relation/where-
 import { BatchEnumerator } from "./relation/batches/batch-enumerator.js";
 import { touchAttributesWithTime } from "./timestamp.js";
 import { ExplainRegistry } from "./explain-registry.js";
+import { inspectExplainOption } from "./adapter.js";
 import type { DatabaseAdapter, ExplainOption } from "./adapter.js";
 import { rubyInspectArray } from "./relation/ruby-inspect.js";
 
@@ -1859,7 +1860,7 @@ export class Relation<T extends Base> {
       if (typeof o === "string") return o.toUpperCase();
       if (!o || typeof o !== "object" || typeof o.format !== "string") {
         throw new TypeError(
-          `EXPLAIN option hash requires a string 'format'; got ${JSON.stringify(o)}`,
+          `EXPLAIN option hash requires a string 'format'; got ${inspectExplainOption(o)}`,
         );
       }
       return `FORMAT ${o.format.toUpperCase()}`;

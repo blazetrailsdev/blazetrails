@@ -4,6 +4,7 @@
  * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter
  */
 
+import { inspectExplainOption } from "../adapter.js";
 import type { DatabaseAdapter, ExplainOption } from "../adapter.js";
 import { type Nodes, Visitors } from "@blazetrails/arel";
 import { ReadOnlyError } from "../errors.js";
@@ -113,7 +114,7 @@ export class AbstractAdapter extends AbstractAdapterBase {
         return `FORMAT ${o.format.toUpperCase()}`;
       }
       throw new TypeError(
-        `EXPLAIN option hash requires a string 'format'; got ${JSON.stringify(o)}`,
+        `EXPLAIN option hash requires a string 'format'; got ${inspectExplainOption(o)}`,
       );
     });
     return `EXPLAIN (${parts.join(", ")}) for:`;

@@ -662,6 +662,15 @@ function applyColumnsHash(
       if (Object.prototype.hasOwnProperty.call(proto, name)) {
         delete (proto as Record<string, unknown>)[name];
       }
+      // STI: also strip a subclass-owned accessor if the originating
+      // host declared the attribute on itself, or `"col" in record` on
+      // the subclass would still return true.
+      if (originatingHost && originatingHost !== host) {
+        const subProto = (originatingHost as unknown as { prototype: object }).prototype;
+        if (Object.prototype.hasOwnProperty.call(subProto, name)) {
+          delete (subProto as Record<string, unknown>)[name];
+        }
+      }
       const existing = host._attributeDefinitions.get(name);
       if (!existing || (existing.userProvided ?? true) === false) {
         host._attributeDefinitions.delete(name);

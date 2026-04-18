@@ -134,4 +134,10 @@ describe("StatementCacheTest", () => {
       adapter.disconnectBang();
     }
   });
+
+  it.skip("StatementCache.create compiles via cacheableQuery", () => {
+    // Full round-trip requires findBySql to pass binds directly to the
+    // adapter without going through sanitizeSql string interpolation.
+    // That's a separate change to the execution path.
+  });
 });

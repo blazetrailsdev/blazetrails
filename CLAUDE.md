@@ -404,5 +404,22 @@ Non-identifier / reserved-word column names (e.g. `strange-col`,
 `class`) are emitted as quoted class fields (`declare "strange-col":
 string;`). Emit order is sorted alphabetically for stability.
 
-A schema-dump command that emits this JSON from the live adapter is a
-planned follow-up.
+Emit the JSON from a live adapter with `trails-schema-dump`:
+
+```sh
+# Print to stdout
+trails-schema-dump --database-url postgres://localhost/mydb
+
+# Write to a file
+trails-schema-dump --out db/schema-columns.json
+
+# DATABASE_URL is read from the environment if --database-url is absent
+DATABASE_URL=postgres://... trails-schema-dump --out db/schema-columns.json
+
+# Feed into the type-checker
+trails-tsc --schema db/schema-columns.json
+```
+
+Rails-bookkeeping tables (`schema_migrations`, `ar_internal_metadata`)
+are skipped by default. Pass `--ignore t1,t2` to drop additional tables.
+Both tables and columns are emitted in sorted order for stable diffs.

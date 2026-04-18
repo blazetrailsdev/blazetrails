@@ -47,8 +47,13 @@ export interface VirtualizeOptions extends WalkOptions {
    *
    * Table resolution: `static tableName = "..."` on the class when
    * present, otherwise `pluralize(underscore(className))`. Each column's
-   * value is a Rails type string (same alphabet as
-   * `this.attribute("x", "<type>")`).
+   * value is a Rails type string.
+   *
+   * Caveats:
+   * - `id` is skipped (Base's `PrimaryKeyValue` accessor handles it).
+   * - Non-identifier / reserved-word names are emitted as quoted class
+   *   fields (`declare "strange-col": string;`).
+   * - Columns are emitted in sorted order for stable output.
    */
   schemaColumnsByTable?: Readonly<Record<string, Readonly<Record<string, string>>>>;
 }

@@ -400,6 +400,9 @@ resolution is `static tableName = "..."` when present, otherwise
 `pluralize(underscore(className))`. User `declare`s and
 `this.attribute(...)` calls always win over schema-sourced declares.
 `id` is skipped (Base's `PrimaryKeyValue` accessor handles it).
+Non-identifier / reserved-word column names (e.g. `strange-col`,
+`class`) are emitted as quoted class fields (`declare "strange-col":
+string;`). Emit order is sorted alphabetically for stability.
 
 A schema-dump command that emits this JSON from the live adapter is a
 planned follow-up.

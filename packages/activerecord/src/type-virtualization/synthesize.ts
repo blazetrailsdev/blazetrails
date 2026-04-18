@@ -63,25 +63,30 @@ function renderSchemaColumnDeclares(
   const cols = map[table];
   if (!cols) return [];
   const out: string[] = [];
-  for (const [col, railsType] of Object.entries(cols)) {
+  // Sort by column name so emitted declares are stable regardless of
+  // JSON key insertion order.
+  const entries = Object.entries(cols).sort(([a], [b]) => a.localeCompare(b));
+  for (const [col, railsType] of entries) {
     if (userAttrNames.has(col)) continue;
     if (info.existingMembers.has(col)) continue;
     // Skip "id" — Base already defines a PrimaryKeyValue accessor that
     // handles composite keys; re-declaring here would shadow it.
     if (col === "id") continue;
-    // Skip columns whose names aren't valid TypeScript identifiers —
-    // emitting `declare strange-col: T;` would be a parse error. Users
-    // who need access to such columns can reach them via
-    // `record.readAttribute("strange-col")` at runtime.
-    if (!isValidIdentifier(col)) continue;
-    out.push(`${INDENT}declare ${col}: ${tsTypeFor(railsType)};`);
+    // Emit a bracket-quoted declare for non-identifier / reserved-word
+    // names (e.g. `declare "strange-col": string;`). TypeScript allows
+    // string-literal class field names, so this is a valid declare.
+    out.push(`${INDENT}declare ${renderDeclaredMemberName(col)}: ${tsTypeFor(railsType)};`);
   }
   return out;
 }
 
+function renderDeclaredMemberName(name: string): string {
+  return isValidIdentifier(name) ? name : JSON.stringify(name);
+}
+
 // Conservative check: ECMAScript identifier start + continue chars,
-// and not a TS/JS reserved word that can't be used as a class member
-// name without quoting.
+// and not a TS/JS reserved word that can't be used as a bare class
+// member name (must be quoted).
 const RESERVED_WORDS = new Set([
   "break",
   "case",

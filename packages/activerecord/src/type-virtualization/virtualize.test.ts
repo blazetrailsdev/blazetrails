@@ -93,22 +93,39 @@ describe("virtualize — deltas", () => {
     expect(text).toMatch(/declare name: string;/);
   });
 
-  test("schemaColumnsByTable skips columns with non-identifier or reserved names", () => {
+  test("schemaColumnsByTable quotes non-identifier and reserved-word column names", () => {
     const src = "export class Post extends Base {}\n";
     const { text } = virtualize(src, "post.ts", {
       schemaColumnsByTable: {
         posts: {
           "strange-col": "string",
           "2bad": "string",
-          class: "string", // reserved word
+          class: "string", // reserved word — must be quoted
           safe: "string",
         },
       },
     });
     expect(text).toMatch(/declare safe: string;/);
-    expect(text).not.toMatch(/declare strange-col:/);
-    expect(text).not.toMatch(/declare 2bad:/);
-    expect(text).not.toMatch(/declare class:/);
+    expect(text).toMatch(/declare "strange-col": string;/);
+    expect(text).toMatch(/declare "2bad": string;/);
+    expect(text).toMatch(/declare "class": string;/);
+    // Bare (unquoted) reserved `class` would be a parse error.
+    expect(text).not.toMatch(/declare class: string;/);
+  });
+
+  test("schemaColumnsByTable emits columns in stable (sorted) order", () => {
+    const src = "export class Post extends Base {}\n";
+    const { text } = virtualize(src, "post.ts", {
+      schemaColumnsByTable: {
+        posts: { zulu: "string", alpha: "string", mike: "string" },
+      },
+    });
+    const alphaIdx = text.indexOf("declare alpha:");
+    const mikeIdx = text.indexOf("declare mike:");
+    const zuluIdx = text.indexOf("declare zulu:");
+    expect(alphaIdx).toBeGreaterThan(-1);
+    expect(mikeIdx).toBeGreaterThan(alphaIdx);
+    expect(zuluIdx).toBeGreaterThan(mikeIdx);
   });
 
   test("schemaColumnsByTable infers table name from class name when absent", () => {

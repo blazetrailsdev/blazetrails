@@ -228,6 +228,17 @@ export class AssociationScope {
     const table = (reflection as ReflectionProxy).aliasedTable ?? null;
     const joinPks = Array.isArray(r.joinPrimaryKey) ? r.joinPrimaryKey : [r.joinPrimaryKey];
     const joinFks = Array.isArray(r.joinForeignKey) ? r.joinForeignKey : [r.joinForeignKey];
+    // Same guard `AbstractReflection#joinScope` uses — mismatched
+    // composite join-key lengths would silently read
+    // `owner.readAttribute(undefined)` and generate a broken WHERE.
+    // Fail fast instead.
+    if (joinPks.length !== joinFks.length) {
+      const name = (reflection as { name?: string }).name ?? "<unknown>";
+      throw new Error(
+        `AssociationScope: ${name} joinPrimaryKey/joinForeignKey column count mismatch ` +
+          `(${joinPks.length} primary key column(s) vs ${joinFks.length} foreign key column(s))`,
+      );
+    }
     for (let i = 0; i < joinPks.length; i++) {
       const rawValue = owner.readAttribute(joinFks[i]);
       const value = this._transformValue(rawValue);

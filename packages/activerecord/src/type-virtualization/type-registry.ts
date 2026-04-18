@@ -36,7 +36,10 @@ export const ATTRIBUTE_TYPE_MAP: Record<string, string> = {
   time: "Date",
   json: "unknown",
   jsonb: "unknown",
-  hstore: "Record<string, string>",
+  // hstore values are nullable at runtime (see
+  // connection-adapters/postgresql/oid/hstore.ts), so the compile-time
+  // type allows null values too.
+  hstore: "Record<string, string | null>",
   binary: "Uint8Array",
   array: "unknown[]",
   value: "unknown",

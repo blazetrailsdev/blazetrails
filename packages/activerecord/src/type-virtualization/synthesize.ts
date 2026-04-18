@@ -4,6 +4,7 @@
 // user has already declared by hand. Output is plain text — the splicer
 // in virtualize.ts inserts it verbatim after the class body's opening `{`.
 
+import ts from "typescript";
 import { camelize, pluralize, underscore } from "@blazetrails/activesupport";
 import { resolveAssociationTarget, stripQuotes } from "./resolve-target.js";
 import type {
@@ -84,52 +85,18 @@ function renderDeclaredMemberName(name: string): string {
   return isValidIdentifier(name) ? name : JSON.stringify(name);
 }
 
-// Conservative check: ECMAScript identifier start + continue chars,
-// and not a TS/JS reserved word that can't be used as a bare class
-// member name (must be quoted).
-const RESERVED_WORDS = new Set([
-  "break",
-  "case",
-  "catch",
-  "class",
-  "const",
-  "continue",
-  "debugger",
-  "default",
-  "delete",
-  "do",
-  "else",
-  "enum",
-  "export",
-  "extends",
-  "false",
-  "finally",
-  "for",
-  "function",
-  "if",
-  "import",
-  "in",
-  "instanceof",
-  "new",
-  "null",
-  "return",
-  "super",
-  "switch",
-  "this",
-  "throw",
-  "true",
-  "try",
-  "typeof",
-  "var",
-  "void",
-  "while",
-  "with",
-  "yield",
-]);
+// Identifier-safe check: use TypeScript's scanner so every reserved
+// word AND TS-specific keyword (`static`, `private`, `public`,
+// `interface`, `let`, `await`, etc.) is detected. If the scanner
+// consumes the whole string and emits an Identifier token, the name
+// is safe to emit unquoted. Otherwise (keyword, invalid start char,
+// non-identifier continue char) it must be quoted.
+const identifierScanner = ts.createScanner(ts.ScriptTarget.ES2022, /* skipTrivia */ true);
 function isValidIdentifier(name: string): boolean {
-  if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)) return false;
-  if (RESERVED_WORDS.has(name)) return false;
-  return true;
+  if (name.length === 0) return false;
+  identifierScanner.setText(name);
+  const token = identifierScanner.scan();
+  return token === ts.SyntaxKind.Identifier && identifierScanner.getTextPos() === name.length;
 }
 
 /**

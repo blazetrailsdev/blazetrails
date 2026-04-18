@@ -100,7 +100,10 @@ describe("virtualize — deltas", () => {
         posts: {
           "strange-col": "string",
           "2bad": "string",
-          class: "string", // reserved word — must be quoted
+          class: "string", // JS reserved — must be quoted
+          static: "string", // TS-class reserved — also must be quoted
+          interface: "string", // TS reserved — must be quoted
+          private: "string", // TS reserved — must be quoted
           safe: "string",
         },
       },
@@ -109,8 +112,12 @@ describe("virtualize — deltas", () => {
     expect(text).toMatch(/declare "strange-col": string;/);
     expect(text).toMatch(/declare "2bad": string;/);
     expect(text).toMatch(/declare "class": string;/);
-    // Bare (unquoted) reserved `class` would be a parse error.
+    expect(text).toMatch(/declare "static": string;/);
+    expect(text).toMatch(/declare "interface": string;/);
+    expect(text).toMatch(/declare "private": string;/);
+    // Bare (unquoted) reserved names would be parse errors.
     expect(text).not.toMatch(/declare class: string;/);
+    expect(text).not.toMatch(/declare static: string;/);
   });
 
   test("schemaColumnsByTable de-dupes against user-authored quoted members", () => {

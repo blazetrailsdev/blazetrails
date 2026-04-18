@@ -36,13 +36,47 @@ describeIfPg("PostgreSQLAdapter", () => {
       try {
         await adapter.execute("SELECT $1::int", [1]);
         const pool = adapter._statementPoolForTest()!;
-        // Force eviction by shrinking the pool. Rails uses
-        // statement_limit = 1 in the matching test.
-        (pool as unknown as { _maxSize: number })._maxSize = 1;
+        // Rails' matching test sets statement_limit = 1 and asserts
+        // LRU eviction. setMaxSize immediately evicts excess entries.
+        pool.setMaxSize(1);
         await adapter.execute("SELECT $1::text", ["a"]);
         expect(pool.length).toBe(1);
       } finally {
         await adapter.rollback();
+      }
+    });
+
+    it("statementLimit config resizes the active pool", async () => {
+      await adapter.beginDbTransaction();
+      try {
+        await adapter.execute("SELECT $1::int", [1]);
+        await adapter.execute("SELECT $1::text", ["a"]);
+        const pool = adapter._statementPoolForTest()!;
+        expect(pool.length).toBe(2);
+        adapter.statementLimit = 1;
+        expect(pool.length).toBe(1);
+      } finally {
+        await adapter.rollback();
+      }
+    });
+
+    it("executeMutation caches the plan for INSERT (reuses on repeat)", async () => {
+      await adapter.exec(
+        `CREATE TABLE IF NOT EXISTS "sp_exec_mut" ("id" SERIAL PRIMARY KEY, "name" TEXT)`,
+      );
+      await adapter.beginDbTransaction();
+      try {
+        await adapter.executeMutation(`INSERT INTO "sp_exec_mut" ("name") VALUES ($1)`, ["a"]);
+        await adapter.executeMutation(`INSERT INTO "sp_exec_mut" ("name") VALUES ($1)`, ["b"]);
+        const pool = adapter._statementPoolForTest()!;
+        // Both INSERTs share the same SQL template → single cached
+        // plan. Rails exec_cache backs exec_insert the same way.
+        // The statement key is the RETURNING-rewritten form, so only
+        // one entry — the two mutations reused the plan.
+        expect(pool.length).toBe(1);
+      } finally {
+        await adapter.rollback();
+        await adapter.exec(`DROP TABLE IF EXISTS "sp_exec_mut"`);
       }
     });
 

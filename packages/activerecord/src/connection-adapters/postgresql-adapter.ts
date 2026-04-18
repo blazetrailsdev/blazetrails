@@ -77,6 +77,30 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   // without us leaking entries.
   private _statementPools = new WeakMap<pg.PoolClient, StatementPool>();
   private _stmtCounter = 0;
+  // Rails' `statement_limit` database.yml key — max prepared
+  // statements cached per session before LRU eviction (default 1000).
+  private _statementLimit = 1000;
+
+  /**
+   * Maximum prepared statements cached per connection.
+   *
+   * Mirrors: `database.yml`'s `statement_limit` — read by Rails as
+   * `config[:statement_limit]` in PostgreSQLAdapter#initialize.
+   */
+  get statementLimit(): number {
+    return this._statementLimit;
+  }
+
+  set statementLimit(value: number) {
+    this._statementLimit = value;
+    // Resize the active transaction client's pool immediately. Pools
+    // attached to non-held clients pick up the new limit on next
+    // acquisition via `_poolFor` (they get detached on close /
+    // commit / rollback anyway).
+    if (this._client) {
+      this._statementPools.get(this._client)?.setMaxSize(value);
+    }
+  }
 
   constructor(config: string | pg.PoolConfig) {
     super();
@@ -433,10 +457,52 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   private _poolFor(client: pg.PoolClient): StatementPool {
     let pool = this._statementPools.get(client);
     if (!pool) {
-      pool = new StatementPool(client);
+      pool = new StatementPool(client, this._statementLimit);
       this._statementPools.set(client, pool);
     }
     return pool;
+  }
+
+  /**
+   * Run a query on `client`, routing through the statement pool when
+   * binds are present and `preparedStatements` is on. On Rails-parity
+   * "invalid cached plan" (SQLSTATE 0A000 + "cached plan" in the
+   * message), purges the pool entry and either re-runs once (outside
+   * a txn) or raises `PreparedStatementCacheExpired` (inside one, so
+   * the transaction machinery can retry the whole txn).
+   *
+   * Shared by execute/executeMutation so every bound path benefits
+   * from prepared-statement reuse — matches Rails where `exec_cache`
+   * backs both exec_query and exec_delete / exec_update / exec_insert.
+   */
+  private async _runQuery(
+    client: pg.PoolClient,
+    sql: string,
+    binds: unknown[],
+  ): Promise<pg.QueryResult> {
+    const prepare = this._shouldPrepare(binds);
+    const attempt = async (): Promise<pg.QueryResult> => {
+      if (prepare) {
+        const name = this._preparedNameFor(client, sql);
+        return client.query({ name, text: sql, values: binds });
+      }
+      return client.query(sql, binds);
+    };
+    try {
+      return await attempt();
+    } catch (e) {
+      if (prepare && this._isInvalidCachedPlan(e)) {
+        this._poolFor(client).delete(sql);
+        if (this._inTransaction) {
+          throw new PreparedStatementCacheExpired(
+            (e as { message?: string })?.message ?? "cached plan expired",
+            { cause: e },
+          );
+        }
+        return await attempt();
+      }
+      throw e;
+    }
   }
 
   /**
@@ -521,37 +587,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return Notifications.instrumentAsync("sql.active_record", payload, async () => {
       try {
         return await this.withClient(async (client) => {
-          const prepare = this._shouldPrepare(binds);
-          const run = async (): Promise<pg.QueryResult> => {
-            if (prepare) {
-              const name = this._preparedNameFor(client, rewritten);
-              return client.query({ name, text: rewritten, values: binds });
-            }
-            return client.query(rewritten, binds);
-          };
-          let result: pg.QueryResult;
-          try {
-            result = await run();
-          } catch (e) {
-            if (prepare && this._isInvalidCachedPlan(e)) {
-              // Purge the stale entry. Rails' `exec_cache` retries here
-              // when not in a transaction; inside one the retry is
-              // guaranteed to fail with InFailedSqlTransaction (25P02)
-              // since any error aborts the enclosing txn, so we raise
-              // PreparedStatementCacheExpired for the txn machinery to
-              // catch and retry the whole transaction.
-              this._poolFor(client).delete(rewritten);
-              if (this._inTransaction) {
-                throw new PreparedStatementCacheExpired(
-                  (e as { message?: string })?.message ?? "cached plan expired",
-                  { cause: e },
-                );
-              }
-              result = await run();
-            } else {
-              throw e;
-            }
-          }
+          const result = await this._runQuery(client, rewritten, binds);
           payload.row_count = result.rows.length;
           return result.rows;
         });
@@ -604,7 +640,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
             payload.sql = withReturning;
             try {
               if (useSavepoint) await client.query(`SAVEPOINT "${spName}"`);
-              const result = await client.query(withReturning, binds);
+              const result = await this._runQuery(client, withReturning, binds);
               if (useSavepoint) await client.query(`RELEASE SAVEPOINT "${spName}"`);
               payload.row_count = result.rowCount ?? 0;
               if (result.rows.length > 1) {
@@ -621,7 +657,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
                 await client.query(`RELEASE SAVEPOINT "${spName}"`).catch(() => {});
               }
               payload.sql = pgSql;
-              const result = await client.query(pgSql, binds);
+              const result = await this._runQuery(client, pgSql, binds);
               payload.row_count = result.rowCount ?? 0;
               return result.rowCount ?? 0;
             }
@@ -629,7 +665,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
 
           // For INSERT with explicit RETURNING
           if (upper.startsWith("INSERT") && upper.includes("RETURNING")) {
-            const result = await client.query(pgSql, binds);
+            const result = await this._runQuery(client, pgSql, binds);
             payload.row_count = result.rowCount ?? 0;
             if (result.rows.length > 0) {
               const firstCol = Object.keys(result.rows[0])[0];
@@ -639,7 +675,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
           }
 
           // For UPDATE/DELETE, return affected rows
-          const result = await client.query(pgSql, binds);
+          const result = await this._runQuery(client, pgSql, binds);
           payload.row_count = result.rowCount ?? 0;
           return result.rowCount ?? 0;
         });

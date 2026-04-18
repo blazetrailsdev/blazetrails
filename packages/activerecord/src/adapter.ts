@@ -103,15 +103,18 @@ export interface DatabaseAdapter {
    * - **booleans**: SQLite / MySQL collapse to `1` / `0`; PostgreSQL
    *   keeps them as `true` / `false`.
    * - **Date**: returned as an **unquoted** formatted string
-   *   (`"YYYY-MM-DD HH:MM:SS"` — matches Rails'
-   *   `value.to_formatted_s(:db)`). `quote()` is responsible for
-   *   wrapping it in single quotes.
+   *   (`"YYYY-MM-DD HH:MM:SS"` with optional `.microseconds` when
+   *   milliseconds > 0 — matches Rails' `value.to_formatted_s(:db)`).
+   *   `quote()` is responsible for wrapping it in single quotes.
    * - **null**: returned unchanged.
    * - **undefined**: adapter-dependent — SQLite coerces to `null`
    *   to match its nullable-column semantics; PG / MySQL /
    *   abstract pass through unchanged.
-   * - **strings / numbers / bigints / symbols**: passed through
-   *   (symbols coerce to their description).
+   * - **strings / numbers / bigints**: passed through.
+   * - **symbols**: adapter-dependent — abstract / MySQL / PG use
+   *   the symbol's description when present and fall back to
+   *   `String(symbol)` otherwise; SQLite coerces description-less
+   *   symbols to `null`.
    *
    * Rails' `render_bind` uses this rather than `quote()` so EXPLAIN
    * headers show the actual bind values instead of their SQL-literal

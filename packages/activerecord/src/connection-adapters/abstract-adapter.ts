@@ -134,7 +134,8 @@ export class AbstractAdapter extends AbstractAdapterBase {
    * Abstract defaults mirror `abstract/quoting.ts`:
    * - booleans pass through as `true` / `false` (adapters override —
    *   SQLite / MySQL collapse to `1` / `0`, PG keeps `true` / `false`)
-   * - Date → unquoted `"YYYY-MM-DD HH:MM:SS"` (no surrounding quotes;
+   * - Date → unquoted `"YYYY-MM-DD HH:MM:SS"` with optional
+   *   `.microseconds` when milliseconds > 0 (no surrounding quotes;
    *   matches Rails' `value.to_formatted_s(:db)`)
    * - null → returned unchanged; undefined passes through too at
    *   the abstract level (SQLite overrides to coerce `undefined →

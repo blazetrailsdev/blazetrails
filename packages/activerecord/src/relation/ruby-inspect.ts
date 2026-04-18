@@ -45,8 +45,8 @@ export function rubyInspect(value: unknown): string {
     /* eslint-enable no-control-regex */
   }
   if (Array.isArray(value)) return rubyInspectArray(value);
-  // Fallback — matches Ruby's `Object#inspect` which gives `#<Class …>`
-  // but we just toString for anything unhandled.
+  // Fallback — Ruby's `Object#inspect` gives `#<Class …>`; here we
+  // just call `String(value)` for anything unhandled.
   return String(value);
 }
 

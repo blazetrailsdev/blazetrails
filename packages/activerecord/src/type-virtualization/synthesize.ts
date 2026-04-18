@@ -69,9 +69,62 @@ function renderSchemaColumnDeclares(
     // Skip "id" — Base already defines a PrimaryKeyValue accessor that
     // handles composite keys; re-declaring here would shadow it.
     if (col === "id") continue;
+    // Skip columns whose names aren't valid TypeScript identifiers —
+    // emitting `declare strange-col: T;` would be a parse error. Users
+    // who need access to such columns can reach them via
+    // `record.readAttribute("strange-col")` at runtime.
+    if (!isValidIdentifier(col)) continue;
     out.push(`${INDENT}declare ${col}: ${tsTypeFor(railsType)};`);
   }
   return out;
+}
+
+// Conservative check: ECMAScript identifier start + continue chars,
+// and not a TS/JS reserved word that can't be used as a class member
+// name without quoting.
+const RESERVED_WORDS = new Set([
+  "break",
+  "case",
+  "catch",
+  "class",
+  "const",
+  "continue",
+  "debugger",
+  "default",
+  "delete",
+  "do",
+  "else",
+  "enum",
+  "export",
+  "extends",
+  "false",
+  "finally",
+  "for",
+  "function",
+  "if",
+  "import",
+  "in",
+  "instanceof",
+  "new",
+  "null",
+  "return",
+  "super",
+  "switch",
+  "this",
+  "throw",
+  "true",
+  "try",
+  "typeof",
+  "var",
+  "void",
+  "while",
+  "with",
+  "yield",
+]);
+function isValidIdentifier(name: string): boolean {
+  if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)) return false;
+  if (RESERVED_WORDS.has(name)) return false;
+  return true;
 }
 
 /**

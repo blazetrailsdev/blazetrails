@@ -52,13 +52,40 @@ function loadSchemaColumns(args: string[]): Record<string, Record<string, string
     process.stderr.write(`trails-tsc: failed to read --schema file: ${msg}\n`);
     process.exit(1);
   }
+  let parsed: unknown;
   try {
-    return JSON.parse(schemaJson) as Record<string, Record<string, string>>;
+    parsed = JSON.parse(schemaJson);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     process.stderr.write(`trails-tsc: --schema file is not valid JSON: ${msg}\n`);
     process.exit(1);
   }
+  return validateSchemaShape(parsed, resolved);
+}
+
+function validateSchemaShape(value: unknown, path: string): Record<string, Record<string, string>> {
+  const fail = (reason: string): never => {
+    process.stderr.write(`trails-tsc: --schema file ${path} is malformed: ${reason}\n`);
+    process.exit(1);
+  };
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    fail("expected a top-level object of { [table]: { [column]: railsType } }");
+  }
+  const out: Record<string, Record<string, string>> = {};
+  for (const [table, cols] of Object.entries(value as Record<string, unknown>)) {
+    if (cols === null || typeof cols !== "object" || Array.isArray(cols)) {
+      fail(`table "${table}" must map to an object of column definitions`);
+    }
+    const colMap: Record<string, string> = {};
+    for (const [col, railsType] of Object.entries(cols as Record<string, unknown>)) {
+      if (typeof railsType !== "string") {
+        fail(`column "${table}.${col}" must have a string Rails type (got ${typeof railsType})`);
+      }
+      colMap[col] = railsType as string;
+    }
+    out[table] = colMap;
+  }
+  return out;
 }
 
 function handlePrintVirtualized(args: string[]): void {
@@ -130,12 +157,12 @@ function handleBuildMode(args: string[]): void {
   const buildArgs = args.slice(buildIdx + 1);
   const verbose = args.includes("--verbose");
   const clean = args.includes("--clean");
-  const flagsWithValues = new Set(["--pretty"]);
+  const flagsWithValues = new Set(["--pretty", "--schema"]);
   const rest: string[] = [];
   for (let i = 0; i < buildArgs.length; i++) {
     const arg = buildArgs[i]!;
     if (arg === "--verbose" || arg === "--clean") continue;
-    if (arg.startsWith("--pretty=")) continue;
+    if (arg.startsWith("--pretty=") || arg.startsWith("--schema=")) continue;
     if (flagsWithValues.has(arg)) {
       if (i + 1 < buildArgs.length && !buildArgs[i + 1]!.startsWith("-")) i++;
       continue;
@@ -150,8 +177,10 @@ function handleBuildMode(args: string[]): void {
 
   const fh = formatHost();
   const pretty = parsePretty(args, {});
+  const schemaColumnsByTable = loadSchemaColumns(args);
   const builder = createTrailsSolutionBuilder(rootConfigs, {
     verbose,
+    schemaColumnsByTable,
     onDiagnostic: (d) => {
       const out = pretty
         ? ts.formatDiagnosticsWithColorAndContext([d], fh)

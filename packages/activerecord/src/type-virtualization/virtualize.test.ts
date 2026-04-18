@@ -93,6 +93,24 @@ describe("virtualize — deltas", () => {
     expect(text).toMatch(/declare name: string;/);
   });
 
+  test("schemaColumnsByTable skips columns with non-identifier or reserved names", () => {
+    const src = "export class Post extends Base {}\n";
+    const { text } = virtualize(src, "post.ts", {
+      schemaColumnsByTable: {
+        posts: {
+          "strange-col": "string",
+          "2bad": "string",
+          class: "string", // reserved word
+          safe: "string",
+        },
+      },
+    });
+    expect(text).toMatch(/declare safe: string;/);
+    expect(text).not.toMatch(/declare strange-col:/);
+    expect(text).not.toMatch(/declare 2bad:/);
+    expect(text).not.toMatch(/declare class:/);
+  });
+
   test("schemaColumnsByTable infers table name from class name when absent", () => {
     const src = "export class BlogPost extends Base {}\n";
     const { text } = virtualize(src, "blog-post.ts", {

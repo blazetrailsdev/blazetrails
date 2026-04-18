@@ -38,6 +38,19 @@ export interface VirtualizeResult {
 
 export interface VirtualizeOptions extends WalkOptions {
   prependImports?: readonly string[];
+  /**
+   * Schema columns keyed by table name. When supplied, the virtualizer
+   * emits `declare <col>: <tsType>` for every column not already covered
+   * by a user-authored `declare` or `this.attribute(...)` call — giving
+   * IDE autocomplete to schema-only columns (Rails-default pattern:
+   * columns come from the migration, not from per-class declarations).
+   *
+   * Table resolution: `static tableName = "..."` on the class when
+   * present, otherwise `pluralize(underscore(className))`. Each column's
+   * value is a Rails type string (same alphabet as
+   * `this.attribute("x", "<type>")`).
+   */
+  schemaColumnsByTable?: Readonly<Record<string, Readonly<Record<string, string>>>>;
 }
 
 export function virtualize(
@@ -59,7 +72,9 @@ export function virtualize(
   for (const info of classes) {
     if (info.skip) continue;
     if (info.openBracePos < 0) continue;
-    const decls = synthesizeDeclares(info);
+    const decls = synthesizeDeclares(info, {
+      schemaColumnsByTable: options.schemaColumnsByTable,
+    });
     if (decls.length === 0) continue;
     const block = "\n" + decls.join("\n") + "\n";
     edits.push({

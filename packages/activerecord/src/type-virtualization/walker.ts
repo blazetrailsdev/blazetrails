@@ -65,6 +65,14 @@ export interface ClassInfo {
   existingMembers: Set<string>;
   existingStaticMembers: Set<string>;
   skip: boolean; // `/** @trails-typegen skip */` JSDoc above the class
+  /**
+   * The `static tableName = "..."` value when the user declared it
+   * explicitly. Used to look up schema columns in
+   * `VirtualizeOptions.schemaColumnsByTable`. When absent, callers
+   * should fall back to Rails' conventional inference
+   * (`pluralize(underscore(className))`).
+   */
+  tableName?: string;
 }
 
 export interface WalkOptions {
@@ -180,6 +188,17 @@ function recordExistingMember(m: ts.ClassElement, info: ClassInfo): void {
   const isStatic = modifiers?.some((mod) => mod.kind === ts.SyntaxKind.StaticKeyword) ?? false;
   if (isStatic) info.existingStaticMembers.add(name);
   else info.existingMembers.add(name);
+
+  // Capture `static tableName = "..."` for schema-column lookup.
+  if (
+    isStatic &&
+    name === "tableName" &&
+    ts.isPropertyDeclaration(m) &&
+    m.initializer &&
+    ts.isStringLiteralLike(m.initializer)
+  ) {
+    info.tableName = m.initializer.text;
+  }
 }
 
 function readDefineEnumThisCall(stmt: ts.Statement): DefineEnumCall | null {

@@ -49,6 +49,59 @@ describe("virtualize — deltas", () => {
     expect(text).toBe("export class NotAModel {}\n");
   });
 
+  test("schemaColumnsByTable injects declares for columns without attribute()", () => {
+    const src =
+      "export class Post extends Base {\n" +
+      '  static override tableName = "posts";\n' +
+      "  static {\n" +
+      '    this.attribute("title", "string");\n' +
+      "  }\n" +
+      "}\n";
+    const { text } = virtualize(src, "post.ts", {
+      schemaColumnsByTable: {
+        posts: { title: "string", body: "text", published_at: "datetime", views: "integer" },
+      },
+    });
+    // User-declared `title` is NOT re-emitted.
+    expect(text).toMatch(/declare title: string;/);
+    expect(text.match(/declare title: string;/g)?.length).toBe(1);
+    // Schema-only columns ARE emitted.
+    expect(text).toMatch(/declare body: string;/);
+    expect(text).toMatch(/declare published_at: Date;/);
+    expect(text).toMatch(/declare views: number;/);
+  });
+
+  test("schemaColumnsByTable skips user-authored declares", () => {
+    const src =
+      "export class Post extends Base {\n" +
+      '  static override tableName = "posts";\n' +
+      "  declare body: string;\n" +
+      "}\n";
+    const { text } = virtualize(src, "post.ts", {
+      schemaColumnsByTable: { posts: { body: "text" } },
+    });
+    // User already declared `body` — the virtualizer must not duplicate.
+    expect(text.match(/declare body:/g)?.length).toBe(1);
+  });
+
+  test("schemaColumnsByTable skips `id`", () => {
+    const src = "export class Post extends Base {}\n";
+    const { text } = virtualize(src, "post.ts", {
+      schemaColumnsByTable: { posts: { id: "integer", name: "string" } },
+    });
+    expect(text).not.toMatch(/declare id:/);
+    expect(text).toMatch(/declare name: string;/);
+  });
+
+  test("schemaColumnsByTable infers table name from class name when absent", () => {
+    const src = "export class BlogPost extends Base {}\n";
+    const { text } = virtualize(src, "blog-post.ts", {
+      // pluralize(underscore("BlogPost")) === "blog_posts"
+      schemaColumnsByTable: { blog_posts: { slug: "string" } },
+    });
+    expect(text).toMatch(/declare slug: string;/);
+  });
+
   test("skip marker yields no deltas", () => {
     const src =
       "/** @trails-typegen skip */\n" +

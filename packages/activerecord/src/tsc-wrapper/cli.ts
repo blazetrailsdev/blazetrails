@@ -8,6 +8,38 @@ import { createTrailsSolutionBuilder } from "./build.js";
 import { remapDiagnostics } from "./remap.js";
 import { virtualize } from "../type-virtualization/virtualize.js";
 
+/**
+ * Load a schema-columns JSON file produced by the schema dumper.
+ * Format: `{ "<table>": { "<column>": "<rails_type>", ... }, ... }`.
+ */
+function loadSchemaColumns(args: string[]): Record<string, Record<string, string>> | undefined {
+  let schemaPath: string | undefined;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (a === "--schema") {
+      schemaPath = args[i + 1];
+      break;
+    }
+    if (a.startsWith("--schema=")) {
+      schemaPath = a.slice("--schema=".length);
+      break;
+    }
+  }
+  if (!schemaPath) return undefined;
+  const resolved = path.resolve(schemaPath);
+  if (!fs.existsSync(resolved)) {
+    process.stderr.write(`trails-tsc: --schema file not found: ${resolved}\n`);
+    process.exit(1);
+  }
+  try {
+    return JSON.parse(fs.readFileSync(resolved, "utf8")) as Record<string, Record<string, string>>;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    process.stderr.write(`trails-tsc: --schema file is not valid JSON: ${msg}\n`);
+    process.exit(1);
+  }
+}
+
 function handlePrintVirtualized(args: string[]): void {
   const idx = args.indexOf("--print-virtualized");
   if (idx === -1) return;
@@ -22,7 +54,8 @@ function handlePrintVirtualized(args: string[]): void {
     process.exit(1);
   }
   const text = fs.readFileSync(resolved, "utf8");
-  const { text: virtualized } = virtualize(text, resolved);
+  const schemaColumnsByTable = loadSchemaColumns(args);
+  const { text: virtualized } = virtualize(text, resolved, { schemaColumnsByTable });
   process.stdout.write(virtualized);
   process.exit(0);
 }
@@ -145,7 +178,10 @@ function main(): void {
     configPath = path.resolve(configPath);
   }
 
-  const { program, host, configDiagnostics } = createTrailsProgram(configPath);
+  const schemaColumnsByTable = loadSchemaColumns(args);
+  const { program, host, configDiagnostics } = createTrailsProgram(configPath, {
+    schemaColumnsByTable,
+  });
 
   const fh = formatHost();
 

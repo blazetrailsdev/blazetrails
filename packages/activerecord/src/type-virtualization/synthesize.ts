@@ -4,7 +4,7 @@
 // user has already declared by hand. Output is plain text — the splicer
 // in virtualize.ts inserts it verbatim after the class body's opening `{`.
 
-import { camelize } from "@blazetrails/activesupport";
+import { camelize, pluralize, underscore } from "@blazetrails/activesupport";
 import { resolveAssociationTarget, stripQuotes } from "./resolve-target.js";
 import type {
   ClassInfo,
@@ -27,15 +27,49 @@ const INDENT = "  ";
 // (see the plan § "Auto-import resolution under Phase 1b").
 const AR_IMPORT = `import("@blazetrails/activerecord")`;
 
-export function synthesizeDeclares(info: ClassInfo): string[] {
+export interface SynthesizeOptions {
+  schemaColumnsByTable?: Readonly<Record<string, Readonly<Record<string, string>>>>;
+}
+
+export function synthesizeDeclares(info: ClassInfo, opts: SynthesizeOptions = {}): string[] {
   const out: string[] = [];
+  // Track attribute names the user declared via `this.attribute(...)`
+  // so schema-reflected declares don't duplicate them.
+  const userAttrNames = new Set<string>();
   for (const call of info.calls) {
+    if (call.kind === "attribute") userAttrNames.add(call.name);
     for (const line of renderCall(info, call)) {
       if (!line.skipIfPresent || !memberPresent(info, line)) out.push(line.text);
     }
   }
   for (const l of renderLoaderOverloads(info)) {
     if (!info.existingMembers.has(l.declaredName)) out.push(l.text);
+  }
+  // Schema-reflected declares for columns the user never touched.
+  for (const line of renderSchemaColumnDeclares(info, userAttrNames, opts)) {
+    out.push(line);
+  }
+  return out;
+}
+
+function renderSchemaColumnDeclares(
+  info: ClassInfo,
+  userAttrNames: Set<string>,
+  opts: SynthesizeOptions,
+): string[] {
+  const map = opts.schemaColumnsByTable;
+  if (!map) return [];
+  const table = info.tableName ?? pluralize(underscore(info.name));
+  const cols = map[table];
+  if (!cols) return [];
+  const out: string[] = [];
+  for (const [col, railsType] of Object.entries(cols)) {
+    if (userAttrNames.has(col)) continue;
+    if (info.existingMembers.has(col)) continue;
+    // Skip "id" — Base already defines a PrimaryKeyValue accessor that
+    // handles composite keys; re-declaring here would shadow it.
+    if (col === "id") continue;
+    out.push(`declare ${col}: ${tsTypeFor(railsType)};`);
   }
   return out;
 }

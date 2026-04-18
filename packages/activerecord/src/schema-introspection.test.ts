@@ -1,5 +1,27 @@
 import { describe, it, expect } from "vitest";
+import { createTestAdapter } from "./test-adapter.js";
+import { MigrationContext } from "./migration.js";
 import { introspectTables, introspectColumns } from "./schema-introspection.js";
+
+/**
+ * Return a proxy over `adapter` that hides the named methods so the
+ * SchemaStatements fallback path inside `introspect*` runs. Keeping
+ * the real adapter underneath means detectAdapterName + execute()
+ * work, so SchemaStatements' query dispatch can complete.
+ */
+function withoutMethods<A extends object>(adapter: A, hidden: string[]): A {
+  const hiddenSet = new Set(hidden);
+  return new Proxy(adapter, {
+    get(target, prop, receiver) {
+      if (typeof prop === "string" && hiddenSet.has(prop)) return undefined;
+      return Reflect.get(target, prop, receiver);
+    },
+    has(target, prop) {
+      if (typeof prop === "string" && hiddenSet.has(prop)) return false;
+      return Reflect.has(target, prop);
+    },
+  }) as A;
+}
 
 describe("introspectTables", () => {
   it("uses adapter.tables() when the adapter implements it", async () => {
@@ -18,42 +40,18 @@ describe("introspectTables", () => {
   });
 
   it("falls back to SchemaStatements when the adapter doesn't implement tables()", async () => {
-    // No `tables` method — introspectTables must call
-    // `new SchemaStatements(adapter).tables()`, which issues the
-    // portable `SELECT ... FROM information_schema.tables` query via
-    // the adapter's `execute()`. Supplying a stub execute() that
-    // returns the expected shape lets us verify the fallback path
-    // without a real DB connection.
-    const executed: string[] = [];
-    const adapter = {
-      async execute(sql: string): Promise<unknown[]> {
-        executed.push(sql);
-        return [{ name: "widgets" }, { name: "gadgets" }];
-      },
-      // DatabaseAdapter requires misc methods for SchemaStatements'
-      // helpers; supply just the minimum + permissive fallbacks.
-      async selectAll() {
-        return { rows: [] };
-      },
-    } as unknown as Parameters<typeof introspectTables>[0];
+    const realAdapter = createTestAdapter();
+    const ctx = new MigrationContext(realAdapter);
+    await ctx.createTable("widgets", {}, () => {});
+    await ctx.createTable("gadgets", {}, () => {});
 
-    // SchemaStatements.tables() issues an INFORMATION_SCHEMA-style
-    // query; we don't care about the exact SQL, only that it was
-    // called and the rows shape is respected.
-    try {
-      await introspectTables(adapter);
-    } catch {
-      // Adapter type demands more than our stub provides — some
-      // adapters throw before reaching execute(). The important
-      // invariant is "no adapter.tables() shortcut is used": when
-      // the method is absent, fallback is attempted (evidenced by
-      // any side effect OR a thrown error from the fallback path).
-    }
-    // Negative: the adapter had no `tables()`, so no short-circuit.
-    // Positive: if any SQL was issued, it came from SchemaStatements.
-    // Either way, the absence of a `tables()` method is what we're
-    // locking.
-    expect(typeof (adapter as { tables?: unknown }).tables).toBe("undefined");
+    // Strip `tables()` so introspectTables routes through SchemaStatements.
+    const stripped = withoutMethods(realAdapter, ["tables"]);
+
+    const tables = await introspectTables(stripped);
+
+    expect(tables).toContain("widgets");
+    expect(tables).toContain("gadgets");
   });
 });
 
@@ -72,5 +70,22 @@ describe("introspectColumns", () => {
 
     expect(calledWith).toBe("users");
     expect(cols).toBe(fakeCols);
+  });
+
+  it("falls back to SchemaStatements when the adapter doesn't implement columns()", async () => {
+    const realAdapter = createTestAdapter();
+    const ctx = new MigrationContext(realAdapter);
+    await ctx.createTable("widgets", {}, (t) => {
+      t.string("name");
+      t.integer("age");
+    });
+
+    // Strip `columns()` so introspectColumns routes through SchemaStatements.
+    const stripped = withoutMethods(realAdapter, ["columns"]);
+
+    const cols = await introspectColumns(stripped, "widgets");
+    const names = cols.map((c) => c.name).sort();
+
+    expect(names).toEqual(["age", "id", "name"]);
   });
 });

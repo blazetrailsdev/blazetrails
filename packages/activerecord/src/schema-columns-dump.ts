@@ -74,7 +74,7 @@ export async function dumpSchemaColumns(
     const colMap: Record<string, DumpColumnSchema> = Object.create(null);
     const sorted = [...cols].sort((a, b) => a.name.localeCompare(b.name));
     for (const col of sorted) {
-      colMap[col.name] = buildColumnSchema(col as AdapterColumn);
+      colMap[col.name] = buildColumnSchema(col);
     }
     out[table] = colMap;
   }

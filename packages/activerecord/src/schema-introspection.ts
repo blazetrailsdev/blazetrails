@@ -27,25 +27,41 @@ function hasColumns(a: unknown): a is AdapterWithColumns {
   return typeof (a as AdapterWithColumns).columns === "function";
 }
 
+// Memoize `SchemaStatements` per-adapter so the fallback path doesn't
+// reinstantiate on every call (and per-table when `adapter.columns()`
+// is absent). WeakMap lets GC reclaim the helper when the adapter is
+// disposed.
+const SCHEMA_STATEMENTS = new WeakMap<object, SchemaStatements>();
+function schemaStatementsFor(adapter: DatabaseAdapter): SchemaStatements {
+  const key = adapter as unknown as object;
+  let s = SCHEMA_STATEMENTS.get(key);
+  if (!s) {
+    s = new SchemaStatements(adapter);
+    SCHEMA_STATEMENTS.set(key, s);
+  }
+  return s;
+}
+
 /**
  * Return the table names reported by the adapter. Uses
  * `adapter.tables()` when the adapter implements it, else falls back
- * to `SchemaStatements.tables(adapter)`.
+ * to `new SchemaStatements(adapter).tables()` (memoized per adapter).
  */
 export async function introspectTables(adapter: DatabaseAdapter): Promise<string[]> {
   if (hasTables(adapter)) return adapter.tables();
-  return new SchemaStatements(adapter).tables();
+  return schemaStatementsFor(adapter).tables();
 }
 
 /**
  * Return the Column objects for `table`. Uses `adapter.columns()`
  * when implemented, else falls back to
- * `SchemaStatements.columns(adapter, table)`.
+ * `new SchemaStatements(adapter).columns(table)` (memoized per adapter
+ * so a loop that dumps many tables reuses a single helper).
  */
 export async function introspectColumns(
   adapter: DatabaseAdapter,
   table: string,
 ): Promise<Column[]> {
   if (hasColumns(adapter)) return adapter.columns(table);
-  return new SchemaStatements(adapter).columns(table);
+  return schemaStatementsFor(adapter).columns(table);
 }

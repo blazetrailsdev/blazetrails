@@ -8,6 +8,7 @@ import {
   HasOneThroughNestedAssociationsAreReadonly,
 } from "./associations/errors.js";
 import { ForeignAssociation } from "./associations/foreign-association.js";
+import { AssociationScope } from "./associations/association-scope.js";
 import { underscore, singularize, pluralize, camelize } from "@blazetrails/activesupport";
 import { getInheritanceColumn, findStiClass } from "./inheritance.js";
 import { BelongsTo as BelongsToBuilder } from "./associations/builder/belongs-to.js";
@@ -584,8 +585,23 @@ export async function loadHasMany(
   const pkValue = record.readAttribute(primaryKey as string);
   if (pkValue === null || pkValue === undefined) return [];
 
-  let rel = (targetModel as any).all().where({ [foreignKey]: pkValue });
-  // Apply association scope
+  // Route through AssociationScope when we have a reflection registered
+  // for this association — single code path with the explicit loaders in
+  // `load*` sharing WHERE/FK construction. Falls back to the inline
+  // builder when the reflection hasn't been registered (happens in
+  // tests that define associations via the lower-level API without
+  // going through the full Reflection.create path).
+  const reflection = ctor._reflectOnAssociation?.(assocName);
+  let rel: any;
+  if (reflection && !options.as && !options.through) {
+    rel = AssociationScope.scope({
+      owner: record,
+      reflection,
+      klass: targetModel,
+    });
+  } else {
+    rel = (targetModel as any).all().where({ [foreignKey]: pkValue });
+  }
   if (options.scope) {
     rel = options.scope(rel);
   }

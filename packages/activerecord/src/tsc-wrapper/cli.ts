@@ -341,7 +341,18 @@ const invokedDirectly = (() => {
   try {
     const entry = process.argv[1];
     if (!entry) return false;
-    return path.resolve(fileURLToPath(import.meta.url)) === path.resolve(entry);
+    // Resolve both sides through symlinks so package-manager bin
+    // shims (e.g. `node_modules/.bin/trails-tsc` → the real cli.js)
+    // still match. Without realpath, a shim invocation would leave
+    // `main()` unrun and the CLI becomes a no-op.
+    const resolveReal = (p: string): string => {
+      try {
+        return fs.realpathSync(p);
+      } catch {
+        return path.resolve(p);
+      }
+    };
+    return resolveReal(fileURLToPath(import.meta.url)) === resolveReal(entry);
   } catch {
     return false;
   }

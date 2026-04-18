@@ -1694,12 +1694,78 @@ export class Relation<T extends Base> {
    * bind is an Attribute object; `ExplainRegistry` collects plain
    * values (no Attribute wrappers here), so we emit the value-only
    * form — same shape, just without the `[name, value]` tuples.
+   *
+   * Some adapters' `typeCast` can legitimately return non-primitive
+   * shapes (PG's `BinaryData` comes out as `{ value, format }`);
+   * `_normalizeExplainBindValue` below reduces those to something
+   * rubyInspect can render cleanly, and handles binary data the way
+   * Rails' `render_bind` does: `<N bytes of binary data>`.
    */
   private _renderExplainBinds(adapter: DatabaseAdapter, binds: unknown[]): string {
-    const casted = binds.map((b) =>
-      typeof adapter.typeCast === "function" ? adapter.typeCast(b) : b,
-    );
+    const casted = binds.map((b) => {
+      const value = typeof adapter.typeCast === "function" ? adapter.typeCast(b) : b;
+      return this._normalizeExplainBindValue(value);
+    });
     return rubyInspectArray(casted);
+  }
+
+  /**
+   * Reduce a typeCast'd bind value to a form `rubyInspect` can render
+   * as a primitive:
+   *   - binary (Buffer / Uint8Array / ArrayBuffer) → `"<N bytes of
+   *     binary data>"`, matching Rails' `render_bind` binary branch.
+   *   - PG-style bind wrappers (`{ value, format }` from
+   *     `pg/quoting.ts`'s `BinaryBind` shape) → unwrap `.value` and
+   *     normalize recursively.
+   *   - Dates / primitives (including symbols handled by typeCast
+   *     earlier) → pass through.
+   *   - Anything else → `JSON.stringify`, falling back to
+   *     `Object.prototype.toString.call` when non-serializable.
+   *
+   * Mirrors: the binary branch of
+   * ActiveRecord::Relation#render_bind.
+   */
+  private _normalizeExplainBindValue(value: unknown): unknown {
+    if (
+      value === null ||
+      value === undefined ||
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "bigint" ||
+      typeof value === "boolean"
+    ) {
+      return value;
+    }
+    const binaryBytes = this._binaryByteLength(value);
+    if (binaryBytes !== null) return `<${binaryBytes} bytes of binary data>`;
+    if (typeof value === "object") {
+      // Bind-wrapper objects like PG's BinaryBind (`{ value, format }`)
+      // — recurse on `.value` so the inspected form shows the payload
+      // rather than the wrapper envelope.
+      const keys = Object.keys(value as object);
+      if (
+        "value" in (value as object) &&
+        keys.length > 0 &&
+        keys.every((k) => k === "value" || k === "format")
+      ) {
+        return this._normalizeExplainBindValue((value as { value: unknown }).value);
+      }
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return Object.prototype.toString.call(value);
+      }
+    }
+    return String(value);
+  }
+
+  private _binaryByteLength(value: unknown): number | null {
+    if (typeof Buffer !== "undefined" && value instanceof Buffer) return value.byteLength;
+    if (typeof ArrayBuffer !== "undefined") {
+      if (value instanceof ArrayBuffer) return value.byteLength;
+      if (ArrayBuffer.isView(value)) return (value as ArrayBufferView).byteLength;
+    }
+    return null;
   }
 
   /**

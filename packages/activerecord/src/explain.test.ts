@@ -241,6 +241,45 @@ describe("ExplainTest", () => {
     expect(plan.length).toBeGreaterThan(0);
   });
 
+  it("renders binary binds as '<N bytes of binary data>' (Rails parity)", async () => {
+    // Rails' `render_bind` special-cases binary-typed attrs:
+    //   "<#{attr.value_for_database.to_s.bytesize} bytes of binary data>"
+    // We reach the same result structurally — after typeCast, any
+    // Buffer / Uint8Array / ArrayBuffer bind gets normalized to the
+    // same byte-count string before rubyInspect sees it, so an
+    // EXPLAIN over a BYTEA/BLOB column doesn't dump the raw buffer.
+    const { Post } = makeModel();
+    const rel = Post.all() as unknown as {
+      _renderExplainBinds: (a: DatabaseAdapter, binds: unknown[]) => string;
+    };
+    const buf = Buffer.from("hello world"); // 11 bytes
+    const u8 = new Uint8Array([1, 2, 3, 4, 5]); // 5 bytes
+    const rendered = rel._renderExplainBinds(adapter, [buf, u8]);
+    expect(rendered).toBe('["<11 bytes of binary data>", "<5 bytes of binary data>"]');
+  });
+
+  it("unwraps PG-style { value, format } bind shapes when rendering", async () => {
+    // PG's `typeCast(BinaryData)` returns `{ value, format }` — the
+    // raw wrapper would stringify to "[object Object]" via
+    // `rubyInspect`'s object fallback. Normalization recurses on
+    // `.value` so we show the actual payload instead of the envelope.
+    const { Post } = makeModel();
+    const rel = Post.all() as unknown as {
+      _renderExplainBinds: (a: DatabaseAdapter, binds: unknown[]) => string;
+    };
+    // Skip typeCast here — we're testing the normalization of a
+    // pre-cast bind-wrapper value. The inner adapter.typeCast call
+    // would pass these objects through unchanged on non-PG adapters.
+    const stub = {
+      typeCast: (v: unknown) => v,
+    } as unknown as DatabaseAdapter;
+    const rendered = rel._renderExplainBinds(stub, [
+      { value: "raw", format: 1 },
+      { value: 42, format: 0 },
+    ]);
+    expect(rendered).toBe('["raw", 42]');
+  });
+
   it("isolates concurrent explain() calls via AsyncLocalStorage scopes", async () => {
     // Two parallel explain() calls must not trample each other's
     // collected queries. Without async-context isolation a global

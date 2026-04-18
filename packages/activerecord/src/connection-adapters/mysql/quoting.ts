@@ -115,3 +115,21 @@ export function typecastForDatabase(value: unknown): unknown {
   if (value === false) return 0;
   return value;
 }
+
+/**
+ * Cast a value to the primitive form MySQL drivers expect for binds.
+ * Booleans become 1/0, Dates are rendered as date strings, strings
+ * and numbers pass through unchanged.
+ *
+ * Mirrors: ActiveRecord::ConnectionAdapters::MySQL::Quoting#type_cast
+ */
+export function typeCast(value: unknown): unknown {
+  if (typeof value === "symbol") return value.description ?? String(value);
+  if (value === true) return unquotedTrue();
+  if (value === false) return unquotedFalse();
+  if (value === null || value === undefined) return value;
+  if (typeof value === "number" || typeof value === "bigint") return value;
+  if (typeof value === "string") return value;
+  if (value instanceof Date) return quotedDate(value);
+  throw new TypeError(`can't cast ${(value as object).constructor?.name ?? typeof value}`);
+}

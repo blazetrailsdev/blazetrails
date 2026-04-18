@@ -93,6 +93,18 @@ export interface DatabaseAdapter {
    */
   quote?(value: unknown): string;
 
+  /**
+   * Cast a value to the primitive form drivers expect for binds
+   * (booleans → `0/1`, Dates → quoted date string, etc). Distinct
+   * from `quote()` — returns an unquoted primitive suitable for
+   * passing as a bind value, not a SQL literal. Rails' `render_bind`
+   * uses this rather than `quote()` so EXPLAIN headers show the
+   * actual bind values instead of their SQL-literal form.
+   *
+   * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#type_cast
+   */
+  typeCast?(value: unknown): unknown;
+
   // --- DatabaseStatements (Rails mixin) ---
   // Mirrors ActiveRecord::ConnectionAdapters::DatabaseStatements.
   // Default implementations delegate to execute()/executeMutation().

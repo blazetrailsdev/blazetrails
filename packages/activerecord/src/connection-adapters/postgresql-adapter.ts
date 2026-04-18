@@ -10,6 +10,7 @@ import { Column } from "./postgresql/column.js";
 import { ExplainPrettyPrinter } from "./postgresql/explain-pretty-printer.js";
 import {
   quote as pgQuote,
+  typeCast as pgTypeCast,
   quoteTableName as pgQuoteTableName,
   quoteColumnName as pgQuoteColumnName,
   quoteString as pgQuoteString,
@@ -1004,6 +1005,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    */
   override quote(value: unknown): string {
     return pgQuote(value);
+  }
+
+  override typeCast(value: unknown): unknown {
+    return pgTypeCast(value);
   }
 
   columnsForDistinct(columns: string, orders: string[]): string {

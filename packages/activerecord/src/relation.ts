@@ -46,6 +46,7 @@ import { BatchEnumerator } from "./relation/batches/batch-enumerator.js";
 import { touchAttributesWithTime } from "./timestamp.js";
 import { ExplainRegistry } from "./explain-registry.js";
 import type { DatabaseAdapter } from "./adapter.js";
+import { rubyInspectArray } from "./relation/ruby-inspect.js";
 
 /**
  * A Relation returned from `load()` / `reload()` — a normal Relation with
@@ -1679,29 +1680,26 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Render a bind array for the EXPLAIN header using the adapter's
-   * own `quote()` — produces a SQL-literal list like
-   * `['foo', 42, NULL]` with adapter-specific string escaping
-   * (`'' ` on SQLite, MySQL's `\0/\n/\r/\Z` escapes, PG's `E'…\\…'`
-   * form, etc). Falls back to a BigInt-safe JSON form when the
-   * adapter doesn't implement `quote()`.
+   * Render a bind array for the EXPLAIN header. Mirrors Rails'
+   * `exec_explain` rendering:
    *
-   * Mirrors Rails' `exec_explain` rendering:
-   * `binds.map { |attr| render_bind(c, attr) }.inspect` — a
-   * positional list formatted via the connection's quoting rules.
-   * Rails' `render_bind` returns `[name, value]` pairs for
-   * Attribute-backed binds; we collect plain values at this layer
-   * (no attribute names), so the list is just values — same shape,
-   * less metadata.
+   *     msg << binds.map { |attr| render_bind(c, attr) }.inspect
+   *
+   * where `render_bind` does `connection.type_cast(attr.value_for_database)`
+   * — so each bind comes out as its primitive DB-cast value, then
+   * Ruby's `Array#inspect` formats the list (strings double-quoted,
+   * numbers bare, nil as `nil`).
+   *
+   * Rails' `render_bind` returns `[attr.name, value]` pairs when the
+   * bind is an Attribute object; `ExplainRegistry` collects plain
+   * values (no Attribute wrappers here), so we emit the value-only
+   * form — same shape, just without the `[name, value]` tuples.
    */
   private _renderExplainBinds(adapter: DatabaseAdapter, binds: unknown[]): string {
-    if (typeof adapter.quote !== "function") {
-      // Adapter hasn't implemented quote() — fall back to the BigInt-
-      // safe JSON form so we don't crash on BigIntegerType columns.
-      return JSON.stringify(binds, (_k, v) => (typeof v === "bigint" ? v.toString() : v));
-    }
-    const pieces = binds.map((b) => adapter.quote!(b));
-    return `[${pieces.join(", ")}]`;
+    const casted = binds.map((b) =>
+      typeof adapter.typeCast === "function" ? adapter.typeCast(b) : b,
+    );
+    return rubyInspectArray(casted);
   }
 
   /**

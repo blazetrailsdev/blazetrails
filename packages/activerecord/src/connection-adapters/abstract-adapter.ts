@@ -25,7 +25,7 @@ import {
   type QueryCacheHost,
 } from "./abstract/query-cache.js";
 import { DatabaseStatementsMixin } from "./database-statements-mixin.js";
-import { quote as abstractQuote } from "./abstract/quoting.js";
+import { quote as abstractQuote, typeCast as abstractTypeCast } from "./abstract/quoting.js";
 
 /**
  * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter::Version
@@ -123,6 +123,20 @@ export class AbstractAdapter extends AbstractAdapterBase {
    */
   quote(value: unknown): string {
     return abstractQuote(value);
+  }
+
+  /**
+   * Cast a value to the primitive form the driver expects for binds
+   * (booleans → `0/1`, Dates → quoted date string, etc). Distinct from
+   * `quote()` — returns an unquoted primitive suitable for passing as
+   * a bind value, not a SQL literal. Used by `Relation#_renderExplainBinds`
+   * to mirror Rails' `render_bind(c, attr)` which does
+   * `connection.type_cast(attr.value_for_database)`.
+   *
+   * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#type_cast
+   */
+  typeCast(value: unknown): unknown {
+    return abstractTypeCast(value);
   }
 
   /**

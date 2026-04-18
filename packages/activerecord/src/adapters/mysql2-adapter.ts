@@ -6,7 +6,10 @@ import { Column } from "../connection-adapters/column.js";
 import { SqlTypeMetadata } from "../connection-adapters/sql-type-metadata.js";
 import { ExplainPrettyPrinter } from "../connection-adapters/mysql/explain-pretty-printer.js";
 import { typeCastedBinds } from "../connection-adapters/abstract/database-statements.js";
-import { quote as mysqlQuote } from "../connection-adapters/mysql/quoting.js";
+import {
+  quote as mysqlQuote,
+  typeCast as mysqlTypeCast,
+} from "../connection-adapters/mysql/quoting.js";
 
 /**
  * MySQL adapter — connects ActiveRecord to a real MySQL/MariaDB database.
@@ -335,6 +338,10 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
    */
   override quote(value: unknown): string {
     return mysqlQuote(value);
+  }
+
+  override typeCast(value: unknown): unknown {
+    return mysqlTypeCast(value);
   }
 
   /**

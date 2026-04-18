@@ -215,23 +215,27 @@ describe("ExplainTest", () => {
     expect(plan.toLowerCase()).toContain("select");
   });
 
-  it("renders binds via adapter.quote() with SQL-literal output", async () => {
-    // _renderExplainBinds now delegates to the adapter's own
-    // `quote()` so binds come out in adapter-correct SQL-literal
-    // form: strings get adapter-specific escaping, bigints pass
-    // through as `String(value)`, nulls render as `NULL`. That
-    // matches Rails' `render_bind(c, attr)` pattern, which also
-    // quotes via the connection. The BigInt case is the one that
-    // used to crash raw `JSON.stringify`.
+  it("renders binds via adapter.typeCast + Ruby-inspect form", async () => {
+    // Mirrors Rails' `exec_explain`:
+    //   binds.map { |attr| render_bind(c, attr) }.inspect
+    // where `render_bind` does
+    // `connection.type_cast(attr.value_for_database)`. That produces
+    // Ruby's `Array#inspect` output: strings double-quoted, numbers
+    // bare, nil as `nil`, booleans as `true/false`. The BigInt case
+    // is the one that used to crash raw `JSON.stringify`.
     const { Post } = makeModel();
     const rel = Post.all() as unknown as {
-      _renderExplainBinds: (adapter: { quote?(v: unknown): string }, binds: unknown[]) => string;
+      _renderExplainBinds: (a: DatabaseAdapter, binds: unknown[]) => string;
     };
-    const ad = adapter as { quote?(v: unknown): string };
-    expect(rel._renderExplainBinds(ad, [BigInt(42), "str", 7, null])).toBe("[42, 'str', 7, NULL]");
-    // Make sure the end-to-end path still returns output (no crash
-    // even when binds are absent — this is the path `Relation#explain`
-    // actually takes on sqlite).
+    // Booleans go through the adapter's typeCast: SQLite collapses
+    // them to 1/0, PG/MySQL keep them as true/false. So the rendered
+    // form differs by backend; assert both halves independently.
+    const rendered = rel._renderExplainBinds(adapter, [BigInt(42), "str", 7, null, true, false]);
+    expect(rendered.startsWith('[42, "str", 7, nil, ')).toBe(true);
+    expect(rendered).toMatch(/\b(1, 0|true, false)\]$/);
+    // End-to-end on sqlite: where-literals are interpolated into the
+    // SQL (no binds reach the adapter), so the round-trip still
+    // returns non-empty output.
     await Post.create({ title: "x" });
     const plan = await Post.all().explain();
     expect(plan.length).toBeGreaterThan(0);

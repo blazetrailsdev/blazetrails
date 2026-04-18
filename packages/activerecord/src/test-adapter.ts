@@ -699,6 +699,12 @@ class SchemaAdapter extends DatabaseStatementsMixin(class {}) implements Databas
     return value === null || value === undefined ? "NULL" : String(value);
   }
 
+  typeCast(value: unknown): unknown {
+    const inner = this.inner as { typeCast?: (v: unknown) => unknown };
+    if (typeof inner.typeCast === "function") return inner.typeCast(value);
+    return value;
+  }
+
   async cleanup(): Promise<void> {
     await dropAllTables(this.inner);
   }

@@ -33,6 +33,7 @@ import { getFs, Notifications } from "@blazetrails/activesupport";
 import { typeCastedBinds } from "./abstract/database-statements.js";
 import {
   quote as sqliteQuote,
+  typeCast as sqliteTypeCast,
   quoteString,
   quoteTableName,
   quoteColumnName,
@@ -309,6 +310,10 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
    */
   override quote(value: unknown): string {
     return sqliteQuote(value);
+  }
+
+  override typeCast(value: unknown): unknown {
+    return sqliteTypeCast(value);
   }
 
   /**

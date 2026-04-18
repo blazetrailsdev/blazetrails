@@ -308,6 +308,12 @@ export class QueryCacheAdapter implements DatabaseAdapter {
     return value === null || value === undefined ? "NULL" : String(value);
   }
 
+  typeCast(value: unknown): unknown {
+    const inner = this.inner as { typeCast?: (v: unknown) => unknown };
+    if (typeof inner.typeCast === "function") return inner.typeCast(value);
+    return value;
+  }
+
   // --- DatabaseStatements ---
   // Read methods go through this.execute() to leverage the query cache.
   // Write methods go through this.executeMutation() to clear the cache.

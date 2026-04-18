@@ -46,8 +46,14 @@ export interface VirtualizeOptions extends WalkOptions {
    * columns come from the migration, not from per-class declarations).
    *
    * Table resolution: `static tableName = "..."` on the class when
-   * present, otherwise `pluralize(underscore(className))`. Each column's
-   * value is a Rails type string.
+   * present, otherwise `pluralize(underscore(className))`.
+   *
+   * Each column's value is a `SchemaColumnValue` — either:
+   *   - a Rails type string (legacy shape, e.g. `"string"`), or
+   *   - a rich object `{ type, null?, arrayElementType? }` as emitted
+   *     by `dumpSchemaColumns`. `null: true` renders `Type | null`;
+   *     `arrayElementType` on an `array` column renders
+   *     `ElementTsType[]` instead of the default `unknown[]`.
    *
    * Caveats:
    * - `id` is skipped (Base's `PrimaryKeyValue` accessor handles it).

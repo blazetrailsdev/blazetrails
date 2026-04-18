@@ -12,7 +12,16 @@ import { virtualize } from "../type-virtualization/virtualize.js";
  * Load a schema-columns JSON file produced by the schema dumper.
  * Format: `{ "<table>": { "<column>": "<rails_type>", ... }, ... }`.
  */
-function loadSchemaColumns(args: string[]): Record<string, Record<string, string>> | undefined {
+type RichColumnValue = {
+  type: string;
+  null?: boolean;
+  arrayElementType?: string;
+};
+type SchemaColumnValue = string | RichColumnValue;
+
+function loadSchemaColumns(
+  args: string[],
+): Record<string, Record<string, SchemaColumnValue>> | undefined {
   let schemaPath: string | undefined;
   let schemaProvided = false;
   for (let i = 0; i < args.length; i++) {
@@ -67,35 +76,71 @@ function loadSchemaColumns(args: string[]): Record<string, Record<string, string
 // chain — rejected up front rather than trusted from JSON input.
 const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
-function validateSchemaShape(value: unknown, path: string): Record<string, Record<string, string>> {
+function validateSchemaShape(
+  value: unknown,
+  path: string,
+): Record<string, Record<string, SchemaColumnValue>> {
   const fail = (reason: string): never => {
     process.stderr.write(`trails-tsc: --schema file ${path} is malformed: ${reason}\n`);
     process.exit(1);
   };
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    fail("expected a top-level object of { [table]: { [column]: railsType } }");
+    fail("expected a top-level object of { [table]: { [column]: railsType | richValue } }");
   }
   // Use null-prototype maps so untrusted keys from the JSON can't reach
   // Object.prototype. Iterate with Object.keys to skip inherited keys on
   // the input (defense-in-depth; JSON.parse never sets them, but the
   // function signature accepts `unknown`).
-  const out: Record<string, Record<string, string>> = Object.create(null);
+  const out: Record<string, Record<string, SchemaColumnValue>> = Object.create(null);
   for (const table of Object.keys(value as object)) {
     if (UNSAFE_KEYS.has(table)) fail(`table name "${table}" is not allowed`);
     const cols = (value as Record<string, unknown>)[table];
     if (cols === null || typeof cols !== "object" || Array.isArray(cols)) {
       fail(`table "${table}" must map to an object of column definitions`);
     }
-    const colMap: Record<string, string> = Object.create(null);
+    const colMap: Record<string, SchemaColumnValue> = Object.create(null);
     for (const col of Object.keys(cols as object)) {
       if (UNSAFE_KEYS.has(col)) fail(`column name "${table}.${col}" is not allowed`);
-      const railsType = (cols as Record<string, unknown>)[col];
-      if (typeof railsType !== "string") {
-        fail(`column "${table}.${col}" must have a string Rails type (got ${typeof railsType})`);
-      }
-      colMap[col] = railsType as string;
+      const raw = (cols as Record<string, unknown>)[col];
+      colMap[col] = validateColumnValue(raw, `${table}.${col}`, fail);
     }
     out[table] = colMap;
+  }
+  return out;
+}
+
+/**
+ * A column value can be either a Rails type string (legacy) or a rich
+ * object `{ type, null?, arrayElementType? }` emitted by
+ * `dumpSchemaColumns`. Reject anything else with a targeted message so
+ * users see the actual problem instead of a downstream crash.
+ */
+function validateColumnValue(
+  raw: unknown,
+  fqColumn: string,
+  fail: (reason: string) => never,
+): SchemaColumnValue {
+  if (typeof raw === "string") return raw;
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    fail(
+      `column "${fqColumn}" must be a Rails type string or an object ` +
+        `with at least { type: string } (got ${Array.isArray(raw) ? "array" : typeof raw})`,
+    );
+  }
+  const r = raw as Record<string, unknown>;
+  if (typeof r.type !== "string") {
+    fail(`column "${fqColumn}" rich shape requires { type: string } (got ${typeof r.type})`);
+  }
+  if (r.null !== undefined && typeof r.null !== "boolean") {
+    fail(`column "${fqColumn}" rich shape: \`null\` must be a boolean when present`);
+  }
+  if (r.arrayElementType !== undefined && typeof r.arrayElementType !== "string") {
+    fail(`column "${fqColumn}" rich shape: \`arrayElementType\` must be a string when present`);
+  }
+  const out: RichColumnValue = { type: r.type as string };
+  if (r.null !== undefined) out.null = r.null as boolean;
+  if (r.arrayElementType !== undefined) {
+    out.arrayElementType = r.arrayElementType as string;
   }
   return out;
 }

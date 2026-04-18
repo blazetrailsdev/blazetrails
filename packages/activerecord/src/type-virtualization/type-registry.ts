@@ -3,19 +3,22 @@
 //
 // Two sources feed this map:
 //
-// 1. activemodel's `TypeRegistry` (packages/activemodel/src/type/registry.ts)
-//    — the alphabet `this.attribute(name, type)` accepts at runtime.
-//    Every key registered there needs a matching entry here so the
-//    virtualizer can emit the right declare for a user-declared
-//    attribute.
+// 1. activemodel + activerecord runtime registries (see
+//    packages/activemodel/src/type/registry.ts and
+//    packages/activerecord/src/type.ts). Every key registered there
+//    needs a matching entry here so the virtualizer can emit the right
+//    declare for a user-declared `this.attribute(name, type)`.
 //
 // 2. Adapter schema dumps (schema-columns JSON passed via `--schema`).
-//    PostgreSQL emits Rails type names like `text`, `timestamp`, `jsonb`,
-//    `hstore`, `inet`, `cidr`, `citext` from its column introspection.
-//    These keys are SCHEMA-DUMP-ONLY: they're never passed to
-//    `this.attribute(...)` (that would throw at runtime — activemodel's
-//    registry doesn't know them). The virtualizer maps them to TS types
-//    only for the compile-time declare produced from schema reflection.
+//    PostgreSQL emits Rails type names from its column introspection.
+//
+// Some keys overlap (e.g. `text` is registered runtime-side by
+// activerecord and also appears in PG dumps). Others are schema-dump-
+// only (`timestamp`, `jsonb`, `hstore`, `inet`, `cidr`, `citext`) —
+// activemodel/activerecord's runtime registry doesn't know them, so
+// passing them to `this.attribute(...)` would throw. The virtualizer
+// maps both kinds to TS types so the compile-time declare is correct
+// for user-declared attributes AND schema-reflected columns.
 
 export const ATTRIBUTE_TYPE_MAP: Record<string, string> = {
   string: "string",

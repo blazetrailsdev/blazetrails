@@ -45,7 +45,7 @@ import { WhereClause, predicatesWithWrappedSqlLiterals } from "./relation/where-
 import { BatchEnumerator } from "./relation/batches/batch-enumerator.js";
 import { touchAttributesWithTime } from "./timestamp.js";
 import { ExplainRegistry } from "./explain-registry.js";
-import type { DatabaseAdapter } from "./adapter.js";
+import type { DatabaseAdapter, ExplainOption } from "./adapter.js";
 import { rubyInspectArray } from "./relation/ruby-inspect.js";
 
 /**
@@ -1637,13 +1637,20 @@ export class Relation<T extends Base> {
    * subscriber captures every `sql.active_record` notification, and
    * `exec_explain` runs EXPLAIN against each captured SQL.
    *
-   * `options` mirrors Rails' variadic symbols (e.g. `explain("analyze",
-   * "verbose")` → `EXPLAIN (ANALYZE, VERBOSE) ...`) and is forwarded to
-   * the adapter's `buildExplainClause` / `explain` implementations.
+   * `options` mirrors Rails' variadic form — a mix of flag strings and
+   * a trailing keyword hash. The keyword hash currently supports
+   * `format: "json" | "yaml" | "xml" | "text"` on PG / MySQL; adapters
+   * that don't support a key throw. Examples:
+   *
+   *     await Post.all().explain("analyze", "verbose")
+   *     // → EXPLAIN (ANALYZE, VERBOSE) for: SELECT …
+   *
+   *     await Post.all().explain("analyze", { format: "json" })
+   *     // → EXPLAIN (ANALYZE, FORMAT JSON) for: SELECT …
    *
    * Mirrors: ActiveRecord::Relation#explain
    */
-  async explain(...options: string[]): Promise<string> {
+  async explain(...options: ExplainOption[]): Promise<string> {
     const { queries } = await ExplainRegistry.collectingQueries(() => this.toArray());
     return this._execExplain(queries, options);
   }
@@ -1657,7 +1664,10 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#exec_explain
    * @internal
    */
-  async _execExplain(queries: [string, unknown[]][], options: string[] = []): Promise<string> {
+  async _execExplain(
+    queries: [string, unknown[]][],
+    options: ExplainOption[] = [],
+  ): Promise<string> {
     const adapter = this._modelClass.adapter;
     if (typeof adapter?.explain !== "function") {
       return "EXPLAIN not supported by this adapter";
@@ -1804,13 +1814,15 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter#build_explain_clause
    */
-  private _buildExplainClause(adapter: DatabaseAdapter, options: string[]): string {
+  private _buildExplainClause(adapter: DatabaseAdapter, options: ExplainOption[]): string {
     if (typeof adapter.buildExplainClause === "function") {
       return adapter.buildExplainClause(options);
     }
     if (options.length === 0) return "EXPLAIN for:";
-    const parts = options.map((o) => o.toUpperCase()).join(", ");
-    return `EXPLAIN (${parts}) for:`;
+    const parts = options.map((o) =>
+      typeof o === "string" ? o.toUpperCase() : `FORMAT ${String(o.format).toUpperCase()}`,
+    );
+    return `EXPLAIN (${parts.join(", ")}) for:`;
   }
 
   // count, sum, average, minimum, maximum are mixed in via

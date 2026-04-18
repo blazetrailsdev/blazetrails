@@ -1,6 +1,18 @@
 import type { Result } from "./result.js";
 
 /**
+ * A single entry in `Relation#explain`'s options list. Either a bare
+ * flag name (`"analyze"`, `"verbose"`) or a keyword hash (`{ format:
+ * "json" }`) — mirrors Rails' `explain(*options)` where options can
+ * be a mix of Symbols and a single Hash. Each adapter decides which
+ * flags / keys it supports and throws on unknown ones.
+ *
+ * Mirrors: the `options` array shape used by Rails'
+ * `ActiveRecord::Relation#explain` and its adapter `build_explain_clause`.
+ */
+export type ExplainOption = string | { format?: string };
+
+/**
  * Database adapter interface — pluggable backends.
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter
@@ -64,12 +76,13 @@ export interface DatabaseAdapter {
    * same bind values the adapter would accept on `execute()`, so a
    * captured prepared-statement query re-EXPLAINs cleanly; `options`
    * carries the Rails-style variadic flags (e.g. `analyze`,
-   * `verbose`) for adapters that support them. Both are optional for
-   * adapters that pre-date the options surface.
+   * `verbose`) and keyword options (`{ format: "json" }`) for
+   * adapters that support them. Both are optional for adapters that
+   * pre-date the options surface.
    *
    * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#explain
    */
-  explain?(sql: string, binds?: unknown[], options?: string[]): Promise<string>;
+  explain?(sql: string, binds?: unknown[], options?: ExplainOption[]): Promise<string>;
 
   /**
    * Build the printed header prefix used by `Relation#explain` — e.g.
@@ -80,7 +93,7 @@ export interface DatabaseAdapter {
    *
    * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter#build_explain_clause
    */
-  buildExplainClause?(options?: string[]): string;
+  buildExplainClause?(options?: ExplainOption[]): string;
 
   /**
    * Quote a value for inclusion in a SQL literal (e.g. `"'foo'"`,

@@ -10,7 +10,7 @@
  */
 
 import { Notifications } from "@blazetrails/activesupport";
-import type { DatabaseAdapter } from "./adapter.js";
+import type { DatabaseAdapter, ExplainOption } from "./adapter.js";
 import { Result } from "./result.js";
 
 const DEFAULT_MAX_SIZE = 100;
@@ -278,9 +278,13 @@ export class QueryCacheAdapter implements DatabaseAdapter {
     return this.inner.inTransaction;
   }
 
-  async explain(sql: string, binds: unknown[] = [], options: string[] = []): Promise<string> {
+  async explain(
+    sql: string,
+    binds: unknown[] = [],
+    options: ExplainOption[] = [],
+  ): Promise<string> {
     const inner = this.inner as {
-      explain?: (sql: string, binds?: unknown[], options?: string[]) => Promise<string>;
+      explain?: (sql: string, binds?: unknown[], options?: ExplainOption[]) => Promise<string>;
     };
     if (typeof inner.explain === "function") {
       // Forward binds/options so `Relation#explain("analyze", ...)` and
@@ -292,14 +296,16 @@ export class QueryCacheAdapter implements DatabaseAdapter {
     return "EXPLAIN is not supported by the underlying adapter";
   }
 
-  buildExplainClause(options: string[] = []): string {
-    const inner = this.inner as { buildExplainClause?: (options: string[]) => string };
+  buildExplainClause(options: ExplainOption[] = []): string {
+    const inner = this.inner as { buildExplainClause?: (options: ExplainOption[]) => string };
     if (typeof inner.buildExplainClause === "function") {
       return inner.buildExplainClause(options);
     }
     if (options.length === 0) return "EXPLAIN for:";
-    const parts = options.map((o) => o.toUpperCase()).join(", ");
-    return `EXPLAIN (${parts}) for:`;
+    const parts = options.map((o) =>
+      typeof o === "string" ? o.toUpperCase() : `FORMAT ${String(o.format).toUpperCase()}`,
+    );
+    return `EXPLAIN (${parts.join(", ")}) for:`;
   }
 
   quote(value: unknown): string {

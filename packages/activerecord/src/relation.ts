@@ -1703,6 +1703,19 @@ export class Relation<T extends Base> {
    */
   private _renderExplainBinds(adapter: DatabaseAdapter, binds: unknown[]): string {
     const casted = binds.map((b) => {
+      // Rails' `render_bind` short-circuits binary-typed binds BEFORE
+      // calling type_cast:
+      //   if attr.type.binary? && attr.value
+      //     "<#{attr.value_for_database.to_s.bytesize} bytes of binary data>"
+      //   else
+      //     connection.type_cast(attr.value_for_database)
+      //   end
+      // We don't have attribute types at this layer, so we detect
+      // binary structurally (Buffer / Uint8Array / ArrayBuffer) before
+      // handing the value to typeCast — some adapters' typeCast throws
+      // on buffer shapes because they're not bindable primitives.
+      const binaryBytes = this._binaryByteLength(b);
+      if (binaryBytes !== null) return `<${binaryBytes} bytes of binary data>`;
       const value = typeof adapter.typeCast === "function" ? adapter.typeCast(b) : b;
       return this._normalizeExplainBindValue(value);
     });
@@ -1736,6 +1749,12 @@ export class Relation<T extends Base> {
     ) {
       return value;
     }
+    // Dates CAN slip past typeCast if an adapter returns them
+    // unchanged (e.g. a future adapter that skips Date formatting).
+    // Coerce to ISO-ish string so rubyInspect renders
+    // `"2026-01-02T12:34:56.000Z"` rather than `"[object Date]"`
+    // via JSON.stringify (which would double-quote the date).
+    if (value instanceof Date) return value.toISOString();
     const binaryBytes = this._binaryByteLength(value);
     if (binaryBytes !== null) return `<${binaryBytes} bytes of binary data>`;
     if (typeof value === "object") {

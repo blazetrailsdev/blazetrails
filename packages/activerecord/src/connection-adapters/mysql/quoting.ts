@@ -8,6 +8,8 @@
  * the pattern used by the PostgreSQL and SQLite3 adapters.
  */
 
+import { quotedDate as abstractQuotedDate } from "../abstract/quoting.js";
+
 export interface Quoting {
   quotedTrue(): string;
   unquotedTrue(): number;
@@ -93,11 +95,12 @@ export function quote(value: unknown): string {
   if (value === null || value === undefined) return "NULL";
   if (typeof value === "boolean") return value ? quotedTrue() : quotedFalse();
   if (typeof value === "number" || typeof value === "bigint") return String(value);
-  // JS `Date` always carries a time component, so render the full
-  // `YYYY-MM-DD HH:MM:SS` form (via `quotedTimeUtc`) rather than the
-  // date-only `quotedDate`. Time-only values have no dedicated JS type
-  // here — callers who want date-only can pass a pre-formatted string.
-  if (value instanceof Date) return quotedTimeUtc(value);
+  // Use abstract's `quotedDate` for the `YYYY-MM-DD HH:MM:SS[.microseconds]`
+  // form (Rails' `:db` format — fractional seconds only when
+  // non-zero), then wrap with single quotes. MySQL's own
+  // `quotedDate` would drop the time; its `quotedTimeUtc` always
+  // trails `.000`.
+  if (value instanceof Date) return `'${abstractQuotedDate(value)}'`;
   if (value instanceof Buffer) return quotedBinaryString(value);
   if (typeof value === "symbol") {
     const desc = value.description;
@@ -137,13 +140,14 @@ export function typeCast(value: unknown): unknown {
   if (typeof value === "number" || typeof value === "bigint") return value;
   if (typeof value === "string") return value;
   if (value instanceof Date) {
-    // Use the full `YYYY-MM-DD HH:MM:SS` form from `quotedTimeUtc` —
-    // JS `Date` always has a time component; `quotedDate` would drop
-    // it. Strip the surrounding single quotes that `quotedTimeUtc`
-    // adds to honor typeCast's unquoted-primitive contract (quote()
-    // adds the quotes back).
-    const quoted = quotedTimeUtc(value);
-    return quoted.startsWith("'") && quoted.endsWith("'") ? quoted.slice(1, -1) : quoted;
+    // Delegate to abstract's `quotedDate` which renders the
+    // unquoted `YYYY-MM-DD HH:MM:SS[.microseconds]` form (optional
+    // fractional seconds only when non-zero, matching Rails'
+    // `:db`-format output). MySQL's own `quotedTimeUtc` relies on
+    // `toISOString()` which always trails `.000`, and MySQL's
+    // `quotedDate` drops the time. Neither matches Rails here;
+    // the abstract formatter does.
+    return abstractQuotedDate(value);
   }
   throw new TypeError(`can't cast ${(value as object).constructor?.name ?? typeof value}`);
 }

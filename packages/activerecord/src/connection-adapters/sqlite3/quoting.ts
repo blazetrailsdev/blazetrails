@@ -4,6 +4,8 @@
  * Mirrors: ActiveRecord::ConnectionAdapters::SQLite3::Quoting
  */
 
+import { quotedDate as abstractQuotedDate } from "../abstract/quoting.js";
+
 export interface Quoting {
   quotedTrue(): string;
   unquotedTrue(): number;
@@ -119,8 +121,15 @@ export function typeCast(value: unknown): unknown {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   if (typeof value === "string" || typeof value === "bigint") return value;
   if (typeof value === "symbol") return value.description ?? null;
-  if (value instanceof Date || value instanceof Uint8Array || value instanceof ArrayBuffer)
-    return value;
+  if (value instanceof Date) {
+    // Delegate to abstract's `quotedDate` which renders the
+    // unquoted `YYYY-MM-DD HH:MM:SS[.microseconds]` form (optional
+    // fractional seconds only when non-zero). Matches Rails'
+    // `type_cast` which returns `quoted_date(value)` — a formatted
+    // string, not the Date object itself.
+    return abstractQuotedDate(value);
+  }
+  if (value instanceof Uint8Array || value instanceof ArrayBuffer) return value;
   throw new TypeError(`can't cast ${Object.prototype.toString.call(value)} to a SQLite3 type`);
 }
 

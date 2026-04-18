@@ -427,25 +427,16 @@ export class Base extends Model {
   static set adapter(adapter: DatabaseAdapter) {
     this._adapter = adapter;
     if (_onAdapterSet) _onAdapterSet(this);
-    // Clear schema-load state so an adapter swap (A → B) is followed by
-    // a fresh reflection next time loadSchema() / _instantiate runs.
-    // Without this, `await Model.loadSchema()` would reuse the resolved
-    // promise from adapter A and never pick up B's types.
-    const state = this as unknown as {
-      _schemaLoadPromise?: Promise<void>;
-      _schemaLoaded?: boolean;
-      _columnsHash?: unknown;
-      _columns?: unknown;
-      _attributesBuilder?: unknown;
-      _cachedDefaultAttributes?: unknown;
-    };
-    state._schemaLoadPromise = undefined;
-    state._schemaLoaded = false;
-    state._columnsHash = undefined;
-    state._columns = undefined;
-    state._attributesBuilder = undefined;
-    state._cachedDefaultAttributes = null;
-    // No longer kicks off a fire-and-forget schema reflection: the
+    // Full schema reset on adapter swap: drops schema-sourced defs and
+    // their prototype accessors (preserves user-declared defs), and
+    // clears every derived cache. Without this, a swap A → B could
+    // leave stale columns reachable (e.g. columns that only existed in
+    // A's schema) and `await Model.loadSchema()` would reuse the
+    // resolved promise from adapter A and never pick up B's types.
+
+    (ModelSchema.resetColumnInformation as any).call(this);
+    (this as unknown as { _schemaLoadPromise?: Promise<void> })._schemaLoadPromise = undefined;
+    // No longer kicks off a fire-and-forget schema reflection — the
     // async query path races with explicit pool client usage. Schema
     // reflection still runs via:
     //   1. The sync loadSchema call in _instantiate (after the adapter

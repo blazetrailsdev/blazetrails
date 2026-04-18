@@ -69,4 +69,25 @@ describe("_instantiate routes row values through adapter-resolved types", () => 
 
     expect(Widget._attributeDefinitions.get("payload")?.type.name).toBe("doubling");
   });
+
+  it("drops stale schema-sourced columns on adapter swap", async () => {
+    class Widget extends Base {
+      static override tableName = "widgets";
+    }
+    const colsA = {
+      payload: { sqlType: "doubling", name: "payload", default: null },
+      removed: { sqlType: "doubling", name: "removed", default: null },
+    };
+    (Widget as unknown as { adapter: unknown }).adapter = makeAdapter(colsA);
+    await Widget.loadSchema();
+    expect(Widget._attributeDefinitions.has("removed")).toBe(true);
+
+    // Adapter B doesn't have the `removed` column.
+    const colsB = { payload: { sqlType: "doubling", name: "payload", default: null } };
+    (Widget as unknown as { adapter: unknown }).adapter = makeAdapter(colsB);
+    await Widget.loadSchema();
+
+    expect(Widget._attributeDefinitions.has("removed")).toBe(false);
+    expect(Object.getOwnPropertyDescriptor(Widget.prototype, "removed")).toBeUndefined();
+  });
 });

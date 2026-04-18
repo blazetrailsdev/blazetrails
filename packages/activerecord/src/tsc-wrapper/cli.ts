@@ -3,6 +3,7 @@
 import ts from "typescript";
 import * as path from "node:path";
 import * as fs from "node:fs";
+import { fileURLToPath } from "node:url";
 import { createTrailsProgram } from "./program.js";
 import { createTrailsSolutionBuilder } from "./build.js";
 import { remapDiagnostics } from "./remap.js";
@@ -333,13 +334,14 @@ function main(): void {
 
 // Run main() only when this module is invoked as a binary, not when
 // imported (e.g. by tests that exercise `loadSchemaColumns` directly).
-// `require.main === module` is the CommonJS form; `import.meta.url`
-// vs `process.argv[1]` covers the ESM form the tsc-wrapper ships.
+// Compare decoded filesystem paths to sidestep URL-encoding pitfalls
+// (spaces, Windows drive letters + backslashes) that would trip up a
+// naive `import.meta.url === "file://" + path.resolve(entry)` check.
 const invokedDirectly = (() => {
   try {
     const entry = process.argv[1];
     if (!entry) return false;
-    return import.meta.url === `file://${path.resolve(entry)}`;
+    return path.resolve(fileURLToPath(import.meta.url)) === path.resolve(entry);
   } catch {
     return false;
   }

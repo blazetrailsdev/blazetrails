@@ -13,6 +13,62 @@ import { Notifications } from "@blazetrails/activesupport";
 import type { DatabaseAdapter } from "./adapter.js";
 import { Result } from "./result.js";
 
+/**
+ * QueryCache executor hooks — enable/disable query caching per-request.
+ *
+ * Mirrors: ActiveRecord::QueryCache (the module with run/complete hooks)
+ *
+ * In Rails these are registered as Rack middleware executor hooks that
+ * enable the query cache at the start of each request and clear it
+ * at the end. In our JS runtime, callers use these directly or
+ * register them with their own request lifecycle.
+ */
+export class QueryCache {
+  /**
+   * Enable query cache on all provided adapters.
+   * Called at the start of a request/execution context.
+   *
+   * Mirrors: ActiveRecord::QueryCache::ExecutorHooks.run
+   */
+  static run(adapters: QueryCacheAdapter[]): void {
+    for (const adapter of adapters) {
+      adapter.enableQueryCache();
+    }
+  }
+
+  /**
+   * Disable and clear query cache on all provided adapters.
+   * Called at the end of a request/execution context.
+   *
+   * Mirrors: ActiveRecord::QueryCache::ExecutorHooks.complete
+   */
+  static complete(adapters: QueryCacheAdapter[]): void {
+    for (const adapter of adapters) {
+      adapter.disableQueryCache();
+      adapter.clearQueryCache();
+    }
+  }
+
+  /**
+   * Register query cache hooks with an executor-like object.
+   *
+   * Mirrors: ActiveRecord::QueryCache.install_executor_hooks
+   */
+  static installExecutorHooks(executor: {
+    registerHook(hook: { run(): void; complete(): void }): void;
+  }): void {
+    executor.registerHook({
+      run() {
+        // In Rails this iterates connection pools.
+        // Callers should pass their adapters to run/complete directly.
+      },
+      complete() {
+        // Same — callers manage their adapter lifecycle.
+      },
+    });
+  }
+}
+
 const DEFAULT_MAX_SIZE = 100;
 
 /**

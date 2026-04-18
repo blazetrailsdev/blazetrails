@@ -29,9 +29,10 @@ import { typeCastedBinds } from "./abstract/database-statements.js";
 
 /**
  * Quote a PG identifier for DEALLOCATE. The pool only ever stores
- * names it generated itself (`a<counter>`), so a regex check is
- * enough — reject anything that contains a double quote so a leaked
- * caller-supplied name can't escape the quoting.
+ * names it generated itself (`a<counter>`), so this helper just
+ * wraps the name in double quotes after defensively rejecting any
+ * embedded `"` — a leaked caller-supplied name can't escape the
+ * quoting that way.
  */
 function quoteIdentifier(name: string): string {
   if (name.includes('"')) {
@@ -2225,9 +2226,11 @@ export class StatementPool extends GenericStatementPool<PreparedStatement> {
     if (!client) return;
     // Fire-and-forget: eviction can't block the caller that triggered
     // it (the pg write path), and the server will clean up the
-    // statement when the connection closes anyway. Errors are logged
-    // to a swallowed catch so node doesn't treat them as unhandled
-    // rejections.
+    // statement when the connection closes anyway. Errors are
+    // intentionally swallowed — Rails' PG::StatementPool#dealloc
+    // likewise rescues PG::InvalidSqlStatementName / connection
+    // errors — and the empty `.catch` also keeps node from treating
+    // a post-close DEALLOCATE as an unhandled rejection.
     client.query(`DEALLOCATE ${quoteIdentifier(stmt.name)}`).catch(() => {});
   }
 

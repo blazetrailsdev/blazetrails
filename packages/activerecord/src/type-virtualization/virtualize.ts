@@ -55,7 +55,9 @@ export interface VirtualizeOptions extends WalkOptions {
    *   fields (`declare "strange-col": string;`).
    * - Columns are emitted in sorted order for stable output.
    */
-  schemaColumnsByTable?: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  schemaColumnsByTable?: Readonly<
+    Record<string, Readonly<Record<string, import("./synthesize.js").SchemaColumnValue>>>
+  >;
 }
 
 export function virtualize(

@@ -29,17 +29,17 @@ describe("dumpSchemaColumns", () => {
     const dump = await dumpSchemaColumns(adapter);
 
     expect(Object.keys(dump).sort()).toEqual(["posts", "users"]);
-    // Concrete Rails type assertions — trails-tsc keys on these exact
-    // strings, so raw SQL types (TEXT, VARCHAR, int4) would silently
-    // make the virtualizer emit `unknown`. Tests lock the mapping.
-    // `id` is integer on SQLite/PG but big_integer on MariaDB — both
-    // map to TS `number` in the virtualizer, so accept either.
-    expect(["integer", "big_integer"]).toContain(dump.users.id);
-    expect(dump.users.name).toBe("string");
-    expect(dump.users.age).toBe("integer");
-    expect(dump.users.created_at).toBe("datetime");
-    expect(dump.posts.title).toBe("string");
-    expect(dump.posts.body).toBe("text");
+    // Rich-shape assertions: each column entry is now an object with
+    // `type` + `null`. `id` is integer on SQLite/PG but big_integer on
+    // MariaDB — both map to TS `number` in the virtualizer.
+    expect(["integer", "big_integer"]).toContain(dump.users.id.type);
+    expect(dump.users.name.type).toBe("string");
+    expect(dump.users.age.type).toBe("integer");
+    expect(dump.users.created_at.type).toBe("datetime");
+    expect(dump.posts.title.type).toBe("string");
+    expect(dump.posts.body.type).toBe("text");
+    // Nullable by default (no NOT NULL constraint declared above).
+    expect(dump.users.name.null).toBe(true);
   });
 
   it("skips schema_migrations and ar_internal_metadata by default", async () => {
@@ -145,25 +145,49 @@ describe("dumpSchemaColumns", () => {
     } as unknown as Parameters<typeof dumpSchemaColumns>[0];
 
     const dump = await dumpSchemaColumns(fakeAdapter);
-    expect(dump.widgets).toEqual({
-      name: "string",
-      bio: "text",
-      count: "integer",
-      big: "big_integer",
-      price: "decimal",
-      active: "boolean",
-      at: "datetime",
-      data: "jsonb",
-      guid: "uuid",
-      at_tz: "datetime",
-      at_tz2: "time",
-      tags: "array",
-      names: "array",
-      email: "string",
-      active_mysql: "boolean",
-      at_udt: "datetime",
-      tags_udt: "array",
-    });
+    // Each entry is the rich { type, null } shape; these fake columns
+    // don't set `null`, so the conservative default (true) applies.
+    expect(dump.widgets.name.type).toBe("string");
+    expect(dump.widgets.bio.type).toBe("text");
+    expect(dump.widgets.count.type).toBe("integer");
+    expect(dump.widgets.big.type).toBe("big_integer");
+    expect(dump.widgets.price.type).toBe("decimal");
+    expect(dump.widgets.active.type).toBe("boolean");
+    expect(dump.widgets.at.type).toBe("datetime");
+    expect(dump.widgets.data.type).toBe("jsonb");
+    expect(dump.widgets.guid.type).toBe("uuid");
+    expect(dump.widgets.at_tz.type).toBe("datetime");
+    expect(dump.widgets.at_tz2.type).toBe("time");
+    expect(dump.widgets.email.type).toBe("string");
+    expect(dump.widgets.active_mysql.type).toBe("boolean");
+    expect(dump.widgets.at_udt.type).toBe("datetime");
+    // Array columns should surface arrayElementType.
+    expect(dump.widgets.tags.type).toBe("array");
+    expect(dump.widgets.tags.arrayElementType).toBe("integer");
+    expect(dump.widgets.names.type).toBe("array");
+    expect(dump.widgets.names.arrayElementType).toBe("string");
+    expect(dump.widgets.tags_udt.type).toBe("array");
+    expect(dump.widgets.tags_udt.arrayElementType).toBe("integer");
+  });
+
+  it("preserves column nullability from the adapter", async () => {
+    const fakeAdapter = {
+      async tables() {
+        return ["widgets"];
+      },
+      async columns() {
+        return [
+          { name: "not_nullable", sqlType: "varchar(255)", null: false },
+          { name: "nullable", sqlType: "varchar(255)", null: true },
+          { name: "missing", sqlType: "varchar(255)" }, // defaults to true
+        ];
+      },
+    } as unknown as Parameters<typeof dumpSchemaColumns>[0];
+
+    const dump = await dumpSchemaColumns(fakeAdapter);
+    expect(dump.widgets.not_nullable.null).toBe(false);
+    expect(dump.widgets.nullable.null).toBe(true);
+    expect(dump.widgets.missing.null).toBe(true);
   });
 
   it("output feeds directly into trails-tsc's virtualizer (end-to-end)", async () => {

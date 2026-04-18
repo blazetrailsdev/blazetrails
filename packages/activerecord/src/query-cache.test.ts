@@ -442,11 +442,12 @@ describe("QueryCache executor hooks", () => {
     expect(a2.cache.enabled).toBe(true);
   });
 
-  it("complete disables and clears query cache", () => {
+  it("complete disables and clears query cache", async () => {
     const inner = createTestAdapter();
     const adapter = new QueryCacheAdapter(inner);
     adapter.enableQueryCache();
-    adapter.cache.computeIfAbsent("SELECT 1", async () => [{ id: 1 }]);
+    await adapter.cache.computeIfAbsent("SELECT 1", async () => [{ id: 1 }]);
+    expect(adapter.cache.size).toBe(1);
     QueryCache.complete([adapter]);
     expect(adapter.cache.enabled).toBe(false);
     expect(adapter.cache.size).toBe(0);

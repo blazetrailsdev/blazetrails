@@ -113,7 +113,7 @@ function validateInverseOf(targetModel: typeof Base, assocName: string, inverseO
       corrections.push(a.name);
     }
   }
-  throw new InverseOfAssociationNotFoundError(assocName, inverseOf, corrections);
+  throw new InverseOfAssociationNotFoundError(assocName, inverseOf, corrections, targetModel.name);
 }
 
 function levenshtein(a: string, b: string): number {
@@ -237,17 +237,19 @@ export class Associations {
 }
 
 /**
- * Returns true if the given association has been loaded/cached on the record.
- * Matches records set by inverse_of wiring, explicit writers (`setBelongsTo`,
- * `setHasOne`, `setHasMany`) and the sync paths of the explicit loaders.
+ * Returns true if an Association instance (the wrapper that owns
+ * load/build/create for a given macro) has already been built for this
+ * record. Rails' `@association_cache` stores wrapper instances, populated
+ * by `record.association(name)` — see
+ * `activerecord/lib/active_record/associations.rb:51-67`. Our equivalent
+ * caches are `_associationInstances` (singular: belongsTo/hasOne) and
+ * `_collectionProxies` (collection: hasMany/habtm).
  *
  * Mirrors: ActiveRecord::Associations#association_cached?
  */
 export function isAssociationCached(record: Base, assocName: string): boolean {
-  const cached = (record as any)._cachedAssociations as Map<string, unknown> | undefined;
-  if (cached?.has(assocName)) return true;
-  const preloaded = (record as any)._preloadedAssociations as Map<string, unknown> | undefined;
-  return preloaded?.has(assocName) ?? false;
+  if (record._associationInstances.has(assocName)) return true;
+  return record._collectionProxies.has(assocName);
 }
 
 /**

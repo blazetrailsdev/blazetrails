@@ -1182,26 +1182,39 @@ describe("HasManyAssociationsTest", () => {
     expect((reloaded as any).author_id).toBeNull();
   });
 
-  it("isAssociationCached reflects cached and preloaded maps", async () => {
+  it("isAssociationCached reflects built Association instances", async () => {
+    // Rails' `association_cached?` checks @association_cache — which
+    // stores Association wrapper instances populated by .association(name),
+    // not targets. Our equivalents are _associationInstances (singular)
+    // and _collectionProxies (collection).
     class CacheAuthor extends Base {
+      declare cachePosts: CollectionProxy<Base>;
       static {
         this.attribute("name", "string");
         this.adapter = adapter;
       }
     }
+    class CachePost extends Base {
+      static {
+        this.attribute("cache_author_id", "integer");
+        this.adapter = adapter;
+      }
+    }
     registerModel(CacheAuthor);
+    registerModel(CachePost);
+    Associations.hasMany.call(CacheAuthor, "cache_posts", {
+      className: "CachePost",
+      foreignKey: "cache_author_id",
+    });
     const author = await CacheAuthor.create({ name: "Alice" });
 
-    expect(isAssociationCached(author, "posts")).toBe(false);
+    expect(isAssociationCached(author, "cache_posts")).toBe(false);
 
-    (author as any)._cachedAssociations = new Map([["posts", []]]);
-    expect(isAssociationCached(author, "posts")).toBe(true);
-    expect(isAssociationCached(author, "comments")).toBe(false);
-
-    delete (author as any)._cachedAssociations;
-    (author as any)._preloadedAssociations = new Map([["comments", []]]);
-    expect(isAssociationCached(author, "comments")).toBe(true);
-    expect(isAssociationCached(author, "missing")).toBe(false);
+    // Building the proxy via `association(record, name)` is what Rails'
+    // `record.association(name)` does — populates the cache.
+    association(author, "cache_posts");
+    expect(isAssociationCached(author, "cache_posts")).toBe(true);
+    expect(isAssociationCached(author, "other")).toBe(false);
   });
 
   // -- Dependence --

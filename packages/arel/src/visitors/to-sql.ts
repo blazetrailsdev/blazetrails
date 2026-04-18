@@ -57,7 +57,18 @@ export class ToSql implements NodeVisitor<SQLString> {
     } finally {
       this._extractBinds = false;
     }
-    const binds = bindCollector.value.map((b) => (b instanceof Nodes.BindParam ? b.value : b));
+    const binds = bindCollector.value.map((b) => {
+      const val = b instanceof Nodes.BindParam ? b.value : b;
+      if (
+        val &&
+        typeof val === "object" &&
+        "valueForDatabase" in val &&
+        typeof (val as Record<string, unknown>).valueForDatabase === "function"
+      ) {
+        return (val as { valueForDatabase(): unknown }).valueForDatabase();
+      }
+      return val;
+    });
     return [sqlCollector.value, binds];
   }
 

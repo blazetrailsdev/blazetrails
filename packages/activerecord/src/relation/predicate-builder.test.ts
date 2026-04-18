@@ -135,7 +135,9 @@ describe("PredicateBuilderTest", () => {
       const [sql, binds] = visitor.compileWithBinds(node);
       expect(sql).toContain('"users"."name" = ?');
       expect(binds).toHaveLength(1);
-      expect((binds[0] as any).valueBeforeTypeCast).toBeInstanceOf(Substitute);
+      // The bind is the Substitute itself (unwrapped from QueryAttribute
+      // via valueForDatabase → identity type serialize)
+      expect(binds[0]).toBeInstanceOf(Substitute);
     });
 
     it("compile inlines QueryAttribute values for display SQL", () => {

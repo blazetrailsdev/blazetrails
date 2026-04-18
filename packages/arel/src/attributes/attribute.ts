@@ -112,7 +112,12 @@ export class Attribute extends Node {
     // QueryAttribute and similar bind objects have valueForDatabase —
     // wrap them in BindParam so the visitor extracts them as binds
     // rather than inlining via Casted.
-    if (value && typeof value === "object" && "valueForDatabase" in value && "name" in value) {
+    if (
+      value &&
+      typeof value === "object" &&
+      typeof (value as Record<string, unknown>).valueForDatabase === "function" &&
+      typeof (value as Record<string, unknown>).name === "string"
+    ) {
       return new BindParam(value);
     }
     return new Casted(value, this);

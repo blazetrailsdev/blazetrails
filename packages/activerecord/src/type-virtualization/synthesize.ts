@@ -34,20 +34,29 @@ export interface SynthesizeOptions {
 
 export function synthesizeDeclares(info: ClassInfo, opts: SynthesizeOptions = {}): string[] {
   const out: string[] = [];
-  // Track attribute names the user declared via `this.attribute(...)`
-  // so schema-reflected declares don't duplicate them.
-  const userAttrNames = new Set<string>();
+  // Track ALL synthesized instance member names so schema-reflected
+  // declares don't collide with attribute() / hasMany() / belongsTo() /
+  // hasOne() / scope() etc. Rails allows an association named "comments"
+  // and a column named "comments" to coexist (distinct concepts);
+  // emitting two `declare comments: ...` members is a TS error.
+  const synthesizedInstanceNames = new Set<string>();
   for (const call of info.calls) {
-    if (call.kind === "attribute") userAttrNames.add(call.name);
     for (const line of renderCall(info, call)) {
-      if (!line.skipIfPresent || !memberPresent(info, line)) out.push(line.text);
+      if (!line.skipIfPresent || !memberPresent(info, line)) {
+        out.push(line.text);
+        if (!line.isStatic) synthesizedInstanceNames.add(line.declaredName);
+      }
     }
   }
   for (const l of renderLoaderOverloads(info)) {
-    if (!info.existingMembers.has(l.declaredName)) out.push(l.text);
+    if (!info.existingMembers.has(l.declaredName)) {
+      out.push(l.text);
+      synthesizedInstanceNames.add(l.declaredName);
+    }
   }
-  // Schema-reflected declares for columns the user never touched.
-  for (const line of renderSchemaColumnDeclares(info, userAttrNames, opts)) {
+  // Schema-reflected declares for columns not covered by any user or
+  // synthesized member.
+  for (const line of renderSchemaColumnDeclares(info, synthesizedInstanceNames, opts)) {
     out.push(line);
   }
   return out;
@@ -55,7 +64,7 @@ export function synthesizeDeclares(info: ClassInfo, opts: SynthesizeOptions = {}
 
 function renderSchemaColumnDeclares(
   info: ClassInfo,
-  userAttrNames: Set<string>,
+  synthesizedInstanceNames: Set<string>,
   opts: SynthesizeOptions,
 ): string[] {
   const map = opts.schemaColumnsByTable;
@@ -68,7 +77,7 @@ function renderSchemaColumnDeclares(
   // JSON key insertion order.
   const entries = Object.entries(cols).sort(([a], [b]) => a.localeCompare(b));
   for (const [col, railsType] of entries) {
-    if (userAttrNames.has(col)) continue;
+    if (synthesizedInstanceNames.has(col)) continue;
     if (info.existingMembers.has(col)) continue;
     // Skip "id" — Base already defines a PrimaryKeyValue accessor that
     // handles composite keys; re-declaring here would shadow it.
@@ -171,7 +180,8 @@ function renderCall(info: ClassInfo, call: RuntimeCall): RenderedLine[] {
 
 function renderAttribute(call: AttributeCall): RenderedLine[] {
   const tsType = tsTypeFor(call.railsType);
-  return [line(`declare ${call.name}: ${tsType};`, call.name, false)];
+  const memberName = renderDeclaredMemberName(call.name);
+  return [line(`declare ${memberName}: ${tsType};`, call.name, false)];
 }
 
 function renderCollectionAssoc(call: AssociationCall): RenderedLine[] {
@@ -182,8 +192,9 @@ function renderCollectionAssoc(call: AssociationCall): RenderedLine[] {
   // covered by `loadBelongsTo` / `loadHasOne` overloads rendered by
   // `renderLoaderOverloads` at the end of `synthesizeDeclares`.
   const target = resolveTarget(call);
+  const memberName = renderDeclaredMemberName(call.name);
   return [
-    line(`declare ${call.name}: ${AR_IMPORT}.AssociationProxy<${target}>;`, call.name, false),
+    line(`declare ${memberName}: ${AR_IMPORT}.AssociationProxy<${target}>;`, call.name, false),
   ];
 }
 
@@ -194,7 +205,8 @@ function renderSingularAssoc(call: AssociationCall): RenderedLine[] {
   // `declare loadBelongsTo: ...` / `declare loadHasOne: ...` lines
   // by `renderLoaderOverloads` below.
   const target = call.options["polymorphic"] === "true" ? "Base" : resolveTarget(call);
-  return [line(`declare ${call.name}: ${target} | null;`, call.name, false)];
+  const memberName = renderDeclaredMemberName(call.name);
+  return [line(`declare ${memberName}: ${target} | null;`, call.name, false)];
 }
 
 function renderScope(info: ClassInfo, call: ScopeCall): RenderedLine[] {

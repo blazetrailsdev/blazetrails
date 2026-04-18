@@ -133,6 +133,39 @@ describe("virtualize — deltas", () => {
     expect(text).toMatch(/declare safe: string;/);
   });
 
+  test("schemaColumnsByTable doesn't collide with hasMany / belongsTo names", () => {
+    const src =
+      "export class Post extends Base {\n" +
+      "  static {\n" +
+      '    this.hasMany("comments");\n' +
+      '    this.belongsTo("author");\n' +
+      "  }\n" +
+      "}\n";
+    const { text } = virtualize(src, "post.ts", {
+      schemaColumnsByTable: {
+        posts: { comments: "string", author: "string", body: "string" },
+      },
+    });
+    // Only one declare per name — association wins over schema column.
+    expect(text.match(/declare comments:/g)?.length).toBe(1);
+    expect(text.match(/declare author:/g)?.length).toBe(1);
+    // Non-colliding schema column is still emitted.
+    expect(text).toMatch(/declare body: string;/);
+  });
+
+  test("runtime-macro declares quote reserved / non-identifier names", () => {
+    const src =
+      "export class Post extends Base {\n" +
+      "  static {\n" +
+      '    this.attribute("class", "string");\n' +
+      "  }\n" +
+      "}\n";
+    const { text } = virtualize(src, "post.ts");
+    // Bare `declare class: ...` would be a parse error.
+    expect(text).toMatch(/declare "class": string;/);
+    expect(text).not.toMatch(/declare class: string;/);
+  });
+
   test("schemaColumnsByTable emits columns in stable (sorted) order", () => {
     const src = "export class Post extends Base {}\n";
     const { text } = virtualize(src, "post.ts", {

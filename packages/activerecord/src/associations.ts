@@ -1036,12 +1036,11 @@ export async function processDependentAssociations(record: Base): Promise<void> 
           ? (assoc.options.foreignKey ?? `${underscore(asName)}_id`)
           : (assoc.options.foreignKey ?? `${underscore(ctor.name)}_id`);
         const typeCol = asName ? `${underscore(asName)}_type` : null;
-        const nullified = ForeignAssociation.nullifiedOwnerAttributes({
-          foreignKey,
-          type: typeCol,
-        });
+        const nullifiedEntries = Object.entries(
+          ForeignAssociation.nullifiedOwnerAttributes({ foreignKey, type: typeCol }),
+        );
         for (const child of children) {
-          for (const [col, val] of Object.entries(nullified)) {
+          for (const [col, val] of nullifiedEntries) {
             child.writeAttribute(col, val);
           }
           await child.save();

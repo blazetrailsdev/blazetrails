@@ -47,6 +47,7 @@ export {
   loadHasManyThrough,
   processDependentAssociations,
   association,
+  isAssociationCached,
   loadHabtm,
   updateCounterCaches,
   touchBelongsToParents,

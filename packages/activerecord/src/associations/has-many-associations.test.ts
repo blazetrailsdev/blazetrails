@@ -18,6 +18,7 @@ import {
   loadHasMany,
   loadHasManyThrough,
   processDependentAssociations,
+  isAssociationCached,
 } from "../associations.js";
 import { DeleteRestrictionError } from "./errors.js";
 
@@ -1142,6 +1143,65 @@ describe("HasManyAssociationsTest", () => {
     await processDependentAssociations(author);
     const reloaded = await NullifyPost.find(post.id!);
     expect((reloaded as any).author_id).toBeNull();
+  });
+
+  it("depends and nullify with composite foreign key nulls every FK column", async () => {
+    // Regression guard: the pre-ForeignAssociation.nullifiedOwnerAttributes
+    // path only nulled the first FK column when `foreignKey` was an array.
+    class CpkAuthor extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class CpkPost extends Base {
+      static {
+        this.attribute("tenant_id", "integer");
+        this.attribute("author_id", "integer");
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(CpkAuthor);
+    registerModel(CpkPost);
+    Associations.hasMany.call(CpkAuthor, "cpk_posts", {
+      className: "CpkPost",
+      foreignKey: ["tenant_id", "author_id"],
+      primaryKey: ["id", "id"],
+      dependent: "nullify",
+    });
+    const author = await CpkAuthor.create({ name: "Alice" });
+    const post = await CpkPost.create({
+      tenant_id: author.id,
+      author_id: author.id,
+      title: "A",
+    });
+    await processDependentAssociations(author);
+    const reloaded = await CpkPost.find(post.id!);
+    expect((reloaded as any).tenant_id).toBeNull();
+    expect((reloaded as any).author_id).toBeNull();
+  });
+
+  it("isAssociationCached reflects cached and preloaded maps", async () => {
+    class CacheAuthor extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(CacheAuthor);
+    const author = await CacheAuthor.create({ name: "Alice" });
+
+    expect(isAssociationCached(author, "posts")).toBe(false);
+
+    (author as any)._cachedAssociations = new Map([["posts", []]]);
+    expect(isAssociationCached(author, "posts")).toBe(true);
+    expect(isAssociationCached(author, "comments")).toBe(false);
+
+    delete (author as any)._cachedAssociations;
+    (author as any)._preloadedAssociations = new Map([["comments", []]]);
+    expect(isAssociationCached(author, "comments")).toBe(true);
+    expect(isAssociationCached(author, "missing")).toBe(false);
   });
 
   // -- Dependence --

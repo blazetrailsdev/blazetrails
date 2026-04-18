@@ -64,7 +64,8 @@
   - Update `BindMap` to recognize `QueryAttribute` (not just `Attribute` from activemodel) and call `QueryAttribute.withCastValue()` for rebinding
 
 - `packages/activerecord/src/connection-adapters/abstract/database-statements.ts`
-  - `cacheableQuery()` should compile the Arel tree with `compileWithBinds` and return the bound attributes alongside the query builder
+  - `cacheableQuery()` keeps its current signature — it compiles the Arel tree and returns `[queryBuilder, executionBinds]`
+  - It does NOT return `relation.boundAttributes` — that's read directly by `StatementCache.create` from the relation object, which has access to both the relation and the connection
 
 **Tests:** Full round-trip: `StatementCache.create(conn, (p) => Book.where({name: p.bind()}))` → `cache.execute(["Rails Guide"], conn)` → returns correct records
 

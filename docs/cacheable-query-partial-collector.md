@@ -49,13 +49,14 @@ Rails' unprepared path:
 
 - `packages/arel/src/visitors/to-sql.ts`
   - `compileWithCollector(node, collector)` — accept an external collector parameter instead of always creating a new `SQLString`
-  - When a `PartialQueryCollector` is passed, the visitor's `visitCasted`/`visitBindParam` call `collector.addBind()` which pushes Substitutes into the parts array
-  - This is partially done — `compileWithCollector` exists but always creates a new `SQLString`. Need to accept an arbitrary collector.
+  - Update `PartialQueryCollector.addBind` to accept the optional `block` argument (`addBind(value, block?)`) so it satisfies the same collector interface Arel visitors expect. Add `addBinds(..., block?)` too.
+  - Update visitor behavior: when compiling with a `PartialQueryCollector`, `visitBindParam`/`visitCasted` must route values through `collector.addBind(...)` instead of appending quoted values directly. The current `_extractBinds` flag controls this — when an external collector is passed, set `_extractBinds = true` so bind values flow through `addBind`.
+  - This is partially done — `compileWithCollector` exists but always creates a new `SQLString`, and the visitor inlines quoted values when `_extractBinds` is false.
 
 - `packages/arel/src/visitors/postgresql.ts`
-  - Same for `PostgreSQLWithBinds` — accept external collector
+  - Same for `PostgreSQLWithBinds` — accept external collector, preserve numbered-bind behavior by honoring the optional `block` argument
 
-**Tests:** Compile an AST with a `PartialQueryCollector`, verify parts array has interleaved strings + Substitutes, binds array has values.
+**Tests:** Compile an AST with an interface-compatible `PartialQueryCollector`, verify parts array has interleaved strings + Substitutes, binds array has values, and PG numbered-bind visitors still work.
 
 ### PR 2: Wire cacheableQuery Through PartialQueryCollector
 

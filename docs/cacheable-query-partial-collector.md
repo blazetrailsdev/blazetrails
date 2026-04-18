@@ -10,11 +10,16 @@ In Rails, the unprepared (non-prepared-statement) path compiles the Arel tree wi
 
 ```
 cacheableQuery(klass, arel):
-  [sql, binds] = toSqlAndBinds(arel)    // sql = "SELECT ... WHERE name = ?"
-  return [klass.partialQuery([sql]), binds]  // PartialQuery(["SELECT ... WHERE name = ?"])
+  [sql, binds] = toSqlAndBinds(arel)    // binds is always [] because toSqlAndBinds
+                                         // is called without `this` binding, so it
+                                         // can't see arelVisitor and falls back to
+                                         // node.toSql() which inlines all values
+  return [klass.partialQuery([sql]), binds]  // PartialQuery(["SELECT ... WHERE name = 'foo'"])
 ```
 
-The PartialQuery receives the full SQL as one string with no Substitute slots. On `sqlFor(binds, connection)`, it has nothing to substitute — the `?` in the SQL is a literal character, not a Substitute object.
+Two problems: (1) `toSqlAndBinds` is called without `this` so it never extracts binds, and (2) even if it did, the PartialQuery receives the full SQL as one string with no Substitute slots. On `sqlFor(binds, connection)`, it has nothing to substitute.
+
+This epic needs to fix both: bind `this` in `cacheableQuery` so the adapter's visitor is used, AND compile through `PartialQueryCollector` so Substitute slots are produced.
 
 ## What Rails Does
 
@@ -49,6 +54,8 @@ Rails' unprepared path:
 
 - `packages/arel/src/visitors/to-sql.ts`
   - `compileWithCollector(node, collector)` — accept an external collector parameter instead of always creating a new `SQLString`
+- `packages/activerecord/src/statement-cache.ts`
+  - `PartialQueryCollector` lives here, not under `packages/arel`
   - Update `PartialQueryCollector.addBind` to accept the optional `block` argument (`addBind(value, block?)`) so it satisfies the same collector interface Arel visitors expect. Add `addBinds(..., block?)` too.
   - Update visitor behavior: when compiling with a `PartialQueryCollector`, `visitBindParam`/`visitCasted` must route values through `collector.addBind(...)` instead of appending quoted values directly. The current `_extractBinds` flag controls this — when an external collector is passed, set `_extractBinds = true` so bind values flow through `addBind`.
   - This is partially done — `compileWithCollector` exists but always creates a new `SQLString`, and the visitor inlines quoted values when `_extractBinds` is false.

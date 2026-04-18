@@ -13,22 +13,33 @@ import type { Result } from "./result.js";
 export type ExplainOption = string | { format: string };
 
 /**
- * Safely stringify an arbitrary value for inclusion in an EXPLAIN
- * validation error message. Uses `util.inspect` (which handles circular
- * references), so even objects constructed with `as any` can't crash the
- * validator before its intended error reaches the caller.
+ * Stringify an arbitrary value for inclusion in an EXPLAIN validation
+ * error message. `as any` callers can hand us arbitrary shapes —
+ * circular objects, BigInts, Symbols, functions — and a raw
+ * `JSON.stringify` either throws or silently drops non-JSON values,
+ * masking the validation error the caller actually needs to see.
+ *
+ * Uses `JSON.stringify` with a custom replacer that:
+ *   - replaces circular refs with `"[Circular]"` (WeakSet-tracked)
+ *   - renders `BigInt` as `"123n"`, `Symbol` as `"Symbol(desc)"`, and
+ *     `function` as `"[Function: name]"` so the shape is visible
+ *
+ * `util.inspect` would be the idiomatic choice but is forbidden by the
+ * repo's `blazetrails/no-node-builtins` rule (browser compat).
  */
 export function inspectExplainOption(o: unknown): string {
   if (o === null) return "null";
   if (o === undefined) return "undefined";
+  if (typeof o === "bigint") return `${o}n`;
+  if (typeof o === "symbol") return o.toString();
+  if (typeof o === "function") return `[Function: ${o.name || "anonymous"}]`;
   if (typeof o !== "object") return String(o);
-  // JSON.stringify with a circular-ref-safe replacer. `as any` callers
-  // can hand us arbitrary shapes, and a raw JSON.stringify would throw
-  // on self-referencing structures — masking the validation error the
-  // caller actually needs to see.
   const seen = new WeakSet<object>();
   try {
     return JSON.stringify(o, (_k, v) => {
+      if (typeof v === "bigint") return `${v}n`;
+      if (typeof v === "symbol") return v.toString();
+      if (typeof v === "function") return `[Function: ${v.name || "anonymous"}]`;
       if (v !== null && typeof v === "object") {
         if (seen.has(v as object)) return "[Circular]";
         seen.add(v as object);

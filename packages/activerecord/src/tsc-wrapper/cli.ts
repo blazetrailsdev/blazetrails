@@ -63,6 +63,10 @@ function loadSchemaColumns(args: string[]): Record<string, Record<string, string
   return validateSchemaShape(parsed, resolved);
 }
 
+// Keys whose assignment on a plain object would pollute the prototype
+// chain — rejected up front rather than trusted from JSON input.
+const UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
 function validateSchemaShape(value: unknown, path: string): Record<string, Record<string, string>> {
   const fail = (reason: string): never => {
     process.stderr.write(`trails-tsc: --schema file ${path} is malformed: ${reason}\n`);
@@ -71,13 +75,21 @@ function validateSchemaShape(value: unknown, path: string): Record<string, Recor
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     fail("expected a top-level object of { [table]: { [column]: railsType } }");
   }
-  const out: Record<string, Record<string, string>> = {};
-  for (const [table, cols] of Object.entries(value as Record<string, unknown>)) {
+  // Use null-prototype maps so untrusted keys from the JSON can't reach
+  // Object.prototype. Iterate with Object.keys to skip inherited keys on
+  // the input (defense-in-depth; JSON.parse never sets them, but the
+  // function signature accepts `unknown`).
+  const out: Record<string, Record<string, string>> = Object.create(null);
+  for (const table of Object.keys(value as object)) {
+    if (UNSAFE_KEYS.has(table)) fail(`table name "${table}" is not allowed`);
+    const cols = (value as Record<string, unknown>)[table];
     if (cols === null || typeof cols !== "object" || Array.isArray(cols)) {
       fail(`table "${table}" must map to an object of column definitions`);
     }
-    const colMap: Record<string, string> = {};
-    for (const [col, railsType] of Object.entries(cols as Record<string, unknown>)) {
+    const colMap: Record<string, string> = Object.create(null);
+    for (const col of Object.keys(cols as object)) {
+      if (UNSAFE_KEYS.has(col)) fail(`column name "${table}.${col}" is not allowed`);
+      const railsType = (cols as Record<string, unknown>)[col];
       if (typeof railsType !== "string") {
         fail(`column "${table}.${col}" must have a string Rails type (got ${typeof railsType})`);
       }

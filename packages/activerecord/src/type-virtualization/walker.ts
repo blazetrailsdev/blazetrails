@@ -182,7 +182,14 @@ function hasSkipMarker(cls: ts.ClassDeclaration, sf: ts.SourceFile): boolean {
 }
 
 function recordExistingMember(m: ts.ClassElement, info: ClassInfo): void {
-  const name = m.name && ts.isIdentifier(m.name) ? m.name.text : undefined;
+  // Accept identifier AND string-literal member names so user-authored
+  // quoted members (e.g. `declare "strange-col": string;`) de-dupe
+  // against schema-emitted quoted declares.
+  let name: string | undefined;
+  if (m.name) {
+    if (ts.isIdentifier(m.name)) name = m.name.text;
+    else if (ts.isStringLiteralLike(m.name)) name = m.name.text;
+  }
   if (!name) return;
   const modifiers = ts.canHaveModifiers(m) ? ts.getModifiers(m) : undefined;
   const isStatic = modifiers?.some((mod) => mod.kind === ts.SyntaxKind.StaticKeyword) ?? false;

@@ -113,6 +113,19 @@ describe("virtualize — deltas", () => {
     expect(text).not.toMatch(/declare class: string;/);
   });
 
+  test("schemaColumnsByTable de-dupes against user-authored quoted members", () => {
+    const src = "export class Post extends Base {\n" + '  declare "strange-col": string;\n' + "}\n";
+    const { text } = virtualize(src, "post.ts", {
+      schemaColumnsByTable: {
+        posts: { "strange-col": "string", safe: "string" },
+      },
+    });
+    // User-authored quoted member is only written once.
+    expect(text.match(/declare "strange-col":/g)?.length).toBe(1);
+    // Other schema column still emitted.
+    expect(text).toMatch(/declare safe: string;/);
+  });
+
   test("schemaColumnsByTable emits columns in stable (sorted) order", () => {
     const src = "export class Post extends Base {}\n";
     const { text } = virtualize(src, "post.ts", {

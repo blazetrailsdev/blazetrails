@@ -63,7 +63,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   private _nativeTypeMap: TypeMap;
   private _memoryDatabase: boolean;
   private _filename: string;
-  private _statementPool = new StatementPool();
+  private _statementPool = new GenericStatementPool<Database.Statement>();
 
   private static _isMemoryFilename(filename: string): boolean {
     if (filename === ":memory:") return true;

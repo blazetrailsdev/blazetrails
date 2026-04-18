@@ -445,6 +445,26 @@ describe("trails-tsc — schemaColumnsByTable (Phase R.3)", () => {
     expect(combined).toMatch(/must be a Rails type string or an object/);
   });
 
+  it("loadSchemaColumns: reports `null` when a column value is null", async () => {
+    const { loadSchemaColumns } = await import("./cli.js");
+    const tmp = writeSchemaJson({ posts: { title: null } });
+    const { err } = spyExitAndStderr();
+    expect(() => loadSchemaColumns(["--schema", tmp])).toThrow(/process\.exit\(1\)/);
+    const combined = err.mock.calls.map((c) => String(c[0])).join("");
+    expect(combined).toMatch(/\(got null\)/);
+  });
+
+  it("loadSchemaColumns: rejects arrayElementType on non-array type", async () => {
+    const { loadSchemaColumns } = await import("./cli.js");
+    const tmp = writeSchemaJson({
+      posts: { title: { type: "string", arrayElementType: "integer" } },
+    });
+    const { err } = spyExitAndStderr();
+    expect(() => loadSchemaColumns(["--schema", tmp])).toThrow(/process\.exit\(1\)/);
+    const combined = err.mock.calls.map((c) => String(c[0])).join("");
+    expect(combined).toMatch(/`arrayElementType` is only valid when `type` is "array"/);
+  });
+
   it("without schema, those accesses fall back to unknown (declares weren't injected)", () => {
     const configPath = path.join(SCHEMA_DIR, "tsconfig.json");
     const { program } = createTrailsProgram(configPath);

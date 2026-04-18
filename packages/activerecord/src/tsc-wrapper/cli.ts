@@ -126,9 +126,10 @@ function validateColumnValue(
 ): SchemaColumnValue {
   if (typeof raw === "string") return raw;
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    const got = raw === null ? "null" : Array.isArray(raw) ? "array" : typeof raw;
     fail(
       `column "${fqColumn}" must be a Rails type string or an object ` +
-        `with at least { type: string } (got ${Array.isArray(raw) ? "array" : typeof raw})`,
+        `with at least { type: string } (got ${got})`,
     );
   }
   const r = raw as Record<string, unknown>;
@@ -138,8 +139,19 @@ function validateColumnValue(
   if (r.null !== undefined && typeof r.null !== "boolean") {
     fail(`column "${fqColumn}" rich shape: \`null\` must be a boolean when present`);
   }
-  if (r.arrayElementType !== undefined && typeof r.arrayElementType !== "string") {
-    fail(`column "${fqColumn}" rich shape: \`arrayElementType\` must be a string when present`);
+  if (r.arrayElementType !== undefined) {
+    if (typeof r.arrayElementType !== "string") {
+      fail(`column "${fqColumn}" rich shape: \`arrayElementType\` must be a string when present`);
+    }
+    // Catch typos / misconfiguration at load time — a non-"array" `type`
+    // would silently ignore `arrayElementType` downstream, leaving the
+    // user with an unexpectedly-untyped declare.
+    if (r.type !== "array") {
+      fail(
+        `column "${fqColumn}" rich shape: \`arrayElementType\` is only valid when ` +
+          `\`type\` is "array" (got type: "${r.type as string}")`,
+      );
+    }
   }
   const out: RichColumnValue = { type: r.type as string };
   if (r.null !== undefined) out.null = r.null as boolean;

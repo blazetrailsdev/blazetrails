@@ -72,11 +72,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   private _databaseVersion: number | null = null;
   private _typeMap: HashLookupTypeMap | null = null;
   // Per-pg.Client statement pool. PG's prepared statements are
-  // session-scoped, so each physical client gets its own pool and
-  // its own counter space. The WeakMap lets pg.Pool reap clients
-  // without us leaking entries.
+  // session-scoped, so each physical client gets its own pool with
+  // its own counter (matching Rails' `PostgreSQL::StatementPool`).
+  // The WeakMap lets pg.Pool reap clients without us leaking entries.
   private _statementPools = new WeakMap<pg.PoolClient, StatementPool>();
-  private _stmtCounter = 0;
   // Rails' `statement_limit` database.yml key — max prepared
   // statements cached per session before LRU eviction (default 1000).
   private _statementLimit = 1000;
@@ -93,12 +92,18 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
 
   set statementLimit(value: number) {
     this._statementLimit = value;
-    // Resize the active transaction client's pool immediately. Pools
-    // attached to non-held clients pick up the new limit on next
-    // acquisition via `_poolFor` (they get detached on close /
-    // commit / rollback anyway).
-    if (this._client) {
-      this._statementPools.get(this._client)?.setMaxSize(value);
+    // Resize the active transaction client's pool immediately so a
+    // mid-session change is visible. Drop references to any other
+    // cached pools so the next `_poolFor` call constructs a fresh
+    // one with the new limit — we can't iterate a WeakMap to resize
+    // them in place, and old entries become unreachable once pg
+    // releases the client anyway.
+    const activeClient = this._client;
+    const activePool = activeClient ? this._statementPools.get(activeClient) : undefined;
+    activePool?.setMaxSize(value);
+    this._statementPools = new WeakMap<pg.PoolClient, StatementPool>();
+    if (activeClient && activePool) {
+      this._statementPools.set(activeClient, activePool);
     }
   }
 
@@ -252,37 +257,13 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       payload,
       async () => {
         try {
-          const r = await this.withClient(async (client) => {
+          const r = await this.withClient(async (client) =>
             // rowMode: "array" returns rows as positional arrays, preserving
             // duplicate column names and matching the field-index order.
-            const prepare = this._shouldPrepare(bindArray);
-            const run = async (): Promise<ArrayQueryResult> =>
-              (await client.query({
-                ...(prepare ? { name: this._preparedNameFor(client, rewritten) } : {}),
-                text: rewritten,
-                values: bindArray,
-                rowMode: "array",
-              })) as unknown as ArrayQueryResult;
-            try {
-              return await run();
-            } catch (e) {
-              if (prepare && this._isInvalidCachedPlan(e)) {
-                this._poolFor(client).delete(rewritten);
-                if (this._inTransaction) {
-                  // Rails raises inside a txn because the server has
-                  // aborted it — a retry can only fail with
-                  // InFailedSqlTransaction (25P02). The transaction
-                  // machinery catches this and retries the whole txn.
-                  throw new PreparedStatementCacheExpired(
-                    (e as { message?: string })?.message ?? "cached plan expired",
-                    { cause: e },
-                  );
-                }
-                return await run();
-              }
-              throw e;
-            }
-          });
+            // Delegates to `_runQuery` so prepared-statement caching and
+            // in-txn / out-of-txn cached-plan handling stay in one place.
+            this._runQuery<ArrayQueryResult>(client, rewritten, bindArray, { rowMode: "array" }),
+          );
           payload.row_count = r.rows?.length ?? 0;
           return r;
         } catch (e: any) {
@@ -491,18 +472,22 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * from prepared-statement reuse — matches Rails where `exec_cache`
    * backs both exec_query and exec_delete / exec_update / exec_insert.
    */
-  private async _runQuery(
+  private async _runQuery<R = pg.QueryResult>(
     client: pg.PoolClient,
     sql: string,
     binds: unknown[],
-  ): Promise<pg.QueryResult> {
+    extra: { rowMode?: "array" } = {},
+  ): Promise<R> {
     const prepare = this._shouldPrepare(binds);
-    const attempt = async (): Promise<pg.QueryResult> => {
+    const attempt = async (): Promise<R> => {
       if (prepare) {
         const name = this._preparedNameFor(client, sql);
-        return client.query({ name, text: sql, values: binds });
+        return (await client.query({ name, text: sql, values: binds, ...extra })) as R;
       }
-      return client.query(sql, binds);
+      if (extra.rowMode) {
+        return (await client.query({ text: sql, values: binds, ...extra })) as R;
+      }
+      return (await client.query(sql, binds)) as R;
     };
     try {
       return await attempt();
@@ -522,16 +507,17 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   /**
-   * Return the prepared-statement name for `sql` on `client`, issuing
-   * one from `_stmtCounter` on first use. Mirrors the cache behavior
-   * of Rails' `PostgreSQL::StatementPool#[]` / `#[]=` — present key
-   * → cached name, absent → allocate and store.
+   * Return the prepared-statement name for `sql` on `client`. Names
+   * are allocated from the per-pool counter (`StatementPool#nextKey`)
+   * so each session has its own `a1`, `a2`, ... sequence. Mirrors
+   * Rails' `PostgreSQL::StatementPool#[]` / `#[]=` — present key →
+   * cached name, absent → `next_key` + store.
    */
   private _preparedNameFor(client: pg.PoolClient, sql: string): string {
     const pool = this._poolFor(client);
     const existing = pool.get(sql);
     if (existing) return existing.name;
-    const name = `a${++this._stmtCounter}`;
+    const name = pool.nextKey();
     pool.set(sql, { name });
     return name;
   }
@@ -917,9 +903,11 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       this._client.release();
       this._client = null;
     }
-    // Detach any lingering pools so late errors don't fire
-    // DEALLOCATE against a pool.end()-ed client. The WeakMap drops
-    // entries once pg releases the client anyway.
+    // Drop adapter-held references to any remaining pools so late
+    // errors can't fire DEALLOCATE against a pool.end()-ed client.
+    // The pool objects become unreachable once pg releases the
+    // corresponding clients anyway — this is about breaking our
+    // own reference, not an explicit detach step per pool.
     this._statementPools = new WeakMap();
     if (this._driverPool) {
       await this._driverPool.end();
@@ -2178,10 +2166,23 @@ export interface PreparedStatement {
  */
 export class StatementPool extends GenericStatementPool<PreparedStatement> {
   private _client: pg.PoolClient | null;
+  // Per-pool counter. Rails' PG StatementPool uses `@counter` on the
+  // pool instance so names are scoped to the session — matches the
+  // session-scoped nature of PG prepared statements and lets the
+  // adapter own zero state about naming.
+  private _counter = 0;
 
   constructor(client: pg.PoolClient, maxSize = 1000) {
     super(maxSize);
     this._client = client;
+  }
+
+  /**
+   * Allocate a fresh prepared-statement name. Rails' equivalent is
+   * `next_key` on `PostgreSQL::StatementPool` — `"a#{@counter += 1}"`.
+   */
+  nextKey(): string {
+    return `a${++this._counter}`;
   }
 
   /**

@@ -67,4 +67,50 @@ describe("STI subclass attribute() routing", () => {
     expect(Triangle._attributeDefinitions.get("sides")?.type.name).toBe("integer");
     expect(Shape._attributeDefinitions.get("sides")?.type.name).toBe("integer");
   });
+
+  it("subclass attribute survives schema reflection on the STI base (end-to-end)", async () => {
+    const { loadSchemaFromAdapter } = await import("./model-schema.js");
+    const { ValueType } = await import("@blazetrails/activemodel");
+
+    class UuidT extends ValueType {
+      override readonly name = "uuid" as unknown as "value";
+    }
+
+    class Shape extends Base {
+      static override tableName = "shapes";
+      static {
+        this.inheritanceColumn = "type";
+      }
+    }
+    class Circle extends Shape {
+      static {
+        // Subclass-authored attribute declared BEFORE schema reflection
+        // — the case previously documented as "STI note 2" (subclass
+        // fork would shadow later base reflection). With the routing
+        // fix this lives on the shared base map from the start.
+        this.attribute("radius", "integer");
+      }
+    }
+
+    const adapter = {
+      schemaCache: {
+        dataSourceExists: async () => true,
+        columnsHash: async () => ({ guid: { sqlType: "uuid" } }),
+        getCachedColumnsHash: () => ({ guid: { sqlType: "uuid" } }),
+        isCached: () => true,
+      },
+      lookupCastTypeFromColumn(col: { sqlType: string }) {
+        return col.sqlType === "uuid" ? new UuidT() : null;
+      },
+    };
+    (Shape as unknown as { adapter: unknown }).adapter = adapter;
+
+    await (loadSchemaFromAdapter as unknown as (this: typeof Base) => Promise<void>).call(Shape);
+
+    expect(Shape._attributeDefinitions.get("radius")?.type.name).toBe("integer");
+    expect(Shape._attributeDefinitions.get("guid")?.type.name).toBe("uuid");
+    expect(Circle._attributeDefinitions).toBe(Shape._attributeDefinitions);
+    expect(Circle._attributeDefinitions.get("radius")?.type.name).toBe("integer");
+    expect(Circle._attributeDefinitions.get("guid")?.type.name).toBe("uuid");
+  });
 });

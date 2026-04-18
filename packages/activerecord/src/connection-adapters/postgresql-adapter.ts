@@ -618,7 +618,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    *
    * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::DatabaseStatements#build_explain_clause
    */
-  buildExplainClause(options: ExplainOption[] = []): string {
+  override buildExplainClause(options: ExplainOption[] = []): string {
     if (options.length === 0) return "EXPLAIN for:";
     const parts = this._validateExplainOptions(options);
     return `EXPLAIN (${parts.join(", ")}) for:`;

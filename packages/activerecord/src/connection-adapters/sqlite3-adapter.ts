@@ -301,7 +301,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
    *
    * Mirrors: ActiveRecord::ConnectionAdapters::SQLite3::DatabaseStatements#build_explain_clause
    */
-  buildExplainClause(_options: ExplainOption[] = []): string {
+  override buildExplainClause(_options: ExplainOption[] = []): string {
     return "EXPLAIN QUERY PLAN for:";
   }
 

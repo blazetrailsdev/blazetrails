@@ -93,7 +93,11 @@ export function quote(value: unknown): string {
   if (value === null || value === undefined) return "NULL";
   if (typeof value === "boolean") return value ? quotedTrue() : quotedFalse();
   if (typeof value === "number" || typeof value === "bigint") return String(value);
-  if (value instanceof Date) return quotedDate(value);
+  // JS `Date` always carries a time component, so render the full
+  // `YYYY-MM-DD HH:MM:SS` form (via `quotedTimeUtc`) rather than the
+  // date-only `quotedDate`. Time-only values have no dedicated JS type
+  // here — callers who want date-only can pass a pre-formatted string.
+  if (value instanceof Date) return quotedTimeUtc(value);
   if (value instanceof Buffer) return quotedBinaryString(value);
   if (typeof value === "symbol") {
     const desc = value.description;
@@ -133,9 +137,12 @@ export function typeCast(value: unknown): unknown {
   if (typeof value === "number" || typeof value === "bigint") return value;
   if (typeof value === "string") return value;
   if (value instanceof Date) {
-    // MySQL's `quotedDate` wraps with single quotes; strip them for the
-    // unquoted-primitive contract that typeCast guarantees.
-    const quoted = quotedDate(value);
+    // Use the full `YYYY-MM-DD HH:MM:SS` form from `quotedTimeUtc` —
+    // JS `Date` always has a time component; `quotedDate` would drop
+    // it. Strip the surrounding single quotes that `quotedTimeUtc`
+    // adds to honor typeCast's unquoted-primitive contract (quote()
+    // adds the quotes back).
+    const quoted = quotedTimeUtc(value);
     return quoted.startsWith("'") && quoted.endsWith("'") ? quoted.slice(1, -1) : quoted;
   }
   throw new TypeError(`can't cast ${(value as object).constructor?.name ?? typeof value}`);

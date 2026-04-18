@@ -68,6 +68,36 @@ describe("STI subclass attribute() routing", () => {
     expect(Shape._attributeDefinitions.get("sides")?.type.name).toBe("integer");
   });
 
+  it("STI subclass encrypts() routes pending encryptions to the base", async () => {
+    const { isEncryptedAttribute } = await import("./encryption.js");
+
+    class Animal extends Base {
+      static override tableName = "animals";
+      static {
+        this.inheritanceColumn = "type";
+        this.attribute("name", "string");
+      }
+    }
+    class Dog extends Animal {
+      static {
+        // Pre-PR: encrypts() on subclass would add to Dog._pendingEncryptions
+        // while the attribute def lived on Animal — wrapper never applied.
+        // Post-PR: encrypts() also routes to the STI base.
+        this.encrypts("name");
+      }
+    }
+
+    // Pending encryption is recorded on the base, not the subclass.
+    expect(Object.prototype.hasOwnProperty.call(Animal, "_pendingEncryptions")).toBe(true);
+    expect(Object.prototype.hasOwnProperty.call(Dog, "_pendingEncryptions")).toBe(false);
+
+    // Both classes observe the encrypted attribute via the shared map.
+    expect(isEncryptedAttribute(Animal, "name")).toBe(true);
+    expect(isEncryptedAttribute(Dog, "name")).toBe(true);
+    // No fork on the subclass.
+    expect(Dog._attributeDefinitions).toBe(Animal._attributeDefinitions);
+  });
+
   it("subclass attribute survives schema reflection on the STI base (end-to-end)", async () => {
     const { loadSchemaFromAdapter } = await import("./model-schema.js");
     const { ValueType } = await import("@blazetrails/activemodel");

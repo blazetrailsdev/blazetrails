@@ -624,8 +624,12 @@ function getColumnsHash(host: SchemaHost): Record<string, any> {
  * time in `columnsHash()` (filters the returned hash), but it cannot
  * retroactively remove a prototype accessor already defined on the
  * base — a consequence of TypeScript not having Ruby's method_missing.
- * Subclass `attribute()` calls route through the STI base (`Base.attribute`
- * in base.ts), so there's no forked-map shadowing to worry about.
+ * Subclass `attribute()` and `encrypts()` calls route through the STI
+ * base (see base.ts), so those specific flows don't create forked-map
+ * shadowing. Other decorators that mutate `_attributeDefinitions`
+ * directly on the calling class may still fork until they're routed
+ * through the same shared owner — add them to the STI redirect list
+ * in base.ts when they're introduced.
  */
 function applyColumnsHash(
   host: SchemaHost,

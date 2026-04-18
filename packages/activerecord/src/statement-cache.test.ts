@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { Attribute, ValueType } from "@blazetrails/activemodel";
 import {
   StatementCache,
   Substitute,
@@ -87,16 +88,12 @@ describe("StatementCacheTest", () => {
     expect(StatementCache.unsupportedValue(42)).toBe(false);
   });
 
-  it("BindMap with withCastValue objects", () => {
-    const attr = {
-      value: new Substitute(),
-      withCastValue(v: unknown) {
-        return { value: v, withCastValue: this.withCastValue };
-      },
-    };
+  it("BindMap with Attribute containing Substitute", () => {
+    const attr = Attribute.withCastValue("name", new Substitute(), new ValueType());
     const bindMap = new BindMap([attr]);
     const result = bindMap.bind(["typed_value"]);
-    expect((result[0] as any).value).toBe("typed_value");
+    expect(result[0]).toBeInstanceOf(Attribute);
+    expect((result[0] as Attribute).value).toBe("typed_value");
   });
 
   it("static factory methods", () => {

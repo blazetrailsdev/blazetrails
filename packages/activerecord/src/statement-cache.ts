@@ -10,6 +10,7 @@
  *   const results = await cache.execute(["my book"], connection);
  */
 
+import { Attribute } from "@blazetrails/activemodel";
 import type { Base } from "./base.js";
 
 /**
@@ -60,8 +61,8 @@ export class PartialQuery extends Query {
     const bindsCopy = [...binds];
     for (const i of this._indexes) {
       let value = bindsCopy.shift();
-      if (value && typeof value === "object" && "valueForDatabase" in value) {
-        value = (value as { valueForDatabase(): unknown }).valueForDatabase();
+      if (value instanceof Attribute) {
+        value = value.valueForDatabase;
       }
       const conn = connection as { quote?(v: unknown): string };
       val[i] = conn.quote ? conn.quote(value) : quoteValue(value);
@@ -131,12 +132,7 @@ export class BindMap {
       const attr = boundAttributes[i];
       if (attr instanceof Substitute) {
         this._indexes.push(i);
-      } else if (
-        attr &&
-        typeof attr === "object" &&
-        "value" in attr &&
-        (attr as any).value instanceof Substitute
-      ) {
+      } else if (attr instanceof Attribute && attr.value instanceof Substitute) {
         this._indexes.push(i);
       }
     }
@@ -147,8 +143,8 @@ export class BindMap {
     for (let i = 0; i < this._indexes.length; i++) {
       const offset = this._indexes[i];
       const attr = bas[offset];
-      if (attr && typeof attr === "object" && "withCastValue" in attr) {
-        bas[offset] = (attr as { withCastValue(v: unknown): unknown }).withCastValue(values[i]);
+      if (attr instanceof Attribute) {
+        bas[offset] = attr.withCastValue(values[i]);
       } else {
         bas[offset] = values[i];
       }

@@ -124,6 +124,22 @@ describe("dumpSchemaColumns", () => {
             sqlType: "tinyint(1)",
             sqlTypeMetadata: { type: "tinyint" },
           },
+          // PG SchemaStatements fallback: sqlTypeMetadata.type is the UDT
+          // (e.g. `timestamptz`), sqlTypeMetadata.sqlType is the human
+          // SQL (e.g. `timestamp with time zone`). The latter should win.
+          {
+            name: "at_udt",
+            sqlTypeMetadata: {
+              type: "timestamptz",
+              sqlType: "timestamp with time zone",
+            },
+          },
+          // PG fallback array via UDT name (`_int4`): should still be
+          // detected as an array via the sqlType string (`int4[]`).
+          {
+            name: "tags_udt",
+            sqlTypeMetadata: { type: "_int4", sqlType: "int4[]" },
+          },
         ];
       },
     } as unknown as Parameters<typeof dumpSchemaColumns>[0];
@@ -145,6 +161,8 @@ describe("dumpSchemaColumns", () => {
       names: "array",
       email: "string",
       active_mysql: "boolean",
+      at_udt: "datetime",
+      tags_udt: "array",
     });
   });
 

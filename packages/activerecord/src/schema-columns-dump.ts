@@ -80,27 +80,47 @@ export async function dumpSchemaColumns(
 function normalizeRailsType(col: AdapterColumn): string {
   // MySQL reports booleans as `tinyint(1)`. `sqlTypeMetadata.type` is the
   // unparameterized base ("tinyint") → would map to integer, losing the
-  // boolean semantics. `sqlType` carries the full `tinyint(1)`. Rails
-  // treats any tinyint(1) as boolean, so honor that special case up front.
-  const fullSqlType = (col.sqlType ?? col.sqlTypeMetadata?.sqlType ?? "").toLowerCase();
+  // boolean semantics. Rails treats any tinyint(1) as boolean.
+  const fullSqlType = (col.sqlTypeMetadata?.sqlType ?? col.sqlType ?? "").toLowerCase();
   if (/^\s*tinyint\s*\(\s*1\s*\)/.test(fullSqlType)) return "boolean";
 
-  const candidate = col.sqlTypeMetadata?.type ?? col.sqlType ?? col.type ?? "";
-  const raw = candidate.toLowerCase();
-  if (!raw) return "value";
+  // PostgreSQL array types are only reliably visible in the full SQL
+  // type string (`int4[]`, `character varying[]`). The PG
+  // SchemaStatements fallback exposes internal UDT names like `_int4`
+  // on sqlTypeMetadata.type, which would bypass a naive
+  // "candidate.endsWith('[]')" check — so detect off the full SQL
+  // string instead.
+  if (fullSqlType.trim().endsWith("[]")) return "array";
 
-  // PostgreSQL array types end in `[]` (`integer[]`, `character varying[]`).
-  // Collapse every array type to the Rails `array` key regardless of
-  // element type — trails-tsc maps `array` → `unknown[]`. Element-type
-  // narrowing would need a richer schema format than a single string.
-  if (raw.endsWith("[]")) return "array";
+  // Try each candidate through the SQL_TO_RAILS map, returning the
+  // first hit. PG adapter fallback sets sqlTypeMetadata.type to UDT
+  // names (`timestamptz`, `_int4`) while sqlTypeMetadata.sqlType
+  // carries the human-readable SQL (`timestamp with time zone`) — so
+  // prefer sqlType-bearing candidates first.
+  const candidates = [
+    col.sqlTypeMetadata?.sqlType,
+    col.sqlType,
+    col.sqlTypeMetadata?.type,
+    col.type,
+  ];
 
-  // Strip the first `(precision[, scale])` block from the string, even
-  // when the type name is MULTI-WORD (`character varying(255)` →
-  // `character varying`) or has trailing suffix text
-  // (`timestamp(3) without time zone` → `timestamp without time zone`).
-  const base = raw.replace(/\s*\([^)]*\)/, "").trim();
-  return SQL_TO_RAILS[base] ?? base;
+  let fallbackBase: string | undefined;
+  for (const candidate of candidates) {
+    const raw = candidate?.toLowerCase().trim();
+    if (!raw) continue;
+
+    // Strip the first `(precision[, scale])` block from the string, even
+    // when the type name is MULTI-WORD (`character varying(255)` →
+    // `character varying`) or has trailing suffix text
+    // (`timestamp(3) without time zone` → `timestamp without time zone`).
+    const base = raw.replace(/\s*\([^)]*\)/, "").trim();
+    fallbackBase ??= base;
+
+    const railsType = SQL_TO_RAILS[base];
+    if (railsType) return railsType;
+  }
+
+  return fallbackBase ?? "value";
 }
 
 // Common SQL → Rails type names. Covers the types adapters most

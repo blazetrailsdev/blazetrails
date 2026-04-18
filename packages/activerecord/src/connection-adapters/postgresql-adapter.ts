@@ -9,6 +9,7 @@ import { splitQuotedIdentifier, Utils } from "./postgresql/utils.js";
 import { Column } from "./postgresql/column.js";
 import { ExplainPrettyPrinter } from "./postgresql/explain-pretty-printer.js";
 import {
+  quote as pgQuote,
   quoteTableName as pgQuoteTableName,
   quoteColumnName as pgQuoteColumnName,
   quoteString as pgQuoteString,
@@ -991,6 +992,18 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
 
   quoteTableName(name: string): string {
     return pgQuoteTableName(name);
+  }
+
+  /**
+   * Quote a value for inclusion in a SQL literal. PG-specific branches
+   * (XmlData, BitData, Range, ArrayData) fall through to the base
+   * dispatch, and strings use PG's `E'\\\\'`-escape form when a
+   * backslash is present.
+   *
+   * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::Quoting#quote
+   */
+  override quote(value: unknown): string {
+    return pgQuote(value);
   }
 
   columnsForDistinct(columns: string, orders: string[]): string {

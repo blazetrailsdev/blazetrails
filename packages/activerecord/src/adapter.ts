@@ -82,6 +82,17 @@ export interface DatabaseAdapter {
    */
   buildExplainClause?(options?: string[]): string;
 
+  /**
+   * Quote a value for inclusion in a SQL literal (e.g. `"'foo'"`,
+   * `"42"`, `"NULL"`, `"x'DEADBEEF'"`). Concrete adapters override to
+   * use their own string-escape rules — SQLite: `'' only`; PG: `E'\\'`
+   * form when backslash present; MySQL: `\0 \n \r \Z \\` via
+   * MYSQL_ESCAPE_MAP.
+   *
+   * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#quote
+   */
+  quote?(value: unknown): string;
+
   // --- DatabaseStatements (Rails mixin) ---
   // Mirrors ActiveRecord::ConnectionAdapters::DatabaseStatements.
   // Default implementations delegate to execute()/executeMutation().

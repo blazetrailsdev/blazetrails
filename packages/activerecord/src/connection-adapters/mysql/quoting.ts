@@ -85,6 +85,28 @@ export function quotedBinaryString(value: Buffer): string {
 }
 
 /**
+ * Quote a value for inclusion in a SQL literal.
+ *
+ * Mirrors: ActiveRecord::ConnectionAdapters::MySQL::Quoting#quote
+ */
+export function quote(value: unknown): string {
+  if (value === null || value === undefined) return "NULL";
+  if (typeof value === "boolean") return value ? quotedTrue() : quotedFalse();
+  if (typeof value === "number" || typeof value === "bigint") return String(value);
+  if (value instanceof Date) return quotedDate(value);
+  if (value instanceof Buffer) return quotedBinaryString(value);
+  if (typeof value === "symbol") {
+    const desc = value.description;
+    if (desc === undefined) throw new TypeError("Cannot quote a Symbol without a description");
+    return quoteString(desc);
+  }
+  if (typeof value === "string") return quoteString(value);
+  // Rails: when Class then "'#{value}'"
+  if (typeof value === "function" && value.name) return `'${value.name}'`;
+  throw new TypeError(`can't quote ${(value as object).constructor?.name ?? typeof value}`);
+}
+
+/**
  * Type-cast a value for use as a column default in DDL.
  * MySQL represents booleans as 1/0 integers.
  */

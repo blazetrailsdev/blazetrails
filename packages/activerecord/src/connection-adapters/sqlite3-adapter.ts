@@ -31,7 +31,12 @@ import {
 } from "@blazetrails/activemodel";
 import { getFs, Notifications } from "@blazetrails/activesupport";
 import { typeCastedBinds } from "./abstract/database-statements.js";
-import { quoteString, quoteTableName, quoteColumnName } from "./sqlite3/quoting.js";
+import {
+  quote as sqliteQuote,
+  quoteString,
+  quoteTableName,
+  quoteColumnName,
+} from "./sqlite3/quoting.js";
 import {
   CheckConstraintDefinition,
   type AddForeignKeyOptions,
@@ -293,6 +298,17 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
    */
   buildExplainClause(_options: string[] = []): string {
     return "EXPLAIN QUERY PLAN for:";
+  }
+
+  /**
+   * Quote a value for inclusion in a SQL literal. SQLite uses plain
+   * `'' ` string escaping (no backslash escapes), `1/0` for booleans,
+   * and `x'hex'` for binary.
+   *
+   * Mirrors: ActiveRecord::ConnectionAdapters::SQLite3::Quoting#quote
+   */
+  override quote(value: unknown): string {
+    return sqliteQuote(value);
   }
 
   /**

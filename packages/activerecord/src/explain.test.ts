@@ -215,20 +215,20 @@ describe("ExplainTest", () => {
     expect(plan.toLowerCase()).toContain("select");
   });
 
-  it("renders BigInt binds without JSON.stringify crashing", async () => {
-    // _renderExplainBinds is the thing we're guarding — plain
-    // `JSON.stringify(BigInt(...))` throws TypeError; the replacer
-    // coerces bigints to their string form, so `[BigInt(42)]` renders
-    // as `["42"]` (quoted, matching log-subscriber.ts's
-    // `safeJsonStringify`). `Relation#explain` on sqlite interpolates
-    // where-literals into the SQL rather than issuing prepared-
-    // statement binds, so we verify the rendering helper directly —
-    // that's the surface this test is guarding.
+  it("renders binds via adapter.quote() with SQL-literal output", async () => {
+    // _renderExplainBinds now delegates to the adapter's own
+    // `quote()` so binds come out in adapter-correct SQL-literal
+    // form: strings get adapter-specific escaping, bigints pass
+    // through as `String(value)`, nulls render as `NULL`. That
+    // matches Rails' `render_bind(c, attr)` pattern, which also
+    // quotes via the connection. The BigInt case is the one that
+    // used to crash raw `JSON.stringify`.
     const { Post } = makeModel();
     const rel = Post.all() as unknown as {
-      _renderExplainBinds: (binds: unknown[]) => string;
+      _renderExplainBinds: (adapter: { quote?(v: unknown): string }, binds: unknown[]) => string;
     };
-    expect(rel._renderExplainBinds([BigInt(42), "str", 7])).toBe('["42","str",7]');
+    const ad = adapter as { quote?(v: unknown): string };
+    expect(rel._renderExplainBinds(ad, [BigInt(42), "str", 7, null])).toBe("[42, 'str', 7, NULL]");
     // Make sure the end-to-end path still returns output (no crash
     // even when binds are absent — this is the path `Relation#explain`
     // actually takes on sqlite).

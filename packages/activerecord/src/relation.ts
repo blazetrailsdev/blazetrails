@@ -1671,7 +1671,7 @@ export class Relation<T extends Base> {
     const parts: string[] = [];
     for (const [sql, binds] of effective) {
       let msg = `${clause} ${sql}`;
-      if (binds.length > 0) msg += ` ${this._renderExplainBinds(binds)}`;
+      if (binds.length > 0) msg += ` ${this._renderExplainBinds(adapter, binds)}`;
       const plan = await adapter.explain(sql, binds, options);
       parts.push(`${msg}\n${plan}`);
     }
@@ -1679,24 +1679,29 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Render a bind array for the EXPLAIN header. Reuses the BigInt-safe
-   * replacer from `log-subscriber.ts`'s `safeJsonStringify` so a bigint
-   * (from trails' `BigIntegerType`) coerces to its string form in the
-   * output — `["1"]` — rather than throwing, the way raw
-   * `JSON.stringify` would.
+   * Render a bind array for the EXPLAIN header using the adapter's
+   * own `quote()` — produces a SQL-literal list like
+   * `['foo', 42, NULL]` with adapter-specific string escaping
+   * (`'' ` on SQLite, MySQL's `\0/\n/\r/\Z` escapes, PG's `E'…\\…'`
+   * form, etc). Falls back to a BigInt-safe JSON form when the
+   * adapter doesn't implement `quote()`.
    *
-   * This is a positional-values-only rendering, deliberately simpler
-   * than LogSubscriber's output: LogSubscriber formats each bind as a
-   * `[name, type_casted_value]` pair (the attribute-name prefix lets
-   * you read the log against the query text). `exec_explain` doesn't
-   * carry attribute names down to this point, and the Rails
-   * equivalent — `render_bind(c, attr).inspect` on the values — is
-   * also a positional list. So we match Rails' shape, not
-   * LogSubscriber's, and the log/explain outputs are intentionally
-   * different at this site.
+   * Mirrors Rails' `exec_explain` rendering:
+   * `binds.map { |attr| render_bind(c, attr) }.inspect` — a
+   * positional list formatted via the connection's quoting rules.
+   * Rails' `render_bind` returns `[name, value]` pairs for
+   * Attribute-backed binds; we collect plain values at this layer
+   * (no attribute names), so the list is just values — same shape,
+   * less metadata.
    */
-  private _renderExplainBinds(binds: unknown[]): string {
-    return JSON.stringify(binds, (_key, v) => (typeof v === "bigint" ? v.toString() : v));
+  private _renderExplainBinds(adapter: DatabaseAdapter, binds: unknown[]): string {
+    if (typeof adapter.quote !== "function") {
+      // Adapter hasn't implemented quote() — fall back to the BigInt-
+      // safe JSON form so we don't crash on BigIntegerType columns.
+      return JSON.stringify(binds, (_k, v) => (typeof v === "bigint" ? v.toString() : v));
+    }
+    const pieces = binds.map((b) => adapter.quote!(b));
+    return `[${pieces.join(", ")}]`;
   }
 
   /**

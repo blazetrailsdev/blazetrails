@@ -25,6 +25,7 @@ import {
   type QueryCacheHost,
 } from "./abstract/query-cache.js";
 import { DatabaseStatementsMixin } from "./database-statements-mixin.js";
+import { quote as abstractQuote } from "./abstract/quoting.js";
 
 /**
  * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter::Version
@@ -108,6 +109,20 @@ export class AbstractAdapter extends AbstractAdapterBase {
     if (options.length === 0) return "EXPLAIN for:";
     const parts = options.map((o) => o.toUpperCase()).join(", ");
     return `EXPLAIN (${parts}) for:`;
+  }
+
+  /**
+   * Quote a value for inclusion in a SQL literal. Concrete adapters
+   * override to use their own string-escape rules (SQLite: `'' only`;
+   * PG: `E'\\' escape form`; MySQL: escapes `\0 \n \r \Z \\`). The
+   * abstract default is SQL-92 with `'' only`, suitable for
+   * identifier-quoting tests and for adapters that haven't specialized
+   * yet.
+   *
+   * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#quote
+   */
+  quote(value: unknown): string {
+    return abstractQuote(value);
   }
 
   /**

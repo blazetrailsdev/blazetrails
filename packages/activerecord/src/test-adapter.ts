@@ -690,6 +690,15 @@ class SchemaAdapter extends DatabaseStatementsMixin(class {}) implements Databas
     return `EXPLAIN (${options.map((o) => o.toUpperCase()).join(", ")}) for:`;
   }
 
+  quote(value: unknown): string {
+    const inner = this.inner as { quote?: (v: unknown) => string };
+    if (typeof inner.quote === "function") return inner.quote(value);
+    // Fallback shouldn't fire in practice — every adapter we wrap has
+    // quote() — but keep explain from crashing if somebody ever points
+    // SchemaAdapter at a bare mock.
+    return value === null || value === undefined ? "NULL" : String(value);
+  }
+
   async cleanup(): Promise<void> {
     await dropAllTables(this.inner);
   }

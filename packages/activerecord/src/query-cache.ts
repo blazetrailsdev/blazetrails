@@ -302,6 +302,12 @@ export class QueryCacheAdapter implements DatabaseAdapter {
     return `EXPLAIN (${parts}) for:`;
   }
 
+  quote(value: unknown): string {
+    const inner = this.inner as { quote?: (v: unknown) => string };
+    if (typeof inner.quote === "function") return inner.quote(value);
+    return value === null || value === undefined ? "NULL" : String(value);
+  }
+
   // --- DatabaseStatements ---
   // Read methods go through this.execute() to leverage the query cache.
   // Write methods go through this.executeMutation() to clear the cache.

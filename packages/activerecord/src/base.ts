@@ -427,10 +427,27 @@ export class Base extends Model {
   static set adapter(adapter: DatabaseAdapter) {
     this._adapter = adapter;
     if (_onAdapterSet) _onAdapterSet(this);
+    // Clear schema-load state so an adapter swap (A → B) is followed by
+    // a fresh reflection next time loadSchema() / _instantiate runs.
+    // Without this, `await Model.loadSchema()` would reuse the resolved
+    // promise from adapter A and never pick up B's types.
+    const state = this as unknown as {
+      _schemaLoadPromise?: Promise<void>;
+      _schemaLoaded?: boolean;
+      _columnsHash?: unknown;
+      _columns?: unknown;
+      _attributesBuilder?: unknown;
+      _cachedDefaultAttributes?: unknown;
+    };
+    state._schemaLoadPromise = undefined;
+    state._schemaLoaded = false;
+    state._columnsHash = undefined;
+    state._columns = undefined;
+    state._attributesBuilder = undefined;
+    state._cachedDefaultAttributes = null;
     // No longer kicks off a fire-and-forget schema reflection: the
-    // async query path races with the test's explicit pool client
-    // usage, causing double-release on adapters configured directly
-    // (non-pool). Schema reflection still runs via:
+    // async query path races with explicit pool client usage. Schema
+    // reflection still runs via:
     //   1. The sync loadSchema call in _instantiate (after the adapter
     //      has naturally populated the schema cache via its first query).
     //   2. An explicit `await Model.loadSchema()` when ordering matters.

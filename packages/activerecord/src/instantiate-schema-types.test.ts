@@ -50,4 +50,23 @@ describe("_instantiate routes row values through adapter-resolved types", () => 
 
     expect((rec as unknown as { blob: string }).blob).toBe("raw");
   });
+
+  it("picks up a new adapter's types after an adapter swap", async () => {
+    class Widget extends Base {
+      static override tableName = "widgets";
+    }
+    const colsA = { payload: { sqlType: "unknown", name: "payload", default: null } };
+    (Widget as unknown as { adapter: unknown }).adapter = makeAdapter(colsA);
+    await Widget.loadSchema();
+
+    // Adapter A has no cast for "unknown" → ValueType fallback.
+    expect(Widget._attributeDefinitions.get("payload")?.type.name).toBe("value");
+
+    // Swap to adapter B that provides the DoublingType.
+    const colsB = { payload: { sqlType: "doubling", name: "payload", default: null } };
+    (Widget as unknown as { adapter: unknown }).adapter = makeAdapter(colsB);
+    await Widget.loadSchema();
+
+    expect(Widget._attributeDefinitions.get("payload")?.type.name).toBe("doubling");
+  });
 });

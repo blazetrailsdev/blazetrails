@@ -203,8 +203,9 @@ import {
 2. **User override** (`this.attribute(name, type)`): use when you want to
    pin a type or add a virtual attribute. `attribute()` is now an
    _override_ — it defaults to `userProvidedDefault: true` (Rails' keyword)
-   and wins over the schema-reflected type. Internal schema-loader paths
-   pass `userProvidedDefault: false`.
+   and wins over the schema-reflected type. Schema reflection instead
+   registers attributes as schema-sourced and non-user-provided
+   (`source: "schema"`, `userProvided: false`).
 
 ```ts
 class User extends Base {

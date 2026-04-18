@@ -55,7 +55,7 @@ export function quotedDate(date: Date): string {
  * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#quoted_time
  */
 export function quotedTimeUtc(date: Date): string {
-  const full = abstractQuotedDate(date);
+  const full = quotedDate(date);
   const sep = full.indexOf(" ");
   return sep === -1 ? full : full.slice(sep + 1);
 }

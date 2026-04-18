@@ -398,11 +398,11 @@ trails-tsc --schema db/schema-columns.json
 JSON shape accepts either:
 
 - Legacy string: `{ "<table>": { "<column>": "<rails_type>", ... } }`
-- Rich: `{ "<table>": { "<column>": { "type": "<rails_type>", "null": boolean, "arrayElementType"?: "<rails_type>" }, ... } }`
+- Rich: `{ "<table>": { "<column>": { "type": "<rails_type>", "null"?: boolean, "arrayElementType"?: "<rails_type>" }, ... } }`
 
 The rich shape (emitted by `trails-schema-dump`) drives:
 
-- Nullability: `null: true` renders `Type | null`, `null: false` renders the bare type.
+- Nullability: `null: true` renders `Type | null`, `null: false` renders the bare type. `null` is optional — omitting it is treated as `true` (Rails' conservative default: columns without a NOT NULL constraint are nullable).
 - Array element type: when `type: "array"` and `arrayElementType` is set, trails-tsc renders `ElementTsType[]` instead of the default `unknown[]`.
 
 Table resolution is `static tableName = "..."` when present, otherwise

@@ -6,10 +6,6 @@ import { Column } from "../connection-adapters/column.js";
 import { SqlTypeMetadata } from "../connection-adapters/sql-type-metadata.js";
 import { ExplainPrettyPrinter } from "../connection-adapters/mysql/explain-pretty-printer.js";
 import { typeCastedBinds } from "../connection-adapters/abstract/database-statements.js";
-import {
-  quote as mysqlQuote,
-  typeCast as mysqlTypeCast,
-} from "../connection-adapters/mysql/quoting.js";
 
 /**
  * MySQL adapter — connects ActiveRecord to a real MySQL/MariaDB database.
@@ -329,20 +325,9 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     return `EXPLAIN ${parts} for:`;
   }
 
-  /**
-   * Quote a value for inclusion in a SQL literal. Uses MySQL-specific
-   * string escaping (`'' ` + `\0 \n \r \Z \\` via MYSQL_ESCAPE_MAP)
-   * and `1/0` booleans.
-   *
-   * Mirrors: ActiveRecord::ConnectionAdapters::MySQL::Quoting#quote
-   */
-  override quote(value: unknown): string {
-    return mysqlQuote(value);
-  }
-
-  override typeCast(value: unknown): unknown {
-    return mysqlTypeCast(value);
-  }
+  // `quote()` and `typeCast()` are inherited from AbstractMysqlAdapter,
+  // which delegates to `mysql/quoting.ts`. No Mysql2-specific override
+  // needed — they'd be duplicates.
 
   /**
    * Set of MySQL EXPLAIN flags that are safe to interpolate into the

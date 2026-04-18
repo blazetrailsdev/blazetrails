@@ -106,7 +106,10 @@ export interface DatabaseAdapter {
    *   (`"YYYY-MM-DD HH:MM:SS"` — matches Rails'
    *   `value.to_formatted_s(:db)`). `quote()` is responsible for
    *   wrapping it in single quotes.
-   * - **null / undefined**: returned unchanged.
+   * - **null**: returned unchanged.
+   * - **undefined**: adapter-dependent — SQLite coerces to `null`
+   *   to match its nullable-column semantics; PG / MySQL /
+   *   abstract pass through unchanged.
    * - **strings / numbers / bigints / symbols**: passed through
    *   (symbols coerce to their description).
    *

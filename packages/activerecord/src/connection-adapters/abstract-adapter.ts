@@ -136,7 +136,9 @@ export class AbstractAdapter extends AbstractAdapterBase {
    *   SQLite / MySQL collapse to `1` / `0`, PG keeps `true` / `false`)
    * - Date → unquoted `"YYYY-MM-DD HH:MM:SS"` (no surrounding quotes;
    *   matches Rails' `value.to_formatted_s(:db)`)
-   * - null / undefined → returned unchanged
+   * - null → returned unchanged; undefined passes through too at
+   *   the abstract level (SQLite overrides to coerce `undefined →
+   *   null` for its nullable-column semantics)
    * - strings / numbers / bigints → passed through
    *
    * Used by `Relation#_renderExplainBinds` to mirror Rails'

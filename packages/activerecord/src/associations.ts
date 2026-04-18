@@ -7,6 +7,7 @@ import {
   InverseOfAssociationNotFoundError,
   HasOneThroughNestedAssociationsAreReadonly,
 } from "./associations/errors.js";
+import { ForeignAssociation } from "./associations/foreign-association.js";
 import { underscore, singularize, pluralize, camelize } from "@blazetrails/activesupport";
 import { getInheritanceColumn, findStiClass } from "./inheritance.js";
 import { BelongsTo as BelongsToBuilder } from "./associations/builder/belongs-to.js";
@@ -184,13 +185,6 @@ export function resolveCounterColumn(
  */
 export class Associations {
   static _associations: AssociationDefinition[] = [];
-
-  /**
-   * No-op in TypeScript: ESM imports are already eagerly evaluated, so there is
-   * no equivalent of Rails' autoload/require_dependency cycle to trigger here.
-   * Kept for API parity with `ActiveRecord::Associations.eager_load!`.
-   */
-  static eagerLoadBang(): void {}
 
   /**
    * Define a belongs_to association.
@@ -1042,9 +1036,14 @@ export async function processDependentAssociations(record: Base): Promise<void> 
           ? (assoc.options.foreignKey ?? `${underscore(asName)}_id`)
           : (assoc.options.foreignKey ?? `${underscore(ctor.name)}_id`);
         const typeCol = asName ? `${underscore(asName)}_type` : null;
+        const nullified = ForeignAssociation.nullifiedOwnerAttributes({
+          foreignKey,
+          type: typeCol,
+        });
         for (const child of children) {
-          child.writeAttribute(foreignKey as string, null);
-          if (typeCol) child.writeAttribute(typeCol, null);
+          for (const [col, val] of Object.entries(nullified)) {
+            child.writeAttribute(col, val);
+          }
           await child.save();
         }
       } else if (dep === "restrictWithException") {
@@ -1071,8 +1070,14 @@ export async function processDependentAssociations(record: Base): Promise<void> 
         const foreignKey = hasOneAsName
           ? (assoc.options.foreignKey ?? `${underscore(hasOneAsName)}_id`)
           : (assoc.options.foreignKey ?? `${underscore(ctor.name)}_id`);
-        child.writeAttribute(foreignKey as string, null);
-        if (hasOneAsName) child.writeAttribute(`${underscore(hasOneAsName)}_type`, null);
+        const typeCol = hasOneAsName ? `${underscore(hasOneAsName)}_type` : null;
+        const nullified = ForeignAssociation.nullifiedOwnerAttributes({
+          foreignKey,
+          type: typeCol,
+        });
+        for (const [col, val] of Object.entries(nullified)) {
+          child.writeAttribute(col, val);
+        }
         await child.save();
       } else if (dep === "restrictWithException") {
         throw new DeleteRestrictionError(record, assoc.name);

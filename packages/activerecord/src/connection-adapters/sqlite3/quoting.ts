@@ -72,7 +72,15 @@ export function quote(value: unknown): string {
     }
     return quoteString(value.description);
   }
-  if (value instanceof Date) return quotedTimeUtc(value);
+  if (value instanceof Date) {
+    // Use abstract's `quotedDate` for consistency with
+    // `typeCast(Date)`: `YYYY-MM-DD HH:MM:SS` with optional
+    // `.microseconds` only when ms > 0 (Rails' `:db` format). Local
+    // `quotedTimeUtc` trails `.000` unconditionally via
+    // `toISOString()`; `quote()` wraps the result with single
+    // quotes.
+    return `'${abstractQuotedDate(value)}'`;
+  }
   if (value instanceof Uint8Array || value instanceof ArrayBuffer) {
     return quotedBinary(value);
   }

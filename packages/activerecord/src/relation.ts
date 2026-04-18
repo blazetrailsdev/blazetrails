@@ -1716,8 +1716,17 @@ export class Relation<T extends Base> {
       // on buffer shapes because they're not bindable primitives.
       const binaryBytes = this._binaryByteLength(b);
       if (binaryBytes !== null) return `<${binaryBytes} bytes of binary data>`;
-      const value = typeof adapter.typeCast === "function" ? adapter.typeCast(b) : b;
-      return this._normalizeExplainBindValue(value);
+      if (typeof adapter.typeCast !== "function") {
+        // Match the "throw loudly" contract the SchemaAdapter /
+        // QueryCacheAdapter wrappers use — a silent fallback would
+        // make EXPLAIN output depend on whether the adapter
+        // happens to implement `typeCast`, and nothing we ship does
+        // without it.
+        throw new Error(
+          `Relation#explain: adapter ${this._modelClass.adapter.adapterName} does not implement typeCast()`,
+        );
+      }
+      return this._normalizeExplainBindValue(adapter.typeCast(b));
     });
     return rubyInspectArray(casted);
   }

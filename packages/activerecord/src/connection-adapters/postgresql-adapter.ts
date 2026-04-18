@@ -464,6 +464,22 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   /**
+   * Tear down the statement pool attached to `client`. Called on
+   * commit / rollback / close. Detaching stops late DEALLOCATE calls
+   * from racing with a released client, AND we drop the WeakMap entry
+   * so a later checkout that hands back the same pg.PoolClient wrapper
+   * gets a fresh pool. Without the delete, `_poolFor` would return the
+   * silently-detached pool and DEALLOCATE would become a no-op,
+   * leaking server-side prepared statements.
+   */
+  private _releaseStatementPool(client: pg.PoolClient): void {
+    const pool = this._statementPools.get(client);
+    if (!pool) return;
+    pool.detach();
+    this._statementPools.delete(client);
+  }
+
+  /**
    * Run a query on `client`, routing through the statement pool when
    * binds are present and `preparedStatements` is on. On Rails-parity
    * "invalid cached plan" (SQLSTATE 0A000 + "cached plan" in the
@@ -711,8 +727,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   async commit(): Promise<void> {
     if (!this._client) throw new Error("No active transaction");
     await this._client.query("COMMIT");
-    const pool = this._statementPools.get(this._client);
-    if (pool) pool.detach();
+    this._releaseStatementPool(this._client);
     this._client.release();
     this._client = null;
     this._inTransaction = false;
@@ -728,8 +743,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   async rollback(): Promise<void> {
     if (!this._client) throw new Error("No active transaction");
     await this._client.query("ROLLBACK");
-    const pool = this._statementPools.get(this._client);
-    if (pool) pool.detach();
+    this._releaseStatementPool(this._client);
     this._client.release();
     this._client = null;
     this._inTransaction = false;
@@ -899,8 +913,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       this._advisoryLockClient = null;
     }
     if (this._client) {
-      const pool = this._statementPools.get(this._client);
-      if (pool) pool.detach();
+      this._releaseStatementPool(this._client);
       this._client.release();
       this._client = null;
     }

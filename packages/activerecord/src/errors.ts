@@ -265,11 +265,19 @@ export class PreparedStatementInvalid extends ActiveRecordError {
  * transaction machinery) can catch this and retry the whole
  * transaction.
  *
+ * Extends `StatementInvalid` so handlers that rescue generic statement
+ * failures catch this too — matching Rails' class hierarchy
+ * (`activerecord/lib/active_record/errors.rb:362`,
+ * `PreparedStatementCacheExpired < StatementInvalid`).
+ *
  * Mirrors: ActiveRecord::PreparedStatementCacheExpired
- * (activerecord/lib/active_record/connection_adapters/postgresql/database_statements.rb:147).
+ * (raised from postgresql/database_statements.rb:147).
  */
-export class PreparedStatementCacheExpired extends ActiveRecordError {
-  constructor(message?: string, options?: ErrorOptions) {
+export class PreparedStatementCacheExpired extends StatementInvalid {
+  constructor(
+    message?: string,
+    options?: { sql?: string; binds?: unknown[]; connectionPool?: unknown; cause?: unknown },
+  ) {
     super(message, options);
     this.name = "PreparedStatementCacheExpired";
   }

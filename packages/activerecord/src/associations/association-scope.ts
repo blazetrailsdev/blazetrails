@@ -283,7 +283,7 @@ export class AssociationScope {
   ): Array<AbstractReflection | ReflectionProxy> {
     if (reflection.chain.length > 1) {
       throw new Error(
-        `AssociationScope: multi-step chain (through) not implemented in PR 1 — ` +
+        `AssociationScope: multi-step association chains are not implemented yet — ` +
           `reflection '${reflection.name}' has ${reflection.chain.length} chain entries`,
       );
     }

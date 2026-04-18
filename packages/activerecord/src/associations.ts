@@ -596,14 +596,22 @@ export async function loadHasMany(
   // `options.through` is handled by the early-return above, so we don't
   // need to re-check it here.
   if (reflection && !options.as) {
-    // AssociationScope.scope already merges reflection.scope (the
-    // user-supplied scope lambda) via _addConstraints, so don't double-
-    // apply options.scope on this path.
-    rel = AssociationScope.scope({
+    // Rails' `Association#scope` is
+    //   AssociationRelation.create(klass, self).merge!(klass.scope_for_association)
+    // (association.rb:313), so the unscoped+constraints relation built
+    // by AssociationScope.scope MUST be merged with the target's
+    // scope_for_association — otherwise the target model's default_scope
+    // / scope extensions would silently disappear on the reflection-
+    // backed path. AssociationScope.scope already merges reflection.scope
+    // (the user-supplied scope lambda) via _addConstraints, so don't
+    // double-apply options.scope on this path.
+    const built = AssociationScope.scope({
       owner: record,
       reflection,
       klass: targetModel,
-    });
+    }) as any;
+    const baseRelation = (targetModel as any).scopeForAssociation?.() ?? (targetModel as any).all();
+    rel = baseRelation.merge(built);
   } else {
     rel = (targetModel as any).all().where({ [foreignKey]: pkValue });
     if (options.scope) {

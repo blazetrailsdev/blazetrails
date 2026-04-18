@@ -195,6 +195,48 @@ describe("AssociationScope", () => {
     expect(scope.toSql()).toMatch(/"type"\s*=\s*'StiSpecial'/);
   });
 
+  it("loadHasMany merges target's scope_for_association (default_scope flows through)", async () => {
+    // Rails' Association#scope is
+    //   AssociationRelation.create(klass, self).merge!(klass.scope_for_association)
+    // (associations/association.rb:313). The reflection-backed loader
+    // path must merge in the target's default_scope so behavior matches
+    // the inline path (targetModel.all().where(...)).
+    class DsAuthor extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class DsPost extends Base {
+      static {
+        this.attribute("ds_author_id", "integer");
+        this.attribute("published", "boolean");
+        this.adapter = adapter;
+        this.defaultScope((rel: any) => rel.where({ published: true }));
+      }
+    }
+    registerModel(DsAuthor);
+    registerModel(DsPost);
+    Associations.hasMany.call(DsAuthor, "ds_posts", {
+      className: "DsPost",
+      foreignKey: "ds_author_id",
+    });
+
+    const author = new DsAuthor({ id: 1 });
+    const reflection = (DsAuthor as any)._reflectOnAssociation("ds_posts");
+    // Replicate the loader's merge so the test pins the actual Rails
+    // shape rather than just the unscoped+constraints intermediate.
+    const built = AssociationScope.scope({
+      owner: author,
+      reflection,
+      klass: DsPost,
+    }) as any;
+    const merged = (DsPost as any).scopeForAssociation().merge(built);
+    const sql = merged.toSql();
+    expect(sql).toMatch(/"published"\s*=\s*TRUE/i);
+    expect(sql).toMatch(/"ds_author_id"\s*=\s*1/);
+  });
+
   it("invokes 0-arity scope lambda with this=relation (Rails instance_exec semantics)", () => {
     // Rails: `relation.instance_exec(owner, &scope) || relation`. A
     // 0-arity scope (e.g. `-> { where(active: true) }`) reads `self`
@@ -278,6 +320,6 @@ describe("AssociationScope", () => {
         reflection,
         klass: reflection.klass,
       }),
-    ).toThrow(/multi-step chain/);
+    ).toThrow(/multi-step association chains/);
   });
 });

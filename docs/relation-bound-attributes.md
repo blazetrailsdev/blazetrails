@@ -8,8 +8,8 @@
 
 - `StatementCache.create(connection, (params) => Model.where({name: params.bind()}))` — the `params.bind()` returns a `Substitute` instance
 - `Substitute` reaches `PredicateBuilder` → `BasicObjectHandler` → `Attribute.eq(substitute)` → `buildCasted(substitute)` → `Casted(substitute, attr)`
-- The `Casted` node treats Substitute as a regular value — `visitCasted` calls `valueForDatabase()` on it, which returns the Substitute object itself
-- `BindMap` needs to find Substitute positions in the compiled binds array, but Substitutes are wrapped in Casted nodes and lose their identity after type casting
+- The `Casted` node treats Substitute as a regular value — `visitCasted` calls `valueForDatabase()` which delegates to the attribute caster and may type-cast/serialize/coerce the Substitute
+- `BindMap` needs to find Substitute positions in the compiled binds array, but once a Substitute is wrapped in `Casted`, type casting can change the emitted bind value and the original Substitute identity is no longer reliably preserved
 - `Relation` doesn't track `boundAttributes` — Rails' Relation collects bound attributes during WHERE clause construction so BindMap can index Substitute positions
 
 ## What Rails Does
@@ -61,6 +61,7 @@
   - `create()` calls `callable(new Params())` which returns a relation
   - Extract `relation.boundAttributes` for `BindMap` construction instead of relying on `cacheableQuery` binds
   - `BindMap` scans boundAttributes for Substitute-valued QueryAttributes
+  - Update `BindMap` to recognize `QueryAttribute` (not just `Attribute` from activemodel) and call `QueryAttribute.withCastValue()` for rebinding
 
 - `packages/activerecord/src/connection-adapters/abstract/database-statements.ts`
   - `cacheableQuery()` should compile the Arel tree with `compileWithBinds` and return the bound attributes alongside the query builder

@@ -2,7 +2,7 @@
 
 ## Problem
 
-`cacheableQuery()` currently calls `toSqlAndBinds(arel)` which returns `[sql_string, binds]`, then wraps the SQL string in a `PartialQuery([sql])`. This means the PartialQuery has no Substitute slots — it's just a single-element array containing the full SQL. The bind values exist in the binds array but aren't correlated with positions in the SQL template.
+`cacheableQuery()` currently calls `toSqlAndBinds(arel)` which returns `[sql, binds, preparable, allowRetry]` (a 4-tuple, though callers typically destructure only the first two), then wraps the SQL string in a `PartialQuery([sql])`. This means the PartialQuery has no Substitute slots — it's just a single-element array containing the full SQL. The bind values exist in the binds array but aren't correlated with positions in the SQL template.
 
 In Rails, the unprepared (non-prepared-statement) path compiles the Arel tree with a `PartialQueryCollector` that produces interleaved SQL fragments and Substitute placeholders. This allows `PartialQuery.sqlFor(binds, connection)` to splice quoted bind values into the exact positions where `?` placeholders would go.
 

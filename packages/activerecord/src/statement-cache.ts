@@ -223,7 +223,10 @@ export class StatementCache {
   async execute(params: unknown[], connection: unknown): Promise<InstanceType<typeof Base>[]> {
     const bindValues = this._bindMap.bind(params);
     const sql = this._queryBuilder.sqlFor(bindValues, connection);
-    return this._model.findBySql(sql, bindValues);
+    // PartialQuery inlines values into the SQL string — pass empty binds
+    // to avoid findBySql trying to re-substitute them.
+    const binds = this._queryBuilder instanceof PartialQuery ? [] : bindValues;
+    return this._model.findBySql(sql, binds);
   }
 
   /**

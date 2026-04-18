@@ -12,8 +12,23 @@ import { isStiSubclass, getStiBase } from "./inheritance.js";
 import { quote, quoteIdentifier, quoteTableName } from "./connection-adapters/abstract/quoting.js";
 import { detectAdapterName } from "./adapter-name.js";
 import { applyPendingEncryptions } from "./encryption.js";
-import { EncryptedAttributeType as SchemeEncryptedAttributeType } from "./encryption/encrypted-attribute-type.js";
-import { EncryptedAttributeType as EncryptorEncryptedAttributeType } from "./encrypted-attribute-type.js";
+import type { Type as AttributeTypeT } from "@blazetrails/activemodel";
+
+/**
+ * Duck-type predicate: does `t` expose the shared
+ * `withInnerType(type): this` contract both EncryptedAttributeType
+ * variants implement? Narrows so schema reflection can preserve any
+ * encryption wrapper without branching on concrete classes.
+ */
+function hasWithInnerType(
+  t: unknown,
+): t is { withInnerType(innerType: AttributeTypeT): AttributeTypeT } {
+  return (
+    typeof t === "object" &&
+    t !== null &&
+    typeof (t as { withInnerType?: unknown }).withInnerType === "function"
+  );
+}
 
 /**
  * Schema metadata for ActiveRecord models — table name, primary key,
@@ -686,13 +701,12 @@ function applyColumnsHash(
         : null;
     let type = (castType as Type | null) ?? typeRegistry.lookup("value");
 
-    // Preserve encryption wrappers across schema reflection — two
-    // distinct EncryptedAttributeType classes exist (scheme-based
-    // `encrypts()` macro vs encryptor-based internal path); handle both.
-    if (existing?.type instanceof SchemeEncryptedAttributeType) {
-      const scheme = existing.type.scheme;
-      type = new SchemeEncryptedAttributeType({ scheme, castType: type });
-    } else if (existing?.type instanceof EncryptorEncryptedAttributeType) {
+    // Preserve encryption wrappers across schema reflection. Both
+    // EncryptedAttributeType variants (encryptor-based / scheme-based)
+    // expose `withInnerType(type)` so we don't need to branch on
+    // `instanceof` here — duck-typing keeps us class-agnostic and
+    // consumers of either `encrypts()` entry point are preserved.
+    if (hasWithInnerType(existing?.type)) {
       type = existing.type.withInnerType(type);
     }
 

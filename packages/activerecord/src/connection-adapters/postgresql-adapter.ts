@@ -334,7 +334,13 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    */
   private releaseClient(client: pg.PoolClient): void {
     if (client !== this._client) {
-      client.release();
+      try {
+        client.release();
+      } catch {
+        // Client may have already been released if materializeTransactions
+        // acquired it as the transaction client and commit/rollback released
+        // it before we get here.
+      }
     }
   }
 
@@ -342,6 +348,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * Execute a SELECT query and return rows.
    */
   async execute(sql: string, binds: unknown[] = []): Promise<Record<string, unknown>[]> {
+    await this.materializeTransactions();
     const client = await this.getClient();
     try {
       const result = await client.query(this.rewriteBinds(sql, binds), binds);
@@ -359,6 +366,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * `rowCount` is returned.
    */
   async executeMutation(sql: string, binds: unknown[] = []): Promise<number> {
+    await this.materializeTransactions();
     const client = await this.getClient();
     try {
       this.dirtyCurrentTransaction();

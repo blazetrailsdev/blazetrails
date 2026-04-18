@@ -94,12 +94,25 @@ export interface DatabaseAdapter {
   quote?(value: unknown): string;
 
   /**
-   * Cast a value to the primitive form drivers expect for binds
-   * (booleans → `0/1`, Dates → quoted date string, etc). Distinct
-   * from `quote()` — returns an unquoted primitive suitable for
-   * passing as a bind value, not a SQL literal. Rails' `render_bind`
-   * uses this rather than `quote()` so EXPLAIN headers show the
-   * actual bind values instead of their SQL-literal form.
+   * Cast a value to the primitive form drivers expect for binds.
+   * Returns an **unquoted** primitive suitable for passing as a bind
+   * value — distinct from `quote()`, which returns a SQL literal
+   * with its surrounding quotes already attached.
+   *
+   * Adapter-specific behavior (mirrors Rails):
+   * - **booleans**: SQLite / MySQL collapse to `1` / `0`; PostgreSQL
+   *   keeps them as `true` / `false`.
+   * - **Date**: returned as an **unquoted** formatted string
+   *   (`"YYYY-MM-DD HH:MM:SS"` — matches Rails'
+   *   `value.to_formatted_s(:db)`). `quote()` is responsible for
+   *   wrapping it in single quotes.
+   * - **null / undefined**: returned unchanged.
+   * - **strings / numbers / bigints / symbols**: passed through
+   *   (symbols coerce to their description).
+   *
+   * Rails' `render_bind` uses this rather than `quote()` so EXPLAIN
+   * headers show the actual bind values instead of their SQL-literal
+   * form.
    *
    * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#type_cast
    */

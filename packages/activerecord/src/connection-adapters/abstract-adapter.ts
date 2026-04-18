@@ -126,11 +126,21 @@ export class AbstractAdapter extends AbstractAdapterBase {
   }
 
   /**
-   * Cast a value to the primitive form the driver expects for binds
-   * (booleans → `0/1`, Dates → quoted date string, etc). Distinct from
-   * `quote()` — returns an unquoted primitive suitable for passing as
-   * a bind value, not a SQL literal. Used by `Relation#_renderExplainBinds`
-   * to mirror Rails' `render_bind(c, attr)` which does
+   * Cast a value to the primitive form drivers expect for binds.
+   * Returns an **unquoted** primitive suitable for passing as a bind
+   * value (distinct from `quote()`, which returns a SQL literal with
+   * surrounding quotes attached).
+   *
+   * Abstract defaults mirror `abstract/quoting.ts`:
+   * - booleans pass through as `true` / `false` (adapters override —
+   *   SQLite / MySQL collapse to `1` / `0`, PG keeps `true` / `false`)
+   * - Date → unquoted `"YYYY-MM-DD HH:MM:SS"` (no surrounding quotes;
+   *   matches Rails' `value.to_formatted_s(:db)`)
+   * - null / undefined → returned unchanged
+   * - strings / numbers / bigints → passed through
+   *
+   * Used by `Relation#_renderExplainBinds` to mirror Rails'
+   * `render_bind(c, attr)` which does
    * `connection.type_cast(attr.value_for_database)`.
    *
    * Mirrors: ActiveRecord::ConnectionAdapters::Quoting#type_cast

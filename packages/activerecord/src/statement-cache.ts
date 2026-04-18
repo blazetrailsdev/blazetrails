@@ -55,7 +55,7 @@ export class PartialQuery extends Query {
     }
   }
 
-  override sqlFor(binds: unknown[], connection: { quote?(value: unknown): string }): string {
+  override sqlFor(binds: unknown[], connection: unknown): string {
     const val = [...this._values];
     const bindsCopy = [...binds];
     for (const i of this._indexes) {
@@ -63,7 +63,8 @@ export class PartialQuery extends Query {
       if (value && typeof value === "object" && "valueForDatabase" in value) {
         value = (value as { valueForDatabase(): unknown }).valueForDatabase();
       }
-      val[i] = connection.quote ? connection.quote(value) : quoteValue(value);
+      const conn = connection as { quote?(v: unknown): string };
+      val[i] = conn.quote ? conn.quote(value) : quoteValue(value);
     }
     return val.join("");
   }
@@ -219,10 +220,7 @@ export class StatementCache {
    * Execute the cached statement with the given bind values.
    * Mirrors: ActiveRecord::StatementCache#execute
    */
-  async execute(
-    params: unknown[],
-    connection: { quote?(value: unknown): string },
-  ): Promise<InstanceType<typeof Base>[]> {
+  async execute(params: unknown[], connection: unknown): Promise<InstanceType<typeof Base>[]> {
     const bindValues = this._bindMap.bind(params);
     const sql = this._queryBuilder.sqlFor(bindValues, connection);
     return this._model.findBySql(sql, bindValues);

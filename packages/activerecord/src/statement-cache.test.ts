@@ -104,4 +104,37 @@ describe("StatementCacheTest", () => {
     expect(StatementCache.partialQuery([])).toBeInstanceOf(PartialQuery);
     expect(StatementCache.partialQueryCollector()).toBeInstanceOf(PartialQueryCollector);
   });
+
+  it("execute round-trip with Query and BindMap", async () => {
+    const { SQLite3Adapter } = await import("./connection-adapters/sqlite3-adapter.js");
+    const { Base } = await import("./base.js");
+
+    const adapter = new SQLite3Adapter(":memory:");
+    try {
+      await adapter.executeMutation('CREATE TABLE "books" ("id" INTEGER PRIMARY KEY, "name" TEXT)');
+      await adapter.executeMutation('INSERT INTO "books" ("name") VALUES (?)', ["Rails Guide"]);
+      await adapter.executeMutation('INSERT INTO "books" ("name") VALUES (?)', ["TS Handbook"]);
+
+      class Book extends Base {
+        static {
+          this.tableName = "books";
+          this.adapter = adapter;
+        }
+      }
+
+      const sql = 'SELECT * FROM "books" WHERE "name" = ?';
+      const bindMap = new BindMap([new Substitute()]);
+      const cache = new StatementCache(new Query(sql), bindMap, Book);
+
+      const r1 = await cache.execute(["Rails Guide"], adapter);
+      expect(r1).toHaveLength(1);
+      expect(r1[0].readAttribute("name")).toBe("Rails Guide");
+
+      const r2 = await cache.execute(["TS Handbook"], adapter);
+      expect(r2).toHaveLength(1);
+      expect(r2[0].readAttribute("name")).toBe("TS Handbook");
+    } finally {
+      adapter.disconnectBang();
+    }
+  });
 });

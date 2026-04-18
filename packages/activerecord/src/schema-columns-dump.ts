@@ -1,7 +1,20 @@
 /**
- * Emits a `{ table: { column: railsType } }` JSON map from a live
- * adapter. Consumed by `trails-tsc --schema <path>` so the virtualizer
- * can inject `declare` members for schema-only columns.
+ * Emits a JSON map from a live adapter consumed by
+ * `trails-tsc --schema <path>` so the virtualizer can inject `declare`
+ * members for schema-only columns.
+ *
+ * Output shape (per column):
+ *   `{ type: <railsType>, null: boolean, arrayElementType?: <railsType> }`
+ *
+ * - `type`: Rails type string (`string`, `integer`, `datetime`, ...).
+ * - `null`: true when the column lacks a NOT NULL constraint, rendered
+ *   as `Type | null` by trails-tsc.
+ * - `arrayElementType`: present for array columns, renders
+ *   `ElementTsType[]` instead of `unknown[]`.
+ *
+ * The virtualizer also accepts the legacy `{ column: "<railsType>" }`
+ * shape for backwards compatibility with hand-authored JSON, but this
+ * dumper always emits the rich object shape.
  *
  * Not in Rails — this is the bridge that gives TypeScript IDE
  * autocomplete parity with Rails' runtime method_missing.

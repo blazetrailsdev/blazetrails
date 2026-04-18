@@ -22,6 +22,7 @@ import {
 } from "./postgresql/type-map-init.js";
 import { inspectExplainOption } from "../adapter.js";
 import type { DatabaseAdapter, ExplainOption } from "../adapter.js";
+import { PreparedStatementCacheExpired } from "../errors.js";
 import { AbstractAdapter } from "./abstract-adapter.js";
 import { StatementPool as GenericStatementPool } from "./statement-pool.js";
 import { typeCastedBinds } from "./abstract/database-statements.js";
@@ -243,6 +244,16 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
             } catch (e) {
               if (prepare && this._isInvalidCachedPlan(e)) {
                 this._poolFor(client).delete(rewritten);
+                if (this._inTransaction) {
+                  // Rails raises inside a txn because the server has
+                  // aborted it — a retry can only fail with
+                  // InFailedSqlTransaction (25P02). The transaction
+                  // machinery catches this and retries the whole txn.
+                  throw new PreparedStatementCacheExpired(
+                    (e as { message?: string })?.message ?? "cached plan expired",
+                    { cause: e },
+                  );
+                }
                 return await run();
               }
               throw e;
@@ -455,18 +466,32 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   /**
-   * True if a pg driver error indicates the server forgot the
-   * prepared plan (cache invalidation after DDL, backup/restore,
-   * pgbouncer losing the session). Rails retries once in these
-   * cases after purging the pool entry.
+   * True if a pg driver error indicates the cached plan has been
+   * invalidated by DDL on a referenced object (typical: `ALTER TABLE`,
+   * `DROP COLUMN`, schema change). PG emits SQLSTATE `0A000`
+   * FEATURE_NOT_SUPPORTED with the server message "cached plan must
+   * not change result type" — Rails checks the source function
+   * `RevalidateCachedQuery`, which the node-pg driver does not expose,
+   * so we fall back to the message substring.
    *
-   * - `26000` INVALID_SQL_STATEMENT_NAME: the server doesn't know the name
-   * - `0A000` FEATURE_NOT_SUPPORTED: emitted as "cached plan must not
-   *   change result type" after DDL on referenced objects
+   * `26000` (invalid_sql_statement_name) is intentionally NOT included
+   * here: pg-js's own client-side name cache handles the session-lost
+   * case on its own, and retrying behind the driver's back masks
+   * genuine "this name never existed" bugs. Rails' equivalent path
+   * (`exec_cache`) also only retries on cached-plan failure — not on
+   * unknown-statement-name — so this matches the activerecord
+   * contract.
+   *
+   * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQLAdapter#is_cached_plan_failure?
+   * (postgresql_adapter.rb:901-906).
    */
   private _isInvalidCachedPlan(e: unknown): boolean {
-    const code = (e as { code?: string } | null)?.code;
-    return code === "26000" || code === "0A000";
+    const err = e as { code?: string; message?: string } | null;
+    if (err?.code !== "0A000") return false;
+    // "cached plan must not change result type" is the only
+    // 0A000 subtype we retry on — other FEATURE_NOT_SUPPORTED
+    // errors (e.g. RETURNING on a view) must surface unchanged.
+    return typeof err.message === "string" && err.message.includes("cached plan");
   }
 
   /**
@@ -509,11 +534,19 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
             result = await run();
           } catch (e) {
             if (prepare && this._isInvalidCachedPlan(e)) {
-              // Purge the stale entry and retry once. Rails does the
-              // same in `PostgreSQLAdapter#exec_cache` — the server
-              // forgot the plan (DDL on referenced table, etc.), so
-              // we must let pg re-issue the PREPARE with a fresh name.
+              // Purge the stale entry. Rails' `exec_cache` retries here
+              // when not in a transaction; inside one the retry is
+              // guaranteed to fail with InFailedSqlTransaction (25P02)
+              // since any error aborts the enclosing txn, so we raise
+              // PreparedStatementCacheExpired for the txn machinery to
+              // catch and retry the whole transaction.
               this._poolFor(client).delete(rewritten);
+              if (this._inTransaction) {
+                throw new PreparedStatementCacheExpired(
+                  (e as { message?: string })?.message ?? "cached plan expired",
+                  { cause: e },
+                );
+              }
               result = await run();
             } else {
               throw e;

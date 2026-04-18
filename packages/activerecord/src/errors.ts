@@ -257,6 +257,24 @@ export class PreparedStatementInvalid extends ActiveRecordError {
   }
 }
 
+/**
+ * Raised when the server tells us a cached prepared plan is no longer
+ * valid (usually after DDL on a referenced object) AND we're inside a
+ * transaction so we can't transparently retry — subsequent commands
+ * would raise InFailedSqlTransaction. Callers (typically the
+ * transaction machinery) can catch this and retry the whole
+ * transaction.
+ *
+ * Mirrors: ActiveRecord::PreparedStatementCacheExpired
+ * (activerecord/lib/active_record/connection_adapters/postgresql/database_statements.rb:147).
+ */
+export class PreparedStatementCacheExpired extends ActiveRecordError {
+  constructor(message?: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "PreparedStatementCacheExpired";
+  }
+}
+
 export class NoDatabaseError extends StatementInvalid {
   constructor(
     message?: string,

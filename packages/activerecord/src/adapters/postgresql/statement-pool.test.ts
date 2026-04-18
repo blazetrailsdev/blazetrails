@@ -71,23 +71,33 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
 
     it("prepared statements do not get stuck on query interruption", async () => {
-      await adapter.beginDbTransaction();
-      try {
-        // Simulate an interruption: a prepared statement that errors
-        // (division by zero) must not poison the pool — a subsequent
-        // query on the same text must succeed by re-preparing.
-        await expect(adapter.execute("SELECT 1 / $1::int", [0])).rejects.toThrow();
-        const pool = adapter._statementPoolForTest()!;
-        // The entry still exists in the pool after the error — that's
-        // fine; the server kept the prepared plan. Running the same
-        // statement shape with a valid value succeeds on reuse.
-        const before = pool.length;
-        const rows = await adapter.execute("SELECT 1 / $1::int", [1]);
-        expect(rows[0]).toBeDefined();
-        expect(pool.length).toBeGreaterThanOrEqual(before);
-      } finally {
-        await adapter.rollback();
-      }
+      // Rails' equivalent stubs `get_last_result` to raise after PREPARE,
+      // simulating a lost ack while the server has the statement. pg-js
+      // doesn't expose that hook, so we test the closest observable
+      // property: an execute-time error (outside a transaction, so the
+      // session is still usable) must not prevent a later query from
+      // reusing the prepared plan. Mirrors the spirit of
+      // `test_prepared_statements_do_not_get_stuck_on_query_interruption`
+      // in activerecord/test/cases/adapters/postgresql/statement_pool_test.rb.
+      await expect(adapter.execute("SELECT 1 / $1::int", [0])).rejects.toThrow();
+      // The adapter still serves queries with the same SQL shape after
+      // the error — no pool poisoning, no duplicate-prepared-statement
+      // error on reuse.
+      const rows = await adapter.execute("SELECT 1 / $1::int", [1]);
+      expect(rows[0]).toBeDefined();
+    });
+
+    it("PreparedStatementCacheExpired is exported for txn-retry callers", async () => {
+      // In-txn `exec_cache` can't transparently retry a cached-plan
+      // failure — any error aborts the enclosing txn, so subsequent
+      // commands raise 25P02 InFailedSqlTransaction. Rails raises
+      // `PreparedStatementCacheExpired` for the transaction machinery
+      // to catch and retry the whole txn. Triggering a real 0A000
+      // requires DDL on a referenced object between two queries in
+      // the same txn (covered by txn retry suite); here we just
+      // verify the error class round-trips.
+      const { PreparedStatementCacheExpired } = await import("../../errors.js");
+      expect(new PreparedStatementCacheExpired("test").name).toBe("PreparedStatementCacheExpired");
     });
   });
 });

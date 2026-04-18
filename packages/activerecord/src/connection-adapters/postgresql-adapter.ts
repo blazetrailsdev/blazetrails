@@ -487,7 +487,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     binds: unknown[],
     extra: { rowMode?: "array" } = {},
   ): Promise<R> {
-    const prepare = this._shouldPrepare(binds);
+    const prepare = this._shouldPrepare(binds, client);
     const attempt = async (): Promise<R> => {
       if (prepare) {
         const name = this._preparedNameFor(client, sql);
@@ -538,12 +538,18 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * parse cost is the same either way and the name never gets
    * reused without binds).
    */
-  private _shouldPrepare(binds: unknown[]): boolean {
-    // `statementLimit = 0` disables caching (matches Rails: when the
-    // limit is 0, `PostgreSQL::StatementPool#set` is a no-op so
-    // allocating a name would leak unbounded server-side PREPAREs).
-    // Fall through to anonymous parameterized queries in that case.
-    return this.preparedStatements && binds.length > 0 && this._statementLimit > 0;
+  private _shouldPrepare(binds: unknown[], client?: pg.PoolClient): boolean {
+    if (!this.preparedStatements || binds.length === 0) return false;
+    // Gate on the actual pool's maxSize (or the adapter default if
+    // no pool exists yet). A direct `pool.setMaxSize(0)` — by a test
+    // or an operator shrinking one specific session — must reliably
+    // disable preparation for that client, because `StatementPool#set`
+    // is a no-op at maxSize=0 and we'd otherwise keep allocating a
+    // fresh `a<n>` name per execution and leak server-side PREPAREs.
+    const poolLimit = client
+      ? (this._statementPools.get(client)?.maxSize ?? this._statementLimit)
+      : this._statementLimit;
+    return poolLimit > 0;
   }
 
   /**

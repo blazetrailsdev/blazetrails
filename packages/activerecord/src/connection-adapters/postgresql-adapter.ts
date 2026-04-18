@@ -28,22 +28,6 @@ import { StatementPool as GenericStatementPool } from "./statement-pool.js";
 import { typeCastedBinds } from "./abstract/database-statements.js";
 
 /**
- * Quote a PG identifier for DEALLOCATE. The pool only ever stores
- * names it generated itself (`a<counter>`), so this helper just
- * wraps the name in double quotes after defensively rejecting any
- * embedded `"` — a leaked caller-supplied name can't escape the
- * quoting that way.
- */
-function quoteIdentifier(name: string): string {
-  if (name.includes('"')) {
-    throw new Error(
-      `StatementPool: refusing to DEALLOCATE identifier with embedded quote: ${name}`,
-    );
-  }
-  return `"${name}"`;
-}
-
-/**
  * PostgreSQL adapter — connects ActiveRecord to a real PostgreSQL database.
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQLAdapter
@@ -2237,7 +2221,11 @@ export class StatementPool extends GenericStatementPool<PreparedStatement> {
     // likewise rescues PG::InvalidSqlStatementName / connection
     // errors — and the empty `.catch` also keeps node from treating
     // a post-close DEALLOCATE as an unhandled rejection.
-    client.query(`DEALLOCATE ${quoteIdentifier(stmt.name)}`).catch(() => {});
+    // Use the adapter's PG column-name quoter so any embedded `"` in a
+    // leaked caller-supplied name is escaped rather than raising
+    // synchronously inside `dealloc` — fire-and-forget eviction must
+    // never throw, or it escapes the `.catch(() => {})` below.
+    client.query(`DEALLOCATE ${pgQuoteColumnName(stmt.name)}`).catch(() => {});
   }
 
   /**

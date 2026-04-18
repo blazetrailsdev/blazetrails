@@ -47,7 +47,15 @@ export function inspectExplainOption(o: unknown): string {
       return v;
     });
   } catch {
-    return String(o);
+    // String(o) would invoke a user-defined toString/valueOf, which can
+    // itself throw — masking the validation error we're here to preserve.
+    // Object.prototype.toString.call(o) is spec-defined to produce
+    // `[object Type]` without consulting user code.
+    try {
+      return Object.prototype.toString.call(o);
+    } catch {
+      return "[object Object]";
+    }
   }
 }
 

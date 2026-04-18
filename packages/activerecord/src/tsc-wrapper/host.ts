@@ -37,8 +37,15 @@ export function buildCompilerHost(
   // Match valid JS/TS identifiers (including $) after `extends`.
   const EXTENDS_IDENT = /\bextends\s+([\w$]+)/g;
 
+  const hasSchemaColumns =
+    extra.schemaColumnsByTable && Object.keys(extra.schemaColumnsByTable).length > 0;
+
   function shouldVirtualize(text: string): boolean {
-    if (!STATIC_BLOCK_PATTERN.test(text)) return false;
+    // Fast-path skip for files that don't reference a Base-like class.
+    // When schema columns are available, a class extending Base may
+    // need declares even without a `static {}` block — so the static-
+    // block pre-filter only applies when no schema info is present.
+    if (!hasSchemaColumns && !STATIC_BLOCK_PATTERN.test(text)) return false;
     EXTENDS_IDENT.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = EXTENDS_IDENT.exec(text))) {

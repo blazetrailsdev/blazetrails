@@ -1,6 +1,7 @@
 import type { Base } from "../base.js";
 import type { AssociationReflection, AbstractReflection } from "../reflection.js";
 import { isStiSubclass, getStiBase, getInheritanceColumn, descendants } from "../inheritance.js";
+import { CompositePrimaryKeyMismatchError } from "./errors.js";
 
 /**
  * Lambda applied to each FK/type bind value before it reaches the
@@ -78,6 +79,23 @@ export class ReflectionProxy {
 
   get scope(): ((rel: unknown) => unknown) | undefined {
     return (this.reflection as unknown as { scope?: (rel: unknown) => unknown }).scope;
+  }
+
+  /**
+   * Forwarding `scopeFor` to the underlying reflection. Rails'
+   * `ReflectionProxy < SimpleDelegator` gets this via delegation;
+   * we forward explicitly so AssociationScope can call
+   * `proxy.scopeFor(rel, owner)` and get Rails-faithful arity +
+   * `instance_exec`-style binding.
+   */
+  scopeFor(relation: unknown, owner?: unknown): unknown {
+    return (
+      (
+        this.reflection as unknown as {
+          scopeFor?: (rel: unknown, owner?: unknown) => unknown;
+        }
+      ).scopeFor?.(relation, owner) ?? relation
+    );
   }
 
   constraints(): Array<(...args: unknown[]) => unknown> {
@@ -231,13 +249,14 @@ export class AssociationScope {
     // Same guard `AbstractReflection#joinScope` uses — mismatched
     // composite join-key lengths would silently read
     // `owner.readAttribute(undefined)` and generate a broken WHERE.
-    // Fail fast instead.
+    // Rails raises CompositePrimaryKeyMismatchError from
+    // checkValidityBang for the equivalent case
+    // (associations/errors.rb:187, reflection.rb:623); use the same
+    // class here so callers can rescue uniformly.
     if (joinPks.length !== joinFks.length) {
       const name = (reflection as { name?: string }).name ?? "<unknown>";
-      throw new Error(
-        `AssociationScope: ${name} joinPrimaryKey/joinForeignKey column count mismatch ` +
-          `(${joinPks.length} primary key column(s) vs ${joinFks.length} foreign key column(s))`,
-      );
+      const ownerName = (owner.constructor as typeof Base).name;
+      throw new CompositePrimaryKeyMismatchError(ownerName, name);
     }
     for (let i = 0; i < joinPks.length; i++) {
       const rawValue = owner.readAttribute(joinFks[i]);
@@ -286,10 +305,14 @@ export class AssociationScope {
   ): unknown {
     const last = chain[chain.length - 1];
     scope = this._lastChainScope(scope, last, owner);
-    const scopeLambda = (last as { scope?: (rel: unknown) => unknown }).scope;
-    if (typeof scopeLambda === "function") {
-      const applied = scopeLambda(scope);
-      if (applied) scope = applied;
+    // Use scopeFor (Rails: reflection.rb:448, scope_for) so 0-arity
+    // scopes get `this`=relation, and >=1-arity scopes receive
+    // (relation, owner) — matches Rails' `relation.instance_exec(owner,
+    // &scope) || relation`. Calling `reflection.scope(scope)` directly
+    // would lose the binding.
+    const scopeFor = (last as { scopeFor?: (rel: unknown, owner: unknown) => unknown }).scopeFor;
+    if (typeof scopeFor === "function") {
+      scope = scopeFor.call(last, scope, owner);
     }
     return scope;
   }

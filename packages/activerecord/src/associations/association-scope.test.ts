@@ -195,6 +195,45 @@ describe("AssociationScope", () => {
     expect(scope.toSql()).toMatch(/"type"\s*=\s*'StiSpecial'/);
   });
 
+  it("invokes 0-arity scope lambda with this=relation (Rails instance_exec semantics)", () => {
+    // Rails: `relation.instance_exec(owner, &scope) || relation`. A
+    // 0-arity scope (e.g. `-> { where(active: true) }`) reads `self`
+    // as the relation, so we must bind `this` rather than passing the
+    // relation as the first arg.
+    class ZeroArityAuthor extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class ZeroArityPost extends Base {
+      static {
+        this.attribute("zero_arity_author_id", "integer");
+        this.attribute("active", "boolean");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(ZeroArityAuthor);
+    registerModel(ZeroArityPost);
+    Associations.hasMany.call(ZeroArityAuthor, "zero_arity_posts", {
+      className: "ZeroArityPost",
+      foreignKey: "zero_arity_author_id",
+      // The function's .length is 0, so the loader must use scopeFor's
+      // 0-arity branch (this=relation). If we passed it as a 1-arg
+      // function, `where` would not exist on the empty arg.
+      scope: function (this: any) {
+        return this.where({ active: true });
+      },
+    });
+
+    const owner = new ZeroArityAuthor({ id: 1 });
+    const reflection = (ZeroArityAuthor as any)._reflectOnAssociation("zero_arity_posts");
+    const sql = (
+      AssociationScope.scope({ owner, reflection, klass: reflection.klass }) as any
+    ).toSql();
+    expect(sql).toMatch(/"active"\s*=\s*TRUE/i);
+  });
+
   it("scope() raises for through chains (PR 1 limitation)", () => {
     class ThroughAuthor extends Base {
       static {

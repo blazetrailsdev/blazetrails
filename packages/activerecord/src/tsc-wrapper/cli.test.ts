@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import ts from "typescript";
 import * as path from "node:path";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import { fileURLToPath } from "node:url";
 import { createTrailsProgram } from "./program.js";
 import { createTrailsSolutionBuilder } from "./build.js";
@@ -374,10 +375,7 @@ describe("trails-tsc — schemaColumnsByTable (Phase R.3)", () => {
 
   it("loadSchemaColumns: --schema <path> accepts legacy string shape", async () => {
     const { loadSchemaColumns } = await import("./cli.js");
-    const tmp = path.join(
-      fs.mkdtempSync(path.join(fs.realpathSync("/tmp"), "trails-tsc-")),
-      "s.json",
-    );
+    const tmp = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "trails-tsc-")), "s.json");
     fs.writeFileSync(tmp, JSON.stringify({ users: { name: "string", age: "integer" } }));
     const loaded = loadSchemaColumns(["--schema", tmp]);
     expect(loaded).toEqual({ users: { name: "string", age: "integer" } });
@@ -385,10 +383,7 @@ describe("trails-tsc — schemaColumnsByTable (Phase R.3)", () => {
 
   it("loadSchemaColumns: accepts rich shape end-to-end", async () => {
     const { loadSchemaColumns } = await import("./cli.js");
-    const tmp = path.join(
-      fs.mkdtempSync(path.join(fs.realpathSync("/tmp"), "trails-tsc-")),
-      "s.json",
-    );
+    const tmp = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "trails-tsc-")), "s.json");
     fs.writeFileSync(
       tmp,
       JSON.stringify({
@@ -411,10 +406,7 @@ describe("trails-tsc — schemaColumnsByTable (Phase R.3)", () => {
 
   it("loadSchemaColumns: mixed legacy + rich in one file", async () => {
     const { loadSchemaColumns } = await import("./cli.js");
-    const tmp = path.join(
-      fs.mkdtempSync(path.join(fs.realpathSync("/tmp"), "trails-tsc-")),
-      "s.json",
-    );
+    const tmp = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "trails-tsc-")), "s.json");
     fs.writeFileSync(
       tmp,
       JSON.stringify({
@@ -429,10 +421,7 @@ describe("trails-tsc — schemaColumnsByTable (Phase R.3)", () => {
 
   it("loadSchemaColumns: rejects rich shape with non-boolean `null`", async () => {
     const { loadSchemaColumns } = await import("./cli.js");
-    const tmp = path.join(
-      fs.mkdtempSync(path.join(fs.realpathSync("/tmp"), "trails-tsc-")),
-      "s.json",
-    );
+    const tmp = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "trails-tsc-")), "s.json");
     fs.writeFileSync(tmp, JSON.stringify({ posts: { title: { type: "string", null: "yes" } } }));
     // Malformed values should cause the loader to call process.exit(1).
     const exitSpy = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
@@ -451,10 +440,7 @@ describe("trails-tsc — schemaColumnsByTable (Phase R.3)", () => {
 
   it("loadSchemaColumns: rejects non-object / non-string column value", async () => {
     const { loadSchemaColumns } = await import("./cli.js");
-    const tmp = path.join(
-      fs.mkdtempSync(path.join(fs.realpathSync("/tmp"), "trails-tsc-")),
-      "s.json",
-    );
+    const tmp = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "trails-tsc-")), "s.json");
     fs.writeFileSync(tmp, JSON.stringify({ posts: { title: 42 } }));
     const exitSpy = vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
       throw new Error(`process.exit(${code})`);

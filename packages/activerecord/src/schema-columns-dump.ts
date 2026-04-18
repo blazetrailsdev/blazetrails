@@ -37,9 +37,6 @@ export interface DumpColumnSchema {
   arrayElementType?: string;
 }
 
-/** Union of the legacy and the rich shape, for consumer flexibility. */
-export type DumpColumnValue = string | DumpColumnSchema;
-
 const ALWAYS_IGNORED = new Set(["schema_migrations", "ar_internal_metadata"]);
 
 type AdapterColumn = {

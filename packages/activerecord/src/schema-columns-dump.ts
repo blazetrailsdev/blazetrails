@@ -81,9 +81,19 @@ function normalizeRailsType(col: AdapterColumn): string {
   const candidate = col.sqlTypeMetadata?.type ?? col.sqlType ?? col.type ?? "";
   const raw = candidate.toLowerCase();
   if (!raw) return "value";
-  // Strip `(precision[, scale])` parameter block before mapping so
-  // `varchar(255)` / `numeric(10,2)` / `timestamp(3)` all normalize.
-  const base = raw.replace(/\s*\([^)]*\)\s*$/, "").trim();
+
+  // PostgreSQL array types end in `[]` (`integer[]`, `character varying[]`).
+  // Collapse every array type to the Rails `array` key regardless of
+  // element type — trails-tsc maps `array` → `unknown[]`. Element-type
+  // narrowing would need a richer schema format than a single string.
+  if (raw.endsWith("[]")) return "array";
+
+  // Strip the `(precision[, scale])` block IMMEDIATELY following the
+  // SQL type token, even when more suffix text follows — PG commonly
+  // reports `timestamp(3) without time zone`, `time(6) with time zone`
+  // (those normalize to `timestamp without time zone` / `time with time zone`
+  // below). Also handles plain `varchar(255)` / `numeric(10,2)`.
+  const base = raw.replace(/^\s*([^( \t]+)\s*\([^)]*\)(.*)$/, "$1$2").trim();
   return SQL_TO_RAILS[base] ?? base;
 }
 

@@ -108,6 +108,12 @@ describe("dumpSchemaColumns", () => {
           { name: "at", sqlType: "timestamp without time zone" },
           { name: "data", sqlType: "jsonb" },
           { name: "guid", sqlType: "uuid" },
+          // PG-style inline precision + suffix text
+          { name: "at_tz", sqlType: "timestamp(3) without time zone" },
+          { name: "at_tz2", sqlType: "time(6) with time zone" },
+          // PG array types
+          { name: "tags", sqlType: "integer[]" },
+          { name: "names", sqlType: "character varying[]" },
         ];
       },
     } as unknown as Parameters<typeof dumpSchemaColumns>[0];
@@ -123,6 +129,10 @@ describe("dumpSchemaColumns", () => {
       at: "datetime",
       data: "jsonb",
       guid: "uuid",
+      at_tz: "datetime",
+      at_tz2: "time",
+      tags: "array",
+      names: "array",
     });
   });
 

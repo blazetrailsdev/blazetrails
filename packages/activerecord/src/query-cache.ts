@@ -54,16 +54,19 @@ export class QueryCache {
    *
    * Mirrors: ActiveRecord::QueryCache.install_executor_hooks
    */
-  static installExecutorHooks(executor: {
-    registerHook(hook: { run(): void; complete(): void }): void;
-  }): void {
+  static installExecutorHooks(
+    executor: {
+      registerHook(hook: { run(): void; complete(): void }): void;
+    },
+    adapters: QueryCacheAdapter[] | (() => QueryCacheAdapter[]),
+  ): void {
+    const resolve = typeof adapters === "function" ? adapters : () => adapters;
     executor.registerHook({
       run() {
-        // In Rails this iterates connection pools.
-        // Callers should pass their adapters to run/complete directly.
+        QueryCache.run(resolve());
       },
       complete() {
-        // Same — callers manage their adapter lifecycle.
+        QueryCache.complete(resolve());
       },
     });
   }

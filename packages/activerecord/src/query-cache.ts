@@ -55,11 +55,12 @@ export class QueryCache {
    * Mirrors: ActiveRecord::QueryCache.install_executor_hooks
    */
   static installExecutorHooks(
-    executor: {
+    executor?: {
       registerHook(hook: { run(): void; complete(): void }): void;
     },
-    adapters: QueryCacheAdapter[] | (() => QueryCacheAdapter[]),
+    adapters: QueryCacheAdapter[] | (() => QueryCacheAdapter[]) = [],
   ): void {
+    if (!executor) return;
     const resolve = typeof adapters === "function" ? adapters : () => adapters;
 
     // Mirrors Rails' ExecutorHooks module with static run/complete

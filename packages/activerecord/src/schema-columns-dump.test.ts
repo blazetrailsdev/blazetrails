@@ -29,10 +29,15 @@ describe("dumpSchemaColumns", () => {
     const dump = await dumpSchemaColumns(adapter);
 
     expect(Object.keys(dump).sort()).toEqual(["posts", "users"]);
-    expect(dump.users.id).toBeDefined();
-    expect(dump.users.name).toBeDefined();
-    expect(dump.users.age).toBeDefined();
-    expect(dump.posts.title).toBeDefined();
+    // Concrete Rails type assertions — trails-tsc keys on these exact
+    // strings, so raw SQL types (TEXT, VARCHAR, int4) would silently
+    // make the virtualizer emit `unknown`. Tests lock the mapping.
+    expect(dump.users.id).toBe("integer");
+    expect(dump.users.name).toBe("string");
+    expect(dump.users.age).toBe("integer");
+    expect(dump.users.created_at).toBe("datetime");
+    expect(dump.posts.title).toBe("string");
+    expect(dump.posts.body).toBe("text");
   });
 
   it("skips schema_migrations and ar_internal_metadata by default", async () => {
@@ -80,6 +85,43 @@ describe("dumpSchemaColumns", () => {
     const dump = await dumpSchemaColumns(adapter);
 
     expect(Object.keys(dump)).toEqual(["apples", "mangoes", "zebras"]);
+  });
+
+  it("normalizes raw SQL types to the Rails alphabet", async () => {
+    // Synthesize a minimal adapter whose `columns()` returns RAW SQL
+    // types with no SqlTypeMetadata.type populated. Verifies the
+    // normalization layer maps them to Rails type names.
+    const fakeAdapter = {
+      async tables() {
+        return ["widgets"];
+      },
+      async columns() {
+        return [
+          { name: "name", sqlType: "varchar(255)" },
+          { name: "bio", sqlType: "TEXT" },
+          { name: "count", sqlType: "int4" },
+          { name: "big", sqlType: "int8" },
+          { name: "price", sqlType: "numeric(10,2)" },
+          { name: "active", sqlType: "bool" },
+          { name: "at", sqlType: "timestamp without time zone" },
+          { name: "data", sqlType: "jsonb" },
+          { name: "guid", sqlType: "uuid" },
+        ];
+      },
+    } as unknown as Parameters<typeof dumpSchemaColumns>[0];
+
+    const dump = await dumpSchemaColumns(fakeAdapter);
+    expect(dump.widgets).toEqual({
+      name: "string",
+      bio: "text",
+      count: "integer",
+      big: "big_integer",
+      price: "decimal",
+      active: "boolean",
+      at: "datetime",
+      data: "jsonb",
+      guid: "uuid",
+    });
   });
 
   it("output feeds directly into trails-tsc's virtualizer (end-to-end)", async () => {

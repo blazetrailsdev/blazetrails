@@ -202,6 +202,16 @@ describe("InverseBelongsToTests", () => {
     await expect(
       loadHasOne(h, "confusedFace", { className: "Face", inverseOf: "cnffusedHuman" }),
     ).rejects.toThrow(InverseOfAssociationNotFoundError);
+
+    // Verify Rails attr_reader parity: associatedClass exposes the
+    // target model name so error handlers can branch on it.
+    try {
+      await loadHasOne(h, "confusedFace", { className: "Face", inverseOf: "cnffusedHuman" });
+      throw new Error("expected loadHasOne to throw");
+    } catch (e) {
+      expect(e).toBeInstanceOf(InverseOfAssociationNotFoundError);
+      expect((e as InverseOfAssociationNotFoundError).associatedClass).toBe("Face");
+    }
   });
 
   it("trying to use inverses that dont exist should have suggestions for fix", async () => {

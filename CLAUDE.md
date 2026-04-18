@@ -407,14 +407,11 @@ string;`). Emit order is sorted alphabetically for stability.
 Emit the JSON from a live adapter with `trails-schema-dump`:
 
 ```sh
-# Print to stdout
+# Explicit URL — print to stdout
 trails-schema-dump --database-url postgres://localhost/mydb
 
-# Write to a file
-trails-schema-dump --out db/schema-columns.json
-
 # DATABASE_URL is read from the environment if --database-url is absent
-DATABASE_URL=postgres://... trails-schema-dump --out db/schema-columns.json
+DATABASE_URL=postgres://localhost/mydb trails-schema-dump --out db/schema-columns.json
 
 # Feed into the type-checker
 trails-tsc --schema db/schema-columns.json

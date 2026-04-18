@@ -390,6 +390,17 @@ export class Base extends Model {
     typeName: string,
     options?: { default?: unknown; virtual?: boolean; userProvidedDefault?: boolean },
   ): void {
+    // STI subclasses share the base's `_attributeDefinitions` — matching
+    // Rails' `ActiveRecord::Inheritance` where `attribute_types` is a
+    // shared `class_attribute`. Route the registration through the STI
+    // base so `Circle.attribute("radius", ...)` lands on `Shape._attributeDefinitions`
+    // instead of forking a subclass-local map that later schema
+    // reflection on the base wouldn't see.
+    if (isStiSubclass(this)) {
+      const stiBase = getStiBase(this);
+      stiBase.attribute(name, typeName, options);
+      return;
+    }
     super.attribute(name, typeName, options);
     // If we just defined an "id" accessor on a subclass prototype, remove it
     // so Base.prototype.id (which handles CPK) is used instead.

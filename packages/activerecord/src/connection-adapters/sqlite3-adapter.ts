@@ -412,9 +412,13 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     return this.db.open;
   }
 
+  override clearCacheBang(): void {
+    super.clearCacheBang();
+    this._statementPool.clear();
+  }
+
   override disconnectBang(): void {
     super.disconnectBang();
-    this._statementPool.clear();
     if (this.db.open) {
       this.db.close();
     }

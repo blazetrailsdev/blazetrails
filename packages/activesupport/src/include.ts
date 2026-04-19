@@ -57,9 +57,28 @@ export function include(klass: AnyClass, mod: Module | AnyClass): void {
     const proto = (mod as AnyClass).prototype;
     for (const key of Object.getOwnPropertyNames(proto)) {
       if (key === "constructor") continue;
-      if (Object.prototype.hasOwnProperty.call(klass.prototype, key)) continue;
-      const desc = Object.getOwnPropertyDescriptor(proto, key);
-      if (desc) descriptors[key] = desc;
+      const modDesc = Object.getOwnPropertyDescriptor(proto, key);
+      if (!modDesc) continue;
+      const existing = Object.getOwnPropertyDescriptor(klass.prototype, key);
+      if (!existing) {
+        descriptors[key] = modDesc;
+        continue;
+      }
+      // Accessor pairs: preserve the existing half, fill in whichever the
+      // including class didn't define. Ruby's include supplies only the
+      // missing methods, but in TS `get`/`set` share a single property
+      // name — re-apply the whole pair so both halves end up live.
+      const isAccessorPair =
+        ("get" in modDesc || "set" in modDesc) && ("get" in existing || "set" in existing);
+      if (isAccessorPair) {
+        descriptors[key] = {
+          get: existing.get ?? modDesc.get,
+          set: existing.set ?? modDesc.set,
+          configurable: true,
+          enumerable: existing.enumerable ?? modDesc.enumerable ?? false,
+        };
+      }
+      // Value (method) collision: Ruby's include doesn't replace — leave it.
     }
   } else {
     for (const key of Object.keys(mod as Module)) {

@@ -21,6 +21,21 @@ describe("SQLite3StatementPoolTest", () => {
     expect(() => new SQLite3Adapter(":memory:", { statementLimit: 1.5 })).toThrow(RangeError);
   });
 
+  it("rejects non-boolean preparedStatements at construction time and via assignment", () => {
+    expect(
+      () => new SQLite3Adapter(":memory:", { preparedStatements: "false" as unknown as boolean }),
+    ).toThrow(TypeError);
+    expect(
+      () => new SQLite3Adapter(":memory:", { preparedStatements: 0 as unknown as boolean }),
+    ).toThrow(TypeError);
+
+    const adapter = new SQLite3Adapter(":memory:");
+    expect(() => {
+      (adapter as unknown as { preparedStatements: unknown }).preparedStatements = "true";
+    }).toThrow(TypeError);
+    adapter.disconnectBang();
+  });
+
   it("clearCacheBang clears the pool without throwing on next query", async () => {
     const adapter = new SQLite3Adapter(":memory:");
     await adapter.exec(`CREATE TABLE t (id INTEGER)`);

@@ -2,34 +2,81 @@ import { Relation } from "./relation.js";
 import type { Base } from "./base.js";
 
 /**
- * Specialized Relation returned by DisableJoinsAssociationScope when the
- * source scope has no explicit ORDER but an upstream chain entry was
- * ordered. Rails uses this to:
+ * Specialized Relation returned by `DisableJoinsAssociationScope`.
+ * Operates in one of two modes:
  *
- *   - preserve the through-IDs order when IN(...) is used on the final
- *     query (SQL IN doesn't preserve list order, but Rails' ORM contract
- *     for an ordered `through` association expects the records back in
- *     the join-table order),
- *   - and short-circuit `limit` / `first` so they slice the loaded
- *     in-memory array rather than appending SQL LIMIT (which would
- *     interact badly with IN-list reordering).
+ *   1. **Loaded-chain mode** (Rails' `DisableJoinsAssociationRelation`,
+ *      `activerecord/lib/active_record/disable_joins_association_relation.rb`):
+ *      constructed with `(klass, key, ids)` after the chain walk is
+ *      complete. `toArray()` loads via Relation, then groups by `key`
+ *      and re-emits in `ids` order so callers see join-table ordering
+ *      (SQL `IN(...)` doesn't preserve list order). `limit` / `first`
+ *      slice the loaded array in-memory rather than appending SQL
+ *      LIMIT (matches Rails' deliberate deviation).
  *
- * Mirrors: ActiveRecord::DisableJoinsAssociationRelation
- * (activerecord/lib/active_record/disable_joins_association_relation.rb).
+ *   2. **Deferred-chain mode**: constructed with a `chainWalker`
+ *      callback that performs the async chain walk on first `toArray()`
+ *      and returns the final scope (which itself may be a loaded-chain
+ *      DJAR for the ordered-upstream wrap case). Lets `DJAS.scope()`
+ *      return a `Relation` synchronously instead of `Promise<{ relation }>` —
+ *      matches Rails' `DisableJoinsAssociationScope#scope` returning
+ *      a Relation directly.
  */
 export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T> {
   readonly key: string;
   /** Stored IDs (uniq'd at construction). Exposed as `ids()` to match
    * Rails' `attr_reader :ids` which shadows `Relation#ids` here. */
   private readonly _storedIds: unknown[];
+  /** Deferred chain walker. Boxed return ({ relation }) defeats
+   * `Relation.then` — without the box, `await Promise<Relation>`
+   * would unwrap to `T[]` (records array) instead of the Relation
+   * itself. The box stays internal; callers see only the public
+   * `toArray()` interface. */
+  private readonly _chainWalker?: () => Promise<{ relation: Relation<T> }>;
+  private _walkerPromise?: Promise<T[]>;
 
-  constructor(klass: typeof Base, key: string, ids: unknown[]) {
+  constructor(
+    klass: typeof Base,
+    key: string,
+    ids: unknown[],
+    chainWalker?: () => Promise<{ relation: Relation<T> }>,
+  ) {
     super(klass);
     this.key = key;
     this._storedIds = Array.from(new Set(ids));
+    this._chainWalker = chainWalker;
+  }
+
+  /**
+   * Construct a deferred-chain DJAR. Used by `DJAS.scope()` to return
+   * a sync Relation while letting the async chain walk happen at
+   * `toArray()` time. `key` and `ids` are placeholders here — the
+   * walker's returned Relation owns the real reorder semantics (it
+   * may itself be a loaded-chain DJAR if upstream was ordered).
+   *
+   * The walker MUST return a boxed `{ relation }`, not a bare
+   * `Promise<Relation>` — bare Relations get unwrapped to `T[]` by
+   * Promise's thenable chaining (since `Relation.then` is the
+   * `toArray` shortcut). Callers construct the box at the source so
+   * the bare Relation never crosses an `await` boundary.
+   */
+  static deferred<T extends Base>(
+    klass: typeof Base,
+    chainWalker: () => Promise<{ relation: Relation<T> }>,
+  ): DisableJoinsAssociationRelation<T> {
+    return new DisableJoinsAssociationRelation<T>(klass, "", [], chainWalker);
   }
 
   override async ids(): Promise<unknown[]> {
+    if (this._chainWalker) {
+      // Deferred mode — load via the walker, then read PKs off the
+      // result. Matches Rails' `Relation#ids` semantics for the
+      // deferred-chain path; the loaded-chain mode uses the stored
+      // through-IDs instead.
+      const records = await this.toArray();
+      const pk = this.model.primaryKey as string;
+      return records.map((r) => r.readAttribute(pk));
+    }
     return this._storedIds;
   }
 
@@ -44,14 +91,25 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
       this.model,
       this.key,
       this._storedIds,
+      this._chainWalker,
     ) as unknown as Relation<T>;
   }
 
-  /**
-   * Load via Relation, then group by `key` and re-emit in `ids` order so
-   * the caller sees join-table ordering (Rails' `load` override).
-   */
   override async toArray(): Promise<T[]> {
+    if (this._chainWalker) {
+      // Memoize the walk + load so repeated toArray() calls don't
+      // re-execute the chain (e.g. via Relation thenable shortcuts).
+      if (!this._walkerPromise) {
+        this._walkerPromise = (async () => {
+          const { relation } = await this._chainWalker!();
+          return relation.toArray();
+        })();
+      }
+      return this._walkerPromise;
+    }
+    // Loaded-chain mode: load via Relation, then group by `key` and
+    // re-emit in `ids` order so the caller sees join-table ordering
+    // (Rails' `load` override).
     const records = await super.toArray();
     const byKey = new Map<unknown, T[]>();
     for (const r of records) {

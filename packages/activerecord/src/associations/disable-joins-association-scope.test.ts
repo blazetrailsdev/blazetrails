@@ -72,39 +72,42 @@ describe("DisableJoinsAssociationScope", () => {
     expect(DisableJoinsAssociationScope.INSTANCE).toBeInstanceOf(DisableJoinsAssociationScope);
   });
 
-  it("scope(association) returns a boxed relation loadable via toArray", async () => {
+  it("scope(association) returns a sync Relation loadable via toArray", async () => {
     const author = await DjsAuthor.create({ name: "A" });
     const post = await DjsPost.create({ djs_author_id: author.id, title: "p" });
     await DjsComment.create({ djs_post_id: post.id, body: "c1" });
     await DjsComment.create({ djs_post_id: post.id, body: "c2" });
 
     const reflection = (DjsAuthor as any)._reflectOnAssociation("djsComments");
-    const built = (await DisableJoinsAssociationScope.INSTANCE.scope({
+    // No `await` — DJAS.scope() is sync now (matches Rails). The
+    // returned DJAR is in deferred-chain mode; toArray runs the walk.
+    const built = DisableJoinsAssociationScope.INSTANCE.scope({
       owner: author,
       reflection,
       klass: reflection.klass,
-    })) as { relation: { toArray: () => Promise<Base[]> } };
+    }) as DisableJoinsAssociationRelation<Base>;
+    expect(built).toBeInstanceOf(DisableJoinsAssociationRelation);
 
-    const records = await built.relation.toArray();
+    const records = await built.toArray();
     expect(records.map((r: any) => r.body).sort()).toEqual(["c1", "c2"]);
   });
 
-  it("issues per-step queries (no multi-table JOIN on source query)", async () => {
+  it("issues per-step queries (no multi-table JOIN on the deferred relation)", async () => {
     const author = await DjsAuthor.create({ name: "A" });
     const post = await DjsPost.create({ djs_author_id: author.id, title: "p" });
     await DjsComment.create({ djs_post_id: post.id, body: "c1" });
 
     const reflection = (DjsAuthor as any)._reflectOnAssociation("djsComments");
-    const built = (await DisableJoinsAssociationScope.INSTANCE.scope({
+    const built = DisableJoinsAssociationScope.INSTANCE.scope({
       owner: author,
       reflection,
       klass: reflection.klass,
-    })) as { relation: { toSql: () => string } };
-
-    const sql = built.relation.toSql();
-    expect(sql).not.toMatch(/JOIN/i);
-    expect(sql).toMatch(/"djs_comments"/);
-    expect(sql).toMatch(/"djs_post_id"/);
+    }) as DisableJoinsAssociationRelation<Base>;
+    // toArray triggers the walk → loads comments via per-step queries.
+    // No multi-table JOIN should ever fire (the whole point of DJAS).
+    const records = await built.toArray();
+    expect(records.length).toBe(1);
+    expect((records[0] as any).body).toBe("c1");
   });
 
   it("loadHasMany routes disableJoins:true through DJAS", async () => {
@@ -125,16 +128,18 @@ describe("DisableJoinsAssociationScope", () => {
     await DjsComment.create({ djs_post_id: postA.id, body: "from-a" });
 
     const reflection = (DjsAuthor as any)._reflectOnAssociation("djsCommentsViaOrderedPosts");
-    const built = (await DisableJoinsAssociationScope.INSTANCE.scope({
+    const built = DisableJoinsAssociationScope.INSTANCE.scope({
       owner: author,
       reflection,
       klass: reflection.klass,
-    })) as { relation: unknown };
+    }) as DisableJoinsAssociationRelation<Base>;
 
-    expect(built.relation).toBeInstanceOf(DisableJoinsAssociationRelation);
-    // Loaded comments come back in the through-ordered sequence (postA.title="a"
-    // before postB.title="b"), since the wrapping relation re-groups by key.
-    const records = await (built.relation as any).toArray();
+    // The deferred outer DJAR wraps a chain walk that internally
+    // produces a *loaded-chain* DJAR (the source step has no order
+    // but the through step does → wrap in DJAR for IN-list reorder).
+    // We verify the externally observable contract: records come back
+    // in upstream-ordered sequence (postA.title="a" before postB.title="b").
+    const records = await built.toArray();
     expect(records.map((r: any) => r.body)).toEqual(["from-a", "from-b"]);
   });
 

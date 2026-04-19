@@ -107,12 +107,15 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     // Rails' database.yml merges driver connection params + adapter
     // options into one hash; AbstractAdapter#initialize reads
     // `config[:statement_limit]` / `config[:prepared_statements]`
-    // and hands the rest to the driver. Do the same here: split
-    // adapter-level keys out before constructing pg.Pool.
+    // and hands the rest to the driver. Validate & apply the
+    // adapter-level keys FIRST so an invalid value fails before
+    // `pg.Pool` is constructed — otherwise a throw here would leave
+    // a live driver pool with no cleanup path on the half-built
+    // adapter.
     const { statementLimit, preparedStatements, ...pgConfig } = config;
-    this._driverPool = new pg.Pool(pgConfig);
     if (statementLimit !== undefined) this.statementLimit = statementLimit;
     if (preparedStatements !== undefined) this.preparedStatements = preparedStatements;
+    this._driverPool = new pg.Pool(pgConfig);
   }
 
   /**

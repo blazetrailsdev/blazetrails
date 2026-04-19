@@ -157,11 +157,13 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     // See PostgreSQLAdapter#constructor: Rails' database.yml merges
     // driver + adapter config, and AbstractAdapter#initialize reads
     // `:statement_limit` / `:prepared_statements` off that single
-    // hash. Strip those before passing the rest to mysql.createPool.
+    // hash. Validate & apply the adapter-level keys FIRST so an
+    // invalid value fails before `mysql.createPool` runs — otherwise
+    // a throw would leave a live pool with no cleanup path.
     const { statementLimit, preparedStatements, ...mysqlConfig } = config;
-    this._driverPool = mysql.createPool(mysqlConfig);
     if (statementLimit !== undefined) this.statementLimit = statementLimit;
     if (preparedStatements !== undefined) this.preparedStatements = preparedStatements;
+    this._driverPool = mysql.createPool(mysqlConfig);
   }
 
   /**

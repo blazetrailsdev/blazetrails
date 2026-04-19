@@ -500,24 +500,39 @@ export class AssociationScope {
     }
     // Rails' chain.reverse_each over reflection.constraints (Rails:
     // association_scope.rb:131-156) merges scope-chain items into the
-    // relation. For each non-head reflection in the chain, we apply
-    // its scope lambda to a fresh klass.unscoped, then push the
-    // resulting WHERE / ORDER predicates onto the main scope qualified
-    // to the reflection's table. The head reflection (chain[0]) is
-    // handled via scopeFor below — Rails' chain_head branch in
-    // add_constraints does the same effective thing.
-    for (let i = 1; i < chain.length; i++) {
+    // relation. For each non-head reflection in the chain (in REVERSE
+    // order to match Rails' chain.reverse_each), we apply its scope
+    // lambda to a fresh klass.(unscoped + STI type filter), then push
+    // only the WHERE and ORDER predicates onto the main scope —
+    // matching Rails' `where_clause +=` / `order_values |=` granular
+    // merging (NOT a full Relation#merge, which would let the chain
+    // entry's limit/select/etc override the main scope). The head
+    // reflection (chain[0]) is handled by the scope/scopeFor branch
+    // below — Rails' chain_head item in add_constraints.
+    for (let i = chain.length - 1; i >= 1; i--) {
       scope = this._mergeReflectionScopeChain(scope, chain[i], owner);
     }
     // scopeFor on the head reflection. Rails: reflection.rb:448,
     // scope_for — 0-arity scopes get `this`=relation, >=1-arity get
     // (relation, owner) per `relation.instance_exec(owner, &scope) ||
     // relation`. Calling `reflection.scope(scope)` directly would lose
-    // the binding.
-    const scopeFor = (chain[0] as { scopeFor?: (rel: unknown, owner: unknown) => unknown })
-      .scopeFor;
-    if (typeof scopeFor === "function") {
-      scope = scopeFor.call(chain[0], scope, owner);
+    // the binding. ThroughReflection doesn't expose scopeFor (it's not
+    // a MacroReflection), so fall back to invoking .scope directly so
+    // a scope defined on the through association itself still applies.
+    const head = chain[0] as {
+      scopeFor?: (rel: unknown, owner: unknown) => unknown;
+      scope?: ((rel: unknown, owner?: unknown) => unknown) | null;
+    };
+    if (typeof head.scopeFor === "function") {
+      scope = head.scopeFor.call(head, scope, owner);
+    } else if (typeof head.scope === "function") {
+      // Match Rails instance_exec arity: 0-arg scope → this=scope;
+      // 1+-arg → (scope, owner). Without scopeFor we mimic the same
+      // dispatch the AssociationReflection.scopeFor implementation does.
+      const fn = head.scope;
+      const result =
+        fn.length === 0 ? (fn as () => unknown).call(scope) : fn.call(scope, scope, owner);
+      if (result) scope = result;
     }
     return scope;
   }
@@ -525,15 +540,20 @@ export class AssociationScope {
   /**
    * Apply a non-head chain entry's scope lambda. Rails' add_constraints
    * does this via `eval_scope` + `scope.where_clause += item.where_clause`
-   * — the scope's WHERE / ORDER predicates are merged into the main
-   * relation, qualified to the entry's table since that's where the
-   * scope was originally written against.
+   * + `scope.order_values = item.order_values | scope.order_values` —
+   * granular per-attribute merging that pushes ONLY where and order
+   * predicates onto the main relation. A through-reflection scope's
+   * limit / select / joins / etc must NOT override the main scope.
    *
    * For non-head entries we evaluate the lambda against a fresh
-   * `entry.klass.unscoped` so its `where(...)` calls bind to the
-   * correct table, then merge that result into the main scope. Our
-   * `Relation#merge` table-tags the predicates correctly when scope
-   * tables differ (verified end-to-end by the through+scope test).
+   * `entry.klass.unscoped` (with STI type_condition re-applied for
+   * subclasses, matching the head-scope path in `scope()`) so its
+   * `where(...)` calls bind to the correct table. We then push the
+   * resulting WHERE predicates onto the main scope and union the
+   * ORDER clauses.
+   *
+   * Mirrors: ActiveRecord::Associations::AssociationScope#add_constraints
+   * (association_scope.rb:131-156).
    */
   private _mergeReflectionScopeChain(
     scope: unknown,
@@ -541,23 +561,57 @@ export class AssociationScope {
     owner: Base,
   ): unknown {
     const r = reflection as {
-      scope?: (rel: unknown, owner?: unknown) => unknown;
+      scope?: ((rel: unknown, owner?: unknown) => unknown) | null;
       scopeFor?: (rel: unknown, owner?: unknown) => unknown;
       klass?: typeof Base;
     };
     if (typeof r.scope !== "function") return scope;
     const entryKlass = r.klass;
     if (!entryKlass) return scope;
-    const entryScope = (entryKlass as unknown as { unscoped: () => unknown }).unscoped();
+    // Build the entry-side scope with STI type_condition, matching the
+    // head-scope path so STI subclasses get the right type filter
+    // (Base.unscoped strips it; we re-add per the same compensation).
+    let entryScope: unknown = (entryKlass as unknown as { unscoped: () => unknown }).unscoped();
+    if (isStiSubclass(entryKlass)) {
+      const col = getInheritanceColumn(getStiBase(entryKlass));
+      if (col) {
+        const stiNames = [
+          entryKlass.name,
+          ...descendants(entryKlass).map((d: typeof Base) => d.name),
+        ];
+        entryScope = (entryScope as { where: (c: Record<string, unknown>) => unknown }).where({
+          [col]: stiNames.length === 1 ? stiNames[0] : stiNames,
+        });
+      }
+    }
     const evaluated =
       typeof r.scopeFor === "function"
         ? r.scopeFor.call(reflection, entryScope, owner)
         : r.scope.call(reflection, entryScope, owner);
     if (!evaluated) return scope;
-    // Rails: scope.where_clause += item.where_clause / order_values |=
-    // ... For our purposes, Relation#merge handles the per-attribute
-    // semantics (WHERE concatenation, last-wins for limit/order/etc).
-    const merger = (scope as { merge: (other: unknown) => unknown }).merge;
-    return typeof merger === "function" ? merger.call(scope, evaluated) : scope;
+    // Push ONLY the entry's WHERE predicates and ORDER clauses onto
+    // the main scope — Rails' `where_clause += ...` / `order_values |=`
+    // semantics. A full Relation#merge would let the entry's limit /
+    // select / joins / etc override the main scope, which Rails
+    // explicitly avoids (see the chain_head branch's
+    // `merge! item.except(:where, :includes, :unscope, :order)` plus
+    // explicit `where_clause += / order_values |=` afterward).
+    const evalWhere = (evaluated as { _whereClause?: { predicates?: unknown[] } })._whereClause;
+    const evalOrders = (evaluated as { _orderClauses?: unknown[] })._orderClauses ?? [];
+    let merged = scope as {
+      where: (n: unknown) => unknown;
+      order: (...args: unknown[]) => unknown;
+    };
+    for (const pred of evalWhere?.predicates ?? []) {
+      merged = merged.where(pred) as typeof merged;
+    }
+    if (evalOrders.length > 0) {
+      const existing = (merged as unknown as { _orderClauses?: unknown[] })._orderClauses ?? [];
+      const additions = evalOrders.filter((o) => !existing.includes(o));
+      if (additions.length > 0) {
+        merged = merged.order(...additions) as typeof merged;
+      }
+    }
+    return merged;
   }
 }

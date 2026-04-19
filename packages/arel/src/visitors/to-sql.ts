@@ -6,11 +6,13 @@ import * as Nodes from "../nodes/index.js";
 import { Table } from "../table.js";
 
 /**
- * Resolve a bind's database value. Handles both method form
- * (QueryAttribute#valueForDatabase()) and getter form
- * (ActiveModel::Attribute#valueForDatabase).
+ * Resolve a bind's database value. QueryAttribute exposes
+ * `valueForDatabase` as a method; ActiveModel::Attribute (TS port)
+ * exposes it as a getter. A normal property read handles both shapes —
+ * the getter evaluates to its value, a method reference yields a
+ * function that we then invoke.
  */
-function resolveValueForDatabase(value: unknown): unknown {
+export function resolveValueForDatabase(value: unknown): unknown {
   if (!value || typeof value !== "object" || !("valueForDatabase" in value)) return value;
   const v = (value as Record<string, unknown>).valueForDatabase;
   return typeof v === "function" ? (v as () => unknown).call(value) : v;
@@ -955,10 +957,6 @@ export class ToSql implements NodeVisitor<SQLString> {
     if (this._extractBinds) {
       this.collector.addBind(node.value !== undefined ? node.value : node);
     } else if (node.value !== undefined) {
-      // Extract the database value from bind objects (QueryAttribute,
-      // ActiveModel::Attribute, etc.). Rails exposes `value_for_database`
-      // as a method; ActiveModel::Attribute (TS port) uses a getter. Read
-      // via the descriptor so both shapes resolve correctly.
       this.collector.append(this.quote(resolveValueForDatabase(node.value)));
     } else {
       this.collector.addBind(node);

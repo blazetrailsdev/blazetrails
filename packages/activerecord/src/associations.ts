@@ -316,6 +316,52 @@ function _canRouteThroughViaAssociationScope(
 }
 
 /**
+ * Disable-joins routing gate. Mirrors `_canRouteThroughViaAssociationScope`
+ * but for `disable_joins: true` through associations — runs the chain
+ * via the Rails-faithful `DisableJoinsAssociationScope` (per-step pluck
+ * + IN list) rather than the legacy `loadHasManyThrough` 2-step. PR 4
+ * routes the simple non-polymorphic shape only; polymorphic / sourceType
+ * stays on the existing loader.
+ */
+function _canRouteThroughViaDisableJoinsAssociationScope(
+  reflection: unknown,
+  options: AssociationOptions,
+): boolean {
+  if (!reflection) return false;
+  if (!options.disableJoins) return false;
+  const refl = reflection as {
+    isThroughReflection?: () => boolean;
+    isNested?: () => boolean;
+  };
+  if (typeof refl.isThroughReflection !== "function" || !refl.isThroughReflection()) return false;
+  if (typeof refl.isNested === "function" && refl.isNested()) return false;
+  const src = (reflection as { sourceReflection?: unknown }).sourceReflection as
+    | { isPolymorphic?: () => boolean }
+    | undefined;
+  if (!src) return false;
+  if (typeof src.isPolymorphic === "function" && src.isPolymorphic()) return false;
+  if (options.sourceType) return false;
+  return true;
+}
+
+async function _loadThroughViaDisableJoinsScope(
+  record: Base,
+  reflection: unknown,
+): Promise<Base[]> {
+  // Lazy-import to avoid an eager cycle: DJAS imports
+  // DisableJoinsAssociationRelation → relation.ts → associations.ts.
+  const { DisableJoinsAssociationScope } =
+    await import("./associations/disable-joins-association-scope.js");
+  const klass = (reflection as { klass: typeof Base }).klass;
+  const built = (await DisableJoinsAssociationScope.INSTANCE.scope({
+    owner: record,
+    reflection: reflection as any,
+    klass,
+  })) as { relation: { toArray: () => Promise<Base[]> } };
+  return built.relation.toArray();
+}
+
+/**
  * Sync loaded result to the association instance if one exists.
  */
 function syncToAssociationInstance(record: Base, assocName: string, result: unknown): void {
@@ -470,6 +516,10 @@ export async function loadHasOne(
   if (options.through) {
     const ctorEarly = record.constructor as typeof Base;
     const reflEarly = ctorEarly._reflectOnAssociation?.(assocName);
+    if (_canRouteThroughViaDisableJoinsAssociationScope(reflEarly, options)) {
+      const records = await _loadThroughViaDisableJoinsScope(record, reflEarly);
+      return records[0] ?? null;
+    }
     if (!_canRouteThroughViaAssociationScope(reflEarly, options)) {
       return loadHasOneThrough(record, assocName, options);
     }
@@ -672,6 +722,9 @@ export async function loadHasMany(
   if (options.through) {
     const ctorEarly = record.constructor as typeof Base;
     const reflEarly = ctorEarly._reflectOnAssociation?.(assocName);
+    if (_canRouteThroughViaDisableJoinsAssociationScope(reflEarly, options)) {
+      return _loadThroughViaDisableJoinsScope(record, reflEarly);
+    }
     if (!_canRouteThroughViaAssociationScope(reflEarly, options)) {
       return loadHasManyThrough(record, assocName, options);
     }

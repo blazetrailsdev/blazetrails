@@ -252,11 +252,14 @@ export type UnscopeType =
   | "joins"
   | "leftOuterJoins"
   | "includes"
+  | "preload"
+  | "eagerLoad"
   | "from"
   | "readonly"
   | "having"
   | "optimizerHints"
-  | "annotate";
+  | "annotate"
+  | "createWith";
 
 export const VALID_UNSCOPING_VALUES: ReadonlySet<UnscopeType> = new Set<UnscopeType>([
   "where",
@@ -269,11 +272,14 @@ export const VALID_UNSCOPING_VALUES: ReadonlySet<UnscopeType> = new Set<UnscopeT
   "joins",
   "leftOuterJoins",
   "includes",
+  "preload",
+  "eagerLoad",
   "from",
   "readonly",
   "having",
   "optimizerHints",
   "annotate",
+  "createWith",
 ]);
 
 function unscopeBang(
@@ -326,9 +332,20 @@ function unscopeBang(
           this._joinClauses = this._joinClauses.filter((j) => j.type !== "left");
           break;
         case "includes":
+          // Rails: `unscope(:includes)` clears includes only — preload
+          // and eager_load are independent and have their own keys
+          // below (matches Rails `query_methods.rb` switch on
+          // :includes / :preload / :eager_load).
           this._includesAssociations = [];
-          this._eagerLoadAssociations = [];
+          break;
+        case "preload":
           this._preloadAssociations = [];
+          break;
+        case "eagerLoad":
+          this._eagerLoadAssociations = [];
+          break;
+        case "createWith":
+          this._createWithAttrs = {};
           break;
         case "optimizerHints":
           this._optimizerHints = [];

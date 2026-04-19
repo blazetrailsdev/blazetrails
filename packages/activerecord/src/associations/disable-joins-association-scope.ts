@@ -45,8 +45,11 @@ function readTuple(owner: Base, cols: string[]): unknown[] {
  * by the caller via `Relation#none()`. PG / MySQL / SQLite all support
  * tuple IN; Arel's AST doesn't expose a direct constructor for it, so
  * raw SQL is the portable path. Identifiers go through
- * `quoteColumnName` (handles embedded quotes / schema-qualified
- * names per Rails' adapter quoting).
+ * `quoteColumnName` for adapter-specific column quoting (handles
+ * embedded quote characters in the identifier itself; does NOT
+ * split on `.` for schema-qualified names — that's
+ * `quoteTableName`'s responsibility, and column names here come
+ * from reflection metadata which is always bare).
  */
 function tupleInClause(cols: string[], tuples: unknown[][]): { sql: string; binds: unknown[] } {
   const placeholderRow = "(" + cols.map(() => "?").join(", ") + ")";

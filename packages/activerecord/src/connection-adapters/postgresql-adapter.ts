@@ -83,9 +83,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     }
     this._statementLimit = value;
     // Resize the active transaction client's pool immediately so a
-    // mid-session change is visible. Non-active pools are synced
-    // lazily in `_poolFor` on next acquisition — we can't iterate a
-    // WeakMap, and dropping entries would orphan their counter /
+    // mid-session change is visible. Other per-client pools keep the
+    // size they were built with (Rails reads `statement_limit` once
+    // at pool construction). We can't iterate a WeakMap to retrofit
+    // them, and dropping entries would orphan their counter /
     // sql→name mapping while server-side PREPAREd statements still
     // exist on the reusable pg.PoolClient, risking name collisions.
     if (this._client) {
@@ -2214,17 +2215,19 @@ export class StatementPool extends GenericStatementPool<PreparedStatement> {
   protected override dealloc(stmt: PreparedStatement): void {
     const client = this._client;
     if (!client) return;
-    // Fire-and-forget: eviction can't block the caller that triggered
-    // it (the pg write path), and the server will clean up the
-    // statement when the connection closes anyway. Errors are
-    // intentionally swallowed — Rails' PG::StatementPool#dealloc
-    // likewise rescues PG::InvalidSqlStatementName / connection
-    // errors — and the empty `.catch` also keeps node from treating
-    // a post-close DEALLOCATE as an unhandled rejection.
-    // Use the adapter's PG column-name quoter so any embedded `"` in a
-    // leaked caller-supplied name is escaped rather than raising
-    // synchronously inside `dealloc` — fire-and-forget eviction must
-    // never throw, or it escapes the `.catch(() => {})` below.
+    // Best-effort async cleanup: we don't await DEALLOCATE, but pg
+    // still queues it on this client and it runs before later queries
+    // on the same connection — eviction doesn't block the caller
+    // that triggered it (pg.write path) but it isn't free either.
+    // The server also drops prepared statements on session close, so
+    // a swallowed failure here is safe. Errors are intentionally
+    // ignored — Rails' PG::StatementPool#dealloc likewise rescues
+    // PG::InvalidSqlStatementName / connection errors — and the
+    // empty `.catch` keeps node from treating a post-close
+    // DEALLOCATE as an unhandled rejection.
+    // `pgQuoteColumnName` escapes any embedded `"` instead of
+    // raising, so a leaked caller-supplied name can't produce a
+    // synchronous throw that would escape the `.catch(() => {})`.
     client.query(`DEALLOCATE ${pgQuoteColumnName(stmt.name)}`).catch(() => {});
   }
 

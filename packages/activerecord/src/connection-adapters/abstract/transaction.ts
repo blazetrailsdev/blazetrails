@@ -1,4 +1,5 @@
 import type { DatabaseAdapter } from "../../adapter.js";
+import { PreparedStatementCacheExpired } from "../../errors.js";
 import { ActiveRecordTransaction } from "../../transaction.js";
 import { Notifications, NotificationEvent } from "@blazetrails/activesupport";
 
@@ -267,6 +268,7 @@ export interface TransactionConnection extends DatabaseAdapter {
   rollbackDbTransaction?(): void | Promise<void>;
   restartDbTransaction?(): void | Promise<void>;
   resetIsolationLevel?(): void | Promise<void>;
+  clearCacheBang?(): void;
   supportsLazyTransactions?(): boolean;
   supportsRestartDbTransaction?(): boolean;
   addTransactionRecord?(record: unknown): void;
@@ -968,6 +970,7 @@ export class TransactionManager {
       if (!transaction.state.isCompleted()) {
         transaction.incompleteBang();
       }
+      this._afterFailureActions(e);
       throw e;
     }
 
@@ -987,5 +990,22 @@ export class TransactionManager {
       transaction.incompleteBang();
     }
     return result;
+  }
+
+  /**
+   * Mirrors Rails' `TransactionManager#after_failure_actions`:
+   * when a transaction fails with `PreparedStatementCacheExpired`,
+   * drop cached prepared statements so the next call re-PREPAREs
+   * on a fresh session. Rails does NOT retry the transaction body —
+   * it clears the cache and re-raises; user code decides whether
+   * to retry.
+   *
+   * Reference: activerecord/lib/active_record/connection_adapters/abstract/
+   * transaction.rb: `TransactionManager#after_failure_actions`.
+   */
+  private _afterFailureActions(error: unknown): void {
+    if (error instanceof PreparedStatementCacheExpired) {
+      this._connection.clearCacheBang?.();
+    }
   }
 }

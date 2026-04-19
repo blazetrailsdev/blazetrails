@@ -2,8 +2,31 @@ import type { Base } from "./base.js";
 
 import { ArgumentError } from "@blazetrails/activemodel";
 import { getAsyncContext, type AsyncContext } from "@blazetrails/activesupport";
-import { Rollback, TransactionIsolationError } from "./errors.js";
+import { PreparedStatementCacheExpired, Rollback, TransactionIsolationError } from "./errors.js";
 export { Rollback };
+
+/**
+ * Rails' `TransactionManager#after_failure_actions`: when a
+ * transaction fails with `PreparedStatementCacheExpired`, drop
+ * cached prepared statements so the next call re-PREPAREs on a
+ * fresh session. The error itself re-raises unchanged — Rails
+ * does NOT retry the body.
+ *
+ * The TransactionManager path calls this from `withinNewTransaction`'s
+ * catch (see abstract/transaction.ts). The fallback path below
+ * handles adapters that don't route through TransactionManager.
+ *
+ * Reference: activerecord/lib/active_record/connection_adapters/
+ * abstract/transaction.rb `TransactionManager#after_failure_actions`.
+ */
+function _afterFailureActions(
+  adapter: import("./adapter.js").DatabaseAdapter,
+  error: unknown,
+): void {
+  if (error instanceof PreparedStatementCacheExpired) {
+    adapter.clearCacheBang?.();
+  }
+}
 import { Transaction } from "./connection-adapters/abstract/transaction.js";
 import { transaction as dbTransaction } from "./connection-adapters/abstract/database-statements.js";
 
@@ -140,6 +163,7 @@ async function _transactionFallback<T>(
         releaseLock = null;
         await tx.rollback();
         await tx.runAfterRollbackCallbacks();
+        _afterFailureActions(adapter, error);
         if (error instanceof Rollback) return undefined;
         throw error;
       }
@@ -156,6 +180,7 @@ async function _transactionFallback<T>(
         releaseLock = null;
         await tx.rollback();
         await tx.runAfterRollbackCallbacks();
+        _afterFailureActions(adapter, error);
         if (error instanceof Rollback) return undefined;
         throw error;
       }

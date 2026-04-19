@@ -33,7 +33,13 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
    * itself. The box stays internal; callers see only the public
    * `toArray()` interface. */
   private readonly _chainWalker?: () => Promise<{ relation: Relation<T> }>;
-  private _walkerPromise?: Promise<T[]>;
+  /**
+   * Memoized walker invocation. Both `toArray()` and `ids()` (and any
+   * future deferred-mode consumer) share this so the async chain walk
+   * — including intermediate `pluck`s, which are the expensive part —
+   * runs at most once per DJAR instance.
+   */
+  private _walkPromise?: Promise<{ relation: Relation<T> }>;
 
   constructor(
     klass: typeof Base,
@@ -106,13 +112,26 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
     if (this._chainWalker) {
       // Deferred mode — delegate to the composed walker result's
       // ids(), which can pluck instead of materializing full records.
-      // (If the walker produced a loaded-chain DJAR, that DJAR's
-      // ids() returns its stored through-IDs without a query.)
-      const { relation } = await this._chainWalker();
+      // Routes through the shared `_walkOnce()` so the chain walk
+      // (including intermediate plucks) runs at most once per DJAR
+      // instance, even if a caller invokes ids() and then toArray()
+      // (or ids() multiple times).
+      const { relation } = await this._walkOnce();
       const merged = this._composeChainedState(relation);
       return (merged as unknown as { ids: () => Promise<unknown[]> }).ids();
     }
     return this._storedIds;
+  }
+
+  /**
+   * Memoize the walker invocation so the async chain walk runs at
+   * most once per DJAR instance. Shared by `toArray()` and `ids()`.
+   */
+  private _walkOnce(): Promise<{ relation: Relation<T> }> {
+    if (!this._walkPromise) {
+      this._walkPromise = this._chainWalker!();
+    }
+    return this._walkPromise;
   }
 
   /**
@@ -132,24 +151,15 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
 
   override async toArray(): Promise<T[]> {
     if (this._chainWalker) {
-      // Memoize the walk + load so repeated toArray() calls don't
-      // re-execute the chain (e.g. via Relation thenable shortcuts).
-      if (!this._walkerPromise) {
-        const walker = this._chainWalker;
-        // Snapshot the chained query state from `this` (wheres /
-        // orders / limit / etc) so post-chain operations like
-        // `DJAS.scope(...).where({title: 'foo'})` actually filter the
-        // walker's result. Without this, chained wheres would be
-        // silently dropped — _loadThroughViaDisableJoinsScope routes
-        // `options.scope(rel)` through here for example.
-        const overlay = this;
-        this._walkerPromise = (async () => {
-          const { relation } = await walker();
-          const merged = overlay._composeChainedState(relation);
-          return merged.toArray();
-        })();
-      }
-      return this._walkerPromise;
+      // Routes through `_walkOnce()` so the chain walk (including
+      // intermediate plucks) is shared with any earlier `ids()` call.
+      // The chained query state on `this` (wheres / orders / limit /
+      // etc.) composes via `_composeChainedState` so chains like
+      // `DJAS.scope(...).where({title: 'foo'})` actually filter the
+      // walker's result.
+      const { relation } = await this._walkOnce();
+      const merged = this._composeChainedState(relation);
+      return merged.toArray();
     }
     // Loaded-chain mode: load via Relation, then group by `key` and
     // re-emit in `ids` order so the caller sees join-table ordering

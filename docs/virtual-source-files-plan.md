@@ -311,7 +311,7 @@ Status legend: ✅ merged, 🚧 in flight, 📋 planned.
   singular readers, and made the proxy array-like so existing consumers
   keep working.
 - **Phase 1a-fixup (#539)** — `synthesize.ts` now emits
-  `declare <name>: AssociationProxy<<target>>;` for hasMany / HABTM,
+  `declare <name>: AssociationProxy<target>;` for hasMany / HABTM,
   with inline `import("@blazetrails/activerecord").<Type>` qualification
   so zero-declare files don't need extra imports.
 - **Phase 1b** — six sub-PRs building the `trails-tsc` CLI shell: driver

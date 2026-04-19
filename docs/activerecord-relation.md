@@ -20,7 +20,8 @@ reselect! group! regroup! order! reorder! unscope! joins! left_outer_joins!
 where! invert_where! and! or! having! limit! offset! lock! none! readonly!
 strict_loading! create_with! from! distinct! extending! optimizer_hints!
 reverse_order! skip_query_cache! skip_preloading! annotate! uniq! excluding!
-construct_join_dependency null_relation?
+construct_join_dependency
+null_relation?
 ```
 
 (plus `null_relation?` → `isNullRelation` and `construct_join_dependency` →

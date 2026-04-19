@@ -67,5 +67,5 @@ Files with methods still missing. Run `api:compare --missing` to see per-method 
 | Area                | Notes                                                                             |
 | ------------------- | --------------------------------------------------------------------------------- |
 | Connection adapters | Abstract adapter / schema statements / pool / transaction still have missing bits |
-| Associations        | Builders, preloader, join_dependency — see `docs/activerecord-relation.md`        |
+| Associations        | Builders, preloader, and join_dependency still have major gaps                    |
 | Migration           | Command recorder, schema migration                                                |

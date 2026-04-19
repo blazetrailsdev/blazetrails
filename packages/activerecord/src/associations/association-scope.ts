@@ -591,17 +591,37 @@ export class AssociationScope {
         let merged = scope;
         for (const c of constraints) {
           if (typeof c !== "function") continue;
-          const entryScope = (entryKlass as unknown as { unscoped: () => unknown }).unscoped();
-          const evaluated = c(entryScope);
+          const evaluated = c(this._buildEntryScope(entryKlass));
           merged = this._pushScopeIntoRelation(merged, evaluated);
         }
         return merged;
       }
     }
     if (typeof r.scope !== "function") return scope;
-    // Build the entry-side scope with STI type_condition, matching the
-    // head-scope path so STI subclasses get the right type filter
-    // (Base.unscoped strips it; we re-add per the same compensation).
+    const entryScope = this._buildEntryScope(entryKlass);
+    // Same arity / `this` semantics as AssociationReflection.scopeFor
+    // for the fallback path: 0-arg → `this=relation`; 1+-arg →
+    // `this=relation, args=(relation, owner)`. Without this binding,
+    // a scope written as `function () { return this.where(...) }`
+    // (the common 0-arg form) would lose the relation.
+    const evaluated =
+      typeof r.scopeFor === "function"
+        ? r.scopeFor.call(reflection, entryScope, owner)
+        : r.scope.length === 0
+          ? (r.scope as () => unknown).call(entryScope)
+          : r.scope.call(entryScope, entryScope, owner);
+    return this._pushScopeIntoRelation(scope, evaluated);
+  }
+
+  /**
+   * Build a fresh scope for evaluating a chain entry's lambda. Mirrors
+   * `entryKlass.unscoped` plus the same STI type_condition compensation
+   * the head-scope path applies — Rails' `unscoped` retains the STI
+   * type filter via `relation()` (core.rb:431-435); ours strips it,
+   * so we re-add `where(type: stiNames)` for subclasses to keep the
+   * filter on intermediate / source relation builds.
+   */
+  private _buildEntryScope(entryKlass: typeof Base): unknown {
     let entryScope: unknown = (entryKlass as unknown as { unscoped: () => unknown }).unscoped();
     if (isStiSubclass(entryKlass)) {
       const col = getInheritanceColumn(getStiBase(entryKlass));
@@ -615,18 +635,7 @@ export class AssociationScope {
         });
       }
     }
-    // Same arity / `this` semantics as AssociationReflection.scopeFor
-    // for the fallback path: 0-arg → `this=relation`; 1+-arg →
-    // `this=relation, args=(relation, owner)`. Without this binding,
-    // a scope written as `function () { return this.where(...) }`
-    // (the common 0-arg form) would lose the relation.
-    const evaluated =
-      typeof r.scopeFor === "function"
-        ? r.scopeFor.call(reflection, entryScope, owner)
-        : r.scope.length === 0
-          ? (r.scope as () => unknown).call(entryScope)
-          : r.scope.call(entryScope, entryScope, owner);
-    return this._pushScopeIntoRelation(scope, evaluated);
+    return entryScope;
   }
 
   /**

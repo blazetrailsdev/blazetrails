@@ -515,20 +515,24 @@ export class AssociationScope {
     // scopeFor on the head reflection. Rails: reflection.rb:448,
     // scope_for — 0-arity scopes get `this`=relation, >=1-arity get
     // (relation, owner) per `relation.instance_exec(owner, &scope) ||
-    // relation`. Calling `reflection.scope(scope)` directly would lose
-    // the binding. ThroughReflection doesn't expose scopeFor (it's not
-    // a MacroReflection), so fall back to invoking .scope directly so
-    // a scope defined on the through association itself still applies.
+    // relation`. ThroughReflection inherits AbstractReflection's
+    // `scopeFor`, but its internal `_scope` field is never set — the
+    // scope on the `has_many :through` itself lives on `.scope`
+    // (delegated), so `scopeFor` returns the scope unchanged for
+    // through reflections. Detect through explicitly and invoke
+    // `.scope` directly with matching arity / `this` semantics so a
+    // scope on the through association itself still applies.
     const head = chain[0] as {
       scopeFor?: (rel: unknown, owner: unknown) => unknown;
       scope?: ((rel: unknown, owner?: unknown) => unknown) | null;
+      isThroughReflection?: () => boolean;
     };
-    if (typeof head.scopeFor === "function") {
+    const isThrough = typeof head.isThroughReflection === "function" && head.isThroughReflection();
+    if (!isThrough && typeof head.scopeFor === "function") {
       scope = head.scopeFor.call(head, scope, owner);
     } else if (typeof head.scope === "function") {
       // Match Rails instance_exec arity: 0-arg scope → this=scope;
-      // 1+-arg → (scope, owner). Without scopeFor we mimic the same
-      // dispatch the AssociationReflection.scopeFor implementation does.
+      // 1+-arg → (scope, owner).
       const fn = head.scope;
       const result =
         fn.length === 0 ? (fn as () => unknown).call(scope) : fn.call(scope, scope, owner);
@@ -584,33 +588,45 @@ export class AssociationScope {
         });
       }
     }
+    // Same arity / `this` semantics as AssociationReflection.scopeFor
+    // for the fallback path: 0-arg → `this=relation`; 1+-arg →
+    // `this=relation, args=(relation, owner)`. Without this binding,
+    // a scope written as `function () { return this.where(...) }`
+    // (the common 0-arg form) would lose the relation.
     const evaluated =
       typeof r.scopeFor === "function"
         ? r.scopeFor.call(reflection, entryScope, owner)
-        : r.scope.call(reflection, entryScope, owner);
+        : r.scope.length === 0
+          ? (r.scope as () => unknown).call(entryScope)
+          : r.scope.call(entryScope, entryScope, owner);
     if (!evaluated) return scope;
     // Push ONLY the entry's WHERE predicates and ORDER clauses onto
     // the main scope — Rails' `where_clause += ...` / `order_values |=`
     // semantics. A full Relation#merge would let the entry's limit /
     // select / joins / etc override the main scope, which Rails
-    // explicitly avoids (see the chain_head branch's
-    // `merge! item.except(:where, :includes, :unscope, :order)` plus
-    // explicit `where_clause += / order_values |=` afterward).
+    // explicitly avoids.
     const evalWhere = (evaluated as { _whereClause?: { predicates?: unknown[] } })._whereClause;
     const evalOrders = (evaluated as { _orderClauses?: unknown[] })._orderClauses ?? [];
     let merged = scope as {
       where: (n: unknown) => unknown;
-      order: (...args: unknown[]) => unknown;
+      _orderClauses?: unknown[];
     };
     for (const pred of evalWhere?.predicates ?? []) {
       merged = merged.where(pred) as typeof merged;
     }
     if (evalOrders.length > 0) {
-      const existing = (merged as unknown as { _orderClauses?: unknown[] })._orderClauses ?? [];
-      const additions = evalOrders.filter((o) => !existing.includes(o));
-      if (additions.length > 0) {
-        merged = merged.order(...additions) as typeof merged;
+      // Rails: `scope.order_values = item.order_values | scope.order_values`
+      // (association_scope.rb:153) — chain entry's orderings come
+      // BEFORE the main scope's, deduplicated. _orderClauses entries
+      // are `string | [string, "asc"|"desc"]` tuples; pushing tuples
+      // back through `.order(...)` doesn't round-trip, so mutate the
+      // _orderClauses array directly.
+      const existing = merged._orderClauses ?? [];
+      const next: unknown[] = [];
+      for (const o of [...evalOrders, ...existing]) {
+        if (!next.includes(o)) next.push(o);
       }
+      merged._orderClauses = next;
     }
     return merged;
   }

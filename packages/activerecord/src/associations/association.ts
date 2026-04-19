@@ -105,12 +105,23 @@ export class Association {
    * `AssociationScope` machinery. Mirrors Rails'
    * `Association#association_scope` (association.rb:300-308):
    * memoized for the JOIN-based path; fresh-each-call for
-   * `disable_joins` (the cache would mask owner FK snapshot
-   * dependencies on the chain walk).
+   * `disable_joins`.
    *
-   * Returns the **base** scope — caller is responsible for any
-   * additional `.where(...)` / `.order(...)` chaining (e.g.
-   * `options.scope`). The cache stores the unfiltered base only.
+   * Return shape:
+   *  - JOIN-based path: a `Relation` (the base scope). Caller is
+   *    responsible for any additional `.where(...)` / `.order(...)`
+   *    chaining (e.g. `options.scope`). The cache stores the
+   *    unfiltered base only.
+   *  - `disable_joins` path: a `Promise<{ relation }>` per DJAS' boxed
+   *    contract (the box dodges the Relation thenable when awaited).
+   *    Caller awaits + unwraps `.relation`.
+   *
+   * Cache contract (Rails-equivalent): the cached scope captures
+   * owner FK / polymorphic-type values at build time. Mutating the
+   * owner's FK after a first load does NOT invalidate the cache —
+   * Rails behaves the same (`@association_scope` only resets via
+   * `reset_scope`, called on init and `reload()`). Callers that
+   * mutate FKs and want a fresh query must `reload()`.
    */
   associationScope(): unknown {
     // `this.reflection` here is the lightweight AssociationDefinition

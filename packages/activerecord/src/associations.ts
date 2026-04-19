@@ -3,6 +3,7 @@ import { Table as ArelTable } from "@blazetrails/arel";
 import { CollectionProxy, type AssociationProxy } from "./associations/collection-proxy.js";
 import { StrictLoadingViolationError, ConfigurationError } from "./errors.js";
 import {
+  AssociationNotFoundError,
   DeleteRestrictionError,
   InverseOfAssociationNotFoundError,
   HasOneThroughNestedAssociationsAreReadonly,
@@ -389,11 +390,17 @@ function _builtAssociationScope(
   if (typeof assocFn === "function") {
     try {
       instance = assocFn.call(record, assocName) as typeof instance;
-    } catch {
-      // Association registry mismatch (e.g. low-level test fixtures
-      // that bypass `Associations.hasMany.call`); fall through to the
-      // fresh-build path so callers still work.
-      instance = undefined;
+    } catch (e) {
+      // Only swallow the "association not registered" case (low-level
+      // test fixtures that bypass `Associations.hasMany.call`). Real
+      // bugs in instance construction must surface — otherwise the
+      // fresh-build fallback would silently mask them and callers
+      // would see mysterious behavior changes.
+      if (e instanceof AssociationNotFoundError) {
+        instance = undefined;
+      } else {
+        throw e;
+      }
     }
   }
   if (instance && !instance.disableJoins && typeof instance.associationScope === "function") {

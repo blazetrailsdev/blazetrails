@@ -46,29 +46,31 @@ describe("Association scope cache", () => {
     });
   });
 
-  it("AssociationScope.scope is called once across repeated loads (memoized)", async () => {
+  it("AssociationScope.scope is called once across repeated scope builds (memoized)", async () => {
+    // Test the scope cache directly: assert that calling
+    // associationScope() twice on the same instance only invokes
+    // AssociationScope.scope once, and that resetScope() forces a
+    // rebuild. (Going through loadTarget/reload would be ambiguous —
+    // a second loadTarget short-circuits on the already-loaded target
+    // and never builds a scope, so the cache wouldn't be exercised.)
     const author = await CacheAuthor.create({ name: "A" });
     await CachePost.create({ cache_author_id: author.id, title: "p1" });
-    await CachePost.create({ cache_author_id: author.id, title: "p2" });
 
     const spy = vi.spyOn(AssociationScope, "scope");
-
-    // Materialize the Association instance so the cache path is taken.
     const assoc = (author as any).association("cachePosts");
-    expect(assoc).toBeDefined();
 
-    await assoc.loadTarget();
-    const callsAfterFirst = spy.mock.calls.length;
-    expect(callsAfterFirst).toBeGreaterThan(0);
+    assoc.associationScope();
+    const afterFirst = spy.mock.calls.length;
+    expect(afterFirst).toBe(1);
 
-    // Re-load via the same proxy; cached scope should serve.
-    await assoc.reload(); // resets cache + reloads
-    const callsAfterReload = spy.mock.calls.length;
-    expect(callsAfterReload).toBeGreaterThan(callsAfterFirst);
+    // Second call hits the cache — no new AssociationScope.scope call.
+    assoc.associationScope();
+    expect(spy.mock.calls.length).toBe(afterFirst);
 
-    // Now do a load that should hit the cache (no reload between).
-    await assoc.loadTarget();
-    expect(spy.mock.calls.length).toBe(callsAfterReload);
+    // resetScope() (called by reload()) clears the cache; next call rebuilds.
+    assoc.resetScope();
+    assoc.associationScope();
+    expect(spy.mock.calls.length).toBe(afterFirst + 1);
 
     spy.mockRestore();
   });

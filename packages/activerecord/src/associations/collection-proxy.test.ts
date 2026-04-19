@@ -56,7 +56,7 @@ describe("CollectionProxy — array-likeness (Phase R.1)", () => {
     return blog;
   }
 
-  it("exposes sync count via `Array.from(proxy).length`", async () => {
+  it("exposes `length` against the loaded target", async () => {
     const blog = await blogWithPosts();
     const proxy = association<ApPost>(blog, "apPosts");
     // With CP extending Relation, `proxy.length` is now the inherited
@@ -66,7 +66,7 @@ describe("CollectionProxy — array-likeness (Phase R.1)", () => {
     expect(proxy.target.length).toBe(3);
   });
 
-  it("inherits Relation#length() — async count", async () => {
+  it("shadows Relation#length() — use proxy.count() for async count", async () => {
     const blog = await blogWithPosts();
     const proxy = association<ApPost>(blog, "apPosts") as any;
     expect(typeof proxy.length).toBe("function");

@@ -36,10 +36,11 @@ import {
 } from "../associations.js";
 import { _setCollectionProxyCtor } from "./collection-proxy-slot.js";
 
-// @ts-expect-error Declaration merging with `class CollectionProxy extends
-//   Relation` propagates Relation's method types into this interface.
-//   `load()` diverges (CP returns T[], Relation returns LoadedRelation<this>)
-//   and the conflict surfaces here too. Same PR B plan as on the class.
+// Declaration merging with `class CollectionProxy extends Relation`
+// propagates Relation's method types into this interface. `load()`
+// diverges (CP returns T[], Relation returns LoadedRelation<this>)
+// and the conflict surfaces here too. Same PR B plan as on the class.
+// @ts-expect-error see block comment above — declaration-merge `load()` divergence
 export interface CollectionProxy<T extends Base = Base> {
   // Thenable — makes CollectionProxy awaitable. Delegates to `load()`,
   // which both returns the loaded records AND hydrates `_target`, so
@@ -663,6 +664,11 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   //   semantics (loaded-target fast path). PR B will delete CP's count
   //   and let Relation's win.
   async count(): Promise<number> {
+    // Same divergence gate as toArray() / load(): scope bangs on the
+    // proxy mean loadHasMany's cached count is stale.
+    if (this._relationStateDiverged()) {
+      return (await super.toArray()).length;
+    }
     const results = await loadHasMany(this._record, this._assocName, this._assocDef.options);
     return results.length;
   }
@@ -1273,6 +1279,12 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       return records.map((r) => stringCols.map((c) => r.readAttribute(c)));
     }
     this._checkStrictLoading();
+    // Scope bangs on the proxy itself: scope() rebuilds the unmutated
+    // association relation and would drop the mutation. super.pluck
+    // uses the inherited (mutated) Relation state instead.
+    if (this._relationStateDiverged()) {
+      return super.pluck(...columns);
+    }
     return this.scope().pluck(...columns);
   }
 
@@ -1290,6 +1302,10 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       return stringCols.map((c) => records[0].readAttribute(c));
     }
     this._checkStrictLoading();
+    // Same divergence gate as pluck().
+    if (this._relationStateDiverged()) {
+      return super.pick(...columns);
+    }
     return this.scope().pick(...columns);
   }
 
@@ -1548,12 +1564,17 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         );
     }
 
+    // If the proxy's inherited Relation state has been mutated in place
+    // (e.g. cp.whereBang(...)), use `this` directly instead of
+    // scope() — scope() rebuilds the unmutated association scope and
+    // would delete/nullify MORE rows than the caller constrained.
+    const rel = this._relationStateDiverged() ? (this as unknown as Relation<T>) : this.scope();
     if (strategy === "delete_all") {
       if (this._isThrough) {
         // For through associations, delete join rows via SQL — not the target records
         await this._deleteThroughAllSql();
       } else {
-        await this.scope().deleteAll();
+        await (rel as { deleteAll: () => Promise<unknown> }).deleteAll();
       }
     } else {
       // Nullify: set-based SQL update to null FKs (no per-record callbacks)
@@ -1561,7 +1582,9 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         await this._deleteThroughAllSql();
       } else {
         const nullUpdates = this._buildNullifyUpdates();
-        await this.scope().updateAll(nullUpdates);
+        await (rel as { updateAll: (u: Record<string, unknown>) => Promise<unknown> }).updateAll(
+          nullUpdates,
+        );
       }
     }
     this._target = [];

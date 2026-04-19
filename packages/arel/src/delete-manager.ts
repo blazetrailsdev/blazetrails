@@ -1,5 +1,5 @@
 import { Node } from "./nodes/node.js";
-import { TreeManager } from "./tree-manager.js";
+import { TreeManager, applyStatementMethods } from "./tree-manager.js";
 import { DeleteStatement } from "./nodes/delete-statement.js";
 import { Limit, Group } from "./nodes/unary.js";
 import { Quoted } from "./nodes/casted.js";
@@ -14,6 +14,8 @@ import { ToSql } from "./visitors/to-sql.js";
  */
 export class DeleteManager extends TreeManager {
   readonly ast: DeleteStatement;
+  // Installed via applyStatementMethods (below) — Rails mixes these in.
+  declare key: unknown;
 
   constructor() {
     super();
@@ -95,3 +97,5 @@ export class DeleteManager extends TreeManager {
     return new ToSql().compile(this.ast);
   }
 }
+
+applyStatementMethods(DeleteManager);

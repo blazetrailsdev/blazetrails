@@ -5,6 +5,8 @@ import { Composite } from "../collectors/composite.js";
 import * as Nodes from "../nodes/index.js";
 import { Table } from "../table.js";
 
+const ATTRIBUTE_BRAND_KEY = Symbol.for("activemodel.attribute");
+
 export class UnsupportedVisitError extends Error {
   constructor(message: string) {
     super(message);
@@ -945,9 +947,10 @@ export class ToSql implements NodeVisitor<SQLString> {
       this.collector.addBind(node.value !== undefined ? node.value : node);
     } else if (node.value !== undefined) {
       // Extract the database value from Attribute instances via brand symbol
-      const brandKey = Symbol.for("activemodel.attribute");
       const val =
-        node.value && typeof node.value === "object" && brandKey in (node.value as object)
+        node.value &&
+        typeof node.value === "object" &&
+        ATTRIBUTE_BRAND_KEY in (node.value as object)
           ? (node.value as { valueForDatabase: unknown }).valueForDatabase
           : node.value;
       this.collector.append(this.quote(val));

@@ -40,6 +40,9 @@ import { Over } from "../nodes/over.js";
 import { NamedWindow, Window } from "../nodes/window.js";
 import { True } from "../nodes/true.js";
 
+/** Brand symbol for ActiveModel::Attribute detection (arel can't import activemodel). */
+const ATTRIBUTE_BRAND_KEY = Symbol.for("activemodel.attribute");
+
 function buildQuoted(value: unknown): Node {
   if (value instanceof Node) return value;
   return new Quoted(value);
@@ -112,11 +115,7 @@ export class Attribute extends Node {
     // ActiveModel::Attribute instances (QueryAttribute etc.) carry their
     // own type + value. Wrap in BindParam so the visitor extracts them
     // as binds. Detected via brand symbol — arel can't import activemodel.
-    if (
-      value &&
-      typeof value === "object" &&
-      Symbol.for("activemodel.attribute") in (value as object)
-    ) {
+    if (value && typeof value === "object" && ATTRIBUTE_BRAND_KEY in (value as object)) {
       return new BindParam(value);
     }
     return new Casted(value, this);

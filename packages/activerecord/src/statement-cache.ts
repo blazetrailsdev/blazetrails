@@ -10,7 +10,7 @@
  *   const results = await cache.execute(["my book"], connection);
  */
 
-import { Attribute } from "@blazetrails/activemodel";
+import { Attribute, ATTRIBUTE_BRAND } from "@blazetrails/activemodel";
 import type { Base } from "./base.js";
 
 /**
@@ -233,9 +233,8 @@ export class StatementCache {
       return this._model.findBySql(sql);
     }
     // Type-cast Attribute bind objects to primitives for the adapter
-    const brandKey = Symbol.for("activemodel.attribute");
     const castedBinds = bindValues.map((b) =>
-      b !== null && typeof b === "object" && brandKey in (b as object)
+      b !== null && typeof b === "object" && ATTRIBUTE_BRAND in (b as object)
         ? (b as { valueForDatabase: unknown }).valueForDatabase
         : b,
     );

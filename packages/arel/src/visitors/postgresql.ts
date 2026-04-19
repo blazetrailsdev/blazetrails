@@ -4,6 +4,8 @@ import { SQLString } from "../collectors/sql-string.js";
 import { ToSql } from "./to-sql.js";
 import { quoteArrayLiteral } from "../quote-array.js";
 
+const ATTRIBUTE_BRAND_KEY = Symbol.for("activemodel.attribute");
+
 /**
  * PostgreSQL visitor — extends generic ToSql with PostgreSQL-specific features.
  *
@@ -95,9 +97,10 @@ export class PostgreSQLWithBinds extends PostgreSQL {
       const value = node.value !== undefined ? node.value : node;
       this.collector.addBind(value, () => `$${this.bindIndex}`);
     } else if (node.value !== undefined) {
-      const brandKey = Symbol.for("activemodel.attribute");
       const val =
-        node.value && typeof node.value === "object" && brandKey in (node.value as object)
+        node.value &&
+        typeof node.value === "object" &&
+        ATTRIBUTE_BRAND_KEY in (node.value as object)
           ? (node.value as { valueForDatabase: unknown }).valueForDatabase
           : node.value;
       this.collector.append(this.quote(val));

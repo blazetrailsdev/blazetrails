@@ -5,6 +5,7 @@
  */
 
 import { sql as arelSql, Nodes, Visitors } from "@blazetrails/arel";
+import { ATTRIBUTE_BRAND } from "@blazetrails/activemodel";
 import { Notifications } from "@blazetrails/activesupport";
 import { TransactionIsolationError } from "../../errors.js";
 import { quote, quoteTableName, quoteColumnName } from "./quoting.js";
@@ -119,9 +120,8 @@ export function toSqlAndBinds(
       const [sql, extractedBinds] = visitor.compileWithBinds(node);
       // Type-cast bind objects (QueryAttribute) to primitive values
       // for adapter execution, matching Rails' type_casted_binds
-      const brandKey = Symbol.for("activemodel.attribute");
       const castedBinds = extractedBinds.map((b) => {
-        if (b && typeof b === "object" && brandKey in (b as object)) {
+        if (b && typeof b === "object" && ATTRIBUTE_BRAND in (b as object)) {
           return (b as { valueForDatabase: unknown }).valueForDatabase;
         }
         return b;

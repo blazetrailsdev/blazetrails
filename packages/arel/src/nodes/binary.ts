@@ -1,12 +1,22 @@
 import { Node, NodeVisitor } from "./node.js";
+import { NodeExpression } from "./node-expression.js";
 import { SqlLiteral } from "./sql-literal.js";
 import { And } from "./and.js";
 import { Or } from "./or.js";
 import { Not } from "./unary.js";
 import { Grouping } from "./grouping.js";
-import { Cte } from "./cte.js";
+import type { Cte } from "./cte.js";
 
-export type NodeOrValue = Node | string | number | boolean | bigint | Date | null | undefined;
+export type NodeOrValue =
+  | Node
+  | string
+  | number
+  | boolean
+  | bigint
+  | Date
+  | Node[]
+  | null
+  | undefined;
 
 export const ATTRIBUTE_BRAND = Symbol.for("arel.Attribute");
 
@@ -25,7 +35,7 @@ export function fetchAttributeFromBinary(
   return undefined;
 }
 
-export class Binary extends Node {
+export class Binary extends NodeExpression {
   left: NodeOrValue;
   right: NodeOrValue;
 
@@ -58,11 +68,20 @@ export class Binary extends Node {
 
 export class Assignment extends Binary {}
 
+// Cte lives in ./cte.ts (Rails parity), but `As.toCte` needs to construct
+// one. cte.ts also needs to `extends Binary` for inheritance fidelity — a
+// cycle. Break it with a late-bound factory registered by cte.ts at load.
+let cteFactory: ((name: string, relation: Node) => Cte) | null = null;
+export function _registerCteFactory(fn: (name: string, relation: Node) => Cte): void {
+  cteFactory = fn;
+}
+
 export class As extends Binary {
   toCte(): Cte {
     const name =
       this.right instanceof SqlLiteral ? (this.right as SqlLiteral).value : String(this.right);
-    return new Cte(name, this.left as Node);
+    if (!cteFactory) throw new Error("Cte factory not registered (import ./cte.js first)");
+    return cteFactory(name, this.left as Node);
   }
 }
 

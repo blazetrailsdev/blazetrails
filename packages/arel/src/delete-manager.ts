@@ -1,4 +1,5 @@
 import { Node } from "./nodes/node.js";
+import { TreeManager } from "./tree-manager.js";
 import { DeleteStatement } from "./nodes/delete-statement.js";
 import { Limit, Group } from "./nodes/unary.js";
 import { Quoted } from "./nodes/casted.js";
@@ -11,10 +12,11 @@ import { ToSql } from "./visitors/to-sql.js";
  *
  * Mirrors: Arel::DeleteManager
  */
-export class DeleteManager {
+export class DeleteManager extends TreeManager {
   readonly ast: DeleteStatement;
 
   constructor() {
+    super();
     this.ast = new DeleteStatement();
   }
 

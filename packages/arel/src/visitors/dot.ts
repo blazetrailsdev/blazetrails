@@ -1,4 +1,5 @@
 import { Node } from "../nodes/node.js";
+import { Visitor } from "./visitor.js";
 
 export class DotNode {
   readonly name: string;
@@ -29,7 +30,11 @@ export class DotEdge {
  *
  * Mirrors: Arel::Visitors::Dot (loosely)
  */
-export class Dot {
+export class Dot extends Visitor {
+  protected visit(object: Node): unknown {
+    return this.compile(object);
+  }
+
   accept(
     object: Node,
     collector: { append(s: string): unknown; value: string },

@@ -1,4 +1,5 @@
 import { Node } from "./nodes/node.js";
+import { TreeManager } from "./tree-manager.js";
 import { UpdateStatement } from "./nodes/update-statement.js";
 import { Assignment } from "./nodes/binary.js";
 import { Quoted } from "./nodes/casted.js";
@@ -12,10 +13,11 @@ import { ToSql } from "./visitors/to-sql.js";
  *
  * Mirrors: Arel::UpdateManager
  */
-export class UpdateManager {
+export class UpdateManager extends TreeManager {
   readonly ast: UpdateStatement;
 
   constructor() {
+    super();
     this.ast = new UpdateStatement();
   }
 
@@ -69,16 +71,6 @@ export class UpdateManager {
    */
   get wheres(): Node[] {
     return [...this.ast.wheres];
-  }
-
-  /**
-   * Set a primary key condition for the update.
-   *
-   * Mirrors: Arel::UpdateManager#key=
-   */
-  key(keyNode: Node): this {
-    this.ast.key = keyNode;
-    return this;
   }
 
   /**

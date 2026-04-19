@@ -1,4 +1,5 @@
 import { Node } from "./nodes/node.js";
+import { TreeManager } from "./tree-manager.js";
 import { InsertStatement } from "./nodes/insert-statement.js";
 import { Attribute } from "./attributes/attribute.js";
 import { ValuesList } from "./nodes/values-list.js";
@@ -11,10 +12,11 @@ import { ToSql } from "./visitors/to-sql.js";
  *
  * Mirrors: Arel::InsertManager
  */
-export class InsertManager {
+export class InsertManager extends TreeManager {
   readonly ast: InsertStatement;
 
   constructor(table?: Table | null) {
+    super();
     this.ast = new InsertStatement();
     if (table) this.into(table);
   }

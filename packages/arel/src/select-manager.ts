@@ -1,4 +1,5 @@
 import { Node } from "./nodes/node.js";
+import { TreeManager } from "./tree-manager.js";
 import { SelectStatement } from "./nodes/select-statement.js";
 import { SelectCore } from "./nodes/select-core.js";
 import { SqlLiteral } from "./nodes/sql-literal.js";
@@ -37,10 +38,11 @@ import { InsertManager } from "./insert-manager.js";
  *
  * Mirrors: Arel::SelectManager
  */
-export class SelectManager {
+export class SelectManager extends TreeManager {
   readonly ast: SelectStatement;
 
   constructor(table?: Table | null) {
+    super();
     this.ast = new SelectStatement();
     if (table) {
       this.from(table);

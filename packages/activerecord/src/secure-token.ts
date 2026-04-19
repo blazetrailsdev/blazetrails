@@ -40,12 +40,19 @@ function generateToken(length: number = 24): string {
  * Generates a unique token before create if the attribute is blank.
  * Adds a `regenerateToken()` (or `regenerateAuthToken()`) instance method.
  */
+const MINIMUM_TOKEN_LENGTH = 24;
+
 export function hasSecureToken(
   modelClass: typeof Base,
   attribute: string = "token",
   options?: { length?: number },
 ): void {
-  const tokenLength = options?.length ?? 24;
+  const tokenLength = options?.length ?? MINIMUM_TOKEN_LENGTH;
+  if (tokenLength < MINIMUM_TOKEN_LENGTH) {
+    throw new MinimumLengthError(
+      `Token requires a minimum length of ${MINIMUM_TOKEN_LENGTH} characters.`,
+    );
+  }
 
   // Before create: auto-generate token if blank
   modelClass.beforeCreate((record: any) => {

@@ -377,11 +377,25 @@ function _builtAssociationScope(
   reflection: unknown,
   targetModel: typeof Base,
 ): unknown {
-  const instance = (
-    record as { _associationInstances?: Map<string, unknown> }
-  )._associationInstances?.get(assocName) as
-    | { disableJoins?: boolean; associationScope?: () => unknown }
-    | undefined;
+  // Materialize the Association instance if missing — proxy paths
+  // (CollectionProxy, AssociationProxy) call loaders directly without
+  // first going through `record.association(name)`, so an instance-
+  // only cache wouldn't hit in the common case. Rails caches on the
+  // Association instance too, but Rails' proxy IS the Association so
+  // the instance always exists. Calling `record.association(name)`
+  // here bridges that gap.
+  let instance: { disableJoins?: boolean; associationScope?: () => unknown } | undefined;
+  const assocFn = (record as { association?: (n: string) => unknown }).association;
+  if (typeof assocFn === "function") {
+    try {
+      instance = assocFn.call(record, assocName) as typeof instance;
+    } catch {
+      // Association registry mismatch (e.g. low-level test fixtures
+      // that bypass `Associations.hasMany.call`); fall through to the
+      // fresh-build path so callers still work.
+      instance = undefined;
+    }
+  }
   if (instance && !instance.disableJoins && typeof instance.associationScope === "function") {
     return instance.associationScope();
   }

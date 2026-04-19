@@ -92,6 +92,37 @@ describe("Association scope cache", () => {
     expect(a).not.toBe(b);
   });
 
+  it("loader paths hit the cache too (not just explicit record.association(name) calls)", async () => {
+    // CollectionProxy / AssociationProxy call loadHasMany / loadHasOne
+    // directly without first calling `record.association(name)`. The
+    // cache must still apply — otherwise the common proxy path
+    // (e.g. `await blog.posts`) would rebuild the scope every time.
+    // `_builtAssociationScope` lazily materializes the Association
+    // instance to cover this case.
+    const { loadHasMany } = await import("../associations.js");
+    const author = await CacheAuthor.create({ name: "A" });
+    await CachePost.create({ cache_author_id: author.id, title: "p1" });
+    await CachePost.create({ cache_author_id: author.id, title: "p2" });
+
+    const spy = vi.spyOn(AssociationScope, "scope");
+    const opts = {
+      className: "CachePost",
+      foreignKey: "cache_author_id",
+    };
+
+    // First loader call populates the Association-instance cache.
+    await loadHasMany(author, "cachePosts", opts);
+    const afterFirst = spy.mock.calls.length;
+    expect(afterFirst).toBeGreaterThan(0);
+
+    // Second loader call — different caches would rebuild the scope.
+    // With our cache, AssociationScope.scope count is unchanged.
+    await loadHasMany(author, "cachePosts", opts);
+    expect(spy.mock.calls.length).toBe(afterFirst);
+
+    spy.mockRestore();
+  });
+
   it("different owners get independent caches", async () => {
     const a1 = await CacheAuthor.create({ name: "A1" });
     const a2 = await CacheAuthor.create({ name: "A2" });

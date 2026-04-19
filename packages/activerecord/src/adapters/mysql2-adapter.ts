@@ -51,8 +51,12 @@ class Mysql2StatementPool extends MysqlStatementPool {
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::Mysql2Adapter
  *
- * Accepts either a connection URI (`mysql://...`) or a `mysql2` pool config
- * object. Uses a connection pool internally for concurrent access.
+ * Accepts either a connection URI (`mysql://...`) or a merged config
+ * hash — `mysql2` pool-options keys for the driver, plus Rails' adapter-
+ * level keys (`statementLimit`, `preparedStatements`) stripped into the
+ * adapter before `mysql.createPool` is called. Matches Rails' database.yml
+ * shape where driver params and adapter knobs share one hash.
+ * Uses a connection pool internally for concurrent access.
  */
 export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapter {
   override get adapterName(): string {

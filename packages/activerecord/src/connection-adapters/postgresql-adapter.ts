@@ -32,8 +32,12 @@ import { typeCastedBinds } from "./abstract/database-statements.js";
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQLAdapter
  *
- * Accepts either a connection string (`postgres://...`) or a `pg.PoolConfig`
- * object. Uses a connection pool internally for concurrent access.
+ * Accepts either a connection string (`postgres://...`) or a merged
+ * config hash — `pg.PoolConfig` keys for the driver, plus Rails'
+ * adapter-level keys (`statementLimit`, `preparedStatements`) stripped
+ * into the adapter before `pg.Pool` is built. Matches Rails' database.yml
+ * shape where driver params and adapter knobs share one hash.
+ * Uses a connection pool internally for concurrent access.
  */
 export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapter {
   override get adapterName(): string {

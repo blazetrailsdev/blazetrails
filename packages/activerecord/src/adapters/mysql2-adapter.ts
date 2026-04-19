@@ -121,7 +121,11 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
   private _trackPrepared(conn: mysql.PoolConnection, sql: string): void {
     const pool = this._poolFor(conn);
     if (pool.maxSize === 0) return;
-    if (pool.has(sql)) return;
+    // Use `get` (not `has`) so an already-cached entry is moved to
+    // the MRU end of the LRU. Otherwise a hot statement executed
+    // repeatedly would keep its original insertion position and get
+    // evicted the moment any other distinct query came along.
+    if (pool.get(sql)) return;
     pool.set(sql, { sql, key: pool.nextKey() });
   }
 

@@ -37,7 +37,8 @@ describeIfMysql("Mysql2Adapter", () => {
         await adapter.execute("SELECT ? AS n", [1]);
         const pool = adapter._statementPoolForTest()!;
         // Rails' matching test sets statement_limit = 1 and asserts
-        // LRU eviction. setMaxSize immediately evicts the older entry
+        // LRU eviction. With one cached statement, setMaxSize(1) just
+        // records the new limit; eviction happens on the next insert
         // via our Mysql2StatementPool#dealloc (conn.unprepare).
         pool.setMaxSize(1);
         await adapter.execute("SELECT ? AS s", ["a"]);

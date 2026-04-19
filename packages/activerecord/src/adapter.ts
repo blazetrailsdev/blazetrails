@@ -114,10 +114,11 @@ export interface DatabaseAdapter {
   rollback(): Promise<void>;
 
   /**
-   * Drop cached prepared statements. Safe no-op for adapters with no
-   * statement pool. Called from the transaction-manager's rollback
-   * path when the failure is a `PreparedStatementCacheExpired` so the
-   * next call re-PREPAREs on a fresh session.
+   * Drop cached prepared statements on the current connection. Safe
+   * no-op for adapters with no statement pool. Called from the
+   * transaction-manager's rollback path when the failure is a
+   * `PreparedStatementCacheExpired` so subsequent statements
+   * re-PREPARE on the same connection after the cache is cleared.
    *
    * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter#clear_cache!
    */

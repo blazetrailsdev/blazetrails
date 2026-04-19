@@ -2,7 +2,7 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { Base, transaction, savepoint, Rollback } from "./index.js";
 
 import { createTestAdapter } from "./test-adapter.js";
@@ -1650,6 +1650,12 @@ describe("TransactionTest", () => {
     // transaction fails with PreparedStatementCacheExpired we must drop
     // cached prepared statements on the connection. The error itself
     // re-raises unchanged — Rails does NOT retry the body.
+    // A shared afterEach restores spies so a mid-test throw can't leak
+    // mocks into later tests.
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
     it("calls clearCacheBang and re-raises when the body throws the expired error", async () => {
       const { PreparedStatementCacheExpired } = await import("./errors.js");
       const spy = vi.spyOn(adapter as Required<DatabaseAdapter>, "clearCacheBang");
@@ -1659,7 +1665,6 @@ describe("TransactionTest", () => {
         }),
       ).rejects.toBeInstanceOf(PreparedStatementCacheExpired);
       expect(spy).toHaveBeenCalledTimes(1);
-      spy.mockRestore();
     });
 
     it("does not call clearCacheBang for unrelated errors", async () => {
@@ -1670,7 +1675,6 @@ describe("TransactionTest", () => {
         }),
       ).rejects.toThrow("unrelated");
       expect(spy).not.toHaveBeenCalled();
-      spy.mockRestore();
     });
 
     // The tests above exercise the fallback path (test-adapter has no

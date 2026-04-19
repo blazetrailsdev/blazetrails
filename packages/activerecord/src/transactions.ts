@@ -6,15 +6,17 @@ import { PreparedStatementCacheExpired, Rollback, TransactionIsolationError } fr
 export { Rollback };
 
 /**
- * Rails' `TransactionManager#after_failure_actions`: when a
- * transaction fails with `PreparedStatementCacheExpired`, drop
- * cached prepared statements so the next call re-PREPAREs on a
- * fresh session. The error itself re-raises unchanged — Rails
- * does NOT retry the body.
+ * Mirrors Rails' `TransactionManager#after_failure_actions`: when a
+ * transaction fails with `PreparedStatementCacheExpired`, clear the
+ * cached prepared statements on the current connection so subsequent
+ * statements re-PREPARE. The error itself re-raises unchanged —
+ * Rails does NOT retry the body.
  *
- * The TransactionManager path calls this from `withinNewTransaction`'s
- * catch (see abstract/transaction.ts). The fallback path below
- * handles adapters that don't route through TransactionManager.
+ * This helper is only used by the fallback transaction path below
+ * (for adapters that don't route through TransactionManager, like
+ * the test adapter). `TransactionManager` has its own
+ * `_afterFailureActions` implementation in
+ * `connection-adapters/abstract/transaction.ts`.
  *
  * Reference: activerecord/lib/active_record/connection_adapters/
  * abstract/transaction.rb `TransactionManager#after_failure_actions`.

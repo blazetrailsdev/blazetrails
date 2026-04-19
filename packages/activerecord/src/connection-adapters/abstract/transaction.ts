@@ -994,10 +994,10 @@ export class TransactionManager {
   /**
    * Mirrors Rails' `TransactionManager#after_failure_actions`:
    * when a transaction fails with `PreparedStatementCacheExpired`,
-   * drop cached prepared statements so the next call re-PREPAREs
-   * on a fresh session. Rails does NOT retry the transaction body —
-   * it clears the cache and re-raises; user code decides whether
-   * to retry.
+   * drop cached prepared statements so subsequent statements
+   * re-PREPARE on the same connection. Rails does NOT retry the
+   * transaction body — it clears the cache and re-raises; user
+   * code decides whether to retry.
    *
    * Reference: activerecord/lib/active_record/connection_adapters/abstract/
    * transaction.rb: `TransactionManager#after_failure_actions`.

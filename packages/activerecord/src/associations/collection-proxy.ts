@@ -353,37 +353,68 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
    * check is a single boolean read.
    */
   private _installMutationTracker(): void {
-    // Start the scan at Relation.prototype — we only care about bangs
-    // that mutate the inherited Relation SCOPE (whereBang, orderBang,
-    // reorderBang, noneBang, …). Skipping CollectionProxy's own
-    // prototype avoids tripping on association-write APIs like
-    // `createBang` / `firstOrCreateBang` / `destroyAll`, which don't
-    // change the scope's SQL shape and shouldn't force `toArray()`
-    // to abandon the association-cache / strict-loading path.
-    // Scan Relation.prototype itself and anything mixed in above it
-    // (e.g. the QueryMethodBangs module included into Relation). Stop
-    // at Object.prototype.
-    const seen = new Set<string>();
-    for (
-      let proto: object | null = Relation.prototype;
-      proto && proto !== Object.prototype;
-      proto = Object.getPrototypeOf(proto)
-    ) {
-      for (const name of Object.getOwnPropertyNames(proto)) {
-        if (!name.endsWith("Bang") || seen.has(name)) continue;
-        const desc = Object.getOwnPropertyDescriptor(proto, name);
-        if (!desc || typeof desc.value !== "function") continue;
-        seen.add(name);
-        const original = desc.value as (...args: unknown[]) => unknown;
-        Object.defineProperty(this, name, {
-          value: function (this: CollectionProxy<T>, ...args: unknown[]) {
-            (this as unknown as { _cpMutated: boolean })._cpMutated = true;
-            return original.apply(this, args);
-          },
-          writable: true,
-          configurable: true,
-        });
-      }
+    // Explicit allowlist of SCOPE-mutator bangs — everything exported
+    // from query-methods.ts (the `*Bang` chain mutators) plus
+    // `mergeBang` from spawn-methods. Deliberately excludes finder
+    // bangs (firstBang / lastBang / takeBang / findByBang) which
+    // raise-on-missing but don't mutate scope, and save/persistence
+    // bangs (saveBang / updateBang / destroyBang). Previously we
+    // wrapped every `*Bang` name from the prototype chain, which
+    // caused finder-bang calls to flip `_cpMutated` and force
+    // toArray() to bypass the association cache.
+    const SCOPE_MUTATOR_BANGS: readonly string[] = [
+      "whereBang",
+      "rewhereBang",
+      "invertWhereBang",
+      "orderBang",
+      "reorderBang",
+      "reverseOrderBang",
+      "groupBang",
+      "regroupBang",
+      "havingBang",
+      "limitBang",
+      "offsetBang",
+      "selectBang",
+      "reselectBang",
+      "distinctBang",
+      "lockBang",
+      "readonlyBang",
+      "strictLoadingBang",
+      "noneBang",
+      "nullBang",
+      "joinsBang",
+      "leftOuterJoinsBang",
+      "includesBang",
+      "eagerLoadBang",
+      "preloadBang",
+      "referencesBang",
+      "withBang",
+      "withRecursiveBang",
+      "fromBang",
+      "createWithBang",
+      "extendingBang",
+      "optimizerHintsBang",
+      "annotateBang",
+      "uniqBang",
+      "unscopeBang",
+      "skipQueryCacheBang",
+      "skipPreloadingBang",
+      "excludingBang",
+      "andBang",
+      "orBang",
+      "mergeBang",
+    ];
+    for (const name of SCOPE_MUTATOR_BANGS) {
+      const original = (this as unknown as Record<string, unknown>)[name];
+      if (typeof original !== "function") continue;
+      Object.defineProperty(this, name, {
+        value: function (this: CollectionProxy<T>, ...args: unknown[]) {
+          (this as unknown as { _cpMutated: boolean })._cpMutated = true;
+          return (original as (...a: unknown[]) => unknown).apply(this, args);
+        },
+        writable: true,
+        configurable: true,
+      });
     }
   }
 

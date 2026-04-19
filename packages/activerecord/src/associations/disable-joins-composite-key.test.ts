@@ -141,6 +141,40 @@ describe("DJAS — composite key support", () => {
     expect(items.map((i: any) => i.sku).sort()).toEqual(["from-a", "from-b"]);
   });
 
+  it("skips tuples containing null/undefined (matches SQL tuple-equality semantics, not Arel IS NULL)", async () => {
+    // Regression: Arel's Attribute#eq(null) emits IS NULL, but SQL
+    // tuple-equality treats any null component as a non-match.
+    // _addConstraintsDj filters null/undefined-bearing tuples
+    // BEFORE handing them to tuplePredicate; if all tuples are
+    // filtered out, falls back to Relation#none(). Mirrors
+    // counter-cache.ts#buildPkPredicate's null handling.
+    const shop = await CkShop.create({ name: "S" });
+    const order = (await CkOrder.create({
+      shop_id: shop.id,
+      order_number: 100,
+      name: "O",
+    })) as any;
+    // line item with a NULL composite component — not a match for
+    // any (shop_id, order_number) tuple.
+    await CkLineItem.create({
+      ck_order_shop_id: order.shop_id,
+      ck_order_number: null as any,
+      sku: "orphan",
+    });
+    await CkLineItem.create({
+      ck_order_shop_id: order.shop_id,
+      ck_order_number: order.order_number,
+      sku: "valid",
+    });
+
+    const reflection = (CkShop as any)._reflectOnAssociation("ckLineItemsThroughOrders");
+    const items = await loadHasMany(shop, "ckLineItemsThroughOrders", reflection.options);
+    // Only the "valid" record is returned — the orphan with
+    // ck_order_number=NULL doesn't match the (shop_id=1, order_number=100)
+    // tuple even though shop_id matches.
+    expect(items.map((i: any) => i.sku)).toEqual(["valid"]);
+  });
+
   it("returns no rows when the composite-key tuple list is empty (owner has no through records)", async () => {
     const shop = await CkShop.create({ name: "Lonely" });
     // No orders for this shop → through-records pluck yields [] →

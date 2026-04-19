@@ -17,8 +17,9 @@ type ChainEntry = AbstractReflection | ReflectionProxy;
  * Normalize a `joinPrimaryKey` / `joinForeignKey` to an array of column
  * names. Both single-column (`"id"`) and composite (`["a", "b"]`)
  * shapes are supported; downstream code branches on `cols.length === 1`
- * vs `> 1` to decide between hash-WHERE (`{key: ids}`) and tuple-IN
- * raw SQL (`(c1, c2) IN ((?, ?), ...)`).
+ * vs `> 1` to decide between hash-WHERE (`{ key: ids }`) and the
+ * composite-key predicate built by `tuplePredicate`
+ * (`(c1=v11 AND c2=v12) OR (c1=v21 AND c2=v22) OR ...`).
  */
 function keyColumns(key: string | string[], label: string): string[] {
   if (Array.isArray(key)) {
@@ -208,11 +209,21 @@ export class DisableJoinsAssociationScope extends AssociationScope {
         [keyCols[0]]: joinIds,
       });
     } else {
-      // Composite key: tuples of values. Empty tuple list ⇒ no
-      // possible match; use Relation#none() for an idiomatic "no
-      // rows" short-circuit (skips the DB hit entirely at toArray
-      // time, matches Rails' `relation.none` contract).
-      const tuples = joinIds as unknown[][];
+      // Composite key: tuples of values. Filter out tuples
+      // containing null/undefined — Arel's `Attribute#eq(null)` would
+      // emit `IS NULL`, but tuple-equality semantics (and SQL tuple-
+      // IN) treat any null component as a non-match, never a true
+      // equality. Mirrors `buildPkPredicate` in counter-cache.ts:93.
+      // After filtering, an empty tuple list ⇒ no possible match;
+      // use `Relation#none()` (idiomatic, skips the DB hit at
+      // toArray time, matches Rails' `.none` contract).
+      const allTuples = joinIds as unknown[][];
+      const tuples = allTuples.filter(
+        (t) =>
+          Array.isArray(t) &&
+          t.length === keyCols.length &&
+          t.every((v) => v !== null && v !== undefined),
+      );
       if (tuples.length === 0) {
         scope = (scope as { none: () => unknown }).none();
       } else {

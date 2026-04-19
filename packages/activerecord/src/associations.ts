@@ -342,10 +342,12 @@ function _canRouteThroughViaDisableJoinsAssociationScope(
   if (!src) return false;
   if (typeof src.isPolymorphic === "function" && src.isPolymorphic()) return false;
   if (options.sourceType) return false;
-  // Composite-key through associations are now supported via tuple-IN
-  // WHERE clauses (see DJAS `_addConstraintsDj`). The previous gate
-  // that bailed on multi-column joinPrimaryKey / joinForeignKey is
-  // gone — the chain walk handles both single and composite shapes.
+  // Composite-key through associations are now supported by DJAS'
+  // `_addConstraintsDj`, which builds an Arel `OR`-of-`AND` predicate
+  // (`(c1=v1a AND c2=v1b) OR ...`) for the chain walk — same shape
+  // counter-cache.ts#buildPkPredicate uses. The previous gate that
+  // bailed on multi-column joinPrimaryKey / joinForeignKey is gone —
+  // the chain walk handles both single and composite shapes.
   return true;
 }
 

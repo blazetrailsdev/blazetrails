@@ -1,6 +1,7 @@
 import { Table as ArelTable } from "@blazetrails/arel";
 import type { Base } from "../base.js";
 import type { AssociationReflection, AbstractReflection } from "../reflection.js";
+import { PolymorphicReflection } from "../reflection.js";
 import {
   isStiSubclass,
   getStiBase,
@@ -567,9 +568,37 @@ export class AssociationScope {
       scopeFor?: (rel: unknown, owner?: unknown) => unknown;
       klass?: typeof Base;
     };
-    if (typeof r.scope !== "function") return scope;
     const entryKlass = r.klass;
     if (!entryKlass) return scope;
+    // PolymorphicReflection wraps a chain entry whose previousReflection
+    // had `sourceType: 'X'` set. Its `constraints()` returns
+    // `[innerConstraints..., typeConstraint]` where the type constraint
+    // is `(rel) => rel.where(foreignType: sourceType)`. Apply it
+    // explicitly so a sourceType-filtered through chain emits the WHERE
+    // even when the underlying reflection itself has no scope (the
+    // common case).
+    // _getChain wraps non-head reflections in ReflectionProxy; unwrap
+    // before the instanceof check so PolymorphicReflection through
+    // proxies are detected.
+    const inner =
+      (reflection as { reflection?: AbstractReflection }).reflection ??
+      (reflection as AbstractReflection);
+    if (inner instanceof PolymorphicReflection) {
+      const constraints = (
+        inner as { constraints?: () => Array<(rel: unknown) => unknown> }
+      ).constraints?.();
+      if (constraints) {
+        let merged = scope;
+        for (const c of constraints) {
+          if (typeof c !== "function") continue;
+          const entryScope = (entryKlass as unknown as { unscoped: () => unknown }).unscoped();
+          const evaluated = c(entryScope);
+          merged = this._pushScopeIntoRelation(merged, evaluated);
+        }
+        return merged;
+      }
+    }
+    if (typeof r.scope !== "function") return scope;
     // Build the entry-side scope with STI type_condition, matching the
     // head-scope path so STI subclasses get the right type filter
     // (Base.unscoped strips it; we re-add per the same compensation).
@@ -597,12 +626,18 @@ export class AssociationScope {
         : r.scope.length === 0
           ? (r.scope as () => unknown).call(entryScope)
           : r.scope.call(entryScope, entryScope, owner);
+    return this._pushScopeIntoRelation(scope, evaluated);
+  }
+
+  /**
+   * Push ONLY the entry's WHERE predicates and ORDER clauses onto
+   * the main scope — Rails' `where_clause += ...` / `order_values |=`
+   * semantics. A full Relation#merge would let the entry's limit /
+   * select / joins / etc override the main scope, which Rails
+   * explicitly avoids.
+   */
+  private _pushScopeIntoRelation(scope: unknown, evaluated: unknown): unknown {
     if (!evaluated) return scope;
-    // Push ONLY the entry's WHERE predicates and ORDER clauses onto
-    // the main scope — Rails' `where_clause += ...` / `order_values |=`
-    // semantics. A full Relation#merge would let the entry's limit /
-    // select / joins / etc override the main scope, which Rails
-    // explicitly avoids.
     const evalWhere = (evaluated as { _whereClause?: { predicates?: unknown[] } })._whereClause;
     const evalPredicates = evalWhere?.predicates ?? [];
     const evalOrders = (evaluated as { _orderClauses?: unknown[] })._orderClauses ?? [];
@@ -612,12 +647,12 @@ export class AssociationScope {
       _orderClauses?: unknown[];
       _rawOrderClauses?: string[];
     };
-    // Rails: `scope.where_clause += item.where_clause`. Mutate the
-    // existing _whereClause's predicates array in place — appending all
-    // entry predicates in one shot — instead of looping with `.where()`
-    // which would clone the relation per-predicate. Safe because `scope`
-    // here is owned by this _addConstraints call (built fresh from
-    // klass.unscoped + per-step .where clones; not shared externally).
+    // Mutate the existing _whereClause's predicates array in place —
+    // appending all entry predicates in one shot — instead of looping
+    // with `.where()` which would clone the relation per-predicate.
+    // Safe because `scope` here is owned by this _addConstraints call
+    // (built fresh from klass.unscoped + per-step .where clones; not
+    // shared externally).
     if (evalPredicates.length > 0) {
       const existingPredicates = merged._whereClause?.predicates ?? [];
       existingPredicates.push(...evalPredicates);
@@ -626,10 +661,7 @@ export class AssociationScope {
       }
     }
     // Rails: `scope.order_values = item.order_values | scope.order_values`
-    // (association_scope.rb:153). Ordering lives in both _orderClauses
-    // (string | [col, dir] tuples) and _rawOrderClauses (string like
-    // `inOrderOf` produces). Merge both with chain-entry-first +
-    // structural dedup so tuples compare by value, not reference.
+    // (association_scope.rb:153). Chain-entry-first + structural dedup.
     if (evalOrders.length > 0) {
       merged._orderClauses = unionOrderClauses(evalOrders, merged._orderClauses ?? []);
     }

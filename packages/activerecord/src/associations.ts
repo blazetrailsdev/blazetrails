@@ -269,14 +269,43 @@ function _canRouteThroughViaAssociationScope(
   options: AssociationOptions,
 ): boolean {
   if (!reflection) return false;
-  if (options.sourceType) return false;
   if (options.disableJoins) return false;
+  // Only ThroughReflection has a real distinct sourceReflection.
+  // AssociationReflection.sourceReflection returns `this` (line 793 in
+  // reflection.ts), which means HABTM and other non-through reflections
+  // would falsely match. Gate explicitly on isThroughReflection so HABTM's
+  // anonymous-join-model machinery (with its own load path) keeps using
+  // the existing 2-step loaders.
+  const refl = reflection as {
+    isThroughReflection?: () => boolean;
+    chain?: unknown[];
+    throughReflection?: { options?: { through?: string } };
+  };
+  if (typeof refl.isThroughReflection !== "function" || !refl.isThroughReflection()) {
+    return false;
+  }
+  // Through-a-through (chain length 3+): the through reflection itself
+  // points at another through reflection (e.g. Author has_many :ratings
+  // through :comments where :comments is itself through :posts). Chain
+  // walking would need to recurse on the inner through; PR 3c sticks
+  // with chain-length-2 and falls back to the 2-step loader otherwise.
+  if (refl.throughReflection?.options?.through) return false;
   const src = (reflection as { sourceReflection?: unknown }).sourceReflection as
     | { belongsTo?: () => boolean; isPolymorphic?: () => boolean }
     | undefined;
   if (!src) return false;
-  if (typeof src.belongsTo !== "function" || !src.belongsTo()) return false;
-  if (typeof src.isPolymorphic === "function" && src.isPolymorphic()) return false;
+  // Polymorphic has_many / has_one source is unusual and needs
+  // chain-inversion machinery this PR doesn't yet provide. Polymorphic
+  // belongsTo source is fine — _lastChainScope's reflection.type branch
+  // handles the type filter.
+  if (
+    typeof src.isPolymorphic === "function" &&
+    src.isPolymorphic() &&
+    typeof src.belongsTo === "function" &&
+    !src.belongsTo()
+  ) {
+    return false;
+  }
   return true;
 }
 

@@ -19,7 +19,7 @@ export {
   ForcedMutationTracker,
   NullMutationTracker,
 } from "./attribute-mutation-tracker.js";
-export { Attribute, FromDatabase, FromUser, WithCastValue } from "./attribute.js";
+export { Attribute, ATTRIBUTE_BRAND, FromDatabase, FromUser, WithCastValue } from "./attribute.js";
 export { UserProvidedDefault } from "./attribute/user-provided-default.js";
 export { AttributeSet } from "./attribute-set.js";
 export { LazyAttributeSet, LazyAttributeHash } from "./attribute-set/builder.js";

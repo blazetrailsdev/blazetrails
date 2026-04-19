@@ -18,7 +18,15 @@ export function _registerUserProvidedDefault(ctor: new (...args: any[]) => Attri
  *
  * Mirrors: ActiveModel::Attribute
  */
+/**
+ * Brand symbol for cross-package instanceof-free detection.
+ * Arel can't import from activemodel, so it checks this symbol
+ * to identify Attribute instances for bind parameter handling.
+ */
+export const ATTRIBUTE_BRAND = Symbol.for("activemodel.attribute");
+
 export abstract class Attribute {
+  readonly [ATTRIBUTE_BRAND] = true;
   readonly name: string;
   protected _valueBeforeTypeCast: unknown;
   readonly type: Type;

@@ -119,14 +119,10 @@ export function toSqlAndBinds(
       const [sql, extractedBinds] = visitor.compileWithBinds(node);
       // Type-cast bind objects (QueryAttribute) to primitive values
       // for adapter execution, matching Rails' type_casted_binds
+      const brandKey = Symbol.for("activemodel.attribute");
       const castedBinds = extractedBinds.map((b) => {
-        if (
-          b &&
-          typeof b === "object" &&
-          "valueForDatabase" in b &&
-          typeof (b as Record<string, unknown>).valueForDatabase === "function"
-        ) {
-          return (b as { valueForDatabase(): unknown }).valueForDatabase();
+        if (b && typeof b === "object" && brandKey in (b as object)) {
+          return (b as { valueForDatabase: unknown }).valueForDatabase;
         }
         return b;
       });

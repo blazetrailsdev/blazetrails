@@ -95,12 +95,10 @@ export class PostgreSQLWithBinds extends PostgreSQL {
       const value = node.value !== undefined ? node.value : node;
       this.collector.addBind(value, () => `$${this.bindIndex}`);
     } else if (node.value !== undefined) {
+      const brandKey = Symbol.for("activemodel.attribute");
       const val =
-        node.value &&
-        typeof node.value === "object" &&
-        "valueForDatabase" in node.value &&
-        typeof (node.value as Record<string, unknown>).valueForDatabase === "function"
-          ? (node.value as { valueForDatabase(): unknown }).valueForDatabase()
+        node.value && typeof node.value === "object" && brandKey in (node.value as object)
+          ? (node.value as { valueForDatabase: unknown }).valueForDatabase
           : node.value;
       this.collector.append(this.quote(val));
     } else {

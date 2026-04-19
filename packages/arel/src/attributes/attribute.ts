@@ -109,14 +109,13 @@ export class Attribute extends Node {
   private buildCasted(value: unknown): Node {
     if (value instanceof Node) return value;
     if (value === null || value === undefined) return new Quoted(null);
-    // QueryAttribute and similar bind objects have valueForDatabase —
-    // wrap them in BindParam so the visitor extracts them as binds
-    // rather than inlining via Casted.
+    // ActiveModel::Attribute instances (QueryAttribute etc.) carry their
+    // own type + value. Wrap in BindParam so the visitor extracts them
+    // as binds. Detected via brand symbol — arel can't import activemodel.
     if (
       value &&
       typeof value === "object" &&
-      typeof (value as Record<string, unknown>).valueForDatabase === "function" &&
-      typeof (value as Record<string, unknown>).name === "string"
+      Symbol.for("activemodel.attribute") in (value as object)
     ) {
       return new BindParam(value);
     }

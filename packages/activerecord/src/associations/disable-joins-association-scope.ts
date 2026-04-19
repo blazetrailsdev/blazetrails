@@ -5,6 +5,7 @@ import {
   type ValueTransformation,
 } from "./association-scope.js";
 import { DisableJoinsAssociationRelation } from "../disable-joins-association-relation.js";
+import { quoteColumnName } from "../connection-adapters/abstract/quoting.js";
 import type { Relation } from "../relation.js";
 import type { UnscopeType } from "../relation/query-methods.js";
 import type { Base } from "../base.js";
@@ -40,15 +41,17 @@ function readTuple(owner: Base, cols: string[]): unknown[] {
 
 /**
  * Build a tuple-IN WHERE clause as raw SQL: `(c1, c2) IN ((?, ?), ...)`.
- * Returns null when `tuples` is empty (caller should short-circuit
- * with no records). PG / MySQL / SQLite all support tuple IN; Arel's
- * AST doesn't expose a direct constructor for it, so raw SQL is the
- * portable path.
+ * Caller must guarantee `tuples.length > 0` — empty input is handled
+ * by the caller via `Relation#none()`. PG / MySQL / SQLite all support
+ * tuple IN; Arel's AST doesn't expose a direct constructor for it, so
+ * raw SQL is the portable path. Identifiers go through
+ * `quoteColumnName` (handles embedded quotes / schema-qualified
+ * names per Rails' adapter quoting).
  */
 function tupleInClause(cols: string[], tuples: unknown[][]): { sql: string; binds: unknown[] } {
   const placeholderRow = "(" + cols.map(() => "?").join(", ") + ")";
   const allRows = tuples.map(() => placeholderRow).join(", ");
-  const colList = cols.map((c) => `"${c.replace(/"/g, '""')}"`).join(", ");
+  const colList = cols.map((c) => quoteColumnName(c)).join(", ");
   const flat: unknown[] = [];
   for (const t of tuples) flat.push(...t);
   return { sql: `(${colList}) IN (${allRows})`, binds: flat };
@@ -198,21 +201,13 @@ export class DisableJoinsAssociationScope extends AssociationScope {
         [keyCols[0]]: joinIds,
       });
     } else {
-      // Composite key: tuples of values. Empty tuple list ⇒ empty
-      // result; short-circuit by emitting a never-true WHERE so the
-      // load returns 0 rows without a malformed `() IN ()` SQL.
+      // Composite key: tuples of values. Empty tuple list ⇒ no
+      // possible match; use Relation#none() for an idiomatic "no
+      // rows" short-circuit (skips the DB hit entirely at toArray
+      // time, matches Rails' `relation.none` contract).
       const tuples = joinIds as unknown[][];
       if (tuples.length === 0) {
-        scope = (scope as { where: (c: Record<string, unknown>) => unknown }).where({
-          [keyCols[0]]: null as unknown,
-        });
-        // The where above doesn't strictly produce zero rows for a
-        // nullable column; follow with `.none()` semantics by chaining
-        // a literal-false predicate. Fall through to scope_for_assoc /
-        // constraints below for parity, then the `none` short-circuit
-        // ensures no DB hit at toArray time. Use raw-SQL safety: a
-        // `1=0` clause is the universal "no rows" predicate.
-        scope = (scope as { where: (sql: string) => unknown }).where("1=0");
+        scope = (scope as { none: () => unknown }).none();
       } else {
         const { sql, binds } = tupleInClause(keyCols, tuples);
         scope = (scope as { where: (sql: string, ...binds: unknown[]) => unknown }).where(

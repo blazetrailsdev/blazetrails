@@ -129,7 +129,7 @@ describeIfMysql("Mysql2Adapter", () => {
       );
     });
 
-    it("rejects non-boolean preparedStatements at construction time and via assignment", () => {
+    it("rejects non-boolean preparedStatements at construction time and via assignment", async () => {
       // Mirror coverage to PG's statement-pool tests — without an
       // explicit guard test the runtime TypeError could regress
       // silently when adapter options are wired.
@@ -149,9 +149,15 @@ describeIfMysql("Mysql2Adapter", () => {
       ).toThrow(TypeError);
 
       const adapter2 = new Mysql2Adapter(MYSQL_TEST_URL);
-      expect(() => {
-        (adapter2 as unknown as { preparedStatements: unknown }).preparedStatements = "true";
-      }).toThrow(TypeError);
+      try {
+        expect(() => {
+          (adapter2 as unknown as { preparedStatements: unknown }).preparedStatements = "true";
+        }).toThrow(TypeError);
+      } finally {
+        // mysql2 pool keeps open handles — close to avoid leaked
+        // sockets / Vitest hangs.
+        await adapter2.close();
+      }
     });
   });
 });

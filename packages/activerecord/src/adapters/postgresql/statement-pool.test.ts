@@ -165,7 +165,7 @@ describeIfPg("PostgreSQLAdapter", () => {
       ).toThrow(RangeError);
     });
 
-    it("rejects non-boolean preparedStatements at construction time and via assignment", () => {
+    it("rejects non-boolean preparedStatements at construction time and via assignment", async () => {
       // Construction-time validation routes preparedStatements through
       // the setter, so a non-boolean (string, number, etc.) hits the
       // same TypeError guard as direct assignment. Without this test
@@ -186,9 +186,15 @@ describeIfPg("PostgreSQLAdapter", () => {
       ).toThrow(TypeError);
 
       const adapter2 = new PostgreSQLAdapter(PG_TEST_URL);
-      expect(() => {
-        (adapter2 as unknown as { preparedStatements: unknown }).preparedStatements = "true";
-      }).toThrow(TypeError);
+      try {
+        expect(() => {
+          (adapter2 as unknown as { preparedStatements: unknown }).preparedStatements = "true";
+        }).toThrow(TypeError);
+      } finally {
+        // pg.Pool keeps sockets/timers alive — close to avoid Vitest
+        // hangs / flakiness from leaked handles.
+        await adapter2.close();
+      }
     });
   });
 });

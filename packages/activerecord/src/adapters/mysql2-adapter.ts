@@ -1,6 +1,6 @@
 import mysql from "mysql2/promise";
 import { Notifications } from "@blazetrails/activesupport";
-import type { DatabaseAdapter, ExplainOption } from "../adapter.js";
+import type { DatabaseAdapter, ExplainOption, TrailsAdapterOptions } from "../adapter.js";
 import {
   AbstractMysqlAdapter,
   StatementPool as MysqlStatementPool,
@@ -144,19 +144,20 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
   // not yet probed, `true`/`false` = result.
   private _statisticsHasExpression: boolean | undefined;
 
-  constructor(config: string | mysql.PoolOptions, options: { statementLimit?: number } = {}) {
+  constructor(config: string | (mysql.PoolOptions & TrailsAdapterOptions)) {
     super();
     if (typeof config === "string") {
       this._driverPool = mysql.createPool({ uri: config });
-    } else {
-      this._driverPool = mysql.createPool(config);
+      return;
     }
-    // Rails reads `config[:statement_limit]` at adapter init; honor
-    // the same shape here. Going through the setter applies the
-    // value's validation (finite non-negative integer).
-    if (options.statementLimit !== undefined) {
-      this.statementLimit = options.statementLimit;
-    }
+    // See PostgreSQLAdapter#constructor: Rails' database.yml merges
+    // driver + adapter config, and AbstractAdapter#initialize reads
+    // `:statement_limit` / `:prepared_statements` off that single
+    // hash. Strip those before passing the rest to mysql.createPool.
+    const { statementLimit, preparedStatements, ...mysqlConfig } = config;
+    this._driverPool = mysql.createPool(mysqlConfig);
+    if (statementLimit !== undefined) this.statementLimit = statementLimit;
+    if (preparedStatements !== undefined) this.preparedStatements = preparedStatements;
   }
 
   /**

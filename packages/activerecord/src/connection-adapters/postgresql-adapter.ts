@@ -21,7 +21,7 @@ import {
   initializeTypeMap as staticInitializeTypeMap,
 } from "./postgresql/type-map-init.js";
 import { inspectExplainOption } from "../adapter.js";
-import type { DatabaseAdapter, ExplainOption } from "../adapter.js";
+import type { DatabaseAdapter, ExplainOption, TrailsAdapterOptions } from "../adapter.js";
 import { PreparedStatementCacheExpired } from "../errors.js";
 import { AbstractAdapter } from "./abstract-adapter.js";
 import { StatementPool as GenericStatementPool } from "./statement-pool.js";
@@ -94,19 +94,21 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     }
   }
 
-  constructor(config: string | pg.PoolConfig, options: { statementLimit?: number } = {}) {
+  constructor(config: string | (pg.PoolConfig & TrailsAdapterOptions)) {
     super();
     if (typeof config === "string") {
       this._driverPool = new pg.Pool({ connectionString: config });
-    } else {
-      this._driverPool = new pg.Pool(config);
+      return;
     }
-    // Rails reads `config[:statement_limit]` at adapter init; honor
-    // the same shape here. Going through the setter applies the
-    // value's validation (finite non-negative integer).
-    if (options.statementLimit !== undefined) {
-      this.statementLimit = options.statementLimit;
-    }
+    // Rails' database.yml merges driver connection params + adapter
+    // options into one hash; AbstractAdapter#initialize reads
+    // `config[:statement_limit]` / `config[:prepared_statements]`
+    // and hands the rest to the driver. Do the same here: split
+    // adapter-level keys out before constructing pg.Pool.
+    const { statementLimit, preparedStatements, ...pgConfig } = config;
+    this._driverPool = new pg.Pool(pgConfig);
+    if (statementLimit !== undefined) this.statementLimit = statementLimit;
+    if (preparedStatements !== undefined) this.preparedStatements = preparedStatements;
   }
 
   /**

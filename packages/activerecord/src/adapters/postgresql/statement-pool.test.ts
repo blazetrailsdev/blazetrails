@@ -1,7 +1,8 @@
 /**
  * Mirrors Rails activerecord/test/cases/adapters/postgresql/statement_pool_test.rb
  */
-import { describe, it, beforeEach, afterEach, expect } from "vitest";
+import { describe, it, beforeEach, afterEach, expect, vi } from "vitest";
+import type pg from "pg";
 import { describeIfPg, PostgreSQLAdapter, PG_TEST_URL } from "./test-helper.js";
 
 describeIfPg("PostgreSQLAdapter", () => {
@@ -11,6 +12,7 @@ describeIfPg("PostgreSQLAdapter", () => {
     adapter.preparedStatements = true;
   });
   afterEach(async () => {
+    vi.restoreAllMocks();
     await adapter.close();
   });
 
@@ -259,45 +261,45 @@ describeIfPg("PostgreSQLAdapter", () => {
       expect(adapter._needsDeallocateAllForTest(taggedClient!)).toBe(true);
 
       // Capture the next pg.PoolClient and its query() call list so we
-      // can assert DEALLOCATE ALL ran during checkout.
+      // can assert DEALLOCATE ALL ran during checkout. Use vi.spyOn
+      // (consistent with other tests in this repo, e.g.
+      // postgresql-adapter.exec-query.test.ts) so cleanup is automatic
+      // via vi.restoreAllMocks() and we don't manually reassign methods.
       const observed: string[] = [];
-      const originalConnect = adapter
-        ._driverPoolForTest()!
-        .connect.bind(adapter._driverPoolForTest()!);
-      (adapter._driverPoolForTest() as any).connect = async function (this: any, ...args: any[]) {
-        const client: any = await (originalConnect as any)(...args);
+      const pool = adapter._driverPoolForTest()!;
+      const originalConnect = pool.connect.bind(pool);
+      vi.spyOn(pool, "connect").mockImplementation((async (...args: unknown[]) => {
+        const client = (await (originalConnect as (...a: unknown[]) => Promise<pg.PoolClient>)(
+          ...args,
+        )) as unknown as { query: (...a: unknown[]) => unknown };
         const origQuery = client.query.bind(client);
-        client.query = (sql: any, ...rest: any[]) => {
+        client.query = (sql: unknown, ...rest: unknown[]) => {
           if (typeof sql === "string") observed.push(sql);
-          return origQuery(sql, ...rest);
+          return (origQuery as (...a: unknown[]) => unknown)(sql, ...rest);
         };
-        return client;
-      };
+        return client as unknown as pg.PoolClient;
+      }) as unknown as typeof pool.connect);
 
+      await adapter.beginDbTransaction();
       try {
-        await adapter.beginDbTransaction();
-        try {
-          // The DEALLOCATE ALL fires before BEGIN — but only when
-          // pg.Pool hands back the SAME physical client (the only one
-          // we tagged). With pool size > 1, a different client may be
-          // returned and the tag stays attached for its eventual reuse.
-          // Either way, the new client is no longer tagged after this
-          // checkout (drain ran or it wasn't the tagged one).
-          const newClient = adapter._currentClientForTest();
-          expect(adapter._needsDeallocateAllForTest(newClient!)).toBe(false);
-          if (newClient === taggedClient) {
-            expect(observed).toContain("DEALLOCATE ALL");
-            // DEALLOCATE ALL must run BEFORE BEGIN.
-            const deallocIdx = observed.indexOf("DEALLOCATE ALL");
-            const beginIdx = observed.indexOf("BEGIN");
-            expect(deallocIdx).toBeGreaterThanOrEqual(0);
-            expect(beginIdx).toBeGreaterThan(deallocIdx);
-          }
-        } finally {
-          await adapter.rollback();
+        // The DEALLOCATE ALL fires before BEGIN — but only when
+        // pg.Pool hands back the SAME physical client (the only one
+        // we tagged). With pool size > 1, a different client may be
+        // returned and the tag stays attached for its eventual reuse.
+        // Either way, the new client is no longer tagged after this
+        // checkout (drain ran or it wasn't the tagged one).
+        const newClient = adapter._currentClientForTest();
+        expect(adapter._needsDeallocateAllForTest(newClient!)).toBe(false);
+        if (newClient === taggedClient) {
+          expect(observed).toContain("DEALLOCATE ALL");
+          // DEALLOCATE ALL must run BEFORE BEGIN.
+          const deallocIdx = observed.indexOf("DEALLOCATE ALL");
+          const beginIdx = observed.indexOf("BEGIN");
+          expect(deallocIdx).toBeGreaterThanOrEqual(0);
+          expect(beginIdx).toBeGreaterThan(deallocIdx);
         }
       } finally {
-        (adapter._driverPoolForTest() as any).connect = originalConnect;
+        await adapter.rollback();
       }
     });
 

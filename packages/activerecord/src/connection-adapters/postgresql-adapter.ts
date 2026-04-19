@@ -430,15 +430,26 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    */
   private async getClient(): Promise<pg.PoolClient> {
     if (this._client) return this._client;
+    return this._acquireFreshClient();
+  }
+
+  /**
+   * Acquire a fresh client from the pool and drain any orphaned
+   * server-side prepared statements left by a prior PSCE event. All
+   * direct pool checkouts MUST go through this helper so the drain
+   * guarantee holds for every code path (getClient, beginTransaction,
+   * getAdvisoryLock, etc.).
+   *
+   * On drain failure, the client is released with the error so node-
+   * postgres discards it, then the error propagates — callers don't
+   * have a client to release on this path.
+   */
+  private async _acquireFreshClient(): Promise<pg.PoolClient> {
     if (!this._driverPool) throw new Error("PostgreSQLAdapter: connection is closed");
     const client = await this._driverPool.connect();
     try {
       await this._maybeDrainOrphanedPreparedStatements(client);
     } catch (error) {
-      // The drain failed before we returned the client to the caller,
-      // so the caller has no chance to release it. Discard via
-      // release(err) so node-postgres doesn't put a broken socket back
-      // in the idle pool, then propagate.
       client.release(error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
@@ -449,8 +460,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * If `client` was tagged for `DEALLOCATE ALL` (by the released-client
    * `reset()` branch in `clearCacheBang`), drain its server-side
    * prepared statements before handing it to user code. Centralized
-   * here so EVERY checkout path benefits — `getClient` (non-txn via
-   * `withClient`) and `beginTransaction` both go through this.
+   * here so EVERY checkout path benefits, by routing all direct
+   * `pool.connect()` callers through `_acquireFreshClient` (which
+   * calls this).
    *
    * Failure of `DEALLOCATE ALL` propagates: the caller's existing
    * error path will release the (broken) client with the error so
@@ -778,15 +790,12 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    * Begin a transaction. Acquires a dedicated client from the pool.
    */
   async beginTransaction(): Promise<void> {
-    if (!this._driverPool) throw new Error("PostgreSQLAdapter: connection is closed");
-    this._client = await this._driverPool.connect();
+    // Routes through `_acquireFreshClient` so the drain runs on every
+    // checkout (a tagged client returned here gets `DEALLOCATE ALL`'d
+    // before BEGIN). Drain failures are released-with-error inside
+    // the helper, so a thrown drain doesn't leak `_client`.
+    this._client = await this._acquireFreshClient();
     try {
-      // Drain any server-side prepared statements that a prior PSCE
-      // event left orphaned on this physical session (released-client
-      // `reset()` path in `clearCacheBang` tagged it). Failure
-      // propagates to the BEGIN catch below — the broken client is
-      // discarded via `release(err)`.
-      await this._maybeDrainOrphanedPreparedStatements(this._client);
       await this._client.query("BEGIN");
       this._inTransaction = true;
       // Note: do NOT null `_lastReleasedTxnClient` here. After-rollback
@@ -1171,8 +1180,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     // Server-side accumulation note: the released-client `reset()`
     // path above only drops the local sql→name map. Server-side
     // PREPAREs are drained by `_clientsNeedingDeallocateAll` +
-    // `DEALLOCATE ALL` on next checkout (see beginTransaction). Until
-    // that checkout happens, the orphans live on the idle pg.PoolClient.
+    // `DEALLOCATE ALL` on next checkout (any path that goes through
+    // `_acquireFreshClient` — getClient / beginTransaction /
+    // getAdvisoryLock / etc.). Until that checkout happens, the
+    // orphans live on the idle pg.PoolClient.
   }
 
   /**
@@ -1345,8 +1356,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   private _advisoryLockClient: pg.PoolClient | null = null;
 
   async getAdvisoryLock(lockId: number | string): Promise<boolean> {
-    if (!this._driverPool) throw new Error("PostgreSQLAdapter: connection is closed");
-    const client = await this._driverPool.connect();
+    const client = await this._acquireFreshClient();
     try {
       const isNumeric = typeof lockId === "number";
       const sql = `SELECT pg_try_advisory_lock(${isNumeric ? "$1" : "hashtext($1)"}) AS locked`;

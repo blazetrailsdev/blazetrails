@@ -184,6 +184,34 @@ describe("DisableJoinsAssociationScope", () => {
     expect(records.map((r: any) => r.body)).toEqual(["from-a", "from-b"]);
   });
 
+  it("limit on the ordered-upstream wrap case slices AFTER reorder (no SQL LIMIT before IN-list ordering)", async () => {
+    // Regression: the ordered-upstream wrap returns a loaded-chain
+    // DJAR that, before this fix, applied SQL LIMIT during super.toArray()
+    // when a chained .limit(n) was merged in via composition. That
+    // sliced rows in IN-clause order (DB-arbitrary), not through-table
+    // order — so .limit(1) might return the LAST through record's
+    // first comment instead of the FIRST.
+    const author = await DjsAuthor.create({ name: "A" });
+    const postB = await DjsPost.create({ djs_author_id: author.id, title: "b" });
+    const postA = await DjsPost.create({ djs_author_id: author.id, title: "a" });
+    await DjsComment.create({ djs_post_id: postB.id, body: "from-b" });
+    await DjsComment.create({ djs_post_id: postA.id, body: "from-a" });
+
+    const reflection = (DjsAuthor as any)._reflectOnAssociation("djsCommentsViaOrderedPosts");
+    const built = DisableJoinsAssociationScope.INSTANCE.scope({
+      owner: author,
+      reflection,
+      klass: reflection.klass,
+    }) as DisableJoinsAssociationRelation<Base>;
+
+    // Chain .limit(1) on the deferred outer DJAR. The first record by
+    // through-table ordering (ordered by post.title) is from postA.
+    const limited = built.limit(1) as Promise<Base[]> | DisableJoinsAssociationRelation<Base>;
+    const records = await limited;
+    expect(records.length).toBe(1);
+    expect((records[0] as any).body).toBe("from-a");
+  });
+
   it("DisableJoinsAssociationRelation is exported and reorders by ids on load", async () => {
     const post1 = await DjsPost.create({ djs_author_id: 1, title: "p1" });
     const post2 = await DjsPost.create({ djs_author_id: 1, title: "p2" });

@@ -164,7 +164,31 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
     // Loaded-chain mode: load via Relation, then group by `key` and
     // re-emit in `ids` order so the caller sees join-table ordering
     // (Rails' `load` override).
-    const records = await super.toArray();
+    //
+    // Snapshot + clear `_limitValue` / `_offsetValue` before
+    // `super.toArray()` and apply them in-memory after reorder.
+    // Reason: deferred-mode composition (via `_composeChainedState`'s
+    // `merge`) can copy a chained `.limit(n)` / offset onto this
+    // loaded-chain DJAR. Letting the SQL path apply LIMIT before the
+    // IN-list reorder would slice the WRONG rows — the rows that
+    // happen to come back first from the IN(...) query, not the rows
+    // that come first in through-table order. Rails handles this by
+    // overriding `limit` / `first` to load + take in memory; we
+    // must match for the merged-in case too.
+    const self = this as unknown as { _limitValue?: number | null; _offsetValue?: number | null };
+    const limitVal = self._limitValue ?? null;
+    const offsetVal = self._offsetValue ?? null;
+    self._limitValue = null;
+    self._offsetValue = null;
+    let records: T[];
+    try {
+      records = await super.toArray();
+    } finally {
+      // Restore so the relation's reported state matches what callers
+      // configured (e.g. for inspect/diagnostic paths).
+      self._limitValue = limitVal;
+      self._offsetValue = offsetVal;
+    }
     const byKey = new Map<unknown, T[]>();
     for (const r of records) {
       const k = r.readAttribute(this.key);
@@ -177,7 +201,9 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
       const bucket = byKey.get(id);
       if (bucket) ordered.push(...bucket);
     }
-    return ordered;
+    const start = offsetVal ?? 0;
+    const end = limitVal == null ? undefined : start + limitVal;
+    return start === 0 && end === undefined ? ordered : ordered.slice(start, end);
   }
 
   /**

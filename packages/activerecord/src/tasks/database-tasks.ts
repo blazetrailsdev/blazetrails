@@ -10,6 +10,20 @@ import { ProtectedEnvironmentError } from "../migration.js";
 import { getFs, getPath, getCryptoAsync, getOs } from "@blazetrails/activesupport";
 import { coercePort } from "./task-utils.js";
 
+/**
+ * Raised when a database task is attempted against an adapter that
+ * doesn't support it (e.g. creating a SQLite DB where the adapter
+ * can't provision storage).
+ *
+ * Mirrors: ActiveRecord::Tasks::DatabaseTasks::DatabaseNotSupported
+ */
+export class DatabaseNotSupported extends Error {
+  constructor(message?: string) {
+    super(message);
+    this.name = "DatabaseNotSupported";
+  }
+}
+
 function sqliteDatabaseFromUrl(url: string): string | undefined {
   try {
     const parsed = new URL(url);

@@ -2,6 +2,19 @@ import { getCrypto } from "@blazetrails/activesupport";
 import type { Base } from "./base.js";
 
 /**
+ * Raised when `hasSecureToken` is configured with a length below the
+ * allowed minimum (24).
+ *
+ * Mirrors: ActiveRecord::SecureToken::MinimumLengthError
+ */
+export class MinimumLengthError extends Error {
+  constructor(message?: string) {
+    super(message);
+    this.name = "MinimumLengthError";
+  }
+}
+
+/**
  * Generate a unique random token.
  *
  * Mirrors: SecureRandom.base58(24) used by has_secure_token

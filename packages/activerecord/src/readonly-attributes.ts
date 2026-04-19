@@ -1,4 +1,5 @@
 import type { Base } from "./base.js";
+import { ActiveRecordError } from "./errors.js";
 
 /**
  * Track and enforce readonly attributes on ActiveRecord models.
@@ -9,6 +10,18 @@ import type { Base } from "./base.js";
  *   User.attrReadonly('email', 'username')
  *   User.readonlyAttributes // => ['email', 'username']
  */
+
+/**
+ * Raised when writing to an attribute that was declared readonly.
+ *
+ * Mirrors: ActiveRecord::ReadonlyAttributeError
+ */
+export class ReadonlyAttributeError extends ActiveRecordError {
+  constructor(attribute: string) {
+    super(attribute);
+    this.name = "ReadonlyAttributeError";
+  }
+}
 
 /**
  * Declare attributes as readonly. Once a record is persisted, these

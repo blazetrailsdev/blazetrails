@@ -1,8 +1,21 @@
 import type { Base } from "./base.js";
 import { modelRegistry } from "./associations.js";
-import { UnknownAttributeError } from "./errors.js";
+import { ActiveRecordError, UnknownAttributeError } from "./errors.js";
 import { singularize, camelize, underscore } from "@blazetrails/activesupport";
 import { Table, UpdateManager } from "@blazetrails/arel";
+
+/**
+ * Raised when more nested-attribute records are provided than the
+ * association's `limit` option allows.
+ *
+ * Mirrors: ActiveRecord::NestedAttributes::TooManyRecords
+ */
+export class TooManyRecords extends ActiveRecordError {
+  constructor(message?: string) {
+    super(message);
+    this.name = "TooManyRecords";
+  }
+}
 
 interface NestedAttributeOptions {
   allowDestroy?: boolean;

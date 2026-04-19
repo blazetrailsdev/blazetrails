@@ -396,7 +396,9 @@ export class AssociationScope {
     const joinFks = Array.isArray(r.joinForeignKey) ? r.joinForeignKey : [r.joinForeignKey];
     if (joinPks.length !== joinFks.length) {
       const name = (reflection as { name?: string }).name ?? "<unknown>";
-      throw new CompositePrimaryKeyMismatchError(name, name);
+      const ownerName =
+        (reflection as { activeRecord?: { name?: string } }).activeRecord?.name ?? "<unknown>";
+      throw new CompositePrimaryKeyMismatchError(ownerName, name);
     }
     const table = r.klass?.tableName ?? "";
     // nextReflection may be a ReflectionProxy (with aliasedTable) or a

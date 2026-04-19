@@ -168,20 +168,22 @@ import { PostgreSQLAdapter } from "@blazetrails/activerecord/connection-adapters
 import { Mysql2Adapter } from "@blazetrails/activerecord/adapters/mysql2-adapter.js";
 import { SQLite3Adapter } from "@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js";
 
-// PG: default_prepared_statements = true (abstract default).
+// PG defaults preparedStatements to true (matches Rails, where
+// PostgreSQLAdapter inherits AbstractAdapter#default_prepared_statements = true).
 new PostgreSQLAdapter({
   connectionString: "postgres://localhost/app",
   statementLimit: 500, // default 1000
   preparedStatements: true,
 });
 
-// MySQL2: default_prepared_statements = false (Rails override).
+// MySQL2 defaults preparedStatements to false (matches Rails'
+// Mysql2Adapter#default_prepared_statements override).
 new Mysql2Adapter({
   uri: "mysql://localhost/app",
   statementLimit: 0, // 0 disables caching entirely
 });
 
-// SQLite3: default_prepared_statements = true (abstract default).
+// SQLite3 defaults preparedStatements to true (matches Rails' abstract default).
 new SQLite3Adapter("db/app.sqlite3", { statementLimit: 200 });
 ```
 

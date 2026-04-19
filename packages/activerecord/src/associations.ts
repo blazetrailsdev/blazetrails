@@ -5,6 +5,25 @@ import { _CollectionProxyCtor } from "./associations/collection-proxy-slot.js";
 // Re-export the slot's setter so the package entry and other internal
 // callers don't need to import the slot module directly.
 export { _setCollectionProxyCtor } from "./associations/collection-proxy-slot.js";
+
+/**
+ * Explicit initialization hook for subpath consumers.
+ *
+ * The package entry (`@blazetrails/activerecord`) loads
+ * CollectionProxy eagerly so `association()` works out of the box.
+ * Consumers who deep-import `@blazetrails/activerecord/associations`
+ * without touching the entry won't trigger that registration; calling
+ * `await initializeAssociations()` once before `association()` is the
+ * supported alternative.
+ *
+ * Uses a dynamic `import()` so it doesn't participate in the static
+ * dependency cycle (associations → CP → Relation → Base →
+ * associations) that forced the late-binding in the first place.
+ */
+export async function initializeAssociations(): Promise<void> {
+  if (_CollectionProxyCtor) return;
+  await import("./associations/collection-proxy.js");
+}
 import { StrictLoadingViolationError, ConfigurationError } from "./errors.js";
 import {
   AssociationNotFoundError,
@@ -1712,11 +1731,11 @@ export function association<T extends Base = Base>(
     // `associations.js` bypasses that. See the collection-proxy-slot
     // module for the load-order details.
     throw new Error(
-      "CollectionProxy not registered. Import '@blazetrails/activerecord' " +
-        "once before calling association() so CollectionProxy registration can run. " +
-        "If you are using a subpath import such as '@blazetrails/activerecord/associations' " +
-        "or '@blazetrails/activerecord/base', keep that import but also import " +
-        "'@blazetrails/activerecord' for initialization.",
+      "CollectionProxy not registered. Either import '@blazetrails/activerecord' " +
+        "once (the package entry loads CollectionProxy eagerly), or, if you are " +
+        "using subpath imports such as '@blazetrails/activerecord/associations' / " +
+        "'/base', call `await initializeAssociations()` (exported from " +
+        "'@blazetrails/activerecord/associations') before the first `association()` call.",
     );
   }
   const proxy = new _CollectionProxyCtor(record, assocName, assocDef) as CollectionProxy<T> & {

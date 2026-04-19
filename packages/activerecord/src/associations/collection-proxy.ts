@@ -459,11 +459,17 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   //   will remove CP's load in favor of Relation's.
   async load(): Promise<T[]> {
     if (this._targetLoaded) return this._target;
-    const results = (await loadHasMany(
-      this._record,
-      this._assocName,
-      this._assocDef.options,
-    )) as T[];
+    // Same divergence gate as `toArray()` — if the inherited Relation
+    // state has been mutated via scope bangs (whereBang / orderBang /
+    // ...), route through `super.toArray()` so `load()` / `await proxy`
+    // honor the mutation. Without this, `cp.whereBang({...}); await cp`
+    // would silently fall back to the full association-cache load.
+    let results: T[];
+    if (this._relationStateDiverged()) {
+      results = await super.toArray();
+    } else {
+      results = (await loadHasMany(this._record, this._assocName, this._assocDef.options)) as T[];
+    }
     // Merge: prefer existing in-memory instances (from push/build) over fresh DB records
     const existingByPk = new Map<string, T>();
     for (const r of this._target) {

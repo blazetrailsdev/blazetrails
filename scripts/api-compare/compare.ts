@@ -151,7 +151,7 @@ const TS_PARENT_ALIASES: { transform: (ruby: string) => string }[] = [
   { transform: (r) => `${r}Type` },
 ];
 
-function nameMatches(rubyName: string, tsName: string): boolean {
+export function nameMatches(rubyName: string, tsName: string): boolean {
   if (rubyName === tsName) return true;
   if (RUBY_ERROR_BUILTINS.has(rubyName) && tsName === "Error") return true;
   for (const { transform } of TS_PARENT_ALIASES) {
@@ -172,7 +172,11 @@ function nameMatches(rubyName: string, tsName: string): boolean {
 // matched to reflect the structural choice rather than a fidelity gap.
 const AREL_ROOT_NODE_CLASSES = new Set(["Table", "Attribute"]);
 
-function superclassesMatch(rubySuper: string | null, tsChain: string[], tsName: string): boolean {
+export function superclassesMatch(
+  rubySuper: string | null,
+  tsChain: string[],
+  tsName: string,
+): boolean {
   if (!rubySuper && tsChain.length === 0) return true;
   // Ruby builtins have no faithful TS superclass; accept whatever TS uses.
   if (rubySuper && RUBY_UNEXTENDABLE_BUILTINS.has(rubySuper)) return true;
@@ -839,4 +843,11 @@ function printReport(
   console.log(`${"=".repeat(100)}\n`);
 }
 
-main();
+// Only run the CLI when invoked as a script. `import`s (e.g. from tests)
+// should be able to pull in exported helpers without triggering main().
+const invokedAsScript =
+  typeof process !== "undefined" &&
+  Array.isArray(process.argv) &&
+  typeof process.argv[1] === "string" &&
+  process.argv[1].endsWith("compare.ts");
+if (invokedAsScript) main();

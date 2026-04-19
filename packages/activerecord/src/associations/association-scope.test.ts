@@ -489,6 +489,129 @@ describe("AssociationScope", () => {
     expect(DisableJoinsAssociationScope.INSTANCE).not.toBe(AssociationScope.INSTANCE);
   });
 
+  it("through chain merges scope on the through reflection (chain.reverse_each)", () => {
+    // Rails' add_constraints walks chain.reverse_each over each
+    // reflection's constraints and merges WHERE/ORDER predicates from
+    // the scope lambda into the main relation. PR 3b adds this for
+    // non-head chain entries: a scope on the through reflection (e.g.
+    // `hasMany :memberships, scope: r => r.where(active: true)`) must
+    // emit `WHERE memberships.active = TRUE` on the JOINed-in table.
+    class CcAuthor extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class CcMembership extends Base {
+      static {
+        this.attribute("cc_author_id", "integer");
+        this.attribute("cc_tag_id", "integer");
+        this.attribute("active", "boolean");
+        this.adapter = adapter;
+      }
+    }
+    class CcTag extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(CcAuthor);
+    registerModel(CcMembership);
+    registerModel(CcTag);
+    Associations.hasMany.call(CcAuthor, "cc_memberships", {
+      className: "CcMembership",
+      foreignKey: "cc_author_id",
+      // Scope on the through reflection — chain.reverse_each must pick
+      // it up when AssociationScope walks the chain for cc_tags.
+      scope: (rel: any) => rel.where({ active: true }),
+    });
+    Associations.hasMany.call(CcAuthor, "cc_tags", {
+      className: "CcTag",
+      through: "cc_memberships",
+      source: "cc_tag",
+    });
+    Associations.belongsTo.call(CcMembership, "cc_tag", {
+      className: "CcTag",
+      foreignKey: "cc_tag_id",
+    });
+
+    const author = new CcAuthor({ id: 1 });
+    const reflection = (CcAuthor as any)._reflectOnAssociation("cc_tags");
+    const sql = (
+      AssociationScope.scope({
+        owner: author,
+        reflection,
+        klass: reflection.klass,
+      }) as any
+    ).toSql();
+    expect(sql).toMatch(/INNER JOIN\s+"?cc_memberships"?/i);
+    expect(sql).toMatch(/"cc_memberships"\."cc_author_id"\s*=\s*1/);
+    expect(sql).toMatch(/"cc_memberships"\."active"\s*=\s*TRUE/i);
+  });
+
+  it("loadHasMany through chain (belongsTo source, no sourceType) routes via AssociationScope", async () => {
+    // PR 3b migration: loadHasMany for has_many :through where source
+    // is non-polymorphic belongsTo (no sourceType) now routes through
+    // AssociationScope's JOIN-based path instead of the 2-step IN-list
+    // loader. End-to-end: insert records, call loadHasMany, assert the
+    // right rows return — exercises the migrated path through real DB.
+    const { loadHasMany } = await import("../associations.js");
+    class MgAuthor extends Base {
+      declare name: string;
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class MgPosting extends Base {
+      static {
+        this.attribute("mg_author_id", "integer");
+        this.attribute("mg_tag_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class MgTag extends Base {
+      declare label: string;
+      static {
+        this.attribute("label", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(MgAuthor);
+    registerModel(MgPosting);
+    registerModel(MgTag);
+    Associations.hasMany.call(MgAuthor, "mg_postings", {
+      className: "MgPosting",
+      foreignKey: "mg_author_id",
+    });
+    Associations.hasMany.call(MgAuthor, "mg_tags", {
+      className: "MgTag",
+      through: "mg_postings",
+      source: "mg_tag",
+    });
+    Associations.belongsTo.call(MgPosting, "mg_tag", {
+      className: "MgTag",
+      foreignKey: "mg_tag_id",
+    });
+
+    const alice = await MgAuthor.create({ name: "Alice" });
+    const bob = await MgAuthor.create({ name: "Bob" });
+    const ruby = await MgTag.create({ label: "ruby" });
+    const ts = await MgTag.create({ label: "typescript" });
+    const go = await MgTag.create({ label: "go" });
+    await MgPosting.create({ mg_author_id: alice.id, mg_tag_id: ruby.id });
+    await MgPosting.create({ mg_author_id: alice.id, mg_tag_id: ts.id });
+    await MgPosting.create({ mg_author_id: bob.id, mg_tag_id: go.id });
+
+    const tags = (await loadHasMany(alice, "mg_tags", {
+      className: "MgTag",
+      through: "mg_postings",
+      source: "mg_tag",
+    })) as MgTag[];
+    expect(tags.map((t) => t.label).sort()).toEqual(["ruby", "typescript"]);
+  });
+
   it("through chain query loads actual records end-to-end (Author -> Memberships -> Tags)", async () => {
     // Real DB roundtrip: insert records, build the through scope via
     // AssociationScope, execute it, assert the right rows come back.

@@ -1,4 +1,4 @@
-import { Type } from "@blazetrails/activemodel";
+import { Type, ValueType } from "@blazetrails/activemodel";
 
 export interface Coder {
   dump(value: unknown): string | null;
@@ -14,7 +14,7 @@ export interface Coder {
  *
  * Mirrors: ActiveRecord::Type::Serialized
  */
-export class Serialized extends Type {
+export class Serialized extends ValueType {
   readonly name = "serialized";
   readonly subtype: Type;
   readonly coder: Coder;

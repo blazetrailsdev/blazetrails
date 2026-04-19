@@ -1,5 +1,6 @@
 import type { Base } from "./base.js";
 import { camelize } from "@blazetrails/activesupport";
+import { ValueType } from "@blazetrails/activemodel";
 
 /**
  * Enum definition — maps symbolic names to integer values.
@@ -145,8 +146,8 @@ export function defineEnum(
  *
  * Mirrors: ActiveRecord::Enum::EnumType
  */
-export class EnumType {
-  private _name: string;
+export class EnumType extends ValueType<string> {
+  override readonly name: string;
   private _mapping: ReadonlyMap<string, number | string>;
   private _reverseMapping: ReadonlyMap<number | string, string>;
   private _raiseOnInvalidValues: boolean;
@@ -158,7 +159,8 @@ export class EnumType {
     subtype: string,
     raiseOnInvalidValues = true,
   ) {
-    this._name = name;
+    super();
+    this.name = name;
     this._mapping = mapping;
     const reverse = new Map<number | string, string>();
     for (const [k, v] of mapping) {
@@ -231,7 +233,7 @@ export class EnumType {
       const num = Number(value);
       if (!Number.isNaN(num) && this._reverseMapping.has(num)) return;
     }
-    throw new Error(`'${value}' is not a valid ${this._name}`);
+    throw new Error(`'${value}' is not a valid ${this.name}`);
   }
 }
 

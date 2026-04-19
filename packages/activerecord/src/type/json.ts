@@ -1,10 +1,10 @@
 /**
  * Mirrors: ActiveRecord::Type::Json
  */
-import { Type } from "@blazetrails/activemodel";
+import { ValueType } from "@blazetrails/activemodel";
 import { ActiveSupportJSON } from "@blazetrails/activesupport";
 
-export class Json extends Type<unknown> {
+export class Json extends ValueType<unknown> {
   readonly name = "json";
 
   cast(value: unknown): unknown {

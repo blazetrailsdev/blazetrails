@@ -100,6 +100,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
 
   constructor(config: string | (pg.PoolConfig & TrailsAdapterOptions)) {
     super();
+    // Rails: `PostgreSQLAdapter` inherits the abstract adapter's
+    // `default_prepared_statements = true`.
+    this.preparedStatements = true;
     if (typeof config === "string") {
       this._driverPool = new pg.Pool({ connectionString: config });
       return;

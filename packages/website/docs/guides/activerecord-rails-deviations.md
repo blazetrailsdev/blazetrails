@@ -158,22 +158,30 @@ merged `database.yml` hash in `AbstractAdapter#initialize`. The same
 shape works here — pass them alongside driver connection options in
 the single config hash:
 
+PG and MySQL take a single merged config hash (driver params + adapter
+knobs), matching Rails' `database.yml` shape. SQLite3 takes `(filename,
+options)` because the driver's first argument is a path, not a hash;
+the second argument accepts the same adapter knobs.
+
 ```ts
 import { PostgreSQLAdapter } from "@blazetrails/activerecord/connection-adapters/postgresql-adapter.js";
 import { Mysql2Adapter } from "@blazetrails/activerecord/adapters/mysql2-adapter.js";
 import { SQLite3Adapter } from "@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js";
 
+// PG: default_prepared_statements = true (abstract default).
 new PostgreSQLAdapter({
   connectionString: "postgres://localhost/app",
   statementLimit: 500, // default 1000
-  preparedStatements: true, // default true
+  preparedStatements: true,
 });
 
+// MySQL2: default_prepared_statements = false (Rails override).
 new Mysql2Adapter({
   uri: "mysql://localhost/app",
   statementLimit: 0, // 0 disables caching entirely
 });
 
+// SQLite3: default_prepared_statements = true (abstract default).
 new SQLite3Adapter("db/app.sqlite3", { statementLimit: 200 });
 ```
 

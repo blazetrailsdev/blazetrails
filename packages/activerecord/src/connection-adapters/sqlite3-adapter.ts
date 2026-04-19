@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 import { Visitors } from "@blazetrails/arel";
-import type { DatabaseAdapter, ExplainOption } from "../adapter.js";
+import type { DatabaseAdapter, ExplainOption, TrailsAdapterOptions } from "../adapter.js";
 import { AbstractAdapter, Version } from "./abstract-adapter.js";
 import { StatementPool as GenericStatementPool } from "./statement-pool.js";
 import {
@@ -105,7 +105,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
 
   constructor(
     filename: string | ":memory:" = ":memory:",
-    options: { readonly?: boolean; statementLimit?: number; preparedStatements?: boolean } = {},
+    options: TrailsAdapterOptions & { readonly?: boolean } = {},
   ) {
     super();
     this._filename = filename;

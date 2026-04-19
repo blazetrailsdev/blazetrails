@@ -1,9 +1,42 @@
 import { Node, NodeVisitor } from "./node.js";
 import { NodeExpression } from "./node-expression.js";
 import type { Attribute } from "../attributes/attribute.js";
+import { ATTRIBUTE_BRAND } from "./binary.js";
+import { Attribute as AMAttribute } from "@blazetrails/activemodel";
 
-export interface Nodes {
-  buildQuoted(other: unknown, attribute?: unknown): Node;
+/**
+ * Arel::Nodes.build_quoted — coerce `other` into a Node suitable for the AST.
+ *
+ * Rails: if `other` is already one of the Arel/ActiveModel node-like types,
+ * return it unchanged; otherwise wrap it in Casted (when an attribute is
+ * provided) or Quoted.
+ */
+export function buildQuoted(other: unknown, attribute?: unknown): Node {
+  if (other instanceof Node) return other;
+  if (other && typeof other === "object") {
+    // Arel::Attributes::Attribute (duck-typed via symbol brand)
+    if ((other as Record<symbol, unknown>)[ATTRIBUTE_BRAND] === true) return other as Node;
+    // ActiveModel::Attribute
+    if (other instanceof AMAttribute) return other as unknown as Node;
+  }
+  // SelectManager / Table and other AST-level wrappers expose `.toSql()`;
+  // Rails also passes those through. Detect structurally to avoid a hard
+  // dep cycle back into ./table.ts / ../select-manager.ts.
+  if (
+    other &&
+    typeof other === "object" &&
+    typeof (other as { toSql?: unknown }).toSql === "function"
+  ) {
+    return other as Node;
+  }
+  // Lazy-imported to avoid the classic Attribute <-> Casted module cycle.
+  if (isAttribute(attribute)) return new Casted(other, attribute as Attribute);
+  return new Quoted(other);
+}
+
+function isAttribute(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  return (value as Record<symbol, unknown>)[ATTRIBUTE_BRAND] === true;
 }
 
 /**

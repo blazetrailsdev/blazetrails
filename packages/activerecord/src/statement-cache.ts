@@ -94,7 +94,7 @@ export class PartialQueryCollector {
 
   addBinds(
     binds: unknown[],
-    procForBinds?: (v: unknown) => unknown,
+    procForBinds?: ((v: unknown) => unknown) | null,
     _block?: (index: number) => string,
   ): this {
     const mapped = procForBinds ? binds.map(procForBinds) : binds;

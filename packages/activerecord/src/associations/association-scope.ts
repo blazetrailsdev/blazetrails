@@ -236,15 +236,25 @@ export class AssociationScope {
    * Rails checks `scope.table == table` and scopes the where to the
    * joined table's alias in the multi-step case. For chain length 1
    * `scope.table` is the klass table, so the where goes directly on the
-   * relation.
+   * relation. For multi-step (through), `table` is a different
+   * (joined-in) table — qualify the WHERE as `<table>.<key> = ?`.
    *
    * Mirrors: ActiveRecord::Associations::AssociationScope#apply_scope
    * (association_scope.rb:161-167).
    */
-  private _applyScope(scope: unknown, _table: unknown, key: string, value: unknown): unknown {
-    return (scope as { where: (c: Record<string, unknown>) => unknown }).where({
-      [key]: value,
-    });
+  private _applyScope(scope: unknown, table: string | null, key: string, value: unknown): unknown {
+    const w = scope as {
+      where: (c: Record<string, unknown> | string, ...binds: unknown[]) => unknown;
+      modelClassName?: string;
+      _modelClass?: { tableName?: string };
+    };
+    const scopeTable = w._modelClass?.tableName ?? null;
+    if (table && scopeTable && table !== scopeTable) {
+      // Table-qualified WHERE: `<joined_table>.<key> = ?`. Used for
+      // through chains where the FK lives on an intermediate table.
+      return w.where(`"${table}"."${key}" = ?`, value);
+    }
+    return w.where({ [key]: value });
   }
 
   /**
@@ -267,7 +277,30 @@ export class AssociationScope {
       joinPrimaryKeyFor?: (klass?: typeof Base) => string | string[];
       type?: string | null;
     };
-    const table = (reflection as ReflectionProxy).aliasedTable ?? null;
+    // For multi-step chains the reflection is wrapped in ReflectionProxy
+    // with an aliasedTable set. For chain length 1 prefer the runtime
+    // klass's tableName (passed in) over reflection.klass — the latter
+    // throws for polymorphic belongsTo since the target class isn't
+    // known at definition time.
+    const aliased = (reflection as ReflectionProxy).aliasedTable as
+      | string
+      | { name?: string }
+      | null
+      | undefined;
+    let table: string | null;
+    if (typeof aliased === "string") {
+      table = aliased;
+    } else if (aliased && typeof aliased === "object" && typeof aliased.name === "string") {
+      table = aliased.name;
+    } else if (klass && typeof klass.tableName === "string") {
+      table = klass.tableName;
+    } else {
+      try {
+        table = (reflection as { klass?: { tableName?: string } }).klass?.tableName ?? null;
+      } catch {
+        table = null;
+      }
+    }
     // For polymorphic belongsTo, `joinPrimaryKey` is hard-coded to "id"
     // because the target klass isn't known at definition time. The
     // runtime klass comes from `AssociationScopeable.klass`; route
@@ -304,23 +337,94 @@ export class AssociationScope {
   }
 
   /**
-   * Build the chain of reflections to walk. Rails uses `reflection.chain`
-   * and wraps all-but-head in `ReflectionProxy` with aliased tables; for
-   * chain length 1 the source reflection stands alone.
+   * Build the chain of reflections to walk. Rails wraps all-but-head in
+   * `ReflectionProxy` with an aliased_table from `AliasTracker` so
+   * repeated joins to the same table get unique aliases.
+   *
+   * PR 3 doesn't share an AliasTracker across calls (single-query through
+   * loads typically don't collide), so each non-head reflection gets its
+   * klass.tableName as the table identifier. Sharing a tracker for
+   * repeated/eager-loaded joins is a follow-up.
    *
    * Mirrors: ActiveRecord::Associations::AssociationScope#get_chain
-   * (association_scope.rb:112-122). Multi-step wrapping comes in PR 3.
+   * (association_scope.rb:112-122).
    */
   private _getChain(
     reflection: AssociationReflection,
   ): Array<AbstractReflection | ReflectionProxy> {
-    if (reflection.chain.length > 1) {
-      throw new Error(
-        `AssociationScope: multi-step association chains are not implemented yet — ` +
-          `reflection '${reflection.name}' has ${reflection.chain.length} chain entries`,
-      );
+    const chain: Array<AbstractReflection | ReflectionProxy> = [reflection];
+    const tail = reflection.chain.slice(1);
+    for (const refl of tail) {
+      const tableName =
+        (refl as unknown as { klass?: { tableName?: string } }).klass?.tableName ?? "";
+      // ReflectionProxy expects an AssociationReflection; tail entries
+      // ARE AssociationReflection in the through case (the through-target
+      // hasMany / belongsTo on the through model). Cast for the type
+      // shape — the proxy only reads structural fields.
+      chain.push(new ReflectionProxy(refl as AssociationReflection, tableName));
     }
-    return [reflection];
+    return chain;
+  }
+
+  /**
+   * Walk a chain pair and emit an INNER JOIN constraint that joins the
+   * `next_reflection`'s table back onto the relation. The join condition
+   * is built from `reflection.joinPrimaryKey` (target-side column) and
+   * `joinForeignKey` (foreign-side column).
+   *
+   * Mirrors: ActiveRecord::Associations::AssociationScope#next_chain_scope
+   * (association_scope.rb:81-99).
+   */
+  private _nextChainScope(
+    scope: unknown,
+    reflection: AbstractReflection | ReflectionProxy,
+    nextReflection: AbstractReflection | ReflectionProxy,
+  ): unknown {
+    const r = reflection as {
+      joinPrimaryKey: string | string[];
+      joinForeignKey: string | string[];
+      klass?: { tableName?: string };
+      type?: string | null;
+    };
+    const nr = nextReflection as {
+      joinPrimaryKey: string | string[];
+      joinForeignKey: string | string[];
+      klass?: { tableName?: string };
+      aliasedTable?: string | { name?: string };
+    };
+    const joinPks = Array.isArray(r.joinPrimaryKey) ? r.joinPrimaryKey : [r.joinPrimaryKey];
+    const joinFks = Array.isArray(r.joinForeignKey) ? r.joinForeignKey : [r.joinForeignKey];
+    if (joinPks.length !== joinFks.length) {
+      const name = (reflection as { name?: string }).name ?? "<unknown>";
+      throw new CompositePrimaryKeyMismatchError(name, name);
+    }
+    const table = r.klass?.tableName ?? "";
+    // nextReflection may be a ReflectionProxy (with aliasedTable) or a
+    // raw reflection; resolve its table name the same way.
+    const aliased = nr.aliasedTable;
+    const foreignTable =
+      typeof aliased === "string"
+        ? aliased
+        : aliased && typeof aliased === "object" && typeof aliased.name === "string"
+          ? aliased.name
+          : (nr.klass?.tableName ?? "");
+    const conditions: string[] = [];
+    for (let i = 0; i < joinPks.length; i++) {
+      conditions.push(`"${table}"."${joinPks[i]}" = "${foreignTable}"."${joinFks[i]}"`);
+    }
+    let onClause = conditions.join(" AND ");
+    if (r.type) {
+      // Polymorphic through: filter the JOIN by the next reflection's
+      // klass polymorphic name. For PR 3 we use klass.name; STI base_class
+      // resolution is deferred (matches our existing polymorphic
+      // handling).
+      const nextName = (nextReflection as { klass?: { name?: string } }).klass?.name ?? "";
+      onClause += ` AND "${table}"."${r.type}" = '${nextName.replace(/'/g, "''")}'`;
+    }
+    return (scope as { joins: (table: string, on: string) => unknown }).joins(
+      foreignTable,
+      onClause,
+    );
   }
 
   /**
@@ -339,14 +443,25 @@ export class AssociationScope {
   ): unknown {
     const last = chain[chain.length - 1];
     scope = this._lastChainScope(scope, last, owner, klass);
+    // For multi-step chains, walk pairs and add INNER JOINs — Rails'
+    // `chain.each_cons(2) { |r, nr| next_chain_scope(scope, r, nr) }`
+    // (association_scope.rb:128-130).
+    for (let i = 0; i < chain.length - 1; i++) {
+      scope = this._nextChainScope(scope, chain[i], chain[i + 1]);
+    }
     // Use scopeFor (Rails: reflection.rb:448, scope_for) so 0-arity
     // scopes get `this`=relation, and >=1-arity scopes receive
     // (relation, owner) — matches Rails' `relation.instance_exec(owner,
     // &scope) || relation`. Calling `reflection.scope(scope)` directly
-    // would lose the binding.
-    const scopeFor = (last as { scopeFor?: (rel: unknown, owner: unknown) => unknown }).scopeFor;
+    // would lose the binding. The full Rails `add_constraints`
+    // chain.reverseEach merges every reflection's constraints; for
+    // chain-1 the simplified head-only path matches, and for through
+    // chains we call scopeFor on the source reflection (chain[0])
+    // matching Rails' behavior for the chain-head item.
+    const scopeFor = (chain[0] as { scopeFor?: (rel: unknown, owner: unknown) => unknown })
+      .scopeFor;
     if (typeof scopeFor === "function") {
-      scope = scopeFor.call(last, scope, owner);
+      scope = scopeFor.call(chain[0], scope, owner);
     }
     return scope;
   }

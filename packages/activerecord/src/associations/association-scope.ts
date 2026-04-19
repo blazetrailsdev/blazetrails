@@ -1,7 +1,6 @@
 import { Table as ArelTable } from "@blazetrails/arel";
 import type { Base } from "../base.js";
 import type { AssociationReflection, AbstractReflection } from "../reflection.js";
-import { PolymorphicReflection } from "../reflection.js";
 import {
   isStiSubclass,
   getStiBase,
@@ -570,57 +569,38 @@ export class AssociationScope {
     };
     const entryKlass = r.klass;
     if (!entryKlass) return scope;
-    // PolymorphicReflection wraps a chain entry whose previousReflection
-    // had `sourceType: 'X'` set. Its `constraints()` returns
-    // `[innerConstraints..., typeConstraint]` where the type constraint
-    // is `(rel) => rel.where(foreignType: sourceType)`. Apply it
-    // explicitly so a sourceType-filtered through chain emits the WHERE
-    // even when the underlying reflection itself has no scope (the
-    // common case).
-    // _getChain wraps non-head reflections in ReflectionProxy; unwrap
-    // before the instanceof check so PolymorphicReflection through
-    // proxies are detected.
-    const inner =
-      (reflection as { reflection?: AbstractReflection }).reflection ??
-      (reflection as AbstractReflection);
-    if (inner instanceof PolymorphicReflection) {
-      const constraints = (
-        inner as { constraints?: () => Array<(...args: unknown[]) => unknown> }
-      ).constraints?.();
-      if (constraints) {
-        let merged = scope;
-        for (const c of constraints) {
-          if (typeof c !== "function") continue;
-          // Same arity / `this` semantics as AssociationReflection.scopeFor:
-          // 0-arg → call(relation); 1+-arg → call(relation, relation, owner).
-          // Without this binding, a constraint written as
-          // `function () { return this.where(...) }` (the common 0-arg
-          // form Rails uses for scope_for_association) loses the
-          // relation.
-          const entryScope = this._buildEntryScope(entryKlass);
-          const evaluated =
-            c.length === 0
-              ? (c as () => unknown).call(entryScope)
-              : c.call(entryScope, entryScope, owner);
-          merged = this._pushScopeIntoRelation(merged, evaluated);
-        }
-        return merged;
-      }
+    // Iterate `reflection.constraints()` rather than special-casing
+    // PolymorphicReflection via instanceof. For ordinary
+    // AssociationReflection / ReflectionProxy entries `constraints()`
+    // returns `chain.flatMap(scopes)` — for non-through chain entries
+    // that's just `[self.scope].compact`. For PolymorphicReflection
+    // (sourceType wrapper) `constraints()` ALSO returns the
+    // `source_type_scope` lambda
+    // (`where(foreign_type: source_type)`). Iterating handles both
+    // cases without an instanceof check, avoiding a value-import cycle
+    // (reflection → associations → association-scope → reflection).
+    const constraints =
+      (
+        reflection as { constraints?: () => Array<(...args: unknown[]) => unknown> }
+      ).constraints?.() ?? [];
+    if (constraints.length === 0) return scope;
+    let merged = scope;
+    for (const c of constraints) {
+      if (typeof c !== "function") continue;
+      // Same arity / `this` semantics as AssociationReflection.scopeFor:
+      // 0-arg → call(relation); 1+-arg → call(relation, relation, owner).
+      // Without this binding, a scope written as
+      // `function () { return this.where(...) }` (the common 0-arg
+      // form Rails uses for scope_for_association / source_type_scope)
+      // loses the relation.
+      const entryScope = this._buildEntryScope(entryKlass);
+      const evaluated =
+        c.length === 0
+          ? (c as () => unknown).call(entryScope)
+          : c.call(entryScope, entryScope, owner);
+      merged = this._pushScopeIntoRelation(merged, evaluated);
     }
-    if (typeof r.scope !== "function") return scope;
-    const entryScope = this._buildEntryScope(entryKlass);
-    // Same arity / `this` semantics as AssociationReflection.scopeFor
-    // for the fallback path: 0-arg → `this=relation`; 1+-arg →
-    // `this=relation, args=(relation, owner)`. Without this binding,
-    // a scope written as `function () { return this.where(...) }`
-    // (the common 0-arg form) would lose the relation.
-    const evaluated =
-      typeof r.scopeFor === "function"
-        ? r.scopeFor.call(reflection, entryScope, owner)
-        : r.scope.length === 0
-          ? (r.scope as () => unknown).call(entryScope)
-          : r.scope.call(entryScope, entryScope, owner);
-    return this._pushScopeIntoRelation(scope, evaluated);
+    return merged;
   }
 
   /**

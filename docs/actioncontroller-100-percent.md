@@ -91,7 +91,7 @@ but diverges from Rails' mutable return.
 
 ## Remaining work
 
-### Files at 0% (92 methods)
+### Files at 0% (50 methods)
 
 | File                               | Methods | Notes                                         |
 | ---------------------------------- | ------- | --------------------------------------------- |
@@ -100,8 +100,8 @@ but diverges from Rails' mutable return.
 | `deprecator.ts`                    | 3       | Deprecator/addRenderer/removeRenderer         |
 | `metal/content-security-policy.ts` | 2       | CSP before_action hooks                       |
 | `metal/implicit-render.ts`         | 2       | Template existence checking                   |
+| `base.ts`                          | 2       | withoutModules + one more                     |
 | `api/api-rendering.ts`             | 1       | API renderToBody override                     |
-| `base.ts`                          | 1       | withoutModules                                |
 | `form-builder.ts`                  | 1       | defaultFormBuilder class method               |
 | `metal/permissions-policy.ts`      | 1       | Permissions policy before_action              |
 | `metal/rate-limiting.ts`           | 1       | Rate limiting before_action                   |

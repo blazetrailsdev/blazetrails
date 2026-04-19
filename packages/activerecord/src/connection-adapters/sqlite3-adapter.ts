@@ -111,11 +111,13 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     this._filename = filename;
     this._memoryDatabase = SQLite3Adapter._isMemoryFilename(filename);
     this._readonly = options.readonly ?? false;
+    // Rails: `SQLite3Adapter#default_prepared_statements` inherits the
+    // abstract adapter's `true`. Mirror that default and let options
+    // override per connection.
+    this.preparedStatements = options.preparedStatements ?? true;
     // Apply adapter-level options FIRST so invalid values fail before
     // the native driver opens a file handle that would otherwise leak.
     if (options.statementLimit !== undefined) this.statementLimit = options.statementLimit;
-    if (options.preparedStatements !== undefined)
-      this.preparedStatements = options.preparedStatements;
     try {
       this.db = new Database(filename, { readonly: this._readonly });
     } catch (e) {
@@ -168,6 +170,13 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   }
 
   private _cachedStatement(sql: string): Database.Statement {
+    // When preparedStatements is off, skip the pool and prepare per call —
+    // matches Rails' `statement_pool` behavior gated on
+    // `prepared_statements`. better-sqlite3 still uses its own statement
+    // handle internally, but we no longer cache across executes.
+    if (!this.preparedStatements) {
+      return this.db.prepare(sql);
+    }
     let stmt = this._statementPool.get(sql);
     if (!stmt) {
       stmt = this.db.prepare(sql);

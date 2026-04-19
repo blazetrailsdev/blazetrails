@@ -315,13 +315,6 @@ export async function loadBelongsTo(
         : defaultFk);
   const primaryKey = options.primaryKey ?? targetModel.primaryKey;
 
-  // Null-FK short-circuit: avoid a query when owner's FK column is null.
-  const fkCols = Array.isArray(foreignKey) ? foreignKey : [foreignKey as string];
-  for (const fk of fkCols) {
-    const v = record.readAttribute(fk);
-    if (v === null || v === undefined) return null;
-  }
-
   // Route through AssociationScope when reflection is registered.
   // For polymorphic belongsTo, AssociationScope receives the
   // runtime-resolved klass; the reflection's own joinPrimaryKey
@@ -329,6 +322,24 @@ export async function loadBelongsTo(
   // returns the owner-side FK, so the WHERE shape is identical to
   // the non-polymorphic case.
   const reflection = ctor._reflectOnAssociation?.(assocName);
+  // Null-FK short-circuit: avoid a query when owner's FK column is null.
+  // The check must read the SAME columns the eventual query uses —
+  // reflection.joinForeignKey when routing through AssociationScope,
+  // options-derived foreignKey otherwise. Reading from a different
+  // column would silently return null while a real query would have
+  // found the row (or vice versa).
+  const fkColsForCheck = reflection
+    ? Array.isArray((reflection as any).joinForeignKey)
+      ? ((reflection as any).joinForeignKey as string[])
+      : [(reflection as any).joinForeignKey as string]
+    : Array.isArray(foreignKey)
+      ? foreignKey
+      : [foreignKey as string];
+  for (const fk of fkColsForCheck) {
+    const v = record.readAttribute(fk);
+    if (v === null || v === undefined) return null;
+  }
+
   let result: Base | null;
   if (reflection) {
     const built = AssociationScope.scope({
@@ -424,17 +435,28 @@ export async function loadHasOne(
   if (options.as && (Array.isArray(primaryKey) || Array.isArray(foreignKey))) {
     throw new CompositePrimaryKeyMismatchError(ctor.name, assocName);
   }
-  // Null-PK short-circuit: avoid a query when the owner's PK is missing.
-  const pkCheckCols = Array.isArray(primaryKey) ? primaryKey : [primaryKey as string];
+  // Route through AssociationScope (handles scalar, composite, :as, STI
+  // in a single Rails-faithful path). reflection.isCollection() === false
+  // for hasOne, so AssociationScope.scope adds limit(1) automatically.
+  const reflection = ctor._reflectOnAssociation?.(assocName);
+  // Null-PK short-circuit: read the SAME columns the eventual query
+  // reads — reflection.joinForeignKey when routing through
+  // AssociationScope (= owner-side FK = activeRecordPrimaryKey for
+  // hasOne), options-derived primaryKey otherwise. Reading from a
+  // different column would silently return null while the real query
+  // would have found the row.
+  const pkCheckCols = reflection
+    ? Array.isArray((reflection as any).joinForeignKey)
+      ? ((reflection as any).joinForeignKey as string[])
+      : [(reflection as any).joinForeignKey as string]
+    : Array.isArray(primaryKey)
+      ? primaryKey
+      : [primaryKey as string];
   for (const pk of pkCheckCols) {
     const v = record.readAttribute(pk);
     if (v === null || v === undefined) return null;
   }
 
-  // Route through AssociationScope (handles scalar, composite, :as, STI
-  // in a single Rails-faithful path). reflection.isCollection() === false
-  // for hasOne, so AssociationScope.scope adds limit(1) automatically.
-  const reflection = ctor._reflectOnAssociation?.(assocName);
   let result: Base | null;
   if (reflection) {
     const built = AssociationScope.scope({
@@ -601,15 +623,6 @@ export async function loadHasMany(
   if (options.as && (Array.isArray(primaryKey) || Array.isArray(foreignKey))) {
     throw new CompositePrimaryKeyMismatchError(ctor.name, assocName);
   }
-  // Null-FK short-circuit: avoid a query when the owner's PK value is
-  // missing (unsaved record). Rails would WHERE on null and return [];
-  // we skip the roundtrip.
-  const fkCheckPks = Array.isArray(primaryKey) ? primaryKey : [primaryKey as string];
-  for (const pk of fkCheckPks) {
-    const v = record.readAttribute(pk);
-    if (v === null || v === undefined) return [];
-  }
-
   // Route through AssociationScope when we have a reflection registered.
   // AssociationScope handles scalar, composite, polymorphic `:as`, and
   // STI in a single path matching Rails' `AssociationScope.scope`.
@@ -617,6 +630,24 @@ export async function loadHasMany(
   // (happens in tests that define associations via the lower-level API
   // without going through Reflection.create).
   const reflection = ctor._reflectOnAssociation?.(assocName);
+  // Null-FK short-circuit: read the SAME columns the eventual query
+  // reads — reflection.joinForeignKey when routing through
+  // AssociationScope (= owner-side activeRecordPrimaryKey for hasMany),
+  // options-derived primaryKey otherwise. Reading from a different
+  // column would silently return [] while the real query would have
+  // found rows.
+  const fkCheckPks = reflection
+    ? Array.isArray((reflection as any).joinForeignKey)
+      ? ((reflection as any).joinForeignKey as string[])
+      : [(reflection as any).joinForeignKey as string]
+    : Array.isArray(primaryKey)
+      ? primaryKey
+      : [primaryKey as string];
+  for (const pk of fkCheckPks) {
+    const v = record.readAttribute(pk);
+    if (v === null || v === undefined) return [];
+  }
+
   let rel: any;
   if (reflection) {
     // Rails' `Association#scope` is

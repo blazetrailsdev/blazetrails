@@ -165,7 +165,7 @@ the second argument accepts the same adapter knobs.
 
 ```ts
 import { PostgreSQLAdapter } from "@blazetrails/activerecord/connection-adapters/postgresql-adapter.js";
-import { Mysql2Adapter } from "@blazetrails/activerecord/adapters/mysql2-adapter.js";
+import { Mysql2Adapter } from "@blazetrails/activerecord/connection-adapters/mysql2-adapter.js";
 import { SQLite3Adapter } from "@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js";
 
 // PG defaults preparedStatements to true (matches Rails, where

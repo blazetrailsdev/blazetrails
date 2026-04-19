@@ -25,4 +25,18 @@ describe("UnsignedIntegerTest", () => {
     expect(t.cast(null)).toBeNull();
     expect(t.cast(undefined)).toBeNull();
   });
+
+  it("isSerializable rejects negatives to stay in sync with cast", () => {
+    const t = new UnsignedInteger();
+    expect(t.isSerializable(-1)).toBe(false);
+    expect(t.isSerializable("-7")).toBe(false);
+  });
+
+  it("isSerializable accepts null and non-negative values", () => {
+    const t = new UnsignedInteger();
+    expect(t.isSerializable(null)).toBe(true);
+    expect(t.isSerializable(0)).toBe(true);
+    expect(t.isSerializable(42)).toBe(true);
+    expect(t.isSerializable("17")).toBe(true);
+  });
 });

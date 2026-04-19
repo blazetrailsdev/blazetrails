@@ -17,4 +17,11 @@ export class UnsignedInteger extends IntegerType {
     if (result === null) return null;
     return result < 0 ? null : result;
   }
+
+  // Keep serializability in sync with cast — negatives drop to null, so
+  // they aren't serializable. Inherited IntegerType.isSerializable only
+  // checks the signed range and would return true for small negatives.
+  override isSerializable(value: unknown): boolean {
+    return value === null || this.cast(value) !== null;
+  }
 }

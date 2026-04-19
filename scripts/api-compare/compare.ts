@@ -72,6 +72,52 @@ interface PackageResult {
   filesExist: number;
   excludedFiles: string[];
   files: FileResult[];
+  inheritance: InheritanceResult;
+}
+
+interface InheritanceMismatch {
+  rubyFqn: string;
+  rubyFile: string;
+  tsFile: string;
+  tsName: string;
+  rubySuper: string | null;
+  tsSuper: string | null;
+}
+
+interface InheritanceResult {
+  checked: number;
+  matched: number;
+  mismatches: InheritanceMismatch[];
+}
+
+// Ruby builtin exception classes → TS `Error` is the accepted equivalent.
+const RUBY_ERROR_BUILTINS = new Set([
+  "StandardError",
+  "RuntimeError",
+  "Exception",
+  "ArgumentError",
+  "TypeError",
+  "NotImplementedError",
+  "NameError",
+  "NoMethodError",
+  "IndexError",
+  "KeyError",
+  "RangeError",
+  "IOError",
+]);
+
+function shortName(fqn: string | undefined | null): string | null {
+  if (!fqn) return null;
+  const parts = fqn.split("::");
+  return parts[parts.length - 1] || null;
+}
+
+function superclassesMatch(rubySuper: string | null, tsSuper: string | null): boolean {
+  if (!rubySuper && !tsSuper) return true;
+  if (!rubySuper || !tsSuper) return false;
+  if (rubySuper === tsSuper) return true;
+  if (RUBY_ERROR_BUILTINS.has(rubySuper) && tsSuper === "Error") return true;
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -93,6 +139,7 @@ function main() {
   const showMissing = args.includes("--missing");
   const showFiles = args.includes("--files");
   const showIncomplete = args.includes("--incomplete");
+  const showInheritance = args.includes("--inheritance");
 
   const rubyPath = path.join(OUTPUT_DIR, "rails-api.json");
   const tsPath = path.join(OUTPUT_DIR, "ts-api.json");
@@ -478,6 +525,49 @@ function main() {
     const totalMethods = totalMatched + totalMissing;
     const pct = totalMethods > 0 ? Math.round((totalMatched / totalMethods) * 1000) / 10 : 0;
 
+    // ---- Inheritance check ----
+    // For each primary Ruby class, locate the matching TS class (same expected
+    // file + same short name) and compare superclass short names.
+    const inheritance: InheritanceResult = { checked: 0, matched: 0, mismatches: [] };
+    if (tsPkg) {
+      // Index TS classes by (file, shortName).
+      const tsByFileName = new Map<string, ClassInfo>();
+      for (const cls of Object.values(tsPkg.classes)) {
+        if (!cls.file) continue;
+        tsByFileName.set(`${cls.file}::${cls.name}`, cls);
+      }
+
+      for (const { fqn, info } of allRuby) {
+        if (!info.file || isExcluded(info.file)) continue;
+        // Only check primary class of the file (skip nested).
+        if (primaryClassPerFile.get(info.file) !== fqn) continue;
+        // Modules don't carry `superclass`; skip entries from the modules map.
+        // `allRuby` mixes both, so guard by "is it in rubyPkg.classes".
+        if (!(fqn in rubyPkg.classes)) continue;
+
+        const expectedTs = rubyFileToTs(info.file);
+        const short = shortName(fqn)!;
+        const tsCls = tsByFileName.get(`${expectedTs}::${short}`);
+        if (!tsCls) continue;
+
+        const rubySuper = shortName(info.superclass);
+        const tsSuper = shortName(tsCls.superclass);
+        inheritance.checked++;
+        if (superclassesMatch(rubySuper, tsSuper)) {
+          inheritance.matched++;
+        } else {
+          inheritance.mismatches.push({
+            rubyFqn: fqn,
+            rubyFile: info.file,
+            tsFile: expectedTs,
+            tsName: short,
+            rubySuper,
+            tsSuper,
+          });
+        }
+      }
+    }
+
     results.push({
       package: pkg,
       totalMethods,
@@ -488,6 +578,7 @@ function main() {
       filesExist,
       excludedFiles: [...excludedFiles].sort(),
       files: fileResults,
+      inheritance,
     });
   }
 
@@ -498,7 +589,7 @@ function main() {
     JSON.stringify({ generatedAt: new Date().toISOString(), results }, null, 2),
   );
 
-  printReport(results, showMissing, showFiles, filterPkg, showIncomplete);
+  printReport(results, showMissing, showFiles, filterPkg, showIncomplete, showInheritance);
 }
 
 // ---------------------------------------------------------------------------
@@ -511,25 +602,44 @@ function printReport(
   showFiles: boolean,
   filterPkg: string | null,
   showIncomplete = false,
+  showInheritance = false,
 ) {
   let grandTotal = 0;
   let grandMatched = 0;
   let grandFiles = 0;
   let grandFilesExist = 0;
+  let grandInhChecked = 0;
+  let grandInhMatched = 0;
 
   for (const pkg of results) {
     grandTotal += pkg.totalMethods;
     grandMatched += pkg.matched;
     grandFiles += pkg.totalFiles;
     grandFilesExist += pkg.filesExist;
+    grandInhChecked += pkg.inheritance.checked;
+    grandInhMatched += pkg.inheritance.matched;
 
     console.log(`\n${"=".repeat(100)}`);
     const excludedNote =
       pkg.excludedFiles.length > 0 ? "  (some intentionally excluded, see excluded-files.ts)" : "";
+    const inh = pkg.inheritance;
+    const inhPct =
+      inh.checked > 0 ? Math.round((inh.matched / inh.checked) * 1000) / 10 : 0;
+    const inhNote =
+      inh.checked > 0 ? `  |  inheritance: ${inh.matched}/${inh.checked} (${inhPct}%)` : "";
     console.log(
-      `  ${pkg.package}  —  ${pkg.matched}/${pkg.totalMethods} methods (${pkg.percent}%)  |  files: ${pkg.filesExist}/${pkg.totalFiles}${excludedNote}`,
+      `  ${pkg.package}  —  ${pkg.matched}/${pkg.totalMethods} methods (${pkg.percent}%)  |  files: ${pkg.filesExist}/${pkg.totalFiles}${inhNote}${excludedNote}`,
     );
     console.log(`${"=".repeat(100)}`);
+
+    if (showInheritance && inh.mismatches.length > 0) {
+      console.log(`\n  Inheritance mismatches:`);
+      for (const m of inh.mismatches) {
+        const rs = m.rubySuper ?? "(none)";
+        const ts = m.tsSuper ?? "(none)";
+        console.log(`    ${m.tsFile}:${m.tsName}  ruby<${rs}>  ts<${ts}>`);
+      }
+    }
 
     // Per-file table (only for detail packages or when filtered)
     if (DETAIL_PACKAGES.has(pkg.package) || filterPkg || showFiles) {
@@ -580,8 +690,14 @@ function printReport(
       `  Data layer: ${dataMatched}/${dataTotal} methods (${dataPct}%)  |  files: ${dataFilesExist}/${dataFiles}`,
     );
   }
+  const inhPct =
+    grandInhChecked > 0 ? Math.round((grandInhMatched / grandInhChecked) * 1000) / 10 : 0;
+  const inhSummary =
+    grandInhChecked > 0
+      ? `  |  inheritance: ${grandInhMatched}/${grandInhChecked} (${inhPct}%)`
+      : "";
   console.log(
-    `  Overall: ${grandMatched}/${grandTotal} methods (${grandPct}%)  |  files: ${grandFilesExist}/${grandFiles}`,
+    `  Overall: ${grandMatched}/${grandTotal} methods (${grandPct}%)  |  files: ${grandFilesExist}/${grandFiles}${inhSummary}`,
   );
   console.log(`${"=".repeat(100)}\n`);
 }

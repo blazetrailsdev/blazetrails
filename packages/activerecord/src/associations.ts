@@ -359,6 +359,24 @@ async function _loadThroughViaDisableJoinsScope(
   record: Base,
   reflection: unknown,
 ): Promise<Base[]> {
+  // Null-PK short-circuit: an unsaved owner has no through-table FK to
+  // chain off, so DJAS would build `WHERE through.<fk> IN ([null])` and
+  // either return 0 rows or (worse) match rows with null FKs. Read the
+  // owner-side column the chain seeds from — `joinForeignKey` on the
+  // through_reflection is the owner's PK column on the through table,
+  // and on the owner record itself it's the owner's PK attribute. For
+  // chain length 1 (non-through), this code isn't reached. For through,
+  // the chain reverse walk seeds with `owner.readAttribute(throughRefl
+  // .joinForeignKey)`, so checking that here matches what DJAS reads.
+  const throughRefl = (reflection as { throughReflection?: unknown }).throughReflection as
+    | { joinForeignKey?: string | string[] }
+    | undefined;
+  const fk = throughRefl?.joinForeignKey;
+  const fkCols = Array.isArray(fk) ? fk : fk ? [fk] : [];
+  for (const col of fkCols) {
+    const v = record.readAttribute(col);
+    if (v === null || v === undefined) return [];
+  }
   // Lazy-import to avoid an eager cycle: DJAS imports
   // DisableJoinsAssociationRelation → relation.ts → associations.ts.
   const { DisableJoinsAssociationScope } =

@@ -41,7 +41,7 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
    */
   protected override _newRelation(): Relation<T> {
     return new DisableJoinsAssociationRelation<T>(
-      (this as unknown as { _modelClass: typeof Base })._modelClass,
+      this.model,
       this.key,
       this._storedIds,
     ) as unknown as Relation<T>;

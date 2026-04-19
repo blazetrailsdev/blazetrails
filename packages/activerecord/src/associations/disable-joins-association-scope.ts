@@ -130,8 +130,13 @@ export class DisableJoinsAssociationScope extends AssociationScope {
       const recordIds = (await (records as { pluck: (col: string) => Promise<unknown[]> }).pluck(
         foreignKeyStr,
       )) as unknown[];
-      const orderValues = (records as { orderValues?: unknown[] }).orderValues ?? ([] as unknown[]);
-      const recordsOrdered = orderValues.length > 0;
+      // `orderValues` covers `_orderClauses` (the parsed form); raw-SQL
+      // orders (e.g. `inOrderOf`) live in `_rawOrderClauses` and are
+      // invisible to the public getter. Check both so chain steps with
+      // raw orders trigger the DJAR wrapping branch correctly.
+      const ord = records as { orderValues?: unknown[]; _rawOrderClauses?: unknown[] };
+      const recordsOrdered =
+        (ord.orderValues?.length ?? 0) > 0 || (ord._rawOrderClauses?.length ?? 0) > 0;
       acc = [nextReflection, recordsOrdered, recordIds];
     }
     return acc;
@@ -194,7 +199,13 @@ export class DisableJoinsAssociationScope extends AssociationScope {
       scope = this._pushScopeIntoRelation(scope, evaluated);
     }
 
-    const finalOrders = (scope as { orderValues?: unknown[] }).orderValues ?? [];
+    // Same _rawOrderClauses guard as the chain-walk: a raw-SQL order on
+    // the source step also disables the DJAR wrap.
+    const finalOrd = scope as { orderValues?: unknown[]; _rawOrderClauses?: unknown[] };
+    const finalOrders =
+      (finalOrd.orderValues?.length ?? 0) > 0 || (finalOrd._rawOrderClauses?.length ?? 0) > 0
+        ? [1]
+        : [];
     if (finalOrders.length === 0 && ordered) {
       const split = new DisableJoinsAssociationRelation<Base>(klass, key, joinIds);
       const sourceWhere = (scope as { _whereClause?: { predicates?: unknown[] } })._whereClause;

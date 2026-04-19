@@ -69,35 +69,48 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
 
   /**
    * Compose any query state chained onto this deferred DJAR (wheres,
-   * orders, limit, offset) onto the walker's result relation.
-   * Without this, `DJAS.scope(...).where(...)` would silently drop
-   * the chained where because the walker builds a fresh relation
-   * that doesn't see anything stored on `this`.
+   * orders, limit, offset, select, distinct, group, having, joins,
+   * lock, etc.) onto the walker's result relation. Without this,
+   * `DJAS.scope(...).where(...)` and other chained modifiers would
+   * be silently dropped — the walker builds a fresh relation that
+   * doesn't see anything stored on `this`.
    *
-   * Implementation: Relation#merge already does the right thing for
-   * combining wheres/orders/etc. We treat `this` as the overlay and
-   * merge it onto the walker's result.
+   * Implementation: always merge `this` as the overlay onto the
+   * walker's result. Relation#merge handles wheres/orders/etc;
+   * `_rawOrderClauses` (used by `inOrderOf`) and `_isNone` (used by
+   * `.none()`) are copied explicitly because Relation#merge doesn't
+   * propagate them today.
    */
   private _composeChainedState(walkerResult: Relation<T>): Relation<T> {
-    const hasOverlay =
-      (this._whereClause?.predicates?.length ?? 0) > 0 ||
-      ((this as unknown as { _orderClauses?: unknown[] })._orderClauses?.length ?? 0) > 0 ||
-      ((this as unknown as { _rawOrderClauses?: unknown[] })._rawOrderClauses?.length ?? 0) > 0 ||
-      (this as unknown as { _limitValue?: number | null })._limitValue != null ||
-      (this as unknown as { _offsetValue?: number | null })._offsetValue != null;
-    if (!hasOverlay) return walkerResult;
-    return (walkerResult as unknown as { merge: (o: unknown) => Relation<T> }).merge(this);
+    const merged = (walkerResult as unknown as { merge: (o: unknown) => Relation<T> }).merge(this);
+    // Explicit copies for state Relation#merge doesn't propagate.
+    const overlay = this as unknown as {
+      _rawOrderClauses?: unknown[];
+      _isNone?: boolean;
+    };
+    const target = merged as unknown as {
+      _rawOrderClauses?: unknown[];
+      _isNone?: boolean;
+    };
+    if ((overlay._rawOrderClauses?.length ?? 0) > 0) {
+      target._rawOrderClauses = [
+        ...(target._rawOrderClauses ?? []),
+        ...(overlay._rawOrderClauses ?? []),
+      ];
+    }
+    if (overlay._isNone) target._isNone = true;
+    return merged;
   }
 
   override async ids(): Promise<unknown[]> {
     if (this._chainWalker) {
-      // Deferred mode — load via the walker, then read PKs off the
-      // result. Matches Rails' `Relation#ids` semantics for the
-      // deferred-chain path; the loaded-chain mode uses the stored
-      // through-IDs instead.
-      const records = await this.toArray();
-      const pk = this.model.primaryKey as string;
-      return records.map((r) => r.readAttribute(pk));
+      // Deferred mode — delegate to the composed walker result's
+      // ids(), which can pluck instead of materializing full records.
+      // (If the walker produced a loaded-chain DJAR, that DJAR's
+      // ids() returns its stored through-IDs without a query.)
+      const { relation } = await this._chainWalker();
+      const merged = this._composeChainedState(relation);
+      return (merged as unknown as { ids: () => Promise<unknown[]> }).ids();
     }
     return this._storedIds;
   }
@@ -158,24 +171,46 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
   }
 
   /**
-   * Rails: `def limit(value); records.take(value); end` — load everything
-   * then slice in memory. Returns an array, breaking the Relation chain
-   * (matching Rails' deliberate deviation here).
+   * Loaded-chain mode (Rails fidelity): `def limit(value);
+   * records.take(value); end` — load everything then slice in
+   * memory. Deferred-chain mode: chain like a normal Relation. The
+   * walker result composes the limit via `_composeChainedState` and
+   * the underlying relation handles SQL LIMIT (or, if the walker
+   * produced a loaded-chain DJAR, that DJAR's own override slices
+   * in-memory).
    */
-  // @ts-expect-error — deliberate Rails-fidelity deviation: returns Array, not Relation
-  override async limit(value: number): Promise<T[]> {
-    const records = await this.toArray();
-    return records.slice(0, value);
+  // @ts-expect-error — deliberate Rails-fidelity deviation in loaded-chain mode: returns Array, not Relation
+  override limit(value: number): Relation<T> | Promise<T[]> {
+    if (this._chainWalker) return Relation.prototype.limit.call(this, value) as Relation<T>;
+    return (async () => {
+      const records = await this.toArray();
+      return records.slice(0, value);
+    })();
   }
 
   /**
-   * Rails: load everything then take the first (or first n) in memory,
-   * for the same reason as `limit` above.
+   * Loaded-chain mode: load + take. Deferred-chain mode: chain like
+   * a normal Relation (returning a new deferred DJAR with limit
+   * applied — async first() on that lands on the SQL-LIMIT path of
+   * the walker's underlying relation).
    */
-  // @ts-expect-error — deliberate Rails-fidelity deviation: async, not sync
-  override async first(limit?: number): Promise<T | T[] | null> {
-    const records = await this.toArray();
-    if (limit === undefined) return records[0] ?? null;
-    return records.slice(0, limit);
+  // @ts-expect-error — deliberate Rails-fidelity deviation in loaded-chain mode: async, not sync
+  override first(limit?: number): Promise<T | null> | Promise<T[]> {
+    if (this._chainWalker) {
+      // Defer to Relation's chained-then-load semantics: spawn a
+      // limited(1)/limited(N) clone, then load + take the first.
+      const limitVal = limit ?? 1;
+      const limited = Relation.prototype.limit.call(this, limitVal) as Relation<T>;
+      return (async () => {
+        const records = await limited.toArray();
+        if (limit === undefined) return records[0] ?? null;
+        return records;
+      })() as Promise<T | null> | Promise<T[]>;
+    }
+    return (async () => {
+      const records = await this.toArray();
+      if (limit === undefined) return records[0] ?? null;
+      return records.slice(0, limit);
+    })() as Promise<T | null> | Promise<T[]>;
   }
 }

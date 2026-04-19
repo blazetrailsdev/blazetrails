@@ -5,6 +5,7 @@ import {
   type ValueTransformation,
 } from "./association-scope.js";
 import { DisableJoinsAssociationRelation } from "../disable-joins-association-relation.js";
+import type { Relation } from "../relation.js";
 import type { Base } from "../base.js";
 import type { AbstractReflection } from "../reflection.js";
 
@@ -95,7 +96,7 @@ export class DisableJoinsAssociationScope extends AssociationScope {
         lastJoinIds,
         owner,
         lastOrdered,
-      ) as never;
+      ) as Relation<Base>;
       return { relation };
     });
   }

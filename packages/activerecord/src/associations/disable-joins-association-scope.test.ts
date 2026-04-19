@@ -92,7 +92,11 @@ describe("DisableJoinsAssociationScope", () => {
     expect(records.map((r: any) => r.body).sort()).toEqual(["c1", "c2"]);
   });
 
-  it("issues per-step queries (no multi-table JOIN on the deferred relation)", async () => {
+  it("issues per-step queries (no multi-table JOIN actually emitted to the DB)", async () => {
+    // Capture executed SQL via Notifications so we can assert the
+    // WHOLE point of DJAS — no JOIN ever hits the wire — instead of
+    // just verifying the records came back.
+    const { Notifications } = await import("@blazetrails/activesupport");
     const author = await DjsAuthor.create({ name: "A" });
     const post = await DjsPost.create({ djs_author_id: author.id, title: "p" });
     await DjsComment.create({ djs_post_id: post.id, body: "c1" });
@@ -103,11 +107,24 @@ describe("DisableJoinsAssociationScope", () => {
       reflection,
       klass: reflection.klass,
     }) as DisableJoinsAssociationRelation<Base>;
-    // toArray triggers the walk → loads comments via per-step queries.
-    // No multi-table JOIN should ever fire (the whole point of DJAS).
-    const records = await built.toArray();
-    expect(records.length).toBe(1);
-    expect((records[0] as any).body).toBe("c1");
+
+    const observed: string[] = [];
+    const sub = Notifications.subscribe("sql.active_record", (event: any) => {
+      const sql = event?.payload?.sql;
+      if (typeof sql === "string") observed.push(sql);
+    });
+    try {
+      const records = await built.toArray();
+      expect(records.length).toBe(1);
+      expect((records[0] as any).body).toBe("c1");
+    } finally {
+      Notifications.unsubscribe(sub);
+    }
+    // Per-step queries hit djs_posts and djs_comments individually;
+    // a JOIN-based load would have a single query mentioning both
+    // table names with a JOIN keyword. Assert no captured SQL has JOIN.
+    expect(observed.length).toBeGreaterThan(0);
+    expect(observed.some((s) => /\bJOIN\b/i.test(s))).toBe(false);
   });
 
   it("chained .where() on the deferred DJAR composes into the walker result", async () => {

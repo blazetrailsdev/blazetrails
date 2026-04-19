@@ -963,6 +963,7 @@ export async function loadHasMany(
  */
 export function computeHasManyWhere(
   record: Base,
+  assocName: string,
   options: AssociationOptions,
 ): Record<string, unknown> | null {
   const ctor = record.constructor as typeof Base;
@@ -970,6 +971,9 @@ export function computeHasManyWhere(
 
   if (options.as) {
     const foreignKey = options.foreignKey ?? `${underscore(options.as)}_id`;
+    if (Array.isArray(foreignKey) || Array.isArray(primaryKey)) {
+      throw new CompositePrimaryKeyMismatchError(ctor.name, assocName);
+    }
     const pkValue = record.readAttribute(primaryKey as string);
     if (pkValue === null || pkValue === undefined) return null;
     const typeCol = `${underscore(options.as)}_type`;
@@ -985,16 +989,26 @@ export function computeHasManyWhere(
         : `${underscore(ctor.name)}_id`);
 
   if (Array.isArray(foreignKey)) {
-    const pkCols = Array.isArray(primaryKey) ? primaryKey : [primaryKey];
+    // Composite FK requires a composite PK of matching length — otherwise
+    // we'd silently readAttribute(undefined) and produce a bogus/empty
+    // scope. Existing loaders throw CompositePrimaryKeyMismatchError; do
+    // the same here so CollectionProxy construction fails loudly.
+    if (!Array.isArray(primaryKey) || primaryKey.length !== foreignKey.length) {
+      throw new CompositePrimaryKeyMismatchError(ctor.name, assocName);
+    }
     const conditions: Record<string, unknown> = {};
     for (let i = 0; i < foreignKey.length; i++) {
-      const pkVal = record.readAttribute(pkCols[i]);
+      const pkVal = record.readAttribute(primaryKey[i]);
       if (pkVal === null || pkVal === undefined) return null;
       conditions[foreignKey[i]] = pkVal;
     }
     return conditions;
   }
 
+  // Scalar FK: a composite PK here is a mismatch too.
+  if (Array.isArray(primaryKey)) {
+    throw new CompositePrimaryKeyMismatchError(ctor.name, assocName);
+  }
   const pkValue = record.readAttribute(primaryKey as string);
   if (pkValue === null || pkValue === undefined) return null;
   return { [foreignKey]: pkValue };
@@ -1011,7 +1025,7 @@ export function buildHasManyRelation(
   assocName: string,
   options: AssociationOptions,
 ): any | null {
-  const conditions = computeHasManyWhere(record, options);
+  const conditions = computeHasManyWhere(record, assocName, options);
   if (conditions === null) return null;
   const className = options.className ?? camelize(singularize(assocName));
   const targetModel = resolveModel(className);
@@ -1701,7 +1715,9 @@ export function association<T extends Base = Base>(
   }
   if (!_CollectionProxyCtor) {
     throw new Error(
-      "CollectionProxy not loaded. Import collection-proxy.js first (or access an association).",
+      "CollectionProxy not registered. Import from '@blazetrails/activerecord' " +
+        "instead of deep-importing associations.js so late-bound registration " +
+        "can run and break the associations/collection-proxy/relation/base cycle.",
     );
   }
   const proxy = new _CollectionProxyCtor<T>(record, assocName, assocDef);

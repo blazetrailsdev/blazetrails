@@ -250,23 +250,54 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     this._assocName = assocName;
     this._assocDef = assocDef;
 
-    // Seed the FK where-clause so direct Relation calls on this proxy
-    // (e.g. `cp.toSql()`, `cp.toArray()` via Relation's path) scope to
-    // the owner — matches Rails where the CollectionProxy IS a Relation
-    // already scoped by the association's foreign key. Through
-    // associations keep the subquery/join path via `scope()` — no seed
-    // here. Missing PK → set `_isNone = true` so the proxy acts like
-    // `none` (Rails' NullRelation fallback).
-    if (!assocDef.options.through) {
-      const conditions = computeHasManyWhere(record, assocDef.options);
+    // Seed the proxy's Relation state so direct Relation calls
+    // (`cp.toSql()`, `cp.where(...)`, `cp.toArray()` via Relation's path)
+    // scope to the owner — matches Rails, where CollectionProxy IS the
+    // scoped Relation. Two paths:
+    //
+    // - Non-through (hasMany / HABTM): seed the FK where-clause, then
+    //   apply any `scope:` callback. The callback returns a new relation
+    //   in our codebase, so capture it and copy state back into `this`.
+    //   Missing owner PK → `_isNone = true` (Rails' NullRelation fallback).
+    // - Through: delegate to `_buildThroughScope()`, which builds the
+    //   subquery/join relation, then copy its state onto `this` so the
+    //   inherited Relation methods see the same scope as the old
+    //   `scope()` path.
+    //
+    // Through scope-building reads adapter schema, which can fail on
+    // adapter-less test fixtures that still expect bare CP construction
+    // to succeed. Wrap in try/catch — a later `scope()` call will surface
+    // the real error.
+    const proxySelf = this as unknown as {
+      _isNone: boolean;
+      whereBang: (c: Record<string, unknown>) => unknown;
+      _copyStateFrom: (other: Relation<T>) => void;
+    };
+    if (assocDef.options.through) {
+      try {
+        const throughRel = this._buildThroughScope() as Relation<T>;
+        proxySelf._copyStateFrom(throughRel);
+      } catch {
+        // Schema/adapter not ready — leave Relation state empty; `scope()`
+        // will re-run `_buildThroughScope()` when callers invoke it and
+        // raise the real error there.
+      }
+    } else {
+      const conditions = computeHasManyWhere(record, assocName, assocDef.options);
       if (conditions === null) {
-        (this as unknown as { _isNone: boolean })._isNone = true;
+        proxySelf._isNone = true;
       } else {
-        (this as unknown as { whereBang: (c: Record<string, unknown>) => unknown }).whereBang(
-          conditions,
-        );
+        proxySelf.whereBang(conditions);
         if (assocDef.options.scope) {
-          assocDef.options.scope(this as unknown as Relation<T>);
+          const scoped = assocDef.options.scope(this as unknown as Relation<T>);
+          // Scope callbacks are written in the codebase as
+          // `(rel) => rel.where(...).order(...)` — they CLONE the input
+          // relation and return a new one. We must copy state back onto
+          // `this` so the inherited Relation methods observe the scoped
+          // where/order/limit/etc.
+          if (scoped && scoped !== (this as unknown)) {
+            proxySelf._copyStateFrom(scoped);
+          }
         }
       }
     }

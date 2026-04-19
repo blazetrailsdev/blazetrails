@@ -164,8 +164,10 @@ export type PrimaryKeyValue = PrimaryKeyScalar | PrimaryKeyScalar[];
 // call before base.ts reaches this line. `let` would throw TDZ; `var
 // x = null` would hoist then RESET the value back to null; `var x;`
 // hoists as `undefined` without clobbering a later-set value.
-let _RelationCtor: (new (modelClass: typeof Base) => any) | undefined;
-let _wrapWithScopeProxy: ((rel: any) => any) | undefined;
+// eslint-disable-next-line no-var
+var _RelationCtor: (new (modelClass: typeof Base) => any) | undefined;
+// eslint-disable-next-line no-var
+var _wrapWithScopeProxy: ((rel: any) => any) | undefined;
 
 /** @internal Called by relation.ts to register itself. */
 export function _setRelationCtor(ctor: new (modelClass: typeof Base) => any): void {

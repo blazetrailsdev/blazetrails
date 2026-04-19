@@ -123,8 +123,11 @@ export class AssociationScope {
     this._valueTransformation = valueTransformation;
   }
 
-  static create(valueTransformation?: ValueTransformation): AssociationScope {
-    return new AssociationScope(valueTransformation ?? ((v: unknown) => v));
+  static create<T extends typeof AssociationScope>(
+    this: T,
+    valueTransformation?: ValueTransformation,
+  ): InstanceType<T> {
+    return new this(valueTransformation ?? ((v: unknown) => v)) as InstanceType<T>;
   }
 
   /** Identity-lambda shared instance. Rails: `INSTANCE = create`. */
@@ -132,12 +135,16 @@ export class AssociationScope {
 
   /**
    * Entry point. Build the Relation that loads (or filters) the given
-   * association's records for its owner.
+   * association's records for its owner. Polymorphic via `this.INSTANCE`
+   * so a subclass with its own `static INSTANCE` (e.g.
+   * `DisableJoinsAssociationScope`) routes through that subclass'
+   * instance — matching Rails' `AssociationScope.scope(association)` /
+   * `INSTANCE` lookup chain.
    *
    * Mirrors: ActiveRecord::Associations::AssociationScope.scope
    */
-  static scope(association: AssociationScopeable): unknown {
-    return AssociationScope.INSTANCE.scope(association);
+  static scope(this: typeof AssociationScope, association: AssociationScopeable): unknown {
+    return this.INSTANCE.scope(association);
   }
 
   /**

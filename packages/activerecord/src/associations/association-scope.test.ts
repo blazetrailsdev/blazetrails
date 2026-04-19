@@ -317,6 +317,14 @@ describe("AssociationScope", () => {
     expect(sql).toMatch(/"active"\s*=\s*TRUE/i);
   });
 
+  it("static scope() routes through this.INSTANCE (subclass dispatch)", async () => {
+    const { DisableJoinsAssociationScope } = await import("./disable-joins-association-scope.js");
+    expect(DisableJoinsAssociationScope.INSTANCE).toBeInstanceOf(DisableJoinsAssociationScope);
+    // Subclass INSTANCE shadows the parent's so polymorphic
+    // this.INSTANCE in `static scope` resolves to the subclass instance.
+    expect(DisableJoinsAssociationScope.INSTANCE).not.toBe(AssociationScope.INSTANCE);
+  });
+
   it("scope() raises for through chains (PR 1 limitation)", () => {
     class ThroughAuthor extends Base {
       static {

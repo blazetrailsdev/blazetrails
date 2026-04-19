@@ -5,8 +5,7 @@ import {
   type ValueTransformation,
 } from "./association-scope.js";
 import { DisableJoinsAssociationRelation } from "../disable-joins-association-relation.js";
-import { quoteColumnName } from "../connection-adapters/abstract/quoting.js";
-import { detectAdapterName } from "../adapter-name.js";
+import { Nodes } from "@blazetrails/arel";
 import type { Relation } from "../relation.js";
 import type { UnscopeType } from "../relation/query-methods.js";
 import type { Base } from "../base.js";
@@ -41,34 +40,28 @@ function readTuple(owner: Base, cols: string[]): unknown[] {
 }
 
 /**
- * Build a tuple-IN WHERE clause as raw SQL: `(c1, c2) IN ((?, ?), ...)`.
+ * Build a composite-key predicate as `(c1=v11 AND c2=v12) OR
+ * (c1=v21 AND c2=v22) OR ...`. Semantically equivalent to tuple-IN
+ * but built with Arel nodes — keeps adapter-specific identifier
+ * quoting centralized in Arel (no manual `quoteColumnName` /
+ * `detectAdapterName` plumbing) and matches the existing pattern in
+ * `counter-cache.ts#buildPkPredicate`.
+ *
  * Caller must guarantee `tuples.length > 0` — empty input is handled
- * by the caller via `Relation#none()`. PG / MySQL / SQLite all support
- * tuple IN; Arel's AST doesn't expose a direct constructor for it, so
- * raw SQL is the portable path. Identifiers go through
- * `quoteColumnName` for adapter-specific column quoting (handles
- * embedded quote characters in the identifier itself; does NOT
- * split on `.` for schema-qualified names — that's
- * `quoteTableName`'s responsibility, and column names here come
- * from reflection metadata which is always bare).
+ * by the caller via `Relation#none()`.
  */
-function tupleInClause(
+function tuplePredicate(
   klass: typeof Base,
   cols: string[],
   tuples: unknown[][],
-): { sql: string; binds: unknown[] } {
-  // Resolve the adapter flavor from the target class so identifier
-  // quoting picks the right delimiter — double-quotes for PG/SQLite,
-  // backticks for MySQL/MariaDB. Without this, the default
-  // double-quote style would emit invalid SQL on MySQL unless the
-  // server was in ANSI_QUOTES mode.
-  const flavor = detectAdapterName(klass.adapter);
-  const placeholderRow = "(" + cols.map(() => "?").join(", ") + ")";
-  const allRows = tuples.map(() => placeholderRow).join(", ");
-  const colList = cols.map((c) => quoteColumnName(c, flavor)).join(", ");
-  const flat: unknown[] = [];
-  for (const t of tuples) flat.push(...t);
-  return { sql: `(${colList}) IN (${allRows})`, binds: flat };
+): InstanceType<typeof Nodes.Node> {
+  const table = klass.arelTable;
+  const groupings: InstanceType<typeof Nodes.Node>[] = tuples.map((tuple) => {
+    const eqs = cols.map((c, i) => table.get(c).eq(tuple[i]));
+    return new Nodes.Grouping(new Nodes.And(eqs));
+  });
+  if (groupings.length === 1) return groupings[0];
+  return new Nodes.Grouping(groupings.reduce((left, right) => new Nodes.Or(left, right)));
 }
 
 /**
@@ -223,11 +216,8 @@ export class DisableJoinsAssociationScope extends AssociationScope {
       if (tuples.length === 0) {
         scope = (scope as { none: () => unknown }).none();
       } else {
-        const { sql, binds } = tupleInClause(klass, keyCols, tuples);
-        scope = (scope as { where: (sql: string, ...binds: unknown[]) => unknown }).where(
-          sql,
-          ...binds,
-        );
+        const node = tuplePredicate(klass, keyCols, tuples);
+        scope = (scope as { where: (n: InstanceType<typeof Nodes.Node>) => unknown }).where(node);
       }
     }
 

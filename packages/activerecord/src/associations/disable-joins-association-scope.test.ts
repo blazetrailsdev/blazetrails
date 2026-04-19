@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { Notifications } from "@blazetrails/activesupport";
 import { Base, registerModel } from "../index.js";
 import { createTestAdapter } from "../test-adapter.js";
 import type { DatabaseAdapter } from "../adapter.js";
@@ -66,6 +67,13 @@ describe("DisableJoinsAssociationScope", () => {
       source: "djsComments",
       disableJoins: true,
     });
+  });
+
+  // Backstop in case a test throws before reaching its in-test
+  // unsubscribe — leaked sql.active_record subscribers can corrupt
+  // sibling tests (and bloat process memory across the suite).
+  afterEach(() => {
+    Notifications.unsubscribeAll();
   });
 
   it("INSTANCE is a DisableJoinsAssociationScope", () => {

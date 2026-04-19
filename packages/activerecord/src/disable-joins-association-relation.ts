@@ -256,27 +256,25 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
 
   /**
    * Loaded-chain mode: load + take. Deferred-chain mode: chain like
-   * a normal Relation (returning a new deferred DJAR with limit
-   * applied — async first() on that lands on the SQL-LIMIT path of
-   * the walker's underlying relation).
+   * a normal Relation (limit applied via Relation.prototype.limit
+   * → walker result → SQL LIMIT or loaded-DJAR slice).
+   *
+   * Overload signatures match Relation's: `first()` →
+   * `Promise<T | null>`, `first(n)` → `Promise<T[]>`. The
+   * implementation returns the union and dispatches by argument
+   * presence, so callers keep correct typing without a cast or
+   * `@ts-expect-error`.
    */
-  // @ts-expect-error — deliberate Rails-fidelity deviation in loaded-chain mode: async, not sync
-  override first(limit?: number): Promise<T | null> | Promise<T[]> {
+  override first(): Promise<T | null>;
+  override first(n: number): Promise<T[]>;
+  override async first(limit?: number): Promise<T | T[] | null> {
     if (this._chainWalker) {
-      // Defer to Relation's chained-then-load semantics: spawn a
-      // limited(1)/limited(N) clone, then load + take the first.
       const limitVal = limit ?? 1;
       const limited = Relation.prototype.limit.call(this, limitVal) as Relation<T>;
-      return (async () => {
-        const records = await limited.toArray();
-        if (limit === undefined) return records[0] ?? null;
-        return records;
-      })() as Promise<T | null> | Promise<T[]>;
+      const records = await limited.toArray();
+      return limit === undefined ? (records[0] ?? null) : records;
     }
-    return (async () => {
-      const records = await this.toArray();
-      if (limit === undefined) return records[0] ?? null;
-      return records.slice(0, limit);
-    })() as Promise<T | null> | Promise<T[]>;
+    const records = await this.toArray();
+    return limit === undefined ? (records[0] ?? null) : records.slice(0, limit);
   }
 }

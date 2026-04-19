@@ -74,48 +74,67 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
   }
 
   /**
-   * Compose any query state chained onto this deferred DJAR (wheres,
-   * orders, limit, offset, select, distinct, group, having, joins,
-   * lock, etc.) onto the walker's result relation. Without this,
+   * Compose any query state chained onto this deferred DJAR onto the
+   * walker's result relation. Without this,
    * `DJAS.scope(...).where(...)` and other chained modifiers would
    * be silently dropped — the walker builds a fresh relation that
    * doesn't see anything stored on `this`.
    *
-   * Implementation: always merge `this` as the overlay onto the
-   * walker's result. Relation#merge handles wheres/orders/etc;
-   * `_rawOrderClauses` (used by `inOrderOf`) and `_isNone` (used by
-   * `.none()`) are copied explicitly because Relation#merge doesn't
-   * propagate them today.
+   * Implementation: use `Relation#merge` for state where overlay
+   * REPLACES walker (limit / offset / wheres get the standard merger
+   * semantics), then selectively recompose fields whose normal chain
+   * behavior is additive (`_orderClauses`, `_rawOrderClauses`,
+   * `_selectColumns`). `Relation#merge` replaces orders/select
+   * outright (relation/merger.ts:21-32), but `.order(...)` /
+   * `.select(...)` chains conventionally APPEND elsewhere — so a
+   * blanket merge would drop the walker's existing orders/projection
+   * when the user chains `.order(...)`. Recompose those fields
+   * additively here. `_isNone` (used by `.none()`) is copied
+   * explicitly since `Relation#merge` doesn't propagate it today.
    */
   private _composeChainedState(walkerResult: Relation<T>): Relation<T> {
+    type ComposeFields = {
+      _orderClauses?: unknown[];
+      _rawOrderClauses?: unknown[];
+      _selectColumns?: unknown[];
+      _isNone?: boolean;
+    };
+    // Snapshot walker's pre-merge order/select state — the merge
+    // would otherwise replace these.
+    const source = walkerResult as unknown as ComposeFields;
+    const sourceOrders = [...(source._orderClauses ?? [])];
+    const sourceRawOrders = [...(source._rawOrderClauses ?? [])];
+    const sourceSelects = source._selectColumns ? [...source._selectColumns] : null;
+
     const merged = (walkerResult as unknown as { merge: (o: unknown) => Relation<T> }).merge(this);
-    // Explicit copies for state Relation#merge doesn't propagate.
-    const overlay = this as unknown as {
-      _orderClauses?: unknown[];
-      _rawOrderClauses?: unknown[];
-      _isNone?: boolean;
-    };
-    const target = merged as unknown as {
-      _orderClauses?: unknown[];
-      _rawOrderClauses?: unknown[];
-      _isNone?: boolean;
-    };
-    const overlayRaw = overlay._rawOrderClauses ?? [];
-    if (overlayRaw.length > 0) {
+    const target = merged as unknown as ComposeFields;
+    const overlay = this as unknown as ComposeFields;
+    const overlayOrders = overlay._orderClauses ?? [];
+    const overlayRawOrders = overlay._rawOrderClauses ?? [];
+    const overlaySelects = overlay._selectColumns ?? [];
+
+    if (overlayRawOrders.length > 0 && overlayOrders.length === 0) {
       // `inOrderOf(column, values)` is the only `_rawOrderClauses`
       // producer today; it CLEARS `_orderClauses` to express
       // "replace existing order with this CASE order"
-      // (relation.ts:610). When overlay carries a raw clause but no
-      // parsed orders, treat it as an order-reset and clear the
-      // walker's `_orderClauses` so the raw CASE wins. Without this,
-      // walker's existing orders would still apply, with the raw
-      // CASE only acting as a tiebreaker — contradicting the
-      // caller's `inOrderOf` intent.
-      if ((overlay._orderClauses?.length ?? 0) === 0) {
-        target._orderClauses = [];
-      }
-      target._rawOrderClauses = [...(target._rawOrderClauses ?? []), ...overlayRaw];
+      // (relation.ts:610). Honor that reset: drop BOTH walker's
+      // parsed orders AND any pre-existing raw orders so the
+      // overlay's CASE order wins outright (not as a tiebreaker).
+      target._orderClauses = [];
+      target._rawOrderClauses = [...overlayRawOrders];
+    } else {
+      target._orderClauses = [...sourceOrders, ...overlayOrders];
+      target._rawOrderClauses = [...sourceRawOrders, ...overlayRawOrders];
     }
+
+    // Selects: append-and-dedupe so the walker's projection survives
+    // when the overlay extends it. Dedupe is structural via Set
+    // identity for primitive entries; complex AST nodes will dedupe
+    // by reference (matches Relation#select chain behavior).
+    if (sourceSelects && sourceSelects.length > 0) {
+      target._selectColumns = Array.from(new Set([...sourceSelects, ...overlaySelects]));
+    }
+
     if (overlay._isNone) target._isNone = true;
     return merged;
   }

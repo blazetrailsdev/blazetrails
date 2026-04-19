@@ -144,19 +144,20 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
   }
 
   /**
-   * Clear cached prepared statements. Mirrors Rails'
-   * `Mysql2Adapter#clear_cache!` — each entry's `dealloc` calls
-   * `connection.unprepare(sql)` (COM_STMT_CLOSE). The active
-   * transaction connection's pool is cleared; the WeakMap is reset
-   * so other pooled connections (which we can't iterate) get fresh
-   * pools on next checkout.
+   * Clear cached prepared statements on the currently-held transaction
+   * connection. Mirrors Rails' `Mysql2Adapter#clear_cache!` which
+   * calls `close` on each cached statement on the adapter's sole
+   * connection. Non-active per-connection pools are intentionally
+   * left attached: resetting the WeakMap would orphan our sql→name
+   * map while the server-side PREPAREs still exist, and a later
+   * checkout of that same mysql.PoolConnection would restart the
+   * counter and collide with still-PREPAREd statements.
    */
   override clearCacheBang(): void {
     super.clearCacheBang();
     if (this._conn) {
       this._statementPools.get(this._conn)?.clear();
     }
-    this._statementPools = new WeakMap<mysql.PoolConnection, Mysql2StatementPool>();
   }
   // Cached capability flag — information_schema.statistics.expression
   // is MySQL 8.0.13+. Pre-8 MySQL and MariaDB (through at least 10.x)

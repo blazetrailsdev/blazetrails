@@ -1,5 +1,5 @@
 import type { Base } from "../base.js";
-import type { Relation } from "../relation.js";
+import { Relation } from "../relation.js";
 import type { AssociationRelation as AssociationRelationType } from "../association-relation.js";
 import { wrapWithScopeProxy } from "../relation/delegation.js";
 
@@ -32,9 +32,15 @@ import {
   resolveModel,
   fireAssocCallbacks,
   buildHasManyRelation,
+  computeHasManyWhere,
   loadHasMany,
+  _setCollectionProxyCtor,
 } from "../associations.js";
 
+// @ts-expect-error Declaration merging with `class CollectionProxy extends
+//   Relation` propagates Relation's method types into this interface.
+//   `load()` diverges (CP returns T[], Relation returns LoadedRelation<this>)
+//   and the conflict surfaces here too. Same PR B plan as on the class.
 export interface CollectionProxy<T extends Base = Base> {
   // Thenable — makes CollectionProxy awaitable. Delegates to `load()`,
   // which both returns the loaded records AND hydrates `_target`, so
@@ -87,15 +93,15 @@ export type AssociationProxy<
   };
 
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
-export class CollectionProxy<T extends Base = Base> {
+export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   private _record: Base;
   private _assocName: string;
   private _assocDef: AssociationDefinition;
   private _target: T[] = [];
-  private _loaded = false;
+  private _targetLoaded = false;
 
   get loaded(): boolean {
-    return this._loaded;
+    return this._targetLoaded;
   }
 
   get target(): T[] {
@@ -134,19 +140,12 @@ export class CollectionProxy<T extends Base = Base> {
   // first.
   // ──────────────────────────────────────────────────────────────────
 
-  /**
-   * Sync count of the loaded target. Mirrors `Array.prototype.length`
-   * and Rails' `posts.length` (which blocks to load in Ruby). In trails,
-   * this reads `_target` — zero if nobody loaded. Await the proxy first
-   * (or `Post.includes(...)`) if you need a fresh load.
-   *
-   * Shadows `Relation#length()` (async, `Promise<number>`). For a Relation-
-   * style async count through the proxy, use `.count()` — which still
-   * routes through to Relation via the `AssociationProxy` delegation.
-   */
-  get length(): number {
-    return this._target.length;
-  }
+  // `length` is intentionally NOT redeclared — `CollectionProxy extends
+  // Relation`, and `Relation#length()` is `async`. Previously CP shadowed
+  // it with a sync getter over `_target`; keeping that alongside
+  // inheritance would require overriding an async method with a getter,
+  // which TS rejects. Callers that need the sync count should reach for
+  // `proxy.target.length` or `Array.from(proxy).length`.
 
   [Symbol.iterator](): IterableIterator<T> {
     return this._target[Symbol.iterator]();
@@ -240,13 +239,37 @@ export class CollectionProxy<T extends Base = Base> {
     // Preserve any unsaved in-memory records (from build/push before preload ran)
     const unsaved = this._target.filter((r) => r.isNewRecord());
     this._target = unsaved.length > 0 ? [...records, ...unsaved] : records;
-    this._loaded = true;
+    this._targetLoaded = true;
   }
 
   constructor(record: Base, assocName: string, assocDef: AssociationDefinition) {
+    const className = assocDef.options.className ?? camelize(singularize(assocName));
+    const targetModel = resolveModel(className) as typeof Base;
+    super(targetModel, targetModel.arelTable);
     this._record = record;
     this._assocName = assocName;
     this._assocDef = assocDef;
+
+    // Seed the FK where-clause so direct Relation calls on this proxy
+    // (e.g. `cp.toSql()`, `cp.toArray()` via Relation's path) scope to
+    // the owner — matches Rails where the CollectionProxy IS a Relation
+    // already scoped by the association's foreign key. Through
+    // associations keep the subquery/join path via `scope()` — no seed
+    // here. Missing PK → set `_isNone = true` so the proxy acts like
+    // `none` (Rails' NullRelation fallback).
+    if (!assocDef.options.through) {
+      const conditions = computeHasManyWhere(record, assocDef.options);
+      if (conditions === null) {
+        (this as unknown as { _isNone: boolean })._isNone = true;
+      } else {
+        (this as unknown as { whereBang: (c: Record<string, unknown>) => unknown }).whereBang(
+          conditions,
+        );
+        if (assocDef.options.scope) {
+          assocDef.options.scope(this as unknown as Relation<T>);
+        }
+      }
+    }
 
     // Apply extend option — mix methods into this proxy instance
     const ext = assocDef.options.extend;
@@ -278,8 +301,11 @@ export class CollectionProxy<T extends Base = Base> {
     return results;
   }
 
+  // @ts-expect-error CP's load returns loaded records (association-hydrated
+  //   target), not a LoadedRelation<this>. Intentional divergence; PR B
+  //   will remove CP's load in favor of Relation's.
   async load(): Promise<T[]> {
-    if (this._loaded) return this._target;
+    if (this._targetLoaded) return this._target;
     const results = (await loadHasMany(
       this._record,
       this._assocName,
@@ -297,7 +323,7 @@ export class CollectionProxy<T extends Base = Base> {
     });
     const unsaved = this._target.filter((r) => r.isNewRecord());
     this._target = unsaved.length > 0 ? [...merged, ...unsaved] : merged;
-    this._loaded = true;
+    this._targetLoaded = true;
     return this._target;
   }
 
@@ -473,6 +499,10 @@ export class CollectionProxy<T extends Base = Base> {
   /**
    * Count associated records.
    */
+  // @ts-expect-error Relation defines `count` as a property (from the
+  //   calculations mixin); CP declares it as a method with association
+  //   semantics (loaded-target fast path). PR B will delete CP's count
+  //   and let Relation's win.
   async count(): Promise<number> {
     const results = await loadHasMany(this._record, this._assocName, this._assocDef.options);
     return results.length;
@@ -484,7 +514,7 @@ export class CollectionProxy<T extends Base = Base> {
    * Mirrors: ActiveRecord::Associations::CollectionProxy#size
    */
   async size(): Promise<number> {
-    if (this._loaded) return this._target.length;
+    if (this._targetLoaded) return this._target.length;
     return this.count();
   }
 
@@ -632,6 +662,9 @@ export class CollectionProxy<T extends Base = Base> {
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#delete
    */
+  // @ts-expect-error Relation#delete(id) removes by PK; CP#delete removes
+  //   loaded records via the association. Distinct API. PR B: rename or
+  //   restructure.
   async delete(...records: T[]): Promise<void> {
     this._ensureThroughWritable();
     // Through association (including HABTM): delete the join records
@@ -791,6 +824,8 @@ export class CollectionProxy<T extends Base = Base> {
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#destroy
    */
+  // @ts-expect-error Relation#destroy(id) destroys by PK; CP#destroy
+  //   destroys loaded records. Same divergence as `delete`.
   async destroy(...records: T[]): Promise<void> {
     const destroyed: Base[] = [];
     for (const record of records) {
@@ -832,7 +867,7 @@ export class CollectionProxy<T extends Base = Base> {
    * Mirrors: ActiveRecord::Associations::CollectionProxy#include?
    */
   async isInclude(record: T): Promise<boolean> {
-    if (this._loaded) {
+    if (this._targetLoaded) {
       const targetId = this._identityFor(record);
       if (targetId != null) {
         return this._target.some((r) => this._identityFor(r) === targetId);
@@ -874,6 +909,9 @@ export class CollectionProxy<T extends Base = Base> {
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#first
    */
+  // @ts-expect-error Relation#first has overloads: () | (n: number). CP's
+  //   version only handles the zero-arg case (returns T | null). PR B
+  //   will add the n-arg overload or delete CP's version.
   async first(): Promise<T | null> {
     const records = await this.toArray();
     return records[0] ?? null;
@@ -884,6 +922,7 @@ export class CollectionProxy<T extends Base = Base> {
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#last
    */
+  // @ts-expect-error Same overload divergence as `first`.
   async last(): Promise<T | null> {
     const records = await this.toArray();
     return records[records.length - 1] ?? null;
@@ -894,6 +933,8 @@ export class CollectionProxy<T extends Base = Base> {
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#take
    */
+  // @ts-expect-error Relation#take has distinct () / (n) overloads; CP
+  //   flattens both. PR B will align overloads.
   async take(n?: number): Promise<T | T[] | null> {
     const records = await this.toArray();
     if (n === undefined) return records[0] ?? null;
@@ -914,6 +955,9 @@ export class CollectionProxy<T extends Base = Base> {
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#none?
    */
+  // @ts-expect-error Relation#isNone is sync (`_isNone` flag check). CP's
+  //   isNone fires a query/loaded-target empty check. PR B will rename
+  //   CP's to something like `isEmpty()` or drop it.
   async isNone(): Promise<boolean> {
     return (await this.count()) === 0;
   }
@@ -1010,6 +1054,9 @@ export class CollectionProxy<T extends Base = Base> {
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#destroy_all
    */
+  // @ts-expect-error Relation#destroyAll returns the destroyed T[]; CP's
+  //   returns void (fires association callbacks + mutates target).
+  //   PR B: align to return T[] or drop.
   async destroyAll(): Promise<void> {
     const records = await this.toArray();
     await this.destroy(...records);
@@ -1020,6 +1067,8 @@ export class CollectionProxy<T extends Base = Base> {
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#find
    */
+  // @ts-expect-error Relation#find takes `unknown` IDs (string/number);
+  //   CP narrows to number | number[]. PR B: widen CP's param.
   async find(id: number | number[]): Promise<T | T[]> {
     const records = await this.toArray();
     const targetModel = (records[0]?.constructor ?? Object) as typeof Base;
@@ -1048,7 +1097,7 @@ export class CollectionProxy<T extends Base = Base> {
   }
 
   async pluck(...columns: string[]): Promise<unknown[]> {
-    if (this._isThrough || this._loaded) {
+    if (this._isThrough || this._targetLoaded) {
       const records = (this._isThrough ? await this.toArray() : this._target).filter(
         (r) => !r.isNewRecord(),
       );
@@ -1062,7 +1111,7 @@ export class CollectionProxy<T extends Base = Base> {
   }
 
   async pick(...columns: string[]): Promise<unknown> {
-    if (this._isThrough || this._loaded) {
+    if (this._isThrough || this._targetLoaded) {
       const records = (this._isThrough ? await this.toArray() : this._target).filter(
         (r) => !r.isNewRecord(),
       );
@@ -1075,15 +1124,16 @@ export class CollectionProxy<T extends Base = Base> {
   }
 
   async reload(): Promise<Omit<this, "then">> {
-    this._loaded = false;
+    this._targetLoaded = false;
     this._target = [];
     await this.load();
     return stripThenable(this);
   }
 
-  reset(): void {
-    this._loaded = false;
+  override reset(): this {
+    this._targetLoaded = false;
     this._target = [];
+    return this;
   }
 
   scope(): any {
@@ -1297,6 +1347,8 @@ export class CollectionProxy<T extends Base = Base> {
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#delete_all
    */
+  // @ts-expect-error Relation#deleteAll returns affected-rows count; CP's
+  //   returns void (dependent-strategy routing). PR B: align.
   async deleteAll(dependent?: string): Promise<void> {
     this._ensureThroughWritable();
     // Rails normalizes dependent: :destroy → :delete_all for deleteAll,
@@ -1337,7 +1389,7 @@ export class CollectionProxy<T extends Base = Base> {
       }
     }
     this._target = [];
-    this._loaded = true;
+    this._targetLoaded = true;
     this.resetScope();
   }
 
@@ -1346,6 +1398,8 @@ export class CollectionProxy<T extends Base = Base> {
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#calculate
    */
+  // @ts-expect-error Relation#calculate is strongly typed per operation.
+  //   CP's is looser (string-typed op). PR B: tighten CP's overloads.
   async calculate(operation: string, columnName?: string): Promise<unknown> {
     const op =
       operation === "avg"
@@ -1411,7 +1465,7 @@ export class CollectionProxy<T extends Base = Base> {
         return proxy._target;
       },
       get loaded() {
-        return proxy._loaded;
+        return proxy._targetLoaded;
       },
       reset: () => this.reset(),
     };
@@ -1482,6 +1536,23 @@ export class CollectionProxy<T extends Base = Base> {
       yield record;
     }
   }
+
+  /**
+   * Chains off the proxy (`blog.posts.where(...)`) return an
+   * AssociationRelation, not another CollectionProxy — matching Rails,
+   * where `blog.posts` is a CP and `blog.posts.where(...)` is an AR.
+   * AR still routes writes through `_association` (this CP) so the FK,
+   * inverse, and loaded target stay wired up.
+   */
+  protected override _newRelation(): Relation<T> {
+    if (!_AssociationRelationCtor) {
+      throw new Error(
+        "CollectionProxy._newRelation: AssociationRelation constructor not set — " +
+          "association-relation.ts must be loaded first",
+      );
+    }
+    return new _AssociationRelationCtor(this.model as typeof Base, this) as Relation<T>;
+  }
 }
 
 // Route `await proxy` through `load()` (not `toArray`) so the thenable
@@ -1492,3 +1563,9 @@ export class CollectionProxy<T extends Base = Base> {
 // through `loadHasMany`, which syncs into the record's association
 // instance cache — only this proxy's local cache is left untouched).
 applyThenable(CollectionProxy.prototype, "load");
+
+// Register the constructor so associations.ts can late-bind (it can't
+// value-import CP at module init without re-entering the cycle).
+_setCollectionProxyCtor(
+  CollectionProxy as unknown as Parameters<typeof _setCollectionProxyCtor>[0],
+);

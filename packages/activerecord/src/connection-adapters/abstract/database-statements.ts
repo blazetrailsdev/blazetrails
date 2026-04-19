@@ -182,6 +182,18 @@ export function cacheableQuery(
     return [klass.query(sql), binds as unknown[]];
   }
 
+  // Unprepared path: compile through PartialQueryCollector to produce
+  // parts with Substitute slots, matching Rails' cacheable_query when
+  // prepared_statements is false.
+  if (klass.partialQueryCollector && klass.partialQuery && visitor && node instanceof Nodes.Node) {
+    const collector = klass.partialQueryCollector() as {
+      value: [unknown[], unknown[]];
+    };
+    visitor.compileWithCollector(node, collector);
+    const [parts, collectedBinds] = collector.value;
+    return [klass.partialQuery(parts), collectedBinds];
+  }
+
   if (klass.partialQuery) {
     return [klass.partialQuery(typeof sql === "string" ? [sql] : sql), binds as unknown[]];
   }

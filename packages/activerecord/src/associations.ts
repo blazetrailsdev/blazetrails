@@ -278,18 +278,17 @@ function _canRouteThroughViaAssociationScope(
   // the existing 2-step loaders.
   const refl = reflection as {
     isThroughReflection?: () => boolean;
-    chain?: unknown[];
-    throughReflection?: { options?: { through?: string } };
+    isNested?: () => boolean;
   };
   if (typeof refl.isThroughReflection !== "function" || !refl.isThroughReflection()) {
     return false;
   }
-  // Through-a-through (chain length 3+): the through reflection itself
-  // points at another through reflection (e.g. Author has_many :ratings
-  // through :comments where :comments is itself through :posts). Chain
-  // walking would need to recurse on the inner through; PR 3c sticks
-  // with chain-length-2 and falls back to the 2-step loader otherwise.
-  if (refl.throughReflection?.options?.through) return false;
+  // Through-a-through (nested) cases — either the throughReflection
+  // OR the sourceReflection is itself a ThroughReflection. Rails
+  // exposes both via ThroughReflection#isNested (reflection.ts:1187);
+  // PR 3c sticks with chain-length-2, so any nested shape falls back
+  // to the 2-step loader.
+  if (typeof refl.isNested === "function" && refl.isNested()) return false;
   const src = (reflection as { sourceReflection?: unknown }).sourceReflection as
     | { belongsTo?: () => boolean; isPolymorphic?: () => boolean }
     | undefined;

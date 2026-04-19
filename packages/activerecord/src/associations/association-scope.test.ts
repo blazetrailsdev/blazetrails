@@ -551,8 +551,10 @@ describe("AssociationScope", () => {
   });
 
   it("loadHasMany through with sourceType filters by polymorphic source type (PR 3c)", async () => {
-    // Gallery has_many :imageables polymorphic; PolymorphicReflection
-    // wraps the chain entry and adds a type constraint
+    // Gallery belongsTo :imageable, polymorphic: true (the Gallery
+    // model holds the polymorphic FK + type pair). When we hop through
+    // galleries with a sourceType filter, PolymorphicReflection wraps
+    // the chain entry and adds a type constraint
     // `where(imageable_type: sourceType)`. PR 3c's
     // _mergeReflectionScopeChain detects PolymorphicReflection and
     // applies its constraints() — including the source_type_scope —

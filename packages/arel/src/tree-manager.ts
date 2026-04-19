@@ -5,6 +5,13 @@ import { ToSql } from "./visitors/to-sql.js";
 import { Limit, Offset } from "./nodes/unary.js";
 import { Quoted } from "./nodes/casted.js";
 
+// Mirrors Arel's `Nodes.build_quoted`: pass Nodes through untouched,
+// wrap primitives in Quoted so `take(Nodes::BindParam.new)` works.
+function buildQuoted(value: unknown): Node {
+  if (value instanceof Node) return value;
+  return new Quoted(value);
+}
+
 /**
  * Methods from Arel::TreeManager::StatementMethods — mixed into
  * DeleteManager and UpdateManager in Rails (NOT SelectManager or
@@ -23,12 +30,12 @@ type StatementMethodsHost = {
 
 export class StatementMethods {
   take(this: StatementMethodsHost, limit: unknown): unknown {
-    if (limit != null) this.ast.limit = new Limit(new Quoted(limit));
+    if (limit != null) this.ast.limit = new Limit(buildQuoted(limit));
     return this;
   }
 
   offset(this: StatementMethodsHost, offset: unknown): unknown {
-    if (offset != null) this.ast.offset = new Offset(new Quoted(offset));
+    if (offset != null) this.ast.offset = new Offset(buildQuoted(offset));
     return this;
   }
 

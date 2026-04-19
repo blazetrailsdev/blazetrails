@@ -10,7 +10,7 @@ export class LegacyPoint extends ValueType<[number, number]> {
   override readonly name: string = "point";
 
   override type(): string {
-    return "point";
+    return this.name;
   }
 
   cast(value: unknown): [number, number] | null {

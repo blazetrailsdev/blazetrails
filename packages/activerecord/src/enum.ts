@@ -171,6 +171,14 @@ export class EnumType extends ValueType<string> {
     this.subtype = subtype;
   }
 
+  // Rails' EnumType does `delegate :type, to: :subtype` — callers that
+  // ask what an enum column's storage type is want the underlying
+  // column type (e.g. "integer"), not the enum's attribute name. Our
+  // subtype is already the type string, so return it directly.
+  override type(): string {
+    return this.subtype;
+  }
+
   cast(value: unknown): string | null {
     if (typeof value === "string" && this._mapping.has(value)) {
       return value;

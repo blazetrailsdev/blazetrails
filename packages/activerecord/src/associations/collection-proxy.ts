@@ -18,7 +18,7 @@ import { applyThenable, stripThenable } from "../relation/thenable.js";
 import { Table as ArelTable } from "@blazetrails/arel";
 import type { Nodes } from "@blazetrails/arel";
 import { underscore, singularize, pluralize, camelize } from "@blazetrails/activesupport";
-import { StrictLoadingViolationError, RecordNotSaved } from "../errors.js";
+import { StrictLoadingViolationError, RecordNotSaved, ConfigurationError } from "../errors.js";
 import { RecordInvalid } from "../validations.js";
 import {
   HasManyThroughCantAssociateThroughHasOneOrManyReflection,
@@ -294,7 +294,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         (ctor as unknown as { _associations?: AssociationDefinition[] })._associations ?? [];
       const throughAssoc = ownerAssociations.find((a) => a.name === assocDef.options.through);
       if (!throughAssoc) {
-        throw new Error(
+        throw new ConfigurationError(
           `Through association "${assocDef.options.through}" not found on ${ctor.name}`,
         );
       }
@@ -353,9 +353,19 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
    * check is a single boolean read.
    */
   private _installMutationTracker(): void {
+    // Start the scan at Relation.prototype — we only care about bangs
+    // that mutate the inherited Relation SCOPE (whereBang, orderBang,
+    // reorderBang, noneBang, …). Skipping CollectionProxy's own
+    // prototype avoids tripping on association-write APIs like
+    // `createBang` / `firstOrCreateBang` / `destroyAll`, which don't
+    // change the scope's SQL shape and shouldn't force `toArray()`
+    // to abandon the association-cache / strict-loading path.
+    // Scan Relation.prototype itself and anything mixed in above it
+    // (e.g. the QueryMethodBangs module included into Relation). Stop
+    // at Object.prototype.
     const seen = new Set<string>();
     for (
-      let proto = Object.getPrototypeOf(this);
+      let proto: object | null = Relation.prototype;
       proto && proto !== Object.prototype;
       proto = Object.getPrototypeOf(proto)
     ) {

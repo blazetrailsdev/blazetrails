@@ -512,16 +512,14 @@ export class AssociationScope {
     for (let i = chain.length - 1; i >= 1; i--) {
       scope = this._mergeReflectionScopeChain(scope, chain[i], owner);
     }
-    // scopeFor on the head reflection. Rails: reflection.rb:448,
+    // Apply the head reflection's scope. Rails: reflection.rb:448,
     // scope_for — 0-arity scopes get `this`=relation, >=1-arity get
     // (relation, owner) per `relation.instance_exec(owner, &scope) ||
-    // relation`. ThroughReflection inherits AbstractReflection's
-    // `scopeFor`, but its internal `_scope` field is never set — the
-    // scope on the `has_many :through` itself lives on `.scope`
-    // (delegated), so `scopeFor` returns the scope unchanged for
-    // through reflections. Detect through explicitly and invoke
-    // `.scope` directly with matching arity / `this` semantics so a
-    // scope on the through association itself still applies.
+    // relation`. For ordinary AssociationReflections we call `scopeFor`
+    // when present. ThroughReflection does NOT implement `scopeFor`;
+    // it only exposes `.scope` (delegated to the underlying source
+    // association's scope), so detect through explicitly and invoke
+    // `.scope` directly with the same arity / `this` semantics.
     const head = chain[0] as {
       scopeFor?: (rel: unknown, owner: unknown) => unknown;
       scope?: ((rel: unknown, owner?: unknown) => unknown) | null;
@@ -606,15 +604,26 @@ export class AssociationScope {
     // select / joins / etc override the main scope, which Rails
     // explicitly avoids.
     const evalWhere = (evaluated as { _whereClause?: { predicates?: unknown[] } })._whereClause;
+    const evalPredicates = evalWhere?.predicates ?? [];
     const evalOrders = (evaluated as { _orderClauses?: unknown[] })._orderClauses ?? [];
     const evalRawOrders = (evaluated as { _rawOrderClauses?: string[] })._rawOrderClauses ?? [];
-    let merged = scope as {
-      where: (n: unknown) => unknown;
+    const merged = scope as {
+      _whereClause?: { predicates?: unknown[] };
       _orderClauses?: unknown[];
       _rawOrderClauses?: string[];
     };
-    for (const pred of evalWhere?.predicates ?? []) {
-      merged = merged.where(pred) as typeof merged;
+    // Rails: `scope.where_clause += item.where_clause`. Mutate the
+    // existing _whereClause's predicates array in place — appending all
+    // entry predicates in one shot — instead of looping with `.where()`
+    // which would clone the relation per-predicate. Safe because `scope`
+    // here is owned by this _addConstraints call (built fresh from
+    // klass.unscoped + per-step .where clones; not shared externally).
+    if (evalPredicates.length > 0) {
+      const existingPredicates = merged._whereClause?.predicates ?? [];
+      existingPredicates.push(...evalPredicates);
+      if (merged._whereClause) {
+        merged._whereClause.predicates = existingPredicates;
+      }
     }
     // Rails: `scope.order_values = item.order_values | scope.order_values`
     // (association_scope.rb:153). Ordering lives in both _orderClauses

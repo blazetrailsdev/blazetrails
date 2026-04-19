@@ -550,6 +550,60 @@ describe("AssociationScope", () => {
     expect(sql).toMatch(/"cc_memberships"\."active"\s*=\s*TRUE/i);
   });
 
+  it("loadHasOne through chain (belongsTo source) routes via AssociationScope and returns one record", async () => {
+    // PR 3b migration covers loadHasOne too. End-to-end: insert,
+    // call loadHasOne with a through reflection, assert single result.
+    const { loadHasOne } = await import("../associations.js");
+    class HotPost extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class HotPostHook extends Base {
+      static {
+        this.attribute("hot_post_id", "integer");
+        this.attribute("hot_review_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class HotReview extends Base {
+      declare body: string;
+      static {
+        this.attribute("body", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(HotPost);
+    registerModel(HotPostHook);
+    registerModel(HotReview);
+    Associations.hasOne.call(HotPost, "hot_post_hook", {
+      className: "HotPostHook",
+      foreignKey: "hot_post_id",
+    });
+    Associations.hasOne.call(HotPost, "hot_review", {
+      className: "HotReview",
+      through: "hot_post_hook",
+      source: "hot_review",
+    });
+    Associations.belongsTo.call(HotPostHook, "hot_review", {
+      className: "HotReview",
+      foreignKey: "hot_review_id",
+    });
+
+    const post = await HotPost.create({});
+    const review = await HotReview.create({ body: "Great post" });
+    await HotPostHook.create({ hot_post_id: post.id, hot_review_id: review.id });
+
+    const loaded = (await loadHasOne(post, "hot_review", {
+      className: "HotReview",
+      through: "hot_post_hook",
+      source: "hot_review",
+    })) as HotReview | null;
+    expect(loaded).not.toBeNull();
+    expect(loaded!.body).toBe("Great post");
+  });
+
   it("loadHasMany through chain (belongsTo source, no sourceType) routes via AssociationScope", async () => {
     // PR 3b migration: loadHasMany for has_many :through where source
     // is non-polymorphic belongsTo (no sourceType) now routes through

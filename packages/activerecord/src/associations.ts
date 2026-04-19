@@ -255,6 +255,32 @@ export function isAssociationCached(record: Base, assocName: string): boolean {
 }
 
 /**
+ * Decide whether a `:through` reflection's load can route through
+ * AssociationScope's JOIN-based path. PR 3b only handles the simplest
+ * shape: source is non-polymorphic `belongsTo`, no `sourceType`, no
+ * `disableJoins`. Other shapes (has_many/has_one source, polymorphic
+ * source, sourceType, disable-joins) need machinery this PR doesn't
+ * yet provide and stay on the existing 2-step IN-list loaders.
+ *
+ * Shared by loadHasMany and loadHasOne so the gating rules can't drift.
+ */
+function _canRouteThroughViaAssociationScope(
+  reflection: unknown,
+  options: AssociationOptions,
+): boolean {
+  if (!reflection) return false;
+  if (options.sourceType) return false;
+  if (options.disableJoins) return false;
+  const src = (reflection as { sourceReflection?: unknown }).sourceReflection as
+    | { belongsTo?: () => boolean; isPolymorphic?: () => boolean }
+    | undefined;
+  if (!src) return false;
+  if (typeof src.belongsTo !== "function" || !src.belongsTo()) return false;
+  if (typeof src.isPolymorphic === "function" && src.isPolymorphic()) return false;
+  return true;
+}
+
+/**
  * Sync loaded result to the association instance if one exists.
  */
 function syncToAssociationInstance(record: Base, assocName: string, result: unknown): void {
@@ -404,21 +430,12 @@ export async function loadHasOne(
   }
 
   // Handle has_one :through. Same routing rules as loadHasMany —
-  // route through AssociationScope when source is non-polymorphic
-  // belongsTo and no sourceType; otherwise fall back to the 2-step
-  // loadHasOneThrough.
+  // route through AssociationScope's JOIN-based path for the simple
+  // shape; everything else falls back to the 2-step loadHasOneThrough.
   if (options.through) {
     const ctorEarly = record.constructor as typeof Base;
     const reflEarly = ctorEarly._reflectOnAssociation?.(assocName);
-    const srcReflEarly = (reflEarly as any)?.sourceReflection;
-    const canRouteThrough =
-      reflEarly &&
-      srcReflEarly &&
-      !options.sourceType &&
-      typeof srcReflEarly.belongsTo === "function" &&
-      srcReflEarly.belongsTo() &&
-      !(typeof srcReflEarly.isPolymorphic === "function" && srcReflEarly.isPolymorphic());
-    if (!canRouteThrough) {
+    if (!_canRouteThroughViaAssociationScope(reflEarly, options)) {
       return loadHasOneThrough(record, assocName, options);
     }
     // Fall through into the AssociationScope path below.
@@ -613,22 +630,14 @@ export async function loadHasMany(
     throw StrictLoadingViolationError.forAssociation(record, assocName);
   }
 
-  // Handle through associations. PR 3b: when reflection is registered
-  // and we don't need source-type filtering or has_many-source walking,
-  // route through AssociationScope's JOIN-based path. Other shapes
-  // stay on the 2-step IN-list loader.
+  // Handle through associations. Routes through AssociationScope's
+  // JOIN-based path for the simple shape (see
+  // _canRouteThroughViaAssociationScope); everything else stays on the
+  // 2-step loadHasManyThrough.
   if (options.through) {
     const ctorEarly = record.constructor as typeof Base;
     const reflEarly = ctorEarly._reflectOnAssociation?.(assocName);
-    const srcReflEarly = (reflEarly as any)?.sourceReflection;
-    const canRouteThrough =
-      reflEarly &&
-      srcReflEarly &&
-      !options.sourceType &&
-      typeof srcReflEarly.belongsTo === "function" &&
-      srcReflEarly.belongsTo() &&
-      !(typeof srcReflEarly.isPolymorphic === "function" && srcReflEarly.isPolymorphic());
-    if (!canRouteThrough) {
+    if (!_canRouteThroughViaAssociationScope(reflEarly, options)) {
       return loadHasManyThrough(record, assocName, options);
     }
     // Fall through into the AssociationScope path below.

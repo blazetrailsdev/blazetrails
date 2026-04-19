@@ -60,7 +60,7 @@ export class Serialized extends ValueType {
     return dumped;
   }
 
-  changedInPlace(rawOldValue: unknown, value: unknown): boolean {
+  override isChangedInPlace(rawOldValue: unknown, value: unknown): boolean {
     const oldSerialized = this.serialize(this.deserialize(rawOldValue));
     const newSerialized = this.serialize(value);
     return oldSerialized !== newSerialized;
@@ -72,11 +72,11 @@ export class Serialized extends ValueType {
     }
   }
 
-  forceEquality(value: unknown): boolean {
+  override isForceEquality(value: unknown): boolean {
     return this.coder.objectClass !== undefined && value instanceof this.coder.objectClass;
   }
 
-  get serialized(): boolean {
+  override isSerialized(): boolean {
     return true;
   }
 

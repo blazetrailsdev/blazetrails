@@ -80,7 +80,7 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
     return this.encrypt(toEncrypt);
   }
 
-  changedInPlace(rawOldValue: unknown, newValue: unknown): boolean {
+  override isChangedInPlace(rawOldValue: unknown, newValue: unknown): boolean {
     const oldValue = rawOldValue === null ? null : this.deserialize(rawOldValue);
     return oldValue !== newValue;
   }

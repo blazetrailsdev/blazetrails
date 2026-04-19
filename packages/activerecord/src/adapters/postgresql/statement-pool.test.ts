@@ -246,60 +246,63 @@ describeIfPg("PostgreSQLAdapter", () => {
       // session it doesn't own, so server-side PREPAREs leak. The
       // deferred half: tag the client; on next checkout, drain via
       // `DEALLOCATE ALL` before user code.
-      await adapter.beginDbTransaction();
-      await adapter.execute("SELECT $1::int", [1]);
-      await adapter.execute("SELECT $1::text", ["a"]);
-      await adapter.rollback();
-      // Capture the released client BEFORE clearCacheBang — its
-      // finally block nulls _lastReleasedTxnClient (so a post-clear
-      // _lastReleasedClientForTest() would return null and the
-      // tag check would silently fail with `WeakSet.has(null)` → false).
-      const taggedClient = adapter._lastReleasedClientForTest();
-      expect(taggedClient).not.toBeNull();
-      adapter.clearCacheBang();
-      // Tagged for drain on next checkout.
-      expect(adapter._needsDeallocateAllForTest(taggedClient!)).toBe(true);
-
-      // Capture the next pg.PoolClient and its query() call list so we
-      // can assert DEALLOCATE ALL ran during checkout. Use vi.spyOn
-      // (consistent with other tests in this repo, e.g.
-      // postgresql-adapter.exec-query.test.ts) so cleanup is automatic
-      // via vi.restoreAllMocks() and we don't manually reassign methods.
-      const observed: string[] = [];
-      const pool = adapter._driverPoolForTest()!;
-      const originalConnect = pool.connect.bind(pool);
-      vi.spyOn(pool, "connect").mockImplementation((async (...args: unknown[]) => {
-        const client = (await (originalConnect as (...a: unknown[]) => Promise<pg.PoolClient>)(
-          ...args,
-        )) as unknown as { query: (...a: unknown[]) => unknown };
-        const origQuery = client.query.bind(client);
-        client.query = (sql: unknown, ...rest: unknown[]) => {
-          if (typeof sql === "string") observed.push(sql);
-          return (origQuery as (...a: unknown[]) => unknown)(sql, ...rest);
-        };
-        return client as unknown as pg.PoolClient;
-      }) as unknown as typeof pool.connect);
-
-      await adapter.beginDbTransaction();
+      //
+      // Use a dedicated pool-size-1 adapter so pg.Pool always hands
+      // back the same physical client on re-checkout — makes the
+      // DEALLOCATE-before-BEGIN assertion deterministic. The shared
+      // `adapter` from beforeEach uses pg.Pool's default max (10) and
+      // could hand back a different client, weakening the assertion.
+      const max1 = new PostgreSQLAdapter({ connectionString: PG_TEST_URL, max: 1 });
+      max1.preparedStatements = true;
       try {
-        // The DEALLOCATE ALL fires before BEGIN — but only when
-        // pg.Pool hands back the SAME physical client (the only one
-        // we tagged). With pool size > 1, a different client may be
-        // returned and the tag stays attached for its eventual reuse.
-        // Either way, the new client is no longer tagged after this
-        // checkout (drain ran or it wasn't the tagged one).
-        const newClient = adapter._currentClientForTest();
-        expect(adapter._needsDeallocateAllForTest(newClient!)).toBe(false);
-        if (newClient === taggedClient) {
+        await max1.beginDbTransaction();
+        await max1.execute("SELECT $1::int", [1]);
+        await max1.execute("SELECT $1::text", ["a"]);
+        await max1.rollback();
+        // Capture the released client BEFORE clearCacheBang — its
+        // finally block nulls _lastReleasedTxnClient (so a post-clear
+        // _lastReleasedClientForTest() would return null and the
+        // tag check would silently fail with `WeakSet.has(null)` → false).
+        const taggedClient = max1._lastReleasedClientForTest();
+        expect(taggedClient).not.toBeNull();
+        max1.clearCacheBang();
+        expect(max1._needsDeallocateAllForTest(taggedClient!)).toBe(true);
+
+        // vi.spyOn both pool.connect AND the returned client's query
+        // so vi.restoreAllMocks() handles cleanup for both.
+        const observed: string[] = [];
+        const pool = max1._driverPoolForTest()!;
+        const originalConnect = pool.connect.bind(pool);
+        vi.spyOn(pool, "connect").mockImplementation((async (...args: unknown[]) => {
+          const client = await (originalConnect as (...a: unknown[]) => Promise<pg.PoolClient>)(
+            ...args,
+          );
+          const origQuery = client.query.bind(client);
+          vi.spyOn(client, "query").mockImplementation(((sql: unknown, ...rest: unknown[]) => {
+            if (typeof sql === "string") observed.push(sql);
+            return (origQuery as (...a: unknown[]) => unknown)(sql, ...rest);
+          }) as typeof client.query);
+          return client;
+        }) as unknown as typeof pool.connect);
+
+        await max1.beginDbTransaction();
+        try {
+          // max:1 guarantees pg.Pool returned the same physical client.
+          const newClient = max1._currentClientForTest();
+          expect(newClient).toBe(taggedClient);
+          // Drain ran → no longer tagged.
+          expect(max1._needsDeallocateAllForTest(newClient!)).toBe(false);
+          // DEALLOCATE ALL fired BEFORE BEGIN.
           expect(observed).toContain("DEALLOCATE ALL");
-          // DEALLOCATE ALL must run BEFORE BEGIN.
           const deallocIdx = observed.indexOf("DEALLOCATE ALL");
           const beginIdx = observed.indexOf("BEGIN");
           expect(deallocIdx).toBeGreaterThanOrEqual(0);
           expect(beginIdx).toBeGreaterThan(deallocIdx);
+        } finally {
+          await max1.rollback();
         }
       } finally {
-        await adapter.rollback();
+        await max1.close();
       }
     });
 

@@ -84,13 +84,15 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   private set _lastReleasedTxnClient(client: pg.PoolClient | null) {
     this._lastReleasedTxnClientRef = client == null ? null : new WeakRef(client);
   }
-  // Clients tagged for `DEALLOCATE ALL` on next checkout. Set by the
-  // released-client `reset()` branch of `clearCacheBang` — that path
-  // drops the local sql→name map but can't fire DEALLOCATE on a
-  // released session, so server-side PREPAREs leak. When pg.Pool
-  // hands the same physical client back later, `beginTransaction`
-  // checks this set and runs `DEALLOCATE ALL` before user code, draining
-  // those orphans. WeakSet so pg.Pool reaping the client GCs the entry.
+  // Clients tagged for `DEALLOCATE ALL` on the next fresh checkout.
+  // Set by the released-client `reset()` branch of `clearCacheBang` —
+  // that path drops the local sql→name map but can't fire DEALLOCATE
+  // on a released session, so server-side PREPAREs leak. When pg.Pool
+  // hands the same physical client back later, `_acquireFreshClient`
+  // checks this set and runs `DEALLOCATE ALL` before user code, so
+  // any fresh checkout path (e.g. `getClient`, `getAdvisoryLock`,
+  // `beginTransaction`) drains those orphans. WeakSet so pg.Pool
+  // reaping the client GCs the entry.
   private _clientsNeedingDeallocateAll = new WeakSet<pg.PoolClient>();
   // Rails' `statement_limit` database.yml key — max prepared
   // statements cached per session before LRU eviction (default 1000).
@@ -1161,7 +1163,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
           // the same PSCE error again. `reset()` forces re-PREPARE
           // with a fresh name (counter never resets, so no collision
           // with the orphaned server-side statement). Tag the client
-          // so the next checkout (in `beginTransaction`) runs
+          // so the next checkout through `_acquireFreshClient` runs
           // `DEALLOCATE ALL` to drain the orphaned server-side
           // statements left behind by the local-only reset.
           this._statementPools.get(lastReleased)?.reset();

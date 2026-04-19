@@ -1,6 +1,6 @@
 import { ValueType } from "./value.js";
 
-export class DecimalType extends ValueType {
+export class DecimalType extends ValueType<string> {
   readonly name: string = "decimal";
 
   cast(value: unknown): string | null {

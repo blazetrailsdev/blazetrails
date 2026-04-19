@@ -1,5 +1,7 @@
 import { Node, NodeVisitor } from "./node.js";
 import { Quoted } from "./casted.js";
+import { Attribute as AMAttribute } from "@blazetrails/activemodel";
+import { defaultValue as defaultType } from "@blazetrails/activemodel/type";
 
 export class HomogeneousIn extends Node {
   readonly attribute: Node;
@@ -48,8 +50,11 @@ export class HomogeneousIn extends Node {
     return result;
   }
 
-  get procForBinds(): ((value: unknown) => unknown) | null {
-    return null;
+  get procForBinds(): (value: unknown) => unknown {
+    // Rails: -> value { ActiveModel::Attribute.with_cast_value(
+    //   attribute.name, value, ActiveModel::Type.default_value) }
+    const attrName = (this.attribute as unknown as { name?: string }).name ?? "";
+    return (value: unknown) => AMAttribute.withCastValue(attrName, value, defaultType());
   }
 
   fetchAttribute(block: (attr: Node) => unknown): unknown {

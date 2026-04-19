@@ -33,12 +33,13 @@ class Post extends Base {
 const posts = await Post.published()
   .where({ authorId: 3 })
   .order("createdAt", "desc")
+  .includes("author") // eager-load so .author reads below don't lazy-fire
   .limit(10); // Post[]
 
 for (const post of posts) {
-  post.title; // typed as string (from the schema)
-  post.publishedAt; // typed as Date | null (from the schema)
-  await post.author; // Author | null (AssociationProxy<Author>)
+  post.title; // string (from the schema)
+  post.publishedAt; // Date | null (from the schema)
+  post.author; // Author | null (sync; throws under strict loading if not preloaded)
   await post.comments.where({ flagged: false }); // chainable, awaitable
 }
 ```

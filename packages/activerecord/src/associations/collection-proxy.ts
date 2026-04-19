@@ -278,9 +278,15 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         const throughRel = this._buildThroughScope() as Relation<T>;
         proxySelf._copyStateFrom(throughRel);
       } catch {
-        // Schema/adapter not ready — leave Relation state empty; `scope()`
-        // will re-run `_buildThroughScope()` when callers invoke it and
-        // raise the real error there.
+        // `_buildThroughScope()` can fail during CP construction when
+        // the adapter/schema isn't ready yet (common in test fixtures
+        // that construct a bare proxy before migrations run). Fail
+        // CLOSED: mark the inherited Relation state as `none` so
+        // `cp.where(...).toArray()` returns [] instead of silently
+        // querying the entire target table. A later `scope()` call
+        // rebuilds the through scope and surfaces the real error if
+        // the adapter is still broken.
+        proxySelf._isNone = true;
       }
     } else {
       const conditions = computeHasManyWhere(record, assocName, assocDef.options);
@@ -1127,28 +1133,39 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     await this.replace(records);
   }
 
-  async pluck(...columns: string[]): Promise<unknown[]> {
-    if (this._isThrough || this._targetLoaded) {
+  async pluck(
+    ...columns: Array<string | Nodes.Attribute | Nodes.NamedFunction | Nodes.SqlLiteral>
+  ): Promise<unknown[]> {
+    // Loaded-target fast path only handles bare string column names —
+    // readAttribute can't resolve Arel nodes. For any non-string arg,
+    // fall through to scope().pluck(...) so Relation's SQL path runs.
+    const allStrings = columns.every((c) => typeof c === "string");
+    if (allStrings && (this._isThrough || this._targetLoaded)) {
+      const stringCols = columns as string[];
       const records = (this._isThrough ? await this.toArray() : this._target).filter(
         (r) => !r.isNewRecord(),
       );
-      if (columns.length === 1) {
-        return records.map((r) => r.readAttribute(columns[0]));
+      if (stringCols.length === 1) {
+        return records.map((r) => r.readAttribute(stringCols[0]));
       }
-      return records.map((r) => columns.map((c) => r.readAttribute(c)));
+      return records.map((r) => stringCols.map((c) => r.readAttribute(c)));
     }
     this._checkStrictLoading();
     return this.scope().pluck(...columns);
   }
 
-  async pick(...columns: string[]): Promise<unknown> {
-    if (this._isThrough || this._targetLoaded) {
+  async pick(
+    ...columns: Array<string | Nodes.Attribute | Nodes.NamedFunction | Nodes.SqlLiteral>
+  ): Promise<unknown> {
+    const allStrings = columns.every((c) => typeof c === "string");
+    if (allStrings && (this._isThrough || this._targetLoaded)) {
+      const stringCols = columns as string[];
       const records = (this._isThrough ? await this.toArray() : this._target).filter(
         (r) => !r.isNewRecord(),
       );
       if (records.length === 0) return null;
-      if (columns.length === 1) return records[0].readAttribute(columns[0]);
-      return columns.map((c) => records[0].readAttribute(c));
+      if (stringCols.length === 1) return records[0].readAttribute(stringCols[0]);
+      return stringCols.map((c) => records[0].readAttribute(c));
     }
     this._checkStrictLoading();
     return this.scope().pick(...columns);

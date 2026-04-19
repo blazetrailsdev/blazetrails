@@ -1644,4 +1644,72 @@ describe("TransactionTest", () => {
       }),
     ).rejects.toThrow("specific error message");
   });
+
+  describe("PreparedStatementCacheExpired retry", () => {
+    it("retries the transaction body once on PreparedStatementCacheExpired", async () => {
+      const { PreparedStatementCacheExpired } = await import("./errors.js");
+      class Topic extends Base {
+        static {
+          this.attribute("title", "string");
+          this.adapter = adapter;
+        }
+      }
+      let attempts = 0;
+      const result = await transaction(Topic, async () => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new PreparedStatementCacheExpired("cached plan expired");
+        }
+        return attempts;
+      });
+      expect(attempts).toBe(2);
+      expect(result).toBe(2);
+    });
+
+    it("raises after exhausting a single retry", async () => {
+      const { PreparedStatementCacheExpired } = await import("./errors.js");
+      class Topic extends Base {
+        static {
+          this.attribute("title", "string");
+          this.adapter = adapter;
+        }
+      }
+      let attempts = 0;
+      await expect(
+        transaction(Topic, async () => {
+          attempts += 1;
+          throw new PreparedStatementCacheExpired("still expired");
+        }),
+      ).rejects.toBeInstanceOf(PreparedStatementCacheExpired);
+      // Rails' MAX_ATTEMPTS = 1 retry — initial + one retry = 2 total.
+      expect(attempts).toBe(2);
+    });
+
+    it("does not retry when nested — bubbles up for outer to handle", async () => {
+      const { PreparedStatementCacheExpired } = await import("./errors.js");
+      class Topic extends Base {
+        static {
+          this.attribute("title", "string");
+          this.adapter = adapter;
+        }
+      }
+      let outerAttempts = 0;
+      let innerAttempts = 0;
+      const result = await transaction(Topic, async () => {
+        outerAttempts += 1;
+        await transaction(Topic, async () => {
+          innerAttempts += 1;
+          if (outerAttempts === 1) {
+            throw new PreparedStatementCacheExpired("cached plan expired");
+          }
+        });
+        return outerAttempts;
+      });
+      // Inner didn't retry — error bubbled; outer retried the whole
+      // thing, which re-ran both inner and outer bodies.
+      expect(outerAttempts).toBe(2);
+      expect(innerAttempts).toBe(2);
+      expect(result).toBe(2);
+    });
+  });
 });

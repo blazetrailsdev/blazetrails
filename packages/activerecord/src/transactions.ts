@@ -2,8 +2,15 @@ import type { Base } from "./base.js";
 
 import { ArgumentError } from "@blazetrails/activemodel";
 import { getAsyncContext, type AsyncContext } from "@blazetrails/activesupport";
-import { Rollback, TransactionIsolationError } from "./errors.js";
+import { PreparedStatementCacheExpired, Rollback, TransactionIsolationError } from "./errors.js";
 export { Rollback };
+
+/**
+ * Rails-style max retries for `PreparedStatementCacheExpired`. Rails'
+ * `ActiveRecord::ConnectionAdapters::DatabaseStatements#transaction`
+ * retries the block once on this error; a second failure raises.
+ */
+const PREPARED_STATEMENT_CACHE_EXPIRED_RETRIES = 1;
 import { Transaction } from "./connection-adapters/abstract/transaction.js";
 import { transaction as dbTransaction } from "./connection-adapters/abstract/database-statements.js";
 
@@ -62,6 +69,39 @@ export function currentTransaction(): Transaction | null {
  * lifecycle. Falls back to direct adapter calls for simple adapters.
  */
 export async function transaction<T>(
+  modelClass: typeof Base,
+  fn: (tx: Transaction) => Promise<T>,
+  options?: { isolation?: string; requiresNew?: boolean; joinable?: boolean },
+): Promise<T | undefined> {
+  // Rails retries the whole transaction once on
+  // `PreparedStatementCacheExpired` — a mid-txn cached-plan
+  // invalidation (DDL on a referenced object) can't be transparently
+  // retried in place because PG aborts the txn on any error, so the
+  // adapter raises and the transaction machinery re-runs the block.
+  // Only retry at the outermost frame: if we're already nested, bubble
+  // up so the outer transaction handles it.
+  const nested = currentTransaction() !== null;
+  if (nested) return _transactionAttempt(modelClass, fn, options);
+
+  let attempts = 0;
+
+  while (true) {
+    try {
+      return await _transactionAttempt(modelClass, fn, options);
+    } catch (e) {
+      if (
+        e instanceof PreparedStatementCacheExpired &&
+        attempts < PREPARED_STATEMENT_CACHE_EXPIRED_RETRIES
+      ) {
+        attempts += 1;
+        continue;
+      }
+      throw e;
+    }
+  }
+}
+
+async function _transactionAttempt<T>(
   modelClass: typeof Base,
   fn: (tx: Transaction) => Promise<T>,
   options?: { isolation?: string; requiresNew?: boolean; joinable?: boolean },

@@ -600,6 +600,11 @@ describe("AssociationScope", () => {
     ).toSql();
     expect(sql).toMatch(/FROM\s+"hot_settings"/);
     expect(sql).toMatch(/INNER JOIN\s+"?hot_accounts"?/i);
+    // Pin the ON condition so a regression where the join keys flip
+    // (or get dropped) doesn't slip through. PR 3 builds these via
+    // _nextChainScope using joinPrimaryKey / joinForeignKey from the
+    // chain's pair.
+    expect(sql).toMatch(/ON\s+"hot_settings"\."hot_account_id"\s*=\s*"hot_accounts"\."id"/);
     expect(sql).toMatch(/"hot_accounts"\."hot_user_id"\s*=\s*5/);
     expect(sql).toMatch(/LIMIT\s+1/);
   });

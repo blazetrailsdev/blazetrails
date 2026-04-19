@@ -425,9 +425,14 @@ export class AssociationScope {
     const joinPks = Array.isArray(r.joinPrimaryKey) ? r.joinPrimaryKey : [r.joinPrimaryKey];
     const joinFks = Array.isArray(r.joinForeignKey) ? r.joinForeignKey : [r.joinForeignKey];
     if (joinPks.length !== joinFks.length) {
-      const name = (reflection as { name?: string }).name ?? "<unknown>";
-      const ownerName =
-        (reflection as { activeRecord?: { name?: string } }).activeRecord?.name ?? "<unknown>";
+      // Unwrap ReflectionProxy so activeRecord/name come from the
+      // underlying reflection rather than reading "<unknown>" off the
+      // proxy (which doesn't forward activeRecord).
+      const base =
+        (reflection as { reflection?: { name?: string; activeRecord?: { name?: string } } })
+          .reflection ?? (reflection as { name?: string; activeRecord?: { name?: string } });
+      const name = base.name ?? "<unknown>";
+      const ownerName = base.activeRecord?.name ?? "<unknown>";
       throw new CompositePrimaryKeyMismatchError(ownerName, name);
     }
     const table = r.klass?.tableName ?? "";

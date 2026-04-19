@@ -136,7 +136,7 @@ export class BindMap {
       const attr = boundAttributes[i];
       if (
         attr instanceof Substitute ||
-        (attr instanceof Attribute && attr.value instanceof Substitute)
+        (attr instanceof Attribute && attr.valueBeforeTypeCast instanceof Substitute)
       ) {
         this._indexes.push(i);
       }

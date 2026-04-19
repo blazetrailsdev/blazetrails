@@ -248,10 +248,14 @@ describeIfPg("PostgreSQLAdapter", () => {
       await adapter.execute("SELECT $1::int", [1]);
       await adapter.execute("SELECT $1::text", ["a"]);
       await adapter.rollback();
+      // Capture the released client BEFORE clearCacheBang — its
+      // finally block nulls _lastReleasedTxnClient (so a post-clear
+      // _lastReleasedClientForTest() would return null and the
+      // tag check would silently fail with `WeakSet.has(null)` → false).
+      const taggedClient = adapter._lastReleasedClientForTest();
+      expect(taggedClient).not.toBeNull();
       adapter.clearCacheBang();
       // Tagged for drain on next checkout.
-      const taggedClient = adapter._lastReleasedClientForTest();
-      expect(taggedClient).toBeDefined();
       expect(adapter._needsDeallocateAllForTest(taggedClient!)).toBe(true);
 
       // Capture the next pg.PoolClient and its query() call list so we

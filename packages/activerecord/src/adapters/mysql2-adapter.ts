@@ -142,6 +142,22 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
   _statementPoolForTest(): Mysql2StatementPool | undefined {
     return this._conn ? this._statementPools.get(this._conn) : undefined;
   }
+
+  /**
+   * Clear cached prepared statements. Mirrors Rails'
+   * `Mysql2Adapter#clear_cache!` — each entry's `dealloc` calls
+   * `connection.unprepare(sql)` (COM_STMT_CLOSE). The active
+   * transaction connection's pool is cleared; the WeakMap is reset
+   * so other pooled connections (which we can't iterate) get fresh
+   * pools on next checkout.
+   */
+  override clearCacheBang(): void {
+    super.clearCacheBang();
+    if (this._conn) {
+      this._statementPools.get(this._conn)?.clear();
+    }
+    this._statementPools = new WeakMap<mysql.PoolConnection, Mysql2StatementPool>();
+  }
   // Cached capability flag — information_schema.statistics.expression
   // is MySQL 8.0.13+. Pre-8 MySQL and MariaDB (through at least 10.x)
   // don't expose it, so we detect once and remember. `undefined` =

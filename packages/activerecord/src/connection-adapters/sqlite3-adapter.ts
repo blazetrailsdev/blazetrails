@@ -78,11 +78,44 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     return filename.startsWith("file::memory:") || filename.includes("mode=memory");
   }
 
-  constructor(filename: string | ":memory:" = ":memory:", options?: { readonly?: boolean }) {
+  // Rails' `statement_limit` database.yml key. SQLite has a single
+  // connection (no pool), so the adapter owns exactly one pool and the
+  // setter resizes it directly.
+  private _statementLimit = 1000;
+
+  /**
+   * Maximum prepared statements cached on the single SQLite connection.
+   *
+   * Mirrors: `database.yml`'s `statement_limit` — read by Rails as
+   * `config[:statement_limit]` in `SQLite3Adapter#initialize`.
+   */
+  get statementLimit(): number {
+    return this._statementLimit;
+  }
+
+  set statementLimit(value: number) {
+    if (!Number.isInteger(value) || value < 0) {
+      throw new RangeError(
+        `statementLimit must be a finite non-negative integer; got ${String(value)}`,
+      );
+    }
+    this._statementLimit = value;
+    this._statementPool.setMaxSize(value);
+  }
+
+  constructor(
+    filename: string | ":memory:" = ":memory:",
+    options: { readonly?: boolean; statementLimit?: number; preparedStatements?: boolean } = {},
+  ) {
     super();
     this._filename = filename;
     this._memoryDatabase = SQLite3Adapter._isMemoryFilename(filename);
-    this._readonly = options?.readonly ?? false;
+    this._readonly = options.readonly ?? false;
+    // Apply adapter-level options FIRST so invalid values fail before
+    // the native driver opens a file handle that would otherwise leak.
+    if (options.statementLimit !== undefined) this.statementLimit = options.statementLimit;
+    if (options.preparedStatements !== undefined)
+      this.preparedStatements = options.preparedStatements;
     try {
       this.db = new Database(filename, { readonly: this._readonly });
     } catch (e) {

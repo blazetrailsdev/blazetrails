@@ -151,6 +151,38 @@ pools are acquired per query rather than checked out per thread.
 underlying pool model is different because there are no threads to
 pool over. See `packages/activerecord/src/connection-handling.ts`.
 
+### Adapter config: `statementLimit` and `preparedStatements`
+
+Rails reads `statement_limit` and `prepared_statements` off the
+merged `database.yml` hash in `AbstractAdapter#initialize`. The same
+shape works here — pass them alongside driver connection options in
+the single config hash:
+
+```ts
+new PostgreSQLAdapter({
+  connectionString: "postgres://localhost/app",
+  statementLimit: 500, // default 1000
+  preparedStatements: true, // default true
+});
+
+new Mysql2Adapter({
+  uri: "mysql://localhost/app",
+  statementLimit: 0, // 0 disables caching entirely
+});
+
+new SQLite3Adapter("db/app.sqlite3", { statementLimit: 200 });
+```
+
+Adapter-level keys are stripped from the config hash before it's
+handed to the driver pool; invalid values (non-integer / negative
+`statementLimit`, non-boolean `preparedStatements`) throw at
+construction so misconfiguration fails loudly at boot instead of
+silently leaking unbounded prepared statements later. A
+`statementLimit` of 0 disables the named-prepared-statement path on
+PG and MySQL (Rails' `PG::StatementPool#set` / MySQL equivalent are
+likewise no-ops at 0); queries still run, they just go through the
+unprepared path on that call.
+
 ## 5. Relation `method_missing` → typed `Proxy`
 
 Rails' `ActiveRecord::Relation` uses `method_missing` to forward

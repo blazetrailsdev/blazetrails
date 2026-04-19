@@ -965,6 +965,23 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   /**
+   * Clear cached prepared statements. Mirrors Rails'
+   * `PostgreSQLAdapter#clear_cache!` which sends DEALLOCATE for each
+   * cached entry. The active transaction client's pool is cleared
+   * (evicting through `dealloc`); the WeakMap is reset so any other
+   * pooled clients (which we can't iterate) get fresh pools on next
+   * checkout. Server-side statements on non-held clients will drop
+   * on session close.
+   */
+  override clearCacheBang(): void {
+    super.clearCacheBang();
+    if (this._client) {
+      this._statementPools.get(this._client)?.clear();
+    }
+    this._statementPools = new WeakMap<pg.PoolClient, StatementPool>();
+  }
+
+  /**
    * Check if we're in a transaction.
    */
   get inTransaction(): boolean {

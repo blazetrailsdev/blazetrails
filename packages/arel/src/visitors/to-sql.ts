@@ -5,6 +5,17 @@ import { Composite } from "../collectors/composite.js";
 import * as Nodes from "../nodes/index.js";
 import { Table } from "../table.js";
 
+/**
+ * Resolve a bind's database value. Handles both method form
+ * (QueryAttribute#valueForDatabase()) and getter form
+ * (ActiveModel::Attribute#valueForDatabase).
+ */
+function resolveValueForDatabase(value: unknown): unknown {
+  if (!value || typeof value !== "object" || !("valueForDatabase" in value)) return value;
+  const v = (value as Record<string, unknown>).valueForDatabase;
+  return typeof v === "function" ? (v as () => unknown).call(value) : v;
+}
+
 export class UnsupportedVisitError extends Error {
   constructor(message: string) {
     super(message);
@@ -944,15 +955,11 @@ export class ToSql implements NodeVisitor<SQLString> {
     if (this._extractBinds) {
       this.collector.addBind(node.value !== undefined ? node.value : node);
     } else if (node.value !== undefined) {
-      // Extract the database value from bind objects (QueryAttribute etc.)
-      const val =
-        node.value &&
-        typeof node.value === "object" &&
-        "valueForDatabase" in node.value &&
-        typeof (node.value as Record<string, unknown>).valueForDatabase === "function"
-          ? (node.value as { valueForDatabase(): unknown }).valueForDatabase()
-          : node.value;
-      this.collector.append(this.quote(val));
+      // Extract the database value from bind objects (QueryAttribute,
+      // ActiveModel::Attribute, etc.). Rails exposes `value_for_database`
+      // as a method; ActiveModel::Attribute (TS port) uses a getter. Read
+      // via the descriptor so both shapes resolve correctly.
+      this.collector.append(this.quote(resolveValueForDatabase(node.value)));
     } else {
       this.collector.addBind(node);
     }

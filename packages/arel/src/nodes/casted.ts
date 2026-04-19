@@ -2,6 +2,7 @@ import { Node, NodeVisitor } from "./node.js";
 import { NodeExpression } from "./node-expression.js";
 import type { Attribute } from "../attributes/attribute.js";
 import { ATTRIBUTE_BRAND } from "./binary.js";
+import { BindParam } from "./bind-param.js";
 import { Attribute as AMAttribute } from "@blazetrails/activemodel";
 
 /**
@@ -18,21 +19,17 @@ import { Attribute as AMAttribute } from "@blazetrails/activemodel";
  *   visitors always receive a real Node.
  * - ActiveModel::Attribute isn't an Arel node either. Rails has
  *   visit_ActiveModel_Attribute that routes it through add_bind; we
- *   achieve the same effect by wrapping it in BindParam, which our
- *   visitBindParam already knows how to extract via valueForDatabase.
+ *   wrap it in BindParam so the value participates in prepared-statement
+ *   bind extraction (visitBindParam handles valueForDatabase — both the
+ *   method form on QueryAttribute and the getter form on AM Attribute).
  */
 export function buildQuoted(other: unknown, attribute?: unknown): Node {
   if (other instanceof Node) return other;
   if (other && typeof other === "object") {
     // Arel::Attributes::Attribute (duck-typed via symbol brand)
     if ((other as Record<symbol, unknown>)[ATTRIBUTE_BRAND] === true) return other as Node;
-    // ActiveModel::Attribute: Rails' visitor has visit_ActiveModel_Attribute
-    // that routes through add_bind; our visitor has no such branch, so
-    // resolve the attribute's valueForDatabase now and emit a Quoted node
-    // carrying the already-typed value.
-    if (other instanceof AMAttribute) {
-      return new Quoted((other as unknown as { valueForDatabase: unknown }).valueForDatabase);
-    }
+    // ActiveModel::Attribute → BindParam (Rails: collector.add_bind).
+    if (other instanceof AMAttribute) return new BindParam(other);
     // SelectManager / TreeManager — expose a Node `ast`; use that so the
     // visitor always receives a real Node.
     const maybeAst = (other as { ast?: unknown }).ast;

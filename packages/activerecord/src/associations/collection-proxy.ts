@@ -43,9 +43,9 @@ import { _setCollectionProxyCtor } from "./collection-proxy-slot.js";
 export interface CollectionProxy<T extends Base = Base> {
   // Thenable — makes CollectionProxy awaitable. Delegates to `load()`,
   // which both returns the loaded records AND hydrates `_target`, so
-  // subsequent sync ops (`proxy.length`, `proxy[0]`, iteration) work
-  // after a single `await proxy`. Wired at the bottom of the file via
-  // `applyThenable(CollectionProxy.prototype, "load")`.
+  // subsequent sync ops (`proxy.target.length`, `proxy[0]`, iteration)
+  // work after a single `await proxy`. Wired at the bottom of the file
+  // via `applyThenable(CollectionProxy.prototype, "load")`.
   then<TResult1 = T[], TResult2 = never>(
     onfulfilled?: ((value: T[]) => TResult1 | PromiseLike<TResult1>) | null,
     onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null,
@@ -268,8 +268,8 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     // fail-closed `_isNone` path.
     const ctor = record.constructor as typeof Base;
     const proxySelf = this as unknown as {
-      _isNone: boolean;
       _copyStateFrom: (other: Relation<T>) => void;
+      noneBang: () => unknown;
     };
     if (assocDef.options.through) {
       // Config validation FIRST, outside the try — missing through
@@ -296,7 +296,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         // rather than silently querying the full target table. A
         // later `scope()` call rebuilds and surfaces the real error
         // if the adapter is still broken.
-        proxySelf._isNone = true;
+        proxySelf.noneBang();
       }
     } else {
       // Build via `buildHasManyRelation` so CP's inherited Relation
@@ -312,7 +312,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         assocDef.options,
       ) as Relation<T> | null;
       if (seedRel === null) {
-        proxySelf._isNone = true;
+        proxySelf.noneBang();
       } else {
         proxySelf._copyStateFrom(seedRel);
       }
@@ -336,6 +336,17 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
    * Load and return all associated records.
    */
   async toArray(): Promise<T[]> {
+    // Known limitation (PR B): this path calls `loadHasMany` to reuse
+    // the owner's association cache + strict-loading enforcement, so
+    // in-place Relation mutations on the proxy itself (e.g.
+    // `cp.whereBang(...)`, `cp.orderBang(...)`) affect `cp.toSql()` but
+    // are NOT reflected here. Chained calls (`cp.where(...).toArray()`)
+    // return an AssociationRelation, whose `toArray` goes through
+    // Relation's query path and DOES honor the added state — that's
+    // the supported path for additional filtering. Direct CP bang-
+    // mutation is rare in practice; PR B will either reconcile this
+    // (delegate to super.toArray when state diverges from seed) or
+    // document it as-is.
     const results = (await loadHasMany(
       this._record,
       this._assocName,
@@ -1621,7 +1632,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
 
 // Route `await proxy` through `load()` (not `toArray`) so the thenable
 // also hydrates `_target` — matches the documented contract that
-// `await proxy; proxy[0]` / `proxy.length` work after a single await.
+// `await proxy; proxy[0]` / `proxy.target.length` work after a single await.
 // `toArray()` stays available for callers who want a fresh array
 // without hydrating this proxy's `_target` / `_loaded` (it still goes
 // through `loadHasMany`, which syncs into the record's association

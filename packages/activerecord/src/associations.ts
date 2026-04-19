@@ -1702,6 +1702,15 @@ export function association<T extends Base = Base>(
     throw new Error(`Association "${assocName}" not found on ${ctor.name}`);
   }
   if (!_CollectionProxyCtor) {
+    // Deliberate constraint: `associations.ts`, `relation.ts`,
+    // `collection-proxy.ts`, and `base.ts` form a mandatory mutual
+    // dependency — CP `extends Relation`, Relation/Base call back
+    // into the association wiring, and attempting to value-import CP
+    // at this module's top would observe a partial module during
+    // init. The package entry (`@blazetrails/activerecord`) loads CP
+    // explicitly and triggers self-registration; deep-importing
+    // `associations.js` bypasses that. See the collection-proxy-slot
+    // module for the load-order details.
     throw new Error(
       "CollectionProxy not registered. Import from '@blazetrails/activerecord' " +
         "instead of deep-importing associations.js so late-bound registration " +

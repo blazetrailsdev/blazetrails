@@ -237,6 +237,47 @@ describe("AssociationScope", () => {
     expect(sql).toMatch(/"ds_author_id"\s*=\s*1/);
   });
 
+  it("loadHasMany applies caller-supplied options.scope when it differs from reflection.scope", async () => {
+    // Regression for the loadHasManyThrough path that wraps options.scope
+    // with sourceType filtering before calling loadHasMany. The migrated
+    // path skips re-applying when options.scope === reflection.scope
+    // (avoid double-application), but augmented scopes must still run.
+    const { loadHasMany } = await import("../associations.js");
+    class WrAuthor extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class WrPost extends Base {
+      static {
+        this.attribute("wr_author_id", "integer");
+        this.attribute("kind", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(WrAuthor);
+    registerModel(WrPost);
+    Associations.hasMany.call(WrAuthor, "wr_posts", {
+      className: "WrPost",
+      foreignKey: "wr_author_id",
+    });
+
+    const author = await WrAuthor.create({});
+    await WrPost.create({ wr_author_id: author.id, kind: "draft" });
+    await WrPost.create({ wr_author_id: author.id, kind: "published" });
+
+    // Augmented options.scope — NOT equal to the reflection's macro
+    // scope (which is null here). Loader must still apply it.
+    const results = await loadHasMany(author, "wr_posts", {
+      className: "WrPost",
+      foreignKey: "wr_author_id",
+      scope: (rel: any) => rel.where({ kind: "published" }),
+    });
+    expect(results).toHaveLength(1);
+    expect((results[0] as any).kind).toBe("published");
+  });
+
   it("invokes 0-arity scope lambda with this=relation (Rails instance_exec semantics)", () => {
     // Rails: `relation.instance_exec(owner, &scope) || relation`. A
     // 0-arity scope (e.g. `-> { where(active: true) }`) reads `self`

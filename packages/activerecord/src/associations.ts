@@ -602,9 +602,12 @@ export async function loadHasMany(
     // by AssociationScope.scope MUST be merged with the target's
     // scope_for_association — otherwise the target model's default_scope
     // / scope extensions would silently disappear on the reflection-
-    // backed path. AssociationScope.scope already merges reflection.scope
-    // (the user-supplied scope lambda) via _addConstraints, so don't
-    // double-apply options.scope on this path.
+    // backed path. AssociationScope.scope already merges
+    // `reflection.scope` (the macro-time user lambda) via scopeFor, so
+    // skip re-applying it ONLY when `options.scope` is that exact same
+    // function. Callers like `loadHasManyThrough` synthesize a NEW
+    // `options.scope` (e.g. wrapping with `sourceType` filtering) —
+    // those must still run.
     const built = AssociationScope.scope({
       owner: record,
       reflection,
@@ -612,6 +615,9 @@ export async function loadHasMany(
     }) as any;
     const baseRelation = (targetModel as any).scopeForAssociation?.() ?? (targetModel as any).all();
     rel = baseRelation.merge(built);
+    if (options.scope && options.scope !== (reflection as any).scope) {
+      rel = options.scope(rel);
+    }
   } else {
     rel = (targetModel as any).all().where({ [foreignKey]: pkValue });
     if (options.scope) {

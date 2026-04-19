@@ -34,6 +34,20 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
   }
 
   /**
+   * Preserve the subclass on `_clone()` (and any chained `where`/`order`
+   * /`merge`) so the custom `toArray` reordering and `limit`/`first`
+   * overrides survive chaining. Without this, Relation#_clone() would
+   * spawn a plain Relation and silently drop the wrapping behavior.
+   */
+  protected override _newRelation(): Relation<T> {
+    return new DisableJoinsAssociationRelation<T>(
+      (this as unknown as { _modelClass: typeof Base })._modelClass,
+      this.key,
+      this._storedIds,
+    ) as unknown as Relation<T>;
+  }
+
+  /**
    * Load via Relation, then group by `key` and re-emit in `ids` order so
    * the caller sees join-table ordering (Rails' `load` override).
    */

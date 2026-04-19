@@ -11,6 +11,30 @@ import type { AbstractReflection } from "../reflection.js";
 type ChainEntry = AbstractReflection | ReflectionProxy;
 
 /**
+ * Defense in depth: the routing gate in associations.ts already rejects
+ * composite-key through associations from this path, but per-step keys
+ * are read fresh here, so guard explicitly to fail loudly rather than
+ * silently truncating to `key[0]` and producing a broken WHERE.
+ *
+ * Composite-key support requires per-column predicates (or tuple IN)
+ * and is a follow-up.
+ */
+function singleColumnKey(key: string | string[], label: string): string {
+  if (Array.isArray(key)) {
+    if (key.length === 0) {
+      throw new Error(`DisableJoinsAssociationScope: empty ${label}`);
+    }
+    if (key.length > 1) {
+      throw new Error(
+        `DisableJoinsAssociationScope: composite ${label} not supported (got [${key.join(", ")}])`,
+      );
+    }
+    return key[0];
+  }
+  return key;
+}
+
+/**
  * Builds scopes for `:through` associations that disable joins, querying
  * each step's table separately and stitching results in memory via IN(...)
  * rather than emitting a multi-table JOIN. Used when the source and
@@ -57,7 +81,7 @@ export class DisableJoinsAssociationScope extends AssociationScope {
     );
 
     const key = (lastReflection as { joinPrimaryKey: string | string[] }).joinPrimaryKey;
-    const keyStr = Array.isArray(key) ? key[0] : key;
+    const keyStr = singleColumnKey(key, "joinPrimaryKey");
     const relation = this._addConstraintsDj(
       lastReflection,
       keyStr,
@@ -89,7 +113,7 @@ export class DisableJoinsAssociationScope extends AssociationScope {
       throw new Error("DisableJoinsAssociationScope: empty chain");
     }
     const firstFk = (firstItem as { joinForeignKey: string | string[] }).joinForeignKey;
-    const firstFkStr = Array.isArray(firstFk) ? firstFk[0] : firstFk;
+    const firstFkStr = singleColumnKey(firstFk, "joinForeignKey");
     let acc: [ChainEntry, boolean, unknown[]] = [
       firstItem,
       false,
@@ -99,15 +123,14 @@ export class DisableJoinsAssociationScope extends AssociationScope {
     for (const nextReflection of work) {
       const [reflection, ordered, joinIds] = acc;
       const key = (reflection as { joinPrimaryKey: string | string[] }).joinPrimaryKey;
-      const keyStr = Array.isArray(key) ? key[0] : key;
+      const keyStr = singleColumnKey(key, "joinPrimaryKey");
       const records = this._addConstraintsDj(reflection, keyStr, joinIds, owner, ordered);
       const foreignKey = (nextReflection as { joinForeignKey: string | string[] }).joinForeignKey;
-      const foreignKeyStr = Array.isArray(foreignKey) ? foreignKey[0] : foreignKey;
+      const foreignKeyStr = singleColumnKey(foreignKey, "joinForeignKey");
       const recordIds = (await (records as { pluck: (col: string) => Promise<unknown[]> }).pluck(
         foreignKeyStr,
       )) as unknown[];
-      const orderValues =
-        (records as { _orderClauses?: unknown[] })._orderClauses ?? ([] as unknown[]);
+      const orderValues = (records as { orderValues?: unknown[] }).orderValues ?? ([] as unknown[]);
       const recordsOrdered = orderValues.length > 0;
       acc = [nextReflection, recordsOrdered, recordIds];
     }
@@ -141,18 +164,18 @@ export class DisableJoinsAssociationScope extends AssociationScope {
       klass as unknown as { scopeForAssociation?: () => unknown }
     ).scopeForAssociation?.();
     if (sfa) {
-      const stripped = (
-        sfa as {
-          except: (...keys: string[]) => unknown;
-        }
-      ).except(
+      // Rails: `relation.except(:select, :create_with, :includes, :preload,
+      // :eager_load, :joins, :left_outer_joins)` strips those query parts
+      // before merging. Our `Relation#except` is the SQL set-operation
+      // EXCEPT (Rails-faithful for that name); the query-part strip is
+      // `unscope(...)`. `createWith`, `preload`, `eagerLoad` aren't in
+      // our UnscopeType set yet (follow-up); the supported keys cover
+      // the practical cases (select / includes / joins / leftOuterJoins).
+      const stripped = (sfa as { unscope: (...keys: string[]) => unknown }).unscope(
         "select",
-        "create_with",
         "includes",
-        "preload",
-        "eager_load",
         "joins",
-        "left_outer_joins",
+        "leftOuterJoins",
       );
       scope = (scope as { merge: (o: unknown) => unknown }).merge(stripped);
     }
@@ -171,7 +194,7 @@ export class DisableJoinsAssociationScope extends AssociationScope {
       scope = this._pushScopeIntoRelation(scope, evaluated);
     }
 
-    const finalOrders = (scope as { _orderClauses?: unknown[] })._orderClauses ?? [];
+    const finalOrders = (scope as { orderValues?: unknown[] }).orderValues ?? [];
     if (finalOrders.length === 0 && ordered) {
       const split = new DisableJoinsAssociationRelation<Base>(klass, key, joinIds);
       const sourceWhere = (scope as { _whereClause?: { predicates?: unknown[] } })._whereClause;

@@ -341,6 +341,17 @@ function _canRouteThroughViaDisableJoinsAssociationScope(
   if (!src) return false;
   if (typeof src.isPolymorphic === "function" && src.isPolymorphic()) return false;
   if (options.sourceType) return false;
+  // Composite-key through associations need per-column predicates (or
+  // tuple IN) at every chain step; DJAS only supports single-column keys
+  // today. Bail out if any chain entry has a composite join key so we
+  // fall back to loadHasManyThrough rather than silently truncating.
+  const chain =
+    (reflection as { chain?: Array<{ joinPrimaryKey?: unknown; joinForeignKey?: unknown }> })
+      .chain ?? [];
+  for (const entry of chain) {
+    if (Array.isArray(entry.joinPrimaryKey) && entry.joinPrimaryKey.length > 1) return false;
+    if (Array.isArray(entry.joinForeignKey) && entry.joinForeignKey.length > 1) return false;
+  }
   return true;
 }
 

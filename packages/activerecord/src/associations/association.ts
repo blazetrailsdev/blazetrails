@@ -1,6 +1,7 @@
 import type { Base } from "../base.js";
 import type { AssociationDefinition, AssociationOptions } from "../associations.js";
 import { resolveModel, buildHasManyRelation } from "../associations.js";
+import { AssociationScope } from "./association-scope.js";
 import { camelize, singularize } from "@blazetrails/activesupport";
 
 /**
@@ -21,6 +22,16 @@ export class Association {
   target: Base | Base[] | null;
 
   private _staleState: unknown = undefined;
+  /**
+   * Memoized result of `associationScope()` — Rails' `@association_scope`
+   * (association.rb:300-308). Built lazily on first access; reset by
+   * `resetScope()` (called from `reload()` and on init). Skipped for
+   * `disable_joins` paths — Rails creates a fresh
+   * `DisableJoinsAssociationScope` per call (association.rb:107-117)
+   * because the scope's chain walk depends on owner FK snapshots that
+   * a long-lived cache would mask.
+   */
+  private _cachedAssociationScope: unknown = undefined;
 
   constructor(owner: Base, reflection: AssociationDefinition) {
     this.owner = owner;
@@ -86,7 +97,53 @@ export class Association {
   }
 
   resetScope(): void {
-    // Subclasses may cache the scope; reset any cached value.
+    this._cachedAssociationScope = undefined;
+  }
+
+  /**
+   * Build (or return cached) association scope via the
+   * `AssociationScope` machinery. Mirrors Rails'
+   * `Association#association_scope` (association.rb:300-308):
+   * memoized for the JOIN-based path; fresh-each-call for
+   * `disable_joins` (the cache would mask owner FK snapshot
+   * dependencies on the chain walk).
+   *
+   * Returns the **base** scope — caller is responsible for any
+   * additional `.where(...)` / `.order(...)` chaining (e.g.
+   * `options.scope`). The cache stores the unfiltered base only.
+   */
+  associationScope(): unknown {
+    // `this.reflection` here is the lightweight AssociationDefinition
+    // attached at macro time. AssociationScope needs the rich
+    // Reflection (with `chain`, `joinPrimaryKey`, etc.) that lives on
+    // the model class via `_reflectOnAssociation(name)`. Resolve once
+    // per call — the result is small and the cache stores the BUILT
+    // scope, not the reflection.
+    const ctor = this.owner.constructor as typeof Base & {
+      _reflectOnAssociation?: (n: string) => unknown;
+    };
+    const richReflection = ctor._reflectOnAssociation?.(this.reflection.name) ?? this.reflection;
+    if (this.disableJoins) {
+      // Lazy import — DJAS' module pulls in
+      // disable-joins-association-relation → relation.ts → associations.ts,
+      // which transitively imports us. Dynamic import keeps the cycle
+      // safe. Returns a Promise<{relation}> per DJAS' boxed contract.
+      return import("./disable-joins-association-scope.js").then((m) =>
+        m.DisableJoinsAssociationScope.INSTANCE.scope({
+          owner: this.owner,
+          reflection: richReflection as never,
+          klass: this.klass as never,
+        }),
+      );
+    }
+    if (this._cachedAssociationScope === undefined) {
+      this._cachedAssociationScope = AssociationScope.scope({
+        owner: this.owner,
+        reflection: richReflection as never,
+        klass: this.klass as never,
+      });
+    }
+    return this._cachedAssociationScope;
   }
 
   /**

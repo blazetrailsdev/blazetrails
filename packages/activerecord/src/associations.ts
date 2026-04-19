@@ -355,6 +355,43 @@ function _canRouteThroughViaDisableJoinsAssociationScope(
   return true;
 }
 
+/**
+ * Build (or return cached) base AssociationScope. When the owner has
+ * a registered `Association` instance for this name, route through
+ * its `associationScope()` so calls hit Rails' `@association_scope`-
+ * style memoization (cleared on `reload()`). Without an instance,
+ * fall back to a fresh `AssociationScope.scope(...)` build — matches
+ * test paths that exercise loaders without going through
+ * `record.association(name)`.
+ *
+ * Disable-joins associations bypass the cache (Rails' `Association#scope`
+ * creates a fresh `DisableJoinsAssociationScope` per call,
+ * association.rb:107-117). The disableJoins routing is already
+ * handled above this call site, so falling through to the fresh
+ * `AssociationScope.scope(...)` here only matters if a future caller
+ * stretches the contract.
+ */
+function _builtAssociationScope(
+  record: Base,
+  assocName: string,
+  reflection: unknown,
+  targetModel: typeof Base,
+): unknown {
+  const instance = (
+    record as { _associationInstances?: Map<string, unknown> }
+  )._associationInstances?.get(assocName) as
+    | { disableJoins?: boolean; associationScope?: () => unknown }
+    | undefined;
+  if (instance && !instance.disableJoins && typeof instance.associationScope === "function") {
+    return instance.associationScope();
+  }
+  return AssociationScope.scope({
+    owner: record,
+    reflection: reflection as never,
+    klass: targetModel,
+  });
+}
+
 async function _loadThroughViaDisableJoinsScope(
   record: Base,
   reflection: unknown,
@@ -488,11 +525,7 @@ export async function loadBelongsTo(
 
   let result: Base | null;
   if (reflection) {
-    const built = AssociationScope.scope({
-      owner: record,
-      reflection,
-      klass: targetModel,
-    }) as any;
+    const built = _builtAssociationScope(record, assocName, reflection, targetModel) as any;
     const baseRelation = (targetModel as any).scopeForAssociation?.() ?? (targetModel as any).all();
     let rel = baseRelation.merge(built);
     if (options.scope && options.scope !== (reflection as any).scope) {
@@ -622,11 +655,7 @@ export async function loadHasOne(
 
   let result: Base | null;
   if (reflection) {
-    const built = AssociationScope.scope({
-      owner: record,
-      reflection,
-      klass: targetModel,
-    }) as any;
+    const built = _builtAssociationScope(record, assocName, reflection, targetModel) as any;
     const baseRelation = (targetModel as any).scopeForAssociation?.() ?? (targetModel as any).all();
     let rel = baseRelation.merge(built);
     if (options.scope && options.scope !== (reflection as any).scope) {
@@ -841,11 +870,7 @@ export async function loadHasMany(
     // function. Callers like `loadHasManyThrough` synthesize a NEW
     // `options.scope` (wrapping with `sourceType` filtering) — those
     // must still run.
-    const built = AssociationScope.scope({
-      owner: record,
-      reflection,
-      klass: targetModel,
-    }) as any;
+    const built = _builtAssociationScope(record, assocName, reflection, targetModel) as any;
     const baseRelation = (targetModel as any).scopeForAssociation?.() ?? (targetModel as any).all();
     rel = baseRelation.merge(built);
     if (options.scope && options.scope !== (reflection as any).scope) {

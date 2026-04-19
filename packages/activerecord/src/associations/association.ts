@@ -124,6 +124,12 @@ export class Association {
    * mutate FKs and want a fresh query must `reload()`.
    */
   associationScope(): unknown {
+    // Mirror Rails' `if klass` guard (association.rb:301): polymorphic
+    // belongs_to with a blank type column has no resolvable target
+    // class. Return undefined and skip caching so the next access
+    // (after the type column is set) builds a fresh scope.
+    const klass = this.klass as typeof Base | undefined;
+    if (!klass) return undefined;
     // `this.reflection` here is the lightweight AssociationDefinition
     // attached at macro time. AssociationScope needs the rich
     // Reflection (with `chain`, `joinPrimaryKey`, etc.) that lives on
@@ -143,7 +149,7 @@ export class Association {
         m.DisableJoinsAssociationScope.INSTANCE.scope({
           owner: this.owner,
           reflection: richReflection as never,
-          klass: this.klass as never,
+          klass: klass as never,
         }),
       );
     }
@@ -151,7 +157,7 @@ export class Association {
       this._cachedAssociationScope = AssociationScope.scope({
         owner: this.owner,
         reflection: richReflection as never,
-        klass: this.klass as never,
+        klass: klass as never,
       });
     }
     return this._cachedAssociationScope;

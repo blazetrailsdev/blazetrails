@@ -10,7 +10,7 @@
  *
  * Reset on init and on `reload()` via `reset_scope`.
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { Base, registerModel } from "../index.js";
 import { Associations } from "../associations.js";
 import { AssociationScope } from "./association-scope.js";
@@ -46,6 +46,12 @@ describe("Association scope cache", () => {
     });
   });
 
+  // Restore spies even if a test throws — leaked spies on
+  // AssociationScope.scope can corrupt sibling tests in this file.
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("AssociationScope.scope is called once across repeated scope builds (memoized)", async () => {
     // Test the scope cache directly: assert that calling
     // associationScope() twice on the same instance only invokes
@@ -71,8 +77,6 @@ describe("Association scope cache", () => {
     assoc.resetScope();
     assoc.associationScope();
     expect(spy.mock.calls.length).toBe(afterFirst + 1);
-
-    spy.mockRestore();
   });
 
   it("disable_joins associations bypass the cache (fresh DJAS each call, Rails association.rb:107-117)", async () => {
@@ -121,8 +125,6 @@ describe("Association scope cache", () => {
     // With our cache, AssociationScope.scope count is unchanged.
     await loadHasMany(author, "cachePosts", opts);
     expect(spy.mock.calls.length).toBe(afterFirst);
-
-    spy.mockRestore();
   });
 
   it("different owners get independent caches", async () => {

@@ -317,6 +317,102 @@ describe("AssociationScope", () => {
     expect(sql).toMatch(/"active"\s*=\s*TRUE/i);
   });
 
+  it("hasMany :as adds the polymorphic type WHERE on the target table", () => {
+    // For `hasMany :comments, as: :commentable`, Rails' AssociationScope
+    // builds `WHERE comments.commentable_id = owner.id AND
+    // comments.commentable_type = OwnerClass.name`. The type filter
+    // comes from reflection.type === foreignType (`commentable_type`).
+    class AsOwner extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class AsComment extends Base {
+      static {
+        this.attribute("commentable_id", "integer");
+        this.attribute("commentable_type", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(AsOwner);
+    registerModel(AsComment);
+    Associations.hasMany.call(AsOwner, "as_comments", {
+      className: "AsComment",
+      as: "commentable",
+    });
+    const owner = new AsOwner({ id: 7 });
+    const reflection = (AsOwner as any)._reflectOnAssociation("as_comments");
+    const sql = (
+      AssociationScope.scope({ owner, reflection, klass: reflection.klass }) as any
+    ).toSql();
+    expect(sql).toMatch(/"commentable_id"\s*=\s*7/);
+    expect(sql).toMatch(/"commentable_type"\s*=\s*'AsOwner'/);
+  });
+
+  it("hasOne :as adds the polymorphic type WHERE plus LIMIT 1", () => {
+    class AsOneOwner extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class AsOneImage extends Base {
+      static {
+        this.attribute("imageable_id", "integer");
+        this.attribute("imageable_type", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(AsOneOwner);
+    registerModel(AsOneImage);
+    Associations.hasOne.call(AsOneOwner, "as_one_image", {
+      className: "AsOneImage",
+      as: "imageable",
+    });
+    const owner = new AsOneOwner({ id: 3 });
+    const reflection = (AsOneOwner as any)._reflectOnAssociation("as_one_image");
+    const sql = (
+      AssociationScope.scope({ owner, reflection, klass: reflection.klass }) as any
+    ).toSql();
+    expect(sql).toMatch(/"imageable_id"\s*=\s*3/);
+    expect(sql).toMatch(/"imageable_type"\s*=\s*'AsOneOwner'/);
+    expect(sql).toMatch(/LIMIT\s+1/);
+  });
+
+  it("polymorphic belongsTo accepts a runtime-resolved klass via AssociationScopeable", () => {
+    // Polymorphic belongsTo: target klass is resolved at runtime from
+    // owner's <assoc>_type column. Callers (loadBelongsTo) pass the
+    // resolved klass via the AssociationScopeable.klass field; the
+    // reflection's joinPrimaryKey returns the target's PK and
+    // joinForeignKey returns the owner-side FK column.
+    class PolyTarget extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class PolyComment extends Base {
+      static {
+        this.attribute("commentable_id", "integer");
+        this.attribute("commentable_type", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(PolyTarget);
+    registerModel(PolyComment);
+    Associations.belongsTo.call(PolyComment, "commentable", { polymorphic: true });
+    const comment = new PolyComment({ commentable_id: 99, commentable_type: "PolyTarget" });
+    const reflection = (PolyComment as any)._reflectOnAssociation("commentable");
+    const sql = (
+      AssociationScope.scope({ owner: comment, reflection, klass: PolyTarget }) as any
+    ).toSql();
+    // Target side: WHERE poly_targets.id = 99 (the FK value), LIMIT 1.
+    expect(sql).toMatch(/"poly_targets"/);
+    expect(sql).toMatch(/"id"\s*=\s*99/);
+    expect(sql).toMatch(/LIMIT\s+1/);
+  });
+
   it("static scope() routes through this.INSTANCE (subclass dispatch)", async () => {
     const { DisableJoinsAssociationScope } = await import("./disable-joins-association-scope.js");
     expect(DisableJoinsAssociationScope.INSTANCE).toBeInstanceOf(DisableJoinsAssociationScope);

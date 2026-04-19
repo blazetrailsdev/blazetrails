@@ -1,7 +1,9 @@
+import { Table as ArelTable } from "@blazetrails/arel";
 import type { Base } from "../base.js";
 import type { AssociationReflection, AbstractReflection } from "../reflection.js";
 import { isStiSubclass, getStiBase, getInheritanceColumn, descendants } from "../inheritance.js";
 import { CompositePrimaryKeyMismatchError } from "./errors.js";
+import { quoteTableName, quoteColumnName, quote } from "../connection-adapters/abstract/quoting.js";
 
 /**
  * Lambda applied to each FK/type bind value before it reaches the
@@ -37,10 +39,14 @@ export interface AssociationScopeable {
  * `def all_includes; nil; end`.)
  */
 export class ReflectionProxy {
-  readonly reflection: AssociationReflection;
+  // AbstractReflection rather than AssociationReflection because chain
+  // entries can be ThroughReflection / PolymorphicReflection wrappers;
+  // ReflectionProxy only reads structural fields (joinPrimaryKey/Fk,
+  // type, klass, name, scope, scopeFor) that all chain entries provide.
+  readonly reflection: AbstractReflection;
   readonly aliasedTable: unknown;
 
-  constructor(reflection: AssociationReflection, aliasedTable: unknown) {
+  constructor(reflection: AbstractReflection, aliasedTable: unknown) {
     this.reflection = reflection;
     this.aliasedTable = aliasedTable;
   }
@@ -56,9 +62,25 @@ export class ReflectionProxy {
 
   // SimpleDelegator-style forwarding of the attributes AssociationScope
   // reads. Kept explicit instead of a runtime Proxy so TypeScript sees
-  // the shape.
+  // the shape. The `_r` getter centralizes the cast — these fields are
+  // present on every chain entry shape (AssociationReflection,
+  // ThroughReflection, PolymorphicReflection) but not declared on the
+  // AbstractReflection base.
+  private get _r(): {
+    joinPrimaryKey: string | string[];
+    joinForeignKey: string | string[];
+    type?: string | null;
+    klass: typeof Base;
+    name: string;
+    scope?: ((rel: unknown) => unknown) | null;
+    joinPrimaryKeyFor?: (klass?: typeof Base) => string | string[];
+    scopeFor?: (rel: unknown, owner?: unknown) => unknown;
+  } {
+    return this.reflection as unknown as ReturnType<() => ReflectionProxy["_r"]>;
+  }
+
   get joinPrimaryKey(): string | string[] {
-    return this.reflection.joinPrimaryKey;
+    return this._r.joinPrimaryKey;
   }
 
   /**
@@ -68,28 +90,25 @@ export class ReflectionProxy {
    * static `joinPrimaryKey` if the reflection doesn't expose it.
    */
   joinPrimaryKeyFor(klass?: typeof Base): string | string[] {
-    const r = this.reflection as unknown as {
-      joinPrimaryKeyFor?: (klass?: typeof Base) => string | string[];
-    };
-    return typeof r.joinPrimaryKeyFor === "function"
-      ? r.joinPrimaryKeyFor(klass)
-      : this.reflection.joinPrimaryKey;
+    return typeof this._r.joinPrimaryKeyFor === "function"
+      ? this._r.joinPrimaryKeyFor(klass)
+      : this._r.joinPrimaryKey;
   }
 
   get joinForeignKey(): string | string[] {
-    return this.reflection.joinForeignKey;
+    return this._r.joinForeignKey;
   }
 
   get type(): string | null {
-    return this.reflection.type;
+    return this._r.type ?? null;
   }
 
   get klass(): typeof Base {
-    return this.reflection.klass;
+    return this._r.klass;
   }
 
   get name(): string {
-    return this.reflection.name;
+    return this._r.name;
   }
 
   get scope(): ((rel: unknown) => unknown) | undefined {
@@ -244,15 +263,17 @@ export class AssociationScope {
    */
   private _applyScope(scope: unknown, table: string | null, key: string, value: unknown): unknown {
     const w = scope as {
-      where: (c: Record<string, unknown> | string, ...binds: unknown[]) => unknown;
-      modelClassName?: string;
+      where: (c: Record<string, unknown> | unknown) => unknown;
       _modelClass?: { tableName?: string };
     };
     const scopeTable = w._modelClass?.tableName ?? null;
     if (table && scopeTable && table !== scopeTable) {
-      // Table-qualified WHERE: `<joined_table>.<key> = ?`. Used for
-      // through chains where the FK lives on an intermediate table.
-      return w.where(`"${table}"."${key}" = ?`, value);
+      // Table-qualified WHERE for through chains where the FK lives on
+      // an intermediate joined-in table. Use Arel so identifier quoting
+      // and value escaping go through the same path as the rest of the
+      // query — no manual interpolation.
+      const node = new ArelTable(table).get(key).eq(value);
+      return w.where(node);
     }
     return w.where({ [key]: value });
   }
@@ -361,7 +382,7 @@ export class AssociationScope {
       // ARE AssociationReflection in the through case (the through-target
       // hasMany / belongsTo on the through model). Cast for the type
       // shape — the proxy only reads structural fields.
-      chain.push(new ReflectionProxy(refl as AssociationReflection, tableName));
+      chain.push(new ReflectionProxy(refl, tableName));
     }
     return chain;
   }
@@ -410,18 +431,27 @@ export class AssociationScope {
         : aliased && typeof aliased === "object" && typeof aliased.name === "string"
           ? aliased.name
           : (nr.klass?.tableName ?? "");
+    // Build the ON clause with proper identifier quoting (handles
+    // schema-qualified names, embedded quotes, etc.) and Arel-style
+    // value escaping for the polymorphic-type literal. JOIN ON in our
+    // Relation is stored as a SQL string and re-wrapped in
+    // Nodes.SqlLiteral at apply time, so we still produce a string —
+    // but the identifiers/values are escape-safe.
+    const qTable = quoteTableName(table);
+    const qForeignTable = quoteTableName(foreignTable);
     const conditions: string[] = [];
     for (let i = 0; i < joinPks.length; i++) {
-      conditions.push(`"${table}"."${joinPks[i]}" = "${foreignTable}"."${joinFks[i]}"`);
+      conditions.push(
+        `${qTable}.${quoteColumnName(joinPks[i])} = ${qForeignTable}.${quoteColumnName(joinFks[i])}`,
+      );
     }
     let onClause = conditions.join(" AND ");
     if (r.type) {
       // Polymorphic through: filter the JOIN by the next reflection's
-      // klass polymorphic name. For PR 3 we use klass.name; STI base_class
-      // resolution is deferred (matches our existing polymorphic
-      // handling).
+      // klass polymorphic name. STI base_class resolution is deferred
+      // (matches our existing polymorphic handling).
       const nextName = (nextReflection as { klass?: { name?: string } }).klass?.name ?? "";
-      onClause += ` AND "${table}"."${r.type}" = '${nextName.replace(/'/g, "''")}'`;
+      onClause += ` AND ${qTable}.${quoteColumnName(r.type)} = ${quote(nextName)}`;
     }
     return (scope as { joins: (table: string, on: string) => unknown }).joins(
       foreignTable,

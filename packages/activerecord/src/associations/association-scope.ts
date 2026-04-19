@@ -409,10 +409,12 @@ export class AssociationScope {
     scope: unknown,
     reflection: AbstractReflection | ReflectionProxy,
     nextReflection: AbstractReflection | ReflectionProxy,
+    klass?: typeof Base,
   ): unknown {
     const r = reflection as {
       joinPrimaryKey: string | string[];
       joinForeignKey: string | string[];
+      joinPrimaryKeyFor?: (klass?: typeof Base) => string | string[];
       klass?: { tableName?: string };
       type?: string | null;
     };
@@ -422,7 +424,16 @@ export class AssociationScope {
       klass?: { tableName?: string };
       aliasedTable?: string | { name?: string };
     };
-    const joinPks = Array.isArray(r.joinPrimaryKey) ? r.joinPrimaryKey : [r.joinPrimaryKey];
+    // For polymorphic belongsTo sources, reflection.joinPrimaryKey is
+    // hard-coded to "id" — but the resolved sourceType class may use a
+    // different PK. Route through joinPrimaryKeyFor(klass) when the
+    // reflection exposes it (ThroughReflection / BelongsToReflection
+    // both do) so the JOIN uses the right target PK column.
+    const rawJoinPk =
+      typeof r.joinPrimaryKeyFor === "function"
+        ? r.joinPrimaryKeyFor(klass ?? (r.klass as typeof Base | undefined))
+        : r.joinPrimaryKey;
+    const joinPks = Array.isArray(rawJoinPk) ? rawJoinPk : [rawJoinPk];
     const joinFks = Array.isArray(r.joinForeignKey) ? r.joinForeignKey : [r.joinForeignKey];
     if (joinPks.length !== joinFks.length) {
       // Unwrap ReflectionProxy so activeRecord/name come from the
@@ -435,7 +446,19 @@ export class AssociationScope {
       const ownerName = base.activeRecord?.name ?? "<unknown>";
       throw new CompositePrimaryKeyMismatchError(ownerName, name);
     }
-    const table = r.klass?.tableName ?? "";
+    // For polymorphic belongsTo-through with sourceType, r.klass may
+    // throw (polymorphic) or resolve to the wrong class; prefer the
+    // explicit runtime klass passed in when available.
+    let table: string;
+    if (klass && typeof klass.tableName === "string") {
+      table = klass.tableName;
+    } else {
+      try {
+        table = r.klass?.tableName ?? "";
+      } catch {
+        table = "";
+      }
+    }
     // nextReflection may be a ReflectionProxy (with aliasedTable) or a
     // raw reflection; resolve its table name the same way.
     const aliased = nr.aliasedTable;
@@ -496,7 +519,7 @@ export class AssociationScope {
     // `chain.each_cons(2) { |r, nr| next_chain_scope(scope, r, nr) }`
     // (association_scope.rb:128-130).
     for (let i = 0; i < chain.length - 1; i++) {
-      scope = this._nextChainScope(scope, chain[i], chain[i + 1]);
+      scope = this._nextChainScope(scope, chain[i], chain[i + 1], klass);
     }
     // Rails' chain.reverse_each over reflection.constraints (Rails:
     // association_scope.rb:131-156) merges scope-chain items into the

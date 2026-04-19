@@ -293,15 +293,23 @@ function _canRouteThroughViaAssociationScope(
     | { belongsTo?: () => boolean; isPolymorphic?: () => boolean }
     | undefined;
   if (!src) return false;
-  // Polymorphic source (any kind): _nextChainScope reads
-  // reflection.joinPrimaryKey, but BelongsToReflection.joinPrimaryKey
-  // hard-codes "id" for polymorphic — and ThroughReflection.joinPrimaryKey
-  // delegates to its source. If the resolved sourceType class uses a
-  // non-"id" PK, the JOIN emits `target."id" = through."<fk>"` against
-  // a column that doesn't exist. Until per-klass JOIN routing honors
-  // joinPrimaryKeyFor consistently in the chain walker, fall back to
-  // the existing 2-step loaders for ALL polymorphic source reflections.
-  if (typeof src.isPolymorphic === "function" && src.isPolymorphic()) {
+  // Polymorphic has_many / has_one source (rare): the chain walker
+  // would need inversion machinery not present in PR 3c. Polymorphic
+  // belongsTo source WITH sourceType is routed — AssociationScope's
+  // _nextChainScope now uses ThroughReflection#joinPrimaryKeyFor(klass)
+  // so the resolved sourceType class's PK drives the JOIN.
+  if (
+    typeof src.isPolymorphic === "function" &&
+    src.isPolymorphic() &&
+    (typeof src.belongsTo !== "function" || !src.belongsTo())
+  ) {
+    return false;
+  }
+  // Polymorphic belongsTo source requires sourceType to resolve the
+  // target class. Without sourceType the JOIN can't pick a single
+  // target table — fall back to the 2-step loader which handles that
+  // by grouping through records by type.
+  if (typeof src.isPolymorphic === "function" && src.isPolymorphic() && !options.sourceType) {
     return false;
   }
   return true;

@@ -489,6 +489,70 @@ describe("AssociationScope", () => {
     expect(DisableJoinsAssociationScope.INSTANCE).not.toBe(AssociationScope.INSTANCE);
   });
 
+  it("through chain query loads actual records end-to-end (Author -> Memberships -> Tags)", async () => {
+    // Real DB roundtrip: insert records, build the through scope via
+    // AssociationScope, execute it, assert the right rows come back.
+    // Proves the chain-walking machinery isn't just generating valid-
+    // looking SQL — it actually returns the correct records.
+    class IntAuthor extends Base {
+      static {
+        this.attribute("id", "integer");
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class IntMembership extends Base {
+      static {
+        this.attribute("int_author_id", "integer");
+        this.attribute("int_tag_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class IntTag extends Base {
+      declare label: string;
+      static {
+        this.attribute("id", "integer");
+        this.attribute("label", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(IntAuthor);
+    registerModel(IntMembership);
+    registerModel(IntTag);
+    Associations.hasMany.call(IntAuthor, "int_memberships", {
+      className: "IntMembership",
+      foreignKey: "int_author_id",
+    });
+    Associations.hasMany.call(IntAuthor, "int_tags", {
+      className: "IntTag",
+      through: "int_memberships",
+      source: "int_tag",
+    });
+    Associations.belongsTo.call(IntMembership, "int_tag", {
+      className: "IntTag",
+      foreignKey: "int_tag_id",
+    });
+
+    const alice = await IntAuthor.create({ name: "Alice" });
+    const bob = await IntAuthor.create({ name: "Bob" });
+    const ruby = await IntTag.create({ label: "ruby" });
+    const ts = await IntTag.create({ label: "typescript" });
+    const go = await IntTag.create({ label: "go" });
+    await IntMembership.create({ int_author_id: alice.id, int_tag_id: ruby.id });
+    await IntMembership.create({ int_author_id: alice.id, int_tag_id: ts.id });
+    await IntMembership.create({ int_author_id: bob.id, int_tag_id: go.id });
+
+    const reflection = (IntAuthor as any)._reflectOnAssociation("int_tags");
+    const tags: IntTag[] = await (
+      AssociationScope.scope({
+        owner: alice,
+        reflection,
+        klass: reflection.klass,
+      }) as any
+    ).toArray();
+    expect(tags.map((t) => t.label).sort()).toEqual(["ruby", "typescript"]);
+  });
+
   it("hasOne :through chain emits a JOIN with LIMIT 1", () => {
     class HotUser extends Base {
       static {

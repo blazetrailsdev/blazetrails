@@ -413,6 +413,42 @@ describe("AssociationScope", () => {
     expect(sql).toMatch(/LIMIT\s+1/);
   });
 
+  it("polymorphic belongsTo uses runtime klass's primary key (non-id PK)", () => {
+    // BelongsToReflection#joinPrimaryKey hard-codes "id" for polymorphic
+    // associations because the target klass isn't known at definition
+    // time. AssociationScope must route through joinPrimaryKeyFor(klass)
+    // so a target with a non-default PK (e.g. "uuid") gets the right
+    // WHERE column. Regression for Copilot review on PR #618.
+    class UuidTarget extends Base {
+      static {
+        this.attribute("uuid", "string");
+        this.primaryKey = "uuid";
+        this.adapter = adapter;
+      }
+    }
+    class UuidComment extends Base {
+      static {
+        this.attribute("commentable_id", "string");
+        this.attribute("commentable_type", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(UuidTarget);
+    registerModel(UuidComment);
+    Associations.belongsTo.call(UuidComment, "commentable", { polymorphic: true });
+    const comment = new UuidComment({
+      commentable_id: "abc-123",
+      commentable_type: "UuidTarget",
+    });
+    const reflection = (UuidComment as any)._reflectOnAssociation("commentable");
+    const sql = (
+      AssociationScope.scope({ owner: comment, reflection, klass: UuidTarget }) as any
+    ).toSql();
+    // Must WHERE on uuid (the target's actual PK), NOT id.
+    expect(sql).toMatch(/"uuid"\s*=\s*'abc-123'/);
+    expect(sql).not.toMatch(/"id"\s*=/);
+  });
+
   it("static scope() routes through this.INSTANCE (subclass dispatch)", async () => {
     const { DisableJoinsAssociationScope } = await import("./disable-joins-association-scope.js");
     expect(DisableJoinsAssociationScope.INSTANCE).toBeInstanceOf(DisableJoinsAssociationScope);

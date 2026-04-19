@@ -431,7 +431,35 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   private async getClient(): Promise<pg.PoolClient> {
     if (this._client) return this._client;
     if (!this._driverPool) throw new Error("PostgreSQLAdapter: connection is closed");
-    return this._driverPool.connect();
+    const client = await this._driverPool.connect();
+    try {
+      await this._maybeDrainOrphanedPreparedStatements(client);
+    } catch (error) {
+      // The drain failed before we returned the client to the caller,
+      // so the caller has no chance to release it. Discard via
+      // release(err) so node-postgres doesn't put a broken socket back
+      // in the idle pool, then propagate.
+      client.release(error instanceof Error ? error : new Error(String(error)));
+      throw error;
+    }
+    return client;
+  }
+
+  /**
+   * If `client` was tagged for `DEALLOCATE ALL` (by the released-client
+   * `reset()` branch in `clearCacheBang`), drain its server-side
+   * prepared statements before handing it to user code. Centralized
+   * here so EVERY checkout path benefits — `getClient` (non-txn via
+   * `withClient`) and `beginTransaction` both go through this.
+   *
+   * Failure of `DEALLOCATE ALL` propagates: the caller's existing
+   * error path will release the (broken) client with the error so
+   * node-postgres discards it.
+   */
+  private async _maybeDrainOrphanedPreparedStatements(client: pg.PoolClient): Promise<void> {
+    if (!this._clientsNeedingDeallocateAll.has(client)) return;
+    this._clientsNeedingDeallocateAll.delete(client);
+    await client.query("DEALLOCATE ALL");
   }
 
   /**
@@ -754,16 +782,11 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     this._client = await this._driverPool.connect();
     try {
       // Drain any server-side prepared statements that a prior PSCE
-      // event left orphaned on this physical session. The released-
-      // client `reset()` path in `clearCacheBang` couldn't fire
-      // DEALLOCATE because the client was checked back into the pool;
-      // tag-on-reset + drain-on-checkout is the deferred half. If
-      // `DEALLOCATE ALL` itself fails, propagate to the BEGIN catch
-      // below so the (broken) client is discarded with the error.
-      if (this._clientsNeedingDeallocateAll.has(this._client)) {
-        this._clientsNeedingDeallocateAll.delete(this._client);
-        await this._client.query("DEALLOCATE ALL");
-      }
+      // event left orphaned on this physical session (released-client
+      // `reset()` path in `clearCacheBang` tagged it). Failure
+      // propagates to the BEGIN catch below — the broken client is
+      // discarded via `release(err)`.
+      await this._maybeDrainOrphanedPreparedStatements(this._client);
       await this._client.query("BEGIN");
       this._inTransaction = true;
       // Note: do NOT null `_lastReleasedTxnClient` here. After-rollback

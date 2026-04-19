@@ -1,7 +1,13 @@
 import { Node, NodeVisitor } from "./node.js";
 import { Quoted } from "./casted.js";
-import { Attribute as AMAttribute } from "@blazetrails/activemodel";
-import { defaultValue as defaultType } from "@blazetrails/activemodel/type";
+import { Attribute as AMAttribute, ValueType } from "@blazetrails/activemodel";
+
+// Rails memoizes ActiveModel::Type.default_value as `@default_value ||= Value.new`.
+// Mirror that here so we don't allocate a fresh ValueType for every bind.
+let _defaultType: ValueType | null = null;
+function defaultType(): ValueType {
+  return (_defaultType ??= new ValueType());
+}
 
 export class HomogeneousIn extends Node {
   readonly attribute: Node;

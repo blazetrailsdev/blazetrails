@@ -22,6 +22,6 @@ export class UnsignedInteger extends IntegerType {
   // they aren't serializable. Inherited IntegerType.isSerializable only
   // checks the signed range and would return true for small negatives.
   override isSerializable(value: unknown): boolean {
-    return value === null || this.cast(value) !== null;
+    return value == null || this.cast(value) !== null;
   }
 }

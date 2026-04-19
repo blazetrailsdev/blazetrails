@@ -35,6 +35,7 @@ describe("UnsignedIntegerTest", () => {
   it("isSerializable accepts null and non-negative values", () => {
     const t = new UnsignedInteger();
     expect(t.isSerializable(null)).toBe(true);
+    expect(t.isSerializable(undefined)).toBe(true);
     expect(t.isSerializable(0)).toBe(true);
     expect(t.isSerializable(42)).toBe(true);
     expect(t.isSerializable("17")).toBe(true);

@@ -163,6 +163,10 @@ post.comments[0];
 | `model[:id]`     | `model.readAttribute("id")`     | Explicit attribute reading.               |
 | `model[:id] = 1` | `model.writeAttribute("id", 1)` | Explicit attribute writing.               |
 
+Full reference: [**Trails Idioms**](packages/website/docs/guides/idioms.md) —
+async conventions, keyword args → options objects, and the rest of the
+Ruby-to-TypeScript translation table.
+
 ## Packages
 
 **Active focus** — these packages are where development effort is concentrated:
@@ -176,6 +180,11 @@ post.comments[0];
 | `@blazetrails/rack`          | [Rack](https://rack.github.io/)                                         | —         | **98.7%** | Modular web server interface, request/response, middleware |
 
 **Data Layer Parity** (ActiveRecord + Arel + ActiveModel): **90.7% API** | **70.6% Tests**
+
+Per-package deviation guides catalog the places where Trails diverges
+from Rails on purpose (and why): [ActiveRecord](packages/website/docs/guides/activerecord-rails-deviations.md)
+· [ActiveModel](packages/website/docs/guides/activemodel-rails-deviations.md)
+· [Arel](packages/website/docs/guides/arel-rails-deviations.md).
 
 **ActionPack & friends** — started but not the current priority:
 

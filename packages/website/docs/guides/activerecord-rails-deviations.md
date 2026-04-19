@@ -159,6 +159,10 @@ shape works here — pass them alongside driver connection options in
 the single config hash:
 
 ```ts
+import { PostgreSQLAdapter } from "@blazetrails/activerecord/connection-adapters/postgresql-adapter.js";
+import { Mysql2Adapter } from "@blazetrails/activerecord/adapters/mysql2-adapter.js";
+import { SQLite3Adapter } from "@blazetrails/activerecord/connection-adapters/sqlite3-adapter.js";
+
 new PostgreSQLAdapter({
   connectionString: "postgres://localhost/app",
   statementLimit: 500, // default 1000

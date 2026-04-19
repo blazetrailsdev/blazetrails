@@ -585,13 +585,23 @@ export class AssociationScope {
       (reflection as AbstractReflection);
     if (inner instanceof PolymorphicReflection) {
       const constraints = (
-        inner as { constraints?: () => Array<(rel: unknown) => unknown> }
+        inner as { constraints?: () => Array<(...args: unknown[]) => unknown> }
       ).constraints?.();
       if (constraints) {
         let merged = scope;
         for (const c of constraints) {
           if (typeof c !== "function") continue;
-          const evaluated = c(this._buildEntryScope(entryKlass));
+          // Same arity / `this` semantics as AssociationReflection.scopeFor:
+          // 0-arg → call(relation); 1+-arg → call(relation, relation, owner).
+          // Without this binding, a constraint written as
+          // `function () { return this.where(...) }` (the common 0-arg
+          // form Rails uses for scope_for_association) loses the
+          // relation.
+          const entryScope = this._buildEntryScope(entryKlass);
+          const evaluated =
+            c.length === 0
+              ? (c as () => unknown).call(entryScope)
+              : c.call(entryScope, entryScope, owner);
           merged = this._pushScopeIntoRelation(merged, evaluated);
         }
         return merged;

@@ -21,16 +21,11 @@ import {
  */
 export class NamedFunction extends Function {
   readonly name: string;
-  readonly expressions: Node[];
-  readonly distinct: boolean;
-  readonly alias: Node | null;
 
   constructor(name: string, expressions: Node[], aliasName?: string, distinct = false) {
     super(expressions, aliasName ?? null);
     this.name = name;
-    this.expressions = expressions;
     this.distinct = distinct;
-    this.alias = aliasName ? new SqlLiteral(aliasName) : null;
   }
 
   /**

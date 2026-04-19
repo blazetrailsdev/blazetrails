@@ -82,7 +82,9 @@ export class As extends Binary {
     const name =
       this.right instanceof SqlLiteral ? (this.right as SqlLiteral).value : String(this.right);
     if (!cteFactory) {
-      throw new Error("Cte factory not registered — import from @blazetrails/arel");
+      throw new Error(
+        'As.toCte() requires the Cte factory registry. Import from "@blazetrails/arel" instead of deep-importing node classes.',
+      );
     }
     return cteFactory(name, this.left as Node);
   }

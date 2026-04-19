@@ -13,7 +13,7 @@ export class JoinSource extends Binary {
   declare right: Node[];
 
   constructor(left: Node | null, right: Node[] = []) {
-    super(left, right as unknown as Node);
+    super(left, right);
     this.left = left;
     this.right = right;
   }

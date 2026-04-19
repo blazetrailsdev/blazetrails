@@ -1,6 +1,6 @@
 # ActionDispatch: Road to 100% Test Coverage
 
-Current state: **37.3%** (534 matched / 1,432 total Rails tests). 23/60 files matched, 0 misplaced.
+Current state: **30.9%** real (500 matched / 1,620 total Rails tests). 0 stub, 1,120 missing, 713 extra.
 
 Unlike ActiveRecord (which has many `it.skip` stubs to convert), ActionDispatch's gap is entirely **missing tests** — tests that exist in Rails but have no TypeScript counterpart at all. This means the work is about implementing features and writing new test files, not unskipping existing tests.
 

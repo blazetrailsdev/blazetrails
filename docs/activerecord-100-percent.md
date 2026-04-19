@@ -55,25 +55,12 @@ keys in reflection.
 
 Files with methods still missing. Run `api:compare --missing` to see per-method gaps.
 
-| File                                       | Matched | Missing | %   |
-| ------------------------------------------ | ------- | ------- | --- |
-| store.rb                                   | 7       | 5       | 58% |
-| attribute_methods/primary_key.rb           | \*      | \*      | —   |
-| attribute_methods/composite_primary_key.rb | \*      | \*      | —   |
-| enum.rb                                    | \*      | \*      | —   |
-| sanitization.rb                            | \*      | \*      | —   |
-| inheritance.rb                             | 8       | 4       | 67% |
-| autosave_association.rb                    | \*      | \*      | —   |
-| scoping/default.rb                         | \*      | \*      | —   |
-| scoping/named.rb                           | \*      | \*      | —   |
-| locking/optimistic.rb                      | \*      | \*      | —   |
-| counter_cache.rb                           | \*      | \*      | —   |
-| no_touching.rb                             | \*      | \*      | —   |
-| attribute_methods/before_type_cast.rb      | \*      | \*      | —   |
-| attribute_methods/time_zone_conversion.rb  | \*      | \*      | —   |
-
-Rows marked with `*` need rechecking via `api:compare --files` — numbers
-in this doc go stale quickly.
+| File                    | Matched | Missing | %   |
+| ----------------------- | ------- | ------- | --- |
+| store.rb                | 7       | 5       | 58% |
+| inheritance.rb          | 8       | 4       | 67% |
+| autosave_association.rb | 6       | 3       | 67% |
+| counter_cache.rb        | 5       | 1       | 83% |
 
 ## Bigger gaps (not in scope yet)
 

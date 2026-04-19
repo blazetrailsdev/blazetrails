@@ -1,6 +1,6 @@
 # ActionController: Road to 100%
 
-**67.6%** API (192 / 284 methods). 25 of 37 files at 100%.
+**66.4%** API (192 / 289 methods). 25 of 37 files at 100%.
 
 ## Known divergences from Rails
 

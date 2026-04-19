@@ -144,12 +144,18 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
   // not yet probed, `true`/`false` = result.
   private _statisticsHasExpression: boolean | undefined;
 
-  constructor(config: string | mysql.PoolOptions) {
+  constructor(config: string | mysql.PoolOptions, options: { statementLimit?: number } = {}) {
     super();
     if (typeof config === "string") {
       this._driverPool = mysql.createPool({ uri: config });
     } else {
       this._driverPool = mysql.createPool(config);
+    }
+    // Rails reads `config[:statement_limit]` at adapter init; honor
+    // the same shape here. Going through the setter applies the
+    // value's validation (finite non-negative integer).
+    if (options.statementLimit !== undefined) {
+      this.statementLimit = options.statementLimit;
     }
   }
 

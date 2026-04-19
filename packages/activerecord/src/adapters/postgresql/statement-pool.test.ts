@@ -137,5 +137,16 @@ describeIfPg("PostgreSQLAdapter", () => {
       const { PreparedStatementCacheExpired } = await import("../../errors.js");
       expect(new PreparedStatementCacheExpired("test").name).toBe("PreparedStatementCacheExpired");
     });
+
+    it("reads statementLimit from the adapter options hash", () => {
+      const configured = new PostgreSQLAdapter(PG_TEST_URL, { statementLimit: 7 });
+      expect(configured.statementLimit).toBe(7);
+      return configured.close();
+    });
+
+    it("rejects invalid statementLimit at construction time", () => {
+      expect(() => new PostgreSQLAdapter(PG_TEST_URL, { statementLimit: -1 })).toThrow(RangeError);
+      expect(() => new PostgreSQLAdapter(PG_TEST_URL, { statementLimit: 1.5 })).toThrow(RangeError);
+    });
   });
 });

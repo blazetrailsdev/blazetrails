@@ -104,5 +104,16 @@ describeIfMysql("Mysql2Adapter", () => {
       await adapter.close();
       expect(() => pool.clear()).not.toThrow();
     });
+
+    it("reads statementLimit from the adapter options hash", async () => {
+      const configured = new Mysql2Adapter(MYSQL_TEST_URL, { statementLimit: 7 });
+      expect(configured.statementLimit).toBe(7);
+      await configured.close();
+    });
+
+    it("rejects invalid statementLimit at construction time", () => {
+      expect(() => new Mysql2Adapter(MYSQL_TEST_URL, { statementLimit: -1 })).toThrow(RangeError);
+      expect(() => new Mysql2Adapter(MYSQL_TEST_URL, { statementLimit: 1.5 })).toThrow(RangeError);
+    });
   });
 });

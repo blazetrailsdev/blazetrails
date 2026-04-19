@@ -94,12 +94,18 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     }
   }
 
-  constructor(config: string | pg.PoolConfig) {
+  constructor(config: string | pg.PoolConfig, options: { statementLimit?: number } = {}) {
     super();
     if (typeof config === "string") {
       this._driverPool = new pg.Pool({ connectionString: config });
     } else {
       this._driverPool = new pg.Pool(config);
+    }
+    // Rails reads `config[:statement_limit]` at adapter init; honor
+    // the same shape here. Going through the setter applies the
+    // value's validation (finite non-negative integer).
+    if (options.statementLimit !== undefined) {
+      this.statementLimit = options.statementLimit;
     }
   }
 

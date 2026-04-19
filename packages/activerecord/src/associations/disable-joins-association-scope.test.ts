@@ -103,8 +103,8 @@ describe("DisableJoinsAssociationScope", () => {
   it("issues per-step queries (no multi-table JOIN actually emitted to the DB)", async () => {
     // Capture executed SQL via Notifications so we can assert the
     // WHOLE point of DJAS — no JOIN ever hits the wire — instead of
-    // just verifying the records came back.
-    const { Notifications } = await import("@blazetrails/activesupport");
+    // just verifying the records came back. (Uses the top-level
+    // `Notifications` import; no need for a dynamic re-import.)
     const author = await DjsAuthor.create({ name: "A" });
     const post = await DjsPost.create({ djs_author_id: author.id, title: "p" });
     await DjsComment.create({ djs_post_id: post.id, body: "c1" });

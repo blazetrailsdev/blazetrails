@@ -246,11 +246,13 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
    * in-memory).
    */
   // @ts-expect-error — deliberate Rails-fidelity deviation in loaded-chain mode: returns Array, not Relation
-  override limit(value: number): Relation<T> | Promise<T[]> {
+  override limit(value: number | null): Relation<T> | Promise<T[]> {
     if (this._chainWalker) return Relation.prototype.limit.call(this, value) as Relation<T>;
     return (async () => {
       const records = await this.toArray();
-      return records.slice(0, value);
+      // null = "clear the limit" (matches Relation#limit). Without
+      // this guard, `records.slice(0, null)` returns an empty array.
+      return value === null ? records : records.slice(0, value);
     })();
   }
 

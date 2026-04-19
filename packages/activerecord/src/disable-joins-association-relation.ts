@@ -91,18 +91,30 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
     const merged = (walkerResult as unknown as { merge: (o: unknown) => Relation<T> }).merge(this);
     // Explicit copies for state Relation#merge doesn't propagate.
     const overlay = this as unknown as {
+      _orderClauses?: unknown[];
       _rawOrderClauses?: unknown[];
       _isNone?: boolean;
     };
     const target = merged as unknown as {
+      _orderClauses?: unknown[];
       _rawOrderClauses?: unknown[];
       _isNone?: boolean;
     };
-    if ((overlay._rawOrderClauses?.length ?? 0) > 0) {
-      target._rawOrderClauses = [
-        ...(target._rawOrderClauses ?? []),
-        ...(overlay._rawOrderClauses ?? []),
-      ];
+    const overlayRaw = overlay._rawOrderClauses ?? [];
+    if (overlayRaw.length > 0) {
+      // `inOrderOf(column, values)` is the only `_rawOrderClauses`
+      // producer today; it CLEARS `_orderClauses` to express
+      // "replace existing order with this CASE order"
+      // (relation.ts:610). When overlay carries a raw clause but no
+      // parsed orders, treat it as an order-reset and clear the
+      // walker's `_orderClauses` so the raw CASE wins. Without this,
+      // walker's existing orders would still apply, with the raw
+      // CASE only acting as a tiebreaker — contradicting the
+      // caller's `inOrderOf` intent.
+      if ((overlay._orderClauses?.length ?? 0) === 0) {
+        target._orderClauses = [];
+      }
+      target._rawOrderClauses = [...(target._rawOrderClauses ?? []), ...overlayRaw];
     }
     if (overlay._isNone) target._isNone = true;
     return merged;

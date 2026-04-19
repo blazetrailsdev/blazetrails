@@ -130,13 +130,33 @@ function shortName(fqn: string | undefined | null): string | null {
   return parts[parts.length - 1] || null;
 }
 
+// Trails rename prefixes/suffixes used to disambiguate when a Rails class
+// name would collide with a built-in, a TS keyword, or another identifier
+// already in scope. Each entry lets `<ruby>` match `<prefix><ruby>` /
+// `<ruby><suffix>` on the TS side so the inheritance check sees through the
+// alias.
+// - `Abstract<X>`: parent import-aliased so an adapter can shadow its name
+//   (e.g. PG's `TableDefinition extends TableDefinition`).
+// - `Base<X>`: TS-added intermediate base class (`BaseLogSubscriber`,
+//   `BaseAbsenceValidator`) — Rails has a single class Trails splits in two.
+// - `ActiveModel<X>`: ActiveRecord's `Type::Date` collides with the JS
+//   `Date` constructor, so we import the ActiveModel type aliased.
+// - `<X>Type` suffix: Trails suffixes attribute-type classes to avoid
+//   clashing with the value they represent (e.g. `Json` value vs
+//   `JsonType` the cast type).
+const TS_PARENT_ALIASES: { transform: (ruby: string) => string }[] = [
+  { transform: (r) => `Abstract${r}` },
+  { transform: (r) => `Base${r}` },
+  { transform: (r) => `ActiveModel${r}` },
+  { transform: (r) => `${r}Type` },
+];
+
 function nameMatches(rubyName: string, tsName: string): boolean {
   if (rubyName === tsName) return true;
   if (RUBY_ERROR_BUILTINS.has(rubyName) && tsName === "Error") return true;
-  // Trails convention: when a subclass in one adapter shadows its parent's
-  // name (e.g. PG's `TableDefinition extends TableDefinition`), the parent is
-  // import-aliased as `Abstract<Name>`. Treat the alias as the same class.
-  if (tsName === `Abstract${rubyName}`) return true;
+  for (const { transform } of TS_PARENT_ALIASES) {
+    if (tsName === transform(rubyName)) return true;
+  }
   return false;
 }
 

@@ -1,7 +1,13 @@
 import { Table as ArelTable } from "@blazetrails/arel";
 import type { Base } from "../base.js";
 import type { AssociationReflection, AbstractReflection } from "../reflection.js";
-import { isStiSubclass, getStiBase, getInheritanceColumn, descendants } from "../inheritance.js";
+import {
+  isStiSubclass,
+  getStiBase,
+  getInheritanceColumn,
+  descendants,
+  polymorphicName,
+} from "../inheritance.js";
 import { CompositePrimaryKeyMismatchError } from "./errors.js";
 import { quoteTableName, quoteColumnName, quote } from "../connection-adapters/abstract/quoting.js";
 
@@ -202,13 +208,14 @@ export class AssociationScope {
     const fks = Array.isArray(joinFk) ? joinFk : joinFk ? [joinFk] : [];
     for (const fk of fks) binds.push(owner.readAttribute(fk));
     if ((last as { type?: string | null }).type) {
-      binds.push((owner.constructor as typeof Base).name);
+      binds.push(polymorphicName(owner.constructor as typeof Base));
     }
     for (let i = 0; i < chain.length - 1; i++) {
       const refl = chain[i];
       const next = chain[i + 1];
       if ((refl as { type?: string | null }).type) {
-        binds.push((next as { klass?: { name: string } }).klass?.name ?? null);
+        const nextKlass = (next as { klass?: typeof Base }).klass;
+        binds.push(nextKlass ? polymorphicName(nextKlass) : null);
       }
     }
     return binds;
@@ -351,7 +358,9 @@ export class AssociationScope {
       scope = this._applyScope(scope, table, joinPks[i], value);
     }
     if (r.type) {
-      const polyName = this._transformValue((owner.constructor as typeof Base).name);
+      // Rails: `owner.class.polymorphic_name` (returns base_class.name
+      // for STI subclasses) routed through `transform_value`.
+      const polyName = this._transformValue(polymorphicName(owner.constructor as typeof Base));
       scope = this._applyScope(scope, table, r.type, polyName);
     }
     return scope;
@@ -448,10 +457,13 @@ export class AssociationScope {
     let onClause = conditions.join(" AND ");
     if (r.type) {
       // Polymorphic through: filter the JOIN by the next reflection's
-      // klass polymorphic name. STI base_class resolution is deferred
-      // (matches our existing polymorphic handling).
-      const nextName = (nextReflection as { klass?: { name?: string } }).klass?.name ?? "";
-      onClause += ` AND ${qTable}.${quoteColumnName(r.type)} = ${quote(nextName)}`;
+      // klass polymorphic name. Rails: `transform_value(next_reflection
+      // .klass.polymorphic_name)` (association_scope.rb:91-93). Routes
+      // through both `polymorphicName` (returns base_class.name for
+      // STI) and the value-transformation lambda.
+      const nextKlass = (nextReflection as { klass?: typeof Base }).klass;
+      const nextName = nextKlass ? polymorphicName(nextKlass) : "";
+      onClause += ` AND ${qTable}.${quoteColumnName(r.type)} = ${quote(this._transformValue(nextName))}`;
     }
     return (scope as { joins: (table: string, on: string) => unknown }).joins(
       foreignTable,

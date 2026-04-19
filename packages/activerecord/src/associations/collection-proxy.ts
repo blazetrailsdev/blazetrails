@@ -32,10 +32,9 @@ import {
   resolveModel,
   fireAssocCallbacks,
   buildHasManyRelation,
-  computeHasManyWhere,
   loadHasMany,
-  _setCollectionProxyCtor,
 } from "../associations.js";
+import { _setCollectionProxyCtor } from "./collection-proxy-slot.js";
 
 // @ts-expect-error Declaration merging with `class CollectionProxy extends
 //   Relation` propagates Relation's method types into this interface.
@@ -250,61 +249,72 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     this._assocName = assocName;
     this._assocDef = assocDef;
 
-    // Seed the proxy's Relation state so direct Relation calls
-    // (`cp.toSql()`, `cp.where(...)`, `cp.toArray()` via Relation's path)
-    // scope to the owner — matches Rails, where CollectionProxy IS the
-    // scoped Relation. Two paths:
+    // Seed the proxy's inherited Relation state so direct Relation calls
+    // (`cp.toSql()`, `cp.where(...)`, `cp.toArray()`) scope to the owner
+    // — matches Rails, where CollectionProxy IS the scoped Relation.
     //
-    // - Non-through (hasMany / HABTM): seed the FK where-clause, then
-    //   apply any `scope:` callback. The callback returns a new relation
-    //   in our codebase, so capture it and copy state back into `this`.
-    //   Missing owner PK → `_isNone = true` (Rails' NullRelation fallback).
-    // - Through: delegate to `_buildThroughScope()`, which builds the
-    //   subquery/join relation, then copy its state onto `this` so the
-    //   inherited Relation methods see the same scope as the old
-    //   `scope()` path.
+    // Non-through path delegates to `buildHasManyRelation()` (same
+    // helper used by `scope()`, `countHasMany()`, eager loaders) so CP
+    // gets identical semantics: the relation starts from
+    // `targetModel.all()` (default scope applied), is scope-proxied
+    // (so `options.scope` callbacks can call named scopes / generated
+    // methods on it), and composite-PK mismatches throw
+    // `CompositePrimaryKeyMismatchError`. State is then copied onto
+    // `this` so the inherited Relation methods observe the same scope.
     //
-    // Through scope-building reads adapter schema, which can fail on
-    // adapter-less test fixtures that still expect bare CP construction
-    // to succeed. Wrap in try/catch — a later `scope()` call will surface
-    // the real error.
+    // Through path copies state from `_buildThroughScope()`. Config
+    // errors (missing through assoc, unregistered target model) are
+    // validated upfront; only adapter/schema failures fall to the
+    // fail-closed `_isNone` path.
+    const ctor = record.constructor as typeof Base;
     const proxySelf = this as unknown as {
       _isNone: boolean;
-      whereBang: (c: Record<string, unknown>) => unknown;
       _copyStateFrom: (other: Relation<T>) => void;
     };
     if (assocDef.options.through) {
+      // Config validation FIRST, outside the try — missing through
+      // association or unregistered target model are deterministic
+      // bugs that must surface immediately, not silently fall to
+      // `_isNone`. The try only wraps the schema/adapter-dependent
+      // parts (join resolution, subquery build).
+      const ownerAssociations: AssociationDefinition[] =
+        (ctor as unknown as { _associations?: AssociationDefinition[] })._associations ?? [];
+      const throughAssoc = ownerAssociations.find((a) => a.name === assocDef.options.through);
+      if (!throughAssoc) {
+        throw new Error(
+          `Through association "${assocDef.options.through}" not found on ${ctor.name}`,
+        );
+      }
+      resolveModel(className); // throws if the target model isn't registered
       try {
         const throughRel = this._buildThroughScope() as Relation<T>;
         proxySelf._copyStateFrom(throughRel);
       } catch {
-        // `_buildThroughScope()` can fail during CP construction when
-        // the adapter/schema isn't ready yet (common in test fixtures
-        // that construct a bare proxy before migrations run). Fail
-        // CLOSED: mark the inherited Relation state as `none` so
-        // `cp.where(...).toArray()` returns [] instead of silently
-        // querying the entire target table. A later `scope()` call
-        // rebuilds the through scope and surfaces the real error if
-        // the adapter is still broken.
+        // Config is valid — this path only fires for adapter/schema
+        // failures (e.g. fixture constructs a proxy before migrations
+        // run). Fail CLOSED so `cp.where(...).toArray()` returns []
+        // rather than silently querying the full target table. A
+        // later `scope()` call rebuilds and surfaces the real error
+        // if the adapter is still broken.
         proxySelf._isNone = true;
       }
     } else {
-      const conditions = computeHasManyWhere(record, assocName, assocDef.options);
-      if (conditions === null) {
+      // Build via `buildHasManyRelation` so CP's inherited Relation
+      // state matches `scope()` / direct Relation callers: default
+      // scope from `targetModel.all()` is applied, the relation is
+      // scope-proxied (so `options.scope` can call named scopes /
+      // generated methods on it), and composite-PK validation runs.
+      // Then `_copyStateFrom` onto `this`. Missing owner PK →
+      // `_isNone = true` (Rails' NullRelation fallback).
+      const seedRel = buildHasManyRelation(
+        record,
+        assocName,
+        assocDef.options,
+      ) as Relation<T> | null;
+      if (seedRel === null) {
         proxySelf._isNone = true;
       } else {
-        proxySelf.whereBang(conditions);
-        if (assocDef.options.scope) {
-          const scoped = assocDef.options.scope(this as unknown as Relation<T>);
-          // Scope callbacks are written in the codebase as
-          // `(rel) => rel.where(...).order(...)` — they CLONE the input
-          // relation and return a new one. We must copy state back onto
-          // `this` so the inherited Relation methods observe the scoped
-          // where/order/limit/etc.
-          if (scoped && scoped !== (this as unknown)) {
-            proxySelf._copyStateFrom(scoped);
-          }
-        }
+        proxySelf._copyStateFrom(seedRel);
       }
     }
 
@@ -1179,6 +1189,12 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   }
 
   override reset(): this {
+    // Call Relation.reset() so inherited query state (_records,
+    // _loaded, _loadToken, _loadAsyncPromise) is cleared alongside the
+    // association-specific target cache. Without super, callers using
+    // Relation#load() / Relation#loadAsync() patterns on the proxy
+    // would see stale results after reset.
+    super.reset();
     this._targetLoaded = false;
     this._target = [];
     return this;

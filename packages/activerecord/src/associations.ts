@@ -1,22 +1,10 @@
 import type { Base } from "./base.js";
 import { Table as ArelTable } from "@blazetrails/arel";
 import type { CollectionProxy, AssociationProxy } from "./associations/collection-proxy.js";
-
-// Late-bound CollectionProxy constructor. We can't value-import CP at
-// module init because CP now `extends Relation`, and the cycle
-// (associations → CP → Relation → Base → associations) would read the
-// partial associations module mid-load. Registered by collection-proxy.ts
-// at the bottom of its module.
-type _CPCtor = new <T extends Base>(
-  record: Base,
-  assocName: string,
-  assocDef: AssociationDefinition,
-) => CollectionProxy<T>;
-let _CollectionProxyCtor: _CPCtor | undefined;
-/** @internal */
-export function _setCollectionProxyCtor(ctor: _CPCtor): void {
-  _CollectionProxyCtor = ctor;
-}
+import { _CollectionProxyCtor } from "./associations/collection-proxy-slot.js";
+// Re-export the slot's setter so the package entry and other internal
+// callers don't need to import the slot module directly.
+export { _setCollectionProxyCtor } from "./associations/collection-proxy-slot.js";
 import { StrictLoadingViolationError, ConfigurationError } from "./errors.js";
 import {
   AssociationNotFoundError,
@@ -1720,7 +1708,9 @@ export function association<T extends Base = Base>(
         "can run and break the associations/collection-proxy/relation/base cycle.",
     );
   }
-  const proxy = new _CollectionProxyCtor<T>(record, assocName, assocDef);
+  const proxy = new _CollectionProxyCtor(record, assocName, assocDef) as CollectionProxy<T> & {
+    _hydrateFromPreload: (records: T[]) => void;
+  };
 
   // Hydrate from preloaded data if available
   const preloaded = record._preloadedAssociations?.get(assocName);

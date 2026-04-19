@@ -110,6 +110,30 @@ describe("DisableJoinsAssociationScope", () => {
     expect((records[0] as any).body).toBe("c1");
   });
 
+  it("chained .where() on the deferred DJAR composes into the walker result", async () => {
+    // Regression: a deferred DJAR's chained query state (wheres,
+    // orders, etc.) was silently dropped because the walker built a
+    // fresh relation that didn't see anything on the chained DJAR.
+    // _loadThroughViaDisableJoinsScope hits this when `options.scope`
+    // adds .where on top of the DJAS-returned relation.
+    const author = await DjsAuthor.create({ name: "A" });
+    const post = await DjsPost.create({ djs_author_id: author.id, title: "p" });
+    await DjsComment.create({ djs_post_id: post.id, body: "include-me" });
+    await DjsComment.create({ djs_post_id: post.id, body: "exclude-me" });
+
+    const reflection = (DjsAuthor as any)._reflectOnAssociation("djsComments");
+    const built = DisableJoinsAssociationScope.INSTANCE.scope({
+      owner: author,
+      reflection,
+      klass: reflection.klass,
+    }) as any;
+    // Chain a where() onto the deferred DJAR — this is what
+    // options.scope(rel) does in production.
+    const filtered = built.where({ body: "include-me" });
+    const records = await filtered.toArray();
+    expect(records.map((r: any) => r.body)).toEqual(["include-me"]);
+  });
+
   it("loadHasMany routes disableJoins:true through DJAS", async () => {
     const author = await DjsAuthor.create({ name: "A" });
     const post = await DjsPost.create({ djs_author_id: author.id, title: "p" });

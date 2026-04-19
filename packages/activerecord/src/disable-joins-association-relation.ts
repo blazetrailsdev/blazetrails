@@ -67,6 +67,28 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
     return new DisableJoinsAssociationRelation<T>(klass, "", [], chainWalker);
   }
 
+  /**
+   * Compose any query state chained onto this deferred DJAR (wheres,
+   * orders, limit, offset) onto the walker's result relation.
+   * Without this, `DJAS.scope(...).where(...)` would silently drop
+   * the chained where because the walker builds a fresh relation
+   * that doesn't see anything stored on `this`.
+   *
+   * Implementation: Relation#merge already does the right thing for
+   * combining wheres/orders/etc. We treat `this` as the overlay and
+   * merge it onto the walker's result.
+   */
+  private _composeChainedState(walkerResult: Relation<T>): Relation<T> {
+    const hasOverlay =
+      (this._whereClause?.predicates?.length ?? 0) > 0 ||
+      ((this as unknown as { _orderClauses?: unknown[] })._orderClauses?.length ?? 0) > 0 ||
+      ((this as unknown as { _rawOrderClauses?: unknown[] })._rawOrderClauses?.length ?? 0) > 0 ||
+      (this as unknown as { _limitValue?: number | null })._limitValue != null ||
+      (this as unknown as { _offsetValue?: number | null })._offsetValue != null;
+    if (!hasOverlay) return walkerResult;
+    return (walkerResult as unknown as { merge: (o: unknown) => Relation<T> }).merge(this);
+  }
+
   override async ids(): Promise<unknown[]> {
     if (this._chainWalker) {
       // Deferred mode — load via the walker, then read PKs off the
@@ -100,9 +122,18 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
       // Memoize the walk + load so repeated toArray() calls don't
       // re-execute the chain (e.g. via Relation thenable shortcuts).
       if (!this._walkerPromise) {
+        const walker = this._chainWalker;
+        // Snapshot the chained query state from `this` (wheres /
+        // orders / limit / etc) so post-chain operations like
+        // `DJAS.scope(...).where({title: 'foo'})` actually filter the
+        // walker's result. Without this, chained wheres would be
+        // silently dropped — _loadThroughViaDisableJoinsScope routes
+        // `options.scope(rel)` through here for example.
+        const overlay = this;
         this._walkerPromise = (async () => {
-          const { relation } = await this._chainWalker!();
-          return relation.toArray();
+          const { relation } = await walker();
+          const merged = overlay._composeChainedState(relation);
+          return merged.toArray();
         })();
       }
       return this._walkerPromise;

@@ -236,10 +236,16 @@ function reorderBang(
 
 /**
  * Valid argument values for `unscope`. The TS API is camelCase only —
- * no Rails snake_case aliases. Mirrors Rails' VALID_UNSCOPING_VALUES set
- * (where, select, group, order, lock, limit, offset, joins,
- *  left_outer_joins, includes, from, readonly, having, optimizer_hints,
- *  annotate) translated to TS naming.
+ * no Rails snake_case aliases. Mirrors Rails' VALID_UNSCOPING_VALUES
+ * set (relation/query_methods.rb), camelCased:
+ *
+ *   where, select, group, order, lock, limit, offset, joins,
+ *   left_outer_joins, includes, preload, eager_load, from, readonly,
+ *   having, optimizer_hints, annotate, create_with
+ *
+ * → camelCase: where, select, group, order, lock, limit, offset,
+ *   joins, leftOuterJoins, includes, preload, eagerLoad, from,
+ *   readonly, having, optimizerHints, annotate, createWith.
  */
 export type UnscopeType =
   | "where"

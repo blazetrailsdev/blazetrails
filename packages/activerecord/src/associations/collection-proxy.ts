@@ -114,10 +114,24 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     offsetValue: number | null;
     selectColumns: number | null;
     isDistinct: boolean;
+    distinctOnColumns: number;
     groupColumns: number;
     joinClauses: number;
     rawJoins: number;
     isNone: boolean;
+    // SQL-shape fields added in round 5 to close divergence blind spots
+    // (fromBang / withBang / withRecursiveBang / lockBang / annotate /
+    // optimizerHints / references / eagerLoad / includes / preload).
+    lockValue: string | null;
+    ctes: number;
+    fromClause: unknown;
+    annotations: number;
+    optimizerHints: number;
+    referencesValues: number;
+    eagerLoadAssociations: number;
+    includesAssociations: number;
+    preloadAssociations: number;
+    setOperation: unknown;
   };
 
   get loaded(): boolean {
@@ -307,18 +321,13 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         );
       }
       resolveModel(className); // throws if the target model isn't registered
-      try {
-        const throughRel = this._buildThroughScope() as Relation<T>;
-        proxySelf._copyStateFrom(throughRel);
-      } catch {
-        // Config is valid — this path only fires for adapter/schema
-        // failures (e.g. fixture constructs a proxy before migrations
-        // run). Fail CLOSED so `cp.where(...).toArray()` returns []
-        // rather than silently querying the full target table. A
-        // later `scope()` call rebuilds and surfaces the real error
-        // if the adapter is still broken.
-        proxySelf.noneBang();
-      }
+      // No try/catch: if `_buildThroughScope()` throws, the caller
+      // sees the real error (composite-PK mismatch, join resolution
+      // failure, etc.) instead of a silently `none`-coerced proxy.
+      // Previous fail-closed catch swallowed deterministic config
+      // errors — worse than letting construction fail.
+      const throughRel = this._buildThroughScope() as Relation<T>;
+      proxySelf._copyStateFrom(throughRel);
     } else {
       // Build via `buildHasManyRelation` so CP's inherited Relation
       // state matches `scope()` / direct Relation callers: default
@@ -372,10 +381,21 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       _offsetValue: number | null;
       _selectColumns: unknown[] | null;
       _isDistinct: boolean;
+      _distinctOnColumns: unknown[];
       _groupColumns: unknown[];
       _joinClauses: unknown[];
       _rawJoins: unknown[];
       _isNone: boolean;
+      _lockValue: string | null;
+      _ctes: unknown[];
+      _fromClause: unknown;
+      _annotations: unknown[];
+      _optimizerHints: unknown[];
+      _referencesValues: unknown[];
+      _eagerLoadAssociations: unknown[];
+      _includesAssociations: unknown[];
+      _preloadAssociations: unknown[];
+      _setOperation: unknown;
     };
     return {
       wherePredicates: s._whereClause.predicates.length,
@@ -386,10 +406,21 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       offsetValue: s._offsetValue,
       selectColumns: s._selectColumns ? s._selectColumns.length : null,
       isDistinct: s._isDistinct,
+      distinctOnColumns: s._distinctOnColumns.length,
       groupColumns: s._groupColumns.length,
       joinClauses: s._joinClauses.length,
       rawJoins: s._rawJoins.length,
       isNone: s._isNone,
+      lockValue: s._lockValue,
+      ctes: s._ctes.length,
+      fromClause: s._fromClause,
+      annotations: s._annotations.length,
+      optimizerHints: s._optimizerHints.length,
+      referencesValues: s._referencesValues.length,
+      eagerLoadAssociations: s._eagerLoadAssociations.length,
+      includesAssociations: s._includesAssociations.length,
+      preloadAssociations: s._preloadAssociations.length,
+      setOperation: s._setOperation,
     };
   }
 
@@ -397,20 +428,10 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   private _relationStateDiverged(): boolean {
     const now = this._captureStateSignature();
     const seed = this._seedSignature;
-    return (
-      now.wherePredicates !== seed.wherePredicates ||
-      now.havingPredicates !== seed.havingPredicates ||
-      now.orderClauses !== seed.orderClauses ||
-      now.rawOrderClauses !== seed.rawOrderClauses ||
-      now.limitValue !== seed.limitValue ||
-      now.offsetValue !== seed.offsetValue ||
-      now.selectColumns !== seed.selectColumns ||
-      now.isDistinct !== seed.isDistinct ||
-      now.groupColumns !== seed.groupColumns ||
-      now.joinClauses !== seed.joinClauses ||
-      now.rawJoins !== seed.rawJoins ||
-      now.isNone !== seed.isNone
-    );
+    for (const key of Object.keys(seed) as (keyof typeof seed)[]) {
+      if (now[key] !== seed[key]) return true;
+    }
+    return false;
   }
 
   /**

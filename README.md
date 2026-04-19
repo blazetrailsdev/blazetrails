@@ -2,7 +2,7 @@
 
 TypeScript packages that mirror the Ruby on Rails API.
 
-The goal is **100% API compatible with Rails**, matched behavior **test for test** against the Rails source. If you can read the [Rails API docs](https://api.rubyonrails.org/), you already know how to use this — class names, method signatures, and behavior are designed to match Rails as closely as TypeScript allows, while adding the type safety that Ruby can't.
+The goal is **100% API compatible with Rails**, with behavior matched **test for test** against the Rails source. If you can read the [Rails API docs](https://api.rubyonrails.org/), you already know how to use this — class names, method signatures, and behavior are designed to match Rails as closely as TypeScript allows, while adding the type safety that Ruby can't.
 
 ## Zero-declare models — `trails-tsc`
 
@@ -31,14 +31,14 @@ class Post extends Base {
 }
 
 const posts = await Post.published()
-  .where({ authorId: 3 })
-  .order("createdAt", "desc")
-  .includes("author") // eager-load so .author reads below don't lazy-fire
+  .where({ author_id: 3 })
+  .order("created_at", "desc")
+  .includes("author") // preloads .author so the sync read below doesn't trip strict loading
   .limit(10); // Post[]
 
 for (const post of posts) {
   post.title; // string (from the schema)
-  post.publishedAt; // Date | null (from the schema)
+  post.published_at; // Date | null (from the schema)
   post.author; // Author | null (sync; throws under strict loading if not preloaded)
   await post.comments.where({ flagged: false }); // chainable, awaitable
 }
@@ -46,12 +46,11 @@ for (const post of posts) {
 
 Point it at your schema file and switch your typecheck script:
 
-```jsonc
-// package.json
+```json
 {
   "scripts": {
-    "typecheck": "trails-tsc --schema db/schema-columns.json --noEmit",
-  },
+    "typecheck": "trails-tsc --schema db/schema-columns.json --noEmit"
+  }
 }
 ```
 
@@ -113,7 +112,7 @@ class Post extends Base {
 Post.published()
   .authoredBy(currentUser)
   .includes("comments", "tags")
-  .order("createdAt", "desc")
+  .order("created_at", "desc")
   .limit(20);
 
 // Mutations
@@ -130,7 +129,7 @@ await post.comments.createBang({ body: "👋" });
 const post = await Post.find(1);
 
 // chainable
-const recent = await post.comments.where({ flagged: false }).order("createdAt").limit(10);
+const recent = await post.comments.where({ flagged: false }).order("created_at").limit(10);
 
 // awaitable
 const all = await post.comments;

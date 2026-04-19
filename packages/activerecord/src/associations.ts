@@ -6,6 +6,7 @@ import {
   DeleteRestrictionError,
   InverseOfAssociationNotFoundError,
   HasOneThroughNestedAssociationsAreReadonly,
+  CompositePrimaryKeyMismatchError,
 } from "./associations/errors.js";
 import { ForeignAssociation } from "./associations/foreign-association.js";
 import { AssociationScope } from "./associations/association-scope.js";
@@ -345,6 +346,9 @@ export async function loadBelongsTo(
     // Inline fallback: no reflection registered.
     if (Array.isArray(foreignKey)) {
       const pkCols = Array.isArray(primaryKey) ? primaryKey : [primaryKey];
+      if (pkCols.length !== foreignKey.length) {
+        throw new CompositePrimaryKeyMismatchError(ctor.name, assocName);
+      }
       const conditions: Record<string, unknown> = {};
       for (let i = 0; i < foreignKey.length; i++) {
         conditions[pkCols[i]] = record.readAttribute(foreignKey[i]);
@@ -414,12 +418,14 @@ export async function loadHasOne(
           ? primaryKey.map((col: string) => `${underscore(ctor.name)}_${col}`)
           : `${underscore(ctor.name)}_id`));
 
+  // Polymorphic `:as` doesn't model composite owner-PK or composite
+  // FK in Rails. Reject explicitly so the caller gets a clear error
+  // rather than `readAttribute(undefined)` building a broken WHERE.
+  if (options.as && (Array.isArray(primaryKey) || Array.isArray(foreignKey))) {
+    throw new CompositePrimaryKeyMismatchError(ctor.name, assocName);
+  }
   // Null-PK short-circuit: avoid a query when the owner's PK is missing.
-  const pkCheckCols = options.as
-    ? [primaryKey as string]
-    : Array.isArray(primaryKey)
-      ? primaryKey
-      : [primaryKey as string];
+  const pkCheckCols = Array.isArray(primaryKey) ? primaryKey : [primaryKey as string];
   for (const pk of pkCheckCols) {
     const v = record.readAttribute(pk);
     if (v === null || v === undefined) return null;
@@ -446,6 +452,9 @@ export async function loadHasOne(
     // Inline fallback: no reflection registered.
     if (Array.isArray(foreignKey)) {
       const pkCols = Array.isArray(primaryKey) ? primaryKey : [primaryKey];
+      if (pkCols.length !== foreignKey.length) {
+        throw new CompositePrimaryKeyMismatchError(ctor.name, assocName);
+      }
       const conditions: Record<string, unknown> = {};
       for (let i = 0; i < foreignKey.length; i++) {
         conditions[foreignKey[i]] = record.readAttribute(pkCols[i]);
@@ -586,14 +595,16 @@ export async function loadHasMany(
           ? primaryKey.map((col: string) => `${underscore(ctor.name)}_${col}`)
           : `${underscore(ctor.name)}_id`));
 
+  // Polymorphic `:as` doesn't model composite owner-PK or composite
+  // FK in Rails. Reject explicitly so the caller gets a clear error
+  // rather than `readAttribute(undefined)` building a broken WHERE.
+  if (options.as && (Array.isArray(primaryKey) || Array.isArray(foreignKey))) {
+    throw new CompositePrimaryKeyMismatchError(ctor.name, assocName);
+  }
   // Null-FK short-circuit: avoid a query when the owner's PK value is
   // missing (unsaved record). Rails would WHERE on null and return [];
   // we skip the roundtrip.
-  const fkCheckPks = options.as
-    ? [primaryKey as string]
-    : Array.isArray(primaryKey)
-      ? primaryKey
-      : [primaryKey as string];
+  const fkCheckPks = Array.isArray(primaryKey) ? primaryKey : [primaryKey as string];
   for (const pk of fkCheckPks) {
     const v = record.readAttribute(pk);
     if (v === null || v === undefined) return [];
@@ -632,6 +643,9 @@ export async function loadHasMany(
     // Inline fallback: no reflection (lower-level test helpers).
     if (Array.isArray(foreignKey)) {
       const pkCols = Array.isArray(primaryKey) ? primaryKey : [primaryKey];
+      if (pkCols.length !== foreignKey.length) {
+        throw new CompositePrimaryKeyMismatchError(ctor.name, assocName);
+      }
       const conditions: Record<string, unknown> = {};
       for (let i = 0; i < foreignKey.length; i++) {
         conditions[foreignKey[i]] = record.readAttribute(pkCols[i]);

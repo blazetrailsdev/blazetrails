@@ -413,6 +413,38 @@ describe("AssociationScope", () => {
     expect(sql).toMatch(/LIMIT\s+1/);
   });
 
+  it("loadHasMany rejects composite primary key with :as polymorphic", async () => {
+    // Rails doesn't support polymorphic :as combined with composite
+    // owner PK / composite FK — the polymorphic FK column is a single
+    // <as>_id by convention. Loaders must throw fast rather than
+    // silently building a broken WHERE via readAttribute(undefined).
+    const { loadHasMany, CompositePrimaryKeyMismatchError } = await import("../index.js");
+    class CpkAsOwner extends Base {
+      static {
+        this.attribute("a", "integer");
+        this.attribute("b", "integer");
+        this.primaryKey = ["a", "b"];
+        this.adapter = adapter;
+      }
+    }
+    class CpkAsTarget extends Base {
+      static {
+        this.attribute("commentable_id", "integer");
+        this.attribute("commentable_type", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(CpkAsOwner);
+    registerModel(CpkAsTarget);
+    const owner = new CpkAsOwner({ a: 1, b: 2 });
+    await expect(
+      loadHasMany(owner, "comments", {
+        className: "CpkAsTarget",
+        as: "commentable",
+      }),
+    ).rejects.toThrow(CompositePrimaryKeyMismatchError);
+  });
+
   it("polymorphic belongsTo uses runtime klass's primary key (non-id PK)", () => {
     // BelongsToReflection#joinPrimaryKey hard-codes "id" for polymorphic
     // associations because the target klass isn't known at definition

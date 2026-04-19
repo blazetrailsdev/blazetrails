@@ -128,5 +128,30 @@ describeIfMysql("Mysql2Adapter", () => {
         RangeError,
       );
     });
+
+    it("rejects non-boolean preparedStatements at construction time and via assignment", () => {
+      // Mirror coverage to PG's statement-pool tests — without an
+      // explicit guard test the runtime TypeError could regress
+      // silently when adapter options are wired.
+      expect(
+        () =>
+          new Mysql2Adapter({
+            uri: MYSQL_TEST_URL,
+            preparedStatements: "false" as unknown as boolean,
+          }),
+      ).toThrow(TypeError);
+      expect(
+        () =>
+          new Mysql2Adapter({
+            uri: MYSQL_TEST_URL,
+            preparedStatements: 0 as unknown as boolean,
+          }),
+      ).toThrow(TypeError);
+
+      const adapter2 = new Mysql2Adapter(MYSQL_TEST_URL);
+      expect(() => {
+        (adapter2 as unknown as { preparedStatements: unknown }).preparedStatements = "true";
+      }).toThrow(TypeError);
+    });
   });
 });

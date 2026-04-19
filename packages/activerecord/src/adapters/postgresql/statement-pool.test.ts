@@ -164,5 +164,31 @@ describeIfPg("PostgreSQLAdapter", () => {
         () => new PostgreSQLAdapter({ connectionString: PG_TEST_URL, statementLimit: 1.5 }),
       ).toThrow(RangeError);
     });
+
+    it("rejects non-boolean preparedStatements at construction time and via assignment", () => {
+      // Construction-time validation routes preparedStatements through
+      // the setter, so a non-boolean (string, number, etc.) hits the
+      // same TypeError guard as direct assignment. Without this test
+      // the runtime guard could regress silently.
+      expect(
+        () =>
+          new PostgreSQLAdapter({
+            connectionString: PG_TEST_URL,
+            preparedStatements: "false" as unknown as boolean,
+          }),
+      ).toThrow(TypeError);
+      expect(
+        () =>
+          new PostgreSQLAdapter({
+            connectionString: PG_TEST_URL,
+            preparedStatements: 0 as unknown as boolean,
+          }),
+      ).toThrow(TypeError);
+
+      const adapter2 = new PostgreSQLAdapter(PG_TEST_URL);
+      expect(() => {
+        (adapter2 as unknown as { preparedStatements: unknown }).preparedStatements = "true";
+      }).toThrow(TypeError);
+    });
   });
 });

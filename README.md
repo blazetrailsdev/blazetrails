@@ -44,7 +44,14 @@ for (const post of posts) {
 }
 ```
 
-Point it at your schema file and switch your typecheck script:
+Generate the schema file once from your live database with
+`trails-schema-dump` (ships alongside `trails-tsc`), then switch your
+typecheck script to use it:
+
+```sh
+DATABASE_URL=postgres://localhost/myapp trails-schema-dump \
+  --out db/schema-columns.json
+```
 
 ```json
 {
@@ -53,6 +60,10 @@ Point it at your schema file and switch your typecheck script:
   }
 }
 ```
+
+Re-run `trails-schema-dump` after each migration (or wire it into your
+migration script). Rails-bookkeeping tables (`schema_migrations`,
+`ar_internal_metadata`) are skipped by default.
 
 Attributes come from the schema. Associations, scopes, and enums come from the runtime calls in each class's static block. Override types as needed with `this.attribute("admin", "boolean")` — overrides always win over schema reflection. For editor support (autocomplete, hover, go-to-definition), the Phase-2 tsserver plugin is in flight; `docs/virtual-source-files-plan.md` tracks the rollout.
 

@@ -7,29 +7,37 @@ import { Attribute as AMAttribute } from "@blazetrails/activemodel";
 /**
  * Arel::Nodes.build_quoted — coerce `other` into a Node suitable for the AST.
  *
- * Rails: if `other` is already one of the Arel/ActiveModel node-like types,
- * return it unchanged; otherwise wrap it in Casted (when an attribute is
- * provided) or Quoted.
+ * Rails: pass Arel Nodes / Arel::Attribute / Table / SelectManager /
+ * SqlLiteral / ActiveModel::Attribute through unchanged; otherwise wrap
+ * in Casted (when an attribute is supplied) or Quoted.
+ *
+ * TS deviations, all narrower/safer:
+ * - Table / SelectManager aren't Arel nodes here and our visitor only
+ *   handles them via duck-type in specific contexts (see visitIn). When
+ *   their AST is what's wanted, unwrap to the ast node so downstream
+ *   visitors always receive a real Node.
+ * - ActiveModel::Attribute isn't an Arel node either. Rails has
+ *   visit_ActiveModel_Attribute that routes it through add_bind; we
+ *   achieve the same effect by wrapping it in BindParam, which our
+ *   visitBindParam already knows how to extract via valueForDatabase.
  */
 export function buildQuoted(other: unknown, attribute?: unknown): Node {
   if (other instanceof Node) return other;
   if (other && typeof other === "object") {
     // Arel::Attributes::Attribute (duck-typed via symbol brand)
     if ((other as Record<symbol, unknown>)[ATTRIBUTE_BRAND] === true) return other as Node;
-    // ActiveModel::Attribute
-    if (other instanceof AMAttribute) return other as unknown as Node;
+    // ActiveModel::Attribute: Rails' visitor has visit_ActiveModel_Attribute
+    // that routes through add_bind; our visitor has no such branch, so
+    // resolve the attribute's valueForDatabase now and emit a Quoted node
+    // carrying the already-typed value.
+    if (other instanceof AMAttribute) {
+      return new Quoted((other as unknown as { valueForDatabase: unknown }).valueForDatabase);
+    }
+    // SelectManager / TreeManager — expose a Node `ast`; use that so the
+    // visitor always receives a real Node.
+    const maybeAst = (other as { ast?: unknown }).ast;
+    if (maybeAst instanceof Node) return maybeAst;
   }
-  // SelectManager / Table and other AST-level wrappers expose `.toSql()`;
-  // Rails also passes those through. Detect structurally to avoid a hard
-  // dep cycle back into ./table.ts / ../select-manager.ts.
-  if (
-    other &&
-    typeof other === "object" &&
-    typeof (other as { toSql?: unknown }).toSql === "function"
-  ) {
-    return other as Node;
-  }
-  // Lazy-imported to avoid the classic Attribute <-> Casted module cycle.
   if (isAttribute(attribute)) return new Casted(other, attribute as Attribute);
   return new Quoted(other);
 }

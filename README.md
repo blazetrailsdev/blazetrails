@@ -22,6 +22,8 @@ Post.published.where("created_at > ?", 1.week.ago).limit(10)
 
 ```ts
 // post.ts — no attribute declarations, no `declare` lines
+import { Base } from "@blazetrails/activerecord";
+
 class Post extends Base {
   static {
     this.belongsTo("author");
@@ -65,7 +67,7 @@ Re-run `trails-schema-dump` after each migration (or wire it into your
 migration script). Rails-bookkeeping tables (`schema_migrations`,
 `ar_internal_metadata`) are skipped by default.
 
-Attributes come from the schema. Associations, scopes, and enums come from the runtime calls in each class's static block. Override types as needed with `this.attribute("admin", "boolean")` — overrides always win over schema reflection. For editor support (autocomplete, hover, go-to-definition), the Phase-2 tsserver plugin is in flight; `docs/virtual-source-files-plan.md` tracks the rollout.
+Attributes come from the schema. Associations, scopes, and enums come from the runtime calls in each class's static block. Override types as needed with `this.attribute("admin", "boolean")` — overrides always win over schema reflection. For editor support (autocomplete, hover, go-to-definition), the Phase-2 tsserver plugin is in flight; [docs/virtual-source-files-plan.md](docs/virtual-source-files-plan.md) tracks the rollout.
 
 ## A bigger slice
 
@@ -102,7 +104,11 @@ post.comments.create!(body: "👋")
 ```
 
 ```ts
-// TypeScript / trails
+// TypeScript / trails — `User` is your own model class (another
+// `class User extends Base { ... }` elsewhere in the app).
+import { Base, defineEnum } from "@blazetrails/activerecord";
+import type { User } from "./user.js";
+
 class Post extends Base {
   static {
     this.belongsTo("author");

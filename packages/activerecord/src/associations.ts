@@ -937,32 +937,27 @@ export async function loadHasMany(
 }
 
 /**
- * Build the relation for a hasMany association without executing it.
- * Skips caching, strict loading, and inverse_of — used by countHasMany
- * so resetCounters works under strict loading.
- * Returns null if primary key values are missing.
+ * Compute the WHERE condition hash that scopes a hasMany relation to its
+ * owner. Returns null if primary key values are missing (Rails'
+ * NullRelation fallback). Pure — no Relation construction.
+ *
+ * Shared by `buildHasManyRelation` (which wraps it in `all().where(...)`)
+ * and CollectionProxy's constructor (which seeds its own where-clause
+ * via the same condition).
  */
-export function buildHasManyRelation(
+export function computeHasManyWhere(
   record: Base,
-  assocName: string,
   options: AssociationOptions,
-): any | null {
+): Record<string, unknown> | null {
   const ctor = record.constructor as typeof Base;
-  const className = options.className ?? camelize(singularize(assocName));
   const primaryKey = options.primaryKey ?? ctor.primaryKey;
-  const targetModel = resolveModel(className);
 
   if (options.as) {
     const foreignKey = options.foreignKey ?? `${underscore(options.as)}_id`;
     const pkValue = record.readAttribute(primaryKey as string);
     if (pkValue === null || pkValue === undefined) return null;
     const typeCol = `${underscore(options.as)}_type`;
-    let rel = (targetModel as any).all().where({
-      [foreignKey as string]: pkValue,
-      [typeCol]: ctor.name,
-    });
-    if (options.scope) rel = options.scope(rel);
-    return rel;
+    return { [foreignKey as string]: pkValue, [typeCol]: ctor.name };
   }
 
   const foreignKey =
@@ -981,14 +976,30 @@ export function buildHasManyRelation(
       if (pkVal === null || pkVal === undefined) return null;
       conditions[foreignKey[i]] = pkVal;
     }
-    let rel = (targetModel as any).all().where(conditions);
-    if (options.scope) rel = options.scope(rel);
-    return rel;
+    return conditions;
   }
 
   const pkValue = record.readAttribute(primaryKey as string);
   if (pkValue === null || pkValue === undefined) return null;
-  let rel = (targetModel as any).all().where({ [foreignKey]: pkValue });
+  return { [foreignKey]: pkValue };
+}
+
+/**
+ * Build the relation for a hasMany association without executing it.
+ * Skips caching, strict loading, and inverse_of — used by countHasMany
+ * so resetCounters works under strict loading.
+ * Returns null if primary key values are missing.
+ */
+export function buildHasManyRelation(
+  record: Base,
+  assocName: string,
+  options: AssociationOptions,
+): any | null {
+  const conditions = computeHasManyWhere(record, options);
+  if (conditions === null) return null;
+  const className = options.className ?? camelize(singularize(assocName));
+  const targetModel = resolveModel(className);
+  let rel = (targetModel as any).all().where(conditions);
   if (options.scope) rel = options.scope(rel);
   return rel;
 }

@@ -128,7 +128,7 @@ Post.published()
 
 // Mutations
 const post = await Post.createBang({ title: "Hello", author: currentUser });
-await post.publishedBang(); // enum setter that persists
+await post.publishedBang(); // defineEnum bang: in-memory on new records, updateColumn (no validations/callbacks) on persisted
 await post.comments.createBang({ body: "👋" });
 ```
 

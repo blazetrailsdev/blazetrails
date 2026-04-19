@@ -55,6 +55,17 @@ describe("DisableJoinsAssociationScope", () => {
       source: "djsComments",
       disableJoins: true,
     });
+    Associations.hasMany.call(DjsAuthor, "djsPostsOrdered", {
+      className: "DjsPost",
+      foreignKey: "djs_author_id",
+      scope: (rel: any) => rel.order("title"),
+    });
+    Associations.hasMany.call(DjsAuthor, "djsCommentsViaOrderedPosts", {
+      className: "DjsComment",
+      through: "djsPostsOrdered",
+      source: "djsComments",
+      disableJoins: true,
+    });
   });
 
   it("INSTANCE is a DisableJoinsAssociationScope", () => {
@@ -104,6 +115,27 @@ describe("DisableJoinsAssociationScope", () => {
     const reflection = (DjsAuthor as any)._reflectOnAssociation("djsComments");
     const comments = await loadHasMany(author, "djsComments", reflection.options);
     expect(comments.map((c: any) => c.body)).toEqual(["hi"]);
+  });
+
+  it("wraps source step in DisableJoinsAssociationRelation when upstream chain is ordered", async () => {
+    const author = await DjsAuthor.create({ name: "A" });
+    const postB = await DjsPost.create({ djs_author_id: author.id, title: "b" });
+    const postA = await DjsPost.create({ djs_author_id: author.id, title: "a" });
+    await DjsComment.create({ djs_post_id: postB.id, body: "from-b" });
+    await DjsComment.create({ djs_post_id: postA.id, body: "from-a" });
+
+    const reflection = (DjsAuthor as any)._reflectOnAssociation("djsCommentsViaOrderedPosts");
+    const built = (await DisableJoinsAssociationScope.INSTANCE.scope({
+      owner: author,
+      reflection,
+      klass: reflection.klass,
+    })) as { relation: unknown };
+
+    expect(built.relation).toBeInstanceOf(DisableJoinsAssociationRelation);
+    // Loaded comments come back in the through-ordered sequence (postA.title="a"
+    // before postB.title="b"), since the wrapping relation re-groups by key.
+    const records = await (built.relation as any).toArray();
+    expect(records.map((r: any) => r.body)).toEqual(["from-a", "from-b"]);
   });
 
   it("DisableJoinsAssociationRelation is exported and reorders by ids on load", async () => {

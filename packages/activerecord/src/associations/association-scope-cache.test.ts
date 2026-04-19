@@ -31,18 +31,31 @@ describe("Association scope cache", () => {
       this.attribute("title", "string");
     }
   }
+  class CacheComment extends Base {
+    static {
+      this.attribute("cache_post_id", "integer");
+      this.attribute("body", "string");
+    }
+  }
 
   beforeEach(() => {
     adapter = createTestAdapter();
     CacheAuthor.adapter = adapter;
     CachePost.adapter = adapter;
+    CacheComment.adapter = adapter;
     registerModel("CacheAuthor", CacheAuthor);
     registerModel("CachePost", CachePost);
+    registerModel("CacheComment", CacheComment);
     (CacheAuthor as any)._associations = [];
     (CachePost as any)._associations = [];
+    (CacheComment as any)._associations = [];
     Associations.hasMany.call(CacheAuthor, "cachePosts", {
       className: "CachePost",
       foreignKey: "cache_author_id",
+    });
+    Associations.hasMany.call(CachePost, "cacheComments", {
+      className: "CacheComment",
+      foreignKey: "cache_post_id",
     });
   });
 
@@ -80,22 +93,28 @@ describe("Association scope cache", () => {
   });
 
   it("disable_joins associations bypass the cache (fresh DJAS each call, Rails association.rb:107-117)", async () => {
-    Associations.hasMany.call(CacheAuthor, "cachePostsDj", {
-      className: "CachePost",
+    Associations.hasMany.call(CacheAuthor, "cacheCommentsDj", {
+      className: "CacheComment",
       through: "cachePosts",
-      source: "self",
+      source: "cacheComments",
       disableJoins: true,
     });
     const author = await CacheAuthor.create({ name: "A" });
-    const assoc = (author as any).association("cachePostsDj");
+    const post = await CachePost.create({ cache_author_id: author.id, title: "p" });
+    await CacheComment.create({ cache_post_id: post.id, body: "c" });
+    const assoc = (author as any).association("cacheCommentsDj");
     expect(assoc.disableJoins).toBe(true);
     // The associationScope() returns a Promise on the disableJoins
     // path (DJAS' boxed contract). The cache field stays untouched —
-    // verify that calling it twice yields two distinct Promises (fresh
-    // builds), matching Rails' per-call DJAS construction.
+    // calling it twice yields two distinct Promises (fresh builds),
+    // matching Rails' per-call DJAS construction. Await both so any
+    // scope-build failure surfaces as a test error rather than an
+    // unhandled rejection.
     const a = assoc.associationScope();
     const b = assoc.associationScope();
     expect(a).not.toBe(b);
+    await a;
+    await b;
   });
 
   it("loader paths hit the cache too (not just explicit record.association(name) calls)", async () => {

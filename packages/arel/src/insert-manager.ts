@@ -5,7 +5,6 @@ import { Attribute } from "./attributes/attribute.js";
 import { ValuesList } from "./nodes/values-list.js";
 import { Quoted } from "./nodes/casted.js";
 import { Table } from "./table.js";
-import { ToSql } from "./visitors/to-sql.js";
 
 /**
  * InsertManager — chainable API for building INSERT statements.
@@ -87,12 +86,5 @@ export class InsertManager extends TreeManager {
    */
   createValuesList(rows: Node[][]): ValuesList {
     return new ValuesList(rows);
-  }
-
-  /**
-   * Generate SQL string.
-   */
-  toSql(): string {
-    return new ToSql().compile(this.ast);
   }
 }

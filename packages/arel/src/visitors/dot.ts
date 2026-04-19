@@ -2,6 +2,17 @@ import { Node } from "../nodes/node.js";
 import { Visitor } from "./visitor.js";
 import { PlainString } from "../collectors/plain-string.js";
 
+type AppendableCollector = { append(s: string): unknown; value: string };
+
+function isAppendableCollector(c: unknown): c is AppendableCollector {
+  return (
+    typeof c === "object" &&
+    c !== null &&
+    "append" in c &&
+    typeof (c as { append: unknown }).append === "function"
+  );
+}
+
 export class DotNode {
   readonly name: string;
   readonly id: string;
@@ -36,12 +47,9 @@ export class Dot extends Visitor {
     return this.compile(object);
   }
 
-  accept(
-    object: Node,
-    collector?: { append(s: string): unknown; value: string },
-  ): { value: string } {
+  accept(object: Node, collector?: unknown): { value: string } {
     const dot = this.compile(object);
-    const sink = collector ?? new PlainString();
+    const sink = isAppendableCollector(collector) ? collector : new PlainString();
     sink.append(dot);
     return sink as { value: string };
   }

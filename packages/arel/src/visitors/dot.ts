@@ -5,12 +5,9 @@ import { PlainString } from "../collectors/plain-string.js";
 type AppendableCollector = { append(s: string): unknown; value: string };
 
 function isAppendableCollector(c: unknown): c is AppendableCollector {
-  return (
-    typeof c === "object" &&
-    c !== null &&
-    "append" in c &&
-    typeof (c as { append: unknown }).append === "function"
-  );
+  if (typeof c !== "object" || c === null) return false;
+  const obj = c as Record<string, unknown>;
+  return typeof obj.append === "function" && typeof obj.value === "string";
 }
 
 export class DotNode {

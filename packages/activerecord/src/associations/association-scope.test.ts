@@ -632,6 +632,129 @@ describe("AssociationScope", () => {
     expect(photos.map((p) => p.title)).toEqual(["p1"]);
   });
 
+  it("loadHasMany through with sourceType + non-id target PK uses correct join column", async () => {
+    // Regression: BelongsToReflection.joinPrimaryKey hard-codes "id"
+    // for polymorphic sources, but the sourceType target may use a
+    // different PK. Without per-klass JOIN routing, we'd emit
+    // target."id" = through."<fk>" instead of target."<custom_pk>".
+    const { loadHasMany } = await import("../associations.js");
+    class NpAuthor extends Base {
+      declare name: string;
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class NpGallery extends Base {
+      static {
+        this.attribute("np_author_id", "integer");
+        this.attribute("imageable_uuid", "string");
+        this.attribute("imageable_type", "string");
+        this.adapter = adapter;
+      }
+    }
+    class NpPhoto extends Base {
+      declare title: string;
+      static {
+        this.attribute("uuid", "string");
+        this.attribute("title", "string");
+        this.primaryKey = "uuid";
+        this.adapter = adapter;
+      }
+    }
+    registerModel(NpAuthor);
+    registerModel(NpGallery);
+    registerModel(NpPhoto);
+    Associations.hasMany.call(NpAuthor, "np_galleries", {
+      className: "NpGallery",
+      foreignKey: "np_author_id",
+    });
+    Associations.belongsTo.call(NpGallery, "imageable", {
+      polymorphic: true,
+      foreignKey: "imageable_uuid",
+    });
+    Associations.hasMany.call(NpAuthor, "np_photos", {
+      className: "NpPhoto",
+      through: "np_galleries",
+      source: "imageable",
+      sourceType: "NpPhoto",
+    });
+
+    const author = await NpAuthor.create({ name: "Alice" });
+    const photo = await NpPhoto.create({ uuid: "u1", title: "p1" });
+    await NpGallery.create({
+      np_author_id: author.id,
+      imageable_uuid: "u1",
+      imageable_type: "NpPhoto",
+    });
+
+    const photos = (await loadHasMany(author, "np_photos", {
+      className: "NpPhoto",
+      through: "np_galleries",
+      source: "imageable",
+      sourceType: "NpPhoto",
+    })) as NpPhoto[];
+    expect(photos.map((p) => p.title)).toEqual(["p1"]);
+  });
+
+  it("loadHasOne through with hasOne source routes via AssociationScope and returns one record", async () => {
+    // PR 3c also covers hasOne source on the through model. e.g.,
+    // User has_one :account; Account has_one :preferences;
+    // User has_one :preferences through :account (source is hasOne,
+    // not belongsTo). Verifies the join direction differs from
+    // belongsTo-source — target's FK back to through, not the other
+    // way — and that loadHasOne returns exactly one record.
+    const { loadHasOne } = await import("../associations.js");
+    class Ho1User extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class Ho1Account extends Base {
+      static {
+        this.attribute("ho1_user_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class Ho1Pref extends Base {
+      declare theme: string;
+      static {
+        this.attribute("ho1_account_id", "integer");
+        this.attribute("theme", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel(Ho1User);
+    registerModel(Ho1Account);
+    registerModel(Ho1Pref);
+    Associations.hasOne.call(Ho1User, "ho1_account", {
+      className: "Ho1Account",
+      foreignKey: "ho1_user_id",
+    });
+    Associations.hasOne.call(Ho1Account, "ho1_pref", {
+      className: "Ho1Pref",
+      foreignKey: "ho1_account_id",
+    });
+    Associations.hasOne.call(Ho1User, "ho1_pref", {
+      className: "Ho1Pref",
+      through: "ho1_account",
+      source: "ho1_pref",
+    });
+
+    const user = await Ho1User.create({ name: "Alice" });
+    const account = await Ho1Account.create({ ho1_user_id: user.id });
+    await Ho1Pref.create({ ho1_account_id: account.id, theme: "dark" });
+
+    const pref = (await loadHasOne(user, "ho1_pref", {
+      className: "Ho1Pref",
+      through: "ho1_account",
+      source: "ho1_pref",
+    })) as Ho1Pref | null;
+    expect(pref).not.toBeNull();
+    expect(pref!.theme).toBe("dark");
+  });
+
   it("loadHasMany through with has_many source routes via AssociationScope (PR 3c widening)", async () => {
     // Author has_many :posts; Post has_many :comments; Author has_many
     // :comments, through: :posts (source: :comments → has_many on Post,

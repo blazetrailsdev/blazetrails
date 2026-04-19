@@ -293,16 +293,15 @@ function _canRouteThroughViaAssociationScope(
     | { belongsTo?: () => boolean; isPolymorphic?: () => boolean }
     | undefined;
   if (!src) return false;
-  // Polymorphic has_many / has_one source is unusual and needs
-  // chain-inversion machinery this PR doesn't yet provide. Polymorphic
-  // belongsTo source is fine — _lastChainScope's reflection.type branch
-  // handles the type filter.
-  if (
-    typeof src.isPolymorphic === "function" &&
-    src.isPolymorphic() &&
-    typeof src.belongsTo === "function" &&
-    !src.belongsTo()
-  ) {
+  // Polymorphic source (any kind): _nextChainScope reads
+  // reflection.joinPrimaryKey, but BelongsToReflection.joinPrimaryKey
+  // hard-codes "id" for polymorphic — and ThroughReflection.joinPrimaryKey
+  // delegates to its source. If the resolved sourceType class uses a
+  // non-"id" PK, the JOIN emits `target."id" = through."<fk>"` against
+  // a column that doesn't exist. Until per-klass JOIN routing honors
+  // joinPrimaryKeyFor consistently in the chain walker, fall back to
+  // the existing 2-step loaders for ALL polymorphic source reflections.
+  if (typeof src.isPolymorphic === "function" && src.isPolymorphic()) {
     return false;
   }
   return true;

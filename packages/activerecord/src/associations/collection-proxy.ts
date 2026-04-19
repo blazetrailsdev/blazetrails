@@ -98,16 +98,19 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   private _assocDef: AssociationDefinition;
   private _target: T[] = [];
   private _targetLoaded = false;
-  // Content fingerprint of the inherited Relation state captured at
-  // end of the ctor (after FK/through seeding). `toArray()` compares
-  // the current fingerprint against this seed to detect any in-place
-  // bang-mutation — content-aware (not just array lengths), so
-  // reorderBang / regroupBang / reverseOrderBang / rewhere and other
-  // replace-in-place mutations are also caught. When state diverges,
-  // CP delegates to `super.toArray()` so the query honors the
-  // mutations instead of silently returning the association-cached
-  // load.
-  private _seedFingerprint!: string;
+  // Flag flipped by ANY post-ctor bang-style mutation on the inherited
+  // Relation state (whereBang / orderBang / reorderBang / regroupBang /
+  // reverseOrderBang / rewhereBang / limitBang / offsetBang / ... — all
+  // of them). Set by instance-level method wrappers installed at the
+  // end of the ctor (see `_installMutationTracker`). `toArray()`
+  // consults this flag to decide between the association-cache path
+  // (seed-only) and delegating to super.toArray() (mutated).
+  //
+  // Single-boolean check per toArray call — O(1) vs serializing the
+  // entire Relation state. Content-aware implicitly: any bang that
+  // touches state passes through the wrapper, regardless of whether
+  // it changes array length or only content.
+  private _cpMutated = false;
 
   get loaded(): boolean {
     return this._targetLoaded;
@@ -336,73 +339,47 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       }
     }
 
-    this._seedFingerprint = this._computeStateFingerprint();
+    this._installMutationTracker();
   }
 
   /**
-   * Serialize the SQL-shape-affecting fields of the inherited Relation
-   * state into a content-addressed fingerprint. Predicate nodes contain
-   * non-JSON-safe references (Arel attributes, etc.) so we use a
-   * defensive replacer that falls back to `String(v)` on cycles /
-   * typed instances. Fields reach through `as any` because they're
-   * `private` on Relation — scoped to CP and documented.
+   * Install instance-level wrappers for every `*Bang` method reachable
+   * via the prototype chain. Each wrapper flips `_cpMutated` and
+   * forwards to the original. Runs once per CP instance at ctor end,
+   * AFTER seeding — so `noneBang()` / `whereBang()` calls from the
+   * ctor itself don't trip the flag. The cost of a single O(N) walk
+   * over the prototype chain (N ~ 25 bang methods) is amortized over
+   * the proxy's lifetime; every subsequent `toArray()` / divergence
+   * check is a single boolean read.
    */
-  private _computeStateFingerprint(): string {
-    const s = this as unknown as Record<string, unknown>;
-    // Enumerate every private Relation field that a bang method can
-    // mutate and that affects generated SQL. Length-only sampling
-    // misses reorderBang / regroupBang / reverseOrderBang / rewrite-
-    // in-place mutations, so we serialize contents.
-    const fields = [
-      "_whereClause",
-      "_havingClause",
-      "_orderClauses",
-      "_rawOrderClauses",
-      "_limitValue",
-      "_offsetValue",
-      "_selectColumns",
-      "_isDistinct",
-      "_distinctOnColumns",
-      "_groupColumns",
-      "_joinClauses",
-      "_rawJoins",
-      "_isNone",
-      "_lockValue",
-      "_ctes",
-      "_fromClause",
-      "_annotations",
-      "_optimizerHints",
-      "_referencesValues",
-      "_eagerLoadAssociations",
-      "_includesAssociations",
-      "_preloadAssociations",
-      "_setOperation",
-    ];
-    const seen = new WeakSet<object>();
-    const replacer = (_: string, v: unknown): unknown => {
-      if (v === null || v === undefined) return v;
-      if (typeof v === "function") return "[fn]";
-      if (typeof v === "object") {
-        if (seen.has(v as object)) return "[cycle]";
-        seen.add(v as object);
+  private _installMutationTracker(): void {
+    const seen = new Set<string>();
+    for (
+      let proto = Object.getPrototypeOf(this);
+      proto && proto !== Object.prototype;
+      proto = Object.getPrototypeOf(proto)
+    ) {
+      for (const name of Object.getOwnPropertyNames(proto)) {
+        if (!name.endsWith("Bang") || seen.has(name)) continue;
+        const desc = Object.getOwnPropertyDescriptor(proto, name);
+        if (!desc || typeof desc.value !== "function") continue;
+        seen.add(name);
+        const original = desc.value as (...args: unknown[]) => unknown;
+        Object.defineProperty(this, name, {
+          value: function (this: CollectionProxy<T>, ...args: unknown[]) {
+            (this as unknown as { _cpMutated: boolean })._cpMutated = true;
+            return original.apply(this, args);
+          },
+          writable: true,
+          configurable: true,
+        });
       }
-      return v;
-    };
-    const payload: Record<string, unknown> = {};
-    for (const f of fields) payload[f] = s[f];
-    try {
-      return JSON.stringify(payload, replacer);
-    } catch {
-      // Defensive: if the payload still can't serialize, fall back to
-      // a guaranteed-diverged sentinel so toArray() takes the
-      // Relation path (safer than returning the cached result).
-      return `__unserializable__:${Math.random()}`;
     }
   }
 
-  /** Whether the inherited Relation state has diverged from the seed. */
+  /** Whether any `*Bang` mutator has run on the proxy since seeding. */
   private _relationStateDiverged(): boolean {
-    return this._computeStateFingerprint() !== this._seedFingerprint;
+    return this._cpMutated;
   }
 
   /**

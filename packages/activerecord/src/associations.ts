@@ -1712,9 +1712,11 @@ export function association<T extends Base = Base>(
     // `associations.js` bypasses that. See the collection-proxy-slot
     // module for the load-order details.
     throw new Error(
-      "CollectionProxy not registered. Import from '@blazetrails/activerecord' " +
-        "instead of deep-importing associations.js so late-bound registration " +
-        "can run and break the associations/collection-proxy/relation/base cycle.",
+      "CollectionProxy not registered. Import '@blazetrails/activerecord' " +
+        "once before calling association() so CollectionProxy registration can run. " +
+        "If you are using a subpath import such as '@blazetrails/activerecord/associations' " +
+        "or '@blazetrails/activerecord/base', keep that import but also import " +
+        "'@blazetrails/activerecord' for initialization.",
     );
   }
   const proxy = new _CollectionProxyCtor(record, assocName, assocDef) as CollectionProxy<T> & {

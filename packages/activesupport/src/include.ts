@@ -45,17 +45,33 @@ export type Included<M extends Module> = {
     : never;
 };
 
-export function include(klass: AnyClass, mod: Module): void {
+export function include(klass: AnyClass, mod: Module | AnyClass): void {
   const descriptors: PropertyDescriptorMap = {};
-  for (const key of Object.keys(mod)) {
-    // Ruby's include doesn't replace methods already defined on the class
-    if (Object.prototype.hasOwnProperty.call(klass.prototype, key)) continue;
-    descriptors[key] = {
-      value: mod[key],
-      writable: true,
-      configurable: true,
-      enumerable: false,
-    };
+
+  // When `mod` is a class (has a prototype with own descriptors), read
+  // descriptors directly — this preserves accessor properties (Ruby's
+  // `def key=` / `def key` translate to getters/setters in TS) alongside
+  // plain methods. Plain-object modules still work via Object.keys.
+  const isClassModule = typeof mod === "function" && (mod as AnyClass).prototype;
+  if (isClassModule) {
+    const proto = (mod as AnyClass).prototype;
+    for (const key of Object.getOwnPropertyNames(proto)) {
+      if (key === "constructor") continue;
+      if (Object.prototype.hasOwnProperty.call(klass.prototype, key)) continue;
+      const desc = Object.getOwnPropertyDescriptor(proto, key);
+      if (desc) descriptors[key] = desc;
+    }
+  } else {
+    for (const key of Object.keys(mod as Module)) {
+      // Ruby's include doesn't replace methods already defined on the class
+      if (Object.prototype.hasOwnProperty.call(klass.prototype, key)) continue;
+      descriptors[key] = {
+        value: (mod as Module)[key],
+        writable: true,
+        configurable: true,
+        enumerable: false,
+      };
+    }
   }
   Object.defineProperties(klass.prototype, descriptors);
 

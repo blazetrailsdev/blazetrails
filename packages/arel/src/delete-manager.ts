@@ -1,5 +1,6 @@
 import { Node } from "./nodes/node.js";
-import { TreeManager, applyStatementMethods } from "./tree-manager.js";
+import { TreeManager, StatementMethods } from "./tree-manager.js";
+import { include } from "@blazetrails/activesupport";
 import { DeleteStatement } from "./nodes/delete-statement.js";
 import { Limit, Group } from "./nodes/unary.js";
 import { Quoted } from "./nodes/casted.js";
@@ -98,4 +99,4 @@ export class DeleteManager extends TreeManager {
   }
 }
 
-applyStatementMethods(DeleteManager);
+include(DeleteManager, StatementMethods);

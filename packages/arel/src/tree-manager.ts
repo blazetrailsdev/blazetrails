@@ -8,7 +8,8 @@ import { Quoted } from "./nodes/casted.js";
 /**
  * Methods from Arel::TreeManager::StatementMethods — mixed into
  * DeleteManager and UpdateManager in Rails (NOT SelectManager or
- * InsertManager). Apply with `applyStatementMethods(Cls)`.
+ * InsertManager). Apply with `include(Cls, StatementMethods)` from
+ * @blazetrails/activesupport.
  */
 type StatementMethodsHost = {
   ast: {
@@ -55,22 +56,6 @@ export class StatementMethods {
 
   get wheres(): Node[] {
     return (this as unknown as StatementMethodsHost).ast.wheres ?? [];
-  }
-}
-
-/**
- * Rails mixes StatementMethods into DeleteManager and UpdateManager. TS
- * lacks Ruby's include semantics, so copy missing property descriptors
- * onto the target's prototype — own-class methods keep priority, matching
- * Ruby's ancestor chain (own class > included module).
- */
-export function applyStatementMethods(target: new (...args: never[]) => object): void {
-  const proto = StatementMethods.prototype;
-  for (const name of Object.getOwnPropertyNames(proto)) {
-    if (name === "constructor") continue;
-    if (Object.getOwnPropertyDescriptor(target.prototype, name)) continue;
-    const desc = Object.getOwnPropertyDescriptor(proto, name);
-    if (desc) Object.defineProperty(target.prototype, name, desc);
   }
 }
 

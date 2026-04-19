@@ -1,5 +1,6 @@
 import { Node } from "./nodes/node.js";
-import { TreeManager, applyStatementMethods } from "./tree-manager.js";
+import { TreeManager, StatementMethods } from "./tree-manager.js";
+import { include } from "@blazetrails/activesupport";
 import { UpdateStatement } from "./nodes/update-statement.js";
 import { Assignment } from "./nodes/binary.js";
 import { Quoted } from "./nodes/casted.js";
@@ -110,4 +111,4 @@ export class UpdateManager extends TreeManager {
   }
 }
 
-applyStatementMethods(UpdateManager);
+include(UpdateManager, StatementMethods);

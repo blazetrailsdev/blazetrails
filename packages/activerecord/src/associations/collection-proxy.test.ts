@@ -264,6 +264,20 @@ describe("CollectionProxy — array-likeness (Phase R.1)", () => {
     expect(found?.title).toBe("a");
   });
 
+  it("toArray honors direct bang-mutation of inherited Relation state", async () => {
+    // In-place bang mutations on CP (cp.whereBang/orderBang/limitBang)
+    // change the inherited Relation state. `toArray()` detects the
+    // divergence from the seed and delegates to super.toArray() so
+    // results reflect the mutations, instead of silently returning the
+    // association-cached full load. Chaining (cp.where(...).toArray())
+    // is the normal path and already goes through AR → Relation.
+    const blog = await blogWithPosts();
+    const proxy = association<ApPost>(blog, "apPosts") as any;
+    proxy.whereBang({ title: "b" });
+    const results = await proxy.toArray();
+    expect(results.map((p: ApPost) => p.title)).toEqual(["b"]);
+  });
+
   // ── Phase R.2 — collection reader returns the AssociationProxy ─────
 
   it("blog.apPosts is the AssociationProxy itself (Phase R.2 reader swap)", async () => {

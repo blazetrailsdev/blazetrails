@@ -98,6 +98,27 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   private _assocDef: AssociationDefinition;
   private _target: T[] = [];
   private _targetLoaded = false;
+  // Snapshot of key Relation-state sizes captured at end of the ctor
+  // (after FK/through seeding). `toArray()` compares against this to
+  // detect in-place bang-mutation of the inherited Relation state;
+  // when state has diverged from the seed, CP delegates to
+  // `super.toArray()` so the query honors the mutations instead of
+  // silently returning the association-cached load. See `toArray()`
+  // for the rationale.
+  private _seedSignature!: {
+    wherePredicates: number;
+    havingPredicates: number;
+    orderClauses: number;
+    rawOrderClauses: number;
+    limitValue: number | null;
+    offsetValue: number | null;
+    selectColumns: number | null;
+    isDistinct: boolean;
+    groupColumns: number;
+    joinClauses: number;
+    rawJoins: number;
+    isNone: boolean;
+  };
 
   get loaded(): boolean {
     return this._targetLoaded;
@@ -330,23 +351,87 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         }
       }
     }
+
+    this._seedSignature = this._captureStateSignature();
+  }
+
+  /**
+   * Snapshot the shape-influencing fields of the inherited Relation
+   * state. Used by `toArray()` to detect in-place bang-mutation of the
+   * proxy (e.g. `cp.whereBang(...)`) since seeding. The fields reach
+   * through `as any` because they're `private` on Relation — this is
+   * scoped to CP and documented.
+   */
+  private _captureStateSignature(): CollectionProxy<T>["_seedSignature"] {
+    const s = this as unknown as {
+      _whereClause: { predicates: unknown[] };
+      _havingClause: { predicates: unknown[] };
+      _orderClauses: unknown[];
+      _rawOrderClauses: unknown[];
+      _limitValue: number | null;
+      _offsetValue: number | null;
+      _selectColumns: unknown[] | null;
+      _isDistinct: boolean;
+      _groupColumns: unknown[];
+      _joinClauses: unknown[];
+      _rawJoins: unknown[];
+      _isNone: boolean;
+    };
+    return {
+      wherePredicates: s._whereClause.predicates.length,
+      havingPredicates: s._havingClause.predicates.length,
+      orderClauses: s._orderClauses.length,
+      rawOrderClauses: s._rawOrderClauses.length,
+      limitValue: s._limitValue,
+      offsetValue: s._offsetValue,
+      selectColumns: s._selectColumns ? s._selectColumns.length : null,
+      isDistinct: s._isDistinct,
+      groupColumns: s._groupColumns.length,
+      joinClauses: s._joinClauses.length,
+      rawJoins: s._rawJoins.length,
+      isNone: s._isNone,
+    };
+  }
+
+  /** Whether the inherited Relation state has diverged from the seed. */
+  private _relationStateDiverged(): boolean {
+    const now = this._captureStateSignature();
+    const seed = this._seedSignature;
+    return (
+      now.wherePredicates !== seed.wherePredicates ||
+      now.havingPredicates !== seed.havingPredicates ||
+      now.orderClauses !== seed.orderClauses ||
+      now.rawOrderClauses !== seed.rawOrderClauses ||
+      now.limitValue !== seed.limitValue ||
+      now.offsetValue !== seed.offsetValue ||
+      now.selectColumns !== seed.selectColumns ||
+      now.isDistinct !== seed.isDistinct ||
+      now.groupColumns !== seed.groupColumns ||
+      now.joinClauses !== seed.joinClauses ||
+      now.rawJoins !== seed.rawJoins ||
+      now.isNone !== seed.isNone
+    );
   }
 
   /**
    * Load and return all associated records.
    */
   async toArray(): Promise<T[]> {
-    // Known limitation (PR B): this path calls `loadHasMany` to reuse
-    // the owner's association cache + strict-loading enforcement, so
-    // in-place Relation mutations on the proxy itself (e.g.
-    // `cp.whereBang(...)`, `cp.orderBang(...)`) affect `cp.toSql()` but
-    // are NOT reflected here. Chained calls (`cp.where(...).toArray()`)
-    // return an AssociationRelation, whose `toArray` goes through
-    // Relation's query path and DOES honor the added state — that's
-    // the supported path for additional filtering. Direct CP bang-
-    // mutation is rare in practice; PR B will either reconcile this
-    // (delegate to super.toArray when state diverges from seed) or
-    // document it as-is.
+    // Two paths:
+    //
+    // 1. Seed-only state (nothing mutated post-ctor): hit `loadHasMany`
+    //    to reuse the owner's association cache + strict-loading
+    //    enforcement. This is the common case (`await blog.posts`).
+    // 2. State has diverged from the seed (e.g. `cp.whereBang(...)`
+    //    was called directly on the proxy): delegate to
+    //    `super.toArray()` so the query honors the mutations. The
+    //    association cache is bypassed here because it's keyed on the
+    //    unmutated scope and would return stale/incorrect data.
+    if (this._relationStateDiverged()) {
+      const results = await super.toArray();
+      const unsaved = this._target.filter((r) => r.isNewRecord());
+      return unsaved.length > 0 ? [...results, ...unsaved] : results;
+    }
     const results = (await loadHasMany(
       this._record,
       this._assocName,

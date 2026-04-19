@@ -2,7 +2,155 @@
 
 TypeScript packages that mirror the Ruby on Rails API.
 
-The goal is to be **100% API compatible with Rails**, matching behavior **test for test** against the Rails source. The current focus is getting ActiveRecord to full parity — it's the heart of Rails and the package with the most ground to cover. If you can read the [Rails API docs](https://api.rubyonrails.org/), you already know how to use this — class names, method signatures, and behavior are designed to match Rails as closely as TypeScript allows, while adding the type safety that Ruby can't.
+The goal is **100% API compatible with Rails**, matched behavior **test for test** against the Rails source. If you can read the [Rails API docs](https://api.rubyonrails.org/), you already know how to use this — class names, method signatures, and behavior are designed to match Rails as closely as TypeScript allows, while adding the type safety that Ruby can't.
+
+## Zero-declare models — `trails-tsc`
+
+Rails models look like this:
+
+```ruby
+class Post < ApplicationRecord
+  belongs_to :author
+  has_many :comments
+  scope :published, -> { where(published: true) }
+end
+
+Post.published.where("created_at > ?", 1.week.ago).limit(10)
+```
+
+`trails-tsc` makes the TypeScript version look almost identical. It's a drop-in replacement for `tsc` that reads your schema and your model class body, then virtualizes the file at type-check time to inject everything TypeScript needs — attribute fields, association proxies, scope signatures, enum surfaces — so you never hand-write a `declare`:
+
+```ts
+// post.ts — no attribute declarations, no `declare` lines
+class Post extends Base {
+  static {
+    this.belongsTo("author");
+    this.hasMany("comments");
+    this.scope("published", (rel) => rel.where({ published: true }));
+  }
+}
+
+const posts = await Post.published()
+  .where({ authorId: 3 })
+  .order("createdAt", "desc")
+  .limit(10); // Post[]
+
+for (const post of posts) {
+  post.title; // typed as string (from the schema)
+  post.publishedAt; // typed as Date | null (from the schema)
+  await post.author; // Author | null (AssociationProxy<Author>)
+  await post.comments.where({ flagged: false }); // chainable, awaitable
+}
+```
+
+Point it at your schema file and switch your typecheck script:
+
+```jsonc
+// package.json
+{
+  "scripts": {
+    "typecheck": "trails-tsc --schema db/schema-columns.json --noEmit",
+  },
+}
+```
+
+Attributes come from the schema. Associations, scopes, and enums come from the runtime calls in each class's static block. Override types as needed with `this.attribute("admin", "boolean")` — overrides always win over schema reflection. For editor support (autocomplete, hover, go-to-definition), the Phase-2 tsserver plugin is in flight; `docs/virtual-source-files-plan.md` tracks the rollout.
+
+## A bigger slice
+
+Rails patterns translate directly:
+
+```ruby
+# Ruby / Rails
+class Post < ApplicationRecord
+  belongs_to :author
+  has_many :comments, dependent: :destroy
+  has_and_belongs_to_many :tags
+
+  validates :title, presence: true
+  validates :slug, uniqueness: true
+
+  scope :published, -> { where(published: true) }
+  scope :authored_by, ->(user) { where(author: user) }
+
+  enum status: { draft: 0, published: 1, archived: 2 }
+end
+
+# Query chain with association and scope
+Post
+  .published
+  .authored_by(current_user)
+  .includes(:comments, :tags)
+  .order(created_at: :desc)
+  .limit(20)
+
+# Mutations
+post = Post.create!(title: "Hello", author: current_user)
+post.update!(status: :published)
+post.comments.create!(body: "👋")
+```
+
+```ts
+// TypeScript / trails
+class Post extends Base {
+  static {
+    this.belongsTo("author");
+    this.hasMany("comments", { dependent: "destroy" });
+    this.hasAndBelongsToMany("tags");
+
+    this.validates("title", { presence: true });
+    this.validates("slug", { uniqueness: true });
+
+    this.scope("published", (rel) => rel.where({ published: true }));
+    this.scope("authoredBy", (rel, user: User) => rel.where({ author: user }));
+
+    defineEnum(this, "status", { draft: 0, published: 1, archived: 2 });
+  }
+}
+
+// Query chain with association and scope
+Post.published()
+  .authoredBy(currentUser)
+  .includes("comments", "tags")
+  .order("createdAt", "desc")
+  .limit(20);
+
+// Mutations
+const post = await Post.createBang({ title: "Hello", author: currentUser });
+await post.publishedBang(); // enum setter that persists
+await post.comments.createBang({ body: "👋" });
+```
+
+### Association proxies
+
+`post.comments` is an `AssociationProxy<Comment>` — chainable like a relation, awaitable to the loaded array, and array-shaped for sync ops once hydrated:
+
+```ts
+const post = await Post.find(1);
+
+// chainable
+const recent = await post.comments.where({ flagged: false }).order("createdAt").limit(10);
+
+// awaitable
+const all = await post.comments;
+
+// array-shaped once loaded
+for (const c of post.comments) console.log(c.body);
+post.comments.map((c) => c.id);
+post.comments.length;
+post.comments[0];
+```
+
+### Ruby to TypeScript conventions
+
+| Ruby / Rails     | TypeScript / `trails`           | Example                                   |
+| ---------------- | ------------------------------- | ----------------------------------------- |
+| `valid?`         | `isValid()`                     | Predicates (`?`) become `is*` prefix.     |
+| `save!`          | `saveBang()`                    | Bang methods (`!`) become `*Bang` suffix. |
+| `initialize`     | `constructor`                   | Standard TypeScript class constructors.   |
+| `table[:id]`     | `table.get("id")`               | The `[]` operator is mapped to `get()`.   |
+| `model[:id]`     | `model.readAttribute("id")`     | Explicit attribute reading.               |
+| `model[:id] = 1` | `model.writeAttribute("id", 1)` | Explicit attribute writing.               |
 
 ## Packages
 
@@ -30,51 +178,6 @@ The goal is to be **100% API compatible with Rails**, matching behavior **test f
 **Tests** = `test:compare` — matches our test names against the Rails test suite. **API** = `api:compare` — matches individual public methods against Rails source (method-level, not class/module wrappers). Rack doesn't have API comparison yet (it's not a Rails gem).
 
 **51.2%** overall API coverage (3,794 / 7,415 methods). CI runs both comparisons on every push.
-
-## Quick Example
-
-Rails patterns translate directly:
-
-```ruby
-# Ruby / Rails
-class Post < ActiveRecord::Base
-  attribute :title, :string
-  attribute :published, :boolean, default: false
-  validates :title, presence: true
-  has_many :comments
-end
-
-post = Post.create!(title: "Hello World")
-post.update!(published: true)
-Post.where(published: true).order(:title)
-```
-
-```typescript
-// TypeScript / trails
-class Post extends Base {
-  static {
-    this.attribute("title", "string");
-    this.attribute("published", "boolean", { default: false });
-    this.validates("title", { presence: true });
-    this.hasMany("comments");
-  }
-}
-
-const post = await Post.create({ title: "Hello World" });
-await post.updateBang({ published: true });
-Post.where({ published: true }).order("title");
-```
-
-## Ruby to TypeScript Conventions
-
-| Ruby / Rails     | TypeScript / `trails`           | Example                                   |
-| ---------------- | ------------------------------- | ----------------------------------------- |
-| `valid?`         | `isValid()`                     | Predicates (`?`) become `is*` prefix.     |
-| `save!`          | `saveBang()`                    | Bang methods (`!`) become `*Bang` suffix. |
-| `initialize`     | `constructor`                   | Standard TypeScript class constructors.   |
-| `table[:id]`     | `table.get("id")`               | The `[]` operator is mapped to `get()`.   |
-| `model[:id]`     | `model.readAttribute("id")`     | Explicit attribute reading.               |
-| `model[:id] = 1` | `model.writeAttribute("id", 1)` | Explicit attribute writing.               |
 
 ## Design Principles
 

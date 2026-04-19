@@ -98,41 +98,16 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   private _assocDef: AssociationDefinition;
   private _target: T[] = [];
   private _targetLoaded = false;
-  // Snapshot of key Relation-state sizes captured at end of the ctor
-  // (after FK/through seeding). `toArray()` compares against this to
-  // detect in-place bang-mutation of the inherited Relation state;
-  // when state has diverged from the seed, CP delegates to
-  // `super.toArray()` so the query honors the mutations instead of
-  // silently returning the association-cached load. See `toArray()`
-  // for the rationale.
-  private _seedSignature!: {
-    wherePredicates: number;
-    havingPredicates: number;
-    orderClauses: number;
-    rawOrderClauses: number;
-    limitValue: number | null;
-    offsetValue: number | null;
-    selectColumns: number | null;
-    isDistinct: boolean;
-    distinctOnColumns: number;
-    groupColumns: number;
-    joinClauses: number;
-    rawJoins: number;
-    isNone: boolean;
-    // SQL-shape fields added in round 5 to close divergence blind spots
-    // (fromBang / withBang / withRecursiveBang / lockBang / annotate /
-    // optimizerHints / references / eagerLoad / includes / preload).
-    lockValue: string | null;
-    ctes: number;
-    fromClause: unknown;
-    annotations: number;
-    optimizerHints: number;
-    referencesValues: number;
-    eagerLoadAssociations: number;
-    includesAssociations: number;
-    preloadAssociations: number;
-    setOperation: unknown;
-  };
+  // Content fingerprint of the inherited Relation state captured at
+  // end of the ctor (after FK/through seeding). `toArray()` compares
+  // the current fingerprint against this seed to detect any in-place
+  // bang-mutation — content-aware (not just array lengths), so
+  // reorderBang / regroupBang / reverseOrderBang / rewhere and other
+  // replace-in-place mutations are also caught. When state diverges,
+  // CP delegates to `super.toArray()` so the query honors the
+  // mutations instead of silently returning the association-cached
+  // load.
+  private _seedFingerprint!: string;
 
   get loaded(): boolean {
     return this._targetLoaded;
@@ -361,77 +336,73 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       }
     }
 
-    this._seedSignature = this._captureStateSignature();
+    this._seedFingerprint = this._computeStateFingerprint();
   }
 
   /**
-   * Snapshot the shape-influencing fields of the inherited Relation
-   * state. Used by `toArray()` to detect in-place bang-mutation of the
-   * proxy (e.g. `cp.whereBang(...)`) since seeding. The fields reach
-   * through `as any` because they're `private` on Relation — this is
-   * scoped to CP and documented.
+   * Serialize the SQL-shape-affecting fields of the inherited Relation
+   * state into a content-addressed fingerprint. Predicate nodes contain
+   * non-JSON-safe references (Arel attributes, etc.) so we use a
+   * defensive replacer that falls back to `String(v)` on cycles /
+   * typed instances. Fields reach through `as any` because they're
+   * `private` on Relation — scoped to CP and documented.
    */
-  private _captureStateSignature(): CollectionProxy<T>["_seedSignature"] {
-    const s = this as unknown as {
-      _whereClause: { predicates: unknown[] };
-      _havingClause: { predicates: unknown[] };
-      _orderClauses: unknown[];
-      _rawOrderClauses: unknown[];
-      _limitValue: number | null;
-      _offsetValue: number | null;
-      _selectColumns: unknown[] | null;
-      _isDistinct: boolean;
-      _distinctOnColumns: unknown[];
-      _groupColumns: unknown[];
-      _joinClauses: unknown[];
-      _rawJoins: unknown[];
-      _isNone: boolean;
-      _lockValue: string | null;
-      _ctes: unknown[];
-      _fromClause: unknown;
-      _annotations: unknown[];
-      _optimizerHints: unknown[];
-      _referencesValues: unknown[];
-      _eagerLoadAssociations: unknown[];
-      _includesAssociations: unknown[];
-      _preloadAssociations: unknown[];
-      _setOperation: unknown;
+  private _computeStateFingerprint(): string {
+    const s = this as unknown as Record<string, unknown>;
+    // Enumerate every private Relation field that a bang method can
+    // mutate and that affects generated SQL. Length-only sampling
+    // misses reorderBang / regroupBang / reverseOrderBang / rewrite-
+    // in-place mutations, so we serialize contents.
+    const fields = [
+      "_whereClause",
+      "_havingClause",
+      "_orderClauses",
+      "_rawOrderClauses",
+      "_limitValue",
+      "_offsetValue",
+      "_selectColumns",
+      "_isDistinct",
+      "_distinctOnColumns",
+      "_groupColumns",
+      "_joinClauses",
+      "_rawJoins",
+      "_isNone",
+      "_lockValue",
+      "_ctes",
+      "_fromClause",
+      "_annotations",
+      "_optimizerHints",
+      "_referencesValues",
+      "_eagerLoadAssociations",
+      "_includesAssociations",
+      "_preloadAssociations",
+      "_setOperation",
+    ];
+    const seen = new WeakSet<object>();
+    const replacer = (_: string, v: unknown): unknown => {
+      if (v === null || v === undefined) return v;
+      if (typeof v === "function") return "[fn]";
+      if (typeof v === "object") {
+        if (seen.has(v as object)) return "[cycle]";
+        seen.add(v as object);
+      }
+      return v;
     };
-    return {
-      wherePredicates: s._whereClause.predicates.length,
-      havingPredicates: s._havingClause.predicates.length,
-      orderClauses: s._orderClauses.length,
-      rawOrderClauses: s._rawOrderClauses.length,
-      limitValue: s._limitValue,
-      offsetValue: s._offsetValue,
-      selectColumns: s._selectColumns ? s._selectColumns.length : null,
-      isDistinct: s._isDistinct,
-      distinctOnColumns: s._distinctOnColumns.length,
-      groupColumns: s._groupColumns.length,
-      joinClauses: s._joinClauses.length,
-      rawJoins: s._rawJoins.length,
-      isNone: s._isNone,
-      lockValue: s._lockValue,
-      ctes: s._ctes.length,
-      fromClause: s._fromClause,
-      annotations: s._annotations.length,
-      optimizerHints: s._optimizerHints.length,
-      referencesValues: s._referencesValues.length,
-      eagerLoadAssociations: s._eagerLoadAssociations.length,
-      includesAssociations: s._includesAssociations.length,
-      preloadAssociations: s._preloadAssociations.length,
-      setOperation: s._setOperation,
-    };
+    const payload: Record<string, unknown> = {};
+    for (const f of fields) payload[f] = s[f];
+    try {
+      return JSON.stringify(payload, replacer);
+    } catch {
+      // Defensive: if the payload still can't serialize, fall back to
+      // a guaranteed-diverged sentinel so toArray() takes the
+      // Relation path (safer than returning the cached result).
+      return `__unserializable__:${Math.random()}`;
+    }
   }
 
   /** Whether the inherited Relation state has diverged from the seed. */
   private _relationStateDiverged(): boolean {
-    const now = this._captureStateSignature();
-    const seed = this._seedSignature;
-    for (const key of Object.keys(seed) as (keyof typeof seed)[]) {
-      if (now[key] !== seed[key]) return true;
-    }
-    return false;
+    return this._computeStateFingerprint() !== this._seedFingerprint;
   }
 
   /**

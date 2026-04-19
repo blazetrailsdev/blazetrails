@@ -6,6 +6,7 @@ import {
 } from "./association-scope.js";
 import { DisableJoinsAssociationRelation } from "../disable-joins-association-relation.js";
 import { quoteColumnName } from "../connection-adapters/abstract/quoting.js";
+import { detectAdapterName } from "../adapter-name.js";
 import type { Relation } from "../relation.js";
 import type { UnscopeType } from "../relation/query-methods.js";
 import type { Base } from "../base.js";
@@ -51,10 +52,20 @@ function readTuple(owner: Base, cols: string[]): unknown[] {
  * `quoteTableName`'s responsibility, and column names here come
  * from reflection metadata which is always bare).
  */
-function tupleInClause(cols: string[], tuples: unknown[][]): { sql: string; binds: unknown[] } {
+function tupleInClause(
+  klass: typeof Base,
+  cols: string[],
+  tuples: unknown[][],
+): { sql: string; binds: unknown[] } {
+  // Resolve the adapter flavor from the target class so identifier
+  // quoting picks the right delimiter — double-quotes for PG/SQLite,
+  // backticks for MySQL/MariaDB. Without this, the default
+  // double-quote style would emit invalid SQL on MySQL unless the
+  // server was in ANSI_QUOTES mode.
+  const flavor = detectAdapterName(klass.adapter);
   const placeholderRow = "(" + cols.map(() => "?").join(", ") + ")";
   const allRows = tuples.map(() => placeholderRow).join(", ");
-  const colList = cols.map((c) => quoteColumnName(c)).join(", ");
+  const colList = cols.map((c) => quoteColumnName(c, flavor)).join(", ");
   const flat: unknown[] = [];
   for (const t of tuples) flat.push(...t);
   return { sql: `(${colList}) IN (${allRows})`, binds: flat };
@@ -212,7 +223,7 @@ export class DisableJoinsAssociationScope extends AssociationScope {
       if (tuples.length === 0) {
         scope = (scope as { none: () => unknown }).none();
       } else {
-        const { sql, binds } = tupleInClause(keyCols, tuples);
+        const { sql, binds } = tupleInClause(klass, keyCols, tuples);
         scope = (scope as { where: (sql: string, ...binds: unknown[]) => unknown }).where(
           sql,
           ...binds,

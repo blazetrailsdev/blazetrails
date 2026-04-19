@@ -358,6 +358,7 @@ function _canRouteThroughViaDisableJoinsAssociationScope(
 async function _loadThroughViaDisableJoinsScope(
   record: Base,
   reflection: unknown,
+  options?: AssociationOptions,
 ): Promise<Base[]> {
   // Null-PK short-circuit: an unsaved owner has no through-table FK to
   // chain off, so DJAS would build `WHERE through.<fk> IN ([null])` and
@@ -387,7 +388,16 @@ async function _loadThroughViaDisableJoinsScope(
     reflection: reflection as any,
     klass,
   })) as { relation: { toArray: () => Promise<Base[]> } };
-  return built.relation.toArray();
+  // Apply caller-supplied `options.scope` when it differs from the
+  // reflection's own scope — same rule the JOIN-based loaders use
+  // (line 488 etc.). Skipping when equal avoids double-application
+  // since DJAS already consumed the reflection's scope via constraints.
+  let rel: unknown = built.relation;
+  const reflScope = (reflection as { scope?: unknown }).scope;
+  if (options?.scope && options.scope !== reflScope) {
+    rel = options.scope(rel as never);
+  }
+  return (rel as { toArray: () => Promise<Base[]> }).toArray();
 }
 
 /**
@@ -546,7 +556,7 @@ export async function loadHasOne(
     const ctorEarly = record.constructor as typeof Base;
     const reflEarly = ctorEarly._reflectOnAssociation?.(assocName);
     if (_canRouteThroughViaDisableJoinsAssociationScope(reflEarly, options)) {
-      const records = await _loadThroughViaDisableJoinsScope(record, reflEarly);
+      const records = await _loadThroughViaDisableJoinsScope(record, reflEarly, options);
       return records[0] ?? null;
     }
     if (!_canRouteThroughViaAssociationScope(reflEarly, options)) {
@@ -752,7 +762,7 @@ export async function loadHasMany(
     const ctorEarly = record.constructor as typeof Base;
     const reflEarly = ctorEarly._reflectOnAssociation?.(assocName);
     if (_canRouteThroughViaDisableJoinsAssociationScope(reflEarly, options)) {
-      return _loadThroughViaDisableJoinsScope(record, reflEarly);
+      return _loadThroughViaDisableJoinsScope(record, reflEarly, options);
     }
     if (!_canRouteThroughViaAssociationScope(reflEarly, options)) {
       return loadHasManyThrough(record, assocName, options);

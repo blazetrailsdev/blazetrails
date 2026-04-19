@@ -1672,5 +1672,32 @@ describe("TransactionTest", () => {
       expect(spy).not.toHaveBeenCalled();
       spy.mockRestore();
     });
+
+    // The tests above exercise the fallback path (test-adapter has no
+    // withinNewTransaction). The TransactionManager path is reached
+    // when an adapter defines withinNewTransaction — cover that branch
+    // explicitly so it can't regress without a failing test.
+    it("calls clearCacheBang via TransactionManager.withinNewTransaction", async () => {
+      const { PreparedStatementCacheExpired } = await import("./errors.js");
+      const { TransactionManager } = await import("./connection-adapters/abstract/transaction.js");
+      const clearCacheBang = vi.fn();
+      const conn = {
+        clearCacheBang,
+        beginDbTransaction: vi.fn(),
+        commitDbTransaction: vi.fn(),
+        rollbackDbTransaction: vi.fn(),
+        supportsLazyTransactions: () => false,
+        supportsRestartDbTransaction: () => false,
+        addTransactionRecord: vi.fn(),
+        active: true,
+      };
+      const tm = new TransactionManager(conn as never);
+      await expect(
+        tm.withinNewTransaction({}, () => {
+          throw new PreparedStatementCacheExpired("cached plan expired");
+        }),
+      ).rejects.toBeInstanceOf(PreparedStatementCacheExpired);
+      expect(clearCacheBang).toHaveBeenCalledTimes(1);
+    });
   });
 });

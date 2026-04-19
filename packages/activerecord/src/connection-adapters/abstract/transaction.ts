@@ -268,7 +268,6 @@ export interface TransactionConnection extends DatabaseAdapter {
   rollbackDbTransaction?(): void | Promise<void>;
   restartDbTransaction?(): void | Promise<void>;
   resetIsolationLevel?(): void | Promise<void>;
-  clearCacheBang?(): void;
   supportsLazyTransactions?(): boolean;
   supportsRestartDbTransaction?(): boolean;
   addTransactionRecord?(record: unknown): void;

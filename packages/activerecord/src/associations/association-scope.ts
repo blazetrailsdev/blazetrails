@@ -607,27 +607,51 @@ export class AssociationScope {
     // explicitly avoids.
     const evalWhere = (evaluated as { _whereClause?: { predicates?: unknown[] } })._whereClause;
     const evalOrders = (evaluated as { _orderClauses?: unknown[] })._orderClauses ?? [];
+    const evalRawOrders = (evaluated as { _rawOrderClauses?: string[] })._rawOrderClauses ?? [];
     let merged = scope as {
       where: (n: unknown) => unknown;
       _orderClauses?: unknown[];
+      _rawOrderClauses?: string[];
     };
     for (const pred of evalWhere?.predicates ?? []) {
       merged = merged.where(pred) as typeof merged;
     }
+    // Rails: `scope.order_values = item.order_values | scope.order_values`
+    // (association_scope.rb:153). Ordering lives in both _orderClauses
+    // (string | [col, dir] tuples) and _rawOrderClauses (string like
+    // `inOrderOf` produces). Merge both with chain-entry-first +
+    // structural dedup so tuples compare by value, not reference.
     if (evalOrders.length > 0) {
-      // Rails: `scope.order_values = item.order_values | scope.order_values`
-      // (association_scope.rb:153) — chain entry's orderings come
-      // BEFORE the main scope's, deduplicated. _orderClauses entries
-      // are `string | [string, "asc"|"desc"]` tuples; pushing tuples
-      // back through `.order(...)` doesn't round-trip, so mutate the
-      // _orderClauses array directly.
-      const existing = merged._orderClauses ?? [];
-      const next: unknown[] = [];
-      for (const o of [...evalOrders, ...existing]) {
-        if (!next.includes(o)) next.push(o);
-      }
-      merged._orderClauses = next;
+      merged._orderClauses = unionOrderClauses(evalOrders, merged._orderClauses ?? []);
+    }
+    if (evalRawOrders.length > 0) {
+      const existingRaw = merged._rawOrderClauses ?? [];
+      merged._rawOrderClauses = Array.from(new Set([...evalRawOrders, ...existingRaw]));
     }
     return merged;
   }
+}
+
+/**
+ * Structurally dedupe `_orderClauses` entries (plain strings or
+ * `[col, "asc"|"desc"]` tuples). `Array#includes` only does reference
+ * equality, so two tuples with equal contents created separately
+ * wouldn't match. Rails' `|` operator on order_values is structural.
+ */
+function unionOrderClauses(first: unknown[], second: unknown[]): unknown[] {
+  const result: unknown[] = [];
+  const seen = new Set<string>();
+  for (const o of [...first, ...second]) {
+    const key =
+      Array.isArray(o) && o.length === 2
+        ? `T:${String(o[0])}:${String(o[1])}`
+        : typeof o === "string"
+          ? `S:${o}`
+          : `J:${JSON.stringify(o)}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(o);
+    }
+  }
+  return result;
 }

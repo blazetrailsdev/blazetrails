@@ -155,12 +155,7 @@ export function cacheableQuery(
   arel: unknown,
 ): [unknown, unknown[]] {
   const host = this as DatabaseStatementsHost;
-  // Use compileWithBinds directly to get raw binds (QueryAttribute
-  // objects with Substitute values) that BindMap needs for indexing.
-  // toSqlAndBinds would type-cast them to primitives, losing Substitute.
   const visitor = (host as any)?.arelVisitor as Visitors.ToSql | undefined;
-  let sql: string;
-  let binds: unknown[];
 
   // Unwrap TreeManager → Node
   let node = arel;
@@ -168,18 +163,10 @@ export function cacheableQuery(
     node = (node as any).ast;
   }
 
-  if (visitor && node instanceof Nodes.Node) {
-    [sql, binds] = visitor.compileWithBinds(node);
-  } else if (typeof arel === "string") {
-    sql = arel;
-    binds = [];
-  } else {
-    sql = (node as any).toSql?.() ?? String(node);
-    binds = [];
-  }
-
-  if (host?.preparedStatements && klass.query) {
-    return [klass.query(sql), binds as unknown[]];
+  // Prepared path: compile with bind extraction, return Query + raw binds
+  if (host?.preparedStatements && klass.query && visitor && node instanceof Nodes.Node) {
+    const [sql, binds] = visitor.compileWithBinds(node);
+    return [klass.query(sql), binds];
   }
 
   // Unprepared path: compile through PartialQueryCollector to produce
@@ -194,13 +181,21 @@ export function cacheableQuery(
     return [klass.partialQuery(parts), collectedBinds];
   }
 
-  if (klass.partialQuery) {
-    return [klass.partialQuery(typeof sql === "string" ? [sql] : sql), binds as unknown[]];
+  // Fallback: compile to SQL string
+  let sql: string;
+  if (typeof arel === "string") {
+    sql = arel;
+  } else if (visitor && node instanceof Nodes.Node) {
+    sql = visitor.compile(node);
+  } else {
+    sql = (node as any).toSql?.() ?? String(node);
   }
 
-  // Fallback: use query if available, otherwise raw SQL
+  if (klass.partialQuery) {
+    return [klass.partialQuery([sql]), []];
+  }
   const queryObj = klass.query ? klass.query(sql) : sql;
-  return [queryObj, binds as unknown[]];
+  return [queryObj, []];
 }
 
 // --- Query execution ---

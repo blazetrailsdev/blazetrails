@@ -68,9 +68,10 @@ export class Binary extends NodeExpression {
 
 export class Assignment extends Binary {}
 
-// Cte lives in ./cte.ts (Rails parity), but `As.toCte` needs to construct
-// one. cte.ts also needs to `extends Binary` for inheritance fidelity — a
-// cycle. Break it with a late-bound factory registered by cte.ts at load.
+// Cte lives in ./cte.ts (Rails parity) and extends Binary, which would be
+// a hard cycle if `As.toCte` imported it directly. The package entrypoint
+// (`./index.ts`) calls `_registerCteFactory` at load, mirroring the
+// `registerBinaryInversions` / `registerNodeDeps` pattern used elsewhere.
 let cteFactory: ((name: string, relation: Node) => Cte) | null = null;
 export function _registerCteFactory(fn: (name: string, relation: Node) => Cte): void {
   cteFactory = fn;
@@ -80,7 +81,9 @@ export class As extends Binary {
   toCte(): Cte {
     const name =
       this.right instanceof SqlLiteral ? (this.right as SqlLiteral).value : String(this.right);
-    if (!cteFactory) throw new Error("Cte factory not registered (import ./cte.js first)");
+    if (!cteFactory) {
+      throw new Error("Cte factory not registered — import from @blazetrails/arel");
+    }
     return cteFactory(name, this.left as Node);
   }
 }

@@ -1,5 +1,5 @@
 import { Node, NodeVisitor } from "./node.js";
-import { Binary, _registerCteFactory } from "./binary.js";
+import { Binary } from "./binary.js";
 import { Table } from "../table.js";
 
 /**
@@ -31,5 +31,3 @@ export class Cte extends Binary {
     return visitor.visit(this);
   }
 }
-
-_registerCteFactory((name, relation) => new Cte(name, relation));

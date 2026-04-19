@@ -1,5 +1,6 @@
 import { Node } from "../nodes/node.js";
 import { Visitor } from "./visitor.js";
+import { PlainString } from "../collectors/plain-string.js";
 
 export class DotNode {
   readonly name: string;
@@ -37,11 +38,12 @@ export class Dot extends Visitor {
 
   accept(
     object: Node,
-    collector: { append(s: string): unknown; value: string },
+    collector?: { append(s: string): unknown; value: string },
   ): { value: string } {
     const dot = this.compile(object);
-    collector.append(dot);
-    return collector as { value: string };
+    const sink = collector ?? new PlainString();
+    sink.append(dot);
+    return sink as { value: string };
   }
 
   compile(node: Node): string {

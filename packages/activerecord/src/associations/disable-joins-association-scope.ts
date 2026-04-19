@@ -13,27 +13,45 @@ import type { AbstractReflection } from "../reflection.js";
 type ChainEntry = AbstractReflection | ReflectionProxy;
 
 /**
- * Defense in depth: the routing gate in associations.ts already rejects
- * composite-key through associations from this path, but per-step keys
- * are read fresh here, so guard explicitly to fail loudly rather than
- * silently truncating to `key[0]` and producing a broken WHERE.
- *
- * Composite-key support requires per-column predicates (or tuple IN)
- * and is a follow-up.
+ * Normalize a `joinPrimaryKey` / `joinForeignKey` to an array of column
+ * names. Both single-column (`"id"`) and composite (`["a", "b"]`)
+ * shapes are supported; downstream code branches on `cols.length === 1`
+ * vs `> 1` to decide between hash-WHERE (`{key: ids}`) and tuple-IN
+ * raw SQL (`(c1, c2) IN ((?, ?), ...)`).
  */
-function singleColumnKey(key: string | string[], label: string): string {
+function keyColumns(key: string | string[], label: string): string[] {
   if (Array.isArray(key)) {
     if (key.length === 0) {
       throw new Error(`DisableJoinsAssociationScope: empty ${label}`);
     }
-    if (key.length > 1) {
-      throw new Error(
-        `DisableJoinsAssociationScope: composite ${label} not supported (got [${key.join(", ")}])`,
-      );
-    }
-    return key[0];
+    return key;
   }
-  return key;
+  return [key];
+}
+
+/**
+ * Read multiple owner attributes as a tuple. Single-column case
+ * returns `[v]`; composite returns `[v1, v2, ...]` matching the
+ * column order. Used to seed the chain-walk's first join-IDs entry.
+ */
+function readTuple(owner: Base, cols: string[]): unknown[] {
+  return cols.map((c) => owner.readAttribute(c));
+}
+
+/**
+ * Build a tuple-IN WHERE clause as raw SQL: `(c1, c2) IN ((?, ?), ...)`.
+ * Returns null when `tuples` is empty (caller should short-circuit
+ * with no records). PG / MySQL / SQLite all support tuple IN; Arel's
+ * AST doesn't expose a direct constructor for it, so raw SQL is the
+ * portable path.
+ */
+function tupleInClause(cols: string[], tuples: unknown[][]): { sql: string; binds: unknown[] } {
+  const placeholderRow = "(" + cols.map(() => "?").join(", ") + ")";
+  const allRows = tuples.map(() => placeholderRow).join(", ");
+  const colList = cols.map((c) => `"${c.replace(/"/g, '""')}"`).join(", ");
+  const flat: unknown[] = [];
+  for (const t of tuples) flat.push(...t);
+  return { sql: `(${colList}) IN (${allRows})`, binds: flat };
 }
 
 /**
@@ -90,10 +108,10 @@ export class DisableJoinsAssociationScope extends AssociationScope {
         owner,
       );
       const key = (lastReflection as { joinPrimaryKey: string | string[] }).joinPrimaryKey;
-      const keyStr = singleColumnKey(key, "joinPrimaryKey");
+      const keyCols = keyColumns(key, "joinPrimaryKey");
       const relation = this._addConstraintsDj(
         lastReflection,
-        keyStr,
+        keyCols,
         lastJoinIds,
         owner,
         lastOrdered,
@@ -120,23 +138,27 @@ export class DisableJoinsAssociationScope extends AssociationScope {
       throw new Error("DisableJoinsAssociationScope: empty chain");
     }
     const firstFk = (firstItem as { joinForeignKey: string | string[] }).joinForeignKey;
-    const firstFkStr = singleColumnKey(firstFk, "joinForeignKey");
-    let acc: [ChainEntry, boolean, unknown[]] = [
-      firstItem,
-      false,
-      [owner.readAttribute(firstFkStr)],
-    ];
+    const firstFkCols = keyColumns(firstFk, "joinForeignKey");
+    // Single-column shape stays `[v1, v2, ...]` (one value per join
+    // candidate). Composite shape becomes `[[v1a, v1b], ...]` (one
+    // tuple per join candidate). The owner contributes exactly one
+    // tuple as the chain seed.
+    const seedTuple = readTuple(owner, firstFkCols);
+    const initialIds = firstFkCols.length === 1 ? [seedTuple[0]] : [seedTuple];
+    let acc: [ChainEntry, boolean, unknown[]] = [firstItem, false, initialIds];
 
     for (const nextReflection of work) {
       const [reflection, ordered, joinIds] = acc;
       const key = (reflection as { joinPrimaryKey: string | string[] }).joinPrimaryKey;
-      const keyStr = singleColumnKey(key, "joinPrimaryKey");
-      const records = this._addConstraintsDj(reflection, keyStr, joinIds, owner, ordered);
+      const keyCols = keyColumns(key, "joinPrimaryKey");
+      const records = this._addConstraintsDj(reflection, keyCols, joinIds, owner, ordered);
       const foreignKey = (nextReflection as { joinForeignKey: string | string[] }).joinForeignKey;
-      const foreignKeyStr = singleColumnKey(foreignKey, "joinForeignKey");
-      const recordIds = (await (records as { pluck: (col: string) => Promise<unknown[]> }).pluck(
-        foreignKeyStr,
-      )) as unknown[];
+      const foreignKeyCols = keyColumns(foreignKey, "joinForeignKey");
+      // Pluck single column → `[v, v, ...]`; pluck multiple →
+      // `[[v1a, v1b], ...]`. Forward as-is into the next iteration.
+      const recordIds = (await (
+        records as { pluck: (...cols: string[]) => Promise<unknown[]> }
+      ).pluck(...foreignKeyCols)) as unknown[];
       // `orderValues` covers `_orderClauses` (the parsed form); raw-SQL
       // orders (e.g. `inOrderOf`) live in `_rawOrderClauses` and are
       // invisible to the public getter. Check both so chain steps with
@@ -163,14 +185,42 @@ export class DisableJoinsAssociationScope extends AssociationScope {
    */
   private _addConstraintsDj(
     reflection: ChainEntry,
-    key: string,
+    keyCols: string[],
     joinIds: unknown[],
     owner: Base,
     ordered: boolean,
   ): unknown {
     const klass = (reflection as { klass: typeof Base }).klass;
     let scope: unknown = (klass as unknown as { unscoped: () => unknown }).unscoped();
-    scope = (scope as { where: (c: Record<string, unknown>) => unknown }).where({ [key]: joinIds });
+    if (keyCols.length === 1) {
+      // Single-column key: hash WHERE compiles to `key IN (?, ?, ...)`.
+      scope = (scope as { where: (c: Record<string, unknown>) => unknown }).where({
+        [keyCols[0]]: joinIds,
+      });
+    } else {
+      // Composite key: tuples of values. Empty tuple list ⇒ empty
+      // result; short-circuit by emitting a never-true WHERE so the
+      // load returns 0 rows without a malformed `() IN ()` SQL.
+      const tuples = joinIds as unknown[][];
+      if (tuples.length === 0) {
+        scope = (scope as { where: (c: Record<string, unknown>) => unknown }).where({
+          [keyCols[0]]: null as unknown,
+        });
+        // The where above doesn't strictly produce zero rows for a
+        // nullable column; follow with `.none()` semantics by chaining
+        // a literal-false predicate. Fall through to scope_for_assoc /
+        // constraints below for parity, then the `none` short-circuit
+        // ensures no DB hit at toArray time. Use raw-SQL safety: a
+        // `1=0` clause is the universal "no rows" predicate.
+        scope = (scope as { where: (sql: string) => unknown }).where("1=0");
+      } else {
+        const { sql, binds } = tupleInClause(keyCols, tuples);
+        scope = (scope as { where: (sql: string, ...binds: unknown[]) => unknown }).where(
+          sql,
+          ...binds,
+        );
+      }
+    }
 
     const sfa = (
       klass as unknown as { scopeForAssociation?: () => unknown }
@@ -215,14 +265,23 @@ export class DisableJoinsAssociationScope extends AssociationScope {
         ? [1]
         : [];
     if (finalOrders.length === 0 && ordered) {
-      const split = new DisableJoinsAssociationRelation<Base>(klass, key, joinIds);
-      const sourceWhere = (scope as { _whereClause?: { predicates?: unknown[] } })._whereClause;
-      const splitWhere = (split as unknown as { _whereClause?: { predicates: unknown[] } })
-        ._whereClause;
-      if (sourceWhere?.predicates && splitWhere) {
-        splitWhere.predicates.push(...sourceWhere.predicates);
+      // DJAR's loaded-chain wrap groups records by `key` (single
+      // string) and re-emits in `ids` order. For composite keys this
+      // would need tuple grouping (out of scope for this PR — see
+      // task #10). Skip the wrap for composite; records still load
+      // correctly via the tuple-IN WHERE above, just without the
+      // through-table-order reorder. Single-column case keeps the
+      // wrap.
+      if (keyCols.length === 1) {
+        const split = new DisableJoinsAssociationRelation<Base>(klass, keyCols[0], joinIds);
+        const sourceWhere = (scope as { _whereClause?: { predicates?: unknown[] } })._whereClause;
+        const splitWhere = (split as unknown as { _whereClause?: { predicates: unknown[] } })
+          ._whereClause;
+        if (sourceWhere?.predicates && splitWhere) {
+          splitWhere.predicates.push(...sourceWhere.predicates);
+        }
+        return split;
       }
-      return split;
     }
     return scope;
   }

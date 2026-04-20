@@ -73,8 +73,17 @@ export const defaultEncryptor: Encryptor = {
  *      `ActiveRecord::Encryption::Encryptor#encrypted?`, which does
  *      `serializer.load(encrypted_text); true; rescue; false`.
  *
- * A custom encryptor whose `decrypt` is permissive (doesn't throw on
- * plaintext) MUST supply `encrypted()` to avoid misclassification.
+ * Two caveats with the fallback path:
+ *
+ * - A custom encryptor whose `decrypt` is permissive (doesn't throw
+ *   on plaintext) MUST supply `encrypted()` to avoid misclassification.
+ * - When `supportUnencryptedData` is enabled, the scheme consults
+ *   `encrypted()` before decrypting, so the fallback path runs
+ *   `decrypt` once for the probe and once for real — roughly 2x the
+ *   CPU. Rails avoids this by probing with `serializer.load` (cheap
+ *   parse, no cipher), but the simple `{ encrypt, decrypt }` surface
+ *   has no equivalent cheap probe. Supplying `encrypted()` eliminates
+ *   the double work; consider doing so in perf-sensitive paths.
  */
 class LegacyEncryptorShim implements EncryptorLike {
   constructor(private readonly inner: Encryptor) {}

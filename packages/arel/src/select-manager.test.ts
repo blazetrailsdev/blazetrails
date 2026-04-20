@@ -625,6 +625,16 @@ describe("SelectManagerTest", () => {
       expect(stmt.toSql()).toBe('UPDATE "users" SET foo = bar');
     });
 
+    it("takes a bound sql literal", () => {
+      const mgr = new SelectManager();
+      mgr.from(users);
+      const stmt = mgr.compileUpdate(
+        new Nodes.BoundSqlLiteral("foo = ?", [1], {}),
+        users.get("id"),
+      );
+      expect(stmt.toSql()).toBe('UPDATE "users" SET foo = 1');
+    });
+
     it("copies limits", () => {
       const mgr = new SelectManager();
       mgr.from(users).take(1);

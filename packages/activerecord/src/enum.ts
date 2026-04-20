@@ -1,5 +1,5 @@
 import type { Base } from "./base.js";
-import { camelize } from "@blazetrails/activesupport";
+import { camelize, pluralize } from "@blazetrails/activesupport";
 import { ValueType } from "@blazetrails/activemodel";
 
 /**
@@ -348,8 +348,9 @@ export function enumMethod(
     });
   }
 
-  // Static method to get the mapping: User.statuses
-  Object.defineProperty(this, `${attribute}s`, {
+  // Mapping accessor under the pluralized attribute name (e.g. User.statuses
+  // for `status`). Rails: `singleton_class.define_method(name.to_s.pluralize)`.
+  Object.defineProperty(this, pluralize(attribute), {
     get() {
       return { ...mapping };
     },

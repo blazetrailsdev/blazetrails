@@ -349,9 +349,17 @@ function _canRouteThroughViaAssociationScope(
  * Disable-joins routing gate. Mirrors `_canRouteThroughViaAssociationScope`
  * but for `disable_joins: true` through associations — runs the chain
  * via the Rails-faithful `DisableJoinsAssociationScope` (per-step pluck
- * + IN list) rather than the legacy `loadHasManyThrough` 2-step. PR 4
- * routes the simple non-polymorphic shape only; polymorphic / sourceType
- * stays on the existing loader.
+ * + IN list) rather than the legacy `loadHasManyThrough` 2-step.
+ *
+ * Currently routes: single-column and composite-key through
+ * associations (from PR #645) and polymorphic-source + `sourceType`
+ * through-associations (from PR #661 — Rails' DJAS has no such gate
+ * and evaluates the per-reflection `constraints()` chain, including
+ * `ThroughReflection#_sourceTypeScope()` which applies
+ * `where(source_type: ...)` on the through step).
+ *
+ * Remaining bail-out: nested-through (`isNested()`). Follow-up
+ * widening covers that case.
  */
 function _canRouteThroughViaDisableJoinsAssociationScope(
   reflection: unknown,

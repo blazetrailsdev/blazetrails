@@ -88,6 +88,13 @@ describe("DJAS routing widening — sourceType + polymorphic source", () => {
       sourceType: "RwMember",
       disableJoins: true,
     });
+    Associations.hasOne.call(RwAuthor, "noJoinsOneRwMember", {
+      className: "RwMember",
+      through: "rwComments",
+      source: "origin",
+      sourceType: "RwMember",
+      disableJoins: true,
+    });
   });
 
   afterEach(() => {
@@ -130,8 +137,11 @@ describe("DJAS routing widening — sourceType + polymorphic source", () => {
       const reflection = (RwAuthor as any)._reflectOnAssociation("noJoinsRwMembers");
       const members = await loadHasMany(author, "noJoinsRwMembers", reflection.options);
       expect(members.map((m: any) => m.id).sort()).toEqual([m1.id, m2.id].sort());
-      // `count()` should hit the same routing gate and also avoid the
-      // JOIN path. Covers the pluck branch of DJAR alongside toArray.
+      // `count()` should hit the same routing gate and also avoid
+      // the JOIN path. CollectionProxy#count currently loads
+      // records and returns `.length` rather than issuing a
+      // distinct COUNT — we only assert the cardinality and the
+      // no-JOIN shape, not the query form.
       const count = await association(author, "noJoinsRwMembers").count();
       expect(count).toBe(2);
     } finally {
@@ -150,14 +160,9 @@ describe("DJAS routing widening — sourceType + polymorphic source", () => {
   it("has_one :through polymorphic+sourceType routes through DJAS (no JOIN)", async () => {
     // The routing gate is shared by loadHasMany and loadHasOne
     // (associations.ts), so the same widening needs to hold for
-    // has_one :through.
-    Associations.hasOne.call(RwAuthor, "noJoinsOneRwMember", {
-      className: "RwMember",
-      through: "rwComments",
-      source: "origin",
-      sourceType: "RwMember",
-      disableJoins: true,
-    });
+    // has_one :through. `noJoinsOneRwMember` is defined in
+    // beforeEach above so we don't mutate RwAuthor's association list
+    // across tests.
     const author = await RwAuthor.create({ name: "a" });
     const member = (await RwMember.create({ name: "m" })) as any;
     const other = (await RwOtherOrigin.create({ label: "o" })) as any;

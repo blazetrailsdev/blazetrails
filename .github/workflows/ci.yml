@@ -346,12 +346,10 @@ jobs:
           NEEDS_JSON: ${{ toJSON(needs) }}
         run: |
           echo "$NEEDS_JSON"
-          echo "$NEEDS_JSON" | python3 -c '
-          import json, sys
-          data = json.load(sys.stdin)
-          bad = [name for name, job in data.items() if job["result"] in ("failure", "cancelled")]
-          if bad:
-              print("Failed/cancelled jobs:", bad)
-              sys.exit(1)
-          print("All jobs passed or were intentionally skipped.")
-          '
+          bad=$(echo "$NEEDS_JSON" | jq -r 'to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | .key')
+          if [ -n "$bad" ]; then
+            echo "Failed/cancelled jobs:"
+            echo "$bad"
+            exit 1
+          fi
+          echo "All jobs passed or were intentionally skipped."

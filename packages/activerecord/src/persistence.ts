@@ -5,7 +5,16 @@
  * Mirrors: ActiveRecord::Persistence::ClassMethods
  */
 
-import { InsertManager, UpdateManager, DeleteManager, Table as ArelTable } from "@blazetrails/arel";
+import {
+  InsertManager,
+  UpdateManager,
+  DeleteManager,
+  Table as ArelTable,
+  star as arelStar,
+} from "@blazetrails/arel";
+import { AttributeAssignmentError, ReadOnlyRecord, RecordNotFound } from "./errors.js";
+import { clearAutosaveState } from "./autosave-association.js";
+import { getStiBase, getInheritanceColumn, isStiSubclass } from "./inheritance.js";
 
 interface PersistenceHost {
   new (attrs?: Record<string, unknown>): any;
@@ -471,4 +480,320 @@ export async function deleteRow<T extends DeleteRecord>(this: T): Promise<T> {
   this._previouslyNewRecord = false;
   this.freeze();
   return this;
+}
+
+// ---------------------------------------------------------------------------
+// Instance read-helpers — slice / valuesAt / assignAttributes.
+// Mirror ActiveRecord::Base#slice / #values_at / #assign_attributes.
+// ---------------------------------------------------------------------------
+
+/** Mirrors: ActiveRecord::Base#slice */
+export function slice(this: AttributeIO, ...keys: string[]): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const key of keys) {
+    result[key] = this.readAttribute(key);
+  }
+  return result;
+}
+
+/** Mirrors: ActiveRecord::Base#values_at */
+export function valuesAt(this: AttributeIO, ...keys: string[]): unknown[] {
+  return keys.map((key) => this.readAttribute(key));
+}
+
+/**
+ * Mirrors: ActiveRecord::AttributeAssignment#assign_attributes. Rails'
+ * version lets setter exceptions propagate raw; ours additionally wraps
+ * them in AttributeAssignmentError with the offending key/value for
+ * debugging. (That wrapping is stricter than Rails but longstanding —
+ * preserved by this extraction; revisiting the Rails-fidelity gap can
+ * happen in a follow-up.)
+ */
+export function assignAttributes(this: AttributeIO, attrs: Record<string, unknown>): void {
+  for (const [key, value] of Object.entries(attrs)) {
+    try {
+      this.writeAttribute(key, value);
+    } catch (e) {
+      let repr: string;
+      try {
+        repr = JSON.stringify(value);
+      } catch {
+        repr = String(value);
+      }
+      throw new AttributeAssignmentError(
+        `error on assignment ${repr} to ${key} (${e instanceof Error ? e.message : String(e)})`,
+        e instanceof Error ? e : undefined,
+        key,
+      );
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// updateAttribute / updateAttributeBang / updateColumn(s) — single- and
+// multi-column writers. Rails' update_attribute runs callbacks (skips
+// validations); update_column(s) skips both.
+// ---------------------------------------------------------------------------
+
+interface AttributeSingleSave {
+  writeAttribute(name: string, value: unknown): void;
+  save(options?: { validate?: boolean }): Promise<boolean>;
+  saveBang(options?: { validate?: boolean }): Promise<true>;
+}
+
+/** Mirrors: ActiveRecord::Persistence#update_attribute */
+export async function updateAttribute<T extends AttributeSingleSave>(
+  this: T,
+  name: string,
+  value: unknown,
+): Promise<boolean> {
+  this.writeAttribute(name, value);
+  return this.save({ validate: false });
+}
+
+/** Mirrors: ActiveRecord::Persistence#update_attribute! */
+export async function updateAttributeBang<T extends AttributeSingleSave>(
+  this: T,
+  name: string,
+  value: unknown,
+): Promise<true> {
+  this.writeAttribute(name, value);
+  return this.saveBang();
+}
+
+interface UpdateColumnsRecord {
+  _readonly: boolean;
+  _attributes: {
+    get(name: string): unknown;
+    set(name: string, value: unknown): void;
+  };
+  id: unknown;
+  isPersisted(): boolean;
+  changesApplied(): void;
+  constructor: {
+    name: string;
+    arelTable: InstanceType<typeof ArelTable>;
+    _attributeDefinitions: Map<string, { type: { cast(v: unknown): unknown } }>;
+    _buildPkWhere(id: unknown): string;
+    adapter: { execUpdate(sql: string, name: string): Promise<unknown> };
+  };
+}
+
+/** Mirrors: ActiveRecord::Persistence#update_column */
+export async function updateColumn<T extends UpdateColumnsRecord>(
+  this: T & { updateColumns(attrs: Record<string, unknown>): Promise<void> },
+  name: string,
+  value: unknown,
+): Promise<void> {
+  return this.updateColumns({ [name]: value });
+}
+
+/**
+ * Mirrors: ActiveRecord::Persistence#update_columns. Writes the given
+ * attributes straight to the database via a raw UPDATE, bypassing
+ * validations, callbacks and timestamps. Resets dirty tracking so the
+ * written values are the new baseline.
+ */
+export async function updateColumns<T extends UpdateColumnsRecord>(
+  this: T,
+  attrs: Record<string, unknown>,
+): Promise<void> {
+  if (this._readonly) {
+    throw new ReadOnlyRecord(`${this.constructor.name} is marked as readonly`);
+  }
+  if (!this.isPersisted()) {
+    throw new Error("Cannot update columns on a new or destroyed record");
+  }
+
+  const ctor = this.constructor;
+  const table = ctor.arelTable;
+
+  // Cast values through their declared attribute types (no dirty tracking
+  // — this path bypasses writeAttribute deliberately).
+  for (const [key, value] of Object.entries(attrs)) {
+    const def = ctor._attributeDefinitions.get(key);
+    this._attributes.set(key, def ? def.type.cast(value) : value);
+  }
+
+  const setClauses = Object.entries(attrs)
+    .map(([key]) => {
+      const val = this._attributes.get(key);
+      if (val === null) return `"${key}" = NULL`;
+      if (typeof val === "number") return `"${key}" = ${val}`;
+      if (typeof val === "boolean") return `"${key}" = ${val ? "TRUE" : "FALSE"}`;
+      if (val instanceof Date) return `"${key}" = '${val.toISOString()}'`;
+      if (typeof val === "object") return `"${key}" = '${JSON.stringify(val).replace(/'/g, "''")}'`;
+      return `"${key}" = '${String(val).replace(/'/g, "''")}'`;
+    })
+    .join(", ");
+
+  const sql = `UPDATE "${(table as unknown as { name: string }).name}" SET ${setClauses} WHERE ${ctor._buildPkWhere(this.id)}`;
+  await ctor.adapter.execUpdate(sql, "Update Columns");
+
+  this.changesApplied();
+}
+
+// ---------------------------------------------------------------------------
+// reload — refetch from DB and reset in-memory state.
+// ---------------------------------------------------------------------------
+
+interface ReloadRecord {
+  _attributes: {
+    set(name: string, value: unknown): void;
+  };
+  _dirty: { snapshot(attrs: unknown): void };
+  _collectionProxies: Map<string, unknown>;
+  _preloadedAssociations: Map<string, unknown>;
+  _associationInstances: Map<string, unknown>;
+  _cachedAssociations?: Map<string, unknown>;
+  id: unknown;
+  constructor: {
+    name: string;
+    primaryKey: string | string[];
+    arelTable: { project(...cols: unknown[]): { where(node: unknown): { toSql(): string } } };
+    _buildPkWhereNode(id: unknown): unknown;
+    adapter: {
+      selectAll(
+        sql: string,
+        name: string,
+      ): Promise<{ first(): Record<string, unknown> | undefined }>;
+    };
+  };
+}
+
+/**
+ * Re-fetch the record from the database and overwrite in-memory attributes,
+ * resetting dirty tracking and clearing association/proxy caches.
+ *
+ * Mirrors: ActiveRecord::Persistence#reload
+ */
+export async function reload<T extends ReloadRecord>(this: T): Promise<T> {
+  const ctor = this.constructor;
+  const sm = ctor.arelTable.project(arelStar).where(ctor._buildPkWhereNode(this.id));
+  const result = await ctor.adapter.selectAll(sm.toSql(), "Reload");
+  const row = result.first();
+
+  if (row === undefined) {
+    throw new RecordNotFound(
+      `${ctor.name} with ${String(ctor.primaryKey)}=${String(this.id)} not found`,
+      ctor.name,
+      String(ctor.primaryKey),
+      this.id,
+    );
+  }
+
+  for (const [key, value] of Object.entries(row)) {
+    this._attributes.set(key, value);
+  }
+
+  this._dirty.snapshot(this._attributes);
+  this._collectionProxies.clear();
+  this._preloadedAssociations.clear();
+  this._associationInstances.clear();
+  this._cachedAssociations?.clear();
+  clearAutosaveState(this as unknown as Parameters<typeof clearAutosaveState>[0]);
+  return this;
+}
+
+// ---------------------------------------------------------------------------
+// dup / clone / becomes / becomes! — shape-preserving copies & class swaps.
+// ---------------------------------------------------------------------------
+
+interface DupRecord {
+  attributes: Record<string, unknown>;
+  constructor: new (attrs: Record<string, unknown>) => unknown;
+}
+
+/**
+ * Build an unsaved duplicate: same non-PK attributes, new_record = true.
+ *
+ * Mirrors: ActiveRecord::Inheritance#dup (Rails 7.2+ moved it from Core to
+ * Inheritance; the behavior is: copy attributes minus primary key[s]).
+ */
+export function dup<T extends DupRecord>(this: T): T {
+  const ctor = this.constructor as typeof this.constructor & {
+    primaryKey: string | string[];
+  };
+  const attrs = { ...this.attributes };
+  const pkCols = Array.isArray(ctor.primaryKey) ? ctor.primaryKey : [ctor.primaryKey];
+  for (const col of pkCols) {
+    delete attrs[col];
+  }
+  return new ctor(attrs) as T;
+}
+
+interface CloneRecord {
+  _attributes: unknown;
+  _previouslyNewRecord: boolean;
+  errors: { constructor: new (base: unknown) => unknown };
+}
+
+/**
+ * Shallow clone preserving the primary key and persisted state. The
+ * attribute map is shared with the original (Rails' Core#clone semantic).
+ * Ours also resets `_previouslyNewRecord` on the copy, since a clone of a
+ * post-save record is a fresh in-memory snapshot.
+ *
+ * Mirrors: ActiveRecord::Core#clone
+ */
+export function clone<T extends CloneRecord>(this: T): T {
+  const copy = Object.create(Object.getPrototypeOf(this)) as T;
+  Object.assign(copy, this);
+  (copy as unknown as CloneRecord)._attributes = this._attributes;
+  (copy as unknown as CloneRecord)._previouslyNewRecord = false;
+  (copy as unknown as { errors: unknown }).errors = new this.errors.constructor(copy);
+  return copy;
+}
+
+interface BecomesRecord {
+  _attributes: unknown;
+  _newRecord: boolean;
+  _dirty: { snapshot(attrs: unknown): void };
+  changesApplied(): void;
+}
+
+/**
+ * Returns an instance of `klass` that shares this record's attribute set,
+ * new-record flag, and dirty/clean state. Useful for STI where the same
+ * row should be viewed through a different subclass.
+ *
+ * Mirrors: ActiveRecord::Persistence#becomes
+ */
+export function becomes<
+  T extends BecomesRecord,
+  K extends new (attrs: Record<string, unknown>) => BecomesRecord,
+>(this: T, klass: K): InstanceType<K> {
+  const instance = new klass({}) as InstanceType<K>;
+  (instance as unknown as BecomesRecord)._attributes = this._attributes;
+  (instance as unknown as BecomesRecord)._newRecord = this._newRecord;
+  if (!this._newRecord) {
+    (instance as unknown as BecomesRecord)._dirty.snapshot(
+      (instance as unknown as BecomesRecord)._attributes,
+    );
+    (instance as unknown as BecomesRecord).changesApplied();
+  }
+  return instance;
+}
+
+/**
+ * Same as #becomes but sets the STI type column so the row can be
+ * persisted under the new class going forward.
+ *
+ * Mirrors: ActiveRecord::Persistence#becomes!
+ */
+export function becomesBang<
+  T extends BecomesRecord & { becomes: typeof becomes },
+  K extends typeof import("./base.js").Base,
+>(this: T, klass: K): InstanceType<K> {
+  const instance = this.becomes(klass) as InstanceType<K>;
+  const base = getStiBase(klass);
+  const inheritanceCol = getInheritanceColumn(base);
+  if (inheritanceCol) {
+    const value = isStiSubclass(klass) ? klass.name : null;
+    (instance as unknown as { _attributes: { set(k: string, v: unknown): void } })._attributes.set(
+      inheritanceCol,
+      value,
+    );
+  }
+  return instance;
 }

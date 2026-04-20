@@ -327,11 +327,11 @@ describe("merge()", () => {
     expect(items[0].name).toBe("A");
   });
 
-  it("propagates the none() short-circuit from the other relation", async () => {
-    // Rails: merging a null-relation keeps the result empty so
-    // callers don't accidentally broaden an already-empty scope by
-    // composing state on top. We mirror the sticky behavior on
-    // `_isNone`.
+  it("propagates the none() short-circuit across merge in either direction", async () => {
+    // Rails: a null-relation stays empty through merge so callers
+    // don't broaden an already-empty scope by composing state. We
+    // mirror the sticky behavior on `_isNone` and it has to hold
+    // whichever side the `.none()` is on.
     class Item extends Base {
       static _tableName = "items";
     }
@@ -342,10 +342,21 @@ describe("merge()", () => {
     await Item.create({ name: "A" });
     await Item.create({ name: "B" });
 
-    const emptyOther = Item.all().none();
-    const merged = Item.all().merge(emptyOther);
-    expect((merged as unknown as { _isNone: boolean })._isNone).toBe(true);
-    expect(await merged.toArray()).toEqual([]);
+    // populated.merge(none) — the propagation case the merger fix
+    // was written for.
+    const noneOther = Item.all().none();
+    const fromPopulated = Item.all().merge(noneOther);
+    expect((fromPopulated as unknown as { _isNone: boolean })._isNone).toBe(true);
+    expect(await fromPopulated.toArray()).toEqual([]);
+
+    // none.merge(populated) — already emptied by the left side; the
+    // merge must not accidentally un-empty it. Exercised here so a
+    // future refactor that rebuilds state from `other` on top of a
+    // fresh base can't regress this.
+    const populatedOther = Item.all().where({ name: "A" });
+    const fromNone = Item.all().none().merge(populatedOther);
+    expect((fromNone as unknown as { _isNone: boolean })._isNone).toBe(true);
+    expect(await fromNone.toArray()).toEqual([]);
   });
 
   it("merges order from other relation", async () => {

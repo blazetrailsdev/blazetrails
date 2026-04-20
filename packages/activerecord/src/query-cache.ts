@@ -12,13 +12,16 @@
 import { Notifications } from "@blazetrails/activesupport";
 import type { DatabaseAdapter, ExplainOption } from "./adapter.js";
 import { Result } from "./result.js";
-import { Store } from "./connection-adapters/abstract/query-cache.js";
+// Import under the qualified TS name so the public `QueryCacheAdapter`
+// surface (e.g. `.cache: QueryCacheStore`) doesn't leak the generic
+// `Store` symbol into the generated `.d.ts`.
+import { Store as QueryCacheStore } from "./connection-adapters/abstract/query-cache.js";
 
 // Deep-import convenience: consumers doing
 // `import { ... } from "@blazetrails/activerecord/query-cache.js"`
 // can still reach the Store class from here under its
 // root-exported name.
-export { Store as QueryCacheStore } from "./connection-adapters/abstract/query-cache.js";
+export { QueryCacheStore };
 
 /**
  * QueryCache executor hooks — enable/disable query caching per-request.
@@ -118,13 +121,13 @@ export class QueryCacheAdapter implements DatabaseAdapter {
   }
 
   readonly inner: DatabaseAdapter;
-  readonly cache: Store;
+  readonly cache: QueryCacheStore;
   private _queryCount = 0;
   private _cacheHits = 0;
 
   constructor(inner: DatabaseAdapter, maxSize?: number) {
     this.inner = inner;
-    this.cache = new Store(maxSize);
+    this.cache = new QueryCacheStore(maxSize);
   }
 
   get queryCount(): number {

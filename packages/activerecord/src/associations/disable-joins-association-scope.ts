@@ -9,8 +9,17 @@ import type { Relation } from "../relation.js";
 import type { UnscopeType } from "../relation/query-methods.js";
 import type { Base } from "../base.js";
 import type { AbstractReflection } from "../reflection.js";
+import { argumentError } from "../relation/query-methods.js";
 
 type ChainEntry = AbstractReflection | ReflectionProxy;
+
+/**
+ * Join-id accumulator shape across the chain walk. Single-column keys
+ * carry a flat list of scalars (`unknown[]`); composite keys carry a
+ * list of tuples (`unknown[][]`). The shape per iteration is decided
+ * by the step's key arity in `_addConstraintsDj` / `_lastScopeChain`.
+ */
+type JoinIds = unknown[] | unknown[][];
 
 /**
  * Normalize a `joinPrimaryKey` / `joinForeignKey` to an array of column
@@ -116,7 +125,7 @@ export class DisableJoinsAssociationScope extends AssociationScope {
   private async _lastScopeChain(
     reverseChain: ChainEntry[],
     owner: Base,
-  ): Promise<[ChainEntry, boolean, unknown[]]> {
+  ): Promise<[ChainEntry, boolean, JoinIds]> {
     const work = reverseChain.slice();
     const firstItem = work.shift();
     if (!firstItem) {
@@ -129,8 +138,8 @@ export class DisableJoinsAssociationScope extends AssociationScope {
     // tuple per join candidate). The owner contributes exactly one
     // tuple as the chain seed.
     const seedTuple = readTuple(owner, firstFkCols);
-    const initialIds = firstFkCols.length === 1 ? [seedTuple[0]] : [seedTuple];
-    let acc: [ChainEntry, boolean, unknown[]] = [firstItem, false, initialIds];
+    const initialIds: JoinIds = firstFkCols.length === 1 ? [seedTuple[0]] : [seedTuple];
+    let acc: [ChainEntry, boolean, JoinIds] = [firstItem, false, initialIds];
 
     for (const nextReflection of work) {
       const [reflection, ordered, joinIds] = acc;
@@ -143,7 +152,7 @@ export class DisableJoinsAssociationScope extends AssociationScope {
       // `[[v1a, v1b], ...]`. Forward as-is into the next iteration.
       const recordIds = (await (
         records as { pluck: (...cols: string[]) => Promise<unknown[]> }
-      ).pluck(...foreignKeyCols)) as unknown[];
+      ).pluck(...foreignKeyCols)) as JoinIds;
       // `orderValues` covers `_orderClauses` (the parsed form); raw-SQL
       // orders (e.g. `inOrderOf`) live in `_rawOrderClauses` and are
       // invisible to the public getter. Check both so chain steps with
@@ -171,7 +180,7 @@ export class DisableJoinsAssociationScope extends AssociationScope {
   private _addConstraintsDj(
     reflection: ChainEntry,
     keyCols: string[],
-    joinIds: unknown[],
+    joinIds: JoinIds,
     owner: Base,
     ordered: boolean,
   ): unknown {
@@ -195,10 +204,26 @@ export class DisableJoinsAssociationScope extends AssociationScope {
       // semantics), arity validation, single-column degeneracy → IN,
       // and bind-param emission via QueryAttribute. Empty/all-filtered
       // tuples become `Relation#none()`. No DJAS-local scaffolding.
-      scope = (scope as { where: (c: string[], t: unknown[][]) => unknown }).where(
-        keyCols,
-        joinIds as unknown[][],
-      );
+      // Defense in depth: the chain walk constructs `joinIds` from
+      // `pluck(...cols)` with `cols.length > 1`, which yields an
+      // array of tuples. A bug upstream that hands us a flat list
+      // (or mismatched arity) would otherwise surface deep inside
+      // PredicateBuilder with a less actionable trace.
+      const arity = keyCols.length;
+      const tuples = joinIds.map((t, i) => {
+        if (!Array.isArray(t)) {
+          throw argumentError(
+            `DisableJoinsAssociationScope: composite joinIds[${i}] must be an array (got ${typeof t})`,
+          );
+        }
+        if (t.length !== arity) {
+          throw argumentError(
+            `DisableJoinsAssociationScope: composite joinIds[${i}] arity ${t.length} does not match key columns [${keyCols.join(", ")}] (arity ${arity})`,
+          );
+        }
+        return t;
+      }) as unknown[][];
+      scope = (scope as { where: (c: string[], t: unknown[][]) => unknown }).where(keyCols, tuples);
     }
 
     const sfa = (
@@ -253,7 +278,11 @@ export class DisableJoinsAssociationScope extends AssociationScope {
       // just without the through-table-order reorder. Single-column
       // case keeps the wrap.
       if (keyCols.length === 1) {
-        const split = new DisableJoinsAssociationRelation<Base>(klass, keyCols[0], joinIds);
+        const split = new DisableJoinsAssociationRelation<Base>(
+          klass,
+          keyCols[0],
+          joinIds as unknown[],
+        );
         const sourceWhere = (scope as { _whereClause?: { predicates?: unknown[] } })._whereClause;
         const splitWhere = (split as unknown as { _whereClause?: { predicates: unknown[] } })
           ._whereClause;

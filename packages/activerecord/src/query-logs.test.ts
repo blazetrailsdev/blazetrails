@@ -199,6 +199,17 @@ describe("GetKeyHandler", () => {
     logs.updateContext({ controller: "UsersController" });
     expect(logs.tagContent()).toBe("controller:UsersController");
   });
+
+  it("lazy-creates a handler if a tag is pushed without going through tags=", () => {
+    // tagContent must survive callers that mutate the live tags
+    // array directly — the handler cache is populated lazily on
+    // first access so we can't crash on a missing map entry.
+    const logs = new QueryLogs();
+    logs.tags = ["controller"];
+    logs.tags.push("action");
+    logs.updateContext({ controller: "Users", action: "index" });
+    expect(logs.tagContent()).toBe("controller:Users,action:index");
+  });
 });
 
 describe("LegacyFormatter", () => {

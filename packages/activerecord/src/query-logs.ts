@@ -175,7 +175,16 @@ export class QueryLogs {
         // Dispatch via the pre-built GetKeyHandler (rebuilt in `tags=`),
         // matching Rails' build_handler caching. The handler is
         // guaranteed present because `tags=` populated it.
-        const handler = this._keyHandlers.get(tag)!;
+        // Prefer the pre-built handler (warm path — populated by
+        // tags= setter). Fall back to a fresh one if callers mutated
+        // the live _tags array without going through the setter —
+        // better to pay the allocation than crash on a non-null
+        // assertion.
+        let handler = this._keyHandlers.get(tag);
+        if (!handler) {
+          handler = new GetKeyHandler(tag);
+          this._keyHandlers.set(tag, handler);
+        }
         const value = handler.call(this._context);
         if (value != null) {
           pairs.push(this._formatter.format(tag, value));

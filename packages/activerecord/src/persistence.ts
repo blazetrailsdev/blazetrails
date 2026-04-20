@@ -250,3 +250,72 @@ export function isPreviouslyNewRecord(this: PersistenceRecordFields): boolean {
 export function isPreviouslyPersisted(this: PersistenceRecordDispatch): boolean {
   return !this.isNewRecord() && this.isDestroyed();
 }
+
+// ---------------------------------------------------------------------------
+// Increment / decrement / toggle — ActiveRecord::Persistence#increment /
+// #decrement / #toggle and their bang counterparts. The plain forms mutate
+// in memory; the bang forms dispatch through `this` and then persist via
+// updateColumn (skipping validations and callbacks).
+// ---------------------------------------------------------------------------
+
+interface CounterRecord {
+  readAttribute(name: string): unknown;
+  writeAttribute(name: string, value: unknown): void;
+  updateColumn(name: string, value: unknown): Promise<unknown>;
+}
+
+/** Mirrors: ActiveRecord::Persistence#increment */
+export function increment<T extends CounterRecord>(this: T, attribute: string, by: number = 1): T {
+  const current = Number(this.readAttribute(attribute)) || 0;
+  this.writeAttribute(attribute, current + by);
+  return this;
+}
+
+/** Mirrors: ActiveRecord::Persistence#decrement */
+export function decrement<T extends CounterRecord>(this: T, attribute: string, by: number = 1): T {
+  const current = Number(this.readAttribute(attribute)) || 0;
+  this.writeAttribute(attribute, current - by);
+  return this;
+}
+
+/** Mirrors: ActiveRecord::Persistence#toggle */
+export function toggle<T extends CounterRecord>(this: T, attribute: string): T {
+  this.writeAttribute(attribute, !this.readAttribute(attribute));
+  return this;
+}
+
+/**
+ * Mirrors: ActiveRecord::Persistence#increment! — dispatches `increment`
+ * through `this` so subclass overrides take effect, then persists via
+ * updateColumn (skipping validations and callbacks).
+ */
+export async function incrementBang<T extends CounterRecord>(
+  this: T & { increment(attribute: string, by?: number): T },
+  attribute: string,
+  by: number = 1,
+): Promise<T> {
+  this.increment(attribute, by);
+  await this.updateColumn(attribute, this.readAttribute(attribute));
+  return this;
+}
+
+/** Mirrors: ActiveRecord::Persistence#decrement! */
+export async function decrementBang<T extends CounterRecord>(
+  this: T & { decrement(attribute: string, by?: number): T },
+  attribute: string,
+  by: number = 1,
+): Promise<T> {
+  this.decrement(attribute, by);
+  await this.updateColumn(attribute, this.readAttribute(attribute));
+  return this;
+}
+
+/** Mirrors: ActiveRecord::Persistence#toggle! */
+export async function toggleBang<T extends CounterRecord>(
+  this: T & { toggle(attribute: string): T },
+  attribute: string,
+): Promise<T> {
+  this.toggle(attribute);
+  await this.updateColumn(attribute, this.readAttribute(attribute));
+  return this;
+}

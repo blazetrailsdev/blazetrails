@@ -1739,9 +1739,10 @@ export function association<T extends Base = Base>(
     throw new Error(
       "CollectionProxy not registered. Either import '@blazetrails/activerecord' " +
         "once (the package entry loads CollectionProxy eagerly), or, if you are " +
-        "using subpath imports such as '@blazetrails/activerecord/associations' / " +
-        "'/base', call `await initializeAssociations()` (exported from " +
-        "'@blazetrails/activerecord/associations') before the first `association()` call.",
+        "using subpath imports such as '@blazetrails/activerecord/associations' or " +
+        "'@blazetrails/activerecord/base', call `await initializeAssociations()` " +
+        "(exported from '@blazetrails/activerecord/associations') before the first " +
+        "`association()` call.",
     );
   }
   const proxy = new _CollectionProxyCtor(record, assocName, assocDef) as CollectionProxy<T> & {

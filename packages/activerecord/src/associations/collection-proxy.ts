@@ -709,6 +709,76 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     return results.length;
   }
 
+  // Aggregate SQL entry points inherited from Relation (via the
+  // Calculations mixin) need the same divergence + strict-loading
+  // treatment as pluck/pick/count. Without overriding, cp.sum('x') /
+  // cp.whereBang({...}); cp.average('y') would both bypass the gate
+  // and drop in-place mutations.
+  // @ts-expect-error sum is a property on Relation (Calculations mixin);
+  //   method override is intentional to gate + honor divergence.
+  async sum(column?: string): Promise<number | Record<string, number>> {
+    this._checkStrictLoading();
+    const fn = (
+      Relation.prototype as unknown as {
+        sum: (col?: string) => Promise<number | Record<string, number>>;
+      }
+    ).sum;
+    if (this._relationStateDiverged()) return fn.call(this, column);
+    const s = this.scope();
+    return (
+      s as unknown as { sum: (col?: string) => Promise<number | Record<string, number>> }
+    ).sum(column);
+  }
+
+  // @ts-expect-error see `sum`.
+  async average(column: string): Promise<number | null | Record<string, number>> {
+    this._checkStrictLoading();
+    const fn = (
+      Relation.prototype as unknown as {
+        average: (col: string) => Promise<number | null | Record<string, number>>;
+      }
+    ).average;
+    if (this._relationStateDiverged()) return fn.call(this, column);
+    const s = this.scope();
+    return (
+      s as unknown as { average: (col: string) => Promise<number | null | Record<string, number>> }
+    ).average(column);
+  }
+
+  // @ts-expect-error see `sum`.
+  async minimum(column: string): Promise<unknown | null | Record<string, unknown>> {
+    this._checkStrictLoading();
+    const fn = (
+      Relation.prototype as unknown as {
+        minimum: (col: string) => Promise<unknown | null | Record<string, unknown>>;
+      }
+    ).minimum;
+    if (this._relationStateDiverged()) return fn.call(this, column);
+    const s = this.scope();
+    return (
+      s as unknown as {
+        minimum: (col: string) => Promise<unknown | null | Record<string, unknown>>;
+      }
+    ).minimum(column);
+  }
+
+  // @ts-expect-error see `sum`.
+  async maximum(column: string): Promise<unknown | null | Record<string, unknown>> {
+    this._checkStrictLoading();
+    const fn = (
+      Relation.prototype as unknown as {
+        maximum: (col: string) => Promise<unknown | null | Record<string, unknown>>;
+      }
+    ).maximum;
+    if (this._relationStateDiverged()) return fn.call(this, column);
+    const s = this.scope();
+    return (
+      s as unknown as {
+        maximum: (col: string) => Promise<unknown | null | Record<string, unknown>>;
+      }
+    ).maximum(column);
+  }
+
   /**
    * Alias for count.
    *

@@ -162,15 +162,57 @@ export class AssociationRelation<T extends Base> extends Relation<T> {
   // reads; with CP now extending Relation, chained AR methods need the
   // same gate.
 
-  // @ts-expect-error — Relation defines `count` as a property; override as
-  //   a method so we can gate strict-loading before dispatching.
-  async count(...args: unknown[]): Promise<number | Record<string, number>> {
+  // @ts-expect-error — Relation defines `count` as a property; override
+  //   as a method so we can gate strict-loading before dispatching.
+  async count(column?: string): Promise<number | Record<string, number>> {
     this._checkStrictLoading();
     return (
       Relation.prototype as unknown as {
-        count: (...a: unknown[]) => Promise<number | Record<string, number>>;
+        count: (col?: string) => Promise<number | Record<string, number>>;
       }
-    ).count.apply(this, args);
+    ).count.call(this, column);
+  }
+
+  // @ts-expect-error — sum/average/minimum/maximum are also property-
+  //   assigned on Relation (from the Calculations mixin); override as
+  //   methods to gate strict-loading before each SQL entry point.
+  async sum(column?: string): Promise<number | Record<string, number>> {
+    this._checkStrictLoading();
+    return (
+      Relation.prototype as unknown as {
+        sum: (col?: string) => Promise<number | Record<string, number>>;
+      }
+    ).sum.call(this, column);
+  }
+
+  // @ts-expect-error — see `sum`.
+  async average(column: string): Promise<number | null | Record<string, number>> {
+    this._checkStrictLoading();
+    return (
+      Relation.prototype as unknown as {
+        average: (col: string) => Promise<number | null | Record<string, number>>;
+      }
+    ).average.call(this, column);
+  }
+
+  // @ts-expect-error — see `sum`.
+  async minimum(column: string): Promise<unknown | null | Record<string, unknown>> {
+    this._checkStrictLoading();
+    return (
+      Relation.prototype as unknown as {
+        minimum: (col: string) => Promise<unknown | null | Record<string, unknown>>;
+      }
+    ).minimum.call(this, column);
+  }
+
+  // @ts-expect-error — see `sum`.
+  async maximum(column: string): Promise<unknown | null | Record<string, unknown>> {
+    this._checkStrictLoading();
+    return (
+      Relation.prototype as unknown as {
+        maximum: (col: string) => Promise<unknown | null | Record<string, unknown>>;
+      }
+    ).maximum.call(this, column);
   }
 
   override pluck(...columns: Parameters<Relation<T>["pluck"]>): Promise<unknown[]> {

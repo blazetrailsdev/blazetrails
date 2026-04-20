@@ -206,6 +206,46 @@ export class PredicateBuilder {
     return this.rangeHandler.call(attribute, range);
   }
 
+  /**
+   * Build an OR-of-AND composite-key predicate:
+   *
+   *   (c1 = v11 AND c2 = v12) OR (c1 = v21 AND c2 = v22) OR ...
+   *
+   * The Rails analog is `where({[col1, col2] => [[v1, v2], ...]})`,
+   * which Rails routes through `Arel::Nodes::HomogeneousIn` and the
+   * predicate builder. JS object keys can't be arrays, so we expose
+   * the composite shape as a separate method (and a matching
+   * `Relation#where(cols, tuples)` overload).
+   *
+   * Tuples containing `null` / `undefined` are filtered out: SQL
+   * tuple-equality semantics treat any null component as a non-match
+   * (Arel's `Attribute#eq(null)` would emit `IS NULL`, which is
+   * different). After filtering, an empty tuple list returns `null`
+   * — caller short-circuits via `Relation#none()`.
+   *
+   * Mirrors: ActiveRecord predicate-builder composite-key handling
+   * (relation/predicate_builder/array_handler.rb's homogeneous-in
+   * path for tuple values).
+   */
+  buildComposite(cols: string[], tuples: unknown[][]): Nodes.Node | null {
+    if (cols.length === 0) {
+      throw new Error("PredicateBuilder.buildComposite: empty column list");
+    }
+    const validTuples = tuples.filter(
+      (t) =>
+        Array.isArray(t) &&
+        t.length === cols.length &&
+        t.every((v) => v !== null && v !== undefined),
+    );
+    if (validTuples.length === 0) return null;
+    const groupings: Nodes.Node[] = validTuples.map((tuple) => {
+      const eqs = cols.map((c, i) => this.resolveColumn(c).eq(tuple[i]));
+      return new Nodes.Grouping(eqs.length === 1 ? eqs[0] : new Nodes.And(eqs));
+    });
+    if (groupings.length === 1) return groupings[0];
+    return new Nodes.Grouping(groupings.reduce((left, right) => new Nodes.Or(left, right)));
+  }
+
   resolveColumn(key: string): Nodes.Attribute {
     return PredicateBuilder.resolveColumn(this.table, key);
   }

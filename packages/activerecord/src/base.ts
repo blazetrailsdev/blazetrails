@@ -1396,16 +1396,28 @@ export class Base extends Model {
   ): Relation<InstanceType<T>>;
   static where<T extends typeof Base>(
     this: T,
-    conditionsOrSql: Record<string, unknown> | string,
-    ...binds: unknown[]
+    cols: string[],
+    tuples: unknown[][],
+  ): Relation<InstanceType<T>>;
+  static where<T extends typeof Base>(
+    this: T,
+    conditionsOrSql: Record<string, unknown> | string | string[],
+    ...rest: unknown[]
   ): Relation<InstanceType<T>> {
     if (this.abstractClass) {
       throw new Error(`Cannot call where on abstract class ${this.name}`);
     }
     if (typeof conditionsOrSql === "string") {
-      return this.all().where(conditionsOrSql, ...binds);
+      return this.all().where(conditionsOrSql, ...rest);
     }
-    return this.all().where(conditionsOrSql);
+    if (
+      Array.isArray(conditionsOrSql) &&
+      conditionsOrSql.every((c) => typeof c === "string") &&
+      Array.isArray(rest[0])
+    ) {
+      return this.all().where(conditionsOrSql, rest[0] as unknown[][]);
+    }
+    return this.all().where(conditionsOrSql as Record<string, unknown>);
   }
 
   static whereNot<T extends typeof Base>(

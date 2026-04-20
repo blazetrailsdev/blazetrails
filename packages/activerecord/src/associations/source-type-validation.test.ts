@@ -15,8 +15,12 @@
  * unguarded polymorphic-source case has no type filter and mixes
  * ids across polymorphic target tables).
  *
- * This test exercises both error paths via `association()`, which
- * constructs the `Association` instance that runs the check.
+ * The suite covers: both error paths via `association()` (which
+ * runs the check during `Association#constructor`), the loader
+ * entry point (`loadHasMany`) so direct callers that bypass the
+ * proxy still surface the misconfiguration, and the valid shape
+ * (polymorphic source paired with `sourceType`) to pin the
+ * no-false-positive contract.
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { Base, registerModel } from "../index.js";

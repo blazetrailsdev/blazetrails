@@ -74,6 +74,10 @@ export function validateThroughSourceType(modelClass: typeof Base, assocName: st
     }
     // Swallow other validity errors for now; once task #23 widens
     // the check, all errors propagate and this `catch` goes away.
+    // Mark as checked even on swallow so a static misconfiguration
+    // doesn't re-run checkValidityBang on every first-use call —
+    // the outcome is stable until the reflection changes.
+    refl[CHECKED] = true;
     return;
   }
   refl[CHECKED] = true;

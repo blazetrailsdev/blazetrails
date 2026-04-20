@@ -1,7 +1,6 @@
 import { Notifications } from "@blazetrails/activesupport";
 import type { DatabaseStatementsHost } from "./database-statements.js";
 
-const DEFAULT_SIZE = 100;
 const DEFAULT_MAX_SIZE = 100;
 
 /**
@@ -131,7 +130,7 @@ export class ConnectionPoolConfiguration {
     } else if (typeof queryCacheConfig === "number") {
       this._queryCacheMaxSize = queryCacheConfig;
     } else {
-      this._queryCacheMaxSize = DEFAULT_SIZE;
+      this._queryCacheMaxSize = DEFAULT_MAX_SIZE;
     }
   }
 

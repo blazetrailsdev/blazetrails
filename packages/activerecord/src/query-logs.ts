@@ -111,6 +111,7 @@ export class QueryLogs {
       // constructor name and type for a useful diagnostic.
       const describe = (v: unknown): string => {
         if (v === null) return "null";
+        if (v === undefined) return "undefined";
         if (typeof v === "function") return `class/function ${v.name || "<anonymous>"}`;
         if (typeof v === "object") {
           const name = (v as { constructor?: { name?: string } })?.constructor?.name;

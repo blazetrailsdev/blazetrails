@@ -25,9 +25,11 @@ import type { EncryptorLike } from "./encryption/encryptor.js";
 /**
  * The simple encryptor surface `Base.encrypts({ encryptor })` accepts.
  * If the encryptor implements `encrypted(text)` it will be consulted
- * directly; otherwise the shim conservatively returns `false` (see
- * `LegacyEncryptorShim.encrypted`) so `supportUnencryptedData` can
- * pass plaintext through unchanged.
+ * directly; otherwise the shim probes by calling `decrypt(text)` and
+ * treats a non-throwing decrypt as encrypted (see
+ * `LegacyEncryptorShim.encrypted`). Custom encryptors whose `decrypt`
+ * accepts plaintext without throwing should also implement
+ * `encrypted(text)` to avoid misclassification.
  */
 export interface Encryptor {
   encrypt(value: string): string;

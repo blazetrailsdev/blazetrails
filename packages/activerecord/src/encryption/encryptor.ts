@@ -18,11 +18,10 @@ export interface EncryptorOptions {
 
 /**
  * Structural encryptor surface accepted by `Scheme.encryptor`. The
- * concrete `Encryptor` class satisfies this, as do `NullEncryptor`,
- * `ReadOnlyNullEncryptor`, `EncryptingOnlyEncryptor`, and the legacy
- * shim used by `Base.encrypts`. Keeps the scheme decoupled from any
- * one implementation so a subtype (or test double) can be passed in
- * without casting through `never`.
+ * concrete `Encryptor` class satisfies this interface. Keeps the
+ * scheme decoupled from any one implementation so a compatible
+ * subtype (or test double) can be passed in without casting through
+ * `never`.
  */
 export interface EncryptorLike {
   encrypt(clearText: string, options?: Record<string, unknown>): string;

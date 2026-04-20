@@ -1379,7 +1379,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         `Couldn't find ${targetModel.name} with an empty list of ids`,
         targetModel.name,
         String(pk),
-        [] as unknown as string | number,
+        [],
       );
     }
 
@@ -1397,8 +1397,22 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     let ids: unknown[];
     let wantArray: boolean;
     if (rest.length > 0) {
-      ids = args;
-      wantArray = true;
+      // Composite PK variadic scalars — `find(1, 42)` on PK
+      // [id1, id2] is ONE tuple, matching Relation.performFind.
+      // Only collapses when the arg count exactly equals the PK
+      // arity AND no arg is itself an array (arrays signal
+      // "tuples-of-tuples" for multi-lookup).
+      if (
+        composite &&
+        args.length === (pk as string[]).length &&
+        args.every((x) => !Array.isArray(x))
+      ) {
+        ids = [args];
+        wantArray = false;
+      } else {
+        ids = args;
+        wantArray = true;
+      }
     } else if (Array.isArray(first)) {
       if (composite) {
         const pkArity = (pk as string[]).length;
@@ -1431,7 +1445,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         `Couldn't find ${targetModel.name} with an empty list of ids`,
         targetModel.name,
         String(pk),
-        [] as unknown as string | number,
+        [],
       );
     }
 
@@ -1448,7 +1462,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
             } (expected an array with ${pkArity} elements)`,
             targetModel.name,
             String(pk),
-            id as string | number,
+            id,
           );
         }
       }
@@ -1506,7 +1520,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
             .join(", ")})`,
           targetModel.name,
           String(pk),
-          ids as unknown as string | number,
+          ids,
         );
       }
       return castedIds.map((c) => byPk.get(keyForCastedId(c)) as T);
@@ -1519,7 +1533,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         `Couldn't find ${targetModel.name} with '${String(pk)}'=${formatId(id)}`,
         targetModel.name,
         String(pk),
-        id as string | number,
+        id,
       );
     }
     return match;

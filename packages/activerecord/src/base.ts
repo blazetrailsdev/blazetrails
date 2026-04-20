@@ -3027,10 +3027,10 @@ export class Base extends Model {
     return this.isEqual(other);
   }
 
-  // --- Associations instance methods (wired via include() after class body) ---
-  declare association: typeof _AssocInstance.association;
-  declare loadBelongsTo: typeof _AssocInstance.loadBelongsTo;
-  declare loadHasOne: typeof _AssocInstance.loadHasOne;
+  // Associations instance methods wired via include() below;
+  // signatures declared on the merged `interface Base` at the bottom
+  // of this file so subclass-variance rules treat them as methods
+  // (bivariant) rather than properties (invariant).
 
   // Underscore aliases for bang methods (Rails uses ! suffix, TS uses _ suffix)
   static async first_<T extends typeof Base>(this: T): Promise<InstanceType<T>> {
@@ -3066,8 +3066,12 @@ export class Base extends Model {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging, @typescript-eslint/no-empty-object-type
-export interface Base extends Included<typeof AutosaveAssociation> {}
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
+export interface Base extends Included<typeof AutosaveAssociation> {
+  association(name: string): AssociationInstance;
+  loadBelongsTo(name: string): Promise<Base | null>;
+  loadHasOne(name: string): Promise<Base | null>;
+}
 
 // ---------------------------------------------------------------------------
 // Ruby-style mixin wiring — one `extend` per module, mirroring Rails:

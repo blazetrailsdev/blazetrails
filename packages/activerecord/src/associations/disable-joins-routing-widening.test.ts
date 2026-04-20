@@ -98,9 +98,9 @@ describe("DJAS routing widening — sourceType + polymorphic source", () => {
     const author = await RwAuthor.create({ name: "a" });
     const m1 = (await RwMember.create({ name: "m1" })) as any;
     const m2 = (await RwMember.create({ name: "m2" })) as any;
-    // Insert an RwOtherOrigin FIRST so the id-sequences overlap —
-    // ensures the source_type filter is the thing doing the
-    // disambiguation, not a lucky id mismatch.
+    // ids overlap across polymorphic target tables (separate
+    // per-table sequences), so the source_type filter is the only
+    // thing that could discriminate — not a lucky id mismatch.
     const other = (await RwOtherOrigin.create({ label: "o" })) as any;
     expect(other.id).toBe(m1.id); // id collision across polymorphic targets
     // Comments pointing at both RwMembers (match sourceType) and the

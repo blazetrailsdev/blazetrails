@@ -551,14 +551,24 @@ export async function updateAttribute<T extends AttributeSingleSave>(
   return this.save({ validate: false });
 }
 
-/** Mirrors: ActiveRecord::Persistence#update_attribute! */
+/**
+ * Mirrors: ActiveRecord::Persistence#update_attribute! —
+ * `public_send("#{name}=", value); save!(validate: false)`.
+ * Skips validations, raises RecordNotSaved when a callback aborts.
+ */
 export async function updateAttributeBang<T extends AttributeSingleSave>(
   this: T,
   name: string,
   value: unknown,
 ): Promise<true> {
   this.writeAttribute(name, value);
-  return this.saveBang();
+  const saved = await this.save({ validate: false });
+  if (!saved) {
+    const ctorName = (this.constructor as { name?: string }).name || "record";
+    const { RecordNotSaved } = await import("./errors.js");
+    throw new RecordNotSaved(`Failed to save the ${ctorName} while updating \`${name}\``, this);
+  }
+  return true;
 }
 
 interface UpdateColumnsRecord {
@@ -575,7 +585,14 @@ interface UpdateColumnsRecord {
     arelTable: InstanceType<typeof ArelTable>;
     _attributeDefinitions: Map<string, { type: { cast(v: unknown): unknown } }>;
     _buildPkWhere(id: unknown): string;
-    adapter: { execUpdate(sql: string, name: string): Promise<unknown> };
+    adapter: {
+      execUpdate(sql: string, name?: string, binds?: unknown[]): Promise<number>;
+      update?(arel: InstanceType<typeof UpdateManager>): Promise<number>;
+      quote?(value: unknown): string;
+      quoteColumnName?(name: string): string;
+      quoteTableName?(name: string): string;
+      toSql?(arel: unknown): string;
+    };
   };
 }
 
@@ -590,9 +607,15 @@ export async function updateColumn<T extends UpdateColumnsRecord>(
 
 /**
  * Mirrors: ActiveRecord::Persistence#update_columns. Writes the given
- * attributes straight to the database via a raw UPDATE, bypassing
- * validations, callbacks and timestamps. Resets dirty tracking so the
- * written values are the new baseline.
+ * attributes to the database bypassing validations, callbacks and
+ * timestamps. Resets dirty tracking so the written values are the new
+ * baseline.
+ *
+ * Builds the UPDATE via Arel's UpdateManager + the adapter's update()
+ * path so identifier and value escaping go through the adapter's
+ * quoting layer (the previous raw-string interpolation mishandled
+ * embedded single-quote-like sequences, binary columns, and
+ * adapter-specific date/JSON formatting).
  */
 export async function updateColumns<T extends UpdateColumnsRecord>(
   this: T,
@@ -606,29 +629,36 @@ export async function updateColumns<T extends UpdateColumnsRecord>(
   }
 
   const ctor = this.constructor;
-  const table = ctor.arelTable;
+  const table = ctor.arelTable as unknown as InstanceType<typeof ArelTable> & {
+    get(name: string): unknown;
+  };
 
-  // Cast values through their declared attribute types (no dirty tracking
-  // — this path bypasses writeAttribute deliberately).
+  // Cast values through their declared attribute types (no dirty tracking —
+  // this path bypasses writeAttribute deliberately) and collect the cast
+  // values for the UPDATE's SET clause.
+  const setPairs: Array<[unknown, unknown]> = [];
   for (const [key, value] of Object.entries(attrs)) {
     const def = ctor._attributeDefinitions.get(key);
-    this._attributes.set(key, def ? def.type.cast(value) : value);
+    const cast = def ? def.type.cast(value) : value;
+    this._attributes.set(key, cast);
+    setPairs.push([table.get(key), cast]);
   }
 
-  const setClauses = Object.entries(attrs)
-    .map(([key]) => {
-      const val = this._attributes.get(key);
-      if (val === null) return `"${key}" = NULL`;
-      if (typeof val === "number") return `"${key}" = ${val}`;
-      if (typeof val === "boolean") return `"${key}" = ${val ? "TRUE" : "FALSE"}`;
-      if (val instanceof Date) return `"${key}" = '${val.toISOString()}'`;
-      if (typeof val === "object") return `"${key}" = '${JSON.stringify(val).replace(/'/g, "''")}'`;
-      return `"${key}" = '${String(val).replace(/'/g, "''")}'`;
-    })
-    .join(", ");
+  const { sql: arelSql } = await import("@blazetrails/arel");
+  const um = new UpdateManager();
+  um.table(table);
+  um.set(setPairs as Parameters<UpdateManager["set"]>[0]);
+  // `_buildPkWhere` returns a string fragment; wrap it as Arel SQL so the
+  // SET clause still routes through UpdateManager's quoting.
+  um.where(arelSql(ctor._buildPkWhere(this.id)) as Parameters<UpdateManager["where"]>[0]);
 
-  const sql = `UPDATE "${(table as unknown as { name: string }).name}" SET ${setClauses} WHERE ${ctor._buildPkWhere(this.id)}`;
-  await ctor.adapter.execUpdate(sql, "Update Columns");
+  const adapter = ctor.adapter;
+  if (typeof adapter.update === "function") {
+    await adapter.update(um);
+  } else {
+    const sql = adapter.toSql ? adapter.toSql(um) : um.toSql();
+    await adapter.execUpdate(sql, "Update Columns");
+  }
 
   this.changesApplied();
 }

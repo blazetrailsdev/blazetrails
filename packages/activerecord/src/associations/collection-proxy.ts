@@ -777,8 +777,14 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       if (this._assocDef.options.disableJoins) {
         const box = await this._djarForCount();
         if (!box) return 0;
-        const djar = (box as { djar: unknown }).djar as { count: () => Promise<number> };
-        return djar.count();
+        const djar = (box as { djar: unknown }).djar as {
+          count: () => Promise<number | Record<string, number>>;
+        };
+        const c = await djar.count();
+        if (typeof c !== "number") {
+          throw new Error("Grouped counts are not supported for association collection counts");
+        }
+        return c;
       }
       if (!_canRouteThroughViaAssociationScope(refl, this._assocDef.options)) {
         const results = await loadHasMany(this._record, this._assocName, this._assocDef.options);

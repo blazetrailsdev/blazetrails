@@ -1,14 +1,31 @@
 import type { DatabaseAdapter } from "./adapter.js";
-import { TableDefinition } from "./connection-adapters/abstract/schema-definitions.js";
-import { detectAdapterName } from "./adapter-name.js";
-import { quoteIdentifier, quoteTableName } from "./connection-adapters/abstract/quoting.js";
+import { Current } from "./migration.js";
 
 /**
- * Schema — defines database schema declaratively.
+ * Schema — programmatically defines a database schema using the same
+ * DSL as migrations (createTable, addIndex, addColumn, dropTable, etc.).
  *
- * Mirrors: ActiveRecord::Schema
+ * Mirrors: ActiveRecord::Schema — in Rails this is
+ * `class Schema < Migration::Current`, so Schema inherits every
+ * schema-manipulation method from Migration. Pairing with Rails here
+ * means we don't duplicate a second, shallower `createTable` in this
+ * file; `Schema.define(adapter, fn)` hands the block a Schema instance
+ * that already exposes Migration's full DSL.
+ *
+ * Usage:
+ *
+ *   await Schema.define(adapter, async (schema) => {
+ *     await schema.createTable("users", (t) => {
+ *       t.string("name");
+ *     });
+ *     await schema.addIndex("users", "name");
+ *   });
  */
-export class Schema {
+export class Schema extends Current {
+  /**
+   * Mirrors: ActiveRecord::Schema.define — the class-method entry
+   * point that creates a Schema instance and yields it to the block.
+   */
   static async define(
     adapter: DatabaseAdapter,
     fn: (schema: Schema) => void | Promise<void>,
@@ -17,30 +34,9 @@ export class Schema {
     await fn(schema);
   }
 
-  private adapter: DatabaseAdapter;
-
   constructor(adapter: DatabaseAdapter) {
+    super();
     this.adapter = adapter;
-  }
-
-  private get _adapterName(): "sqlite" | "postgres" | "mysql" {
-    return detectAdapterName(this.adapter);
-  }
-
-  async createTable(name: string, fn?: (t: TableDefinition) => void): Promise<void> {
-    const td = new TableDefinition(name, { adapterName: this._adapterName });
-    if (fn) fn(td);
-    await this.adapter.executeMutation(td.toSql());
-
-    const adp = this._adapterName;
-    for (const idx of td.indexes) {
-      const indexName = idx.name ?? `index_${name}_on_${idx.columns.join("_and_")}`;
-      const unique = idx.unique ? "UNIQUE " : "";
-      const cols = idx.columns.map((c) => quoteIdentifier(c, adp)).join(", ");
-      await this.adapter.executeMutation(
-        `CREATE ${unique}INDEX ${quoteIdentifier(indexName, adp)} ON ${quoteTableName(name, adp)} (${cols})`,
-      );
-    }
   }
 }
 

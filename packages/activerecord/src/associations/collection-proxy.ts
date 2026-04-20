@@ -703,30 +703,46 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   //   semantics (loaded-target fast path). PR B will delete CP's count
   //   and let Relation's win.
   async count(): Promise<number> {
-    // Same divergence gate as toArray() / load(). Use Relation's count
-    // (COUNT(*) query) on the diverged path rather than
-    // super.toArray().length — instantiating every row just to count
-    // would be a major perf regression on large collections.
-    if (this._relationStateDiverged()) {
-      // Diverged path bypasses loadHasMany — enforce strict-loading
-      // explicitly so owner._strictLoading still raises.
-      this._checkStrictLoading();
-      const counted = await (
-        Relation.prototype as unknown as {
-          count(this: CollectionProxy<T>): Promise<number | Record<string, number>>;
-        }
-      ).count.call(this);
-      // A grouped count (Record) would mean the caller added a
-      // `groupBang(...)` on the proxy — ambiguous for CP#count (which
-      // returns a single number). Match `countHasMany`'s contract and
-      // fail loudly instead of silently collapsing to the group count.
-      if (typeof counted !== "number") {
-        throw new Error("Grouped counts are not supported for association collection counts");
-      }
-      return counted;
+    this._checkStrictLoading();
+    // Rails' CollectionAssociation#count: if the target is already
+    // loaded, count the loaded array (no query). Otherwise issue a
+    // real `COUNT(*)` on the scoped relation. Previously the non-
+    // diverged branch loaded every row just to read `.length`, which
+    // is a significant perf regression on large collections.
+    if (this._targetLoaded) return this._target.length;
+    // Through-associations (including nested-through, polymorphic,
+    // and `disable_joins: true` shapes) don't have a single
+    // COUNT-able scope here — `this.scope()` and `loadHasMany` go
+    // through different loader paths that handle chain expansion
+    // separately. Keep the load + `.length` fallback for those
+    // shapes. The common non-through case (`user.posts.count()`)
+    // takes the fast path and emits `SELECT COUNT(*)` without
+    // instantiating every row.
+    if (this._assocDef.options.through) {
+      const results = await loadHasMany(this._record, this._assocName, this._assocDef.options);
+      return results.length;
     }
-    const results = await loadHasMany(this._record, this._assocName, this._assocDef.options);
-    return results.length;
+    // On the diverged path `this` carries in-place proxy mutations
+    // (whereBang etc.), so route through Relation.prototype.count to
+    // avoid re-entering CP#count. On the non-diverged path route
+    // through the underlying scoped Relation so it emits the same
+    // `COUNT(*)` Rails would.
+    const countFn = (
+      Relation.prototype as unknown as {
+        count: (this: unknown) => Promise<number | Record<string, number>>;
+      }
+    ).count;
+    const counted = this._relationStateDiverged()
+      ? await countFn.call(this)
+      : await countFn.call(this.scope());
+    // A grouped count (Record) would mean the caller added a
+    // `groupBang(...)` on the proxy — ambiguous for CP#count (which
+    // returns a single number). Fail loudly instead of silently
+    // collapsing to the group count.
+    if (typeof counted !== "number") {
+      throw new Error("Grouped counts are not supported for association collection counts");
+    }
+    return counted;
   }
 
   // Aggregate SQL entry points inherited from Relation (via the

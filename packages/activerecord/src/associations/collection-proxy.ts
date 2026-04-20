@@ -97,20 +97,6 @@ export type AssociationProxy<
     readonly [index: number]: T | undefined;
   };
 
-/**
- * Validate a numeric limit using the same rule as
- * `Relation#limitBang` — safe non-negative integer. Keeps
- * `first(n)` / `last(n)` / `take(n)` consistent with Relation's
- * limit semantics and rejects surprises like -1 or 1.5 that
- * `Array.prototype.slice` would silently accept.
- */
-function assertValidLimit(n: number): void {
-  const num = Number(n);
-  if (!Number.isSafeInteger(num) || num < 0) {
-    throw new Error(`Invalid limit value: ${String(n)}`);
-  }
-}
-
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   private _record: Base;
@@ -1202,7 +1188,6 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   override first(): Promise<T | null>;
   override first(n: number): Promise<T[]>;
   override async first(n?: number): Promise<T | T[] | null> {
-    if (n !== undefined) assertValidLimit(n);
     const records = await this.toArray();
     if (n === undefined) return records[0] ?? null;
     return records.slice(0, n);
@@ -1216,7 +1201,6 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   override last(): Promise<T | null>;
   override last(n: number): Promise<T[]>;
   override async last(n?: number): Promise<T | T[] | null> {
-    if (n !== undefined) assertValidLimit(n);
     const records = await this.toArray();
     if (n === undefined) return records[records.length - 1] ?? null;
     return records.slice(Math.max(0, records.length - n));
@@ -1230,7 +1214,6 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   override take(): Promise<T | null>;
   override take(limit: number): Promise<T[]>;
   override async take(n?: number): Promise<T | T[] | null> {
-    if (n !== undefined) assertValidLimit(n);
     const records = await this.toArray();
     if (n === undefined) return records[0] ?? null;
     return records.slice(0, n);
@@ -1511,9 +1494,16 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     // RecordNotFound with the full id list instead of one per
     // missing id.
     if (wantArray || ids.length > 1) {
+      // Match Relation.performFind exactly: the SQL path does a single
+      // WHERE-IN query and compares result count to the requested
+      // count. Duplicate ids or missing ids both yield a count
+      // mismatch and raise the aggregate "couldn't find all" error.
+      // Mirror that here by comparing the distinct found-key count to
+      // the requested ids count — `find([1, 1])` fails the same way
+      // `Base.find([1, 1])` does.
       const castedIds = ids.map(castId);
-      const missing = ids.filter((_, i) => !byPk.has(keyForCastedId(castedIds[i])));
-      if (missing.length > 0) {
+      const uniqueFoundKeys = new Set(castedIds.map(keyForCastedId).filter((k) => byPk.has(k)));
+      if (uniqueFoundKeys.size !== ids.length) {
         throw new RecordNotFound(
           `Couldn't find all ${targetModel.name} with '${String(pk)}': (${ids
             .map((id) => formatId(id))

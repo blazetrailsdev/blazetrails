@@ -499,7 +499,11 @@ describe("InverseHasManyTests", () => {
     const { Man } = makeModels();
     const m = await Man.create({ name: "Gordon" });
     const proxy = association(m, "interests");
+    // Both shapes raise the same "empty list of ids" contract:
+    //   find([])   — explicit empty array
+    //   find()     — zero args (Relation.find normalizes to id=[])
     await expect(proxy.find([] as any)).rejects.toThrow(/empty list of ids/);
+    await expect((proxy as any).find()).rejects.toThrow(/empty list of ids/);
   });
 
   it("trying to use inverses that dont exist should raise an error", async () => {

@@ -2951,6 +2951,9 @@ export interface Base extends Included<typeof AutosaveAssociation> {
   association(name: string): AssociationInstance;
   loadBelongsTo(name: string): Promise<Base | null>;
   loadHasOne(name: string): Promise<Base | null>;
+  readAttributeForValidation(attribute: string): unknown;
+  validate(context?: string): this;
+  customValidationContext(): boolean;
 }
 
 // ---------------------------------------------------------------------------

@@ -242,8 +242,13 @@ export function validates(
     (k) => !["on", "if", "unless", "strict", "allowNil", "allowBlank"].includes(k),
   );
   if (hasRemaining) {
+    if (_parentValidates == null) {
+      throw new ActiveRecordError(
+        "ActiveRecord::Validations#validates called before Base registered the super validates",
+      );
+    }
     // `super.validates` — reach the parent (Model) prototype's version.
-    _parentValidates?.call(this, attribute, arRules);
+    _parentValidates.call(this, attribute, arRules);
   }
 }
 

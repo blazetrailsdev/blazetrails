@@ -271,11 +271,17 @@ export function increment<T extends CounterRecord>(this: T, attribute: string, b
   return this;
 }
 
-/** Mirrors: ActiveRecord::Persistence#decrement */
-export function decrement<T extends CounterRecord>(this: T, attribute: string, by: number = 1): T {
-  const current = Number(this.readAttribute(attribute)) || 0;
-  this.writeAttribute(attribute, current - by);
-  return this;
+/**
+ * Mirrors: ActiveRecord::Persistence#decrement — `increment(attribute, -by)`.
+ * Dispatched through `this` so subclass overrides of `increment` flow into
+ * `decrement`.
+ */
+export function decrement<T extends CounterRecord & { increment(a: string, b?: number): T }>(
+  this: T,
+  attribute: string,
+  by: number = 1,
+): T {
+  return this.increment(attribute, -by);
 }
 
 /** Mirrors: ActiveRecord::Persistence#toggle */
@@ -299,15 +305,15 @@ export async function incrementBang<T extends CounterRecord>(
   return this;
 }
 
-/** Mirrors: ActiveRecord::Persistence#decrement! */
-export async function decrementBang<T extends CounterRecord>(
-  this: T & { decrement(attribute: string, by?: number): T },
-  attribute: string,
-  by: number = 1,
-): Promise<T> {
-  this.decrement(attribute, by);
-  await this.updateColumn(attribute, this.readAttribute(attribute));
-  return this;
+/**
+ * Mirrors: ActiveRecord::Persistence#decrement! — `increment!(attribute, -by)`.
+ * Dispatched through `this` so subclass overrides of `incrementBang` flow
+ * into `decrementBang`.
+ */
+export async function decrementBang<
+  T extends CounterRecord & { incrementBang(a: string, b?: number): Promise<T> },
+>(this: T, attribute: string, by: number = 1): Promise<T> {
+  return this.incrementBang(attribute, -by);
 }
 
 /** Mirrors: ActiveRecord::Persistence#toggle! */

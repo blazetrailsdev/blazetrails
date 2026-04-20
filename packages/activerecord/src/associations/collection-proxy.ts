@@ -18,7 +18,12 @@ import { applyThenable, stripThenable } from "../relation/thenable.js";
 import { Table as ArelTable } from "@blazetrails/arel";
 import type { Nodes } from "@blazetrails/arel";
 import { underscore, singularize, pluralize, camelize } from "@blazetrails/activesupport";
-import { StrictLoadingViolationError, RecordNotSaved, ConfigurationError } from "../errors.js";
+import {
+  StrictLoadingViolationError,
+  RecordNotSaved,
+  RecordNotFound,
+  ConfigurationError,
+} from "../errors.js";
 import { RecordInvalid } from "../validations.js";
 import {
   HasManyThroughCantAssociateThroughHasOneOrManyReflection,
@@ -1356,7 +1361,12 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     const pk = targetModel.primaryKey ?? "id";
     const matches = ids.map((id) => {
       const match = records.find((r) => r.readAttribute(pk as string) === id);
-      if (!match) throw new Error(`Couldn't find record with id=${String(id)}`);
+      if (!match) {
+        throw new RecordNotFound(
+          `Couldn't find ${targetModel.name} with '${String(pk)}'=${String(id)}`,
+          targetModel.name,
+        );
+      }
       return match;
     });
     return wantArray ? matches : matches[0];

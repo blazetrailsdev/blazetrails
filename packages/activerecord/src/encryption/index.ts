@@ -37,3 +37,13 @@ export {
   ExtendedDeterministicUniquenessValidator,
   EncryptedUniquenessValidator,
 } from "./extended-deterministic-uniqueness-validator.js";
+
+// The wiring entry points used by `Base.encrypts` are re-exported here
+// so the subpath is the canonical encryption surface.
+export {
+  encrypts,
+  applyPendingEncryptions,
+  isEncryptedAttribute,
+  defaultEncryptor,
+} from "../encryption.js";
+export type { Encryptor as LegacyEncryptor, EncryptsOptions } from "../encryption.js";

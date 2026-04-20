@@ -1180,12 +1180,12 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#first
    */
-  // @ts-expect-error Relation#first has overloads: () | (n: number). CP's
-  //   version only handles the zero-arg case (returns T | null). PR B
-  //   will add the n-arg overload or delete CP's version.
-  async first(): Promise<T | null> {
+  override first(): Promise<T | null>;
+  override first(n: number): Promise<T[]>;
+  override async first(n?: number): Promise<T | T[] | null> {
     const records = await this.toArray();
-    return records[0] ?? null;
+    if (n === undefined) return records[0] ?? null;
+    return records.slice(0, n);
   }
 
   /**
@@ -1193,10 +1193,12 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#last
    */
-  // @ts-expect-error Same overload divergence as `first`.
-  async last(): Promise<T | null> {
+  override last(): Promise<T | null>;
+  override last(n: number): Promise<T[]>;
+  override async last(n?: number): Promise<T | T[] | null> {
     const records = await this.toArray();
-    return records[records.length - 1] ?? null;
+    if (n === undefined) return records[records.length - 1] ?? null;
+    return records.slice(Math.max(0, records.length - n));
   }
 
   /**
@@ -1204,9 +1206,9 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#take
    */
-  // @ts-expect-error Relation#take has distinct () / (n) overloads; CP
-  //   flattens both. PR B will align overloads.
-  async take(n?: number): Promise<T | T[] | null> {
+  override take(): Promise<T | null>;
+  override take(limit: number): Promise<T[]>;
+  override async take(n?: number): Promise<T | T[] | null> {
     const records = await this.toArray();
     if (n === undefined) return records[0] ?? null;
     return records.slice(0, n);
@@ -1338,20 +1340,26 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#find
    */
-  // @ts-expect-error Relation#find takes `unknown` IDs (string/number);
-  //   CP narrows to number | number[]. PR B: widen CP's param.
-  async find(id: number | number[]): Promise<T | T[]> {
+  override find(ids: unknown[]): Promise<T[]>;
+  override find(id: unknown): Promise<T>;
+  override find(...ids: unknown[]): Promise<T | T[]>;
+  override async find(...args: unknown[]): Promise<T | T[]> {
+    // Normalize the overload set to a single `ids: unknown[]` + `wantArray` pair,
+    // matching Relation#find's shape. `find(a, b, c)` and `find([a, b, c])`
+    // both return arrays; `find(a)` returns a single record.
+    const [first, ...rest] = args;
+    const wantArray = Array.isArray(first) || rest.length > 0;
+    const ids: unknown[] = Array.isArray(first) ? first : [first, ...rest];
+
     const records = await this.toArray();
     const targetModel = (records[0]?.constructor ?? Object) as typeof Base;
     const pk = targetModel.primaryKey ?? "id";
-    if (Array.isArray(id)) {
-      const found = records.filter((r) => id.includes(r.readAttribute(pk as string) as number));
-      if (found.length !== id.length) throw new Error(`Couldn't find all records with ids: ${id}`);
-      return found;
-    }
-    const found = records.find((r) => r.readAttribute(pk as string) === id);
-    if (!found) throw new Error(`Couldn't find record with id=${id}`);
-    return found;
+    const matches = ids.map((id) => {
+      const match = records.find((r) => r.readAttribute(pk as string) === id);
+      if (!match) throw new Error(`Couldn't find record with id=${String(id)}`);
+      return match;
+    });
+    return wantArray ? matches : matches[0];
   }
 
   /**

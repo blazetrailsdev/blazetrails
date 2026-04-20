@@ -748,29 +748,39 @@ export function clone<T extends CloneRecord>(this: T): T {
 interface BecomesRecord {
   _attributes: unknown;
   _newRecord: boolean;
+  _destroyed: boolean;
   _dirty: { snapshot(attrs: unknown): void };
+  errors: unknown;
   changesApplied(): void;
 }
 
 /**
  * Returns an instance of `klass` that shares this record's attribute set,
- * new-record flag, and dirty/clean state. Useful for STI where the same
- * row should be viewed through a different subclass.
+ * new-record / destroyed flags, dirty snapshot, and errors. Useful for STI
+ * where the same row should be viewed through a different subclass.
  *
- * Mirrors: ActiveRecord::Persistence#becomes
+ * Mirrors: ActiveRecord::Persistence#becomes — "shares the same attributes
+ * hash" + copies new_record? / destroyed? / errors.
  */
 export function becomes<
   T extends BecomesRecord,
   K extends new (attrs: Record<string, unknown>) => BecomesRecord,
 >(this: T, klass: K): InstanceType<K> {
   const instance = new klass({}) as InstanceType<K>;
-  (instance as unknown as BecomesRecord)._attributes = this._attributes;
-  (instance as unknown as BecomesRecord)._newRecord = this._newRecord;
+  const target = instance as unknown as BecomesRecord;
+  target._attributes = this._attributes;
+  target._newRecord = this._newRecord;
+  target._destroyed = this._destroyed;
   if (!this._newRecord) {
-    (instance as unknown as BecomesRecord)._dirty.snapshot(
-      (instance as unknown as BecomesRecord)._attributes,
-    );
-    (instance as unknown as BecomesRecord).changesApplied();
+    target._dirty.snapshot(target._attributes);
+    target.changesApplied();
+  }
+  // Rails: `becoming.errors.copy!(errors)` — propagate pending validation
+  // errors across the class swap. Noop if the errors object doesn't expose
+  // a `copy` method (defensive for hosts that stub errors differently).
+  const targetErrors = target.errors as { copy?(other: unknown): void };
+  if (typeof targetErrors.copy === "function") {
+    targetErrors.copy(this.errors);
   }
   return instance;
 }

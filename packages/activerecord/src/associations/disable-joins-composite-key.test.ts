@@ -271,9 +271,67 @@ describe("DJAS — composite key support", () => {
       ],
     );
     expect(await djar.ids()).toEqual([[1n, 100n]]);
-    // Records set is empty (no DB hit needed) — what we're pinning is
-    // that construction + ids() don't throw on bigint components.
+    // The empty result matters less than the fact that bigint tuple
+    // components don't make construction, ids(), or toArray() throw.
     await expect(djar.toArray()).resolves.toEqual([]);
+  });
+
+  it("DisableJoinsAssociationRelation composite-key load: throws ArgumentError on shape/arity mismatch", async () => {
+    // Fail-fast on caller bugs. Without the guard, a flat scalar list
+    // would silently dedupe to "one bucket per scalar" and reorder to
+    // nothing.
+    expect(
+      () =>
+        new DisableJoinsAssociationRelation(CkLineItem, ["ck_order_shop_id", "ck_order_number"], [
+          1, 2, 3,
+        ] as any),
+    ).toThrow(/must be an array/);
+    expect(
+      () =>
+        new DisableJoinsAssociationRelation(CkLineItem, ["ck_order_shop_id", "ck_order_number"], [
+          [1, 2, 3],
+        ] as any),
+    ).toThrow(/arity/);
+  });
+
+  it("composite-key + ordered upstream + empty through: preserves none() instead of full table scan", async () => {
+    // Regression: when PredicateBuilder.buildComposite short-circuits
+    // to `Relation#none()` (empty tuples / all-null), the DJAR wrap
+    // would previously copy `_whereClause.predicates` but drop
+    // `_isNone`, producing a full-table SELECT. The scope itself is
+    // already a never-match, so DJAS now returns it directly.
+    Associations.hasMany.call(CkShop, "ckOrdersOrdered2", {
+      className: "CkOrder",
+      foreignKey: "shop_id",
+      scope: (rel: any) => rel.order("name"),
+    });
+    Associations.hasMany.call(CkShop, "ckLineItemsEmpty", {
+      className: "CkLineItem",
+      through: "ckOrdersOrdered2",
+      source: "ckLineItems",
+      disableJoins: true,
+    });
+    const shop = await CkShop.create({ name: "S" });
+    // No orders — through step plucks nothing, final step gets
+    // composite `where([...], [])` which PredicateBuilder resolves to
+    // none().
+    const observed: string[] = [];
+    const sub = Notifications.subscribe("sql.active_record", (event: any) => {
+      const sql = event?.payload?.sql;
+      if (typeof sql === "string" && /\bFROM\b\s+["`]?ck_line_items\b/i.test(sql)) {
+        observed.push(sql);
+      }
+    });
+    try {
+      const reflection = (CkShop as any)._reflectOnAssociation("ckLineItemsEmpty");
+      const items = await loadHasMany(shop, "ckLineItemsEmpty", reflection.options);
+      expect(items).toEqual([]);
+    } finally {
+      Notifications.unsubscribe(sub);
+    }
+    // The none() short-circuit means no SELECT against ck_line_items
+    // at all. A full-table scan (regression) would show at least one.
+    expect(observed).toEqual([]);
   });
 
   it("returns no rows when the composite-key tuple list is empty (owner has no through records)", async () => {

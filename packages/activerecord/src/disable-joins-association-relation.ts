@@ -1,4 +1,5 @@
 import { Relation } from "./relation.js";
+import { argumentError } from "./relation/query-methods.js";
 import type { Base } from "./base.js";
 
 /**
@@ -93,9 +94,25 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
     // two owner rows collapses to one entry (Set-of-arrays would keep
     // both by reference).
     if (this._composite) {
+      const arity = (key as string[]).length;
       const seen = new Set<string>();
       const out: unknown[][] = [];
-      for (const t of ids as unknown[][]) {
+      for (let i = 0; i < (ids as unknown[]).length; i++) {
+        const t = (ids as unknown[])[i];
+        // Fail fast on shape/arity mismatch. Without this, a flat
+        // `unknown[]` slipping through as composite `ids` would
+        // silently dedupe to "one bucket per scalar" and reorder to
+        // nothing, instead of pointing at the caller.
+        if (!Array.isArray(t)) {
+          throw argumentError(
+            `DisableJoinsAssociationRelation: composite ids[${i}] must be an array (got ${typeof t})`,
+          );
+        }
+        if (t.length !== arity) {
+          throw argumentError(
+            `DisableJoinsAssociationRelation: composite ids[${i}] arity ${t.length} does not match key [${(key as string[]).join(", ")}] (arity ${arity})`,
+          );
+        }
         const k = serializeKey(t, true) as string;
         if (!seen.has(k)) {
           seen.add(k);

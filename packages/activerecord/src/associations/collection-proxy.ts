@@ -689,7 +689,14 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
           count(this: CollectionProxy<T>): Promise<number | Record<string, number>>;
         }
       ).count.call(this);
-      return typeof counted === "number" ? counted : Object.keys(counted).length;
+      // A grouped count (Record) would mean the caller added a
+      // `groupBang(...)` on the proxy — ambiguous for CP#count (which
+      // returns a single number). Match `countHasMany`'s contract and
+      // fail loudly instead of silently collapsing to the group count.
+      if (typeof counted !== "number") {
+        throw new Error("Grouped counts are not supported for association collection counts");
+      }
+      return counted;
     }
     const results = await loadHasMany(this._record, this._assocName, this._assocDef.options);
     return results.length;

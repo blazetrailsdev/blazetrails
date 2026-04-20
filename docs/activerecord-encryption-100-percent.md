@@ -1,7 +1,7 @@
 # ActiveRecord::Encryption: Road to 100%
 
-Current: **15/28 files at 100%**. Overall encryption surface has **~25
-methods missing** across 13 files.
+Current: **12/27 files at 100%**. Overall encryption surface has **29
+methods missing across 15 files**.
 
 ```bash
 # Full encryption status
@@ -268,30 +268,75 @@ surface early.
 
 ## Browser-compat verification
 
-Each PR in the series must pass a browser-compat smoke test. Add a
-new CI job `browser-smoke-encryption` that:
+Each PR in the series must pass a browser-compat smoke test. Land a
+new CI job alongside the existing matrix (`Build & Type Check`, `Unit
+Tests`, `SQLite/PostgreSQL/MariaDB Tests`, etc.) in
+`.github/workflows/ci.yml`:
 
-1. Spawns a headless Chromium via Playwright.
-2. Loads a Vite-built bundle that imports `@blazetrails/activerecord/encryption`
-   and `@blazetrails/activerecord/encryption/encryptor`.
-3. Runs a round-trip: `new Encryptor().encrypt("hello", options) → decrypt`
-   against a registered browser crypto adapter.
+```yaml
+browser-smoke-encryption:
+  name: Browser Smoke — Encryption
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    - uses: pnpm/action-setup@v4
+    - uses: actions/setup-node@v4
+      with: { node-version: "22", cache: pnpm }
+    - run: pnpm install --frozen-lockfile
+    - run: pnpm run build
+    - run: pnpm --filter ./packages/activerecord exec vitest run \
+        -c vitest.browser.config.ts packages/activerecord/src/encryption
+```
 
-The adapter is the decisive bit:
+The Vitest browser config uses `jsdom` or `@vitest/browser` with a
+resolver that throws on `node:*` imports, so any accidental Node
+dependency in the encryption tree fails loudly.
 
-- Node: already works (`getCryptoAsync()` auto-registers the Node
-  adapter on import).
-- Browser: users register a WASM adapter (documented examples:
-  `@noble/ciphers` for AES-GCM, `js-crypto-pbkdf` for PBKDF2). Ship a
-  reference adapter in `@blazetrails/activesupport/crypto-adapter-noble`
-  (new subpath, not in the default barrel) — roughly 80 LoC that
-  translates `noble` + `SubtleCrypto` into the existing sync
-  `CryptoAdapter` interface.
+The crypto adapter is the decisive bit:
 
-**Gate:** any PR that adds a `node:*` import to an encryption source
-file — even transitively — fails CI. The smoke job imports the
-encryption subpath against a JSDOM runtime that throws on `node:*`
-resolution.
+- **Node**: already works — `getCryptoAsync()` auto-registers the Node
+  adapter on import.
+- **Browser**: users register a WASM adapter. Document examples:
+  `@noble/ciphers` for AES-GCM, `js-crypto-pbkdf` for PBKDF2. Ship a
+  reference adapter as a new subpath
+  `@blazetrails/activesupport/crypto-adapter-noble` — roughly 80 LoC
+  translating `noble` + `SubtleCrypto.digest/importKey` into the
+  existing sync `CryptoAdapter` interface. Not in the default barrel;
+  users opt in with `cryptoAdapterConfig.adapter = "noble"`.
+
+**Gate:** any PR in this series that introduces a `node:*` import to
+an encryption source file — even transitively via a new activesupport
+subpath — fails the browser-smoke CI job. Test files under
+`packages/activerecord/src/encryption/*.test.ts` are allowed to use
+`node:crypto` directly (they execute in Node tests, not the smoke
+bundle), but source files are not.
+
+## Rails test mirror (unskip-as-you-go)
+
+Each encryption test file already contains a block of `it.skip(...)`
+placeholders whose names match the Rails encryption test suite
+verbatim. Unskip incrementally as backing methods land; **never rename
+them** (`api:compare --tests` matches on test names). Current skipped
+counts, highest first:
+
+| File                                                 | Skipped | PR most likely to unskip          |
+| ---------------------------------------------------- | ------: | --------------------------------- |
+| `encryptable-record.test.ts`                         |      51 | PR 9 + PR 0 wiring                |
+| `encryptable-record-api.test.ts`                     |      19 | PR 0 + PR 9                       |
+| `encryption-schemes.test.ts`                         |      13 | PR 3                              |
+| `extended-deterministic-queries.test.ts`             |      12 | PR 4                              |
+| `message-pack-message-serializer.test.ts`            |       7 | PR 1 + PR 2                       |
+| `uniqueness-validations.test.ts`                     |       6 | PR 5                              |
+| `configurable.test.ts`                               |       6 | PR 3 (via `with_context`)         |
+| `encryptor.test.ts`                                  |       3 | PR 1 + PR 2                       |
+| `encryptable-record-message-pack-serialized.test.ts` |       3 | PR 2                              |
+| `unencrypted-attributes.test.ts`                     |       2 | PR 3 (`isSupportUnencryptedData`) |
+| `encrypted-fixtures.test.ts`                         |       2 | PR 11                             |
+| `concurrency.test.ts`                                |       1 | PR 3 (`with_context`)             |
+
+That's 125 currently-skipped Rails tests the method work should
+progressively light up. A PR that lands a Rails-faithful method
+without also unskipping the matching Rails test is incomplete.
 
 ## How to work on this
 
@@ -325,7 +370,7 @@ resolution.
 | 11  | EncryptedFixtures constructor                       |            1 |     1 |
 | 12  | Encryption module surface (keyLength, eagerLoad!)   |            3 |     1 |
 
-**Expected end state:** 28/28 encryption files at 100%, overall
-activerecord coverage bumps by ~29 methods, and
-`@blazetrails/activerecord` default bundle loses the
-encryption weight entirely.
+**Expected end state:** 27/27 encryption files at 100%, overall
+activerecord coverage bumps by 29 methods, 125 currently-skipped Rails
+encryption tests unskipped, and the default `@blazetrails/activerecord`
+bundle loses the encryption weight entirely.

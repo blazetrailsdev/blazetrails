@@ -397,9 +397,16 @@ function assertLockingColumnNotExplicitly(
 }
 
 /**
- * Mirrors: ActiveRecord::Persistence#update — `assign_attributes` + `save`.
- * Returns the boolean from save so callers can detect validation / callback
- * aborts without catching exceptions.
+ * Mirrors: ActiveRecord::Persistence#update — assign + save. Returns the
+ * boolean from save so callers can detect validation / callback aborts
+ * without catching exceptions.
+ *
+ * Note: Rails wraps this in `with_transaction_returning_status` so DB
+ * side-effects of the assignment (e.g. nested-attributes creating child
+ * records) roll back with the save. We don't yet — our callback
+ * infrastructure fires after_commit twice when inner + outer transactions
+ * both complete. Tracked as a separate fidelity fix; preserve the
+ * pre-extraction behavior here.
  */
 export async function update<T extends UpdateRecord>(
   this: T,
@@ -413,8 +420,8 @@ export async function update<T extends UpdateRecord>(
 }
 
 /**
- * Mirrors: ActiveRecord::Persistence#update! — `assign_attributes` + `save!`.
- * Raises on validation failure (`save!` throws `RecordInvalid`).
+ * Mirrors: ActiveRecord::Persistence#update! — assign + save!. Raises
+ * `RecordInvalid` on validation failure.
  */
 export async function updateBang<T extends UpdateRecord>(
   this: T,

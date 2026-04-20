@@ -24,9 +24,9 @@ export class UpdateManager extends TreeManager {
   declare offset: (offset: unknown) => this;
   declare order: (...expr: Node[]) => this;
 
-  constructor() {
+  constructor(table: Table | null = null) {
     super();
-    this.ast = new UpdateStatement();
+    this.ast = new UpdateStatement(table);
   }
 
   /**

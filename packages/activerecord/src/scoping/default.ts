@@ -1,3 +1,6 @@
+import type { Base } from "../base.js";
+import type { Relation } from "../relation.js";
+
 /**
  * Default scope handling — applies default_scope to all queries
  * and provides unscoped to bypass it.
@@ -36,6 +39,29 @@ export class DefaultScope {
   get scope(): ((rel: any) => any) | null {
     return this.modelClass._defaultScope ?? null;
   }
+}
+
+/**
+ * Define a default scope applied to all queries for this model.
+ *
+ * Mirrors: ActiveRecord::Scoping::Default::ClassMethods#default_scope
+ */
+export function defaultScope<T extends typeof Base>(
+  this: T,
+  fn: (rel: Relation<InstanceType<T>>) => Relation<any>,
+): void {
+  (this as unknown as { _defaultScope: ((rel: any) => any) | null })._defaultScope = fn as (
+    rel: any,
+  ) => any;
+}
+
+/**
+ * Return a relation that bypasses the default scope.
+ *
+ * Mirrors: ActiveRecord::Scoping::Default::ClassMethods#unscoped
+ */
+export function unscoped<T extends typeof Base>(this: T): Relation<InstanceType<T>> {
+  return Default.unscoped(this, () => (this as unknown as typeof Base)._buildUnscopedRelation());
 }
 
 /**

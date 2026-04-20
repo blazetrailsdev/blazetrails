@@ -211,6 +211,29 @@ describe("LegacyFormatter", () => {
   });
 });
 
+describe("QueryLogs.formatter =", () => {
+  it("accepts a static-method class (LegacyFormatter / SQLCommenter) directly", () => {
+    const logs = new QueryLogs();
+    // Class value — typeof === "function". Must not throw.
+    expect(() => (logs.formatter = SQLCommenter)).not.toThrow();
+    expect(() => (logs.formatter = LegacyFormatter)).not.toThrow();
+  });
+
+  it("still accepts instance-shaped formatters", () => {
+    const logs = new QueryLogs();
+    const custom = {
+      format: (k: string, v: unknown) => `${k}=${v}`,
+      join: (pairs: string[]) => pairs.join(";"),
+    };
+    expect(() => (logs.formatter = custom)).not.toThrow();
+  });
+
+  it("rejects values missing format/join methods", () => {
+    const logs = new QueryLogs();
+    expect(() => (logs.formatter = { foo: 1 } as any)).toThrow(/unsupported/i);
+  });
+});
+
 describe("SQLCommenter", () => {
   it("formats as OpenTelemetry key='value' with URL-encoding", () => {
     expect(SQLCommenter.format("app", "My App")).toBe("app='My%20App'");

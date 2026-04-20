@@ -43,6 +43,11 @@ export class QueryLogs {
   private _cacheEnabled = false;
   private _cachedComment: string | null | undefined = undefined;
   private _context: Record<string, TagValue> = {};
+  // One GetKeyHandler per string tag, built when tags= is set so we
+  // don't allocate one per query inside `tagContent()`. Matches
+  // Rails' build_handler path (query_logs.rb:180) which builds the
+  // handler list once during configuration.
+  private _keyHandlers: Map<string, GetKeyHandler> = new Map();
 
   get tags(): TagDefinition[] {
     return this._tags;
@@ -50,6 +55,12 @@ export class QueryLogs {
 
   set tags(tags: TagDefinition[]) {
     this._tags = tags;
+    this._keyHandlers = new Map();
+    for (const tag of tags) {
+      if (typeof tag === "string") {
+        this._keyHandlers.set(tag, new GetKeyHandler(tag));
+      }
+    }
     this._cachedComment = undefined;
   }
 
@@ -83,8 +94,17 @@ export class QueryLogs {
       this._formatter = LegacyFormatter;
     } else if (format === "sqlcommenter") {
       this._formatter = SQLCommenter;
-    } else if (typeof format === "object" && format !== null) {
-      this._formatter = format;
+    } else if (
+      format !== null &&
+      (typeof format === "object" || typeof format === "function") &&
+      typeof (format as QueryLogsFormatter).format === "function" &&
+      typeof (format as QueryLogsFormatter).join === "function"
+    ) {
+      // Accept anything with the right call shape — an instance, a
+      // const object, or a class / function with static `format` /
+      // `join` (matches how Rails' singleton-class formatters are
+      // invoked: `MyFormatter.format(k, v)`).
+      this._formatter = format as QueryLogsFormatter;
     } else {
       throw new ConfigurationError(`Formatter is unsupported: ${format}`);
     }
@@ -152,10 +172,11 @@ export class QueryLogs {
     const pairs: string[] = [];
     for (const tag of this._tags) {
       if (typeof tag === "string") {
-        // Route through GetKeyHandler — same structure as Rails'
-        // build_handler path, which wraps every string tag in a
-        // GetKeyHandler for uniform dispatch.
-        const value = new GetKeyHandler(tag).call(this._context);
+        // Dispatch via the pre-built GetKeyHandler (rebuilt in `tags=`),
+        // matching Rails' build_handler caching. The handler is
+        // guaranteed present because `tags=` populated it.
+        const handler = this._keyHandlers.get(tag)!;
+        const value = handler.call(this._context);
         if (value != null) {
           pairs.push(this._formatter.format(tag, value));
         }

@@ -345,7 +345,8 @@ without also unskipping the matching Rails test is incomplete.
 - Tests in `packages/activerecord/src/encryption/*.test.ts` contain
   dozens of `it.skip(...)` placeholders that map directly to Rails'
   encryption test suite. Unskip them as the backing methods land; do
-  not rename them (api:compare matches on test names).
+  not rename them (`test:compare` matches tests by their full path:
+  `describe` chain plus test name).
 
 ## Order of operations summary
 

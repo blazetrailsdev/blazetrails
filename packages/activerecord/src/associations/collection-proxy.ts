@@ -97,6 +97,20 @@ export type AssociationProxy<
     readonly [index: number]: T | undefined;
   };
 
+/**
+ * Validate a numeric limit using the same rule as
+ * `Relation#limitBang` — safe non-negative integer. Keeps
+ * `first(n)` / `last(n)` / `take(n)` consistent with Relation's
+ * limit semantics and rejects surprises like -1 or 1.5 that
+ * `Array.prototype.slice` would silently accept.
+ */
+function assertValidLimit(n: number): void {
+  const num = Number(n);
+  if (!Number.isSafeInteger(num) || num < 0) {
+    throw new Error(`Invalid limit value: ${String(n)}`);
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   private _record: Base;
@@ -1188,6 +1202,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   override first(): Promise<T | null>;
   override first(n: number): Promise<T[]>;
   override async first(n?: number): Promise<T | T[] | null> {
+    if (n !== undefined) assertValidLimit(n);
     const records = await this.toArray();
     if (n === undefined) return records[0] ?? null;
     return records.slice(0, n);
@@ -1201,6 +1216,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   override last(): Promise<T | null>;
   override last(n: number): Promise<T[]>;
   override async last(n?: number): Promise<T | T[] | null> {
+    if (n !== undefined) assertValidLimit(n);
     const records = await this.toArray();
     if (n === undefined) return records[records.length - 1] ?? null;
     return records.slice(Math.max(0, records.length - n));
@@ -1214,6 +1230,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   override take(): Promise<T | null>;
   override take(limit: number): Promise<T[]>;
   override async take(n?: number): Promise<T | T[] | null> {
+    if (n !== undefined) assertValidLimit(n);
     const records = await this.toArray();
     if (n === undefined) return records[0] ?? null;
     return records.slice(0, n);

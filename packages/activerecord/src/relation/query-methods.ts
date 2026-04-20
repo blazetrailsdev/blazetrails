@@ -478,15 +478,12 @@ function invertWhereBang(this: QueryMethodsHost): any {
 }
 
 /**
- * Constructs an Error tagged with name "ArgumentError" so callers can
- * catch it the same way they would catch Rails' ArgumentError.
- */
-/**
- * Build an ArgumentError-tagged Error. Exported so other modules
- * (PredicateBuilder, Relation public methods, Base.where, etc.) can
- * raise the same shape without redeclaring the helper. Matches
- * Rails' ArgumentError convention so callers can `catch err if
- * err.name === 'ArgumentError'` consistently.
+ * Build an Error tagged with `name = "ArgumentError"` so callers can
+ * catch it the same way they would catch Rails' ArgumentError
+ * (`catch err if err.name === 'ArgumentError'`). Exported so other
+ * modules (PredicateBuilder, Relation public methods, Base.where /
+ * Base.whereNot, etc.) can raise the same shape without
+ * re-declaring the helper.
  */
 export function argumentError(message: string): Error {
   const err = new Error(message);

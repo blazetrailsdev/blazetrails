@@ -212,10 +212,16 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
             `DisableJoinsAssociationRelation: composite ids[${i}] arity ${t.length} does not match key [${cols.join(", ")}] (arity ${arity})`,
           );
         }
-        const k = serializeKey(t, true) as string;
+        // Copy the tuple before storing so later caller mutation
+        // of the outer array doesn't desync `_storedKeyStrings`
+        // (cached serialization) from `_storedIds` (returned by
+        // `ids()`). Cheap — tuples are tiny — and matches Rails'
+        // `ids.uniq` producing a fresh array.
+        const tuple = Array.from(t);
+        const k = serializeKey(tuple, true) as string;
         if (!seen.has(k)) {
           seen.add(k);
-          out.push(t);
+          out.push(tuple);
           keyStrings.push(k);
         }
       }

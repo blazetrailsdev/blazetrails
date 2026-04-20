@@ -231,23 +231,22 @@ describe("DJAS — composite key support", () => {
     // ordering. Without tuple dedupe + grouping, the duplicate would
     // double-count or the Map would bucket by reference and miss
     // both records.
-    const djar = new DisableJoinsAssociationRelation(
-      CkLineItem,
-      ["ck_order_shop_id", "ck_order_number"],
-      [
-        [shop.id, 200],
-        [shop.id, 100],
-        [shop.id, 200],
-      ],
-    );
-    (djar as any)._whereClause.predicates.push(
-      ...(CkLineItem as any).where(
+    const djar = (
+      new DisableJoinsAssociationRelation(
+        CkLineItem,
         ["ck_order_shop_id", "ck_order_number"],
         [
+          [shop.id, 200],
           [shop.id, 100],
           [shop.id, 200],
         ],
-      )._whereClause.predicates,
+      ) as any
+    ).where(
+      ["ck_order_shop_id", "ck_order_number"],
+      [
+        [shop.id, 100],
+        [shop.id, 200],
+      ],
     );
     const loaded = await djar.toArray();
     expect(loaded.map((r: any) => r.sku)).toEqual(["lb", "la"]);

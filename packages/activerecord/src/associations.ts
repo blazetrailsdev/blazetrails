@@ -40,6 +40,7 @@ import {
 } from "./associations/errors.js";
 import { ForeignAssociation } from "./associations/foreign-association.js";
 import { AssociationScope } from "./associations/association-scope.js";
+import { validateThroughSourceType } from "./associations/validate-source-type.js";
 import { underscore, singularize, pluralize, camelize } from "@blazetrails/activesupport";
 import { getInheritanceColumn, findStiClass } from "./inheritance.js";
 import { BelongsTo as BelongsToBuilder } from "./associations/builder/belongs-to.js";
@@ -1740,6 +1741,10 @@ export function association<T extends Base = Base>(
   if (!assocDef) {
     throw new Error(`Association "${assocName}" not found on ${ctor.name}`);
   }
+  // Matches Rails' first-use check_validity! for ThroughReflection —
+  // surface the sourceType misconfigurations loudly here too, since
+  // `association()` is the other entry point besides Association#ctor.
+  validateThroughSourceType(ctor, assocName);
   if (!_CollectionProxyCtor) {
     // Deliberate constraint: `associations.ts`, `relation.ts`,
     // `collection-proxy.ts`, and `base.ts` form a mandatory mutual

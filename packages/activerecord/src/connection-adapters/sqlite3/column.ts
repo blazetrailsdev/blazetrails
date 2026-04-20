@@ -40,10 +40,6 @@ export class Column extends BaseColumn {
     this._generatedType = options.generatedType ?? null;
   }
 
-  get hasDefault(): boolean {
-    return this.default !== null || this.defaultFunction !== null;
-  }
-
   isAutoIncrementedByDb(): boolean {
     return this.autoIncrement || this.rowid;
   }

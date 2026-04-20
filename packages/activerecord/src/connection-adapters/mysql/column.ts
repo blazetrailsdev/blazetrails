@@ -40,10 +40,6 @@ export class Column extends BaseColumn {
     this.virtual = options.virtual ?? false;
   }
 
-  get hasDefault(): boolean {
-    return this.default != null || this.defaultFunction != null;
-  }
-
   isUnsigned(): boolean {
     return this.unsigned;
   }

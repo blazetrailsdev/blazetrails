@@ -41,12 +41,8 @@ export class Column extends BaseColumn {
     this.array = options.array ?? this.sqlType?.endsWith("[]") ?? false;
   }
 
-  get type(): string {
+  override get type(): string {
     return this.sqlType ?? "";
-  }
-
-  get hasDefault(): boolean {
-    return this.default != null || this.defaultFunction != null;
   }
 
   get isSerial(): boolean {

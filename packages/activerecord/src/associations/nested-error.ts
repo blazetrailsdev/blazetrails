@@ -5,7 +5,7 @@ interface AssociationLike {
   reflection: { name: string };
   isCollection?(): boolean;
   target?: unknown[];
-  options?: Record<string, unknown>;
+  options?: { indexErrors?: boolean };
 }
 
 interface InnerErrorLike {
@@ -18,12 +18,14 @@ interface InnerErrorLike {
 }
 
 /**
- * Wraps validation errors from nested associations.
+ * Wraps validation errors from nested associations, rewriting the
+ * attribute so it reads as `association.attr` (or `association[i].attr`
+ * when `index_errors` is enabled on a collection association).
  *
  * Mirrors: ActiveRecord::Associations::NestedError
  */
 export class NestedError extends ActiveModelNestedError {
-  private readonly association: AssociationLike;
+  readonly association: AssociationLike;
 
   constructor(association: AssociationLike, innerError: InnerErrorLike) {
     const attribute = NestedError.computeAttribute(association, innerError);
@@ -36,6 +38,13 @@ export class NestedError extends ActiveModelNestedError {
     innerError: InnerErrorLike,
   ): string {
     const name = association.reflection.name;
+    const isCollection = association.isCollection?.() ?? false;
+    if (isCollection && association.options?.indexErrors) {
+      const index = association.target?.findIndex((r) => r === innerError.base);
+      if (index != null && index >= 0) {
+        return `${name}[${index}].${innerError.attribute}`;
+      }
+    }
     return `${name}.${innerError.attribute}`;
   }
 }

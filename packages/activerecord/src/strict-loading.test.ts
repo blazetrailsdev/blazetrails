@@ -241,11 +241,17 @@ describe("StrictLoadingTest", () => {
       }
     }
     const author = new Author({ name: "Jack" });
-    expect(() =>
+    let caught: Error | null = null;
+    try {
       (author.strictLoadingBang as (v: boolean, o: { mode: string }) => unknown)(true, {
         mode: "bogus",
-      }),
-    ).toThrow(/The :mode option must be one of/);
+      });
+    } catch (e) {
+      caught = e as Error;
+    }
+    expect(caught).not.toBeNull();
+    expect(caught!.name).toBe("ArgumentError");
+    expect(caught!.message).toMatch(/The :mode option must be one of/);
   });
 
   // Rails: test_strict_loading

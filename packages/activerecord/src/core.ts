@@ -7,6 +7,7 @@
 import { Notifications, ParameterFilter, getAsyncContext } from "@blazetrails/activesupport";
 import type { AsyncContext } from "@blazetrails/activesupport";
 import { PredicateBuilder } from "./relation/predicate-builder.js";
+import { argumentError } from "./relation/query-methods.js";
 
 /**
  * The Core module interface — methods mixed into every AR model.
@@ -22,7 +23,7 @@ export interface Core {
   isReadonly(): boolean;
   readonlyBang(): this;
   isStrictLoading(): boolean;
-  strictLoadingBang(value?: boolean): this;
+  strictLoadingBang(value?: boolean, options?: { mode?: StrictLoadingMode }): this;
   isFrozen(): boolean;
   freeze(): this;
 }
@@ -181,7 +182,8 @@ export function strictLoadingBang<T extends StrictLoadingFields>(
 ): T {
   const mode = options.mode ?? "all";
   if (mode !== "all" && mode !== "n_plus_one_only") {
-    throw new Error(
+    // Rails: `raise ArgumentError, "The :mode option must be one of ..."`
+    throw argumentError(
       `The :mode option must be one of ["all", "n_plus_one_only"] but ${JSON.stringify(mode)} was provided.`,
     );
   }

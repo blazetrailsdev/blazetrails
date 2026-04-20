@@ -98,4 +98,40 @@ describe("Relation#where — composite-key form", () => {
     const rel = (CompOrder as any).all();
     expect(() => rel.predicateBuilder.buildComposite([], [[1, 2]])).toThrow(/empty column list/);
   });
+
+  it("whereNot(cols, tuples) negates the OR-of-AND grouping", async () => {
+    await CompOrder.create({ shop_id: 1, order_number: 100, name: "exclude-me" });
+    await CompOrder.create({ shop_id: 2, order_number: 200, name: "exclude-me-2" });
+    await CompOrder.create({ shop_id: 3, order_number: 300, name: "keep" });
+
+    const matched = await (CompOrder as any)
+      .all()
+      .whereNot(
+        ["shop_id", "order_number"],
+        [
+          [1, 100],
+          [2, 200],
+        ],
+      )
+      .toArray();
+    expect(matched.map((r: any) => r.name)).toEqual(["keep"]);
+  });
+
+  it("whereNot(cols, tuples) on all-filtered tuples is a no-op (matches Rails' empty-hash behavior)", async () => {
+    await CompOrder.create({ shop_id: 1, order_number: 100, name: "a" });
+    await CompOrder.create({ shop_id: 2, order_number: 200, name: "b" });
+    // All tuples have a null component → filtered out → no predicate
+    // added → all rows returned.
+    const matched = await (CompOrder as any)
+      .all()
+      .whereNot(
+        ["shop_id", "order_number"],
+        [
+          [1, null],
+          [null, 200],
+        ],
+      )
+      .toArray();
+    expect(matched.map((r: any) => r.name).sort()).toEqual(["a", "b"]);
+  });
 });

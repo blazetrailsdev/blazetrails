@@ -152,8 +152,14 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Add WHERE conditions. Accepts a hash of column/value pairs,
-   * or a raw SQL string with optional bind values.
+   * Add WHERE conditions. Accepts:
+   *  - a hash of column/value pairs
+   *  - a raw SQL string with optional bind values
+   *  - an Arel `Nodes.Node`
+   *  - composite-key positional form: `where(['c1','c2'], [[v1a,v1b], ...])`
+   *    (the JS analog of Rails' `where({[c1, c2] => [tuples]})` —
+   *    JS object keys can't be arrays, so columns become a leading
+   *    positional argument)
    *
    * Mirrors: ActiveRecord::Relation#where
    *
@@ -161,6 +167,7 @@ export class Relation<T extends Base> {
    *   where({ name: "dean" })
    *   where("age > ?", 18)
    *   where("name LIKE ?", "%dean%")
+   *   where(['shop_id', 'order_number'], [[1, 100], [2, 200]])
    */
   where(): WhereChain<Relation<T>>;
   where(conditions: undefined): WhereChain<Relation<T>>;
@@ -381,14 +388,31 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Add NOT WHERE conditions. Accepts a hash of column/value pairs.
+   * Add NOT WHERE conditions. Accepts a hash of column/value pairs,
+   * or the composite-key positional form (mirrors `where(cols, tuples)`).
    *
    * Mirrors: ActiveRecord::Relation#where.not
    */
-  whereNot(conditions: Record<string, unknown>): Relation<T> {
+  whereNot(conditions: Record<string, unknown>): Relation<T>;
+  whereNot(cols: string[], tuples: unknown[][]): Relation<T>;
+  whereNot(conditions: Record<string, unknown> | string[], tuples?: unknown[][]): Relation<T> {
     const rel = this._clone();
+    if (
+      Array.isArray(conditions) &&
+      conditions.every((c) => typeof c === "string") &&
+      Array.isArray(tuples)
+    ) {
+      const node = this.predicateBuilder.buildComposite(conditions as string[], tuples);
+      // null = empty/all-filtered → NOT (no rows) = ALL rows = no
+      // predicate added (matches Rails' `where.not(...)` no-op for
+      // empty hashes).
+      if (node !== null) {
+        rel._whereClause.predicates.push(new Nodes.Not(new Nodes.Grouping(node)));
+      }
+      return rel;
+    }
     const castConditions: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(conditions)) {
+    for (const [key, value] of Object.entries(conditions as Record<string, unknown>)) {
       castConditions[key] = Array.isArray(value)
         ? value.map((v) => this._castWhereValue(key, v))
         : this._castWhereValue(key, value);

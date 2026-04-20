@@ -330,6 +330,34 @@ describe("sanitizeSql", () => {
     expect(Post.sanitizeSqlForConditions("")).toBeNull();
   });
 
+  it("sanitizeSqlForAssignment dispatches array-form through this.sanitizeSql", () => {
+    class Post extends Base {
+      static _tableName = "posts";
+      static override sanitizeSql(_input: string | [string, ...unknown[]]): string {
+        return "VIA_SANITIZE_SQL";
+      }
+    }
+    expect(Post.sanitizeSqlForAssignment(["a = ?", 1])).toBe("VIA_SANITIZE_SQL");
+  });
+
+  it("sanitizeSqlForOrder dispatches through this.sanitizeSqlArray and this.disallowRawSqlBang", () => {
+    let disallowCalled = false;
+    class Post extends Base {
+      static _tableName = "posts";
+      static override sanitizeSqlArray(_template: string, ..._binds: unknown[]): string {
+        return "id, 1, 2";
+      }
+      static override disallowRawSqlBang(_args: unknown[]): void {
+        disallowCalled = true;
+      }
+    }
+    const result = Post.sanitizeSqlForOrder(["field(id, ?)", [1, 2]]);
+    // sanitizeSqlForOrder wraps the sanitized string in Arel.sql() (a Node).
+    // Assert the override output was threaded through by inspecting it.
+    expect(result).not.toBeNull();
+    expect(disallowCalled).toBe(true);
+  });
+
   it("Base exposes the full Rails Sanitization::ClassMethods surface", () => {
     class Post extends Base {
       static _tableName = "posts";

@@ -201,8 +201,8 @@ export class Base extends Model {
   declare static sanitizeSqlArray: typeof Sanitization.sanitizeSqlArray;
   declare static sanitizeSqlLike: typeof Sanitization.sanitizeSqlLike;
   declare static sanitizeSqlForConditions: typeof Sanitization.ClassMethods.sanitizeSqlForConditions;
-  declare static sanitizeSqlForAssignment: typeof Sanitization.sanitizeSqlForAssignment;
-  declare static sanitizeSqlForOrder: typeof Sanitization.sanitizeSqlForOrder;
+  declare static sanitizeSqlForAssignment: typeof Sanitization.ClassMethods.sanitizeSqlForAssignment;
+  declare static sanitizeSqlForOrder: typeof Sanitization.ClassMethods.sanitizeSqlForOrder;
   declare static sanitizeSqlHashForAssignment: typeof Sanitization.sanitizeSqlHashForAssignment;
   declare static disallowRawSqlBang: typeof Sanitization.disallowRawSqlBang;
 

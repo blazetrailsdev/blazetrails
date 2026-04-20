@@ -201,11 +201,10 @@ export async function _deleteRecord(
 }
 
 // ---------------------------------------------------------------------------
-// Instance predicates — Rails' ActiveRecord::Persistence module
-// (persistence.rb lines 338, 345, 355, 361). These live alongside
-// `destroy` / `save` in Rails; here they're module-level functions mixed
-// into Base via include() so the implementation file matches Rails'
-// source location.
+// Instance predicates — Rails' ActiveRecord::Persistence module.
+// These live alongside `destroy` / `save` in Rails' persistence.rb; here
+// they're module-level functions mixed into Base via include() so the
+// implementation file matches Rails' source location.
 // ---------------------------------------------------------------------------
 
 interface PersistenceRecordFields {

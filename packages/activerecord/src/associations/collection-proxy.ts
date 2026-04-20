@@ -410,22 +410,19 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       if (typeof original !== "function") continue;
       Object.defineProperty(this, name, {
         value: function (this: CollectionProxy<T>, ...args: unknown[]) {
-          const self = this as unknown as {
-            _cpMutated: boolean;
-            _loaded: boolean;
-            _records: unknown[];
-            _loadAsyncPromise?: Promise<unknown>;
-          };
-          self._cpMutated = true;
-          // Also invalidate the inherited Relation load cache so a
-          // subsequent super.toArray() / super.count() on the diverged
-          // path re-runs the query instead of returning stale results
-          // from a pre-bang load. The association-local target (_target)
-          // is intentionally NOT wiped — that's the owner's in-memory
-          // proxy state and survives scope mutations.
-          self._loaded = false;
-          self._records = [];
-          self._loadAsyncPromise = undefined;
+          (this as unknown as { _cpMutated: boolean })._cpMutated = true;
+          // Use Relation#reset so all inherited load-state — including
+          // `_loadToken` — is invalidated atomically. Bumping the token
+          // lets in-flight super.toArray() completions detect that
+          // they're stale and skip committing results; manually
+          // clearing a subset of fields would race on the
+          // diverged-toArray / load code paths. `_target` (the
+          // association-local in-memory state) is NOT touched —
+          // that's the owner's proxy state and survives scope
+          // mutations.
+          (
+            Relation.prototype as unknown as { reset: (this: CollectionProxy<T>) => void }
+          ).reset.call(this);
           return (original as (...a: unknown[]) => unknown).apply(this, args);
         },
         writable: true,
@@ -454,6 +451,10 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     //    association cache is bypassed here because it's keyed on the
     //    unmutated scope and would return stale/incorrect data.
     if (this._relationStateDiverged()) {
+      // Diverged path bypasses loadHasMany, which is where the
+      // association's strict-loading enforcement normally lives. Run
+      // the gate ourselves so owner._strictLoading still raises.
+      this._checkStrictLoading();
       const results = await super.toArray();
       const unsaved = this._target.filter((r) => r.isNewRecord());
       return unsaved.length > 0 ? [...results, ...unsaved] : results;
@@ -482,6 +483,9 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     // would silently fall back to the full association-cache load.
     let results: T[];
     if (this._relationStateDiverged()) {
+      // Diverged path bypasses loadHasMany — enforce strict-loading
+      // explicitly, same as the toArray() diverged branch.
+      this._checkStrictLoading();
       results = await super.toArray();
     } else {
       results = (await loadHasMany(this._record, this._assocName, this._assocDef.options)) as T[];
@@ -684,6 +688,9 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     // super.toArray().length — instantiating every row just to count
     // would be a major perf regression on large collections.
     if (this._relationStateDiverged()) {
+      // Diverged path bypasses loadHasMany — enforce strict-loading
+      // explicitly so owner._strictLoading still raises.
+      this._checkStrictLoading();
       const counted = await (
         Relation.prototype as unknown as {
           count(this: CollectionProxy<T>): Promise<number | Record<string, number>>;
@@ -1601,6 +1608,14 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     // here: those resolve back to CollectionProxy's own methods and
     // would recurse.
     const diverged = this._relationStateDiverged();
+    // Through and diverged paths bypass scope(), which is where AR
+    // gates strict-loading. Enforce directly so deleteAll is
+    // consistent regardless of through/diverged state. The
+    // non-diverged non-through branch goes through scope() which
+    // produces an AR and enforces the same gate on its own.
+    if (this._isThrough || diverged) {
+      this._checkStrictLoading();
+    }
     if (strategy === "delete_all") {
       if (this._isThrough) {
         // For through associations, delete join rows via SQL — not the target records

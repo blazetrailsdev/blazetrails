@@ -1659,18 +1659,18 @@ export function addAggregateReflection(
 
 export function reflections(
   modelClass: typeof Base,
-): Record<string, AssociationReflection | ThroughReflection> {
+): Readonly<Record<string, AssociationReflection | ThroughReflection>> {
   return normalizedReflections(modelClass);
 }
 
 const _normalizedReflectionsCache = new WeakMap<
   typeof Base,
-  Record<string, AssociationReflection | ThroughReflection>
+  Readonly<Record<string, AssociationReflection | ThroughReflection>>
 >();
 
 export function normalizedReflections(
   modelClass: typeof Base,
-): Record<string, AssociationReflection | ThroughReflection> {
+): Readonly<Record<string, AssociationReflection | ThroughReflection>> {
   const cached = _normalizedReflectionsCache.get(modelClass);
   if (cached) return cached;
 
@@ -1802,12 +1802,14 @@ export type AssociationLikeReflection = AssociationReflection | ThroughReflectio
 // ---------------------------------------------------------------------------
 
 export const ClassMethods = {
-  reflections(this: typeof Base): Record<string, AssociationReflection | ThroughReflection> {
+  reflections(
+    this: typeof Base,
+  ): Readonly<Record<string, AssociationReflection | ThroughReflection>> {
     return reflections(this);
   },
   normalizedReflections(
     this: typeof Base,
-  ): Record<string, AssociationReflection | ThroughReflection> {
+  ): Readonly<Record<string, AssociationReflection | ThroughReflection>> {
     return normalizedReflections(this);
   },
   reflectOnAssociation(

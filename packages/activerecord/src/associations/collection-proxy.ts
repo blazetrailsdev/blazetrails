@@ -1484,59 +1484,70 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     };
 
     // Index records by PK once — O(records + ids) instead of
-    // O(records × ids). Composite keys stringify as a JSON tuple.
+    // O(records × ids). Composite keys join with a NUL separator
+    // (unambiguous + bigint-safe; JSON.stringify throws on bigint
+    // and this codebase's big_integer type casts to bigint).
+    const TUPLE_SEP = "\u0000";
+    const keyForTuple = (tuple: unknown[]): string => tuple.map((x) => String(x)).join(TUPLE_SEP);
     const keyForRecord = (r: Base): string => {
       if (composite) {
         const cols = pk as string[];
-        return JSON.stringify(cols.map((c) => r.readAttribute(c)));
+        return keyForTuple(cols.map((c) => r.readAttribute(c)));
       }
       return String(r.readAttribute(pk as string));
     };
     const keyForCastedId = (castedId: unknown): string => {
-      if (composite) return JSON.stringify(castedId);
+      if (composite) return keyForTuple(castedId as unknown[]);
       return String(castedId);
     };
     const byPk = new Map<string, T>();
     for (const r of records) byPk.set(keyForRecord(r), r);
 
-    const formatId = (id: unknown): string => (Array.isArray(id) ? JSON.stringify(id) : String(id));
+    // For composite PKs, collapse the caller-provided ids into the
+    // `tuples` shape performFind uses, so error messages and the
+    // `id` payload match exactly: tuples is always `unknown[][]`;
+    // `String(tuples)` yields "1,2,3,4" for [[1,2],[3,4]]. For
+    // simple PKs, stay with the scalar form.
+    const tuples: unknown[][] | null = composite ? (ids as unknown[][]) : null;
 
     // Aggregate "couldn't find all" error when looking up multiple
-    // ids — matches Relation.performFind so callers see a single
-    // RecordNotFound with the full id list instead of one per
-    // missing id.
-    if (wantArray || ids.length > 1) {
-      // Match Relation.performFind exactly: the SQL path does a single
-      // WHERE-IN query and compares result count to the requested
-      // count. Duplicate ids or missing ids both yield a count
-      // mismatch and raise the aggregate "couldn't find all" error.
-      // Mirror that here by comparing the distinct found-key count to
-      // the requested ids count — `find([1, 1])` fails the same way
-      // `Base.find([1, 1])` does.
+    // ids or composite-tuple lookups — matches Relation.performFind:
+    //   * ALWAYS uses the "Couldn't find all X with 'pk': (ids)" shape
+    //     when at least one requested id is missing, even for a
+    //     single-tuple lookup under composite PKs (relation/
+    //     finder-methods.ts:129-137).
+    //   * Simple-PK single-id lookup uses the "with 'pk'=id" shape.
+    if (composite || wantArray || ids.length > 1) {
+      // Duplicate-id handling matches Relation.performFind: the SQL
+      // path compares result count to requested count; duplicates
+      // collapse to one row and raise. Mirror by comparing distinct
+      // found-key count to ids.length.
       const castedIds = ids.map(castId);
       const uniqueFoundKeys = new Set(castedIds.map(keyForCastedId).filter((k) => byPk.has(k)));
       if (uniqueFoundKeys.size !== ids.length) {
+        const idPayload = tuples ?? ids;
         throw new RecordNotFound(
-          `Couldn't find all ${targetModel.name} with '${String(pk)}': (${ids
-            .map((id) => formatId(id))
-            .join(", ")})`,
+          `Couldn't find all ${targetModel.name} with '${String(pk)}': (${String(idPayload)})`,
           targetModel.name,
           String(pk),
-          ids,
+          idPayload,
         );
       }
-      // Return in DB/load order (the order records appear in
-      // this.toArray()), matching Relation.performFind which returns
-      // the WHERE-IN result set without reordering by input ids.
+      // Return in DB/load order, matching Relation.performFind.
       const wantedKeys = new Set(castedIds.map(keyForCastedId));
-      return records.filter((r) => wantedKeys.has(keyForRecord(r)));
+      const found = records.filter((r) => wantedKeys.has(keyForRecord(r)));
+      // Composite single-tuple lookup (`find([k1, k2])`) returns one
+      // record, matching performFind's `isArrayOfTuples ? records :
+      // records[0]` branch.
+      return wantArray ? found : found[0];
     }
 
+    // Simple PK, single scalar id.
     const id = ids[0];
     const match = byPk.get(keyForCastedId(castId(id)));
     if (!match) {
       throw new RecordNotFound(
-        `Couldn't find ${targetModel.name} with '${String(pk)}'=${formatId(id)}`,
+        `Couldn't find ${targetModel.name} with '${String(pk)}'=${String(id)}`,
         targetModel.name,
         String(pk),
         id,

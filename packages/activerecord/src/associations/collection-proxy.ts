@@ -38,6 +38,7 @@ import {
   fireAssocCallbacks,
   buildHasManyRelation,
   loadHasMany,
+  _canRouteThroughViaAssociationScope,
 } from "../associations.js";
 import { _setCollectionProxyCtor } from "./collection-proxy-slot.js";
 
@@ -722,18 +723,20 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     // Non-disable-joins through associations are handled by
     // `_buildThroughScope()` which builds a JOIN-based Relation that
     // counts correctly.
-    // Through-association shapes our scope() / _buildThroughScope()
-    // don't build a COUNT-able JOIN for today: disable_joins (DJAS
-    // walks the chain in separate queries) and nested-through
-    // (scope() references columns that don't belong to the emitted
-    // FROM table). Fall back for these; single-level through takes
-    // the fast path. Unifying these shapes is tracked in task #22.
+    // Through-associations: only take the scope().count() fast path
+    // when the shape is one AssociationScope can route. The shared
+    // predicate already excludes nested-through, disable-joins,
+    // polymorphic-has_many sources, and polymorphic-belongsTo
+    // sources without sourceType — all shapes where
+    // _buildThroughScope produces SQL that either references the
+    // wrong table's columns or can't disambiguate the target table.
+    // For those, fall back to the loader (which has its own
+    // per-shape handling). Matches the gate used by
+    // loadHasMany / loadHasOne in associations.ts:659.
     if (this._assocDef.options.through) {
       const ctor = this._record.constructor as typeof Base;
       const refl = (ctor as any)._reflectOnAssociation?.(this._assocName);
-      const isNested =
-        refl && typeof refl.isNested === "function" ? (refl.isNested() as boolean) : false;
-      if (this._assocDef.options.disableJoins || isNested) {
+      if (!_canRouteThroughViaAssociationScope(refl, this._assocDef.options)) {
         const results = await loadHasMany(this._record, this._assocName, this._assocDef.options);
         return results.length;
       }

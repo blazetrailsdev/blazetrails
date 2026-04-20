@@ -262,26 +262,34 @@ export function isPreviouslyPersisted(this: PersistenceRecordDispatch): boolean 
 // callbacks), matching Rails' `toggle.update_attribute(...)` chain.
 // ---------------------------------------------------------------------------
 
-interface CounterRecord {
+/** Read/write contract used by every increment/decrement/toggle function. */
+interface AttributeIO {
   readAttribute(name: string): unknown;
   writeAttribute(name: string, value: unknown): void;
-  updateColumn(name: string, value: unknown): Promise<unknown>;
-  updateAttribute(name: string, value: unknown): Promise<unknown>;
-  clearAttributeChanges?(attributes: string[]): void;
-  id: unknown;
-  constructor: {
-    updateCounters(
-      id: unknown,
-      counters: Record<string, number>,
-      options?: { touch?: boolean | string | string[] },
-    ): Promise<number>;
-  };
 }
 
 type TouchOption = boolean | string | string[];
 
+/** Class-level updateCounters + dirty-tracking needed by incrementBang. */
+interface CounterBangRecord extends AttributeIO {
+  id: unknown;
+  clearAttributeChanges(attributes: string[]): void;
+  constructor: {
+    updateCounters(
+      id: unknown,
+      counters: Record<string, number>,
+      options?: { touch?: TouchOption },
+    ): Promise<number>;
+  };
+}
+
+/** Save path used by toggleBang. */
+interface ToggleBangRecord extends AttributeIO {
+  save(options?: { validate?: boolean }): Promise<boolean>;
+}
+
 /** Mirrors: ActiveRecord::Persistence#increment */
-export function increment<T extends CounterRecord>(this: T, attribute: string, by: number = 1): T {
+export function increment<T extends AttributeIO>(this: T, attribute: string, by: number = 1): T {
   const current = Number(this.readAttribute(attribute)) || 0;
   this.writeAttribute(attribute, current + by);
   return this;
@@ -292,7 +300,7 @@ export function increment<T extends CounterRecord>(this: T, attribute: string, b
  * Dispatched through `this` so subclass overrides of `increment` flow into
  * `decrement`.
  */
-export function decrement<T extends CounterRecord & { increment(a: string, b?: number): T }>(
+export function decrement<T extends AttributeIO & { increment(a: string, b?: number): T }>(
   this: T,
   attribute: string,
   by: number = 1,
@@ -301,7 +309,7 @@ export function decrement<T extends CounterRecord & { increment(a: string, b?: n
 }
 
 /** Mirrors: ActiveRecord::Persistence#toggle */
-export function toggle<T extends CounterRecord>(this: T, attribute: string): T {
+export function toggle<T extends AttributeIO>(this: T, attribute: string): T {
   this.writeAttribute(attribute, !this.readAttribute(attribute));
   return this;
 }
@@ -313,18 +321,18 @@ export function toggle<T extends CounterRecord>(this: T, attribute: string): T {
  * other. Validations and callbacks are skipped. Accepts Rails' `touch`
  * option (updates the named timestamp(s) in the same statement).
  */
-export async function incrementBang<T extends CounterRecord>(
+export async function incrementBang<T extends CounterBangRecord>(
   this: T & { increment(attribute: string, by?: number): T },
   attribute: string,
   by: number = 1,
   options: { touch?: TouchOption } = {},
-): Promise<T> {
+) {
   this.increment(attribute, by);
   await this.constructor.updateCounters(this.id, { [attribute]: by }, { touch: options.touch });
   // Rails: `public_send(:"clear_#{attribute}_change")` — the in-memory
   // increment is now durably persisted, so the attribute should no longer
   // appear dirty (otherwise a later save() would re-persist it).
-  this.clearAttributeChanges?.([attribute]);
+  this.clearAttributeChanges([attribute]);
   return this;
 }
 
@@ -334,7 +342,7 @@ export async function incrementBang<T extends CounterRecord>(
  * subclass overrides of `incrementBang` flow into `decrementBang`.
  */
 export async function decrementBang<
-  T extends CounterRecord & {
+  T extends CounterBangRecord & {
     incrementBang(a: string, b?: number, o?: { touch?: TouchOption }): Promise<T>;
   },
 >(this: T, attribute: string, by: number = 1, options: { touch?: TouchOption } = {}): Promise<T> {
@@ -347,11 +355,8 @@ export async function decrementBang<
  * Unlike `increment!` / `decrement!`, Rails' `toggle!` goes through
  * `update_attribute` which runs callbacks (but still skips validations).
  */
-export async function toggleBang<T extends CounterRecord>(
-  this: T & {
-    toggle(attribute: string): T;
-    save(options?: { validate?: boolean }): Promise<boolean>;
-  },
+export async function toggleBang<T extends ToggleBangRecord>(
+  this: T & { toggle(attribute: string): T },
   attribute: string,
 ): Promise<T> {
   this.toggle(attribute);

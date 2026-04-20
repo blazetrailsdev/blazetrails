@@ -237,17 +237,20 @@ export class PredicateBuilder {
    */
   buildComposite(cols: string[], tuples: unknown[][]): Nodes.Node | null {
     if (cols.length === 0) {
-      throw new Error("PredicateBuilder.buildComposite: empty column list");
+      throw composeArgumentError("PredicateBuilder.buildComposite: empty column list");
     }
     // Validate shape/arity loudly — silently dropping malformed
     // tuples would turn caller bugs into `null` (→ `none()`), which
-    // is hard to debug.
+    // is hard to debug. Tagged as ArgumentError so callers can catch
+    // consistently with other query-method validation throws.
     for (const t of tuples) {
       if (!Array.isArray(t)) {
-        throw new Error(`PredicateBuilder.buildComposite: tuple must be an array, got ${typeof t}`);
+        throw composeArgumentError(
+          `PredicateBuilder.buildComposite: tuple must be an array, got ${typeof t}`,
+        );
       }
       if (t.length !== cols.length) {
-        throw new Error(
+        throw composeArgumentError(
           `PredicateBuilder.buildComposite: tuple arity ${t.length} does not match column count ${cols.length} (cols=[${cols.join(", ")}])`,
         );
       }
@@ -267,13 +270,19 @@ export class PredicateBuilder {
     // becomes a `QueryAttribute` (= bind param) rather than an
     // `Arel::Nodes::Casted` (= inlined SQL literal). Inlined values
     // bypass `compileWithBinds` / prepared-statement caching and
-    // mishandle `StatementCache::Substitute` placeholders. Matches
-    // how the normal hash-WHERE handler builds per-attribute bind
-    // values.
+    // mishandle `StatementCache::Substitute` placeholders.
+    //
+    // Use the resolved attribute's `.name` (not the raw `c`) when
+    // constructing the bind so qualified column keys
+    // (e.g. `"orders.shop_id"`) resolve to the same column-name
+    // PredicateBuilder.BasicObjectHandler uses for type lookup —
+    // otherwise `typeForAttribute("orders.shop_id")` returns
+    // undefined and the cast falls back to identity.
     const groupings: Nodes.Node[] = validTuples.map((tuple) => {
-      const eqs = cols.map((c, i) =>
-        this.resolveColumn(c).eq(this.buildBindAttribute(c, tuple[i])),
-      );
+      const eqs = cols.map((c, i) => {
+        const attr = this.resolveColumn(c);
+        return attr.eq(this.buildBindAttribute(attr.name, tuple[i]));
+      });
       return new Nodes.Grouping(new Nodes.And(eqs));
     });
     if (groupings.length === 1) return groupings[0];
@@ -351,6 +360,18 @@ export class PredicateBuilder {
       typeof value === "object" && value !== null && "_modelClass" in value && "toArel" in value
     );
   }
+}
+
+/**
+ * Tag throws from `buildComposite` as `ArgumentError` so callers can
+ * catch them consistently with other argument-shape errors raised
+ * elsewhere in query-methods.ts (matches Rails' ArgumentError surface
+ * for invalid where arguments).
+ */
+function composeArgumentError(message: string): Error {
+  const error = new Error(message);
+  error.name = "ArgumentError";
+  return error;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

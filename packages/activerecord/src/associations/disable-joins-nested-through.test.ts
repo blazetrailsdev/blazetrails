@@ -152,4 +152,45 @@ describe("DJAS routing widening — nested-through", () => {
     // join that would collapse under `disable_joins: true`.
     expect(observed.some((s) => /\bJOIN\b/i.test(s))).toBe(false);
   });
+
+  it("nested-through + ordered intermediate: DJAR wrap reorders final records by chain-intermediate sequence", async () => {
+    // When any step in the (flattened) chain is ordered, DJAS wraps
+    // the final step in a DisableJoinsAssociationRelation whose
+    // loaded-chain reorder re-emits records in the intermediate's
+    // pluck order. This test proves the wrap fires on a nested
+    // shape, not just a direct through.
+    Associations.hasMany.call(NtPost, "ntCommentsOrdered", {
+      className: "NtComment",
+      foreignKey: "nt_post_id",
+      scope: (rel: any) => rel.order("body"),
+    });
+    Associations.hasMany.call(NtAuthor, "ntCommentsOrd", {
+      className: "NtComment",
+      through: "ntPosts",
+      source: "ntCommentsOrdered",
+    });
+    Associations.hasMany.call(NtAuthor, "noJoinsNtRatingsOrdered", {
+      className: "NtRating",
+      through: "ntCommentsOrd",
+      source: "ntRatings",
+      disableJoins: true,
+    });
+
+    const author = await NtAuthor.create({ name: "ord" });
+    const post = (await NtPost.create({ nt_author_id: author.id, title: "p" })) as any;
+    // Insert comment "b" first (smaller id), "a" second (larger id).
+    // The upstream .order("body") flips their pluck order to a, b,
+    // so the final rating reorder should emit a-ratings before
+    // b-ratings even though r_from_a has the larger comment id.
+    const cb = (await NtComment.create({ nt_post_id: post.id, body: "b" })) as any;
+    const ca = (await NtComment.create({ nt_post_id: post.id, body: "a" })) as any;
+    await NtRating.create({ nt_comment_id: cb.id, value: 1 });
+    await NtRating.create({ nt_comment_id: ca.id, value: 2 });
+
+    const reflection = (NtAuthor as any)._reflectOnAssociation("noJoinsNtRatingsOrdered");
+    const ratings = await loadHasMany(author, "noJoinsNtRatingsOrdered", reflection.options);
+    // Ordered by the intermediate (comment body a-then-b): value 2
+    // (from comment a) before value 1 (from comment b).
+    expect(ratings.map((r: any) => r.value)).toEqual([2, 1]);
+  });
 });

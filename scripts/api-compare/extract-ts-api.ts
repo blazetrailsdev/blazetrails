@@ -42,9 +42,17 @@ function main() {
   console.log(`\nWritten to ${outputPath}`);
 }
 
+interface PendingReExport {
+  fromFile: string; // relative path of the file that re-exports
+  localName: string; // name exposed by `fromFile`
+  sourceName: string; // original name in the source module
+  moduleSpecifier: string; // e.g. "./migration-errors.js"
+}
+
 function extractPackage(pkgName: string, srcDir: string): PackageInfo {
   const files = getAllTsFiles(srcDir);
   const info: PackageInfo = { classes: {}, modules: {}, fileFunctions: {} };
+  const pendingReExports: PendingReExport[] = [];
 
   // Create a TypeScript program
   const dirName = PACKAGE_DIR_OVERRIDES[pkgName] ?? pkgName;
@@ -135,6 +143,26 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
             classMethods: [],
           };
           fileHasClassOrModule = true;
+        } else if (
+          node.exportClause &&
+          ts.isNamedExports(node.exportClause) &&
+          node.moduleSpecifier &&
+          ts.isStringLiteral(node.moduleSpecifier)
+        ) {
+          // Handle `export { X, Y } from "./z.js"` — named re-exports.
+          // Record each re-exported name as "pending" keyed under this
+          // file's relPath; resolved in a post-pass once every file has
+          // been walked (the source file may come later in the list).
+          for (const spec of node.exportClause.elements) {
+            const localName = spec.name.text;
+            const sourceName = spec.propertyName?.text ?? localName;
+            pendingReExports.push({
+              fromFile: relPath,
+              localName,
+              sourceName,
+              moduleSpecifier: node.moduleSpecifier.text,
+            });
+          }
         }
       } else if (ts.isFunctionDeclaration(node) && node.name && isExported(node)) {
         const line = node.getSourceFile().getLineAndCharacterOfPosition(node.getStart()).line + 1;
@@ -288,7 +316,44 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
     }
   }
 
+  // Post-pass: resolve named re-exports. For each `export { X } from
+  // "./y.js"`, if ./y.js defined `X` (and we haven't already registered
+  // `fromFile:X` via a local declaration), clone the class entry under
+  // the re-exporting file's path so api-compare sees the class where
+  // Rails expects it.
+  for (const re of pendingReExports) {
+    const key = `${re.fromFile}:${re.localName}`;
+    if (info.classes[key] || info.modules[key]) continue;
+    const targetRel = resolveRelModule(re.fromFile, re.moduleSpecifier);
+    if (!targetRel) continue;
+    const sourceKey = `${targetRel}:${re.sourceName}`;
+    const sourceClass = info.classes[sourceKey];
+    if (sourceClass) {
+      info.classes[key] = { ...sourceClass, name: re.localName, file: re.fromFile };
+      continue;
+    }
+    const sourceModule = info.modules[sourceKey];
+    if (sourceModule) {
+      info.modules[key] = { ...sourceModule, name: re.localName, file: re.fromFile };
+    }
+  }
+
   return info;
+}
+
+/**
+ * Resolve a relative module specifier (e.g. "./migration-errors.js")
+ * against a file's relative path. Returns the resolved file's path
+ * in the same relative form used as PackageInfo keys, or null if the
+ * specifier doesn't target a local file.
+ */
+function resolveRelModule(fromRel: string, spec: string): string | null {
+  if (!spec.startsWith("./") && !spec.startsWith("../")) return null;
+  const fromDir = path.dirname(fromRel);
+  // Strip .js / .ts extension; api-compare keys use .ts paths.
+  const withoutExt = spec.replace(/\.(js|ts)$/, "");
+  const joined = path.normalize(path.join(fromDir, withoutExt));
+  return joined.replace(/\\/g, "/") + ".ts";
 }
 
 function extractClass(

@@ -37,21 +37,20 @@ export {
 // Migration error classes live in a standalone module so leaf modules
 // like InternalMetadata can import EnvironmentStorageError without
 // creating a cycle through migration.ts. Imported here for local use
-// AND re-exported for existing consumers.
+// and re-exported from the source module so tooling (api-compare,
+// d.ts resolvers) sees the classes as belonging to migration.ts —
+// matching the Rails layout where they're defined in migration.rb.
 import {
   MigrationError,
   IrreversibleMigration,
   DuplicateMigrationVersionError,
   DuplicateMigrationNameError,
   UnknownMigrationVersionError,
-  IllegalMigrationNameError,
-  InvalidMigrationTimestampError,
   PendingMigrationError,
   ConcurrentMigrationError,
   NoEnvironmentInSchemaError,
   ProtectedEnvironmentError,
   EnvironmentMismatchError,
-  EnvironmentStorageError,
 } from "./migration-errors.js";
 export {
   MigrationError,
@@ -67,7 +66,7 @@ export {
   ProtectedEnvironmentError,
   EnvironmentMismatchError,
   EnvironmentStorageError,
-};
+} from "./migration-errors.js";
 
 /**
  * Migration — base class for database migrations.

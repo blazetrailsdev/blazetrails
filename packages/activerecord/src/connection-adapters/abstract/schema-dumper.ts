@@ -14,15 +14,4 @@
 
 import { SchemaDumper as BaseSchemaDumper } from "../../schema-dumper.js";
 
-// Re-export the shared shapes so historical consumers
-// (`import { SchemaSource, ... } from ".../abstract/schema-dumper.js"`)
-// keep working after the move.
-export type {
-  ColumnInfo,
-  IndexInfo,
-  SchemaSource,
-  SchemaDumpLanguage,
-  SchemaDumperOptions,
-} from "../../schema-dumper.js";
-
 export class SchemaDumper extends BaseSchemaDumper {}

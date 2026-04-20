@@ -339,8 +339,12 @@ export class SchemaDumper {
    *
    * Mirrors: ActiveRecord::ConnectionAdapters::SchemaDumper.create
    */
-  static create(source: SchemaSource, options: Record<string, unknown> = {}): SchemaDumper {
-    return new this(source, options);
+  static create<T extends typeof SchemaDumper>(
+    this: T,
+    source: SchemaSource,
+    options: Record<string, unknown> = {},
+  ): InstanceType<T> {
+    return new this(source, options) as InstanceType<T>;
   }
 
   /**
@@ -364,7 +368,7 @@ export class SchemaDumper {
     if (isDatabaseAdapter(sourceOrAdapter)) {
       const source = new AdapterSchemaSource(sourceOrAdapter);
       const lang = (options.language as SchemaDumpLanguage) ?? "ts";
-      return this.create(source, { language: lang }).dump() as Promise<string>;
+      return this.create(source, { ...options, language: lang }).dump() as Promise<string>;
     }
     return this.create(sourceOrAdapter, options).dump();
   }

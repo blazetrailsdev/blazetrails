@@ -65,6 +65,12 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
    * by serialized tuple so two independently-read `[1, 100]`s
    * collapse. */
   private readonly _storedIds: DjarIds;
+  /** Serialized form of `_storedIds` for the composite path — computed
+   * once during constructor dedup so the load-time reorder loop can
+   * reuse it instead of re-running `JSON.stringify` on every tuple
+   * per `toArray()`. `null` for single-column keys (Map identity works
+   * directly on scalars). */
+  private readonly _storedKeyStrings: string[] | null;
   /** Whether `key` is composite (string[] with arity > 1). Derived at
    * construction; controls tuple-vs-scalar behavior in read/dedup/group. */
   private readonly _composite: boolean;
@@ -82,6 +88,30 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
    */
   private _walkPromise?: Promise<{ relation: Relation<T> }>;
 
+  // Typed overloads keep `key`/`ids` correlated at the call site so
+  // `new DJAR(..., "id", [[1, 2]])` (string key + tuple ids) or
+  // `new DJAR(..., ["a", "b"], [1, 2])` (tuple key + scalar ids) are
+  // rejected at compile time. The implementation signature accepts
+  // the union, and the runtime guards below still cover dynamic
+  // callers that erase through `unknown`/`any`.
+  constructor(
+    klass: typeof Base,
+    key: string,
+    ids: unknown[],
+    chainWalker?: () => Promise<{ relation: Relation<T> }>,
+  );
+  constructor(
+    klass: typeof Base,
+    key: string[],
+    ids: unknown[][],
+    chainWalker?: () => Promise<{ relation: Relation<T> }>,
+  );
+  constructor(
+    klass: typeof Base,
+    key: DjarKey,
+    ids: DjarIds,
+    chainWalker?: () => Promise<{ relation: Relation<T> }>,
+  );
   constructor(
     klass: typeof Base,
     key: DjarKey,
@@ -89,16 +119,30 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
     chainWalker?: () => Promise<{ relation: Relation<T> }>,
   ) {
     super(klass);
-    this.key = key;
-    this._composite = Array.isArray(key) && key.length > 1;
+    // Normalize array-key shapes: length 0 is always a bug; length 1
+    // collapses to the string form so `this.key` / `_composite`
+    // stay consistent with the scalar path (and `readAttribute`
+    // never gets `undefined`).
+    let normalizedKey: DjarKey = key;
+    if (Array.isArray(key)) {
+      if (key.length === 0) {
+        throw argumentError("DisableJoinsAssociationRelation: key must have at least one column");
+      }
+      if (key.length === 1) normalizedKey = key[0];
+    }
+    this.key = normalizedKey;
+    this._composite = Array.isArray(normalizedKey);
     // Scalar case: Set identity dedup matches Rails' `ids.uniq`.
     // Composite case: dedupe by serialized tuple so `[1, 100]` from
     // two owner rows collapses to one entry (Set-of-arrays would keep
-    // both by reference).
+    // both by reference). Cache the serialized forms so the load-time
+    // reorder doesn't re-run JSON.stringify.
     if (this._composite) {
-      const arity = (key as string[]).length;
+      const cols = normalizedKey as string[];
+      const arity = cols.length;
       const seen = new Set<string>();
       const out: unknown[][] = [];
+      const keyStrings: string[] = [];
       for (let i = 0; i < (ids as unknown[]).length; i++) {
         const t = (ids as unknown[])[i];
         // Fail fast on shape/arity mismatch. Without this, a flat
@@ -112,18 +156,21 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
         }
         if (t.length !== arity) {
           throw argumentError(
-            `DisableJoinsAssociationRelation: composite ids[${i}] arity ${t.length} does not match key [${(key as string[]).join(", ")}] (arity ${arity})`,
+            `DisableJoinsAssociationRelation: composite ids[${i}] arity ${t.length} does not match key [${cols.join(", ")}] (arity ${arity})`,
           );
         }
         const k = serializeKey(t, true) as string;
         if (!seen.has(k)) {
           seen.add(k);
           out.push(t);
+          keyStrings.push(k);
         }
       }
       this._storedIds = out;
+      this._storedKeyStrings = keyStrings;
     } else {
       this._storedIds = Array.from(new Set(ids as unknown[]));
+      this._storedKeyStrings = null;
     }
     this._chainWalker = chainWalker;
   }
@@ -305,9 +352,20 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
       else byKey.set(k, [r]);
     }
     const ordered: T[] = [];
-    for (const id of this._storedIds) {
-      const bucket = byKey.get(serializeKey(id, composite));
-      if (bucket) ordered.push(...bucket);
+    if (composite) {
+      // Walk `_storedKeyStrings` directly — the serialized forms were
+      // computed once at construction, so the reorder avoids re-running
+      // JSON.stringify per tuple on every `toArray()` call.
+      const keyStrings = this._storedKeyStrings!;
+      for (const k of keyStrings) {
+        const bucket = byKey.get(k);
+        if (bucket) ordered.push(...bucket);
+      }
+    } else {
+      for (const id of this._storedIds) {
+        const bucket = byKey.get(id);
+        if (bucket) ordered.push(...bucket);
+      }
     }
     const start = offsetVal ?? 0;
     const end = limitVal == null ? undefined : start + limitVal;

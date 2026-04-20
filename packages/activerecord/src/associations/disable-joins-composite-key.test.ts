@@ -276,6 +276,19 @@ describe("DJAS — composite key support", () => {
     await expect(djar.toArray()).resolves.toEqual([]);
   });
 
+  it("DisableJoinsAssociationRelation key normalization: empty array throws, single-element array collapses to string", async () => {
+    // length 0 is always a bug — the load/reorder path would call
+    // readAttribute(undefined) and misbehave.
+    expect(() => new DisableJoinsAssociationRelation(CkLineItem, [] as any, [])).toThrow(
+      /at least one column/,
+    );
+    // length 1 is equivalent to the string form; normalize so
+    // `this.key` / `_composite` stay consistent with the scalar path.
+    const djar = new DisableJoinsAssociationRelation(CkLineItem, ["sku"], ["a", "b"]);
+    expect(djar.key).toBe("sku");
+    expect(await djar.ids()).toEqual(["a", "b"]);
+  });
+
   it("DisableJoinsAssociationRelation composite-key load: throws ArgumentError on shape/arity mismatch", async () => {
     // Fail-fast on caller bugs. Without the guard, a flat scalar list
     // would silently dedupe to "one bucket per scalar" and reorder to

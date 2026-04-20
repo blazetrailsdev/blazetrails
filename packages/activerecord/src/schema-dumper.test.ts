@@ -27,8 +27,8 @@ describe("SchemaDumperTest", () => {
     const sm = new SchemaMigration(adapter);
     await sm.createTable();
     await sm.deleteAllVersions();
-    const dumper = new TopLevelDumper(adapter);
-    const result = await dumper.dumpWithVersion();
+    const dumper = null as any;
+    const result = await TopLevelDumper.dumpWithVersion(adapter);
     expect(result).toContain("Schema version: 0");
   });
 
@@ -42,8 +42,8 @@ describe("SchemaDumperTest", () => {
     await sm.recordVersion("20240301000000");
     await sm.recordVersion("20240101000000");
     await sm.recordVersion("20240201000000");
-    const dumper = new TopLevelDumper(adapter);
-    const result = await dumper.dumpWithVersion();
+    const dumper = null as any;
+    const result = await TopLevelDumper.dumpWithVersion(adapter);
     expect(result).toContain("Schema version: 20240301000000");
   });
 
@@ -54,8 +54,8 @@ describe("SchemaDumperTest", () => {
     const sm = new SchemaMigration(adapter);
     await sm.createTable();
     await sm.recordVersion("20240601120000");
-    const dumper = new TopLevelDumper(adapter);
-    const result = await dumper.dumpWithVersion();
+    const dumper = null as any;
+    const result = await TopLevelDumper.dumpWithVersion(adapter);
     expect(result).toContain("Schema version: 20240601120000");
     expect(result).toContain("defineSchema");
   });
@@ -461,8 +461,8 @@ describe("SchemaDumperAdapterTest", () => {
     const sm = new SchemaMigration(adapter);
     await sm.createTable();
     await sm.deleteAllVersions();
-    const dumper = new TopLevelDumper(adapter);
-    const result = await dumper.dumpWithVersion();
+    const dumper = null as any;
+    const result = await TopLevelDumper.dumpWithVersion(adapter);
     expect(result).toContain("Schema version: 0");
   });
 
@@ -473,8 +473,8 @@ describe("SchemaDumperAdapterTest", () => {
     await sm.createTable();
     await sm.recordVersion("20240101000000");
     await sm.recordVersion("20240201000000");
-    const dumper = new TopLevelDumper(adapter);
-    const result = await dumper.dumpWithVersion();
+    const dumper = null as any;
+    const result = await TopLevelDumper.dumpWithVersion(adapter);
     expect(result).toContain("Schema version: 20240201000000");
   });
 });

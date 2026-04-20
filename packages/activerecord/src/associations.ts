@@ -462,10 +462,9 @@ async function _loadThroughViaDisableJoinsScope(
 ): Promise<Base[]> {
   // Unsaved-owner / null-PK short-circuit — correctness, not just
   // perf. With the guard absent DJAS seeds `joinIds = [null]`, and
-  // the ArrayHandler in PredicateBuilder turns `where({key: [null]})`
-  // into `key IS NULL` (array-handler.ts:21). That would match
-  // orphan through rows whose FK is null and leak them into the
-  // chain as phantom associations.
+  // the ArrayHandler in PredicateBuilder folds `[null]` into
+  // `key IS NULL`. That would match orphan through rows whose FK
+  // is null and leak them into the chain as phantom associations.
   //
   // Previously the guard read `throughReflection.joinForeignKey`
   // off the owner, but for nested-through + composite-FK shapes

@@ -171,25 +171,21 @@ describe("DJAS composite-key + nested-through", () => {
   });
 
   it("unsaved owner returns [] even when orphan through rows have NULL FKs", async () => {
-    // PredicateBuilder's ArrayHandler turns `where({key: [null]})`
-    // into `key IS NULL`. Without the `isNewRecord()` short-circuit,
+    // PredicateBuilder's ArrayHandler folds `[null]` into
+    // `key IS NULL`. Without the `isNewRecord()` short-circuit,
     // an unsaved owner whose PK is null would seed DJAS with
-    // `[null]`, and the first-step WHERE would match any orphan
-    // through row whose FK is null — leaking into the chain as a
-    // phantom association. This test creates exactly that orphan
-    // scenario and pins the short-circuit.
-    const orphanOrder = (await CkOrder.create({
-      shop_id: null as any,
-      order_number: 999,
-      label: "orphan",
-    })) as any;
+    // `[null]`, and the first-step WHERE would match orphan through
+    // rows whose FK is null — leaking into the chain as a phantom
+    // association. Create the orphan on CkLineItem (its composite
+    // FK columns are nullable) rather than CkOrder (whose shop_id
+    // is part of its composite PK and implicitly NOT NULL on
+    // PG/MySQL).
     const orphanLi = (await CkLineItem.create({
       ck_order_shop_id: null as any,
-      ck_order_number: 999,
+      ck_order_number: null as any,
       sku: "orphan-sku",
     })) as any;
     await CkTag.create({ ck_line_item_id: orphanLi.id, value: "orphan-tag" });
-    expect(orphanOrder.shop_id).toBeNull();
 
     const unsaved = CkShop.new({ name: "unsaved" });
     const reflection = (CkShop as any)._reflectOnAssociation("ckLineItemTags");

@@ -1476,6 +1476,24 @@ describe("PersistenceTest", () => {
     expect(reloaded.count).toBe(2);
   });
 
+  // Rails: `clear_#{attribute}_change` — after increment! the attribute
+  // must no longer look dirty, otherwise a later save() would re-persist
+  // the already-applied delta.
+  it("increment! clears dirty tracking for the incremented attribute", async () => {
+    const adapter = freshAdapter();
+    class Topic extends Base {
+      static {
+        this.attribute("count", "integer", { default: 0 });
+        this.adapter = adapter;
+      }
+    }
+    const t = await Topic.create({ count: 10 });
+    await t.incrementBang("count");
+    // Attribute is applied but should no longer appear dirty.
+    expect(t.count).toBe(11);
+    expect((t as any).changedAttributes).not.toContain("count");
+  });
+
   // Rails: increment!(attribute, by, touch: :updated_at) updates the
   // timestamp in the same atomic statement.
   it("increment! with touch option updates the named timestamp column", async () => {

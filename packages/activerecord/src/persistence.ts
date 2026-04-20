@@ -266,6 +266,7 @@ interface CounterRecord {
   writeAttribute(name: string, value: unknown): void;
   updateColumn(name: string, value: unknown): Promise<unknown>;
   updateAttribute(name: string, value: unknown): Promise<unknown>;
+  clearAttributeChanges?(attributes: string[]): void;
   id: unknown;
   constructor: {
     updateCounters(
@@ -319,6 +320,10 @@ export async function incrementBang<T extends CounterRecord>(
 ): Promise<T> {
   this.increment(attribute, by);
   await this.constructor.updateCounters(this.id, { [attribute]: by }, { touch: options.touch });
+  // Rails: `public_send(:"clear_#{attribute}_change")` — the in-memory
+  // increment is now durably persisted, so the attribute should no longer
+  // appear dirty (otherwise a later save() would re-persist it).
+  this.clearAttributeChanges?.([attribute]);
   return this;
 }
 

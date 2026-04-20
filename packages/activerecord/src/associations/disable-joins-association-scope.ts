@@ -5,7 +5,6 @@ import {
   type ValueTransformation,
 } from "./association-scope.js";
 import { DisableJoinsAssociationRelation } from "../disable-joins-association-relation.js";
-import { Nodes } from "@blazetrails/arel";
 import type { Relation } from "../relation.js";
 import type { UnscopeType } from "../relation/query-methods.js";
 import type { Base } from "../base.js";
@@ -15,11 +14,11 @@ type ChainEntry = AbstractReflection | ReflectionProxy;
 
 /**
  * Normalize a `joinPrimaryKey` / `joinForeignKey` to an array of column
- * names. Both single-column (`"id"`) and composite (`["a", "b"]`)
- * shapes are supported; downstream code branches on `cols.length === 1`
- * vs `> 1` to decide between hash-WHERE (`{ key: ids }`) and the
- * composite-key predicate built by `tuplePredicate`
- * (`(c1=v11 AND c2=v12) OR (c1=v21 AND c2=v22) OR ...`).
+ * names. Single-column (`"id"`) and composite (`["a", "b"]`) shapes
+ * are both supported; the per-step WHERE goes through `where({key:
+ * ids})` for single-column or `where(cols, tuples)` for composite —
+ * both paths land in `PredicateBuilder` (the latter via
+ * `buildComposite`).
  */
 function keyColumns(key: string | string[], label: string): string[] {
   if (Array.isArray(key)) {
@@ -38,31 +37,6 @@ function keyColumns(key: string | string[], label: string): string[] {
  */
 function readTuple(owner: Base, cols: string[]): unknown[] {
   return cols.map((c) => owner.readAttribute(c));
-}
-
-/**
- * Build a composite-key predicate as `(c1=v11 AND c2=v12) OR
- * (c1=v21 AND c2=v22) OR ...`. Semantically equivalent to tuple-IN
- * but built with Arel nodes — keeps adapter-specific identifier
- * quoting centralized in Arel (no manual `quoteColumnName` /
- * `detectAdapterName` plumbing) and matches the existing pattern in
- * `counter-cache.ts#buildPkPredicate`.
- *
- * Caller must guarantee `tuples.length > 0` — empty input is handled
- * by the caller via `Relation#none()`.
- */
-function tuplePredicate(
-  klass: typeof Base,
-  cols: string[],
-  tuples: unknown[][],
-): InstanceType<typeof Nodes.Node> {
-  const table = klass.arelTable;
-  const groupings: InstanceType<typeof Nodes.Node>[] = tuples.map((tuple) => {
-    const eqs = cols.map((c, i) => table.get(c).eq(tuple[i]));
-    return new Nodes.Grouping(new Nodes.And(eqs));
-  });
-  if (groupings.length === 1) return groupings[0];
-  return new Nodes.Grouping(groupings.reduce((left, right) => new Nodes.Or(left, right)));
 }
 
 /**
@@ -205,31 +179,22 @@ export class DisableJoinsAssociationScope extends AssociationScope {
     let scope: unknown = (klass as unknown as { unscoped: () => unknown }).unscoped();
     if (keyCols.length === 1) {
       // Single-column key: hash WHERE compiles to `key IN (?, ?, ...)`.
+      // Matches Rails' `disable_joins_association_scope.rb:34`:
+      // `reflection.build_scope(...).where(key => join_ids)`.
       scope = (scope as { where: (c: Record<string, unknown>) => unknown }).where({
         [keyCols[0]]: joinIds,
       });
     } else {
-      // Composite key: tuples of values. Filter out tuples
-      // containing null/undefined — Arel's `Attribute#eq(null)` would
-      // emit `IS NULL`, but tuple-equality semantics (and SQL tuple-
-      // IN) treat any null component as a non-match, never a true
-      // equality. Mirrors `buildPkPredicate` in counter-cache.ts:93.
-      // After filtering, an empty tuple list ⇒ no possible match;
-      // use `Relation#none()` (idiomatic, skips the DB hit at
-      // toArray time, matches Rails' `.none` contract).
-      const allTuples = joinIds as unknown[][];
-      const tuples = allTuples.filter(
-        (t) =>
-          Array.isArray(t) &&
-          t.length === keyCols.length &&
-          t.every((v) => v !== null && v !== undefined),
+      // Composite key: route through `Relation#where(cols, tuples)`,
+      // which delegates to `PredicateBuilder.buildComposite`. That
+      // helper handles null-component filtering (SQL tuple-equality
+      // semantics), arity validation, single-column degeneracy → IN,
+      // and bind-param emission via QueryAttribute. Empty/all-filtered
+      // tuples become `Relation#none()`. No DJAS-local scaffolding.
+      scope = (scope as { where: (c: string[], t: unknown[][]) => unknown }).where(
+        keyCols,
+        joinIds as unknown[][],
       );
-      if (tuples.length === 0) {
-        scope = (scope as { none: () => unknown }).none();
-      } else {
-        const node = tuplePredicate(klass, keyCols, tuples);
-        scope = (scope as { where: (n: InstanceType<typeof Nodes.Node>) => unknown }).where(node);
-      }
     }
 
     const sfa = (

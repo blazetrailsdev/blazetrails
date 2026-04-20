@@ -352,9 +352,10 @@ describe("sanitizeSql", () => {
       }
     }
     const result = Post.sanitizeSqlForOrder(["field(id, ?)", [1, 2]]);
-    // sanitizeSqlForOrder wraps the sanitized string in Arel.sql() (a Node).
-    // Assert the override output was threaded through by inspecting it.
-    expect(result).not.toBeNull();
+    // sanitizeSqlForOrder wraps the sanitized string in Arel.sql() (a SqlLiteral
+    // node). Read `.value` to confirm the subclass's sanitizeSqlArray override
+    // produced the sanitized text.
+    expect((result as { value?: string }).value).toBe("id, 1, 2");
     expect(disallowCalled).toBe(true);
   });
 

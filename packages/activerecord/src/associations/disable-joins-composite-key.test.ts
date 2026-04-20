@@ -14,7 +14,8 @@
  * joins through associations: tuple-style matching across the
  * intermediate records, no JOIN in the generated query shape.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { Notifications } from "@blazetrails/activesupport";
 import { Base, registerModel } from "../index.js";
 import { Associations, loadHasMany } from "../associations.js";
 import { createTestAdapter } from "../test-adapter.js";
@@ -79,6 +80,12 @@ describe("DJAS — composite key support", () => {
     });
   });
 
+  // Backstop in case a test throws before reaching its in-test
+  // unsubscribe. Same pattern as instrumentation.test.ts.
+  afterEach(() => {
+    Notifications.unsubscribeAll();
+  });
+
   it("loads through a composite-PK chain via composite-key WHERE — no JOIN", async () => {
     const shop = await CkShop.create({ name: "S" });
     const order = (await CkOrder.create({
@@ -97,16 +104,30 @@ describe("DJAS — composite key support", () => {
       sku: "sku-2",
     });
 
-    const reflection = (CkShop as any)._reflectOnAssociation("ckLineItemsThroughOrders");
-    const items = await loadHasMany(shop, "ckLineItemsThroughOrders", reflection.options);
-    expect(items.map((i: any) => i.sku).sort()).toEqual(["sku-1", "sku-2"]);
+    // Capture SQL to actually prove the "no JOIN" claim — without
+    // this, the test would still pass if the loader regressed to a
+    // JOIN-based path.
+    const observed: string[] = [];
+    const sub = Notifications.subscribe("sql.active_record", (event: any) => {
+      const sql = event?.payload?.sql;
+      if (typeof sql === "string") observed.push(sql);
+    });
+    try {
+      const reflection = (CkShop as any)._reflectOnAssociation("ckLineItemsThroughOrders");
+      const items = await loadHasMany(shop, "ckLineItemsThroughOrders", reflection.options);
+      expect(items.map((i: any) => i.sku).sort()).toEqual(["sku-1", "sku-2"]);
+    } finally {
+      Notifications.unsubscribe(sub);
+    }
+    expect(observed.length).toBeGreaterThan(0);
+    expect(observed.some((s) => /\bJOIN\b/i.test(s))).toBe(false);
   });
 
   it("composite-key + ordered upstream: skips DJAR wrap (records load via composite-key WHERE, no in-list reorder)", async () => {
     // Document the trade-off: composite-key chains skip the loaded-
     // chain DJAR wrap because DJAR's per-key group-by would need
     // tuple grouping (out of scope for this PR). Records still load
-    // correctly via the composite-key WHERE WHERE; they just aren't re-ordered
+    // correctly via the composite-key WHERE; they just aren't re-ordered
     // by through-table sequence. Future work could extend DJAR to
     // group by tuple keys.
     Associations.hasMany.call(CkShop, "ckOrdersOrdered", {

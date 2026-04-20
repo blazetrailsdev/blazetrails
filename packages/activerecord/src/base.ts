@@ -108,6 +108,7 @@ import {
 import * as _Core from "./core.js";
 import * as _Persistence from "./persistence.js";
 import * as _EnumModule from "./enum.js";
+import * as _Reflection from "./reflection.js";
 import { argumentError } from "./relation/query-methods.js";
 import { ScopeRegistry } from "./scoping.js";
 
@@ -819,10 +820,9 @@ export class Base extends Model {
 
   /**
    * Mirrors: ActiveRecord::Reflection::ClassMethods#_reflect_on_association
+   * Implementation in reflection.ts, wired via extend() below.
    */
-  static _reflectOnAssociation(name: string): any {
-    return (this as any)._reflections?.[name] ?? null;
-  }
+  declare static _reflectOnAssociation: typeof _Reflection._reflectOnAssociationClassMethod;
 
   /**
    * Mirrors: ActiveRecord::Validations.validates
@@ -3217,10 +3217,6 @@ export class Base extends Model {
     return this.findByBang(conditions);
   }
 
-  previouslyNewRecord(): boolean {
-    return this.isPreviouslyNewRecord();
-  }
-
   static async tableExists(): Promise<boolean> {
     return true; // TODO: query adapter for table existence
   }
@@ -3273,6 +3269,9 @@ extend(Base, CounterCache.ClassMethods);
 extend(Base, Timestamp.ClassMethods);
 extend(Base, NamedScoping.ClassMethods);
 extend(Base, { enum: _EnumModule.enumMethod });
+extend(Base, {
+  _reflectOnAssociation: _Reflection._reflectOnAssociationClassMethod,
+});
 extend(Base, {
   defaultScope: _defaultScope,
   unscoped: _unscoped,

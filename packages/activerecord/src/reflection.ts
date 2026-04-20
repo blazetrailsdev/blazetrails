@@ -1719,6 +1719,20 @@ export function _reflectOnAssociation(
   return rawReflections[name] ?? null;
 }
 
+/**
+ * `this`-typed class-method variant of {@link _reflectOnAssociation} for
+ * wiring onto Base via `extend()`. Same behavior — reads the raw
+ * `_reflections` registry without normalization.
+ *
+ * Mirrors: ActiveRecord::Reflection::ClassMethods#_reflect_on_association
+ */
+export function _reflectOnAssociationClassMethod(
+  this: typeof Base,
+  name: string,
+): AssociationReflection | ThroughReflection | null {
+  return _reflectOnAssociation(this, name);
+}
+
 export function reflectOnAssociation(
   modelClass: typeof Base,
   name: string,

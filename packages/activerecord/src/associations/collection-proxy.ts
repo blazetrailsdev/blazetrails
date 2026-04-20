@@ -1201,6 +1201,14 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   override last(): Promise<T | null>;
   override last(n: number): Promise<T[]>;
   override async last(n?: number): Promise<T | T[] | null> {
+    if (n !== undefined) {
+      // Relation.last(n) routes through limit(n) → limitBang which
+      // validates. Match that contract here so cp.last(-1) / cp.last(1.5)
+      // raise the same 'Invalid limit value' error.
+      if (!Number.isSafeInteger(Number(n)) || Number(n) < 0) {
+        throw new Error(`Invalid limit value: ${String(n)}`);
+      }
+    }
     const records = await this.toArray();
     if (n === undefined) return records[records.length - 1] ?? null;
     return records.slice(Math.max(0, records.length - n));
@@ -1440,9 +1448,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       for (const id of ids) {
         if (!Array.isArray(id) || id.length !== pkArity) {
           throw new RecordNotFound(
-            `Couldn't find ${targetModel.name} with an invalid composite primary key id: ${
-              Array.isArray(id) ? JSON.stringify(id) : String(id)
-            } (expected an array with ${pkArity} elements)`,
+            `${targetModel.name}: composite primary key requires a ${pkArity}-element array, got ${String(id)}`,
             targetModel.name,
             String(pk),
             id,
@@ -1513,7 +1519,11 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
           ids,
         );
       }
-      return castedIds.map((c) => byPk.get(keyForCastedId(c)) as T);
+      // Return in DB/load order (the order records appear in
+      // this.toArray()), matching Relation.performFind which returns
+      // the WHERE-IN result set without reordering by input ids.
+      const wantedKeys = new Set(castedIds.map(keyForCastedId));
+      return records.filter((r) => wantedKeys.has(keyForRecord(r)));
     }
 
     const id = ids[0];

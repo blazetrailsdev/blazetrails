@@ -123,13 +123,12 @@ describe("DJAS — composite key support", () => {
     expect(observed.some((s) => /\bJOIN\b/i.test(s))).toBe(false);
   });
 
-  it("composite-key + ordered upstream: skips DJAR wrap (records load via composite-key WHERE, no in-list reorder)", async () => {
-    // Document the trade-off: composite-key chains skip the loaded-
-    // chain DJAR wrap because DJAR's per-key group-by would need
-    // tuple grouping (out of scope for this PR). Records still load
-    // correctly via the composite-key WHERE; they just aren't re-ordered
-    // by through-table sequence. Future work could extend DJAR to
-    // group by tuple keys.
+  it("composite-key + ordered upstream: DJAR wrap reorders records by through-table tuple order", async () => {
+    // DJAR's loaded-chain wrap now supports composite keys via
+    // serialized tuple grouping. When the through-step is ordered
+    // (upstream `.order("name")` yields orderA before orderB), the
+    // source step's records re-emit in that tuple order regardless
+    // of the DB's own insertion / default order.
     Associations.hasMany.call(CkShop, "ckOrdersOrdered", {
       className: "CkOrder",
       foreignKey: "shop_id",
@@ -165,9 +164,9 @@ describe("DJAS — composite key support", () => {
 
     const reflection = (CkShop as any)._reflectOnAssociation("ckLineItemsOrdered");
     const items = await loadHasMany(shop, "ckLineItemsOrdered", reflection.options);
-    // Both records load. Order is DB-arbitrary (no reorder applied
-    // for composite + ordered-upstream); just assert presence.
-    expect(items.map((i: any) => i.sku).sort()).toEqual(["from-a", "from-b"]);
+    // orderA sorts before orderB by `name`, so the wrap yields
+    // `from-a` before `from-b` even though `from-b` was inserted first.
+    expect(items.map((i: any) => i.sku)).toEqual(["from-a", "from-b"]);
   });
 
   it("skips tuples containing null/undefined (matches SQL tuple-equality semantics, not Arel IS NULL)", async () => {

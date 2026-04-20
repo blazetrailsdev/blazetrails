@@ -269,28 +269,21 @@ export class DisableJoinsAssociationScope extends AssociationScope {
         ? [1]
         : [];
     if (finalOrders.length === 0 && ordered) {
-      // DJAR's loaded-chain wrap groups records by `key` (single
-      // string) and re-emits in `ids` order. For composite keys this
-      // would need tuple grouping (out of scope for this PR — see
-      // task #10). Skip the wrap for composite; records still load
-      // correctly via the composite-key `where` constraint built
-      // above (an Arel OR-of-AND from PredicateBuilder.buildComposite),
-      // just without the through-table-order reorder. Single-column
-      // case keeps the wrap.
-      if (keyCols.length === 1) {
-        const split = new DisableJoinsAssociationRelation<Base>(
-          klass,
-          keyCols[0],
-          joinIds as unknown[],
-        );
-        const sourceWhere = (scope as { _whereClause?: { predicates?: unknown[] } })._whereClause;
-        const splitWhere = (split as unknown as { _whereClause?: { predicates: unknown[] } })
-          ._whereClause;
-        if (sourceWhere?.predicates && splitWhere) {
-          splitWhere.predicates.push(...sourceWhere.predicates);
-        }
-        return split;
+      // Loaded-chain wrap: DJAR loads via SQL, then re-groups by the
+      // join key and re-emits in `ids` order so callers see the
+      // through-table ordering (SQL `IN(...)` / composite OR-of-AND
+      // don't preserve list order). Both single-column and composite
+      // keys are supported — DJAR serializes tuples for Map identity
+      // so `[1, 100]` buckets collide as expected.
+      const splitKey: string | string[] = keyCols.length === 1 ? keyCols[0] : keyCols;
+      const split = new DisableJoinsAssociationRelation<Base>(klass, splitKey, joinIds);
+      const sourceWhere = (scope as { _whereClause?: { predicates?: unknown[] } })._whereClause;
+      const splitWhere = (split as unknown as { _whereClause?: { predicates: unknown[] } })
+        ._whereClause;
+      if (sourceWhere?.predicates && splitWhere) {
+        splitWhere.predicates.push(...sourceWhere.predicates);
       }
+      return split;
     }
     return scope;
   }

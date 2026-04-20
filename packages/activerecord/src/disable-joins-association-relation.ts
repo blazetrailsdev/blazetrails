@@ -22,11 +22,39 @@ import type { Base } from "./base.js";
  *      matches Rails' `DisableJoinsAssociationScope#scope` returning
  *      a Relation directly.
  */
+/**
+ * Join-key shape for the loaded-chain reorder. A plain string names a
+ * single column (`"id"`); a string[] names a composite key's columns
+ * in order (`["shop_id", "order_number"]`). The id list's shape
+ * matches: scalars for single-column, tuples for composite.
+ */
+export type DjarKey = string | string[];
+export type DjarIds = unknown[] | unknown[][];
+
+/**
+ * Stable Map key for both scalar and tuple join keys. Scalars are used
+ * as-is (Map identity already works); tuples are serialized so
+ * `[1, 100]` from two independent reads collides in the bucket. JSON
+ * covers the primitive shapes pluck returns (number/string/null/bool).
+ * A leading `\u0000T` marker makes tuple keys non-collidable with any
+ * plausible scalar.
+ */
+function serializeKey(v: unknown, composite: boolean): unknown {
+  if (!composite) return v;
+  return "\u0000T" + JSON.stringify(v);
+}
+
 export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T> {
-  readonly key: string;
+  readonly key: DjarKey;
   /** Stored IDs (uniq'd at construction). Exposed as `ids()` to match
-   * Rails' `attr_reader :ids` which shadows `Relation#ids` here. */
-  private readonly _storedIds: unknown[];
+   * Rails' `attr_reader :ids` which shadows `Relation#ids` here. For
+   * composite keys this is a list of tuples (`unknown[][]`); dedup is
+   * by serialized tuple so two independently-read `[1, 100]`s
+   * collapse. */
+  private readonly _storedIds: DjarIds;
+  /** Whether `key` is composite (string[] with arity > 1). Derived at
+   * construction; controls tuple-vs-scalar behavior in read/dedup/group. */
+  private readonly _composite: boolean;
   /** Deferred chain walker. Boxed return ({ relation }) defeats
    * `Relation.then` — without the box, `await Promise<Relation>`
    * would unwrap to `T[]` (records array) instead of the Relation
@@ -43,13 +71,31 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
 
   constructor(
     klass: typeof Base,
-    key: string,
-    ids: unknown[],
+    key: DjarKey,
+    ids: DjarIds,
     chainWalker?: () => Promise<{ relation: Relation<T> }>,
   ) {
     super(klass);
     this.key = key;
-    this._storedIds = Array.from(new Set(ids));
+    this._composite = Array.isArray(key) && key.length > 1;
+    // Scalar case: Set identity dedup matches Rails' `ids.uniq`.
+    // Composite case: dedupe by serialized tuple so `[1, 100]` from
+    // two owner rows collapses to one entry (Set-of-arrays would keep
+    // both by reference).
+    if (this._composite) {
+      const seen = new Set<string>();
+      const out: unknown[][] = [];
+      for (const t of ids as unknown[][]) {
+        const k = serializeKey(t, true) as string;
+        if (!seen.has(k)) {
+          seen.add(k);
+          out.push(t);
+        }
+      }
+      this._storedIds = out;
+    } else {
+      this._storedIds = Array.from(new Set(ids as unknown[]));
+    }
     this._chainWalker = chainWalker;
   }
 
@@ -220,15 +266,18 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
     // recurse forever for the loaded-chain mode.
     const records = (await Relation.prototype.toArray.call(loadClone)) as T[];
     const byKey = new Map<unknown, T[]>();
+    const keyCols = Array.isArray(this.key) ? this.key : [this.key];
+    const composite = this._composite;
     for (const r of records) {
-      const k = r.readAttribute(this.key);
+      const raw = composite ? keyCols.map((c) => r.readAttribute(c)) : r.readAttribute(keyCols[0]);
+      const k = serializeKey(raw, composite);
       const bucket = byKey.get(k);
       if (bucket) bucket.push(r);
       else byKey.set(k, [r]);
     }
     const ordered: T[] = [];
     for (const id of this._storedIds) {
-      const bucket = byKey.get(id);
+      const bucket = byKey.get(serializeKey(id, composite));
       if (bucket) ordered.push(...bucket);
     }
     const start = offsetVal ?? 0;

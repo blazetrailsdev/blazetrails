@@ -20,10 +20,19 @@
 
 import { EncryptedAttributeType } from "./encryption/encrypted-attribute-type.js";
 import { Scheme, type SchemeOptions } from "./encryption/scheme.js";
+import type { EncryptorLike } from "./encryption/encryptor.js";
 
+/**
+ * The simple encryptor surface `Base.encrypts({ encryptor })` accepts.
+ * If the encryptor implements `encrypted(text)` it will be consulted
+ * directly; otherwise the shim conservatively returns `false` (see
+ * `LegacyEncryptorShim.encrypted`) so `supportUnencryptedData` can
+ * pass plaintext through unchanged.
+ */
 export interface Encryptor {
   encrypt(value: string): string;
   decrypt(ciphertext: string): string;
+  encrypted?(text: string): boolean;
 }
 
 const ENCRYPTED_PREFIX = "AR_ENC:";
@@ -38,15 +47,27 @@ export const defaultEncryptor: Encryptor = {
     }
     return Buffer.from(ciphertext.slice(ENCRYPTED_PREFIX.length), "base64").toString("utf-8");
   },
+  encrypted(text: string): boolean {
+    return typeof text === "string" && text.startsWith(ENCRYPTED_PREFIX);
+  },
 };
 
 /**
  * Adapts the simple `{ encrypt, decrypt }` pair accepted by `Base.encrypts`
- * to the wider surface that `Scheme.encryptor` expects (options-aware
- * encrypt/decrypt plus `encrypted(text)`). Options are intentionally
- * ignored — the legacy path has no key provider or deterministic mode.
+ * to the wider `EncryptorLike` surface that `Scheme.encryptor` expects.
+ * Options are intentionally ignored — the legacy path has no key provider
+ * or deterministic mode.
+ *
+ * `encrypted()` delegates to the inner encryptor when it supplies a
+ * predicate, and otherwise returns `false`. A conservative `false` is
+ * correct here because it's only consulted by `supportUnencryptedData`
+ * to decide whether to pass a value through as plaintext — erring on
+ * "not encrypted" means the value flows through untouched, which matches
+ * Rails' unencrypted-data fallback. Trying to detect encryption by
+ * calling `decrypt` and watching for a throw would misclassify a
+ * permissive custom encryptor's plaintext as ciphertext.
  */
-class LegacyEncryptorShim {
+class LegacyEncryptorShim implements EncryptorLike {
   constructor(private readonly inner: Encryptor) {}
 
   encrypt(clearText: string, _options?: Record<string, unknown>): string {
@@ -58,19 +79,14 @@ class LegacyEncryptorShim {
   }
 
   encrypted(text: string): boolean {
-    try {
-      this.inner.decrypt(text);
-      return true;
-    } catch {
-      return false;
-    }
+    return this.inner.encrypted?.(text) ?? false;
   }
 }
 
 /**
  * The options bag `Base.encrypts` accepts. Mirrors Rails' kwargs:
  * full `SchemeOptions` (key, keyProvider, deterministic, downcase,
- * ignoreCase, previous, compress, compressor) plus the repo's
+ * ignoreCase, previousSchemes, compress, compressor) plus the repo's
  * backwards-compatible `{ encryptor }` extension for users who supply
  * a simple `{ encrypt, decrypt }` pair without configuring a Scheme.
  */
@@ -82,7 +98,7 @@ function buildScheme(options: EncryptsOptions): Scheme {
   const { encryptor, ...schemeOptions } = options;
 
   if (encryptor) {
-    return new Scheme({ ...schemeOptions, encryptor: new LegacyEncryptorShim(encryptor) as never });
+    return new Scheme({ ...schemeOptions, encryptor: new LegacyEncryptorShim(encryptor) });
   }
 
   const hasSchemeOptions =
@@ -102,7 +118,7 @@ function buildScheme(options: EncryptsOptions): Scheme {
   // No scheme configuration and no explicit encryptor — fall back to
   // the repo's default AR_ENC:base64 encryptor so `this.encrypts("name")`
   // works in contexts that haven't set up keys/config.
-  return new Scheme({ encryptor: new LegacyEncryptorShim(defaultEncryptor) as never });
+  return new Scheme({ encryptor: new LegacyEncryptorShim(defaultEncryptor) });
 }
 
 interface PendingEncryption {
@@ -135,8 +151,11 @@ export function encrypts(klass: any, ...args: Array<string | EncryptsOptions>): 
     klass._pendingEncryptions = [...(klass._pendingEncryptions ?? [])];
   }
 
-  if (!klass._encryptedAttributes) {
-    klass._encryptedAttributes = new Set<string>();
+  // Own-property guard mirrors the `_pendingEncryptions` pattern — a
+  // subclass encrypting a new attribute must not mutate the parent's
+  // (or a sibling's) Set. Matches Rails' `class_attribute` semantics.
+  if (!Object.prototype.hasOwnProperty.call(klass, "_encryptedAttributes")) {
+    klass._encryptedAttributes = new Set<string>(klass._encryptedAttributes ?? []);
   }
 
   for (const name of names) {

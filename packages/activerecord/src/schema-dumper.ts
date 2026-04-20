@@ -21,8 +21,18 @@ import type { DatabaseAdapter } from "./adapter.js";
 // cycle that `ReferenceError`s on evaluation order. We lazy-import
 // the implementation inside `AdapterSchemaSource.indexes()` below.
 import type { SchemaStatements } from "./connection-adapters/abstract/schema-statements.js";
+import type * as SchemaIntrospectionModule from "./schema-introspection.js";
 import { SchemaMigration } from "./schema-migration.js";
-import { introspectTables, introspectColumns } from "./schema-introspection.js";
+
+// Lazy-load schema-introspection to break the static cycle
+// (schema-dumper -> schema-introspection -> schema-statements ->
+// abstract/schema-dumper -> schema-dumper). The type-only import
+// above preserves the compile-time reference.
+let schemaIntrospectionModulePromise: Promise<typeof SchemaIntrospectionModule> | undefined;
+async function loadSchemaIntrospection(): Promise<typeof SchemaIntrospectionModule> {
+  schemaIntrospectionModulePromise ??= import("./schema-introspection.js");
+  return schemaIntrospectionModulePromise;
+}
 
 export interface ColumnInfo {
   name: string;
@@ -139,6 +149,29 @@ const KNOWN_DSL_TYPES = new Set([
   "char",
 ]);
 
+/**
+ * DSL methods that actually exist as helpers on TableDefinition
+ * (connection-adapters/abstract/schema-definitions.ts). Types mapped
+ * to names outside this set are emitted as `t.column(name, sqlType,
+ * options)` so the dumped schema loads through MigrationContext
+ * without a ReferenceError.
+ */
+const DSL_HELPER_METHODS = new Set([
+  "string",
+  "text",
+  "integer",
+  "bigint",
+  "float",
+  "decimal",
+  "boolean",
+  "date",
+  "datetime",
+  "timestamp",
+  "binary",
+  "json",
+  "jsonb",
+]);
+
 function sqlTypeToDsl(sqlType: string): DslMapping {
   const normalized = sqlType.toLowerCase().trim();
   const isArray = normalized.endsWith("[]");
@@ -246,11 +279,13 @@ class AdapterSchemaSource implements SchemaSource {
   }
 
   async tables(): Promise<string[]> {
-    return introspectTables(this._adapter);
+    const mod = await loadSchemaIntrospection();
+    return mod.introspectTables(this._adapter);
   }
 
   async columns(tableName: string): Promise<ColumnInfo[]> {
-    const cols = await introspectColumns(this._adapter, tableName);
+    const mod = await loadSchemaIntrospection();
+    const cols = await mod.introspectColumns(this._adapter, tableName);
     return cols.map((col) => ({
       name: col.name,
       type: col.sqlType || col.type || "unknown",
@@ -478,6 +513,9 @@ export class SchemaDumper {
 
       if (extraOpts) {
         for (const [key, value] of Object.entries(extraOpts)) {
+          // `enum_type` carries the PG enum type name — consumed by
+          // the column-type fallback below, not a column option.
+          if (key === "enum_type") continue;
           opts.push(`${key}: ${JSON.stringify(value)}`);
         }
       }
@@ -495,10 +533,20 @@ export class SchemaDumper {
 
       const optionsStr = opts.length > 0 ? `, { ${opts.join(", ")} }` : "";
 
-      if (dslType === "enum" && extraOpts?.enum_type) {
-        lines.push(`    t.enum(${JSON.stringify(col.name)}${optionsStr});`);
-      } else {
+      if (DSL_HELPER_METHODS.has(dslType)) {
         lines.push(`    t.${dslType}(${JSON.stringify(col.name)}${optionsStr});`);
+      } else {
+        // No helper on TableDefinition for this type — emit the
+        // generic `column(name, type, options)` form so the dumped
+        // schema loads cleanly. `enum_type` carries the user-defined
+        // PG enum name; use it as the column type when set.
+        const columnType =
+          dslType === "enum" && typeof extraOpts?.enum_type === "string"
+            ? extraOpts.enum_type
+            : dslType;
+        lines.push(
+          `    t.column(${JSON.stringify(col.name)}, ${JSON.stringify(columnType)}${optionsStr});`,
+        );
       }
     }
 

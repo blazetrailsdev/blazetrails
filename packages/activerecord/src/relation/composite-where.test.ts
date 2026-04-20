@@ -116,6 +116,16 @@ describe("Relation#where — composite-key form", () => {
     ).toThrow(/tuple must be an array/);
   });
 
+  it("PredicateBuilder.buildComposite throws ArgumentError when tuples itself is not an array (null/object)", () => {
+    const rel = (CompOrder as any).all();
+    expect(() =>
+      rel.predicateBuilder.buildComposite(["shop_id"], null as unknown as unknown[][]),
+    ).toThrow(/tuples must be an array, got null/);
+    expect(() =>
+      rel.predicateBuilder.buildComposite(["shop_id"], { 0: [1] } as unknown as unknown[][]),
+    ).toThrow(/tuples must be an array, got object/);
+  });
+
   it("composite predicate values flow through QueryAttribute (bind params, not inlined Casted)", () => {
     // Regression: an earlier draft used `attribute.eq(rawValue)`,
     // which wraps as Arel::Nodes::Casted and inlines values into SQL.

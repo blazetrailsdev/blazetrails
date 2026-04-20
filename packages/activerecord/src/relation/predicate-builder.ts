@@ -239,6 +239,14 @@ export class PredicateBuilder {
     if (cols.length === 0) {
       throw composeArgumentError("PredicateBuilder.buildComposite: empty column list");
     }
+    if (!Array.isArray(tuples)) {
+      // Surface as ArgumentError instead of letting the for-of /
+      // .filter() below throw a bare TypeError on null / object /
+      // non-iterable inputs.
+      throw composeArgumentError(
+        `PredicateBuilder.buildComposite: tuples must be an array, got ${tuples === null ? "null" : typeof tuples}`,
+      );
+    }
     // Validate shape/arity loudly — silently dropping malformed
     // tuples would turn caller bugs into `null` (→ `none()`), which
     // is hard to debug. Tagged as ArgumentError so callers can catch

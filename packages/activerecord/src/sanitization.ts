@@ -142,3 +142,13 @@ export function sanitizeSqlLike(value: string, escapeChar: string = "\\"): strin
     .replace(/%/g, () => escapeChar + "%")
     .replace(/_/g, () => escapeChar + "_");
 }
+
+/**
+ * Module methods wired onto Base as static methods via `extend()` in base.ts.
+ * Mirrors Rails' `ActiveRecord::Sanitization::ClassMethods`.
+ */
+export const ClassMethods = {
+  sanitizeSql,
+  sanitizeSqlArray,
+  sanitizeSqlLike,
+};

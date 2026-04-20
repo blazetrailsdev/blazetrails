@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { QueryLogs, escapeComment } from "./query-logs.js";
+import { QueryLogs, escapeComment, GetKeyHandler } from "./query-logs.js";
+import { LegacyFormatter, SQLCommenter } from "./query-logs-formatter.js";
 
 describe("QueryLogsTest", () => {
   let logs: QueryLogs;
@@ -179,5 +180,47 @@ describe("QueryLogsTest", () => {
     ];
     logs.call("SELECT 1");
     expect(called).toBe(true);
+  });
+});
+
+describe("GetKeyHandler", () => {
+  it("looks up a named key in the context hash", () => {
+    const handler = new GetKeyHandler("controller");
+    expect(handler.call({ controller: "UsersController" })).toBe("UsersController");
+  });
+
+  it("returns undefined when the key is absent", () => {
+    expect(new GetKeyHandler("missing").call({})).toBeUndefined();
+  });
+
+  it("is used by QueryLogs string-tag resolution", () => {
+    const logs = new QueryLogs();
+    logs.tags = ["controller"];
+    logs.updateContext({ controller: "UsersController" });
+    expect(logs.tagContent()).toBe("controller:UsersController");
+  });
+});
+
+describe("LegacyFormatter", () => {
+  it("formats as 'key:value'", () => {
+    expect(LegacyFormatter.format("app", "MyApp")).toBe("app:MyApp");
+  });
+
+  it("joins with ','", () => {
+    expect(LegacyFormatter.join(["a:1", "b:2"])).toBe("a:1,b:2");
+  });
+});
+
+describe("SQLCommenter", () => {
+  it("formats as OpenTelemetry key='value' with URL-encoding", () => {
+    expect(SQLCommenter.format("app", "My App")).toBe("app='My%20App'");
+  });
+
+  it("encodes single quotes as %27", () => {
+    expect(SQLCommenter.format("k", "v'x")).toBe("k='v%27x'");
+  });
+
+  it("joins with ','", () => {
+    expect(SQLCommenter.join(["a='1'", "b='2'"])).toBe("a='1',b='2'");
   });
 });

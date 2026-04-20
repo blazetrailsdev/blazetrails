@@ -141,7 +141,10 @@ interface ReadonlyFields {
 
 interface StrictLoadingFields {
   _strictLoading: boolean;
+  _strictLoadingMode?: StrictLoadingMode;
 }
+
+export type StrictLoadingMode = "all" | "n_plus_one_only";
 
 interface FrozenFields {
   _frozen: boolean;
@@ -163,11 +166,26 @@ export function isStrictLoading(this: StrictLoadingFields): boolean {
   return this._strictLoading;
 }
 
-/** Mirrors: ActiveRecord::Core#strict_loading! */
+/**
+ * Enable (or disable with `value: false`) strict loading on this record.
+ * An optional `mode` selects strictness: "all" (default, raises on any
+ * lazily-loaded association) or "n_plus_one_only" (only raises on
+ * associations that would lead to N+1 queries).
+ *
+ * Mirrors: ActiveRecord::Core#strict_loading!
+ */
 export function strictLoadingBang<T extends StrictLoadingFields>(
   this: T,
   value: boolean = true,
+  options: { mode?: StrictLoadingMode } = {},
 ): T {
+  const mode = options.mode ?? "all";
+  if (mode !== "all" && mode !== "n_plus_one_only") {
+    throw new Error(
+      `The :mode option must be one of ["all", "n_plus_one_only"] but ${JSON.stringify(mode)} was provided.`,
+    );
+  }
+  this._strictLoadingMode = mode;
   this._strictLoading = value;
   return this;
 }
@@ -210,18 +228,20 @@ export function initAttributes(
 }
 
 export function strictLoadingMode(
-  this: CoreRecord & { _strictLoadingMode?: string },
-): string | null {
+  this: CoreRecord & { _strictLoadingMode?: StrictLoadingMode },
+): StrictLoadingMode | null {
   return this._strictLoadingMode ?? null;
 }
 
 export function isStrictLoadingNPlusOneOnly(
-  this: CoreRecord & { _strictLoadingMode?: string },
+  this: CoreRecord & { _strictLoadingMode?: StrictLoadingMode },
 ): boolean {
   return this._strictLoadingMode === "n_plus_one_only";
 }
 
-export function isStrictLoadingAll(this: CoreRecord & { _strictLoadingMode?: string }): boolean {
+export function isStrictLoadingAll(
+  this: CoreRecord & { _strictLoadingMode?: StrictLoadingMode },
+): boolean {
   return this._strictLoadingMode === "all";
 }
 

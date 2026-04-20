@@ -215,6 +215,37 @@ describe("StrictLoadingTest", () => {
     }
     const author = new Author({ name: "Grace" });
     expect(author.isStrictLoading()).toBe(false);
+    author.strictLoadingBang();
+    // Rails: strict_loading! defaults `mode: :all`; strict_loading_mode returns :all.
+    expect((author as any)._strictLoadingMode).toBe("all");
+  });
+
+  it("strictLoadingBang accepts mode: n_plus_one_only", async () => {
+    class Author extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    const author = new Author({ name: "Ivy" });
+    author.strictLoadingBang(true, { mode: "n_plus_one_only" });
+    expect(author.isStrictLoading()).toBe(true);
+    expect((author as any)._strictLoadingMode).toBe("n_plus_one_only");
+  });
+
+  it("strictLoadingBang rejects an invalid mode", async () => {
+    class Author extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    const author = new Author({ name: "Jack" });
+    expect(() =>
+      (author.strictLoadingBang as (v: boolean, o: { mode: string }) => unknown)(true, {
+        mode: "bogus",
+      }),
+    ).toThrow(/The :mode option must be one of/);
   });
 
   // Rails: test_strict_loading

@@ -4,6 +4,19 @@ import { SchemaMigration } from "./schema-migration.js";
 import { InternalMetadata } from "./internal-metadata.js";
 
 /**
+ * Look up an optional pool property without exposing the concrete
+ * ConnectionPool type (pool is accessed via `(adapter as any).pool`
+ * throughout the schema/migration stack; mirror that here).
+ */
+function adapterPool(adapter: DatabaseAdapter):
+  | {
+      dbConfig?: { useMetadataTable?: boolean };
+    }
+  | undefined {
+  return (adapter as unknown as { pool?: { dbConfig?: { useMetadataTable?: boolean } } }).pool;
+}
+
+/**
  * Info hash accepted by `Schema.define`. Mirrors the Ruby
  * positional-hash arg used by Rails' `Schema.define(info = {}, &block)`.
  */
@@ -72,10 +85,26 @@ export class Schema extends Current {
     const schemaMigration = new SchemaMigration(adapter);
     await schemaMigration.createTable();
     if (info.version !== undefined) {
-      await schemaMigration.assumeMigratedUptoVersion(info.version);
+      // Go through SchemaStatements#assumeMigratedUptoVersion (reached
+      // via the inherited Migration.schema getter) so the known
+      // migration list is pulled from pool.migrationContext.migrations
+      // — matches Rails' `connection.assume_migrated_upto_version`
+      // (see connection-adapters/abstract/schema-statements.ts:1157).
+      // Bypassing that path and calling SchemaMigration directly would
+      // only record the target version without backfilling the
+      // migrations between.
+      await schema.schema.assumeMigratedUptoVersion(info.version);
     }
+    // Honour the use_metadata_table / useMetadataTable opt-out so
+    // schema loading doesn't create / stamp ar_internal_metadata when
+    // the db_config has it disabled. Rails routes this through
+    // `connection_pool.internal_metadata` which respects
+    // db_config.use_metadata_table; we read it off pool.dbConfig here
+    // (the rest of the migration stack uses the same shape — see
+    // migration.ts:1440).
+    const enabled = adapterPool(adapter)?.dbConfig?.useMetadataTable !== false;
     const environment = info.environment ?? process.env.NODE_ENV ?? "development";
-    const internalMetadata = new InternalMetadata(adapter);
+    const internalMetadata = new InternalMetadata(adapter, { enabled });
     await internalMetadata.createTableAndSetFlags(environment);
   }
 

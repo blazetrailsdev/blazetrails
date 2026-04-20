@@ -1398,16 +1398,12 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     let ids: unknown[];
     let wantArray: boolean;
     if (rest.length > 0) {
-      // Composite PK variadic scalars — `find(1, 42)` on PK
-      // [id1, id2] is ONE tuple, matching Relation.performFind.
-      // Only collapses when the arg count exactly equals the PK
-      // arity AND no arg is itself an array (arrays signal
-      // "tuples-of-tuples" for multi-lookup).
-      if (
-        composite &&
-        args.length === (pk as string[]).length &&
-        args.every((x) => !Array.isArray(x))
-      ) {
+      // Composite PK variadic: treat the whole arg list as ONE
+      // composite-tuple id when every arg is a scalar. If the arity
+      // doesn't match, the downstream validator reports the whole
+      // tuple (e.g. "got 1,2,3"), matching Relation.performFind. An
+      // array arg signals tuples-of-tuples — list-of-ids form.
+      if (composite && args.every((x) => !Array.isArray(x))) {
         ids = [args];
         wantArray = false;
       } else {

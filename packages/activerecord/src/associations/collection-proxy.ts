@@ -1370,14 +1370,16 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     const pk = targetModel.primaryKey ?? "id";
     const composite = Array.isArray(pk);
 
-    // No-args contract matches Relation.find / Rails: raise a clear
-    // not-found instead of normalizing to [undefined] and producing a
-    // misleading message.
+    // No-args / empty-list contract matches Relation.find (same
+    // message shape, same `id: []` on the exception) so callers
+    // writing `catch (e) { e.id; e.primaryKey }` see consistent
+    // fields across both finders.
     if (args.length === 0) {
       throw new RecordNotFound(
-        `Couldn't find ${targetModel.name} without an ID`,
+        `Couldn't find ${targetModel.name} with an empty list of ids`,
         targetModel.name,
         String(pk),
+        [] as unknown as string | number,
       );
     }
 
@@ -1429,6 +1431,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         `Couldn't find ${targetModel.name} with an empty list of ids`,
         targetModel.name,
         String(pk),
+        [] as unknown as string | number,
       );
     }
 
@@ -1453,6 +1456,24 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
 
     const records = await this.toArray();
 
+    // Cast incoming ids through the target model's attribute types so
+    // in-memory find matches Relation.find's WHERE-condition casting
+    // (e.g. proxy.find("1") on an integer PK). For composite keys,
+    // cast each tuple element by its PK column.
+    const castFn = (
+      targetModel as typeof Base & {
+        _castAttributeValue?: (attributeName: string, value: unknown) => unknown;
+      }
+    )._castAttributeValue;
+    const castId = (id: unknown): unknown => {
+      if (composite) {
+        const cols = pk as string[];
+        const values = id as unknown[];
+        return castFn ? cols.map((c, i) => castFn.call(targetModel, c, values[i])) : values;
+      }
+      return castFn ? castFn.call(targetModel, pk as string, id) : id;
+    };
+
     // Index records by PK once — O(records + ids) instead of
     // O(records × ids). Composite keys stringify as a JSON tuple.
     const keyForRecord = (r: Base): string => {
@@ -1462,30 +1483,46 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       }
       return String(r.readAttribute(pk as string));
     };
-    const keyForId = (id: unknown): string => {
-      // Composite ids are pre-validated above as arrays of the right
-      // arity, so the JSON form matches keyForRecord's tuple exactly.
-      if (composite) return JSON.stringify(id);
-      return String(id);
+    const keyForCastedId = (castedId: unknown): string => {
+      if (composite) return JSON.stringify(castedId);
+      return String(castedId);
     };
     const byPk = new Map<string, T>();
     for (const r of records) byPk.set(keyForRecord(r), r);
 
-    const matches = ids.map((id) => {
-      const match = byPk.get(keyForId(id));
-      if (!match) {
+    const formatId = (id: unknown): string => (Array.isArray(id) ? JSON.stringify(id) : String(id));
+
+    // Aggregate "couldn't find all" error when looking up multiple
+    // ids — matches Relation.performFind so callers see a single
+    // RecordNotFound with the full id list instead of one per
+    // missing id.
+    if (wantArray || ids.length > 1) {
+      const castedIds = ids.map(castId);
+      const missing = ids.filter((_, i) => !byPk.has(keyForCastedId(castedIds[i])));
+      if (missing.length > 0) {
         throw new RecordNotFound(
-          `Couldn't find ${targetModel.name} with '${String(pk)}'=${
-            Array.isArray(id) ? JSON.stringify(id) : String(id)
-          }`,
+          `Couldn't find all ${targetModel.name} with '${String(pk)}': (${ids
+            .map((id) => formatId(id))
+            .join(", ")})`,
           targetModel.name,
           String(pk),
-          id as string | number,
+          ids as unknown as string | number,
         );
       }
-      return match;
-    });
-    return wantArray ? matches : matches[0];
+      return castedIds.map((c) => byPk.get(keyForCastedId(c)) as T);
+    }
+
+    const id = ids[0];
+    const match = byPk.get(keyForCastedId(castId(id)));
+    if (!match) {
+      throw new RecordNotFound(
+        `Couldn't find ${targetModel.name} with '${String(pk)}'=${formatId(id)}`,
+        targetModel.name,
+        String(pk),
+        id as string | number,
+      );
+    }
+    return match;
   }
 
   /**

@@ -376,8 +376,7 @@ export async function toggleBang<T extends ToggleBangRecord>(
 // Mirrors ActiveRecord::Persistence#update, #update!, #delete.
 // ---------------------------------------------------------------------------
 
-interface UpdateRecord {
-  assignAttributes(attrs: Record<string, unknown>): void;
+interface UpdateRecord extends AttributeIO {
   constructor: {
     lockingColumn: string;
     lockingEnabled: boolean;
@@ -414,7 +413,14 @@ export async function update<T extends UpdateRecord>(
   attrs: Record<string, unknown>,
 ): Promise<boolean> {
   assertLockingColumnNotExplicitly(this, attrs);
-  this.assignAttributes(attrs);
+  // Rails' #update delegates to `assign_attributes`, which iterates setters
+  // and lets their exceptions propagate raw. Our Base#assignAttributes wraps
+  // every writeAttribute failure in AttributeAssignmentError — more aggressive
+  // than Rails. Use a raw writeAttribute loop here to preserve original error
+  // classes (pre-extraction behavior; closer to Rails than wrapping).
+  for (const [key, value] of Object.entries(attrs)) {
+    this.writeAttribute(key, value);
+  }
   return this.save();
 }
 
@@ -427,7 +433,11 @@ export async function updateBang<T extends UpdateRecord>(
   attrs: Record<string, unknown>,
 ): Promise<true> {
   assertLockingColumnNotExplicitly(this, attrs);
-  this.assignAttributes(attrs);
+  // See update(): raw loop preserves original error classes (matches Rails,
+  // avoids Base#assignAttributes's AttributeAssignmentError wrap).
+  for (const [key, value] of Object.entries(attrs)) {
+    this.writeAttribute(key, value);
+  }
   return this.saveBang();
 }
 

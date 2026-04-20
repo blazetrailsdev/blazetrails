@@ -1377,7 +1377,19 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     const normalized = normalizeFindArgs(targetModel.name, pk, args);
     const { ids, wantArray, tuples } = normalized;
 
-    const records = await this.toArray();
+    // Rails-faithful cache gate: CollectionAssociation#find in Rails
+    // only uses the in-memory loaded target when BOTH `inverse_of` is
+    // declared AND the association is `loaded?`. Otherwise it
+    // delegates to `scope.find(...)` (i.e. Relation.find via SQL).
+    // Unconditional caching would mask stale data; inverse_of is the
+    // wiring that guarantees the cache mirrors the DB state.
+    const inverseOf = this._assocDef.options.inverseOf;
+    const useCache = !!inverseOf && this._targetLoaded;
+    if (!useCache) {
+      return (await super.find(...args)) as T | T[];
+    }
+
+    const records = this._target;
 
     // Cast incoming ids through the target model's attribute types so
     // in-memory find matches Relation.find's WHERE-condition casting

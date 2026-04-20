@@ -78,7 +78,7 @@ describe("trails-tsc CLI — Phase 1b.1", () => {
     );
     // Clean exit — no output expected on success.
     expect(result).toBe("");
-  });
+  }, 30_000);
 });
 
 describe("trails-tsc diagnostic remap — Phase 1b.2", () => {

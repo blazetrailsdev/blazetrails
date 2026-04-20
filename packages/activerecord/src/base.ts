@@ -110,8 +110,11 @@ import * as _Persistence from "./persistence.js";
 import { argumentError } from "./relation/query-methods.js";
 import { ScopeRegistry } from "./scoping.js";
 
-import { Default as DefaultScoping } from "./scoping/default.js";
-import * as _DefaultScoping from "./scoping/default.js";
+import {
+  Default as DefaultScoping,
+  defaultScope as _defaultScope,
+  unscoped as _unscoped,
+} from "./scoping/default.js";
 import * as NamedScoping from "./scoping/named.js";
 import { AssociationNotFoundError } from "./associations/errors.js";
 import { Associations as _Associations, loadBelongsTo, loadHasOne } from "./associations.js";
@@ -1045,8 +1048,8 @@ export class Base extends Model {
   static _defaultScope: ((rel: any) => any) | null = null;
 
   // --- Default scope (wired via extend() after class body) ---
-  declare static defaultScope: typeof _DefaultScoping.defaultScope;
-  declare static unscoped: typeof _DefaultScoping.unscoped;
+  declare static defaultScope: typeof _defaultScope;
+  declare static unscoped: typeof _unscoped;
 
   /** @internal Like all() but skips currentScope — used by the preloader. */
   static _allForPreload(): any {
@@ -3368,8 +3371,8 @@ extend(Base, CounterCache.ClassMethods);
 extend(Base, Timestamp.ClassMethods);
 extend(Base, NamedScoping.ClassMethods);
 extend(Base, {
-  defaultScope: _DefaultScoping.defaultScope,
-  unscoped: _DefaultScoping.unscoped,
+  defaultScope: _defaultScope,
+  unscoped: _unscoped,
 });
 extend(Base, ModelSchema.ClassMethods);
 

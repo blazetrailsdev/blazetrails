@@ -50,9 +50,7 @@ export function defaultScope<T extends typeof Base>(
   this: T,
   fn: (rel: Relation<InstanceType<T>>) => Relation<any>,
 ): void {
-  (this as unknown as { _defaultScope: ((rel: any) => any) | null })._defaultScope = fn as (
-    rel: any,
-  ) => any;
+  this._defaultScope = fn as (rel: any) => any;
 }
 
 /**
@@ -73,9 +71,9 @@ export function unscoped<T extends typeof Base, R>(
   this: T,
   block?: () => R | Promise<R>,
 ): Relation<InstanceType<T>> | Promise<R> {
-  const rel = Default.unscoped(this, () =>
-    (this as unknown as typeof Base)._buildUnscopedRelation(),
-  ) as Relation<InstanceType<T>>;
+  const rel = Default.unscoped(this, () => this._buildUnscopedRelation()) as Relation<
+    InstanceType<T>
+  >;
   if (block) {
     return rel.scoping(block);
   }

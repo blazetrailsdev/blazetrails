@@ -169,4 +169,18 @@ describe("DJAS composite-key + nested-through", () => {
       ),
     ).toBe(true);
   });
+
+  it("unsaved owner returns [] (DJAS walker handles null seeds without the dropped guard)", async () => {
+    // The old null-PK short-circuit in _loadThroughViaDisableJoinsScope
+    // existed to save a round-trip for unsaved owners. Dropping it
+    // means the walker runs — seeds joinIds with null, the first
+    // step's pluck returns [], and subsequent queries short-circuit
+    // via PredicateBuilder.buildComposite / Relation#none(). Net:
+    // still [] for unsaved owners, just with one round-trip instead
+    // of zero.
+    const unsaved = CkShop.new({ name: "unsaved" });
+    const reflection = (CkShop as any)._reflectOnAssociation("ckLineItemTags");
+    const tags = await loadHasMany(unsaved, "ckLineItemTags", reflection.options);
+    expect(tags).toEqual([]);
+  });
 });

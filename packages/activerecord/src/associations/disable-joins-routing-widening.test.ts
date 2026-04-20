@@ -21,7 +21,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { Notifications } from "@blazetrails/activesupport";
 import { Base, registerModel } from "../index.js";
-import { Associations, loadHasMany } from "../associations.js";
+import { Associations, association, loadHasMany } from "../associations.js";
 import { createTestAdapter } from "../test-adapter.js";
 import type { DatabaseAdapter } from "../adapter.js";
 
@@ -96,17 +96,25 @@ describe("DJAS routing widening — sourceType + polymorphic source", () => {
 
   it("routes through DJAS (no JOIN emitted) and filters by source_type", async () => {
     const author = await RwAuthor.create({ name: "a" });
-    const member = (await RwMember.create({ name: "m" })) as any;
+    const m1 = (await RwMember.create({ name: "m1" })) as any;
+    const m2 = (await RwMember.create({ name: "m2" })) as any;
+    // Insert an RwOtherOrigin FIRST so the id-sequences overlap —
+    // ensures the source_type filter is the thing doing the
+    // disambiguation, not a lucky id mismatch.
     const other = (await RwOtherOrigin.create({ label: "o" })) as any;
-    // A comment whose origin is an RwMember (matches sourceType).
+    expect(other.id).toBe(m1.id); // id collision across polymorphic targets
+    // Comments pointing at both RwMembers (match sourceType) and the
+    // RwOtherOrigin (must be filtered out by source_type, not by id).
     await RwComment.create({
       rw_author_id: author.id,
-      origin_id: member.id,
+      origin_id: m1.id,
       origin_type: "RwMember",
     });
-    // A comment whose origin is RwOtherOrigin (should NOT match — the
-    // source_type filter is what distinguishes the polymorphic
-    // targets).
+    await RwComment.create({
+      rw_author_id: author.id,
+      origin_id: m2.id,
+      origin_type: "RwMember",
+    });
     await RwComment.create({
       rw_author_id: author.id,
       origin_id: other.id,
@@ -121,8 +129,11 @@ describe("DJAS routing widening — sourceType + polymorphic source", () => {
     try {
       const reflection = (RwAuthor as any)._reflectOnAssociation("noJoinsRwMembers");
       const members = await loadHasMany(author, "noJoinsRwMembers", reflection.options);
-      // Only the RwMember-originated row resolves to a real RwMember.
-      expect(members.map((m: any) => m.id)).toEqual([member.id]);
+      expect(members.map((m: any) => m.id).sort()).toEqual([m1.id, m2.id].sort());
+      // `count()` should hit the same routing gate and also avoid the
+      // JOIN path. Covers the pluck branch of DJAR alongside toArray.
+      const count = await association(author, "noJoinsRwMembers").count();
+      expect(count).toBe(2);
     } finally {
       Notifications.unsubscribe(sub);
     }
@@ -134,5 +145,45 @@ describe("DJAS routing widening — sourceType + polymorphic source", () => {
     // applies it on the through step (rw_comments) via
     // ThroughReflection#_sourceTypeScope.
     expect(observed.some((s) => /origin_type/i.test(s))).toBe(true);
+  });
+
+  it("has_one :through polymorphic+sourceType routes through DJAS (no JOIN)", async () => {
+    // The routing gate is shared by loadHasMany and loadHasOne
+    // (associations.ts), so the same widening needs to hold for
+    // has_one :through.
+    Associations.hasOne.call(RwAuthor, "noJoinsOneRwMember", {
+      className: "RwMember",
+      through: "rwComments",
+      source: "origin",
+      sourceType: "RwMember",
+      disableJoins: true,
+    });
+    const author = await RwAuthor.create({ name: "a" });
+    const member = (await RwMember.create({ name: "m" })) as any;
+    const other = (await RwOtherOrigin.create({ label: "o" })) as any;
+    await RwComment.create({
+      rw_author_id: author.id,
+      origin_id: other.id,
+      origin_type: "RwOtherOrigin",
+    });
+    await RwComment.create({
+      rw_author_id: author.id,
+      origin_id: member.id,
+      origin_type: "RwMember",
+    });
+
+    const observed: string[] = [];
+    const sub = Notifications.subscribe("sql.active_record", (event: any) => {
+      const sql = event?.payload?.sql;
+      if (typeof sql === "string") observed.push(sql);
+    });
+    let loaded: any;
+    try {
+      loaded = await (author as any).loadHasOne("noJoinsOneRwMember");
+    } finally {
+      Notifications.unsubscribe(sub);
+    }
+    expect(loaded?.id).toBe(member.id);
+    expect(observed.some((s) => /\bJOIN\b/i.test(s))).toBe(false);
   });
 });

@@ -1764,7 +1764,7 @@ async function syncCompareStats(mode: "latest" | "refresh"): Promise<number> {
 // Summary
 // ---------------------------------------------------------------------------
 
-async function printSummary(mode: "latest" | "refresh") {
+async function printSummary() {
   const count = async (table: string) => {
     const rows = await Base.adapter.execute(`SELECT COUNT(*) as cnt FROM ${table}`);
     return (rows[0] as { cnt: number }).cnt;
@@ -1969,7 +1969,7 @@ async function main() {
       logs_parsed: logsParsed,
     });
 
-    await printSummary(mode === "refresh" ? "refresh" : "latest");
+    await printSummary();
   } finally {
     adapter.close();
   }

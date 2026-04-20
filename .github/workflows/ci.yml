@@ -321,3 +321,37 @@ jobs:
         run: pnpm exec tsx scripts/api-compare/lint-deps.ts
       - name: Test comparison
         run: pnpm exec tsx scripts/test-compare/extract-ts-tests.ts && pnpm exec tsx scripts/test-compare/test-compare.ts
+
+  ci:
+    name: CI
+    if: ${{ always() }}
+    needs:
+      - changes
+      - build-and-typecheck
+      - lint
+      - prettier
+      - guides-typecheck
+      - dx-type-tests
+      - virtualized-dx-type-tests
+      - unit-tests
+      - sqlite-tests
+      - postgres-tests
+      - mariadb-tests
+      - website
+      - rails-comparison
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any required job failed or was cancelled
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS_JSON"
+          echo "$NEEDS_JSON" | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)
+          bad = [name for name, job in data.items() if job["result"] in ("failure", "cancelled")]
+          if bad:
+              print("Failed/cancelled jobs:", bad)
+              sys.exit(1)
+          print("All jobs passed or were intentionally skipped.")
+          '

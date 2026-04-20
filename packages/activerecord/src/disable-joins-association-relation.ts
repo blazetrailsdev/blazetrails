@@ -91,9 +91,10 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
   // Typed overloads keep `key`/`ids` correlated at the call site so
   // `new DJAR(..., "id", [[1, 2]])` (string key + tuple ids) or
   // `new DJAR(..., ["a", "b"], [1, 2])` (tuple key + scalar ids) are
-  // rejected at compile time. The implementation signature accepts
-  // the union, and the runtime guards below still cover dynamic
-  // callers that erase through `unknown`/`any`.
+  // rejected at compile time. Only the two correlated overloads are
+  // public — the broad `DjarKey`/`DjarIds` union stays on the
+  // implementation signature alone. Runtime guards in the body still
+  // cover dynamic callers that erase through `unknown` / `any`.
   constructor(
     klass: typeof Base,
     key: string,
@@ -111,24 +112,28 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
     key: DjarKey,
     ids: DjarIds,
     chainWalker?: () => Promise<{ relation: Relation<T> }>,
-  );
-  constructor(
-    klass: typeof Base,
-    key: DjarKey,
-    ids: DjarIds,
-    chainWalker?: () => Promise<{ relation: Relation<T> }>,
   ) {
     super(klass);
     // Normalize array-key shapes: length 0 is always a bug; length 1
     // collapses to the string form so `this.key` / `_composite`
     // stay consistent with the scalar path (and `readAttribute`
-    // never gets `undefined`).
+    // never gets `undefined`). When we collapse a length-1 key, we
+    // also flatten singleton-tuple ids (`[[1], [2]]` → `[1, 2]`) so
+    // the caller's shape isn't silently incompatible with the scalar
+    // path they now route through — a tuple-typed overload call like
+    // `new DJAR(..., ["col"], [[1], [2]])` keeps working.
     let normalizedKey: DjarKey = key;
+    let normalizedIds: DjarIds = ids;
     if (Array.isArray(key)) {
       if (key.length === 0) {
         throw argumentError("DisableJoinsAssociationRelation: key must have at least one column");
       }
-      if (key.length === 1) normalizedKey = key[0];
+      if (key.length === 1) {
+        normalizedKey = key[0];
+        normalizedIds = (ids as unknown[]).map((id) =>
+          Array.isArray(id) && id.length === 1 ? id[0] : id,
+        );
+      }
     }
     this.key = normalizedKey;
     this._composite = Array.isArray(normalizedKey);
@@ -143,8 +148,8 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
       const seen = new Set<string>();
       const out: unknown[][] = [];
       const keyStrings: string[] = [];
-      for (let i = 0; i < (ids as unknown[]).length; i++) {
-        const t = (ids as unknown[])[i];
+      for (let i = 0; i < (normalizedIds as unknown[]).length; i++) {
+        const t = (normalizedIds as unknown[])[i];
         // Fail fast on shape/arity mismatch. Without this, a flat
         // `unknown[]` slipping through as composite `ids` would
         // silently dedupe to "one bucket per scalar" and reorder to
@@ -169,7 +174,7 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
       this._storedIds = out;
       this._storedKeyStrings = keyStrings;
     } else {
-      this._storedIds = Array.from(new Set(ids as unknown[]));
+      this._storedIds = Array.from(new Set(normalizedIds as unknown[]));
       this._storedKeyStrings = null;
     }
     this._chainWalker = chainWalker;
@@ -294,12 +299,23 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
    * spawn a plain Relation and silently drop the wrapping behavior.
    */
   protected override _newRelation(): Relation<T> {
-    return new DisableJoinsAssociationRelation<T>(
-      this.model,
-      this.key,
-      this._storedIds,
-      this._chainWalker,
-    ) as unknown as Relation<T>;
+    // Branch to route through the correlated overloads; `this.key` is
+    // already normalized in the constructor so the two shapes line up
+    // with `this._storedIds`.
+    const clone = this._composite
+      ? new DisableJoinsAssociationRelation<T>(
+          this.model,
+          this.key as string[],
+          this._storedIds as unknown[][],
+          this._chainWalker,
+        )
+      : new DisableJoinsAssociationRelation<T>(
+          this.model,
+          this.key as string,
+          this._storedIds as unknown[],
+          this._chainWalker,
+        );
+    return clone as unknown as Relation<T>;
   }
 
   override async toArray(): Promise<T[]> {

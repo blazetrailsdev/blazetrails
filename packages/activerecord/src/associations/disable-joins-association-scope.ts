@@ -281,8 +281,13 @@ export class DisableJoinsAssociationScope extends AssociationScope {
       // don't preserve list order). Both single-column and composite
       // keys are supported — DJAR serializes tuples for Map identity
       // so `[1, 100]` buckets collide as expected.
-      const splitKey: string | string[] = keyCols.length === 1 ? keyCols[0] : keyCols;
-      const split = new DisableJoinsAssociationRelation<Base>(klass, splitKey, joinIds);
+      // Branch over key arity so we hit DJAR's correlated overloads.
+      // At this point `joinIds` is already shape-matched to `keyCols`
+      // by the single-vs-composite branches in `_addConstraintsDj`.
+      const split =
+        keyCols.length === 1
+          ? new DisableJoinsAssociationRelation<Base>(klass, keyCols[0], joinIds as unknown[])
+          : new DisableJoinsAssociationRelation<Base>(klass, keyCols, joinIds as unknown[][]);
       const sourceWhere = (scope as { _whereClause?: { predicates?: unknown[] } })._whereClause;
       const splitWhere = (split as unknown as { _whereClause?: { predicates: unknown[] } })
         ._whereClause;

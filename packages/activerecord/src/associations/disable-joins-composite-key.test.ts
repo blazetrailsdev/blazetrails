@@ -284,9 +284,13 @@ describe("DJAS — composite key support", () => {
     );
     // length 1 is equivalent to the string form; normalize so
     // `this.key` / `_composite` stay consistent with the scalar path.
-    const djar = new DisableJoinsAssociationRelation(CkLineItem, ["sku"], ["a", "b"]);
-    expect(djar.key).toBe("sku");
-    expect(await djar.ids()).toEqual(["a", "b"]);
+    // The correlated overloads pair `string[]` with `unknown[][]`, so
+    // the length-1 case is exercised through the tuple-ids route and
+    // the constructor's singleton-tuple flattening (`[[1], [2]]` →
+    // `[1, 2]`).
+    const djarTuples = new DisableJoinsAssociationRelation(CkLineItem, ["sku"], [["a"], ["b"]]);
+    expect(djarTuples.key).toBe("sku");
+    expect(await djarTuples.ids()).toEqual(["a", "b"]);
   });
 
   it("DisableJoinsAssociationRelation composite-key load: throws ArgumentError on shape/arity mismatch", async () => {

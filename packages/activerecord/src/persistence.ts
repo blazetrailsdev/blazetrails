@@ -12,7 +12,12 @@ import {
   Table as ArelTable,
   star as arelStar,
 } from "@blazetrails/arel";
-import { AttributeAssignmentError, ReadOnlyRecord, RecordNotFound } from "./errors.js";
+import {
+  AttributeAssignmentError,
+  ReadOnlyRecord,
+  RecordNotFound,
+  RecordNotSaved,
+} from "./errors.js";
 import { clearAutosaveState } from "./autosave-association.js";
 import { getStiBase, getInheritanceColumn, isStiSubclass } from "./inheritance.js";
 
@@ -538,7 +543,6 @@ export function assignAttributes(this: AttributeIO, attrs: Record<string, unknow
 interface AttributeSingleSave {
   writeAttribute(name: string, value: unknown): void;
   save(options?: { validate?: boolean }): Promise<boolean>;
-  saveBang(options?: { validate?: boolean }): Promise<true>;
 }
 
 /** Mirrors: ActiveRecord::Persistence#update_attribute */
@@ -565,7 +569,6 @@ export async function updateAttributeBang<T extends AttributeSingleSave>(
   const saved = await this.save({ validate: false });
   if (!saved) {
     const ctorName = (this.constructor as { name?: string }).name || "record";
-    const { RecordNotSaved } = await import("./errors.js");
     throw new RecordNotSaved(`Failed to save the ${ctorName} while updating \`${name}\``, this);
   }
   return true;
@@ -584,7 +587,7 @@ interface UpdateColumnsRecord {
     name: string;
     arelTable: InstanceType<typeof ArelTable>;
     _attributeDefinitions: Map<string, { type: { cast(v: unknown): unknown } }>;
-    _buildPkWhere(id: unknown): string;
+    _buildPkWhereNode(id: unknown): Parameters<UpdateManager["where"]>[0];
     adapter: {
       execUpdate(sql: string, name?: string, binds?: unknown[]): Promise<number>;
       update?(arel: InstanceType<typeof UpdateManager>): Promise<number>;
@@ -611,11 +614,13 @@ export async function updateColumn<T extends UpdateColumnsRecord>(
  * timestamps. Resets dirty tracking so the written values are the new
  * baseline.
  *
- * Builds the UPDATE via Arel's UpdateManager + the adapter's update()
- * path so identifier and value escaping go through the adapter's
- * quoting layer (the previous raw-string interpolation mishandled
- * embedded single-quote-like sequences, binary columns, and
- * adapter-specific date/JSON formatting).
+ * Builds the UPDATE with Arel's UpdateManager. When the adapter
+ * provides update() / toSql(), compilation routes through the adapter
+ * (picking up its quoting layer for SET values and identifiers); else
+ * falls back to Arel's generic SQL generation. Either path replaces
+ * the previous raw-string interpolation, which mishandled embedded
+ * single-quote-like sequences, binary columns, and adapter-specific
+ * date / JSON formatting.
  */
 export async function updateColumns<T extends UpdateColumnsRecord>(
   this: T,
@@ -644,13 +649,10 @@ export async function updateColumns<T extends UpdateColumnsRecord>(
     setPairs.push([table.get(key), cast]);
   }
 
-  const { sql: arelSql } = await import("@blazetrails/arel");
   const um = new UpdateManager();
   um.table(table);
   um.set(setPairs as Parameters<UpdateManager["set"]>[0]);
-  // `_buildPkWhere` returns a string fragment; wrap it as Arel SQL so the
-  // SET clause still routes through UpdateManager's quoting.
-  um.where(arelSql(ctor._buildPkWhere(this.id)) as Parameters<UpdateManager["where"]>[0]);
+  um.where(ctor._buildPkWhereNode(this.id));
 
   const adapter = ctor.adapter;
   if (typeof adapter.update === "function") {

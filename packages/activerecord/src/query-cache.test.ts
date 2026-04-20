@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { Base } from "./index.js";
 import { createTestAdapter } from "./test-adapter.js";
-import { QueryCache, QueryCacheAdapter } from "./query-cache.js";
-import { Store } from "./connection-adapters/abstract/query-cache.js";
+import { QueryCache, QueryCacheAdapter, QueryCacheStore as Store } from "./query-cache.js";
+import { QueryCacheStore as RootQueryCacheStore } from "./index.js";
+import { Store as AbstractStore } from "./connection-adapters/abstract/query-cache.js";
 
 function setup() {
   const inner = createTestAdapter();
@@ -360,6 +361,17 @@ describe("QueryCacheTest", () => {
       expect(cached.cache.enabled).toBe(false);
     });
     expect(cached.cache.enabled).toBe(true);
+  });
+});
+
+describe("QueryCacheStore public re-export", () => {
+  it("is the same class via both the package root and the query-cache deep import", () => {
+    // Guards the re-export + alias surface against regressions: consumers
+    // reaching for `QueryCacheStore` from either `@blazetrails/activerecord`
+    // or `@blazetrails/activerecord/query-cache.js` should hit the
+    // canonical `Store` class in abstract/query-cache.ts.
+    expect(Store).toBe(AbstractStore);
+    expect(RootQueryCacheStore).toBe(AbstractStore);
   });
 });
 

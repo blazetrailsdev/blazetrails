@@ -89,7 +89,10 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
     if (filePath.endsWith(".test.ts")) continue;
     if (filePath.endsWith(".d.ts")) continue;
 
-    const relPath = path.relative(srcDir, filePath);
+    // POSIX-normalize relPath so manifest keys are platform-stable.
+    // Windows path.relative() yields backslashes; api-compare keys —
+    // and resolveRelModule below — assume forward slashes.
+    const relPath = path.relative(srcDir, filePath).replace(/\\/g, "/");
     let fileHasClassOrModule = false;
     const fileFunctions: MethodInfo[] = [];
     // Local-name → source-module map for this file, used to resolve the
@@ -387,16 +390,16 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
 /**
  * Resolve a relative module specifier (e.g. "./migration-errors.js")
  * against a file's relative path. Returns the resolved file's path
- * in the same relative form used as PackageInfo keys, or null if the
- * specifier doesn't target a local file.
+ * in the same POSIX-normalized form used as PackageInfo keys, or
+ * null if the specifier doesn't target a local file. Caller must
+ * already have POSIX-normalized `fromRel`.
  */
-function resolveRelModule(fromRel: string, spec: string): string | null {
+export function resolveRelModule(fromRel: string, spec: string): string | null {
   if (!spec.startsWith("./") && !spec.startsWith("../")) return null;
-  const fromDir = path.dirname(fromRel);
+  const fromDir = path.posix.dirname(fromRel);
   // Strip .js / .ts extension; api-compare keys use .ts paths.
   const withoutExt = spec.replace(/\.(js|ts)$/, "");
-  const joined = path.normalize(path.join(fromDir, withoutExt));
-  return joined.replace(/\\/g, "/") + ".ts";
+  return path.posix.normalize(path.posix.join(fromDir, withoutExt)) + ".ts";
 }
 
 function extractClass(
@@ -726,4 +729,10 @@ function getAllTsFiles(dir: string): string[] {
   return results;
 }
 
-main();
+// Only run when invoked as a script (not when imported for its
+// exports by the test file). fileURLToPath + argv[1] matches the
+// common ESM "if __main__" pattern.
+import { fileURLToPath as _fileURLToPath } from "node:url";
+if (process.argv[1] && process.argv[1] === _fileURLToPath(import.meta.url)) {
+  main();
+}

@@ -9,10 +9,12 @@ on:
 jobs:
   # Preflight that sets `docs_only=true` when every changed path is under
   # top-level `docs/`. Downstream jobs gate on this via `if:` so they're
-  # reported as skipped (not cancelled) — GitHub treats skipped required
-  # status checks as passing, so this keeps branch protection happy on
-  # docs-only PRs. `packages/website/docs` does not qualify; it lives
-  # under `packages/website/` and affects the site build.
+  # reported as skipped on docs-only PRs. Skipped required checks in
+  # branch protection DO block merges, so point branch protection at the
+  # aggregate `CI` job at the bottom of this file instead of individual
+  # jobs — `CI` always runs and treats skipped needs as success.
+  # `packages/website/docs` does not qualify; it lives under
+  # `packages/website/` and affects the site build.
   changes:
     name: Detect changed paths
     runs-on: ubuntu-latest

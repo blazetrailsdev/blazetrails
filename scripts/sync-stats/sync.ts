@@ -1802,38 +1802,36 @@ async function printSummary() {
   console.log("\n=== Database Summary ===");
   console.log(`  PRs: ${prCount} (${stateParts})`);
 
-  if (mode === "refresh") {
-    const [
-      fileCount,
-      commitCount,
-      commentCount,
-      reviewCount,
-      requestedReviewerCount,
-      linkedIssueCount,
-      timelineEventCount,
-      reactionCount,
-      annotationCount,
-    ] = await Promise.all([
-      count("pr_files"),
-      count("pr_commits"),
-      count("pr_comments"),
-      count("pr_reviews"),
-      count("pr_requested_reviewers"),
-      count("pr_linked_issues"),
-      count("pr_timeline_events"),
-      count("pr_reactions"),
-      count("check_annotations"),
-    ]);
-    console.log(`  PR files: ${fileCount}`);
-    console.log(`  PR commits: ${commitCount}`);
-    console.log(`  PR comments: ${commentCount}`);
-    console.log(`  PR reviews: ${reviewCount}`);
-    console.log(`  PR requested reviewers: ${requestedReviewerCount}`);
-    console.log(`  PR linked issues: ${linkedIssueCount}`);
-    console.log(`  PR timeline events: ${timelineEventCount}`);
-    console.log(`  PR reactions: ${reactionCount}`);
-    console.log(`  Check annotations: ${annotationCount}`);
-  }
+  const [
+    fileCount,
+    commitCount,
+    commentCount,
+    reviewCount,
+    requestedReviewerCount,
+    linkedIssueCount,
+    timelineEventCount,
+    reactionCount,
+    annotationCount,
+  ] = await Promise.all([
+    count("pr_files"),
+    count("pr_commits"),
+    count("pr_comments"),
+    count("pr_reviews"),
+    count("pr_requested_reviewers"),
+    count("pr_linked_issues"),
+    count("pr_timeline_events"),
+    count("pr_reactions"),
+    count("check_annotations"),
+  ]);
+  console.log(`  PR files: ${fileCount}`);
+  console.log(`  PR commits: ${commitCount}`);
+  console.log(`  PR comments: ${commentCount}`);
+  console.log(`  PR reviews: ${reviewCount}`);
+  console.log(`  PR requested reviewers: ${requestedReviewerCount}`);
+  console.log(`  PR linked issues: ${linkedIssueCount}`);
+  console.log(`  PR timeline events: ${timelineEventCount}`);
+  console.log(`  PR reactions: ${reactionCount}`);
+  console.log(`  Check annotations: ${annotationCount}`);
 
   console.log(`  Workflow runs: ${runCount}`);
   console.log(`  Workflow jobs: ${jobCount} (${rawLogCount} logs fetched)`);

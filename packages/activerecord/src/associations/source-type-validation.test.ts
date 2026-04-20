@@ -20,7 +20,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { Base, registerModel } from "../index.js";
-import { Associations, association } from "../associations.js";
+import { Associations, association, loadHasMany } from "../associations.js";
 import { createTestAdapter } from "../test-adapter.js";
 import type { DatabaseAdapter } from "../adapter.js";
 
@@ -115,6 +115,36 @@ describe("ThroughReflection — sourceType validation", () => {
     });
     const author = await StvAuthor.create({ name: "a" });
     expect(() => association(author, "authorsByPost")).toThrow(/:source_type/);
+  });
+
+  it("fires at the loadHasMany entry point too (not just association() / Association#ctor)", async () => {
+    // loadHasMany is the loader path direct callers (preloader,
+    // tests) hit without going through `association()`. The
+    // validation has to surface there too — matching Rails'
+    // Association#initialize check_validity! which runs on every
+    // first use regardless of entry point.
+    Associations.hasMany.call(StvAuthor, "stvComments", {
+      className: "StvComment",
+      foreignKey: "stv_author_id",
+    });
+    Associations.belongsTo.call(StvComment, "origin", {
+      className: "StvMember",
+      foreignKey: "origin_id",
+      polymorphic: true,
+    });
+    Associations.hasMany.call(StvAuthor, "originFromComments", {
+      className: "StvMember",
+      through: "stvComments",
+      source: "origin",
+    });
+    const author = await StvAuthor.create({ name: "a" });
+    await expect(
+      loadHasMany(author, "originFromComments", {
+        className: "StvMember",
+        through: "stvComments",
+        source: "origin",
+      }),
+    ).rejects.toThrow(/polymorphic association 'origin'/);
   });
 
   it("accepts the valid shape: polymorphic source with sourceType", async () => {

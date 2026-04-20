@@ -634,6 +634,9 @@ export async function loadHasOne(
   assocName: string,
   options: AssociationOptions,
 ): Promise<Base | null> {
+  if (options.through) {
+    validateThroughSourceType(record.constructor as typeof Base, assocName);
+  }
   // Check cached (inverse_of) first, then preloaded
   if ((record as any)._cachedAssociations?.has(assocName)) {
     return (record as any)._cachedAssociations.get(assocName) as Base | null;
@@ -835,6 +838,9 @@ export async function loadHasMany(
   assocName: string,
   options: AssociationOptions,
 ): Promise<Base[]> {
+  if (options.through) {
+    validateThroughSourceType(record.constructor as typeof Base, assocName);
+  }
   // Check cached (inverse_of) first, then preloaded
   if ((record as any)._cachedAssociations?.has(assocName)) {
     return (record as any)._cachedAssociations.get(assocName) as Base[];
@@ -1741,9 +1747,6 @@ export function association<T extends Base = Base>(
   if (!assocDef) {
     throw new Error(`Association "${assocName}" not found on ${ctor.name}`);
   }
-  // Matches Rails' first-use check_validity! for ThroughReflection —
-  // surface the sourceType misconfigurations loudly here too, since
-  // `association()` is the other entry point besides Association#ctor.
   validateThroughSourceType(ctor, assocName);
   if (!_CollectionProxyCtor) {
     // Deliberate constraint: `associations.ts`, `relation.ts`,

@@ -369,8 +369,6 @@ function _canRouteThroughViaDisableJoinsAssociationScope(
     | { isPolymorphic?: () => boolean }
     | undefined;
   if (!src) return false;
-  if (typeof src.isPolymorphic === "function" && src.isPolymorphic()) return false;
-  if (options.sourceType) return false;
   // Composite-key through associations are now supported by DJAS'
   // `_addConstraintsDj`, which builds an Arel `OR`-of-`AND` predicate
   // (`(c1=v1a AND c2=v1b) OR ...`) for the chain walk — same shape

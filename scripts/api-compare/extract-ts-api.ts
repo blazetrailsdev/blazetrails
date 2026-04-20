@@ -730,9 +730,12 @@ function getAllTsFiles(dir: string): string[] {
 }
 
 // Only run when invoked as a script (not when imported for its
-// exports by the test file). fileURLToPath + argv[1] matches the
-// common ESM "if __main__" pattern.
+// exports by the test file). fileURLToPath + argv[1] is the common
+// ESM "if __main__" pattern; resolve argv[1] first so the guard
+// works regardless of whether the caller passed a relative path or
+// went through a wrapper (matches the pattern in
+// scripts/guides-typecheck/check.ts).
 import { fileURLToPath as _fileURLToPath } from "node:url";
-if (process.argv[1] && process.argv[1] === _fileURLToPath(import.meta.url)) {
+if (process.argv[1] && path.resolve(process.argv[1]) === _fileURLToPath(import.meta.url)) {
   main();
 }

@@ -7,6 +7,12 @@ on:
     branches: [main]
 
 jobs:
+  # Preflight that sets `docs_only=true` when every changed path is under
+  # top-level `docs/`. Downstream jobs gate on this via `if:` so they're
+  # reported as skipped (not cancelled) — GitHub treats skipped required
+  # status checks as passing, so this keeps branch protection happy on
+  # docs-only PRs. `packages/website/docs` does not qualify; it lives
+  # under `packages/website/` and affects the site build.
   changes:
     name: Detect changed paths
     runs-on: ubuntu-latest
@@ -18,6 +24,7 @@ jobs:
           fetch-depth: 0
       - id: filter
         run: |
+          set -euo pipefail
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             base="${{ github.event.pull_request.base.sha }}"
             head="${{ github.event.pull_request.head.sha }}"
@@ -25,17 +32,25 @@ jobs:
             base="${{ github.event.before }}"
             head="${{ github.sha }}"
           fi
+          # First push to a branch has a zero-SHA base; force-push may
+          # rewrite history out from under us. In either case we can't
+          # reliably compute a diff — fall back to running the full matrix.
           if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          files=$(git diff --name-only "$base" "$head")
+          if ! files=$(git diff --name-only "$base" "$head" 2>/dev/null); then
+            echo "git diff failed (base may be unreachable after force-push) — running full matrix"
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           echo "Changed files:"
           echo "$files"
           if [ -z "$files" ]; then
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # Any line that does NOT start with `docs/` flips the switch.
           if echo "$files" | grep -qv '^docs/'; then
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
           else

@@ -97,6 +97,21 @@ export type AssociationProxy<
     readonly [index: number]: T | undefined;
   };
 
+/**
+ * Validate a numeric limit (safe non-negative integer) and raise the
+ * same error shape as Relation#limitBang. Rails' `first(n)` / `last(n)`
+ * / `take(n)` all route through `limit(limit)` which validates; our
+ * TS finder methods bypass validation for first/take via
+ * `_limitValue = n` (a TS-internal shortcut that diverges from Rails).
+ * For Rails fidelity at the CollectionProxy layer we validate all
+ * three.
+ */
+function assertValidLimit(n: number): void {
+  if (!Number.isSafeInteger(Number(n)) || Number(n) < 0) {
+    throw new Error(`Invalid limit value: ${String(n)}`);
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   private _record: Base;
@@ -1188,6 +1203,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   override first(): Promise<T | null>;
   override first(n: number): Promise<T[]>;
   override async first(n?: number): Promise<T | T[] | null> {
+    if (n !== undefined) assertValidLimit(n);
     const records = await this.toArray();
     if (n === undefined) return records[0] ?? null;
     return records.slice(0, n);
@@ -1201,14 +1217,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   override last(): Promise<T | null>;
   override last(n: number): Promise<T[]>;
   override async last(n?: number): Promise<T | T[] | null> {
-    if (n !== undefined) {
-      // Relation.last(n) routes through limit(n) → limitBang which
-      // validates. Match that contract here so cp.last(-1) / cp.last(1.5)
-      // raise the same 'Invalid limit value' error.
-      if (!Number.isSafeInteger(Number(n)) || Number(n) < 0) {
-        throw new Error(`Invalid limit value: ${String(n)}`);
-      }
-    }
+    if (n !== undefined) assertValidLimit(n);
     const records = await this.toArray();
     if (n === undefined) return records[records.length - 1] ?? null;
     return records.slice(Math.max(0, records.length - n));
@@ -1222,6 +1231,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   override take(): Promise<T | null>;
   override take(limit: number): Promise<T[]>;
   override async take(n?: number): Promise<T | T[] | null> {
+    if (n !== undefined) assertValidLimit(n);
     const records = await this.toArray();
     if (n === undefined) return records[0] ?? null;
     return records.slice(0, n);

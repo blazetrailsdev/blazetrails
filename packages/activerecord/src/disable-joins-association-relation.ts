@@ -320,7 +320,15 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
     return merged;
   }
 
-  override async ids(): Promise<unknown[]> {
+  /**
+   * Return the stored id list. The shape is correlated with `this.key`:
+   * a `string` key yields a flat `unknown[]` of scalars, a `string[]`
+   * composite key yields `unknown[][]` of tuples. Narrow with
+   * `Array.isArray(this.key)` at the call site when the key shape isn't
+   * statically known. In deferred-chain mode the walker's loaded-chain
+   * DJAR carries the authoritative shape.
+   */
+  override async ids(): Promise<DjarIds> {
     if (this._chainWalker) {
       // Deferred mode — delegate to the composed walker result's
       // ids(), which can pluck instead of materializing full records.
@@ -330,7 +338,7 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
       // (or ids() multiple times).
       const { relation } = await this._walkOnce();
       const merged = this._composeChainedState(relation);
-      return (merged as unknown as { ids: () => Promise<unknown[]> }).ids();
+      return (merged as unknown as { ids: () => Promise<DjarIds> }).ids();
     }
     return this._storedIds;
   }

@@ -1124,10 +1124,15 @@ export { deleteStatement as remove };
 // primitives, matching Rails' pattern where module methods call down
 // into the adapter's `internal_exec_query` / `exec_query` layer.
 //
-// The file-level `export function selectAll` / etc. above are the
-// unbound Rails-module-style references (Rails' default behavior of
-// "must be implemented by subclass"); the module object below is the
-// concrete default set mixed onto AbstractAdapter's prototype.
+// The file-level `export function` surface above models the Rails
+// DatabaseStatements module for standalone / utility use by adapters.
+// Most of those functions already provide default behavior by
+// delegating through the host adapter (e.g. `selectOne`, `selectRows`,
+// `execQuery`, `execInsertAll`); only the adapter-specific primitives
+// (`selectAll`, `execute`, `isWriteQuery`, `explain`) remain subclass
+// responsibilities and throw if called unbound. The module object
+// below is the concrete default set mixed onto AbstractAdapter's
+// prototype via `include()`.
 // ---------------------------------------------------------------------------
 
 interface DatabaseStatementsDefaultsHost {

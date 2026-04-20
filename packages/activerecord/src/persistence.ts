@@ -357,7 +357,13 @@ export async function toggleBang<T extends CounterRecord>(
   // Rails' update_attribute(name, value) is effectively `self[name] = value; save(validate: false)`.
   // Our toggle() already wrote the toggled value; calling updateAttribute would
   // re-write the same value (potentially clearing dirty tracking). Save directly
-  // to preserve the dirty change and still run callbacks.
-  await this.save({ validate: false });
+  // to preserve the dirty change and still run callbacks. Raise on save failure
+  // (e.g. a before_save callback aborted) — Rails' toggle! returns the
+  // update_attribute boolean, but our `Promise<this>` contract surfaces it as
+  // an error so the failure isn't silently swallowed.
+  const saved = await this.save({ validate: false });
+  if (!saved) {
+    throw new Error(`toggleBang failed to persist ${attribute}`);
+  }
   return this;
 }

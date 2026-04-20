@@ -1491,7 +1491,7 @@ describe("PersistenceTest", () => {
     await t.incrementBang("count");
     // Attribute is applied but should no longer appear dirty.
     expect(t.count).toBe(11);
-    expect((t as any).changedAttributes).not.toContain("count");
+    expect(t.changedAttributes).not.toContain("count");
   });
 
   // Rails: increment!(attribute, by, touch: :updated_at) updates the

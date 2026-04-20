@@ -262,7 +262,18 @@ interface CounterRecord {
   readAttribute(name: string): unknown;
   writeAttribute(name: string, value: unknown): void;
   updateColumn(name: string, value: unknown): Promise<unknown>;
+  updateAttribute(name: string, value: unknown): Promise<unknown>;
+  id: unknown;
+  constructor: {
+    updateCounters(
+      id: unknown,
+      counters: Record<string, number>,
+      options?: { touch?: boolean | string | string[] },
+    ): Promise<number>;
+  };
 }
+
+type TouchOption = boolean | string | string[];
 
 /** Mirrors: ActiveRecord::Persistence#increment */
 export function increment<T extends CounterRecord>(this: T, attribute: string, by: number = 1): T {
@@ -292,36 +303,53 @@ export function toggle<T extends CounterRecord>(this: T, attribute: string): T {
 
 /**
  * Mirrors: ActiveRecord::Persistence#increment! — dispatches `increment`
- * through `this` so subclass overrides take effect, then persists via
- * updateColumn (skipping validations and callbacks).
+ * through `this`, then emits an atomic `UPDATE ... SET attr = attr + by`
+ * via Class.updateCounters so concurrent increments don't stomp each
+ * other. Validations and callbacks are skipped. Accepts Rails' `touch`
+ * option (updates the named timestamp(s) in the same statement).
  */
 export async function incrementBang<T extends CounterRecord>(
   this: T & { increment(attribute: string, by?: number): T },
   attribute: string,
   by: number = 1,
+  options: { touch?: TouchOption } = {},
 ): Promise<T> {
   this.increment(attribute, by);
-  await this.updateColumn(attribute, this.readAttribute(attribute));
+  await this.constructor.updateCounters(this.id, { [attribute]: by }, { touch: options.touch });
   return this;
 }
 
 /**
- * Mirrors: ActiveRecord::Persistence#decrement! — `increment!(attribute, -by)`.
- * Dispatched through `this` so subclass overrides of `incrementBang` flow
- * into `decrementBang`.
+ * Mirrors: ActiveRecord::Persistence#decrement! —
+ * `increment!(attribute, -by, touch: touch)`. Dispatched through `this` so
+ * subclass overrides of `incrementBang` flow into `decrementBang`.
  */
 export async function decrementBang<
-  T extends CounterRecord & { incrementBang(a: string, b?: number): Promise<T> },
->(this: T, attribute: string, by: number = 1): Promise<T> {
-  return this.incrementBang(attribute, -by);
+  T extends CounterRecord & {
+    incrementBang(a: string, b?: number, o?: { touch?: TouchOption }): Promise<T>;
+  },
+>(this: T, attribute: string, by: number = 1, options: { touch?: TouchOption } = {}): Promise<T> {
+  return this.incrementBang(attribute, -by, options);
 }
 
-/** Mirrors: ActiveRecord::Persistence#toggle! */
+/**
+ * Mirrors: ActiveRecord::Persistence#toggle! —
+ * `toggle(attribute).update_attribute(attribute, self[attribute])`.
+ * Unlike `increment!` / `decrement!`, Rails' `toggle!` goes through
+ * `update_attribute` which runs callbacks (but still skips validations).
+ */
 export async function toggleBang<T extends CounterRecord>(
-  this: T & { toggle(attribute: string): T },
+  this: T & {
+    toggle(attribute: string): T;
+    save(options?: { validate?: boolean }): Promise<boolean>;
+  },
   attribute: string,
 ): Promise<T> {
   this.toggle(attribute);
-  await this.updateColumn(attribute, this.readAttribute(attribute));
+  // Rails' update_attribute(name, value) is effectively `self[name] = value; save(validate: false)`.
+  // Our toggle() already wrote the toggled value; calling updateAttribute would
+  // re-write the same value (potentially clearing dirty tracking). Save directly
+  // to preserve the dirty change and still run callbacks.
+  await this.save({ validate: false });
   return this;
 }

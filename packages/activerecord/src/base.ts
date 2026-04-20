@@ -2894,8 +2894,16 @@ export interface Base extends Included<typeof AutosaveAssociation> {
   increment(attribute: string, by?: number): this;
   decrement(attribute: string, by?: number): this;
   toggle(attribute: string): this;
-  incrementBang(attribute: string, by?: number): Promise<this>;
-  decrementBang(attribute: string, by?: number): Promise<this>;
+  incrementBang(
+    attribute: string,
+    by?: number,
+    options?: { touch?: boolean | string | string[] },
+  ): Promise<this>;
+  decrementBang(
+    attribute: string,
+    by?: number,
+    options?: { touch?: boolean | string | string[] },
+  ): Promise<this>;
   toggleBang(attribute: string): Promise<this>;
 }
 

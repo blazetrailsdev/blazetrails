@@ -399,14 +399,14 @@ export class AssociationScope {
       let aliased: unknown;
       if (tracker && klass) {
         // Rails: `tracker.aliased_table_for(refl.klass.arel_table) {
-        // refl.alias_candidate(name) }`. The block is the alias
-        // candidate used when the base table name is already claimed.
-        const candidate =
-          typeof (refl as unknown as { aliasCandidate?: (n: string) => string }).aliasCandidate ===
-          "function"
-            ? (refl as unknown as { aliasCandidate: (n: string) => string }).aliasCandidate(name)
-            : klass.tableName;
-        aliased = tracker.aliasedTableFor(klass.arelTable, candidate);
+        // refl.alias_candidate(name) }`. Pass a thunk so
+        // `aliasCandidate` is only invoked on repeat visits — first
+        // visits return the base arel table without ever building
+        // the candidate string.
+        aliased = tracker.aliasedTableFor(klass.arelTable, () => {
+          const fn = (refl as unknown as { aliasCandidate?: (n: string) => string }).aliasCandidate;
+          return typeof fn === "function" ? fn.call(refl, name) : klass.tableName;
+        });
       } else {
         // Fallback for the legacy single-call path where no tracker
         // is provided — bare table name, same behavior as before.

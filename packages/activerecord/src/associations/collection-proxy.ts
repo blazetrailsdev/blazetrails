@@ -1351,26 +1351,62 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   override async find(...args: unknown[]): Promise<T | T[]> {
     const targetModel = this.model as typeof Base;
     const pk = targetModel.primaryKey ?? "id";
+    const composite = Array.isArray(pk);
 
     // No-args contract matches Relation.find / Rails: raise a clear
     // not-found instead of normalizing to [undefined] and producing a
     // misleading message.
     if (args.length === 0) {
-      throw new RecordNotFound(`Couldn't find ${targetModel.name} without an ID`, targetModel.name);
+      throw new RecordNotFound(
+        `Couldn't find ${targetModel.name} without an ID`,
+        targetModel.name,
+        String(pk),
+      );
     }
 
-    // Normalize the overload set: `find(a, b, c)` and `find([a, b, c])`
-    // both return arrays; `find(a)` returns a single record.
+    // Normalize the overload set into (ids, wantArray). Rules:
+    //
+    // - Variadic (`find(a, b, c)`) → each arg is a full id (scalar for
+    //   simple PKs, tuple for composite). Returns T[].
+    // - Single array arg + composite PK: ambiguous. Follow Rails:
+    //     * flat array of scalars whose length matches PK arity →
+    //       ONE composite-tuple id (find([k1, k2]) on [id1, id2]).
+    //     * array of arrays → each inner array is a composite-tuple id.
+    // - Single array arg + scalar PK → list of ids.
+    // - Single scalar / single tuple → that's the only id.
     const [first, ...rest] = args;
-    const wantArray = Array.isArray(first) || rest.length > 0;
-    const ids: unknown[] = Array.isArray(first) ? first : [first, ...rest];
+    let ids: unknown[];
+    let wantArray: boolean;
+    if (rest.length > 0) {
+      ids = args;
+      wantArray = true;
+    } else if (Array.isArray(first)) {
+      if (composite) {
+        const pkArity = (pk as string[]).length;
+        const looksLikeSingleTuple =
+          first.length === pkArity && first.every((x) => !Array.isArray(x));
+        if (looksLikeSingleTuple) {
+          ids = [first];
+          wantArray = false;
+        } else {
+          // Array of tuples (or mixed / wrong arity — fall through so
+          // each element is treated as an id and keyForId normalizes).
+          ids = first;
+          wantArray = true;
+        }
+      } else {
+        ids = first;
+        wantArray = true;
+      }
+    } else {
+      ids = [first];
+      wantArray = false;
+    }
 
     const records = await this.toArray();
 
-    // Index records by PK once: O(records + ids) instead of
-    // O(records × ids) for large collections. Composite keys are
-    // stringified as a JSON tuple so the comparison is stable.
-    const composite = Array.isArray(pk);
+    // Index records by PK once — O(records + ids) instead of
+    // O(records × ids). Composite keys stringify as a JSON tuple.
     const keyForRecord = (r: Base): string => {
       if (composite) {
         const cols = pk as string[];
@@ -1395,6 +1431,8 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
             Array.isArray(id) ? JSON.stringify(id) : String(id)
           }`,
           targetModel.name,
+          String(pk),
+          id as string | number,
         );
       }
       return match;

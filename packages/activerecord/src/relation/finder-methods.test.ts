@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { normalizeFindArgs, raiseNotFoundAll, raiseNotFoundSingle } from "./find-normalization.js";
+import { normalizeFindArgs, raiseNotFoundAll, raiseNotFoundSingle } from "./finder-methods.js";
 import { RecordNotFound } from "../errors.js";
 
 describe("normalizeFindArgs — simple primary key", () => {

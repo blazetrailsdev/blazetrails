@@ -902,7 +902,7 @@ async function syncPullRequests(mode: "latest" | "refresh"): Promise<number> {
   }
 
   const openRows = await PullRequest.findBySql(
-    `SELECT number FROM pull_requests WHERE state = 'open' ORDER BY number DESC`,
+    `SELECT number FROM pull_requests WHERE state = 'open' OR state IS NULL ORDER BY number DESC`,
   );
   if (openRows.length > 0) {
     console.log(`Re-fetching ${openRows.length} open PRs to check for state changes...`);
@@ -1929,26 +1929,28 @@ async function main() {
     console.log("=== Syncing PR data ===");
     const prsSynced = await syncPullRequests(fetchMode);
 
-    console.log("\n=== Syncing PR files ===");
-    await syncPrFiles();
+    if (mode !== "compare-only") {
+      console.log("\n=== Syncing PR files ===");
+      await syncPrFiles();
 
-    console.log("\n=== Syncing PR commits ===");
-    await syncPrCommits();
+      console.log("\n=== Syncing PR commits ===");
+      await syncPrCommits();
 
-    console.log("\n=== Syncing PR comments & reviews ===");
-    await syncPrComments();
+      console.log("\n=== Syncing PR comments & reviews ===");
+      await syncPrComments();
 
-    console.log("\n=== Syncing PR requested reviewers ===");
-    await syncPrRequestedReviewers();
+      console.log("\n=== Syncing PR requested reviewers ===");
+      await syncPrRequestedReviewers();
 
-    console.log("\n=== Syncing PR linked issues ===");
-    await syncPrLinkedIssues();
+      console.log("\n=== Syncing PR linked issues ===");
+      await syncPrLinkedIssues();
 
-    console.log("\n=== Syncing PR timeline events ===");
-    await syncPrTimelineEvents();
+      console.log("\n=== Syncing PR timeline events ===");
+      await syncPrTimelineEvents();
 
-    console.log("\n=== Syncing PR reactions ===");
-    await syncPrReactions();
+      console.log("\n=== Syncing PR reactions ===");
+      await syncPrReactions();
+    }
 
     console.log("\n=== Syncing workflow runs ===");
     const runsSynced = await syncWorkflowRuns(fetchMode);

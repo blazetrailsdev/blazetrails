@@ -2904,7 +2904,7 @@ export interface Base extends Included<typeof AutosaveAssociation> {
     by?: number,
     options?: { touch?: boolean | string | string[] },
   ): Promise<this>;
-  toggleBang(attribute: string): Promise<this>;
+  toggleBang(attribute: string): Promise<boolean>;
 }
 
 // ---------------------------------------------------------------------------

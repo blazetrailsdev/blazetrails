@@ -208,33 +208,46 @@ export async function _deleteRecord(
 // source location.
 // ---------------------------------------------------------------------------
 
-interface PersistenceRecord {
+interface PersistenceRecordFields {
   _newRecord: boolean;
   _destroyed: boolean;
   _previouslyNewRecord: boolean;
 }
 
-/** Mirrors: ActiveRecord::Persistence#new_record? */
-export function isNewRecord(this: PersistenceRecord): boolean {
+interface PersistenceRecordDispatch {
+  isNewRecord(): boolean;
+  isDestroyed(): boolean;
+}
+
+/** Mirrors: ActiveRecord::Persistence#new_record? — `@new_record` */
+export function isNewRecord(this: PersistenceRecordFields): boolean {
   return this._newRecord;
 }
 
-/** Mirrors: ActiveRecord::Persistence#persisted? */
-export function isPersisted(this: PersistenceRecord): boolean {
+/**
+ * Mirrors: ActiveRecord::Persistence#persisted? — `!(@new_record || @destroyed)`.
+ * Rails reads the ivars directly, so subclasses overriding `new_record?` /
+ * `destroyed?` don't change `persisted?`.
+ */
+export function isPersisted(this: PersistenceRecordFields): boolean {
   return !this._newRecord && !this._destroyed;
 }
 
-/** Mirrors: ActiveRecord::Persistence#destroyed? */
-export function isDestroyed(this: PersistenceRecord): boolean {
+/** Mirrors: ActiveRecord::Persistence#destroyed? — `@destroyed` */
+export function isDestroyed(this: PersistenceRecordFields): boolean {
   return this._destroyed;
 }
 
-/** Mirrors: ActiveRecord::Persistence#previously_new_record? */
-export function isPreviouslyNewRecord(this: PersistenceRecord): boolean {
+/** Mirrors: ActiveRecord::Persistence#previously_new_record? — `@previously_new_record` */
+export function isPreviouslyNewRecord(this: PersistenceRecordFields): boolean {
   return this._previouslyNewRecord;
 }
 
-/** Mirrors: ActiveRecord::Persistence#previously_persisted? */
-export function isPreviouslyPersisted(this: PersistenceRecord): boolean {
-  return !this._newRecord && this._destroyed;
+/**
+ * Mirrors: ActiveRecord::Persistence#previously_persisted? — `!new_record? && destroyed?`.
+ * Rails dispatches through `self` here, so subclass overrides of
+ * `new_record?` / `destroyed?` do affect this predicate.
+ */
+export function isPreviouslyPersisted(this: PersistenceRecordDispatch): boolean {
+  return !this.isNewRecord() && this.isDestroyed();
 }

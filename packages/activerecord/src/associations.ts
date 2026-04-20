@@ -460,23 +460,32 @@ async function _loadThroughViaDisableJoinsScope(
   reflection: unknown,
   options?: AssociationOptions,
 ): Promise<Base[]> {
-  // Unsaved-owner short-circuit — correctness, not just perf.
-  // With the guard absent DJAS seeds `joinIds = [null]`, and the
-  // ArrayHandler in PredicateBuilder turns `where({key: [null]})`
+  // Unsaved-owner / null-PK short-circuit — correctness, not just
+  // perf. With the guard absent DJAS seeds `joinIds = [null]`, and
+  // the ArrayHandler in PredicateBuilder turns `where({key: [null]})`
   // into `key IS NULL` (array-handler.ts:21). That would match
-  // orphan through rows whose FK is null and leak downstream into
-  // the chain, producing phantom associations for unsaved owners.
+  // orphan through rows whose FK is null and leak them into the
+  // chain as phantom associations.
   //
   // Previously the guard read `throughReflection.joinForeignKey`
   // off the owner, but for nested-through + composite-FK shapes
   // that delegation surfaces deeper-target columns that don't
   // exist on the outer owner (e.g. `ck_order_shop_id` on `Shop`),
   // producing a false null and early-returning even for saved
-  // owners. Route through `isNewRecord()` instead — the same
-  // predicate Rails uses (`new_record?`). It's chain-shape-agnostic
-  // and exactly the question being asked: does the owner have
-  // nothing to chain from yet?
-  if (record.isNewRecord()) return [];
+  // owners. Read from the OUTER reflection's `activeRecordPrimaryKey`
+  // instead — that's the owner's own PK column(s), never a
+  // delegated downstream target. `isNewRecord()` covers unsaved
+  // records; the explicit PK-null check covers the defensive edge
+  // where a saved record somehow has a null composite-PK component.
+  const activeRecordPk = (reflection as { activeRecordPrimaryKey?: string | string[] })
+    .activeRecordPrimaryKey;
+  const ownerPkCols =
+    activeRecordPk == null ? [] : Array.isArray(activeRecordPk) ? activeRecordPk : [activeRecordPk];
+  const ownerHasNullPk = ownerPkCols.some((col) => {
+    const v = record.readAttribute(col);
+    return v === null || v === undefined;
+  });
+  if (record.isNewRecord() || ownerHasNullPk) return [];
   // Lazy-import to avoid an eager cycle: DJAS imports
   // DisableJoinsAssociationRelation → relation.ts → associations.ts.
   const { DisableJoinsAssociationScope } =

@@ -10,6 +10,12 @@
  * normalization + raise helpers here prevents the two paths from
  * drifting as the API evolves.
  *
+ * Simple-PK flattening note: we use `flat(Infinity)` (fully
+ * recursive), not `flat(1)`. This matches Ruby's `Array#flatten`
+ * default, which is Rails' contract (`Post.find([[1, [2]]])` works
+ * as `Post.find(1, 2)`). The previous TS `performFind` only
+ * flattened one level — this unifies behavior with Rails.
+ *
  * Mirrors: ActiveRecord::FinderMethods shared argument handling.
  */
 

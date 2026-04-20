@@ -1367,27 +1367,27 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   override find(id: unknown): Promise<T>;
   override find(...ids: unknown[]): Promise<T | T[]>;
   override async find(...args: unknown[]): Promise<T | T[]> {
-    const targetModel = this.model as typeof Base;
-    const pk = targetModel.primaryKey ?? "id";
-    const composite = Array.isArray(pk);
-
-    // Shared arg normalization + deterministic-error raising (empty
-    // list / composite arity). Raises RecordNotFound with the same
-    // message + id shape as Relation.performFind.
-    const normalized = normalizeFindArgs(targetModel.name, pk, args);
-    const { ids, wantArray, tuples } = normalized;
-
     // Rails-faithful cache gate: CollectionAssociation#find in Rails
     // only uses the in-memory loaded target when BOTH `inverse_of` is
     // declared AND the association is `loaded?`. Otherwise it
     // delegates to `scope.find(...)` (i.e. Relation.find via SQL).
-    // Unconditional caching would mask stale data; inverse_of is the
-    // wiring that guarantees the cache mirrors the DB state.
+    // Gate runs FIRST so the non-cache path doesn't do duplicate
+    // arg-normalization — super.find runs its own normalize.
     const inverseOf = this._assocDef.options.inverseOf;
     const useCache = !!inverseOf && this._targetLoaded;
     if (!useCache) {
       return (await super.find(...args)) as T | T[];
     }
+
+    const targetModel = this.model as typeof Base;
+    const pk = targetModel.primaryKey ?? "id";
+    const composite = Array.isArray(pk);
+
+    // Shared arg normalization + deterministic-error raising (empty
+    // list / composite arity). Same message + id shape as
+    // Relation.performFind.
+    const normalized = normalizeFindArgs(targetModel.name, pk, args);
+    const { ids, wantArray, tuples } = normalized;
 
     const records = this._target;
 

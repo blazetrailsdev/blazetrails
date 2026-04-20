@@ -48,9 +48,13 @@ export async function performFind(this: FinderRelation, ...args: unknown[]): Pro
   const normalized = normalizeFindArgs(modelName, pk, args);
   const { ids, wantArray, tuples } = normalized;
 
-  if (tuples) {
-    // Composite PK: OR over per-tuple WHERE conditions.
-    const orConditions = tuples.map((tuple) => buildPkWhere(pk as string[], tuple));
+  // Composite PK: OR over per-tuple WHERE conditions. The
+  // `Array.isArray(pk)` guard narrows `pk` to `string[]` via
+  // control flow instead of a cast. `tuples !== null` is a
+  // stronger invariant (the normalizer only returns tuples when pk
+  // is composite) but TS can't correlate them, so we check both.
+  if (tuples && Array.isArray(pk)) {
+    const orConditions = tuples.map((tuple) => buildPkWhere(pk, tuple));
     let rel: any = this.where(orConditions[0]);
     for (let i = 1; i < orConditions.length; i++) {
       rel = rel.or(this.where(orConditions[i]));
@@ -60,18 +64,25 @@ export async function performFind(this: FinderRelation, ...args: unknown[]): Pro
     return wantArray ? records : records[0];
   }
 
+  // Simple PK from here on — pk is narrowed to `string`.
+  if (Array.isArray(pk)) {
+    // Unreachable: tuples-null + pk-array would mean the normalizer
+    // violated its contract.
+    throw new Error("performFind: composite PK without tuples (normalizer invariant violation)");
+  }
+
   // Simple PK, single scalar: find(1)
   if (!wantArray) {
     const id = ids[0];
-    const records = await this.where({ [pk as string]: id })
+    const records = await this.where({ [pk]: id })
       .limit(1)
       .toArray();
-    if (records.length === 0) raiseNotFoundSingle(modelName, pk as string, id);
+    if (records.length === 0) raiseNotFoundSingle(modelName, pk, id);
     return records[0];
   }
 
   // Simple PK, multiple: find(1, 2, 3) or find([1, 2, 3]).
-  const records = await this.where({ [pk as string]: ids }).toArray();
+  const records = await this.where({ [pk]: ids }).toArray();
   if (records.length !== ids.length) raiseNotFoundAll(modelName, pk, normalized);
   return records;
 }

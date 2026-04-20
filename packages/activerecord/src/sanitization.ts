@@ -151,4 +151,9 @@ export const ClassMethods = {
   sanitizeSql,
   sanitizeSqlArray,
   sanitizeSqlLike,
+  sanitizeSqlForConditions,
+  sanitizeSqlForAssignment,
+  sanitizeSqlForOrder,
+  sanitizeSqlHashForAssignment,
+  disallowRawSqlBang,
 };

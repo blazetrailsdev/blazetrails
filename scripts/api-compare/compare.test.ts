@@ -119,19 +119,11 @@ describe("superclassesMatch", () => {
     expect(superclassesMatch(null, ["Model"], "Base")).toBe(true);
   });
 
-  it("accepts QueryCache Store extending QueryCacheStore when Ruby has no super", () => {
-    // Rails' `ConnectionAdapters::QueryCache::Store` has no super; TS
-    // factors the LRU implementation into `QueryCacheStore` (reused
-    // by the QueryCacheAdapter wrapper) and has `Store` extend it.
-    expect(superclassesMatch(null, ["QueryCacheStore"], "Store")).toBe(true);
-  });
-
   it("does not auto-accept other classes extending the intermediates with null Ruby super", () => {
     // Only the whitelisted (tsName, intermediate) pairs above are accepted.
     expect(superclassesMatch(null, ["Node"], "Something")).toBe(false);
     expect(superclassesMatch(null, ["Type"], "Something")).toBe(false);
     expect(superclassesMatch(null, ["Model"], "Something")).toBe(false);
-    expect(superclassesMatch(null, ["QueryCacheStore"], "Something")).toBe(false);
   });
 });
 

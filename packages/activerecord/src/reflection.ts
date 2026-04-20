@@ -1657,7 +1657,9 @@ export function addAggregateReflection(
 // functions that take the model class as the first argument.
 // ---------------------------------------------------------------------------
 
-export function reflections(modelClass: typeof Base): Record<string, any> {
+export function reflections(
+  modelClass: typeof Base,
+): Record<string, AssociationReflection | ThroughReflection> {
   return normalizedReflections(modelClass);
 }
 
@@ -1800,7 +1802,7 @@ export type AssociationLikeReflection = AssociationReflection | ThroughReflectio
 // ---------------------------------------------------------------------------
 
 export const ClassMethods = {
-  reflections(this: typeof Base): Record<string, any> {
+  reflections(this: typeof Base): Record<string, AssociationReflection | ThroughReflection> {
     return reflections(this);
   },
   normalizedReflections(

@@ -18,6 +18,22 @@ export type TagHandler = (context?: Record<string, TagValue>) => TagValue;
 export type TagDefinition = string | TagHandler | Record<string, TagValue | TagHandler>;
 
 /**
+ * Handler that resolves a tag value by looking up a named key in the
+ * QueryLogs context hash.
+ *
+ * Mirrors: ActiveRecord::QueryLogs::GetKeyHandler — Rails builds one
+ * of these per string tag (`build_handler` in query_logs.rb) so
+ * `[name, handler]` pairs can be uniformly dispatched via `.call`.
+ */
+export class GetKeyHandler {
+  constructor(private readonly name: string) {}
+
+  call(context: Record<string, TagValue>): TagValue {
+    return context[this.name];
+  }
+}
+
+/**
  * QueryLogs configuration and SQL comment generation.
  */
 export class QueryLogs {
@@ -136,7 +152,10 @@ export class QueryLogs {
     const pairs: string[] = [];
     for (const tag of this._tags) {
       if (typeof tag === "string") {
-        const value = this._context[tag];
+        // Route through GetKeyHandler — same structure as Rails'
+        // build_handler path, which wraps every string tag in a
+        // GetKeyHandler for uniform dispatch.
+        const value = new GetKeyHandler(tag).call(this._context);
         if (value != null) {
           pairs.push(this._formatter.format(tag, value));
         }

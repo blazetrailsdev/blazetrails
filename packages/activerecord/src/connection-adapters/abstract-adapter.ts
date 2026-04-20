@@ -25,7 +25,7 @@ import {
   clearQueryCache as clearQueryCacheMixin,
   type QueryCacheHost,
 } from "./abstract/query-cache.js";
-import { DatabaseStatements } from "./abstract/database-statements-defaults.js";
+import { DatabaseStatements } from "./abstract/database-statements.js";
 import { quote as abstractQuote, typeCast as abstractTypeCast } from "./abstract/quoting.js";
 import { include } from "@blazetrails/activesupport";
 import type { Result } from "../result.js";

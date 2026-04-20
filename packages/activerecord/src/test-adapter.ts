@@ -18,7 +18,7 @@
 
 import { inspectExplainOption } from "./adapter.js";
 import type { DatabaseAdapter, ExplainOption } from "./adapter.js";
-import { DatabaseStatements } from "./connection-adapters/abstract/database-statements-defaults.js";
+import { DatabaseStatements } from "./connection-adapters/abstract/database-statements.js";
 import { include } from "@blazetrails/activesupport";
 import { isWriteQuerySql } from "./connection-adapters/sql-classification.js";
 import type { Result } from "./result.js";

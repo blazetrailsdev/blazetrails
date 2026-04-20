@@ -777,10 +777,8 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       if (this._assocDef.options.disableJoins) {
         const box = await this._djarForCount();
         if (!box) return 0;
-        const djar = (box as { djar: unknown }).djar as {
-          countDeferred: () => Promise<number>;
-        };
-        return djar.countDeferred();
+        const djar = (box as { djar: unknown }).djar as { count: () => Promise<number> };
+        return djar.count();
       }
       if (!_canRouteThroughViaAssociationScope(refl, this._assocDef.options)) {
         const results = await loadHasMany(this._record, this._assocName, this._assocDef.options);

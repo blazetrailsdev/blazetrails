@@ -97,15 +97,6 @@ export class AssociationRelation<T extends Base> extends Relation<T> {
   }
 
   /**
-   * Override the load path to propagate inverse_of and strict_loading onto
-   * records fetched through this relation — mirrors Rails'
-   * `AssociationRelation#exec_queries`, which calls
-   * `set_inverse_instance_from_queries` and applies `strict_loading!` when
-   * the owner or the reflection has it set. Without this, a record loaded
-   * via `blog.posts.where(...)` wouldn't cache `post.blog = blog` on the
-   * way back, so accessing the inverse would re-query.
-   */
-  /**
    * Throw `StrictLoadingViolationError` if the owning record has
    * strict-loading on and isn't inside a bypass block. Called from
    * every AR query-executing entry point (toArray, count, pluck,
@@ -125,6 +116,16 @@ export class AssociationRelation<T extends Base> extends Relation<T> {
     }
   }
 
+  /**
+   * Override the load path to enforce owner strict-loading and to
+   * propagate inverse_of / per-record strict-loading onto the fetched
+   * records — mirrors Rails' `AssociationRelation#exec_queries`, which
+   * calls `set_inverse_instance_from_queries` and applies
+   * `strict_loading!` when the owner or the reflection has it set.
+   * Without the inverse wiring, a record loaded via
+   * `blog.posts.where(...)` wouldn't cache `post.blog = blog` on the
+   * way back, so accessing the inverse would re-query.
+   */
   async toArray(): Promise<T[]> {
     this._checkStrictLoading();
     const records = await super.toArray();

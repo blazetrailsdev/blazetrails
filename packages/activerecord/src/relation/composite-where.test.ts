@@ -116,6 +116,28 @@ describe("Relation#where — composite-key form", () => {
     ).toThrow(/tuple must be an array/);
   });
 
+  it("composite predicate values flow through QueryAttribute (bind params, not inlined Casted)", () => {
+    // Regression: an earlier draft used `attribute.eq(rawValue)`,
+    // which wraps as Arel::Nodes::Casted and inlines values into SQL.
+    // That breaks compileWithBinds / prepared-statement caching.
+    // Switching to buildBindAttribute makes each value a
+    // QueryAttribute → BindParam at SQL emission. Inspect the node
+    // tree: the AND's right-hand sides should be QueryAttribute
+    // instances (carrying `name` / `type`), not raw literals or
+    // Casted nodes.
+    const rel = (CompOrder as any).all();
+    const node: any = rel.predicateBuilder.buildComposite(["shop_id", "order_number"], [[1, 100]]);
+    // Single-tuple path returns Grouping(And([eq, eq])). Arel wraps
+    // QueryAttribute in BindParam at `attribute.eq()`, so the Eq's
+    // right-hand side is BindParam(QueryAttribute(name, value, type)).
+    const and = node.expr;
+    const firstEq = and.children[0];
+    const rhs = firstEq.right;
+    expect(rhs?.constructor?.name).toBe("BindParam");
+    expect(rhs?.value?.name).toBe("shop_id");
+    expect(rhs?.value?.constructor?.name).toBe("QueryAttribute");
+  });
+
   it("single-column composite uses IN(...) (not OR-chain) for compactness", () => {
     const rel = (CompOrder as any).all();
     const node = rel.predicateBuilder.buildComposite(["shop_id"], [[1], [2], [3]]);

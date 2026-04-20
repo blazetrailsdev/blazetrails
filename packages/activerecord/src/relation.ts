@@ -198,9 +198,11 @@ export class Relation<T extends Base> {
       // treat the array as a record (numeric keys), producing
       // nonsense.
       if (rest.length !== 1 || !Array.isArray(rest[0])) {
-        throw new Error(
+        const err = new Error(
           "Relation#where(cols, tuples): composite-key form requires a tuples argument as an array of arrays",
         );
+        err.name = "ArgumentError";
+        throw err;
       }
       const cols = conditionsOrSql as string[];
       const tuples = rest[0] as unknown[][];
@@ -409,9 +411,11 @@ export class Relation<T extends Base> {
       // `whereNot(['a','b'])` falls through to Object.entries and
       // produces an invalid predicate.
       if (!Array.isArray(tuples)) {
-        throw new Error(
+        const err = new Error(
           "Relation#whereNot(cols, tuples): composite-key form requires a tuples argument as an array of arrays",
         );
+        err.name = "ArgumentError";
+        throw err;
       }
       const node = this.predicateBuilder.buildComposite(conditions as string[], tuples);
       // null = empty/all-filtered → NOT (no rows) = ALL rows = no

@@ -1417,9 +1417,11 @@ export class Base extends Model {
       // and treat the array as a record (numeric keys), producing
       // nonsense.
       if (rest.length !== 1 || !Array.isArray(rest[0])) {
-        throw new Error(
+        const err = new Error(
           `${(this as { name?: string }).name ?? "Model"}.where(cols, tuples): composite-key form requires a tuples argument as an array of arrays`,
         );
+        err.name = "ArgumentError";
+        throw err;
       }
       return this.all().where(conditionsOrSql, rest[0] as unknown[][]);
     }

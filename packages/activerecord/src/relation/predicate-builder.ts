@@ -263,8 +263,17 @@ export class PredicateBuilder {
       const values = validTuples.map((t) => t[0]);
       return this.resolveColumn(cols[0]).in(values);
     }
+    // Build equalities through `buildBindAttribute` so each value
+    // becomes a `QueryAttribute` (= bind param) rather than an
+    // `Arel::Nodes::Casted` (= inlined SQL literal). Inlined values
+    // bypass `compileWithBinds` / prepared-statement caching and
+    // mishandle `StatementCache::Substitute` placeholders. Matches
+    // how the normal hash-WHERE handler builds per-attribute bind
+    // values.
     const groupings: Nodes.Node[] = validTuples.map((tuple) => {
-      const eqs = cols.map((c, i) => this.resolveColumn(c).eq(tuple[i]));
+      const eqs = cols.map((c, i) =>
+        this.resolveColumn(c).eq(this.buildBindAttribute(c, tuple[i])),
+      );
       return new Nodes.Grouping(new Nodes.And(eqs));
     });
     if (groupings.length === 1) return groupings[0];

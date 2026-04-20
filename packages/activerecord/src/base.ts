@@ -2022,7 +2022,6 @@ export class Base extends Model {
   _newRecord = true;
   _destroyed = false;
   _readonly = false;
-  _frozen = false;
   private _previouslyNewRecord = false;
   private _destroyedByAssociation: unknown = null;
   _transactionAction: "create" | "update" | "destroy" | undefined = undefined;
@@ -2107,7 +2106,7 @@ export class Base extends Model {
   declare cacheVersion: () => string | null;
 
   writeAttribute(name: string, value: unknown): void {
-    if (this._frozen) {
+    if (this._attributes.isFrozen()) {
       throw new Error(`Cannot modify a frozen ${(this.constructor as typeof Base).name}`);
     }
     super.writeAttribute(name, value);
@@ -2625,7 +2624,9 @@ export class Base extends Model {
       }
 
       this._destroyed = true;
-      this._frozen = true;
+      // Rails' destroy ends with a `freeze` call. Delegate to it so we
+      // pick up the clone-and-freeze semantics on `_attributes`.
+      this.freeze();
       this._collectionProxies.clear();
       this._preloadedAssociations.clear();
       this._associationInstances.clear();
@@ -2678,7 +2679,7 @@ export class Base extends Model {
     await ctor.adapter.execDelete(dm.toSql(), "Delete");
 
     this._destroyed = true;
-    this._frozen = true;
+    this.freeze();
     return this;
   }
 

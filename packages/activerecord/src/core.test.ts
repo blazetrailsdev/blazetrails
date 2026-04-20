@@ -270,6 +270,29 @@ describe("frozen / isFrozen", () => {
     expect(user.isFrozen()).toBe(true);
     expect(() => (user.name = "Bob")).toThrow("Cannot modify a frozen");
   });
+
+  // Rails: ActiveRecord::Core#freeze aliases @attributes = @attributes.clone.freeze.
+  // Verifies our implementation backs isFrozen() by freezing the AttributeSet,
+  // and that the pre-freeze reference is left untouched so records sharing
+  // an attribute map (e.g. via clone/becomes) aren't frozen together.
+  it("freeze clones the attribute set so prior references stay mutable", async () => {
+    const adapter = freshAdapter();
+    class User extends Base {
+      static _tableName = "users";
+    }
+    User.attribute("id", "integer");
+    User.attribute("name", "string");
+    User.adapter = adapter;
+
+    const user = await User.create({ name: "Alice" });
+    const preFreezeAttrs = (user as any)._attributes;
+    user.freeze();
+    expect(user.isFrozen()).toBe(true);
+    expect((user as any)._attributes).not.toBe(preFreezeAttrs);
+    expect(preFreezeAttrs.isFrozen()).toBe(false);
+    // The frozen clone is what the record now exposes.
+    expect((user as any)._attributes.isFrozen()).toBe(true);
+  });
 });
 
 describe("Base#isEqual", () => {

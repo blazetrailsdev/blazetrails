@@ -384,7 +384,7 @@ function rememberTransactionRecordState(record: Base): TransactionRecordSnapshot
   return {
     newRecord: r._newRecord,
     destroyed: r._destroyed,
-    frozen: r._frozen,
+    frozen: r._attributes.isFrozen(),
     id: record.id,
     previouslyNewRecord: r._previouslyNewRecord,
   };
@@ -401,8 +401,17 @@ function restoreTransactionRecordState(record: Base, snapshot: TransactionRecord
   const r = record as any;
   r._newRecord = snapshot.newRecord;
   r._destroyed = snapshot.destroyed;
-  r._frozen = snapshot.frozen;
   r._previouslyNewRecord = snapshot.previouslyNewRecord;
+
+  // Reconcile frozen state with the snapshot. If the record was frozen
+  // during the transaction (e.g. destroy) but rollback unwinds that,
+  // replace _attributes with an unfrozen deep clone so subsequent writes
+  // (including the PK restore below) succeed. Rails takes the mirror
+  // path in `restore_transaction_record_state` by reassigning
+  // `@attributes`.
+  if (r._attributes.isFrozen() !== snapshot.frozen) {
+    r._attributes = snapshot.frozen ? r._attributes.deepDup().freeze() : r._attributes.deepDup();
+  }
 
   // Restore the primary key if it was auto-assigned during insert
   if (snapshot.newRecord && !Array.isArray(record.id)) {

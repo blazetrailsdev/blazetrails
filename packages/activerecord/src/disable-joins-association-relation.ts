@@ -41,9 +41,11 @@ export type DjarIds = unknown[] | unknown[][];
  * null/bool), but `bigint` throws in `JSON.stringify` — the `big_integer`
  * cast type produces bigints, and composite PKs on large tables are
  * the exact case that hits them. Normalize bigints via a replacer
- * (`"bigint:<decimal>"`) so a `123n` never collides with the string
- * `"123"`. A leading `\u0000T` marker makes tuple keys
- * non-collidable with any plausible scalar passed through this helper.
+ * that emits `"\u0000B<decimal>"` (a NUL-prefixed string), so a
+ * `123n` component serializes distinctly from the plain string
+ * `"123"`. The outer tuple key also carries a leading `\u0000T`
+ * marker so tuple keys are non-collidable with any plausible scalar
+ * passed through this helper.
  */
 function serializeKey(v: unknown, composite: boolean): unknown {
   if (!composite) return v;

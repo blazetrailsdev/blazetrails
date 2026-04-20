@@ -14,6 +14,12 @@ import type { DatabaseAdapter, ExplainOption } from "./adapter.js";
 import { Result } from "./result.js";
 import { Store } from "./connection-adapters/abstract/query-cache.js";
 
+// Deep-import convenience: consumers doing
+// `import { ... } from "@blazetrails/activerecord/query-cache.js"`
+// can still reach the Store class from here under its
+// root-exported name.
+export { Store as QueryCacheStore } from "./connection-adapters/abstract/query-cache.js";
+
 /**
  * QueryCache executor hooks — enable/disable query caching per-request.
  *

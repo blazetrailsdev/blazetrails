@@ -118,16 +118,20 @@ describe("DJAS — polymorphic belongsTo-through with non-id target PK", () => {
       imageable_type: "DpNonIdPhoto",
     });
 
-    // Distraction row with COLLIDING imageable_uuid — shares the
-    // same FK value as the photo. Without the sourceType filter
+    // A second real photo whose uuid matches a distraction gallery's
+    // imageable_uuid. Without the sourceType filter
     // (imageable_type = 'DpNonIdPhoto'), the walk would collect
-    // `u-photo` from this gallery too and try to match it against
-    // dp_non_id_photos.uuid. Proves source_type is doing real work,
-    // not a lucky FK mismatch.
-    await DpNonIdArticle.create({ slug: "u-photo", headline: "h-collide" });
+    // BOTH uuids from the gallery step and incorrectly load
+    // `otherPhoto` alongside the real one — proving the filter is
+    // doing observable work, not just shaping SQL.
+    const otherPhoto = (await DpNonIdPhoto.create({
+      uuid: "u-other-photo",
+      title: "leak-check",
+    })) as any;
+    await DpNonIdArticle.create({ slug: otherPhoto.uuid, headline: "h-collide" });
     await DpGallery.create({
       dp_author_id: author.id,
-      imageable_uuid: "u-photo",
+      imageable_uuid: otherPhoto.uuid,
       imageable_type: "DpNonIdArticle",
     });
 

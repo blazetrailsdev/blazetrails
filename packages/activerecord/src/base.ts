@@ -2453,11 +2453,10 @@ export class Base extends Model {
       this.writeAttribute("updated_at", new Date());
     }
 
-    // Filter out readonly attributes from changes (they can only be set on create)
+    // Rails raises ReadonlyAttributeError at write time (HasReadonlyAttributes),
+    // so by the time we reach save the change set can never contain a readonly
+    // column on a persisted record. No silent-filter needed.
     const changedAttrs = { ...this.changes };
-    for (const readonlyAttr of ctor._readonlyAttributes) {
-      delete changedAttrs[readonlyAttr];
-    }
 
     if (Object.keys(changedAttrs).length === 0) return;
 

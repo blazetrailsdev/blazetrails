@@ -29,9 +29,9 @@ import type { DatabaseAdapter } from "../adapter.js";
 describe("DJAS routing widening — nested-through", () => {
   let adapter: DatabaseAdapter;
 
-  // Author → Post → Comment → Rating (4-level chain). `djRatings` on
-  // the author is nested: it goes through `djComments`, which is
-  // itself a through on `djPosts`.
+  // Author → Post → Comment → Rating (4-level chain).
+  // `noJoinsNtRatings` on the author is nested: it goes through
+  // `ntComments`, which is itself a through on `ntPosts`.
   class NtAuthor extends Base {
     static {
       this._tableName = "nt_authors";

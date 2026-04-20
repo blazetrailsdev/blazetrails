@@ -1565,16 +1565,21 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     }
 
     // If the proxy's inherited Relation state has been mutated in place
-    // (e.g. cp.whereBang(...)), use `this` directly instead of
-    // scope() — scope() rebuilds the unmutated association scope and
-    // would delete/nullify MORE rows than the caller constrained.
-    const rel = this._relationStateDiverged() ? (this as unknown as Relation<T>) : this.scope();
+    // (e.g. cp.whereBang(...)), go through super.deleteAll() /
+    // super.updateAll() directly — scope() would rebuild the
+    // unmutated association scope and delete/nullify MORE rows than
+    // the caller constrained. NOT `this.deleteAll()` / `this.updateAll()`
+    // here: those resolve back to CollectionProxy's own methods and
+    // would recurse.
+    const diverged = this._relationStateDiverged();
     if (strategy === "delete_all") {
       if (this._isThrough) {
         // For through associations, delete join rows via SQL — not the target records
         await this._deleteThroughAllSql();
+      } else if (diverged) {
+        await super.deleteAll();
       } else {
-        await (rel as { deleteAll: () => Promise<unknown> }).deleteAll();
+        await this.scope().deleteAll();
       }
     } else {
       // Nullify: set-based SQL update to null FKs (no per-record callbacks)
@@ -1582,9 +1587,11 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         await this._deleteThroughAllSql();
       } else {
         const nullUpdates = this._buildNullifyUpdates();
-        await (rel as { updateAll: (u: Record<string, unknown>) => Promise<unknown> }).updateAll(
-          nullUpdates,
-        );
+        if (diverged) {
+          await super.updateAll(nullUpdates);
+        } else {
+          await this.scope().updateAll(nullUpdates);
+        }
       }
     }
     this._target = [];

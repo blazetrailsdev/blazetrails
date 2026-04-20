@@ -58,14 +58,21 @@ export const defaultEncryptor: Encryptor = {
  * Options are intentionally ignored — the legacy path has no key provider
  * or deterministic mode.
  *
- * `encrypted()` delegates to the inner encryptor when it supplies a
- * predicate, and otherwise returns `false`. A conservative `false` is
- * correct here because it's only consulted by `supportUnencryptedData`
- * to decide whether to pass a value through as plaintext — erring on
- * "not encrypted" means the value flows through untouched, which matches
- * Rails' unencrypted-data fallback. Trying to detect encryption by
- * calling `decrypt` and watching for a throw would misclassify a
- * permissive custom encryptor's plaintext as ciphertext.
+ * `encrypted()` is what `supportUnencryptedData` consults to distinguish
+ * ciphertext from plaintext on read. Returning the wrong answer is
+ * critical in both directions: false positive and the shim decrypts
+ * plaintext (may corrupt it); false negative and it skips decryption
+ * for real ciphertext (returns garbage to the caller). Resolution order:
+ *
+ *   1. Delegate to `inner.encrypted(text)` if the user supplied one —
+ *      this is the only reliable answer for custom encryptors.
+ *   2. Otherwise, try `inner.decrypt(text)` and treat a throw as
+ *      "not encrypted". Matches Rails' own
+ *      `ActiveRecord::Encryption::Encryptor#encrypted?`, which does
+ *      `serializer.load(encrypted_text); true; rescue; false`.
+ *
+ * A custom encryptor whose `decrypt` is permissive (doesn't throw on
+ * plaintext) MUST supply `encrypted()` to avoid misclassification.
  */
 class LegacyEncryptorShim implements EncryptorLike {
   constructor(private readonly inner: Encryptor) {}
@@ -79,7 +86,13 @@ class LegacyEncryptorShim implements EncryptorLike {
   }
 
   encrypted(text: string): boolean {
-    return this.inner.encrypted?.(text) ?? false;
+    if (this.inner.encrypted) return this.inner.encrypted(text);
+    try {
+      this.inner.decrypt(text);
+      return true;
+    } catch {
+      return false;
+    }
   }
 }
 

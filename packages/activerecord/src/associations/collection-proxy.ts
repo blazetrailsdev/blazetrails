@@ -1376,6 +1376,14 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     const inverseOf = this._assocDef.options.inverseOf;
     const useCache = !!inverseOf && this._targetLoaded;
     if (!useCache) {
+      // Non-cache path hits the DB — enforce strict-loading the same
+      // way the other query-executing proxy methods do. super.find
+      // goes through Relation.where(...).toArray(), which wraps CP
+      // as the `this` of its intermediate relations; the strict-
+      // loading guard lives on AssociationRelation.toArray(), not
+      // here. For the direct-on-CP call we check explicitly so
+      // owner.strictLoadingBang() can't be bypassed via proxy.find.
+      this._checkStrictLoading();
       return (await super.find(...args)) as T | T[];
     }
 

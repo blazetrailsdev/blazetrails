@@ -18,6 +18,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { Notifications } from "@blazetrails/activesupport";
 import { Base, registerModel } from "../index.js";
 import { Associations, loadHasMany } from "../associations.js";
+import { DisableJoinsAssociationRelation } from "../disable-joins-association-relation.js";
 import { createTestAdapter } from "../test-adapter.js";
 import type { DatabaseAdapter } from "../adapter.js";
 
@@ -201,6 +202,59 @@ describe("DJAS — composite key support", () => {
     // ck_order_number=NULL doesn't match the (shop_id=1, order_number=100)
     // tuple even though shop_id matches.
     expect(items.map((i: any) => i.sku)).toEqual(["valid"]);
+  });
+
+  it("DisableJoinsAssociationRelation composite-key load: dedupes tuples and reorders by ids on load", async () => {
+    const shop = await CkShop.create({ name: "S" });
+    const orderA = (await CkOrder.create({
+      shop_id: shop.id,
+      order_number: 100,
+      name: "a",
+    })) as any;
+    const orderB = (await CkOrder.create({
+      shop_id: shop.id,
+      order_number: 200,
+      name: "b",
+    })) as any;
+    await CkLineItem.create({
+      ck_order_shop_id: orderA.shop_id,
+      ck_order_number: orderA.order_number,
+      sku: "la",
+    });
+    await CkLineItem.create({
+      ck_order_shop_id: orderB.shop_id,
+      ck_order_number: orderB.order_number,
+      sku: "lb",
+    });
+
+    // Two independently-read `[shop.id, 200]` tuples + B-before-A
+    // ordering. Without tuple dedupe + grouping, the duplicate would
+    // double-count or the Map would bucket by reference and miss
+    // both records.
+    const djar = new DisableJoinsAssociationRelation(
+      CkLineItem,
+      ["ck_order_shop_id", "ck_order_number"],
+      [
+        [shop.id, 200],
+        [shop.id, 100],
+        [shop.id, 200],
+      ],
+    );
+    (djar as any)._whereClause.predicates.push(
+      ...(CkLineItem as any).where(
+        ["ck_order_shop_id", "ck_order_number"],
+        [
+          [shop.id, 100],
+          [shop.id, 200],
+        ],
+      )._whereClause.predicates,
+    );
+    const loaded = await djar.toArray();
+    expect(loaded.map((r: any) => r.sku)).toEqual(["lb", "la"]);
+    expect(await djar.ids()).toEqual([
+      [shop.id, 200],
+      [shop.id, 100],
+    ]);
   });
 
   it("returns no rows when the composite-key tuple list is empty (owner has no through records)", async () => {

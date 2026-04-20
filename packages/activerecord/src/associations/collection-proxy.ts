@@ -1425,7 +1425,10 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
           wantArray = true;
         }
       } else {
-        ids = first;
+        // Simple PK: Relation.performFind flattens nested arrays
+        // (finder-methods.ts:78 `ids.flat()`), so `find([[1, 2]])`
+        // behaves like `find([1, 2])`. Mirror that here.
+        ids = (first as unknown[]).flat(Infinity);
         wantArray = true;
       }
     } else {
@@ -1525,9 +1528,14 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       const castedIds = ids.map(castId);
       const uniqueFoundKeys = new Set(castedIds.map(keyForCastedId).filter((k) => byPk.has(k)));
       if (uniqueFoundKeys.size !== ids.length) {
+        // Simple PK: performFind uses `flatIds.join(", ")` and stores
+        // flatIds on the exception (finder-methods.ts:78-95).
+        // Composite: performFind uses `String(tuples)` (comma-join,
+        // no space) and stores tuples (finder-methods.ts:129-137).
         const idPayload = tuples ?? ids;
+        const messageIds = tuples ? String(tuples) : (ids as unknown[]).join(", ");
         throw new RecordNotFound(
-          `Couldn't find all ${targetModel.name} with '${String(pk)}': (${String(idPayload)})`,
+          `Couldn't find all ${targetModel.name} with '${String(pk)}': (${messageIds})`,
           targetModel.name,
           String(pk),
           idPayload,

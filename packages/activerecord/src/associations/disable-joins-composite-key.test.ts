@@ -284,6 +284,13 @@ describe("DJAS — composite key support", () => {
     expect(() => new DisableJoinsAssociationRelation(CkLineItem, [] as any, [])).toThrow(
       /at least one column/,
     );
+    // Empty-string key in loaded-chain mode would make
+    // readAttribute("") return null and silently empty the reorder.
+    // `deferred()` uses "" as a placeholder so the guard only fires
+    // when no chainWalker is present.
+    expect(() => new DisableJoinsAssociationRelation(CkLineItem, "", [1])).toThrow(
+      /key must not be empty/,
+    );
     // length 1 is equivalent to the string form; normalize so
     // `this.key` / `_composite` stay consistent with the scalar path.
     // The correlated overloads pair `string[]` with `unknown[][]`, so

@@ -191,6 +191,15 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
         });
       }
     }
+    // Guard against empty-string key in loaded-chain mode — it would
+    // make `readAttribute("")` return null for every record and the
+    // reorder Map would silently produce an empty result. The
+    // `deferred()` static intentionally passes "" as a placeholder
+    // because the walker's returned relation owns the real key, so
+    // allow it when a chain walker is present.
+    if (normalizedKey === "" && !chainWalker) {
+      throw argumentError("DisableJoinsAssociationRelation: key must not be empty");
+    }
     this.key = normalizedKey;
     this._composite = Array.isArray(normalizedKey);
     // Scalar case: Set identity dedup matches Rails' `ids.uniq`.

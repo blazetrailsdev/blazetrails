@@ -119,13 +119,6 @@ describe("superclassesMatch", () => {
     expect(superclassesMatch(null, ["Model"], "Base")).toBe(true);
   });
 
-  it("accepts AbstractAdapter extending AbstractAdapterBase when Ruby has no super", () => {
-    // Rails `AbstractAdapter` has no super; TS applies the
-    // DatabaseStatements mixin via `AbstractAdapterBase`, matching
-    // Rails' `include DatabaseStatements`.
-    expect(superclassesMatch(null, ["AbstractAdapterBase"], "AbstractAdapter")).toBe(true);
-  });
-
   it("accepts QueryCache Store extending QueryCacheStore when Ruby has no super", () => {
     // Rails' `ConnectionAdapters::QueryCache::Store` has no super; TS
     // factors the LRU implementation into `QueryCacheStore` (reused
@@ -138,7 +131,6 @@ describe("superclassesMatch", () => {
     expect(superclassesMatch(null, ["Node"], "Something")).toBe(false);
     expect(superclassesMatch(null, ["Type"], "Something")).toBe(false);
     expect(superclassesMatch(null, ["Model"], "Something")).toBe(false);
-    expect(superclassesMatch(null, ["AbstractAdapterBase"], "Something")).toBe(false);
     expect(superclassesMatch(null, ["QueryCacheStore"], "Something")).toBe(false);
   });
 });

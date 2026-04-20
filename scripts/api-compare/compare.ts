@@ -192,11 +192,6 @@ const TS_ROOT_INTERMEDIATE = new Map<string, string>([
   // `ActiveRecord::Base` has no Ruby super; TS `Base` extends `Model`
   // so the ActiveModel mixin surface is type-visible on subclasses.
   ["Base", "Model"],
-  // `ActiveRecord::ConnectionAdapters::AbstractAdapter` has no Ruby
-  // super; TS mixes DatabaseStatements into an anonymous base via
-  // `AbstractAdapterBase = DatabaseStatementsMixin(class {})` so
-  // its methods are inherited as in Rails' `include`.
-  ["AbstractAdapter", "AbstractAdapterBase"],
   // `ActiveRecord::ConnectionAdapters::QueryCache::Store` has no Ruby
   // super; TS factors the LRU implementation into `QueryCacheStore`
   // (reused by the QueryCacheAdapter wrapper) and has `Store` extend it.

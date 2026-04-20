@@ -2667,17 +2667,16 @@ export class Base extends Model {
   async delete(): Promise<this> {
     const ctor = this.constructor as typeof Base;
     const table = ctor.arelTable;
-    const pk = this.id;
 
     // Rails' `delete` issues a DELETE only when `persisted?`, then
     // unconditionally marks the record destroyed + frozen.
-    if (!(Array.isArray(pk) ? pk.every((v) => v == null) : pk == null)) {
-      const dm = new DeleteManager().from(table).where(ctor._buildPkWhereNode(pk));
+    if (this.isPersisted()) {
+      const dm = new DeleteManager().from(table).where(ctor._buildPkWhereNode(this.id));
       await ctor.adapter.execDelete(dm.toSql(), "Delete");
     }
 
     this._destroyed = true;
-    (this as any)._previouslyNewRecord = false;
+    this._previouslyNewRecord = false;
     this.freeze();
     return this;
   }

@@ -585,6 +585,7 @@ interface UpdateColumnsRecord {
   changesApplied(): void;
   constructor: {
     name: string;
+    primaryKey: string | string[];
     arelTable: InstanceType<typeof ArelTable>;
     _attributeDefinitions: Map<string, { type: { cast(v: unknown): unknown } }>;
     _buildPkWhereNode(id: unknown): Parameters<UpdateManager["where"]>[0];
@@ -638,12 +639,24 @@ export async function updateColumns<T extends UpdateColumnsRecord>(
     get(name: string): unknown;
   };
 
+  // Capture the PK *before* applying attrs — if the caller is updating a
+  // PK column, we still need to target the row by its existing id, not
+  // the new value we're about to write.
+  const originalId = this.id;
+
   // Cast values through their declared attribute types (no dirty tracking —
   // this path bypasses writeAttribute deliberately) and collect the cast
-  // values for the UPDATE's SET clause.
+  // values for the UPDATE's SET clause. Reject unknown keys up-front so a
+  // malicious/invalid key can't sneak an un-schema'd identifier into the
+  // SQL identifier position. Primary-key columns are implicit on Base and
+  // aren't always in _attributeDefinitions, so allow them through.
+  const pkCols = Array.isArray(ctor.primaryKey) ? ctor.primaryKey : [ctor.primaryKey];
   const setPairs: Array<[unknown, unknown]> = [];
   for (const [key, value] of Object.entries(attrs)) {
     const def = ctor._attributeDefinitions.get(key);
+    if (!def && !pkCols.includes(key)) {
+      throw new Error(`Unknown attribute: ${key}`);
+    }
     const cast = def ? def.type.cast(value) : value;
     this._attributes.set(key, cast);
     setPairs.push([table.get(key), cast]);
@@ -652,7 +665,7 @@ export async function updateColumns<T extends UpdateColumnsRecord>(
   const um = new UpdateManager();
   um.table(table);
   um.set(setPairs as Parameters<UpdateManager["set"]>[0]);
-  um.where(ctor._buildPkWhereNode(this.id));
+  um.where(ctor._buildPkWhereNode(originalId));
 
   const adapter = ctor.adapter;
   if (typeof adapter.update === "function") {

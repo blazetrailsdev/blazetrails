@@ -269,6 +269,7 @@ export class AttributeSet {
   }
 
   reverseMergeBang(target: AttributeSet): this {
+    this.assertNotFrozen();
     const cache = new Map<Attribute, Attribute>();
     target.forEach((attr, name) => {
       if (!this.isKey(name)) {

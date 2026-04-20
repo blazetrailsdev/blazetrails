@@ -39,6 +39,7 @@ import {
   buildHasManyRelation,
   loadHasMany,
   _canRouteThroughViaAssociationScope,
+  ownerHasUnresolvedThroughKey,
 } from "../associations.js";
 import { _setCollectionProxyCtor } from "./collection-proxy-slot.js";
 
@@ -699,32 +700,16 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   /**
    * Build a DJAR for the disable-joins-through count fast path —
    * mirrors `_loadThroughViaDisableJoinsScope`'s setup but stops
-   * after constructing the DJAR (which is itself a sync Relation
-   * whose chain walker fires on first count/toArray/ids). Returns
-   * `null` for the unsaved-owner case so the caller can short-
-   * circuit to 0 (matches the `isNewRecord()` / null-PK guard
-   * `_loadThroughViaDisableJoinsScope` enforces for correctness —
-   * an unsaved owner seeding `[null]` would otherwise let the
-   * ArrayHandler fold `[null]` into `IS NULL` and match orphan
-   * through rows).
+   * after constructing the DJAR. Returns `null` when
+   * `ownerHasUnresolvedThroughKey` fires (unsaved owner / null
+   * PK) so the caller short-circuits to 0 — same correctness
+   * guard the loader uses.
    */
   private async _djarForCount(): Promise<{ djar: unknown } | null> {
     const ctor = this._record.constructor as typeof Base;
     const reflection = (ctor as any)._reflectOnAssociation?.(this._assocName);
     if (!reflection) return null;
-    const activeRecordPk = (reflection as { activeRecordPrimaryKey?: string | string[] })
-      .activeRecordPrimaryKey;
-    const ownerPkCols =
-      activeRecordPk == null
-        ? []
-        : Array.isArray(activeRecordPk)
-          ? activeRecordPk
-          : [activeRecordPk];
-    const ownerHasNullPk = ownerPkCols.some((col) => {
-      const v = this._record.readAttribute(col);
-      return v === null || v === undefined;
-    });
-    if (this._record.isNewRecord() || ownerHasNullPk) return null;
+    if (ownerHasUnresolvedThroughKey(this._record, reflection)) return null;
     const { DisableJoinsAssociationScope } = await import("./disable-joins-association-scope.js");
     const klass = (reflection as { klass: typeof Base }).klass;
     // Box the DJAR so awaiting this helper doesn't unwrap it via
@@ -774,7 +759,13 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     if (this._assocDef.options.through) {
       const ctor = this._record.constructor as typeof Base;
       const refl = (ctor as any)._reflectOnAssociation?.(this._assocName);
-      if (this._assocDef.options.disableJoins) {
+      // Disable-joins through: fast path goes through DJAR's
+      // deferred walker + final-step COUNT. The divergence-aware
+      // Relation.prototype.count fallthrough below handles any
+      // in-place proxy mutations (whereBang / groupBang / etc.) —
+      // DJAR construction here ignores those, so route diverged
+      // proxies through the generic path instead.
+      if (this._assocDef.options.disableJoins && !this._relationStateDiverged()) {
         const box = await this._djarForCount();
         if (!box) return 0;
         const djar = (box as { djar: unknown }).djar as {
@@ -786,7 +777,16 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         }
         return c;
       }
-      if (!_canRouteThroughViaAssociationScope(refl, this._assocDef.options)) {
+      // Non-disable-joins through shapes AssociationScope can't
+      // route (nested / polymorphic-has_many / polymorphic-
+      // belongsTo-without-sourceType): fall back to the loader.
+      // Disable-joins diverged case also falls through here — the
+      // generic Relation.prototype.count path below honors the
+      // proxy's in-place mutations.
+      if (
+        !this._assocDef.options.disableJoins &&
+        !_canRouteThroughViaAssociationScope(refl, this._assocDef.options)
+      ) {
         const results = await loadHasMany(this._record, this._assocName, this._assocDef.options);
         return results.length;
       }

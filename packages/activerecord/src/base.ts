@@ -818,11 +818,15 @@ export class Base extends Model {
     return _isSuppressed(this);
   }
 
-  /**
-   * Mirrors: ActiveRecord::Reflection::ClassMethods#_reflect_on_association
-   * Implementation in reflection.ts, wired via extend() below.
-   */
-  declare static _reflectOnAssociation: typeof _Reflection._reflectOnAssociationClassMethod;
+  // --- Reflection::ClassMethods (wired via extend() after class body) ---
+  declare static _reflectOnAssociation: typeof _Reflection.ClassMethods._reflectOnAssociation;
+  declare static reflections: typeof _Reflection.ClassMethods.reflections;
+  declare static normalizedReflections: typeof _Reflection.ClassMethods.normalizedReflections;
+  declare static reflectOnAssociation: typeof _Reflection.ClassMethods.reflectOnAssociation;
+  declare static reflectOnAllAssociations: typeof _Reflection.ClassMethods.reflectOnAllAssociations;
+  declare static reflectOnAllAggregations: typeof _Reflection.ClassMethods.reflectOnAllAggregations;
+  declare static reflectOnAggregation: typeof _Reflection.ClassMethods.reflectOnAggregation;
+  declare static reflectOnAllAutosaveAssociations: typeof _Reflection.ClassMethods.reflectOnAllAutosaveAssociations;
 
   /**
    * Mirrors: ActiveRecord::Validations.validates
@@ -3269,9 +3273,7 @@ extend(Base, CounterCache.ClassMethods);
 extend(Base, Timestamp.ClassMethods);
 extend(Base, NamedScoping.ClassMethods);
 extend(Base, { enum: _EnumModule.enumMethod });
-extend(Base, {
-  _reflectOnAssociation: _Reflection._reflectOnAssociationClassMethod,
-});
+extend(Base, _Reflection.ClassMethods);
 extend(Base, {
   defaultScope: _defaultScope,
   unscoped: _unscoped,

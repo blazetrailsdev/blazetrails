@@ -271,6 +271,23 @@ describe("frozen / isFrozen", () => {
     expect(() => (user.name = "Bob")).toThrow("Cannot modify a frozen");
   });
 
+  it("deleting an unpersisted record still marks it destroyed and frozen", async () => {
+    const adapter = freshAdapter();
+    class User extends Base {
+      static _tableName = "users";
+    }
+    User.attribute("id", "integer");
+    User.attribute("name", "string");
+    User.adapter = adapter;
+
+    // Matches Rails' `delete` which only issues the DELETE when persisted?
+    // is true, but always ends with `@destroyed = true; freeze`.
+    const user = new User({ name: "Alice" });
+    await user.delete();
+    expect(user.isDestroyed()).toBe(true);
+    expect(user.isFrozen()).toBe(true);
+  });
+
   // Rails: ActiveRecord::Core#freeze aliases @attributes = @attributes.clone.freeze.
   // Verifies our implementation backs isFrozen() by freezing the AttributeSet,
   // and that the pre-freeze reference is left untouched so records sharing

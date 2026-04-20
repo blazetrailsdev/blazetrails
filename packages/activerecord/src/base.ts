@@ -2669,16 +2669,15 @@ export class Base extends Model {
     const table = ctor.arelTable;
     const pk = this.id;
 
-    if (Array.isArray(pk) ? pk.every((v) => v == null) : pk == null) {
-      // New (unpersisted) record — nothing to delete
-      this._destroyed = true;
-      return this;
+    // Rails' `delete` issues a DELETE only when `persisted?`, then
+    // unconditionally marks the record destroyed + frozen.
+    if (!(Array.isArray(pk) ? pk.every((v) => v == null) : pk == null)) {
+      const dm = new DeleteManager().from(table).where(ctor._buildPkWhereNode(pk));
+      await ctor.adapter.execDelete(dm.toSql(), "Delete");
     }
 
-    const dm = new DeleteManager().from(table).where(ctor._buildPkWhereNode(pk));
-    await ctor.adapter.execDelete(dm.toSql(), "Delete");
-
     this._destroyed = true;
+    (this as any)._previouslyNewRecord = false;
     this.freeze();
     return this;
   }

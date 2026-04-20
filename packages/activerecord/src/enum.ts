@@ -249,7 +249,8 @@ export class EnumType extends ValueType<string> {
  * Declare an enum attribute via `Base.enum(attribute, mapping, options)`.
  * Maps symbolic names to integer values; defines a getter/setter on the
  * prototype, `is{Name}()` predicates, `{name}Bang()` in-memory setters,
- * per-value scopes, and a static `{attribute}s` accessor for the mapping.
+ * per-value scopes, and a static `pluralize(attribute)` accessor for the
+ * mapping (e.g. `status` → `statuses`, `priority` → `priorities`).
  *
  * This is the simpler-semantics sibling to `defineEnum` — the bang setter
  * only mutates in-memory state (returns `this`), matching the historical

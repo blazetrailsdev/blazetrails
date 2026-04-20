@@ -1349,21 +1349,51 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   override find(id: unknown): Promise<T>;
   override find(...ids: unknown[]): Promise<T | T[]>;
   override async find(...args: unknown[]): Promise<T | T[]> {
-    // Normalize the overload set to a single `ids: unknown[]` + `wantArray` pair,
-    // matching Relation#find's shape. `find(a, b, c)` and `find([a, b, c])`
+    const targetModel = this.model as typeof Base;
+    const pk = targetModel.primaryKey ?? "id";
+
+    // No-args contract matches Relation.find / Rails: raise a clear
+    // not-found instead of normalizing to [undefined] and producing a
+    // misleading message.
+    if (args.length === 0) {
+      throw new RecordNotFound(`Couldn't find ${targetModel.name} without an ID`, targetModel.name);
+    }
+
+    // Normalize the overload set: `find(a, b, c)` and `find([a, b, c])`
     // both return arrays; `find(a)` returns a single record.
     const [first, ...rest] = args;
     const wantArray = Array.isArray(first) || rest.length > 0;
     const ids: unknown[] = Array.isArray(first) ? first : [first, ...rest];
 
     const records = await this.toArray();
-    const targetModel = (records[0]?.constructor ?? Object) as typeof Base;
-    const pk = targetModel.primaryKey ?? "id";
+
+    // Index records by PK once: O(records + ids) instead of
+    // O(records × ids) for large collections. Composite keys are
+    // stringified as a JSON tuple so the comparison is stable.
+    const composite = Array.isArray(pk);
+    const keyForRecord = (r: Base): string => {
+      if (composite) {
+        const cols = pk as string[];
+        return JSON.stringify(cols.map((c) => r.readAttribute(c)));
+      }
+      return String(r.readAttribute(pk as string));
+    };
+    const keyForId = (id: unknown): string => {
+      if (composite) {
+        return JSON.stringify(Array.isArray(id) ? id : [id]);
+      }
+      return String(id);
+    };
+    const byPk = new Map<string, T>();
+    for (const r of records) byPk.set(keyForRecord(r), r);
+
     const matches = ids.map((id) => {
-      const match = records.find((r) => r.readAttribute(pk as string) === id);
+      const match = byPk.get(keyForId(id));
       if (!match) {
         throw new RecordNotFound(
-          `Couldn't find ${targetModel.name} with '${String(pk)}'=${String(id)}`,
+          `Couldn't find ${targetModel.name} with '${String(pk)}'=${
+            Array.isArray(id) ? JSON.stringify(id) : String(id)
+          }`,
           targetModel.name,
         );
       }

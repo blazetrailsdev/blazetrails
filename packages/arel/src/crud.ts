@@ -12,7 +12,7 @@ export interface Crud {
   compileInsert(values: [Node, unknown][]): InsertManager;
   createInsert(): InsertManager;
   compileUpdate(
-    values: [Node, unknown][] | string,
+    values: [Node, unknown][] | string | Node,
     key?: Node | null,
     havingClause?: Node | null,
     groupValuesColumns?: Node[],

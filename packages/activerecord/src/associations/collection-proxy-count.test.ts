@@ -14,10 +14,9 @@
  * (associations/collection_association.rb) — loaded target returns
  * `.length`, otherwise delegates to `scope.count(...)`.
  *
- * Through-associations (nested, polymorphic, disable-joins) keep
- * the load-and-length fallback — `this.scope()` and the loader
- * paths expand the chain differently, and unifying them is out of
- * scope for this change.
+ * Simple (single-level) through-associations also take the fast
+ * path. Nested-through and `disable_joins: true` through shapes
+ * fall back to load-and-length — tracked in task #22.
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { Notifications } from "@blazetrails/activesupport";
@@ -83,5 +82,51 @@ describe("CollectionProxy#count — non-through fast path", () => {
     // or a row-wise column list and no COUNT.
     expect(observed.length).toBe(1);
     expect(observed[0]).toMatch(/SELECT\s+COUNT\b/i);
+  });
+
+  it("single-level through: count() emits a SELECT COUNT(*) (IN-subquery or JOIN form)", async () => {
+    class CpcComment extends Base {
+      static {
+        this._tableName = "cpc_comments";
+        this.attribute("cpc_post_id", "integer");
+        this.attribute("body", "string");
+      }
+    }
+    CpcComment.adapter = adapter;
+    registerModel("CpcComment", CpcComment);
+    (CpcComment as any)._associations = [];
+    Associations.hasMany.call(CpcPost, "cpcComments", {
+      className: "CpcComment",
+      foreignKey: "cpc_post_id",
+    });
+    Associations.hasMany.call(CpcAuthor, "cpcCommentsThrough", {
+      className: "CpcComment",
+      through: "cpcPosts",
+      source: "cpcComments",
+    });
+
+    const author = await CpcAuthor.create({ name: "a" });
+    const post = (await CpcPost.create({ cpc_author_id: author.id, title: "p" })) as any;
+    await CpcComment.create({ cpc_post_id: post.id, body: "c1" });
+    await CpcComment.create({ cpc_post_id: post.id, body: "c2" });
+
+    const observed: string[] = [];
+    const sub = Notifications.subscribe("sql.active_record", (event: any) => {
+      const sql = event?.payload?.sql;
+      if (typeof sql === "string") observed.push(sql);
+    });
+    try {
+      const n = await association(author, "cpcCommentsThrough").count();
+      expect(n).toBe(2);
+    } finally {
+      Notifications.unsubscribe(sub);
+    }
+    // Exactly one SQL, a COUNT — not a row-wise SELECT the loader
+    // path would emit. Shape is `COUNT ... IN (subquery)` via our
+    // `_buildThroughScope`; other valid forms (explicit JOIN) would
+    // also be fine, so we only assert COUNT and no row-wise select.
+    expect(observed.length).toBe(1);
+    expect(observed[0]).toMatch(/SELECT\s+COUNT\b/i);
+    expect(observed[0]).not.toMatch(/SELECT\s+\*/i);
   });
 });

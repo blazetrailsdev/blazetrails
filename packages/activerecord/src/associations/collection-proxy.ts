@@ -710,17 +710,30 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     // diverged branch loaded every row just to read `.length`, which
     // is a significant perf regression on large collections.
     if (this._targetLoaded) return this._target.length;
-    // Through-associations (including nested-through, polymorphic,
-    // and `disable_joins: true` shapes) don't have a single
-    // COUNT-able scope here — `this.scope()` and `loadHasMany` go
-    // through different loader paths that handle chain expansion
-    // separately. Keep the load + `.length` fallback for those
-    // shapes. The common non-through case (`user.posts.count()`)
-    // takes the fast path and emits `SELECT COUNT(*)` without
-    // instantiating every row.
+    // `disable_joins: true` through-associations don't have a single
+    // JOIN-based relation to count against — DJAS walks the chain in
+    // separate queries and `this.scope()` returns the final-step's
+    // relation without the prior chain's IN filters (nested-through
+    // shapes surface as `no such column` errors when running a
+    // direct COUNT). Fall back to the loader on that path.
+    // Non-disable-joins through associations are handled by
+    // `_buildThroughScope()` which builds a JOIN-based Relation that
+    // counts correctly.
+    // Through-association shapes our scope() / _buildThroughScope()
+    // don't build a COUNT-able JOIN for today: disable_joins (DJAS
+    // walks the chain in separate queries) and nested-through
+    // (scope() references columns that don't belong to the emitted
+    // FROM table). Fall back for these; single-level through takes
+    // the fast path. Unifying these shapes is tracked in task #22.
     if (this._assocDef.options.through) {
-      const results = await loadHasMany(this._record, this._assocName, this._assocDef.options);
-      return results.length;
+      const ctor = this._record.constructor as typeof Base;
+      const refl = (ctor as any)._reflectOnAssociation?.(this._assocName);
+      const isNested =
+        refl && typeof refl.isNested === "function" ? (refl.isNested() as boolean) : false;
+      if (this._assocDef.options.disableJoins || isNested) {
+        const results = await loadHasMany(this._record, this._assocName, this._assocDef.options);
+        return results.length;
+      }
     }
     // On the diverged path `this` carries in-place proxy mutations
     // (whereBang etc.), so route through Relation.prototype.count to

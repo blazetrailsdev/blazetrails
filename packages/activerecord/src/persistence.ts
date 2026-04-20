@@ -369,7 +369,7 @@ export async function toggleBang<T extends ToggleBangRecord>(
   // an error so the failure isn't silently swallowed.
   const saved = await this.save({ validate: false });
   if (!saved) {
-    const ctorName = (this.constructor as { name?: string }).name ?? "record";
+    const ctorName = (this.constructor as { name?: string }).name || "record";
     throw new RecordNotSaved(
       `Failed to save the ${ctorName} while toggling \`${attribute}\``,
       this,

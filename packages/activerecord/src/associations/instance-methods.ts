@@ -57,9 +57,13 @@ function syncAssociationInstance(this: Base, name: string, instance: Association
     instance.setTarget(cached.get(name) as any);
     return;
   }
-  const preloaded = this._preloadedAssociations?.get(name) ?? null;
-  if (preloaded !== null) {
-    instance.setTarget(preloaded as any);
+  // Use `has()` so an eagerly-preloaded "nil association" (the preloader
+  // sets Map.set(name, null) for associations that resolved to no record)
+  // still marks the Association instance loaded — matching Association#
+  // doFindTarget's cache semantics. Checking truthiness would skip those.
+  const preloadedAssociations = this._preloadedAssociations;
+  if (preloadedAssociations?.has(name)) {
+    instance.setTarget(preloadedAssociations.get(name) as any);
   }
 }
 

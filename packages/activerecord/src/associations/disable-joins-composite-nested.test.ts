@@ -170,17 +170,31 @@ describe("DJAS composite-key + nested-through", () => {
     ).toBe(true);
   });
 
-  it("unsaved owner returns [] (DJAS walker handles null seeds without the dropped guard)", async () => {
-    // The old null-PK short-circuit in _loadThroughViaDisableJoinsScope
-    // existed to save a round-trip for unsaved owners. Dropping it
-    // means the walker runs — seeds joinIds with null, the first
-    // step's pluck returns [], and subsequent queries short-circuit
-    // via PredicateBuilder.buildComposite / Relation#none(). Net:
-    // still [] for unsaved owners, just with one round-trip instead
-    // of zero.
+  it("unsaved owner returns [] even when orphan through rows have NULL FKs", async () => {
+    // PredicateBuilder's ArrayHandler turns `where({key: [null]})`
+    // into `key IS NULL`. Without the `isNewRecord()` short-circuit,
+    // an unsaved owner whose PK is null would seed DJAS with
+    // `[null]`, and the first-step WHERE would match any orphan
+    // through row whose FK is null — leaking into the chain as a
+    // phantom association. This test creates exactly that orphan
+    // scenario and pins the short-circuit.
+    const orphanOrder = (await CkOrder.create({
+      shop_id: null as any,
+      order_number: 999,
+      label: "orphan",
+    })) as any;
+    const orphanLi = (await CkLineItem.create({
+      ck_order_shop_id: null as any,
+      ck_order_number: 999,
+      sku: "orphan-sku",
+    })) as any;
+    await CkTag.create({ ck_line_item_id: orphanLi.id, value: "orphan-tag" });
+    expect(orphanOrder.shop_id).toBeNull();
+
     const unsaved = CkShop.new({ name: "unsaved" });
     const reflection = (CkShop as any)._reflectOnAssociation("ckLineItemTags");
     const tags = await loadHasMany(unsaved, "ckLineItemTags", reflection.options);
     expect(tags).toEqual([]);
+    expect(tags.map((t: any) => t.value)).not.toContain("orphan-tag");
   });
 });

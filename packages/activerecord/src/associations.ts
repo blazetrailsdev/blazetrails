@@ -460,16 +460,23 @@ async function _loadThroughViaDisableJoinsScope(
   reflection: unknown,
   options?: AssociationOptions,
 ): Promise<Base[]> {
-  // (Previously had a null-PK short-circuit here that read
-  // `throughReflection.joinForeignKey` off the owner. For nested-
-  // through + composite-FK shapes the delegation chain surfaces
-  // columns that belong to a downstream target, not the owner —
-  // producing a false null and an empty result set. The underlying
-  // DJAS walk handles unsaved owners correctly on its own: seeds
-  // `joinIds` with null, the chain's first pluck returns [], and
-  // the subsequent composite/scalar WHERE runs against an empty
-  // list. One extra round-trip for unsaved-owner case, trivially
-  // cheap — and correct for every shape.
+  // Unsaved-owner short-circuit — correctness, not just perf.
+  // With the guard absent DJAS seeds `joinIds = [null]`, and the
+  // ArrayHandler in PredicateBuilder turns `where({key: [null]})`
+  // into `key IS NULL` (array-handler.ts:21). That would match
+  // orphan through rows whose FK is null and leak downstream into
+  // the chain, producing phantom associations for unsaved owners.
+  //
+  // Previously the guard read `throughReflection.joinForeignKey`
+  // off the owner, but for nested-through + composite-FK shapes
+  // that delegation surfaces deeper-target columns that don't
+  // exist on the outer owner (e.g. `ck_order_shop_id` on `Shop`),
+  // producing a false null and early-returning even for saved
+  // owners. Route through `isNewRecord()` instead — the same
+  // predicate Rails uses (`new_record?`). It's chain-shape-agnostic
+  // and exactly the question being asked: does the owner have
+  // nothing to chain from yet?
+  if (record.isNewRecord()) return [];
   // Lazy-import to avoid an eager cycle: DJAS imports
   // DisableJoinsAssociationRelation → relation.ts → associations.ts.
   const { DisableJoinsAssociationScope } =

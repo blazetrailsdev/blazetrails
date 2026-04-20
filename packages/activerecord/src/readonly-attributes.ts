@@ -1,4 +1,5 @@
 import type { Base } from "./base.js";
+import { Model } from "@blazetrails/activemodel";
 
 /**
  * Track and enforce readonly attributes on ActiveRecord models.
@@ -42,6 +43,27 @@ export function readonlyAttributes(this: typeof Base): string[] {
  */
 export function readonlyAttributeQ(this: typeof Base, attribute: string): boolean {
   return ((this as any)._readonlyAttributes as Set<string> | undefined)?.has(attribute) ?? false;
+}
+
+/**
+ * AR's `write_attribute` override. In Rails this lives in the
+ * `HasReadonlyAttributes` mixin inside readonly_attributes.rb. Our version
+ * carries only the frozen-record guard today; the Rails-faithful
+ * "raise ReadonlyAttributeError on a persisted-record readonly-column write"
+ * is a behavioral change and lands in a follow-up PR (existing tests
+ * encode silent-ignore-on-save, which predates Rails' raise).
+ *
+ * `Base.prototype.writeAttribute` installed via include() in base.ts.
+ *
+ * Mirrors: ActiveRecord::HasReadonlyAttributes#write_attribute
+ */
+export function writeAttribute(this: Base, name: string, value: unknown): void {
+  if (this._attributes.isFrozen()) {
+    throw new Error(`Cannot modify a frozen ${(this.constructor as typeof Base).name}`);
+  }
+  // `super` — route through Model's writeAttribute (the next ancestor with
+  // a writeAttribute impl, matching Rails' `super` in HasReadonlyAttributes).
+  Model.prototype.writeAttribute.call(this, name, value);
 }
 
 /**

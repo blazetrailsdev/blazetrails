@@ -2077,12 +2077,7 @@ export class Base extends Model {
   declare cacheKeyWithVersion: () => string;
   declare cacheVersion: () => string | null;
 
-  writeAttribute(name: string, value: unknown): void {
-    if (this._attributes.isFrozen()) {
-      throw new Error(`Cannot modify a frozen ${(this.constructor as typeof Base).name}`);
-    }
-    super.writeAttribute(name, value);
-  }
+  declare writeAttribute: typeof ReadonlyAttributes.writeAttribute;
 
   /**
    * The primary key value. When the concrete PK type is known, narrow it at
@@ -3386,6 +3381,8 @@ extend(Base, NamedScoping.ClassMethods);
 extend(Base, ModelSchema.ClassMethods);
 
 include(Base, {
+  // ReadonlyAttributes
+  writeAttribute: ReadonlyAttributes.writeAttribute,
   // Persistence
   isNewRecord: _Persistence.isNewRecord,
   isPersisted: _Persistence.isPersisted,

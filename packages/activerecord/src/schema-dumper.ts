@@ -319,12 +319,19 @@ export class SchemaDumper {
     sourceOrAdapter: SchemaSource | DatabaseAdapter,
     options: Record<string, unknown> = {},
   ): string | Promise<string> {
-    if (isSchemaSource(sourceOrAdapter)) {
-      return this.create(sourceOrAdapter, options).dump();
+    // Adapter check runs FIRST because concrete DatabaseAdapters
+    // (PostgreSQLAdapter, SQLite3Adapter) implement `tables()` /
+    // `columns()` / `indexes()` and so also satisfy the SchemaSource
+    // duck type. The adapter-bridging path (AdapterSchemaSource)
+    // does the column normalization expected by emitTable — skipping
+    // it would leak raw adapter column shapes (e.g. `scale: null`)
+    // into dumps.
+    if (isDatabaseAdapter(sourceOrAdapter)) {
+      const source = new AdapterSchemaSource(sourceOrAdapter);
+      const lang = (options.language as SchemaDumpLanguage) ?? "ts";
+      return this.create(source, { language: lang }).dump() as Promise<string>;
     }
-    const source = new AdapterSchemaSource(sourceOrAdapter as DatabaseAdapter);
-    const lang = (options.language as SchemaDumpLanguage) ?? "ts";
-    return this.create(source, { language: lang }).dump() as Promise<string>;
+    return this.create(sourceOrAdapter, options).dump();
   }
 
   static async dumpTableSchema(source: SchemaSource, tableName: string): Promise<string> {
@@ -483,7 +490,7 @@ export class SchemaDumper {
         extraOpts?.precision === undefined
       )
         opts.push(`precision: ${col.precision}`);
-      if (col.scale !== undefined && extraOpts?.scale === undefined)
+      if (col.scale !== undefined && col.scale !== null && extraOpts?.scale === undefined)
         opts.push(`scale: ${col.scale}`);
 
       const optionsStr = opts.length > 0 ? `, { ${opts.join(", ")} }` : "";
@@ -513,13 +520,25 @@ export class SchemaDumper {
   }
 }
 
-/** Duck-type check so `dump()` can accept either a SchemaSource or a DatabaseAdapter. */
-function isSchemaSource(v: unknown): v is SchemaSource {
+/**
+ * Duck-type check so `dump()` can branch on adapter vs SchemaSource.
+ * `DatabaseAdapter` IS a SchemaSource at the duck level (it has
+ * `tables`/`columns`/`indexes`), so we identify adapters by their
+ * adapter-specific surface (`execute`/`executeMutation`/
+ * `adapterName`). If that matches, we route through
+ * `AdapterSchemaSource` even though the raw adapter would duck-type
+ * as a SchemaSource.
+ */
+function isDatabaseAdapter(v: unknown): v is DatabaseAdapter {
   if (v === null || typeof v !== "object") return false;
-  const obj = v as { tables?: unknown; columns?: unknown; indexes?: unknown };
+  const obj = v as {
+    execute?: unknown;
+    executeMutation?: unknown;
+    adapterName?: unknown;
+  };
   return (
-    typeof obj.tables === "function" &&
-    typeof obj.columns === "function" &&
-    typeof obj.indexes === "function"
+    typeof obj.execute === "function" &&
+    typeof obj.executeMutation === "function" &&
+    typeof obj.adapterName === "string"
   );
 }

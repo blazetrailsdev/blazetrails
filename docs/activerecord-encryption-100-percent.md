@@ -18,18 +18,23 @@ Related:
 
 ## Constraints (non-negotiable)
 
-1. **Browser-compatible.** The encryption subpath must run in a browser
-   with zero `node:*` imports at the module level. Node-only work is
-   delegated through `@blazetrails/activesupport`'s `getCrypto()` /
-   `getCryptoAsync()` crypto adapter — browser apps register a WASM or
-   Web-Crypto-backed adapter via `cryptoAdapterConfig.adapter = "..."`.
+1. **Keep the door open for browser compat.** All new crypto flows
+   through `@blazetrails/activesupport`'s `getCrypto()` /
+   `getCryptoAsync()` adapter — **never `node:crypto` directly**. This
+   is the only browser-compat guarantee inside the scope of this epic:
+   we don't foreclose on a future browser port, but we also don't do
+   browser-side work here. Actually shipping to browsers (reference
+   adapter, `Buffer` → `Uint8Array` migration, smoke CI) is tracked as
+   a follow-up epic — see § "Follow-up: browser port" at the bottom.
 2. **Not bundled by default.** Users must `import` from an explicit
    subpath; the root `@blazetrails/activerecord` barrel does NOT pull
    encryption into the default build. Follows the existing pattern for
    `@blazetrails/activesupport/message-verifier`,
    `/message-encryptor`, `/key-generator`, and
    `@blazetrails/activerecord/connection-handling` (all subpath-only
-   because they pull in Node-only or heavy dependencies).
+   because they pull in Node-only or heavy dependencies). The
+   motivation here is bundle weight and "pay for what you use" — not
+   browser compat.
 3. **Rails fidelity first.** Every new method mirrors its Rails
    equivalent: same name (camelCased), same signature, same
    public/protected split. Read `encryption/*.rb` in the Rails source
@@ -91,27 +96,15 @@ Consolidation onto the scheme-based class is the gate because:
 
 5. **Migration note in CLAUDE.md** — users now write
    `import { encrypts } from "@blazetrails/activerecord/encryption"`.
-6. **Browser compat audit.** Greater scope than a `node:*` grep — the
-   current encryption tree also pulls **unprefixed** Node builtins
-   (`import { deflateSync } from "zlib"` in `config.ts`) and relies on
-   the `Buffer` global in `encryptor.ts`, `config.ts`, and
-   `message-serializer.ts`. The audit must catch:
-   - `node:*` imports (prefixed form).
-   - Unprefixed builtin specifiers: `"zlib"`, `"crypto"`, `"fs"`,
-     `"path"`, `"os"`, `"buffer"`, `"stream"`, `"util"`, `"process"`.
-     (A project-local ESLint rule in `.eslintrc` that forbids these
-     across `packages/activerecord/src/encryption/**` is a clean way
-     to land this without ad-hoc grepping.)
-   - Node globals like `Buffer` and `process` — replace with
-     `Uint8Array` + the `base64` / `utf-8` helpers in
-     `@blazetrails/activesupport` (already provides `TextEncoder`/
-     `TextDecoder`-based conversions that work in browsers).
-     The browser-smoke bundler job (below) is the authoritative gate —
-     it will fail on any builtin that reaches the output bundle. Tests
-     may use Node-only APIs freely (they don't ship). No MessagePack
-     dependency exists yet — `MessagePackMessageSerializer` is
-     currently a JSON-backed stub; if a real MessagePack library is
-     adopted, verify it is pure-JS with no module-level Node imports.
+6. **Crypto goes through the adapter.** New crypto code calls
+   `getCrypto()` / `getCryptoAsync()` from `@blazetrails/activesupport`
+   rather than `node:crypto` directly. This is the only browser-compat
+   constraint in scope for this epic — we keep the door open without
+   doing the browser port here. Existing `Buffer` / unprefixed
+   `"zlib"` usage in `config.ts`, `encryptor.ts`, and
+   `message-serializer.ts` is left as-is; migrating those plus the
+   ESLint rule, reference adapter, and smoke CI are tracked in the
+   "Follow-up: browser port" section at the bottom.
 
 **Gate:** PR 0 merges only after `pnpm api:compare` shows no regression
 and `pnpm tsc --noEmit` is clean with the subpath-only imports.
@@ -284,56 +277,33 @@ not the actual encryption logic. Those three methods re-export from
 eagerly constructs the default scheme/cipher so boot-time errors
 surface early.
 
-## Browser-compat verification
+## Follow-up: browser port
 
-Each PR in the series must pass a browser-compat smoke test. Land a
-new CI job alongside the existing matrix (`Build & Type Check`, `Unit
-Tests`, `SQLite/PostgreSQL/MariaDB Tests`, etc.) in
-`.github/workflows/ci.yml`:
+Out of scope for this epic — tracked here so the work is sequenced
+and the adapter indirection that lands in this series doesn't get
+undone. A future epic should:
 
-```yaml
-browser-smoke-encryption:
-  name: Browser Smoke — Encryption
-  runs-on: ubuntu-latest
-  steps:
-    - uses: actions/checkout@v4
-    - uses: pnpm/action-setup@v4
-    - uses: actions/setup-node@v4
-      with: { node-version: "22", cache: pnpm }
-    - run: pnpm install --frozen-lockfile
-    - run: pnpm run build
-    - run: pnpm --filter ./packages/activerecord exec vitest run \
-        -c vitest.browser.config.ts packages/activerecord/src/encryption
-```
+- Add a Vitest browser config (`vitest.browser.config.ts` at repo
+  root, `@vitest/browser` or `jsdom`) with a resolver that fails the
+  bundle on any Node builtin import, prefixed or unprefixed.
+- Add a `Browser Smoke — Encryption` CI job that runs that config
+  over `packages/activerecord/src/encryption/**`.
+- Migrate `Buffer` usage in `encryptor.ts`, `config.ts`, and
+  `message-serializer.ts` to `Uint8Array` + the `base64` / `utf-8`
+  helpers in `@blazetrails/activesupport`.
+- Replace unprefixed `"zlib"` in `config.ts` with a
+  `CompressionStream` / `DecompressionStream` path for browsers
+  (keep the Node path behind an adapter).
+- Ship a reference browser crypto adapter — e.g.
+  `@blazetrails/activesupport/crypto-adapter-noble` wrapping
+  `@noble/ciphers` + `SubtleCrypto` — opt-in via
+  `cryptoAdapterConfig.adapter = "noble"`.
+- Add an ESLint rule forbidding Node builtin imports (prefixed and
+  unprefixed) and the `Buffer` / `process` globals across
+  `packages/activerecord/src/encryption/**`.
 
-The referenced `vitest.browser.config.ts` does **not** exist in the
-repo yet — landing it is part of this series. It should live at the
-repo root alongside the existing Vitest config, use `@vitest/browser`
-(preferred; runs against a real browser runtime) or `jsdom` as a
-fallback, and wire a resolver / `define` rule that throws on any of
-the Node builtins listed in the audit above — prefixed OR unprefixed.
-Practically: a Vite `resolve.alias` that routes every builtin to a
-module whose default export throws with a clear message on import
-lets the bundler step fail the job before tests even start.
-
-The crypto adapter is the decisive bit:
-
-- **Node**: already works — `getCryptoAsync()` auto-registers the Node
-  adapter on import.
-- **Browser**: users register a WASM adapter. Document examples:
-  `@noble/ciphers` for AES-GCM, `js-crypto-pbkdf` for PBKDF2. Ship a
-  reference adapter as a new subpath
-  `@blazetrails/activesupport/crypto-adapter-noble` — roughly 80 LoC
-  translating `noble` + `SubtleCrypto.digest/importKey` into the
-  existing sync `CryptoAdapter` interface. Not in the default barrel;
-  users opt in with `cryptoAdapterConfig.adapter = "noble"`.
-
-**Gate:** any PR in this series that introduces a `node:*` import to
-an encryption source file — even transitively via a new activesupport
-subpath — fails the browser-smoke CI job. Test files under
-`packages/activerecord/src/encryption/*.test.ts` are allowed to use
-`node:crypto` directly (they execute in Node tests, not the smoke
-bundle), but source files are not.
+The in-epic adapter-only rule (constraint #1 above) ensures no new
+`node:crypto` calls land in the meantime.
 
 ## Rails test mirror (unskip-as-you-go)
 
@@ -398,4 +368,5 @@ without also unskipping the matching Rails test is incomplete.
 **Expected end state:** 27/27 encryption files at 100%, overall
 activerecord coverage bumps by 29 methods, 125 currently-skipped Rails
 encryption tests unskipped, and the default `@blazetrails/activerecord`
-bundle loses the encryption weight entirely.
+bundle loses the encryption weight entirely. Browser support is not
+shipped here — see "Follow-up: browser port" above.

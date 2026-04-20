@@ -56,12 +56,30 @@ export function defaultScope<T extends typeof Base>(
 }
 
 /**
- * Return a relation that bypasses the default scope.
+ * Return a relation that bypasses the default scope. With a block, runs
+ * the block with the unscoped relation installed as the current scope so
+ * any queries inside also bypass default scopes — matching Rails'
+ * `unscoped { ... }` / `unscoped(&block)` form.
  *
- * Mirrors: ActiveRecord::Scoping::Default::ClassMethods#unscoped
+ * Mirrors: ActiveRecord::Scoping::Default::ClassMethods#unscoped —
+ * `block_given? ? relation.scoping(&block) : relation`
  */
-export function unscoped<T extends typeof Base>(this: T): Relation<InstanceType<T>> {
-  return Default.unscoped(this, () => (this as unknown as typeof Base)._buildUnscopedRelation());
+export function unscoped<T extends typeof Base>(this: T): Relation<InstanceType<T>>;
+export function unscoped<T extends typeof Base, R>(
+  this: T,
+  block: () => R | Promise<R>,
+): Promise<R>;
+export function unscoped<T extends typeof Base, R>(
+  this: T,
+  block?: () => R | Promise<R>,
+): Relation<InstanceType<T>> | Promise<R> {
+  const rel = Default.unscoped(this, () =>
+    (this as unknown as typeof Base)._buildUnscopedRelation(),
+  ) as Relation<InstanceType<T>>;
+  if (block) {
+    return rel.scoping(block);
+  }
+  return rel;
 }
 
 /**

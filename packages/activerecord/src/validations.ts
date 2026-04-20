@@ -7,10 +7,11 @@
  */
 import { ActiveRecordError } from "./errors.js";
 import { AbsenceValidator } from "./validations/absence.js";
-import { AssociatedValidator } from "./validations/associated.js";
+import { AssociatedValidator, validatesAssociated } from "./validations/associated.js";
 import { LengthValidator } from "./validations/length.js";
 import { NumericalityValidator } from "./validations/numericality.js";
 import { PresenceValidator } from "./validations/presence.js";
+import { UniquenessValidator, validatesUniqueness } from "./validations/uniqueness.js";
 
 // Re-export all validators matching Rails' require at bottom of validations.rb
 export {
@@ -19,8 +20,10 @@ export {
   LengthValidator,
   NumericalityValidator,
   PresenceValidator,
+  UniquenessValidator,
+  validatesAssociated,
+  validatesUniqueness,
 };
-export { UniquenessValidator } from "./validations/uniqueness.js";
 
 /**
  * Mirrors: ActiveRecord::RecordInvalid
@@ -258,43 +261,11 @@ export function _setSuperValidates(
 }
 
 /**
- * Validates that all named associations are themselves valid.
- *
- * Mirrors: ActiveRecord::Validations::ClassMethods#validates_associated
- */
-export function validatesAssociated(
-  this: { validatesWith(vc: unknown, opts: Record<string, unknown>): void },
-  ...args: (string | Record<string, unknown>)[]
-): void {
-  const last = args[args.length - 1];
-  const opts =
-    typeof last === "object" && last !== null ? (args.pop() as Record<string, unknown>) : {};
-  for (const name of args as string[]) {
-    this.validatesWith(AssociatedValidator, { ...opts, attributes: [name] });
-  }
-}
-
-/**
- * Register a deferred uniqueness validation to run on save (since uniqueness
- * requires a DB round-trip, it's kept off the synchronous validator chain).
- *
- * Mirrors: validates uniqueness: true / ActiveRecord::Validations::ClassMethods#validates_uniqueness_of
- */
-export function validatesUniqueness(
-  this: unknown,
-  attribute: string,
-  options: { scope?: string | string[]; message?: string; conditions?: (this: any) => any } = {},
-): void {
-  const klass = this as { _asyncValidations?: Array<unknown> };
-  if (!Object.prototype.hasOwnProperty.call(klass, "_asyncValidations")) {
-    klass._asyncValidations = [...(klass._asyncValidations ?? [])];
-  }
-  (klass._asyncValidations as Array<unknown>).push({ attribute, options });
-}
-
-/**
  * Module methods wired onto Base as static methods via `extend()` in base.ts.
  * Mirrors Rails' `ActiveRecord::Validations::ClassMethods` / `ActiveSupport::Concern#ClassMethods`.
+ * `validatesAssociated` and `validatesUniqueness` live next to their
+ * validator classes in validations/associated.ts and validations/uniqueness.ts
+ * matching Rails' file layout.
  */
 export const ClassMethods = {
   validates,

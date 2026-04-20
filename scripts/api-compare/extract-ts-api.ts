@@ -92,6 +92,9 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
     const relPath = path.relative(srcDir, filePath);
     let fileHasClassOrModule = false;
     const fileFunctions: MethodInfo[] = [];
+    // Local-name → source-module map for this file, used to resolve the
+    // two-step re-export pattern (`import { X } ...; export { X };`).
+    const localImports = new Map<string, { sourceName: string; moduleSpecifier: string }>();
 
     ts.forEachChild(sourceFile, (node) => {
       if (ts.isClassDeclaration(node) && node.name) {
@@ -149,10 +152,11 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
           node.moduleSpecifier &&
           ts.isStringLiteral(node.moduleSpecifier)
         ) {
-          // Handle `export { X, Y } from "./z.js"` — named re-exports.
-          // Record each re-exported name as "pending" keyed under this
-          // file's relPath; resolved in a post-pass once every file has
-          // been walked (the source file may come later in the list).
+          // Handle `export { X, Y } from "./z.js"` — single-step named
+          // re-exports. Record each re-exported name as "pending" keyed
+          // under this file's relPath; resolved in a post-pass once
+          // every file has been walked (the source file may come later
+          // in the list).
           for (const spec of node.exportClause.elements) {
             const localName = spec.name.text;
             const sourceName = spec.propertyName?.text ?? localName;
@@ -162,6 +166,45 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
               sourceName,
               moduleSpecifier: node.moduleSpecifier.text,
             });
+          }
+        } else if (
+          node.exportClause &&
+          ts.isNamedExports(node.exportClause) &&
+          !node.moduleSpecifier
+        ) {
+          // Handle the two-step pattern:
+          //   import { X } from "./y.js";
+          //   export { X };
+          // Look up each exported name in localImports (built during
+          // the same forEachChild pass) to recover the source module.
+          for (const spec of node.exportClause.elements) {
+            const localName = spec.name.text;
+            const sourceName = spec.propertyName?.text ?? localName;
+            const imported = localImports.get(sourceName);
+            if (!imported) continue;
+            pendingReExports.push({
+              fromFile: relPath,
+              localName,
+              sourceName: imported.sourceName,
+              moduleSpecifier: imported.moduleSpecifier,
+            });
+          }
+        }
+      } else if (ts.isImportDeclaration(node)) {
+        // Track local imports so the two-step re-export branch above
+        // can resolve `export { X };` back to its source module.
+        if (
+          node.importClause?.namedBindings &&
+          ts.isNamedImports(node.importClause.namedBindings) &&
+          ts.isStringLiteral(node.moduleSpecifier)
+        ) {
+          const spec = node.moduleSpecifier.text;
+          if (spec.startsWith("./") || spec.startsWith("../")) {
+            for (const el of node.importClause.namedBindings.elements) {
+              const localName = el.name.text;
+              const sourceName = el.propertyName?.text ?? localName;
+              localImports.set(localName, { sourceName, moduleSpecifier: spec });
+            }
           }
         }
       } else if (ts.isFunctionDeclaration(node) && node.name && isExported(node)) {

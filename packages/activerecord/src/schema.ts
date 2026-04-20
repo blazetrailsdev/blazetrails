@@ -2,6 +2,7 @@ import type { DatabaseAdapter } from "./adapter.js";
 import { Current } from "./migration.js";
 import { SchemaMigration } from "./schema-migration.js";
 import { InternalMetadata } from "./internal-metadata.js";
+import { DatabaseConfigurations } from "./database-configurations.js";
 
 /**
  * Look up an optional pool property without exposing the concrete
@@ -103,7 +104,14 @@ export class Schema extends Current {
     // (the rest of the migration stack uses the same shape — see
     // migration.ts:1440).
     const enabled = adapterPool(adapter)?.dbConfig?.useMetadataTable !== false;
-    const environment = info.environment ?? process.env.NODE_ENV ?? "development";
+    // Environment fallback chain: explicit info.environment → NODE_ENV
+    // → DatabaseConfigurations.defaultEnv (which itself defaults to
+    // "development" but can be overridden by the app, e.g. via
+    // trailties boot). Using defaultEnv over a hard-coded literal
+    // keeps Schema.define consistent with how Migrator and other
+    // migration-stack pieces resolve the current environment.
+    const environment =
+      info.environment ?? process.env.NODE_ENV ?? DatabaseConfigurations.defaultEnv;
     const internalMetadata = new InternalMetadata(adapter, { enabled });
     await internalMetadata.createTableAndSetFlags(environment);
   }

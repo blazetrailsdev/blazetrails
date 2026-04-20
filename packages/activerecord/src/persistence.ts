@@ -368,3 +368,95 @@ export async function toggleBang<T extends ToggleBangRecord>(
   // aborted, `true` otherwise.
   return this.save({ validate: false });
 }
+
+// ---------------------------------------------------------------------------
+// update / update! / delete — instance mutators.
+//   update / update!  → write attrs, delegate to save / save!
+//   delete            → callback-free DELETE + mark destroyed/frozen
+// Mirrors ActiveRecord::Persistence#update, #update!, #delete.
+// ---------------------------------------------------------------------------
+
+interface UpdateRecord extends AttributeIO {
+  constructor: {
+    lockingColumn: string;
+    lockingEnabled: boolean;
+  };
+  save(options?: { validate?: boolean }): Promise<boolean>;
+  saveBang(options?: { validate?: boolean }): Promise<true>;
+}
+
+function assertLockingColumnNotExplicitly(
+  record: UpdateRecord,
+  attrs: Record<string, unknown>,
+): void {
+  const ctor = record.constructor;
+  const lockCol = ctor.lockingColumn;
+  if (Object.hasOwn(attrs, lockCol) && ctor.lockingEnabled) {
+    throw new Error(`${lockCol} cannot be updated explicitly`);
+  }
+}
+
+/**
+ * Mirrors: ActiveRecord::Persistence#update — `assign_attributes` + `save`.
+ * Returns the boolean from save so callers can detect validation / callback
+ * aborts without catching exceptions.
+ */
+export async function update<T extends UpdateRecord>(
+  this: T,
+  attrs: Record<string, unknown>,
+): Promise<boolean> {
+  assertLockingColumnNotExplicitly(this, attrs);
+  for (const [key, value] of Object.entries(attrs)) {
+    this.writeAttribute(key, value);
+  }
+  return this.save();
+}
+
+/**
+ * Mirrors: ActiveRecord::Persistence#update! — `assign_attributes` + `save!`.
+ * Raises on validation failure (`save!` throws `RecordInvalid`).
+ */
+export async function updateBang<T extends UpdateRecord>(
+  this: T,
+  attrs: Record<string, unknown>,
+): Promise<true> {
+  assertLockingColumnNotExplicitly(this, attrs);
+  for (const [key, value] of Object.entries(attrs)) {
+    this.writeAttribute(key, value);
+  }
+  return this.saveBang();
+}
+
+interface DeleteRecord {
+  _destroyed: boolean;
+  _previouslyNewRecord: boolean;
+  id: unknown;
+  isPersisted(): boolean;
+  freeze(): unknown;
+  constructor: {
+    arelTable: InstanceType<typeof ArelTable>;
+    _buildPkWhereNode(id: unknown): unknown;
+    adapter: { execDelete(sql: string, name: string): Promise<number> };
+  };
+}
+
+/**
+ * Rails emits a DELETE only for persisted records, then unconditionally
+ * marks the instance destroyed + frozen and clears the new-record flag.
+ * No callbacks, no validations.
+ *
+ * Mirrors: ActiveRecord::Persistence#delete
+ */
+export async function deleteRow<T extends DeleteRecord>(this: T): Promise<T> {
+  const ctor = this.constructor;
+  if (this.isPersisted()) {
+    const dm = new DeleteManager()
+      .from(ctor.arelTable)
+      .where(ctor._buildPkWhereNode(this.id) as Parameters<DeleteManager["where"]>[0]);
+    await ctor.adapter.execDelete(dm.toSql(), "Delete");
+  }
+  this._destroyed = true;
+  this._previouslyNewRecord = false;
+  this.freeze();
+  return this;
+}

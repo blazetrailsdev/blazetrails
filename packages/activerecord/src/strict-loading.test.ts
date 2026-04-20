@@ -217,7 +217,9 @@ describe("StrictLoadingTest", () => {
     expect(author.isStrictLoading()).toBe(false);
     author.strictLoadingBang();
     // Rails: strict_loading! defaults `mode: :all`; strict_loading_mode returns :all.
-    expect((author as any)._strictLoadingMode).toBe("all");
+    expect(author.strictLoadingMode()).toBe("all");
+    expect(author.isStrictLoadingAll()).toBe(true);
+    expect(author.isStrictLoadingNPlusOneOnly()).toBe(false);
   });
 
   it("strictLoadingBang accepts mode: n_plus_one_only", async () => {
@@ -230,7 +232,9 @@ describe("StrictLoadingTest", () => {
     const author = new Author({ name: "Ivy" });
     author.strictLoadingBang(true, { mode: "n_plus_one_only" });
     expect(author.isStrictLoading()).toBe(true);
-    expect((author as any)._strictLoadingMode).toBe("n_plus_one_only");
+    expect(author.strictLoadingMode()).toBe("n_plus_one_only");
+    expect(author.isStrictLoadingNPlusOneOnly()).toBe(true);
+    expect(author.isStrictLoadingAll()).toBe(false);
   });
 
   it("strictLoadingBang rejects an invalid mode", async () => {

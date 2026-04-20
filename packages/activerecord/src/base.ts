@@ -2027,6 +2027,7 @@ export class Base extends Model {
   private _destroyedByAssociation: unknown = null;
   _transactionAction: "create" | "update" | "destroy" | undefined = undefined;
   _strictLoading = false;
+  _strictLoadingMode?: _Core.StrictLoadingMode;
   _strictLoadingBypassCount = 0;
   _preloadedAssociations: Map<string, unknown> = new Map();
   _collectionProxies: Map<string, unknown> = new Map();
@@ -2068,6 +2069,9 @@ export class Base extends Model {
   declare readonlyBang: typeof _Core.readonlyBang;
   declare isStrictLoading: typeof _Core.isStrictLoading;
   declare strictLoadingBang: typeof _Core.strictLoadingBang;
+  declare strictLoadingMode: typeof _Core.strictLoadingMode;
+  declare isStrictLoadingAll: typeof _Core.isStrictLoadingAll;
+  declare isStrictLoadingNPlusOneOnly: typeof _Core.isStrictLoadingNPlusOneOnly;
   declare isFrozen: typeof _Core.isFrozen;
   declare freeze: typeof _Core.freeze;
 
@@ -3430,6 +3434,9 @@ include(Base, {
   readonlyBang: _Core.readonlyBang,
   isStrictLoading: _Core.isStrictLoading,
   strictLoadingBang: _Core.strictLoadingBang,
+  strictLoadingMode: _Core.strictLoadingMode,
+  isStrictLoadingAll: _Core.isStrictLoadingAll,
+  isStrictLoadingNPlusOneOnly: _Core.isStrictLoadingNPlusOneOnly,
   isFrozen: _Core.isFrozen,
   freeze: _Core.freeze,
   // Integration

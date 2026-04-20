@@ -24,6 +24,9 @@ export interface Core {
   readonlyBang(): this;
   isStrictLoading(): boolean;
   strictLoadingBang(value?: boolean, options?: { mode?: StrictLoadingMode }): this;
+  strictLoadingMode(): StrictLoadingMode | null;
+  isStrictLoadingAll(): boolean;
+  isStrictLoadingNPlusOneOnly(): boolean;
   isFrozen(): boolean;
   freeze(): this;
 }

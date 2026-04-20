@@ -3,6 +3,23 @@ import { argumentError } from "./relation/query-methods.js";
 import type { Base } from "./base.js";
 
 /**
+ * Module-private token for the DJAR fast-clone path. Unexported — only
+ * `_newRelation` inside this module can forge a payload carrying it,
+ * so external callers can't reach the trusted constructor branch even
+ * via `any`/`unknown` erasure (they have no reference to the symbol).
+ */
+const TRUSTED_CLONE = Symbol("DisableJoinsAssociationRelation.trustedClone");
+
+interface TrustedClonePayload<T extends Base> {
+  [TRUSTED_CLONE]: {
+    storedIds: DjarIds;
+    storedKeyStrings: string[] | null;
+    composite: boolean;
+    chainWalker?: () => Promise<{ relation: Relation<T> }>;
+  };
+}
+
+/**
  * Specialized Relation returned by `DisableJoinsAssociationScope`.
  * Operates in one of two modes:
  *
@@ -107,36 +124,18 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
     ids: unknown[][],
     chainWalker?: () => Promise<{ relation: Relation<T> }>,
   );
-  // Internal trusted-clone overload: `_newRelation` uses this to adopt
-  // already-normalized state without re-running dedup / JSON.stringify.
-  // The leading `_` on `_trustedClone` flags it as internal.
+  // The implementation signature accepts an internal
+  // `TrustedClonePayload<T>` (gated by the unexported `TRUSTED_CLONE`
+  // symbol) as the fourth argument so `_newRelation` can take the
+  // fast-clone path. It is intentionally NOT declared as a public
+  // overload — external callers only see the two correlated forms
+  // above, and they can't construct a valid trusted payload without
+  // a reference to the module-private symbol.
   constructor(
     klass: typeof Base,
     key: DjarKey,
     ids: DjarIds,
-    trusted: {
-      _trustedClone: {
-        storedIds: DjarIds;
-        storedKeyStrings: string[] | null;
-        composite: boolean;
-        chainWalker?: () => Promise<{ relation: Relation<T> }>;
-      };
-    },
-  );
-  constructor(
-    klass: typeof Base,
-    key: DjarKey,
-    ids: DjarIds,
-    chainWalkerOrTrusted?:
-      | (() => Promise<{ relation: Relation<T> }>)
-      | {
-          _trustedClone: {
-            storedIds: DjarIds;
-            storedKeyStrings: string[] | null;
-            composite: boolean;
-            chainWalker?: () => Promise<{ relation: Relation<T> }>;
-          };
-        },
+    chainWalkerOrTrusted?: (() => Promise<{ relation: Relation<T> }>) | TrustedClonePayload<T>,
   ) {
     super(klass);
     // Fast clone path: `_newRelation` hands us already-normalized
@@ -145,9 +144,9 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
     if (
       chainWalkerOrTrusted &&
       typeof chainWalkerOrTrusted === "object" &&
-      "_trustedClone" in chainWalkerOrTrusted
+      TRUSTED_CLONE in chainWalkerOrTrusted
     ) {
-      const t = chainWalkerOrTrusted._trustedClone;
+      const t = (chainWalkerOrTrusted as TrustedClonePayload<T>)[TRUSTED_CLONE];
       this.key = key;
       this._composite = t.composite;
       this._storedIds = t.storedIds;
@@ -380,14 +379,35 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
     // chain link would repeat quadratic-ish work for large
     // composite-id lists. Route through the internal trusted
     // constructor overload that copies already-normalized state.
-    return new DisableJoinsAssociationRelation<T>(this.model, this.key, this._storedIds, {
-      _trustedClone: {
+    const payload: TrustedClonePayload<T> = {
+      [TRUSTED_CLONE]: {
         storedIds: this._storedIds,
         storedKeyStrings: this._storedKeyStrings,
         composite: this._composite,
         chainWalker: this._chainWalker,
       },
-    }) as unknown as Relation<T>;
+    };
+    // Branch on `_composite` so we hit one of the public correlated
+    // overloads. The trusted payload is not in the public signature
+    // list (it only lives on the implementation signature, gated by
+    // the module-private TRUSTED_CLONE symbol), so cast it through
+    // the public `chainWalker?` slot — same runtime position, same
+    // module.
+    const trusted = payload as unknown as () => Promise<{ relation: Relation<T> }>;
+    const clone = this._composite
+      ? new DisableJoinsAssociationRelation<T>(
+          this.model,
+          this.key as string[],
+          this._storedIds as unknown[][],
+          trusted,
+        )
+      : new DisableJoinsAssociationRelation<T>(
+          this.model,
+          this.key as string,
+          this._storedIds as unknown[],
+          trusted,
+        );
+    return clone as unknown as Relation<T>;
   }
 
   override async toArray(): Promise<T[]> {

@@ -44,10 +44,7 @@ export function validateThroughSourceType(modelClass: typeof Base, assocName: st
   const refl = full as
     | {
         isThroughReflection?: () => boolean;
-        options?: { sourceType?: unknown };
-        sourceReflection?: { isPolymorphic?: () => boolean; name?: string };
-        name?: string;
-        activeRecord?: { name?: string };
+        checkValidityBang?: () => void;
         [CHECKED]?: boolean;
       }
     | null
@@ -55,28 +52,29 @@ export function validateThroughSourceType(modelClass: typeof Base, assocName: st
   if (!refl || refl[CHECKED]) return;
   // AssociationReflection.sourceReflection returns `this`
   // (reflection.ts:793), so non-through polymorphic belongsTo would
-  // misfire here. Gate on `isThroughReflection`.
+  // misfire if we delegated without gating. ThroughReflection is
+  // the only shape that needs the sourceType checks.
   const isThrough = typeof refl.isThroughReflection === "function" && refl.isThroughReflection();
-  if (!isThrough || !refl.sourceReflection || !refl.options) return;
+  if (!isThrough || typeof refl.checkValidityBang !== "function") return;
 
-  const srcPoly =
-    typeof refl.sourceReflection.isPolymorphic === "function"
-      ? refl.sourceReflection.isPolymorphic()
-      : false;
-  const hasSourceType = refl.options.sourceType != null;
-  if (hasSourceType && !srcPoly) {
-    throw new HasManyThroughAssociationPointlessSourceTypeError(
-      refl.activeRecord?.name ?? "<unknown>",
-      refl.name ?? "<unknown>",
-      refl.sourceReflection.name ?? "<unknown>",
-    );
-  }
-  if (srcPoly && !hasSourceType) {
-    throw new HasManyThroughAssociationPolymorphicSourceError(
-      refl.activeRecord?.name ?? "<unknown>",
-      refl.name ?? "<unknown>",
-      refl.sourceReflection.name ?? "<unknown>",
-    );
+  // Delegate to the full `ThroughReflection#checkValidityBang` so
+  // the sourceType logic stays in one place (reflection.ts), but
+  // only re-throw the two sourceType errors this PR targets. Other
+  // checks (PolymorphicThrough, missing source, has-one-through-
+  // collection) trip pre-existing test fixtures — task #23 widens
+  // the set once those fixtures are addressed.
+  try {
+    refl.checkValidityBang();
+  } catch (err) {
+    if (
+      err instanceof HasManyThroughAssociationPointlessSourceTypeError ||
+      err instanceof HasManyThroughAssociationPolymorphicSourceError
+    ) {
+      throw err;
+    }
+    // Swallow other validity errors for now; once task #23 widens
+    // the check, all errors propagate and this `catch` goes away.
+    return;
   }
   refl[CHECKED] = true;
 }

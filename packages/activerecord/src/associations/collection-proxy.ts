@@ -410,7 +410,22 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       if (typeof original !== "function") continue;
       Object.defineProperty(this, name, {
         value: function (this: CollectionProxy<T>, ...args: unknown[]) {
-          (this as unknown as { _cpMutated: boolean })._cpMutated = true;
+          const self = this as unknown as {
+            _cpMutated: boolean;
+            _loaded: boolean;
+            _records: unknown[];
+            _loadAsyncPromise?: Promise<unknown>;
+          };
+          self._cpMutated = true;
+          // Also invalidate the inherited Relation load cache so a
+          // subsequent super.toArray() / super.count() on the diverged
+          // path re-runs the query instead of returning stale results
+          // from a pre-bang load. The association-local target (_target)
+          // is intentionally NOT wiped — that's the owner's in-memory
+          // proxy state and survives scope mutations.
+          self._loaded = false;
+          self._records = [];
+          self._loadAsyncPromise = undefined;
           return (original as (...a: unknown[]) => unknown).apply(this, args);
         },
         writable: true,
@@ -664,10 +679,17 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   //   semantics (loaded-target fast path). PR B will delete CP's count
   //   and let Relation's win.
   async count(): Promise<number> {
-    // Same divergence gate as toArray() / load(): scope bangs on the
-    // proxy mean loadHasMany's cached count is stale.
+    // Same divergence gate as toArray() / load(). Use Relation's count
+    // (COUNT(*) query) on the diverged path rather than
+    // super.toArray().length — instantiating every row just to count
+    // would be a major perf regression on large collections.
     if (this._relationStateDiverged()) {
-      return (await super.toArray()).length;
+      const counted = await (
+        Relation.prototype as unknown as {
+          count(this: CollectionProxy<T>): Promise<number | Record<string, number>>;
+        }
+      ).count.call(this);
+      return typeof counted === "number" ? counted : Object.keys(counted).length;
     }
     const results = await loadHasMany(this._record, this._assocName, this._assocDef.options);
     return results.length;

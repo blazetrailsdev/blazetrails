@@ -2,6 +2,7 @@ import type { Base } from "./base.js";
 import { Relation } from "./relation.js";
 import type { CollectionProxy } from "./associations/collection-proxy.js";
 import { _setAssociationRelationCtor } from "./associations/collection-proxy.js";
+import { StrictLoadingViolationError } from "./errors.js";
 
 /**
  * A Relation produced by a collection association (e.g. `blog.posts`,
@@ -105,8 +106,20 @@ export class AssociationRelation<T extends Base> extends Relation<T> {
    * way back, so accessing the inverse would re-query.
    */
   async toArray(): Promise<T[]> {
-    const records = await super.toArray();
+    // Strict-loading guard BEFORE executing the query. Previously this
+    // lived in `wrapCollectionProxy`'s `get` trap; with CP now
+    // inheriting Relation directly, chained queries (blog.posts.where
+    // (...)) become AR instances and bypass the trap — so AR has to
+    // enforce it itself.
     const owner = this._association.owner;
+    const ownerAny = owner as unknown as {
+      _strictLoading?: boolean;
+      _strictLoadingBypassCount?: number;
+    };
+    if (ownerAny._strictLoading && !ownerAny._strictLoadingBypassCount) {
+      throw StrictLoadingViolationError.forAssociation(owner, this._association.associationName);
+    }
+    const records = await super.toArray();
     const reflection = this._association.reflection;
     const inverseOf = reflection.options.inverseOf;
 
@@ -117,13 +130,12 @@ export class AssociationRelation<T extends Base> extends Relation<T> {
       }
     }
 
-    const ownerAny = owner as unknown as {
-      _strictLoading?: boolean;
+    const ownerNPlus = owner as unknown as {
       isStrictLoadingNPlusOneOnly?: () => boolean;
     };
     const nPlusOneOnly =
-      typeof ownerAny.isStrictLoadingNPlusOneOnly === "function" &&
-      ownerAny.isStrictLoadingNPlusOneOnly() &&
+      typeof ownerNPlus.isStrictLoadingNPlusOneOnly === "function" &&
+      ownerNPlus.isStrictLoadingNPlusOneOnly() &&
       reflection.type === "hasMany";
     if (nPlusOneOnly || ownerAny._strictLoading || reflection.options.strictLoading) {
       for (const r of records) {

@@ -21,8 +21,14 @@ export { _setCollectionProxyCtor } from "./associations/collection-proxy-slot.js
  * associations) that forced the late-binding in the first place.
  */
 export async function initializeAssociations(): Promise<void> {
-  if (_CollectionProxyCtor) return;
-  await import("./associations/collection-proxy.js");
+  // Load both ctor slots. `association-relation.js` imports
+  // `collection-proxy.js` for the late-bind ctor setter, so importing
+  // AR first also registers CP transitively; we still import CP
+  // explicitly as a belt-and-suspenders guarantee.
+  await Promise.all([
+    import("./associations/collection-proxy.js"),
+    import("./association-relation.js"),
+  ]);
 }
 import { StrictLoadingViolationError, ConfigurationError } from "./errors.js";
 import {

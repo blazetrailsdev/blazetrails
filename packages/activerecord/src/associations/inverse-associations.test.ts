@@ -499,9 +499,7 @@ describe("InverseHasManyTests", () => {
     const { Man } = makeModels();
     const m = await Man.create({ name: "Gordon" });
     const proxy = association(m, "interests");
-    // Empty array returns empty array (no error) in current impl; test that it returns empty
-    const result = await proxy.find([] as any);
-    expect(Array.isArray(result) ? result.length : -1).toBe(0);
+    await expect(proxy.find([] as any)).rejects.toThrow(/empty list of ids/);
   });
 
   it("trying to use inverses that dont exist should raise an error", async () => {

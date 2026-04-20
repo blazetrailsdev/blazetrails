@@ -1403,6 +1403,37 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       wantArray = false;
     }
 
+    // Empty-id-list contract: Relation.find / performFind raises for
+    // an empty list so callers can distinguish "no ids" from "found
+    // nothing". Mirror that here — `find([])` and the composite
+    // fallthrough that produces zero ids both raise.
+    if (ids.length === 0) {
+      throw new RecordNotFound(
+        `Couldn't find ${targetModel.name} with an empty list of ids`,
+        targetModel.name,
+        String(pk),
+      );
+    }
+
+    // Composite PKs require a tuple id of matching arity. Fail fast
+    // with a clear message instead of computing a lookup key that
+    // can never match (scalar id → [scalar] → no match).
+    if (composite) {
+      const pkArity = (pk as string[]).length;
+      for (const id of ids) {
+        if (!Array.isArray(id) || id.length !== pkArity) {
+          throw new RecordNotFound(
+            `Couldn't find ${targetModel.name} with an invalid composite primary key id: ${
+              Array.isArray(id) ? JSON.stringify(id) : String(id)
+            } (expected an array with ${pkArity} elements)`,
+            targetModel.name,
+            String(pk),
+            id as string | number,
+          );
+        }
+      }
+    }
+
     const records = await this.toArray();
 
     // Index records by PK once — O(records + ids) instead of
@@ -1415,9 +1446,9 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       return String(r.readAttribute(pk as string));
     };
     const keyForId = (id: unknown): string => {
-      if (composite) {
-        return JSON.stringify(Array.isArray(id) ? id : [id]);
-      }
+      // Composite ids are pre-validated above as arrays of the right
+      // arity, so the JSON form matches keyForRecord's tuple exactly.
+      if (composite) return JSON.stringify(id);
       return String(id);
     };
     const byPk = new Map<string, T>();

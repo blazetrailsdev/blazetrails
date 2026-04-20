@@ -144,14 +144,42 @@ export function sanitizeSqlLike(value: string, escapeChar: string = "\\"): strin
 }
 
 /**
+ * Class-method variant of `sanitizeSql` that dispatches through
+ * `this.sanitizeSqlArray`, so subclass overrides of `sanitizeSqlArray`
+ * take effect — matching Rails' `Sanitization::ClassMethods#sanitize_sql`
+ * which calls `sanitize_sql_array` via `self`.
+ */
+function sanitizeSqlClassMethod(
+  this: { sanitizeSqlArray(template: string, ...binds: unknown[]): string },
+  input: string | [string, ...unknown[]],
+): string {
+  if (typeof input === "string") return input;
+  const [template, ...binds] = input;
+  return this.sanitizeSqlArray(template, ...binds);
+}
+
+/**
+ * Class-method variant of `sanitizeSqlForConditions` that dispatches
+ * through `this.sanitizeSql` (and therefore `this.sanitizeSqlArray`),
+ * matching Rails' Ruby `self` dispatch through `ClassMethods`.
+ */
+function sanitizeSqlForConditionsClassMethod(
+  this: { sanitizeSql(input: string | [string, ...unknown[]]): string },
+  condition: string | [string, ...unknown[]] | null | undefined,
+): string | null {
+  if (!condition || (typeof condition === "string" && condition.trim() === "")) return null;
+  return this.sanitizeSql(condition);
+}
+
+/**
  * Module methods wired onto Base as static methods via `extend()` in base.ts.
  * Mirrors Rails' `ActiveRecord::Sanitization::ClassMethods`.
  */
 export const ClassMethods = {
-  sanitizeSql,
+  sanitizeSql: sanitizeSqlClassMethod,
   sanitizeSqlArray,
   sanitizeSqlLike,
-  sanitizeSqlForConditions,
+  sanitizeSqlForConditions: sanitizeSqlForConditionsClassMethod,
   sanitizeSqlForAssignment,
   sanitizeSqlForOrder,
   sanitizeSqlHashForAssignment,

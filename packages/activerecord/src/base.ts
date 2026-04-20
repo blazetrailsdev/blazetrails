@@ -197,10 +197,10 @@ export class Base extends Model {
   declare static lookupAncestors: typeof Translation.lookupAncestors;
 
   // --- Sanitization mixin (wired via extend() after class) ---
-  declare static sanitizeSql: typeof Sanitization.sanitizeSql;
+  declare static sanitizeSql: typeof Sanitization.ClassMethods.sanitizeSql;
   declare static sanitizeSqlArray: typeof Sanitization.sanitizeSqlArray;
   declare static sanitizeSqlLike: typeof Sanitization.sanitizeSqlLike;
-  declare static sanitizeSqlForConditions: typeof Sanitization.sanitizeSqlForConditions;
+  declare static sanitizeSqlForConditions: typeof Sanitization.ClassMethods.sanitizeSqlForConditions;
   declare static sanitizeSqlForAssignment: typeof Sanitization.sanitizeSqlForAssignment;
   declare static sanitizeSqlForOrder: typeof Sanitization.sanitizeSqlForOrder;
   declare static sanitizeSqlHashForAssignment: typeof Sanitization.sanitizeSqlHashForAssignment;

@@ -377,6 +377,47 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
   }
 
   /**
+   * Count via the deferred chain walk without instantiating the
+   * target rows. Runs the intermediate plucks (cheap; they happen
+   * anyway for this shape) then emits a single `SELECT COUNT(*)`
+   * on the final-step Relation instead of loading every record.
+   *
+   * Loaded-chain mode has the target already materialized, so we
+   * return the `_storedIds.length` (matches the re-emitted record
+   * count after the `_target` re-order). No override of `size`
+   * needed — Rails' `CollectionAssociation#count` goes through
+   * `count` for the single-argument form too.
+   */
+  /**
+   * Count via the deferred chain walk without materializing the
+   * target rows. Runs the intermediate plucks (cheap; they happen
+   * anyway for this shape) then emits a single `SELECT COUNT(*)`
+   * on the final-step Relation. Named `countDeferred` rather than
+   * overriding `count` because Relation's `count` is installed via
+   * the Calculations mixin (property-style) and can't be cleanly
+   * overridden by a class-body method.
+   *
+   * Loaded-chain mode: returns `_storedIds.length` — matches the
+   * re-emitted record count after the `_target` re-order.
+   */
+  async countDeferred(): Promise<number> {
+    if (this._chainWalker) {
+      const { relation } = await this._walkOnce();
+      const merged = this._composeChainedState(relation);
+      const c = await (
+        merged as unknown as { count: () => Promise<number | Record<string, number>> }
+      ).count();
+      if (typeof c !== "number") {
+        throw new Error(
+          "Grouped counts are not supported on DisableJoinsAssociationRelation#countDeferred",
+        );
+      }
+      return c;
+    }
+    return this._storedIds.length;
+  }
+
+  /**
    * Memoize the walker invocation so the async chain walk runs at
    * most once per DJAR instance. Shared by `toArray()` and `ids()`.
    */

@@ -381,8 +381,10 @@ export class AssociationScope {
    * repeated joins to the same table get unique aliases — e.g. a
    * self-referential `has_many :through` that visits the same table
    * twice in one chain. `tracker.aliasedTableFor(arelTable, candidate)`
-   * returns the base Arel table on the first visit and a freshly
-   * aliased one (name_2, name_3, ...) on subsequent visits.
+   * returns the base Arel table on the first visit and, on subsequent
+   * visits, an Arel table aliased to the supplied candidate — with a
+   * numeric suffix (`candidate_2`, `_3`, ...) only when the candidate
+   * itself has already been used.
    *
    * Mirrors: ActiveRecord::Associations::AssociationScope#get_chain
    * (association_scope.rb:112-122).

@@ -112,10 +112,12 @@ export function _loadFromSql<T extends typeof Base>(
 
 // ---------------------------------------------------------------------------
 // Thin static delegators to `all()` — Rails' `Querying::QUERYING_METHODS`
-// list. Each forwards to the default relation, matching Rails' `delegate(...,
-// to: :all)`.
+// list, delegated via `delegate(*QUERYING_METHODS, to: :all)`. Each forwards
+// to the default relation, so calling `Model.where(...)` is equivalent to
+// `Model.all.where(...)`.
 // ---------------------------------------------------------------------------
 
+/** Mirrors: ActiveRecord::Querying#from */
 export function from<T extends typeof Base>(
   this: T,
   source: string | Relation<any>,
@@ -124,6 +126,7 @@ export function from<T extends typeof Base>(
   return this.all().from(source, subqueryName);
 }
 
+/** Mirrors: ActiveRecord::Querying#select */
 export function select<T extends typeof Base>(
   this: T,
   ...columns: string[]
@@ -131,6 +134,7 @@ export function select<T extends typeof Base>(
   return this.all().select(...columns);
 }
 
+/** Mirrors: ActiveRecord::Querying#order */
 export function order<T extends typeof Base>(
   this: T,
   ...args: Array<string | Record<string, "asc" | "desc">>
@@ -138,6 +142,7 @@ export function order<T extends typeof Base>(
   return this.all().order(...args);
 }
 
+/** Mirrors: ActiveRecord::Querying#group */
 export function group<T extends typeof Base>(
   this: T,
   ...columns: string[]
@@ -145,6 +150,7 @@ export function group<T extends typeof Base>(
   return this.all().group(...columns);
 }
 
+/** Mirrors: ActiveRecord::Querying#limit */
 export function limit<T extends typeof Base>(
   this: T,
   value: number | null,
@@ -152,14 +158,17 @@ export function limit<T extends typeof Base>(
   return this.all().limit(value);
 }
 
+/** Mirrors: ActiveRecord::Querying#offset */
 export function offset<T extends typeof Base>(this: T, value: number): Relation<InstanceType<T>> {
   return this.all().offset(value);
 }
 
+/** Mirrors: ActiveRecord::Querying#distinct */
 export function distinct<T extends typeof Base>(this: T): Relation<InstanceType<T>> {
   return this.all().distinct();
 }
 
+/** Mirrors: ActiveRecord::Querying#joins */
 export function joins<T extends typeof Base>(
   this: T,
   tableOrSql?: string,
@@ -168,6 +177,7 @@ export function joins<T extends typeof Base>(
   return this.all().joins(tableOrSql, on);
 }
 
+/** Mirrors: ActiveRecord::Querying#left_joins */
 export function leftJoins<T extends typeof Base>(
   this: T,
   table: string,
@@ -176,6 +186,7 @@ export function leftJoins<T extends typeof Base>(
   return this.all().leftJoins(table, on);
 }
 
+/** Mirrors: ActiveRecord::Querying#left_outer_joins */
 export function leftOuterJoins<T extends typeof Base>(
   this: T,
   table?: string,
@@ -184,6 +195,7 @@ export function leftOuterJoins<T extends typeof Base>(
   return this.all().leftOuterJoins(table, on);
 }
 
+/** Mirrors: ActiveRecord::Querying#none */
 export function none<T extends typeof Base>(this: T): Relation<InstanceType<T>> {
   return this.all().none();
 }

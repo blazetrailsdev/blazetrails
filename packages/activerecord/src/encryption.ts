@@ -19,7 +19,7 @@
  */
 
 import { EncryptedAttributeType } from "./encryption/encrypted-attribute-type.js";
-import { Scheme } from "./encryption/scheme.js";
+import { Scheme, type SchemeOptions } from "./encryption/scheme.js";
 
 export interface Encryptor {
   encrypt(value: string): string;
@@ -67,13 +67,47 @@ class LegacyEncryptorShim {
   }
 }
 
-function schemeFor(encryptor: Encryptor): Scheme {
-  return new Scheme({ encryptor: new LegacyEncryptorShim(encryptor) as never });
+/**
+ * The options bag `Base.encrypts` accepts. Mirrors Rails' kwargs:
+ * full `SchemeOptions` (key, keyProvider, deterministic, downcase,
+ * ignoreCase, previous, compress, compressor) plus the repo's
+ * backwards-compatible `{ encryptor }` extension for users who supply
+ * a simple `{ encrypt, decrypt }` pair without configuring a Scheme.
+ */
+export interface EncryptsOptions extends Omit<SchemeOptions, "encryptor"> {
+  encryptor?: Encryptor;
+}
+
+function buildScheme(options: EncryptsOptions): Scheme {
+  const { encryptor, ...schemeOptions } = options;
+
+  if (encryptor) {
+    return new Scheme({ ...schemeOptions, encryptor: new LegacyEncryptorShim(encryptor) as never });
+  }
+
+  const hasSchemeOptions =
+    schemeOptions.key !== undefined ||
+    schemeOptions.keyProvider !== undefined ||
+    schemeOptions.deterministic !== undefined ||
+    schemeOptions.downcase !== undefined ||
+    schemeOptions.ignoreCase !== undefined ||
+    schemeOptions.previousSchemes !== undefined ||
+    schemeOptions.compress !== undefined ||
+    schemeOptions.compressor !== undefined;
+
+  if (hasSchemeOptions) {
+    return new Scheme(schemeOptions);
+  }
+
+  // No scheme configuration and no explicit encryptor — fall back to
+  // the repo's default AR_ENC:base64 encryptor so `this.encrypts("name")`
+  // works in contexts that haven't set up keys/config.
+  return new Scheme({ encryptor: new LegacyEncryptorShim(defaultEncryptor) as never });
 }
 
 interface PendingEncryption {
   name: string;
-  encryptor: Encryptor;
+  scheme: Scheme;
 }
 
 /**
@@ -83,24 +117,31 @@ interface PendingEncryption {
  * Pending encryptions are applied when the attribute definitions are
  * first used (via `applyPendingEncryptions`).
  */
-export function encrypts(klass: any, ...args: Array<string | { encryptor?: Encryptor }>): void {
-  let enc: Encryptor = defaultEncryptor;
+export function encrypts(klass: any, ...args: Array<string | EncryptsOptions>): void {
+  let options: EncryptsOptions = {};
   const names: string[] = [];
 
   for (const arg of args) {
     if (typeof arg === "string") {
       names.push(arg);
-    } else if (arg && typeof arg === "object" && arg.encryptor) {
-      enc = arg.encryptor;
+    } else if (arg && typeof arg === "object") {
+      options = arg;
     }
   }
+
+  const scheme = buildScheme(options);
 
   if (!Object.prototype.hasOwnProperty.call(klass, "_pendingEncryptions")) {
     klass._pendingEncryptions = [...(klass._pendingEncryptions ?? [])];
   }
 
+  if (!klass._encryptedAttributes) {
+    klass._encryptedAttributes = new Set<string>();
+  }
+
   for (const name of names) {
-    klass._pendingEncryptions.push({ name, encryptor: enc });
+    klass._pendingEncryptions.push({ name, scheme });
+    klass._encryptedAttributes.add(name);
   }
 
   if (klass._attributeDefinitions?.size > 0) {
@@ -111,8 +152,7 @@ export function encrypts(klass: any, ...args: Array<string | { encryptor?: Encry
 /**
  * Apply any pending encryption decorations to the class's attribute
  * definitions. Wraps the existing cast type with the scheme-based
- * `EncryptedAttributeType` via a `Scheme` backed by the declared
- * encryptor shim.
+ * `EncryptedAttributeType`.
  */
 export function applyPendingEncryptions(klass: any): void {
   const pending: PendingEncryption[] | undefined = klass._pendingEncryptions;
@@ -122,16 +162,13 @@ export function applyPendingEncryptions(klass: any): void {
     klass._attributeDefinitions = new Map(klass._attributeDefinitions);
   }
 
-  for (const { name, encryptor } of pending) {
+  for (const { name, scheme } of pending) {
     const def = klass._attributeDefinitions.get(name);
     if (!def) continue;
     if (def.type instanceof EncryptedAttributeType) continue;
     klass._attributeDefinitions.set(name, {
       ...def,
-      type: new EncryptedAttributeType({
-        scheme: schemeFor(encryptor),
-        castType: def.type,
-      }),
+      type: new EncryptedAttributeType({ scheme, castType: def.type }),
     });
   }
 }

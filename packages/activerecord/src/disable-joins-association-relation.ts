@@ -228,7 +228,19 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
       this._storedIds = out;
       this._storedKeyStrings = keyStrings;
     } else {
-      this._storedIds = Array.from(new Set(normalizedIds as unknown[]));
+      // Symmetric guard for the scalar path: a dynamic caller
+      // passing tuple ids (via `any`/`unknown` erasure) with a
+      // string key would dedupe by array reference and silently
+      // produce an empty reorder result. Fail fast instead.
+      const scalarIds = normalizedIds as unknown[];
+      for (let i = 0; i < scalarIds.length; i++) {
+        if (Array.isArray(scalarIds[i])) {
+          throw argumentError(
+            `DisableJoinsAssociationRelation: scalar ids[${i}] must not be an array when key is "${String(normalizedKey)}"`,
+          );
+        }
+      }
+      this._storedIds = Array.from(new Set(scalarIds));
       this._storedKeyStrings = null;
     }
     this._chainWalker = chainWalker;

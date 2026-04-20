@@ -301,6 +301,14 @@ describe("DJAS — composite key support", () => {
           [1, 2],
         ] as unknown as unknown[][]),
     ).toThrow(/single-element array/);
+
+    // Scalar-key + tuple-ids via dynamic `any` erasure: Set dedup
+    // would keep arrays by reference and the Map lookup on load
+    // would never match a scalar record attribute, silently
+    // yielding an empty ordering. Guard fails fast instead.
+    expect(() => new DisableJoinsAssociationRelation(CkLineItem, "sku", [[1], [2]] as any)).toThrow(
+      /must not be an array/,
+    );
   });
 
   it("DisableJoinsAssociationRelation composite-key load: throws ArgumentError on shape/arity mismatch", async () => {

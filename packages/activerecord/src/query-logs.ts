@@ -55,7 +55,7 @@ export class QueryLogs {
 
   set tags(tags: TagDefinition[]) {
     this._tags = tags;
-    this._keyHandlers = new Map();
+    this._keyHandlers = new Map<string, GetKeyHandler>();
     for (const tag of tags) {
       if (typeof tag === "string") {
         this._keyHandlers.set(tag, new GetKeyHandler(tag));
@@ -106,7 +106,21 @@ export class QueryLogs {
       // invoked: `MyFormatter.format(k, v)`).
       this._formatter = format as QueryLogsFormatter;
     } else {
-      throw new ConfigurationError(`Formatter is unsupported: ${format}`);
+      // Describe the bad value without dumping a full function body
+      // (classes stringify to their whole source) — prefer the
+      // constructor name and type for a useful diagnostic.
+      const describe = (v: unknown): string => {
+        if (v === null) return "null";
+        if (typeof v === "function") return `class/function ${v.name || "<anonymous>"}`;
+        if (typeof v === "object") {
+          const name = (v as { constructor?: { name?: string } })?.constructor?.name;
+          return `${typeof v}${name ? ` (${name})` : ""}`;
+        }
+        return `${typeof v} ${String(v)}`;
+      };
+      throw new ConfigurationError(
+        `Formatter is unsupported: ${describe(format)} — expected "legacy", "sqlcommenter", or an object/class with callable \`format\` and \`join\``,
+      );
     }
     this._cachedComment = undefined;
   }

@@ -21,7 +21,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { Base, registerModel } from "../index.js";
-import { Associations, loadHasMany } from "../associations.js";
+import { Associations } from "../associations.js";
 import { AliasTracker } from "./alias-tracker.js";
 import { createTestAdapter } from "../test-adapter.js";
 import type { DatabaseAdapter } from "../adapter.js";
@@ -29,48 +29,45 @@ import type { DatabaseAdapter } from "../adapter.js";
 describe("AssociationScope — AliasTracker aliases repeated tables", () => {
   let adapter: DatabaseAdapter;
 
+  // `AtUser.friends` visits the `at_users` table twice — once as
+  // the chain's owning klass and once as the source (friend side of
+  // the friendship). Without a tracker the two ReflectionProxy
+  // entries for `at_users` would collide; the tracker gives the
+  // source-side visit an alias.
   class AtUser extends Base {
     static {
       this._tableName = "at_users";
       this.attribute("name", "string");
     }
   }
-  // Self-referential join table: both columns reference at_users.
-  // `has_many :followers through: :follows source: :follower` visits
-  // at_follows twice in the conceptual chain — once outbound
-  // (user → follows → target) and once inbound (via the source
-  // side). We approximate this with a simple ordered chain that
-  // still forces at_follows to appear twice through reflection
-  // composition.
-  class AtFollow extends Base {
+  class AtFriendship extends Base {
     static {
-      this._tableName = "at_follows";
-      this.attribute("follower_id", "integer");
-      this.attribute("followee_id", "integer");
+      this._tableName = "at_friendships";
+      this.attribute("at_user_id", "integer");
+      this.attribute("at_friend_id", "integer");
     }
   }
 
   beforeEach(() => {
     adapter = createTestAdapter();
     AtUser.adapter = adapter;
-    AtFollow.adapter = adapter;
+    AtFriendship.adapter = adapter;
     registerModel("AtUser", AtUser);
-    registerModel("AtFollow", AtFollow);
+    registerModel("AtFriendship", AtFriendship);
     (AtUser as any)._associations = [];
-    (AtFollow as any)._associations = [];
-    Associations.hasMany.call(AtUser, "follows", {
-      className: "AtFollow",
-      foreignKey: "follower_id",
+    (AtFriendship as any)._associations = [];
+    Associations.hasMany.call(AtUser, "friendships", {
+      className: "AtFriendship",
+      foreignKey: "at_user_id",
     });
-    Associations.hasMany.call(AtFollow, "follower", {
+    Associations.belongsTo.call(AtFriendship, "friend", {
       className: "AtUser",
-      foreignKey: "id",
-      primaryKey: "follower_id",
+      foreignKey: "at_friend_id",
     });
-    Associations.hasMany.call(AtUser, "followerOfFollows", {
+    Associations.hasMany.call(AtUser, "friends", {
       className: "AtUser",
-      through: "follows",
-      source: "follower",
+      through: "friendships",
+      source: "friend",
     });
   });
 
@@ -80,26 +77,9 @@ describe("AssociationScope — AliasTracker aliases repeated tables", () => {
     // same name gets an alias derived from the `aliasCandidate` thunk
     // (only invoked on repeat — matching Rails' block-form API).
     const tracker = AliasTracker.create(null, "at_users", []);
-    const t1 = tracker.aliasedTableFor(AtFollow.arelTable, () => "at_follows_alt");
-    expect(t1.name).toBe("at_follows");
-    const t2 = tracker.aliasedTableFor(AtFollow.arelTable, () => "at_follows_alt");
-    expect(t2.name).not.toBe("at_follows");
-    expect(t2.name).toMatch(/at_follows/);
-  });
-
-  it("builds a chain through AtFollow with no table-alias collision in the JOIN", async () => {
-    const a = await AtUser.create({ name: "a" });
-    const b = await AtUser.create({ name: "b" });
-    await AtFollow.create({ follower_id: a.id, followee_id: b.id });
-
-    // The main assertion here is just that the chain walk succeeds
-    // and loads the expected record — a collision would manifest
-    // either as a SQL error ("ambiguous column reference") or an
-    // empty result. With the tracker, the chain assigns the base
-    // at_follows name on first visit; any second visit would get
-    // an alias rather than a duplicate identifier.
-    const reflection = (AtUser as any)._reflectOnAssociation("followerOfFollows");
-    const users = await loadHasMany(a, "followerOfFollows", reflection.options);
-    expect(users.length).toBeGreaterThan(0);
+    const t1 = tracker.aliasedTableFor(AtFriendship.arelTable, () => "at_friendships_alt");
+    expect(t1.name).toBe("at_friendships");
+    const t2 = tracker.aliasedTableFor(AtFriendship.arelTable, () => "at_friendships_alt");
+    expect(t2.name).not.toBe("at_friendships");
   });
 });

@@ -101,6 +101,7 @@ import {
   isPresent as _isPresent,
   isBlank as _isBlank,
 } from "./core.js";
+import { argumentError } from "./relation/query-methods.js";
 import { ScopeRegistry } from "./scoping.js";
 
 import { Default as DefaultScoping } from "./scoping/default.js";
@@ -1165,12 +1166,10 @@ export class Base extends Model {
       // neither of which matches the CPK tuple contract). Require an
       // explicit array form so intent is unambiguous.
       if (this.compositePrimaryKey && ids.every((i) => !Array.isArray(i))) {
-        const err = new Error(
+        throw argumentError(
           `${this.name} has a composite primary key (${String(this.primaryKey)}); ` +
             `call find([...tuple]) or find([[...], [...]]) rather than variadic scalars.`,
         );
-        err.name = "ArgumentError";
-        throw err;
       }
       return this.find(ids);
     }
@@ -1417,11 +1416,9 @@ export class Base extends Model {
       // and treat the array as a record (numeric keys), producing
       // nonsense.
       if (rest.length !== 1 || !Array.isArray(rest[0])) {
-        const err = new Error(
+        throw argumentError(
           `${(this as { name?: string }).name ?? "Model"}.where(cols, tuples): composite-key form requires a tuples argument as an array of arrays`,
         );
-        err.name = "ArgumentError";
-        throw err;
       }
       return this.all().where(conditionsOrSql, rest[0] as unknown[][]);
     }
@@ -1449,11 +1446,9 @@ export class Base extends Model {
       // and Relation#whereNot's matching guard would throw — same
       // outcome but the error message would mention Relation, not Model.
       if (!Array.isArray(tuples)) {
-        const err = new Error(
+        throw argumentError(
           `${(this as { name?: string }).name ?? "Model"}.whereNot(cols, tuples): composite-key form requires a tuples argument as an array of arrays`,
         );
-        err.name = "ArgumentError";
-        throw err;
       }
       return this.all().whereNot(conditions, tuples);
     }

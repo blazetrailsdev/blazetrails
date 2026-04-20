@@ -28,6 +28,7 @@ import {
   QueryMethodBangs,
   areStructurallyCompatible,
   VALID_UNSCOPING_VALUES,
+  argumentError,
   type UnscopeType,
 } from "./relation/query-methods.js";
 import { Batches } from "./relation/batches.js";
@@ -198,11 +199,9 @@ export class Relation<T extends Base> {
       // treat the array as a record (numeric keys), producing
       // nonsense.
       if (rest.length !== 1 || !Array.isArray(rest[0])) {
-        const err = new Error(
+        throw argumentError(
           "Relation#where(cols, tuples): composite-key form requires a tuples argument as an array of arrays",
         );
-        err.name = "ArgumentError";
-        throw err;
       }
       const cols = conditionsOrSql as string[];
       const tuples = rest[0] as unknown[][];
@@ -411,11 +410,9 @@ export class Relation<T extends Base> {
       // `whereNot(['a','b'])` falls through to Object.entries and
       // produces an invalid predicate.
       if (!Array.isArray(tuples)) {
-        const err = new Error(
+        throw argumentError(
           "Relation#whereNot(cols, tuples): composite-key form requires a tuples argument as an array of arrays",
         );
-        err.name = "ArgumentError";
-        throw err;
       }
       const node = this.predicateBuilder.buildComposite(conditions as string[], tuples);
       // null = empty/all-filtered → NOT (no rows) = ALL rows = no

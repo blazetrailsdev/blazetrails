@@ -7,6 +7,7 @@ import { BasicObjectHandler } from "./predicate-builder/basic-object-handler.js"
 import { RelationHandler } from "./predicate-builder/relation-handler.js";
 import { AssociationQueryValue } from "./predicate-builder/association-query-value.js";
 import { PolymorphicArrayValue } from "./predicate-builder/polymorphic-array-value.js";
+import { argumentError } from "./query-methods.js";
 
 /**
  * Converts hash conditions ({ name: "dean", age: 30 }) into
@@ -237,13 +238,13 @@ export class PredicateBuilder {
    */
   buildComposite(cols: string[], tuples: unknown[][]): Nodes.Node | null {
     if (cols.length === 0) {
-      throw composeArgumentError("PredicateBuilder.buildComposite: empty column list");
+      throw argumentError("PredicateBuilder.buildComposite: empty column list");
     }
     if (!Array.isArray(tuples)) {
       // Surface as ArgumentError instead of letting the for-of /
       // .filter() below throw a bare TypeError on null / object /
       // non-iterable inputs.
-      throw composeArgumentError(
+      throw argumentError(
         `PredicateBuilder.buildComposite: tuples must be an array, got ${tuples === null ? "null" : typeof tuples}`,
       );
     }
@@ -253,12 +254,12 @@ export class PredicateBuilder {
     // consistently with other query-method validation throws.
     for (const t of tuples) {
       if (!Array.isArray(t)) {
-        throw composeArgumentError(
+        throw argumentError(
           `PredicateBuilder.buildComposite: tuple must be an array, got ${typeof t}`,
         );
       }
       if (t.length !== cols.length) {
-        throw composeArgumentError(
+        throw argumentError(
           `PredicateBuilder.buildComposite: tuple arity ${t.length} does not match column count ${cols.length} (cols=[${cols.join(", ")}])`,
         );
       }
@@ -375,18 +376,6 @@ export class PredicateBuilder {
       typeof value === "object" && value !== null && "_modelClass" in value && "toArel" in value
     );
   }
-}
-
-/**
- * Tag throws from `buildComposite` as `ArgumentError` so callers can
- * catch them consistently with other argument-shape errors raised
- * elsewhere in query-methods.ts (matches Rails' ArgumentError surface
- * for invalid where arguments).
- */
-function composeArgumentError(message: string): Error {
-  const error = new Error(message);
-  error.name = "ArgumentError";
-  return error;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

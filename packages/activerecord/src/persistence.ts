@@ -199,3 +199,42 @@ export async function _deleteRecord(
   const sql = adapter.toSql ? adapter.toSql(dm) : dm.toSql();
   return adapter.executeMutation(sql);
 }
+
+// ---------------------------------------------------------------------------
+// Instance predicates — Rails' ActiveRecord::Persistence module
+// (persistence.rb lines 338, 345, 355, 361). These live alongside
+// `destroy` / `save` in Rails; here they're module-level functions mixed
+// into Base via include() so the implementation file matches Rails'
+// source location.
+// ---------------------------------------------------------------------------
+
+interface PersistenceRecord {
+  _newRecord: boolean;
+  _destroyed: boolean;
+  _previouslyNewRecord: boolean;
+}
+
+/** Mirrors: ActiveRecord::Persistence#new_record? */
+export function isNewRecord(this: PersistenceRecord): boolean {
+  return this._newRecord;
+}
+
+/** Mirrors: ActiveRecord::Persistence#persisted? */
+export function isPersisted(this: PersistenceRecord): boolean {
+  return !this._newRecord && !this._destroyed;
+}
+
+/** Mirrors: ActiveRecord::Persistence#destroyed? */
+export function isDestroyed(this: PersistenceRecord): boolean {
+  return this._destroyed;
+}
+
+/** Mirrors: ActiveRecord::Persistence#previously_new_record? */
+export function isPreviouslyNewRecord(this: PersistenceRecord): boolean {
+  return this._previouslyNewRecord;
+}
+
+/** Mirrors: ActiveRecord::Persistence#previously_persisted? */
+export function isPreviouslyPersisted(this: PersistenceRecord): boolean {
+  return !this._newRecord && this._destroyed;
+}

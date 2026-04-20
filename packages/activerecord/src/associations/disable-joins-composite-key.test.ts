@@ -291,6 +291,17 @@ describe("DJAS — composite key support", () => {
     const djarTuples = new DisableJoinsAssociationRelation(CkLineItem, ["sku"], [["a"], ["b"]]);
     expect(djarTuples.key).toBe("sku");
     expect(await djarTuples.ids()).toEqual(["a", "b"]);
+
+    // A non-singleton tuple under a length-1 key is a caller bug —
+    // without the guard it would silently route through the scalar
+    // path with an array id that can never match scalar record
+    // attributes, dropping all loaded records. Fail fast.
+    expect(
+      () =>
+        new DisableJoinsAssociationRelation(CkLineItem, ["sku"], [
+          [1, 2],
+        ] as unknown as unknown[][]),
+    ).toThrow(/single-element array/);
   });
 
   it("DisableJoinsAssociationRelation composite-key load: throws ArgumentError on shape/arity mismatch", async () => {

@@ -107,13 +107,55 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
     ids: unknown[][],
     chainWalker?: () => Promise<{ relation: Relation<T> }>,
   );
+  // Internal trusted-clone overload: `_newRelation` uses this to adopt
+  // already-normalized state without re-running dedup / JSON.stringify.
+  // The leading `_` on `_trustedClone` flags it as internal.
   constructor(
     klass: typeof Base,
     key: DjarKey,
     ids: DjarIds,
-    chainWalker?: () => Promise<{ relation: Relation<T> }>,
+    trusted: {
+      _trustedClone: {
+        storedIds: DjarIds;
+        storedKeyStrings: string[] | null;
+        composite: boolean;
+        chainWalker?: () => Promise<{ relation: Relation<T> }>;
+      };
+    },
+  );
+  constructor(
+    klass: typeof Base,
+    key: DjarKey,
+    ids: DjarIds,
+    chainWalkerOrTrusted?:
+      | (() => Promise<{ relation: Relation<T> }>)
+      | {
+          _trustedClone: {
+            storedIds: DjarIds;
+            storedKeyStrings: string[] | null;
+            composite: boolean;
+            chainWalker?: () => Promise<{ relation: Relation<T> }>;
+          };
+        },
   ) {
     super(klass);
+    // Fast clone path: `_newRelation` hands us already-normalized
+    // state from another DJAR. Skip dedup / arity checks / per-tuple
+    // JSON.stringify and just adopt the frozen outputs.
+    if (
+      chainWalkerOrTrusted &&
+      typeof chainWalkerOrTrusted === "object" &&
+      "_trustedClone" in chainWalkerOrTrusted
+    ) {
+      const t = chainWalkerOrTrusted._trustedClone;
+      this.key = key;
+      this._composite = t.composite;
+      this._storedIds = t.storedIds;
+      this._storedKeyStrings = t.storedKeyStrings;
+      this._chainWalker = t.chainWalker;
+      return;
+    }
+    const chainWalker = chainWalkerOrTrusted;
     // Normalize array-key shapes: length 0 is always a bug; length 1
     // collapses to the string form so `this.key` / `_composite`
     // stay consistent with the scalar path (and `readAttribute`
@@ -130,9 +172,15 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
       }
       if (key.length === 1) {
         normalizedKey = key[0];
-        normalizedIds = (ids as unknown[]).map((id) =>
-          Array.isArray(id) && id.length === 1 ? id[0] : id,
-        );
+        normalizedIds = (ids as unknown[]).map((id, i) => {
+          if (!Array.isArray(id)) return id;
+          if (id.length !== 1) {
+            throw argumentError(
+              `DisableJoinsAssociationRelation: single-column ids[${i}] must be a scalar or single-element array (got arity ${id.length})`,
+            );
+          }
+          return id[0];
+        });
       }
     }
     this.key = normalizedKey;
@@ -299,23 +347,21 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
    * spawn a plain Relation and silently drop the wrapping behavior.
    */
   protected override _newRelation(): Relation<T> {
-    // Branch to route through the correlated overloads; `this.key` is
-    // already normalized in the constructor so the two shapes line up
-    // with `this._storedIds`.
-    const clone = this._composite
-      ? new DisableJoinsAssociationRelation<T>(
-          this.model,
-          this.key as string[],
-          this._storedIds as unknown[][],
-          this._chainWalker,
-        )
-      : new DisableJoinsAssociationRelation<T>(
-          this.model,
-          this.key as string,
-          this._storedIds as unknown[],
-          this._chainWalker,
-        );
-    return clone as unknown as Relation<T>;
+    // `_newRelation` runs on every `_clone()` — including the
+    // limit/offset-free load clone inside `toArray()`, and every
+    // chained `.where(...)` / `.order(...)` — so re-running the
+    // full constructor (dedup + per-tuple JSON.stringify) on every
+    // chain link would repeat quadratic-ish work for large
+    // composite-id lists. Route through the internal trusted
+    // constructor overload that copies already-normalized state.
+    return new DisableJoinsAssociationRelation<T>(this.model, this.key, this._storedIds, {
+      _trustedClone: {
+        storedIds: this._storedIds,
+        storedKeyStrings: this._storedKeyStrings,
+        composite: this._composite,
+        chainWalker: this._chainWalker,
+      },
+    }) as unknown as Relation<T>;
   }
 
   override async toArray(): Promise<T[]> {

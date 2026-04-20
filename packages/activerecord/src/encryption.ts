@@ -1,19 +1,25 @@
 /**
- * ActiveRecord::Encryption — declares encrypted attributes.
+ * Wiring for `Base.encrypts` — records declarations and applies them
+ * to the class's attribute definitions.
  *
- * Mirrors: ActiveRecord::Encryption
+ * Mirrors: ActiveRecord::Encryption::EncryptableRecord#encrypts
  *
- * In Rails, encrypts() uses decorate_attributes which defers type wrapping
- * via PendingDecorator — the actual wrapping happens when _default_attributes
- * is first resolved. This means encrypts() can be called before or after
- * attribute(), and order doesn't matter.
+ * In Rails, `encrypts` uses `decorate_attributes` which defers type
+ * wrapping via `PendingDecorator` — the actual wrapping happens when
+ * `_default_attributes` is first resolved. We mirror this with
+ * `_pendingEncryptions`: `encrypts()` records the request, and
+ * `applyPendingEncryptions()` runs during construction and after
+ * schema reflection, wrapping any attributes that haven't been
+ * wrapped yet.
  *
- * We mirror this with _pendingEncryptions: encrypts() records the request,
- * and applyPendingEncryptions() is called during construction to wrap any
- * attributes that haven't been wrapped yet.
+ * All actual encryption flows through the Rails-faithful scheme-based
+ * `EncryptedAttributeType` under `./encryption/`. A custom `{ encryptor }`
+ * option is adapted into a `Scheme` via a minimal encryptor shim so the
+ * two flows share a single wrapper implementation.
  */
 
-import { EncryptedAttributeType } from "./encrypted-attribute-type.js";
+import { EncryptedAttributeType } from "./encryption/encrypted-attribute-type.js";
+import { Scheme } from "./encryption/scheme.js";
 
 export interface Encryptor {
   encrypt(value: string): string;
@@ -34,6 +40,37 @@ export const defaultEncryptor: Encryptor = {
   },
 };
 
+/**
+ * Adapts the simple `{ encrypt, decrypt }` pair accepted by `Base.encrypts`
+ * to the wider surface that `Scheme.encryptor` expects (options-aware
+ * encrypt/decrypt plus `encrypted(text)`). Options are intentionally
+ * ignored — the legacy path has no key provider or deterministic mode.
+ */
+class LegacyEncryptorShim {
+  constructor(private readonly inner: Encryptor) {}
+
+  encrypt(clearText: string, _options?: Record<string, unknown>): string {
+    return this.inner.encrypt(clearText);
+  }
+
+  decrypt(encryptedText: string, _options?: Record<string, unknown>): string {
+    return this.inner.decrypt(encryptedText);
+  }
+
+  encrypted(text: string): boolean {
+    try {
+      this.inner.decrypt(text);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+function schemeFor(encryptor: Encryptor): Scheme {
+  return new Scheme({ encryptor: new LegacyEncryptorShim(encryptor) as never });
+}
+
 interface PendingEncryption {
   name: string;
   encryptor: Encryptor;
@@ -42,11 +79,9 @@ interface PendingEncryption {
 /**
  * Declare one or more attributes as encrypted on a model class.
  *
- * Mirrors: ActiveRecord::Encryption::EncryptableRecord#encrypts
- *
- * Like Rails' decorate_attributes, this defers the actual type wrapping.
+ * Like Rails' `decorate_attributes`, this defers the actual type wrapping.
  * Pending encryptions are applied when the attribute definitions are
- * first used (via applyPendingEncryptions).
+ * first used (via `applyPendingEncryptions`).
  */
 export function encrypts(klass: any, ...args: Array<string | { encryptor?: Encryptor }>): void {
   let enc: Encryptor = defaultEncryptor;
@@ -68,18 +103,16 @@ export function encrypts(klass: any, ...args: Array<string | { encryptor?: Encry
     klass._pendingEncryptions.push({ name, encryptor: enc });
   }
 
-  // If definitions are already available, apply immediately
-  // (handles the common case where attribute() was called first)
   if (klass._attributeDefinitions?.size > 0) {
     applyPendingEncryptions(klass);
   }
 }
 
 /**
- * Apply any pending encryption decorations to the class's attribute definitions.
- *
- * Mirrors: Rails' PendingDecorator.apply_to — wraps the attribute type
- * with EncryptedAttributeType if not already wrapped.
+ * Apply any pending encryption decorations to the class's attribute
+ * definitions. Wraps the existing cast type with the scheme-based
+ * `EncryptedAttributeType` via a `Scheme` backed by the declared
+ * encryptor shim.
  */
 export function applyPendingEncryptions(klass: any): void {
   const pending: PendingEncryption[] | undefined = klass._pendingEncryptions;
@@ -91,20 +124,22 @@ export function applyPendingEncryptions(klass: any): void {
 
   for (const { name, encryptor } of pending) {
     const def = klass._attributeDefinitions.get(name);
-    if (!def) continue; // attribute not defined yet — will be applied later
-    if (def.type instanceof EncryptedAttributeType) continue; // already wrapped
+    if (!def) continue;
+    if (def.type instanceof EncryptedAttributeType) continue;
     klass._attributeDefinitions.set(name, {
       ...def,
-      type: new EncryptedAttributeType(def.type, encryptor),
+      type: new EncryptedAttributeType({
+        scheme: schemeFor(encryptor),
+        castType: def.type,
+      }),
     });
   }
 }
 
 /**
- * Check if an attribute is encrypted on a class.
+ * Check if an attribute is encrypted on a class (pending or applied).
  */
 export function isEncryptedAttribute(klass: any, attr: string): boolean {
-  // Check pending encryptions first (may not be applied yet)
   let current = klass;
   while (current) {
     const pending: PendingEncryption[] | undefined = current._pendingEncryptions;

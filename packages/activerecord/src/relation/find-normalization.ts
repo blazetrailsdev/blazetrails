@@ -75,24 +75,36 @@ export function normalizeFindArgs(
   let wantArray: boolean;
 
   if (rest.length > 0) {
-    // Variadic. Composite + all-scalar collapses to one tuple id
-    // (Relation.performFind treats `find(1, 42)` on a 2-arity PK as
-    // the tuple `[1, 42]`; arity mismatch raises below in
-    // assertCompositeArity with the full tuple in the message).
-    // Any array arg signals tuples-of-tuples (list form).
-    if (composite && args.every((x) => !Array.isArray(x))) {
-      ids = [args];
-      wantArray = false;
+    // Variadic.
+    if (composite) {
+      if (args.every((x) => !Array.isArray(x))) {
+        // All-scalar collapses to one tuple id — Rails treats
+        // `find(1, 42)` on a 2-arity PK as `[1, 42]`. Arity mismatch
+        // raises below with the whole tuple in the message.
+        ids = [args];
+        wantArray = false;
+      } else {
+        // Any array arg signals tuples-of-tuples (list form).
+        ids = args;
+        wantArray = true;
+      }
     } else {
-      ids = args;
+      // Simple PK: flatten everything so mixed inputs like
+      // `find([1, 2], 3)` canonicalize to `[1, 2, 3]`, keeping the
+      // "simple PK ids are scalar" contract.
+      ids = (args as unknown[]).flat(Infinity);
       wantArray = true;
     }
   } else if (Array.isArray(first)) {
     if (composite) {
-      const pkArity = (pk as string[]).length;
-      const looksLikeSingleTuple =
-        first.length === pkArity && first.every((x) => !Array.isArray(x));
-      if (looksLikeSingleTuple) {
+      // Empty array → fall through to the empty-list error.
+      // Scalar-only non-empty array → ONE tuple (whatever its
+      // arity). Wrong arity reports the whole tuple.
+      // Array-of-arrays → list of tuples.
+      if (first.length === 0) {
+        ids = first;
+        wantArray = true;
+      } else if (first.every((x) => !Array.isArray(x))) {
         ids = [first];
         wantArray = false;
       } else {
@@ -100,8 +112,8 @@ export function normalizeFindArgs(
         wantArray = true;
       }
     } else {
-      // Simple PK: Relation.performFind flattens nested arrays
-      // (finder-methods.ts: `ids.flat()`).
+      // Simple PK: recursive flatten so `find([[1, 2]])` behaves like
+      // `find([1, 2])`, matching Rails' behavior via Array#flatten.
       ids = (first as unknown[]).flat(Infinity);
       wantArray = true;
     }

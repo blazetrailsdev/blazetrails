@@ -36,9 +36,17 @@ describe("normalizeFindArgs — simple primary key", () => {
     });
   });
 
-  it("find([[1, 2]]) → flattened (matches performFind's ids.flat())", () => {
+  it("find([[1, 2]]) → recursively flattened (Rails Array#flatten semantics)", () => {
     expect(normalizeFindArgs("Post", pk, [[[1, 2]]])).toEqual({
       ids: [1, 2],
+      wantArray: true,
+      tuples: null,
+    });
+  });
+
+  it("find([1, 2], 3) → flat scalar list via variadic", () => {
+    expect(normalizeFindArgs("Post", pk, [[1, 2], 3])).toEqual({
+      ids: [1, 2, 3],
       wantArray: true,
       tuples: null,
     });
@@ -140,6 +148,19 @@ describe("normalizeFindArgs — composite primary key", () => {
   it("find(1, 2, 3) on 2-arity PK → arity error with the whole tuple", () => {
     try {
       normalizeFindArgs("Order", pk, [1, 2, 3]);
+      expect.fail("should have thrown");
+    } catch (e) {
+      const err = e as RecordNotFound;
+      expect(err.message).toBe(
+        "Order: composite primary key requires a 2-element array, got 1,2,3",
+      );
+      expect(err.id).toEqual([1, 2, 3]);
+    }
+  });
+
+  it("find([1, 2, 3]) on 2-arity PK → arity error with the whole tuple", () => {
+    try {
+      normalizeFindArgs("Order", pk, [[1, 2, 3]]);
       expect.fail("should have thrown");
     } catch (e) {
       const err = e as RecordNotFound;

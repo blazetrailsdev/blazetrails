@@ -257,6 +257,25 @@ describe("DJAS — composite key support", () => {
     ]);
   });
 
+  it("DisableJoinsAssociationRelation composite-key load: bigint tuple components don't crash serialization", async () => {
+    // Regression: `big_integer`-cast PKs produce bigints, and
+    // JSON.stringify throws on bigint. The serializer must normalize
+    // them before hashing so composite-key dedupe/group-by can't
+    // crash when a tuple component is a bigint.
+    const djar = new DisableJoinsAssociationRelation(
+      CkLineItem,
+      ["ck_order_shop_id", "ck_order_number"],
+      [
+        [1n, 100n],
+        [1n, 100n],
+      ],
+    );
+    expect(await djar.ids()).toEqual([[1n, 100n]]);
+    // Records set is empty (no DB hit needed) — what we're pinning is
+    // that construction + ids() don't throw on bigint components.
+    await expect(djar.toArray()).resolves.toEqual([]);
+  });
+
   it("returns no rows when the composite-key tuple list is empty (owner has no through records)", async () => {
     const shop = await CkShop.create({ name: "Lonely" });
     // No orders for this shop → through-records pluck yields [] →

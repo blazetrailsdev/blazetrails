@@ -34,14 +34,24 @@ export type DjarIds = unknown[] | unknown[][];
 /**
  * Stable Map key for both scalar and tuple join keys. Scalars are used
  * as-is (Map identity already works); tuples are serialized so
- * `[1, 100]` from two independent reads collides in the bucket. JSON
- * covers the primitive shapes pluck returns (number/string/null/bool).
- * A leading `\u0000T` marker makes tuple keys non-collidable with any
- * plausible scalar.
+ * `[1, 100]` from two independent reads collides in the bucket.
+ *
+ * JSON covers the primitive shapes pluck returns (number/string/
+ * null/bool), but `bigint` throws in `JSON.stringify` — the `big_integer`
+ * cast type produces bigints, and composite PKs on large tables are
+ * the exact case that hits them. Normalize bigints via a replacer
+ * (`"bigint:<decimal>"`) so a `123n` never collides with the string
+ * `"123"`. A leading `\u0000T` marker makes tuple keys
+ * non-collidable with any plausible scalar passed through this helper.
  */
 function serializeKey(v: unknown, composite: boolean): unknown {
   if (!composite) return v;
-  return "\u0000T" + JSON.stringify(v);
+  return (
+    "\u0000T" +
+    JSON.stringify(v, (_k, value) =>
+      typeof value === "bigint" ? `\u0000B${value.toString()}` : value,
+    )
+  );
 }
 
 export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T> {

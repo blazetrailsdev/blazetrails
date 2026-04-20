@@ -7,6 +7,7 @@
 
 import { Notifications } from "@blazetrails/activesupport";
 import type { Base } from "./base.js";
+import type { Relation } from "./relation.js";
 import { sanitizeSql } from "./sanitization.js";
 
 /**
@@ -107,4 +108,82 @@ export function _loadFromSql<T extends typeof Base>(
   );
   if (block) records.forEach(block);
   return records;
+}
+
+// ---------------------------------------------------------------------------
+// Thin static delegators to `all()` — Rails' `Querying::QUERYING_METHODS`
+// list. Each forwards to the default relation, matching Rails' `delegate(...,
+// to: :all)`.
+// ---------------------------------------------------------------------------
+
+export function from<T extends typeof Base>(
+  this: T,
+  source: string | Relation<any>,
+  subqueryName?: string,
+): Relation<InstanceType<T>> {
+  return this.all().from(source, subqueryName);
+}
+
+export function select<T extends typeof Base>(
+  this: T,
+  ...columns: string[]
+): Relation<InstanceType<T>> {
+  return this.all().select(...columns);
+}
+
+export function order<T extends typeof Base>(
+  this: T,
+  ...args: Array<string | Record<string, "asc" | "desc">>
+): Relation<InstanceType<T>> {
+  return this.all().order(...args);
+}
+
+export function group<T extends typeof Base>(
+  this: T,
+  ...columns: string[]
+): Relation<InstanceType<T>> {
+  return this.all().group(...columns);
+}
+
+export function limit<T extends typeof Base>(
+  this: T,
+  value: number | null,
+): Relation<InstanceType<T>> {
+  return this.all().limit(value);
+}
+
+export function offset<T extends typeof Base>(this: T, value: number): Relation<InstanceType<T>> {
+  return this.all().offset(value);
+}
+
+export function distinct<T extends typeof Base>(this: T): Relation<InstanceType<T>> {
+  return this.all().distinct();
+}
+
+export function joins<T extends typeof Base>(
+  this: T,
+  tableOrSql?: string,
+  on?: string,
+): Relation<InstanceType<T>> {
+  return this.all().joins(tableOrSql, on);
+}
+
+export function leftJoins<T extends typeof Base>(
+  this: T,
+  table: string,
+  on?: string,
+): Relation<InstanceType<T>> {
+  return this.all().leftJoins(table, on);
+}
+
+export function leftOuterJoins<T extends typeof Base>(
+  this: T,
+  table?: string,
+  on?: string,
+): Relation<InstanceType<T>> {
+  return this.all().leftOuterJoins(table, on);
+}
+
+export function none<T extends typeof Base>(this: T): Relation<InstanceType<T>> {
+  return this.all().none();
 }

@@ -379,22 +379,20 @@ function _canRouteThroughViaDisableJoinsAssociationScope(
     | { isPolymorphic?: () => boolean }
     | undefined;
   if (!src) return false;
-  // `sourceType` is only meaningful with a polymorphic source — it's
-  // the tag Rails uses to disambiguate which polymorphic target to
-  // select. With a non-polymorphic source, the through chain still
-  // inserts a `PolymorphicReflection` (reflection.ts#_collectJoinReflections
-  // triggers on `options.sourceType`), but its `foreignType` resolves
-  // to `null` (reflection.ts:544), and `_sourceTypeScope()` would
-  // emit `where({[null]: sourceType})` — invalid SQL. Rails doesn't
-  // explicitly guard this misconfiguration either, but we can reject
-  // the DJAS fast-path so the 2-step `loadHasManyThrough` handles it
-  // predictably.
-  if (
-    options.sourceType != null &&
-    (typeof src.isPolymorphic !== "function" || !src.isPolymorphic())
-  ) {
-    return false;
-  }
+  // `sourceType` must pair with a polymorphic source. Rails' own
+  // reflection validation rejects `has_many :through` with a
+  // polymorphic source and no `source_type`
+  // (`HasManyThroughAssociationPolymorphicSourceError`), and `source_type`
+  // with a non-polymorphic source injects a useless
+  // `PolymorphicReflection` whose `foreignType` is null
+  // (reflection.ts:544) — `_sourceTypeScope()` would emit
+  // `where({[null]: sourceType})` (invalid SQL). Reject both
+  // mismatches so the fallback loader handles them predictably:
+  // - polymorphic source without sourceType → missing type filter,
+  //   through-step pluck could mix ids across polymorphic targets.
+  // - sourceType without polymorphic source → no valid type column.
+  const srcIsPolymorphic = typeof src.isPolymorphic === "function" && src.isPolymorphic();
+  if (srcIsPolymorphic !== (options.sourceType != null)) return false;
   // Composite-key through associations are now supported by DJAS'
   // `_addConstraintsDj`, which builds an Arel `OR`-of-`AND` predicate
   // (`(c1=v1a AND c2=v1b) OR ...`) for the chain walk — same shape

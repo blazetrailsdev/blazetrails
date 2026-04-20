@@ -16,7 +16,11 @@
  */
 
 import type { DatabaseAdapter } from "./adapter.js";
-import { SchemaStatements } from "./connection-adapters/abstract/schema-statements.js";
+// Type-only import: SchemaStatements -> SchemaDumper (abstract inner
+// extends this file's base) -> schema-dumper.ts would be a runtime
+// cycle that `ReferenceError`s on evaluation order. We lazy-import
+// the implementation inside `AdapterSchemaSource.indexes()` below.
+import type { SchemaStatements } from "./connection-adapters/abstract/schema-statements.js";
 import { SchemaMigration } from "./schema-migration.js";
 import { introspectTables, introspectColumns } from "./schema-introspection.js";
 
@@ -230,14 +234,15 @@ function cleanDefault(raw: unknown): unknown {
  */
 class AdapterSchemaSource implements SchemaSource {
   private _adapter: DatabaseAdapter;
-  // Only needed for indexes() — tables/columns go through the shared
-  // introspectTables/introspectColumns helpers so the adapter's own
-  // `tables()` / `columns()` are honored (matching `dumpSchemaColumns`).
-  private _schema: SchemaStatements;
+  // Lazily constructed on first `indexes()` call so the static import
+  // cycle (schema-dumper -> schema-statements -> abstract/schema-dumper
+  // -> schema-dumper) doesn't fire at module init. Type-only import
+  // above keeps the compile-time reference; runtime construction
+  // happens inside `indexes()` via dynamic import.
+  private _schema?: SchemaStatements;
 
   constructor(adapter: DatabaseAdapter) {
     this._adapter = adapter;
-    this._schema = new SchemaStatements(adapter);
   }
 
   async tables(): Promise<string[]> {
@@ -259,6 +264,10 @@ class AdapterSchemaSource implements SchemaSource {
   }
 
   async indexes(tableName: string): Promise<IndexInfo[]> {
+    if (!this._schema) {
+      const mod = await import("./connection-adapters/abstract/schema-statements.js");
+      this._schema = new mod.SchemaStatements(this._adapter);
+    }
     const idxs = await this._schema.indexes(tableName);
     return idxs.map((idx) => ({
       columns: idx.columns,

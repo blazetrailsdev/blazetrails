@@ -131,6 +131,59 @@ export function isBlank(this: CoreRecord): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Readonly / strict-loading / freeze instance predicates and setters.
+// Mirrors the corresponding defs in activerecord/lib/active_record/core.rb.
+// ---------------------------------------------------------------------------
+
+interface ReadonlyFields {
+  _readonly: boolean;
+}
+
+interface StrictLoadingFields {
+  _strictLoading: boolean;
+}
+
+interface FrozenFields {
+  _frozen: boolean;
+}
+
+/** Mirrors: ActiveRecord::Core#readonly? */
+export function isReadonly(this: ReadonlyFields): boolean {
+  return this._readonly;
+}
+
+/** Mirrors: ActiveRecord::Core#readonly! */
+export function readonlyBang<T extends ReadonlyFields>(this: T): T {
+  this._readonly = true;
+  return this;
+}
+
+/** Mirrors: ActiveRecord::Core#strict_loading? */
+export function isStrictLoading(this: StrictLoadingFields): boolean {
+  return this._strictLoading;
+}
+
+/** Mirrors: ActiveRecord::Core#strict_loading! */
+export function strictLoadingBang<T extends StrictLoadingFields>(
+  this: T,
+  value: boolean = true,
+): T {
+  this._strictLoading = value;
+  return this;
+}
+
+/** Mirrors: ActiveRecord::Core#frozen? */
+export function isFrozen(this: FrozenFields): boolean {
+  return this._frozen;
+}
+
+/** Mirrors: ActiveRecord::Core#freeze */
+export function freeze<T extends FrozenFields>(this: T): T {
+  this._frozen = true;
+  return this;
+}
+
+// ---------------------------------------------------------------------------
 // Instance methods missing from api:compare
 // ---------------------------------------------------------------------------
 

@@ -12,6 +12,7 @@
 import { Notifications } from "@blazetrails/activesupport";
 import type { DatabaseAdapter, ExplainOption } from "./adapter.js";
 import { Result } from "./result.js";
+import { Store } from "./connection-adapters/abstract/query-cache.js";
 
 /**
  * QueryCache executor hooks — enable/disable query caching per-request.
@@ -77,71 +78,6 @@ export class QueryCache {
   }
 }
 
-const DEFAULT_MAX_SIZE = 100;
-
-/**
- * LRU cache store for query results.
- * Mirrors: ActiveRecord::ConnectionAdapters::QueryCache::Store
- */
-export class QueryCacheStore {
-  private _map = new Map<string, Record<string, unknown>[]>();
-  private _maxSize: number;
-  enabled = false;
-  dirties = true;
-
-  constructor(maxSize: number = DEFAULT_MAX_SIZE) {
-    this._maxSize = maxSize;
-  }
-
-  get size(): number {
-    return this._map.size;
-  }
-
-  get empty(): boolean {
-    return this._map.size === 0;
-  }
-
-  get(key: string): Record<string, unknown>[] | undefined {
-    if (!this.enabled) return undefined;
-    const entry = this._map.get(key);
-    if (entry) {
-      // Move to end (LRU)
-      this._map.delete(key);
-      this._map.set(key, entry);
-    }
-    return entry;
-  }
-
-  computeIfAbsent(
-    key: string,
-    compute: () => Promise<Record<string, unknown>[]>,
-  ): Promise<Record<string, unknown>[]> {
-    if (!this.enabled) return compute();
-
-    const cached = this.get(key);
-    if (cached !== undefined) {
-      return Promise.resolve(cached.map((row) => ({ ...row })));
-    }
-
-    return compute().then((result) => {
-      if (this._maxSize <= 0) {
-        // maxSize of 0 or negative disables caching — return without storing
-        return result;
-      }
-      if (this._map.size >= this._maxSize) {
-        const firstKey = this._map.keys().next().value;
-        if (firstKey !== undefined) this._map.delete(firstKey);
-      }
-      this._map.set(key, result);
-      return result.map((row) => ({ ...row }));
-    });
-  }
-
-  clear(): void {
-    this._map.clear();
-  }
-}
-
 /**
  * Extract primitive values from bind objects, matching Rails' type_casted_binds.
  */
@@ -176,13 +112,13 @@ export class QueryCacheAdapter implements DatabaseAdapter {
   }
 
   readonly inner: DatabaseAdapter;
-  readonly cache: QueryCacheStore;
+  readonly cache: Store;
   private _queryCount = 0;
   private _cacheHits = 0;
 
   constructor(inner: DatabaseAdapter, maxSize?: number) {
     this.inner = inner;
-    this.cache = new QueryCacheStore(maxSize);
+    this.cache = new Store(maxSize);
   }
 
   get queryCount(): number {

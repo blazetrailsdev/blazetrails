@@ -99,6 +99,51 @@ describe("Relation#where — composite-key form", () => {
     expect(() => rel.predicateBuilder.buildComposite([], [[1, 2]])).toThrow(/empty column list/);
   });
 
+  it("PredicateBuilder.buildComposite throws on tuple arity mismatch (caller bug, not silent filter)", () => {
+    const rel = (CompOrder as any).all();
+    expect(() => rel.predicateBuilder.buildComposite(["shop_id", "order_number"], [[1]])).toThrow(
+      /tuple arity 1 does not match column count 2/,
+    );
+  });
+
+  it("PredicateBuilder.buildComposite throws on non-array tuple", () => {
+    const rel = (CompOrder as any).all();
+    expect(() =>
+      rel.predicateBuilder.buildComposite(
+        ["shop_id", "order_number"],
+        [42 as unknown as unknown[]],
+      ),
+    ).toThrow(/tuple must be an array/);
+  });
+
+  it("single-column composite uses IN(...) (not OR-chain) for compactness", () => {
+    const rel = (CompOrder as any).all();
+    const node = rel.predicateBuilder.buildComposite(["shop_id"], [[1], [2], [3]]);
+    // The Arel In node renders as `shop_id IN (1, 2, 3)`; OR-chain
+    // would render as `shop_id = 1 OR shop_id = 2 OR shop_id = 3`.
+    const sql = (CompOrder as any).all().where(node).toSql();
+    expect(sql).toMatch(/IN \(1,\s*2,\s*3\)/);
+    expect(sql).not.toMatch(/OR/);
+  });
+
+  it("Relation#where(cols) without tuples arg throws a clear error", () => {
+    expect(() => (CompOrder as any).all().where(["shop_id"])).toThrow(
+      /requires a tuples argument as an array of arrays/,
+    );
+  });
+
+  it("Relation#whereNot(cols) without tuples arg throws a clear error", () => {
+    expect(() => (CompOrder as any).all().whereNot(["shop_id"])).toThrow(
+      /requires a tuples argument as an array of arrays/,
+    );
+  });
+
+  it("Base.where(cols) without tuples arg throws a clear error", () => {
+    expect(() => (CompOrder as any).where(["shop_id"])).toThrow(
+      /requires a tuples argument as an array of arrays/,
+    );
+  });
+
   it("whereNot(cols, tuples) negates the OR-of-AND grouping", async () => {
     await CompOrder.create({ shop_id: 1, order_number: 100, name: "exclude-me" });
     await CompOrder.create({ shop_id: 2, order_number: 200, name: "exclude-me-2" });

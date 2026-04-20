@@ -191,11 +191,17 @@ export class Relation<T extends Base> {
   ): Relation<T> | WhereChain<Relation<T>> {
     if (conditionsOrSql === undefined) return new WhereChain<Relation<T>>(this._clone());
     // Composite-key form: array of column names + array of tuples.
-    if (
-      Array.isArray(conditionsOrSql) &&
-      conditionsOrSql.every((c) => typeof c === "string") &&
-      Array.isArray(rest[0])
-    ) {
+    if (Array.isArray(conditionsOrSql) && conditionsOrSql.every((c) => typeof c === "string")) {
+      // Fast-fail on malformed call: must have exactly one extra
+      // argument that is an array of tuples. Without this guard, a
+      // stray `where(['a','b'])` would fall through to whereBang and
+      // treat the array as a record (numeric keys), producing
+      // nonsense.
+      if (rest.length !== 1 || !Array.isArray(rest[0])) {
+        throw new Error(
+          "Relation#where(cols, tuples): composite-key form requires a tuples argument as an array of arrays",
+        );
+      }
       const cols = conditionsOrSql as string[];
       const tuples = rest[0] as unknown[][];
       const node = this.predicateBuilder.buildComposite(cols, tuples);
@@ -397,11 +403,16 @@ export class Relation<T extends Base> {
   whereNot(cols: string[], tuples: unknown[][]): Relation<T>;
   whereNot(conditions: Record<string, unknown> | string[], tuples?: unknown[][]): Relation<T> {
     const rel = this._clone();
-    if (
-      Array.isArray(conditions) &&
-      conditions.every((c) => typeof c === "string") &&
-      Array.isArray(tuples)
-    ) {
+    if (Array.isArray(conditions) && conditions.every((c) => typeof c === "string")) {
+      // Fast-fail on malformed call: see Relation#where guard for
+      // the same reasoning. Without this, a stray
+      // `whereNot(['a','b'])` falls through to Object.entries and
+      // produces an invalid predicate.
+      if (!Array.isArray(tuples)) {
+        throw new Error(
+          "Relation#whereNot(cols, tuples): composite-key form requires a tuples argument as an array of arrays",
+        );
+      }
       const node = this.predicateBuilder.buildComposite(conditions as string[], tuples);
       // null = empty/all-filtered → NOT (no rows) = ALL rows = no
       // predicate added (matches Rails' `where.not(...)` no-op for

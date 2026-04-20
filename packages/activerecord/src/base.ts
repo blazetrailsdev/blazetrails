@@ -1410,11 +1410,17 @@ export class Base extends Model {
     if (typeof conditionsOrSql === "string") {
       return this.all().where(conditionsOrSql, ...rest);
     }
-    if (
-      Array.isArray(conditionsOrSql) &&
-      conditionsOrSql.every((c) => typeof c === "string") &&
-      Array.isArray(rest[0])
-    ) {
+    if (Array.isArray(conditionsOrSql) && conditionsOrSql.every((c) => typeof c === "string")) {
+      // Fast-fail: composite-key form requires exactly one extra
+      // argument that is an array of tuples. Without this, a stray
+      // `Model.where(['a','b'])` would fall through to the hash path
+      // and treat the array as a record (numeric keys), producing
+      // nonsense.
+      if (rest.length !== 1 || !Array.isArray(rest[0])) {
+        throw new Error(
+          `${(this as { name?: string }).name ?? "Model"}.where(cols, tuples): composite-key form requires a tuples argument as an array of arrays`,
+        );
+      }
       return this.all().where(conditionsOrSql, rest[0] as unknown[][]);
     }
     return this.all().where(conditionsOrSql as Record<string, unknown>);

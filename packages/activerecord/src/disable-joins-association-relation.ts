@@ -163,6 +163,15 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
     // the caller's shape isn't silently incompatible with the scalar
     // path they now route through — a tuple-typed overload call like
     // `new DJAR(..., ["col"], [[1], [2]])` keeps working.
+    // Guard against non-array `ids` up front. Dynamic callers using
+    // `any`/`unknown` could pass a Set, null, undefined, or an
+    // arbitrary object — `.map` / `.length` below would otherwise
+    // throw a generic TypeError or silently store zero ids.
+    if (!Array.isArray(ids)) {
+      throw argumentError(
+        `DisableJoinsAssociationRelation: ids must be an array (got ${ids === null ? "null" : typeof ids})`,
+      );
+    }
     let normalizedKey: DjarKey = key;
     let normalizedIds: DjarIds = ids;
     if (Array.isArray(key)) {

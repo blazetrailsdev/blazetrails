@@ -309,6 +309,16 @@ describe("DJAS — composite key support", () => {
     expect(() => new DisableJoinsAssociationRelation(CkLineItem, "sku", [[1], [2]] as any)).toThrow(
       /must not be an array/,
     );
+
+    // Non-array `ids` via dynamic erasure — without the early guard
+    // `.map` / `.length` below would throw a generic TypeError or
+    // silently store zero ids.
+    expect(
+      () => new DisableJoinsAssociationRelation(CkLineItem, "sku", new Set(["a"]) as any),
+    ).toThrow(/ids must be an array/);
+    expect(() => new DisableJoinsAssociationRelation(CkLineItem, "sku", null as any)).toThrow(
+      /ids must be an array/,
+    );
   });
 
   it("DisableJoinsAssociationRelation composite-key load: throws ArgumentError on shape/arity mismatch", async () => {

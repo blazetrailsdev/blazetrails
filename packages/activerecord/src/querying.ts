@@ -210,7 +210,7 @@ export function none<T extends typeof Base>(this: T): Relation<InstanceType<T>> 
 export function insertAll<T extends typeof Base>(
   this: T,
   records: Record<string, unknown>[],
-  options?: { uniqueBy?: string | string[] },
+  options?: Parameters<Relation<InstanceType<T>>["insertAll"]>[1],
 ): Promise<number> {
   return this.all().insertAll(records, options);
 }
@@ -229,7 +229,7 @@ export async function updateAll<T extends typeof Base>(
   this: T,
   updates: Record<string, unknown>,
 ): Promise<number> {
-  if ((this as unknown as { abstractClass: boolean }).abstractClass) {
+  if (this.abstractClass) {
     throw new Error(`Cannot call updateAll on abstract class ${this.name}`);
   }
   return this.all().updateAll(updates);
@@ -237,7 +237,7 @@ export async function updateAll<T extends typeof Base>(
 
 /** Mirrors: ActiveRecord::Querying#delete_all */
 export async function deleteAll<T extends typeof Base>(this: T): Promise<number> {
-  if ((this as unknown as { abstractClass: boolean }).abstractClass) {
+  if (this.abstractClass) {
     throw new Error(`Cannot call deleteAll on abstract class ${this.name}`);
   }
   return this.all().deleteAll();

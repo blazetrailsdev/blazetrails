@@ -13,7 +13,9 @@ import { NumericalityValidator } from "./validations/numericality.js";
 import { PresenceValidator } from "./validations/presence.js";
 import { UniquenessValidator, validatesUniqueness } from "./validations/uniqueness.js";
 
-// Re-export all validators matching Rails' require at bottom of validations.rb
+// Re-export validators (matching Rails' requires at the bottom of validations.rb)
+// plus the validator-adjacent ClassMethods registrars that Rails colocates
+// with each validator (validates_associated / validates_uniqueness_of).
 export {
   AbsenceValidator,
   AssociatedValidator,
@@ -195,7 +197,8 @@ function extractShared(rules: Record<string, unknown>): Record<string, unknown> 
 export function validates(
   this: {
     validatesWith(validatorClass: unknown, opts: Record<string, unknown>): void;
-    // Model.prototype.validates reached via the parent prototype chain.
+    // The Model.validates class method is reached via _parentValidates,
+    // registered by Base at module load via _setSuperValidates.
   },
   attribute: string,
   rules: Record<string, unknown>,
@@ -247,12 +250,12 @@ export function validates(
         "ActiveRecord::Validations#validates called before Base registered the super validates",
       );
     }
-    // `super.validates` — reach the parent (Model) prototype's version.
+    // `super.validates` — delegate to Model's `validates` class method.
     _parentValidates.call(this, attribute, arRules);
   }
 }
 
-// Late-bound reference to Model.prototype.validates — registered by
+// Late-bound reference to Model's `validates` class method — registered by
 // Base to break the circular-import chain.
 let _parentValidates:
   | ((this: unknown, attribute: string, rules: Record<string, unknown>) => void)

@@ -376,7 +376,8 @@ export async function toggleBang<T extends ToggleBangRecord>(
 // Mirrors ActiveRecord::Persistence#update, #update!, #delete.
 // ---------------------------------------------------------------------------
 
-interface UpdateRecord extends AttributeIO {
+interface UpdateRecord {
+  assignAttributes(attrs: Record<string, unknown>): void;
   constructor: {
     lockingColumn: string;
     lockingEnabled: boolean;
@@ -413,9 +414,7 @@ export async function update<T extends UpdateRecord>(
   attrs: Record<string, unknown>,
 ): Promise<boolean> {
   assertLockingColumnNotExplicitly(this, attrs);
-  for (const [key, value] of Object.entries(attrs)) {
-    this.writeAttribute(key, value);
-  }
+  this.assignAttributes(attrs);
   return this.save();
 }
 
@@ -428,9 +427,7 @@ export async function updateBang<T extends UpdateRecord>(
   attrs: Record<string, unknown>,
 ): Promise<true> {
   assertLockingColumnNotExplicitly(this, attrs);
-  for (const [key, value] of Object.entries(attrs)) {
-    this.writeAttribute(key, value);
-  }
+  this.assignAttributes(attrs);
   return this.saveBang();
 }
 
@@ -442,7 +439,7 @@ interface DeleteRecord {
   freeze(): unknown;
   constructor: {
     arelTable: InstanceType<typeof ArelTable>;
-    _buildPkWhereNode(id: unknown): unknown;
+    _buildPkWhereNode(id: unknown): Parameters<DeleteManager["where"]>[0];
     adapter: { execDelete(sql: string, name: string): Promise<number> };
   };
 }
@@ -457,9 +454,7 @@ interface DeleteRecord {
 export async function deleteRow<T extends DeleteRecord>(this: T): Promise<T> {
   const ctor = this.constructor;
   if (this.isPersisted()) {
-    const dm = new DeleteManager()
-      .from(ctor.arelTable)
-      .where(ctor._buildPkWhereNode(this.id) as Parameters<DeleteManager["where"]>[0]);
+    const dm = new DeleteManager().from(ctor.arelTable).where(ctor._buildPkWhereNode(this.id));
     await ctor.adapter.execDelete(dm.toSql(), "Delete");
   }
   this._destroyed = true;

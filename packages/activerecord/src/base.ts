@@ -1431,8 +1431,33 @@ export class Base extends Model {
   static whereNot<T extends typeof Base>(
     this: T,
     conditions: Record<string, unknown>,
+  ): Relation<InstanceType<T>>;
+  static whereNot<T extends typeof Base>(
+    this: T,
+    cols: string[],
+    tuples: unknown[][],
+  ): Relation<InstanceType<T>>;
+  static whereNot<T extends typeof Base>(
+    this: T,
+    conditions: Record<string, unknown> | string[],
+    tuples?: unknown[][],
   ): Relation<InstanceType<T>> {
-    return this.all().whereNot(conditions);
+    if (Array.isArray(conditions) && conditions.every((c) => typeof c === "string")) {
+      // Same fast-fail as Base.where: composite-key form requires
+      // a tuples argument as an array of arrays. Without this guard
+      // a stray `Model.whereNot(['c'])` would forward only the cols
+      // and Relation#whereNot's matching guard would throw — same
+      // outcome but the error message would mention Relation, not Model.
+      if (!Array.isArray(tuples)) {
+        const err = new Error(
+          `${(this as { name?: string }).name ?? "Model"}.whereNot(cols, tuples): composite-key form requires a tuples argument as an array of arrays`,
+        );
+        err.name = "ArgumentError";
+        throw err;
+      }
+      return this.all().whereNot(conditions, tuples);
+    }
+    return this.all().whereNot(conditions as Record<string, unknown>);
   }
 
   /**

@@ -286,15 +286,22 @@ export class PredicateBuilder {
     // PredicateBuilder.BasicObjectHandler uses for type lookup —
     // otherwise `typeForAttribute("orders.shop_id")` returns
     // undefined and the cast falls back to identity.
+    //
+    // Pre-resolve `Attribute[]` once outside the per-tuple loop —
+    // each `resolveColumn` allocates a fresh `Arel::Attribute` (and
+    // sometimes a `Table`). Reusing the resolved attrs keeps large
+    // tuple lists allocation-light.
+    const attrs = cols.map((c) => this.resolveColumn(c));
     const groupings: Nodes.Node[] = validTuples.map((tuple) => {
-      const eqs = cols.map((c, i) => {
-        const attr = this.resolveColumn(c);
-        return attr.eq(this.buildBindAttribute(attr.name, tuple[i]));
-      });
+      const eqs = attrs.map((attr, i) => attr.eq(this.buildBindAttribute(attr.name, tuple[i])));
       return new Nodes.Grouping(new Nodes.And(eqs));
     });
     if (groupings.length === 1) return groupings[0];
-    return new Nodes.Grouping(groupings.reduce((left, right) => new Nodes.Or(left, right)));
+    // Use n-ary `Or(children[])` (Arel `Nodes::Or` extends `Nary`)
+    // for a flat AST instead of the deeply-nested binary chain
+    // `reduce` would produce. Keeps depth O(1) instead of O(n) for
+    // large tuple lists.
+    return new Nodes.Grouping(new Nodes.Or(groupings));
   }
 
   resolveColumn(key: string): Nodes.Attribute {

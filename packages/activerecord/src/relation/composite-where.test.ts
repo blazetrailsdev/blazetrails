@@ -176,6 +176,21 @@ describe("Relation#where — composite-key form", () => {
     );
   });
 
+  it("Base.whereNot(cols, tuples) routes through Relation#whereNot composite form", async () => {
+    await CompOrder.create({ shop_id: 1, order_number: 100, name: "exclude" });
+    await CompOrder.create({ shop_id: 2, order_number: 200, name: "keep" });
+    const matched = await (CompOrder as any)
+      .whereNot(["shop_id", "order_number"], [[1, 100]])
+      .toArray();
+    expect(matched.map((r: any) => r.name)).toEqual(["keep"]);
+  });
+
+  it("Base.whereNot(cols) without tuples arg throws a clear ArgumentError", () => {
+    expect(() => (CompOrder as any).whereNot(["shop_id"])).toThrow(
+      /requires a tuples argument as an array of arrays/,
+    );
+  });
+
   it("whereNot(cols, tuples) negates the OR-of-AND grouping", async () => {
     await CompOrder.create({ shop_id: 1, order_number: 100, name: "exclude-me" });
     await CompOrder.create({ shop_id: 2, order_number: 200, name: "exclude-me-2" });

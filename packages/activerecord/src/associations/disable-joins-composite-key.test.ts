@@ -1,19 +1,18 @@
 /**
  * Composite-key support in DisableJoinsAssociationScope.
  *
- * Rails' DJAS handles composite primary/foreign keys by passing them
- * through `where(key => ids)` — Rails' lower PredicateBuilder layer
- * understands composite hash keys with tuple values and emits an
- * `Arel::Nodes::HomogeneousIn` (effectively tuple-IN) on the chain
- * step. Our PredicateBuilder doesn't yet support that hash form, so
- * DJAS builds the composite predicate inline as an Arel OR-of-AND
- * (`(c1=v11 AND c2=v12) OR (c1=v21 AND c2=v22) OR ...`), matching
- * the existing pattern in `counter-cache.ts#buildPkPredicate`.
- * Functionally equivalent; PG / MySQL / SQLite all optimize OR-of-
- * AND on indexed columns to the same plan as tuple-IN. Tracked as a
- * deviation: the right Rails-faithful fix is to extend
- * PredicateBuilder for composite hash keys, then DJAS reverts to
- * `where({key: ids})` matching disable_joins_association_scope.rb:34.
+ * DJAS delegates composite matching to the positional composite form
+ * `where(columns, tuples)`, which routes through
+ * `PredicateBuilder.buildComposite` (PR #647). That helper emits the
+ * composite predicate (Arel `OR`-of-`AND` over per-column equalities,
+ * matching `counter-cache.ts#buildPkPredicate`) so DJAS itself stays
+ * a thin chain-walker — same layering as Rails'
+ * `disable_joins_association_scope.rb:34` (`where(key => join_ids)`
+ * with PredicateBuilder doing the composite work).
+ *
+ * This test covers the current composite-key path used for disable-
+ * joins through associations: tuple-style matching across the
+ * intermediate records, no JOIN in the generated query shape.
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { Base, registerModel } from "../index.js";

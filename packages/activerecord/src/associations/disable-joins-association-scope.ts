@@ -178,8 +178,12 @@ export class DisableJoinsAssociationScope extends AssociationScope {
     const klass = (reflection as { klass: typeof Base }).klass;
     let scope: unknown = (klass as unknown as { unscoped: () => unknown }).unscoped();
     if (keyCols.length === 1) {
-      // Single-column key: hash WHERE compiles to `key IN (?, ?, ...)`.
-      // Matches Rails' `disable_joins_association_scope.rb:34`:
+      // Single-column key: hash WHERE typically compiles to
+      // `key IN (?, ?, ...)`. The PredicateBuilder array handler
+      // splits null entries into a separate `OR key IS NULL` branch,
+      // so the exact emitted shape depends on whether `joinIds`
+      // contains nulls (rare in the chain-walk's pluck output, but
+      // possible). Matches Rails' `disable_joins_association_scope.rb:34`:
       // `reflection.build_scope(...).where(key => join_ids)`.
       scope = (scope as { where: (c: Record<string, unknown>) => unknown }).where({
         [keyCols[0]]: joinIds,

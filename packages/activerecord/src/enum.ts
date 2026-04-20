@@ -289,16 +289,18 @@ export function enumMethod(
     reverseMap[value] = name;
   }
 
-  // Define getter that returns the symbol name
+  // Define getter that returns the symbol name. Use hasOwnProperty checks so
+  // inherited prototype keys like "toString" don't masquerade as enum values.
+  const hasOwn = Object.prototype.hasOwnProperty;
   Object.defineProperty(this.prototype, attribute, {
     get(this: Base) {
       const raw = this._attributes.get(attrName);
-      if (typeof raw === "number" && raw in reverseMap) return reverseMap[raw];
-      if (typeof raw === "string" && raw in mapping) return raw;
+      if (typeof raw === "number" && hasOwn.call(reverseMap, raw)) return reverseMap[raw];
+      if (typeof raw === "string" && hasOwn.call(mapping, raw)) return raw;
       return raw;
     },
     set(this: Base, value: unknown) {
-      if (typeof value === "string" && value in mapping) {
+      if (typeof value === "string" && hasOwn.call(mapping, value)) {
         this.writeAttribute(attrName, mapping[value as string]);
       } else {
         this.writeAttribute(attrName, value);

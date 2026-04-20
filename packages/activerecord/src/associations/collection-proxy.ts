@@ -1866,7 +1866,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
    */
   protected override _newRelation(): Relation<T> {
     if (!_AssociationRelationCtor) {
-      throw new Error(
+      throw new ConfigurationError(
         "CollectionProxy._newRelation: AssociationRelation constructor not set — " +
           "association-relation.ts must be loaded first",
       );

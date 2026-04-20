@@ -96,6 +96,13 @@ describe("DJAS — polymorphic belongsTo-through with non-id target PK", () => {
       sourceType: "DpNonIdPhoto",
       disableJoins: true,
     });
+    Associations.hasOne.call(DpAuthor, "noJoinsDpOnePhoto", {
+      className: "DpNonIdPhoto",
+      through: "dpGalleries",
+      source: "imageable",
+      sourceType: "DpNonIdPhoto",
+      disableJoins: true,
+    });
   });
 
   afterEach(() => Notifications.unsubscribeAll());
@@ -111,13 +118,16 @@ describe("DJAS — polymorphic belongsTo-through with non-id target PK", () => {
       imageable_type: "DpNonIdPhoto",
     });
 
-    // Distraction row: different polymorphic target (`DpNonIdArticle`).
-    // Shares no FK overlap with the photo, but proves the sourceType
-    // filter is what's discriminating on the gallery step.
-    await DpNonIdArticle.create({ slug: "slug-a", headline: "h1" });
+    // Distraction row with COLLIDING imageable_uuid — shares the
+    // same FK value as the photo. Without the sourceType filter
+    // (imageable_type = 'DpNonIdPhoto'), the walk would collect
+    // `u-photo` from this gallery too and try to match it against
+    // dp_non_id_photos.uuid. Proves source_type is doing real work,
+    // not a lucky FK mismatch.
+    await DpNonIdArticle.create({ slug: "u-photo", headline: "h-collide" });
     await DpGallery.create({
       dp_author_id: author.id,
-      imageable_uuid: "slug-a",
+      imageable_uuid: "u-photo",
       imageable_type: "DpNonIdArticle",
     });
 
@@ -147,5 +157,33 @@ describe("DJAS — polymorphic belongsTo-through with non-id target PK", () => {
     expect(observed.some((s) => /\bFROM\b\s+["`]?dp_non_id_photos\b.+\buuid\b/i.test(s))).toBe(
       true,
     );
+  });
+
+  it("has_one :through polymorphic-source + non-id target PK via DJAS", async () => {
+    // Same routing gate + chain walker as has_many — pinning the
+    // has_one variant since the fix touches both paths and
+    // CollectionAssociation / SingularAssociation share the DJAS
+    // scope infrastructure.
+    const author = await DpAuthor.create({ name: "a" });
+    const photo = (await DpNonIdPhoto.create({ uuid: "u-one", title: "only" })) as any;
+    await DpGallery.create({
+      dp_author_id: author.id,
+      imageable_uuid: photo.uuid,
+      imageable_type: "DpNonIdPhoto",
+    });
+
+    const observed: string[] = [];
+    const sub = Notifications.subscribe("sql.active_record", (event: any) => {
+      const sql = event?.payload?.sql;
+      if (typeof sql === "string") observed.push(sql);
+    });
+    let loaded: any;
+    try {
+      loaded = await (author as any).loadHasOne("noJoinsDpOnePhoto");
+    } finally {
+      Notifications.unsubscribe(sub);
+    }
+    expect(loaded?.uuid).toBe(photo.uuid);
+    expect(observed.some((s) => /\bJOIN\b/i.test(s))).toBe(false);
   });
 });

@@ -248,9 +248,10 @@ export class DisableJoinsAssociationScope extends AssociationScope {
       // string) and re-emits in `ids` order. For composite keys this
       // would need tuple grouping (out of scope for this PR — see
       // task #10). Skip the wrap for composite; records still load
-      // correctly via the tuple-IN WHERE above, just without the
-      // through-table-order reorder. Single-column case keeps the
-      // wrap.
+      // correctly via the composite-key `where` constraint built
+      // above (an Arel OR-of-AND from PredicateBuilder.buildComposite),
+      // just without the through-table-order reorder. Single-column
+      // case keeps the wrap.
       if (keyCols.length === 1) {
         const split = new DisableJoinsAssociationRelation<Base>(klass, keyCols[0], joinIds);
         const sourceWhere = (scope as { _whereClause?: { predicates?: unknown[] } })._whereClause;

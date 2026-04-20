@@ -79,7 +79,7 @@ describe("DJAS — composite key support", () => {
     });
   });
 
-  it("loads through a composite-PK chain via tuple-IN — no JOIN", async () => {
+  it("loads through a composite-PK chain via composite-key WHERE — no JOIN", async () => {
     const shop = await CkShop.create({ name: "S" });
     const order = (await CkOrder.create({
       shop_id: shop.id,
@@ -102,11 +102,11 @@ describe("DJAS — composite key support", () => {
     expect(items.map((i: any) => i.sku).sort()).toEqual(["sku-1", "sku-2"]);
   });
 
-  it("composite-key + ordered upstream: skips DJAR wrap (records load via tuple-IN, no in-list reorder)", async () => {
+  it("composite-key + ordered upstream: skips DJAR wrap (records load via composite-key WHERE, no in-list reorder)", async () => {
     // Document the trade-off: composite-key chains skip the loaded-
     // chain DJAR wrap because DJAR's per-key group-by would need
     // tuple grouping (out of scope for this PR). Records still load
-    // correctly via the tuple-IN WHERE; they just aren't re-ordered
+    // correctly via the composite-key WHERE WHERE; they just aren't re-ordered
     // by through-table sequence. Future work could extend DJAR to
     // group by tuple keys.
     Associations.hasMany.call(CkShop, "ckOrdersOrdered", {
@@ -186,7 +186,7 @@ describe("DJAS — composite key support", () => {
   it("returns no rows when the composite-key tuple list is empty (owner has no through records)", async () => {
     const shop = await CkShop.create({ name: "Lonely" });
     // No orders for this shop → through-records pluck yields [] →
-    // tuple-IN short-circuits to a never-true predicate.
+    // composite-key WHERE short-circuits to a never-true predicate.
     const reflection = (CkShop as any)._reflectOnAssociation("ckLineItemsThroughOrders");
     const items = await loadHasMany(shop, "ckLineItemsThroughOrders", reflection.options);
     expect(items).toEqual([]);

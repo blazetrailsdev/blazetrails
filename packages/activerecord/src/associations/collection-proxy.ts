@@ -703,13 +703,16 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   //   semantics (loaded-target fast path). PR B will delete CP's count
   //   and let Relation's win.
   async count(): Promise<number> {
-    this._checkStrictLoading();
     // Rails' CollectionAssociation#count: if the target is already
     // loaded, count the loaded array (no query). Otherwise issue a
     // real `COUNT(*)` on the scoped relation. Previously the non-
     // diverged branch loaded every row just to read `.length`, which
     // is a significant perf regression on large collections.
     if (this._targetLoaded) return this._target.length;
+    // Strict loading only blocks paths that actually hit the DB —
+    // a loaded target above returns without querying, matching
+    // `size()`'s loaded-target fast path.
+    this._checkStrictLoading();
     // `disable_joins: true` through-associations don't have a single
     // JOIN-based relation to count against — DJAS walks the chain in
     // separate queries and `this.scope()` returns the final-step's

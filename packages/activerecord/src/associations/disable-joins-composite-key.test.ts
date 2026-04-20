@@ -152,10 +152,10 @@ describe("DJAS — composite key support", () => {
   it("skips tuples containing null/undefined (matches SQL tuple-equality semantics, not Arel IS NULL)", async () => {
     // Regression: Arel's Attribute#eq(null) emits IS NULL, but SQL
     // tuple-equality treats any null component as a non-match.
-    // _addConstraintsDj filters null/undefined-bearing tuples
-    // BEFORE handing them to tuplePredicate; if all tuples are
-    // filtered out, falls back to Relation#none(). Mirrors
-    // counter-cache.ts#buildPkPredicate's null handling.
+    // The composite path now goes DJAS → Relation#where(cols, tuples)
+    // → PredicateBuilder.buildComposite, which handles the null /
+    // undefined filter and the empty-list short-circuit (→ none()).
+    // Mirrors counter-cache.ts#buildPkPredicate's null handling.
     const shop = await CkShop.create({ name: "S" });
     const order = (await CkOrder.create({
       shop_id: shop.id,

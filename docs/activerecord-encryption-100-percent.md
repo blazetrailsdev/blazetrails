@@ -14,7 +14,7 @@ pnpm tsx scripts/api-compare/compare.ts --package activerecord --missing
 Related:
 
 - [ActiveRecord: Road to 100%](./activerecord-100-percent.md) — the broader parent plan.
-- [Attr-type wiring follow-up #4](../.claude/projects/-home-dean-github-blazetrailsdev-trails/memory/project_attr_wiring_followups.md) — tracking the consolidation of the two `EncryptedAttributeType` classes that must land as part of this effort.
+- [Two-class consolidation](#the-two-class-consolidation-blocker-pr) (§ PR 0 below) — consolidates the two `EncryptedAttributeType` classes so `Base.encrypts()` routes through the Rails-faithful scheme-based implementation. Prerequisite for every PR below, so new scheme-surface behavior doesn't have to be mirrored across both implementations.
 
 ## Constraints (non-negotiable)
 
@@ -91,9 +91,27 @@ Consolidation onto the scheme-based class is the gate because:
 
 5. **Migration note in CLAUDE.md** — users now write
    `import { encrypts } from "@blazetrails/activerecord/encryption"`.
-6. **Browser compat audit** — grep the entire `encryption/` tree for
-   `node:*` imports; there should be **zero**. Tests may use `node:crypto`
-   freely (they don't ship). Confirm `msgpackr` is pure-JS (it is).
+6. **Browser compat audit.** Greater scope than a `node:*` grep — the
+   current encryption tree also pulls **unprefixed** Node builtins
+   (`import { deflateSync } from "zlib"` in `config.ts`) and relies on
+   the `Buffer` global in `encryptor.ts`, `config.ts`, and
+   `message-serializer.ts`. The audit must catch:
+   - `node:*` imports (prefixed form).
+   - Unprefixed builtin specifiers: `"zlib"`, `"crypto"`, `"fs"`,
+     `"path"`, `"os"`, `"buffer"`, `"stream"`, `"util"`, `"process"`.
+     (A project-local ESLint rule in `.eslintrc` that forbids these
+     across `packages/activerecord/src/encryption/**` is a clean way
+     to land this without ad-hoc grepping.)
+   - Node globals like `Buffer` and `process` — replace with
+     `Uint8Array` + the `base64` / `utf-8` helpers in
+     `@blazetrails/activesupport` (already provides `TextEncoder`/
+     `TextDecoder`-based conversions that work in browsers).
+     The browser-smoke bundler job (below) is the authoritative gate —
+     it will fail on any builtin that reaches the output bundle. Tests
+     may use Node-only APIs freely (they don't ship). No MessagePack
+     dependency exists yet — `MessagePackMessageSerializer` is
+     currently a JSON-backed stub; if a real MessagePack library is
+     adopted, verify it is pure-JS with no module-level Node imports.
 
 **Gate:** PR 0 merges only after `pnpm api:compare` shows no regression
 and `pnpm tsc --noEmit` is clean with the subpath-only imports.
@@ -288,9 +306,15 @@ browser-smoke-encryption:
         -c vitest.browser.config.ts packages/activerecord/src/encryption
 ```
 
-The Vitest browser config uses `jsdom` or `@vitest/browser` with a
-resolver that throws on `node:*` imports, so any accidental Node
-dependency in the encryption tree fails loudly.
+The referenced `vitest.browser.config.ts` does **not** exist in the
+repo yet — landing it is part of this series. It should live at the
+repo root alongside the existing Vitest config, use `@vitest/browser`
+(preferred; runs against a real browser runtime) or `jsdom` as a
+fallback, and wire a resolver / `define` rule that throws on any of
+the Node builtins listed in the audit above — prefixed OR unprefixed.
+Practically: a Vite `resolve.alias` that routes every builtin to a
+module whose default export throws with a clear message on import
+lets the bundler step fail the job before tests even start.
 
 The crypto adapter is the decisive bit:
 
@@ -316,8 +340,9 @@ bundle), but source files are not.
 Each encryption test file already contains a block of `it.skip(...)`
 placeholders whose names match the Rails encryption test suite
 verbatim. Unskip incrementally as backing methods land; **never rename
-them** (`api:compare --tests` matches on test names). Current skipped
-counts, highest first:
+them** — `pnpm run test:compare` matches tests by their full path
+(`describe` chain plus test name), so renaming silently drops the
+Rails match. Current skipped counts, highest first:
 
 | File                                                 | Skipped | PR most likely to unskip          |
 | ---------------------------------------------------- | ------: | --------------------------------- |

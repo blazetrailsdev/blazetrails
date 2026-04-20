@@ -1130,7 +1130,7 @@ export { deleteStatement as remove };
 // concrete default set mixed onto AbstractAdapter's prototype.
 // ---------------------------------------------------------------------------
 
-interface DatabaseStatementsMixinHost {
+interface DatabaseStatementsDefaultsHost {
   execute(sql: string, binds?: unknown[]): Promise<Record<string, unknown>[]>;
   executeMutation(sql: string, binds?: unknown[]): Promise<number>;
   execQuery(sql: string, name?: string | null, binds?: unknown[]): Promise<Result>;
@@ -1138,7 +1138,7 @@ interface DatabaseStatementsMixinHost {
 
 export const DatabaseStatements = {
   async selectAll(
-    this: DatabaseStatementsMixinHost,
+    this: DatabaseStatementsDefaultsHost,
     sql: string,
     name?: string | null,
     binds?: unknown[],
@@ -1151,7 +1151,7 @@ export const DatabaseStatements = {
   },
 
   async selectOne(
-    this: DatabaseStatementsMixinHost,
+    this: DatabaseStatementsDefaultsHost,
     sql: string,
     _name?: string | null,
     binds?: unknown[],
@@ -1161,7 +1161,7 @@ export const DatabaseStatements = {
   },
 
   async selectValue(
-    this: DatabaseStatementsMixinHost,
+    this: DatabaseStatementsDefaultsHost,
     sql: string,
     _name?: string | null,
     binds?: unknown[],
@@ -1173,7 +1173,7 @@ export const DatabaseStatements = {
   },
 
   async selectValues(
-    this: DatabaseStatementsMixinHost,
+    this: DatabaseStatementsDefaultsHost,
     sql: string,
     _name?: string | null,
     binds?: unknown[],
@@ -1186,7 +1186,7 @@ export const DatabaseStatements = {
   },
 
   async selectRows(
-    this: DatabaseStatementsMixinHost,
+    this: DatabaseStatementsDefaultsHost,
     sql: string,
     _name?: string | null,
     binds?: unknown[],
@@ -1198,7 +1198,7 @@ export const DatabaseStatements = {
   },
 
   async execQuery(
-    this: DatabaseStatementsMixinHost,
+    this: DatabaseStatementsDefaultsHost,
     sql: string,
     _name?: string | null,
     binds?: unknown[],
@@ -1208,7 +1208,7 @@ export const DatabaseStatements = {
   },
 
   async execInsert(
-    this: DatabaseStatementsMixinHost,
+    this: DatabaseStatementsDefaultsHost,
     sql: string,
     _name?: string | null,
     binds?: unknown[],
@@ -1217,7 +1217,7 @@ export const DatabaseStatements = {
   },
 
   async execDelete(
-    this: DatabaseStatementsMixinHost,
+    this: DatabaseStatementsDefaultsHost,
     sql: string,
     _name?: string | null,
     binds?: unknown[],
@@ -1226,7 +1226,7 @@ export const DatabaseStatements = {
   },
 
   async execUpdate(
-    this: DatabaseStatementsMixinHost,
+    this: DatabaseStatementsDefaultsHost,
     sql: string,
     _name?: string | null,
     binds?: unknown[],

@@ -327,6 +327,27 @@ describe("merge()", () => {
     expect(items[0].name).toBe("A");
   });
 
+  it("propagates the none() short-circuit from the other relation", async () => {
+    // Rails: merging a null-relation keeps the result empty so
+    // callers don't accidentally broaden an already-empty scope by
+    // composing state on top. We mirror the sticky behavior on
+    // `_isNone`.
+    class Item extends Base {
+      static _tableName = "items";
+    }
+    Item.attribute("id", "integer");
+    Item.attribute("name", "string");
+    Item.adapter = adapter;
+
+    await Item.create({ name: "A" });
+    await Item.create({ name: "B" });
+
+    const emptyOther = Item.all().none();
+    const merged = Item.all().merge(emptyOther);
+    expect((merged as unknown as { _isNone: boolean })._isNone).toBe(true);
+    expect(await merged.toArray()).toEqual([]);
+  });
+
   it("merges order from other relation", async () => {
     class Item extends Base {
       static _tableName = "items";

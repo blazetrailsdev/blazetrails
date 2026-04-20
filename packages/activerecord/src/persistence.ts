@@ -6,6 +6,7 @@
  */
 
 import { InsertManager, UpdateManager, DeleteManager, Table as ArelTable } from "@blazetrails/arel";
+import { RecordNotSaved } from "./errors.js";
 
 interface PersistenceHost {
   new (attrs?: Record<string, unknown>): any;
@@ -363,7 +364,11 @@ export async function toggleBang<T extends CounterRecord>(
   // an error so the failure isn't silently swallowed.
   const saved = await this.save({ validate: false });
   if (!saved) {
-    throw new Error(`toggleBang failed to persist ${attribute}`);
+    const ctorName = (this.constructor as { name?: string }).name ?? "record";
+    throw new RecordNotSaved(
+      `Failed to save the ${ctorName} while toggling \`${attribute}\``,
+      this,
+    );
   }
   return this;
 }

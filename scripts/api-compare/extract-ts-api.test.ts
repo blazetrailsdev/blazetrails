@@ -40,9 +40,12 @@ describe("resolveRelModule", () => {
     expect(resolveRelModule("a.ts", "node:fs")).toBeNull();
   });
 
-  it("emits POSIX-style separators regardless of input", () => {
-    // Directory walk uses POSIX separators in relPath keys; the
-    // resolver must never introduce backslashes even if fed one.
+  it("emits POSIX-style separators", () => {
+    // relPath is POSIX-normalized at the caller (in extract-ts-api.ts
+    // where it's built via `path.relative(...).replace(/\\/g, "/")`),
+    // so resolveRelModule's contract is POSIX-in, POSIX-out. This
+    // test pins the output format so the caller's keys match what
+    // resolveRelModule produces.
     const result = resolveRelModule("dir/sub/file.ts", "./sibling.js");
     expect(result).toBe("dir/sub/sibling.ts");
     expect(result).not.toContain("\\");

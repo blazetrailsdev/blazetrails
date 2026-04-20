@@ -254,8 +254,11 @@ export function isPreviouslyPersisted(this: PersistenceRecordDispatch): boolean 
 // ---------------------------------------------------------------------------
 // Increment / decrement / toggle — ActiveRecord::Persistence#increment /
 // #decrement / #toggle and their bang counterparts. The plain forms mutate
-// in memory; the bang forms dispatch through `this` and then persist via
-// updateColumn (skipping validations and callbacks).
+// in memory; the bang forms dispatch through `this`. `increment!` and
+// `decrement!` persist via `constructor.updateCounters(...)` (atomic UPDATE,
+// skipping validations and model callbacks); `toggle!` persists via
+// `save({ validate: false })` (skipping validations but still running
+// callbacks), matching Rails' `toggle.update_attribute(...)` chain.
 // ---------------------------------------------------------------------------
 
 interface CounterRecord {

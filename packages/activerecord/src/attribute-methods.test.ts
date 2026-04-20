@@ -3,7 +3,7 @@
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { Base } from "./index.js";
+import { Base, ReadonlyAttributeError } from "./index.js";
 
 import { createTestAdapter } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
@@ -1793,7 +1793,7 @@ describe("AttributeMethodsTest", () => {
       const item = await Item.create({ code: "ABC", name: "Widget" });
       expect(() => {
         item.code = "XYZ";
-      }).toThrow(/code/);
+      }).toThrow(ReadonlyAttributeError);
       item.name = "Updated";
       await item.save();
       const found = await Item.find(item.id);

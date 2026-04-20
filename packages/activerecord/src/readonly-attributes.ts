@@ -6,6 +6,11 @@ import { ActiveRecordError } from "./errors.js";
  * Raised when a persisted record attempts to write to a column declared
  * via `attr_readonly`.
  *
+ * The message is just the attribute name — matching Rails, which defines
+ * `class ReadonlyAttributeError < ActiveRecordError; end` with no custom
+ * initializer and raises via `ReadonlyAttributeError.new(attr_name)`. The
+ * `.attribute` property gives programmatic access to the same value.
+ *
  * Mirrors: ActiveRecord::ReadonlyAttributeError (defined alongside
  * HasReadonlyAttributes in Rails' readonly_attributes.rb).
  */

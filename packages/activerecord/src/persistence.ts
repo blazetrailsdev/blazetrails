@@ -17,6 +17,7 @@ import {
   ReadOnlyRecord,
   RecordNotFound,
   RecordNotSaved,
+  UnknownAttributeError,
 } from "./errors.js";
 import { clearAutosaveState } from "./autosave-association.js";
 import { getStiBase, getInheritanceColumn, isStiSubclass } from "./inheritance.js";
@@ -634,6 +635,13 @@ export async function updateColumns<T extends UpdateColumnsRecord>(
     throw new Error("Cannot update columns on a new or destroyed record");
   }
 
+  // Rails' update_columns returns true for empty attrs without running a
+  // SQL statement. Our UpdateManager would emit `UPDATE t WHERE ...` with
+  // no SET clause, which is invalid SQL.
+  if (Object.keys(attrs).length === 0) {
+    return;
+  }
+
   const ctor = this.constructor;
   const table = ctor.arelTable as unknown as InstanceType<typeof ArelTable> & {
     get(name: string): unknown;
@@ -655,7 +663,7 @@ export async function updateColumns<T extends UpdateColumnsRecord>(
   for (const [key, value] of Object.entries(attrs)) {
     const def = ctor._attributeDefinitions.get(key);
     if (!def && !pkCols.includes(key)) {
-      throw new Error(`Unknown attribute: ${key}`);
+      throw new UnknownAttributeError(this, key);
     }
     const cast = def ? def.type.cast(value) : value;
     this._attributes.set(key, cast);

@@ -22,6 +22,7 @@ import { NamedWindow } from "./nodes/window.js";
 import { Table } from "./table.js";
 import { UpdateManager } from "./update-manager.js";
 import { DeleteManager } from "./delete-manager.js";
+import type { UpdateValues } from "./crud.js";
 import { Comment } from "./nodes/comment.js";
 import { Lateral } from "./nodes/unary.js";
 import { True } from "./nodes/true.js";
@@ -479,7 +480,7 @@ export class SelectManager extends TreeManager {
    * Mirrors: Arel::SelectManager#compile_update
    */
   compileUpdate(
-    values: [Node, unknown][] | string | SqlLiteral,
+    values: UpdateValues,
     key: Node | null = null,
     havingClause: Node | null = null,
     groupValuesColumns: Node[] = [],

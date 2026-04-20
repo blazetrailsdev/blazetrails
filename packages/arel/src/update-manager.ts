@@ -8,6 +8,7 @@ import { Group } from "./nodes/unary.js";
 import { SqlLiteral } from "./nodes/sql-literal.js";
 import { BoundSqlLiteral } from "./nodes/bound-sql-literal.js";
 import { Table } from "./table.js";
+import type { UpdateValues } from "./crud.js";
 
 /**
  * UpdateManager — chainable API for building UPDATE statements.
@@ -45,7 +46,7 @@ export class UpdateManager extends TreeManager {
    *
    * Mirrors: Arel::UpdateManager#set
    */
-  set(values: [Node, unknown][] | string | SqlLiteral | BoundSqlLiteral): this {
+  set(values: UpdateValues): this {
     if (typeof values === "string") {
       this.ast.values = [new SqlLiteral(values)];
     } else if (values instanceof SqlLiteral || values instanceof BoundSqlLiteral) {

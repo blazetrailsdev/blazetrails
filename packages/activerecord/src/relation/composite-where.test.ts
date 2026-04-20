@@ -11,7 +11,7 @@
  * Mirrors: ActiveRecord predicate-builder composite-key handling.
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { Base, registerModel } from "../index.js";
+import { Base } from "../index.js";
 import { createTestAdapter } from "../test-adapter.js";
 import type { DatabaseAdapter } from "../adapter.js";
 
@@ -31,7 +31,11 @@ describe("Relation#where — composite-key form", () => {
   beforeEach(() => {
     adapter = createTestAdapter();
     CompOrder.adapter = adapter;
-    registerModel("CompOrder", CompOrder);
+    // No registerModel() — this test only exercises where /
+    // whereNot / PredicateBuilder directly; nothing resolves
+    // associations through the global modelRegistry. Skipping
+    // registration also avoids the stale-entry leak across the
+    // suite that registerModel would otherwise create.
   });
 
   it("compiles `where(['c1','c2'], [[v1a,v1b], [v2a,v2b]])` to OR-of-AND of column equalities", async () => {

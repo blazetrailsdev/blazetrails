@@ -346,7 +346,7 @@ describe("merge()", () => {
     // was written for.
     const noneOther = Item.all().none();
     const fromPopulated = Item.all().merge(noneOther);
-    expect((fromPopulated as unknown as { _isNone: boolean })._isNone).toBe(true);
+    expect(fromPopulated.isNone()).toBe(true);
     expect(await fromPopulated.toArray()).toEqual([]);
 
     // none.merge(populated) — already emptied by the left side; the
@@ -355,8 +355,15 @@ describe("merge()", () => {
     // fresh base can't regress this.
     const populatedOther = Item.all().where({ name: "A" });
     const fromNone = Item.all().none().merge(populatedOther);
-    expect((fromNone as unknown as { _isNone: boolean })._isNone).toBe(true);
+    expect(fromNone.isNone()).toBe(true);
     expect(await fromNone.toArray()).toEqual([]);
+
+    // Same sticky behavior through the in-place `merge!` variant —
+    // the merger and spawn-methods paths stay in sync.
+    const bangTarget = Item.all();
+    (bangTarget as unknown as { mergeBang: (o: unknown) => unknown }).mergeBang(Item.all().none());
+    expect(bangTarget.isNone()).toBe(true);
+    expect(await bangTarget.toArray()).toEqual([]);
   });
 
   it("merges order from other relation", async () => {

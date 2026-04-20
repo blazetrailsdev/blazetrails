@@ -347,6 +347,10 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
    * `Array.isArray(this.key)` at the call site when the key shape isn't
    * statically known. In deferred-chain mode the walker's loaded-chain
    * DJAR carries the authoritative shape.
+   *
+   * Returns a defensive shallow copy (and cloned tuples in the
+   * composite case) so caller mutation can't desync the internal
+   * `_storedKeyStrings` cache used by the load-time reorder.
    */
   override async ids(): Promise<DjarIds> {
     if (this._chainWalker) {
@@ -360,7 +364,10 @@ export class DisableJoinsAssociationRelation<T extends Base> extends Relation<T>
       const merged = this._composeChainedState(relation);
       return (merged as unknown as { ids: () => Promise<DjarIds> }).ids();
     }
-    return this._storedIds;
+    if (this._composite) {
+      return (this._storedIds as unknown[][]).map((t) => Array.from(t));
+    }
+    return (this._storedIds as unknown[]).slice();
   }
 
   /**

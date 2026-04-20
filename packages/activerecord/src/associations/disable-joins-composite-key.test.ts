@@ -124,12 +124,15 @@ describe("DJAS — composite key support", () => {
     expect(observed.some((s) => /\bJOIN\b/i.test(s))).toBe(false);
   });
 
-  it("composite-key + ordered upstream: DJAR wrap reorders records by through-table tuple order", async () => {
-    // DJAR's loaded-chain wrap now supports composite keys via
-    // serialized tuple grouping. When the through-step is ordered
-    // (upstream `.order("name")` yields orderA before orderB), the
-    // source step's records re-emit in that tuple order regardless
-    // of the DB's own insertion / default order.
+  it("composite-key + ordered upstream: skips DJAR wrap (records load via composite-key WHERE, no in-list reorder)", async () => {
+    // NOTE: the test name is preserved from PR #645 (test names are
+    // an identifier in this repo — `test:compare` uses them to match
+    // against Rails). The body now asserts the *new* behavior: the
+    // loaded-chain DJAR wrap supports composite keys via serialized
+    // tuple grouping, so when the through-step is ordered (upstream
+    // `.order("name")` yields orderA before orderB) the source
+    // step's records re-emit in that tuple order regardless of the
+    // DB's own insertion / default order.
     Associations.hasMany.call(CkShop, "ckOrdersOrdered", {
       className: "CkOrder",
       foreignKey: "shop_id",
@@ -319,6 +322,21 @@ describe("DJAS — composite key support", () => {
     expect(() => new DisableJoinsAssociationRelation(CkLineItem, "sku", null as any)).toThrow(
       /ids must be an array/,
     );
+
+    // ids() returns a defensive copy — caller mutation of the
+    // returned list or its tuples must not desync the internal
+    // `_storedKeyStrings` cache (which the load-time reorder uses).
+    const djar = new DisableJoinsAssociationRelation(
+      CkLineItem,
+      ["ck_order_shop_id", "ck_order_number"],
+      [[1, 100]],
+    );
+    const returned = (await djar.ids()) as unknown[][];
+    returned.push([999, 999]);
+    (returned[0] as unknown[])[1] = 42;
+    // Second call sees the original — mutation didn't leak into
+    // the DJAR's internal state.
+    expect(await djar.ids()).toEqual([[1, 100]]);
   });
 
   it("DisableJoinsAssociationRelation composite-key load: throws ArgumentError on shape/arity mismatch", async () => {

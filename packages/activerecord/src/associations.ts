@@ -354,9 +354,11 @@ function _canRouteThroughViaAssociationScope(
  * Currently routes: single-column and composite-key through
  * associations (from PR #645) and polymorphic-source + `sourceType`
  * through-associations (from PR #661 — Rails' DJAS has no such gate
- * and evaluates the per-reflection `constraints()` chain, including
- * `ThroughReflection#_sourceTypeScope()` which applies
- * `where(source_type: ...)` on the through step).
+ * and evaluates the per-reflection `constraints()` chain. When the
+ * source is polymorphic, the through chain includes a
+ * `PolymorphicReflection` wrapper whose `constraints()` contributes
+ * `_sourceTypeScope()` (reflection.ts) — the `where(source_type:
+ * ...)` closure that lands on the through step).
  *
  * Remaining bail-out: nested-through (`isNested()`). Follow-up
  * widening covers that case.

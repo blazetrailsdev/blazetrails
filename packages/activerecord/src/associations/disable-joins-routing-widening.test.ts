@@ -8,11 +8,11 @@
  *
  * Rails has no such restriction: `DisableJoinsAssociationScope` walks
  * the reverseChain and evaluates `reflection.constraints()` at each
- * step. The source-type filter is already returned from
- * `ThroughReflection#constraints()` via `_sourceTypeScope()`
- * (reflection.ts#_sourceTypeScope), so the walk naturally applies
- * `WHERE source_type = 'Target'` on the through step once the gate is
- * lifted.
+ * step. When the source is polymorphic, the through chain wraps the
+ * relevant step in a `PolymorphicReflection` whose `constraints()`
+ * contributes `_sourceTypeScope()` (reflection.ts#_sourceTypeScope),
+ * so the walk naturally applies `WHERE source_type = 'Target'` on
+ * the through step once the gate is lifted.
  *
  * These tests pin the resulting SQL shape (no JOIN) so a regression
  * that re-introduces the gate — or any future change that silently
@@ -151,9 +151,9 @@ describe("DJAS routing widening — sourceType + polymorphic source", () => {
     // Hard assert: no JOIN in any query — would be present if the
     // loader regressed back to AssociationScope's join-based path.
     expect(observed.some((s) => /\bJOIN\b/i.test(s))).toBe(false);
-    // And the source_type filter actually lands somewhere. Rails
-    // applies it on the through step (rw_comments) via
-    // ThroughReflection#_sourceTypeScope.
+    // And the source_type filter actually lands somewhere —
+    // contributed by PolymorphicReflection#_sourceTypeScope via
+    // constraints() during the DJAS chain walk.
     expect(observed.some((s) => /origin_type/i.test(s))).toBe(true);
   });
 

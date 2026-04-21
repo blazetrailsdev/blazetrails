@@ -3506,6 +3506,67 @@ describe("CalculationsTest", () => {
     expect(topic.status).toBe("draft"); // kept original
   });
 
+  // Rails' Relation#build/create call scope_for_create, which merges
+  // where_values_hash with create_with_value. A bare `rel.build()` /
+  // `rel.create()` must pick up createWith attrs the same way
+  // findOrCreateBy does.
+  it("Relation#build merges createWith attrs via scope_for_create", () => {
+    class Topic extends Base {
+      static {
+        this._tableName = "topics";
+        this.attribute("id", "integer");
+        this.attribute("title", "string");
+        this.attribute("status", "string");
+        this.adapter = adapter;
+      }
+    }
+
+    const topic = Topic.all().createWith({ status: "draft" }).build({ title: "T" });
+    expect(topic.isNewRecord()).toBe(true);
+    expect(topic.status).toBe("draft");
+    expect(topic.title).toBe("T");
+  });
+
+  it("Relation#create persists with createWith attrs via scope_for_create", async () => {
+    class Topic extends Base {
+      static {
+        this._tableName = "topics";
+        this.attribute("id", "integer");
+        this.attribute("title", "string");
+        this.attribute("status", "string");
+        this.adapter = adapter;
+      }
+    }
+
+    const topic = await Topic.all()
+      .createWith({ status: "published" })
+      .create({ title: "Via create" });
+    expect(topic.isPersisted()).toBe(true);
+    expect(topic.status).toBe("published");
+    const reloaded = await Topic.find(topic.id);
+    expect(reloaded.status).toBe("published");
+  });
+
+  it("Relation#firstOrInitialize merges createWith attrs when initializing", async () => {
+    class Topic extends Base {
+      static {
+        this._tableName = "topics";
+        this.attribute("id", "integer");
+        this.attribute("title", "string");
+        this.attribute("status", "string");
+        this.adapter = adapter;
+      }
+    }
+
+    const topic = await Topic.all()
+      .createWith({ status: "init-default" })
+      .where({ title: "ToInit" })
+      .firstOrInitialize();
+    expect(topic.isNewRecord()).toBe(true);
+    expect(topic.status).toBe("init-default");
+    expect(topic.title).toBe("ToInit");
+  });
+
   // =====================================================================
   // unscope — activerecord/test/cases/relation/where_test.rb
   // =====================================================================

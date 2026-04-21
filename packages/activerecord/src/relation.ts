@@ -1296,8 +1296,7 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#build
    */
   build(attrs: Record<string, unknown> = {}): T {
-    const scopeAttrs = this._scopeAttributes();
-    return new this._modelClass({ ...scopeAttrs, ...attrs }) as T;
+    return new this._modelClass({ ...this.scopeForCreate(), ...attrs }) as T;
   }
 
   /**
@@ -1306,8 +1305,7 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#create
    */
   async create(attrs: Record<string, unknown> = {}): Promise<T> {
-    const scopeAttrs = this._scopeAttributes();
-    return this._modelClass.create({ ...scopeAttrs, ...attrs }) as Promise<T>;
+    return this._modelClass.create({ ...this.scopeForCreate(), ...attrs }) as Promise<T>;
   }
 
   /**
@@ -1316,8 +1314,7 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#create!
    */
   async createBang(attrs: Record<string, unknown> = {}): Promise<T> {
-    const scopeAttrs = this._scopeAttributes();
-    return this._modelClass.createBang({ ...scopeAttrs, ...attrs }) as Promise<T>;
+    return this._modelClass.createBang({ ...this.scopeForCreate(), ...attrs }) as Promise<T>;
   }
 
   /**
@@ -2291,8 +2288,7 @@ export class Relation<T extends Base> {
   ): Promise<T> {
     try {
       return (await this._modelClass.create({
-        ...this._createWithAttrs,
-        ...this._scopeAttributes(),
+        ...this.scopeForCreate(),
         ...conditions,
         ...extra,
       })) as T;
@@ -2334,7 +2330,7 @@ export class Relation<T extends Base> {
   async firstOrInitialize(extra?: Record<string, unknown>): Promise<T> {
     const records = await this.limit(1).toArray();
     if (records.length > 0) return records[0];
-    return new (this._modelClass as any)({ ...this._scopeAttributes(), ...extra }) as T;
+    return new (this._modelClass as any)({ ...this.scopeForCreate(), ...extra }) as T;
   }
 
   /**

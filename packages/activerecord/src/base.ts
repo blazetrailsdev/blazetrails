@@ -1954,8 +1954,8 @@ export class Base extends Model {
 
       // Exclude self if persisted — mirrors uniqueness.rb:26-30:
       // `relation.where.not(primary_key => [record.id_in_database])`
-      // Array form generates NOT IN, matching Rails. attributeWas() provides
-      // the DB value when the PK has been changed in memory (id_in_database).
+      // attributeWas() provides the DB value when the PK changed in memory
+      // (id_in_database semantics). CPK uses a tuple NOT-IN predicate.
       if (this.isPersisted()) {
         const pk = ctor.primaryKey;
         if (Array.isArray(pk)) {
@@ -2565,31 +2565,6 @@ export class Base extends Model {
   // signatures declared on the merged `interface Base` at the bottom
   // of this file so subclass-variance rules treat them as methods
   // (bivariant) rather than properties (invariant).
-
-  // Underscore aliases for bang methods (Rails uses ! suffix, TS uses _ suffix)
-  static async first_<T extends typeof Base>(this: T): Promise<InstanceType<T>> {
-    return this.firstBang();
-  }
-  static async last_<T extends typeof Base>(this: T): Promise<InstanceType<T>> {
-    return this.lastBang();
-  }
-  static async take_<T extends typeof Base>(this: T): Promise<InstanceType<T>> {
-    const r = await this.all().take();
-    if (!r)
-      throw new RecordNotFound(
-        `${this.name} record not found`,
-        this.name,
-        String(this.primaryKey),
-        null,
-      );
-    return r;
-  }
-  static async findBy_<T extends typeof Base>(
-    this: T,
-    conditions: Record<string, unknown>,
-  ): Promise<InstanceType<T>> {
-    return this.findByBang(conditions);
-  }
 
   static async tableExists(): Promise<boolean> {
     const cache = this.adapter?.schemaCache;

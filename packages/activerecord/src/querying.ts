@@ -299,6 +299,41 @@ export function thirdToLast<T extends typeof Base>(this: T): Promise<InstanceTyp
   return this.all().thirdToLast();
 }
 
+/** Mirrors: ActiveRecord::FinderMethods#second! */
+export function secondBang<T extends typeof Base>(this: T): Promise<InstanceType<T>> {
+  return this.all().secondBang();
+}
+
+/** Mirrors: ActiveRecord::FinderMethods#third! */
+export function thirdBang<T extends typeof Base>(this: T): Promise<InstanceType<T>> {
+  return this.all().thirdBang();
+}
+
+/** Mirrors: ActiveRecord::FinderMethods#fourth! */
+export function fourthBang<T extends typeof Base>(this: T): Promise<InstanceType<T>> {
+  return this.all().fourthBang();
+}
+
+/** Mirrors: ActiveRecord::FinderMethods#fifth! */
+export function fifthBang<T extends typeof Base>(this: T): Promise<InstanceType<T>> {
+  return this.all().fifthBang();
+}
+
+/** Mirrors: ActiveRecord::FinderMethods#forty_two! */
+export function fortyTwoBang<T extends typeof Base>(this: T): Promise<InstanceType<T>> {
+  return this.all().fortyTwoBang();
+}
+
+/** Mirrors: ActiveRecord::FinderMethods#second_to_last! */
+export function secondToLastBang<T extends typeof Base>(this: T): Promise<InstanceType<T>> {
+  return this.all().secondToLastBang();
+}
+
+/** Mirrors: ActiveRecord::FinderMethods#third_to_last! */
+export function thirdToLastBang<T extends typeof Base>(this: T): Promise<InstanceType<T>> {
+  return this.all().thirdToLastBang();
+}
+
 /**
  * Mirrors: ActiveRecord::Querying#count — accepts an optional column name
  * and returns either a number or a grouped `Record<string, number>` when
@@ -414,6 +449,11 @@ export function take<T extends typeof Base>(
   n?: number,
 ): Promise<InstanceType<T> | InstanceType<T>[] | null> {
   return n === undefined ? this.all().take() : this.all().take(n);
+}
+
+/** Mirrors: ActiveRecord::FinderMethods#take! */
+export function takeBang<T extends typeof Base>(this: T): Promise<InstanceType<T>> {
+  return this.all().takeBang();
 }
 
 /** Mirrors: ActiveRecord::Querying#sole — single result or throw */

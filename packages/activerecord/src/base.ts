@@ -1726,12 +1726,19 @@ export class Base extends Model {
   declare static destroyBy: typeof Querying.destroyBy;
   declare static deleteBy: typeof Querying.deleteBy;
   declare static second: typeof Querying.second;
+  declare static secondBang: typeof Querying.secondBang;
   declare static third: typeof Querying.third;
+  declare static thirdBang: typeof Querying.thirdBang;
   declare static fourth: typeof Querying.fourth;
+  declare static fourthBang: typeof Querying.fourthBang;
   declare static fifth: typeof Querying.fifth;
+  declare static fifthBang: typeof Querying.fifthBang;
   declare static fortyTwo: typeof Querying.fortyTwo;
+  declare static fortyTwoBang: typeof Querying.fortyTwoBang;
   declare static secondToLast: typeof Querying.secondToLast;
+  declare static secondToLastBang: typeof Querying.secondToLastBang;
   declare static thirdToLast: typeof Querying.thirdToLast;
+  declare static thirdToLastBang: typeof Querying.thirdToLastBang;
   declare static count: typeof Querying.count;
   declare static minimum: typeof Querying.minimum;
   declare static maximum: typeof Querying.maximum;
@@ -1745,6 +1752,7 @@ export class Base extends Model {
   declare static last: typeof Querying.last;
   declare static lastBang: typeof Querying.lastBang;
   declare static take: typeof Querying.take;
+  declare static takeBang: typeof Querying.takeBang;
   declare static sole: typeof Querying.sole;
   declare static exists: typeof Querying.exists;
   declare static findOrCreateBy: typeof Querying.findOrCreateBy;

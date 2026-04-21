@@ -1785,13 +1785,21 @@ export class Base extends Model {
 
     (ModelSchema.loadSchema as any).call(this);
 
+    const hadOwnSuppress = Object.prototype.hasOwnProperty.call(
+      this,
+      "_suppressInitializeCallback",
+    );
     const prevSuppress = this._suppressInitializeCallback;
     this._suppressInitializeCallback = true;
     let record: InstanceType<T>;
     try {
       record = new this() as InstanceType<T>;
     } finally {
-      this._suppressInitializeCallback = prevSuppress;
+      if (hadOwnSuppress) {
+        this._suppressInitializeCallback = prevSuppress;
+      } else {
+        delete (this as any)._suppressInitializeCallback;
+      }
     }
     // Load DB values through deserialize (not cast) so encrypted types decrypt
     for (const [key, value] of Object.entries(row)) {

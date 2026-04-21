@@ -302,9 +302,9 @@ import { Base } from "@blazetrails/activerecord";
 
 class Model extends Base {}
 
-Model.update(":all", { title: "x" }); // explicit sentinel
-Model.update({ title: "x" }); // also `:all` (no id arg)
-Model.update([1, 2], [{ title: "a" }, { title: "b" }]);
+await Model.update(":all", { title: "x" }); // explicit sentinel
+await Model.update({ title: "x" }); // also `:all` (no id arg)
+await Model.update([1, 2], [{ title: "a" }, { title: "b" }]);
 ```
 
 The leading colon matters: a bare `"all"` would collide with a legitimate

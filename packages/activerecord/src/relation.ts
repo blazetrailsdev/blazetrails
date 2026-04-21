@@ -2304,9 +2304,12 @@ export class Relation<T extends Base> {
       // transaction() returns undefined when the block raises Rollback.
       // Don't silently yield undefined — raise so callers see the abort.
       if (result === undefined) {
+        // `RecordNotSaved.record` is conventionally the model instance that
+        // failed to persist — which doesn't exist here, since the inner
+        // create rolled back. Leave record undefined rather than passing
+        // the Relation.
         throw new RecordNotSaved(
           `${this._modelClass.name}.createOrFindBy rolled back before persist`,
-          this as unknown as object,
         );
       }
       return result;

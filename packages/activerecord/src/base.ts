@@ -2461,8 +2461,11 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base#transaction
    */
-  async transaction<R>(fn: (tx: any) => Promise<R>): Promise<R | undefined> {
-    return (this.constructor as typeof Base).transaction(fn);
+  async transaction<R>(
+    fn: (tx: any) => Promise<R>,
+    options?: { isolation?: string; requiresNew?: boolean; joinable?: boolean },
+  ): Promise<R | undefined> {
+    return (this.constructor as typeof Base).transaction(fn, options);
   }
 
   /**

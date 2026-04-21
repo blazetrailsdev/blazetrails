@@ -47,6 +47,9 @@ const NATIVE_DATABASE_TYPES: Record<string, { name: string; limit?: number }> = 
 const ER_DUP_ENTRY = 1062;
 const ER_NOT_NULL_VIOLATION = 1048;
 const ER_DO_NOT_HAVE_DEFAULT = 1364;
+const ER_NO_REFERENCED_ROW = 1217;
+const ER_ROW_IS_REFERENCED = 1216;
+const ER_ROW_IS_REFERENCED_2 = 1451;
 const ER_NO_REFERENCED_ROW_2 = 1452;
 const ER_DATA_TOO_LONG = 1406;
 const ER_OUT_OF_RANGE = 1264;
@@ -620,6 +623,9 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     switch (errno) {
       case ER_DUP_ENTRY:
         return new RecordNotUnique(msg, { sql, binds, cause });
+      case ER_NO_REFERENCED_ROW:
+      case ER_ROW_IS_REFERENCED:
+      case ER_ROW_IS_REFERENCED_2:
       case ER_NO_REFERENCED_ROW_2:
         return new InvalidForeignKey(msg, { sql, binds, cause });
       case ER_NOT_NULL_VIOLATION:

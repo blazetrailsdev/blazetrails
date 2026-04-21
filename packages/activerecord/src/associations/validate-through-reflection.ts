@@ -45,8 +45,12 @@ export function validateThroughReflection(modelClass: typeof Base, assocName: st
   // catches it can't sneak past validation on a retry.
   if (refl[CHECKED_ERROR] !== undefined) throw refl[CHECKED_ERROR];
   if (refl[CHECKED_OK]) return;
-  // Only ThroughReflection has a `checkValidityBang`; non-through
-  // reflections don't need the check.
+  // `AbstractReflection#checkValidityBang` (reflection.ts:743) only
+  // runs the inverse-of check; the broader Rails-named errors live
+  // on `ThroughReflection#checkValidityBang` (reflection.ts:1281).
+  // Gate on `isThroughReflection` so non-through associations
+  // aren't put through the through-only checks here. The narrower
+  // inverse-of-only check fires elsewhere on its own schedule.
   const isThrough = typeof refl.isThroughReflection === "function" && refl.isThroughReflection();
   if (!isThrough || typeof refl.checkValidityBang !== "function") return;
 

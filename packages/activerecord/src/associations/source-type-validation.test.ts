@@ -1,26 +1,33 @@
 /**
- * ThroughReflection sourceType validation (task #18).
+ * ThroughReflection#checkValidityBang at first use (tasks #18 + #23).
  *
- * Rails' `ThroughReflection#check_validity!` raises at first use
- * (`Association#initialize`) for two misconfigurations:
- *   - polymorphic source without `source_type` →
- *     `HasManyThroughAssociationPolymorphicSourceError`
- *   - `source_type` with a non-polymorphic source →
- *     `HasManyThroughAssociationPointlessSourceTypeError`
+ * Rails' `Association#initialize` runs `reflection.check_validity!`
+ * (reflection.rb:1140-1178) so every misconfiguration surfaces
+ * loudly the first time the association is touched. We mirror that
+ * via `validateThroughReflection`, called from
+ * `Association#constructor`, `association(record, name)`, and the
+ * loader entry points (`loadHasMany` / `loadHasOne`).
  *
- * Without this check the misconfiguration silently produces
- * invalid SQL downstream (reflection.ts injects a
- * `PolymorphicReflection` whose `foreignType` resolves to `null`,
- * so `_sourceTypeScope()` emits `where({[null]: sourceType})`; the
- * unguarded polymorphic-source case has no type filter and mixes
- * ids across polymorphic target tables).
+ * Coverage in this suite:
+ *   - polymorphic source without `source_type`
+ *     → `HasManyThroughAssociationPolymorphicSourceError`
+ *   - `source_type` with a non-polymorphic source
+ *     → `HasManyThroughAssociationPointlessSourceTypeError`
+ *   - missing source association
+ *     → `HasManyThroughSourceAssociationNotFoundError`
+ *   - `has_one :through` collection
+ *     → `HasOneThroughCantAssociateThroughCollection`
+ *   - the loader entry point so direct callers surface the same
+ *     errors as the proxy
+ *   - the cached-error re-throw contract (a caught failure on call
+ *     N still raises on call N+1 — no silent bypass)
+ *   - the valid-shape happy path (polymorphic + sourceType)
  *
- * The suite covers: both error paths via `association()` (which
- * runs the check during `Association#constructor`), the loader
- * entry point (`loadHasMany`) so direct callers that bypass the
- * proxy still surface the misconfiguration, and the valid shape
- * (polymorphic source paired with `sourceType`) to pin the
- * no-false-positive contract.
+ * Without this check the misconfigurations silently produce invalid
+ * SQL downstream (e.g. polymorphic-source-without-source_type:
+ * reflection.ts injects a `PolymorphicReflection` whose `foreignType`
+ * resolves to null, the chain walker has no type filter, ids mix
+ * across polymorphic targets).
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { Base, registerModel } from "../index.js";

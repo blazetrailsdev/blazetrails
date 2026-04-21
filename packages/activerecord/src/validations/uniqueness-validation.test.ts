@@ -1548,7 +1548,6 @@ describe("UniquenessBindParamsTest", () => {
   });
 });
 
-
 describe("UniquenessValidationTest", () => {
   it("validate uniqueness", async () => {
     const adapter = freshAdapter();

@@ -2618,14 +2618,21 @@ export class Relation<T extends Base> {
   /**
    * Default projection node when no explicit `select` and no
    * `ignoredColumns`. Mirrors Rails' `Relation#build_arel` which
-   * uses `klass.arel_table[Arel.star]` — always `<target>.*`,
-   * never bare `*`. Plain `*` collapses same-named columns from
-   * joined tables in the row hash (drivers return one key per
-   * row name, last write wins): e.g. `users.id` gets overwritten
-   * by a JOIN's `friendships.id`. Always-qualified projection is
-   * Rails-faithful and avoids the trap.
+   * uses `klass.arel_table[Arel.star]` — qualified `<target>.*`.
+   *
+   * Plain `*` collapses same-named columns from joined tables in
+   * the row hash (drivers return one key per name, last write
+   * wins): e.g. `users.id` gets overwritten by a JOIN's
+   * `friendships.id`. Qualifying the projection avoids the trap.
+   *
+   * Exception: when `from()` replaces the FROM clause (subquery
+   * or arbitrary alias), the model's table name may not be in
+   * scope — `SELECT "users".* FROM (SELECT ...) AS x` is invalid.
+   * Fall back to bare `*` in that case so the user-supplied FROM
+   * source drives the projection.
    */
   private _defaultProjection(table: Table): unknown {
+    if (!this._fromClause.isEmpty()) return "*";
     return new Nodes.SqlLiteral(`"${table.name}".*`);
   }
 

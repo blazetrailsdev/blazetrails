@@ -90,4 +90,14 @@ describe("SELECT * column collision in joined relations", () => {
     const withJoins = (SsjUser as any).all().joins("INNER JOIN ssj_friendships ON 1 = 1").toSql();
     expect(withJoins).toMatch(/SELECT\s+"ssj_users"\.\*/i);
   });
+
+  it("falls back to bare * when from() replaces the FROM source", async () => {
+    // `SELECT "ssj_users".* FROM (SELECT ...) AS sub` would be
+    // invalid SQL — the model's table name isn't in scope. The
+    // user-supplied FROM source should drive the projection
+    // instead.
+    const sql = (SsjUser as any).all().from("(SELECT * FROM ssj_users) AS sub").toSql();
+    expect(sql).toMatch(/SELECT\s+\*/i);
+    expect(sql).not.toMatch(/SELECT\s+"ssj_users"\.\*/i);
+  });
 });

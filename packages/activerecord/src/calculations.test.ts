@@ -5752,6 +5752,42 @@ describe("CalculationsTest", () => {
     expect(scope).toEqual({ role: "admin" });
   });
 
+  // Rails: test "create_with_value"
+  it("create with value", async () => {
+    class Post extends Base {
+      static {
+        this._tableName = "posts";
+        this.attribute("id", "integer");
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+
+    const scope = Post.all().createWith({ title: "hello" }).scopeForCreate();
+    expect(scope).toEqual({ title: "hello" });
+  });
+
+  // Rails: test "create_with_value_with_wheres"
+  it("create with value with wheres", async () => {
+    class Post extends Base {
+      static {
+        this._tableName = "posts";
+        this.attribute("id", "integer");
+        this.attribute("title", "string");
+        this.attribute("status", "string");
+        this.adapter = adapter;
+      }
+    }
+
+    expect(Post.all().scopeForCreate()).toEqual({});
+
+    const withWhere = Post.all().where({ id: 10 });
+    expect(withWhere.scopeForCreate()).toEqual({ id: 10 });
+
+    const withBoth = Post.all().where({ id: 10 }).createWith({ title: "world" });
+    expect(withBoth.scopeForCreate()).toEqual({ title: "world", id: 10 });
+  });
+
   // Rails: test "where_values_hash"
   it("whereValuesHash returns a hash of equality conditions", async () => {
     class User extends Base {

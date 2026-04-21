@@ -179,6 +179,19 @@ describe("ReadonlyTest", () => {
     expect(dev.isReadonly()).toBe(true);
     await expect(dev.updateColumn("name", "New name")).rejects.toThrow(ReadOnlyRecord);
   });
+
+  it("cant update columns readonly record", async () => {
+    class Dev extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    const dev = await Dev.create({ name: "Alice" });
+    dev.readonlyBang();
+    expect(dev.isReadonly()).toBe(true);
+    await expect(dev.updateColumns({ name: "New name" })).rejects.toThrow(ReadOnlyRecord);
+  });
 });
 
 describe("ReadonlyTest", () => {

@@ -2382,6 +2382,13 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       case "22001": // string_data_right_truncation
         return new ValueTooLong(msg, { sql, binds, cause });
       default:
+        // Driver errors expose a SQLSTATE `code`. Wrap those in
+        // StatementInvalid to match Rails' fallback branch and the
+        // SQLite adapter's behavior; leave non-driver errors
+        // (internal/programming bugs with no SQLSTATE) untouched.
+        if (typeof code === "string" && e instanceof StatementInvalid === false) {
+          return new StatementInvalid(msg, { sql, binds, cause });
+        }
         return e;
     }
   }

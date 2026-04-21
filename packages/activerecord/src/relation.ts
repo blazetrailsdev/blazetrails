@@ -1963,13 +1963,20 @@ export class Relation<T extends Base> {
         rel = this.where({ [this._modelClass.primaryKey as string]: conditions });
       }
     }
-    // Use a bounded row fetch instead of count() — under a GROUP BY scope
-    // count() returns a grouped hash (Record<string, number>) and
-    // `(hash as number) > 0` is always true, which is the wrong answer.
-    // `limit(1)` caps the result to one row regardless of grouping, so a
-    // non-empty array == rows exist.
-    const rows = await rel.limit(1).toArray();
-    return rows.length > 0;
+    // Lightweight existence probe that works across adapters.
+    //
+    // - `toArray()` would hydrate full model records and fire after_find /
+    //   load associations; `exists?` must not do that.
+    // - `pluck(pk)` trips Postgres under a GROUP BY scope ("column must
+    //   appear in the GROUP BY clause"), which the sibling regression
+    //   test catches.
+    // - `count()` handles grouping natively: with a group it returns a
+    //   Record<string, number> (one entry per group), without it returns
+    //   a scalar. Either shape answers the existence question without a
+    //   full record fetch.
+    const c = await rel.count();
+    if (typeof c === "number") return c > 0;
+    return Object.keys(c).length > 0;
   }
 
   // -- Async query interface (Rails 7.0+) --

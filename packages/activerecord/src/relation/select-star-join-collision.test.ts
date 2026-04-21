@@ -10,8 +10,12 @@
  * record carries the friendship's id with the friend's other
  * columns.
  *
- * Fix: default projection becomes `<target>.*` when joins are
- * present (mirrors Rails' `klass.arel_table[Arel.star]`).
+ * Fix: default projection is always `<target>.*` — matches Rails'
+ * `Relation#build_select` at query_methods.rb:1909, which projects
+ * `table[Arel.star]` unconditionally. Relations with a custom
+ * `from()` source still emit the qualified projection (Rails
+ * behavior); callers who want bare `*` there override with
+ * `.select("*")`.
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { Base, registerModel } from "../index.js";
@@ -91,13 +95,15 @@ describe("SELECT * column collision in joined relations", () => {
     expect(withJoins).toMatch(/SELECT\s+"ssj_users"\.\*/i);
   });
 
-  it("falls back to bare * when from() replaces the FROM source", async () => {
-    // `SELECT "ssj_users".* FROM (SELECT ...) AS sub` would be
-    // invalid SQL — the model's table name isn't in scope. The
-    // user-supplied FROM source should drive the projection
-    // instead.
+  it("keeps qualified projection even when from() replaces the FROM source (Rails behavior)", async () => {
+    // Rails' `Relation#build_select` (query_methods.rb:1909)
+    // projects `table[Arel.star]` unconditionally — it doesn't
+    // special-case `from()`. The resulting SQL is the caller's
+    // responsibility: if the custom FROM source doesn't expose
+    // the target table name, the caller overrides with
+    // `.select("*")`. We match Rails here rather than silently
+    // downgrading to bare `*`.
     const sql = (SsjUser as any).all().from("(SELECT * FROM ssj_users) AS sub").toSql();
-    expect(sql).toMatch(/SELECT\s+\*/i);
-    expect(sql).not.toMatch(/SELECT\s+"ssj_users"\.\*/i);
+    expect(sql).toMatch(/SELECT\s+"ssj_users"\.\*/i);
   });
 });

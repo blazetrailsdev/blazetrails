@@ -251,8 +251,11 @@ async function performClassUpdate(
           `${this.name}.update: parallel updates for composite PKs require an array-of-tuples first arg, e.g. update([[k1a,k2a],[k1b,k2b]], [attrsA, attrsB])`,
         );
       }
+      if (!isPlainObject(attrs)) {
+        throw argumentError(`${this.name}.update: attributes must be a plain object`);
+      }
       const record = (await this.find(idOrAttrs)) as InstanceType<typeof Base>;
-      await run(record, attrs as Record<string, unknown>);
+      await run(record, attrs);
       return record;
     }
     // Empty ids list is a no-op (Rails behaves this way; Base.find([]) would
@@ -262,15 +265,32 @@ async function performClassUpdate(
     if (!Array.isArray(attrsArr) || attrsArr.length !== idOrAttrs.length) {
       throw argumentError("update(ids, attrs): ids and attrs must be arrays of the same length");
     }
-    // Single `find([...ids])` call: Base.find preserves input order and
-    // handles composite-PK array-of-tuples, so we zip with attrsArr in
-    // place of N round-trips.
+    for (const a of attrsArr) {
+      if (!isPlainObject(a)) {
+        throw argumentError(`${this.name}.update: every attrs entry must be a plain object`);
+      }
+    }
+    // Single `find([...ids])` call, then reorder by input-id to zip with
+    // attrsArr. Rails' AR builds an OR predicate that doesn't guarantee
+    // DB-return order, so rely on a stable id-key lookup (JSON.stringify
+    // handles both scalar and CPK tuple keys).
     const found = (await this.find(idOrAttrs as unknown[])) as
       | InstanceType<typeof Base>
       | InstanceType<typeof Base>[];
-    const records = Array.isArray(found) ? found : [found];
-    for (let i = 0; i < records.length; i++) {
-      await run(records[i], attrsArr[i]);
+    const foundArr = Array.isArray(found) ? found : [found];
+    const byKey = new Map<string, InstanceType<typeof Base>>();
+    for (const r of foundArr) byKey.set(JSON.stringify(r.id), r);
+    const records: InstanceType<typeof Base>[] = [];
+    for (let i = 0; i < idOrAttrs.length; i++) {
+      const record = byKey.get(JSON.stringify(idOrAttrs[i]));
+      if (!record) {
+        throw new RecordNotFound(
+          `Couldn't find ${this.name} with id=${JSON.stringify(idOrAttrs[i])}`,
+          this.name,
+        );
+      }
+      await run(record, attrsArr[i]);
+      records.push(record);
     }
     return records;
   }
@@ -281,8 +301,11 @@ async function performClassUpdate(
     );
   }
 
+  if (!isPlainObject(attrs)) {
+    throw argumentError(`${this.name}.update: attributes must be a plain object`);
+  }
   const record = (await this.find(idOrAttrs)) as InstanceType<typeof Base>;
-  await run(record, attrs as Record<string, unknown>);
+  await run(record, attrs);
   return record;
 }
 

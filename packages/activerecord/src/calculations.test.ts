@@ -3444,6 +3444,33 @@ describe("CalculationsTest", () => {
     expect(topic.title).toBe("Via class-level entry");
   });
 
+  // Rails' `delegate :find_by, to: :all` means Base.findBy picks up the
+  // current scope inside a scoping block. Before this PR, Base.findBy
+  // built a raw SELECT on arelTable and bypassed currentScope entirely.
+  it("Base.findBy honors currentScope under scoping()", async () => {
+    class Topic extends Base {
+      static {
+        this._tableName = "topics";
+        this.attribute("id", "integer");
+        this.attribute("title", "string");
+        this.attribute("status", "string");
+        this.adapter = adapter;
+      }
+    }
+
+    await Topic.create({ title: "A", status: "draft" });
+    await Topic.create({ title: "A", status: "published" });
+
+    let captured: Topic | null = null;
+    await Topic.all()
+      .where({ status: "published" })
+      .scoping(async () => {
+        captured = await Topic.findBy({ title: "A" });
+      });
+    if (captured === null) throw new Error("Expected topic to be present");
+    expect((captured as Topic).status).toBe("published");
+  });
+
   // Rails' findOrInitializeBy merges create_with attrs into the new
   // unsaved record (same scope_for_create path as findOrCreateBy's
   // create branch).

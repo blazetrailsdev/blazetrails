@@ -315,9 +315,9 @@ describe("PersistenceTest", () => {
       }
     }
     const t = await Topic.create({ title: "a" });
-    await expect(Topic.update(t as unknown as number, { title: "x" })).rejects.toThrow(
-      /ActiveRecord::Base/,
-    );
+    // Invoke through `any` to bypass the overloads — we're verifying the
+    // runtime guard rejects a Base instance, not testing a supported form.
+    await expect((Topic as any).update(t, { title: "x" })).rejects.toThrow(/ActiveRecord::Base/);
   });
 });
 
@@ -1734,6 +1734,35 @@ describe("PersistenceTest", () => {
     expect(await Topic.delete(undefined)).toBe(0);
     expect(await Topic.delete([])).toBe(0);
     expect(await Topic.count()).toBe(1);
+  });
+
+  // Rails: Base.delete accepts an array of composite-PK tuples and deletes
+  // each matching row via `(pk1,pk2) IN ((v1,v2),...)` — NOT via a
+  // per-column IN cross-product.
+  it("delete accepts an array of composite-PK tuples", async () => {
+    const adapter = freshAdapter();
+    class OrderItem extends Base {
+      static {
+        this._tableName = "order_items";
+        this.attribute("shop_id", "integer");
+        this.attribute("order_id", "integer");
+        this.attribute("item_name", "string");
+        this.primaryKey = ["shop_id", "order_id"];
+        this.adapter = adapter;
+      }
+    }
+    await OrderItem.create({ shop_id: 1, order_id: 10, item_name: "A" });
+    await OrderItem.create({ shop_id: 1, order_id: 11, item_name: "B" });
+    await OrderItem.create({ shop_id: 2, order_id: 10, item_name: "C" }); // NOT in delete set — cross-product would remove this
+    expect(
+      await OrderItem.delete([
+        [1, 10],
+        [1, 11],
+      ]),
+    ).toBe(2);
+    expect(await OrderItem.count()).toBe(1);
+    const remaining = await OrderItem.first();
+    expect(remaining!.shop_id).toBe(2);
   });
 
   // Rails: destroy(id) on a composite-PK model with a single tuple must

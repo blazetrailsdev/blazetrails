@@ -179,10 +179,13 @@ export function _setOnAdapterSetHook(hook: ((modelClass: any) => void) | null): 
 
 /**
  * Rails' `persistence.rb#update` / `#update!` dispatch on the first arg:
- *   :all | "all" | nil          → iterate `all()` and update each
+ *   ":all" | nil | bare hash    → iterate `all()` and update each
  *   Array (of ids)              → parallel with `attributes` array
  *   ActiveRecord::Base instance → ArgumentError
  *   anything else               → primary-key lookup, single update
+ *
+ * The string sentinel is `":all"` (with leading colon) — a bare `"all"`
+ * would collide with a legitimate string/slug primary-key value.
  */
 async function performClassUpdate(
   this: typeof Base,
@@ -196,7 +199,7 @@ async function performClassUpdate(
   };
 
   // Rails accepts `nil`/`:all` default. TS callers write update(attrs) with
-  // a single hash, or pass the sentinel "all" explicitly.
+  // a single hash, or pass the sentinel ":all" explicitly.
   const isAllSentinel =
     idOrAttrs === undefined ||
     idOrAttrs === null ||
@@ -213,13 +216,13 @@ async function performClassUpdate(
 
   if (Array.isArray(idOrAttrs)) {
     if (idOrAttrs.some((i) => i instanceof Base)) {
-      throw new Error(
+      throw argumentError(
         "You are passing an instance of ActiveRecord::Base to `update`. Please pass the id of the object by calling `.id`.",
       );
     }
     const attrsArr = attrs as Record<string, unknown>[];
     if (!Array.isArray(attrsArr) || attrsArr.length !== idOrAttrs.length) {
-      throw new Error("update(ids, attrs): ids and attrs must be arrays of the same length");
+      throw argumentError("update(ids, attrs): ids and attrs must be arrays of the same length");
     }
     const records = await Promise.all(idOrAttrs.map((id) => this.find(id)));
     for (let i = 0; i < records.length; i++) {
@@ -229,7 +232,7 @@ async function performClassUpdate(
   }
 
   if (idOrAttrs instanceof Base) {
-    throw new Error(
+    throw argumentError(
       "You are passing an instance of ActiveRecord::Base to `update`. Please pass the id of the object by calling `.id`.",
     );
   }
@@ -2074,12 +2077,27 @@ export class Base extends Model {
     }
     const pk = this.primaryKey;
     if (Array.isArray(pk)) {
-      // Composite PK, single tuple — route through all() so currentScope
-      // applies. AND-of-equality per key.
-      const tuple = id as unknown[];
-      const cond: Record<string, unknown> = {};
-      for (let i = 0; i < pk.length; i++) cond[pk[i]] = tuple[i];
-      return this.all().where(cond).deleteAll();
+      // Composite PK — mirror find()'s detection:
+      //   - array-of-arrays → multiple tuples
+      //   - single array    → one tuple
+      if (!Array.isArray(id)) {
+        throw argumentError(
+          `${this.name}.delete expects a tuple (or array of tuples) matching the composite primary key [${pk.join(", ")}]`,
+        );
+      }
+      const arr = id as unknown[];
+      const tuples: unknown[][] = Array.isArray(arr[0]) ? (arr as unknown[][]) : [arr];
+      for (const tuple of tuples) {
+        if (!Array.isArray(tuple) || tuple.length !== pk.length) {
+          throw argumentError(
+            `${this.name}.delete tuple length ${Array.isArray(tuple) ? tuple.length : "<scalar>"} does not match composite primary key arity ${pk.length}`,
+          );
+        }
+      }
+      // where(cols, tuples) emits the composite `(pk1,pk2) IN ((v1,v2),...)`
+      // predicate, so multi-tuple deletes produce correct SQL instead of
+      // a cross-product of per-column IN lists.
+      return this.all().where(pk, tuples).deleteAll();
     }
     // Single-column PK — where({[pk]: id}) handles scalar and array alike
     // (predicate builder emits `=` or `IN(...)` as appropriate).

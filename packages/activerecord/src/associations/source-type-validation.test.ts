@@ -28,7 +28,7 @@ import { Associations, association, loadHasMany } from "../associations.js";
 import { createTestAdapter } from "../test-adapter.js";
 import type { DatabaseAdapter } from "../adapter.js";
 
-describe("ThroughReflection — sourceType validation", () => {
+describe("ThroughReflection — checkValidityBang at first use", () => {
   let adapter: DatabaseAdapter;
 
   class StvAuthor extends Base {

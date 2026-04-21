@@ -154,6 +154,14 @@ export interface DatabaseAdapter {
   readonly schemaCache?: SchemaCache;
 
   /**
+   * The underlying connection pool that owns this adapter checkout.
+   * Passed to SchemaCache methods that need a pool handle for lazy loading.
+   *
+   * Mirrors: ActiveRecord::ConnectionAdapters::AbstractAdapter#pool
+   */
+  readonly pool?: unknown;
+
+  /**
    * Return the query execution plan for `sql`. `binds` carries the
    * same bind values the adapter would accept on `execute()`, so a
    * captured prepared-statement query re-EXPLAINs cleanly; `options`

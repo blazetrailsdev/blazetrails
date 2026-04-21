@@ -2594,7 +2594,7 @@ export class Base extends Model {
   static async tableExists(): Promise<boolean> {
     const cache = this.adapter?.schemaCache;
     if (!cache || typeof cache.dataSourceExists !== "function") return true;
-    const pool = (this.adapter as any).pool ?? this.adapter;
+    const pool = this.adapter.pool ?? this.adapter;
     const exists = await cache.dataSourceExists(pool, this.tableName);
     return exists !== false;
   }

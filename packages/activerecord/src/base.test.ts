@@ -963,7 +963,12 @@ describe("BasicsTest", () => {
         this.adapter = adapter;
       }
     }
+    // create() calls new() immediately → NotImplementedError (matches Rails test_new_with_abstract_class).
+    // find() would also raise when records are materialized via _instantiate → new this().
     await expect(AbstractModel.create({ name: "x" })).rejects.toThrow(NotImplementedError);
+    await expect(AbstractModel.create({ name: "x" })).rejects.toThrow(
+      "AbstractModel is an abstract class and cannot be instantiated.",
+    );
   });
   it("update all on abstract class raises", async () => {
     class AbstractModel extends Base {
@@ -995,7 +1000,9 @@ describe("BasicsTest", () => {
         this.adapter = adapter;
       }
     }
-    // where() returns a lazy Relation; the error fires when records are instantiated via new()
+    // where() itself returns a lazy Relation without error (matching Rails).
+    expect(() => AbstractModel.where({ name: "x" })).not.toThrow();
+    // The error fires when records are materialized — new() is the direct trigger.
     expect(() => new AbstractModel()).toThrow(NotImplementedError);
   });
 
@@ -1007,10 +1014,12 @@ describe("BasicsTest", () => {
         this.adapter = adapter;
       }
     }
-    // Guard fires in the constructor, matching Rails' `new` check in inheritance.rb.
+    // Guard fires in the constructor (Rails inheritance.rb:56-58).
     // create() calls new() → raises immediately; direct new() also raises.
     await expect(AbstractBase.create({ name: "x" })).rejects.toThrow(NotImplementedError);
     expect(() => new AbstractBase()).toThrow(NotImplementedError);
+    // find/findBy/update would raise when rows are materialized via _instantiate → new this();
+    // with no pre-seeded rows the test adapter raises before reaching that point.
   });
 
   it("find accepts multiple tuples on composite primary key", async () => {

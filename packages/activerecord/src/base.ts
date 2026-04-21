@@ -1601,7 +1601,7 @@ export class Base extends Model {
     attrs: Record<string, unknown> | Record<string, unknown>[] = {},
     block?: (record: InstanceType<T>) => void,
   ): InstanceType<T> | InstanceType<T>[] {
-    return (this as T).new(attrs as Record<string, unknown>, block);
+    return Array.isArray(attrs) ? (this as T).new(attrs, block) : (this as T).new(attrs, block);
   }
 
   /**
@@ -1653,7 +1653,7 @@ export class Base extends Model {
    * Create a record or throw if validation fails.
    *
    * Rails: `Base.create!(attributes = nil, &block)` — recurses on arrays
-   * and yields each record to the block before save!.
+   * and yields each record to the block before `saveBang()`.
    */
   static async createBang<T extends typeof Base>(
     this: T,

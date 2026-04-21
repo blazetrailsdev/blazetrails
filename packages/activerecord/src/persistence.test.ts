@@ -306,6 +306,77 @@ describe("PersistenceTest", () => {
     expect(titles).toEqual(["same", "same"]);
   });
 
+  // Rails: Base.create([{...}, {...}]) recurses and returns an array of
+  // persisted records. Same for new() and createBang().
+  it("create with an array recurses and returns an array of records", async () => {
+    class Topic extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    const result = await Topic.create([{ title: "a" }, { title: "b" }]);
+    expect(result).toHaveLength(2);
+    expect(result[0].isPersisted()).toBe(true);
+    expect(result.map((t) => t.title)).toEqual(["a", "b"]);
+  });
+
+  it("createBang with an array recurses and returns an array of records", async () => {
+    class Topic extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    const result = await Topic.createBang([{ title: "a" }, { title: "b" }]);
+    expect(result).toHaveLength(2);
+    expect(result.every((t) => t.isPersisted())).toBe(true);
+  });
+
+  it("new with an array returns unsaved records", () => {
+    class Topic extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    const result = Topic.new([{ title: "a" }, { title: "b" }]);
+    expect(result).toHaveLength(2);
+    expect(result.every((t) => t.isNewRecord())).toBe(true);
+  });
+
+  // Rails: Base.create(attrs, &block) yields each record to the block
+  // before save, so the block can mutate it.
+  it("create yields to block before save", async () => {
+    class Topic extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    const t = await Topic.create({ title: "a" }, (record) => {
+      record.title = "mutated-by-block";
+    });
+    expect(t.title).toBe("mutated-by-block");
+    expect(t.isPersisted()).toBe(true);
+    const reloaded = await Topic.find(t.id);
+    expect(reloaded.title).toBe("mutated-by-block");
+  });
+
+  it("create with array yields to block for each record", async () => {
+    class Topic extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    let calls = 0;
+    await Topic.create([{ title: "a" }, { title: "b" }], () => {
+      calls++;
+    });
+    expect(calls).toBe(2);
+  });
+
   // Rails: passing an AR instance raises ArgumentError.
   it("update rejects a Base instance", async () => {
     class Topic extends Base {

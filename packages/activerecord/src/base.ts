@@ -220,9 +220,14 @@ async function performClassUpdate(
 
   if (isAllSentinel) {
     // update(attrs) — apply to every record in the current scope.
-    const effectiveAttrs = (attrs ?? idOrAttrs) as Record<string, unknown>;
+    const candidate = attrs ?? idOrAttrs;
+    if (!isPlainObject(candidate)) {
+      throw argumentError(
+        "update: attributes must be a plain object (missing or invalid attrs for the :all / nil form)",
+      );
+    }
     const records = (await this.all().toArray()) as InstanceType<typeof Base>[];
-    for (const r of records) await run(r, effectiveAttrs);
+    for (const r of records) await run(r, candidate);
     return records;
   }
 
@@ -2096,8 +2101,9 @@ export class Base extends Model {
    * Mirrors: ActiveRecord::Base.delete — Rails defines this as
    * `delete_by(primary_key => id_or_array)`, so single ids, arrays of
    * ids, `nil`, and empty arrays all route through the same where-builder.
-   * Composite primary keys are supported via the tuple / array-of-tuples
-   * form handled by `_buildPkWhereNode` and `Relation#where`.
+   * Composite primary keys are supported via `where(cols, tuples)` for
+   * both single-tuple and array-of-tuples inputs, which compiles to an
+   * OR-of-AND predicate — not a per-column IN cross-product.
    */
   static async delete(id: unknown): Promise<number> {
     if (id === null || id === undefined || (Array.isArray(id) && id.length === 0)) {

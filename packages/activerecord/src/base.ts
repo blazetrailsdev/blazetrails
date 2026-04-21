@@ -272,20 +272,24 @@ async function performClassUpdate(
     }
     // Single `find([...ids])` call, then reorder by input-id to zip with
     // attrsArr. Rails' AR builds an OR predicate that doesn't guarantee
-    // DB-return order, so rely on a stable id-key lookup (JSON.stringify
-    // handles both scalar and CPK tuple keys).
+    // DB-return order, so rely on a stable id-key lookup. Use
+    // String()-joined keys so bigint PKs don't crash JSON.stringify and
+    // so numeric / string-cast ids (e.g. "1" vs 1 after predicate cast)
+    // hash to the same slot.
+    const stableIdKey = (id: unknown): string =>
+      Array.isArray(id) ? id.map((part) => String(part)).join("\x1f") : String(id);
     const found = (await this.find(idOrAttrs as unknown[])) as
       | InstanceType<typeof Base>
       | InstanceType<typeof Base>[];
     const foundArr = Array.isArray(found) ? found : [found];
     const byKey = new Map<string, InstanceType<typeof Base>>();
-    for (const r of foundArr) byKey.set(JSON.stringify(r.id), r);
+    for (const r of foundArr) byKey.set(stableIdKey(r.id), r);
     const records: InstanceType<typeof Base>[] = [];
     for (let i = 0; i < idOrAttrs.length; i++) {
-      const record = byKey.get(JSON.stringify(idOrAttrs[i]));
+      const record = byKey.get(stableIdKey(idOrAttrs[i]));
       if (!record) {
         throw new RecordNotFound(
-          `Couldn't find ${this.name} with id=${JSON.stringify(idOrAttrs[i])}`,
+          `Couldn't find ${this.name} with id=${stableIdKey(idOrAttrs[i])}`,
           this.name,
         );
       }

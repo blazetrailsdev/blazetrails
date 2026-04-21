@@ -1,11 +1,13 @@
 import type { Base } from "../base.js";
 
 /**
- * Module-private marker: set on a reflection the first time the
- * validity check runs, so subsequent resolutions don't re-run
- * (cheap, idempotent — safety net only).
+ * Per-reflection memoization keys. Cache both success and failure:
+ * success short-circuits subsequent calls; a cached error re-throws
+ * on every call so a caller that catches the validation error can't
+ * inadvertently sneak past it on a retry.
  */
-const CHECKED = Symbol("ThroughReflection.checkedValidity");
+const CHECKED_OK = Symbol("ThroughReflection.checkedValidityOk");
+const CHECKED_ERROR = Symbol("ThroughReflection.checkedValidityError");
 
 /**
  * Run `ThroughReflection#checkValidityBang` at first use (Rails-
@@ -33,24 +35,30 @@ export function validateThroughReflection(modelClass: typeof Base, assocName: st
     | {
         isThroughReflection?: () => boolean;
         checkValidityBang?: () => void;
-        [CHECKED]?: boolean;
+        [CHECKED_OK]?: boolean;
+        [CHECKED_ERROR]?: unknown;
       }
     | null
     | undefined;
-  if (!refl || refl[CHECKED]) return;
+  if (!refl) return;
+  // Re-throw a previously-cached validation error so a caller that
+  // catches it can't sneak past validation on a retry.
+  if (refl[CHECKED_ERROR] !== undefined) throw refl[CHECKED_ERROR];
+  if (refl[CHECKED_OK]) return;
   // Only ThroughReflection has a `checkValidityBang`; non-through
   // reflections don't need the check.
   const isThrough = typeof refl.isThroughReflection === "function" && refl.isThroughReflection();
   if (!isThrough || typeof refl.checkValidityBang !== "function") return;
 
-  // Delegate to `ThroughReflection#checkValidityBang` and let every
-  // Rails-named misconfiguration surface. Mark as checked
-  // regardless of outcome so a static misconfiguration doesn't
-  // re-run on every first-use call; the outcome is stable until
-  // the reflection changes.
+  // Delegate to `ThroughReflection#checkValidityBang`. Cache the
+  // outcome on the reflection: success short-circuits future calls;
+  // failure stashes the error and re-throws on every call so a
+  // misconfiguration always surfaces, even after a catch.
   try {
     refl.checkValidityBang();
-  } finally {
-    refl[CHECKED] = true;
+    refl[CHECKED_OK] = true;
+  } catch (err) {
+    refl[CHECKED_ERROR] = err;
+    throw err;
   }
 }

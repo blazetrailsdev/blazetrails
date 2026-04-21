@@ -170,6 +170,33 @@ describe("ThroughReflection — checkValidityBang at first use", () => {
     );
   });
 
+  it("re-throws a cached validation error on subsequent calls (caught-then-retried can't sneak past)", async () => {
+    Associations.hasMany.call(StvAuthor, "stvComments", {
+      className: "StvComment",
+      foreignKey: "stv_author_id",
+    });
+    Associations.belongsTo.call(StvComment, "origin", {
+      className: "StvMember",
+      foreignKey: "origin_id",
+      polymorphic: true,
+    });
+    Associations.hasMany.call(StvAuthor, "originFromComments", {
+      className: "StvMember",
+      through: "stvComments",
+      source: "origin",
+    });
+    const author = await StvAuthor.create({ name: "a" });
+    // First call: error surfaces.
+    expect(() => association(author, "originFromComments")).toThrow(
+      /polymorphic association 'origin'/,
+    );
+    // Second call (caller may swallow the first): same error must
+    // re-throw. Cached on the reflection, never silently passed.
+    expect(() => association(author, "originFromComments")).toThrow(
+      /polymorphic association 'origin'/,
+    );
+  });
+
   it("raises HasOneThroughCantAssociateThroughCollection for has_one :through collection", async () => {
     Associations.hasMany.call(StvAuthor, "stvComments", {
       className: "StvComment",

@@ -2074,14 +2074,15 @@ export class Base extends Model {
     }
     const pk = this.primaryKey;
     if (Array.isArray(pk)) {
-      // Composite PK: let destroy()/where handle tuple / array-of-tuples
-      // semantics via _buildPkWhereNode, which builds an AND of equality
-      // predicates for a single tuple (array form is not supported here).
-      const dm = new DeleteManager().from(this.arelTable).where(this._buildPkWhereNode(id));
-      return this.adapter.execDelete(dm.toSql(), "Delete");
+      // Composite PK, single tuple — route through all() so currentScope
+      // applies. AND-of-equality per key.
+      const tuple = id as unknown[];
+      const cond: Record<string, unknown> = {};
+      for (let i = 0; i < pk.length; i++) cond[pk[i]] = tuple[i];
+      return this.all().where(cond).deleteAll();
     }
-    // Single-column PK — `where({[pk]: id})` handles both scalar and array
-    // (Arel's `in` for arrays) via the predicate builder.
+    // Single-column PK — where({[pk]: id}) handles scalar and array alike
+    // (predicate builder emits `=` or `IN(...)` as appropriate).
     return this.all()
       .where({ [pk]: id as unknown })
       .deleteAll();

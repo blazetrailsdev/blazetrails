@@ -2617,19 +2617,15 @@ export class Relation<T extends Base> {
 
   /**
    * Default projection node when no explicit `select` and no
-   * `ignoredColumns`. Plain `"*"` works in isolation but collapses
-   * same-named columns from joined tables in the row hash —
-   * e.g. `users.id` from `SELECT * FROM users JOIN friendships`
-   * gets overwritten by `friendships.id` (drivers return one
-   * `id` key per row, last wins). Project the target table's
-   * `<target>.*` so adapter-returned rows carry only the target
-   * model's columns. Mirrors Rails' Relation#build_arel default
-   * projection of `klass.arel_table[Arel.star]`.
+   * `ignoredColumns`. Mirrors Rails' `Relation#build_arel` which
+   * uses `klass.arel_table[Arel.star]` — always `<target>.*`,
+   * never bare `*`. Plain `*` collapses same-named columns from
+   * joined tables in the row hash (drivers return one key per
+   * row name, last write wins): e.g. `users.id` gets overwritten
+   * by a JOIN's `friendships.id`. Always-qualified projection is
+   * Rails-faithful and avoids the trap.
    */
   private _defaultProjection(table: Table): unknown {
-    if (this._joinClauses.length === 0 && this._rawJoins.length === 0) {
-      return "*";
-    }
     return new Nodes.SqlLiteral(`"${table.name}".*`);
   }
 

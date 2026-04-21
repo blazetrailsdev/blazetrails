@@ -78,11 +78,16 @@ describe("SELECT * column collision in joined relations", () => {
     ]);
   });
 
-  it("emitted SQL projects the target table's `<target>.*`", async () => {
-    const reflection = (SsjUser as any)._reflectOnAssociation("friends");
-    const rel = (SsjUser as any).all().joins("INNER JOIN ssj_friendships ON 1 = 1");
-    const sql = rel.toSql();
-    expect(sql).toMatch(/SELECT\s+"ssj_users"\.\*/i);
-    expect(reflection).toBeTruthy();
+  it("default projection is `<target>.*` always (matches Rails — never bare `*`)", async () => {
+    // Always-qualified projection matches Rails'
+    // `klass.arel_table[Arel.star]`. Holds with or without joins
+    // so the no-joins case isn't a special case the user has to
+    // know about.
+    const noJoins = (SsjUser as any).all().toSql();
+    expect(noJoins).toMatch(/SELECT\s+"ssj_users"\.\*/i);
+    expect(noJoins).not.toMatch(/SELECT\s+\*/i);
+
+    const withJoins = (SsjUser as any).all().joins("INNER JOIN ssj_friendships ON 1 = 1").toSql();
+    expect(withJoins).toMatch(/SELECT\s+"ssj_users"\.\*/i);
   });
 });

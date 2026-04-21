@@ -10,7 +10,7 @@ import {
 } from "@blazetrails/arel";
 import type { Base } from "./base.js";
 import { _setRelationCtor, _setScopeProxyWrapper, quoteSqlValue } from "./base.js";
-import { RecordNotFound } from "./errors.js";
+import { RecordNotFound, RecordNotUnique } from "./errors.js";
 import { modelRegistry } from "./associations.js";
 import { applyThenable, stripThenable } from "./relation/thenable.js";
 import { getInheritanceColumn, isStiSubclass } from "./inheritance.js";
@@ -2290,7 +2290,11 @@ export class Relation<T extends Base> {
         ...conditions,
         ...extra,
       })) as T;
-    } catch {
+    } catch (e) {
+      // Rails' create_or_find_by only retries on ActiveRecord::RecordNotUnique;
+      // any other error (validation failure, connection error, etc.) must
+      // propagate unchanged.
+      if (!(e instanceof RecordNotUnique)) throw e;
       const records = await this.where(conditions).limit(1).toArray();
       if (records.length > 0) return records[0];
       throw new RecordNotFound(`${this._modelClass.name} not found`, this._modelClass.name);

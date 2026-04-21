@@ -1703,7 +1703,7 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Persistence#save (the super that Transactions#save calls)
    */
-  async _createOrUpdate(): Promise<boolean> {
+  private async _createOrUpdate(): Promise<boolean> {
     const ctor = this.constructor as typeof Base;
     const { autosaveBelongsTo, autosaveChildren } = await import("./autosave-association.js");
 
@@ -1764,8 +1764,8 @@ export class Base extends Model {
     return saved;
   }
 
-  _pendingOperation: Promise<void> | null = null;
-  _skipTouch = false;
+  private _pendingOperation: Promise<void> | null = null;
+  private _skipTouch = false;
 
   private _performInsert(): void {
     const ctor = this.constructor as typeof Base;
@@ -1911,7 +1911,7 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Persistence#destroy (the super that Transactions#destroy calls)
    */
-  async _destroyRow(): Promise<boolean> {
+  private async _destroyRow(): Promise<boolean> {
     const ctor = this.constructor as typeof Base;
 
     let didDelete = false;

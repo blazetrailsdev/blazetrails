@@ -492,8 +492,11 @@ export async function deleteRow<T extends DeleteRecord>(this: T): Promise<T> {
 
 // ---------------------------------------------------------------------------
 // save / save! / destroy / destroy! — the callback- and transaction-wrapped
-// entry points. The private helpers they rely on (_createOrUpdate,
-// _destroyRow, _performInsert, _performUpdate) remain on Base.
+// entry points. They rely on Base-provided internal helpers/state
+// (_createOrUpdate, _destroyRow, _performInsert, _performUpdate,
+// _skipTouch, _pendingOperation) which remain `private` on Base; the
+// extracted functions reach them through `(this as any)` since those
+// members intentionally aren't part of the public Persistence API.
 // Mirrors ActiveRecord::Persistence#save, #save!, #destroy, #destroy!
 // (merged with Transactions#save / #destroy and Validations#save which, in
 // Rails, override the same method through module layering).
@@ -503,10 +506,7 @@ interface SaveRecord {
   _destroyed: boolean;
   _readonly: boolean;
   _newRecord: boolean;
-  _skipTouch: boolean;
   _attributes: { set(key: string, val: unknown): void };
-  _runAsyncValidations(): Promise<boolean>;
-  _createOrUpdate(): Promise<boolean>;
   readAttribute(name: string): unknown;
   constructor: {
     name: string;
@@ -533,11 +533,12 @@ export async function save<T extends SaveRecord>(
     throw new ReadOnlyRecord(`${this.constructor.name} is marked as readonly`);
   }
   if (!performValidations.call(this, options)) return false;
+  const self = this as any;
   if (options?.validate !== false) {
-    if (!(await this._runAsyncValidations())) return false;
+    if (!(await self._runAsyncValidations())) return false;
   }
 
-  this._skipTouch = options?.touch === false;
+  self._skipTouch = options?.touch === false;
   const ctor = this.constructor as unknown as Parameters<typeof isStiSubclass>[0];
 
   // Auto-set STI type column on new records
@@ -551,9 +552,9 @@ export async function save<T extends SaveRecord>(
   // Mirrors: ActiveRecord::Transactions#save
   const { withTransactionReturningStatus } = await import("./transactions.js");
   try {
-    return await withTransactionReturningStatus(this as any, () => this._createOrUpdate());
+    return await withTransactionReturningStatus(self, () => self._createOrUpdate());
   } finally {
-    this._skipTouch = false;
+    self._skipTouch = false;
   }
 }
 
@@ -570,7 +571,6 @@ export async function saveBang<
 
 interface DestroyRecord {
   _readonly: boolean;
-  _destroyRow(): Promise<boolean>;
   constructor: { name: string };
 }
 
@@ -582,7 +582,8 @@ export async function destroy<T extends DestroyRecord>(this: T): Promise<T | fal
 
   // Mirrors: ActiveRecord::Transactions#destroy
   const { withTransactionReturningStatus } = await import("./transactions.js");
-  const result = await withTransactionReturningStatus(this as any, () => this._destroyRow());
+  const self = this as any;
+  const result = await withTransactionReturningStatus(self, () => self._destroyRow());
   return result ? this : false;
 }
 

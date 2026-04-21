@@ -288,14 +288,22 @@ Rails' `Model.update(id = :all, attributes)` uses Ruby's `:all` symbol
 as the first-arg default. TypeScript has no symbols as natural literals,
 so the equivalent is a string with a leading colon:
 
-```ts
-// Rails
+Rails:
+
+```ruby
 Model.update(:all, title: "x")
 Model.update([1, 2], [{ title: "a" }, { title: "b" }])
+```
 
-// Trails
-Model.update(":all", { title: "x" });         // explicit sentinel
-Model.update({ title: "x" });                  // also `:all` (no id arg)
+Trails:
+
+```ts
+import { Base } from "@blazetrails/activerecord";
+
+class Model extends Base {}
+
+Model.update(":all", { title: "x" }); // explicit sentinel
+Model.update({ title: "x" }); // also `:all` (no id arg)
 Model.update([1, 2], [{ title: "a" }, { title: "b" }]);
 ```
 

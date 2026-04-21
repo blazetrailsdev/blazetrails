@@ -151,6 +151,47 @@ describe("ThroughReflection — sourceType validation", () => {
     ).rejects.toThrow(/polymorphic association 'origin'/);
   });
 
+  it("raises HasManyThroughSourceAssociationNotFoundError for an unresolvable source", async () => {
+    Associations.hasMany.call(StvAuthor, "stvComments", {
+      className: "StvComment",
+      foreignKey: "stv_author_id",
+    });
+    // No `origin` / `origins` association on StvComment — the
+    // full checkValidityBang surfaces this at first use rather
+    // than silently failing deep in the chain walk.
+    Associations.hasMany.call(StvAuthor, "missingSource", {
+      className: "StvMember",
+      through: "stvComments",
+      source: "origin",
+    });
+    const author = await StvAuthor.create({ name: "a" });
+    expect(() => association(author, "missingSource")).toThrow(
+      /Could not find the source association/,
+    );
+  });
+
+  it("raises HasOneThroughCantAssociateThroughCollection for has_one :through collection", async () => {
+    Associations.hasMany.call(StvAuthor, "stvComments", {
+      className: "StvComment",
+      foreignKey: "stv_author_id",
+    });
+    Associations.belongsTo.call(StvComment, "origin", {
+      className: "StvMember",
+      foreignKey: "origin_id",
+    });
+    // has_one :through a has_many is Rails-invalid — the through
+    // association must be singular.
+    Associations.hasOne.call(StvAuthor, "singularThroughCollection", {
+      className: "StvMember",
+      through: "stvComments",
+      source: "origin",
+    });
+    const author = await StvAuthor.create({ name: "a" });
+    expect(() => association(author, "singularThroughCollection")).toThrow(
+      /has_one :through association.*going through.*which is a collection/,
+    );
+  });
+
   it("accepts the valid shape: polymorphic source with sourceType", async () => {
     Associations.hasMany.call(StvAuthor, "stvComments", {
       className: "StvComment",

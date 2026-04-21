@@ -3547,6 +3547,24 @@ describe("CalculationsTest", () => {
     expect(reloaded.status).toBe("published");
   });
 
+  it("Relation#createBang persists with createWith attrs via scope_for_create", async () => {
+    class Topic extends Base {
+      static {
+        this._tableName = "topics";
+        this.attribute("id", "integer");
+        this.attribute("title", "string");
+        this.attribute("status", "string");
+        this.adapter = adapter;
+      }
+    }
+
+    const topic = await Topic.all()
+      .createWith({ status: "bang-default" })
+      .createBang({ title: "Via createBang" });
+    expect(topic.isPersisted()).toBe(true);
+    expect(topic.status).toBe("bang-default");
+  });
+
   it("Relation#firstOrInitialize merges createWith attrs when initializing", async () => {
     class Topic extends Base {
       static {

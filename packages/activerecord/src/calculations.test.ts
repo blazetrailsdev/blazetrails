@@ -2,7 +2,7 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import {
   Base,
   association,
@@ -5203,7 +5203,6 @@ describe("CalculationsTest", () => {
   // from the inner create() call: the retry path must consume the error,
   // hit findByBang inside the scope, and return the existing record.
   it("createOrFindBy retries via findByBang on RecordNotUnique", async () => {
-    const { RecordNotUnique } = await import("./errors.js");
     class User extends Base {
       static {
         this._tableName = "users";
@@ -5213,21 +5212,16 @@ describe("CalculationsTest", () => {
       }
     }
 
+    // Seed a row so the table exists, then add a real unique index so the
+    // second INSERT triggers the adapter's RecordNotUnique — exercising
+    // the whole flow end-to-end (transaction wrap + rescue +
+    // where.lock.findByBang) instead of mocking the exception.
     const existing = await User.create({ name: "Claim" });
+    await adapter.executeMutation(`CREATE UNIQUE INDEX users_name_idx ON users (name)`);
 
-    // Simulate a unique-index loss on the inner create by spying once.
-    const spy = vi.spyOn(User, "create").mockImplementationOnce(() => {
-      throw new RecordNotUnique("duplicate key", { sql: "INSERT ...", binds: [] });
-    });
-
-    try {
-      const retried = await User.createOrFindBy({ name: "Claim" });
-      expect(retried.id).toBe(existing.id);
-      expect(await User.all().count()).toBe(1);
-      expect(spy).toHaveBeenCalledTimes(1);
-    } finally {
-      vi.restoreAllMocks();
-    }
+    const retried = await User.createOrFindBy({ name: "Claim" });
+    expect(retried.id).toBe(existing.id);
+    expect(await User.all().count()).toBe(1);
   });
 
   // Rails: test "lock! reloads with FOR UPDATE"

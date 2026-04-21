@@ -1956,10 +1956,21 @@ export class Relation<T extends Base> {
     if (this._isNone) return false;
     let rel: Relation<T> = this;
     if (conditions !== undefined) {
-      if (typeof conditions === "object" && conditions !== null && !Array.isArray(conditions)) {
+      // Mirrors Rails' FinderMethods#exists? argument handling:
+      //   - Hash → where(conditions)
+      //   - String or [sql, ...binds] → where(sql, ...binds) (SQL fragment)
+      //   - Anything else (Integer/String PK, Array of PKs) → where(pk: ...)
+      if (Array.isArray(conditions) && typeof conditions[0] === "string") {
+        rel = this.where(conditions[0] as string, ...(conditions.slice(1) as unknown[]));
+      } else if (typeof conditions === "string") {
+        rel = this.where(conditions);
+      } else if (
+        typeof conditions === "object" &&
+        conditions !== null &&
+        !Array.isArray(conditions)
+      ) {
         rel = this.where(conditions as Record<string, unknown>);
       } else {
-        // Primary key lookup
         rel = this.where({ [this._modelClass.primaryKey as string]: conditions });
       }
     }

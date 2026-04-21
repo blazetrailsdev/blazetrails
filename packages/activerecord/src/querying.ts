@@ -493,3 +493,51 @@ export function isOne<T extends typeof Base>(this: T): Promise<boolean> {
 export function isEmpty<T extends typeof Base>(this: T): Promise<boolean> {
   return this.all().isEmpty();
 }
+
+/** Mirrors: ActiveRecord::Querying#first_or_create — delegates through all(). */
+export function firstOrCreate<T extends typeof Base>(
+  this: T,
+  extra?: Record<string, unknown>,
+): Promise<InstanceType<T>> {
+  return this.all().firstOrCreate(extra) as Promise<InstanceType<T>>;
+}
+
+/** Mirrors: ActiveRecord::Querying#first_or_create! — delegates through all(). */
+export function firstOrCreateBang<T extends typeof Base>(
+  this: T,
+  extra?: Record<string, unknown>,
+): Promise<InstanceType<T>> {
+  return this.all().firstOrCreateBang(extra) as Promise<InstanceType<T>>;
+}
+
+/** Mirrors: ActiveRecord::Querying#first_or_initialize — delegates through all(). */
+export function firstOrInitialize<T extends typeof Base>(
+  this: T,
+  extra?: Record<string, unknown>,
+): Promise<InstanceType<T>> {
+  return this.all().firstOrInitialize(extra) as Promise<InstanceType<T>>;
+}
+
+/** Mirrors: ActiveRecord::Querying#find_each — delegates through all(). */
+export function findEach<T extends typeof Base>(
+  this: T,
+  opts?: Parameters<ReturnType<T["all"]>["findEach"]>[0],
+): ReturnType<ReturnType<T["all"]>["findEach"]> {
+  return this.all().findEach(opts) as ReturnType<ReturnType<T["all"]>["findEach"]>;
+}
+
+/** Mirrors: ActiveRecord::Querying#find_in_batches — delegates through all(). */
+export function findInBatches<T extends typeof Base>(
+  this: T,
+  opts?: Parameters<ReturnType<T["all"]>["findInBatches"]>[0],
+): ReturnType<ReturnType<T["all"]>["findInBatches"]> {
+  return this.all().findInBatches(opts) as ReturnType<ReturnType<T["all"]>["findInBatches"]>;
+}
+
+/** Mirrors: ActiveRecord::Querying#in_batches — delegates through all(). */
+export function inBatches<T extends typeof Base>(
+  this: T,
+  opts?: Parameters<ReturnType<T["all"]>["inBatches"]>[0],
+): ReturnType<ReturnType<T["all"]>["inBatches"]> {
+  return this.all().inBatches(opts) as ReturnType<ReturnType<T["all"]>["inBatches"]>;
+}

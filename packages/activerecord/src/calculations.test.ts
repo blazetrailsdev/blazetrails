@@ -6958,6 +6958,17 @@ describe("CalculationsTest", () => {
     it("returns false for empty result set", async () => {
       expect(await Product.all().where({ category: "meat" }).exists()).toBe(false);
     });
+
+    // Rails FinderMethods#exists? accepts a raw SQL string or [sql, ...binds]
+    it("accepts a string SQL condition", async () => {
+      expect(await Product.all().exists("price > 0")).toBe(true);
+      expect(await Product.all().exists("price < 0")).toBe(false);
+    });
+
+    it("accepts a [sql, ...binds] array condition", async () => {
+      expect(await Product.all().exists(["price > ?", 0])).toBe(true);
+      expect(await Product.all().exists(["price > ?", 100])).toBe(false);
+    });
   });
 
   describe("count via class method", async () => {

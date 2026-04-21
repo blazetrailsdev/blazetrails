@@ -200,11 +200,23 @@ async function performClassUpdate(
 
   // Rails accepts `nil`/`:all` default. TS callers write update(attrs) with
   // a single hash, or pass the sentinel ":all" explicitly.
+  //
+  // A non-array object argument is only treated as "attrs" when `attrs` is
+  // omitted (one-arg form) AND the value is a plain object. Otherwise a
+  // call like `update(dateId, attrs)` or `update(customIdObj, attrs)`
+  // would silently mass-update the scope; fall through to `find(id)`
+  // instead, matching Rails' `update(id, attributes)` path.
+  const isPlainObject = (v: unknown): v is Record<string, unknown> => {
+    if (typeof v !== "object" || v === null || Array.isArray(v)) return false;
+    if (v instanceof Base) return false;
+    const proto = Object.getPrototypeOf(v) as object | null;
+    return proto === Object.prototype || proto === null;
+  };
   const isAllSentinel =
     idOrAttrs === undefined ||
     idOrAttrs === null ||
     idOrAttrs === ":all" ||
-    (typeof idOrAttrs === "object" && !Array.isArray(idOrAttrs) && !(idOrAttrs instanceof Base));
+    (attrs === undefined && isPlainObject(idOrAttrs));
 
   if (isAllSentinel) {
     // update(attrs) — apply to every record in the current scope.
@@ -234,9 +246,15 @@ async function performClassUpdate(
     if (!Array.isArray(attrsArr) || attrsArr.length !== idOrAttrs.length) {
       throw argumentError("update(ids, attrs): ids and attrs must be arrays of the same length");
     }
-    const records = await Promise.all(idOrAttrs.map((id) => this.find(id)));
+    // Single `find([...ids])` call: Base.find preserves input order and
+    // handles composite-PK array-of-tuples, so we zip with attrsArr in
+    // place of N round-trips.
+    const found = (await this.find(idOrAttrs as unknown[])) as
+      | InstanceType<typeof Base>
+      | InstanceType<typeof Base>[];
+    const records = Array.isArray(found) ? found : [found];
     for (let i = 0; i < records.length; i++) {
-      await run(records[i] as InstanceType<typeof Base>, attrsArr[i]);
+      await run(records[i], attrsArr[i]);
     }
     return records;
   }

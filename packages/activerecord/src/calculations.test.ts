@@ -3709,6 +3709,28 @@ describe("CalculationsTest", () => {
     expect(await Topic.all().exists(999)).toBe(false);
   });
 
+  // Regression: exists() used to route through count(), which returns a
+  // Record<string, number> under a GROUP BY scope — the numeric cast then
+  // always evaluated truthy and `exists` always returned true. Uses
+  // limit(1).toArray() now so grouped scopes report correctly.
+  it("exists() works under a grouped scope", async () => {
+    class Topic extends Base {
+      static {
+        this._tableName = "topics";
+        this.attribute("id", "integer");
+        this.attribute("title", "string");
+        this.attribute("status", "string");
+        this.adapter = adapter;
+      }
+    }
+
+    // Empty grouped relation → exists is false.
+    expect(await Topic.group("status").exists()).toBe(false);
+
+    await Topic.create({ title: "a", status: "draft" });
+    expect(await Topic.group("status").exists()).toBe(true);
+  });
+
   // =====================================================================
   // calculate — activerecord/test/cases/calculations_test.rb
   // =====================================================================

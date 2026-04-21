@@ -1963,8 +1963,13 @@ export class Relation<T extends Base> {
         rel = this.where({ [this._modelClass.primaryKey as string]: conditions });
       }
     }
-    const c = await rel.count();
-    return (c as number) > 0;
+    // Use a bounded row fetch instead of count() — under a GROUP BY scope
+    // count() returns a grouped hash (Record<string, number>) and
+    // `(hash as number) > 0` is always true, which is the wrong answer.
+    // `limit(1)` caps the result to one row regardless of grouping, so a
+    // non-empty array == rows exist.
+    const rows = await rel.limit(1).toArray();
+    return rows.length > 0;
   }
 
   // -- Async query interface (Rails 7.0+) --

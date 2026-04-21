@@ -3444,6 +3444,28 @@ describe("CalculationsTest", () => {
     expect(topic.title).toBe("Via class-level entry");
   });
 
+  // Rails' findOrInitializeBy merges create_with attrs into the new
+  // unsaved record (same scope_for_create path as findOrCreateBy's
+  // create branch).
+  it("createWith() applies default attrs to findOrInitializeBy when initializing", async () => {
+    class Topic extends Base {
+      static {
+        this._tableName = "topics";
+        this.attribute("id", "integer");
+        this.attribute("title", "string");
+        this.attribute("status", "string");
+        this.adapter = adapter;
+      }
+    }
+
+    const topic = await Topic.all()
+      .createWith({ status: "draft" })
+      .findOrInitializeBy({ title: "Unsaved Topic" });
+    expect(topic.isNewRecord()).toBe(true);
+    expect(topic.status).toBe("draft");
+    expect(topic.title).toBe("Unsaved Topic");
+  });
+
   // Rails: test "create_with does not affect existing record lookup"
   it("createWith() does not affect existing record lookup", async () => {
     class Topic extends Base {

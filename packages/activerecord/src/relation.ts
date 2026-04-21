@@ -2228,7 +2228,11 @@ export class Relation<T extends Base> {
   ): Promise<T> {
     const existing = await this.findBy(conditions);
     if (existing) return existing;
+    // Rails merges create_with + scope_for_create in `new`, same as
+    // findOrCreateBy's create path — a fresh initializer should inherit
+    // the same scoped defaults.
     return new (this._modelClass as any)({
+      ...this._createWithAttrs,
       ...this._scopeAttributes(),
       ...conditions,
       ...extra,

@@ -5198,6 +5198,43 @@ describe("CalculationsTest", () => {
     expect(user.isPersisted()).toBe(true);
   });
 
+  // Rails: rescue ActiveRecord::RecordNotUnique → where(attributes).lock.find_by!(attributes)
+  // Synthesize the concurrent-winner scenario by throwing RecordNotUnique
+  // from the inner create() call: the retry path must consume the error,
+  // hit findByBang inside the scope, and return the existing record.
+  it("createOrFindBy retries via findByBang on RecordNotUnique", async () => {
+    const { RecordNotUnique } = await import("./errors.js");
+    class User extends Base {
+      static {
+        this._tableName = "users";
+        this.attribute("id", "integer");
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+
+    const existing = await User.create({ name: "Claim" });
+
+    // Patch create() once to simulate a unique-index loss.
+    const orig = User.create.bind(User);
+    let calls = 0;
+    (User as any).create = async (...args: unknown[]) => {
+      calls++;
+      if (calls === 1) {
+        throw new RecordNotUnique("duplicate key", { sql: "INSERT ...", binds: [] });
+      }
+      return orig(...(args as [Record<string, unknown>]));
+    };
+
+    try {
+      const retried = await User.createOrFindBy({ name: "Claim" });
+      expect(retried.id).toBe(existing.id);
+      expect(await User.all().count()).toBe(1);
+    } finally {
+      (User as any).create = orig;
+    }
+  });
+
   // Rails: test "lock! reloads with FOR UPDATE"
   it("lockBang reloads the record", async () => {
     class Account extends Base {

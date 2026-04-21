@@ -473,19 +473,23 @@ export async function performCreateOrFindByBang(
   conditions: Record<string, unknown>,
   extra?: Record<string, unknown>,
 ): Promise<any> {
+  // Rails:
+  //   transaction(requires_new: true) { create!(attributes, &block) }
+  //   rescue ActiveRecord::RecordNotUnique
+  //     where(attributes).lock.find_by!(attributes)
   try {
-    return await this._modelClass.createBang({
-      ...this.scopeForCreate(),
-      ...conditions,
-      ...extra,
-    });
+    return await (this._modelClass as any).transaction(
+      () =>
+        this._modelClass.createBang({
+          ...this.scopeForCreate(),
+          ...conditions,
+          ...extra,
+        }),
+      { requiresNew: true },
+    );
   } catch (error) {
-    // Rails' create_or_find_by! only retries on RecordNotUnique; validation
-    // failures and other adapter errors must propagate unchanged.
     if (!(error instanceof RecordNotUnique)) throw error;
-    const records = await this.where(conditions).limit(1).toArray();
-    if (records.length > 0) return records[0];
-    throw new RecordNotFound(`${this._modelClass.name} not found`, this._modelClass.name);
+    return this.where(conditions).lock().findByBang(conditions);
   }
 }
 

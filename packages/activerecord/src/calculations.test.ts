@@ -3466,6 +3466,27 @@ describe("CalculationsTest", () => {
     expect(topic.title).toBe("Unsaved Topic");
   });
 
+  // Rails' scope_for_create: where_values_hash.merge(create_with_value).
+  // createWith attrs override same-named equality-scope attrs during
+  // create/initialize.
+  it("createWith() overrides same-named where-scope attrs in findOrCreateBy", async () => {
+    class Topic extends Base {
+      static {
+        this._tableName = "topics";
+        this.attribute("id", "integer");
+        this.attribute("title", "string");
+        this.attribute("status", "string");
+        this.adapter = adapter;
+      }
+    }
+
+    const topic = await Topic.where({ status: "draft" })
+      .createWith({ status: "published" })
+      .findOrCreateBy({ title: "Override Winner" });
+    expect(topic.status).toBe("published");
+    expect(topic.title).toBe("Override Winner");
+  });
+
   // Rails: test "create_with does not affect existing record lookup"
   it("createWith() does not affect existing record lookup", async () => {
     class Topic extends Base {

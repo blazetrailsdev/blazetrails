@@ -2209,9 +2209,12 @@ export class Relation<T extends Base> {
   ): Promise<T> {
     const records = await this.where(conditions).limit(1).toArray();
     if (records.length > 0) return records[0];
+    // Rails' scope_for_create: `where_values_hash.merge(create_with_value)` —
+    // scope attrs first, createWith overrides, then the caller's conditions
+    // and the optional extra hash win over both.
     return this._modelClass.create({
-      ...this._createWithAttrs,
       ...this._scopeAttributes(),
+      ...this._createWithAttrs,
       ...conditions,
       ...extra,
     }) as Promise<T>;
@@ -2228,12 +2231,11 @@ export class Relation<T extends Base> {
   ): Promise<T> {
     const existing = await this.findBy(conditions);
     if (existing) return existing;
-    // Rails merges create_with + scope_for_create in `new`, same as
-    // findOrCreateBy's create path — a fresh initializer should inherit
-    // the same scoped defaults.
+    // Same scope_for_create precedence as findOrCreateBy: scope attrs
+    // first, createWith overrides, caller's conditions + extra win.
     return new (this._modelClass as any)({
-      ...this._createWithAttrs,
       ...this._scopeAttributes(),
+      ...this._createWithAttrs,
       ...conditions,
       ...extra,
     }) as T;

@@ -976,9 +976,10 @@ export class Model {
     // Snapshot after construction — the initial state is "clean"
     this._dirty.snapshot(this._attributes);
 
-    // Fire after_initialize callbacks (suppressed for DB-loaded records so
-    // _instantiate can fire after_find first, then after_initialize in order —
-    // flag is set on Base in activerecord, unknown to Model in activemodel)
+    // Fire after_initialize callbacks. ActiveRecord intentionally uses the
+    // duck-typed `_suppressInitializeCallback` hook during DB hydration so it
+    // can defer constructor-time after_initialize, run after_find first, and
+    // then fire after_initialize in Rails-compatible order.
     const callbackSuppressor = ctor as typeof ctor & { _suppressInitializeCallback?: boolean };
     if (callbackSuppressor._suppressInitializeCallback !== true) {
       ctor._callbackChain.runAfter("initialize", this);

@@ -1113,7 +1113,7 @@ export class Base extends Model {
     this: T,
     conditions: Record<string, unknown>,
   ): Promise<InstanceType<T> | null> {
-    return this.all().findBy(conditions) as Promise<InstanceType<T> | null>;
+    return this.all().findBy(conditions);
   }
 
   /**
@@ -1125,7 +1125,7 @@ export class Base extends Model {
     this: T,
     conditions: Record<string, unknown>,
   ): Promise<InstanceType<T>> {
-    return this.all().findByBang(conditions) as Promise<InstanceType<T>>;
+    return this.all().findByBang(conditions);
   }
 
   /**

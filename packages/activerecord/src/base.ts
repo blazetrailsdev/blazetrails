@@ -393,7 +393,7 @@ export class Base extends Model {
   }
 
   static _requireConcreteClass(): void {
-    if (this.abstractClass) {
+    if (this.abstractClass && !this._suppressAbstractCheck) {
       throw new NotImplementedError(
         `${this.name} is an abstract class and cannot be instantiated.`,
       );
@@ -909,6 +909,10 @@ export class Base extends Model {
   // directInstantiate (inheritance.ts) so we can fire after_find first, then
   // after_initialize — matching Rails' init_with_attributes call order.
   static _suppressInitializeCallback = false;
+
+  // Suppresses the abstract-class guard during _instantiate, mirroring Rails'
+  // use of allocate (which bypasses initialize) for DB-loaded records.
+  static _suppressAbstractCheck = false;
 
   // --- ReadonlyAttributes mixin (wired via extend() after class) ---
   declare static attrReadonly: typeof ReadonlyAttributes.attrReadonly;
@@ -1739,6 +1743,7 @@ export class Base extends Model {
   declare static secondToLastBang: typeof Querying.secondToLastBang;
   declare static thirdToLast: typeof Querying.thirdToLast;
   declare static thirdToLastBang: typeof Querying.thirdToLastBang;
+
   declare static count: typeof Querying.count;
   declare static minimum: typeof Querying.minimum;
   declare static maximum: typeof Querying.maximum;
@@ -1809,6 +1814,12 @@ export class Base extends Model {
     );
     const prevSuppress = this._suppressInitializeCallback;
     this._suppressInitializeCallback = true;
+    const hadOwnAbstractSuppress = Object.prototype.hasOwnProperty.call(
+      this,
+      "_suppressAbstractCheck",
+    );
+    const prevAbstractSuppress = this._suppressAbstractCheck;
+    this._suppressAbstractCheck = true;
     let record: InstanceType<T>;
     try {
       record = new this() as InstanceType<T>;
@@ -1817,6 +1828,11 @@ export class Base extends Model {
         this._suppressInitializeCallback = prevSuppress;
       } else {
         delete (this as any)._suppressInitializeCallback;
+      }
+      if (hadOwnAbstractSuppress) {
+        this._suppressAbstractCheck = prevAbstractSuppress;
+      } else {
+        delete (this as any)._suppressAbstractCheck;
       }
     }
     // Load DB values through deserialize (not cast) so encrypted types decrypt
@@ -2575,9 +2591,10 @@ export class Base extends Model {
   // (bivariant) rather than properties (invariant).
 
   static async tableExists(): Promise<boolean> {
-    const cache = this.adapter?.schemaCache;
+    const adapter = this.adapter;
+    const cache = adapter.schemaCache;
     if (!cache || typeof cache.dataSourceExists !== "function") return true;
-    const pool = this.adapter.pool ?? this.adapter;
+    const pool = adapter.pool ?? adapter;
     const exists = await cache.dataSourceExists(pool, this.tableName);
     return exists !== false;
   }

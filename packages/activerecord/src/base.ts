@@ -220,6 +220,16 @@ async function performClassUpdate(
         "You are passing an instance of ActiveRecord::Base to `update`. Please pass the id of the object by calling `.id`.",
       );
     }
+    // Mirror destroy's CPK detection: on a composite-PK model, a flat
+    // array `[shop_id, id]` is ONE tuple, not parallel ids. Only an
+    // array-of-arrays triggers the parallel-update path.
+    const isParallel = this.compositePrimaryKey ? Array.isArray(idOrAttrs[0]) : true;
+    if (!isParallel) {
+      // Single CPK tuple — fall through to the single-id branch.
+      const record = (await this.find(idOrAttrs)) as InstanceType<typeof Base>;
+      await run(record, attrs as Record<string, unknown>);
+      return record;
+    }
     const attrsArr = attrs as Record<string, unknown>[];
     if (!Array.isArray(attrsArr) || attrsArr.length !== idOrAttrs.length) {
       throw argumentError("update(ids, attrs): ids and attrs must be arrays of the same length");

@@ -1765,6 +1765,27 @@ describe("PersistenceTest", () => {
     expect(remaining!.shop_id).toBe(2);
   });
 
+  // Rails: update(id, attrs) on a composite-PK model must treat a flat
+  // tuple as ONE id (not parallel ids). Mirrors destroy's detection.
+  it("update on composite PK treats a tuple as a single id", async () => {
+    const adapter = freshAdapter();
+    class OrderItem extends Base {
+      static {
+        this._tableName = "order_items";
+        this.attribute("shop_id", "integer");
+        this.attribute("order_id", "integer");
+        this.attribute("item_name", "string");
+        this.primaryKey = ["shop_id", "order_id"];
+        this.adapter = adapter;
+      }
+    }
+    await OrderItem.create({ shop_id: 1, order_id: 10, item_name: "A" });
+    const updated = await OrderItem.update([1, 10], { item_name: "A-updated" });
+    expect(Array.isArray(updated)).toBe(false);
+    const reloaded = await OrderItem.all().where({ shop_id: 1, order_id: 10 }).first();
+    expect(reloaded!.item_name).toBe("A-updated");
+  });
+
   // Rails: destroy(id) on a composite-PK model with a single tuple must
   // destroy ONE record, not iterate the tuple as N ids.
   it("destroy on composite PK treats a tuple as a single id", async () => {

@@ -245,7 +245,7 @@ export async function deleteAll<T extends typeof Base>(this: T): Promise<number>
 
 /** Mirrors: ActiveRecord::Querying#destroy_all */
 export function destroyAll<T extends typeof Base>(this: T): Promise<InstanceType<T>[]> {
-  return this.all().destroyAll() as Promise<InstanceType<T>[]>;
+  return this.all().destroyAll();
 }
 
 /** Mirrors: ActiveRecord::Querying#destroy_by */
@@ -253,7 +253,7 @@ export function destroyBy<T extends typeof Base>(
   this: T,
   conditions: Record<string, unknown>,
 ): Promise<InstanceType<T>[]> {
-  return this.all().where(conditions).destroyAll() as Promise<InstanceType<T>[]>;
+  return this.all().where(conditions).destroyAll();
 }
 
 /** Mirrors: ActiveRecord::Querying#delete_by */
@@ -443,12 +443,12 @@ export async function exists<T extends typeof Base>(
  * (from currentScope's `where` / `createWith`) apply to both the find
  * and the create paths.
  */
-export async function findOrCreateBy<T extends typeof Base>(
+export function findOrCreateBy<T extends typeof Base>(
   this: T,
   conditions: Record<string, unknown>,
   extra?: Record<string, unknown>,
 ): Promise<InstanceType<T>> {
-  return (await this.all().findOrCreateBy(conditions, extra)) as InstanceType<T>;
+  return this.all().findOrCreateBy(conditions, extra);
 }
 
 /**
@@ -456,10 +456,10 @@ export async function findOrCreateBy<T extends typeof Base>(
  * scope-aware dispatch as findOrCreateBy; the new record inherits
  * the active scope's create-with attributes.
  */
-export async function findOrInitializeBy<T extends typeof Base>(
+export function findOrInitializeBy<T extends typeof Base>(
   this: T,
   conditions: Record<string, unknown>,
   extra?: Record<string, unknown>,
 ): Promise<InstanceType<T>> {
-  return (await this.all().findOrInitializeBy(conditions, extra)) as InstanceType<T>;
+  return this.all().findOrInitializeBy(conditions, extra);
 }

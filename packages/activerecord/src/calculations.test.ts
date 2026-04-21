@@ -3432,15 +3432,16 @@ describe("CalculationsTest", () => {
       }
     }
 
-    let topic: Topic | null = null;
+    let captured: Topic | null = null;
     await Topic.all()
       .createWith({ status: "scoped-default" })
       .scoping(async () => {
-        topic = (await Topic.findOrCreateBy({ title: "Via class-level entry" })) as Topic;
+        captured = await Topic.findOrCreateBy({ title: "Via class-level entry" });
       });
-    expect(topic).not.toBeNull();
-    expect((topic as unknown as Topic).status).toBe("scoped-default");
-    expect((topic as unknown as Topic).title).toBe("Via class-level entry");
+    if (captured === null) throw new Error("Expected topic to be present");
+    const topic = captured as Topic;
+    expect(topic.status).toBe("scoped-default");
+    expect(topic.title).toBe("Via class-level entry");
   });
 
   // Rails: test "create_with does not affect existing record lookup"

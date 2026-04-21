@@ -299,9 +299,18 @@ export function thirdToLast<T extends typeof Base>(this: T): Promise<InstanceTyp
   return this.all().thirdToLast();
 }
 
-/** Mirrors: ActiveRecord::Querying#count */
-export function count<T extends typeof Base>(this: T): Promise<number> {
-  return this.all().count() as Promise<number>;
+/**
+ * Mirrors: ActiveRecord::Querying#count — accepts an optional column name
+ * and returns either a number or a grouped `Record<string, number>` when
+ * the active scope has a GROUP BY. Parameters/return are derived from
+ * `Relation#count` so the signatures stay in sync.
+ */
+export function count<T extends typeof Base>(
+  this: T,
+  ...args: Parameters<ReturnType<T["all"]>["count"]>
+): ReturnType<ReturnType<T["all"]>["count"]> {
+  const rel = this.all() as ReturnType<T["all"]>;
+  return rel.count(...args) as ReturnType<ReturnType<T["all"]>["count"]>;
 }
 
 /** Mirrors: ActiveRecord::Querying#minimum */
@@ -324,9 +333,17 @@ export function sum<T extends typeof Base>(this: T, column: string): Promise<unk
   return this.all().sum(column);
 }
 
-/** Mirrors: ActiveRecord::Querying#pluck */
-export function pluck<T extends typeof Base>(this: T, ...columns: string[]): Promise<unknown[]> {
-  return this.all().pluck(...columns);
+/**
+ * Mirrors: ActiveRecord::Querying#pluck — column args accept anything
+ * `Relation#pluck` accepts (strings, Arel nodes, etc.). Types derived
+ * from the Relation method.
+ */
+export function pluck<T extends typeof Base>(
+  this: T,
+  ...columns: Parameters<ReturnType<T["all"]>["pluck"]>
+): ReturnType<ReturnType<T["all"]>["pluck"]> {
+  const rel = this.all() as ReturnType<T["all"]>;
+  return rel.pluck(...columns) as ReturnType<ReturnType<T["all"]>["pluck"]>;
 }
 
 /** Mirrors: ActiveRecord::Querying#ids */
@@ -334,9 +351,13 @@ export function ids<T extends typeof Base>(this: T): Promise<unknown[]> {
   return this.all().ids();
 }
 
-/** Mirrors: ActiveRecord::Querying#pick */
-export function pick<T extends typeof Base>(this: T, ...columns: string[]): Promise<unknown> {
-  return this.all().pick(...columns);
+/** Mirrors: ActiveRecord::Querying#pick — same widened params as `pluck`. */
+export function pick<T extends typeof Base>(
+  this: T,
+  ...columns: Parameters<ReturnType<T["all"]>["pick"]>
+): ReturnType<ReturnType<T["all"]>["pick"]> {
+  const rel = this.all() as ReturnType<T["all"]>;
+  return rel.pick(...columns) as ReturnType<ReturnType<T["all"]>["pick"]>;
 }
 
 export function first<T extends typeof Base>(this: T): Promise<InstanceType<T> | null>;
@@ -385,51 +406,44 @@ export function sole<T extends typeof Base>(this: T): Promise<InstanceType<T>> {
 }
 
 /**
- * Mirrors: ActiveRecord::Querying#exists? — accepts a primary key, a
- * conditions hash, or no arguments. `exists?(false)` / `exists?(nil)`
- * return false; everything else routes through `all()`.
+ * Mirrors: ActiveRecord::Querying#exists? — delegates to
+ * `Relation#exists?` so the active scope (default scopes, STI type
+ * filter, currentScope) applies. Preserves the `false` / `null`
+ * short-circuit — Rails returns false for those regardless of data.
  */
 export async function exists<T extends typeof Base>(
   this: T,
   idOrConditions?: unknown,
 ): Promise<boolean> {
-  if (idOrConditions === undefined) {
-    return this.all().isAny();
-  }
   if (idOrConditions === false || idOrConditions === null) {
     return false;
   }
-  if (
-    typeof idOrConditions === "object" &&
-    idOrConditions !== null &&
-    !Array.isArray(idOrConditions)
-  ) {
-    return this.all()
-      .where(idOrConditions as Record<string, unknown>)
-      .isAny();
-  }
-  const record = await this.findBy({ [this.primaryKey as string]: idOrConditions });
-  return record !== null;
+  return this.all().exists(idOrConditions);
 }
 
-/** Mirrors: ActiveRecord::Querying#find_or_create_by */
+/**
+ * Mirrors: ActiveRecord::Querying#find_or_create_by — routes through
+ * Relation so default scopes, STI filter, and any scope attributes
+ * (from currentScope's `where` / `createWith`) apply to both the find
+ * and the create paths.
+ */
 export async function findOrCreateBy<T extends typeof Base>(
   this: T,
   conditions: Record<string, unknown>,
   extra?: Record<string, unknown>,
 ): Promise<InstanceType<T>> {
-  const record = (await this.findBy(conditions)) as InstanceType<T> | null;
-  if (record) return record;
-  return (await this.create({ ...conditions, ...extra })) as InstanceType<T>;
+  return (await this.all().findOrCreateBy(conditions, extra)) as InstanceType<T>;
 }
 
-/** Mirrors: ActiveRecord::Querying#find_or_initialize_by */
+/**
+ * Mirrors: ActiveRecord::Querying#find_or_initialize_by — same
+ * scope-aware dispatch as findOrCreateBy; the new record inherits
+ * the active scope's create-with attributes.
+ */
 export async function findOrInitializeBy<T extends typeof Base>(
   this: T,
   conditions: Record<string, unknown>,
   extra?: Record<string, unknown>,
 ): Promise<InstanceType<T>> {
-  const record = (await this.findBy(conditions)) as InstanceType<T> | null;
-  if (record) return record;
-  return new this({ ...conditions, ...extra }) as InstanceType<T>;
+  return (await this.all().findOrInitializeBy(conditions, extra)) as InstanceType<T>;
 }

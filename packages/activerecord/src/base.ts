@@ -1867,8 +1867,8 @@ export class Base extends Model {
   _associationInstances: Map<string, AssociationInstance> = new Map();
 
   constructor(attrs: Record<string, unknown> = {}) {
+    (new.target as typeof Base | undefined)?._requireConcreteClass();
     super(attrs);
-    (this.constructor as typeof Base)._requireConcreteClass();
   }
 
   // --- Persistence instance predicates (wired via include() after class body) ---

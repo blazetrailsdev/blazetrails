@@ -363,6 +363,27 @@ describe("PersistenceTest", () => {
     expect(reloaded.title).toBe("mutated-by-block");
   });
 
+  // Rails: create! stops at the first exception, so records after the
+  // failed element are not persisted.
+  it("createBang with an array stops at the first invalid record", async () => {
+    class Topic extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+        this.validatesPresenceOf("title");
+      }
+    }
+
+    await expect(
+      Topic.createBang([{ title: "first" }, { title: "" }, { title: "third" }]),
+    ).rejects.toThrow();
+
+    // First element committed before the failure.
+    expect(await Topic.all().where({ title: "first" }).exists()).toBe(true);
+    // Third element never attempted.
+    expect(await Topic.all().where({ title: "third" }).exists()).toBe(false);
+  });
+
   it("create with array yields to block for each record", async () => {
     class Topic extends Base {
       static {

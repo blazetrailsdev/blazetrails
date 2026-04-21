@@ -1555,7 +1555,7 @@ export class Base extends Model {
    * Instantiate a new record (not yet saved).
    *
    * Rails: `Base.new(attributes = nil, &block)` — recurses on arrays and
-   * yields each record to the block before returning. Aliased as `build`.
+   * yields each record to the block before returning.
    */
   static new<T extends typeof Base>(
     this: T,
@@ -1611,7 +1611,13 @@ export class Base extends Model {
     block?: (record: InstanceType<T>) => void,
   ): Promise<InstanceType<T> | InstanceType<T>[]> {
     if (Array.isArray(attrs)) {
-      return Promise.all(attrs.map((a) => (this as T).create(a, block)));
+      // Sequential, matching Rails' `attributes.collect { create(attr, &block) }`.
+      // Promise.all would interleave saves and fire callbacks out of order.
+      const records: InstanceType<T>[] = [];
+      for (const a of attrs) {
+        records.push((await (this as T).create(a, block)) as InstanceType<T>);
+      }
+      return records;
     }
     const record = new this(this._mergeCurrentScopeAttrs(attrs)) as InstanceType<T>;
     if (block) block(record);
@@ -1641,7 +1647,14 @@ export class Base extends Model {
     block?: (record: InstanceType<T>) => void,
   ): Promise<InstanceType<T> | InstanceType<T>[]> {
     if (Array.isArray(attrs)) {
-      return Promise.all(attrs.map((a) => (this as T).createBang(a, block)));
+      // Sequential + short-circuit on failure: Rails' create! stops at the
+      // first exception, so later elements are never attempted. Promise.all
+      // would fire every save concurrently and partial-write.
+      const records: InstanceType<T>[] = [];
+      for (const a of attrs) {
+        records.push((await (this as T).createBang(a, block)) as InstanceType<T>);
+      }
+      return records;
     }
     const record = new this(this._mergeCurrentScopeAttrs(attrs)) as InstanceType<T>;
     if (block) block(record);

@@ -3711,8 +3711,9 @@ describe("CalculationsTest", () => {
 
   // Regression: exists() used to route through count(), which returns a
   // Record<string, number> under a GROUP BY scope — the numeric cast then
-  // always evaluated truthy and `exists` always returned true. Uses
-  // limit(1).toArray() now so grouped scopes report correctly.
+  // always evaluated truthy and `exists` always returned true. Now issues
+  // a dedicated `SELECT 1 ... LIMIT 1` probe (mirroring Rails), which
+  // handles grouped scopes correctly without instantiating records.
   it("exists() works under a grouped scope", async () => {
     class Topic extends Base {
       static {

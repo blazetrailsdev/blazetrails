@@ -1963,20 +1963,19 @@ export class Relation<T extends Base> {
         rel = this.where({ [this._modelClass.primaryKey as string]: conditions });
       }
     }
-    // Lightweight existence probe that works across adapters.
-    //
-    // - `toArray()` would hydrate full model records and fire after_find /
-    //   load associations; `exists?` must not do that.
-    // - `pluck(pk)` trips Postgres under a GROUP BY scope ("column must
-    //   appear in the GROUP BY clause"), which the sibling regression
-    //   test catches.
-    // - `count()` handles grouping natively: with a group it returns a
-    //   Record<string, number> (one entry per group), without it returns
-    //   a scalar. Either shape answers the existence question without a
-    //   full record fetch.
-    const c = await rel.count();
-    if (typeof c === "number") return c > 0;
-    return Object.keys(c).length > 0;
+    // Mirrors Rails' `SELECT 1 AS one FROM ... LIMIT 1`: a dedicated
+    // existence probe that never instantiates records (no after_find /
+    // association loading) and doesn't go through count()'s limit
+    // fast-path, which would otherwise hydrate models.
+    const table = rel._modelClass.arelTable;
+    const manager = table.project(new Nodes.SqlLiteral("1 AS one"));
+    rel._applyJoinsToManager(manager);
+    rel._applyWheresToManager(manager, table);
+    for (const col of rel._groupColumns) manager.group(col);
+    if (!rel._havingClause.isEmpty()) manager.having(rel._havingClause.ast);
+    manager.take(1);
+    const rows = await rel._modelClass.adapter.execute(manager.toSql());
+    return rows.length > 0;
   }
 
   // -- Async query interface (Rails 7.0+) --

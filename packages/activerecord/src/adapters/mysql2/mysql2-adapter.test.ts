@@ -1,12 +1,18 @@
 /**
  * Mirrors Rails activerecord/test/cases/adapters/mysql2/mysql2_adapter_test.rb
  */
-import { describe, it, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   describeIfMysql,
   Mysql2Adapter,
   MYSQL_TEST_URL,
 } from "../abstract-mysql-adapter/test-helper.js";
+import {
+  InvalidForeignKey,
+  NotNullViolation,
+  RecordNotUnique,
+  ValueTooLong,
+} from "../../errors.js";
 
 describeIfMysql("Mysql2Adapter", () => {
   let adapter: Mysql2Adapter;
@@ -15,6 +21,60 @@ describeIfMysql("Mysql2Adapter", () => {
   });
   afterEach(async () => {
     await adapter.close();
+  });
+
+  // Rails: activerecord/test/cases/adapters/abstract_mysql_adapter/mysql_adapter_test.rb
+  // translate_exception tests. Matches the PG adapter's equivalent suite.
+  describe("translate_exception", () => {
+    beforeEach(async () => {
+      await adapter.executeMutation(`DROP TABLE IF EXISTS ex_child`);
+      await adapter.executeMutation(`DROP TABLE IF EXISTS ex_parent`);
+      await adapter.executeMutation(`DROP TABLE IF EXISTS ex_uniq`);
+      await adapter.executeMutation(`DROP TABLE IF EXISTS ex_notnull`);
+      await adapter.executeMutation(`DROP TABLE IF EXISTS ex_long`);
+    });
+
+    it("translates ER_DUP_ENTRY to RecordNotUnique", async () => {
+      await adapter.executeMutation(
+        `CREATE TABLE ex_uniq (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(20) UNIQUE)`,
+      );
+      await adapter.executeMutation(`INSERT INTO ex_uniq (name) VALUES ('Alice')`);
+      await expect(
+        adapter.executeMutation(`INSERT INTO ex_uniq (name) VALUES ('Alice')`),
+      ).rejects.toBeInstanceOf(RecordNotUnique);
+    });
+
+    it("translates ER_NO_REFERENCED_ROW_2 to InvalidForeignKey", async () => {
+      await adapter.executeMutation(
+        `CREATE TABLE ex_parent (id INT AUTO_INCREMENT PRIMARY KEY) ENGINE=InnoDB`,
+      );
+      await adapter.executeMutation(
+        `CREATE TABLE ex_child (id INT AUTO_INCREMENT PRIMARY KEY, parent_id INT, FOREIGN KEY (parent_id) REFERENCES ex_parent(id)) ENGINE=InnoDB`,
+      );
+      await expect(
+        adapter.executeMutation(`INSERT INTO ex_child (parent_id) VALUES (999)`),
+      ).rejects.toBeInstanceOf(InvalidForeignKey);
+    });
+
+    it("translates ER_NOT_NULL_VIOLATION to NotNullViolation", async () => {
+      await adapter.executeMutation(
+        `CREATE TABLE ex_notnull (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(20) NOT NULL)`,
+      );
+      await expect(
+        adapter.executeMutation(`INSERT INTO ex_notnull (name) VALUES (NULL)`),
+      ).rejects.toBeInstanceOf(NotNullViolation);
+    });
+
+    it("translates ER_DATA_TOO_LONG to ValueTooLong", async () => {
+      await adapter.executeMutation(
+        `CREATE TABLE ex_long (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(5))`,
+      );
+      // MySQL strict SQL mode must be on for this to fail; describeIfMysql
+      // sets the connection to strict by default on recent versions.
+      await expect(
+        adapter.executeMutation(`INSERT INTO ex_long (name) VALUES ('toolongvalue')`),
+      ).rejects.toBeInstanceOf(ValueTooLong);
+    });
   });
 
   describe("Mysql2AdapterTest", () => {

@@ -6969,6 +6969,12 @@ describe("CalculationsTest", () => {
       expect(await Product.all().exists(["price > ?", 0])).toBe(true);
       expect(await Product.all().exists(["price > ?", 100])).toBe(false);
     });
+
+    // Rails: `return false if !conditions` — false/null short-circuits
+    it("returns false immediately for a false/null condition", async () => {
+      expect(await Product.all().exists(false)).toBe(false);
+      expect(await Product.all().exists(null)).toBe(false);
+    });
   });
 
   describe("count via class method", async () => {

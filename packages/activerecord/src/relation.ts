@@ -1954,6 +1954,9 @@ export class Relation<T extends Base> {
    */
   async exists(conditions?: Record<string, unknown> | unknown): Promise<boolean> {
     if (this._isNone) return false;
+    // Rails FinderMethods#exists?: `return false if !conditions` — treats an
+    // explicit `false` / `null` argument as "no match possible".
+    if (conditions === false || conditions === null) return false;
     let rel: Relation<T> = this;
     if (conditions !== undefined) {
       // Mirrors Rails' FinderMethods#exists? argument handling:

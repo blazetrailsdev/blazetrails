@@ -1537,19 +1537,14 @@ describe("UniquenessBindParamsTest", () => {
     }
     const a = await Item.create({ name: "alpha" });
     const b = await Item.create({ name: "beta" });
-    // Change b's PK in memory to a's PK — self-exclusion must use the DB PK (b's original id)
-    // so the uniqueness check for "beta" still correctly excludes b itself, not a
+    // Change b's PK in memory to a's PK, then change b's name to conflict with a.
+    // The uniqueness validator must exclude b using b's database id, not the mutated in-memory id.
     (b as any).id = a.id;
-    // "beta" is still unique (only a has "alpha"), so save should succeed
-    // because the self-exclusion uses b's DB id (original), not the in-memory a.id
+    b.name = "alpha";
     expect(b._dirty.attributeChanged("id")).toBe(true);
-    const saved = await b.save();
-    // The name "beta" has no other record, so uniqueness passes regardless
-    expect(saved).toBe(true);
-    // Now test the case where changed-PK matters: if self-exclusion used in-memory PK,
-    // it would incorrectly exclude a instead of b, causing "alpha" to pass uniqueness
-    const c = new Item({ name: "alpha" });
-    expect(await c.save()).toBe(false); // "alpha" still taken by record a
+    // If self-exclusion incorrectly used the in-memory PK, it would exclude a and allow this save.
+    // Using id_in_database correctly keeps a visible to the uniqueness query, so the save must fail.
+    expect(await b.save()).toBe(false);
   });
 });
 

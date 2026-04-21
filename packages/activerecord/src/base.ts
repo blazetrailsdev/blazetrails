@@ -1949,14 +1949,12 @@ export class Base extends Model {
       if (this.isPersisted()) {
         const pk = ctor.primaryKey;
         if (Array.isArray(pk)) {
-          const selfConditions: Record<string, unknown> = {};
-          for (const col of pk) {
-            const dbVal = this._dirty.attributeChanged(col)
+          const dbVals = pk.map((col) =>
+            this._dirty.attributeChanged(col)
               ? this._dirty.attributeWas(col)
-              : this.readAttribute(col);
-            selfConditions[col] = [dbVal];
-          }
-          relation = relation.whereNot(selfConditions);
+              : this.readAttribute(col),
+          );
+          relation = relation.whereNot(pk, [dbVals]);
         } else {
           const dbVal = this._dirty.attributeChanged(pk)
             ? this._dirty.attributeWas(pk)

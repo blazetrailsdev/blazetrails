@@ -1105,8 +1105,9 @@ export class Base extends Model {
    *
    * Mirrors: ActiveRecord::Base.find_by — `delegate :find_by, to: :all`
    * (querying.rb QUERYING_METHODS). Routing through `all()` picks up
-   * the default scope, current scope, STI type filter, and any active
-   * scoping(...) + createWith attrs on the calling class.
+   * the default scope, current scope (from `scoping()`), and STI type
+   * filter. `createWith` doesn't affect lookups — it's applied only
+   * on downstream create paths like `findOrCreateBy`.
    */
   static findBy<T extends typeof Base>(
     this: T,

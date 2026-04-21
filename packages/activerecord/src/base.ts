@@ -1786,8 +1786,12 @@ export class Base extends Model {
     (ModelSchema.loadSchema as any).call(this);
 
     this._suppressInitializeCallback = true;
-    const record = new this() as InstanceType<T>;
-    this._suppressInitializeCallback = false;
+    let record: InstanceType<T>;
+    try {
+      record = new this() as InstanceType<T>;
+    } finally {
+      this._suppressInitializeCallback = false;
+    }
     // Load DB values through deserialize (not cast) so encrypted types decrypt
     for (const [key, value] of Object.entries(row)) {
       record._attributes.writeFromDatabase(key, value);

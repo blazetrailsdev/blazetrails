@@ -161,7 +161,7 @@ export function afterDestroy<T extends ModelCtor>(
  */
 export function afterFind<T extends ModelCtor>(
   modelClass: T,
-  fn: (record: InstanceType<T>) => void,
+  fn: (record: InstanceType<T>) => void | Promise<void>,
   options?: CallbackOptions<InstanceType<T>>,
 ): void {
   registerCallback(modelClass, "after", "find", fn, options);
@@ -176,7 +176,7 @@ export function afterFind<T extends ModelCtor>(
  */
 export function afterInitialize<T extends ModelCtor>(
   modelClass: T,
-  fn: (record: InstanceType<T>) => void,
+  fn: (record: InstanceType<T>) => void | Promise<void>,
   options?: CallbackOptions<InstanceType<T>>,
 ): void {
   registerCallback(modelClass, "after", "initialize", fn, options);

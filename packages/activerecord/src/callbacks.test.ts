@@ -50,11 +50,14 @@ describe("CallbacksTest", () => {
       }
     }
     const log: string[] = [];
+    Topic.afterFind(function (this: any) {
+      log.push("after_find");
+    });
     Topic.afterInitialize(function (this: any) {
       log.push("after_initialize");
     });
     new Topic({ title: "a" });
-    expect(log).toContain("after_initialize");
+    expect(log).toEqual(["after_initialize"]);
   });
 
   it("find", async () => {
@@ -69,8 +72,11 @@ describe("CallbacksTest", () => {
     Topic.afterFind(function (this: any) {
       log.push("after_find");
     });
+    Topic.afterInitialize(function (this: any) {
+      log.push("after_initialize");
+    });
     await Topic.find(created.id);
-    expect(log).toContain("after_find");
+    expect(log).toEqual(["after_find", "after_initialize"]);
   });
 });
 
@@ -1492,6 +1498,26 @@ describe("CallbacksTest", () => {
     await Developer.all().toArray();
     expect(found).toEqual(["Alice", "Bob"]);
   });
+
+  // after_initialize fires with DB-loaded values available
+  it("after_initialize on loaded record sees DB values", async () => {
+    const seen: string[] = [];
+    class Developer extends Base {
+      static {
+        this._tableName = "developers";
+        this.attribute("id", "integer");
+        this.attribute("name", "string");
+        this.adapter = adapter;
+        this.afterInitialize((r: any) => seen.push(r.name));
+      }
+    }
+
+    await Developer.create({ name: "Carol" });
+    seen.length = 0;
+
+    await Developer.find(1);
+    expect(seen).toEqual(["Carol"]);
+  });
 });
 
 describe("CallbacksTest", () => {
@@ -1573,71 +1599,5 @@ describe("CallbacksTest", () => {
     record.locked = true;
     const result = await record.save();
     expect(result).toBe(false);
-  });
-});
-
-describe("CallbacksTest", () => {
-  let adapter: DatabaseAdapter;
-
-  beforeEach(() => {
-    adapter = freshAdapter();
-  });
-
-  // Rails: test "initialize" — only after_initialize fires on new
-  it("initialize", () => {
-    const order: string[] = [];
-    class Developer extends Base {
-      static {
-        this._tableName = "developers";
-        this.attribute("id", "integer");
-        this.attribute("name", "string");
-        this.adapter = adapter;
-        this.afterFind(() => order.push("after_find"));
-        this.afterInitialize(() => order.push("after_initialize"));
-      }
-    }
-    new Developer({ name: "Alice" });
-    expect(order).toEqual(["after_initialize"]);
-  });
-
-  // Rails: test "find" — after_find fires before after_initialize
-  it("find", async () => {
-    const order: string[] = [];
-    class Developer extends Base {
-      static {
-        this._tableName = "developers";
-        this.attribute("id", "integer");
-        this.attribute("name", "string");
-        this.adapter = adapter;
-        this.afterFind(() => order.push("after_find"));
-        this.afterInitialize(() => order.push("after_initialize"));
-      }
-    }
-
-    await Developer.create({ name: "Alice" });
-    order.length = 0;
-
-    await Developer.find(1);
-    expect(order).toEqual(["after_find", "after_initialize"]);
-  });
-
-  // after_initialize fires with DB-loaded values available
-  it("after_initialize on loaded record sees DB values", async () => {
-    const seen: string[] = [];
-    class Developer extends Base {
-      static {
-        this._tableName = "developers";
-        this.attribute("id", "integer");
-        this.attribute("name", "string");
-        this.adapter = adapter;
-        this.afterInitialize((r: any) => seen.push(r.name));
-      }
-    }
-
-    await Developer.create({ name: "Carol" });
-    seen.length = 0;
-
-    await Developer.find(1);
-    expect(seen).toEqual(["Carol"]);
   });
 });

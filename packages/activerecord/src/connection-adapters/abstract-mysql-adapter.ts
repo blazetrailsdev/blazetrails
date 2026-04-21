@@ -11,6 +11,13 @@
 import { inspectExplainOption } from "../adapter.js";
 import type { ExplainOption } from "../adapter.js";
 import { AbstractAdapter, Version } from "./abstract-adapter.js";
+import {
+  InvalidForeignKey,
+  NotNullViolation,
+  RecordNotUnique,
+  StatementInvalid,
+  ValueTooLong,
+} from "../errors.js";
 import type { Nodes } from "@blazetrails/arel";
 import { StatementPool as ConnectionStatementPool } from "./statement-pool.js";
 import {
@@ -598,6 +605,31 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
   protected _explainStatementClause(options: ExplainOption[]): string {
     if (options.length === 0) return "EXPLAIN";
     return `EXPLAIN ${this._validateExplainOptions(options).join(" ")}`;
+  }
+
+  /**
+   * Map MySQL/MariaDB driver errors to ActiveRecord exception classes by
+   * errno. Matches Rails'
+   * `ConnectionAdapters::AbstractMysqlAdapter#translate_exception`.
+   */
+  protected _translateException(e: unknown, sql: string, binds: unknown[]): Error {
+    if (!(e instanceof Error)) return new StatementInvalid(String(e), { sql, binds, cause: e });
+    const errno = (e as { errno?: number }).errno;
+    const msg = e.message;
+    const cause = e;
+    switch (errno) {
+      case ER_DUP_ENTRY:
+        return new RecordNotUnique(msg, { sql, binds, cause });
+      case ER_NO_REFERENCED_ROW_2:
+        return new InvalidForeignKey(msg, { sql, binds, cause });
+      case ER_NOT_NULL_VIOLATION:
+      case ER_DO_NOT_HAVE_DEFAULT:
+        return new NotNullViolation(msg, { sql, binds, cause });
+      case ER_DATA_TOO_LONG:
+        return new ValueTooLong(msg, { sql, binds, cause });
+      default:
+        return e;
+    }
   }
 }
 

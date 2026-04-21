@@ -676,6 +676,15 @@ describe("CollectionProxy", () => {
     expect(player.team_id).toBe(team.id);
   });
 
+  it("AssociationRelation#createBang honors createWith defaults", async () => {
+    const team = await Team.create({ name: "Bulls" });
+    const proxy = association(team, "players");
+    const player = await proxy.createWith({ name: "rookie!" }).createBang({});
+    expect(player.isPersisted()).toBe(true);
+    expect(player.name).toBe("rookie!");
+    expect(player.team_id).toBe(team.id);
+  });
+
   // Rails: test_count
   it("test_count", async () => {
     const team = await Team.create({ name: "Bulls" });

@@ -3607,6 +3607,27 @@ describe("CalculationsTest", () => {
     expect(topic.status).toBe("from-conditions");
   });
 
+  // Rails: create_or_find_by!'s rescue narrows to RecordNotUnique, so
+  // validation failures propagate unchanged rather than getting masked
+  // as RecordNotFound. Our narrow-catch refactor must preserve that.
+  it("Relation#createOrFindByBang rethrows validation failures (not RecordNotUnique)", async () => {
+    const { RecordInvalid } = await import("./validations.js");
+    class Topic extends Base {
+      static {
+        this._tableName = "topics";
+        this.attribute("id", "integer");
+        this.attribute("title", "string");
+        this.adapter = adapter;
+        this.validatesPresenceOf("title");
+      }
+    }
+
+    // No title → validation fails → RecordInvalid. Should propagate.
+    await expect(Topic.all().createOrFindByBang({ title: "" })).rejects.toBeInstanceOf(
+      RecordInvalid,
+    );
+  });
+
   it("Relation#firstOrInitialize merges createWith attrs when initializing", async () => {
     class Topic extends Base {
       static {

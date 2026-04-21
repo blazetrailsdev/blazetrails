@@ -634,11 +634,12 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
       case ER_DATA_TOO_LONG:
         return new ValueTooLong(msg, { sql, binds, cause });
       default:
-        // Driver errors expose an `errno`. Wrap those in StatementInvalid
-        // to match Rails' fallback branch and the SQLite adapter's
-        // behavior; leave non-driver errors (no errno) untouched so
-        // internal/programming bugs keep their original class.
-        return errno !== undefined && e instanceof StatementInvalid === false
+        // Driver errors expose a positive MySQL errno and usually a
+        // sqlState. Node/system errors (ECONNREFUSED etc.) also carry
+        // an `errno`, often negative, so gate on a positive numeric
+        // errno to avoid re-tagging network failures as
+        // StatementInvalid (which would attach misleading sql/binds).
+        return typeof errno === "number" && errno > 0 && e instanceof StatementInvalid === false
           ? new StatementInvalid(msg, { sql, binds, cause })
           : e;
     }

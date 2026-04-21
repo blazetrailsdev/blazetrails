@@ -3565,6 +3565,48 @@ describe("CalculationsTest", () => {
     expect(topic.status).toBe("bang-default");
   });
 
+  // Rails: create_or_find_by runs `create(attributes)` on the current
+  // relation, which uses scope_for_create. With a same-named column set
+  // in both where() and createWith(), createWith must win (the pre-fix
+  // merge order had scope overwriting createWith).
+  it("Relation#createOrFindBy: createWith overrides same-named where-scope attrs", async () => {
+    class Topic extends Base {
+      static {
+        this._tableName = "topics";
+        this.attribute("id", "integer");
+        this.attribute("title", "string");
+        this.attribute("status", "string");
+        this.adapter = adapter;
+      }
+    }
+
+    const topic = await Topic.all()
+      .where({ status: "from-where" })
+      .createWith({ status: "from-create-with" })
+      .createOrFindBy({ title: "cof-topic" });
+    expect(topic.isPersisted()).toBe(true);
+    expect(topic.status).toBe("from-create-with");
+  });
+
+  // Explicit conditions still win over both createWith and where-scope.
+  it("Relation#createOrFindBy: caller's conditions win over createWith + where", async () => {
+    class Topic extends Base {
+      static {
+        this._tableName = "topics";
+        this.attribute("id", "integer");
+        this.attribute("title", "string");
+        this.attribute("status", "string");
+        this.adapter = adapter;
+      }
+    }
+
+    const topic = await Topic.all()
+      .where({ status: "from-where" })
+      .createWith({ status: "from-create-with" })
+      .createOrFindBy({ title: "cof-override", status: "from-conditions" });
+    expect(topic.status).toBe("from-conditions");
+  });
+
   it("Relation#firstOrInitialize merges createWith attrs when initializing", async () => {
     class Topic extends Base {
       static {

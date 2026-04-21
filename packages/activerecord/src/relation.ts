@@ -2249,8 +2249,7 @@ export class Relation<T extends Base> {
     // scope attrs first, createWith overrides, then the caller's conditions
     // and the optional extra hash win over both.
     return this._modelClass.create({
-      ...this._scopeAttributes(),
-      ...this._createWithAttrs,
+      ...this.scopeForCreate(),
       ...conditions,
       ...extra,
     }) as Promise<T>;
@@ -2270,8 +2269,7 @@ export class Relation<T extends Base> {
     // Same scope_for_create precedence as findOrCreateBy: scope attrs
     // first, createWith overrides, caller's conditions + extra win.
     return new (this._modelClass as any)({
-      ...this._scopeAttributes(),
-      ...this._createWithAttrs,
+      ...this.scopeForCreate(),
       ...conditions,
       ...extra,
     }) as T;

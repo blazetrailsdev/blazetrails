@@ -1581,6 +1581,30 @@ export class Base extends Model {
   }
 
   /**
+   * Alias for `new` (Rails 7.2+). Handy when `new` reads awkwardly in
+   * fluent chains or template literals.
+   *
+   * Mirrors: ActiveRecord::Persistence::ClassMethods#build
+   */
+  static build<T extends typeof Base>(
+    this: T,
+    attrs: Record<string, unknown>[],
+    block?: (record: InstanceType<T>) => void,
+  ): InstanceType<T>[];
+  static build<T extends typeof Base>(
+    this: T,
+    attrs?: Record<string, unknown>,
+    block?: (record: InstanceType<T>) => void,
+  ): InstanceType<T>;
+  static build<T extends typeof Base>(
+    this: T,
+    attrs: Record<string, unknown> | Record<string, unknown>[] = {},
+    block?: (record: InstanceType<T>) => void,
+  ): InstanceType<T> | InstanceType<T>[] {
+    return (this as T).new(attrs as Record<string, unknown>, block);
+  }
+
+  /**
    * Create a record and save it to the database.
    *
    * Rails: `Base.create(attributes = nil, &block)` — recurses on arrays

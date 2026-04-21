@@ -333,6 +333,25 @@ describe("PersistenceTest", () => {
     expect(result.every((t) => t.isPersisted())).toBe(true);
   });
 
+  // Rails 7.2+: `Base.build` is an alias for `Base.new`.
+  it("build is an alias for new and supports array + block", () => {
+    class Topic extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    const single = Topic.build({ title: "a" }, (r) => {
+      r.title = "mutated";
+    });
+    expect(single.isNewRecord()).toBe(true);
+    expect(single.title).toBe("mutated");
+
+    const many = Topic.build([{ title: "b" }, { title: "c" }]);
+    expect(many).toHaveLength(2);
+    expect(many.every((t) => t.isNewRecord())).toBe(true);
+  });
+
   it("new with an array returns unsaved records", () => {
     class Topic extends Base {
       static {

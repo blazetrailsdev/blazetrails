@@ -6974,8 +6974,11 @@ describe("CalculationsTest", () => {
     });
 
     it("treats a bare string argument as a primary-key lookup", async () => {
-      // With no matching PK, returns false (not SQL-parsed).
-      expect(await Product.all().exists("not-a-real-pk")).toBe(false);
+      // A numeric-looking string that doesn't match any existing row.
+      // Proves the PK-lookup branch (not SQL parsing): if the arg were
+      // treated as a SQL fragment we'd get true back (every row has price),
+      // and DBs with strict integer PKs would error on non-numeric strings.
+      expect(await Product.all().exists("999999999")).toBe(false);
     });
 
     // Rails: `return false if !conditions` — false/null short-circuits

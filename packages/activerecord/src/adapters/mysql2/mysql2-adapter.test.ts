@@ -66,19 +66,26 @@ describeIfMysql("Mysql2Adapter", () => {
     });
 
     it("translates ER_DATA_TOO_LONG to ValueTooLong", async () => {
-      // Force strict SQL mode for the session so the over-length insert
-      // raises instead of being truncated with a warning — default
-      // sql_mode varies across MySQL / MariaDB versions and is not
-      // reliable enough to depend on implicitly.
-      await adapter.executeMutation(
-        `SET SESSION sql_mode = CONCAT_WS(',', @@SESSION.sql_mode, 'STRICT_TRANS_TABLES')`,
-      );
-      await adapter.executeMutation(
-        `CREATE TABLE ex_long (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(5))`,
-      );
-      await expect(
-        adapter.executeMutation(`INSERT INTO ex_long (name) VALUES ('toolongvalue')`),
-      ).rejects.toBeInstanceOf(ValueTooLong);
+      // sql_mode is session-scoped, and our mysql2-adapter's pool checks
+      // out / releases a connection per call — so a plain SET SESSION
+      // wouldn't carry over to the CREATE + INSERT below. Pin a single
+      // pool connection via beginTransaction so all three statements
+      // run on the same session. (DDL in MySQL auto-commits, so the
+      // table persists even though we roll back the transaction.)
+      await adapter.beginTransaction();
+      try {
+        await adapter.executeMutation(
+          `SET SESSION sql_mode = CONCAT_WS(',', @@SESSION.sql_mode, 'STRICT_TRANS_TABLES')`,
+        );
+        await adapter.executeMutation(
+          `CREATE TABLE ex_long (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(5))`,
+        );
+        await expect(
+          adapter.executeMutation(`INSERT INTO ex_long (name) VALUES ('toolongvalue')`),
+        ).rejects.toBeInstanceOf(ValueTooLong);
+      } finally {
+        await adapter.rollback();
+      }
     });
   });
 

@@ -242,11 +242,22 @@ async function performClassUpdate(
     // array-of-arrays triggers the parallel-update path.
     const isParallel = this.compositePrimaryKey ? Array.isArray(idOrAttrs[0]) : true;
     if (!isParallel) {
-      // Single CPK tuple — fall through to the single-id branch.
+      // Single CPK tuple — fall through to the single-id branch. Reject
+      // the parallel-update shape (an attrs array) up front so the
+      // user gets a readable error instead of UnknownAttributeError on
+      // numeric-keyed forwarding.
+      if (Array.isArray(attrs)) {
+        throw argumentError(
+          `${this.name}.update: parallel updates for composite PKs require an array-of-tuples first arg, e.g. update([[k1a,k2a],[k1b,k2b]], [attrsA, attrsB])`,
+        );
+      }
       const record = (await this.find(idOrAttrs)) as InstanceType<typeof Base>;
       await run(record, attrs as Record<string, unknown>);
       return record;
     }
+    // Empty ids list is a no-op (Rails behaves this way; Base.find([]) would
+    // otherwise raise RecordNotFound "empty list of ids").
+    if (idOrAttrs.length === 0) return [];
     const attrsArr = attrs as Record<string, unknown>[];
     if (!Array.isArray(attrsArr) || attrsArr.length !== idOrAttrs.length) {
       throw argumentError("update(ids, attrs): ids and attrs must be arrays of the same length");

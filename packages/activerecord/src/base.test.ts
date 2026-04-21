@@ -964,7 +964,7 @@ describe("BasicsTest", () => {
       }
     }
     // create() calls new() immediately → NotImplementedError (matches Rails test_new_with_abstract_class).
-    // find() would also raise when records are materialized via _instantiate → new this().
+    // find() does NOT raise here — _instantiate suppresses the guard (mirrors Rails' allocate).
     await expect(AbstractModel.create({ name: "x" })).rejects.toThrow(NotImplementedError);
     await expect(AbstractModel.create({ name: "x" })).rejects.toThrow(
       "AbstractModel is an abstract class and cannot be instantiated.",
@@ -1016,10 +1016,9 @@ describe("BasicsTest", () => {
     }
     // Guard fires in the constructor (Rails inheritance.rb:56-58).
     // create() calls new() → raises immediately; direct new() also raises.
+    // find/findBy/update go through _instantiate which suppresses the guard (mirrors Rails' allocate).
     await expect(AbstractBase.create({ name: "x" })).rejects.toThrow(NotImplementedError);
     expect(() => new AbstractBase()).toThrow(NotImplementedError);
-    // find/findBy/update would raise when rows are materialized via _instantiate → new this();
-    // with no pre-seeded rows the test adapter raises before reaching that point.
   });
 
   it("find accepts multiple tuples on composite primary key", async () => {

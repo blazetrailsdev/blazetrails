@@ -66,11 +66,16 @@ describeIfMysql("Mysql2Adapter", () => {
     });
 
     it("translates ER_DATA_TOO_LONG to ValueTooLong", async () => {
+      // Force strict SQL mode for the session so the over-length insert
+      // raises instead of being truncated with a warning — default
+      // sql_mode varies across MySQL / MariaDB versions and is not
+      // reliable enough to depend on implicitly.
+      await adapter.executeMutation(
+        `SET SESSION sql_mode = CONCAT_WS(',', @@SESSION.sql_mode, 'STRICT_TRANS_TABLES')`,
+      );
       await adapter.executeMutation(
         `CREATE TABLE ex_long (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(5))`,
       );
-      // MySQL strict SQL mode must be on for this to fail; describeIfMysql
-      // sets the connection to strict by default on recent versions.
       await expect(
         adapter.executeMutation(`INSERT INTO ex_long (name) VALUES ('toolongvalue')`),
       ).rejects.toBeInstanceOf(ValueTooLong);

@@ -1014,11 +1014,14 @@ describe("BasicsTest", () => {
         this.adapter = adapter;
       }
     }
-    // Guard fires in the constructor (Rails inheritance.rb:56-58).
-    // create() calls new() → raises immediately; direct new() also raises.
-    // find/findBy/update go through _instantiate which suppresses the guard (mirrors Rails' allocate).
+    // create() and new() raise NotImplementedError (Rails inheritance.rb:56-58).
     await expect(AbstractBase.create({ name: "x" })).rejects.toThrow(NotImplementedError);
     expect(() => new AbstractBase()).toThrow(NotImplementedError);
+    // find/findBy/update go through _instantiate which suppresses the guard (mirrors Rails' allocate).
+    // They fail for other reasons (no table/RecordNotFound) but NOT with NotImplementedError.
+    await expect(AbstractBase.find(1)).rejects.not.toThrow(NotImplementedError);
+    await expect(AbstractBase.findBy({ name: "x" })).rejects.not.toThrow(NotImplementedError);
+    await expect(AbstractBase.update(1, { name: "y" })).rejects.not.toThrow(NotImplementedError);
   });
 
   it("find accepts multiple tuples on composite primary key", async () => {

@@ -3447,6 +3447,9 @@ describe("CalculationsTest", () => {
   // Rails' `delegate :find_by, to: :all` means Base.findBy picks up the
   // current scope inside a scoping block. Before this PR, Base.findBy
   // built a raw SELECT on arelTable and bypassed currentScope entirely.
+  // Deterministic check: a title that only exists OUTSIDE the scope must
+  // return null while the scope is active — the unscoped path would still
+  // return the row.
   it("Base.findBy honors currentScope under scoping()", async () => {
     class Topic extends Base {
       static {
@@ -3458,17 +3461,21 @@ describe("CalculationsTest", () => {
       }
     }
 
-    await Topic.create({ title: "A", status: "draft" });
-    await Topic.create({ title: "A", status: "published" });
+    await Topic.create({ title: "draft-only", status: "draft" });
+    await Topic.create({ title: "published-only", status: "published" });
 
-    let captured: Topic | null = null;
+    let insideScope: Topic | null = null;
+    let insideScopeOther: Topic | null = null;
     await Topic.all()
       .where({ status: "published" })
       .scoping(async () => {
-        captured = await Topic.findBy({ title: "A" });
+        insideScope = await Topic.findBy({ title: "published-only" });
+        insideScopeOther = await Topic.findBy({ title: "draft-only" });
       });
-    if (captured === null) throw new Error("Expected topic to be present");
-    expect((captured as Topic).status).toBe("published");
+    expect(insideScope).not.toBeNull();
+    expect((insideScope as unknown as Topic).status).toBe("published");
+    // draft-only is excluded by the active where(status: 'published') scope.
+    expect(insideScopeOther).toBeNull();
   });
 
   // Rails' findOrInitializeBy merges create_with attrs into the new

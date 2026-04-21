@@ -382,18 +382,20 @@ describe("InheritanceTest", () => {
       }
     }
 
-    await Firm.create({ name: "37signals" });
-    await Client.create({ name: "37signals" }); // same name, different type
+    const createdFirm = await Firm.create({ name: "37signals" });
+    const createdClient = await Client.create({ name: "37signals" }); // same name, different type
 
-    // Firm.findBy should only match the Firm row.
-    const firm = await Firm.findBy({ name: "37signals" });
+    // Firm.findBy must only match Firm rows, even when another subtype exists.
+    // Looking up by the OTHER subtype's PK must return null under the STI filter.
+    const firm = await Firm.findBy({ id: createdFirm.id });
     expect(firm).not.toBeNull();
     expect(firm!.constructor.name).toBe("Firm");
+    expect(await Firm.findBy({ id: createdClient.id })).toBeNull();
 
-    // Client.findBy should only match the Client row.
-    const client = await Client.findBy({ name: "37signals" });
+    const client = await Client.findBy({ id: createdClient.id });
     expect(client).not.toBeNull();
     expect(client!.constructor.name).toBe("Client");
+    expect(await Client.findBy({ id: createdFirm.id })).toBeNull();
   });
 
   it("alt inheritance find all", async () => {

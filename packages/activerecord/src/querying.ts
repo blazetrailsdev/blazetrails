@@ -313,24 +313,40 @@ export function count<T extends typeof Base>(
   return rel.count(...args) as ReturnType<ReturnType<T["all"]>["count"]>;
 }
 
-/** Mirrors: ActiveRecord::Querying#minimum */
-export function minimum<T extends typeof Base>(this: T, column: string): Promise<unknown> {
-  return this.all().minimum(column);
+/** Mirrors: ActiveRecord::Querying#minimum — params/return derived from Relation#minimum. */
+export function minimum<T extends typeof Base>(
+  this: T,
+  column: Parameters<ReturnType<T["all"]>["minimum"]>[0],
+): ReturnType<ReturnType<T["all"]>["minimum"]> {
+  const rel = this.all() as ReturnType<T["all"]>;
+  return rel.minimum(column) as ReturnType<ReturnType<T["all"]>["minimum"]>;
 }
 
-/** Mirrors: ActiveRecord::Querying#maximum */
-export function maximum<T extends typeof Base>(this: T, column: string): Promise<unknown> {
-  return this.all().maximum(column);
+/** Mirrors: ActiveRecord::Querying#maximum — params/return derived from Relation#maximum. */
+export function maximum<T extends typeof Base>(
+  this: T,
+  column: Parameters<ReturnType<T["all"]>["maximum"]>[0],
+): ReturnType<ReturnType<T["all"]>["maximum"]> {
+  const rel = this.all() as ReturnType<T["all"]>;
+  return rel.maximum(column) as ReturnType<ReturnType<T["all"]>["maximum"]>;
 }
 
-/** Mirrors: ActiveRecord::Querying#average */
-export function average<T extends typeof Base>(this: T, column: string): Promise<unknown> {
-  return this.all().average(column);
+/** Mirrors: ActiveRecord::Querying#average — params/return derived from Relation#average. */
+export function average<T extends typeof Base>(
+  this: T,
+  column: Parameters<ReturnType<T["all"]>["average"]>[0],
+): ReturnType<ReturnType<T["all"]>["average"]> {
+  const rel = this.all() as ReturnType<T["all"]>;
+  return rel.average(column) as ReturnType<ReturnType<T["all"]>["average"]>;
 }
 
-/** Mirrors: ActiveRecord::Querying#sum */
-export function sum<T extends typeof Base>(this: T, column: string): Promise<unknown> {
-  return this.all().sum(column);
+/** Mirrors: ActiveRecord::Querying#sum — params/return derived from Relation#sum. */
+export function sum<T extends typeof Base>(
+  this: T,
+  column?: Parameters<ReturnType<T["all"]>["sum"]>[0],
+): ReturnType<ReturnType<T["all"]>["sum"]> {
+  const rel = this.all() as ReturnType<T["all"]>;
+  return rel.sum(column) as ReturnType<ReturnType<T["all"]>["sum"]>;
 }
 
 /**

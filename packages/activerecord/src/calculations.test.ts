@@ -3417,6 +3417,32 @@ describe("CalculationsTest", () => {
     expect(topic.title).toBe("New Topic");
   });
 
+  // Rails' Querying.find_or_create_by is `delegate ... to: :all`, so
+  // Model.findOrCreateBy picks up any active scope's create-with attrs /
+  // default scope. Exercises the class-level entry point (not Relation)
+  // under a scoping block to lock in the scope-aware semantics.
+  it("Base.findOrCreateBy inherits createWith attrs from currentScope", async () => {
+    class Topic extends Base {
+      static {
+        this._tableName = "topics";
+        this.attribute("id", "integer");
+        this.attribute("title", "string");
+        this.attribute("status", "string");
+        this.adapter = adapter;
+      }
+    }
+
+    let topic: Topic | null = null;
+    await Topic.all()
+      .createWith({ status: "scoped-default" })
+      .scoping(async () => {
+        topic = (await Topic.findOrCreateBy({ title: "Via class-level entry" })) as Topic;
+      });
+    expect(topic).not.toBeNull();
+    expect((topic as unknown as Topic).status).toBe("scoped-default");
+    expect((topic as unknown as Topic).title).toBe("Via class-level entry");
+  });
+
   // Rails: test "create_with does not affect existing record lookup"
   it("createWith() does not affect existing record lookup", async () => {
     class Topic extends Base {

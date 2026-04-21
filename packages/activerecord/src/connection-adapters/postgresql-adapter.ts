@@ -2382,15 +2382,13 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       case "22001": // string_data_right_truncation
         return new ValueTooLong(msg, { sql, binds, cause });
       default:
-        // Driver errors carry a 5-char SQLSTATE `code`. Node/system
-        // errors (ECONNREFUSED, etc.) also set a string `code`, so gate
-        // on the SQLSTATE shape to avoid re-tagging network failures as
-        // StatementInvalid (which would attach misleading sql/binds).
-        if (
-          typeof code === "string" &&
-          /^[0-9A-Z]{5}$/.test(code) &&
-          e instanceof StatementInvalid === false
-        ) {
+        // Only wrap node-postgres `DatabaseError`s. The SQLSTATE
+        // 5-char shape alone isn't enough — Node system errors like
+        // `EPIPE` / `EBADF` also match it, so gating on
+        // instanceof pg.DatabaseError avoids re-tagging socket /
+        // network failures as StatementInvalid with misleading
+        // sql/binds attached.
+        if (e instanceof pg.DatabaseError && e instanceof StatementInvalid === false) {
           return new StatementInvalid(msg, { sql, binds, cause });
         }
         return e;

@@ -178,6 +178,68 @@ export function _setOnAdapterSetHook(hook: ((modelClass: any) => void) | null): 
 }
 
 /**
+ * Rails' `persistence.rb#update` / `#update!` dispatch on the first arg:
+ *   :all | "all" | nil          → iterate `all()` and update each
+ *   Array (of ids)              → parallel with `attributes` array
+ *   ActiveRecord::Base instance → ArgumentError
+ *   anything else               → primary-key lookup, single update
+ */
+async function performClassUpdate(
+  this: typeof Base,
+  idOrAttrs: unknown,
+  attrs: Record<string, unknown> | Record<string, unknown>[] | undefined,
+  bang: boolean,
+): Promise<unknown> {
+  const run = async (record: InstanceType<typeof Base>, a: Record<string, unknown>) => {
+    if (bang) await record.updateBang(a);
+    else await record.update(a);
+  };
+
+  // Rails accepts `nil`/`:all` default. TS callers write update(attrs) with
+  // a single hash, or pass the sentinel "all" explicitly.
+  const isAllSentinel =
+    idOrAttrs === undefined ||
+    idOrAttrs === null ||
+    idOrAttrs === "all" ||
+    (typeof idOrAttrs === "object" && !Array.isArray(idOrAttrs) && !(idOrAttrs instanceof Base));
+
+  if (isAllSentinel) {
+    // update(attrs) — apply to every record in the current scope.
+    const effectiveAttrs = (attrs ?? idOrAttrs) as Record<string, unknown>;
+    const records = (await this.all().toArray()) as InstanceType<typeof Base>[];
+    for (const r of records) await run(r, effectiveAttrs);
+    return records;
+  }
+
+  if (Array.isArray(idOrAttrs)) {
+    if (idOrAttrs.some((i) => i instanceof Base)) {
+      throw new Error(
+        "You are passing an instance of ActiveRecord::Base to `update`. Please pass the id of the object by calling `.id`.",
+      );
+    }
+    const attrsArr = attrs as Record<string, unknown>[];
+    if (!Array.isArray(attrsArr) || attrsArr.length !== idOrAttrs.length) {
+      throw new Error("update(ids, attrs): ids and attrs must be arrays of the same length");
+    }
+    const records = await Promise.all(idOrAttrs.map((id) => this.find(id)));
+    for (let i = 0; i < records.length; i++) {
+      await run(records[i] as InstanceType<typeof Base>, attrsArr[i]);
+    }
+    return records;
+  }
+
+  if (idOrAttrs instanceof Base) {
+    throw new Error(
+      "You are passing an instance of ActiveRecord::Base to `update`. Please pass the id of the object by calling `.id`.",
+    );
+  }
+
+  const record = (await this.find(idOrAttrs)) as InstanceType<typeof Base>;
+  await run(record, attrs as Record<string, unknown>);
+  return record;
+}
+
+/**
  * Base — the core ActiveRecord class with persistence and finders.
  *
  * Mirrors: ActiveRecord::Base
@@ -1264,35 +1326,66 @@ export class Base extends Model {
   // extracted to querying.ts; declared in the Querying mixin section below.
 
   /**
-   * Find and update a record by primary key.
+   * Update record(s). Mirrors Rails' `persistence.rb#update` — the id
+   * argument shape drives behavior:
    *
-   * Mirrors: ActiveRecord::Base.update(id, attrs)
+   *   update(attrs)                 → update every record in `all()` (Rails' `:all` default)
+   *   update("all", attrs)          → same, explicit sentinel
+   *   update(id, attrs)             → find(id) + update(attrs), returns the record
+   *   update([ids], [attrs])        → parallel arrays, index-aligned
+   *
+   * Passing a `Base` instance (or array containing one) raises.
    */
-  static async update<T extends typeof Base>(
+  static update<T extends typeof Base>(
+    this: T,
+    attrs: Record<string, unknown>,
+  ): Promise<InstanceType<T>[]>;
+  static update<T extends typeof Base>(
+    this: T,
+    sentinel: "all" | null | undefined,
+    attrs: Record<string, unknown>,
+  ): Promise<InstanceType<T>[]>;
+  static update<T extends typeof Base>(
+    this: T,
+    ids: unknown[],
+    attrs: Record<string, unknown>[],
+  ): Promise<InstanceType<T>[]>;
+  static update<T extends typeof Base>(
     this: T,
     id: unknown,
     attrs: Record<string, unknown>,
-  ): Promise<InstanceType<T>> {
-    const record = await this.find(id);
-    await record.update(attrs);
-    return record;
+  ): Promise<InstanceType<T>>;
+  static async update<T extends typeof Base>(
+    this: T,
+    idOrAttrs: unknown,
+    attrs?: Record<string, unknown> | Record<string, unknown>[],
+  ): Promise<InstanceType<T> | InstanceType<T>[]> {
+    return performClassUpdate.call(this, idOrAttrs, attrs, /*bang*/ false) as Promise<
+      InstanceType<T> | InstanceType<T>[]
+    >;
   }
 
   /**
-   * Destroy a record by primary key (with callbacks).
+   * Destroy a record by primary key (with callbacks). Accepts a single id,
+   * an array of ids, a composite-PK tuple, or an array of tuples.
    *
-   * Mirrors: ActiveRecord::Base.destroy(id)
+   * Mirrors: ActiveRecord::Base.destroy — Rails detects multiple ids via
+   *   `composite_primary_key? ? id.first.is_a?(Array) : id.is_a?(Array)`
+   * so a plain tuple on a composite-PK model is treated as ONE record,
+   * not N.
    */
   static async destroy<T extends typeof Base>(
     this: T,
     id: unknown | unknown[],
   ): Promise<InstanceType<T> | InstanceType<T>[]> {
-    if (Array.isArray(id)) {
+    const multipleIds = this.compositePrimaryKey
+      ? Array.isArray(id) && Array.isArray((id as unknown[])[0])
+      : Array.isArray(id);
+
+    if (multipleIds) {
       const found = await this.find(id);
       const records = Array.isArray(found) ? found : [found];
-      for (const record of records) {
-        await record.destroy();
-      }
+      for (const record of records) await record.destroy();
       return records;
     }
     const record = await this.find(id);
@@ -1303,18 +1396,38 @@ export class Base extends Model {
   // destroyAll extracted to querying.ts; declared in the Querying mixin section.
 
   /**
-   * Update a record and raise on validation failure.
+   * Update record(s) and raise on validation failure. Same arg shapes as
+   * `update`.
    *
    * Mirrors: ActiveRecord::Base.update!
    */
-  static async updateBang<T extends typeof Base>(
+  static updateBang<T extends typeof Base>(
+    this: T,
+    attrs: Record<string, unknown>,
+  ): Promise<InstanceType<T>[]>;
+  static updateBang<T extends typeof Base>(
+    this: T,
+    sentinel: "all" | null | undefined,
+    attrs: Record<string, unknown>,
+  ): Promise<InstanceType<T>[]>;
+  static updateBang<T extends typeof Base>(
+    this: T,
+    ids: unknown[],
+    attrs: Record<string, unknown>[],
+  ): Promise<InstanceType<T>[]>;
+  static updateBang<T extends typeof Base>(
     this: T,
     id: unknown,
     attrs: Record<string, unknown>,
-  ): Promise<InstanceType<T>> {
-    const record = await this.find(id);
-    await record.updateBang(attrs);
-    return record;
+  ): Promise<InstanceType<T>>;
+  static async updateBang<T extends typeof Base>(
+    this: T,
+    idOrAttrs: unknown,
+    attrs?: Record<string, unknown> | Record<string, unknown>[],
+  ): Promise<InstanceType<T> | InstanceType<T>[]> {
+    return performClassUpdate.call(this, idOrAttrs, attrs, /*bang*/ true) as Promise<
+      InstanceType<T> | InstanceType<T>[]
+    >;
   }
 
   /**
@@ -1947,13 +2060,31 @@ export class Base extends Model {
   // delete extracted to persistence.ts; wired via include() below.
 
   /**
-   * Delete a record by primary key without callbacks.
+   * Delete record(s) by primary key without callbacks / validations.
    *
-   * Mirrors: ActiveRecord::Base.delete
+   * Mirrors: ActiveRecord::Base.delete — Rails defines this as
+   * `delete_by(primary_key => id_or_array)`, so single ids, arrays of
+   * ids, `nil`, and empty arrays all route through the same where-builder.
+   * Composite primary keys are supported via the tuple / array-of-tuples
+   * form handled by `_buildPkWhereNode` and `Relation#where`.
    */
   static async delete(id: unknown): Promise<number> {
-    const dm = new DeleteManager().from(this.arelTable).where(this._buildPkWhereNode(id));
-    return this.adapter.execDelete(dm.toSql(), "Delete");
+    if (id === null || id === undefined || (Array.isArray(id) && id.length === 0)) {
+      return 0;
+    }
+    const pk = this.primaryKey;
+    if (Array.isArray(pk)) {
+      // Composite PK: let destroy()/where handle tuple / array-of-tuples
+      // semantics via _buildPkWhereNode, which builds an AND of equality
+      // predicates for a single tuple (array form is not supported here).
+      const dm = new DeleteManager().from(this.arelTable).where(this._buildPkWhereNode(id));
+      return this.adapter.execDelete(dm.toSql(), "Delete");
+    }
+    // Single-column PK — `where({[pk]: id})` handles both scalar and array
+    // (Arel's `in` for arrays) via the predicate builder.
+    return this.all()
+      .where({ [pk]: id as unknown })
+      .deleteAll();
   }
 
   // reload extracted to persistence.ts; wired via include() below.

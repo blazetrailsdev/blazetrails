@@ -6977,6 +6977,94 @@ describe("CalculationsTest", () => {
     });
   });
 
+  // Rails' Querying delegators route through `all()`, so class-level calls
+  // inherit default scopes / active scoping's createWith + where attrs.
+  // These regressions lock in that behavior for the firstOr* / batch
+  // entry points added alongside the exists arg-form changes.
+  // Rails' Querying delegators route through `all()`, so class-level calls
+  // inherit default scopes / active scoping's createWith + where attrs.
+  // These regressions lock in that behavior for the firstOr* / batch
+  // entry points added alongside the exists arg-form changes.
+  const makeTopicClass = () => {
+    class Topic extends Base {
+      static {
+        this._tableName = "topics";
+        this.attribute("id", "integer");
+        this.attribute("title", "string");
+        this.attribute("status", "string");
+        this.adapter = adapter;
+      }
+    }
+    return Topic;
+  };
+
+  it("Base.firstOrCreate inherits createWith attrs from currentScope", async () => {
+    const Topic = makeTopicClass();
+    let captured: InstanceType<typeof Topic> | null = null;
+    await Topic.all()
+      .createWith({ status: "scoped-default" })
+      .scoping(async () => {
+        captured = await Topic.firstOrCreate({ title: "via-class-firstOrCreate" });
+      });
+    if (captured === null) throw new Error("Expected topic to be present");
+    const topic = captured as InstanceType<typeof Topic>;
+    expect(topic.status).toBe("scoped-default");
+    expect(topic.title).toBe("via-class-firstOrCreate");
+  });
+
+  it("Base.firstOrInitialize inherits where-scope attrs from currentScope", async () => {
+    const Topic = makeTopicClass();
+    let captured: InstanceType<typeof Topic> | null = null;
+    // `where({title: ...})` seeds scope_for_create with that equality attr,
+    // which the initialized record should pick up when no match exists.
+    await Topic.all()
+      .where({ title: "to-be-initialized", status: "draft" })
+      .scoping(async () => {
+        captured = await Topic.firstOrInitialize();
+      });
+    if (captured === null) throw new Error("Expected topic to be present");
+    const topic = captured as InstanceType<typeof Topic>;
+    expect(topic.isNewRecord()).toBe(true);
+    expect(topic.title).toBe("to-be-initialized");
+    expect(topic.status).toBe("draft");
+  });
+
+  it("Base.findEach iterates the default scope via all()", async () => {
+    const Topic = makeTopicClass();
+    await Topic.create({ title: "a" });
+    await Topic.create({ title: "b" });
+    await Topic.create({ title: "c" });
+    const seen: string[] = [];
+    for await (const t of Topic.findEach({ batchSize: 2 })) {
+      seen.push(t.title as string);
+    }
+    expect(seen.sort()).toEqual(["a", "b", "c"]);
+  });
+
+  it("Base.findInBatches yields arrays sized to batchSize", async () => {
+    const Topic = makeTopicClass();
+    await Topic.create({ title: "a" });
+    await Topic.create({ title: "b" });
+    await Topic.create({ title: "c" });
+    const batches: number[] = [];
+    for await (const batch of Topic.findInBatches({ batchSize: 2 })) {
+      batches.push(batch.length);
+    }
+    expect(batches).toEqual([2, 1]);
+  });
+
+  it("Base.inBatches returns a BatchEnumerator scoped to all()", async () => {
+    const Topic = makeTopicClass();
+    await Topic.create({ title: "a" });
+    await Topic.create({ title: "b" });
+    const titles: string[] = [];
+    for await (const relBatch of Topic.inBatches({ batchSize: 1 })) {
+      const records = await relBatch.toArray();
+      for (const t of records) titles.push(t.title as string);
+    }
+    expect(titles.sort()).toEqual(["a", "b"]);
+  });
+
   describe("count via class method", async () => {
     it("delegates to relation", async () => {
       expect(await Product.count()).toBe(4);

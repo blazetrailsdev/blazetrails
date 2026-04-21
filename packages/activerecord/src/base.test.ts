@@ -997,10 +997,10 @@ describe("BasicsTest", () => {
         this.adapter = adapter;
       }
     }
-    expect(() => AbstractModel.where({ name: "x" })).toThrow(/abstract class/i);
+    expect(() => AbstractModel.where({ name: "x" })).toThrow(/cannot be instantiated/i);
   });
 
-  it("abstract class raises from find / findBy / create / update / all", async () => {
+  it("abstract class raises from find / findBy / create / update", async () => {
     class AbstractBase extends Base {
       static {
         this.abstractClass = true;
@@ -1009,12 +1009,11 @@ describe("BasicsTest", () => {
       }
     }
     // find/create/update are async — check as rejected promise
-    await expect(AbstractBase.find(1)).rejects.toThrow(/abstract class/i);
-    await expect(AbstractBase.create({ name: "x" })).rejects.toThrow(/abstract class/i);
-    await expect(AbstractBase.update(1, { name: "x" })).rejects.toThrow(/abstract class/i);
-    // findBy and all throw synchronously before returning a promise
-    expect(() => AbstractBase.findBy({ name: "x" })).toThrow(/abstract class/i);
-    expect(() => AbstractBase.all()).toThrow(/abstract class/i);
+    await expect(AbstractBase.find(1)).rejects.toThrow(/cannot be instantiated/i);
+    await expect(AbstractBase.create({ name: "x" })).rejects.toThrow(/cannot be instantiated/i);
+    await expect(AbstractBase.update(1, { name: "x" })).rejects.toThrow(/cannot be instantiated/i);
+    // findBy throws synchronously before returning a promise
+    expect(() => AbstractBase.findBy({ name: "x" })).toThrow(/cannot be instantiated/i);
   });
 
   it("find accepts multiple tuples on composite primary key", async () => {

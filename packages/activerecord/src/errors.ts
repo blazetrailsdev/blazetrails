@@ -117,10 +117,10 @@ export class DatabaseConnectionError extends ConnectionNotEstablished {
   }
 }
 
-export class AbstractClassError extends ActiveRecordError {
+export class NotImplementedError extends ActiveRecordError {
   constructor(message?: string, options?: ErrorOptions) {
     super(message, options);
-    this.name = "AbstractClassError";
+    this.name = "NotImplementedError";
   }
 }
 

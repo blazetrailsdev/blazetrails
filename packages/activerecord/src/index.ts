@@ -172,7 +172,7 @@ export {
   SubclassNotFound,
   AdapterNotSpecified,
   AdapterNotFound,
-  AbstractClassError,
+  NotImplementedError,
   AdapterError,
   ConnectionNotEstablished,
   ConnectionTimeoutError,

@@ -21,7 +21,7 @@ import {
   descendants as inheritanceDescendants,
 } from "./inheritance.js";
 import {
-  AbstractClassError,
+  NotImplementedError,
   RecordNotFound,
   StaleObjectError,
   ConnectionNotDefined,
@@ -394,8 +394,8 @@ export class Base extends Model {
 
   static _requireConcreteClass(): void {
     if (this.abstractClass) {
-      throw new AbstractClassError(
-        `${this.name} is an abstract class and cannot be used directly.`,
+      throw new NotImplementedError(
+        `${this.name} is an abstract class and cannot be instantiated.`,
       );
     }
   }
@@ -1334,7 +1334,6 @@ export class Base extends Model {
    * Mirrors: ActiveRecord::Base.all
    */
   static all<T extends typeof Base>(this: T): Relation<InstanceType<T>> {
-    this._requireConcreteClass();
     const scope = this.currentScope;
     if (scope) {
       return scope._clone();

@@ -20,7 +20,12 @@ import {
   subclasses as inheritanceSubclasses,
   descendants as inheritanceDescendants,
 } from "./inheritance.js";
-import { RecordNotFound, StaleObjectError, ConnectionNotDefined } from "./errors.js";
+import {
+  AbstractClassError,
+  RecordNotFound,
+  StaleObjectError,
+  ConnectionNotDefined,
+} from "./errors.js";
 import { AutosaveAssociation } from "./autosave-association.js";
 import {
   isValid as validationsIsValid,
@@ -385,6 +390,14 @@ export class Base extends Model {
 
   static set abstractClass(value: boolean) {
     this._abstractClass = value;
+  }
+
+  static _requireConcreteClass(): void {
+    if (this.abstractClass) {
+      throw new AbstractClassError(
+        `${this.name} is an abstract class and cannot be used directly.`,
+      );
+    }
   }
 
   /**
@@ -1127,6 +1140,7 @@ export class Base extends Model {
     ...ids: [unknown, ...unknown[]]
   ): Promise<InstanceType<T>[]>;
   static async find(...ids: unknown[]): Promise<any> {
+    this._requireConcreteClass();
     if (ids.length === 0) {
       throw new RecordNotFound(
         `Couldn't find ${this.name} with an empty list of ids`,
@@ -1141,7 +1155,7 @@ export class Base extends Model {
       // (`Model.find(1, 42)` could mean "tuple [1,42]" or "two scalar ids",
       // neither of which matches the CPK tuple contract). Require an
       // explicit array form so intent is unambiguous.
-      if (this.compositePrimaryKey && ids.every((i) => !Array.isArray(i))) {
+      if (this.compositePrimaryKey && ids.some((i) => !Array.isArray(i))) {
         throw argumentError(
           `${this.name} has a composite primary key (${String(this.primaryKey)}); ` +
             `call find([...tuple]) or find([[...], [...]]) rather than variadic scalars.`,
@@ -1255,6 +1269,7 @@ export class Base extends Model {
     this: T,
     conditions: Record<string, unknown>,
   ): Promise<InstanceType<T> | null> {
+    this._requireConcreteClass();
     return this.all().findBy(conditions);
   }
 
@@ -1319,6 +1334,7 @@ export class Base extends Model {
    * Mirrors: ActiveRecord::Base.all
    */
   static all<T extends typeof Base>(this: T): Relation<InstanceType<T>> {
+    this._requireConcreteClass();
     const scope = this.currentScope;
     if (scope) {
       return scope._clone();
@@ -1350,9 +1366,7 @@ export class Base extends Model {
     conditionsOrSql: Record<string, unknown> | string | string[],
     ...rest: unknown[]
   ): Relation<InstanceType<T>> {
-    if (this.abstractClass) {
-      throw new Error(`Cannot call where on abstract class ${this.name}`);
-    }
+    this._requireConcreteClass();
     if (typeof conditionsOrSql === "string") {
       return this.all().where(conditionsOrSql, ...rest);
     }
@@ -1440,6 +1454,7 @@ export class Base extends Model {
     idOrAttrs: unknown,
     attrs?: Record<string, unknown> | Record<string, unknown>[],
   ): Promise<InstanceType<T> | InstanceType<T>[]> {
+    this._requireConcreteClass();
     return performClassUpdate.call(this, idOrAttrs, attrs, /*bang*/ false) as Promise<
       InstanceType<T> | InstanceType<T>[]
     >;
@@ -1640,6 +1655,7 @@ export class Base extends Model {
     attrs: Record<string, unknown> | Record<string, unknown>[] = {},
     block?: (record: InstanceType<T>) => void,
   ): Promise<InstanceType<T> | InstanceType<T>[]> {
+    this._requireConcreteClass();
     if (Array.isArray(attrs)) {
       // Sequential, matching Rails' `attributes.collect { create(attr, &block) }`.
       // Promise.all would interleave saves and fire callbacks out of order.
@@ -1812,7 +1828,6 @@ export class Base extends Model {
     if (this._strictLoadingByDefault) {
       record._strictLoading = true;
     }
-    // Rails' init_with_attributes fires after_find then after_initialize
     this._callbackChain.runAfter("find", record);
     this._callbackChain.runAfter("initialize", record);
     return record;
@@ -2582,7 +2597,11 @@ export class Base extends Model {
   }
 
   static async tableExists(): Promise<boolean> {
-    return true; // TODO: query adapter for table existence
+    const cache = this.adapter?.schemaCache;
+    if (!cache || typeof cache.dataSourceExists !== "function") return true;
+    const pool = (this.adapter as any).pool ?? this.adapter;
+    const exists = await cache.dataSourceExists(pool, this.tableName);
+    return exists !== false;
   }
 
   static hasAttribute(name: string): boolean {

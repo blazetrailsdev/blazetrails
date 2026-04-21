@@ -117,6 +117,13 @@ export class DatabaseConnectionError extends ConnectionNotEstablished {
   }
 }
 
+export class AbstractClassError extends ActiveRecordError {
+  constructor(message?: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "AbstractClassError";
+  }
+}
+
 export class ReadOnlyError extends ActiveRecordError {
   constructor(message?: string, options?: ErrorOptions) {
     super(message, options);

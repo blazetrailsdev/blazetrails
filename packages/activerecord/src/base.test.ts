@@ -1000,6 +1000,51 @@ describe("BasicsTest", () => {
     expect(() => AbstractModel.where({ name: "x" })).toThrow(/abstract class/i);
   });
 
+  it("abstract class raises from find / findBy / create / update / all", async () => {
+    class AbstractBase extends Base {
+      static {
+        this.abstractClass = true;
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    // find/create/update are async — check as rejected promise
+    await expect(AbstractBase.find(1)).rejects.toThrow(/abstract class/i);
+    await expect(AbstractBase.create({ name: "x" })).rejects.toThrow(/abstract class/i);
+    await expect(AbstractBase.update(1, { name: "x" })).rejects.toThrow(/abstract class/i);
+    // findBy and all throw synchronously before returning a promise
+    expect(() => AbstractBase.findBy({ name: "x" })).toThrow(/abstract class/i);
+    expect(() => AbstractBase.all()).toThrow(/abstract class/i);
+  });
+
+  it("find accepts multiple tuples on composite primary key", async () => {
+    class Order extends Base {
+      static {
+        this.primaryKey = ["shop_id", "id"];
+        this.attribute("shop_id", "integer");
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    // Variadic tuple form: find([1,2], [3,4]) — all args are arrays, so it should
+    // NOT raise the "use array form" ambiguity error. It will raise RecordNotFound
+    // (expected — no records exist), not an ArgumentError.
+    await expect(Order.find([1, 2], [3, 4])).rejects.toThrow(/couldn't find/i);
+  });
+
+  it("tableExists returns true when adapter has no schemaCache", async () => {
+    class Ghost extends Base {
+      static tableName = "ghosts_that_do_not_exist";
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    // The in-memory test adapter has no schemaCache, so tableExists falls back to true.
+    const exists = await Ghost.tableExists();
+    expect(exists).toBe(true);
+  });
+
   it("create works with optimistic locking", async () => {
     class Post extends Base {
       static {

@@ -486,7 +486,7 @@ export function isOne<T extends typeof Base>(this: T): Promise<boolean> {
 }
 
 /**
- * Mirrors: ActiveRecord::Querying#empty? — delegates to all().empty?.
+ * Mirrors: ActiveRecord::Querying#empty? — delegates to `all().empty?`.
  * Rails' `none?` (no block/args) falls through to `empty?`, so this
  * predicate also covers that semantic.
  */

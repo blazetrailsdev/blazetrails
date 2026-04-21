@@ -1737,8 +1737,10 @@ describe("PersistenceTest", () => {
   });
 
   // Rails: Base.delete accepts an array of composite-PK tuples and deletes
-  // each matching row via `(pk1,pk2) IN ((v1,v2),...)` — NOT via a
-  // per-column IN cross-product.
+  // each matching row. Predicate builder emits an OR-of-AND — e.g.
+  // `(shop_id = 1 AND order_id = 10) OR (shop_id = 1 AND order_id = 11)`
+  // — NOT a per-column IN cross-product (which would also match
+  // [shop_id=2, order_id=10]).
   it("delete accepts an array of composite-PK tuples", async () => {
     const adapter = freshAdapter();
     class OrderItem extends Base {

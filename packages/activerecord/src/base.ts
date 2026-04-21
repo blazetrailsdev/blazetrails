@@ -2104,9 +2104,9 @@ export class Base extends Model {
           );
         }
       }
-      // where(cols, tuples) emits the composite `(pk1,pk2) IN ((v1,v2),...)`
-      // predicate, so multi-tuple deletes produce correct SQL instead of
-      // a cross-product of per-column IN lists.
+      // where(cols, tuples) compiles to OR-of-AND (`(pk1=v1 AND pk2=v2) OR ...`)
+      // via PredicateBuilder.buildComposite, so multi-tuple deletes produce
+      // correct SQL instead of a cross-product of per-column IN lists.
       return this.all().where(pk, tuples).deleteAll();
     }
     // Single-column PK — where({[pk]: id}) handles scalar and array alike

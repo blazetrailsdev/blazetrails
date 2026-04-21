@@ -979,12 +979,8 @@ export class Model {
     // Fire after_initialize callbacks (suppressed for DB-loaded records so
     // _instantiate can fire after_find first, then after_initialize in order —
     // flag is set on Base in activerecord, unknown to Model in activemodel)
-    if (
-      !(
-        "_suppressInitializeCallback" in ctor &&
-        ctor["_suppressInitializeCallback" as keyof typeof ctor]
-      )
-    ) {
+    const callbackSuppressor = ctor as typeof ctor & { _suppressInitializeCallback?: boolean };
+    if (callbackSuppressor._suppressInitializeCallback !== true) {
       ctor._callbackChain.runAfter("initialize", this);
     }
   }

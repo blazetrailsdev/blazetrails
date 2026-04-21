@@ -177,12 +177,12 @@ export function findStiClass(baseClass: typeof Base, typeName: string): typeof B
  */
 function directInstantiate(klass: typeof Base, row: Record<string, unknown>): Base {
   (klass as any)._skipEncryption = true;
-  (klass as any)._suppressInitializeCallback = true;
+  klass._suppressInitializeCallback = true;
   let record: Base;
   try {
     record = new klass(row);
   } finally {
-    (klass as any)._suppressInitializeCallback = false;
+    klass._suppressInitializeCallback = false;
     (klass as any)._skipEncryption = false;
   }
   record._newRecord = false;

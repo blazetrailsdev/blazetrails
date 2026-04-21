@@ -193,6 +193,10 @@ interface FinderRelation {
     primaryKey: string | string[];
     compositePrimaryKey: boolean;
     createBang(attrs: any): Promise<any>;
+    transaction<R>(
+      fn: (tx: any) => Promise<R>,
+      options?: { isolation?: string; requiresNew?: boolean; joinable?: boolean },
+    ): Promise<R | undefined>;
   };
   _isNone: boolean;
   _limitValue: number | null;
@@ -478,7 +482,7 @@ export async function performCreateOrFindByBang(
   //   rescue ActiveRecord::RecordNotUnique
   //     where(attributes).lock.find_by!(attributes)
   try {
-    return await (this._modelClass as any).transaction(
+    return await this._modelClass.transaction(
       () =>
         this._modelClass.createBang({
           ...this.scopeForCreate(),

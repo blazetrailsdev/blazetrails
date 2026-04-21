@@ -2,7 +2,7 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   Base,
   association,
@@ -5215,23 +5215,18 @@ describe("CalculationsTest", () => {
 
     const existing = await User.create({ name: "Claim" });
 
-    // Patch create() once to simulate a unique-index loss.
-    const orig = User.create.bind(User);
-    let calls = 0;
-    (User as any).create = async (...args: unknown[]) => {
-      calls++;
-      if (calls === 1) {
-        throw new RecordNotUnique("duplicate key", { sql: "INSERT ...", binds: [] });
-      }
-      return orig(...(args as [Record<string, unknown>]));
-    };
+    // Simulate a unique-index loss on the inner create by spying once.
+    const spy = vi.spyOn(User, "create").mockImplementationOnce(() => {
+      throw new RecordNotUnique("duplicate key", { sql: "INSERT ...", binds: [] });
+    });
 
     try {
       const retried = await User.createOrFindBy({ name: "Claim" });
       expect(retried.id).toBe(existing.id);
       expect(await User.all().count()).toBe(1);
+      expect(spy).toHaveBeenCalledTimes(1);
     } finally {
-      (User as any).create = orig;
+      vi.restoreAllMocks();
     }
   });
 

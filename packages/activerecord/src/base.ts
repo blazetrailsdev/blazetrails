@@ -1942,11 +1942,27 @@ export class Base extends Model {
         relation = options.conditions.call(relation);
       }
 
-      // Exclude self if persisted
+      // Exclude self if persisted — mirrors uniqueness.rb:26-30
+      // `relation.where.not(primary_key => [record.id_in_database])`
+      // Use the DB value (attributeWas) when the PK has been changed in memory.
       if (this.isPersisted()) {
-        relation = relation.where(
-          `"${ctor.arelTable.name}"."${ctor.primaryKey}" != ${(this as any).id}`,
-        );
+        const pk = ctor.primaryKey;
+        if (Array.isArray(pk)) {
+          const selfConditions: Record<string, unknown> = {};
+          for (const col of pk) {
+            const dirty = this._dirty;
+            selfConditions[col] = dirty.attributeChanged(col)
+              ? dirty.attributeWas(col)
+              : this.readAttribute(col);
+          }
+          relation = relation.whereNot(selfConditions);
+        } else {
+          const dirty = this._dirty;
+          const pkVal = dirty.attributeChanged(pk)
+            ? dirty.attributeWas(pk)
+            : this.readAttribute(pk);
+          relation = relation.whereNot({ [pk]: pkVal });
+        }
       }
       const existing = await relation.first();
       if (existing) {

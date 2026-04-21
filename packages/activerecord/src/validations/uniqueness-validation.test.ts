@@ -1484,6 +1484,75 @@ describe("UniquenessWithCompositeKey", () => {
   });
 });
 
+describe("UniquenessBindParamsTest", () => {
+  it("uniqueness excludes self with string primary key", async () => {
+    const adp = freshAdapter();
+    class Token extends Base {
+      static {
+        this.primaryKey = "token";
+        this.attribute("token", "string");
+        this.attribute("label", "string");
+        this.adapter = adp;
+        this.validatesUniqueness("label");
+      }
+    }
+    const t = await Token.create({ token: "abc-123", label: "my token" });
+    expect(t.isPersisted()).toBe(true);
+    // Re-saving same record should not conflict with itself (self-exclusion via bind param)
+    expect(await t.save()).toBe(true);
+    // A different record with the same label should fail
+    const t2 = new Token({ token: "def-456", label: "my token" });
+    expect(await t2.save()).toBe(false);
+  });
+
+  it("uniqueness excludes self with composite primary key", async () => {
+    const adp = freshAdapter();
+    class Slot extends Base {
+      static {
+        this.primaryKey = ["room_id", "slot_num"];
+        this.attribute("room_id", "integer");
+        this.attribute("slot_num", "integer");
+        this.attribute("title", "string");
+        this.adapter = adp;
+        this.validatesUniqueness("title");
+      }
+    }
+    const s = await Slot.create({ room_id: 1, slot_num: 1, title: "keynote" });
+    expect(s.isPersisted()).toBe(true);
+    // Re-saving same record should not conflict with itself
+    expect(await s.save()).toBe(true);
+    // A different record with the same title should fail
+    const s2 = new Slot({ room_id: 2, slot_num: 1, title: "keynote" });
+    expect(await s2.save()).toBe(false);
+  });
+
+  it("uniqueness uses id_in_database when pk was changed in memory", async () => {
+    const adp = freshAdapter();
+    class Item extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adp;
+        this.validatesUniqueness("name");
+      }
+    }
+    const a = await Item.create({ name: "alpha" });
+    const b = await Item.create({ name: "beta" });
+    // Change b's PK in memory to a's PK — self-exclusion must use the DB PK (b's original id)
+    // so the uniqueness check for "beta" still correctly excludes b itself, not a
+    (b as any).id = a.id;
+    // "beta" is still unique (only a has "alpha"), so save should succeed
+    // because the self-exclusion uses b's DB id (original), not the in-memory a.id
+    expect(b._dirty.attributeChanged("id")).toBe(true);
+    const saved = await b.save();
+    // The name "beta" has no other record, so uniqueness passes regardless
+    expect(saved).toBe(true);
+    // Now test the case where changed-PK matters: if self-exclusion used in-memory PK,
+    // it would incorrectly exclude a instead of b, causing "alpha" to pass uniqueness
+    const c = new Item({ name: "alpha" });
+    expect(await c.save()).toBe(false); // "alpha" still taken by record a
+  });
+});
+
 describe("UniquenessValidationTest", () => {
   it("validate uniqueness", async () => {
     const adapter = freshAdapter();

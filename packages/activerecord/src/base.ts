@@ -200,7 +200,7 @@ async function performClassUpdate(
   const isAllSentinel =
     idOrAttrs === undefined ||
     idOrAttrs === null ||
-    idOrAttrs === "all" ||
+    idOrAttrs === ":all" ||
     (typeof idOrAttrs === "object" && !Array.isArray(idOrAttrs) && !(idOrAttrs instanceof Base));
 
   if (isAllSentinel) {
@@ -1330,7 +1330,7 @@ export class Base extends Model {
    * argument shape drives behavior:
    *
    *   update(attrs)                 → update every record in `all()` (Rails' `:all` default)
-   *   update("all", attrs)          → same, explicit sentinel
+   *   update(":all", attrs)         → same, explicit sentinel (mirrors Rails' :all symbol)
    *   update(id, attrs)             → find(id) + update(attrs), returns the record
    *   update([ids], [attrs])        → parallel arrays, index-aligned
    *
@@ -1342,7 +1342,7 @@ export class Base extends Model {
   ): Promise<InstanceType<T>[]>;
   static update<T extends typeof Base>(
     this: T,
-    sentinel: "all" | null | undefined,
+    sentinel: ":all" | null | undefined,
     attrs: Record<string, unknown>,
   ): Promise<InstanceType<T>[]>;
   static update<T extends typeof Base>(
@@ -1407,7 +1407,7 @@ export class Base extends Model {
   ): Promise<InstanceType<T>[]>;
   static updateBang<T extends typeof Base>(
     this: T,
-    sentinel: "all" | null | undefined,
+    sentinel: ":all" | null | undefined,
     attrs: Record<string, unknown>,
   ): Promise<InstanceType<T>[]>;
   static updateBang<T extends typeof Base>(

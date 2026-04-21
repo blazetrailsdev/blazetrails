@@ -10,7 +10,7 @@ import {
 } from "@blazetrails/arel";
 import type { Base } from "./base.js";
 import { _setRelationCtor, _setScopeProxyWrapper, quoteSqlValue } from "./base.js";
-import { RecordNotUnique } from "./errors.js";
+import { RecordNotSaved, RecordNotUnique } from "./errors.js";
 import { modelRegistry } from "./associations.js";
 import { applyThenable, stripThenable } from "./relation/thenable.js";
 import { getInheritanceColumn, isStiSubclass } from "./inheritance.js";
@@ -2292,7 +2292,7 @@ export class Relation<T extends Base> {
     // before the retry; `.lock` + `find_by!` so the concurrent winner
     // is materialized + row-locked inside the caller's txn.
     try {
-      return (await this._modelClass.transaction(
+      const result = await this._modelClass.transaction(
         () =>
           this._modelClass.create({
             ...this.scopeForCreate(),
@@ -2300,7 +2300,16 @@ export class Relation<T extends Base> {
             ...extra,
           }) as Promise<T>,
         { requiresNew: true },
-      )) as T;
+      );
+      // transaction() returns undefined when the block raises Rollback.
+      // Don't silently yield undefined — raise so callers see the abort.
+      if (result === undefined) {
+        throw new RecordNotSaved(
+          `${this._modelClass.name}.createOrFindBy rolled back before persist`,
+          this as unknown as object,
+        );
+      }
+      return result;
     } catch (e) {
       if (!(e instanceof RecordNotUnique)) throw e;
       return this.where(conditions).lock().findByBang(conditions) as Promise<T>;

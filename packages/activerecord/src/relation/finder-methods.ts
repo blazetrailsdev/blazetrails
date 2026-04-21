@@ -8,7 +8,7 @@
  * Mirrors: ActiveRecord::FinderMethods
  */
 
-import { RecordNotFound, RecordNotUnique, SoleRecordExceeded } from "../errors.js";
+import { RecordNotFound, RecordNotSaved, RecordNotUnique, SoleRecordExceeded } from "../errors.js";
 
 // ---------------------------------------------------------------------------
 // Shared id-normalization + not-found helpers.
@@ -482,7 +482,7 @@ export async function performCreateOrFindByBang(
   //   rescue ActiveRecord::RecordNotUnique
   //     where(attributes).lock.find_by!(attributes)
   try {
-    return await this._modelClass.transaction(
+    const result = await this._modelClass.transaction(
       () =>
         this._modelClass.createBang({
           ...this.scopeForCreate(),
@@ -491,6 +491,16 @@ export async function performCreateOrFindByBang(
         }),
       { requiresNew: true },
     );
+    // transaction() returns undefined when the block raises Rollback.
+    // Treat that as a persist failure rather than leaking undefined to
+    // the bang caller.
+    if (result === undefined) {
+      throw new RecordNotSaved(
+        `${this._modelClass.name}.createOrFindByBang rolled back before persist`,
+        undefined,
+      );
+    }
+    return result;
   } catch (error) {
     if (!(error instanceof RecordNotUnique)) throw error;
     return this.where(conditions).lock().findByBang(conditions);

@@ -91,6 +91,13 @@ describe("ReadonlyTest", () => {
     expect(p.isReadonly()).toBe(false);
   });
 
+  it("readonly new record cannot be saved", async () => {
+    const { Post } = makeModel();
+    const p = new Post({ title: "new" });
+    p.readonlyBang();
+    await expect(p.save()).rejects.toThrow(ReadOnlyRecord);
+  });
+
   it("readonly record cannot be updated via updateAttribute", async () => {
     const { Post } = makeModel();
     const p = await Post.create({ title: "locked" });

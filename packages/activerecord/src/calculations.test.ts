@@ -5788,6 +5788,25 @@ describe("CalculationsTest", () => {
     expect(withBoth.scopeForCreate()).toEqual({ title: "world", id: 10 });
   });
 
+  // Caller-explicit attrs override both where-scope and createWith —
+  // confirmed via Relation#build which spreads scopeForCreate then caller attrs.
+  it("scope_for_create caller attrs win over createWith and where", async () => {
+    class Post extends Base {
+      static {
+        this._tableName = "posts";
+        this.attribute("id", "integer");
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+
+    const scope = Post.all()
+      .where({ title: "from-where" })
+      .createWith({ title: "from-create-with" });
+    const record = scope.build({ title: "from-caller" });
+    expect(record.title).toBe("from-caller");
+  });
+
   // Rails: test "where_values_hash"
   it("whereValuesHash returns a hash of equality conditions", async () => {
     class User extends Base {

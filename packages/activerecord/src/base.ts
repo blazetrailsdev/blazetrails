@@ -1942,26 +1942,26 @@ export class Base extends Model {
         relation = options.conditions.call(relation);
       }
 
-      // Exclude self if persisted — mirrors uniqueness.rb:26-30
+      // Exclude self if persisted — mirrors uniqueness.rb:26-30:
       // `relation.where.not(primary_key => [record.id_in_database])`
-      // Use the DB value (attributeWas) when the PK has been changed in memory.
+      // Array form generates NOT IN, matching Rails. attributeWas() provides
+      // the DB value when the PK has been changed in memory (id_in_database).
       if (this.isPersisted()) {
         const pk = ctor.primaryKey;
         if (Array.isArray(pk)) {
           const selfConditions: Record<string, unknown> = {};
           for (const col of pk) {
-            const dirty = this._dirty;
-            selfConditions[col] = dirty.attributeChanged(col)
-              ? dirty.attributeWas(col)
+            const dbVal = this._dirty.attributeChanged(col)
+              ? this._dirty.attributeWas(col)
               : this.readAttribute(col);
+            selfConditions[col] = [dbVal];
           }
           relation = relation.whereNot(selfConditions);
         } else {
-          const dirty = this._dirty;
-          const pkVal = dirty.attributeChanged(pk)
-            ? dirty.attributeWas(pk)
+          const dbVal = this._dirty.attributeChanged(pk)
+            ? this._dirty.attributeWas(pk)
             : this.readAttribute(pk);
-          relation = relation.whereNot({ [pk]: pkVal });
+          relation = relation.whereNot({ [pk]: [dbVal] });
         }
       }
       const existing = await relation.first();

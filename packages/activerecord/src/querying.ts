@@ -497,25 +497,29 @@ export function isEmpty<T extends typeof Base>(this: T): Promise<boolean> {
 /** Mirrors: ActiveRecord::Querying#first_or_create — delegates through all(). */
 export function firstOrCreate<T extends typeof Base>(
   this: T,
-  extra?: Record<string, unknown>,
-): Promise<InstanceType<T>> {
-  return this.all().firstOrCreate(extra) as Promise<InstanceType<T>>;
+  extra?: Parameters<ReturnType<T["all"]>["firstOrCreate"]>[0],
+): ReturnType<ReturnType<T["all"]>["firstOrCreate"]> {
+  return this.all().firstOrCreate(extra) as ReturnType<ReturnType<T["all"]>["firstOrCreate"]>;
 }
 
 /** Mirrors: ActiveRecord::Querying#first_or_create! — delegates through all(). */
 export function firstOrCreateBang<T extends typeof Base>(
   this: T,
-  extra?: Record<string, unknown>,
-): Promise<InstanceType<T>> {
-  return this.all().firstOrCreateBang(extra) as Promise<InstanceType<T>>;
+  extra?: Parameters<ReturnType<T["all"]>["firstOrCreateBang"]>[0],
+): ReturnType<ReturnType<T["all"]>["firstOrCreateBang"]> {
+  return this.all().firstOrCreateBang(extra) as ReturnType<
+    ReturnType<T["all"]>["firstOrCreateBang"]
+  >;
 }
 
 /** Mirrors: ActiveRecord::Querying#first_or_initialize — delegates through all(). */
 export function firstOrInitialize<T extends typeof Base>(
   this: T,
-  extra?: Record<string, unknown>,
-): Promise<InstanceType<T>> {
-  return this.all().firstOrInitialize(extra) as Promise<InstanceType<T>>;
+  extra?: Parameters<ReturnType<T["all"]>["firstOrInitialize"]>[0],
+): ReturnType<ReturnType<T["all"]>["firstOrInitialize"]> {
+  return this.all().firstOrInitialize(extra) as ReturnType<
+    ReturnType<T["all"]>["firstOrInitialize"]
+  >;
 }
 
 /** Mirrors: ActiveRecord::Querying#find_each — delegates through all(). */

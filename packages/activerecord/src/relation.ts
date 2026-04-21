@@ -1959,19 +1959,17 @@ export class Relation<T extends Base> {
     if (conditions === false || conditions === null) return false;
     let rel: Relation<T> = this;
     if (conditions !== undefined) {
-      // Mirrors Rails' FinderMethods#exists? argument handling:
-      //   - Hash → where(conditions)
-      //   - String or [sql, ...binds] → where(sql, ...binds) (SQL fragment)
-      //   - Anything else (Integer/String PK, Array of PKs) → where(pk: ...)
-      if (Array.isArray(conditions) && typeof conditions[0] === "string") {
+      // Mirrors Rails' FinderMethods#exists? argument handling
+      // (construct_relation_for_exists):
+      //   case conditions
+      //   when Array, Hash → where!(conditions)
+      //   else             → where!(primary_key => conditions)
+      // So strings, numbers, and UUID-shaped PK values all route through
+      // the PK-lookup branch; only Array / Hash become condition specs.
+      if (Array.isArray(conditions)) {
+        // Array form: [sql, ...binds] — delegate to where's string+binds overload.
         rel = this.where(conditions[0] as string, ...(conditions.slice(1) as unknown[]));
-      } else if (typeof conditions === "string") {
-        rel = this.where(conditions);
-      } else if (
-        typeof conditions === "object" &&
-        conditions !== null &&
-        !Array.isArray(conditions)
-      ) {
+      } else if (typeof conditions === "object" && conditions !== null) {
         rel = this.where(conditions as Record<string, unknown>);
       } else {
         rel = this.where({ [this._modelClass.primaryKey as string]: conditions });

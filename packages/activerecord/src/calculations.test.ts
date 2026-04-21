@@ -6959,15 +6959,23 @@ describe("CalculationsTest", () => {
       expect(await Product.all().where({ category: "meat" }).exists()).toBe(false);
     });
 
-    // Rails FinderMethods#exists? accepts a raw SQL string or [sql, ...binds]
-    it("accepts a string SQL condition", async () => {
-      expect(await Product.all().exists("price > 0")).toBe(true);
-      expect(await Product.all().exists("price < 0")).toBe(false);
+    // Rails FinderMethods#exists? treats Array as a condition spec —
+    // [sql, ...binds] routes through where() as a SQL fragment. Bare strings
+    // fall to the PK-lookup branch (see Rails' construct_relation_for_exists),
+    // so string ids / UUID PKs stay unambiguous.
+    it("accepts a [sql] single-element array condition", async () => {
+      expect(await Product.all().exists(["price > 0"])).toBe(true);
+      expect(await Product.all().exists(["price < 0"])).toBe(false);
     });
 
     it("accepts a [sql, ...binds] array condition", async () => {
       expect(await Product.all().exists(["price > ?", 0])).toBe(true);
       expect(await Product.all().exists(["price > ?", 100])).toBe(false);
+    });
+
+    it("treats a bare string argument as a primary-key lookup", async () => {
+      // With no matching PK, returns false (not SQL-parsed).
+      expect(await Product.all().exists("not-a-real-pk")).toBe(false);
     });
 
     // Rails: `return false if !conditions` — false/null short-circuits
@@ -6977,10 +6985,6 @@ describe("CalculationsTest", () => {
     });
   });
 
-  // Rails' Querying delegators route through `all()`, so class-level calls
-  // inherit default scopes / active scoping's createWith + where attrs.
-  // These regressions lock in that behavior for the firstOr* / batch
-  // entry points added alongside the exists arg-form changes.
   // Rails' Querying delegators route through `all()`, so class-level calls
   // inherit default scopes / active scoping's createWith + where attrs.
   // These regressions lock in that behavior for the firstOr* / batch

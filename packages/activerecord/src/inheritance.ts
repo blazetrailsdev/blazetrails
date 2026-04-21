@@ -177,7 +177,9 @@ export function findStiClass(baseClass: typeof Base, typeName: string): typeof B
  */
 function directInstantiate(klass: typeof Base, row: Record<string, unknown>): Base {
   (klass as any)._skipEncryption = true;
+  (klass as any)._suppressInitializeCallback = true;
   const record = new klass(row);
+  (klass as any)._suppressInitializeCallback = false;
   (klass as any)._skipEncryption = false;
   record._newRecord = false;
   (record as any)._dirty.snapshot(record._attributes);
@@ -185,7 +187,9 @@ function directInstantiate(klass: typeof Base, row: Record<string, unknown>): Ba
   if ((klass as any)._strictLoadingByDefault) {
     (record as any)._strictLoading = true;
   }
+  // Rails' init_with_attributes fires after_find then after_initialize
   (klass as any)._callbackChain?.runAfter?.("find", record);
+  (klass as any)._callbackChain?.runAfter?.("initialize", record);
   return record;
 }
 

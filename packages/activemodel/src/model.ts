@@ -976,8 +976,17 @@ export class Model {
     // Snapshot after construction — the initial state is "clean"
     this._dirty.snapshot(this._attributes);
 
-    // Fire after_initialize callbacks
-    ctor._callbackChain.runAfter("initialize", this);
+    // Fire after_initialize callbacks (suppressed for DB-loaded records so
+    // _instantiate can fire after_find first, then after_initialize in order —
+    // flag is set on Base in activerecord, unknown to Model in activemodel)
+    if (
+      !(
+        "_suppressInitializeCallback" in ctor &&
+        ctor["_suppressInitializeCallback" as keyof typeof ctor]
+      )
+    ) {
+      ctor._callbackChain.runAfter("initialize", this);
+    }
   }
 
   // -- Attribute access --

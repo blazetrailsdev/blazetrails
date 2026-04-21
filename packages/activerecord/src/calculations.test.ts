@@ -3472,8 +3472,8 @@ describe("CalculationsTest", () => {
         insideScope = await Topic.findBy({ title: "published-only" });
         insideScopeOther = await Topic.findBy({ title: "draft-only" });
       });
-    expect(insideScope).not.toBeNull();
-    expect((insideScope as unknown as Topic).status).toBe("published");
+    if (insideScope === null) throw new Error("Expected insideScope to be present");
+    expect((insideScope as Topic).status).toBe("published");
     // draft-only is excluded by the active where(status: 'published') scope.
     expect(insideScopeOther).toBeNull();
   });

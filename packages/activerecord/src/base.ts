@@ -1140,7 +1140,6 @@ export class Base extends Model {
     ...ids: [unknown, ...unknown[]]
   ): Promise<InstanceType<T>[]>;
   static async find(...ids: unknown[]): Promise<any> {
-    this._requireConcreteClass();
     if (ids.length === 0) {
       throw new RecordNotFound(
         `Couldn't find ${this.name} with an empty list of ids`,
@@ -1269,7 +1268,6 @@ export class Base extends Model {
     this: T,
     conditions: Record<string, unknown>,
   ): Promise<InstanceType<T> | null> {
-    this._requireConcreteClass();
     return this.all().findBy(conditions);
   }
 
@@ -1365,7 +1363,6 @@ export class Base extends Model {
     conditionsOrSql: Record<string, unknown> | string | string[],
     ...rest: unknown[]
   ): Relation<InstanceType<T>> {
-    this._requireConcreteClass();
     if (typeof conditionsOrSql === "string") {
       return this.all().where(conditionsOrSql, ...rest);
     }
@@ -1453,7 +1450,6 @@ export class Base extends Model {
     idOrAttrs: unknown,
     attrs?: Record<string, unknown> | Record<string, unknown>[],
   ): Promise<InstanceType<T> | InstanceType<T>[]> {
-    this._requireConcreteClass();
     return performClassUpdate.call(this, idOrAttrs, attrs, /*bang*/ false) as Promise<
       InstanceType<T> | InstanceType<T>[]
     >;
@@ -1654,7 +1650,6 @@ export class Base extends Model {
     attrs: Record<string, unknown> | Record<string, unknown>[] = {},
     block?: (record: InstanceType<T>) => void,
   ): Promise<InstanceType<T> | InstanceType<T>[]> {
-    this._requireConcreteClass();
     if (Array.isArray(attrs)) {
       // Sequential, matching Rails' `attributes.collect { create(attr, &block) }`.
       // Promise.all would interleave saves and fire callbacks out of order.
@@ -1849,6 +1844,7 @@ export class Base extends Model {
 
   constructor(attrs: Record<string, unknown> = {}) {
     super(attrs);
+    (this.constructor as typeof Base)._requireConcreteClass();
   }
 
   // --- Persistence instance predicates (wired via include() after class body) ---

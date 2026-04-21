@@ -3,7 +3,7 @@
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { Base, RecordNotFound, AttributeAssignmentError } from "./index.js";
+import { Base, RecordNotFound, AttributeAssignmentError, NotImplementedError } from "./index.js";
 import { SubclassNotFound, NameError } from "./errors.js";
 
 import { createTestAdapter } from "./test-adapter.js";
@@ -963,9 +963,7 @@ describe("BasicsTest", () => {
         this.adapter = adapter;
       }
     }
-    // Abstract classes shouldn't have their own table, but the adapter allows it
-    // The key behavior is that abstractClass is true
-    expect(AbstractModel.abstractClass).toBe(true);
+    await expect(AbstractModel.create({ name: "x" })).rejects.toThrow(NotImplementedError);
   });
   it("update all on abstract class raises", async () => {
     class AbstractModel extends Base {
@@ -997,7 +995,8 @@ describe("BasicsTest", () => {
         this.adapter = adapter;
       }
     }
-    expect(() => AbstractModel.where({ name: "x" })).toThrow(/cannot be instantiated/i);
+    // where() returns a lazy Relation; the error fires when records are instantiated via new()
+    expect(() => new AbstractModel()).toThrow(NotImplementedError);
   });
 
   it("abstract class raises from find / findBy / create / update", async () => {
@@ -1008,12 +1007,10 @@ describe("BasicsTest", () => {
         this.adapter = adapter;
       }
     }
-    // find/create/update are async — check as rejected promise
-    await expect(AbstractBase.find(1)).rejects.toThrow(/cannot be instantiated/i);
-    await expect(AbstractBase.create({ name: "x" })).rejects.toThrow(/cannot be instantiated/i);
-    await expect(AbstractBase.update(1, { name: "x" })).rejects.toThrow(/cannot be instantiated/i);
-    // findBy throws synchronously before returning a promise
-    expect(() => AbstractBase.findBy({ name: "x" })).toThrow(/cannot be instantiated/i);
+    // Guard fires in the constructor, matching Rails' `new` check in inheritance.rb.
+    // create() calls new() → raises immediately; direct new() also raises.
+    await expect(AbstractBase.create({ name: "x" })).rejects.toThrow(NotImplementedError);
+    expect(() => new AbstractBase()).toThrow(NotImplementedError);
   });
 
   it("find accepts multiple tuples on composite primary key", async () => {

@@ -31,7 +31,7 @@ describeIfPg("PostgreSQLAdapter", () => {
         );
         expect(rows[0].enc).toMatch(/utf8|UTF8/i);
       } finally {
-        await adapter.exec(`DROP DATABASE IF EXISTS ${tmpDb1}`);
+        await adapter.dropDatabase(tmpDb1).catch(() => {});
       }
     });
 
@@ -51,7 +51,7 @@ describeIfPg("PostgreSQLAdapter", () => {
         expect(rows[0].col).toBe("C");
         expect(rows[0].ct).toBe("C");
       } finally {
-        await adapter.exec(`DROP DATABASE IF EXISTS ${tmpDb2}`);
+        await adapter.dropDatabase(tmpDb2).catch(() => {});
       }
     });
 

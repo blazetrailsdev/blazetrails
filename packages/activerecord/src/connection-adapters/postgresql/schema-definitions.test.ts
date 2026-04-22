@@ -1,0 +1,144 @@
+import { describe, it, expect } from "vitest";
+import {
+  ExclusionConstraintDefinition,
+  UniqueConstraintDefinition,
+  TableDefinition,
+  AlterTable,
+} from "./schema-definitions.js";
+
+describe("ExclusionConstraintDefinition", () => {
+  it("exposes options as accessors", () => {
+    const defn = new ExclusionConstraintDefinition("products", "price WITH =, range WITH &&", {
+      name: "price_check",
+      using: "gist",
+      where: "price > 0",
+      deferrable: "deferred",
+    });
+
+    expect(defn.tableName).toBe("products");
+    expect(defn.expression).toBe("price WITH =, range WITH &&");
+    expect(defn.name).toBe("price_check");
+    expect(defn.using).toBe("gist");
+    expect(defn.where).toBe("price > 0");
+    expect(defn.deferrable).toBe("deferred");
+  });
+
+  it("exportNameOnSchemaDump returns true when name is set", () => {
+    const named = new ExclusionConstraintDefinition("t", "x WITH =", { name: "my_excl" });
+    const unnamed = new ExclusionConstraintDefinition("t", "x WITH =", {});
+    expect(named.exportNameOnSchemaDump()).toBe(true);
+    expect(unnamed.exportNameOnSchemaDump()).toBe(false);
+  });
+});
+
+describe("UniqueConstraintDefinition", () => {
+  it("exposes options as accessors", () => {
+    const defn = new UniqueConstraintDefinition("orders", "position", {
+      name: "unique_position",
+      deferrable: "deferred",
+      usingIndex: "orders_position_idx",
+      nullsNotDistinct: true,
+    });
+
+    expect(defn.tableName).toBe("orders");
+    expect(defn.column).toBe("position");
+    expect(defn.name).toBe("unique_position");
+    expect(defn.deferrable).toBe("deferred");
+    expect(defn.usingIndex).toBe("orders_position_idx");
+    expect(defn.nullsNotDistinct).toBe(true);
+  });
+
+  it("exportNameOnSchemaDump returns true when name is set", () => {
+    const named = new UniqueConstraintDefinition("t", "col", { name: "u_col" });
+    const unnamed = new UniqueConstraintDefinition("t", "col", {});
+    expect(named.exportNameOnSchemaDump()).toBe(true);
+    expect(unnamed.exportNameOnSchemaDump()).toBe(false);
+  });
+
+  it("definedFor matches by name", () => {
+    const defn = new UniqueConstraintDefinition("t", "col", { name: "u_col" });
+    expect(defn.definedFor({ name: "u_col" })).toBe(true);
+    expect(defn.definedFor({ name: "other" })).toBe(false);
+  });
+
+  it("definedFor matches by column", () => {
+    const defn = new UniqueConstraintDefinition("t", ["a", "b"], { name: "u_ab" });
+    expect(defn.definedFor({ column: ["a", "b"] })).toBe(true);
+    expect(defn.definedFor({ column: ["a"] })).toBe(false);
+  });
+});
+
+describe("TableDefinition", () => {
+  it("accumulates exclusion constraints", () => {
+    const td = new TableDefinition("products");
+    td.exclusionConstraint("price WITH =, range WITH &&", { name: "price_check", using: "gist" });
+
+    expect(td.exclusionConstraints).toHaveLength(1);
+    const ec = td.exclusionConstraints[0];
+    expect(ec.tableName).toBe("products");
+    expect(ec.name).toBe("price_check");
+    expect(ec.using).toBe("gist");
+  });
+
+  it("accumulates unique constraints", () => {
+    const td = new TableDefinition("orders");
+    td.uniqueConstraint("position", { name: "unique_position", deferrable: "deferred" });
+
+    expect(td.uniqueConstraints).toHaveLength(1);
+    const uc = td.uniqueConstraints[0];
+    expect(uc.tableName).toBe("orders");
+    expect(uc.name).toBe("unique_position");
+    expect(uc.deferrable).toBe("deferred");
+  });
+
+  it("defaults unlogged to false", () => {
+    const td = new TableDefinition("t");
+    expect(td.unlogged).toBe(false);
+  });
+
+  it("accepts unlogged option", () => {
+    const td = new TableDefinition("t", { unlogged: true });
+    expect(td.unlogged).toBe(true);
+  });
+
+  it("newExclusionConstraintDefinition returns definition without pushing", () => {
+    const td = new TableDefinition("products");
+    const defn = td.newExclusionConstraintDefinition("price WITH =", { name: "pc" });
+    expect(defn).toBeInstanceOf(ExclusionConstraintDefinition);
+    expect(defn.tableName).toBe("products");
+    expect(td.exclusionConstraints).toHaveLength(0);
+  });
+
+  it("newUniqueConstraintDefinition returns definition without pushing", () => {
+    const td = new TableDefinition("orders");
+    const defn = td.newUniqueConstraintDefinition("col", { name: "uc" });
+    expect(defn).toBeInstanceOf(UniqueConstraintDefinition);
+    expect(defn.tableName).toBe("orders");
+    expect(td.uniqueConstraints).toHaveLength(0);
+  });
+});
+
+describe("AlterTable", () => {
+  it("validateConstraint pushes to constraintValidations", () => {
+    const td = new TableDefinition("products");
+    const at = new AlterTable(td);
+    at.validateConstraint("price_check");
+    expect(at.constraintValidations).toEqual(["price_check"]);
+  });
+
+  it("addExclusionConstraint pushes to exclusionConstraintAdds", () => {
+    const td = new TableDefinition("products");
+    const at = new AlterTable(td);
+    at.addExclusionConstraint("price WITH =", { name: "pc", using: "gist" });
+    expect(at.exclusionConstraintAdds).toHaveLength(1);
+    expect(at.exclusionConstraintAdds[0].name).toBe("pc");
+  });
+
+  it("addUniqueConstraint pushes to uniqueConstraintAdds", () => {
+    const td = new TableDefinition("orders");
+    const at = new AlterTable(td);
+    at.addUniqueConstraint("position", { name: "unique_position" });
+    expect(at.uniqueConstraintAdds).toHaveLength(1);
+    expect(at.uniqueConstraintAdds[0].name).toBe("unique_position");
+  });
+});

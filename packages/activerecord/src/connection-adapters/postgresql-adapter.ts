@@ -792,7 +792,12 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
           const upper = sql.trimStart().toUpperCase();
 
           // For INSERT without RETURNING, append RETURNING id automatically
-          if (upper.startsWith("INSERT") && !upper.includes("RETURNING")) {
+          // (only when use_insert_returning? is true — mirrors Rails postgresql_adapter.rb:630)
+          if (
+            this._useInsertReturning &&
+            upper.startsWith("INSERT") &&
+            !upper.includes("RETURNING")
+          ) {
             const withReturning = `${pgSql} RETURNING id`;
             const useSavepoint = this._inTransaction;
             const spName = useSavepoint ? `_bt_ret_${++PostgreSQLAdapter._spCounter}` : "";

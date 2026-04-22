@@ -1012,6 +1012,7 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
 
     it("enumTypes returns enum types from the database", async () => {
+      await adapter.execute(`DROP TYPE IF EXISTS pr_c_mood`);
       await adapter.execute(`CREATE TYPE pr_c_mood AS ENUM ('happy', 'sad')`);
       try {
         await adapter.loadAdditionalTypes();
@@ -1021,7 +1022,7 @@ describeIfPg("PostgreSQLAdapter", () => {
         expect(entry![1]).toContain("happy");
         expect(entry![1]).toContain("sad");
       } finally {
-        await adapter.execute(`DROP TYPE pr_c_mood`);
+        await adapter.execute(`DROP TYPE IF EXISTS pr_c_mood`);
       }
     });
 
@@ -1053,6 +1054,7 @@ describeIfPg("PostgreSQLAdapter", () => {
           host: "nonexistent.invalid",
           database: "testdb",
           port: 5432,
+          connectionTimeoutMillis: 1000,
         }),
       ).rejects.toBeInstanceOf(ConnectionNotEstablished);
     });

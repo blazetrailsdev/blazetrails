@@ -88,16 +88,26 @@ When NOT to use this:
   comments for non-obvious context (hidden bug, broader invariant, etc.).
 - Do NOT add empty stubs or placeholder interfaces. If a feature isn't
   implemented yet, don't create an empty file for it.
-- **NEVER rename or reword test names.** Test names are how `api:compare`
+- **NEVER rename or reword test names.** Test names are how `test:compare`
   matches our tests to Rails tests. If a test fails or the behavior doesn't
   match the name, fix the implementation — not the name. Read the
   corresponding Rails test first.
 
 ## Measuring progress
 
-Primary signal: `pnpm run api:compare` (use `--package <name>` for one
-package). "Misplaced" means tests exist but are in the wrong file per Rails
-layout — they need to be moved, not rewritten.
+Two complementary scripts (both run in CI on every push; both take
+`--package <name>`):
+
+- `pnpm run api:compare` — matches our public methods against the Rails
+  source, method by method. This is the coverage number that drives
+  "implementation-first" — an unimplemented method shows up here.
+- `pnpm run test:compare` — matches our test file names and `it()` /
+  `it.skip()` descriptions against the Rails test suite. "Misplaced" means
+  a test exists but is in the wrong file per Rails layout — move it, don't
+  rewrite it. `pnpm run test:stubs` generates stub tests for unmatched
+  Rails tests.
+- `pnpm run lint:deps` — already mentioned above; scores cross-package
+  delegation (e.g. ActiveRecord → Arel) against Rails.
 
 Secondary signal: `pnpm test:types` — Vitest typecheck suites in
 `packages/*/dx-tests/` that pin the public type contract and encode DX gaps

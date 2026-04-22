@@ -38,7 +38,7 @@ import { AbstractAdapter } from "./abstract-adapter.js";
 import { StatementPool as GenericStatementPool } from "./statement-pool.js";
 import { transactionIsolationLevels, typeCastedBinds } from "./abstract/database-statements.js";
 import { READ_QUERY } from "./postgresql/database-statements.js";
-import type { CreateDatabaseOptions } from "./postgresql/schema-statements.js";
+import type { CreateDatabaseOptions, PgIndexDefinition } from "./postgresql/schema-statements.js";
 
 /**
  * PostgreSQL adapter — connects ActiveRecord to a real PostgreSQL database.
@@ -2950,14 +2950,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 }
 
-export interface IndexDefinition {
-  table: string;
-  name: string;
-  unique: boolean;
-  columns: string[];
-  using: string;
-  orders?: Record<string, string> | string;
-}
+export type IndexDefinition = PgIndexDefinition;
 
 class SimpleTableBuilder {
   private _columns: { name: string; type: string }[] = [];

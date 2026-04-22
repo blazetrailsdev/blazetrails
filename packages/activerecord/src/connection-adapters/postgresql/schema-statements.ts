@@ -4,6 +4,15 @@
  * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::SchemaStatements
  */
 
+export interface PgIndexDefinition {
+  table: string;
+  name: string;
+  unique: boolean;
+  columns: string[];
+  using: string;
+  orders?: Record<string, string> | string;
+}
+
 export interface CreateDatabaseOptions {
   encoding?: string;
   collation?: string;
@@ -31,7 +40,7 @@ export interface SchemaStatements {
   ctype(): Promise<string>;
   clientMinMessages(): Promise<string>;
   setClientMinMessages(level: string): Promise<void>;
-  indexes(tableName: string): Promise<{ name: string }[]>;
+  indexes(tableName: string): Promise<PgIndexDefinition[]>;
   indexNameExists(tableName: string, indexName: string): Promise<boolean>;
   tableOptions(tableName: string): Promise<Record<string, unknown>>;
   tableComment(tableName: string): Promise<string | null>;

@@ -1978,13 +1978,20 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     if (rows.length === 0) return null;
 
     const pk = rows[0].pk as string;
-    const schemaName = rows[0].schema_name as string;
+    const tableSchema = rows[0].schema_name as string;
+    let seqSchema: string;
     let seqName: string;
 
     if (rows[0].seq) {
       const fullSeq = rows[0].seq as string;
       const parts = splitQuotedIdentifier(fullSeq);
-      seqName = parts.length > 1 ? parts[1] : parts[0];
+      if (parts.length > 1) {
+        seqSchema = parts[0];
+        seqName = parts[1];
+      } else {
+        seqSchema = tableSchema;
+        seqName = parts[0];
+      }
     } else {
       const defaultExpr = rows[0].default_expr as string | null;
       if (defaultExpr) {
@@ -1992,7 +1999,13 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         if (match) {
           const seqRef = match[1];
           const parts = splitQuotedIdentifier(seqRef);
-          seqName = parts.length > 1 ? parts[1] : parts[0];
+          if (parts.length > 1) {
+            seqSchema = parts[0];
+            seqName = parts[1];
+          } else {
+            seqSchema = tableSchema;
+            seqName = parts[0];
+          }
         } else {
           return null;
         }
@@ -2001,7 +2014,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       }
     }
 
-    return [pk, { schema: schemaName, name: seqName }];
+    return [pk, { schema: seqSchema, name: seqName }];
   }
 
   async resetPkSequence(tableName: string): Promise<void> {

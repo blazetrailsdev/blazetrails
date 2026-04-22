@@ -23,6 +23,8 @@ work in this repo — behavioral rules, not API reference.
   queries with `@blazetrails/arel` (Table, SelectManager, Nodes, Attribute) —
   never raw SQL strings. Use `@blazetrails/activemodel` for
   validations/callbacks and `@blazetrails/activesupport` for inflection.
+  `pnpm run lint:deps` scores cross-package usage against Rails (e.g.
+  ActiveRecord methods that should delegate to Arel) and flags gaps.
 
 ## Module mixins (Ruby `include` → TypeScript)
 

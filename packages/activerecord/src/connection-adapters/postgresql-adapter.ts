@@ -927,8 +927,17 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     const levels = transactionIsolationLevels();
     const level = levels[isolation];
     if (!level) throw new Error(`Unknown isolation level: ${isolation}`);
-    await this.execute(`BEGIN ISOLATION LEVEL ${level}`);
-    this._inTransaction = true;
+    this._client = await this._acquireFreshClient();
+    try {
+      await this._client.query(`BEGIN ISOLATION LEVEL ${level}`);
+      this._inTransaction = true;
+    } catch (error) {
+      const client = this._client;
+      this._client = null;
+      this._inTransaction = false;
+      client?.release(error instanceof Error ? error : undefined);
+      throw error;
+    }
   }
 
   // Mirrors: DatabaseStatements#write_query? (database_statements.rb:24)

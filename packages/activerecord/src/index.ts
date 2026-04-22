@@ -4,15 +4,11 @@ export { Result, IndexedRow } from "./result.js";
 export type { ColumnType as ResultColumnType, ColumnTypes as ResultColumnTypes } from "./result.js";
 export * as Type from "./type.js";
 
+// Wire ExecutorHooks to lazily resolve Base.connectionHandler at call time,
+// matching Rails' ActiveRecord::Base.connection_handler late binding.
 import { ExecutorHooks } from "./connection-adapters/abstract/connection-pool.js";
-import { Base as _Base, _setRelationCtor, _setScopeProxyWrapper } from "./base.js";
-import { Relation as _Relation } from "./relation.js";
-import { wrapWithScopeProxy as _wrapWithScopeProxy } from "./relation/delegation.js";
-
-// Post-load wiring — runs after all modules are fully evaluated.
+import { Base as _Base } from "./base.js";
 ExecutorHooks.setConnectionHandlerResolver(() => _Base.connectionHandler);
-_setRelationCtor(_Relation as any);
-_setScopeProxyWrapper(_wrapWithScopeProxy);
 export { Relation, Range } from "./relation.js";
 export type { LoadedRelation } from "./relation.js";
 export { QueryAttribute } from "./relation/query-attribute.js";

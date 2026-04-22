@@ -9,7 +9,7 @@ import {
   sql as arelSql,
 } from "@blazetrails/arel";
 import type { Base } from "./base.js";
-import { quoteSqlValue } from "./base.js";
+import { _setRelationCtor, _setScopeProxyWrapper, quoteSqlValue } from "./base.js";
 import { RecordNotSaved, RecordNotUnique } from "./errors.js";
 import { modelRegistry } from "./associations.js";
 import { applyThenable, stripThenable } from "./relation/thenable.js";
@@ -3612,3 +3612,7 @@ include(Relation, SpawnMethods);
 
 // Thenable: make Relation directly awaitable (delegates to toArray).
 applyThenable(Relation.prototype);
+
+// Register Relation with Base to break the circular dependency.
+_setRelationCtor(Relation as any);
+_setScopeProxyWrapper(wrapWithScopeProxy);

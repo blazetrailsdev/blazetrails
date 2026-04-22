@@ -156,16 +156,27 @@ export type PrimaryKeyScalar = string | number | null | undefined;
  */
 export type PrimaryKeyValue = PrimaryKeyScalar | PrimaryKeyScalar[];
 
-// Wired by index.ts after both base.ts and relation.ts are fully evaluated.
-let _RelationCtor: (new (modelClass: typeof Base) => any) | undefined;
-let _wrapWithScopeProxy: ((rel: any) => any) | undefined;
+// Late-bound Relation constructor to break circular dependency.
+// Set by relation.ts when it loads.
+//
+// `var` (rather than `let`) with no initializer is deliberate: these are
+// assigned from other modules' top-level code (relation.ts's
+// `_setRelationCtor(Relation)` call runs during module init). With
+// `extends Relation` chains, base.ts's own imports can trigger that
+// call before base.ts reaches this line. `let` would throw TDZ; `var
+// x = null` would hoist then RESET the value back to null; `var x;`
+// hoists as `undefined` without clobbering a later-set value.
+// eslint-disable-next-line no-var
+var _RelationCtor: (new (modelClass: typeof Base) => any) | undefined;
+// eslint-disable-next-line no-var
+var _wrapWithScopeProxy: ((rel: any) => any) | undefined;
 
-/** @internal Called by index.ts to wire Relation after both modules load. */
+/** @internal Called by relation.ts to register itself. */
 export function _setRelationCtor(ctor: new (modelClass: typeof Base) => any): void {
   _RelationCtor = ctor;
 }
 
-/** @internal Called by index.ts to wire the scope proxy wrapper. */
+/** @internal Called by relation.ts to register the scope proxy wrapper. */
 export function _setScopeProxyWrapper(wrapper: (rel: any) => any): void {
   _wrapWithScopeProxy = wrapper;
 }

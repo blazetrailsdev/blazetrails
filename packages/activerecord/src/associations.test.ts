@@ -686,15 +686,14 @@ describe("CollectionProxy", () => {
   });
 
   it("Relation#build with array yields each record", async () => {
-    const team = await Team.create({ name: "Rockets" });
-    const rel = Team.where({ id: team.id });
-    const yielded: Base[] = [];
-    const players = rel.build([{ name: "A" }, { name: "B" }], (r) => yielded.push(r));
-    expect(players).toHaveLength(2);
-    expect((players[0] as any).name).toBe("A");
-    expect((players[1] as any).name).toBe("B");
-    expect(yielded).toHaveLength(2);
-    expect(players[0].isNewRecord()).toBe(true);
+    const rel = Team.all();
+    const yieldedTeams: Team[] = [];
+    const teams = rel.build([{ name: "A" }, { name: "B" }], (r) => yieldedTeams.push(r));
+    expect(teams).toHaveLength(2);
+    expect((teams[0] as any).name).toBe("A");
+    expect((teams[1] as any).name).toBe("B");
+    expect(yieldedTeams).toHaveLength(2);
+    expect(teams[0].isNewRecord()).toBe(true);
   });
 
   it("Relation#create with array returns array of saved records", async () => {

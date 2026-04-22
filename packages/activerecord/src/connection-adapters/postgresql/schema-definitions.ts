@@ -168,6 +168,7 @@ export class TableDefinition extends AbstractTableDefinition {
       comment?: string;
       temporary?: boolean;
       ifNotExists?: boolean;
+      as?: string;
     } = {},
   ) {
     super(tableName, { ...options, adapterName: "postgres" });
@@ -205,7 +206,7 @@ export class TableDefinition extends AbstractTableDefinition {
       sql = sql.replace(/^CREATE TABLE/, "CREATE UNLOGGED TABLE");
     }
 
-    if (this.exclusionConstraints.length > 0 || this.uniqueConstraints.length > 0) {
+    if (!this.as && (this.exclusionConstraints.length > 0 || this.uniqueConstraints.length > 0)) {
       const constraintSql = [
         ...this.exclusionConstraints.map((ec) => this.exclusionConstraintSql(ec)),
         ...this.uniqueConstraints.map((uc) => this.uniqueConstraintSql(uc)),
@@ -239,12 +240,11 @@ export class TableDefinition extends AbstractTableDefinition {
 
     for (let i = openingParenIndex; i < sql.length; i++) {
       const ch = sql[i];
-      const prev = i > 0 ? sql[i - 1] : "";
 
       if (inSingleQuote) {
-        if (ch === "'" && prev !== "\\") {
+        if (ch === "'") {
           if (sql[i + 1] === "'") {
-            i++;
+            i++; // doubled-quote escape — skip both
             continue;
           }
           inSingleQuote = false;
@@ -252,9 +252,9 @@ export class TableDefinition extends AbstractTableDefinition {
         continue;
       }
       if (inDoubleQuote) {
-        if (ch === '"' && prev !== "\\") {
+        if (ch === '"') {
           if (sql[i + 1] === '"') {
-            i++;
+            i++; // doubled-quote escape — skip both
             continue;
           }
           inDoubleQuote = false;

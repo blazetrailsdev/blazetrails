@@ -86,7 +86,7 @@ export interface SchemaStatements {
     columnName: string,
     type: string,
     options?: {
-      comment?: string;
+      comment?: string | null;
       default?: unknown;
       null?: boolean;
       array?: boolean;

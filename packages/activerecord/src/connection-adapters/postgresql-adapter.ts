@@ -2230,7 +2230,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     columnName: string,
     type: string,
     options: {
-      comment?: string;
+      comment?: string | null;
       default?: unknown;
       null?: boolean;
       array?: boolean;
@@ -2240,10 +2240,6 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       ifNotExists?: boolean;
     } = {},
   ): Promise<void> {
-    if (options.ifNotExists) {
-      const cols = await this.columns(tableName);
-      if (cols.some((c) => (c as { name: string }).name === columnName)) return;
-    }
     const quotedTable = this.quoteTableName(tableName);
     const quotedCol = this.quoteIdentifier(columnName);
     const pgType = this.typeToSql(type, options);
@@ -2257,7 +2253,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       colSql += options.default === null ? " DEFAULT NULL" : defaultClause;
     }
     if (options.null === false) colSql += " NOT NULL";
-    await this.exec(`ALTER TABLE ${quotedTable} ADD COLUMN ${colSql}`);
+    const ifNotExists = options.ifNotExists ? " IF NOT EXISTS" : "";
+    await this.exec(`ALTER TABLE ${quotedTable} ADD COLUMN${ifNotExists} ${colSql}`);
     if (options.comment !== undefined) {
       await this.changeColumnComment(tableName, columnName, options.comment ?? null);
     }
@@ -2286,7 +2283,15 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     if (defaultValue === null) {
       await this.exec(`ALTER TABLE ${quotedTable} ALTER COLUMN ${quotedCol} DROP DEFAULT`);
     } else {
-      const clause = pgQuoteDefaultExpression(defaultValue);
+      const col = (await this.columns(tableName)).find((c) => (c as Column).name === columnName);
+      const clause = pgQuoteDefaultExpression(
+        defaultValue,
+        {
+          array: (col as Column | undefined)?.array,
+          sqlType: (col as Column | undefined)?.sqlType ?? undefined,
+        },
+        this.typeMap,
+      );
       const expr = clause.startsWith(" DEFAULT ") ? clause.slice(" DEFAULT ".length) : clause;
       await this.exec(`ALTER TABLE ${quotedTable} ALTER COLUMN ${quotedCol} SET DEFAULT ${expr}`);
     }
@@ -2301,7 +2306,15 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     const quotedTable = this.quoteTableName(tableName);
     const quotedCol = this.quoteIdentifier(columnName);
     if (!nullable && defaultValue !== null) {
-      const clause = pgQuoteDefaultExpression(defaultValue);
+      const col = (await this.columns(tableName)).find((c) => (c as Column).name === columnName);
+      const clause = pgQuoteDefaultExpression(
+        defaultValue,
+        {
+          array: (col as Column | undefined)?.array,
+          sqlType: (col as Column | undefined)?.sqlType ?? undefined,
+        },
+        this.typeMap,
+      );
       const expr = clause.startsWith(" DEFAULT ") ? clause.slice(" DEFAULT ".length) : clause;
       await this.exec(
         `UPDATE ${quotedTable} SET ${quotedCol} = ${expr} WHERE ${quotedCol} IS NULL`,
@@ -2531,17 +2544,21 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   async renameTable(oldName: string, newName: string): Promise<void> {
+    const { schema: oldSchema, table: unqualifiedOld } = this.parseSchemaQualifiedName(oldName);
+    const { table: unqualifiedNew } = this.parseSchemaQualifiedName(newName);
     await this.exec(
-      `ALTER TABLE ${this.quoteTableName(oldName)} RENAME TO ${this.quoteIdentifier(this.parseSchemaQualifiedName(newName).table)}`,
+      `ALTER TABLE ${this.quoteTableName(oldName)} RENAME TO ${this.quoteIdentifier(unqualifiedNew)}`,
     );
     const maxLen = await this.maxIdentifierLength();
-    const result = await this.pkAndSequenceFor(newName).catch(() => null);
+    // After rename the table lives in the old schema; build the correct name for lookup.
+    const renamedName = oldSchema
+      ? `${this.quoteIdentifier(oldSchema)}.${this.quoteIdentifier(unqualifiedNew)}`
+      : unqualifiedNew;
+    const result = await this.pkAndSequenceFor(renamedName).catch(() => null);
     if (result) {
       const [pk, seq] = result;
       const pkeySuffix = "_pkey";
       const maxPkeyPrefix = maxLen - pkeySuffix.length;
-      const { schema: oldSchema, table: unqualifiedOld } = this.parseSchemaQualifiedName(oldName);
-      const { table: unqualifiedNew } = this.parseSchemaQualifiedName(newName);
       const oldIdx = `${unqualifiedOld.slice(0, maxPkeyPrefix)}${pkeySuffix}`;
       const newIdx = `${unqualifiedNew.slice(0, maxPkeyPrefix)}${pkeySuffix}`;
       const qualifiedOldIdx = oldSchema

@@ -2,8 +2,7 @@
 
 See [README.md](README.md) for the project overview, package list, design
 principles, zero-declare `trails-tsc` workflow, and the Rails-to-TypeScript
-idiom table. This file contains only guidance specific to how Claude should
-work in this repo — behavioral rules, not API reference.
+idiom table.
 
 ## Working principles
 

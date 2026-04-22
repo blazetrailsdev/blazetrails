@@ -2017,9 +2017,14 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     );
     const maxVal = Number(maxRows[0].max_val);
     if (maxVal === 0) {
-      await this.schemaQuery(`SELECT setval($1::regclass, 1, false)`, [seqName]);
+      await this.schemaQuery(`SELECT setval($1::regclass, 1, false)`, [
+        this.quoteTableName(seqName),
+      ]);
     } else {
-      await this.schemaQuery(`SELECT setval($1::regclass, $2, true)`, [seqName, maxVal]);
+      await this.schemaQuery(`SELECT setval($1::regclass, $2, true)`, [
+        this.quoteTableName(seqName),
+        maxVal,
+      ]);
     }
   }
 
@@ -2028,7 +2033,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     if (!result) return;
     const [, seq] = result;
     const seqName = `${seq.schema}.${seq.name}`;
-    await this.schemaQuery(`SELECT setval($1::regclass, $2)`, [seqName, value]);
+    await this.schemaQuery(`SELECT setval($1::regclass, $2)`, [
+      this.quoteTableName(seqName),
+      value,
+    ]);
   }
 
   async renameIndex(tableName: string, oldName: string, newName: string): Promise<void> {
@@ -2703,7 +2711,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       tableNames = args.slice(0, -1) as string[];
       options = last as { ifExists?: boolean; force?: "cascade" };
     } else {
-      tableNames = args.filter((a) => a !== undefined) as string[];
+      tableNames = args as string[];
     }
     if (tableNames.length === 0) {
       throw new Error("dropTable requires at least one table name");
@@ -2890,18 +2898,16 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       const dbVersion = await this.getDatabaseVersion();
       const minRows = await this.schemaQuery(
         dbVersion >= 100000
-          ? `SELECT seqmin AS minvalue FROM pg_sequence WHERE seqrelid = ${this.quoteLiteral(quotedSeq)}::regclass`
+          ? `SELECT seqmin AS minvalue FROM pg_sequence WHERE seqrelid = $1::regclass`
           : `SELECT min_value AS minvalue FROM ${quotedSeq}`,
+        [quotedSeq],
       );
       await this.schemaQuery(`SELECT setval($1::regclass, $2, false)`, [
-        this.quoteTableName(sequence),
+        quotedSeq,
         minRows[0]?.minvalue ?? 1,
       ]);
     } else {
-      await this.schemaQuery(`SELECT setval($1::regclass, $2, true)`, [
-        this.quoteTableName(sequence),
-        maxVal,
-      ]);
+      await this.schemaQuery(`SELECT setval($1::regclass, $2, true)`, [quotedSeq, maxVal]);
     }
   }
 

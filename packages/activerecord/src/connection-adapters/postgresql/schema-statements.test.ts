@@ -222,6 +222,28 @@ describeIfPg("PostgreSQLAdapter", () => {
       ).resolves.not.toThrow();
     });
 
+    it("drop table with force cascade drops dependent constraints", async () => {
+      await adapter.exec(`CREATE TABLE ${SCHEMA_NAME}.parent_tbl (id int PRIMARY KEY)`);
+      await adapter.exec(
+        `CREATE TABLE ${SCHEMA_NAME}.child_tbl (id int REFERENCES ${SCHEMA_NAME}.parent_tbl(id))`,
+      );
+      await expect(adapter.dropTable(`${SCHEMA_NAME}.parent_tbl`)).rejects.toThrow();
+      await adapter.dropTable(`${SCHEMA_NAME}.parent_tbl`, { force: "cascade" });
+      const parentRows = await adapter.schemaQuery(
+        `SELECT COUNT(*) AS c FROM information_schema.tables
+         WHERE table_schema = $1 AND table_name = 'parent_tbl'`,
+        [SCHEMA_NAME],
+      );
+      expect(Number(parentRows[0].c)).toBe(0);
+      const fkRows = await adapter.schemaQuery(
+        `SELECT COUNT(*) AS c FROM information_schema.table_constraints
+         WHERE constraint_schema = $1 AND table_name = 'child_tbl' AND constraint_type = 'FOREIGN KEY'`,
+        [SCHEMA_NAME],
+      );
+      expect(Number(fkRows[0].c)).toBe(0);
+      await adapter.exec(`DROP TABLE IF EXISTS ${SCHEMA_NAME}.child_tbl`);
+    });
+
     it("drop table multiple tables", async () => {
       await adapter.exec(`CREATE TABLE ${SCHEMA_NAME}.t1 (id int)`);
       await adapter.exec(`CREATE TABLE ${SCHEMA_NAME}.t2 (id int)`);

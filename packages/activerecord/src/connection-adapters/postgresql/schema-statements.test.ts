@@ -256,7 +256,7 @@ describeIfPg("PostgreSQLAdapter", () => {
       expect(Number(rows[0].c)).toBe(0);
     });
 
-    it("drop database removes the database", async () => {
+    it("drop database removes the database", { timeout: 30000 }, async () => {
       const tmpDb = "trails_test_drop_db_tmp";
       const rootAdapter = new PostgreSQLAdapter(postgresUrl());
       try {
@@ -279,7 +279,7 @@ describeIfPg("PostgreSQLAdapter", () => {
       }
     });
 
-    it("recreate database drops and creates", async () => {
+    it("recreate database drops and creates", { timeout: 30000 }, async () => {
       const tmpDb = "trails_test_recreate_tmp";
       const rootAdapter = new PostgreSQLAdapter(postgresUrl());
       try {

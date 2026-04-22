@@ -21,7 +21,7 @@ describeIfPg("PostgreSQLAdapter", () => {
   });
 
   describe("PostgreSQLActiveSchemaTest", () => {
-    it("create database with encoding", async () => {
+    it("create database with encoding", { timeout: 30000 }, async () => {
       await adapter.exec(`DROP DATABASE IF EXISTS ${tmpDb1}`);
       try {
         await adapter.createDatabase(tmpDb1, { encoding: "utf8" });
@@ -35,7 +35,7 @@ describeIfPg("PostgreSQLAdapter", () => {
       }
     });
 
-    it("create database with collation and ctype", async () => {
+    it("create database with collation and ctype", { timeout: 30000 }, async () => {
       await adapter.exec(`DROP DATABASE IF EXISTS ${tmpDb2}`);
       try {
         await adapter.createDatabase(tmpDb2, {

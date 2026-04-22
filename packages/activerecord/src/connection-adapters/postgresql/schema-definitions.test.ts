@@ -223,6 +223,21 @@ describe("TableDefinition#toSql", () => {
     expect(sql).not.toContain("(,");
     expect(sql).toContain('UNIQUE ("ref")');
   });
+
+  it("injects constraints before trailing table options clause", () => {
+    const td = new TableDefinition("logs", {
+      id: false,
+      options: "WITH (autovacuum_enabled = false)",
+    });
+    td.string("message");
+    td.uniqueConstraint("message", { name: "unique_msg" });
+    const sql = td.toSql();
+    // Constraint must appear inside the column list, before the trailing WITH clause
+    const constraintPos = sql.indexOf('CONSTRAINT "unique_msg"');
+    const withPos = sql.indexOf("WITH (");
+    expect(constraintPos).toBeGreaterThan(0);
+    expect(constraintPos).toBeLessThan(withPos);
+  });
 });
 
 function makeSchema(): SchemaStatementsConstraintLike {

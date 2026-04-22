@@ -159,7 +159,17 @@ export class TableDefinition extends AbstractTableDefinition {
   readonly uniqueConstraints: UniqueConstraintDefinition[] = [];
   readonly unlogged: boolean;
 
-  constructor(tableName: string, options: { id?: boolean | "uuid"; unlogged?: boolean } = {}) {
+  constructor(
+    tableName: string,
+    options: {
+      id?: boolean | "uuid";
+      unlogged?: boolean;
+      options?: string;
+      comment?: string;
+      temporary?: boolean;
+      ifNotExists?: boolean;
+    } = {},
+  ) {
     super(tableName, { ...options, adapterName: "postgres" });
     this.unlogged = options.unlogged ?? false;
   }
@@ -200,14 +210,77 @@ export class TableDefinition extends AbstractTableDefinition {
         ...this.exclusionConstraints.map((ec) => this.exclusionConstraintSql(ec)),
         ...this.uniqueConstraints.map((uc) => this.uniqueConstraintSql(uc)),
       ].join(", ");
-      const hasEmptyTableElementList = /\(\s*\)(\s*(?:OPTIONS|COMMENT|$))/.test(sql);
-      sql = sql.replace(
-        /\)(\s*(?:OPTIONS|COMMENT|$))/,
-        `${hasEmptyTableElementList ? "" : ", "}${constraintSql})$1`,
-      );
+      sql = this.appendConstraintsToSql(sql, constraintSql);
     }
 
     return sql;
+  }
+
+  private appendConstraintsToSql(sql: string, constraintSql: string): string {
+    const range = this.tableElementListRange(sql);
+    if (range === null) return sql;
+    const { openingParenIndex, closingParenIndex } = range;
+    const inner = sql.slice(openingParenIndex + 1, closingParenIndex).trim();
+    const separator = inner.length === 0 ? "" : ", ";
+    return (
+      sql.slice(0, closingParenIndex) + separator + constraintSql + sql.slice(closingParenIndex)
+    );
+  }
+
+  private tableElementListRange(
+    sql: string,
+  ): { openingParenIndex: number; closingParenIndex: number } | null {
+    const openingParenIndex = sql.indexOf("(");
+    if (openingParenIndex === -1) return null;
+
+    let depth = 0;
+    let inSingleQuote = false;
+    let inDoubleQuote = false;
+
+    for (let i = openingParenIndex; i < sql.length; i++) {
+      const ch = sql[i];
+      const prev = i > 0 ? sql[i - 1] : "";
+
+      if (inSingleQuote) {
+        if (ch === "'" && prev !== "\\") {
+          if (sql[i + 1] === "'") {
+            i++;
+            continue;
+          }
+          inSingleQuote = false;
+        }
+        continue;
+      }
+      if (inDoubleQuote) {
+        if (ch === '"' && prev !== "\\") {
+          if (sql[i + 1] === '"') {
+            i++;
+            continue;
+          }
+          inDoubleQuote = false;
+        }
+        continue;
+      }
+
+      if (ch === "'") {
+        inSingleQuote = true;
+        continue;
+      }
+      if (ch === '"') {
+        inDoubleQuote = true;
+        continue;
+      }
+      if (ch === "(") {
+        depth++;
+        continue;
+      }
+      if (ch === ")") {
+        depth--;
+        if (depth === 0) return { openingParenIndex, closingParenIndex: i };
+      }
+    }
+
+    return null;
   }
 
   private exclusionConstraintSql(ec: ExclusionConstraintDefinition): string {

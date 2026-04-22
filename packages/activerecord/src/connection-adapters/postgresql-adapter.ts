@@ -1,6 +1,6 @@
 import pg from "pg";
 import { type Type, ValueType } from "@blazetrails/activemodel";
-import { singularize, underscore, Notifications } from "@blazetrails/activesupport";
+import { singularize, underscore, Notifications, getCrypto } from "@blazetrails/activesupport";
 import { sql as arelSql, Nodes, Visitors } from "@blazetrails/arel";
 import { Result } from "../result.js";
 import { HashLookupTypeMap } from "../type/hash-lookup-type-map.js";
@@ -51,7 +51,6 @@ import {
 import { CheckConstraintDefinition } from "./abstract/schema-definitions.js";
 import { SchemaCreation as PgSchemaCreation } from "./postgresql/schema-creation.js";
 import { SchemaDumper as PgSchemaDumper } from "./postgresql/schema-dumper.js";
-import { createHash } from "node:crypto";
 
 /**
  * PostgreSQL adapter — connects ActiveRecord to a real PostgreSQL database.
@@ -3321,7 +3320,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
        JOIN pg_class t ON c.conrelid = t.oid
        JOIN pg_namespace n ON n.oid = c.connamespace
        WHERE c.contype = 'c'
-         AND t.relname = ${scope.name ?? "NULL"}
+         AND t.relname = ${scope.name!}
          AND n.nspname = ${scope.schema}`,
     );
     return rows.map((row) => {
@@ -3429,17 +3428,11 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   addIndexOptions(
-    tableName: string,
-    columnName: string | string[],
+    _tableName: string,
+    _columnName: string | string[],
     options: Record<string, unknown> = {},
-  ): unknown {
-    const opts = { ...options };
-    const where = opts.where as string | undefined;
-    if (where) {
-      // Delegate to abstract; where-is-column-name quoting requires tableExists + columnExists
-      // which are async. For synchronous callers, pass where as-is.
-    }
-    return opts;
+  ): Record<string, unknown> {
+    return { ...options };
   }
 
   schemaCreation(): PgSchemaCreation {
@@ -3460,7 +3453,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     _options: Record<string, unknown>,
   ): string {
     const identifier = `${tableName}_${expression}_excl`;
-    const hashed = createHash("sha256").update(identifier).digest("hex").slice(0, 10);
+    const hashed = getCrypto().createHash("sha256").update(identifier).digest("hex").slice(0, 10);
     return `excl_rails_${hashed}`;
   }
 
@@ -3488,7 +3481,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
           ? [options.usingIndex as string]
           : [];
     const identifier = `${tableName}_${cols.join("_and_")}_unique`;
-    const hashed = createHash("sha256").update(identifier).digest("hex").slice(0, 10);
+    const hashed = getCrypto().createHash("sha256").update(identifier).digest("hex").slice(0, 10);
     return `uniq_rails_${hashed}`;
   }
 

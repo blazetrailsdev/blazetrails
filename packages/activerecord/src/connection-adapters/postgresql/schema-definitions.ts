@@ -148,6 +148,12 @@ export class UniqueConstraintDefinition {
   }
 }
 
+function deferrableSql(deferrable: boolean | "immediate" | "deferred" | undefined): string[] {
+  if (!deferrable) return [];
+  if (deferrable === true) return ["DEFERRABLE"];
+  return [`DEFERRABLE INITIALLY ${deferrable.toUpperCase()}`];
+}
+
 export class TableDefinition extends AbstractTableDefinition {
   readonly exclusionConstraints: ExclusionConstraintDefinition[] = [];
   readonly uniqueConstraints: UniqueConstraintDefinition[] = [];
@@ -190,36 +196,43 @@ export class TableDefinition extends AbstractTableDefinition {
     }
 
     if (this.exclusionConstraints.length > 0 || this.uniqueConstraints.length > 0) {
-      const constraintSqls = [
+      const constraintSql = [
         ...this.exclusionConstraints.map((ec) => this.exclusionConstraintSql(ec)),
         ...this.uniqueConstraints.map((uc) => this.uniqueConstraintSql(uc)),
-      ];
-      // Insert constraint clauses inside the closing paren of the column list
-      sql = sql.replace(/\)(\s*(?:OPTIONS|COMMENT|$))/, `, ${constraintSqls.join(", ")})$1`);
+      ].join(", ");
+      const hasEmptyTableElementList = /\(\s*\)(\s*(?:OPTIONS|COMMENT|$))/.test(sql);
+      sql = sql.replace(
+        /\)(\s*(?:OPTIONS|COMMENT|$))/,
+        `${hasEmptyTableElementList ? "" : ", "}${constraintSql})$1`,
+      );
     }
 
     return sql;
   }
 
   private exclusionConstraintSql(ec: ExclusionConstraintDefinition): string {
-    const parts = ["CONSTRAINT", quoteIdentifier(ec.name ?? "", "postgres"), "EXCLUDE"];
+    const parts: string[] = [];
+    if (ec.name) parts.push("CONSTRAINT", quoteIdentifier(ec.name, "postgres"));
+    parts.push("EXCLUDE");
     if (ec.using) parts.push(`USING ${ec.using}`);
     parts.push(`(${ec.expression})`);
     if (ec.where) parts.push(`WHERE (${ec.where})`);
-    if (ec.deferrable) parts.push(`DEFERRABLE INITIALLY ${String(ec.deferrable).toUpperCase()}`);
+    parts.push(...deferrableSql(ec.deferrable));
     return parts.join(" ");
   }
 
   private uniqueConstraintSql(uc: UniqueConstraintDefinition): string {
     const columns = Array.isArray(uc.column) ? uc.column : [uc.column];
-    const parts = ["CONSTRAINT", quoteIdentifier(uc.name ?? "", "postgres"), "UNIQUE"];
+    const parts: string[] = [];
+    if (uc.name) parts.push("CONSTRAINT", quoteIdentifier(uc.name, "postgres"));
+    parts.push("UNIQUE");
     if (uc.nullsNotDistinct) parts.push("NULLS NOT DISTINCT");
     if (uc.usingIndex) {
       parts.push(`USING INDEX ${quoteIdentifier(uc.usingIndex, "postgres")}`);
     } else {
       parts.push(`(${columns.map((c) => quoteIdentifier(c, "postgres")).join(", ")})`);
     }
-    if (uc.deferrable) parts.push(`DEFERRABLE INITIALLY ${String(uc.deferrable).toUpperCase()}`);
+    parts.push(...deferrableSql(uc.deferrable));
     return parts.join(" ");
   }
 

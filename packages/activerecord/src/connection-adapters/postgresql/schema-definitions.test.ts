@@ -190,6 +190,39 @@ describe("TableDefinition#toSql", () => {
     const sql = td.toSql();
     expect(sql).toContain('USING INDEX "orders_pos_idx"');
   });
+
+  it("emits DEFERRABLE without INITIALLY clause when deferrable: true", () => {
+    const td = new TableDefinition("orders", { id: false });
+    td.uniqueConstraint("position", { name: "unique_pos", deferrable: true });
+    const sql = td.toSql();
+    expect(sql).toContain('CONSTRAINT "unique_pos" UNIQUE ("position") DEFERRABLE');
+    expect(sql).not.toContain("INITIALLY TRUE");
+    expect(sql).not.toContain("INITIALLY");
+  });
+
+  it("emits exclusion constraint without CONSTRAINT clause when name is omitted", () => {
+    const td = new TableDefinition("meetings", { id: false });
+    td.exclusionConstraint("room WITH =", { using: "gist" });
+    const sql = td.toSql();
+    expect(sql).toContain("EXCLUDE USING gist (room WITH =)");
+    expect(sql).not.toContain('CONSTRAINT ""');
+  });
+
+  it("emits unique constraint without CONSTRAINT clause when name is omitted", () => {
+    const td = new TableDefinition("orders", { id: false });
+    td.uniqueConstraint("position");
+    const sql = td.toSql();
+    expect(sql).toContain('UNIQUE ("position")');
+    expect(sql).not.toContain('CONSTRAINT ""');
+  });
+
+  it("handles constraint-only table with no columns (id: false)", () => {
+    const td = new TableDefinition("link_table", { id: false });
+    td.uniqueConstraint("ref", { name: "unique_ref" });
+    const sql = td.toSql();
+    expect(sql).not.toContain("(,");
+    expect(sql).toContain('UNIQUE ("ref")');
+  });
 });
 
 function makeSchema(): SchemaStatementsConstraintLike {

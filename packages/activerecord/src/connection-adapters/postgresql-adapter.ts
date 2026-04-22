@@ -2493,10 +2493,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     if (options.tablespace)
       optionString += ` TABLESPACE = ${this.quoteIdentifier(options.tablespace)}`;
     if (options.connectionLimit != null) {
-      const limit = Math.trunc(Number(options.connectionLimit));
-      if (!Number.isFinite(limit) || (limit < 0 && limit !== -1)) {
+      const limit = options.connectionLimit;
+      if (!Number.isInteger(limit) || (limit < 0 && limit !== -1)) {
         throw new Error(
-          `connectionLimit must be -1 (unlimited) or a non-negative integer, got: ${options.connectionLimit}`,
+          `connectionLimit must be -1 (unlimited) or a non-negative integer, got: ${limit}`,
         );
       }
       optionString += ` CONNECTION LIMIT = ${limit}`;

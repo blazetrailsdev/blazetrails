@@ -40,15 +40,16 @@ describeIfPg("PostgreSQLAdapter", () => {
       try {
         await adapter.createDatabase(tmpDb2, {
           encoding: "UTF8",
-          collation: "en_US.utf8",
-          ctype: "en_US.utf8",
+          collation: "C",
+          ctype: "C",
+          template: "template0",
         });
         const rows = await adapter.schemaQuery(
           `SELECT datcollate AS col, datctype AS ct FROM pg_database WHERE datname = $1`,
           [tmpDb2],
         );
-        expect(rows[0].col).toBe("en_US.utf8");
-        expect(rows[0].ct).toBe("en_US.utf8");
+        expect(rows[0].col).toBe("C");
+        expect(rows[0].ct).toBe("C");
       } finally {
         await adapter.exec(`DROP DATABASE IF EXISTS ${tmpDb2}`);
       }

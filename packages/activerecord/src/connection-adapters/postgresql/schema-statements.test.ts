@@ -229,8 +229,26 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
 
     it("recreate database drops and creates", async () => {
-      const dbName = await adapter.currentDatabase();
-      expect(typeof dbName).toBe("string");
+      const tmpDb = "trails_test_recreate_tmp";
+      const rootAdapter = new PostgreSQLAdapter(PG_TEST_URL.replace(/\/[^/]+$/, "/postgres"));
+      try {
+        await rootAdapter.exec(`DROP DATABASE IF EXISTS ${tmpDb}`);
+        await rootAdapter.createDatabase(tmpDb);
+        const existsBefore = await rootAdapter.schemaQuery(
+          `SELECT 1 AS ok FROM pg_database WHERE datname = $1`,
+          [tmpDb],
+        );
+        expect(existsBefore.length).toBe(1);
+        await rootAdapter.recreateDatabase(tmpDb);
+        const existsAfter = await rootAdapter.schemaQuery(
+          `SELECT 1 AS ok FROM pg_database WHERE datname = $1`,
+          [tmpDb],
+        );
+        expect(existsAfter.length).toBe(1);
+      } finally {
+        await rootAdapter.exec(`DROP DATABASE IF EXISTS ${tmpDb}`);
+        await rootAdapter.close();
+      }
     });
   });
 });

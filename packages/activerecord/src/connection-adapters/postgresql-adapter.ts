@@ -2482,20 +2482,29 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     }
   }
 
-  createDatabase(
+  async createDatabase(
     name: string,
     options: {
       encoding?: string;
       collation?: string;
       ctype?: string;
+      owner?: string;
+      template?: string;
+      tablespace?: string;
+      connectionLimit?: number;
     } = {},
-  ): string {
-    let sql = `CREATE DATABASE ${this.quoteIdentifier(name)}`;
+  ): Promise<void> {
     const encoding = options.encoding ?? "utf8";
-    sql += ` ENCODING = ${this.quoteLiteral(encoding)}`;
-    if (options.collation) sql += ` LC_COLLATE = ${this.quoteLiteral(options.collation)}`;
-    if (options.ctype) sql += ` LC_CTYPE = ${this.quoteLiteral(options.ctype)}`;
-    return sql;
+    let optionString = ` ENCODING = ${this.quoteLiteral(encoding)}`;
+    if (options.collation) optionString += ` LC_COLLATE = ${this.quoteLiteral(options.collation)}`;
+    if (options.ctype) optionString += ` LC_CTYPE = ${this.quoteLiteral(options.ctype)}`;
+    if (options.owner) optionString += ` OWNER = ${this.quoteIdentifier(options.owner)}`;
+    if (options.template) optionString += ` TEMPLATE = ${this.quoteIdentifier(options.template)}`;
+    if (options.tablespace)
+      optionString += ` TABLESPACE = ${this.quoteIdentifier(options.tablespace)}`;
+    if (options.connectionLimit != null)
+      optionString += ` CONNECTION LIMIT = ${options.connectionLimit}`;
+    await this.exec(`CREATE DATABASE ${this.quoteTableName(name)}${optionString}`);
   }
 
   // ---------------------------------------------------------------------------
@@ -2706,8 +2715,20 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   async isIndexNameExists(tableName: string, indexName: string): Promise<boolean> {
-    const idxs = await this.indexes(tableName);
-    return idxs.some((idx) => idx.name === indexName);
+    const table = this.pgQuotedScope(tableName, "BASE TABLE");
+    const idxName = this.quoteLiteral(indexName);
+    const rows = await this.schemaQuery(`
+      SELECT COUNT(*) AS cnt
+      FROM pg_class t
+      INNER JOIN pg_index d ON t.oid = d.indrelid
+      INNER JOIN pg_class i ON d.indexrelid = i.oid
+      LEFT JOIN pg_namespace n ON n.oid = t.relnamespace
+      WHERE i.relkind IN ('i', 'I')
+        AND i.relname = ${idxName}
+        AND t.relname = ${table.name}
+        AND n.nspname = ${table.schema}
+    `);
+    return Number(rows[0].cnt) > 0;
   }
 
   async currentDatabase(): Promise<string> {
@@ -2829,7 +2850,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       if (!result) return null;
       return Utils.extractSchemaQualifiedName(result).toString();
     } catch {
-      return `${tableName}_${pk}_seq`;
+      const { identifier } = Utils.extractSchemaQualifiedName(tableName);
+      return `${identifier ?? tableName}_${pk}_seq`;
     }
   }
 

@@ -1275,13 +1275,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   // NoDatabaseError, DatabaseConnectionError).
   static async newClient(config: pg.ClientConfig): Promise<pg.Client> {
     const client = new pg.Client(config);
-    // pg.Client parses the connectionString immediately on construction, so
-    // client.database / client.user / client.host reflect the actual params
-    // even when only a connectionString was passed — matching Rails' access
-    // to conn_params[:dbname] / [:user] / [:host].
-    const database: string | undefined = (client as unknown as { database?: string }).database;
-    const user: string | undefined = (client as unknown as { user?: string }).user;
-    const host: string | undefined = (client as unknown as { host?: string }).host;
+    // pg.Client parses connectionString on construction, so these typed properties
+    // reflect the actual params even when only connectionString was passed —
+    // matching Rails' conn_params[:dbname] / [:user] / [:host] access.
+    const { database, user, host } = client;
     try {
       await client.connect();
       return client;

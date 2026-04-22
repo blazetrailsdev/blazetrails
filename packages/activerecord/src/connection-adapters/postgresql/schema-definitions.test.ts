@@ -75,9 +75,9 @@ describe("UniqueConstraintDefinition", () => {
     expect(defn.definedFor({ deferrable: "immediate" })).toBe(false);
   });
 
-  it("definedFor returns false for keys not stored in options", () => {
+  it("definedFor ignores keys not stored in options (Rails slice semantics)", () => {
     const defn = new UniqueConstraintDefinition("t", "col", { name: "u" });
-    expect(defn.definedFor({ unknownKey: "value" } as never)).toBe(false);
+    expect(defn.definedFor({ unknownKey: "value" } as never)).toBe(true);
   });
 });
 

@@ -1903,8 +1903,20 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   async indexNameExists(tableName: string, indexName: string): Promise<boolean> {
-    const idxs = await this.indexes(tableName);
-    return idxs.some((idx) => idx.name === indexName);
+    const table = this.pgQuotedScope(tableName, "BASE TABLE");
+    const idxName = this.quoteLiteral(indexName);
+    const rows = await this.schemaQuery(`
+      SELECT COUNT(*) AS cnt
+      FROM pg_class t
+      INNER JOIN pg_index d ON t.oid = d.indrelid
+      INNER JOIN pg_class i ON d.indexrelid = i.oid
+      LEFT JOIN pg_namespace n ON n.oid = t.relnamespace
+      WHERE i.relkind IN ('i', 'I')
+        AND i.relname = ${idxName}
+        AND t.relname = ${table.name}
+        AND n.nspname = ${table.schema}
+    `);
+    return Number(rows[0].cnt) > 0;
   }
 
   async primaryKey(tableName: string): Promise<string | string[] | null> {
@@ -2733,23 +2745,6 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     const cascade = options.force === "cascade" ? " CASCADE" : "";
     const quoted = tableNames.map((t) => this.quoteTableName(t)).join(", ");
     await this.exec(`DROP TABLE${ifExists} ${quoted}${cascade}`);
-  }
-
-  async isIndexNameExists(tableName: string, indexName: string): Promise<boolean> {
-    const table = this.pgQuotedScope(tableName, "BASE TABLE");
-    const idxName = this.quoteLiteral(indexName);
-    const rows = await this.schemaQuery(`
-      SELECT COUNT(*) AS cnt
-      FROM pg_class t
-      INNER JOIN pg_index d ON t.oid = d.indrelid
-      INNER JOIN pg_class i ON d.indexrelid = i.oid
-      LEFT JOIN pg_namespace n ON n.oid = t.relnamespace
-      WHERE i.relkind IN ('i', 'I')
-        AND i.relname = ${idxName}
-        AND t.relname = ${table.name}
-        AND n.nspname = ${table.schema}
-    `);
-    return Number(rows[0].cnt) > 0;
   }
 
   async currentDatabase(): Promise<string> {

@@ -32,7 +32,7 @@ export interface SchemaStatements {
   clientMinMessages(): Promise<string>;
   setClientMinMessages(level: string): Promise<void>;
   indexes(tableName: string): Promise<{ name: string }[]>;
-  isIndexNameExists(tableName: string, indexName: string): Promise<boolean>;
+  indexNameExists(tableName: string, indexName: string): Promise<boolean>;
   tableOptions(tableName: string): Promise<Record<string, unknown>>;
   tableComment(tableName: string): Promise<string | null>;
   tablePartitionDefinition(tableName: string): Promise<string | null>;

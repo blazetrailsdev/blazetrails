@@ -1,6 +1,6 @@
 /**
  * Mirrors Rails activerecord/test/cases/adapters/postgresql/schema_test.rb
- * (schema-statements subset: recreateDatabase, dropTable, isIndexNameExists,
+ * (schema-statements subset: recreateDatabase, dropTable, indexNameExists,
  * currentDatabase, encoding, collation, ctype, schemaSearchPath,
  * clientMinMessages, tableOptions, tableComment, tablePartitionDefinition,
  * inheritedTableNames, defaultSequenceName, serialSequence, setPkSequenceBang,
@@ -107,10 +107,10 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
 
     it("index name exists", async () => {
-      expect(await adapter.isIndexNameExists(`${SCHEMA_NAME}.${TABLE_NAME}`, INDEX_A_NAME)).toBe(
+      expect(await adapter.indexNameExists(`${SCHEMA_NAME}.${TABLE_NAME}`, INDEX_A_NAME)).toBe(
         true,
       );
-      expect(await adapter.isIndexNameExists(`${SCHEMA_NAME}.${TABLE_NAME}`, "missing_index")).toBe(
+      expect(await adapter.indexNameExists(`${SCHEMA_NAME}.${TABLE_NAME}`, "missing_index")).toBe(
         false,
       );
     });

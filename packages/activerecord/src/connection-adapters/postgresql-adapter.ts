@@ -50,6 +50,10 @@ import {
 } from "./postgresql/schema-definitions.js";
 import {
   CheckConstraintDefinition,
+  ChangeColumnDefinition,
+  ChangeColumnDefaultDefinition,
+  ColumnDefinition,
+  type ColumnType,
   type ReferentialAction,
 } from "./abstract/schema-definitions.js";
 import { SchemaCreation as PgSchemaCreation } from "./postgresql/schema-creation.js";
@@ -2309,6 +2313,41 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       const expr = clause.startsWith(" DEFAULT ") ? clause.slice(" DEFAULT ".length) : clause;
       await this.exec(`ALTER TABLE ${quotedTable} ALTER COLUMN ${quotedCol} SET DEFAULT ${expr}`);
     }
+  }
+
+  buildChangeColumnDefinition(
+    tableName: string,
+    columnName: string,
+    type: string,
+    options: {
+      using?: string;
+      castAs?: string;
+      default?: unknown;
+      null?: boolean;
+      array?: boolean;
+    } = {},
+  ): ChangeColumnDefinition {
+    void tableName;
+    const cd = new ColumnDefinition(columnName, type as ColumnType, options);
+    cd.sqlType = this.typeToSql(type, options);
+    return new ChangeColumnDefinition(cd, columnName);
+  }
+
+  buildChangeColumnDefaultDefinition(
+    tableName: string,
+    columnName: string,
+    defaultOrChanges: unknown,
+  ): ChangeColumnDefaultDefinition {
+    void tableName;
+    const defaultValue =
+      defaultOrChanges !== null &&
+      typeof defaultOrChanges === "object" &&
+      "from" in (defaultOrChanges as object) &&
+      "to" in (defaultOrChanges as object)
+        ? (defaultOrChanges as { from: unknown; to: unknown }).to
+        : defaultOrChanges;
+    const cd = new ColumnDefinition(columnName, "string");
+    return new ChangeColumnDefaultDefinition(cd, defaultValue);
   }
 
   async changeColumnNull(

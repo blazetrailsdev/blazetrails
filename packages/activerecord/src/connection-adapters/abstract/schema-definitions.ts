@@ -96,6 +96,20 @@ export class CheckConstraintDefinition {
   ) {}
 }
 
+export class ChangeColumnDefinition {
+  constructor(
+    readonly column: ColumnDefinition,
+    readonly name: string,
+  ) {}
+}
+
+export class ChangeColumnDefaultDefinition {
+  constructor(
+    readonly column: ColumnDefinition,
+    readonly default_: unknown,
+  ) {}
+}
+
 export interface ColumnOptions {
   null?: boolean;
   default?: unknown;

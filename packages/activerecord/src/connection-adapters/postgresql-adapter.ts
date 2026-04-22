@@ -48,7 +48,10 @@ import {
   type UniqueConstraintOptions,
   type SchemaStatementsConstraintLike,
 } from "./postgresql/schema-definitions.js";
-import { CheckConstraintDefinition } from "./abstract/schema-definitions.js";
+import {
+  CheckConstraintDefinition,
+  type ReferentialAction,
+} from "./abstract/schema-definitions.js";
 import { SchemaCreation as PgSchemaCreation } from "./postgresql/schema-creation.js";
 import { SchemaDumper as PgSchemaDumper } from "./postgresql/schema-dumper.js";
 
@@ -2786,8 +2789,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       column?: string;
       primaryKey?: string;
       name?: string;
-      onDelete?: string;
-      onUpdate?: string;
+      onDelete?: ReferentialAction;
+      onUpdate?: ReferentialAction;
       deferrable?: boolean | "immediate" | "deferred";
       validate?: boolean;
     } = {},
@@ -2803,10 +2806,11 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     const qi = (s: string) => this.quoteIdentifier(s);
     const qualifiedFrom = fromSchema ? `${qi(fromSchema)}.${qi(fromTbl)}` : qi(fromTbl);
     const qualifiedTo = toSchema ? `${qi(toSchema)}.${qi(toTbl)}` : qi(toTbl);
+    const sc = this.schemaCreation();
 
     let sql = `ALTER TABLE ${qualifiedFrom} ADD CONSTRAINT ${qi(name)} FOREIGN KEY (${qi(column)}) REFERENCES ${qualifiedTo} (${qi(pk)})`;
-    if (options.onDelete) sql += ` ON DELETE ${options.onDelete.toUpperCase().replace(/_/g, " ")}`;
-    if (options.onUpdate) sql += ` ON UPDATE ${options.onUpdate.toUpperCase().replace(/_/g, " ")}`;
+    if (options.onDelete) sql += ` ${sc.actionSql("DELETE", options.onDelete)}`;
+    if (options.onUpdate) sql += ` ${sc.actionSql("UPDATE", options.onUpdate)}`;
     if (options.validate === false) sql += " NOT VALID";
     sql += this.deferrable(options.deferrable);
 
@@ -3364,10 +3368,18 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
 
   async removeExclusionConstraint(
     tableName: string,
-    expression?: string | null,
+    expressionOrOptions?: string | Record<string, unknown> | null,
     options: Record<string, unknown> = {},
   ): Promise<void> {
-    const excl = this.exclusionConstraintForBang(tableName, expression ?? null, options);
+    const expression =
+      typeof expressionOrOptions === "string" || expressionOrOptions == null
+        ? expressionOrOptions
+        : null;
+    const opts =
+      typeof expressionOrOptions === "object" && expressionOrOptions !== null
+        ? expressionOrOptions
+        : options;
+    const excl = this.exclusionConstraintForBang(tableName, expression ?? null, opts);
     await this.exec(
       `ALTER TABLE ${this.quoteTableName(tableName)} DROP CONSTRAINT ${this.quoteIdentifier(excl.name!)}`,
     );
@@ -3394,6 +3406,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     columnName?: string | string[] | null,
     options: UniqueConstraintOptions = {},
   ): Promise<void> {
+    if (!columnName && !options.usingIndex) {
+      throw new Error("Either columnName or usingIndex must be provided for addUniqueConstraint.");
+    }
     const opts = this.uniqueConstraintOptions(tableName, columnName, options);
     const name = this.quoteIdentifier(opts.name as string);
     const deferParts = this.deferrable(opts.deferrable as UniqueConstraintOptions["deferrable"]);
@@ -3412,10 +3427,23 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
 
   async removeUniqueConstraint(
     tableName: string,
-    columnName?: string | string[] | null,
+    columnNameOrOptions?: string | string[] | Record<string, unknown> | null,
     options: Record<string, unknown> = {},
   ): Promise<void> {
-    const uniq = this.uniqueConstraintForBang(tableName, columnName, options);
+    const columnName =
+      columnNameOrOptions === null ||
+      typeof columnNameOrOptions === "string" ||
+      Array.isArray(columnNameOrOptions) ||
+      columnNameOrOptions === undefined
+        ? columnNameOrOptions
+        : undefined;
+    const opts =
+      typeof columnNameOrOptions === "object" &&
+      columnNameOrOptions !== null &&
+      !Array.isArray(columnNameOrOptions)
+        ? columnNameOrOptions
+        : options;
+    const uniq = this.uniqueConstraintForBang(tableName, columnName, opts);
     await this.exec(
       `ALTER TABLE ${this.quoteTableName(tableName)} DROP CONSTRAINT ${this.quoteIdentifier(uniq.name!)}`,
     );

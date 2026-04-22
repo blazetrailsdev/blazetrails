@@ -158,8 +158,8 @@ export interface SchemaStatements {
       column?: string;
       primaryKey?: string;
       name?: string;
-      onDelete?: string;
-      onUpdate?: string;
+      onDelete?: "cascade" | "nullify" | "restrict" | "no_action" | "set_default";
+      onUpdate?: "cascade" | "nullify" | "restrict" | "no_action" | "set_default";
       deferrable?: boolean | "immediate" | "deferred";
       validate?: boolean;
     },
@@ -182,7 +182,7 @@ export interface SchemaStatements {
   ): Record<string, unknown>;
   removeExclusionConstraint(
     tableName: string,
-    expression?: string | null,
+    expressionOrOptions?: string | Record<string, unknown> | null,
     options?: Record<string, unknown>,
   ): Promise<void>;
   addUniqueConstraint(
@@ -202,7 +202,7 @@ export interface SchemaStatements {
   ): Record<string, unknown>;
   removeUniqueConstraint(
     tableName: string,
-    columnName?: string | string[] | null,
+    columnNameOrOptions?: string | string[] | Record<string, unknown> | null,
     options?: Record<string, unknown>,
   ): Promise<void>;
   typeToSql(

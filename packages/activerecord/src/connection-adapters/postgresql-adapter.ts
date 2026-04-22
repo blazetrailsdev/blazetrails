@@ -2223,7 +2223,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       // Materialize any lazy transaction so the savepoint lands inside the
       // real PG transaction (mirrors Rails' transaction(requires_new: true)).
       await this.materializeTransactions();
-      const sp = "check_all_foreign_keys";
+      // Mirror Rails' savepoint naming: "active_record_#{stack.size}" (transaction.rb:528).
+      // Using openTransactions+1 makes repeated calls in the same transaction safe.
+      const sp = `active_record_${this.openTransactions + 1}`;
       await this.createSavepoint(sp);
       try {
         await this.execute(CHECK_ALL_FOREIGN_KEYS_SQL);

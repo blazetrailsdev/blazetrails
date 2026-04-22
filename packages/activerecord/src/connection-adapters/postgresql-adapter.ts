@@ -15,6 +15,7 @@ import {
   quoteTableName as pgQuoteTableName,
   quoteColumnName as pgQuoteColumnName,
   quoteString as pgQuoteString,
+  quoteDefaultExpression as pgQuoteDefaultExpression,
 } from "./postgresql/quoting.js";
 import { TypeMapInitializer, type PgTypeRow } from "./postgresql/oid/type-map-initializer.js";
 import {
@@ -2236,10 +2237,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     if (options.array) pgType += "[]";
     let colSql = `${quotedCol} ${pgType}`;
     if (options.default !== undefined) {
-      colSql +=
-        options.default === null
-          ? " DEFAULT NULL"
-          : ` DEFAULT ${this.quoteLiteral(options.default)}`;
+      const defaultClause = pgQuoteDefaultExpression(options.default);
+      colSql += options.default === null ? " DEFAULT NULL" : defaultClause;
     }
     if (options.null === false) colSql += " NOT NULL";
     await this.exec(`ALTER TABLE ${quotedTable} ADD COLUMN ${colSql}`);
@@ -2271,9 +2270,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     if (defaultValue === null) {
       await this.exec(`ALTER TABLE ${quotedTable} ALTER COLUMN ${quotedCol} DROP DEFAULT`);
     } else {
-      await this.exec(
-        `ALTER TABLE ${quotedTable} ALTER COLUMN ${quotedCol} SET DEFAULT ${this.quoteLiteral(defaultValue)}`,
-      );
+      const clause = pgQuoteDefaultExpression(defaultValue);
+      const expr = clause.startsWith(" DEFAULT ") ? clause.slice(" DEFAULT ".length) : clause;
+      await this.exec(`ALTER TABLE ${quotedTable} ALTER COLUMN ${quotedCol} SET DEFAULT ${expr}`);
     }
   }
 
@@ -2286,8 +2285,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     const quotedTable = this.quoteTableName(tableName);
     const quotedCol = this.quoteIdentifier(columnName);
     if (!nullable && defaultValue !== null) {
+      const clause = pgQuoteDefaultExpression(defaultValue);
+      const expr = clause.startsWith(" DEFAULT ") ? clause.slice(" DEFAULT ".length) : clause;
       await this.exec(
-        `UPDATE ${quotedTable} SET ${quotedCol} = ${this.quoteLiteral(defaultValue)} WHERE ${quotedCol} IS NULL`,
+        `UPDATE ${quotedTable} SET ${quotedCol} = ${expr} WHERE ${quotedCol} IS NULL`,
       );
     }
     await this.exec(
@@ -2467,11 +2468,17 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
 
   async columnNamesFromColumnNumbers(tableOid: number, columnNumbers: number[]): Promise<string[]> {
     if (columnNumbers.length === 0) return [];
+    if (!Number.isSafeInteger(tableOid)) throw new TypeError("tableOid must be a safe integer");
+    const safeNums = columnNumbers.map((n) => {
+      if (!Number.isSafeInteger(n))
+        throw new TypeError("columnNumbers must contain only safe integers");
+      return n;
+    });
     const rows = await this.schemaQuery(
-      `SELECT a.attnum, a.attname FROM pg_attribute a WHERE a.attrelid = ${tableOid} AND a.attnum IN (${columnNumbers.join(", ")})`,
+      `SELECT a.attnum, a.attname FROM pg_attribute a WHERE a.attrelid = ${tableOid} AND a.attnum IN (${safeNums.join(", ")})`,
     );
     const map = Object.fromEntries(rows.map((r) => [Number(r.attnum), r.attname as string]));
-    return columnNumbers.map((n) => map[n]).filter(Boolean);
+    return safeNums.map((n) => map[n]).filter(Boolean);
   }
 
   async renameTable(oldName: string, newName: string): Promise<void> {
@@ -2484,12 +2491,12 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       const [pk, seq] = result;
       const pkeySuffix = "_pkey";
       const maxPkeyPrefix = maxLen - pkeySuffix.length;
-      const { table: unqualifiedOld } = this.parseSchemaQualifiedName(oldName);
+      const { schema: oldSchema, table: unqualifiedOld } = this.parseSchemaQualifiedName(oldName);
       const { table: unqualifiedNew } = this.parseSchemaQualifiedName(newName);
       const oldIdx = `${unqualifiedOld.slice(0, maxPkeyPrefix)}${pkeySuffix}`;
       const newIdx = `${unqualifiedNew.slice(0, maxPkeyPrefix)}${pkeySuffix}`;
-      const qualifiedOldIdx = seq.schema
-        ? `${this.quoteIdentifier(seq.schema)}.${this.quoteIdentifier(oldIdx)}`
+      const qualifiedOldIdx = oldSchema
+        ? `${this.quoteIdentifier(oldSchema)}.${this.quoteIdentifier(oldIdx)}`
         : this.quoteIdentifier(oldIdx);
       await this.exec(
         `ALTER INDEX IF EXISTS ${qualifiedOldIdx} RENAME TO ${this.quoteIdentifier(newIdx)}`,

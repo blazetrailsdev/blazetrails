@@ -2028,7 +2028,6 @@ export class Base extends Model {
    */
   private async _createOrUpdate(): Promise<boolean> {
     const ctor = this.constructor as typeof Base;
-
     let saved = false;
     if (!(await ctor._callbackChain.runBeforeAsync("save", this))) return false;
 

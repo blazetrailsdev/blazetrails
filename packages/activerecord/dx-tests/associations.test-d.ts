@@ -98,13 +98,16 @@ describe("associations DX", () => {
     expectTypeOf(proxy.find(1)).resolves.toEqualTypeOf<Post>();
     expectTypeOf(proxy.find([1, 2])).resolves.toEqualTypeOf<Post[]>();
     expectTypeOf(proxy.find(1, 2)).resolves.toMatchTypeOf<Post | Post[]>();
-    // build / create are overloaded: (attrs?) → T, (attrs[]) → T[].
+    // build / create / createBang are overloaded: (attrs?) → T, (attrs[]) → T[].
     expectTypeOf(proxy.build()).toEqualTypeOf<Post>();
     expectTypeOf(proxy.build({})).toEqualTypeOf<Post>();
     expectTypeOf(proxy.build([{}, {}])).toEqualTypeOf<Post[]>();
     expectTypeOf(proxy.create()).resolves.toEqualTypeOf<Post>();
     expectTypeOf(proxy.create({})).resolves.toEqualTypeOf<Post>();
     expectTypeOf(proxy.create([{}, {}])).resolves.toEqualTypeOf<Post[]>();
+    expectTypeOf(proxy.createBang()).resolves.toEqualTypeOf<Post>();
+    expectTypeOf(proxy.createBang({})).resolves.toEqualTypeOf<Post>();
+    expectTypeOf(proxy.createBang([{}, {}])).resolves.toEqualTypeOf<Post[]>();
     expectTypeOf(proxy.target).toEqualTypeOf<Post[]>();
   });
 

@@ -3001,7 +3001,8 @@ export class Relation<T extends Base> {
     attrs: Record<string, unknown> | Record<string, unknown>[] = {},
     block?: (r: T) => void,
   ): T | T[] {
-    return Array.isArray(attrs) ? this.build(attrs, block) : this.build(attrs, block);
+    if (Array.isArray(attrs)) return this.build(attrs, block);
+    return this.build(attrs, block);
   }
 
   // -- Mutation methods --

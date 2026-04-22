@@ -690,7 +690,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     }
     this._ensureThroughWritable();
     if (this._isThrough) {
-      return (await this._createThrough(attrs)) as T;
+      return (await this._createThrough(attrs, block)) as T;
     }
     const record = this._buildRaw(attrs) as T;
     if (block) block(record);
@@ -708,12 +708,16 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   // NOTE: If _pushThrough fails after the target is saved, the target record
   // will be orphaned (no join row). Rails wraps this in a transaction. We don't
   // have transaction support yet — tracked in the roadmap under "Transactions".
-  private async _createThrough(attrs: Record<string, unknown> = {}): Promise<Base> {
+  private async _createThrough(
+    attrs: Record<string, unknown> = {},
+    block?: (r: T) => void,
+  ): Promise<Base> {
     const ctor = this._record.constructor as typeof Base;
     if (this._record.isNewRecord()) {
       throw new Error(`Cannot create through association on an unpersisted ${ctor.name}`);
     }
     const record = this._buildThrough(attrs) as T;
+    if (block) block(record);
     const saved = await record.save();
     if (!saved) return record;
     await this._pushThrough([record]);

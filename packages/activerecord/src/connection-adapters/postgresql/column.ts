@@ -59,7 +59,7 @@ export class Column extends BaseColumn {
   // Return the full SQL type string (including "[]" for arrays) — callers
   // expecting the base type without the array suffix should use sqlType.
   override get type(): string {
-    return (super.type as string) ?? "";
+    return super.type ?? "";
   }
 
   get isSerial(): boolean {

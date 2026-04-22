@@ -1819,7 +1819,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
               a.attnotnull AS notnull,
               (i.indisprimary IS TRUE) AS is_primary,
               a.atttypid AS oid,
-              a.atttypmod AS fmod
+              a.atttypmod AS fmod,
+              a.attidentity AS identity,
+              a.attgenerated AS attgenerated
        FROM pg_attribute a
        JOIN pg_class t ON t.oid = a.attrelid
        JOIN pg_namespace n ON n.oid = t.relnamespace
@@ -1845,7 +1847,13 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       // than defaulting to the raw sqlType string.
       const castType = this.lookupCastTypeFromColumn({ oid, fmod, sqlType });
       const rawDefault = (r.default as string | null) ?? null;
-      const { literal, fn } = splitPgDefault(rawDefault);
+      const identity = (r.identity as string | null) || null;
+      const attgenerated = (r.attgenerated as string | null) || null;
+      // Mirrors Rails new_column_from_field: generated columns store the
+      // generation expression as defaultFunction; regular columns split into
+      // literal default vs. default function (nextval, CURRENT_TIMESTAMP, etc.).
+      const defaultFunction = attgenerated ? rawDefault : splitPgDefault(rawDefault).fn;
+      const literal = attgenerated ? null : splitPgDefault(rawDefault).literal;
       const isSerial = typeof rawDefault === "string" && rawDefault.startsWith("nextval(");
 
       return new Column(
@@ -1859,10 +1867,12 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         },
         !(r.notnull as boolean),
         {
-          defaultFunction: fn,
+          defaultFunction: defaultFunction ?? undefined,
           primaryKey: r.is_primary as boolean,
           serial: isSerial,
           array: sqlType.endsWith("[]"),
+          identity,
+          generated: attgenerated,
         },
       );
     });

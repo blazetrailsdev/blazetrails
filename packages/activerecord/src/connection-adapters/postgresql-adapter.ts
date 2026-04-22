@@ -2699,11 +2699,11 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     let tableNames: string[];
     let options: { ifExists?: boolean; force?: "cascade" } = {};
     const last = args[args.length - 1];
-    if (typeof last === "object" && last !== null) {
+    if (last !== null && last !== undefined && typeof last === "object") {
       tableNames = args.slice(0, -1) as string[];
       options = last as { ifExists?: boolean; force?: "cascade" };
     } else {
-      tableNames = args as string[];
+      tableNames = args.filter((a) => a !== undefined) as string[];
     }
     if (tableNames.length === 0) {
       throw new Error("dropTable requires at least one table name");

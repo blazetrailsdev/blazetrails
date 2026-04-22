@@ -9,7 +9,10 @@ work in this repo — behavioral rules, not API reference.
 
 - **Implementation-first.** The goal is to implement Rails features, not to
   flip skipped tests. Build the feature, then unskip the tests that prove it.
-  Read the Rails source first to understand the expected behavior.
+  Read the Rails source first to understand the expected behavior. A pinned
+  sparse checkout lives at `scripts/api-compare/.rails-source/` in the main
+  repo — no need to clone or go hunting. Populate it with
+  `bash scripts/api-compare/fetch-rails.sh` if missing.
 - **Read existing code before writing new code.** Trace how the codebase
   already handles the concern. Use the real persistence API (`isNewRecord()`,
   `isPersisted()`, `readAttribute()`, `writeAttribute()`) — not ad-hoc state.

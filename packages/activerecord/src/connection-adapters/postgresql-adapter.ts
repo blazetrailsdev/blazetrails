@@ -2236,7 +2236,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     if (options.array) pgType += "[]";
     let colSql = `${quotedCol} ${pgType}`;
     if (options.default !== undefined) {
-      colSql += options.default === null ? " DEFAULT NULL" : ` DEFAULT ${this.quoteLiteral(options.default)}`;
+      colSql +=
+        options.default === null
+          ? " DEFAULT NULL"
+          : ` DEFAULT ${this.quoteLiteral(options.default)}`;
     }
     if (options.null === false) colSql += " NOT NULL";
     await this.exec(`ALTER TABLE ${quotedTable} ADD COLUMN ${colSql}`);
@@ -2303,9 +2306,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   async changeTableComment(tableName: string, comment: string | null): Promise<void> {
-    await this.exec(
-      `COMMENT ON TABLE ${this.quoteTableName(tableName)} IS ${this.quote(comment)}`,
-    );
+    await this.exec(`COMMENT ON TABLE ${this.quoteTableName(tableName)} IS ${this.quote(comment)}`);
   }
 
   typeToSql(
@@ -2405,6 +2406,17 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return deferrable && (deferred ? "deferred" : "immediate");
   }
 
+  async foreignTables(): Promise<string[]> {
+    const rows = await this.schemaQuery(this.dataSourceSql(null, { type: "FOREIGN TABLE" }));
+    return rows.map((r) => r.relname as string);
+  }
+
+  async foreignTableExists(tableName: string): Promise<boolean> {
+    if (!tableName) return false;
+    const rows = await this.schemaQuery(this.dataSourceSql(tableName, { type: "FOREIGN TABLE" }));
+    return rows.length > 0;
+  }
+
   dataSourceSql(name?: string | null, options: { type?: string } = {}): string {
     const scope = this.quotedScope(name, options);
     const type = scope.type ?? "'r','v','m','p','f'";
@@ -2444,10 +2456,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return singularize(table);
   }
 
-  async columnNamesFromColumnNumbers(
-    tableOid: number,
-    columnNumbers: number[],
-  ): Promise<string[]> {
+  async columnNamesFromColumnNumbers(tableOid: number, columnNumbers: number[]): Promise<string[]> {
     if (columnNumbers.length === 0) return [];
     const rows = await this.schemaQuery(
       `SELECT a.attnum, a.attname FROM pg_attribute a WHERE a.attrelid = ${tableOid} AND a.attnum IN (${columnNumbers.join(", ")})`,
@@ -2460,6 +2469,27 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     await this.exec(
       `ALTER TABLE ${this.quoteTableName(oldName)} RENAME TO ${this.quoteIdentifier(newName)}`,
     );
+    const maxLen = await this.maxIdentifierLength();
+    const result = await this.pkAndSequenceFor(newName);
+    if (result) {
+      const [pk, seq] = result;
+      const pkeySuffix = "_pkey";
+      const maxPkeyPrefix = maxLen - pkeySuffix.length;
+      const oldIdx = `${oldName.slice(0, maxPkeyPrefix)}${pkeySuffix}`;
+      const newIdx = `${newName.slice(0, maxPkeyPrefix)}${pkeySuffix}`;
+      await this.exec(
+        `ALTER INDEX IF EXISTS ${this.quoteTableName(oldIdx)} RENAME TO ${this.quoteIdentifier(newIdx)}`,
+      );
+      const seqSuffix = `_${pk}_seq`;
+      const maxSeqPrefix = maxLen - seqSuffix.length;
+      const expectedOldSeq = `${oldName.slice(0, maxSeqPrefix)}${seqSuffix}`;
+      if (seq.name === expectedOldSeq) {
+        const newSeqName = `${newName.slice(0, maxSeqPrefix)}${seqSuffix}`;
+        await this.exec(
+          `ALTER TABLE IF EXISTS ${this.quoteTableName(`${seq.schema}.${seq.name}`)} RENAME TO ${this.quoteIdentifier(newSeqName)}`,
+        );
+      }
+    }
   }
 
   async tables(): Promise<string[]> {

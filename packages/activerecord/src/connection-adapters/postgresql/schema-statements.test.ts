@@ -316,9 +316,7 @@ describeIfPg("PostgreSQLAdapter", () => {
         [SCHEMA_NAME, TABLE_NAME],
       );
       expect(cols.map((r) => r.column_name)).toContain("score");
-      await adapter.exec(
-        `ALTER TABLE ${SCHEMA_NAME}.${TABLE_NAME} DROP COLUMN IF EXISTS score`,
-      );
+      await adapter.exec(`ALTER TABLE ${SCHEMA_NAME}.${TABLE_NAME} DROP COLUMN IF EXISTS score`);
     });
 
     it("add column with comment", async () => {
@@ -334,9 +332,7 @@ describeIfPg("PostgreSQLAdapter", () => {
         [TABLE_NAME, SCHEMA_NAME],
       );
       expect(rows[0].comment).toBe("user bio");
-      await adapter.exec(
-        `ALTER TABLE ${SCHEMA_NAME}.${TABLE_NAME} DROP COLUMN IF EXISTS bio`,
-      );
+      await adapter.exec(`ALTER TABLE ${SCHEMA_NAME}.${TABLE_NAME} DROP COLUMN IF EXISTS bio`);
     });
 
     it("rename column", async () => {
@@ -349,9 +345,7 @@ describeIfPg("PostgreSQLAdapter", () => {
       const names = cols.map((r) => r.column_name);
       expect(names).toContain("new_col");
       expect(names).not.toContain("old_col");
-      await adapter.exec(
-        `ALTER TABLE ${SCHEMA_NAME}.${TABLE_NAME} DROP COLUMN IF EXISTS new_col`,
-      );
+      await adapter.exec(`ALTER TABLE ${SCHEMA_NAME}.${TABLE_NAME} DROP COLUMN IF EXISTS new_col`);
     });
 
     it("change column default", async () => {
@@ -363,9 +357,7 @@ describeIfPg("PostgreSQLAdapter", () => {
         [SCHEMA_NAME, TABLE_NAME],
       );
       expect(rows[0].column_default).toMatch(/5/);
-      await adapter.exec(
-        `ALTER TABLE ${SCHEMA_NAME}.${TABLE_NAME} DROP COLUMN IF EXISTS rating`,
-      );
+      await adapter.exec(`ALTER TABLE ${SCHEMA_NAME}.${TABLE_NAME} DROP COLUMN IF EXISTS rating`);
     });
 
     it("change column default with from/to object", async () => {
@@ -382,9 +374,7 @@ describeIfPg("PostgreSQLAdapter", () => {
         [SCHEMA_NAME, TABLE_NAME],
       );
       expect(rows[0].column_default).toMatch(/7/);
-      await adapter.exec(
-        `ALTER TABLE ${SCHEMA_NAME}.${TABLE_NAME} DROP COLUMN IF EXISTS rating`,
-      );
+      await adapter.exec(`ALTER TABLE ${SCHEMA_NAME}.${TABLE_NAME} DROP COLUMN IF EXISTS rating`);
     });
 
     it("change column null", async () => {
@@ -396,17 +386,11 @@ describeIfPg("PostgreSQLAdapter", () => {
         [SCHEMA_NAME, TABLE_NAME],
       );
       expect(rows[0].is_nullable).toBe("NO");
-      await adapter.exec(
-        `ALTER TABLE ${SCHEMA_NAME}.${TABLE_NAME} DROP COLUMN IF EXISTS flag`,
-      );
+      await adapter.exec(`ALTER TABLE ${SCHEMA_NAME}.${TABLE_NAME} DROP COLUMN IF EXISTS flag`);
     });
 
     it("change column comment", async () => {
-      await adapter.changeColumnComment(
-        `${SCHEMA_NAME}.${TABLE_NAME}`,
-        "name",
-        "full name",
-      );
+      await adapter.changeColumnComment(`${SCHEMA_NAME}.${TABLE_NAME}`, "name", "full name");
       const rows = await adapter.schemaQuery(
         `SELECT col_description(c.oid, a.attnum) AS comment
          FROM pg_class c

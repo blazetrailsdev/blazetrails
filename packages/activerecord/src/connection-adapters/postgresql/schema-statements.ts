@@ -88,7 +88,11 @@ export interface SchemaStatements {
     options?: { comment?: string; default?: unknown; null?: boolean; array?: boolean },
   ): Promise<void>;
   renameColumn(tableName: string, columnName: string, newColumnName: string): Promise<void>;
-  changeColumnDefault(tableName: string, columnName: string, defaultOrChanges: unknown): Promise<void>;
+  changeColumnDefault(
+    tableName: string,
+    columnName: string,
+    defaultOrChanges: unknown,
+  ): Promise<void>;
   changeColumnNull(
     tableName: string,
     columnName: string,
@@ -99,15 +103,22 @@ export interface SchemaStatements {
   changeTableComment(tableName: string, comment: string | null): Promise<void>;
   typeToSql(
     type: string,
-    options?: { limit?: number; precision?: number; scale?: number; array?: boolean; enumType?: string },
+    options?: {
+      limit?: number;
+      precision?: number;
+      scale?: number;
+      array?: boolean;
+      enumType?: string;
+    },
   ): string;
   foreignKeyColumnFor(tableName: string, columnName?: string): string;
   sequenceNameFromParts(tableName: string, columnName: string, suffix: string): string;
   assertValidDeferrable(deferrable: unknown): void;
-  extractForeignKeyAction(
-    specifier: string,
-  ): "cascade" | "nullify" | "restrict" | undefined;
-  extractConstraintDeferrable(deferrable: boolean, deferred: boolean): "deferred" | "immediate" | false;
+  extractForeignKeyAction(specifier: string): "cascade" | "nullify" | "restrict" | undefined;
+  extractConstraintDeferrable(
+    deferrable: boolean,
+    deferred: boolean,
+  ): "deferred" | "immediate" | false;
   dataSourceSql(name?: string | null, options?: { type?: string }): string;
   quotedScope(
     name?: string | null,
@@ -115,4 +126,6 @@ export interface SchemaStatements {
   ): { schema: string; name: string | null; type: string | null };
   referenceNameForTable(tableName: string): string;
   columnNamesFromColumnNumbers(tableOid: number, columnNumbers: number[]): Promise<string[]>;
+  foreignTables(): Promise<string[]>;
+  foreignTableExists(tableName: string): Promise<boolean>;
 }

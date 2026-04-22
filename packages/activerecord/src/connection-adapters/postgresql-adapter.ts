@@ -120,6 +120,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   // Default :timestamp; can be changed to :timestamptz to store timezone info.
   static datetimeType: "timestamp" | "timestamptz" = "timestamp";
 
+  // Mirrors: PostgreSQLAdapter.create_unlogged_tables class_attribute (postgresql_adapter.rb:105)
+  static createUnloggedTables = false;
+
   private static _spCounter = 0;
   private _driverPool: pg.Pool | null;
   private _client: pg.PoolClient | null = null;

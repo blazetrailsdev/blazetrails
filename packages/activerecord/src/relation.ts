@@ -1327,10 +1327,9 @@ export class Relation<T extends Base> {
       }
       return records;
     }
-    return this._modelClass.create(
-      { ...this.scopeForCreate(), ...attrs },
-      block as ((r: InstanceType<typeof Base>) => void) | undefined,
-    ) as Promise<T>;
+    const record = this.build(attrs, block);
+    await record.save();
+    return record;
   }
 
   /**
@@ -1351,10 +1350,9 @@ export class Relation<T extends Base> {
       }
       return records;
     }
-    return this._modelClass.createBang(
-      { ...this.scopeForCreate(), ...attrs },
-      block as ((r: InstanceType<typeof Base>) => void) | undefined,
-    ) as Promise<T>;
+    const record = this.build(attrs, block);
+    await record.saveBang();
+    return record;
   }
 
   /**

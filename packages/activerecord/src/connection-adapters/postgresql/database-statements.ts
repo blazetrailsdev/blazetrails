@@ -4,7 +4,8 @@
  * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::DatabaseStatements
  */
 
-import { Nodes } from "@blazetrails/arel";
+import type { Nodes } from "@blazetrails/arel";
+import type { ExplainOption } from "../../adapter.js";
 import type { Result } from "../../result.js";
 
 // Mirrors: PostgreSQL::DatabaseStatements::READ_QUERY (database_statements.rb:19-21)
@@ -40,7 +41,7 @@ export interface DatabaseStatements {
   // Mirrors: database_statements.rb:24
   isWriteQuery(sql: string): boolean;
   // Mirrors: database_statements.rb:39
-  execute(sql: string, name?: string | null, binds?: unknown[]): Promise<unknown[]>;
+  execute(sql: string, binds?: unknown[], name?: string | null): Promise<unknown[]>;
   // Mirrors: database_statements.rb:64
   beginDbTransaction(): Promise<void>;
   // Mirrors: database_statements.rb:68
@@ -54,7 +55,7 @@ export interface DatabaseStatements {
   // Mirrors: database_statements.rb:92
   highPrecisionCurrentTimestamp(): Nodes.SqlLiteral;
   // Mirrors: database_statements.rb:96
-  buildExplainClause(options?: string[]): string;
+  buildExplainClause(options?: ExplainOption[]): string;
   // Mirrors: database_statements.rb:110
   setConstraints(deferred: "deferred" | "immediate", ...constraints: string[]): Promise<void>;
 }

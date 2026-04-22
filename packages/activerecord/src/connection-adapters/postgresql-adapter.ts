@@ -2896,12 +2896,13 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     const maxVal = maxRows[0]?.max_val;
     if (maxVal == null) {
       const dbVersion = await this.getDatabaseVersion();
-      const minRows = await this.schemaQuery(
+      const minRows =
         dbVersion >= 100000
-          ? `SELECT seqmin AS minvalue FROM pg_sequence WHERE seqrelid = $1::regclass`
-          : `SELECT min_value AS minvalue FROM ${quotedSeq}`,
-        [quotedSeq],
-      );
+          ? await this.schemaQuery(
+              `SELECT seqmin AS minvalue FROM pg_sequence WHERE seqrelid = $1::regclass`,
+              [quotedSeq],
+            )
+          : await this.schemaQuery(`SELECT min_value AS minvalue FROM ${quotedSeq}`);
       await this.schemaQuery(`SELECT setval($1::regclass, $2, false)`, [
         quotedSeq,
         minRows[0]?.minvalue ?? 1,

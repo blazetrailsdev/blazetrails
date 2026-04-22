@@ -398,27 +398,39 @@ export class Table extends AbstractTable {
   }
 
   exclusionConstraint(expression: string, options?: ExclusionConstraintOptions): Promise<void> {
-    return this._pgSchema.addExclusionConstraint(this._pgTableName, expression, options);
+    return this._requireConstraint("addExclusionConstraint")(
+      this._pgTableName,
+      expression,
+      options,
+    );
   }
 
   removeExclusionConstraint(options?: { name?: string }): Promise<void> {
-    return this._pgSchema.removeExclusionConstraint(this._pgTableName, options);
+    return this._requireConstraint("removeExclusionConstraint")(this._pgTableName, options);
   }
 
   uniqueConstraint(column: string | string[], options?: UniqueConstraintOptions): Promise<void> {
-    return this._pgSchema.addUniqueConstraint(this._pgTableName, column, options);
+    return this._requireConstraint("addUniqueConstraint")(this._pgTableName, column, options);
   }
 
   removeUniqueConstraint(options?: { name?: string }): Promise<void> {
-    return this._pgSchema.removeUniqueConstraint(this._pgTableName, options);
+    return this._requireConstraint("removeUniqueConstraint")(this._pgTableName, options);
   }
 
   validateConstraint(constraintName: string): Promise<void> {
-    return this._pgSchema.validateConstraint(this._pgTableName, constraintName);
+    return this._requireConstraint("validateConstraint")(this._pgTableName, constraintName);
   }
 
   validateCheckConstraint(constraintName: string): Promise<void> {
-    return this._pgSchema.validateCheckConstraint(this._pgTableName, constraintName);
+    return this._requireConstraint("validateCheckConstraint")(this._pgTableName, constraintName);
+  }
+
+  private _requireConstraint<K extends keyof SchemaStatementsConstraintLike>(
+    method: K,
+  ): NonNullable<SchemaStatementsConstraintLike[K]> {
+    const fn = this._pgSchema[method];
+    if (!fn) throw new Error(`${method} is not supported by the current schema backend`);
+    return fn as NonNullable<SchemaStatementsConstraintLike[K]>;
   }
 }
 

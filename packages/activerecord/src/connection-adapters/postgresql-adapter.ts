@@ -2417,6 +2417,15 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return rows.length > 0;
   }
 
+  quotedIncludeColumnsForIndex(columnNames: string | string[]): string {
+    if (typeof columnNames === "string") return this.quoteIdentifier(columnNames);
+    const quoted: Record<string, string> = {};
+    for (const name of columnNames) {
+      quoted[name] = this.quoteIdentifier(name);
+    }
+    return Object.values(quoted).join(", ");
+  }
+
   dataSourceSql(name?: string | null, options: { type?: string } = {}): string {
     const scope = this.quotedScope(name, options);
     const type = scope.type ?? "'r','v','m','p','f'";

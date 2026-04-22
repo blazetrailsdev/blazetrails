@@ -128,4 +128,5 @@ export interface SchemaStatements {
   columnNamesFromColumnNumbers(tableOid: number, columnNumbers: number[]): Promise<string[]>;
   foreignTables(): Promise<string[]>;
   foreignTableExists(tableName: string): Promise<boolean>;
+  quotedIncludeColumnsForIndex(columnNames: string | string[]): string;
 }

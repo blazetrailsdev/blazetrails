@@ -2479,23 +2479,29 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       `ALTER TABLE ${this.quoteTableName(oldName)} RENAME TO ${this.quoteIdentifier(newName)}`,
     );
     const maxLen = await this.maxIdentifierLength();
-    const result = await this.pkAndSequenceFor(newName);
+    const result = await this.pkAndSequenceFor(newName).catch(() => null);
     if (result) {
       const [pk, seq] = result;
       const pkeySuffix = "_pkey";
       const maxPkeyPrefix = maxLen - pkeySuffix.length;
-      const oldIdx = `${oldName.slice(0, maxPkeyPrefix)}${pkeySuffix}`;
-      const newIdx = `${newName.slice(0, maxPkeyPrefix)}${pkeySuffix}`;
+      const { table: unqualifiedOld } = this.parseSchemaQualifiedName(oldName);
+      const { table: unqualifiedNew } = this.parseSchemaQualifiedName(newName);
+      const oldIdx = `${unqualifiedOld.slice(0, maxPkeyPrefix)}${pkeySuffix}`;
+      const newIdx = `${unqualifiedNew.slice(0, maxPkeyPrefix)}${pkeySuffix}`;
+      const qualifiedOldIdx = seq.schema
+        ? `${this.quoteIdentifier(seq.schema)}.${this.quoteIdentifier(oldIdx)}`
+        : this.quoteIdentifier(oldIdx);
       await this.exec(
-        `ALTER INDEX IF EXISTS ${this.quoteTableName(oldIdx)} RENAME TO ${this.quoteIdentifier(newIdx)}`,
+        `ALTER INDEX IF EXISTS ${qualifiedOldIdx} RENAME TO ${this.quoteIdentifier(newIdx)}`,
       );
       const seqSuffix = `_${pk}_seq`;
       const maxSeqPrefix = maxLen - seqSuffix.length;
-      const expectedOldSeq = `${oldName.slice(0, maxSeqPrefix)}${seqSuffix}`;
+      const expectedOldSeq = `${unqualifiedOld.slice(0, maxSeqPrefix)}${seqSuffix}`;
       if (seq.name === expectedOldSeq) {
-        const newSeqName = `${newName.slice(0, maxSeqPrefix)}${seqSuffix}`;
+        const newSeqName = `${unqualifiedNew.slice(0, maxSeqPrefix)}${seqSuffix}`;
+        const qualifiedOldSeq = `${this.quoteIdentifier(seq.schema)}.${this.quoteIdentifier(seq.name)}`;
         await this.exec(
-          `ALTER TABLE IF EXISTS ${this.quoteTableName(`${seq.schema}.${seq.name}`)} RENAME TO ${this.quoteIdentifier(newSeqName)}`,
+          `ALTER SEQUENCE IF EXISTS ${qualifiedOldSeq} RENAME TO ${this.quoteIdentifier(newSeqName)}`,
         );
       }
     }

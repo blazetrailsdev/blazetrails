@@ -2492,8 +2492,15 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     if (options.template) optionString += ` TEMPLATE = ${this.quoteIdentifier(options.template)}`;
     if (options.tablespace)
       optionString += ` TABLESPACE = ${this.quoteIdentifier(options.tablespace)}`;
-    if (options.connectionLimit != null)
-      optionString += ` CONNECTION LIMIT = ${Math.trunc(Number(options.connectionLimit))}`;
+    if (options.connectionLimit != null) {
+      const limit = Math.trunc(Number(options.connectionLimit));
+      if (!Number.isFinite(limit) || (limit < 0 && limit !== -1)) {
+        throw new Error(
+          `connectionLimit must be -1 (unlimited) or a non-negative integer, got: ${options.connectionLimit}`,
+        );
+      }
+      optionString += ` CONNECTION LIMIT = ${limit}`;
+    }
     await this.exec(`CREATE DATABASE ${this.quoteIdentifier(name)}${optionString}`);
   }
 
@@ -2816,7 +2823,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   async tableOptions(tableName: string): Promise<Record<string, unknown>> {
     const options: Record<string, unknown> = {};
     const comment = await this.tableComment(tableName);
-    if (comment) options.comment = comment;
+    if (comment !== null) options.comment = comment;
     const inherited = await this.inheritedTableNames(tableName);
     if (inherited.length > 0) {
       options.options = `INHERITS (${inherited.join(", ")})`;

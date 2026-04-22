@@ -17,6 +17,12 @@ const SCHEMA_NAME = "test_schema_stmts";
 const TABLE_NAME = "things";
 const INDEX_A_NAME = "a_index_things_stmts";
 
+function postgresUrl(): string {
+  const u = new URL(PG_TEST_URL);
+  u.pathname = "/postgres";
+  return u.toString();
+}
+
 async function setup(adapter: PostgreSQLAdapter) {
   await adapter.exec(`CREATE SCHEMA IF NOT EXISTS ${SCHEMA_NAME}`);
   await adapter.exec(
@@ -230,7 +236,7 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it("drop database removes the database", async () => {
       const tmpDb = "trails_test_drop_db_tmp";
-      const rootAdapter = new PostgreSQLAdapter(PG_TEST_URL.replace(/\/[^/]+$/, "/postgres"));
+      const rootAdapter = new PostgreSQLAdapter(postgresUrl());
       try {
         await rootAdapter.exec(`DROP DATABASE IF EXISTS ${tmpDb}`);
         await rootAdapter.createDatabase(tmpDb);
@@ -253,7 +259,7 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it("recreate database drops and creates", async () => {
       const tmpDb = "trails_test_recreate_tmp";
-      const rootAdapter = new PostgreSQLAdapter(PG_TEST_URL.replace(/\/[^/]+$/, "/postgres"));
+      const rootAdapter = new PostgreSQLAdapter(postgresUrl());
       try {
         await rootAdapter.exec(`DROP DATABASE IF EXISTS ${tmpDb}`);
         await rootAdapter.createDatabase(tmpDb);

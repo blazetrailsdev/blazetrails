@@ -1,8 +1,9 @@
 # trails — Claude guide
 
-See [README.md](README.md) for project overview, package list, design principles,
-and the full `declare` / associations / enums / schema reference. This file
-contains only guidance specific to how Claude should work in this repo.
+See [README.md](README.md) for the project overview, package list, design
+principles, zero-declare `trails-tsc` workflow, and the Rails-to-TypeScript
+idiom table. This file contains only guidance specific to how Claude should
+work in this repo — behavioral rules, not API reference.
 
 ## Working principles
 

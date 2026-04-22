@@ -2224,6 +2224,238 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     await this.exec(`CREATE TABLE ${quotedTable} (${columnDefs.join(", ")})`);
   }
 
+  async addColumn(
+    tableName: string,
+    columnName: string,
+    type: string,
+    options: { comment?: string; default?: unknown; null?: boolean; array?: boolean } = {},
+  ): Promise<void> {
+    const quotedTable = this.quoteTableName(tableName);
+    const quotedCol = this.quoteIdentifier(columnName);
+    let pgType = this.nativeType(type);
+    if (options.array) pgType += "[]";
+    let colSql = `${quotedCol} ${pgType}`;
+    if (options.default !== undefined) {
+      colSql += options.default === null ? " DEFAULT NULL" : ` DEFAULT ${this.quoteLiteral(options.default)}`;
+    }
+    if (options.null === false) colSql += " NOT NULL";
+    await this.exec(`ALTER TABLE ${quotedTable} ADD COLUMN ${colSql}`);
+    if (options.comment !== undefined) {
+      await this.changeColumnComment(tableName, columnName, options.comment ?? null);
+    }
+  }
+
+  async renameColumn(tableName: string, columnName: string, newColumnName: string): Promise<void> {
+    await this.exec(
+      `ALTER TABLE ${this.quoteTableName(tableName)} RENAME COLUMN ${this.quoteIdentifier(columnName)} TO ${this.quoteIdentifier(newColumnName)}`,
+    );
+  }
+
+  async changeColumnDefault(
+    tableName: string,
+    columnName: string,
+    defaultOrChanges: unknown,
+  ): Promise<void> {
+    const quotedTable = this.quoteTableName(tableName);
+    const quotedCol = this.quoteIdentifier(columnName);
+    const defaultValue =
+      defaultOrChanges !== null &&
+      typeof defaultOrChanges === "object" &&
+      "from" in (defaultOrChanges as object) &&
+      "to" in (defaultOrChanges as object)
+        ? (defaultOrChanges as { from: unknown; to: unknown }).to
+        : defaultOrChanges;
+    if (defaultValue === null) {
+      await this.exec(`ALTER TABLE ${quotedTable} ALTER COLUMN ${quotedCol} DROP DEFAULT`);
+    } else {
+      await this.exec(
+        `ALTER TABLE ${quotedTable} ALTER COLUMN ${quotedCol} SET DEFAULT ${this.quoteLiteral(defaultValue)}`,
+      );
+    }
+  }
+
+  async changeColumnNull(
+    tableName: string,
+    columnName: string,
+    nullable: boolean,
+    defaultValue: unknown = null,
+  ): Promise<void> {
+    const quotedTable = this.quoteTableName(tableName);
+    const quotedCol = this.quoteIdentifier(columnName);
+    if (!nullable && defaultValue !== null) {
+      await this.exec(
+        `UPDATE ${quotedTable} SET ${quotedCol} = ${this.quoteLiteral(defaultValue)} WHERE ${quotedCol} IS NULL`,
+      );
+    }
+    await this.exec(
+      `ALTER TABLE ${quotedTable} ALTER COLUMN ${quotedCol} ${nullable ? "DROP" : "SET"} NOT NULL`,
+    );
+  }
+
+  async changeColumnComment(
+    tableName: string,
+    columnName: string,
+    comment: string | null,
+  ): Promise<void> {
+    await this.exec(
+      `COMMENT ON COLUMN ${this.quoteTableName(tableName)}.${this.quoteIdentifier(columnName)} IS ${this.quote(comment)}`,
+    );
+  }
+
+  async changeTableComment(tableName: string, comment: string | null): Promise<void> {
+    await this.exec(
+      `COMMENT ON TABLE ${this.quoteTableName(tableName)} IS ${this.quote(comment)}`,
+    );
+  }
+
+  typeToSql(
+    type: string,
+    options: {
+      limit?: number;
+      precision?: number;
+      scale?: number;
+      array?: boolean;
+      enumType?: string;
+    } = {},
+  ): string {
+    const { limit, array, enumType } = options;
+    let sql: string;
+    switch (type) {
+      case "binary":
+        if (limit != null && (limit < 0 || limit > 0x3fffffff)) {
+          throw new Error(
+            `No binary type has byte size ${limit}. The limit on binary can be at most 1GB - 1byte.`,
+          );
+        }
+        sql = "bytea";
+        break;
+      case "text":
+        if (limit != null && (limit < 0 || limit > 0x3fffffff)) {
+          throw new Error(
+            `No text type has byte size ${limit}. The limit on text can be at most 1GB - 1byte.`,
+          );
+        }
+        sql = "text";
+        break;
+      case "integer":
+        if (limit === 1 || limit === 2) sql = "smallint";
+        else if (limit == null || (limit >= 3 && limit <= 4)) sql = "integer";
+        else if (limit >= 5 && limit <= 8) sql = "bigint";
+        else
+          throw new Error(
+            `No integer type has byte size ${limit}. Use a numeric with scale 0 instead.`,
+          );
+        break;
+      case "enum":
+        if (!enumType) throw new Error("enumType is required for enums");
+        sql = enumType;
+        break;
+      default:
+        sql = this.nativeType(type);
+    }
+    return array && type !== "primary_key" ? `${sql}[]` : sql;
+  }
+
+  foreignKeyColumnFor(tableName: string, columnName = "id"): string {
+    const { table } = this.parseSchemaQualifiedName(tableName);
+    return `${singularize(table)}_${columnName}`;
+  }
+
+  sequenceNameFromParts(tableName: string, columnName: string, suffix: string): string {
+    const maxLen = 63;
+    let overLength = tableName.length + columnName.length + suffix.length + 2 - maxLen;
+    let col = columnName;
+    let tbl = tableName;
+    if (overLength > 0) {
+      const colMaxLen = Math.floor((maxLen - suffix.length - 2) / 2);
+      const newColLen = Math.min(colMaxLen, col.length);
+      overLength -= col.length - newColLen;
+      col = col.slice(0, newColLen - Math.max(overLength, 0));
+    }
+    if (overLength > 0) {
+      tbl = tbl.slice(0, tbl.length - overLength);
+    }
+    return `${tbl}_${col}_${suffix}`;
+  }
+
+  assertValidDeferrable(deferrable: unknown): void {
+    if (!deferrable || deferrable === "immediate" || deferrable === "deferred") return;
+    throw new Error(
+      `deferrable must be \`"immediate"\` or \`"deferred"\`, got: \`${JSON.stringify(deferrable)}\``,
+    );
+  }
+
+  extractForeignKeyAction(specifier: string): "cascade" | "nullify" | "restrict" | undefined {
+    switch (specifier) {
+      case "c":
+        return "cascade";
+      case "n":
+        return "nullify";
+      case "r":
+        return "restrict";
+      default:
+        return undefined;
+    }
+  }
+
+  extractConstraintDeferrable(
+    deferrable: boolean,
+    deferred: boolean,
+  ): "deferred" | "immediate" | false {
+    return deferrable && (deferred ? "deferred" : "immediate");
+  }
+
+  dataSourceSql(name?: string | null, options: { type?: string } = {}): string {
+    const scope = this.quotedScope(name, options);
+    const type = scope.type ?? "'r','v','m','p','f'";
+    let sql = `SELECT c.relname FROM pg_class c LEFT JOIN pg_namespace n ON n.oid = c.relnamespace`;
+    sql += ` WHERE n.nspname = ${scope.schema}`;
+    if (scope.name) sql += ` AND c.relname = ${scope.name}`;
+    sql += ` AND c.relkind IN (${type})`;
+    return sql;
+  }
+
+  quotedScope(
+    name?: string | null,
+    options: { type?: string } = {},
+  ): { schema: string; name: string | null; type: string | null } {
+    const { schema, table } = this.parseSchemaQualifiedName(name ?? "");
+    let type: string | null = null;
+    switch (options.type) {
+      case "BASE TABLE":
+        type = "'r','p'";
+        break;
+      case "VIEW":
+        type = "'v','m'";
+        break;
+      case "FOREIGN TABLE":
+        type = "'f'";
+        break;
+    }
+    return {
+      schema: schema ? this.quoteLiteral(schema) : "ANY (current_schemas(false))",
+      name: table ? this.quoteLiteral(table) : null,
+      type,
+    };
+  }
+
+  referenceNameForTable(tableName: string): string {
+    const { table } = this.parseSchemaQualifiedName(tableName);
+    return singularize(table);
+  }
+
+  async columnNamesFromColumnNumbers(
+    tableOid: number,
+    columnNumbers: number[],
+  ): Promise<string[]> {
+    if (columnNumbers.length === 0) return [];
+    const rows = await this.schemaQuery(
+      `SELECT a.attnum, a.attname FROM pg_attribute a WHERE a.attrelid = ${tableOid} AND a.attnum IN (${columnNumbers.join(", ")})`,
+    );
+    const map = Object.fromEntries(rows.map((r) => [Number(r.attnum), r.attname as string]));
+    return columnNumbers.map((n) => map[n]).filter(Boolean);
+  }
+
   async renameTable(oldName: string, newName: string): Promise<void> {
     await this.exec(
       `ALTER TABLE ${this.quoteTableName(oldName)} RENAME TO ${this.quoteIdentifier(newName)}`,

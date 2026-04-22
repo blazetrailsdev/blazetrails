@@ -24,7 +24,10 @@ import {
 import { inspectExplainOption } from "../adapter.js";
 import type { DatabaseAdapter, ExplainOption, TrailsAdapterOptions } from "../adapter.js";
 import {
+  ConnectionNotEstablished,
+  DatabaseConnectionError,
   InvalidForeignKey,
+  NoDatabaseError,
   NotNullViolation,
   PreparedStatementCacheExpired,
   RecordNotUnique,
@@ -1259,11 +1262,31 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   // Mirrors: PostgreSQLAdapter.new_client (postgresql_adapter.rb:57)
-  // Builds a single pg.Client from connection params — Rails uses a single connection
-  // per adapter instance; our adapter uses pg.Pool, but this static factory mirrors
-  // the Rails class-method surface for api:compare completeness.
-  static newClient(config: pg.ClientConfig): pg.Client {
-    return new pg.Client(config);
+  // Connects a single pg.Client and translates connection errors into
+  // the same ActiveRecord error hierarchy as Rails (ConnectionNotEstablished,
+  // NoDatabaseError, DatabaseConnectionError).
+  static async newClient(config: pg.ClientConfig): Promise<pg.Client> {
+    const client = new pg.Client(config);
+    try {
+      await client.connect();
+      return client;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const database = typeof config.database === "string" ? config.database : undefined;
+      const user = typeof config.user === "string" ? config.user : undefined;
+      const host = typeof config.host === "string" ? config.host : undefined;
+      if (database === "postgres") {
+        throw new ConnectionNotEstablished(message);
+      } else if (database && message.includes(database)) {
+        throw NoDatabaseError.dbError(database);
+      } else if (user && message.includes(user)) {
+        throw DatabaseConnectionError.usernameError(user);
+      } else if (host && message.includes(host)) {
+        throw DatabaseConnectionError.hostnameError(host);
+      } else {
+        throw new ConnectionNotEstablished(message);
+      }
+    }
   }
 
   /**

@@ -5,6 +5,7 @@ import pg from "pg";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { describeIfPg, PostgreSQLAdapter, PG_TEST_URL } from "./test-helper.js";
 import {
+  ConnectionNotEstablished,
   InvalidForeignKey,
   NotNullViolation,
   RecordNotUnique,
@@ -1029,11 +1030,22 @@ describeIfPg("PostgreSQLAdapter", () => {
       await adapter.sessionAuth("DEFAULT");
     });
 
-    it("newClient returns a pg.Client instance", () => {
-      const client = PostgreSQLAdapter.newClient({
+    it("newClient connects and returns a pg.Client instance", async () => {
+      const client = await PostgreSQLAdapter.newClient({
         connectionString: process.env.PG_TEST_URL,
       });
       expect(client).toBeInstanceOf(pg.Client);
+      await client.end();
+    });
+
+    it("newClient translates unknown host errors to ConnectionNotEstablished", async () => {
+      await expect(
+        PostgreSQLAdapter.newClient({
+          host: "nonexistent.invalid",
+          database: "testdb",
+          port: 5432,
+        }),
+      ).rejects.toBeInstanceOf(ConnectionNotEstablished);
     });
   });
 });

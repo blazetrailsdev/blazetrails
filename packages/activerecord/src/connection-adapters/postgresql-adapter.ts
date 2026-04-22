@@ -1837,13 +1837,14 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
 
     return rows.map((r) => {
       const sqlType = r.type as string;
+      const oid = r.oid as number;
+      const fmod = r.fmod as number;
+      // Mirrors Rails' fetch_type_metadata: look up the cast type so that
+      // SqlTypeMetadata.type reflects the OID type's semantic name (e.g.
+      // "enum" for user-defined enums, "integer" for int4, etc.) rather
+      // than defaulting to the raw sqlType string.
+      const castType = this.lookupCastTypeFromColumn({ oid, fmod, sqlType });
       const rawDefault = (r.default as string | null) ?? null;
-      // Mirrors Rails' PG `extract_value_from_default` / `extract_default_function`
-      // split — SQL-expression defaults (nextval, CURRENT_TIMESTAMP,
-      // gen_random_uuid(), etc.) become `defaultFunction`; only literals
-      // become `default`. Without this split, schema reflection would
-      // apply expressions as literal bind values and PG would reject
-      // `nextval(...)` as a bound integer.
       const { literal, fn } = splitPgDefault(rawDefault);
       const isSerial = typeof rawDefault === "string" && rawDefault.startsWith("nextval(");
 
@@ -1852,8 +1853,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         literal,
         {
           sqlType,
-          oid: r.oid as number,
-          fmod: r.fmod as number,
+          type: castType.type(),
+          oid,
+          fmod,
         },
         !(r.notnull as boolean),
         {

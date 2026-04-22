@@ -32,7 +32,7 @@ describeIfPg("PostgreSQLAdapter", () => {
       await adapter.execute(`
         CREATE TABLE referential_integrity_test_schema.nodes (
           id        BIGSERIAL,
-          parent_id INT NOT NULL,
+          parent_id BIGINT NOT NULL,
           PRIMARY KEY (id),
           CONSTRAINT fk_parent_node FOREIGN KEY (parent_id)
             REFERENCES referential_integrity_test_schema.nodes (id)

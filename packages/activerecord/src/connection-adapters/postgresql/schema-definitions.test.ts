@@ -1,9 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   ExclusionConstraintDefinition,
   UniqueConstraintDefinition,
   TableDefinition,
+  Table,
   AlterTable,
+  type SchemaStatementsConstraintLike,
 } from "./schema-definitions.js";
 
 describe("ExclusionConstraintDefinition", () => {
@@ -140,5 +142,115 @@ describe("AlterTable", () => {
     at.addUniqueConstraint("position", { name: "unique_position" });
     expect(at.uniqueConstraintAdds).toHaveLength(1);
     expect(at.uniqueConstraintAdds[0].name).toBe("unique_position");
+  });
+});
+
+describe("TableDefinition#toSql", () => {
+  it("emits UNLOGGED when unlogged: true", () => {
+    const td = new TableDefinition("products", { id: false, unlogged: true });
+    td.string("name");
+    expect(td.toSql()).toMatch(/^CREATE UNLOGGED TABLE/);
+  });
+
+  it("does not emit UNLOGGED by default", () => {
+    const td = new TableDefinition("products", { id: false });
+    td.string("name");
+    expect(td.toSql()).toMatch(/^CREATE TABLE/);
+    expect(td.toSql()).not.toContain("UNLOGGED");
+  });
+
+  it("emits exclusion constraint in CREATE TABLE", () => {
+    const td = new TableDefinition("meetings", { id: false });
+    td.exclusionConstraint("room WITH =, during WITH &&", { name: "no_overlap", using: "gist" });
+    const sql = td.toSql();
+    expect(sql).toContain(
+      'CONSTRAINT "no_overlap" EXCLUDE USING gist (room WITH =, during WITH &&)',
+    );
+  });
+
+  it("emits unique constraint in CREATE TABLE", () => {
+    const td = new TableDefinition("orders", { id: false });
+    td.uniqueConstraint("position", { name: "unique_pos", deferrable: "deferred" });
+    const sql = td.toSql();
+    expect(sql).toContain(
+      'CONSTRAINT "unique_pos" UNIQUE ("position") DEFERRABLE INITIALLY DEFERRED',
+    );
+  });
+
+  it("emits unique constraint with nulls not distinct", () => {
+    const td = new TableDefinition("orders", { id: false });
+    td.uniqueConstraint("position", { name: "unique_pos", nullsNotDistinct: true });
+    const sql = td.toSql();
+    expect(sql).toContain("NULLS NOT DISTINCT");
+  });
+
+  it("emits unique constraint using index", () => {
+    const td = new TableDefinition("orders", { id: false });
+    td.uniqueConstraint("position", { name: "unique_pos", usingIndex: "orders_pos_idx" });
+    const sql = td.toSql();
+    expect(sql).toContain('USING INDEX "orders_pos_idx"');
+  });
+});
+
+function makeSchema(): SchemaStatementsConstraintLike {
+  return {
+    addColumn: vi.fn(),
+    addExclusionConstraint: vi.fn().mockResolvedValue(undefined),
+    removeExclusionConstraint: vi.fn().mockResolvedValue(undefined),
+    addUniqueConstraint: vi.fn().mockResolvedValue(undefined),
+    removeUniqueConstraint: vi.fn().mockResolvedValue(undefined),
+    validateConstraint: vi.fn().mockResolvedValue(undefined),
+    validateCheckConstraint: vi.fn().mockResolvedValue(undefined),
+  } as unknown as SchemaStatementsConstraintLike;
+}
+
+describe("Table delegation", () => {
+  it("exclusionConstraint delegates to schema.addExclusionConstraint", async () => {
+    const schema = makeSchema();
+    const table = new Table("products", schema);
+    await table.exclusionConstraint("price WITH =", { name: "price_check", using: "gist" });
+    expect(schema.addExclusionConstraint).toHaveBeenCalledWith("products", "price WITH =", {
+      name: "price_check",
+      using: "gist",
+    });
+  });
+
+  it("removeExclusionConstraint delegates to schema.removeExclusionConstraint", async () => {
+    const schema = makeSchema();
+    const table = new Table("products", schema);
+    await table.removeExclusionConstraint({ name: "price_check" });
+    expect(schema.removeExclusionConstraint).toHaveBeenCalledWith("products", {
+      name: "price_check",
+    });
+  });
+
+  it("uniqueConstraint delegates to schema.addUniqueConstraint", async () => {
+    const schema = makeSchema();
+    const table = new Table("orders", schema);
+    await table.uniqueConstraint("position", { name: "unique_pos" });
+    expect(schema.addUniqueConstraint).toHaveBeenCalledWith("orders", "position", {
+      name: "unique_pos",
+    });
+  });
+
+  it("removeUniqueConstraint delegates to schema.removeUniqueConstraint", async () => {
+    const schema = makeSchema();
+    const table = new Table("orders", schema);
+    await table.removeUniqueConstraint({ name: "unique_pos" });
+    expect(schema.removeUniqueConstraint).toHaveBeenCalledWith("orders", { name: "unique_pos" });
+  });
+
+  it("validateConstraint delegates to schema.validateConstraint", async () => {
+    const schema = makeSchema();
+    const table = new Table("products", schema);
+    await table.validateConstraint("price_check");
+    expect(schema.validateConstraint).toHaveBeenCalledWith("products", "price_check");
+  });
+
+  it("validateCheckConstraint delegates to schema.validateCheckConstraint", async () => {
+    const schema = makeSchema();
+    const table = new Table("products", schema);
+    await table.validateCheckConstraint("price_check");
+    expect(schema.validateCheckConstraint).toHaveBeenCalledWith("products", "price_check");
   });
 });

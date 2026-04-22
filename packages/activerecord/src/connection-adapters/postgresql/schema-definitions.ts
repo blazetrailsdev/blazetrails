@@ -19,6 +19,7 @@ import type {
   ColumnType,
   SchemaStatementsLike,
 } from "../abstract/schema-definitions.js";
+import { quoteIdentifier } from "../abstract/quoting.js";
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace PostgreSQL {
@@ -181,6 +182,47 @@ export class TableDefinition extends AbstractTableDefinition {
     return new UniqueConstraintDefinition(this.tableName, columnName, options);
   }
 
+  override toSql(): string {
+    let sql = super.toSql();
+
+    if (this.unlogged) {
+      sql = sql.replace(/^CREATE TABLE/, "CREATE UNLOGGED TABLE");
+    }
+
+    if (this.exclusionConstraints.length > 0 || this.uniqueConstraints.length > 0) {
+      const constraintSqls = [
+        ...this.exclusionConstraints.map((ec) => this.exclusionConstraintSql(ec)),
+        ...this.uniqueConstraints.map((uc) => this.uniqueConstraintSql(uc)),
+      ];
+      // Insert constraint clauses inside the closing paren of the column list
+      sql = sql.replace(/\)(\s*(?:OPTIONS|COMMENT|$))/, `, ${constraintSqls.join(", ")})$1`);
+    }
+
+    return sql;
+  }
+
+  private exclusionConstraintSql(ec: ExclusionConstraintDefinition): string {
+    const parts = ["CONSTRAINT", quoteIdentifier(ec.name ?? "", "postgres"), "EXCLUDE"];
+    if (ec.using) parts.push(`USING ${ec.using}`);
+    parts.push(`(${ec.expression})`);
+    if (ec.where) parts.push(`WHERE (${ec.where})`);
+    if (ec.deferrable) parts.push(`DEFERRABLE INITIALLY ${String(ec.deferrable).toUpperCase()}`);
+    return parts.join(" ");
+  }
+
+  private uniqueConstraintSql(uc: UniqueConstraintDefinition): string {
+    const columns = Array.isArray(uc.column) ? uc.column : [uc.column];
+    const parts = ["CONSTRAINT", quoteIdentifier(uc.name ?? "", "postgres"), "UNIQUE"];
+    if (uc.nullsNotDistinct) parts.push("NULLS NOT DISTINCT");
+    if (uc.usingIndex) {
+      parts.push(`USING INDEX ${quoteIdentifier(uc.usingIndex, "postgres")}`);
+    } else {
+      parts.push(`(${columns.map((c) => quoteIdentifier(c, "postgres")).join(", ")})`);
+    }
+    if (uc.deferrable) parts.push(`DEFERRABLE INITIALLY ${String(uc.deferrable).toUpperCase()}`);
+    return parts.join(" ");
+  }
+
   bigserial(name: string, options: ColumnOptions = {}): this {
     return this.pgColumn(name, "bigint" as ColumnType, "BIGSERIAL", options);
   }
@@ -329,7 +371,7 @@ export interface SchemaStatementsConstraintLike extends SchemaStatementsLike {
   ): Promise<void>;
   removeUniqueConstraint(tableName: string, options?: { name?: string }): Promise<void>;
   validateConstraint(tableName: string, constraintName: string): Promise<void>;
-  validateCheckConstraint(tableName: string, options?: { name?: string }): Promise<void>;
+  validateCheckConstraint(tableName: string, constraintName: string): Promise<void>;
 }
 
 export class Table extends AbstractTable {
@@ -362,8 +404,8 @@ export class Table extends AbstractTable {
     return this._pgSchema.validateConstraint(this._pgTableName, constraintName);
   }
 
-  validateCheckConstraint(options?: { name?: string }): Promise<void> {
-    return this._pgSchema.validateCheckConstraint(this._pgTableName, options);
+  validateCheckConstraint(constraintName: string): Promise<void> {
+    return this._pgSchema.validateCheckConstraint(this._pgTableName, constraintName);
   }
 }
 

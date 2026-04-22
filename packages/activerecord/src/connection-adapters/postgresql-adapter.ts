@@ -1852,8 +1852,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       // Mirrors Rails new_column_from_field: generated columns store the
       // generation expression as defaultFunction; regular columns split into
       // literal default vs. default function (nextval, CURRENT_TIMESTAMP, etc.).
-      const defaultFunction = attgenerated ? rawDefault : splitPgDefault(rawDefault).fn;
-      const literal = attgenerated ? null : splitPgDefault(rawDefault).literal;
+      const splitDefault = attgenerated ? null : splitPgDefault(rawDefault);
+      const defaultFunction = attgenerated ? rawDefault : (splitDefault?.fn ?? null);
+      const literal = attgenerated ? null : (splitDefault?.literal ?? null);
       const isSerial = typeof rawDefault === "string" && rawDefault.startsWith("nextval(");
 
       return new Column(

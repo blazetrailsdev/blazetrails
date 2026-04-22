@@ -55,6 +55,51 @@ describeIfPg("PostgreSQLAdapter", () => {
       }
     });
 
+    it("check all foreign keys valid raises on violated constraint", async () => {
+      await adapter.execute(`DROP SCHEMA IF EXISTS referential_integrity_violation_test CASCADE`);
+      await adapter.execute(`CREATE SCHEMA referential_integrity_violation_test`);
+      await adapter.execute(`
+        CREATE TABLE referential_integrity_violation_test.parents (id BIGSERIAL PRIMARY KEY)
+      `);
+      await adapter.execute(`
+        CREATE TABLE referential_integrity_violation_test.children (
+          id        BIGSERIAL PRIMARY KEY,
+          parent_id BIGINT NOT NULL
+        )
+      `);
+
+      try {
+        // Insert a child row that references a non-existent parent.
+        await adapter.execute(
+          `INSERT INTO referential_integrity_violation_test.children (parent_id) VALUES (9999)`,
+        );
+        // Add the FK constraint NOT VALID so it can be created despite the bad row.
+        await adapter.execute(`
+          ALTER TABLE referential_integrity_violation_test.children
+            ADD CONSTRAINT fk_children_parent
+            FOREIGN KEY (parent_id)
+            REFERENCES referential_integrity_violation_test.parents (id)
+            NOT VALID
+        `);
+
+        // checkAllForeignKeysValidBang re-validates every FK — should raise.
+        await expect(adapter.checkAllForeignKeysValidBang()).rejects.toThrow();
+
+        // When called inside a transaction the savepoint is rolled back on
+        // failure, leaving the outer transaction still usable.
+        await adapter.beginTransaction();
+        try {
+          await expect(adapter.checkAllForeignKeysValidBang()).rejects.toThrow();
+          const result = await adapter.execute("SELECT 1 AS n");
+          expect(result[0].n).toBe(1);
+        } finally {
+          await adapter.commit();
+        }
+      } finally {
+        await adapter.execute(`DROP SCHEMA IF EXISTS referential_integrity_violation_test CASCADE`);
+      }
+    });
+
     it("check all foreign keys valid inside a transaction uses savepoint", async () => {
       await adapter.execute(`DROP SCHEMA IF EXISTS referential_integrity_tx_test CASCADE`);
       await adapter.execute(`CREATE SCHEMA referential_integrity_tx_test`);

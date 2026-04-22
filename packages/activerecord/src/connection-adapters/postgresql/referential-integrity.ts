@@ -7,8 +7,7 @@
 import { quoteTableName } from "./quoting.js";
 
 export interface ReferentialIntegrity {
-  disableReferentialIntegrity(): Promise<void>;
-  enableReferentialIntegrity(): Promise<void>;
+  disableReferentialIntegrity(fn: () => Promise<void>): Promise<void>;
   checkAllForeignKeysValidBang(): Promise<void>;
 }
 

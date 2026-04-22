@@ -2219,7 +2219,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   // Rails uses `transaction(requires_new: true)` — a savepoint when already
   // inside a transaction, or a fresh BEGIN otherwise.
   async checkAllForeignKeysValidBang(): Promise<void> {
-    if (this.inTransaction) {
+    if (this.isTransactionOpen()) {
+      // Materialize any lazy transaction so the savepoint lands inside the
+      // real PG transaction (mirrors Rails' transaction(requires_new: true)).
+      await this.materializeTransactions();
       const sp = "check_all_foreign_keys";
       await this.createSavepoint(sp);
       try {

@@ -909,17 +909,45 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   async rollbackDbTransaction(): Promise<void> {
-    return this.rollback();
+    return this.execRollbackDbTransaction();
   }
 
   // Mirrors: DatabaseStatements#exec_rollback_db_transaction (database_statements.rb:78)
   async execRollbackDbTransaction(): Promise<void> {
+    await this._cancelAnyRunningQuery();
     return this.rollback();
   }
 
   // Mirrors: DatabaseStatements#exec_restart_db_transaction (database_statements.rb:83)
   async execRestartDbTransaction(): Promise<void> {
+    await this._cancelAnyRunningQuery();
     await this.execute("ROLLBACK AND CHAIN");
+  }
+
+  // Mirrors: PostgreSQL::DatabaseStatements#cancel_any_running_query (database_statements.rb private)
+  // Sends a CancelRequest to abort any in-flight query on the transaction connection
+  // before issuing ROLLBACK / ROLLBACK AND CHAIN, so the rollback isn't blocked
+  // waiting for a long-running query to finish. Best-effort: errors are swallowed.
+  private async _cancelAnyRunningQuery(): Promise<void> {
+    type PgClientInternals = {
+      activeQuery?: unknown;
+      processID?: number | null;
+      cancel: (target: PgClientInternals, query: unknown) => void;
+    };
+    const txClient = this._client as (pg.PoolClient & PgClientInternals) | null;
+    if (!txClient?.activeQuery || txClient.processID == null) return;
+    const pool = this._driverPool;
+    if (!pool) return;
+    try {
+      const cancelConn = await pool.connect();
+      try {
+        (cancelConn as unknown as PgClientInternals).cancel(txClient, txClient.activeQuery);
+      } finally {
+        cancelConn.release();
+      }
+    } catch {
+      // cancel is best-effort
+    }
   }
 
   // Mirrors: DatabaseStatements#begin_isolated_db_transaction (database_statements.rb:68)

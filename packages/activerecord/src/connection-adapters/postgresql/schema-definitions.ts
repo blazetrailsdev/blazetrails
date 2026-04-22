@@ -444,20 +444,20 @@ export class TableDefinition extends AbstractTableDefinition {
 }
 
 export interface SchemaStatementsConstraintLike extends SchemaStatementsLike {
-  addExclusionConstraint(
+  addExclusionConstraint?(
     tableName: string,
     expression: string,
     options?: ExclusionConstraintOptions,
   ): Promise<void>;
-  removeExclusionConstraint(tableName: string, options?: { name?: string }): Promise<void>;
-  addUniqueConstraint(
+  removeExclusionConstraint?(tableName: string, options?: { name?: string }): Promise<void>;
+  addUniqueConstraint?(
     tableName: string,
     column: string | string[],
     options?: UniqueConstraintOptions,
   ): Promise<void>;
-  removeUniqueConstraint(tableName: string, options?: { name?: string }): Promise<void>;
-  validateConstraint(tableName: string, constraintName: string): Promise<void>;
-  validateCheckConstraint(tableName: string, constraintName: string): Promise<void>;
+  removeUniqueConstraint?(tableName: string, options?: { name?: string }): Promise<void>;
+  validateConstraint?(tableName: string, constraintName: string): Promise<void>;
+  validateCheckConstraint?(tableName: string, constraintName: string): Promise<void>;
 }
 
 export class Table extends AbstractTable {
@@ -471,39 +471,39 @@ export class Table extends AbstractTable {
   }
 
   exclusionConstraint(expression: string, options?: ExclusionConstraintOptions): Promise<void> {
-    return this._requireConstraint("addExclusionConstraint")(
-      this._pgTableName,
-      expression,
-      options,
-    );
+    this._requireConstraint("addExclusionConstraint");
+    return this._pgSchema.addExclusionConstraint!(this._pgTableName, expression, options);
   }
 
   removeExclusionConstraint(options?: { name?: string }): Promise<void> {
-    return this._requireConstraint("removeExclusionConstraint")(this._pgTableName, options);
+    this._requireConstraint("removeExclusionConstraint");
+    return this._pgSchema.removeExclusionConstraint!(this._pgTableName, options);
   }
 
   uniqueConstraint(column: string | string[], options?: UniqueConstraintOptions): Promise<void> {
-    return this._requireConstraint("addUniqueConstraint")(this._pgTableName, column, options);
+    this._requireConstraint("addUniqueConstraint");
+    return this._pgSchema.addUniqueConstraint!(this._pgTableName, column, options);
   }
 
   removeUniqueConstraint(options?: { name?: string }): Promise<void> {
-    return this._requireConstraint("removeUniqueConstraint")(this._pgTableName, options);
+    this._requireConstraint("removeUniqueConstraint");
+    return this._pgSchema.removeUniqueConstraint!(this._pgTableName, options);
   }
 
   validateConstraint(constraintName: string): Promise<void> {
-    return this._requireConstraint("validateConstraint")(this._pgTableName, constraintName);
+    this._requireConstraint("validateConstraint");
+    return this._pgSchema.validateConstraint!(this._pgTableName, constraintName);
   }
 
   validateCheckConstraint(constraintName: string): Promise<void> {
-    return this._requireConstraint("validateCheckConstraint")(this._pgTableName, constraintName);
+    this._requireConstraint("validateCheckConstraint");
+    return this._pgSchema.validateCheckConstraint!(this._pgTableName, constraintName);
   }
 
-  private _requireConstraint<K extends keyof SchemaStatementsConstraintLike>(
-    method: K,
-  ): NonNullable<SchemaStatementsConstraintLike[K]> {
-    const fn = this._pgSchema[method];
-    if (!fn) throw new Error(`${method} is not supported by the current schema backend`);
-    return fn as NonNullable<SchemaStatementsConstraintLike[K]>;
+  private _requireConstraint(method: keyof SchemaStatementsConstraintLike): void {
+    if (!this._pgSchema[method]) {
+      throw new Error(`${method} is not supported by the current schema backend`);
+    }
   }
 }
 

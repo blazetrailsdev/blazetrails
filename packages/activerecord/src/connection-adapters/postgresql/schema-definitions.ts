@@ -143,10 +143,12 @@ export class UniqueConstraintDefinition {
     }
     // Mirrors Rails: options.slice(*self.options.keys).all? { |k, v| self.options[k].to_s == v.to_s }
     // slice drops keys not present in self.options, so unknown keys are ignored.
+    // nil.to_s == "" in Ruby, so coerce null/undefined to "" like Rails does.
+    const toS = (x: unknown): string => (x == null ? "" : String(x));
     const storedOpts = this.options as Record<string, unknown>;
     for (const [k, v] of Object.entries(rest)) {
       if (!(k in storedOpts)) continue;
-      if (String(storedOpts[k]) !== String(v)) return false;
+      if (toS(storedOpts[k]) !== toS(v)) return false;
     }
     return true;
   }
@@ -223,7 +225,10 @@ export class TableDefinition extends AbstractTableDefinition {
 
   private appendConstraintsToSql(sql: string, constraintSql: string): string {
     const range = this.tableElementListRange(sql);
-    if (range === null) return sql;
+    if (range === null)
+      throw new Error(
+        `Unable to append constraints to CREATE TABLE statement for ${this.tableName}: ${sql}`,
+      );
     const { openingParenIndex, closingParenIndex } = range;
     const inner = sql.slice(openingParenIndex + 1, closingParenIndex).trim();
     const separator = inner.length === 0 ? "" : ", ";
@@ -235,37 +240,68 @@ export class TableDefinition extends AbstractTableDefinition {
   private tableElementListRange(
     sql: string,
   ): { openingParenIndex: number; closingParenIndex: number } | null {
-    const openingParenIndex = sql.indexOf("(");
+    let inSingleQuote = false;
+    let inDoubleQuote = false;
+    let openingParenIndex = -1;
+
+    for (let i = 0; i < sql.length; i++) {
+      const ch = sql[i];
+
+      if (inSingleQuote) {
+        if (ch === "'" && sql[i + 1] === "'") {
+          i++;
+          continue;
+        }
+        if (ch === "'") inSingleQuote = false;
+        continue;
+      }
+      if (inDoubleQuote) {
+        if (ch === '"' && sql[i + 1] === '"') {
+          i++;
+          continue;
+        }
+        if (ch === '"') inDoubleQuote = false;
+        continue;
+      }
+      if (ch === "'") {
+        inSingleQuote = true;
+        continue;
+      }
+      if (ch === '"') {
+        inDoubleQuote = true;
+        continue;
+      }
+      if (ch === "(") {
+        openingParenIndex = i;
+        break;
+      }
+    }
+
     if (openingParenIndex === -1) return null;
 
     let depth = 0;
-    let inSingleQuote = false;
-    let inDoubleQuote = false;
+    inSingleQuote = false;
+    inDoubleQuote = false;
 
     for (let i = openingParenIndex; i < sql.length; i++) {
       const ch = sql[i];
 
       if (inSingleQuote) {
-        if (ch === "'") {
-          if (sql[i + 1] === "'") {
-            i++; // doubled-quote escape — skip both
-            continue;
-          }
-          inSingleQuote = false;
+        if (ch === "'" && sql[i + 1] === "'") {
+          i++;
+          continue;
         }
+        if (ch === "'") inSingleQuote = false;
         continue;
       }
       if (inDoubleQuote) {
-        if (ch === '"') {
-          if (sql[i + 1] === '"') {
-            i++; // doubled-quote escape — skip both
-            continue;
-          }
-          inDoubleQuote = false;
+        if (ch === '"' && sql[i + 1] === '"') {
+          i++;
+          continue;
         }
+        if (ch === '"') inDoubleQuote = false;
         continue;
       }
-
       if (ch === "'") {
         inSingleQuote = true;
         continue;

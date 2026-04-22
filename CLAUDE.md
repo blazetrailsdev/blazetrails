@@ -51,6 +51,7 @@ use `include()` / `Included<>` from `@blazetrails/activesupport`. See
 `activesupport/src/include.ts` and `relation.ts` + `relation/query-methods.ts`.
 
 When NOT to use this:
+
 - Ruby lifecycle hooks (`extended`, `included`, `inherited`) — no TS
   equivalent. Don't stub them; add them to the skip list in
   `scripts/api-compare/compare.ts`.

@@ -914,13 +914,13 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
 
   // Mirrors: DatabaseStatements#exec_rollback_db_transaction (database_statements.rb:78)
   async execRollbackDbTransaction(): Promise<void> {
-    await this._cancelAnyRunningQuery();
+    this._cancelAnyRunningQuery();
     return this.rollback();
   }
 
   // Mirrors: DatabaseStatements#exec_restart_db_transaction (database_statements.rb:83)
   async execRestartDbTransaction(): Promise<void> {
-    await this._cancelAnyRunningQuery();
+    this._cancelAnyRunningQuery();
     await this.execute("ROLLBACK AND CHAIN");
   }
 
@@ -928,7 +928,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   // Sends a CancelRequest to abort any in-flight query on the transaction connection
   // before issuing ROLLBACK / ROLLBACK AND CHAIN, so the rollback isn't blocked
   // waiting for a long-running query to finish. Best-effort: errors are swallowed.
-  private async _cancelAnyRunningQuery(): Promise<void> {
+  private _cancelAnyRunningQuery(): void {
     type PgClientInternals = {
       activeQuery?: unknown;
       processID?: number | null;
@@ -936,15 +936,11 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     };
     const txClient = this._client as (pg.PoolClient & PgClientInternals) | null;
     if (!txClient?.activeQuery || txClient.processID == null) return;
-    const pool = this._driverPool;
-    if (!pool) return;
     try {
-      const cancelConn = await pool.connect();
-      try {
-        (cancelConn as unknown as PgClientInternals).cancel(txClient, txClient.activeQuery);
-      } finally {
-        cancelConn.release();
-      }
+      // pg.Client.cancel(target, query) opens a fresh raw TCP connection to send
+      // the libpq CancelRequest — it does NOT consume a pool slot, so this is
+      // safe even when the pool is at max capacity.
+      txClient.cancel(txClient, txClient.activeQuery);
     } catch {
       // cancel is best-effort
     }

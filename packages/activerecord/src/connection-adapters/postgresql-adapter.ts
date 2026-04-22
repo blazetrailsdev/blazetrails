@@ -1216,7 +1216,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   // Mirrors: PostgreSQLAdapter#enum_types (postgresql_adapter.rb:518)
-  // Returns an array of [fullName, values] pairs for all enum types in the current schema.
+  // Returns an array of [fullName, values] pairs for all enum types visible on the search path
+  // (current_schemas(false) — all schemas in search_path, not just the current one).
+  // Enum types in the default schema are returned without a schema prefix.
   async enumTypes(): Promise<[string, string[]][]> {
     const query = `
       SELECT
@@ -1273,15 +1275,19 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   // NoDatabaseError, DatabaseConnectionError).
   static async newClient(config: pg.ClientConfig): Promise<pg.Client> {
     const client = new pg.Client(config);
+    // pg.Client parses the connectionString immediately on construction, so
+    // client.database / client.user / client.host reflect the actual params
+    // even when only a connectionString was passed — matching Rails' access
+    // to conn_params[:dbname] / [:user] / [:host].
+    const database: string | undefined = (client as unknown as { database?: string }).database;
+    const user: string | undefined = (client as unknown as { user?: string }).user;
+    const host: string | undefined = (client as unknown as { host?: string }).host;
     try {
       await client.connect();
       return client;
     } catch (error) {
       await client.end().catch(() => {});
       const message = error instanceof Error ? error.message : String(error);
-      const database = typeof config.database === "string" ? config.database : undefined;
-      const user = typeof config.user === "string" ? config.user : undefined;
-      const host = typeof config.host === "string" ? config.host : undefined;
       if (database === "postgres") {
         throw new ConnectionNotEstablished(message);
       } else if (database && message.includes(database)) {

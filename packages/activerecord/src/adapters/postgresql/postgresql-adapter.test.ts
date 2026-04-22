@@ -999,6 +999,24 @@ describeIfPg("PostgreSQLAdapter", () => {
       }
     });
 
+    it("insert with insertReturning disabled returns rowCount not id", async () => {
+      const a = new PostgreSQLAdapter({
+        connectionString: PG_TEST_URL,
+        insertReturning: false,
+      });
+      try {
+        await a.execute(
+          `CREATE TEMP TABLE test_no_returning (id bigserial primary key, title text)`,
+        );
+        const result = await a.executeMutation(
+          `INSERT INTO test_no_returning (title) VALUES ('hello')`,
+        );
+        expect(result).toBe(1);
+      } finally {
+        await a.close();
+      }
+    });
+
     it("maxIdentifierLength returns a positive integer", async () => {
       const len = await adapter.maxIdentifierLength();
       expect(len).toBeGreaterThan(0);

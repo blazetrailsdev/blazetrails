@@ -34,12 +34,14 @@ Rails uses `include`/`extend` to mix module methods into a class. We
 reimplement both in `@blazetrails/activesupport`:
 
 - `include()` / `Included<>` — bulk-mix instance methods, Rails-style. Mirrors
-  Ruby's `include Mod`. See `activesupport/src/include.ts`, and
-  `relation.ts` + `relation/query-methods.ts` for real usage.
+  Ruby's `include Mod`. See `packages/activesupport/src/include.ts`, and
+  `packages/activerecord/src/relation.ts` +
+  `packages/activerecord/src/relation/query-methods.ts` for real usage.
 - `extend()` / `Extended<>` — same, but onto the class (static side).
 - `concern()` / `includeConcern()` — our port of `ActiveSupport::Concern`
-  (with `included`/`prepended` blocks and dependency resolution). See
-  `activesupport/src/concern.ts`.
+  (with `included`/`prepended` blocks and dependency resolution, matching
+  `activesupport/lib/active_support/concern.rb` in the Rails source). See
+  `packages/activesupport/src/concern.ts`.
 
 For **one-off static methods** where a full Concern is overkill, prefer
 **`this`-typed functions assigned directly to the class**:
@@ -78,6 +80,9 @@ When NOT to use this:
 - Prefer small, focused modules.
 - Do NOT use subagents unless explicitly requested.
 - Do use worktrees for any changes; leave the default worktree for the user.
+  Always create them with the `EnterWorktree` skill so they land under
+  `.claude/worktrees/` (gitignored) instead of scattered under `/tmp` or
+  beside the repo. Do NOT run `git worktree add` directly.
 - Open new PRs in **draft** status.
 - After opening a PR, run the `/link` skill with the PR number so webhook
   notifications (Copilot reviews, CI failures) are delivered to this pane.

@@ -56,7 +56,7 @@ describeIfPg("PostgreSQLAdapter", () => {
     it("encoding", async () => {
       const enc = await adapter.encoding();
       expect(typeof enc).toBe("string");
-      expect(enc).toMatch(/^UTF8|UTF-8|unicode$/i);
+      expect(enc).toMatch(/^(UTF8|UTF-8|unicode)$/i);
     });
 
     it("collation", async () => {

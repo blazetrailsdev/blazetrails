@@ -34,11 +34,17 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it("create database with collation and ctype", async () => {
       await adapter.exec(`DROP DATABASE IF EXISTS ${tmpDb2}`);
-      await adapter.createDatabase(tmpDb2, { encoding: "UTF8" });
-      const rows = await adapter.schemaQuery(`SELECT 1 AS ok FROM pg_database WHERE datname = $1`, [
-        tmpDb2,
-      ]);
-      expect(rows.length).toBe(1);
+      await adapter.createDatabase(tmpDb2, {
+        encoding: "UTF8",
+        collation: "en_US.utf8",
+        ctype: "en_US.utf8",
+      });
+      const rows = await adapter.schemaQuery(
+        `SELECT datcollate AS col, datctype AS ct FROM pg_database WHERE datname = $1`,
+        [tmpDb2],
+      );
+      expect(rows[0].col).toBe("en_US.utf8");
+      expect(rows[0].ct).toBe("en_US.utf8");
       await adapter.exec(`DROP DATABASE IF EXISTS ${tmpDb2}`);
     });
 

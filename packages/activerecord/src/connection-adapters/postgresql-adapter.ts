@@ -38,6 +38,7 @@ import { AbstractAdapter } from "./abstract-adapter.js";
 import { StatementPool as GenericStatementPool } from "./statement-pool.js";
 import { transactionIsolationLevels, typeCastedBinds } from "./abstract/database-statements.js";
 import { READ_QUERY } from "./postgresql/database-statements.js";
+import type { CreateDatabaseOptions } from "./postgresql/schema-statements.js";
 
 /**
  * PostgreSQL adapter — connects ActiveRecord to a real PostgreSQL database.
@@ -2482,18 +2483,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     }
   }
 
-  async createDatabase(
-    name: string,
-    options: {
-      encoding?: string;
-      collation?: string;
-      ctype?: string;
-      owner?: string;
-      template?: string;
-      tablespace?: string;
-      connectionLimit?: number;
-    } = {},
-  ): Promise<void> {
+  async createDatabase(name: string, options: CreateDatabaseOptions = {}): Promise<void> {
     const encoding = options.encoding ?? "utf8";
     let optionString = ` ENCODING = ${this.quoteLiteral(encoding)}`;
     if (options.collation) optionString += ` LC_COLLATE = ${this.quoteLiteral(options.collation)}`;
@@ -2504,7 +2494,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       optionString += ` TABLESPACE = ${this.quoteIdentifier(options.tablespace)}`;
     if (options.connectionLimit != null)
       optionString += ` CONNECTION LIMIT = ${options.connectionLimit}`;
-    await this.exec(`CREATE DATABASE ${this.quoteTableName(name)}${optionString}`);
+    await this.exec(`CREATE DATABASE ${this.quoteIdentifier(name)}${optionString}`);
   }
 
   // ---------------------------------------------------------------------------
@@ -2689,7 +2679,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     await this.exec(`DROP DATABASE IF EXISTS ${this.quoteIdentifier(name)}`);
   }
 
-  async recreateDatabase(name: string, options: Record<string, unknown> = {}): Promise<void> {
+  async recreateDatabase(name: string, options: CreateDatabaseOptions = {}): Promise<void> {
     await this.dropDatabase(name);
     await this.createDatabase(name, options);
   }
@@ -2707,6 +2697,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       options = last as { ifExists?: boolean; force?: "cascade" };
     } else {
       tableNames = args as string[];
+    }
+    if (tableNames.length === 0) {
+      throw new Error("dropTable requires at least one table name");
     }
     const ifExists = options.ifExists ? " IF EXISTS" : "";
     const cascade = options.force === "cascade" ? " CASCADE" : "";
@@ -2764,7 +2757,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
 
   async setSchemaSearchPath(searchPath: string | null): Promise<void> {
     if (searchPath == null) return;
-    await this.exec(`SET search_path TO ${searchPath}`);
+    await this.schemaQuery(`SELECT set_config('search_path', $1, false)`, [searchPath]);
   }
 
   async clientMinMessages(): Promise<string> {
@@ -2773,7 +2766,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   async setClientMinMessages(level: string): Promise<void> {
-    await this.exec(`SET client_min_messages TO '${level}'`);
+    await this.exec(`SET client_min_messages TO ${this.quoteLiteral(level)}`);
   }
 
   async tableComment(tableName: string): Promise<string | null> {
@@ -2843,7 +2836,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return (rows[0]?.seq as string | null) ?? null;
   }
 
-  async defaultSequenceName(tableName: string, pk = "id"): Promise<string | null> {
+  async defaultSequenceName(
+    tableName: string,
+    pk: string | string[] = "id",
+  ): Promise<string | null> {
     if (Array.isArray(pk)) return null;
     try {
       const result = await this.serialSequence(tableName, pk);

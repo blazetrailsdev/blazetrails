@@ -4,10 +4,20 @@
  * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::SchemaStatements
  */
 
+export interface CreateDatabaseOptions {
+  encoding?: string;
+  collation?: string;
+  ctype?: string;
+  owner?: string;
+  template?: string;
+  tablespace?: string;
+  connectionLimit?: number;
+}
+
 export interface SchemaStatements {
-  createDatabase(name: string, options?: Record<string, unknown>): Promise<void>;
+  createDatabase(name: string, options?: CreateDatabaseOptions): Promise<void>;
   dropDatabase(name: string): Promise<void>;
-  recreateDatabase(name: string, options?: Record<string, unknown>): Promise<void>;
+  recreateDatabase(name: string, options?: CreateDatabaseOptions): Promise<void>;
   createSchema(name: string, options?: { force?: boolean; ifNotExists?: boolean }): Promise<void>;
   dropSchema(name: string, options?: { ifExists?: boolean; cascade?: boolean }): Promise<void>;
   schemaExists(name: string): Promise<boolean>;
@@ -40,7 +50,7 @@ export interface SchemaStatements {
   columns(tableName: string): Promise<unknown[]>;
   columnDefinitions(tableName: string): Promise<unknown[]>;
   foreignKeys(tableName: string): Promise<unknown[]>;
-  defaultSequenceName(tableName: string, pk?: string): Promise<string | null>;
+  defaultSequenceName(tableName: string, pk?: string | string[]): Promise<string | null>;
   serialSequence(tableName: string, column: string): Promise<string | null>;
   setPkSequenceBang(tableName: string, value: number): Promise<void>;
   resetPkSequenceBang(

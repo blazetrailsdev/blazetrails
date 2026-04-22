@@ -6,6 +6,7 @@ import { Result } from "../result.js";
 import { HashLookupTypeMap } from "../type/hash-lookup-type-map.js";
 import { getDefaultTimezone } from "../type/internal/timezone.js";
 import { splitQuotedIdentifier, Utils } from "./postgresql/utils.js";
+import { CHECK_ALL_FOREIGN_KEYS_SQL } from "./postgresql/referential-integrity.js";
 import { Column } from "./postgresql/column.js";
 import { ExplainPrettyPrinter } from "./postgresql/explain-pretty-printer.js";
 import {
@@ -2199,6 +2200,18 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       binds,
     );
     return Number(rows[0].count) > 0;
+  }
+
+  // Mirrors: ReferentialIntegrity#check_all_foreign_keys_valid!
+  async checkAllForeignKeysValidBang(): Promise<void> {
+    await this.beginTransaction();
+    try {
+      await this.execute(CHECK_ALL_FOREIGN_KEYS_SQL);
+      await this.commit();
+    } catch (e) {
+      await this.rollback();
+      throw e;
+    }
   }
 
   createDatabase(

@@ -23,29 +23,35 @@ describeIfPg("PostgreSQLAdapter", () => {
   describe("PostgreSQLActiveSchemaTest", () => {
     it("create database with encoding", async () => {
       await adapter.exec(`DROP DATABASE IF EXISTS ${tmpDb1}`);
-      await adapter.createDatabase(tmpDb1, { encoding: "utf8" });
-      const rows = await adapter.schemaQuery(
-        `SELECT pg_encoding_to_char(encoding) AS enc FROM pg_database WHERE datname = $1`,
-        [tmpDb1],
-      );
-      expect(rows[0].enc).toMatch(/utf8|UTF8/i);
-      await adapter.exec(`DROP DATABASE IF EXISTS ${tmpDb1}`);
+      try {
+        await adapter.createDatabase(tmpDb1, { encoding: "utf8" });
+        const rows = await adapter.schemaQuery(
+          `SELECT pg_encoding_to_char(encoding) AS enc FROM pg_database WHERE datname = $1`,
+          [tmpDb1],
+        );
+        expect(rows[0].enc).toMatch(/utf8|UTF8/i);
+      } finally {
+        await adapter.exec(`DROP DATABASE IF EXISTS ${tmpDb1}`);
+      }
     });
 
     it("create database with collation and ctype", async () => {
       await adapter.exec(`DROP DATABASE IF EXISTS ${tmpDb2}`);
-      await adapter.createDatabase(tmpDb2, {
-        encoding: "UTF8",
-        collation: "en_US.utf8",
-        ctype: "en_US.utf8",
-      });
-      const rows = await adapter.schemaQuery(
-        `SELECT datcollate AS col, datctype AS ct FROM pg_database WHERE datname = $1`,
-        [tmpDb2],
-      );
-      expect(rows[0].col).toBe("en_US.utf8");
-      expect(rows[0].ct).toBe("en_US.utf8");
-      await adapter.exec(`DROP DATABASE IF EXISTS ${tmpDb2}`);
+      try {
+        await adapter.createDatabase(tmpDb2, {
+          encoding: "UTF8",
+          collation: "en_US.utf8",
+          ctype: "en_US.utf8",
+        });
+        const rows = await adapter.schemaQuery(
+          `SELECT datcollate AS col, datctype AS ct FROM pg_database WHERE datname = $1`,
+          [tmpDb2],
+        );
+        expect(rows[0].col).toBe("en_US.utf8");
+        expect(rows[0].ct).toBe("en_US.utf8");
+      } finally {
+        await adapter.exec(`DROP DATABASE IF EXISTS ${tmpDb2}`);
+      }
     });
 
     it("add index", async () => {

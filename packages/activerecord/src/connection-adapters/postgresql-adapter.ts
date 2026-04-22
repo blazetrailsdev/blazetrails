@@ -2493,7 +2493,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     if (options.tablespace)
       optionString += ` TABLESPACE = ${this.quoteIdentifier(options.tablespace)}`;
     if (options.connectionLimit != null)
-      optionString += ` CONNECTION LIMIT = ${options.connectionLimit}`;
+      optionString += ` CONNECTION LIMIT = ${Math.trunc(Number(options.connectionLimit))}`;
     await this.exec(`CREATE DATABASE ${this.quoteIdentifier(name)}${optionString}`);
   }
 

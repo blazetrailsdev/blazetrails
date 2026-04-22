@@ -2853,8 +2853,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       if (!result) return null;
       return Utils.extractSchemaQualifiedName(result).toString();
     } catch {
-      const { identifier } = Utils.extractSchemaQualifiedName(tableName);
-      return `${identifier ?? tableName}_${pk}_seq`;
+      return `${tableName}_${pk}_seq`;
     }
   }
 
@@ -2863,7 +2862,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     if (!result) return;
     const [, seq] = result;
     const seqName = `${seq.schema}.${seq.name}`;
-    await this.schemaQuery(`SELECT setval($1::regclass, $2)`, [seqName, value]);
+    await this.schemaQuery(`SELECT setval($1::regclass, $2)`, [
+      this.quoteTableName(seqName),
+      value,
+    ]);
   }
 
   async resetPkSequenceBang(
@@ -2892,11 +2894,14 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
           : `SELECT min_value AS minvalue FROM ${quotedSeq}`,
       );
       await this.schemaQuery(`SELECT setval($1::regclass, $2, false)`, [
-        sequence,
+        this.quoteTableName(sequence),
         minRows[0]?.minvalue ?? 1,
       ]);
     } else {
-      await this.schemaQuery(`SELECT setval($1::regclass, $2, true)`, [sequence, maxVal]);
+      await this.schemaQuery(`SELECT setval($1::regclass, $2, true)`, [
+        this.quoteTableName(sequence),
+        maxVal,
+      ]);
     }
   }
 

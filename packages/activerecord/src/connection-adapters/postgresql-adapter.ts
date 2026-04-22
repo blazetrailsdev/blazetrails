@@ -2791,7 +2791,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       name?: string;
       onDelete?: ReferentialAction;
       onUpdate?: ReferentialAction;
-      deferrable?: boolean | "immediate" | "deferred";
+      deferrable?: "immediate" | "deferred";
       validate?: boolean;
     } = {},
   ): Promise<void> {
@@ -2811,8 +2811,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     let sql = `ALTER TABLE ${qualifiedFrom} ADD CONSTRAINT ${qi(name)} FOREIGN KEY (${qi(column)}) REFERENCES ${qualifiedTo} (${qi(pk)})`;
     if (options.onDelete) sql += ` ${sc.actionSql("DELETE", options.onDelete)}`;
     if (options.onUpdate) sql += ` ${sc.actionSql("UPDATE", options.onUpdate)}`;
-    if (options.validate === false) sql += " NOT VALID";
     sql += this.deferrable(options.deferrable);
+    if (options.validate === false) sql += " NOT VALID";
 
     await this.exec(sql);
   }
@@ -3360,7 +3360,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     const name = this.quoteIdentifier(opts.name as string);
     const using = opts.using ? ` USING ${opts.using}` : "";
     const where = opts.where ? ` WHERE (${opts.where})` : "";
-    const deferParts = this.deferrable(opts.deferrable as ExclusionConstraintOptions["deferrable"]);
+    const deferParts = this.deferrable(opts.deferrable as "immediate" | "deferred" | undefined);
     await this.exec(
       `ALTER TABLE ${this.quoteTableName(tableName)} ADD CONSTRAINT ${name} EXCLUDE${using} (${expression})${where}${deferParts}`,
     );
@@ -3379,6 +3379,11 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       typeof expressionOrOptions === "object" && expressionOrOptions !== null
         ? expressionOrOptions
         : options;
+    if (!expression && !opts.name) {
+      throw new Error(
+        "Either expression or `name` option must be provided for removeExclusionConstraint.",
+      );
+    }
     const excl = this.exclusionConstraintForBang(tableName, expression ?? null, opts);
     await this.exec(
       `ALTER TABLE ${this.quoteTableName(tableName)} DROP CONSTRAINT ${this.quoteIdentifier(excl.name!)}`,
@@ -3392,7 +3397,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   ): Record<string, unknown> {
     this.assertValidDeferrable(options.deferrable);
     if (columnName && options.usingIndex) {
-      throw new Error("Cannot specify both column_name and :usingIndex options.");
+      throw new Error("Cannot specify both `columnName` and `usingIndex` options.");
     }
     const opts = { ...options };
     if (!opts.name) {
@@ -3411,7 +3416,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     }
     const opts = this.uniqueConstraintOptions(tableName, columnName, options);
     const name = this.quoteIdentifier(opts.name as string);
-    const deferParts = this.deferrable(opts.deferrable as UniqueConstraintOptions["deferrable"]);
+    const deferParts = this.deferrable(opts.deferrable as "immediate" | "deferred" | undefined);
     let constraintSql: string;
     if (opts.usingIndex) {
       constraintSql = `UNIQUE USING INDEX ${this.quoteIdentifier(opts.usingIndex as string)}`;
@@ -3443,6 +3448,11 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       !Array.isArray(columnNameOrOptions)
         ? columnNameOrOptions
         : options;
+    if (!columnName && !opts.name && !opts.usingIndex) {
+      throw new Error(
+        "Either `columnName`, `name`, or `usingIndex` option must be provided for removeUniqueConstraint.",
+      );
+    }
     const uniq = this.uniqueConstraintForBang(tableName, columnName, opts);
     await this.exec(
       `ALTER TABLE ${this.quoteTableName(tableName)} DROP CONSTRAINT ${this.quoteIdentifier(uniq.name!)}`,
@@ -3524,9 +3534,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return new UniqueConstraintDefinition(tableName, columnName ?? [], { ...options, name });
   }
 
-  private deferrable(deferrable: boolean | "immediate" | "deferred" | undefined): string {
+  private deferrable(deferrable: "immediate" | "deferred" | undefined): string {
     if (!deferrable) return "";
-    if (deferrable === true) return " DEFERRABLE";
     return ` DEFERRABLE INITIALLY ${deferrable.toUpperCase()}`;
   }
 

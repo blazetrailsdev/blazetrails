@@ -138,17 +138,13 @@ export interface SchemaStatements {
       nullsNotDistinct?: boolean;
       include?: string[];
     },
-  ): Promise<void>;
+  ): Promise<string>;
   buildCreateIndexDefinition(
     tableName: string,
     columnName: string | string[],
     options?: Record<string, unknown>,
   ): unknown;
-  removeIndex(
-    tableName: string,
-    columnNameOrOptions?: string | string[] | { name: string; algorithm?: string },
-    options?: Record<string, unknown>,
-  ): Promise<void>;
+  removeIndex(tableName: string, options: { name: string; algorithm?: string }): Promise<void>;
   renameIndex(tableName: string, oldName: string, newName: string): Promise<void>;
   indexName(tableName: string, options: { column?: string | string[] }): string;
   addForeignKey(
@@ -160,7 +156,7 @@ export interface SchemaStatements {
       name?: string;
       onDelete?: "cascade" | "nullify" | "restrict" | "no_action" | "set_default";
       onUpdate?: "cascade" | "nullify" | "restrict" | "no_action" | "set_default";
-      deferrable?: boolean | "immediate" | "deferred";
+      deferrable?: "immediate" | "deferred";
       validate?: boolean;
     },
   ): Promise<void>;
@@ -172,7 +168,7 @@ export interface SchemaStatements {
       name?: string;
       using?: string;
       where?: string;
-      deferrable?: boolean | "immediate" | "deferred";
+      deferrable?: "immediate" | "deferred";
     },
   ): Promise<void>;
   exclusionConstraintOptions(
@@ -190,7 +186,7 @@ export interface SchemaStatements {
     columnName?: string | string[] | null,
     options?: {
       name?: string;
-      deferrable?: boolean | "immediate" | "deferred";
+      deferrable?: "immediate" | "deferred";
       usingIndex?: string;
       nullsNotDistinct?: boolean;
     },

@@ -1,6 +1,7 @@
 /**
  * Mirrors Rails activerecord/test/cases/adapters/postgresql/postgresql_adapter_test.rb
  */
+import pg from "pg";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { describeIfPg, PostgreSQLAdapter, PG_TEST_URL } from "./test-helper.js";
 import {
@@ -957,6 +958,82 @@ describeIfPg("PostgreSQLAdapter", () => {
       } finally {
         await adapter.commit();
       }
+    });
+  });
+
+  // ── Top-level adapter methods (PR C) ──────────────────────────────
+  describe("PostgreSQLAdapter top-level methods", () => {
+    it("nativeDatabaseTypes includes expected pg types", () => {
+      const types = PostgreSQLAdapter.nativeDatabaseTypes();
+      expect(types.string).toEqual({ name: "character varying" });
+      expect(types.binary).toEqual({ name: "bytea" });
+      expect(types.primaryKey).toBe("bigserial primary key");
+      expect(types.datetime).toBeDefined();
+    });
+
+    it("nativeDatabaseTypes datetime resolves from datetimeType", () => {
+      const original = PostgreSQLAdapter.datetimeType;
+      try {
+        PostgreSQLAdapter.datetimeType = "timestamptz";
+        const types = PostgreSQLAdapter.nativeDatabaseTypes();
+        expect(types.datetime).toEqual({ name: "timestamptz" });
+      } finally {
+        PostgreSQLAdapter.datetimeType = original;
+      }
+    });
+
+    it("isUseInsertReturning defaults to true", () => {
+      expect(adapter.isUseInsertReturning()).toBe(true);
+    });
+
+    it("isUseInsertReturning reflects insertReturning config", () => {
+      const a = new PostgreSQLAdapter({
+        connectionString: process.env.PG_TEST_URL!,
+        insertReturning: false,
+      });
+      expect(a.isUseInsertReturning()).toBe(false);
+    });
+
+    it("maxIdentifierLength returns a positive integer", async () => {
+      const len = await adapter.maxIdentifierLength();
+      expect(len).toBeGreaterThan(0);
+      expect(Number.isInteger(len)).toBe(true);
+    });
+
+    it("maxIdentifierLength is cached after first call", async () => {
+      const first = await adapter.maxIdentifierLength();
+      const second = await adapter.maxIdentifierLength();
+      expect(first).toBe(second);
+    });
+
+    it("enumTypes returns enum types from the database", async () => {
+      await adapter.execute(`CREATE TYPE pr_c_mood AS ENUM ('happy', 'sad')`);
+      try {
+        await adapter.loadAdditionalTypes();
+        const types = await adapter.enumTypes();
+        const entry = types.find(([name]) => name === "pr_c_mood");
+        expect(entry).toBeDefined();
+        expect(entry![1]).toContain("happy");
+        expect(entry![1]).toContain("sad");
+      } finally {
+        await adapter.execute(`DROP TYPE pr_c_mood`);
+      }
+    });
+
+    it("setStandardConformingStrings executes without error", async () => {
+      await expect(adapter.setStandardConformingStrings()).resolves.toBeUndefined();
+    });
+
+    it("sessionAuth changes the session authorization", async () => {
+      await expect(adapter.sessionAuth("postgres")).resolves.toBeUndefined();
+      await adapter.sessionAuth("DEFAULT");
+    });
+
+    it("newClient returns a pg.Client instance", () => {
+      const client = PostgreSQLAdapter.newClient({
+        connectionString: process.env.PG_TEST_URL,
+      });
+      expect(client).toBeInstanceOf(pg.Client);
     });
   });
 });

@@ -63,12 +63,68 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return this._driverPool != null;
   }
 
+  // Mirrors: PostgreSQLAdapter::NATIVE_DATABASE_TYPES (postgresql_adapter.rb:134)
+  static readonly NATIVE_DATABASE_TYPES: Record<
+    string,
+    string | { name?: string; limit?: number }
+  > = {
+    primaryKey: "bigserial primary key",
+    string: { name: "character varying" },
+    text: { name: "text" },
+    integer: { name: "integer", limit: 4 },
+    bigint: { name: "bigint" },
+    float: { name: "float" },
+    decimal: { name: "decimal" },
+    timestamp: { name: "timestamp" },
+    timestamptz: { name: "timestamptz" },
+    time: { name: "time" },
+    date: { name: "date" },
+    daterange: { name: "daterange" },
+    numrange: { name: "numrange" },
+    tsrange: { name: "tsrange" },
+    tstzrange: { name: "tstzrange" },
+    int4range: { name: "int4range" },
+    int8range: { name: "int8range" },
+    binary: { name: "bytea" },
+    boolean: { name: "boolean" },
+    xml: { name: "xml" },
+    tsvector: { name: "tsvector" },
+    hstore: { name: "hstore" },
+    inet: { name: "inet" },
+    cidr: { name: "cidr" },
+    macaddr: { name: "macaddr" },
+    uuid: { name: "uuid" },
+    json: { name: "json" },
+    jsonb: { name: "jsonb" },
+    ltree: { name: "ltree" },
+    citext: { name: "citext" },
+    point: { name: "point" },
+    line: { name: "line" },
+    lseg: { name: "lseg" },
+    box: { name: "box" },
+    path: { name: "path" },
+    polygon: { name: "polygon" },
+    circle: { name: "circle" },
+    bit: { name: "bit" },
+    bitVarying: { name: "bit varying" },
+    money: { name: "money" },
+    interval: { name: "interval" },
+    oid: { name: "oid" },
+    enum: {},
+  };
+
+  // Mirrors: PostgreSQLAdapter.datetime_type class_attribute (postgresql_adapter.rb:123)
+  // Default :timestamp; can be changed to :timestamptz to store timezone info.
+  static datetimeType: "timestamp" | "timestamptz" = "timestamp";
+
   private static _spCounter = 0;
   private _driverPool: pg.Pool | null;
   private _client: pg.PoolClient | null = null;
   private _inTransaction = false;
   private _databaseVersion: number | null = null;
   private _typeMap: HashLookupTypeMap | null = null;
+  private _maxIdentifierLength: number | null = null;
+  private _useInsertReturning = true;
   // Per-pg.Client statement pool. PG's prepared statements are
   // session-scoped, so each physical client gets its own pool with
   // its own counter (matching Rails' `PostgreSQL::StatementPool`).
@@ -153,9 +209,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     // `pg.Pool` is constructed — otherwise a throw here would leave
     // a live driver pool with no cleanup path on the half-built
     // adapter.
-    const { statementLimit, preparedStatements, ...pgConfig } = config;
+    const { statementLimit, preparedStatements, insertReturning, ...pgConfig } = config;
     if (statementLimit !== undefined) this.statementLimit = statementLimit;
     if (preparedStatements !== undefined) this.preparedStatements = preparedStatements;
+    if (insertReturning !== undefined) this._useInsertReturning = insertReturning;
     this._driverPool = new pg.Pool(pgConfig);
   }
 
@@ -1129,6 +1186,84 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     if (options.length === 0) return "EXPLAIN";
     const validated = this._validateExplainOptions(options);
     return `EXPLAIN (${validated.join(", ")})`;
+  }
+
+  // Mirrors: PostgreSQLAdapter.native_database_types (postgresql_adapter.rb:404)
+  // The datetime entry is resolved dynamically from datetimeType, matching Rails'
+  // `types[:datetime] = types[datetime_type]`.
+  static nativeDatabaseTypes(): Record<string, string | { name?: string; limit?: number }> {
+    const types = { ...this.NATIVE_DATABASE_TYPES };
+    types["datetime"] = types[PostgreSQLAdapter.datetimeType] ?? { name: "timestamp" };
+    return types;
+  }
+
+  // Mirrors: PostgreSQLAdapter#native_database_types (postgresql_adapter.rb:400)
+  nativeDatabaseTypes(): Record<string, string | { name?: string; limit?: number }> {
+    return PostgreSQLAdapter.nativeDatabaseTypes();
+  }
+
+  // Mirrors: PostgreSQLAdapter#set_standard_conforming_strings (postgresql_adapter.rb:412)
+  async setStandardConformingStrings(): Promise<void> {
+    await this.execute("SET standard_conforming_strings = on");
+  }
+
+  // Mirrors: PostgreSQLAdapter#enum_types (postgresql_adapter.rb:518)
+  // Returns an array of [fullName, values] pairs for all enum types in the current schema.
+  async enumTypes(): Promise<[string, string[]][]> {
+    const query = `
+      SELECT
+        type.typname AS name,
+        type.OID AS oid,
+        n.nspname AS schema,
+        array_agg(enum.enumlabel ORDER BY enum.enumsortorder) AS value
+      FROM pg_enum AS enum
+      JOIN pg_type AS type ON (type.oid = enum.enumtypid)
+      JOIN pg_namespace n ON type.typnamespace = n.oid
+      WHERE n.nspname = ANY (current_schemas(false))
+      GROUP BY type.OID, n.nspname, type.typname
+    `;
+    const currentSchema = await this.currentSchema();
+    const rows = (await this.schemaQuery(query)) as Array<{
+      name: string;
+      schema: string;
+      value: string[];
+    }>;
+    return rows.map((row) => {
+      const schema = row.schema === currentSchema ? null : row.schema;
+      const fullName = [schema, row.name].filter(Boolean).join(".");
+      return [fullName, row.value] as [string, string[]];
+    });
+  }
+
+  // Mirrors: PostgreSQLAdapter#max_identifier_length (postgresql_adapter.rb:620)
+  async maxIdentifierLength(): Promise<number> {
+    if (this._maxIdentifierLength == null) {
+      const rows = (await this.schemaQuery("SHOW max_identifier_length")) as Array<{
+        max_identifier_length: string;
+      }>;
+      this._maxIdentifierLength = parseInt(rows[0]?.max_identifier_length ?? "63", 10);
+    }
+    return this._maxIdentifierLength;
+  }
+
+  // Mirrors: PostgreSQLAdapter#session_auth= (postgresql_adapter.rb:625)
+  // Returns a Promise so callers can await the SET SESSION AUTHORIZATION round-trip.
+  async sessionAuth(user: string): Promise<void> {
+    this.clearCacheBang();
+    await this.execute(`SET SESSION AUTHORIZATION ${user}`);
+  }
+
+  // Mirrors: PostgreSQLAdapter#use_insert_returning? (postgresql_adapter.rb:630)
+  isUseInsertReturning(): boolean {
+    return this._useInsertReturning;
+  }
+
+  // Mirrors: PostgreSQLAdapter.new_client (postgresql_adapter.rb:57)
+  // Builds a single pg.Client from connection params — Rails uses a single connection
+  // per adapter instance; our adapter uses pg.Pool, but this static factory mirrors
+  // the Rails class-method surface for api:compare completeness.
+  static newClient(config: pg.ClientConfig): pg.Client {
+    return new pg.Client(config);
   }
 
   /**

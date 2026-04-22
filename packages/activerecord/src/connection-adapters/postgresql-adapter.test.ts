@@ -646,7 +646,7 @@ describeIfPg("PostgreSQLAdapter", () => {
       const constraints = await adapter.checkConstraints("check_test");
       expect(constraints).toHaveLength(1);
       expect(constraints[0].name).toBe("chk_age");
-      expect(constraints[0].expression).toContain("age > 0");
+      expect(constraints[0].expression).toBe("age > 0");
       expect(constraints[0].validate).toBe(true);
     });
 
@@ -744,10 +744,7 @@ describeIfPg("PostgreSQLAdapter", () => {
 
   describe("addExclusionConstraint / removeExclusionConstraint", () => {
     beforeEach(async () => {
-      await adapter.exec(`CREATE EXTENSION IF NOT EXISTS btree_gist`);
-      await adapter.exec(
-        `CREATE TABLE "excl_test" ("id" SERIAL PRIMARY KEY, "room" TEXT, "during" int4range)`,
-      );
+      await adapter.exec(`CREATE TABLE "excl_test" ("id" SERIAL PRIMARY KEY, "during" tsrange)`);
     });
 
     afterEach(async () => {
@@ -755,18 +752,18 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
 
     it("adds and introspects an exclusion constraint", async () => {
-      await adapter.addExclusionConstraint("excl_test", `"room" WITH =, "during" WITH &&`, {
-        name: "excl_room_during",
+      await adapter.addExclusionConstraint("excl_test", `"during" WITH &&`, {
+        name: "excl_during",
         using: "gist",
       });
       const rows = await adapter.execute(
-        `SELECT conname FROM pg_constraint WHERE conname = 'excl_room_during' AND contype = 'x'`,
+        `SELECT conname FROM pg_constraint WHERE conname = 'excl_during' AND contype = 'x'`,
       );
       expect(rows as any[]).toHaveLength(1);
     });
 
-    it("removes an exclusion constraint by name", async () => {
-      await adapter.addExclusionConstraint("excl_test", `"room" WITH =, "during" WITH &&`, {
+    it("removes an exclusion constraint by name via options object", async () => {
+      await adapter.addExclusionConstraint("excl_test", `"during" WITH &&`, {
         name: "excl_to_remove",
         using: "gist",
       });
@@ -775,6 +772,26 @@ describeIfPg("PostgreSQLAdapter", () => {
         `SELECT conname FROM pg_constraint WHERE conname = 'excl_to_remove'`,
       );
       expect(rows as any[]).toHaveLength(0);
+    });
+
+    it("removes an exclusion constraint by expression string", async () => {
+      await adapter.addExclusionConstraint("excl_test", `"during" WITH &&`, {
+        name: "excl_by_expr",
+        using: "gist",
+      });
+      await adapter.removeExclusionConstraint("excl_test", `"during" WITH &&`, {
+        name: "excl_by_expr",
+      });
+      const rows = await adapter.execute(
+        `SELECT conname FROM pg_constraint WHERE conname = 'excl_by_expr'`,
+      );
+      expect(rows as any[]).toHaveLength(0);
+    });
+
+    it("throws when neither expression nor name provided", async () => {
+      await expect(adapter.removeExclusionConstraint("excl_test")).rejects.toThrow(
+        /expression.*name/,
+      );
     });
   });
 

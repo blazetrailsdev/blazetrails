@@ -4,6 +4,8 @@
  * Mirrors: ActiveRecord::ConnectionAdapters::PostgreSQL::SchemaStatements
  */
 
+import type { CheckConstraintDefinition } from "../abstract/schema-definitions.js";
+
 export interface PgIndexDefinition {
   table: string;
   name: string;
@@ -160,7 +162,7 @@ export interface SchemaStatements {
       validate?: boolean;
     },
   ): Promise<void>;
-  checkConstraints(tableName: string): Promise<unknown[]>;
+  checkConstraints(tableName: string): Promise<CheckConstraintDefinition[]>;
   addExclusionConstraint(
     tableName: string,
     expression: string,

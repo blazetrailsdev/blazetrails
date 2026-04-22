@@ -141,8 +141,12 @@ export class UniqueConstraintDefinition {
       const thatCol = (Array.isArray(column) ? column : [column]).map(String);
       if (thisCol.join(",") !== thatCol.join(",")) return false;
     }
+    // Mirrors Rails: options.slice(*self.options.keys).all? { |k, v| self.options[k].to_s == v.to_s }
+    // Only check keys that exist in self.options; ignore unknown keys (they aren't stored).
+    const storedOpts = this.options as Record<string, unknown>;
     for (const [k, v] of Object.entries(rest)) {
-      if (String((this.options as Record<string, unknown>)[k]) !== String(v)) return false;
+      if (!(k in storedOpts)) return false;
+      if (String(storedOpts[k]) !== String(v)) return false;
     }
     return true;
   }

@@ -29,17 +29,17 @@ describeIfPg("PostgreSQLAdapter", () => {
     it("all foreign keys valid having foreign keys in multiple schemas", async () => {
       await adapter.execute(`DROP SCHEMA IF EXISTS referential_integrity_test_schema CASCADE`);
       await adapter.execute(`CREATE SCHEMA referential_integrity_test_schema`);
-      await adapter.execute(`
-        CREATE TABLE referential_integrity_test_schema.nodes (
-          id        BIGSERIAL,
-          parent_id BIGINT NOT NULL,
-          PRIMARY KEY (id),
-          CONSTRAINT fk_parent_node FOREIGN KEY (parent_id)
-            REFERENCES referential_integrity_test_schema.nodes (id)
-        )
-      `);
-
       try {
+        await adapter.execute(`
+          CREATE TABLE referential_integrity_test_schema.nodes (
+            id        BIGSERIAL,
+            parent_id BIGINT NOT NULL,
+            PRIMARY KEY (id),
+            CONSTRAINT fk_parent_node FOREIGN KEY (parent_id)
+              REFERENCES referential_integrity_test_schema.nodes (id)
+          )
+        `);
+
         const rows = await adapter.execute(`
           SELECT count(*) AS count
             FROM information_schema.table_constraints
@@ -58,17 +58,17 @@ describeIfPg("PostgreSQLAdapter", () => {
     it("check all foreign keys valid raises on violated constraint", async () => {
       await adapter.execute(`DROP SCHEMA IF EXISTS referential_integrity_violation_test CASCADE`);
       await adapter.execute(`CREATE SCHEMA referential_integrity_violation_test`);
-      await adapter.execute(`
-        CREATE TABLE referential_integrity_violation_test.parents (id BIGSERIAL PRIMARY KEY)
-      `);
-      await adapter.execute(`
-        CREATE TABLE referential_integrity_violation_test.children (
-          id        BIGSERIAL PRIMARY KEY,
-          parent_id BIGINT NOT NULL
-        )
-      `);
-
       try {
+        await adapter.execute(`
+          CREATE TABLE referential_integrity_violation_test.parents (id BIGSERIAL PRIMARY KEY)
+        `);
+        await adapter.execute(`
+          CREATE TABLE referential_integrity_violation_test.children (
+            id        BIGSERIAL PRIMARY KEY,
+            parent_id BIGINT NOT NULL
+          )
+        `);
+
         // Insert a child row that references a non-existent parent.
         await adapter.execute(
           `INSERT INTO referential_integrity_violation_test.children (parent_id) VALUES (9999)`,
@@ -103,11 +103,11 @@ describeIfPg("PostgreSQLAdapter", () => {
     it("check all foreign keys valid inside a transaction uses savepoint", async () => {
       await adapter.execute(`DROP SCHEMA IF EXISTS referential_integrity_tx_test CASCADE`);
       await adapter.execute(`CREATE SCHEMA referential_integrity_tx_test`);
-      await adapter.execute(
-        `CREATE TABLE referential_integrity_tx_test.nodes (id BIGSERIAL PRIMARY KEY)`,
-      );
-
       try {
+        await adapter.execute(
+          `CREATE TABLE referential_integrity_tx_test.nodes (id BIGSERIAL PRIMARY KEY)`,
+        );
+
         await adapter.beginTransaction();
         try {
           // Inside a transaction the method uses a SAVEPOINT, so the

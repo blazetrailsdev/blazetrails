@@ -3460,9 +3460,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   indexName(tableName: string, options: { column?: string | string[] }): string {
-    const { table } = this.parseSchemaQualifiedName(tableName);
+    const normalizedTableName = tableName.replace(/[."]/g, "_");
     const cols = Array.isArray(options.column) ? options.column : [options.column ?? ""];
-    return `index_${table}_on_${cols.join("_and_")}`;
+    return `index_${normalizedTableName}_on_${cols.join("_and_")}`;
   }
 
   addIndexOptions(

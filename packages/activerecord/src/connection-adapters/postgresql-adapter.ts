@@ -2203,14 +2203,29 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   // Mirrors: ReferentialIntegrity#check_all_foreign_keys_valid!
+  // Rails uses `transaction(requires_new: true)` — a savepoint when already
+  // inside a transaction, or a fresh BEGIN otherwise.
   async checkAllForeignKeysValidBang(): Promise<void> {
-    await this.beginTransaction();
-    try {
-      await this.execute(CHECK_ALL_FOREIGN_KEYS_SQL);
-      await this.commit();
-    } catch (e) {
-      await this.rollback();
-      throw e;
+    if (this.inTransaction) {
+      const sp = "check_all_foreign_keys";
+      await this.createSavepoint(sp);
+      try {
+        await this.execute(CHECK_ALL_FOREIGN_KEYS_SQL);
+        await this.releaseSavepoint(sp);
+      } catch (e) {
+        await this.rollbackToSavepoint(sp);
+        await this.releaseSavepoint(sp).catch(() => {});
+        throw e;
+      }
+    } else {
+      await this.beginTransaction();
+      try {
+        await this.execute(CHECK_ALL_FOREIGN_KEYS_SQL);
+        await this.commit();
+      } catch (e) {
+        await this.rollback();
+        throw e;
+      }
     }
   }
 

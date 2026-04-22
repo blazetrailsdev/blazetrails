@@ -14,7 +14,6 @@ export class Column extends BaseColumn {
   readonly array: boolean;
   readonly identity: string | null;
   readonly generated: string | null;
-  readonly enum: boolean;
 
   constructor(
     name: string,
@@ -29,7 +28,6 @@ export class Column extends BaseColumn {
       array?: boolean;
       identity?: string | null;
       generated?: string | null;
-      enum?: boolean;
     } = {},
   ) {
     const meta = new SqlTypeMetadata({
@@ -44,13 +42,15 @@ export class Column extends BaseColumn {
     this.serial = options.serial ?? false;
     this.oid = sqlTypeMetadata.oid ?? null;
     this.fmod = sqlTypeMetadata.fmod ?? null;
-    this.array = options.array ?? this.sqlType?.endsWith("[]") ?? false;
+    // Use the raw sqlTypeMetadata.sqlType (not `this.sqlType`) so the check
+    // runs against the unstripped string — our sqlType getter strips "[]".
+    this.array = options.array ?? sqlTypeMetadata.sqlType?.endsWith("[]") ?? false;
     this.identity = options.identity ?? null;
     this.generated = options.generated ?? null;
-    this.enum = options.enum ?? false;
   }
 
-  // Mirrors: Column#sql_type — strips array suffix, returning base type name
+  // Mirrors: Column#sql_type — strips the array suffix so callers get the
+  // base type name; the array dimension is captured by `this.array`.
   override get sqlType(): string | null {
     const raw = super.sqlType;
     return raw?.endsWith("[]") ? raw.slice(0, -2) : (raw ?? null);
@@ -67,7 +67,7 @@ export class Column extends BaseColumn {
     );
   }
 
-  // Mirrors: Column#identity?
+  // Mirrors: Column#identity? — truthy when attidentity is "a" or "d"
   get isIdentity(): boolean {
     return this.identity !== null && this.identity !== "";
   }
@@ -77,18 +77,18 @@ export class Column extends BaseColumn {
     return this.isSerial || this.isIdentity;
   }
 
-  // Mirrors: Column#virtual?
+  // Mirrors: Column#virtual? — true for any generated (stored) column
   override isVirtual(): boolean {
     return this.generated !== null && this.generated !== "";
   }
 
-  // Mirrors: Column#has_default? — identity columns always have an implicit default; virtual columns have none
+  // Mirrors: Column#has_default? — virtual columns never have a user-visible default
   override get hasDefault(): boolean {
     return super.hasDefault && !this.isVirtual();
   }
 
-  // Mirrors: Column#enum?
+  // Mirrors: Column#enum? — true when the OID type is a user-defined pg enum
   get isEnum(): boolean {
-    return this.enum;
+    return this.sqlTypeMetadata?.type === "enum";
   }
 }

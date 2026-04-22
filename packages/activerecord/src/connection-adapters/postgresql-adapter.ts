@@ -1,7 +1,7 @@
 import pg from "pg";
 import { type Type, ValueType } from "@blazetrails/activemodel";
 import { singularize, underscore, Notifications } from "@blazetrails/activesupport";
-import { Visitors } from "@blazetrails/arel";
+import { sql as arelSql, Nodes, Visitors } from "@blazetrails/arel";
 import { Result } from "../result.js";
 import { HashLookupTypeMap } from "../type/hash-lookup-type-map.js";
 import { getDefaultTimezone } from "../type/internal/timezone.js";
@@ -32,7 +32,8 @@ import {
 } from "../errors.js";
 import { AbstractAdapter } from "./abstract-adapter.js";
 import { StatementPool as GenericStatementPool } from "./statement-pool.js";
-import { typeCastedBinds } from "./abstract/database-statements.js";
+import { transactionIsolationLevels, typeCastedBinds } from "./abstract/database-statements.js";
+import { READ_QUERY } from "./postgresql/database-statements.js";
 
 /**
  * PostgreSQL adapter — connects ActiveRecord to a real PostgreSQL database.
@@ -909,6 +910,49 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
 
   async rollbackDbTransaction(): Promise<void> {
     return this.rollback();
+  }
+
+  // Mirrors: DatabaseStatements#exec_rollback_db_transaction (database_statements.rb:78)
+  async execRollbackDbTransaction(): Promise<void> {
+    return this.rollback();
+  }
+
+  // Mirrors: DatabaseStatements#exec_restart_db_transaction (database_statements.rb:83)
+  async execRestartDbTransaction(): Promise<void> {
+    await this.execute("ROLLBACK AND CHAIN");
+  }
+
+  // Mirrors: DatabaseStatements#begin_isolated_db_transaction (database_statements.rb:68)
+  async beginIsolatedDbTransaction(isolation: string): Promise<void> {
+    const levels = transactionIsolationLevels();
+    const level = levels[isolation];
+    if (!level) throw new Error(`Unknown isolation level: ${isolation}`);
+    await this.execute(`BEGIN ISOLATION LEVEL ${level}`);
+    this._inTransaction = true;
+  }
+
+  // Mirrors: DatabaseStatements#write_query? (database_statements.rb:24)
+  override isWriteQuery(sql: string): boolean {
+    return !READ_QUERY.test(sql);
+  }
+
+  // Mirrors: DatabaseStatements#high_precision_current_timestamp (database_statements.rb:92)
+  // Rails: HIGH_PRECISION_CURRENT_TIMESTAMP = Arel.sql("CURRENT_TIMESTAMP")
+  highPrecisionCurrentTimestamp(): Nodes.SqlLiteral {
+    return arelSql("CURRENT_TIMESTAMP");
+  }
+
+  // Mirrors: DatabaseStatements#set_constraints (database_statements.rb:110)
+  async setConstraints(
+    deferred: "deferred" | "immediate",
+    ...constraints: string[]
+  ): Promise<void> {
+    if (deferred !== "deferred" && deferred !== "immediate") {
+      throw new Error(`deferred must be "deferred" or "immediate"`);
+    }
+    const list =
+      constraints.length === 0 ? "ALL" : constraints.map((c) => this.quoteTableName(c)).join(", ");
+    await this.execute(`SET CONSTRAINTS ${list} ${deferred.toUpperCase()}`);
   }
 
   /**

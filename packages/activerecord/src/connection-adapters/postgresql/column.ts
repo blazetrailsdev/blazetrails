@@ -56,8 +56,10 @@ export class Column extends BaseColumn {
     return raw?.endsWith("[]") ? raw.slice(0, -2) : (raw ?? null);
   }
 
+  // Return the full SQL type string (including "[]" for arrays) — callers
+  // expecting the base type without the array suffix should use sqlType.
   override get type(): string {
-    return this.sqlType ?? "";
+    return (super.type as string) ?? "";
   }
 
   get isSerial(): boolean {

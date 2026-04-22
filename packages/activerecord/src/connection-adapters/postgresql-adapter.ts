@@ -2280,7 +2280,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       "to" in (defaultOrChanges as object)
         ? (defaultOrChanges as { from: unknown; to: unknown }).to
         : defaultOrChanges;
-    if (defaultValue === null) {
+    if (defaultValue == null) {
       await this.exec(`ALTER TABLE ${quotedTable} ALTER COLUMN ${quotedCol} DROP DEFAULT`);
     } else {
       const col = (await this.columns(tableName)).find((c) => (c as Column).name === columnName);
@@ -2305,7 +2305,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   ): Promise<void> {
     const quotedTable = this.quoteTableName(tableName);
     const quotedCol = this.quoteIdentifier(columnName);
-    if (!nullable && defaultValue !== null) {
+    if (!nullable && defaultValue != null) {
       const col = (await this.columns(tableName)).find((c) => (c as Column).name === columnName);
       const clause = pgQuoteDefaultExpression(
         defaultValue,
@@ -2355,7 +2355,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       case "binary":
         if (limit != null && (limit < 0 || limit > 0x3fffffff)) {
           throw new Error(
-            `No binary type has byte size ${limit}. The limit on binary can be at most 1GB - 1byte.`,
+            `No binary type has byte size ${limit}. The limit on binary can be at most 1GB - 1 byte.`,
           );
         }
         sql = "bytea";
@@ -2363,7 +2363,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       case "text":
         if (limit != null && (limit < 0 || limit > 0x3fffffff)) {
           throw new Error(
-            `No text type has byte size ${limit}. The limit on text can be at most 1GB - 1byte.`,
+            `No text type has byte size ${limit}. The limit on text can be at most 1GB - 1 byte.`,
           );
         }
         sql = "text";
@@ -2421,9 +2421,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
 
   sequenceNameFromParts(tableName: string, columnName: string, suffix: string): string {
     const maxLen = 63;
-    let overLength = tableName.length + columnName.length + suffix.length + 2 - maxLen;
+    const { table: unqualifiedTable } = this.parseSchemaQualifiedName(tableName);
+    let overLength = unqualifiedTable.length + columnName.length + suffix.length + 2 - maxLen;
     let col = columnName;
-    let tbl = tableName;
+    let tbl = unqualifiedTable;
     if (overLength > 0) {
       const colMaxLen = Math.floor((maxLen - suffix.length - 2) / 2);
       const newColLen = Math.min(colMaxLen, col.length);

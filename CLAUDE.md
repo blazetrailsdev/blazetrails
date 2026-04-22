@@ -28,8 +28,19 @@ work in this repo — behavioral rules, not API reference.
 
 ## Module mixins (Ruby `include` → TypeScript)
 
-Rails uses `include`/`extend` to mix module methods into a class. TS has no
-equivalent, so we use **`this`-typed functions assigned directly to the class**.
+Rails uses `include`/`extend` to mix module methods into a class. We
+reimplement both in `@blazetrails/activesupport`:
+
+- `include()` / `Included<>` — bulk-mix instance methods, Rails-style. Mirrors
+  Ruby's `include Mod`. See `activesupport/src/include.ts`, and
+  `relation.ts` + `relation/query-methods.ts` for real usage.
+- `extend()` / `Extended<>` — same, but onto the class (static side).
+- `concern()` / `includeConcern()` — our port of `ActiveSupport::Concern`
+  (with `included`/`prepended` blocks and dependency resolution). See
+  `activesupport/src/concern.ts`.
+
+For **one-off static methods** where a full Concern is overkill, prefer
+**`this`-typed functions assigned directly to the class**:
 
 ```ts
 // attribute-methods.ts
@@ -47,10 +58,6 @@ export class Model {
 Why: code lives in the file that matches Rails' layout (so `api:compare`
 finds it), no delegation wrappers, type-checked via the host interface,
 and `this` resolves to the actual subclass at runtime.
-
-For **instance methods mixed in bulk** (like Rails' `include QueryMethods`),
-use `include()` / `Included<>` from `@blazetrails/activesupport`. See
-`activesupport/src/include.ts` and `relation.ts` + `relation/query-methods.ts`.
 
 When NOT to use this:
 

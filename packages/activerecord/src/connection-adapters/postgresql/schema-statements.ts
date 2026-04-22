@@ -85,7 +85,16 @@ export interface SchemaStatements {
     tableName: string,
     columnName: string,
     type: string,
-    options?: { comment?: string; default?: unknown; null?: boolean; array?: boolean },
+    options?: {
+      comment?: string;
+      default?: unknown;
+      null?: boolean;
+      array?: boolean;
+      limit?: number;
+      precision?: number;
+      scale?: number;
+      ifNotExists?: boolean;
+    },
   ): Promise<void>;
   renameColumn(tableName: string, columnName: string, newColumnName: string): Promise<void>;
   changeColumnDefault(

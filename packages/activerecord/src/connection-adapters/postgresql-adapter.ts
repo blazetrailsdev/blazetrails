@@ -2229,15 +2229,31 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     tableName: string,
     columnName: string,
     type: string,
-    options: { comment?: string; default?: unknown; null?: boolean; array?: boolean } = {},
+    options: {
+      comment?: string;
+      default?: unknown;
+      null?: boolean;
+      array?: boolean;
+      limit?: number;
+      precision?: number;
+      scale?: number;
+      ifNotExists?: boolean;
+    } = {},
   ): Promise<void> {
+    if (options.ifNotExists) {
+      const cols = await this.columns(tableName);
+      if (cols.some((c) => (c as { name: string }).name === columnName)) return;
+    }
     const quotedTable = this.quoteTableName(tableName);
     const quotedCol = this.quoteIdentifier(columnName);
-    let pgType = this.nativeType(type);
-    if (options.array) pgType += "[]";
+    const pgType = this.typeToSql(type, options);
     let colSql = `${quotedCol} ${pgType}`;
     if (options.default !== undefined) {
-      const defaultClause = pgQuoteDefaultExpression(options.default);
+      const defaultClause = pgQuoteDefaultExpression(
+        options.default,
+        { array: options.array, sqlType: pgType },
+        this.typeMap,
+      );
       colSql += options.default === null ? " DEFAULT NULL" : defaultClause;
     }
     if (options.null === false) colSql += " NOT NULL";
@@ -2352,8 +2368,35 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         if (!enumType) throw new Error("enumType is required for enums");
         sql = enumType;
         break;
-      default:
-        sql = this.nativeType(type);
+      default: {
+        const { precision, scale } = options;
+        const native = this.nativeDatabaseTypes()[type];
+        const baseName = native
+          ? typeof native === "string"
+            ? native
+            : (native.name ?? type)
+          : type;
+        sql = baseName;
+        if (type === "decimal") {
+          if (precision != null) {
+            sql += scale != null ? `(${precision},${scale})` : `(${precision})`;
+          } else if (scale != null) {
+            throw new Error(
+              "Error adding decimal column: precision cannot be empty if scale is specified",
+            );
+          }
+        } else if (["datetime", "timestamp", "time", "interval"].includes(type)) {
+          if (precision != null) {
+            if (precision < 0 || precision > 6)
+              throw new Error(
+                `No ${baseName} type has precision of ${precision}. The allowed range of precision is from 0 to 6`,
+              );
+            sql += `(${precision})`;
+          }
+        } else if (type !== "primary_key" && limit != null) {
+          sql += `(${limit})`;
+        }
+      }
     }
     return array && type !== "primary_key" ? `${sql}[]` : sql;
   }
@@ -2381,7 +2424,13 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   }
 
   assertValidDeferrable(deferrable: unknown): void {
-    if (!deferrable || deferrable === "immediate" || deferrable === "deferred") return;
+    if (
+      deferrable == null ||
+      deferrable === false ||
+      deferrable === "immediate" ||
+      deferrable === "deferred"
+    )
+      return;
     throw new Error(
       `deferrable must be \`"immediate"\` or \`"deferred"\`, got: \`${JSON.stringify(deferrable)}\``,
     );
@@ -2483,7 +2532,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
 
   async renameTable(oldName: string, newName: string): Promise<void> {
     await this.exec(
-      `ALTER TABLE ${this.quoteTableName(oldName)} RENAME TO ${this.quoteIdentifier(newName)}`,
+      `ALTER TABLE ${this.quoteTableName(oldName)} RENAME TO ${this.quoteIdentifier(this.parseSchemaQualifiedName(newName).table)}`,
     );
     const maxLen = await this.maxIdentifierLength();
     const result = await this.pkAndSequenceFor(newName).catch(() => null);

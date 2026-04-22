@@ -1196,13 +1196,13 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   // `types[:datetime] = types[datetime_type]`.
   static nativeDatabaseTypes(): Record<string, string | { name?: string; limit?: number }> {
     const types = { ...this.NATIVE_DATABASE_TYPES };
-    types["datetime"] = types[PostgreSQLAdapter.datetimeType] ?? { name: "timestamp" };
+    types["datetime"] = types[this.datetimeType] ?? { name: "timestamp" };
     return types;
   }
 
   // Mirrors: PostgreSQLAdapter#native_database_types (postgresql_adapter.rb:400)
   nativeDatabaseTypes(): Record<string, string | { name?: string; limit?: number }> {
-    return PostgreSQLAdapter.nativeDatabaseTypes();
+    return (this.constructor as typeof PostgreSQLAdapter).nativeDatabaseTypes();
   }
 
   // Mirrors: PostgreSQLAdapter#set_standard_conforming_strings (postgresql_adapter.rb:412)
@@ -1253,7 +1253,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   // Returns a Promise so callers can await the SET SESSION AUTHORIZATION round-trip.
   async sessionAuth(user: string): Promise<void> {
     this.clearCacheBang();
-    await this.execute(`SET SESSION AUTHORIZATION ${user}`);
+    const quoted = user === "DEFAULT" ? "DEFAULT" : pgQuoteColumnName(user);
+    await this.execute(`SET SESSION AUTHORIZATION ${quoted}`);
   }
 
   // Mirrors: PostgreSQLAdapter#use_insert_returning? (postgresql_adapter.rb:630)
@@ -1271,6 +1272,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       await client.connect();
       return client;
     } catch (error) {
+      await client.end().catch(() => {});
       const message = error instanceof Error ? error.message : String(error);
       const database = typeof config.database === "string" ? config.database : undefined;
       const user = typeof config.user === "string" ? config.user : undefined;

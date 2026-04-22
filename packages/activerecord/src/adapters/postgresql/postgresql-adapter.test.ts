@@ -987,12 +987,16 @@ describeIfPg("PostgreSQLAdapter", () => {
       expect(adapter.isUseInsertReturning()).toBe(true);
     });
 
-    it("isUseInsertReturning reflects insertReturning config", () => {
+    it("isUseInsertReturning reflects insertReturning config", async () => {
       const a = new PostgreSQLAdapter({
-        connectionString: process.env.PG_TEST_URL!,
+        connectionString: PG_TEST_URL,
         insertReturning: false,
       });
-      expect(a.isUseInsertReturning()).toBe(false);
+      try {
+        expect(a.isUseInsertReturning()).toBe(false);
+      } finally {
+        await a.close();
+      }
     });
 
     it("maxIdentifierLength returns a positive integer", async () => {
@@ -1026,13 +1030,18 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
 
     it("sessionAuth changes the session authorization", async () => {
-      await expect(adapter.sessionAuth("postgres")).resolves.toBeUndefined();
-      await adapter.sessionAuth("DEFAULT");
+      const rows = await adapter.execute("SELECT current_user");
+      const currentUser = (rows[0] as { current_user: string }).current_user;
+      try {
+        await expect(adapter.sessionAuth(currentUser)).resolves.toBeUndefined();
+      } finally {
+        await adapter.sessionAuth("DEFAULT");
+      }
     });
 
     it("newClient connects and returns a pg.Client instance", async () => {
       const client = await PostgreSQLAdapter.newClient({
-        connectionString: process.env.PG_TEST_URL,
+        connectionString: PG_TEST_URL,
       });
       expect(client).toBeInstanceOf(pg.Client);
       await client.end();

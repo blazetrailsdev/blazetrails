@@ -21,8 +21,8 @@ import { Base } from "../../../../packages/activerecord/src/base.js";
 import {
   introspectTables,
   introspectColumns,
+  introspectIndexes,
 } from "../../../../packages/activerecord/src/schema-introspection.js";
-import { SchemaStatements } from "../../../../packages/activerecord/src/connection-adapters/abstract/schema-statements.js";
 import { canonicalize } from "./canonicalize.js";
 import type { NativeDump, NativeColumn, NativeIndex } from "./canonicalize.js";
 
@@ -37,8 +37,8 @@ function usage(): never {
 }
 
 function assertRepoRoot(): void {
-  // Relative imports in this file resolve from CWD. Fail fast with a clear
-  // message rather than a cryptic "Cannot find module" error at import time.
+  // Fixture arguments (argv[2], argv[3]) are resolved relative to CWD.
+  // Fail fast with a clear message rather than a cryptic path error later.
   if (!existsSync("packages/activerecord/src/base.ts")) {
     process.stderr.write(
       "parity dump: must be run from the repo root (packages/activerecord/src/base.ts not found)\n",
@@ -70,7 +70,6 @@ async function main(): Promise<void> {
     // 2. Connect via trails adapter
     await Base.establishConnection(`sqlite3://${dbPath}`);
     const adapter = Base.adapter;
-    const schemaStatements = new SchemaStatements(adapter);
 
     // 3. Introspect tables, columns, indexes
     const tables = (await introspectTables(adapter)).filter((t) => !FILTERED_TABLES.has(t)).sort();
@@ -79,7 +78,7 @@ async function main(): Promise<void> {
 
     for (const tableName of tables) {
       const cols = await introspectColumns(adapter, tableName);
-      const idxDefs = await schemaStatements.indexes(tableName);
+      const idxDefs = await introspectIndexes(adapter, tableName);
 
       const columns: NativeColumn[] = cols.map((col) => ({
         name: col.name,

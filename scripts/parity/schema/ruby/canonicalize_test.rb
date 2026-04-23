@@ -5,9 +5,9 @@ require_relative "canonicalize"
 
 class CanonicalizeTest < Minitest::Test
   # Build a minimal NativeTable hash for test fixtures
-  def col(name, ar_type, null: true, default: nil, limit: nil, precision: nil, scale: nil)
-    { name: name, ar_type: ar_type, null: null, default: default,
-      limit: limit, precision: precision, scale: scale }
+  def col(name, ar_type, null: true, default: nil, limit: nil, precision: nil, scale: nil, sql_type: nil)
+    { name: name, ar_type: ar_type, sql_type: sql_type || ar_type&.to_s&.upcase,
+      null: null, default: default, limit: limit, precision: precision, scale: scale }
   end
 
   def table(columns:, indexes: [], primary_key_columns: [])
@@ -23,7 +23,7 @@ class CanonicalizeTest < Minitest::Test
           col("id",         :integer,  null: true),
           col("email",      :text,     null: false),
           col("name",       :text,     null: true),
-          col("score",      :float,    null: true),
+          col("score",      nil,       null: true,  sql_type: "REAL"),  # AR returns nil for REAL
           col("avatar",     :binary,   null: true),
           col("created_at", :datetime, null: false),
           col("active",     :integer,  null: false, default: 1),
@@ -153,6 +153,20 @@ class CanonicalizeTest < Minitest::Test
     native = { "t" => table(columns: [col("x", :unknowntype)]) }
     err = assert_raises(RuntimeError) { Canonicalize.call(native) }
     assert_match(/unknown AR type.*unknowntype/, err.message)
+  end
+
+  def test_falls_back_to_sql_type_when_ar_type_is_nil
+    # SQLite REAL: Rails' abstract type map registers %r(float)i but not %r(real)i,
+    # so col.type returns nil. Canonicalize falls back to SQL_TO_CANONICAL.
+    native = { "t" => table(columns: [col("score", nil, sql_type: "REAL")]) }
+    t = Canonicalize.call(native)["tables"][0]
+    assert_equal "float", t["columns"][0]["type"]
+  end
+
+  def test_raises_on_nil_ar_type_and_unknown_sql_type
+    native = { "t" => table(columns: [col("x", nil, sql_type: "UNKNOWNSQLTYPE")]) }
+    err = assert_raises(RuntimeError) { Canonicalize.call(native) }
+    assert_match(/unknown SQL type/, err.message)
   end
 
   def test_raises_on_index_with_no_columns

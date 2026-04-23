@@ -6,6 +6,7 @@
  * The [included] hook registers validateAssociations onto the class.
  */
 import type { Base } from "./base.js";
+import { CompositePrimaryKeyMismatchError } from "./associations/errors.js";
 import type { AssociationDefinition } from "./associations.js";
 import { underscore } from "@blazetrails/activesupport";
 import { included } from "@blazetrails/activesupport";
@@ -316,6 +317,12 @@ async function autosaveHasMany(record: Base, assoc: AssociationDefinition): Prom
       const foreignKey = assoc.options.foreignKey ?? `${underscore(ctor.name)}_id`;
       const primaryKey = assoc.options.primaryKey ?? ctor.primaryKey;
       if (Array.isArray(primaryKey) && Array.isArray(foreignKey)) {
+        if (primaryKey.length !== foreignKey.length) {
+          throw new CompositePrimaryKeyMismatchError(
+            (record.constructor as typeof Base).name,
+            assoc.name,
+          );
+        }
         primaryKey.forEach((pk: string, i: number) => {
           const pkValue = record._readAttribute(pk);
           if (pkValue != null) child._writeAttribute((foreignKey as string[])[i], pkValue);
@@ -323,6 +330,11 @@ async function autosaveHasMany(record: Base, assoc: AssociationDefinition): Prom
       } else if (!Array.isArray(primaryKey) && !Array.isArray(foreignKey)) {
         const pkValue = record._readAttribute(primaryKey);
         if (pkValue != null) child._writeAttribute(foreignKey, pkValue);
+      } else {
+        throw new CompositePrimaryKeyMismatchError(
+          (record.constructor as typeof Base).name,
+          assoc.name,
+        );
       }
 
       const saved = await child.save();
@@ -351,6 +363,12 @@ async function autosaveHasOne(record: Base, assoc: AssociationDefinition): Promi
     const foreignKey = assoc.options.foreignKey ?? `${underscore(ctor.name)}_id`;
     const primaryKey = assoc.options.primaryKey ?? ctor.primaryKey;
     if (Array.isArray(primaryKey) && Array.isArray(foreignKey)) {
+      if (primaryKey.length !== foreignKey.length) {
+        throw new CompositePrimaryKeyMismatchError(
+          (record.constructor as typeof Base).name,
+          assoc.name,
+        );
+      }
       primaryKey.forEach((pk: string, i: number) => {
         const pkValue = record._readAttribute(pk);
         if (pkValue != null) childRecord._writeAttribute((foreignKey as string[])[i], pkValue);
@@ -358,6 +376,11 @@ async function autosaveHasOne(record: Base, assoc: AssociationDefinition): Promi
     } else if (!Array.isArray(primaryKey) && !Array.isArray(foreignKey)) {
       const pkValue = record._readAttribute(primaryKey);
       if (pkValue != null) childRecord._writeAttribute(foreignKey, pkValue);
+    } else {
+      throw new CompositePrimaryKeyMismatchError(
+        (record.constructor as typeof Base).name,
+        assoc.name,
+      );
     }
 
     const saved = await childRecord.save();
@@ -396,6 +419,12 @@ async function _autosaveBelongsTo(record: Base, assoc: AssociationDefinition): P
     const primaryKey =
       assoc.options.primaryKey ?? (assocRecord.constructor as typeof Base).primaryKey ?? "id";
     if (Array.isArray(primaryKey) && Array.isArray(foreignKey)) {
+      if (primaryKey.length !== foreignKey.length) {
+        throw new CompositePrimaryKeyMismatchError(
+          (record.constructor as typeof Base).name,
+          assoc.name,
+        );
+      }
       primaryKey.forEach((pk: string, i: number) => {
         const pkValue = assocRecord._readAttribute(pk);
         if (pkValue != null) record._writeAttribute((foreignKey as string[])[i], pkValue);
@@ -403,6 +432,11 @@ async function _autosaveBelongsTo(record: Base, assoc: AssociationDefinition): P
     } else if (!Array.isArray(primaryKey) && !Array.isArray(foreignKey)) {
       const pkValue = assocRecord._readAttribute(primaryKey);
       if (pkValue != null) record._writeAttribute(foreignKey, pkValue);
+    } else {
+      throw new CompositePrimaryKeyMismatchError(
+        (record.constructor as typeof Base).name,
+        assoc.name,
+      );
     }
   }
   return true;

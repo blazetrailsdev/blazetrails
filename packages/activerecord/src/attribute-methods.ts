@@ -186,10 +186,10 @@ export function aliasAttributeMethodDefinition(
   if (this.prototype && !(newName in this.prototype)) {
     Object.defineProperty(this.prototype, newName, {
       get(this: any) {
-        return this._readAttribute(oldName);
+        return this.readAttribute(oldName);
       },
       set(this: any, value: unknown) {
-        this._writeAttribute(oldName, value);
+        this.writeAttribute(oldName, value);
       },
       configurable: true,
     });

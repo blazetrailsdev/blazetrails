@@ -105,7 +105,7 @@ export function defineEnum(
     // Predicate: record.isDraft() or record.isStatusDraft()
     Object.defineProperty(modelClass.prototype, `is${capitalizedFullName}`, {
       value: function (this: Base) {
-        return this._readAttribute(attribute) === value;
+        return this.readAttribute(attribute) === value;
       },
       writable: true,
       configurable: true,
@@ -115,7 +115,7 @@ export function defineEnum(
     if (!Object.hasOwn(modelClass.prototype, fullName)) {
       Object.defineProperty(modelClass.prototype, fullName, {
         value: function (this: Base) {
-          this._writeAttribute(attribute, value);
+          this.writeAttribute(attribute, value);
         },
         writable: true,
         configurable: true,
@@ -126,7 +126,7 @@ export function defineEnum(
     const bangName = `${fullName}Bang`;
     Object.defineProperty(modelClass.prototype, bangName, {
       value: async function (this: any) {
-        this._writeAttribute(attribute, value);
+        this.writeAttribute(attribute, value);
         if (this.isPersisted()) {
           await this.updateColumn(attribute, value);
         }
@@ -301,9 +301,9 @@ export function enumMethod(
     },
     set(this: Base, value: unknown) {
       if (typeof value === "string" && hasOwn.call(mapping, value)) {
-        this._writeAttribute(attrName, mapping[value as string]);
+        this.writeAttribute(attrName, mapping[value as string]);
       } else {
-        this._writeAttribute(attrName, value);
+        this.writeAttribute(attrName, value);
       }
     },
     configurable: true,
@@ -328,7 +328,7 @@ export function enumMethod(
     // Bang setter: user.active! → user.activeBang() (in-memory only)
     Object.defineProperty(this.prototype, `${methodBase}Bang`, {
       value: function (this: Base) {
-        this._writeAttribute(attrName, value);
+        this.writeAttribute(attrName, value);
         return this;
       },
       writable: true,
@@ -376,7 +376,7 @@ export function readEnumValue(record: Base, attribute: string): string | null {
   const def = defs.get(attribute);
   if (!def) return null;
 
-  const numericValue = record._readAttribute(attribute);
+  const numericValue = record.readAttribute(attribute);
   return def.type.deserialize(numericValue);
 }
 

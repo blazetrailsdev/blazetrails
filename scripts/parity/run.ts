@@ -48,8 +48,13 @@ function run(cmd: string, args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
     const proc = spawn(cmd, args, { stdio: "inherit" });
     proc.on("close", (code, signal) => {
-      if (code === 0) resolve();
-      else reject(new Error(`${cmd} ${args[0]} exited ${code ?? `signal ${signal}`}`));
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      const command = [cmd, ...args].join(" ");
+      const status = code === null ? `signal ${signal}` : `${code}`;
+      reject(new Error(`${command} exited ${status}`));
     });
     proc.on("error", reject);
   });

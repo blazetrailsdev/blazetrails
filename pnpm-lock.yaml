@@ -30,9 +30,6 @@ importers:
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
-      '@types/diff':
-        specifier: ^8.0.0
-        version: 8.0.0
       '@types/pg':
         specifier: ^8.18.0
         version: 8.18.0
@@ -1428,10 +1425,6 @@ packages:
 
   '@types/deep-eql@4.0.2':
     resolution: {integrity: sha512-c9h9dVVMigMPc4bwTvC5dxqtqJZwQPePsWjPlpSOnojbor6pGqdk541lfA7AqFQr5pB1BRdq0juY9db81BwyFw==}
-
-  '@types/diff@8.0.0':
-    resolution: {integrity: sha512-o7jqJM04gfaYrdCecCVMbZhNdG6T1MHg/oQoRFdERLV+4d+V7FijhiEAbFu0Usww84Yijk9yH58U4Jk4HbtzZw==}
-    deprecated: This is a stub types definition. diff provides its own type definitions, so you do not need this installed.
 
   '@types/esrecurse@4.3.1':
     resolution: {integrity: sha512-xJBAbDifo5hpffDBuHl0Y8ywswbiAp/Wi7Y/GtAgSlZyIABppyurxVueOPE8LUQOxdlgi6Zqce7uoEpqNTeiUw==}
@@ -4491,10 +4484,6 @@ snapshots:
       '@types/d3-zoom': 3.0.8
 
   '@types/deep-eql@4.0.2': {}
-
-  '@types/diff@8.0.0':
-    dependencies:
-      diff: 9.0.0
 
   '@types/esrecurse@4.3.1': {}
 

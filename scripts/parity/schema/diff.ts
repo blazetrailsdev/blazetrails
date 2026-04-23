@@ -58,6 +58,10 @@ function stableJson(obj: unknown): string {
 }
 
 function listJsonFiles(dir: string): string[] {
+  if (!existsSync(dir)) {
+    process.stderr.write(`parity diff: directory not found: ${dir}\n`);
+    process.exit(1);
+  }
   return readdirSync(dir)
     .filter((f) => f.endsWith(".json"))
     .sort();

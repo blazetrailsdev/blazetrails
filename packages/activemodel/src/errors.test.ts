@@ -675,6 +675,27 @@ describe("ErrorsTest", () => {
     expect(target.objects[0].constructor.name).toBe("NestedError");
   });
 
+  it("copy! deep-dups the inner error on NestedError (no shared mutable state)", () => {
+    // Rails `deep_dup` on a NestedError recurses into `@inner_error`, so the
+    // duplicated wrapper's inner error is independent of the source's.
+    const source = new Errors({});
+    source.add("age", "out_of_range", { range: { min: 1 } });
+    const wrapper = new Errors({});
+    wrapper.mergeBang(source);
+    const target = new Errors({});
+    target.copyBang(wrapper);
+    const srcInner = (
+      wrapper.objects[0] as unknown as { innerError: { options: Record<string, unknown> } }
+    ).innerError;
+    const tgtInner = (
+      target.objects[0] as unknown as { innerError: { options: Record<string, unknown> } }
+    ).innerError;
+    expect(tgtInner).not.toBe(srcInner);
+    expect((tgtInner.options.range as { min: number }).min).toBe(1);
+    (srcInner.options.range as { min: number }).min = 999;
+    expect((tgtInner.options.range as { min: number }).min).toBe(1);
+  });
+
   it("copy! rebinds each error's base to the receiver", () => {
     const base1 = { tag: "one" };
     const base2 = { tag: "two" };

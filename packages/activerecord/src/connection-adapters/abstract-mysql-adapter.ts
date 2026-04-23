@@ -24,6 +24,11 @@ import {
   quoteString as mysqlQuoteString,
   quote as mysqlQuote,
   typeCast as mysqlTypeCast,
+  castBoundValue as mysqlCastBoundValue,
+  quotedBinary as mysqlQuotedBinary,
+  unquoteIdentifier as mysqlUnquoteIdentifier,
+  columnNameMatcher as mysqlColumnNameMatcher,
+  columnNameWithOrderMatcher as mysqlColumnNameWithOrderMatcher,
 } from "./mysql/quoting.js";
 import { ForeignKeyDefinition } from "./abstract/schema-definitions.js";
 
@@ -436,6 +441,26 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
 
   highPrecisionCurrentTimestamp(): string {
     return "CURRENT_TIMESTAMP(6)";
+  }
+
+  castBoundValue(value: unknown): unknown {
+    return mysqlCastBoundValue(value);
+  }
+
+  quotedBinary(value: Buffer | string): string {
+    return mysqlQuotedBinary(value);
+  }
+
+  unquoteIdentifier(identifier: string | null | undefined): string | null {
+    return mysqlUnquoteIdentifier(identifier);
+  }
+
+  static columnNameMatcher(): RegExp {
+    return mysqlColumnNameMatcher();
+  }
+
+  static columnNameWithOrderMatcher(): RegExp {
+    return mysqlColumnNameWithOrderMatcher();
   }
 
   async foreignKeys(tableName: string): Promise<ForeignKeyDefinition[]> {

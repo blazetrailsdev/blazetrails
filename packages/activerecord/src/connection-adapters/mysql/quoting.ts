@@ -144,7 +144,7 @@ export function quote(value: unknown): string {
   if (typeof value === "boolean") return value ? quotedTrue() : quotedFalse();
   if (typeof value === "number" || typeof value === "bigint") return String(value);
   if (value instanceof Date) return `'${quotedDate(value)}'`;
-  if (value instanceof Buffer) return quotedBinaryString(value);
+  if (value instanceof Buffer) return quotedBinary(value);
   if (typeof value === "symbol") {
     const desc = value.description;
     if (desc === undefined) throw new TypeError("Cannot quote a Symbol without a description");

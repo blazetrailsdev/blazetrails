@@ -15,7 +15,7 @@ describe("WriteTest", () => {
     expect(p.readAttribute("title")).toBe("new");
   });
 
-  it("_write_attribute writes to canonical name, not through aliases", () => {
+  it("_write_attribute writes directly without alias resolution", () => {
     createTestAdapter();
     class Post extends Base {
       static {
@@ -24,9 +24,11 @@ describe("WriteTest", () => {
       }
     }
     const p = new Post({ body: "original" });
-    // alias "content" → "body"; _writeAttribute("body") writes directly to body
-    p._writeAttribute("body", "updated");
-    expect(p.readAttribute("body")).toBe("updated");
+    // _writeAttribute("content", ...) writes to the "content" slot directly,
+    // not to "body" — alias resolution is what writeAttribute() would add.
+    p._writeAttribute("content", "via alias");
+    expect(p._readAttribute("body")).toBe("original");
+    expect(p._readAttribute("content")).toBe("via alias");
   });
 
   it("_write_attribute bypasses readonly check", () => {

@@ -22,7 +22,8 @@ interface Queryable {
  * Mirrors: ActiveRecord::AttributeMethods::Query#query_attribute
  */
 export function queryAttribute(this: Queryable, name: string): boolean {
-  const value = (this as Record<string, unknown>)[name];
+  const prop = (this as Record<string, unknown>)[name];
+  const value = typeof prop === "function" ? (prop as () => unknown).call(this) : prop;
   return castToBoolean(value);
 }
 

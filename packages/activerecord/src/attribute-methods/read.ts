@@ -28,6 +28,12 @@ interface AttributeHolder {
  * Skips alias resolution and the primary-key "id" redirect — used internally
  * where attribute names are already canonical.
  *
+ * In Rails, `_read_attribute` returns the deserialized value because
+ * serialization lives inside the attribute type. In this codebase,
+ * serialize.ts patches `readAttribute` at the model level, so
+ * `_readAttribute` bypasses that patch and returns the raw stored value
+ * for serialized columns. This matches Rails' intent; the gap is architectural.
+ *
  * Mirrors: ActiveRecord::AttributeMethods::Read#_read_attribute
  */
 export function _readAttribute(this: AttributeHolder, name: string): unknown {

@@ -17,7 +17,8 @@
     },
     "frozenAt": {
       "type": "string",
-      "description": "ISO 8601 UTC timestamp that both sides froze time to for this run. Set by the orchestrator; included for auditability."
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$",
+      "description": "ISO 8601 UTC timestamp (trailing Z required) that both sides froze time to for this run. Set by the orchestrator; included for auditability."
     },
     "sql": {
       "type": "string",

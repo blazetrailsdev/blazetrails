@@ -90,7 +90,7 @@ users.get("name").eq("amy");
 
 The last expression is the one `.toSql()` is called on. All nodes and
 managers expose `.toSql()` via the base `Node` class (`nodes/node.ts:30`);
-no `ToSql` import is needed in the runner.
+no `ToSql` import is needed in the runner (`packages/arel/src/nodes/node.ts:30`).
 
 ---
 

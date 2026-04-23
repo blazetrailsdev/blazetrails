@@ -725,7 +725,9 @@ export class SchemaStatements {
   }
 
   async foreignKeys(tableName: string): Promise<ForeignKeyDefinition[]> {
-    const adapter = this.adapter as { foreignKeys?: (t: string) => Promise<ForeignKeyDefinition[]> };
+    const adapter = this.adapter as {
+      foreignKeys?: (t: string) => Promise<ForeignKeyDefinition[]>;
+    };
     if (typeof adapter.foreignKeys === "function") {
       return adapter.foreignKeys(tableName);
     }

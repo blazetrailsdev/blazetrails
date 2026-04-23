@@ -361,6 +361,8 @@ describe("installExtendedQueriesIfConfigured", () => {
     const { installExtendedQueriesIfConfigured } = await import("./install.js");
 
     const origWhere = Relation.prototype.where;
+    const origExists = (Relation.prototype as any).exists;
+    const origScopeForCreate = (Relation.prototype as any).scopeForCreate;
     const origFindBy = (Base as any).findBy;
     const origSerialize = EncryptedAttributeType.prototype.serialize;
 
@@ -374,8 +376,12 @@ describe("installExtendedQueriesIfConfigured", () => {
       expect((Base as any).findBy).not.toBe(origFindBy);
       expect(EncryptedAttributeType.prototype.serialize).not.toBe(origSerialize);
     } finally {
-      // Restore to avoid bleeding into sibling tests in the same process.
+      // Restore every patched entrypoint — leaving exists/scopeForCreate
+      // patched would make sibling tests in the same Vitest process
+      // order-dependent.
       Relation.prototype.where = origWhere;
+      (Relation.prototype as any).exists = origExists;
+      (Relation.prototype as any).scopeForCreate = origScopeForCreate;
       (Base as any).findBy = origFindBy;
       EncryptedAttributeType.prototype.serialize = origSerialize;
       (ExtendedDeterministicQueries as any)._installed = false;

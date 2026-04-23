@@ -30,7 +30,29 @@ export class ExtendedDeterministicQueries {
   }): void {
     if (this._installed) return;
 
-    prepend(targets.Relation.prototype, {
+    // Pre-validate every target method across all three prepend() calls
+    // so a missing method can't leave us with one class already patched
+    // and another un-patched — a non-atomic state that a retry would
+    // double-wrap. Rails' `prepend` at boot is effectively all-or-
+    // nothing; this matches that intent.
+    const relProto = targets.Relation.prototype;
+    const baseTarget = targets.Base as unknown as Record<string, unknown>;
+    const eatProto = targets.EncryptedAttributeType.prototype;
+    const missing: string[] = [];
+    if (typeof relProto.where !== "function") missing.push("Relation.prototype.where");
+    if (typeof relProto.exists !== "function") missing.push("Relation.prototype.exists");
+    if (typeof relProto.scopeForCreate !== "function")
+      missing.push("Relation.prototype.scopeForCreate");
+    if (typeof baseTarget.findBy !== "function") missing.push("Base.findBy");
+    if (typeof eatProto.serialize !== "function")
+      missing.push("EncryptedAttributeType.prototype.serialize");
+    if (missing.length > 0) {
+      throw new Error(
+        `ExtendedDeterministicQueries.installSupport: missing target method(s): ${missing.join(", ")}`,
+      );
+    }
+
+    prepend(relProto, {
       where(super_, ...args) {
         return RelationQueries.where(super_, this, args);
       },
@@ -41,12 +63,12 @@ export class ExtendedDeterministicQueries {
         return RelationQueries.scopeForCreate(super_, this);
       },
     });
-    prepend(targets.Base as unknown as Record<string, unknown>, {
+    prepend(baseTarget, {
       findBy(super_, ...args) {
         return CoreQueries.findBy(super_, this, args);
       },
     });
-    prepend(targets.EncryptedAttributeType.prototype, {
+    prepend(eatProto, {
       serialize(super_, data) {
         return ExtendedEncryptableType.serialize((v: unknown) => super_.call(this, v), data);
       },

@@ -73,6 +73,44 @@ describe("prepend", () => {
     expect(Factory.make(10)).toBe(11);
   });
 
+  it("preserves the original property descriptor (class methods stay non-enumerable)", () => {
+    class Widget {
+      spin(): string {
+        return "spin";
+      }
+    }
+    const before = Object.getOwnPropertyDescriptor(Widget.prototype, "spin");
+    prepend(Widget.prototype, {
+      spin(super_: Function) {
+        return `wrapped-${super_.call(this)}`;
+      },
+    });
+    const after = Object.getOwnPropertyDescriptor(Widget.prototype, "spin");
+    expect(after?.enumerable).toBe(before?.enumerable);
+    expect(after?.writable).toBe(before?.writable);
+    expect(after?.configurable).toBe(before?.configurable);
+    // Sanity: the wrapper doesn't leak into Object.keys(prototype).
+    expect(Object.keys(Widget.prototype)).not.toContain("spin");
+    expect(new Widget().spin()).toBe("wrapped-spin");
+  });
+
+  it("validates all target methods exist before wrapping anything (atomicity)", () => {
+    class Partial {
+      good(): string {
+        return "ok";
+      }
+    }
+    const originalGood = Partial.prototype.good;
+    expect(() =>
+      prepend(Partial.prototype, {
+        good: (s: Function) => `wrapped-${s.call(undefined)}`,
+        missing: (s: Function) => s,
+      }),
+    ).toThrow(/missing/);
+    // `good` must NOT have been wrapped — atomicity guarantee.
+    expect(Partial.prototype.good).toBe(originalGood);
+  });
+
   it("second prepend on the same method chains on top of the first", () => {
     class Greeter {
       hi(): string {

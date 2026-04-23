@@ -34,6 +34,7 @@ export {
   AdditionalValue,
   ExtendedEncryptableType,
 } from "./extended-deterministic-queries.js";
+export { installExtendedQueriesIfConfigured } from "./install.js";
 export {
   ExtendedDeterministicUniquenessValidator,
   EncryptedUniquenessValidator,

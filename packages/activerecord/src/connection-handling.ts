@@ -263,8 +263,10 @@ export function isPrimaryClass(this: typeof Base): boolean {
   return this.name === "Base" || coreIsApplicationRecordClass.call(this as any);
 }
 
-export function adapterClass(this: typeof Base): Promise<new (...args: unknown[]) => unknown> {
-  return connectionPool.call(this).dbConfig.adapterClass();
+export function adapterClass(this: typeof Base): Promise<new (...args: any[]) => DatabaseAdapter> {
+  return connectionPool.call(this).dbConfig.adapterClass() as Promise<
+    new (...args: any[]) => DatabaseAdapter
+  >;
 }
 
 export function removeConnection(this: typeof Base): void {

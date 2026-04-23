@@ -5,7 +5,7 @@
  * polymorphic, dependent, counterCache, touch, CollectionProxy, reflection,
  * strict loading, inverse_of, and scoped associations.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   loadHabtm,
   Base,
@@ -7993,21 +7993,34 @@ describe("CollectionProxyDelegation", () => {
 });
 
 describe("eagerLoadBang", () => {
-  it("resolves without error and registers CollectionProxy so association() does not throw 'not registered'", async () => {
-    const { eagerLoadBang, association } = await import("./associations.js");
+  it("resolves without error", async () => {
+    const { eagerLoadBang } = await import("./associations.js");
     await expect(eagerLoadBang()).resolves.toBeUndefined();
+  });
 
-    class EagerPost extends Base {
+  it("registers CollectionProxy so association() does not throw 'not registered' after module reset", async () => {
+    // Reset modules to clear the ctor slot, simulating a subpath-only import
+    // (i.e. without going through the full package entry that normally registers CP).
+    vi.resetModules();
+    const { eagerLoadBang, association } = await import("./associations.js");
+
+    // Before calling eagerLoadBang, the slot is cleared — calling association()
+    // with a valid definition would throw "CollectionProxy not registered".
+    // After eagerLoadBang, CP is registered and the error changes to "not found".
+    await eagerLoadBang();
+
+    const { Base: FreshBase } = await import("./base.js");
+    class IsolatedPost extends (FreshBase as typeof Base) {
       static {
         this.attribute("title", "string");
         this.adapter = createTestAdapter();
       }
     }
-    const post = new EagerPost({ title: "hi" });
-    // After eagerLoadBang, CollectionProxy IS registered.
-    // association() throws for a missing definition — not the
-    // "CollectionProxy not registered" error — confirming CP is wired.
+    const post = new IsolatedPost({ title: "hi" });
     expect(() => association(post, "nonexistent")).toThrow(/not found/i);
     expect(() => association(post, "nonexistent")).not.toThrow(/CollectionProxy not registered/);
+
+    // Restore module cache for subsequent tests.
+    vi.resetModules();
   });
 });

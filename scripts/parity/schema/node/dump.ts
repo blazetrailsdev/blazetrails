@@ -12,7 +12,7 @@
  */
 
 import Database from "better-sqlite3";
-import { readFileSync, mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { readFileSync, mkdtempSync, writeFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 // Relative imports so tsx can resolve from source without a prior build.
@@ -36,9 +36,21 @@ function usage(): never {
   process.exit(1);
 }
 
+function assertRepoRoot(): void {
+  // Relative imports in this file resolve from CWD. Fail fast with a clear
+  // message rather than a cryptic "Cannot find module" error at import time.
+  if (!existsSync("packages/activerecord/src/base.ts")) {
+    process.stderr.write(
+      "parity dump: must be run from the repo root (packages/activerecord/src/base.ts not found)\n",
+    );
+    process.exit(1);
+  }
+}
+
 const FILTERED_TABLES = new Set(["schema_migrations", "ar_internal_metadata"]);
 
 async function main(): Promise<void> {
+  assertRepoRoot();
   const [fixtureDir, outPath] = process.argv.slice(2);
   if (!fixtureDir || !outPath) usage();
 
@@ -119,6 +131,13 @@ async function main(): Promise<void> {
     writeFileSync(outPathAbs, JSON.stringify(canonical, null, 2) + "\n");
     process.stdout.write(`parity dump (trails): wrote ${outPathAbs}\n`);
   } finally {
+    // Close the connection before deleting the temp file to avoid EBUSY on
+    // some platforms when better-sqlite3 holds the file open.
+    try {
+      Base.removeConnection();
+    } catch {
+      /* already removed or never opened */
+    }
     rmSync(tmpDir, { recursive: true, force: true });
   }
 }

@@ -127,7 +127,7 @@ describe("CopyTableTest", () => {
     const fks = await adapter.foreignKeys("posts");
     expect(fks).toHaveLength(1);
     expect(fks[0].toTable).toBe("authors");
-    expect(fks[0].onDelete).toBe("CASCADE");
+    expect(fks[0].onDelete).toBe("cascade");
 
     const rows = await adapter.execute(`SELECT * FROM "posts"`);
     expect(rows).toHaveLength(1);

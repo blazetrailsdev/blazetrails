@@ -39,7 +39,7 @@ module Canonicalize
   }.freeze
 
   # native_dump: Hash<table_name, { columns:, indexes:, primary_key_columns: }>
-  # where columns is Array<{ name:, ar_type:, null:, default:, limit:, precision:, scale: }>
+  # where columns is Array<{ name:, ar_type:, sql_type:, null:, default:, limit:, precision:, scale: }>
   # and indexes is Array<{ name:, columns:, unique:, where: }>
   # and primary_key_columns is Array<String> in PK-position order
   def self.call(native_dump)

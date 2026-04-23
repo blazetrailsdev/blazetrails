@@ -1393,7 +1393,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       if (conditions === undefined) return records.length > 0;
       if (typeof conditions === "object" && conditions !== null && !Array.isArray(conditions)) {
         const entries = Object.entries(conditions as Record<string, unknown>);
-        return records.some((r) => entries.every(([k, v]) => r._readAttribute(k) === v));
+        return records.some((r) => entries.every(([k, v]) => r.readAttribute(k) === v));
       }
       const className = this._assocDef.options.className ?? camelize(singularize(this._assocName));
       const targetModel = resolveModel(className);

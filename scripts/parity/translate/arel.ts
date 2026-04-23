@@ -38,8 +38,14 @@ function parseArgs(): { fixture?: string; dryRun: boolean; force: boolean } {
   let dryRun = false;
   let force = false;
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--fixture") fixture = args[++i];
-    else if (args[i] === "--dry-run") dryRun = true;
+    if (args[i] === "--fixture") {
+      const val = args[++i];
+      if (!val || val.startsWith("-")) {
+        process.stderr.write("--fixture requires a fixture name (e.g. --fixture arel-06)\n");
+        usage();
+      }
+      fixture = val;
+    } else if (args[i] === "--dry-run") dryRun = true;
     else if (args[i] === "--force") force = true;
     else {
       process.stderr.write(`unknown argument: ${args[i]}\n`);
@@ -66,6 +72,20 @@ function parseSchemaSql(dir: string): FixtureInfo {
  * Returns [rbExpr, tsExpr] for the body of the query expression.
  * When the query is too complex for rule-based translation, returns a TODO comment.
  */
+// Patterns in `-- Query:` annotations that can't be reliably auto-translated.
+// Queries matching these get a TODO body rather than broken generated code.
+const NON_TRANSLATABLE = [
+  /\.\.\./, // truncated annotations like "posts.join(comments, OuterJoin)..."
+  /^[A-Z].*\s+/, // prose descriptions (e.g. "Simple CTE: ...")
+  /COUNT\(/, // raw SQL fragments
+  /WITH\s/, // WITH clause prose
+  /ORDER BY/, // raw SQL ORDER BY prose
+];
+
+function isNonTranslatable(query: string): boolean {
+  return NON_TRANSLATABLE.some((re) => re.test(query));
+}
+
 function translateQuery(
   query: string,
   tables: string[],
@@ -74,7 +94,15 @@ function translateQuery(
   const rbDecls = tables.map((t) => `${t} = Arel::Table.new(:${t})`).join("\n");
   const tsDecls = tables.map((t) => `const ${t} = new Table("${t}");`).join("\n");
 
-  // Apply simple single-expression translations
+  if (isNonTranslatable(query)) {
+    return {
+      rb: `${rbDecls}\n# TODO: translate — ${query}`,
+      ts: `${tsDecls}\n// TODO: translate — ${query}`,
+      imports: ["Table"],
+    };
+  }
+
+  // Apply single-expression translations (all rules verified against packages/arel/src/)
   let tsExpr = query
     // tbl[:col] → tbl.get("col")
     .replace(/(\w+)\[:([\w_]+)\]/g, '$1.get("$2")')
@@ -88,17 +116,14 @@ function translateQuery(
     .replace(/\.not_eq\(/g, ".notEq(")
     // .not_in → .notIn
     .replace(/\.not_in\(/g, ".notIn(")
-    // .not_in_any → .notIn  (Arel's notInAny not in trails; use notIn)
+    // .not_in_any → .notIn  (trails has notIn; notInAny is not exposed)
     .replace(/\.not_in_any\(/g, ".notIn(")
     // .is_distinct_from → .isDistinctFrom
     .replace(/\.is_distinct_from\(/g, ".isDistinctFrom(")
     // .does_not_match_regexp → .doesNotMatchRegexp
     .replace(/\.does_not_match_regexp\(/g, ".doesNotMatchRegexp(")
-    // .lteq → .lteq (same)
     // Ruby nil → JS null
     .replace(/\bnil\b/g, "null")
-    // Arithmetic operators (simple infix in Ruby)
-    .replace(/\+ /g, ".add(") // approximate; review
     // %w[...] → array literal
     .replace(
       /%w\[([^\]]+)\]/g,
@@ -117,9 +142,8 @@ function translateQuery(
     .replace(/Arel::Table\.new\(:(\w+)\)/g, 'new Table("$1")')
     // Arel::Nodes::NamedFunction.new → new Nodes.NamedFunction
     .replace(/Arel::Nodes::NamedFunction\.new\(/g, "new Nodes.NamedFunction(")
-    // Arel::Nodes::OuterJoin → Nodes.OuterJoin
+    // Arel::Nodes::OuterJoin / bare OuterJoin → Nodes.OuterJoin
     .replace(/Arel::Nodes::OuterJoin/g, "Nodes.OuterJoin")
-    // OuterJoin (bare) → Nodes.OuterJoin
     .replace(/\bOuterJoin\b/g, "Nodes.OuterJoin")
     // Arel::Nodes::Window.new → new Nodes.Window()
     .replace(/Arel::Nodes::Window\.new/g, "new Nodes.Window()")
@@ -127,30 +151,28 @@ function translateQuery(
     .replace(/Arel::Nodes::As\.new\(/g, "new Nodes.As(")
     // Arel::Nodes::Quoted.new → new Nodes.Quoted
     .replace(/Arel::Nodes::Quoted\.new\(/g, "new Nodes.Quoted(")
-    // Property aggregates (Ruby property) → method calls (TS)
+    // Property aggregates → method calls (table.ts / attribute.ts)
     .replace(/\.count\b(?!\()/g, ".count()")
     .replace(/\.sum\b(?!\()/g, ".sum()")
     .replace(/\.average\b(?!\()/g, ".average()")
     .replace(/\.maximum\b(?!\()/g, ".maximum()")
     .replace(/\.minimum\b(?!\()/g, ".minimum()")
-    // .distinct (property) → .distinct() (method)
     .replace(/\.distinct\b(?!\()/g, ".distinct()")
-    // .not (property) → .not() (method)
     .replace(/\.not\b(?!\()/g, ".not()")
-    // .desc (property) → .desc()
     .replace(/\.desc\b(?!\()/g, ".desc()")
-    // .asc (property) → .asc()
     .replace(/\.asc\b(?!\()/g, ".asc()")
-    // ~node → new Nodes.BitwiseNot(node)  — hard to do generically; mark for review
-    .replace(/~(\w+)/, "new Nodes.BitwiseNot($1)");
+    // ~ (bitwise NOT) is complex when applied to sub-expressions — emit TODO.
+    // The committed arel-30/query.ts uses new Nodes.BitwiseNot(...) directly.
+    .replace(/~\S+/, "/* TODO: new Nodes.BitwiseNot(...) */");
+  // NOTE: Ruby infix arithmetic (+, -, *, /) cannot be reliably rewritten
+  // to method chains (.add/.subtract/.multiply/.divide) with regex; those
+  // fixtures are hand-translated in query.ts directly.
 
   // Determine needed imports
   const imports: string[] = ["Table"];
-  if (tsExpr.includes("Nodes.")) imports.push("Nodes");
+  if (tsExpr.includes("Nodes.") || tsExpr.includes("BitwiseNot")) imports.push("Nodes");
   if (tsExpr.includes("sql(")) imports.push("sql");
-  if (tsExpr.includes("star") && !tsExpr.includes("tbl.star") && !tsExpr.includes(".star")) {
-    imports.push("star");
-  }
+  if (/\bstar\b/.test(tsExpr) && !tsExpr.includes(".star")) imports.push("star");
 
   return {
     rb: `${rbDecls}\n${query}`,

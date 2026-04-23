@@ -64,7 +64,7 @@ export class BelongsTo extends SingularAssociation {
         ? counterCache
         : `${pluralize(underscore(model.name))}_count`;
     const targetClassName =
-      reflection.options?.className ?? (name.charAt(0).toUpperCase() + name.slice(1));
+      reflection.options?.className ?? name.charAt(0).toUpperCase() + name.slice(1);
     try {
       const targetClass = resolveModel(targetClassName);
       const existing: Set<string> = (targetClass as any)._counterCacheColumns ?? new Set();

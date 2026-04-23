@@ -16,6 +16,14 @@ import {
 } from "./callbacks.js";
 import { serializableHash, SerializeOptions } from "./serialization.js";
 import { BlockValidator, EachValidator, Validator as ValidatorBase } from "./validator.js";
+
+/**
+ * Anything `validates_with` accepts: a full `Validator`/`EachValidator`
+ * subclass, or any class that just implements `validate(record)`. Used by
+ * `_validators` / `validators()` / `validatorsOn()` so the stored value
+ * type matches what we actually accept at registration.
+ */
+type ValidatorLike = ValidatorBase | EachValidator | { validate(record: AnyRecord): void };
 import {
   AttributeMethodPattern,
   attributeMethodPrefix,
@@ -76,7 +84,7 @@ export class Model {
   // name (or `null` for validators registered without `attributes:`). O(1)
   // `validatorsOn(attr)` and matches Rails' per-attribute dup semantics in
   // `inherited(base)` (validations.rb:287-291).
-  static _validators: Map<string | null, Array<ValidatorBase | EachValidator>> = new Map();
+  static _validators: Map<string | null, Array<ValidatorLike>> = new Map();
   static _callbackChain: CallbackChain = new CallbackChain();
   private static _modelName: ModelName | null = null;
 
@@ -481,11 +489,11 @@ export class Model {
    *
    * Mirrors: ActiveModel::Validations.validators
    */
-  static validators(): Array<ValidatorBase | EachValidator> {
+  static validators(): Array<ValidatorLike> {
     // Rails: `_validators.values.flatten.uniq`
     // (activemodel/lib/active_model/validations.rb:204-206).
-    const seen = new Set<ValidatorBase | EachValidator>();
-    const out: Array<ValidatorBase | EachValidator> = [];
+    const seen = new Set<ValidatorLike>();
+    const out: Array<ValidatorLike> = [];
     for (const bucket of this._validators.values()) {
       for (const v of bucket) {
         if (seen.has(v)) continue;
@@ -511,7 +519,7 @@ export class Model {
    * mutation can't leak into internals; consecutive calls return
    * independent arrays).
    */
-  static validatorsOn(attribute: string): Array<ValidatorBase | EachValidator> {
+  static validatorsOn(attribute: string): Array<ValidatorLike> {
     const bucket = this._validators.get(attribute);
     return bucket ? [...bucket] : [];
   }
@@ -891,7 +899,7 @@ export class Model {
     // gets an independent top-level Map whose per-attribute arrays are also
     // fresh — so push/delete on the subclass never leaks back up the chain.
     if (!Object.prototype.hasOwnProperty.call(this, "_validators")) {
-      const cloned = new Map<string | null, Array<ValidatorBase | EachValidator>>();
+      const cloned = new Map<string | null, Array<ValidatorLike>>();
       for (const [k, arr] of this._validators) cloned.set(k, [...arr]);
       this._validators = cloned;
     }
@@ -915,7 +923,7 @@ export class Model {
    *     caller must pass attributes explicitly).
    */
   private static _registerValidator(
-    validator: ValidatorBase | EachValidator | { validate(record: AnyRecord): void },
+    validator: ValidatorLike,
     explicitAttributes?: readonly string[] | null,
   ): void {
     this._ensureOwnValidators();
@@ -938,7 +946,7 @@ export class Model {
         bucket = [];
         this._validators.set(key, bucket);
       }
-      bucket.push(validator as ValidatorBase);
+      bucket.push(validator);
     }
   }
 

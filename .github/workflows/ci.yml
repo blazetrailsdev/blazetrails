@@ -355,6 +355,7 @@ jobs:
         with:
           name: parity-rails-dumps
           path: scripts/parity/.out/rails/
+          retention-days: 1
 
   schema-parity-trails:
     name: Schema Parity (trails side)
@@ -379,6 +380,7 @@ jobs:
         with:
           name: parity-trails-dumps
           path: scripts/parity/.out/trails/
+          retention-days: 1
 
   schema-parity-diff:
     name: Schema Parity (diff)
@@ -386,7 +388,10 @@ jobs:
       - changes
       - schema-parity-rails
       - schema-parity-trails
-    if: needs.changes.outputs.docs_only != 'true'
+    if: >-
+      needs.changes.outputs.docs_only != 'true' &&
+      needs.schema-parity-rails.result == 'success' &&
+      needs.schema-parity-trails.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

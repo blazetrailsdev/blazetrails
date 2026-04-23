@@ -27,8 +27,8 @@ export function initializeDup(this: Base, _other: unknown): void {
  *
  * Mirrors: ActiveRecord::Aggregations#reload
  */
-export async function reload(this: Base): Promise<Base> {
-  return persistenceReload.call(this);
+export async function reload<T extends Base>(this: T): Promise<T> {
+  return persistenceReload.call(this) as Promise<T>;
 }
 
 export const InstanceMethods = {

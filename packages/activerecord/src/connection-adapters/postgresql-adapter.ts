@@ -2547,14 +2547,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return Promise.all(
       rows.map(async (row) => {
         const toTable = unquoteIdentifier(row.to_table as string);
-        const conkey = String(row.conkey)
-          .replace(/[{}]/g, "")
-          .split(",")
-          .map(Number);
-        const confkey = String(row.confkey)
-          .replace(/[{}]/g, "")
-          .split(",")
-          .map(Number);
+        const conkey = String(row.conkey).replace(/[{}]/g, "").split(",").map(Number);
+        const confkey = String(row.confkey).replace(/[{}]/g, "").split(",").map(Number);
         let column: string;
         let primaryKey: string;
         if (conkey.length > 1) {

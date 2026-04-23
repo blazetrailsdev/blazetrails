@@ -68,6 +68,26 @@ describe("AttributeAssignmentTest", () => {
     expect(() => p.assignAttributes({ name: "test" })).toThrow("boom");
   });
 
+  it("routes through instance-own setter (JS singleton method)", () => {
+    class Person extends Model {
+      static {
+        this.attribute("name", "string");
+      }
+    }
+    const p = new Person({});
+    const seen: string[] = [];
+    Object.defineProperty(p, "name", {
+      set(v: string) {
+        seen.push(v);
+        (this as Person).writeAttribute("name", v.toUpperCase());
+      },
+      configurable: true,
+    });
+    p.assignAttributes({ name: "bob" });
+    expect(seen).toEqual(["bob"]);
+    expect(p.readAttribute("name")).toBe("BOB");
+  });
+
   it("routes through user-defined setter if present", () => {
     class Person extends Model {
       static {

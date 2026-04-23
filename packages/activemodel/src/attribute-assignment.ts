@@ -45,23 +45,41 @@ export function assignAttributes(model: AttributeAssignment, newAttributes: unkn
 }
 
 /**
- * Walk the prototype chain looking for a setter descriptor for `key`.
+ * Walk instance → prototype chain looking for a setter descriptor for `key`.
  * Mirrors Rails' `public_send("#{k}=", v)` dispatch
- * (activemodel/lib/active_model/attribute_assignment.rb:67-70), which
- * routes through any user-defined `attr_writer` / `def name=` before
- * the attribute store sees the value.
+ * (activemodel/lib/active_model/attribute_assignment.rb:67-70), which routes
+ * through any user-defined `attr_writer` / `def name=` before the attribute
+ * store sees the value.
  *
- * Model.prototype itself defines no per-attribute setters, so lookup
- * only finds setters that user subclasses added explicitly.
+ * Starts at the instance itself (JS analogue of Ruby singleton methods —
+ * `Object.defineProperty(model, key, { set })`) and walks up, stopping before
+ * `Object.prototype` so built-in accessors like `__proto__` can't hijack
+ * mass assignment.
+ *
+ * Matches either of:
+ * - a user-defined setter on a subclass prototype
+ *   (`class Cat extends Model { set name(v) { … } }`), or
+ * - a framework-generated setter installed by `this.attribute("name", …)`
+ *   (see attributes.ts:110-120), which just forwards to `writeAttribute` —
+ *   so the net behaviour for non-overridden attributes is unchanged. The
+ *   `hasOwnProperty` guard in `attributes.ts` preserves a user-authored
+ *   `set name` if declared in the class body.
+ *
+ * A shadowing data (non-accessor) descriptor stops the walk and returns
+ * `null`: higher-up setters are unreachable via `obj[key] = v` in that case,
+ * and Rails likewise only dispatches to `name=` when the method actually
+ * exists.
  */
 function findSetter(model: object, key: string): ((this: object, value: unknown) => void) | null {
-  let proto: object | null = Object.getPrototypeOf(model);
-  while (proto && proto !== Object.prototype) {
-    const desc = Object.getOwnPropertyDescriptor(proto, key);
-    if (desc && typeof desc.set === "function") {
-      return desc.set as (this: object, value: unknown) => void;
+  let obj: object | null = model;
+  while (obj && obj !== Object.prototype) {
+    const desc = Object.getOwnPropertyDescriptor(obj, key);
+    if (desc) {
+      return typeof desc.set === "function"
+        ? (desc.set as (this: object, value: unknown) => void)
+        : null;
     }
-    proto = Object.getPrototypeOf(proto);
+    obj = Object.getPrototypeOf(obj);
   }
   return null;
 }

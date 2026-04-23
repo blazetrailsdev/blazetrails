@@ -344,8 +344,15 @@ jobs:
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.3"
-          bundler-cache: true
-          gemfile: scripts/parity/schema/ruby/Gemfile
+      - name: Cache bundled gems
+        uses: actions/cache@v4
+        with:
+          path: scripts/parity/schema/ruby/vendor/bundle
+          key: ${{ runner.os }}-parity-gems-${{ hashFiles('scripts/parity/schema/ruby/Gemfile') }}
+          restore-keys: ${{ runner.os }}-parity-gems-
+      - name: Bundle install
+        run: bundle install --jobs 4 --retry 3 --path vendor/bundle
+        working-directory: scripts/parity/schema/ruby
       - run: pnpm install --frozen-lockfile
       - name: Build dependency packages for trails introspection
         run: pnpm --filter @blazetrails/arel --filter @blazetrails/activesupport --filter @blazetrails/activemodel build

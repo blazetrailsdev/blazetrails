@@ -88,8 +88,9 @@ const users = new Table("users");
 users.get("name").eq("amy");
 ```
 
-The last expression is the one `toSql()` / `new ToSql().compile(node)` is
-called on.
+The last expression is the one `.toSql()` is called on. All nodes and
+managers expose `.toSql()` via the base `Node` class (`nodes/node.ts:30`);
+no `ToSql` import is needed in the runner.
 
 ---
 
@@ -102,7 +103,7 @@ the trails Arel source (`packages/arel/src/`).
 | ---------------------------------------------- | -------------------------------------------------- | --------------------------------- |
 | `Arel::Table.new(:foo)`                        | `new Table("foo")`                                 | `table.ts`                        |
 | `tbl[:col]`                                    | `tbl.get("col")`                                   | `table.ts:68`                     |
-| `tbl[Arel.star]`                               | `tbl.project(star)`                                | `table.ts:76`                     |
+| `tbl[Arel.star]`                               | `tbl.star`                                         | `table.ts:88`                     |
 | `node.as("alias")`                             | `node.as("alias")`                                 | `alias-predication.ts`            |
 | `node.eq(val)`                                 | `node.eq(val)`                                     | `filter-predications.ts`          |
 | `node.not_eq(val)`                             | `node.notEq(val)`                                  | `filter-predications.ts`          |
@@ -235,8 +236,8 @@ Files to add:
    - Apply `schema.sql` to temp SQLite.
    - Install `FakeTimers` if `frozenAt` present.
    - Dynamic import of `query.ts` from the fixture dir.
-   - Call `toSql()` on the result (if manager) or `new ToSql().compile(node)`
-     (if raw node). Import `ToSql` from `@blazetrails/arel`.
+   - Call `.toSql()` on the result. All nodes and managers expose it
+     via the base `Node` class; no `ToSql` import is needed.
    - Write canonical JSON.
 2. Root devDependency: `@sinonjs/fake-timers` + `@types/sinonjs__fake-timers`.
 

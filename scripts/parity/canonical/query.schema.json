@@ -21,7 +21,7 @@
     },
     "sql": {
       "type": "string",
-      "description": "SQL string produced by to_sql (Ruby) or toSql() / new ToSql().compile(node) (TypeScript) on the expression returned by the query script."
+      "description": "SQL string produced by to_sql (Ruby) or .toSql() (TypeScript) on the expression returned by the query script. All nodes and managers expose .toSql() via the base Node class."
     },
     "binds": {
       "type": "array",

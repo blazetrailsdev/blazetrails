@@ -33,20 +33,17 @@ describe("TouchLaterTest", () => {
     return Invoice;
   }
 
-  it("touch later raise if non persisted", () => {
+  it("touch later raise if non persisted", async () => {
     const Invoice = makeTouchModel();
     const inv = new Invoice({ amount: 100 });
-    // touch on non-persisted record returns false
     expect(inv.isPersisted()).toBe(false);
+    await expect(inv.touchLater()).rejects.toThrow("Cannot touch on a new or destroyed record");
   });
 
   it("touch later dont set dirty attributes", async () => {
     const Invoice = makeTouchModel();
     const inv = await Invoice.create({ amount: 100 });
-    // After create, record is not dirty
-    expect(inv.changed).toBe(false);
-    await inv.touch();
-    // touch uses updateColumns which bypasses dirty tracking
+    await inv.touchLater();
     expect(inv.changed).toBe(false);
   });
 
@@ -101,8 +98,19 @@ describe("TouchLaterTest", () => {
     expect(updatedAt).toBeInstanceOf(Date);
   });
 
-  it.skip("touch later dont hit the db", () => {
-    /* touchLater not implemented */
+  it("touch later dont hit the db", async () => {
+    const Invoice = makeTouchModel();
+    const inv = await Invoice.create({ amount: 100 });
+    let queryCount = 0;
+    const orig = (Invoice.adapter as any).query?.bind(Invoice.adapter);
+    if (orig) {
+      (Invoice.adapter as any).query = (...args: any[]) => {
+        queryCount++;
+        return orig(...args);
+      };
+    }
+    await inv.touchLater();
+    expect(queryCount).toBe(0);
   });
   it.skip("touching three deep", () => {
     /* needs multi-level association touch */

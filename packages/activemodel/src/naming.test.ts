@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Model } from "./index.js";
 import { ModelName, Naming } from "./naming.js";
+import { ArgumentError } from "./attribute-assignment.js";
 
 describe("NamingTest", () => {
   class Post extends Model {}
@@ -347,15 +348,24 @@ describe("ModelName rejects Ruby-shaped strings", () => {
 });
 
 describe("ModelName rejects malformed namespace option", () => {
-  it("throws when namespace is a non-string object without a string .name", () => {
+  it("throws ArgumentError on object without a string .name", () => {
     expect(() => new ModelName("Post", { namespace: {} as unknown as { name: string } })).toThrow(
-      /must be a string/,
+      ArgumentError,
     );
   });
-  it("throws when namespace array contains a non-string element", () => {
+  it("throws ArgumentError on array with non-string elements", () => {
     expect(() => new ModelName("Post", { namespace: ["Blog", 42 as unknown as string] })).toThrow(
-      /must be a string/,
+      ArgumentError,
     );
+  });
+  it("throws ArgumentError on empty-string namespace", () => {
+    expect(() => new ModelName("Post", { namespace: "" })).toThrow(ArgumentError);
+  });
+  it("throws ArgumentError on whitespace-only segment in an array", () => {
+    expect(() => new ModelName("Post", { namespace: ["Blog", "   "] })).toThrow(ArgumentError);
+  });
+  it("throws ArgumentError on blank name", () => {
+    expect(() => new ModelName("   ")).toThrow(ArgumentError);
   });
 });
 

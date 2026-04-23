@@ -1,4 +1,5 @@
 import { underscore, pluralize, singularize, humanize } from "@blazetrails/activesupport";
+import { ArgumentError } from "./attribute-assignment.js";
 
 /**
  * Naming mixin — provides model_name on classes and naming helpers.
@@ -103,9 +104,11 @@ export class ModelName {
    *
    * `name` must be a bare class identifier. The Ruby `::` separator has no
    * JavaScript equivalent, so namespace membership is declared explicitly
-   * via `options.namespace` — either a single string (`"Blog"`) or a
-   * segment array for arbitrary nesting (`["Admin", "Blog"]`). `klass`
-   * lets the human-name / I18n lookup walk the class's ancestors.
+   * via `options.namespace` — either a single string (`"Blog"`), a segment
+   * array for arbitrary nesting (`["Admin", "Blog"]`), or a module-like
+   * object with a string `name` field (`{ name: "Blog" }`, Rails-porting
+   * ergonomics). `klass` lets the human-name / I18n lookup walk the class's
+   * ancestors.
    *
    * Field math follows Rails' `ActiveModel::Name#initialize`
    * (activemodel/lib/active_model/naming.rb:166-185) but operates on the
@@ -122,16 +125,17 @@ export class ModelName {
   ) {
     this._klass = options?.klass ?? null;
     const rawNs = options?.namespace ?? null;
-    const nsTypeError = new TypeError(
-      "options.namespace must be a string, an array of strings, or an object with a string `name`",
-    );
+    const invalidNamespace = (): ArgumentError =>
+      new ArgumentError(
+        "options.namespace must be a non-blank string, an array of non-blank strings, or an object with a non-blank string `name`",
+      );
     let segments: string[];
     if (rawNs == null) {
       segments = [];
     } else if (typeof rawNs === "string") {
       segments = [rawNs];
     } else if (Array.isArray(rawNs)) {
-      if (!rawNs.every((s) => typeof s === "string")) throw nsTypeError;
+      if (!rawNs.every((s) => typeof s === "string")) throw invalidNamespace();
       segments = [...rawNs];
     } else if (
       typeof rawNs === "object" &&
@@ -139,12 +143,17 @@ export class ModelName {
     ) {
       segments = [(rawNs as { name: string }).name];
     } else {
-      throw nsTypeError;
+      throw invalidNamespace();
     }
+    // Trim + reject blank segments. `underscore("")` and `underscore(" ")`
+    // leak through as empty / whitespace tails, which would produce invalid
+    // identifiers in `singular`, `collection`, `i18nKey`.
+    segments = segments.map((s) => s.trim());
+    if (segments.some((s) => s.length === 0)) throw invalidNamespace();
 
     // Rails' `@name.blank?` guard — anonymous class without an explicit name.
     if (!name || !name.trim()) {
-      throw new Error(
+      throw new ArgumentError(
         "Class name cannot be blank. You need to supply a name argument when anonymous class given",
       );
     }
@@ -153,8 +162,8 @@ export class ModelName {
     // string — point them at the right option.
     const hasRubySeparator = (s: string): boolean => s.includes("::");
     if (hasRubySeparator(name) || segments.some(hasRubySeparator)) {
-      throw new Error(
-        'ModelName arguments must not contain "::" — pass namespace segments as options.namespace (string or string[])',
+      throw new ArgumentError(
+        'ModelName arguments must not contain "::" — pass namespace segments as options.namespace (string, string[], or { name: string })',
       );
     }
 

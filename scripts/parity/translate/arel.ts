@@ -122,8 +122,22 @@ function translateQuery(
     };
   }
 
-  // Apply single-expression translations (all rules verified against packages/arel/src/)
+  // Apply single-expression translations (all rules verified against packages/arel/src/).
+  // IMPORTANT: %w[...] rewrite must run before not_in_any wrapping so the wrapping
+  // rule sees the expanded array literal, not the %w form.
   let tsExpr = query
+    // %w[...] → array literal (runs first so downstream rules see JS array syntax)
+    .replace(
+      /%w\[([^\]]+)\]/g,
+      (_, words) =>
+        "[" +
+        words
+          .trim()
+          .split(/\s+/)
+          .map((w: string) => `"${w}"`)
+          .join(", ") +
+        "]",
+    )
     // tbl[:col] → tbl.get("col")
     .replace(/(\w+)\[:([\w_]+)\]/g, '$1.get("$2")')
     // tbl[Arel.star] → tbl.star
@@ -136,10 +150,9 @@ function translateQuery(
     .replace(/\.not_eq\(/g, ".notEq(")
     // .not_in → .notIn
     .replace(/\.not_in\(/g, ".notIn(")
-    // .not_in_any → .notInAny with arg wrapping: each element becomes its own inner array.
-    // Rails: col.not_in_any(["A","B"]) = grouping_any(:not_in, ["A","B"])
-    //   = NOT IN ('A') OR NOT IN ('B')
-    // Trails: col.notInAny([["A"], ["B"]]) = same semantics (each inner array → one notIn call)
+    // .not_in_any → .notInAny with arg wrapping.
+    // Rails: col.not_in_any(["A","B"]) = NOT IN ('A') OR NOT IN ('B')
+    // Trails: col.notInAny([["A"], ["B"]]) — each inner array is one notIn call
     .replace(
       /\.not_in_any\(\[([^\]]+)\]\)/g,
       (_, inner) =>
@@ -158,35 +171,22 @@ function translateQuery(
     .replace(/\.does_not_match_regexp\(/g, ".doesNotMatchRegexp(")
     // Ruby nil → JS null
     .replace(/\bnil\b/g, "null")
-    // %w[...] → array literal
-    .replace(
-      /%w\[([^\]]+)\]/g,
-      (_, words) =>
-        "[" +
-        words
-          .trim()
-          .split(/\s+/)
-          .map((w: string) => `"${w}"`)
-          .join(", ") +
-        "]",
-    )
-    // Single quotes → double quotes for strings
-    .replace(/'([^']+)'/g, '"$1"')
+    // NOTE: Ruby string quotes ('…' → "…") are intentionally NOT rewritten here.
+    // The replacement is too fragile (breaks on escaped apostrophes, nested quotes).
+    // Generated files keep Ruby single quotes as-is; reviewers fix them manually.
     // Arel::Table.new(:foo) → new Table("foo")
     .replace(/Arel::Table\.new\(:(\w+)\)/g, 'new Table("$1")')
-    // Arel::Nodes::NamedFunction.new → new Nodes.NamedFunction
-    .replace(/Arel::Nodes::NamedFunction\.new\(/g, "new Nodes.NamedFunction(")
+    // Qualified and bare Arel Node constructors → Nodes.* equivalents
+    .replace(/(?:Arel::Nodes::)?NamedFunction\.new\(/g, "new Nodes.NamedFunction(")
+    .replace(/(?:Arel::Nodes::)?Quoted\.new\(/g, "new Nodes.Quoted(")
     // Arel::Nodes::OuterJoin → Nodes.OuterJoin
     .replace(/Arel::Nodes::OuterJoin/g, "Nodes.OuterJoin")
-    // Bare OuterJoin → Nodes.OuterJoin, but not if already preceded by "Nodes."
-    // (negative lookbehind prevents double-translation to Nodes.Nodes.OuterJoin)
+    // Bare OuterJoin → Nodes.OuterJoin (negative lookbehind prevents double-translation)
     .replace(/(?<!Nodes\.)OuterJoin\b/g, "Nodes.OuterJoin")
     // Arel::Nodes::Window.new → new Nodes.Window()
     .replace(/Arel::Nodes::Window\.new/g, "new Nodes.Window()")
     // Arel::Nodes::As.new → new Nodes.As
     .replace(/Arel::Nodes::As\.new\(/g, "new Nodes.As(")
-    // Arel::Nodes::Quoted.new → new Nodes.Quoted
-    .replace(/Arel::Nodes::Quoted\.new\(/g, "new Nodes.Quoted(")
     // Property aggregates → method calls (table.ts / attribute.ts)
     .replace(/\.count\b(?!\()/g, ".count()")
     .replace(/\.sum\b(?!\()/g, ".sum()")

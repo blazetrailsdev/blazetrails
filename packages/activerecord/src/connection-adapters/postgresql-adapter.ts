@@ -2343,12 +2343,13 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     const defaultValue =
       defaultOrChanges !== null &&
       typeof defaultOrChanges === "object" &&
-      "from" in (defaultOrChanges as object) &&
       "to" in (defaultOrChanges as object)
-        ? (defaultOrChanges as { from: unknown; to: unknown }).to
+        ? (defaultOrChanges as { to: unknown }).to
         : defaultOrChanges;
-    const sqlType = ((col as Column).sqlType ?? "string") as ColumnType;
-    const cd = new ColumnDefinition(columnName, sqlType);
+    const pgCol = col as Column;
+    const semanticType = (pgCol.type ?? "string") as ColumnType;
+    const cd = new ColumnDefinition(columnName, semanticType);
+    cd.sqlType = pgCol.sqlType ?? undefined;
     return new ChangeColumnDefaultDefinition(cd, defaultValue);
   }
 

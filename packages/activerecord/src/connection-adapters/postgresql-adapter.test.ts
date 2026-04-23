@@ -869,16 +869,17 @@ describeIfPg("PostgreSQLAdapter", () => {
       await adapter.exec(`DROP TABLE IF EXISTS "bcd_test" CASCADE`);
     });
 
-    it("returns a ChangeColumnDefaultDefinition with the new default value", async () => {
+    it("returns a ChangeColumnDefaultDefinition with the new default value and correct types", async () => {
       const def = await adapter.buildChangeColumnDefaultDefinition("bcd_test", "score", 42);
       expect(def).toBeDefined();
       expect(def!.column.name).toBe("score");
       expect(def!.default).toBe(42);
+      expect(def!.column.type).toBe("integer");
+      expect(def!.column.sqlType).toBe("integer");
     });
 
-    it("extracts :to from a from/to hash", async () => {
+    it("extracts :to from an object with a to key", async () => {
       const def = await adapter.buildChangeColumnDefaultDefinition("bcd_test", "score", {
-        from: 0,
         to: 99,
       });
       expect(def!.default).toBe(99);

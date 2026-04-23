@@ -9,6 +9,7 @@ import { reflectOnAllAssociations } from "./reflection.js";
 import { BelongsTo as BelongsToBuilder } from "./associations/builder/belongs-to.js";
 import { HasOne as HasOneBuilder } from "./associations/builder/has-one.js";
 import { beforeCommittedBang as transactionsBeforeCommittedBang } from "./transactions.js";
+import { isAppliedTo as isNoTouchingApplied } from "./no-touching.js";
 
 /**
  * Deferred-touch mixin.
@@ -36,6 +37,7 @@ function raiseRecordNotTouchedError(): never {
  */
 export async function touchLater(this: Base, ...names: string[]): Promise<void> {
   if (!this.isPersisted()) raiseRecordNotTouchedError();
+  if (isNoTouchingApplied(this.constructor as typeof Base)) return;
 
   const ctor = this.constructor as typeof Base;
   const self = this as any;
@@ -63,7 +65,7 @@ export async function touchLater(this: Base, ...names: string[]): Promise<void> 
     if (r.macro === "belongsTo") {
       await BelongsToBuilder.touchRecord(
         this,
-        (this as any).changesToSave?.() ?? {},
+        (this as any).changesToSave ?? {},
         r.foreignKey ?? r.options?.foreignKey,
         r.name,
         touch,
@@ -121,34 +123,16 @@ function surreptitouslyTouch(record: Base, attrNames: string[], time: Date): voi
 async function touchDeferredAttributes(record: Base): Promise<void> {
   const self = record as any;
   const time: Date = self._touchTime ?? new Date();
-  const ctor = record.constructor as typeof Base;
-  const tsAttrs = timestampAttributesForUpdateInModel.call(ctor) as string[];
-  const extra: string[] = (self._deferTouchAttrs as string[]).filter(
-    (a: string) => !tsAttrs.includes(a),
-  );
 
-  self._skipDirtyTracking = true;
-  try {
-    // Build the attrs map with the deferred time so we preserve the exact
-    // timestamp that was set during touchLater rather than calling new Date().
-    const attrs: Record<string, unknown> = { updated_at: time };
-    for (const attr of extra) attrs[attr] = time;
-    await record.updateColumns(attrs);
-  } finally {
-    self._skipDirtyTracking = false;
-  }
+  // Build attrs from all deferred columns, preserving the exact timestamp
+  // set at touchLater time — mirrors touch(time: @_touch_time) in Rails.
+  const attrs: Record<string, unknown> = {};
+  for (const attr of self._deferTouchAttrs as string[]) attrs[attr] = time;
 
   self._deferTouchAttrs = null;
   self._touchTime = null;
-}
 
-// ---------------------------------------------------------------------------
-// initInternals — called by Base#_initInternals to zero the deferred state.
-// Mirrors: ActiveRecord::TouchLater#init_internals (private)
-// ---------------------------------------------------------------------------
-export function initInternals(this: Base): void {
-  (this as any)._deferTouchAttrs = null;
-  (this as any)._touchTime = null;
+  await record.updateColumns(attrs);
 }
 
 export const InstanceMethods = {

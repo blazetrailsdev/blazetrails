@@ -109,7 +109,9 @@ export function quotedBinary(value: Buffer | string): string {
 }
 
 export function unquoteIdentifier(identifier: string | null | undefined): string | null {
-  if (identifier && identifier.startsWith("`")) return identifier.slice(1, -1);
+  if (identifier && identifier.startsWith("`") && identifier.endsWith("`")) {
+    return identifier.slice(1, -1).replace(/``/g, "`");
+  }
   return identifier ?? null;
 }
 

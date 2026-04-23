@@ -650,6 +650,18 @@ describe("ErrorsTest", () => {
     expect(e2.attributeNames).toEqual(["age"]);
   });
 
+  it("copy! preserves NestedError class on duplicated errors", () => {
+    // Rails `deep_dup` preserves dynamic class; a NestedError dup is still
+    // a NestedError with its innerError reachable.
+    const source = new Errors({});
+    source.add("age", "invalid");
+    const wrapper = new Errors({});
+    wrapper.mergeBang(source); // imports as NestedError
+    const target = new Errors({});
+    target.copyBang(wrapper);
+    expect(target.objects[0].constructor.name).toBe("NestedError");
+  });
+
   it("copy! rebinds each error's base to the receiver", () => {
     const base1 = { tag: "one" };
     const base2 = { tag: "two" };

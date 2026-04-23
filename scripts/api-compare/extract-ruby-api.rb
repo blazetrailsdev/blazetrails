@@ -902,15 +902,16 @@ def run
       extractor.process_file(filepath, pkg_dir)
     end
 
-    # Filter to only public methods
+    # Preserve every method; non-public methods are tagged with
+    # `internal: true` so --privates mode can select them.
     classes = {}
     extractor.classes.each do |fqn, info|
-      classes[fqn] = filter_public(info)
+      classes[fqn] = tag_visibility(info)
     end
 
     modules = {}
     extractor.modules.each do |fqn, info|
-      modules[fqn] = filter_public(info)
+      modules[fqn] = tag_visibility(info)
     end
 
     manifest[:packages][pkg_name] = {
@@ -925,7 +926,7 @@ def run
     module_count = data[:modules].length
     method_count = data[:classes].values.sum { |c| c[:instanceMethods].length + c[:classMethods].length } +
                    data[:modules].values.sum { |m| m[:instanceMethods].length + m[:classMethods].length }
-    puts "  #{pkg}: #{class_count} classes, #{module_count} modules, #{method_count} public methods"
+    puts "  #{pkg}: #{class_count} classes, #{module_count} modules, #{method_count} methods (public + internal)"
   end
 
   output_path = File.join(OUTPUT_DIR, "rails-api.json")
@@ -943,7 +944,7 @@ def tag_internal(methods)
   end
 end
 
-def filter_public(info)
+def tag_visibility(info)
   {
     name: info[:name],
     fqn: info[:fqn],

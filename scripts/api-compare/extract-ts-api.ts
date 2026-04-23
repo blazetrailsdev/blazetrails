@@ -243,7 +243,12 @@ function extractPackage(pkgName: string, srcDir: string): PackageInfo {
         if (prop.flags & ts.SymbolFlags.Prototype) continue;
         const decl = prop.valueDeclaration ?? prop.declarations?.[0];
         if (!decl) continue;
-        const isPrivateField = prop.name.startsWith("#");
+        // `#private` fields surface in the symbol table with their
+        // mangled name, not a literal leading `#`, so derive the flag
+        // from the declaration's name node (same approach as `getVisibility`
+        // below and the top-level class walker at line 707/727).
+        const declNameNode = (decl as ts.NamedDeclaration).name;
+        const isPrivateField = !!declNameNode && ts.isPrivateIdentifier(declNameNode);
         const hasPrivateMod = hasModifier(decl, ts.SyntaxKind.PrivateKeyword);
         const hasProtectedMod = hasModifier(decl, ts.SyntaxKind.ProtectedKeyword);
         const visibility: "public" | "private" | "protected" =

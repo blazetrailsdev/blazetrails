@@ -130,6 +130,9 @@ function getDirectSubclasses(cls: AnyAttributeHost): AnyAttributeHost[] {
  */
 export function resetDefaultAttributes(cls: AnyAttributeHost): void {
   cls._cachedDefaultAttributes = null;
+  // _attributesBuilder is an AR-specific derived cache; clear it when present
+  // so AR models rebuilding from a new attribute declaration get fresh state.
+  if ("_attributesBuilder" in cls) cls._attributesBuilder = undefined;
   for (const sub of getDirectSubclasses(cls)) {
     resetDefaultAttributes(sub);
   }

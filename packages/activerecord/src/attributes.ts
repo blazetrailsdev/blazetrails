@@ -88,7 +88,6 @@ export function defineAttribute(
   });
 
   resetDefaultAttributes(this);
-  this._attributesBuilder = undefined;
   applyPendingEncryptions(this);
 
   // Install prototype accessor so the attribute is readable/writable by name,

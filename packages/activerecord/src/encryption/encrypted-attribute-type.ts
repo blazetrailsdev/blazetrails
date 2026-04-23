@@ -21,7 +21,6 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
   private _previousType: boolean;
   private _default?: unknown;
   private _encryptor: EncryptorLike;
-  private _previousTypes?: EncryptedAttributeType[];
   private _previousTypesMemo?: EncryptedAttributeType[];
   private _previousTypesMemoKey?: boolean;
 
@@ -130,9 +129,16 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
   }
 
   private _cleanTextScheme(): Scheme {
+    // Rails' clean_text_scheme passes `downcase: downcase?`, and Rails'
+    // `Scheme` sets `@downcase = downcase || ignore_case` internally so
+    // `downcase?` is true for either flag. Our Scheme keeps the flags
+    // separate, so fold `ignoreCase` into `downcase` here to mirror
+    // Rails' effective behavior. Without this, a scheme configured
+    // `ignoreCase: true, downcase: false` would produce a non-lower-
+    // casing clean-text fallback and miss normalized plaintext rows.
     return new Scheme({
       deterministic: this.scheme.deterministic,
-      downcase: this.scheme.downcase,
+      downcase: this.scheme.downcase || this.scheme.ignoreCase,
       encryptor: new NullEncryptor(),
     });
   }
@@ -182,9 +188,7 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
  * a direct `instanceof AdditionalValue` import would introduce a cycle
  * between this module and `extended-deterministic-queries.ts`.
  */
-export const ADDITIONAL_VALUE_BRAND: unique symbol = Symbol.for(
-  "activerecord.encryption.AdditionalValue",
-);
+export const ADDITIONAL_VALUE_BRAND: symbol = Symbol.for("activerecord.encryption.AdditionalValue");
 
 function isAdditionalValue(value: unknown): boolean {
   return (

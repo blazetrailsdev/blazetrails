@@ -650,6 +650,19 @@ describe("ErrorsTest", () => {
     expect(e2.attributeNames).toEqual(["age"]);
   });
 
+  it("copy! deep-dups nested option values (matches Rails deep_dup)", () => {
+    // Rails errors.rb:138 calls `other.errors.deep_dup`, which recurses into
+    // Hash/Array values. A shallow spread would leave nested values shared,
+    // so mutating the source after copy would leak into the target.
+    const source = new Errors({});
+    const nested = { range: { min: 1, max: 5 } };
+    source.add("age", "out_of_range", nested);
+    const target = new Errors({});
+    target.copyBang(source);
+    (source.objects[0].options.range as { min: number }).min = 999;
+    expect((target.objects[0].options.range as { min: number }).min).toBe(1);
+  });
+
   it("copy! preserves NestedError class on duplicated errors", () => {
     // Rails `deep_dup` preserves dynamic class; a NestedError dup is still
     // a NestedError with its innerError reachable.

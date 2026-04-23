@@ -1,4 +1,4 @@
-import { humanize, underscore } from "@blazetrails/activesupport";
+import { humanize, underscore, deepDup } from "@blazetrails/activesupport";
 import { I18n } from "./i18n.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -39,7 +39,7 @@ export class Error {
    * (activemodel/lib/active_model/errors.rb:138-143).
    */
   dupWithBase(newBase: AnyRecord): Error {
-    return new Error(newBase, this.attribute, this.rawType, { ...this.options });
+    return new Error(newBase, this.attribute, this.rawType, deepDup(this.options));
   }
 
   get message(): string {

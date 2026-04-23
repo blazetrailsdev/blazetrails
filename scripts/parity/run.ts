@@ -44,9 +44,13 @@ function parseSide(): Side {
   return "all";
 }
 
+// Schema parity uses only numeric-prefixed fixtures (e.g. 01-trivial, 02-moderate).
+// Query parity fixtures (arel-XX, ar-XX) are handled by a separate runner (parity:query).
+const SCHEMA_FIXTURE_PATTERN = /^\d/;
+
 function fixtures(): string[] {
   return readdirSync(FIXTURES_DIR, { withFileTypes: true })
-    .filter((e) => e.isDirectory())
+    .filter((e) => e.isDirectory() && SCHEMA_FIXTURE_PATTERN.test(e.name))
     .map((e) => e.name)
     .sort();
 }

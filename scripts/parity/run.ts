@@ -15,6 +15,12 @@ import { join } from "node:path";
 import { spawn } from "node:child_process";
 
 const FIXTURES_DIR = "scripts/parity/fixtures";
+const OUT_RAILS = "scripts/parity/.out/rails";
+const OUT_TRAILS = "scripts/parity/.out/trails";
+const GEMFILE = "scripts/parity/schema/ruby/Gemfile";
+const RUBY_DUMP = "scripts/parity/schema/ruby/dump.rb";
+const NODE_DUMP = "scripts/parity/schema/node/dump.ts";
+const DIFF_SCRIPT = "scripts/parity/schema/diff.ts";
 
 function assertRepoRoot(): void {
   if (!existsSync(FIXTURES_DIR)) {
@@ -22,12 +28,6 @@ function assertRepoRoot(): void {
     process.exit(1);
   }
 }
-const OUT_RAILS = "scripts/parity/.out/rails";
-const OUT_TRAILS = "scripts/parity/.out/trails";
-const GEMFILE = "scripts/parity/schema/ruby/Gemfile";
-const RUBY_DUMP = "scripts/parity/schema/ruby/dump.rb";
-const NODE_DUMP = "scripts/parity/schema/node/dump.ts";
-const DIFF_SCRIPT = "scripts/parity/schema/diff.ts";
 
 type Side = "rails" | "trails" | "diff" | "all";
 

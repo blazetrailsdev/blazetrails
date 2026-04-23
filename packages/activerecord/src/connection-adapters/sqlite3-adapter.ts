@@ -1428,7 +1428,9 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     const fkNames = this._parseForeignKeyNames(tableName);
 
     for (const fk of fks) {
-      const cols = fk.column.includes(",") ? fk.column.split(",").map((c) => c.trim()) : [fk.column];
+      const cols = fk.column.includes(",")
+        ? fk.column.split(",").map((c) => c.trim())
+        : [fk.column];
       if (!cols.every((c) => colNames.includes(c))) continue;
       const pks = fk.primaryKey.includes(",")
         ? fk.primaryKey.split(",").map((c) => c.trim())

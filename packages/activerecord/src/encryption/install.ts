@@ -20,12 +20,6 @@ import { ExtendedDeterministicQueries } from "./extended-deterministic-queries.j
  */
 export function installExtendedQueriesIfConfigured(): boolean {
   if (!Configurable.config.extendQueries) return ExtendedDeterministicQueries.installed;
-  ExtendedDeterministicQueries.installSupport({
-    Relation: Relation as unknown as { prototype: Record<string, Function> },
-    Base: Base as unknown as Record<string, Function>,
-    EncryptedAttributeType: EncryptedAttributeType as unknown as {
-      prototype: Record<string, Function>;
-    },
-  });
+  ExtendedDeterministicQueries.installSupport({ Relation, Base, EncryptedAttributeType });
   return ExtendedDeterministicQueries.installed;
 }

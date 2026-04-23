@@ -1,8 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   AdditionalValue,
-  CoreQueries,
-  EncryptedQuery,
   ExtendedDeterministicQueries,
   ExtendedEncryptableType,
   RelationQueries,
@@ -256,7 +254,7 @@ describe("ActiveRecord::Encryption::ExtendedDeterministicQueries.installSupport"
     });
   });
 
-  it("patches Relation.prototype.scopeForCreate to unwrap AdditionalValue[0]", () => {
+  it("patches Relation.prototype.scopeForCreate to copy the AdditionalValue[0] marker into scope", () => {
     withFreshInstaller(() => {
       const targets = isolatedTargets();
       ExtendedDeterministicQueries.installSupport(targets as any);
@@ -328,14 +326,6 @@ describe("ActiveRecord::Encryption::ExtendedDeterministicQueries.installSupport"
       expect(ExtendedDeterministicQueries.installed).toBe(true);
     });
   });
-
-  // These identifiers are only used inside the wrappers / through
-  // Relation.prototype, so TypeScript's unused-import checks flag them.
-  // The `void` references silence those checks without changing runtime
-  // behavior.
-  void EncryptedQuery;
-  void CoreQueries;
-  void Relation;
 });
 
 describe("installExtendedQueriesIfConfigured", () => {

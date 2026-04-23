@@ -24,9 +24,9 @@ export class ExtendedDeterministicQueries {
    * `config.active_record.encryption.extend_queries`).
    */
   static installSupport(targets: {
-    Relation: { prototype: Record<string, Function> };
-    Base: Record<string, Function> & { findBy?: Function };
-    EncryptedAttributeType: { prototype: Record<string, Function> };
+    Relation: { prototype: { where: Function; exists: Function; scopeForCreate: Function } };
+    Base: { findBy: Function };
+    EncryptedAttributeType: { prototype: { serialize: Function } };
   }): void {
     if (this._installed) return;
 
@@ -35,9 +35,14 @@ export class ExtendedDeterministicQueries {
     // and another un-patched — a non-atomic state that a retry would
     // double-wrap. Rails' `prepend` at boot is effectively all-or-
     // nothing; this matches that intent.
-    const relProto = targets.Relation.prototype;
-    const baseTarget = targets.Base as unknown as Record<string, unknown>;
-    const eatProto = targets.EncryptedAttributeType.prototype;
+    // `prepend()` needs an open object-with-Function-values shape, so
+    // cast at the call site rather than widening the public signature.
+    const relProto = targets.Relation.prototype as unknown as Record<string, Function>;
+    const baseTarget = targets.Base as unknown as Record<string, Function>;
+    const eatProto = targets.EncryptedAttributeType.prototype as unknown as Record<
+      string,
+      Function
+    >;
     const missing: string[] = [];
     if (typeof relProto.where !== "function") missing.push("Relation.prototype.where");
     if (typeof relProto.exists !== "function") missing.push("Relation.prototype.exists");

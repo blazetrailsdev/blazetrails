@@ -102,7 +102,9 @@ export function quotedBinaryString(value: Buffer): string {
 }
 
 export function quotedBinary(value: Buffer | string): string {
-  const hex = Buffer.isBuffer(value) ? value.toString("hex") : Buffer.from(value, "binary").toString("hex");
+  const hex = Buffer.isBuffer(value)
+    ? value.toString("hex")
+    : Buffer.from(value, "binary").toString("hex");
   return `x'${hex}'`;
 }
 

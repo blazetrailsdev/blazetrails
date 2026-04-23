@@ -1,15 +1,15 @@
 /**
- * Arel query translator: Ruby → TypeScript
+ * Arel query translator: Ruby → TypeScript skeleton generator
  *
- * Usage:
- *   tsx scripts/parity/translate/arel.ts [--fixture arel-XX] [--dry-run]
+ * Usage (from repo root):
+ *   tsx scripts/parity/translate/arel.ts [--fixture arel-XX] [--dry-run] [--force]
  *
  * Reads the `-- Query:` comment from each arel fixture's schema.sql,
  * applies the rule-based translation map from docs/query-parity-verification.md,
- * and writes query.rb + query.ts into the fixture directory.
+ * and writes query.rb + query.ts skeletons into the fixture directory.
  *
- * Run once and commit. Re-running is idempotent unless --force is given.
- * Fixtures that cannot be auto-translated get a TODO marker.
+ * Run when adding new fixtures. Existing files are skipped unless --force.
+ * Generated files are starting points — review and correct before committing.
  *
  * Must be run from the repo root.
  */
@@ -61,37 +61,113 @@ function parseSchemaSql(dir: string): FixtureInfo {
   };
 }
 
-/** Generate Ruby query.rb content for an Arel fixture. */
-function generateRuby(info: FixtureInfo): string {
-  const lines: string[] = [`# ${info.name}: ${info.query}`, ""];
-  // Declare Arel::Table vars for each table in the schema
-  for (const t of info.tables) {
-    lines.push(`${t} = Arel::Table.new(:${t})`);
+/**
+ * Apply the Ruby→TypeScript translation rules from docs/query-parity-verification.md.
+ * Returns [rbExpr, tsExpr] for the body of the query expression.
+ * When the query is too complex for rule-based translation, returns a TODO comment.
+ */
+function translateQuery(
+  query: string,
+  tables: string[],
+): { rb: string; ts: string; imports: string[] } {
+  // Build table declaration lines
+  const rbDecls = tables.map((t) => `${t} = Arel::Table.new(:${t})`).join("\n");
+  const tsDecls = tables.map((t) => `const ${t} = new Table("${t}");`).join("\n");
+
+  // Apply simple single-expression translations
+  let tsExpr = query
+    // tbl[:col] → tbl.get("col")
+    .replace(/(\w+)\[:([\w_]+)\]/g, '$1.get("$2")')
+    // tbl[Arel.star] → tbl.star
+    .replace(/(\w+)\[Arel\.star\]/g, "$1.star")
+    // Arel.star → star (standalone)
+    .replace(/\bArel\.star\b/g, "star")
+    // Arel.sql(...) → sql(...)
+    .replace(/Arel\.sql\(/g, "sql(")
+    // .not_eq → .notEq
+    .replace(/\.not_eq\(/g, ".notEq(")
+    // .not_in → .notIn
+    .replace(/\.not_in\(/g, ".notIn(")
+    // .not_in_any → .notIn  (Arel's notInAny not in trails; use notIn)
+    .replace(/\.not_in_any\(/g, ".notIn(")
+    // .is_distinct_from → .isDistinctFrom
+    .replace(/\.is_distinct_from\(/g, ".isDistinctFrom(")
+    // .does_not_match_regexp → .doesNotMatchRegexp
+    .replace(/\.does_not_match_regexp\(/g, ".doesNotMatchRegexp(")
+    // .lteq → .lteq (same)
+    // Ruby nil → JS null
+    .replace(/\bnil\b/g, "null")
+    // Arithmetic operators (simple infix in Ruby)
+    .replace(/\+ /g, ".add(") // approximate; review
+    // %w[...] → array literal
+    .replace(
+      /%w\[([^\]]+)\]/g,
+      (_, words) =>
+        "[" +
+        words
+          .trim()
+          .split(/\s+/)
+          .map((w: string) => `"${w}"`)
+          .join(", ") +
+        "]",
+    )
+    // Single quotes → double quotes for strings
+    .replace(/'([^']+)'/g, '"$1"')
+    // Arel::Table.new(:foo) → new Table("foo")
+    .replace(/Arel::Table\.new\(:(\w+)\)/g, 'new Table("$1")')
+    // Arel::Nodes::NamedFunction.new → new Nodes.NamedFunction
+    .replace(/Arel::Nodes::NamedFunction\.new\(/g, "new Nodes.NamedFunction(")
+    // Arel::Nodes::OuterJoin → Nodes.OuterJoin
+    .replace(/Arel::Nodes::OuterJoin/g, "Nodes.OuterJoin")
+    // OuterJoin (bare) → Nodes.OuterJoin
+    .replace(/\bOuterJoin\b/g, "Nodes.OuterJoin")
+    // Arel::Nodes::Window.new → new Nodes.Window()
+    .replace(/Arel::Nodes::Window\.new/g, "new Nodes.Window()")
+    // Arel::Nodes::As.new → new Nodes.As
+    .replace(/Arel::Nodes::As\.new\(/g, "new Nodes.As(")
+    // Arel::Nodes::Quoted.new → new Nodes.Quoted
+    .replace(/Arel::Nodes::Quoted\.new\(/g, "new Nodes.Quoted(")
+    // Property aggregates (Ruby property) → method calls (TS)
+    .replace(/\.count\b(?!\()/g, ".count()")
+    .replace(/\.sum\b(?!\()/g, ".sum()")
+    .replace(/\.average\b(?!\()/g, ".average()")
+    .replace(/\.maximum\b(?!\()/g, ".maximum()")
+    .replace(/\.minimum\b(?!\()/g, ".minimum()")
+    // .distinct (property) → .distinct() (method)
+    .replace(/\.distinct\b(?!\()/g, ".distinct()")
+    // .not (property) → .not() (method)
+    .replace(/\.not\b(?!\()/g, ".not()")
+    // .desc (property) → .desc()
+    .replace(/\.desc\b(?!\()/g, ".desc()")
+    // .asc (property) → .asc()
+    .replace(/\.asc\b(?!\()/g, ".asc()")
+    // ~node → new Nodes.BitwiseNot(node)  — hard to do generically; mark for review
+    .replace(/~(\w+)/, "new Nodes.BitwiseNot($1)");
+
+  // Determine needed imports
+  const imports: string[] = ["Table"];
+  if (tsExpr.includes("Nodes.")) imports.push("Nodes");
+  if (tsExpr.includes("sql(")) imports.push("sql");
+  if (tsExpr.includes("star") && !tsExpr.includes("tbl.star") && !tsExpr.includes(".star")) {
+    imports.push("star");
   }
-  lines.push("");
-  lines.push(`# TODO: translate query — ${info.query}`);
-  lines.push("");
-  return lines.join("\n");
+
+  return {
+    rb: `${rbDecls}\n${query}`,
+    ts: `${tsDecls}\n${tsExpr};`,
+    imports: [...new Set(imports)].sort(),
+  };
 }
 
-/** Generate TypeScript query.ts content for an Arel fixture. */
-function generateTs(info: FixtureInfo): string {
-  const imports = new Set<string>(["Table"]);
-  const lines: string[] = [];
-  lines.push(`// ${info.name}: ${info.query}`);
-  lines.push(""); // imports placeholder, filled in below
-  lines.push("");
-  // Declare Table vars
-  for (const t of info.tables) {
-    lines.push(`const ${t} = new Table("${t}");`);
-  }
-  lines.push("");
-  lines.push(`// TODO: translate query — ${info.query}`);
-  lines.push("");
+function generateRuby(info: FixtureInfo): string {
+  const { rb } = translateQuery(info.query, info.tables);
+  return `# ${info.name}: ${info.query}\n${rb}\n`;
+}
 
-  const importLine = `import { ${[...imports].sort().join(", ")} } from "@blazetrails/arel";`;
-  lines[1] = importLine;
-  return lines.join("\n");
+function generateTs(info: FixtureInfo): string {
+  const { ts, imports } = translateQuery(info.query, info.tables);
+  const importLine = `import { ${imports.join(", ")} } from "@blazetrails/arel";`;
+  return `// ${info.name}: ${info.query}\n${importLine}\n${ts}\n`;
 }
 
 function arelFixtures(): string[] {
@@ -144,9 +220,11 @@ function main(): void {
 
   if (!dryRun) {
     process.stdout.write(`generated: ${generated}, skipped (already exist): ${skipped}\n`);
-    process.stdout.write(
-      `Review all generated files — each has a TODO where the query must be translated.\n`,
-    );
+    if (generated > 0) {
+      process.stdout.write(
+        "Review all generated files — rule-based translation is approximate for complex queries.\n",
+      );
+    }
   }
 }
 

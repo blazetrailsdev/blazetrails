@@ -33,18 +33,18 @@ reading the rest of the document.
 
 ## Locked decisions (override before PR1 or live with them)
 
-| #   | Decision                                     | Value                                                                                                                                                                     |
-| --- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| D1  | Column ordering in canonical JSON            | **Preserve declaration order** (order is semantic). Indexes + tables sorted by name.                                                                                      |
-| D2  | `schema_migrations` / `ar_internal_metadata` | **Filter** on both sides. Fixtures never declare them.                                                                                                                    |
-| D3  | SQLite implicit `sqlite_autoindex_*` indexes | **Filter** on both sides.                                                                                                                                                 |
-| D4  | Canonical type alphabet (v1)                 | Closed set: `string`, `text`, `integer`, `bigint`, `float`, `decimal`, `datetime`, `date`, `time`, `boolean`, `binary`, `json`. Anything else → canonicalizer errors out. |
-| D5  | Node-side SQLite applier                     | **`better-sqlite3`** dev-dep in `scripts/parity/schema/node/`. Keeps fixture application orthogonal to the code under test.                                               |
-| D6  | Fixture sanity manifest                      | Sidecar `expected.json` per fixture: `{ tables: string[], indexCount: number }`. Canonicalizer asserts match, catches silent-drop false negatives.                        |
-| D7  | Diff behavior                                | Run **all** fixtures, print per-fixture pass/fail, exit 1 at end if any failed. Never fail-fast.                                                                          |
-| D8  | Local dev                                    | Require both toolchains for full run. `pnpm parity:schema --side=rails\|trails\|diff` runs just one side.                                                                 |
-| D9  | Canonical format versioning                  | `version: 1` is pinned. Any bump requires updating: JSON Schema, both canonicalizers, and any checked-in baselines, in a single PR.                                       |
-| D10 | Rails pin                                    | `8.0.2` — matches `scripts/api-compare/fetch-rails.sh:6` (`RAILS_TAG="v8.0.2"`).                                                                                          |
+| #   | Decision                                     | Value                                                                                                                                                                                                                            |
+| --- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D1  | Column ordering in canonical JSON            | **Preserve declaration order** (order is semantic). Indexes + tables sorted by name.                                                                                                                                             |
+| D2  | `schema_migrations` / `ar_internal_metadata` | **Filter** on both sides. Fixtures never declare them.                                                                                                                                                                           |
+| D3  | SQLite implicit `sqlite_autoindex_*` indexes | **Filter** on both sides.                                                                                                                                                                                                        |
+| D4  | Canonical type alphabet (v1)                 | Closed set: `string`, `text`, `integer`, `bigint`, `float`, `decimal`, `datetime`, `date`, `time`, `boolean`, `binary`, `json`. Anything else → canonicalizer errors out.                                                        |
+| D5  | Node-side SQLite applier                     | **`better-sqlite3`** added as a root `devDependency` (root `package.json`). Matches `scripts/api-compare/` / `scripts/test-compare/` pattern; no new workspace package. Keeps fixture application orthogonal to code under test. |
+| D6  | Fixture sanity manifest                      | Sidecar `expected.json` per fixture: `{ tables: string[], indexCount: number }`. Canonicalizer asserts match, catches silent-drop false negatives.                                                                               |
+| D7  | Diff behavior                                | Run **all** fixtures, print per-fixture pass/fail, exit 1 at end if any failed. Never fail-fast.                                                                                                                                 |
+| D8  | Local dev                                    | Require both toolchains for full run. `pnpm parity:schema --side=rails\|trails\|diff` runs just one side.                                                                                                                        |
+| D9  | Canonical format versioning                  | `version: 1` is pinned. Any bump requires updating: JSON Schema, both canonicalizers, and any checked-in baselines, in a single PR.                                                                                              |
+| D10 | Rails pin                                    | `8.0.2` — matches `scripts/api-compare/fetch-rails.sh:6` (`RAILS_TAG="v8.0.2"`).                                                                                                                                                 |
 
 ---
 
@@ -134,7 +134,6 @@ scripts/parity/
       dump.ts
       canonicalize.ts
       canonicalize.test.ts
-      package.json          # local dev-dep on better-sqlite3
     diff.ts
 ```
 
@@ -203,11 +202,14 @@ Hand-written, no tooling.
    `title TEXT NOT NULL`, `published_at DATETIME`), plus one explicit
    `CREATE INDEX idx_posts_published_at ON posts(published_at)`.
    v1 canonical does **not** cover FKs (deferred); the FK in SQL is
-   fine but won't appear in canonical output.
+   kept deliberately so the fixture doesn't need reshaping when v2 adds
+   FK support. Both canonicalizers silently ignore FK info in v1.
 4. `scripts/parity/fixtures/02-moderate/expected.json` —
-   `{ "tables": ["authors", "posts"], "indexCount": 2 }`
-   (1 explicit + 1 from `UNIQUE` on `authors.name`; confirm during PR3
-   implementation — adjust if Rails filters the implicit one per D3).
+   `{ "tables": ["authors", "posts"], "indexCount": 1 }`.
+   SQLite creates an implicit `sqlite_autoindex_authors_1` for the `UNIQUE`
+   constraint on `authors.name`, but both canonicalizers filter
+   `sqlite_autoindex_*` per D3. Only the explicit `idx_posts_published_at`
+   survives.
 
 ### Acceptance
 
@@ -220,6 +222,20 @@ Hand-written, no tooling.
 Do **not** include `schema_migrations` / `ar_internal_metadata` in any
 `schema.sql`. Both sides filter them from dumps (D2).
 
+### Contract for adding a new fixture (future agents)
+
+1. Create `scripts/parity/fixtures/NN-name/schema.sql` with pure SQLite
+   DDL. No `schema_migrations` / `ar_internal_metadata`.
+2. Create `scripts/parity/fixtures/NN-name/expected.json` listing the
+   user-facing tables (alphabetically) and the _post-filter_ index
+   count (autoindexes and internal tables excluded).
+3. Run `pnpm parity:schema` locally. If it fails, the failure is a real
+   parsing parity gap in trails — file an issue, fix the adapter/
+   dumper, do not edit the fixture to make the test pass.
+4. If the fixture uses a SQL feature v1 canonical doesn't cover (FKs,
+   checks, generated columns, etc.), leave it in the SQL — both
+   canonicalizers ignore unsupported features in v1.
+
 ---
 
 ## PR3 — Node side: dump + canonicalize
@@ -229,9 +245,12 @@ Do **not** include `schema_migrations` / `ar_internal_metadata` in any
 
 ### Files to add
 
-1. `scripts/parity/schema/node/package.json` — local
-   `dependencies`: `better-sqlite3` (D5). `type: "module"`. Do not
-   hoist to workspace root — this is a tool-local dep.
+1. Root `package.json` (`devDependencies`) — add `better-sqlite3`
+   (latest 12.x compatible with Node 22). Do **not** create
+   `scripts/parity/schema/node/package.json`; this follows the
+   `scripts/api-compare/` / `scripts/test-compare/` convention of
+   consuming root deps via `pnpm exec tsx` and avoids adding a new
+   workspace package to `pnpm-workspace.yaml`.
 2. `scripts/parity/schema/node/dump.ts` — CLI:
    ```
    tsx dump.ts <fixture-dir> <out.json>
@@ -297,7 +316,7 @@ scripts/parity/fixtures/01-trivial /tmp/trails-01.json`
    ```ruby
    source "https://rubygems.org"
    gem "rails", "8.0.2"    # D10
-   gem "sqlite3"           # version: whatever activerecord 8.0.2 resolves
+   gem "sqlite3", "~> 2.1" # matches AR 8.0.2 declared dependency range
    gem "prism"             # AST parser for canonicalize.rb
    ```
 2. `scripts/parity/schema/ruby/Gemfile.lock` — committed, generated via
@@ -446,10 +465,19 @@ to match the existing pattern at `.github/workflows/ci.yml:297`.
 
 ### Acceptance
 
-- Push the branch, watch all three jobs go green.
-- Intentionally push a regression to `canonicalize.ts` that drops
-  `limit` on string columns → `schema-parity-diff` fails with a readable
-  diff in the job log.
+- On push, all three jobs run. `schema-parity-rails` and
+  `schema-parity-trails` upload non-empty artifacts with one JSON per
+  fixture. `schema-parity-diff` downloads both and exits 0.
+- Total wall-clock for the three-job chain is under ~3 minutes on a
+  cold cache (pnpm + bundler caches warmed thereafter).
+- The jobs appear in the same `needs: changes` gate as other parity
+  jobs (`.github/workflows/ci.yml:297`), so docs-only PRs skip them.
+- Failure-mode verification (do this once, locally on a throwaway
+  commit before landing PR6): introduce a one-line regression in
+  `scripts/parity/schema/node/canonicalize.ts` that drops `limit` on
+  string columns, push, confirm `schema-parity-diff` fails with a
+  unified diff naming the affected fixture and column. Revert before
+  merging.
 
 ---
 

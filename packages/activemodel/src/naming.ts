@@ -1,11 +1,4 @@
-import {
-  underscore,
-  pluralize,
-  singularize,
-  humanize,
-  demodulize,
-  tableize,
-} from "@blazetrails/activesupport";
+import { underscore, pluralize, singularize, humanize } from "@blazetrails/activesupport";
 
 /**
  * Naming mixin — provides model_name on classes and naming helpers.
@@ -63,32 +56,31 @@ interface ModelLike {
   modelName?: ModelName;
 }
 
-/**
- * Rails `_singularize(string)` — activemodel/lib/active_model/naming.rb:216-218:
- *
- *   def _singularize(string)
- *     ActiveSupport::Inflector.underscore(string).tr("/", "_")
- *   end
- *
- * Note: despite the Ruby method name, this does *not* call `singularize`;
- * it snake_cases a class name and flattens `/` separators.
- */
-function _singularize(str: string): string {
-  return underscore(str).replace(/\//g, "_");
-}
-
 export class ModelName {
+  /** Bare class name (no separators), e.g. `"Post"`. */
   readonly name: string;
+  /** Namespace segments from outermost to innermost; `null` if top-level. */
+  readonly namespace: readonly string[] | null;
+
+  /** Snake-cased identifier with namespace joined by `_` — `"blog_post"`. */
   readonly singular: string;
+  /** Pluralized `singular` — `"blog_posts"`. */
   readonly plural: string;
+  /** Snake-cased bare name only — `"post"`. */
   readonly element: string;
+  /** Path form — `"blog/posts"`. */
   readonly collection: string;
+  /**
+   * URL / form param key. Drops the namespace prefix — matches Rails'
+   * isolated-namespace `param_key = _singularize(@unnamespaced)` semantic.
+   */
   readonly paramKey: string;
+  /** Plural form of `paramKey` (plus `_index` for uncountables). */
   readonly routeKey: string;
+  /** Singular form of `routeKey`. */
   readonly singularRouteKey: string;
+  /** I18n key in path form — `"blog/post"`. */
   readonly i18nKey: string;
-  readonly namespace: string | null;
-  readonly unnamespaced: string | null;
 
   private _humanFallback: string;
   private _klass: ModelLike | null;
@@ -107,82 +99,85 @@ export class ModelName {
   }
 
   /**
-   * Mirrors `ActiveModel::Name#initialize`
-   * (activemodel/lib/active_model/naming.rb:166-185):
+   * Construct a ModelName.
    *
-   *   def initialize(klass, namespace = nil, name = nil, locale = :en)
-   *     @name = name || klass.name
-   *     @unnamespaced = @name.delete_prefix("#{namespace.name}::") if namespace
-   *     @singular = _singularize(@name)
-   *     @plural   = pluralize(@singular)
-   *     @element  = underscore(demodulize(@name))
-   *     @collection = tableize(@name)
-   *     @param_key  = namespace ? _singularize(@unnamespaced) : @singular
-   *     @i18n_key   = @name.underscore.to_sym
-   *     @route_key  = namespace ? pluralize(@param_key) : @plural.dup
-   *     @route_key << "_index" if @uncountable
+   * `name` must be a bare class identifier. The Ruby `::` separator has no
+   * JavaScript equivalent, so namespace membership is declared explicitly
+   * via `options.namespace` — either a single string (`"Blog"`) or a
+   * segment array for arbitrary nesting (`["Admin", "Blog"]`). `klass`
+   * lets the human-name / I18n lookup walk the class's ancestors.
    *
-   * The TS signature keeps `className` as the primary positional arg (users
-   * typically pass `this.name` from the class) and routes Rails' optional
-   * `namespace` / `name` through the options object. Pass `name` to override
-   * what we use as `@name` (Rails' third constructor arg); pass `namespace`
-   * (the containing module's string name, Rails' `namespace.name`) to scope
-   * `paramKey` / `routeKey` to the unnamespaced form.
+   * Field math follows Rails' `ActiveModel::Name#initialize`
+   * (activemodel/lib/active_model/naming.rb:166-185) but operates on the
+   * namespace segments directly rather than round-tripping through a
+   * Ruby-shaped `::`-joined string — equivalent output, no Ruby-ism in
+   * TS code.
    */
   constructor(
-    className: string,
-    options?: { namespace?: string | { name: string }; klass?: ModelLike; name?: string },
+    name: string,
+    options?: {
+      namespace?: string | readonly string[] | { name: string };
+      klass?: ModelLike;
+    },
   ) {
     this._klass = options?.klass ?? null;
-    // Rails' `namespace` arg is a Module; its `.name` is what
-    // `delete_prefix("#{namespace.name}::")` uses. Accept either the string
-    // form (most common from TS callers) or an object with a `.name` for
-    // parity with callers porting code that passes a class/module reference.
-    const rawNamespace = options?.namespace ?? null;
-    this.namespace = typeof rawNamespace === "string" ? rawNamespace : (rawNamespace?.name ?? null);
+    const rawNs = options?.namespace ?? null;
+    const segments: string[] =
+      rawNs == null
+        ? []
+        : typeof rawNs === "string"
+          ? [rawNs]
+          : Array.isArray(rawNs)
+            ? [...rawNs]
+            : typeof (rawNs as { name?: unknown }).name === "string"
+              ? [(rawNs as { name: string }).name]
+              : [];
 
-    // Rails: @name = name || klass.name
-    this.name = options?.name ?? className;
-
-    // Rails: raise ArgumentError if @name.blank?
-    // (activemodel/lib/active_model/naming.rb:169). Ruby's `#blank?` treats
-    // nil / empty / whitespace-only as blank.
-    if (!this.name || !this.name.trim()) {
+    // Rails' `@name.blank?` guard — anonymous class without an explicit name.
+    if (!name || !name.trim()) {
       throw new Error(
         "Class name cannot be blank. You need to supply a name argument when anonymous class given",
       );
     }
+    // Reject Ruby-style separators. TS classes don't carry `::` in their
+    // `.name`, so presence here means a caller pasted a Ruby-shaped
+    // string — point them at the right option.
+    const hasRubySeparator = (s: string): boolean => s.includes("::");
+    if (hasRubySeparator(name) || segments.some(hasRubySeparator)) {
+      throw new Error(
+        'ModelName arguments must not contain "::" — pass namespace segments as options.namespace (string or string[])',
+      );
+    }
 
-    // Rails: @unnamespaced = @name.delete_prefix("#{namespace.name}::") if namespace
-    this.unnamespaced = this.namespace
-      ? this.name.startsWith(`${this.namespace}::`)
-        ? this.name.slice(this.namespace.length + 2)
-        : this.name
-      : null;
+    this.name = name;
+    this.namespace = segments.length > 0 ? Object.freeze([...segments]) : null;
 
-    // Rails: @singular = _singularize(@name)
-    this.singular = _singularize(this.name);
-    // Rails: @plural = pluralize(@singular)
+    const bareUnderscored = underscore(name);
+    const segmentsUnderscored = segments.map(underscore);
+
+    // Rails `@singular = _singularize(@name)` flattens the path separator
+    // to `_`; the segments-join is the exact equivalent.
+    this.singular = [...segmentsUnderscored, bareUnderscored].join("_");
+    // Rails `@plural = pluralize(@singular)`.
     this.plural = ModelName._uncountables.has(this.singular)
       ? this.singular
       : pluralize(this.singular);
     const uncountable = this.plural === this.singular;
-    // Rails: @element = underscore(demodulize(@name))
-    this.element = underscore(demodulize(this.name));
+    // Rails `@element = underscore(demodulize(@name))` — bare name only.
+    this.element = bareUnderscored;
     this._humanFallback = humanize(this.element);
-    // Rails: @collection = tableize(@name)  — e.g. "Blog::Post" → "blog/posts"
-    this.collection = tableize(this.name);
-    // Rails: @param_key = namespace ? _singularize(@unnamespaced) : @singular
-    this.paramKey =
-      this.namespace && this.unnamespaced != null ? _singularize(this.unnamespaced) : this.singular;
-    // Rails: @i18n_key = @name.underscore.to_sym  → "Blog::Post" → :"blog/post"
-    this.i18nKey = underscore(this.name);
-    // Rails: @route_key = namespace ? pluralize(@param_key) : @plural.dup
-    let routeKey = this.namespace ? pluralize(this.paramKey) : this.plural;
-    // Rails: @route_key << "_index" if @uncountable
+    // Rails `@collection = tableize(@name)` — path form, last segment pluralized.
+    this.collection = [...segmentsUnderscored, pluralize(bareUnderscored)].join("/");
+    // Rails `@param_key = namespace ? _singularize(@unnamespaced) : @singular`.
+    // In TS we require an explicit namespace, so the isolated shape is the
+    // only one expressible — `paramKey` drops the prefix when present.
+    this.paramKey = segments.length > 0 ? this.element : this.singular;
+    // Rails `@i18n_key = @name.underscore.to_sym` — path form with bare name.
+    this.i18nKey = [...segmentsUnderscored, bareUnderscored].join("/");
+    // Rails `@route_key = namespace ? pluralize(@param_key) : @plural.dup`.
+    let routeKey = segments.length > 0 ? pluralize(this.paramKey) : this.plural;
     if (uncountable) routeKey = `${routeKey}_index`;
     this.routeKey = routeKey;
-    // Rails: @singular_route_key = singularize(@route_key)
     this.singularRouteKey = singularize(this.routeKey);
   }
 

@@ -144,48 +144,46 @@ describe("NamingMethodDelegationTest", () => {
 });
 
 // Ports Rails `NamingWithNamespacedModelInSharedNamespaceTest`
-// (activemodel/test/cases/naming_test.rb:89-125): setup
-// `ActiveModel::Name.new(Blog::Post)` — namespace arg NOT passed, so
-// `paramKey`/`routeKey` keep the namespace prefix.
+// (activemodel/test/cases/naming_test.rb:89-125). Rails reaches that
+// state by passing `Blog::Post` directly (namespace inferred from the
+// class's own `::`-shaped `.name`); TS has no `::` in JS class names,
+// so the only way to express namespace membership is `options.namespace`.
+// That path always drops the prefix from `paramKey`/`routeKey` (Rails'
+// "isolated" semantic) — we don't expose the Rails "shared" shape
+// because it's purely an artifact of Ruby constant-name strings.
 describe("NamingWithNamespacedModelInSharedNamespaceTest", () => {
+  const opts = { namespace: "Blog" };
+
   it("singular", () => {
-    const name = new ModelName("Blog::Post");
-    expect(name.singular).toBe("blog_post");
+    expect(new ModelName("Post", opts).singular).toBe("blog_post");
   });
 
   it("plural", () => {
-    const name = new ModelName("Blog::Post");
-    expect(name.plural).toBe("blog_posts");
+    expect(new ModelName("Post", opts).plural).toBe("blog_posts");
   });
 
   it("element", () => {
-    const name = new ModelName("Blog::Post");
-    expect(name.element).toBe("post");
+    expect(new ModelName("Post", opts).element).toBe("post");
   });
 
   it("collection", () => {
-    const name = new ModelName("Blog::Post");
-    expect(name.collection).toBe("blog/posts");
+    expect(new ModelName("Post", opts).collection).toBe("blog/posts");
   });
 
   it("human", () => {
-    const name = new ModelName("Blog::Post");
-    expect(name.human).toBe("Post");
+    expect(new ModelName("Post", opts).human).toBe("Post");
   });
 
   it("route key", () => {
-    const name = new ModelName("Blog::Post");
-    expect(name.routeKey).toBe("blog_posts");
+    expect(new ModelName("Post", opts).routeKey).toBe("posts");
   });
 
   it("param key", () => {
-    const name = new ModelName("Blog::Post");
-    expect(name.paramKey).toBe("blog_post");
+    expect(new ModelName("Post", opts).paramKey).toBe("post");
   });
 
   it("i18n key", () => {
-    const name = new ModelName("Blog::Post");
-    expect(name.i18nKey).toBe("blog/post");
+    expect(new ModelName("Post", opts).i18nKey).toBe("blog/post");
   });
 });
 
@@ -235,79 +233,68 @@ describe("NamingWithSuppliedLocaleTest", () => {
   });
 });
 
+// Ports Rails `NamingUsingRelativeModelNameTest`
+// (activemodel/test/cases/naming_test.rb:184-221). Rails' setup is
+// `Blog::Post.model_name` (namespace inferred from Ruby constant scope).
+// TS has no such inference, so membership is declared with
+// `options.namespace`. Results match Rails exactly.
 describe("NamingUsingRelativeModelNameTest", () => {
+  const opts = { namespace: "Blog" };
   it("singular", () => {
-    const name = new ModelName("Post", { namespace: "Blog" });
-    expect(name.singular).toBe("post");
+    expect(new ModelName("Post", opts).singular).toBe("blog_post");
   });
   it("plural", () => {
-    const name = new ModelName("Post", { namespace: "Blog" });
-    expect(name.plural).toBe("posts");
+    expect(new ModelName("Post", opts).plural).toBe("blog_posts");
   });
   it("element", () => {
-    const name = new ModelName("Post", { namespace: "Blog" });
-    expect(name.element).toBe("post");
+    expect(new ModelName("Post", opts).element).toBe("post");
   });
   it("collection", () => {
-    const name = new ModelName("Post", { namespace: "Blog" });
-    expect(name.collection).toBe("posts");
+    expect(new ModelName("Post", opts).collection).toBe("blog/posts");
   });
   it("human", () => {
-    const name = new ModelName("Post", { namespace: "Blog" });
-    expect(name.human).toBe("Post");
+    expect(new ModelName("Post", opts).human).toBe("Post");
   });
   it("route key", () => {
-    const name = new ModelName("Post", { namespace: "Blog" });
-    expect(name.routeKey).toBe("posts");
+    expect(new ModelName("Post", opts).routeKey).toBe("posts");
   });
   it("param key", () => {
-    const name = new ModelName("Post", { namespace: "Blog" });
-    expect(name.paramKey).toBe("post");
+    expect(new ModelName("Post", opts).paramKey).toBe("post");
   });
   it("i18n key", () => {
-    const name = new ModelName("Post", { namespace: "Blog" });
-    expect(name.i18nKey).toBe("post");
+    expect(new ModelName("Post", opts).i18nKey).toBe("blog/post");
   });
 });
 
 // Ports Rails `NamingWithNamespacedModelInIsolatedNamespaceTest`
-// (activemodel/test/cases/naming_test.rb:51-87): setup
-// `ActiveModel::Name.new(Blog::Post, Blog)` — namespace arg passed,
-// so `paramKey`/`routeKey` drop the namespace prefix while `singular`,
-// `plural`, `collection`, and `i18nKey` keep it.
+// (activemodel/test/cases/naming_test.rb:51-87). Rails' setup passes
+// `namespace: Blog` explicitly; our equivalent is `options.namespace:
+// "Blog"`. Result fields identical to Rails.
 describe("NamingWithNamespacedModelInIsolatedNamespaceTest", () => {
   const opts = { namespace: "Blog" };
   it("singular", () => {
-    const name = new ModelName("Blog::Post", opts);
-    expect(name.singular).toBe("blog_post");
+    expect(new ModelName("Post", opts).singular).toBe("blog_post");
   });
   it("human", () => {
-    const name = new ModelName("Blog::Post", opts);
-    expect(name.human).toBe("Post");
+    expect(new ModelName("Post", opts).human).toBe("Post");
   });
   it("plural", () => {
-    const name = new ModelName("Blog::Post", opts);
-    expect(name.plural).toBe("blog_posts");
+    expect(new ModelName("Post", opts).plural).toBe("blog_posts");
   });
   it("element", () => {
-    const name = new ModelName("Blog::Post", opts);
-    expect(name.element).toBe("post");
+    expect(new ModelName("Post", opts).element).toBe("post");
   });
   it("collection", () => {
-    const name = new ModelName("Blog::Post", opts);
-    expect(name.collection).toBe("blog/posts");
+    expect(new ModelName("Post", opts).collection).toBe("blog/posts");
   });
   it("route key", () => {
-    const name = new ModelName("Blog::Post", opts);
-    expect(name.routeKey).toBe("posts");
+    expect(new ModelName("Post", opts).routeKey).toBe("posts");
   });
   it("param key", () => {
-    const name = new ModelName("Blog::Post", opts);
-    expect(name.paramKey).toBe("post");
+    expect(new ModelName("Post", opts).paramKey).toBe("post");
   });
   it("i18n key", () => {
-    const name = new ModelName("Blog::Post", opts);
-    expect(name.i18nKey).toBe("blog/post");
+    expect(new ModelName("Post", opts).i18nKey).toBe("blog/post");
   });
 });
 
@@ -315,13 +302,16 @@ describe("NamingWithNamespacedModelInIsolatedNamespaceTest", () => {
 // (activemodel/test/cases/naming_test.rb:166-182): anonymous classes
 // (nil/blank `name`) must raise unless an explicit `name:` override is
 // supplied.
+// Rails' anonymous-class path is `ActiveModel::Name.new(klass, nil, "Anonymous")`
+// — `name` arg supplies the display name since `klass.name` is nil.
+// In TS the className arg is already a string, so just pass the name directly.
 describe("NameWithAnonymousClassTest", () => {
   it("anonymous class without name argument", () => {
     expect(() => new ModelName("")).toThrow(/cannot be blank/);
   });
 
   it("anonymous class with name argument", () => {
-    const mn = new ModelName("", { name: "Anonymous" });
+    const mn = new ModelName("Anonymous");
     expect(mn.name).toBe("Anonymous");
     expect(mn.singular).toBe("anonymous");
     expect(mn.element).toBe("anonymous");
@@ -329,14 +319,40 @@ describe("NameWithAnonymousClassTest", () => {
   });
 });
 
-describe("ModelName namespace Module-or-string parity", () => {
-  it("accepts namespace as an object with a name property (Rails Module arg)", () => {
-    // Rails: `ActiveModel::Name.new(Blog::Post, Blog)` — passes the Module.
-    const asObject = new ModelName("Blog::Post", { namespace: { name: "Blog" } });
-    const asString = new ModelName("Blog::Post", { namespace: "Blog" });
+// Arbitrary-depth namespaces: Rails walks a full `::` chain via
+// `_singularize`/`tableize`; our equivalent is a segment array — same
+// output, no Ruby-shaped strings in the TS API.
+describe("ModelName deeply-nested namespace", () => {
+  it("multi-segment namespace array produces full prefix on derived fields", () => {
+    const name = new ModelName("Post", { namespace: ["Admin", "Blog"] });
+    expect(name.name).toBe("Post");
+    expect(Array.from(name.namespace ?? [])).toEqual(["Admin", "Blog"]);
+    expect(name.singular).toBe("admin_blog_post");
+    expect(name.plural).toBe("admin_blog_posts");
+    expect(name.element).toBe("post");
+    expect(name.collection).toBe("admin/blog/posts");
+    expect(name.i18nKey).toBe("admin/blog/post");
+    expect(name.paramKey).toBe("post"); // isolated — drops the full prefix
+    expect(name.routeKey).toBe("posts");
+  });
+});
+
+describe("ModelName rejects Ruby-shaped strings", () => {
+  it("throws when className contains ::", () => {
+    expect(() => new ModelName("Blog::Post")).toThrow(/must not contain/);
+  });
+  it("throws when namespace contains ::", () => {
+    expect(() => new ModelName("Post", { namespace: "Admin::Blog" })).toThrow(/must not contain/);
+  });
+});
+
+describe("ModelName namespace accepts Module-like {name}", () => {
+  it("an object with a string `name` property is equivalent to the string form", () => {
+    const asObject = new ModelName("Post", { namespace: { name: "Blog" } });
+    const asString = new ModelName("Post", { namespace: "Blog" });
+    expect(asObject.singular).toBe(asString.singular);
     expect(asObject.paramKey).toBe(asString.paramKey);
     expect(asObject.routeKey).toBe(asString.routeKey);
-    expect(asObject.unnamespaced).toBe("Post");
   });
 });
 

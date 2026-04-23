@@ -20,7 +20,7 @@ export class Json extends ValueType<unknown> {
    *
    * Mirrors: ActiveRecord::Type::Json#accessor
    */
-  get accessor(): new (...args: unknown[]) => unknown {
+  accessor(): typeof StringKeyedHashAccessor {
     return StringKeyedHashAccessor;
   }
 

@@ -18,7 +18,7 @@ export const JSON = {
    * Mirrors: ActiveRecord::Coders::JSON.load
    */
   load(json: string | null | undefined): unknown {
-    if (json == null || json === "") return undefined;
+    if (json == null || json === "") return null;
     return ActiveSupportJSON.decode(json);
   },
 };

@@ -42,6 +42,7 @@ export class ColumnSerializer {
     this._attrName = coder.attrName;
     this._objectClass = coder.objectClass;
     this._coder = coder.coder;
+    this.checkArityOfConstructor();
   }
 
   /**
@@ -99,6 +100,8 @@ export class ColumnSerializer {
           `Cannot serialize ${this._objectClass.name}. Classes passed to \`serialize\` must have a 0 argument constructor.`,
           { cause: e },
         );
+      } else if (!(e instanceof SerializationTypeMismatch)) {
+        throw e;
       }
     }
   }

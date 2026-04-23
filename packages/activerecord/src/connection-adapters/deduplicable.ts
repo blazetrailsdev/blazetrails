@@ -14,6 +14,10 @@ export interface Deduplicable {
 
 const registries = new Map<string, WeakRef<any>>();
 
+export function registry(): Map<string, WeakRef<object>> {
+  return registries;
+}
+
 export function deduplicate<T extends Deduplicable>(obj: T): T {
   const key = `${obj.constructor.name}:${obj.deduplicateKey()}`;
   const ref = registries.get(key);

@@ -65,7 +65,8 @@ export async function touchLater(this: Base, ...names: string[]): Promise<void> 
   // a no-op, so deferring into it would silently lose the flush.
   const adapter = ctor.adapter as any;
   const hasAddRecord = typeof adapter?.addTransactionRecord === "function";
-  const currentTx = adapter?.currentTransaction;
+  const currentTx =
+    typeof adapter?.currentTransaction === "function" ? adapter.currentTransaction() : null;
   const hasOpenRealTransaction =
     hasAddRecord &&
     currentTx != null &&

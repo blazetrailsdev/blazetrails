@@ -75,7 +75,7 @@ When NOT to use this:
   comments for non-obvious context (hidden bug, broader invariant, etc.).
 - Do NOT add empty stubs or placeholder interfaces. If a feature isn't
   implemented yet, don't create an empty file for it.
-- **NEVER rename or reword test names.** Test names are how `api:compare`
+- **NEVER rename or reword test names.** Test names are how `test:compare`
   matches our tests to Rails tests. If a test fails or the behavior doesn't
   match the name, fix the implementation — not the name. Read the
   corresponding Rails test first.

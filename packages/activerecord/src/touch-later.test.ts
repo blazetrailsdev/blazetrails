@@ -101,17 +101,17 @@ describe("TouchLaterTest", () => {
   it("touch later dont hit the db", async () => {
     const Invoice = makeTouchModel();
     const inv = await Invoice.create({ amount: 100 });
-    // touchLater writes the timestamp in-memory immediately (no dirty tracking)
-    // and defers the DB UPDATE until beforeCommitted!. Verify in-memory update
-    // happens without a DB round-trip by checking the attribute is already set.
-    const before = inv.updated_at as Date | null;
+    // surreptitiouslyTouch writes updated_at in-memory without dirty tracking.
+    // Verify the in-memory value is updated synchronously (before any DB flush)
+    // and that the attribute is not marked dirty.
+    const before = inv.updated_at as Date;
     await inv.touchLater();
-    const afterInMemory = inv.updated_at as Date | null;
-    // Attribute updated in-memory by surreptitiously_touch
+    const afterInMemory = inv.updated_at as Date;
     expect(afterInMemory).not.toBeNull();
-    if (before && afterInMemory) {
-      expect(afterInMemory.getTime()).toBeGreaterThanOrEqual(before.getTime());
-    }
+    // The value was written in-memory — no reload needed to observe it.
+    expect(afterInMemory.getTime()).toBeGreaterThanOrEqual(before?.getTime() ?? 0);
+    // No dirty tracking — the attribute change was cleared by surreptitiouslyTouch.
+    expect(inv.changed).toBe(false);
   });
   it.skip("touching three deep", () => {
     /* needs multi-level association touch */

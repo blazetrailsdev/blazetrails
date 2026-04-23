@@ -38,11 +38,13 @@ export function prepend<T extends object>(target: T, mod: PrependModule): void {
     throw new TypeError("prepend: target must be an object or function");
   }
 
-  // Pre-validate every method exists on the target and every wrapper
-  // value is actually a function, before mutating anything. Mirrors
-  // Rails' all-or-nothing `Module#prepend` — a missing method or
-  // malformed module value should leave the target state untouched
-  // instead of applying partial wraps.
+  // All-or-nothing pre-validation. A missing method, a non-function
+  // wrapper, a frozen/sealed target, or a non-configurable own property
+  // would otherwise throw mid-loop and leave the target in a partial-
+  // patch state. We check all four up front and throw before mutating.
+  if (!Object.isExtensible(target)) {
+    throw new TypeError("prepend: target is not extensible (frozen/sealed)");
+  }
   const names = Object.keys(mod);
   for (const name of names) {
     if (typeof mod[name] !== "function") {
@@ -53,6 +55,14 @@ export function prepend<T extends object>(target: T, mod: PrependModule): void {
     const original = (target as Record<string, unknown>)[name];
     if (typeof original !== "function") {
       throw new Error(`prepend: cannot wrap ${name} — target has no method with that name`);
+    }
+    // If an own property exists and is non-configurable and non-writable,
+    // `Object.defineProperty` below would throw. Detect now.
+    const own = Object.getOwnPropertyDescriptor(target, name);
+    if (own && own.configurable === false && own.writable === false) {
+      throw new TypeError(
+        `prepend: cannot wrap ${name} — target's own property is non-configurable and non-writable`,
+      );
     }
   }
 

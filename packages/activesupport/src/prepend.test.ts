@@ -94,6 +94,50 @@ describe("prepend", () => {
     expect(new Widget().spin()).toBe("wrapped-spin");
   });
 
+  it("throws before mutating when the target is frozen (atomicity)", () => {
+    class Frozen {
+      a(): string {
+        return "a";
+      }
+      b(): string {
+        return "b";
+      }
+    }
+    Object.freeze(Frozen.prototype);
+    const origA = Frozen.prototype.a;
+    expect(() =>
+      prepend(Frozen.prototype, {
+        a: (s: Function) => `wrapped-${s.call(undefined)}`,
+      }),
+    ).toThrow(TypeError);
+    expect(Frozen.prototype.a).toBe(origA);
+  });
+
+  it("throws before mutating when an own property is non-configurable + non-writable (atomicity)", () => {
+    const target: Record<string, unknown> = {};
+    Object.defineProperty(target, "locked", {
+      value: () => "locked",
+      writable: false,
+      configurable: false,
+      enumerable: false,
+    });
+    Object.defineProperty(target, "loose", {
+      value: () => "loose",
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
+    const origLoose = target.loose;
+    expect(() =>
+      prepend(target, {
+        loose: (s: Function) => `w-${s.call(undefined)}`,
+        locked: (s: Function) => `w-${s.call(undefined)}`,
+      }),
+    ).toThrow(/non-configurable and non-writable/);
+    // `loose` must NOT have been wrapped — atomicity guarantee.
+    expect(target.loose).toBe(origLoose);
+  });
+
   it("validates all target methods exist before wrapping anything (atomicity)", () => {
     class Partial {
       good(): string {

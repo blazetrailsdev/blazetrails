@@ -3,7 +3,13 @@
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { Base, RecordNotFound, AttributeAssignmentError, NotImplementedError, ReadonlyAttributeError } from "./index.js";
+import {
+  Base,
+  RecordNotFound,
+  AttributeAssignmentError,
+  NotImplementedError,
+  ReadonlyAttributeError,
+} from "./index.js";
 import { SubclassNotFound, NameError } from "./errors.js";
 
 import { createTestAdapter } from "./test-adapter.js";

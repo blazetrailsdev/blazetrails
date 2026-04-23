@@ -945,7 +945,15 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
           ? (first.primary_key as string)
           : group.map((r) => r.primary_key as string).join(",");
       results.push(
-        new ForeignKeyDefinition(tableName, toTable, column, primaryKey, fkName, onDelete, onUpdate),
+        new ForeignKeyDefinition(
+          tableName,
+          toTable,
+          column,
+          primaryKey,
+          fkName,
+          onDelete,
+          onUpdate,
+        ),
       );
     }
     return results;

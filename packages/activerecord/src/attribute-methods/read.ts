@@ -8,7 +8,7 @@
  * Mirrors: ActiveRecord::AttributeMethods::Read
  */
 
-import { AttributeSet } from "@blazetrails/activemodel";
+import type { AttributeSet } from "@blazetrails/activemodel";
 
 /**
  * The Read module interface.

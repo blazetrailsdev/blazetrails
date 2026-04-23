@@ -22,8 +22,8 @@ export interface Write {
 }
 
 /**
- * Skips the primary-key "id" redirect and AR's readonly/frozen checks.
- * Used internally where the attribute name is already canonical.
+ * Skips the primary-key "id" redirect and Base/ReadonlyAttributes' readonly
+ * guards. Used internally where the attribute name is already canonical.
  *
  * Mirrors: ActiveRecord::AttributeMethods::Write#_write_attribute
  */

@@ -75,8 +75,13 @@ describe("QueryTest", () => {
       static {
         this.attribute("views", "integer");
       }
+      get views() {
+        return 42;
+      }
     }
-    const p = new Post({ views: 7 });
-    expect(p._queryAttribute("views")).toBe(true);
+    const p = new Post({ views: 0 });
+    // queryAttribute calls the getter (42 → true); _queryAttribute reads raw (0 → false)
+    expect(p.queryAttribute("views")).toBe(true);
+    expect(p._queryAttribute("views")).toBe(false);
   });
 });

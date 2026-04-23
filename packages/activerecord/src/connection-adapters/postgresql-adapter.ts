@@ -5,7 +5,7 @@ import { sql as arelSql, Nodes, Visitors } from "@blazetrails/arel";
 import { Result } from "../result.js";
 import { HashLookupTypeMap } from "../type/hash-lookup-type-map.js";
 import { getDefaultTimezone } from "../type/internal/timezone.js";
-import { splitQuotedIdentifier, Utils } from "./postgresql/utils.js";
+import { splitQuotedIdentifier, unquoteIdentifier, Utils } from "./postgresql/utils.js";
 import { CHECK_ALL_FOREIGN_KEYS_SQL } from "./postgresql/referential-integrity.js";
 import { Column } from "./postgresql/column.js";
 import { ExplainPrettyPrinter } from "./postgresql/explain-pretty-printer.js";
@@ -53,6 +53,7 @@ import {
   ChangeColumnDefinition,
   ChangeColumnDefaultDefinition,
   ColumnDefinition,
+  ForeignKeyDefinition,
   type ColumnType,
   type ReferentialAction,
 } from "./abstract/schema-definitions.js";
@@ -2523,6 +2524,40 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     deferred: boolean,
   ): "deferred" | "immediate" | false {
     return deferrable && (deferred ? "deferred" : "immediate");
+  }
+
+  async foreignKeys(tableName: string): Promise<ForeignKeyDefinition[]> {
+    const scope = this.quotedScope(tableName);
+    const rows = await this.schemaQuery(`
+      SELECT t2.oid::regclass::text AS to_table, a1.attname AS column, a2.attname AS primary_key,
+             c.conname AS name, c.confupdtype AS on_update, c.confdeltype AS on_delete,
+             c.convalidated AS valid, c.condeferrable AS deferrable, c.condeferred AS deferred
+      FROM pg_constraint c
+      JOIN pg_class t1 ON c.conrelid = t1.oid
+      JOIN pg_class t2 ON c.confrelid = t2.oid
+      JOIN pg_attribute a1 ON a1.attnum = c.conkey[1] AND a1.attrelid = t1.oid
+      JOIN pg_attribute a2 ON a2.attnum = c.confkey[1] AND a2.attrelid = t2.oid
+      JOIN pg_namespace t3 ON c.connamespace = t3.oid
+      WHERE c.contype = 'f'
+        AND t1.relname = ${scope.name!}
+        AND t3.nspname = ${scope.schema}
+      ORDER BY c.conname
+    `);
+    return rows.map((row) => {
+      const toTable = unquoteIdentifier(row.to_table as string);
+      return new ForeignKeyDefinition(
+        tableName,
+        toTable,
+        unquoteIdentifier(row.column as string),
+        row.primary_key as string,
+        row.name as string,
+        this.extractForeignKeyAction(row.on_delete as string),
+        this.extractForeignKeyAction(row.on_update as string),
+        this.extractConstraintDeferrable(row.deferrable as boolean, row.deferred as boolean) ||
+          undefined,
+        (row.valid as boolean) ?? true,
+      );
+    });
   }
 
   async foreignTables(): Promise<string[]> {

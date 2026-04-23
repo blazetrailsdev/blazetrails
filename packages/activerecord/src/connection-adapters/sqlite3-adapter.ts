@@ -40,6 +40,7 @@ import {
 } from "./sqlite3/quoting.js";
 import {
   CheckConstraintDefinition,
+  ForeignKeyDefinition,
   type AddForeignKeyOptions,
 } from "./abstract/schema-definitions.js";
 import { Column } from "./column.js";
@@ -830,15 +831,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     await this.addColumn(tableName, `${refName}_id`, type, options);
   }
 
-  async foreignKeys(tableName: string): Promise<
-    Array<{
-      column: string | string[];
-      primaryKey: string | string[];
-      toTable: string;
-      onDelete: string | null;
-      onUpdate: string | null;
-    }>
-  > {
+  async foreignKeys(tableName: string): Promise<ForeignKeyDefinition[]> {
     const { schema, bare } = this._splitTableName(tableName);
     const prefix = schema ? `${quoteColumnName(schema)}.` : "";
     const rows = await this.execute(
@@ -853,39 +846,38 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
       grouped.get(id)!.push(row);
     }
 
-    const results: Array<{
-      column: string | string[];
-      primaryKey: string | string[];
-      toTable: string;
-      onDelete: string | null;
-      onUpdate: string | null;
-    }> = [];
-
+    const results: ForeignKeyDefinition[] = [];
     for (const group of grouped.values()) {
       group.sort((a, b) => (a.seq as number) - (b.seq as number));
       const first = group[0];
-      const onDelete = first.on_delete === "NO ACTION" ? null : (first.on_delete as string);
-      const onUpdate = first.on_update === "NO ACTION" ? null : (first.on_update as string);
-
-      if (group.length === 1) {
-        results.push({
-          column: first.from as string,
-          primaryKey: first.to as string,
-          toTable: first.table as string,
-          onDelete,
-          onUpdate,
-        });
-      } else {
-        results.push({
-          column: group.map((r) => r.from as string),
-          primaryKey: group.map((r) => r.to as string),
-          toTable: first.table as string,
-          onDelete,
-          onUpdate,
-        });
-      }
+      const toTable = first.table as string;
+      const onDelete = this._extractFkAction(first.on_delete as string);
+      const onUpdate = this._extractFkAction(first.on_update as string);
+      const column =
+        group.length === 1 ? (first.from as string) : group.map((r) => r.from as string).join(",");
+      const primaryKey =
+        group.length === 1 ? (first.to as string) : group.map((r) => r.to as string).join(",");
+      const name = `fk_${bare}_${column}`;
+      results.push(
+        new ForeignKeyDefinition(tableName, toTable, column, primaryKey, name, onDelete, onUpdate),
+      );
     }
     return results;
+  }
+
+  private _extractFkAction(
+    action: string | null | undefined,
+  ): "cascade" | "nullify" | "restrict" | undefined {
+    switch ((action ?? "").toUpperCase()) {
+      case "CASCADE":
+        return "cascade";
+      case "SET NULL":
+        return "nullify";
+      case "RESTRICT":
+        return "restrict";
+      default:
+        return undefined;
+    }
   }
 
   override buildInsertSql(insert: {
@@ -1321,13 +1313,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   private async alterTable(
     tableName: string,
     modify: (columns: Record<string, Record<string, unknown>>) => void,
-    overrideForeignKeys?: Array<{
-      column: string | string[];
-      primaryKey: string | string[];
-      toTable: string;
-      onDelete: string | null;
-      onUpdate: string | null;
-    }>,
+    overrideForeignKeys?: ForeignKeyDefinition[],
     overrideCheckConstraints?: CheckConstraintDefinition[],
     extraDefinition?: (def: import("./abstract/schema-definitions.js").TableDefinition) => void,
   ): Promise<void> {
@@ -1411,8 +1397,8 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
       const fkName = fkNames.get(fkKey) ?? `fk_${bareTable}_${cols.join("_")}`;
       fkSql += `CONSTRAINT ${quoteColumnName(fkName)} `;
       fkSql += `FOREIGN KEY(${colList}) REFERENCES ${quoteTableName(fk.toTable)}(${pkList})`;
-      if (fk.onDelete) fkSql += ` ON DELETE ${fk.onDelete}`;
-      if (fk.onUpdate) fkSql += ` ON UPDATE ${fk.onUpdate}`;
+      if (fk.onDelete) fkSql += ` ON DELETE ${normalizeReferentialAction(fk.onDelete)}`;
+      if (fk.onUpdate) fkSql += ` ON UPDATE ${normalizeReferentialAction(fk.onUpdate)}`;
       colDefs.push(fkSql);
     }
 

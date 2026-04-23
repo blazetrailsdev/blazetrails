@@ -96,14 +96,12 @@ Dir.mktmpdir("parity-ruby-") do |tmpdir|
     expected_tables = expected["tables"].sort
     if actual_tables != expected_tables
       warn "parity dump: table mismatch\n  expected: #{expected_tables.inspect}\n  actual:   #{actual_tables.inspect}"
-      $stdout.flush
       exit 2
     end
 
     actual_index_count = canonical["tables"].sum { |t| t["indexes"].length }
     if actual_index_count != expected["indexCount"]
       warn "parity dump: index count mismatch\n  expected: #{expected["indexCount"]}\n  actual:   #{actual_index_count}"
-      $stdout.flush
       exit 2
     end
 

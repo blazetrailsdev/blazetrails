@@ -375,10 +375,11 @@ scripts/parity/schema/ruby/canonicalize_test.rb` green.
   includes it — filter in both `dump.rb` and `canonicalize.rb` (D2).
 - `conn.primary_key` returns `nil`, a `String`, or an `Array` of
   strings — handle all three cases.
-- `conn.indexes` on SQLite returns only user-created indexes (origin
-  `"c"`) — autoindexes are already filtered at the AR level, same as
-  the node side's `introspectIndexes`. The canonicalizer's
-  `sqlite_autoindex_*` filter is belt-and-suspenders.
+- `conn.indexes` on SQLite filters any index whose name starts with
+  `"sqlite_"` (Rails source:
+  `sqlite3/schema_statements.rb:12` — `next if row["name"].start_with?("sqlite_")`).
+  The canonicalizer's `sqlite_autoindex_*` filter (D3) is
+  belt-and-suspenders and catches any that slip through.
 
 ---
 

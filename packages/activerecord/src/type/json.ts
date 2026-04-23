@@ -11,7 +11,7 @@ export class Json extends ValueType<unknown> {
   /**
    * Mirrors: ActiveRecord::Type::Json#type
    */
-  get type(): string {
+  override type(): string {
     return "json";
   }
 
@@ -20,7 +20,7 @@ export class Json extends ValueType<unknown> {
    *
    * Mirrors: ActiveRecord::Type::Json#accessor
    */
-  get accessor(): typeof StringKeyedHashAccessor {
+  get accessor(): new (...args: unknown[]) => unknown {
     return StringKeyedHashAccessor;
   }
 

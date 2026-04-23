@@ -7,7 +7,7 @@ export class Text extends (StringType as new () => Omit<StringType, "name"> & { 
   readonly name = "text";
 
   /** Mirrors: ActiveRecord::Type::Text#type */
-  get type(): string {
+  type(): string {
     return "text";
   }
 }

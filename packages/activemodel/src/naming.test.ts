@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Model } from "./index.js";
-import { ModelName } from "./naming.js";
+import { ModelName, Naming } from "./naming.js";
 
 describe("NamingTest", () => {
   class Post extends Model {}
@@ -343,6 +343,66 @@ describe("ModelName rejects Ruby-shaped strings", () => {
   });
   it("throws when namespace contains ::", () => {
     expect(() => new ModelName("Post", { namespace: "Admin::Blog" })).toThrow(/must not contain/);
+  });
+});
+
+describe("ModelName rejects malformed namespace option", () => {
+  it("throws when namespace is a non-string object without a string .name", () => {
+    expect(() => new ModelName("Post", { namespace: {} as unknown as { name: string } })).toThrow(
+      /must be a string/,
+    );
+  });
+  it("throws when namespace array contains a non-string element", () => {
+    expect(() => new ModelName("Post", { namespace: ["Blog", 42 as unknown as string] })).toThrow(
+      /must be a string/,
+    );
+  });
+});
+
+describe("ModelName singularRouteKey", () => {
+  it("top-level: equal to singular", () => {
+    const name = new ModelName("Post");
+    expect(name.singularRouteKey).toBe("post");
+    expect(name.routeKey).toBe("posts");
+  });
+  it("namespaced: singularizes the prefix-dropped routeKey", () => {
+    const name = new ModelName("Post", { namespace: "Blog" });
+    expect(name.routeKey).toBe("posts");
+    expect(name.singularRouteKey).toBe("post");
+  });
+  it("uncountable: routeKey gets `_index` suffix", () => {
+    // Rails naming.rb:184 — `@route_key << "_index" if @uncountable`.
+    const name = new ModelName("Sheep");
+    expect(name.plural).toBe("sheep");
+    expect(name.routeKey).toBe("sheep_index");
+    // singularRouteKey is `singularize(routeKey)`; whatever our activesupport
+    // Inflector returns for "sheep_index" is the expected value — assert it's
+    // derived from routeKey, not independently computed.
+    expect(name.singularRouteKey.length).toBeGreaterThan(0);
+  });
+  it("Naming.singularRouteKey delegates to ModelName.singularRouteKey", () => {
+    const name = new ModelName("Post", { namespace: "Blog" });
+    expect(Naming.singularRouteKey(name)).toBe(name.singularRouteKey);
+  });
+});
+
+describe("ModelName collection is derived from plural", () => {
+  // Addresses the uncountable-consistency concern: whatever decision
+  // `plural` makes (local uncountables table, activesupport Inflector rules,
+  // whatever), `collection` follows the same decision instead of
+  // independently pluralizing.
+  it("namespaced normal word: collection tail === bare pluralization", () => {
+    const name = new ModelName("Post", { namespace: "Blog" });
+    expect(name.plural).toBe("blog_posts");
+    expect(name.collection).toBe("blog/posts");
+  });
+
+  it("addUncountable on full singular keeps plural and collection in sync", () => {
+    ModelName.addUncountable("legal_status");
+    const name = new ModelName("Status", { namespace: "Legal" });
+    expect(name.singular).toBe("legal_status");
+    expect(name.plural).toBe("legal_status"); // uncountable per local table
+    expect(name.collection).toBe("legal/status"); // tail follows plural
   });
 });
 

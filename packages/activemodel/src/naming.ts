@@ -122,16 +122,25 @@ export class ModelName {
   ) {
     this._klass = options?.klass ?? null;
     const rawNs = options?.namespace ?? null;
-    const segments: string[] =
-      rawNs == null
-        ? []
-        : typeof rawNs === "string"
-          ? [rawNs]
-          : Array.isArray(rawNs)
-            ? [...rawNs]
-            : typeof (rawNs as { name?: unknown }).name === "string"
-              ? [(rawNs as { name: string }).name]
-              : [];
+    const nsTypeError = new TypeError(
+      "options.namespace must be a string, an array of strings, or an object with a string `name`",
+    );
+    let segments: string[];
+    if (rawNs == null) {
+      segments = [];
+    } else if (typeof rawNs === "string") {
+      segments = [rawNs];
+    } else if (Array.isArray(rawNs)) {
+      if (!rawNs.every((s) => typeof s === "string")) throw nsTypeError;
+      segments = [...rawNs];
+    } else if (
+      typeof rawNs === "object" &&
+      typeof (rawNs as { name?: unknown }).name === "string"
+    ) {
+      segments = [(rawNs as { name: string }).name];
+    } else {
+      throw nsTypeError;
+    }
 
     // Rails' `@name.blank?` guard — anonymous class without an explicit name.
     if (!name || !name.trim()) {
@@ -166,8 +175,21 @@ export class ModelName {
     // Rails `@element = underscore(demodulize(@name))` — bare name only.
     this.element = bareUnderscored;
     this._humanFallback = humanize(this.element);
-    // Rails `@collection = tableize(@name)` — path form, last segment pluralized.
-    this.collection = [...segmentsUnderscored, pluralize(bareUnderscored)].join("/");
+    // Rails `@collection = tableize(@name)` — path form, last segment
+    // pluralized. Derive the last segment from `this.plural` (rather than
+    // pluralizing the bare name independently) so any uncountable decision
+    // made above — via `ModelName._uncountables` or via activesupport's
+    // Inflector — applies identically here.
+    let collectionTail: string;
+    if (segmentsUnderscored.length === 0) {
+      collectionTail = this.plural;
+    } else {
+      const prefix = `${segmentsUnderscored.join("_")}_`;
+      collectionTail = this.plural.startsWith(prefix)
+        ? this.plural.slice(prefix.length)
+        : pluralize(bareUnderscored);
+    }
+    this.collection = [...segmentsUnderscored, collectionTail].join("/");
     // Rails `@param_key = namespace ? _singularize(@unnamespaced) : @singular`.
     // In TS we require an explicit namespace, so the isolated shape is the
     // only one expressible — `paramKey` drops the prefix when present.

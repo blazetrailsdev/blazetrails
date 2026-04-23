@@ -566,6 +566,8 @@ export class TableDefinition {
       options.name ?? `fk_${this.tableName}_${col}`,
       options.onDelete,
       options.onUpdate,
+      options.deferrable,
+      options.validate,
     );
   }
 
@@ -874,6 +876,10 @@ export class Table {
     private _tableName: string,
     private _schema: SchemaStatementsLike,
   ) {}
+
+  aliasedTypes(_name: string, fallback: string): string {
+    return fallback;
+  }
 
   async string(name: string, options: ColumnOptions = {}): Promise<void> {
     await this._schema.addColumn(this._tableName, name, "string", options);

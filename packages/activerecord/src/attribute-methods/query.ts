@@ -26,6 +26,14 @@ export function queryAttribute(this: Queryable, name: string): boolean {
 }
 
 function publicSend(obj: object, name: string): unknown {
+  // Check own property first (singleton methods assigned per-instance)
+  const ownDesc = Object.getOwnPropertyDescriptor(obj, name);
+  if (ownDesc) {
+    if (ownDesc.get) return (obj as Record<string, unknown>)[name];
+    if (typeof ownDesc.value === "function") return (ownDesc.value as () => unknown).call(obj);
+    return ownDesc.value;
+  }
+  // Walk prototype chain for accessor getters and prototype methods
   let proto = Object.getPrototypeOf(obj) as object | null;
   while (proto) {
     const desc = Object.getOwnPropertyDescriptor(proto, name);

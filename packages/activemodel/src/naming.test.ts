@@ -143,15 +143,19 @@ describe("NamingMethodDelegationTest", () => {
   });
 });
 
+// Ports Rails `NamingWithNamespacedModelInSharedNamespaceTest`
+// (activemodel/test/cases/naming_test.rb:89-125): setup
+// `ActiveModel::Name.new(Blog::Post)` — namespace arg NOT passed, so
+// `paramKey`/`routeKey` keep the namespace prefix.
 describe("NamingWithNamespacedModelInSharedNamespaceTest", () => {
   it("singular", () => {
     const name = new ModelName("Blog::Post");
-    expect(name.singular).toBe("post");
+    expect(name.singular).toBe("blog_post");
   });
 
   it("plural", () => {
     const name = new ModelName("Blog::Post");
-    expect(name.plural).toBe("posts");
+    expect(name.plural).toBe("blog_posts");
   });
 
   it("element", () => {
@@ -161,7 +165,7 @@ describe("NamingWithNamespacedModelInSharedNamespaceTest", () => {
 
   it("collection", () => {
     const name = new ModelName("Blog::Post");
-    expect(name.collection).toBe("posts");
+    expect(name.collection).toBe("blog/posts");
   });
 
   it("human", () => {
@@ -171,17 +175,17 @@ describe("NamingWithNamespacedModelInSharedNamespaceTest", () => {
 
   it("route key", () => {
     const name = new ModelName("Blog::Post");
-    expect(name.routeKey).toBe("posts");
+    expect(name.routeKey).toBe("blog_posts");
   });
 
   it("param key", () => {
     const name = new ModelName("Blog::Post");
-    expect(name.paramKey).toBe("post");
+    expect(name.paramKey).toBe("blog_post");
   });
 
   it("i18n key", () => {
     const name = new ModelName("Blog::Post");
-    expect(name.i18nKey).toBe("post");
+    expect(name.i18nKey).toBe("blog/post");
   });
 });
 
@@ -266,38 +270,44 @@ describe("NamingUsingRelativeModelNameTest", () => {
   });
 });
 
+// Ports Rails `NamingWithNamespacedModelInIsolatedNamespaceTest`
+// (activemodel/test/cases/naming_test.rb:51-87): setup
+// `ActiveModel::Name.new(Blog::Post, Blog)` — namespace arg passed,
+// so `paramKey`/`routeKey` drop the namespace prefix while `singular`,
+// `plural`, `collection`, and `i18nKey` keep it.
 describe("NamingWithNamespacedModelInIsolatedNamespaceTest", () => {
+  const opts = { namespace: "Blog" };
   it("singular", () => {
-    const name = new ModelName("Admin::Post");
-    expect(name.singular).toBe("post");
+    const name = new ModelName("Blog::Post", opts);
+    expect(name.singular).toBe("blog_post");
   });
   it("human", () => {
-    const name = new ModelName("Admin::Post");
+    const name = new ModelName("Blog::Post", opts);
     expect(name.human).toBe("Post");
   });
   it("plural", () => {
-    const name = new ModelName("Admin::Post");
-    expect(name.plural).toBe("posts");
+    const name = new ModelName("Blog::Post", opts);
+    expect(name.plural).toBe("blog_posts");
   });
   it("element", () => {
-    const name = new ModelName("Admin::Post");
+    const name = new ModelName("Blog::Post", opts);
     expect(name.element).toBe("post");
   });
   it("collection", () => {
-    const name = new ModelName("Admin::Post");
-    expect(name.collection).toBe("posts");
+    const name = new ModelName("Blog::Post", opts);
+    expect(name.collection).toBe("blog/posts");
   });
   it("route key", () => {
-    const name = new ModelName("Admin::Post");
+    const name = new ModelName("Blog::Post", opts);
     expect(name.routeKey).toBe("posts");
   });
   it("param key", () => {
-    const name = new ModelName("Admin::Post");
+    const name = new ModelName("Blog::Post", opts);
     expect(name.paramKey).toBe("post");
   });
   it("i18n key", () => {
-    const name = new ModelName("Admin::Post");
-    expect(name.i18nKey).toBe("post");
+    const name = new ModelName("Blog::Post", opts);
+    expect(name.i18nKey).toBe("blog/post");
   });
 });
 

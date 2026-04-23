@@ -93,13 +93,22 @@ class PendingDecorator implements PendingModification {
  * hook; we register lazily on first _defaultAttributes() call instead).
  */
 const directSubclasses = new WeakMap<object, Set<WeakRef<object>>>();
+// Tracks (superclass, subclass) pairs already registered so each relationship
+// is recorded exactly once, even after repeated _defaultAttributes() rebuilds.
+const registeredPairs = new WeakMap<object, WeakSet<object>>();
 
-function registerWithSuperclass(cls: AnyAttributeHost): void {
+export function registerWithSuperclass(cls: AnyAttributeHost): void {
   const superclass = Object.getPrototypeOf(cls);
   if (!superclass || superclass === Function.prototype) return;
-  // Only register if the superclass participates in the attribute system
-  // (has _cachedDefaultAttributes or _attributeDefinitions as own or inherited).
+  // Only register if the superclass participates in the attribute system.
   if (!("_attributeDefinitions" in superclass)) return;
+  // Deduplicate: each (superclass, subclass) pair registered only once.
+  if (!registeredPairs.has(superclass)) {
+    registeredPairs.set(superclass, new WeakSet());
+  }
+  const seen = registeredPairs.get(superclass)!;
+  if (seen.has(cls)) return;
+  seen.add(cls);
   if (!directSubclasses.has(superclass)) {
     directSubclasses.set(superclass, new Set());
   }
@@ -130,9 +139,11 @@ function getDirectSubclasses(cls: AnyAttributeHost): AnyAttributeHost[] {
  */
 export function resetDefaultAttributes(cls: AnyAttributeHost): void {
   cls._cachedDefaultAttributes = null;
-  // _attributesBuilder is an AR-specific derived cache; clear it when present
-  // so AR models rebuilding from a new attribute declaration get fresh state.
-  if ("_attributesBuilder" in cls) cls._attributesBuilder = undefined;
+  // _attributesBuilder is an AR-specific derived cache; clear it when this
+  // class owns it (not inherited) so AR models get fresh state.
+  if (Object.prototype.hasOwnProperty.call(cls, "_attributesBuilder")) {
+    cls._attributesBuilder = undefined;
+  }
   for (const sub of getDirectSubclasses(cls)) {
     resetDefaultAttributes(sub);
   }

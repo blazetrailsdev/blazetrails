@@ -327,6 +327,88 @@ jobs:
       - name: Test comparison
         run: pnpm exec tsx scripts/test-compare/extract-ts-tests.ts && pnpm exec tsx scripts/test-compare/test-compare.ts
 
+  schema-parity-rails:
+    name: Schema Parity (Rails side)
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.27.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+          gemfile: scripts/parity/schema/ruby/Gemfile
+      - run: pnpm install --frozen-lockfile
+      - name: Build dependency packages for trails introspection
+        run: pnpm --filter @blazetrails/arel --filter @blazetrails/activesupport --filter @blazetrails/activemodel build
+      - name: Run Rails-side dump
+        run: pnpm tsx scripts/parity/run.ts --side=rails
+      - uses: actions/upload-artifact@v4
+        with:
+          name: parity-rails-dumps
+          path: scripts/parity/.out/rails/
+
+  schema-parity-trails:
+    name: Schema Parity (trails side)
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.27.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build dependency packages for trails introspection
+        run: pnpm --filter @blazetrails/arel --filter @blazetrails/activesupport --filter @blazetrails/activemodel build
+      - name: Run trails-side dump
+        run: pnpm tsx scripts/parity/run.ts --side=trails
+      - uses: actions/upload-artifact@v4
+        with:
+          name: parity-trails-dumps
+          path: scripts/parity/.out/trails/
+
+  schema-parity-diff:
+    name: Schema Parity (diff)
+    needs:
+      - changes
+      - schema-parity-rails
+      - schema-parity-trails
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.27.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: parity-rails-dumps
+          path: scripts/parity/.out/rails/
+      - uses: actions/download-artifact@v4
+        with:
+          name: parity-trails-dumps
+          path: scripts/parity/.out/trails/
+      - name: Diff canonical outputs
+        run: pnpm tsx scripts/parity/schema/diff.ts --rails-dir scripts/parity/.out/rails --trails-dir scripts/parity/.out/trails
+
   ci:
     name: CI
     if: ${{ always() }}
@@ -344,6 +426,9 @@ jobs:
       - mariadb-tests
       - website
       - rails-comparison
+      - schema-parity-rails
+      - schema-parity-trails
+      - schema-parity-diff
     runs-on: ubuntu-latest
     steps:
       - name: Fail if any required job failed or was cancelled

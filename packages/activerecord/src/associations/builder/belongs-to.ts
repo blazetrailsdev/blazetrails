@@ -1,4 +1,4 @@
-import { underscore, pluralize } from "@blazetrails/activesupport";
+import { underscore, pluralize, camelize } from "@blazetrails/activesupport";
 import { SingularAssociation } from "./singular-association.js";
 import { beforeValidation, afterCreate, afterUpdate, afterDestroy } from "../../callbacks.js";
 import { resolveModel } from "../../associations.js";
@@ -63,8 +63,7 @@ export class BelongsTo extends SingularAssociation {
       typeof counterCache === "string"
         ? counterCache
         : `${pluralize(underscore(model.name))}_count`;
-    const targetClassName =
-      reflection.options?.className ?? name.charAt(0).toUpperCase() + name.slice(1);
+    const targetClassName = reflection.options?.className ?? camelize(name);
     try {
       const targetClass = resolveModel(targetClassName);
       const existing: Set<string> = (targetClass as any)._counterCacheColumns ?? new Set();

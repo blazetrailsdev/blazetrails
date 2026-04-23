@@ -189,12 +189,18 @@ export function loadSchemaBang(this: typeof Base): void {
 
 function getCounterCacheColumns(modelClass: typeof Base): Set<string> {
   const direct: Set<string> = (modelClass as any)._counterCacheColumns ?? new Set<string>();
-  const pending = _pendingCounterCacheColumns.get(modelClass.name);
-  if (!pending) return direct;
-  // Merge pending into direct and promote
-  for (const col of pending) direct.add(col);
+  // Collect matching pending keys: exact class name or "Namespace::ClassName" suffix.
+  const suffix = `::${modelClass.name}`;
+  const matchingKeys: string[] = [];
+  for (const key of _pendingCounterCacheColumns.keys()) {
+    if (key === modelClass.name || key.endsWith(suffix)) matchingKeys.push(key);
+  }
+  if (matchingKeys.length === 0) return direct;
+  for (const key of matchingKeys) {
+    for (const col of _pendingCounterCacheColumns.get(key)!) direct.add(col);
+    _pendingCounterCacheColumns.delete(key);
+  }
   (modelClass as any)._counterCacheColumns = direct;
-  _pendingCounterCacheColumns.delete(modelClass.name);
   return direct;
 }
 

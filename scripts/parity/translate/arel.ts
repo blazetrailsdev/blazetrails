@@ -44,6 +44,10 @@ function parseArgs(): { fixture?: string; dryRun: boolean; force: boolean } {
         process.stderr.write("--fixture requires a fixture name (e.g. --fixture arel-06)\n");
         usage();
       }
+      if (!/^arel-\d{2}$/.test(val!)) {
+        process.stderr.write(`--fixture value must match arel-NN (e.g. arel-06), got: ${val}\n`);
+        usage();
+      }
       fixture = val;
     } else if (args[i] === "--dry-run") dryRun = true;
     else if (args[i] === "--force") force = true;
@@ -60,11 +64,22 @@ function parseSchemaSql(dir: string): FixtureInfo {
   const fixtureMatch = sql.match(/-- Fixture for statement: (\S+)/);
   const queryMatch = sql.match(/-- Query: (.+)/);
   const tables = [...sql.matchAll(/CREATE TABLE (\w+)/g)].map((m) => m[1]!.toLowerCase());
-  return {
-    name: fixtureMatch?.[1] ?? "",
-    query: queryMatch?.[1]?.trim() ?? "",
-    tables,
-  };
+
+  if (!fixtureMatch) {
+    process.stderr.write(
+      `parity translate: ${dir}/schema.sql missing '-- Fixture for statement:' line\n`,
+    );
+    process.exit(1);
+  }
+  if (!queryMatch) {
+    process.stderr.write(`parity translate: ${dir}/schema.sql missing '-- Query:' line\n`);
+    process.exit(1);
+  }
+
+  // Strip trailing Ruby inline comments (# ...) so they don't land in generated files.
+  const query = queryMatch[1]!.replace(/\s*#.*$/, "").trim();
+
+  return { name: fixtureMatch[1]!, query, tables };
 }
 
 /**

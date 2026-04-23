@@ -45,7 +45,9 @@ function parseSide(): Side {
 }
 
 // Schema parity uses only numeric-prefixed fixtures (e.g. 01-trivial, 02-moderate).
-// Query parity fixtures (arel-XX, ar-XX) are handled by a separate runner (parity:query).
+// Query parity fixtures (arel-XX, ar-XX) are run by parity:query, added in PR5 of the
+// query parity rollout (docs/query-parity-verification.md). They are excluded here
+// to avoid trying to schema-dump query-only fixtures.
 const SCHEMA_FIXTURE_PATTERN = /^\d/;
 
 function fixtures(): string[] {

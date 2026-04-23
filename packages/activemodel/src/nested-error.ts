@@ -24,13 +24,16 @@ export class NestedError extends ActiveModelError {
     options?: { attribute?: string; type?: string },
   ) {
     // Rails `NestedError#initialize`
-    // (activemodel/lib/active_model/nested_error.rb:8-15): `@type =
-    // override_options.fetch(:type) { inner_error.type }`. Raw type stays
-    // as the inner's `raw_type` so message generation still keys off the
-    // original symbol.
+    // (activemodel/lib/active_model/nested_error.rb:8-15):
+    //   @type     = override_options.fetch(:type) { inner_error.type }
+    //   @raw_type = inner_error.raw_type
+    // Message generation keys off `raw_type`, so i18n lookups still
+    // resolve the inner error's original key even when the surface
+    // `type` has been renamed via `override_options[:type]`.
     const attribute = options?.attribute ?? innerError.attribute;
-    const rawType = innerError.rawType ?? innerError.type;
-    super(base, attribute, options?.type ?? rawType, innerError.options ?? {});
+    const innerRawType = innerError.rawType ?? innerError.type;
+    const type = options?.type ?? innerError.type;
+    super(base, attribute, type, innerError.options ?? {}, innerRawType);
     this.innerError = innerError;
   }
 
@@ -63,6 +66,8 @@ export class NestedError extends ActiveModelError {
             message: inner.message,
             options: deepDup(inner.options ?? {}),
           };
-    return new NestedError(newBase, innerDup, { attribute: this.attribute });
+    // Preserve both `attribute` (may have been overridden) and `type`
+    // (may differ from inner.type after `override_options[:type]`).
+    return new NestedError(newBase, innerDup, { attribute: this.attribute, type: this.type });
   }
 }

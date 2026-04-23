@@ -713,6 +713,15 @@ describe("ErrorsTest", () => {
       expect(errors.where("role", "inclusion", { in: [1, 2] })).toHaveLength(0);
     });
 
+    it("matches RegExp option values by source + flags, not reference", () => {
+      const errors = new Errors({});
+      errors.add("email", "invalid", { with: /^\w+@\w+$/i });
+      expect(errors.where("email", "invalid", { with: /^\w+@\w+$/i })).toHaveLength(1);
+      // Different source or different flags must not match.
+      expect(errors.where("email", "invalid", { with: /^\w+@\w+$/g })).toHaveLength(0);
+      expect(errors.where("email", "invalid", { with: /other/i })).toHaveLength(0);
+    });
+
     it("added? matches structurally-equal nested object options", () => {
       const errors = new Errors({});
       errors.add("age", "out_of_range", { range: { min: 1, max: 5 } });
@@ -720,7 +729,10 @@ describe("ErrorsTest", () => {
       expect(errors.added("age", "out_of_range", { range: { min: 1, max: 9 } })).toBe(false);
     });
 
-    it("import accepts :attribute and :type override", () => {
+    it("import accepts :attribute and :type override (rawType stays on inner)", () => {
+      // Rails `NestedError#initialize` (activemodel/lib/active_model/nested_error.rb:8-15):
+      // @type is the override, @raw_type is inner's. Message generation
+      // uses raw_type so the inner error's i18n key is still resolvable.
       const source = new Errors({});
       source.add("name", "invalid");
       const target = new Errors({});
@@ -728,6 +740,15 @@ describe("ErrorsTest", () => {
       const imported = target.objects[0];
       expect(imported.attribute).toBe("title");
       expect(imported.type).toBe("wrong");
+      expect(imported.rawType).toBe("invalid");
+
+      // copy!/dupWithBase must preserve the {attribute, type, rawType} split.
+      const copy = new Errors({});
+      copy.copyBang(target);
+      const round = copy.objects[0];
+      expect(round.attribute).toBe("title");
+      expect(round.type).toBe("wrong");
+      expect(round.rawType).toBe("invalid");
     });
   });
 

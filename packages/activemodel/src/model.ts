@@ -428,6 +428,17 @@ export class Model {
     const { if: ifOpt, unless: unlessOpt, on: onOpt, strict: isStrict, ...rest } = options;
     const conditions = this._buildValidateConditions({ if: ifOpt, unless: unlessOpt, on: onOpt });
 
+    // Extract the explicit `attributes:` option so we can route the validator
+    // into the right bucket even when the validator class doesn't expose
+    // `attributes` on the instance or in `options` (e.g. plain classes that
+    // only implement `validate()`).
+    const rawExplicit = (rest as { attributes?: unknown }).attributes;
+    const explicitAttributes: string[] | null = Array.isArray(rawExplicit)
+      ? rawExplicit.map(String)
+      : typeof rawExplicit === "string"
+        ? [rawExplicit]
+        : null;
+
     for (const klass of args as Array<{
       new (options: Record<string, unknown>): ValidatorBase | { validate(record: AnyRecord): void };
     }>) {
@@ -439,7 +450,7 @@ export class Model {
           (validator as AnyRecord).checkValidityBang();
         }
       }
-      this._registerValidator(validator as ValidatorBase);
+      this._registerValidator(validator, explicitAttributes);
 
       let callbackFn: CallbackFn;
       if (isStrict) {
@@ -891,25 +902,35 @@ export class Model {
    * the `null` key when none are declared — Rails matches this in
    * `validates_with` via `_validators[nil] << validator`).
    *
-   * `EachValidator` exposes attributes directly on the instance; a plain
-   * `Validator` subclass (Rails `validates_with SomeValidator, attributes:
-   * [:x]`) keeps them inside `options` instead. Check both so non-Each
-   * validators registered with an `attributes:` option still land in the
-   * right buckets — matches Rails' `validator.respond_to?(:attributes)`
-   * + `options[:attributes]` handling in `validates_with`.
+   * `explicitAttributes` wins when the caller already parsed attributes
+   * from options (e.g. `validates_with MyValidator, attributes: [...]`
+   * with a validator class that doesn't store them on the instance).
+   * Otherwise fall back to `validator.attributes` (set by `EachValidator`)
+   * or `validator.options.attributes` (set by plain `Validator`
+   * subclasses). This three-tier lookup covers all three validator
+   * shapes `validates_with` accepts:
+   *   - `EachValidator` subclass (attributes on instance),
+   *   - `Validator` subclass (attributes in `options`),
+   *   - arbitrary class that just implements `validate()` (neither —
+   *     caller must pass attributes explicitly).
    */
-  private static _registerValidator(validator: ValidatorBase | EachValidator): void {
+  private static _registerValidator(
+    validator: ValidatorBase | EachValidator | { validate(record: AnyRecord): void },
+    explicitAttributes?: readonly string[] | null,
+  ): void {
     this._ensureOwnValidators();
     const fromInstance = (validator as AnyRecord).attributes;
     const fromOptions = (validator as AnyRecord).options?.attributes;
     const rawAttrs =
-      Array.isArray(fromInstance) && fromInstance.length > 0
-        ? fromInstance
-        : Array.isArray(fromOptions) && fromOptions.length > 0
-          ? fromOptions
-          : typeof fromOptions === "string"
-            ? [fromOptions]
-            : null;
+      explicitAttributes && explicitAttributes.length > 0
+        ? explicitAttributes
+        : Array.isArray(fromInstance) && fromInstance.length > 0
+          ? fromInstance
+          : Array.isArray(fromOptions) && fromOptions.length > 0
+            ? fromOptions
+            : typeof fromOptions === "string"
+              ? [fromOptions]
+              : null;
     const keys: Array<string | null> = rawAttrs ? rawAttrs.map(String) : [null];
     for (const key of keys) {
       let bucket = this._validators.get(key);
@@ -917,7 +938,7 @@ export class Model {
         bucket = [];
         this._validators.set(key, bucket);
       }
-      bucket.push(validator);
+      bucket.push(validator as ValidatorBase);
     }
   }
 

@@ -45,19 +45,27 @@ export class TrilogyAdapter extends AbstractMysqlAdapter {
     throw new Error(`Invalid SSL mode: ${mode}`);
   }
 
+  private static _configString(config: Record<string, unknown>, key: string): string | undefined {
+    const v = config[key];
+    return typeof v === "string" && v.length > 0 ? v : undefined;
+  }
+
   static translateConnectError(
     config: Record<string, unknown>,
     error: { message: string; errorCode?: number },
   ): Error {
     const code = error.errorCode;
-    if (code === 1044 || code === 1049) {
-      return NoDatabaseError.dbError(config.database as string);
+    const database = TrilogyAdapter._configString(config, "database");
+    const username = TrilogyAdapter._configString(config, "username");
+    const host = TrilogyAdapter._configString(config, "host");
+    if ((code === 1044 || code === 1049) && database) {
+      return NoDatabaseError.dbError(database);
     }
-    if (code === 1045) {
-      return DatabaseConnectionError.usernameError(config.username as string);
+    if (code === 1045 && username) {
+      return DatabaseConnectionError.usernameError(username);
     }
-    if (error.message.includes("TRILOGY_DNS_ERROR")) {
-      return DatabaseConnectionError.hostnameError(config.host as string);
+    if (error.message.includes("TRILOGY_DNS_ERROR") && host) {
+      return DatabaseConnectionError.hostnameError(host);
     }
     return new ConnectionNotEstablished(error.message);
   }

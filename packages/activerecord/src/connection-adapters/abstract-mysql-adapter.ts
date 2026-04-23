@@ -18,7 +18,7 @@ import {
   StatementInvalid,
   ValueTooLong,
 } from "../errors.js";
-import type { Nodes } from "@blazetrails/arel";
+import { sql as arelSql, type Nodes } from "@blazetrails/arel";
 import { StatementPool as ConnectionStatementPool } from "./statement-pool.js";
 import {
   quoteString as mysqlQuoteString,
@@ -439,8 +439,8 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     return sql;
   }
 
-  highPrecisionCurrentTimestamp(): string {
-    return "CURRENT_TIMESTAMP(6)";
+  highPrecisionCurrentTimestamp(): Nodes.SqlLiteral {
+    return arelSql("CURRENT_TIMESTAMP(6)");
   }
 
   castBoundValue(value: unknown): unknown {

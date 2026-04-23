@@ -96,6 +96,9 @@ export class CheckConstraintDefinition {
   ) {}
 }
 
+/**
+ * Mirrors: ActiveRecord::ConnectionAdapters::ChangeColumnDefinition
+ */
 export class ChangeColumnDefinition {
   constructor(
     readonly column: ColumnDefinition,
@@ -103,6 +106,9 @@ export class ChangeColumnDefinition {
   ) {}
 }
 
+/**
+ * Mirrors: ActiveRecord::ConnectionAdapters::ChangeColumnDefaultDefinition
+ */
 export class ChangeColumnDefaultDefinition {
   readonly default: unknown;
   constructor(

@@ -62,6 +62,7 @@ import { AssociationScope } from "./associations/association-scope.js";
 import { validateThroughReflection } from "./associations/validate-through-reflection.js";
 import { underscore, singularize, pluralize, camelize } from "@blazetrails/activesupport";
 import { getInheritanceColumn, findStiClass } from "./inheritance.js";
+import { flushPendingCounterCacheColumns } from "./counter-cache.js";
 import { BelongsTo as BelongsToBuilder } from "./associations/builder/belongs-to.js";
 import { HasOne as HasOneBuilder } from "./associations/builder/has-one.js";
 import { HasMany as HasManyBuilder } from "./associations/builder/has-many.js";
@@ -138,8 +139,10 @@ export function registerModel(nameOrModel: string | typeof Base, model?: typeof 
     const keys: string[] = (model as any)._registryKeys ?? [];
     if (!keys.includes(nameOrModel)) keys.push(nameOrModel);
     (model as any)._registryKeys = keys;
+    flushPendingCounterCacheColumns(model);
   } else {
     modelRegistry.set(nameOrModel.name, nameOrModel);
+    flushPendingCounterCacheColumns(nameOrModel);
   }
 }
 

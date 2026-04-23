@@ -340,6 +340,8 @@ async function performClassUpdate(
  */
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class Base extends Model {
+  static readonly _isBaseClass = true;
+
   // --- Translation mixin (wired via extend() after class) ---
   declare static lookupAncestors: typeof Translation.lookupAncestors;
 

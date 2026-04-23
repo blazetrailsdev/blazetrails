@@ -258,7 +258,7 @@ export function connection(this: typeof Base): DatabaseAdapter {
 }
 
 export function isPrimaryClass(this: typeof Base): boolean {
-  return coreIsApplicationRecordClass.call(this as any);
+  return (this as any)._isBaseClass === true || coreIsApplicationRecordClass.call(this as any);
 }
 
 export function adapterClass(this: typeof Base): Promise<new (...args: unknown[]) => unknown> {

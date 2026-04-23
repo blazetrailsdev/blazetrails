@@ -490,13 +490,15 @@ export class Model {
    * lookup — Rails `_validators[attribute.to_sym]`
    * (activemodel/lib/active_model/validations.rb:266-270).
    *
-   * Returns a fresh array each call (same shape whether the bucket is
+   * Returns a detached copy each call (same shape whether the bucket is
    * populated or empty). Deliberately does NOT mirror Rails' default-proc
    * auto-vivification (`Hash.new { |h,k| h[k] = [] }`) — that's a Ruby
    * hash artifact that would turn reads into state mutations, and on a
    * subclass it would also require eagerly invoking
    * `_ensureOwnValidators()` just to avoid polluting the parent's map.
-   * Returning an immutable copy keeps both concerns away from the reader.
+   * The detached copy keeps both concerns away from the reader (caller
+   * mutation can't leak into internals; consecutive calls return
+   * independent arrays).
    */
   static validatorsOn(attribute: string): Array<ValidatorBase | EachValidator> {
     const bucket = this._validators.get(attribute);
@@ -888,12 +890,27 @@ export class Model {
    * Register `validator` under each of its declared attributes (or under
    * the `null` key when none are declared — Rails matches this in
    * `validates_with` via `_validators[nil] << validator`).
+   *
+   * `EachValidator` exposes attributes directly on the instance; a plain
+   * `Validator` subclass (Rails `validates_with SomeValidator, attributes:
+   * [:x]`) keeps them inside `options` instead. Check both so non-Each
+   * validators registered with an `attributes:` option still land in the
+   * right buckets — matches Rails' `validator.respond_to?(:attributes)`
+   * + `options[:attributes]` handling in `validates_with`.
    */
   private static _registerValidator(validator: ValidatorBase | EachValidator): void {
     this._ensureOwnValidators();
-    const attrs = (validator as AnyRecord).attributes;
-    const keys: Array<string | null> =
-      Array.isArray(attrs) && attrs.length > 0 ? attrs.map(String) : [null];
+    const fromInstance = (validator as AnyRecord).attributes;
+    const fromOptions = (validator as AnyRecord).options?.attributes;
+    const rawAttrs =
+      Array.isArray(fromInstance) && fromInstance.length > 0
+        ? fromInstance
+        : Array.isArray(fromOptions) && fromOptions.length > 0
+          ? fromOptions
+          : typeof fromOptions === "string"
+            ? [fromOptions]
+            : null;
+    const keys: Array<string | null> = rawAttrs ? rawAttrs.map(String) : [null];
     for (const key of keys) {
       let bucket = this._validators.get(key);
       if (!bucket) {

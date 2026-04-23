@@ -1151,6 +1151,27 @@ describe("ValidationsTest", () => {
       expect(Person.validatorsOn("name")).toEqual([]);
     });
 
+    it("routes plain Validator with attributes: option into the right bucket", async () => {
+      // Rails `validates_with MyValidator, attributes: [:name]` — the
+      // validator is a plain `Validator` (not EachValidator); attributes
+      // live in `options` rather than directly on the instance.
+      // _registerValidator must check both.
+      const { Validator: ValidatorBase } = await import("./validator.js");
+      class StaticValidator extends ValidatorBase {
+        override validate(): void {
+          /* no-op */
+        }
+      }
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validatesWith(StaticValidator, { attributes: ["name"] });
+        }
+      }
+      expect(Person.validatorsOn("name")).toHaveLength(1);
+      expect(Person.validatorsOn("name")[0]).toBeInstanceOf(StaticValidator);
+    });
+
     it("validatorsOn returns a fresh array (no state-mutating reads)", () => {
       class Person extends Model {
         static {

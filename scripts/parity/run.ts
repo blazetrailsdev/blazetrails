@@ -70,16 +70,15 @@ function run(cmd: string, args: string[], env?: NodeJS.ProcessEnv): Promise<void
   });
 }
 
-const RUBY_DIR = "scripts/parity/schema/ruby";
-
 async function runRails(): Promise<void> {
   rmSync(OUT_RAILS, { recursive: true, force: true });
   mkdirSync(OUT_RAILS, { recursive: true });
   // BUNDLE_GEMFILE tells bundler which Gemfile to use when invoked from repo root.
-  // BUNDLE_PATH points to the vendored gems installed by `bundle install --path vendor/bundle`.
+  // BUNDLE_PATH is not forced here — bundler reads it from the .bundle/config
+  // written by `bundle install --path vendor/bundle` in the ruby dir (CI) or
+  // from the default gem path (local dev with a standard bundle install).
   const bundleEnv = {
     BUNDLE_GEMFILE: GEMFILE,
-    BUNDLE_PATH: `${RUBY_DIR}/vendor/bundle`,
   };
   for (const fixture of fixtures()) {
     const fixtureDir = join(FIXTURES_DIR, fixture);

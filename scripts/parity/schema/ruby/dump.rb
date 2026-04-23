@@ -1,9 +1,10 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Usage: bundle exec ruby dump.rb <fixture-dir> <out.json>
+# Usage (from repo root):
+#   bundle exec --gemfile scripts/parity/schema/ruby/Gemfile \
+#     ruby scripts/parity/schema/ruby/dump.rb <fixture-dir> <out.json>
 #
-# Must be run from scripts/parity/schema/ruby/ (Gemfile lives here).
 # fixture-dir and out.json paths can be relative or absolute.
 #
 # Applies <fixture-dir>/schema.sql to a fresh SQLite database, introspects
@@ -17,6 +18,7 @@ require "active_record"
 require "sqlite3"
 require "tmpdir"
 require "json"
+require "fileutils"
 require_relative "canonicalize"
 
 FILTERED_TABLES = %w[schema_migrations ar_internal_metadata].freeze

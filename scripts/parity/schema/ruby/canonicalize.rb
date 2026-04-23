@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require "set"
+require "bigdecimal"
+
 # Lowers a native dump (raw AR introspection data) into the neutral
 # CanonicalSchema format defined in scripts/parity/canonical/schema.schema.json.
 #
@@ -91,7 +94,8 @@ module Canonicalize
     return nil if value.nil?
     return value if value == true || value == false
     return value.to_i if value.is_a?(Integer)
-    return value.to_f if value.is_a?(Float)
+    # Float and BigDecimal (AR uses BigDecimal for :decimal columns) → JSON number.
+    return value.to_f if value.is_a?(Numeric)
     value.to_s
   end
 end

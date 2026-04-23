@@ -29,5 +29,6 @@ bundle exec --gemfile scripts/parity/schema/ruby/Gemfile \
 
 `Gemfile.lock` is not committed in this PR because it requires network
 access to RubyGems to resolve. Generate it with `bundle install` from
-this directory, then commit it. CI uses `bundler-cache: true` on the
-`ruby/setup-ruby` action, which handles lock generation automatically.
+this directory, then commit it. The CI wiring (added in PR6) will run
+`bundle install` from this Gemfile on each push; a committed lock file
+is required for reproducible installs.

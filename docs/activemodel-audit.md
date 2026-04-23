@@ -9,6 +9,13 @@ with `file:line` pointers on both sides. Headline surface numbers from
 `pnpm run api:compare --package activemodel`: **341/342 public (99.7%)**,
 **12/141 private (8.5%, mostly comparator false-negatives from
 snake→camel renames)**, **40/41 inheritance (Railtie mismatch)**.
+`pnpm run test:compare --package activemodel`: **963/963 tests (100%)**,
+**56/56 files**, **0 misplaced** — so test layout is not the risk;
+behavioral coverage is.
+
+Every deviation below was confirmed by reading both the TS and Rails
+source (no "verify" stubs). Line numbers are current as of HEAD
+(`2808cfc0`).
 
 Legend: `TS` = our file, `Rails` = Rails source.
 
@@ -38,8 +45,11 @@ Methods touched: `Model#toParam`, `Model.paramDelimiter` (new class attr).
   `Rails conversion.rb:114` uses
   `ActiveSupport::Inflector.underscore(ActiveSupport::Inflector.demodulize(name))`.
 - Coincidentally works when `modelName` is configured (because our
-  `ModelName` also strips the namespace — see PR 10), but divergent for
-  classes without configured `modelName`.
+  `ModelName` also strips the namespace — see PR 11), but divergent for
+  classes without configured `modelName`. **Order with PR 11:** land
+  PR 11 first. Once `ModelName` emits namespaced `singular`/`element`,
+  this path needs `demodulize` so the fallback branch stops double-
+  namespacing.
 
 Methods touched: `_toPartialPath`.
 
@@ -156,7 +166,7 @@ Methods touched: `ValidationContext` (new fields), `Model#validationContext`,
 - `TS validations.ts:46-56` — `ValidationError` message hard-codes
   `"Validation failed: …"`. Rails `validations.rb:496-500`:
   `I18n.t(:"#{model.class.i18n_scope}.errors.messages.model_invalid",
- errors: ..., default: :"errors.messages.model_invalid")`.
+errors: ..., default: :"errors.messages.model_invalid")`.
 - `Rails validations.rb:372-377` overrides `freeze` to pre-materialize
   `errors` and `context_for_validation` before delegating to `super`.
   No equivalent on our `Model` (grep `"freeze"` in `model.ts` — no
@@ -337,18 +347,20 @@ Methods touched: `Model.setCallback`, `.skipCallback`,
 
 ---
 
-## PR 19 — `Serialization`: recursive `:include`, `asJson` type handling (3 methods)
+## PR 19 — `Serialization`: `asJson` type coercion (1 method)
 
-- `TS model.ts:1335-1370` (`serializableHash`, `asJson`, `toJson`) —
-  verify `:include` traverses nested models with per-association option
-  hashes (`include: { posts: { only: :title } }`). Rails
-  `serialization.rb:170-196` (`serializable_add_includes`).
-- `asJson` should delegate type coercion like Rails (Date/Time →
-  ISO8601, BigInt/BigDecimal → string) rather than relying on
-  `JSON.stringify` defaults.
+- `:include` recursion is **already implemented** at
+  `TS serialization.ts:88-108` (`normalizeIncludes` at line 110-120),
+  supporting string / string[] / `{ assoc: { only, except } }` forms.
+  Close parity with Rails `serialization.rb:125-167`.
+- Real gap: `asJson` (`model.ts:1339-1350`) returns values as-is —
+  `Date`/`BigInt`/`BigDecimal`-like values flow through whatever
+  `JSON.stringify` happens to do. Rails delegates through
+  `ActiveSupport::JSON` which forces ISO8601 for Time/Date and
+  string-encodes BigDecimal. Add a normalization pass in `asJson`
+  before returning.
 
-Methods touched: `serializableHash`, `asJson`, private
-`serializableAddIncludes`.
+Methods touched: `asJson` (one branch added).
 
 ---
 
@@ -382,47 +394,82 @@ Methods touched: `Railtie` superclass.
 
 ---
 
-## PR 22 — Type correctness (4 types, ~10 methods total)
+## PR 22a — `BooleanType` FALSE_VALUES parity (1 set)
 
-Spot-checks flagged by the privates scan; verify and fix:
+- `TS type/boolean.ts:19-31` contains `[false, 0, "0", "f", "F",
+"false", "FALSE", "off", "OFF", "no", "NO"]` — **11 entries,
+  including `"no"` and `"NO"` that Rails does not have.** Rails
+  `type/boolean.rb:15-24`:
+  `[false, 0, "0", :"0", "f", :f, "F", :F, "false", :false, "FALSE",
+:FALSE, "off", :off, "OFF", :OFF]` — 9 unique values (symbols collapse
+  to strings in JS).
+- Remove `"no"` / `"NO"`. Any test that passes "no" → `false` today is
+  wrong vs Rails.
 
-- `type/integer.ts` — `range`, `inRange?`, `ensureInRange`, `maxValue`,
-  `minValue`. Out-of-range casts must raise `ActiveModelRangeError`
-  (class exported at `errors.ts:242-246`). Rails
-  `type/integer.rb#ensure_in_range`.
-- `type/decimal.ts` — `applyScale`. Rails uses `BigDecimal#round`; ours
-  likely uses `Number.toFixed` / float ops → ULP divergence on edge
-  values.
-- `type/boolean.ts` — `FALSE_VALUES` must be
-  `[false, 0, "0", "f", "F", "false", "FALSE", "off", "OFF"]`
-  exactly. Rails `type/boolean.rb:9`.
-- `type/immutable_string.ts` / `type/string.ts` — `cast_value` must map
-  `true`/`false` literals to `"t"`/`"f"` (Rails
-  `type/immutable_string.rb:19-26`).
-- `type/date.ts` + `type/date_time.ts` — `fast_string_to_date`,
-  `fallback_string_to_date`, `new_date`, `microseconds`,
-  `value_from_multiparameter_assignment`. Port the YYYY-MM-DD regex
-  fast path (`type/date.rb:31-35`).
-- `type/helpers/time_value.ts` — `fast_string_to_time`, `new_time`.
-  `Time.zone` semantics are Rails-specific; document the scope we
-  accept.
+## PR 22b — `IntegerType` error class + helpers (5 methods)
 
-Split into two PRs if the test churn exceeds 20 generated tests.
+- `TS type/integer.ts:27` throws **JS builtin `RangeError`**; Rails
+  `type/integer.rb:95` raises `ActiveModel::RangeError`. We export
+  `ActiveModelRangeError` at `errors.ts:242-246` but don't use it here.
+  Fix: throw `ActiveModelRangeError` with the Rails message shape:
+  `"#{value} is out of range for #{self.class} with limit #{_limit} bytes"`.
+- Expose `range`, `inRange`, `ensureInRange`, `maxValue`, `minValue`,
+  `_limit` (Rails `type/integer.rb:83-105`) so user subclasses can
+  override bounds.
+
+## PR 22c — `DateType` / `DateTimeType` fast-path parsers (5 private methods)
+
+- Rails `type/date.rb:31-35` has a YYYY-MM-DD regex
+  `fast_string_to_date` that skips `Date.parse` for the common case,
+  plus `fallback_string_to_date` and `new_date`. Ours doesn't;
+  `type/helpers/accepts_multiparameter_time.rb` also provides
+  `value_from_multiparameter_assignment` + `microseconds` helpers that
+  are private-level gaps.
+- Also port `type/helpers/time_value.rb` fast path
+  (`fast_string_to_time`, `new_time`). `Time.zone` semantics are
+  Rails-specific — document the scope we accept rather than port.
+
+## PR 22d — `ImmutableStringType` / `StringType` bool-literal casting (2 methods)
+
+- Rails `type/immutable_string.rb:19-26`
+  (`def cast_value(value); case value when true then "t"; when false
+then "f"; else value.to_s; end`). Ours likely does `String(value)`
+  which yields `"true"` / `"false"`. Fix the `case`.
+
+## PR 22e — `DecimalType#applyScale` BigDecimal rounding (1 method)
+
+- Rails `type/decimal.rb` uses `BigDecimal#round` (banker's rounding
+  configurable). Ours likely uses `Number.toFixed` or float
+  arithmetic — ULP divergence near 0.5 boundaries. Port via a decimal
+  library (e.g. `decimal.js`) already used elsewhere, or document
+  the precision limit.
 
 ---
 
-## PR 23 — `SecurePassword` parity (4 methods)
+## PR 23 — `SecurePassword` password-reset token (2 methods)
 
-- Verify against `Rails secure_password.rb` (231 lines):
-  - BCrypt `min_cost` setting (test mode).
-  - Dynamic `authenticate_#{name}` / `#{name}_confirmation` generation
-    for non-default attribute names (`has_secure_password :recovery_password`).
-  - `password_challenge` — compares challenge to the _previous_ digest
-    before overwriting.
-  - Reset token via `MessageVerifier`
-    (`secure_password.rb:178-225 reset_password_token`, `find_by_password_reset_token!`).
+Confirmed by reading `TS secure-password.ts` (178 lines) vs
+`Rails secure_password.rb` (231 lines):
 
-Methods touched: 4 in `packages/activemodel/src/secure-password.ts`.
+- Present and correct: `SecurePassword.minCost`
+  (`secure-password.ts:10`), MAX-72-byte length validation
+  (`secure-password.ts:141 textEncoder.encode(pwd).length > 72`),
+  dynamic per-attribute digest + confirmation + challenge caches
+  (`secure-password.ts:41-57`).
+- **Missing: reset-token infrastructure**. Rails
+  `secure_password.rb:162-178` defaults `reset_token: true`, hooks
+  `generates_token_for :"#{attribute}_reset", expires_in: 15.minutes`,
+  and generates `find_by_#{attribute}_reset_token` +
+  `find_by_#{attribute}_reset_token!` class methods plus
+  `#{attribute}_reset_token` instance method. No mention anywhere in
+  our file.
+- Blocked by absence of `generates_token_for` in our
+  `ActiveRecord`/`MessageVerifier` stack — land that first, then wire
+  this in. Document as blocked until the prerequisite exists.
+
+Methods touched: `hasSecurePassword` opts (`resetToken: boolean`),
+instance `#{attribute}ResetToken`, class
+`findBy#{Attribute}ResetToken` + `!` variant.
 
 ---
 
@@ -440,15 +487,49 @@ Methods touched: ~6 `assert_*` equivalents.
 
 ---
 
-## PR 25 — Relocate `misc.test.ts` (test-layout only, no production code)
+## PR 25 — `NestedError` `:type` override + options merge (1 method)
 
-- `TS packages/activemodel/src/misc.test.ts` is 3,031 lines with no
-  Rails counterpart file — breaks `test:compare`'s layout matching.
-- Move each `it` block to the Rails-matched file
-  (`dirty.test.ts`, `validations.test.ts`, `attribute-methods.test.ts`,
-  …). **Do not rename tests** (per CLAUDE.md — names drive
-  `test:compare` matching). Can be broken into multiple PRs by target
-  file.
+- `TS nested-error.ts:19-28` constructor accepts only
+  `options?: { attribute?: string }`. Rails
+  `nested_error.rb:8-15` also accepts `:type`
+  (`@type = override_options.fetch(:type) { inner_error.type }`).
+  Ours additionally passes `innerError.rawType ?? innerError.type` into
+  super and ignores any caller-supplied type.
+- Fix: accept `{ attribute?, type? }` and forward `type` override to
+  `super`.
+
+Methods touched: `NestedError#constructor`.
+
+---
+
+## PR 26 — `misc.test.ts` redistribution (test-layout only)
+
+`TS packages/activemodel/src/misc.test.ts` is 3,031 lines in one
+`describe("ActiveModel")`. `test:compare` currently still passes (see
+headline) because the matcher tolerates it, but layout-matching will
+tighten. Moves are deterministic from the top-level inner `describe`
+blocks:
+
+| Inner `describe` (line)                                                                              | Target file                               |
+| ---------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `Attributes` (8)                                                                                     | `attributes.test.ts`                      |
+| `Validations > presence/absence/length/…` (131+)                                                     | `validations/<name>.test.ts`              |
+| `Dirty Tracking` (570)                                                                               | `dirty.test.ts`                           |
+| `Callbacks` (675) + `Callbacks (extended)` (1127)                                                    | `callbacks.test.ts`                       |
+| `Serialization` (779)                                                                                | `serialization.test.ts`                   |
+| `Types > Date/DateTime/Decimal/Registry` (855+)                                                      | `type/<name>.test.ts`                     |
+| `Validators (extended)` (979)                                                                        | `validations/<name>.test.ts`              |
+| `ComparisonValidator` (1233)                                                                         | `validations/comparison.test.ts`          |
+| `UuidType` (1389) / `JsonType` (1454)                                                                | `type/uuid.test.ts` / `type/json.test.ts` |
+| `afterCommit / afterRollback` (1509)                                                                 | `callbacks.test.ts`                       |
+| `attributeBeforeTypeCast` (1535) / `willSaveChangeToAttribute` (1562) / `attributeInDatabase` (1592) | `dirty.test.ts`                           |
+| `hasAttribute` (1636)                                                                                | `attribute-methods.test.ts`               |
+| `validatesEach` (1652) / `validatesWith` (1700)                                                      | `validations.test.ts`                     |
+| `clearChangesInformation` (1781)                                                                     | `dirty.test.ts`                           |
+
+**Do not rename tests** (per CLAUDE.md — names drive `test:compare`).
+Split this PR per target file if reviews demand — each column can land
+independently.
 
 ---
 
@@ -468,8 +549,13 @@ Silent correctness first, then public-API shape, then structure:
 9. **PR 8** (`ValidationContext` array) — needed for AR contexts.
 10. **PR 15–16** (Dirty parity) — large; drives AR integration.
 11. **PR 18** (generic `setCallback`) — needed for plugins.
-12. **PR 12, 13, 14, 2, 17, 19, 20, 21, 22, 23, 24, 25** — everything
-    else.
+12. **PR 22a** (`BooleanType` FALSE_VALUES: remove "no"/"NO") — tiny
+    but silent behavioral deviation; one-line fix.
+13. **PR 22b** (`IntegerType` error class) — throws wrong `Error`
+    subclass; one-line fix.
+14. **PR 25** (`NestedError` `:type` override) — tiny, semantic.
+15. **PR 12, 13, 14, 2, 17, 19, 20, 21, 22c–e, 23, 24, 26** —
+    everything else.
 
 ---
 

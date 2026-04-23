@@ -24,8 +24,9 @@ describe("WriteTest", () => {
       }
     }
     const p = new Post({ body: "original" });
-    // _writeAttribute("content", ...) writes to the "content" slot directly,
-    // not to "body" — alias resolution is what writeAttribute() would add.
+    // _writeAttribute("content", ...) writes to the "content" slot directly.
+    // Neither writeAttribute nor _writeAttribute resolve aliases today;
+    // that redirect will live in a future AR-level writeAttribute override.
     p._writeAttribute("content", "via alias");
     expect(p._readAttribute("body")).toBe("original");
     expect(p._readAttribute("content")).toBe("via alias");

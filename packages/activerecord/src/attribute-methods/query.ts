@@ -8,9 +8,12 @@ import { BooleanType } from "@blazetrails/activemodel";
 
 const booleanType = new BooleanType();
 
-interface Queryable {
-  _readAttribute(name: string): unknown;
+interface PublicSendable {
   [key: string]: unknown;
+}
+
+interface RawReadable {
+  _readAttribute(name: string): unknown;
 }
 
 /**
@@ -21,7 +24,7 @@ interface Queryable {
  *
  * Mirrors: ActiveRecord::AttributeMethods::Query#query_attribute
  */
-export function queryAttribute(this: Queryable, name: string): boolean {
+export function queryAttribute(this: PublicSendable, name: string): boolean {
   return castToBoolean(publicSend(this, name));
 }
 
@@ -53,7 +56,7 @@ function publicSend(obj: object, name: string): unknown {
  *
  * Mirrors: ActiveRecord::AttributeMethods::Query#_query_attribute
  */
-export function _queryAttribute(this: Queryable, name: string): boolean {
+export function _queryAttribute(this: RawReadable, name: string): boolean {
   return castToBoolean(this._readAttribute(name));
 }
 

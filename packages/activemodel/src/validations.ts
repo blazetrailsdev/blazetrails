@@ -75,7 +75,10 @@ export class ValidationError extends globalThis.Error {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(model: any) {
     const errors = model.errors.fullMessages.join(", ");
-    const scope: string = model.constructor?.i18nScope ?? "activemodel";
+    // Match the guard used by `error.ts`'s I18n lookups — only treat
+    // `i18nScope` as a scope when the class actually exposes a string.
+    const rawScope = model.constructor?.i18nScope;
+    const scope = typeof rawScope === "string" ? rawScope : "activemodel";
     const message = I18n.t(`${scope}.errors.messages.model_invalid`, {
       errors,
       defaults: [{ key: "errors.messages.model_invalid" }],

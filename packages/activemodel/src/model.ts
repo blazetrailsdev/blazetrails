@@ -1154,16 +1154,14 @@ export class Model {
    *
    * Rails pre-touches `@errors` and `@context_for_validation` so frozen
    * models can still answer `#errors` and `#validation_context` without
-   * tripping their `||=` lazy-init. Our `errors` is already eager
-   * (`model.ts:954`) and `_validationContext` is eagerly `null`, so the
-   * pre-touch is a no-op — we still expose the method for API parity so
-   * `model.freeze()` works Rails-style and locks the object under
-   * `Object.freeze`.
+   * tripping their `||=` lazy-init. We mirror that by going through the
+   * public API (`.errors`, `.validationContext`) — that way, if either
+   * becomes lazy in the future, the pre-materialization still runs
+   * without this method coupling to private fields.
    */
   freeze(): this {
-    // Touch state that Rails lazy-inits so it survives the freeze.
     void this.errors;
-    void this._validationContext;
+    void this.validationContext;
     Object.freeze(this);
     return this;
   }

@@ -9,13 +9,15 @@ export { _setCollectionProxyCtor } from "./associations/collection-proxy-slot.js
 /**
  * Eagerly initializes the association modules needed for the
  * constructor-slot registration cycle used by `association()` and
- * `CollectionProxy`. Delegates to `initializeAssociations()` so
- * subpath consumers don't need to call it directly.
+ * `CollectionProxy`. Delegates to `initializeAssociations()`.
  *
- * In Rails, `Associations.eager_load!` forces Ruby autoloaded constants
- * (`Preloader`, `JoinDependency`) to load immediately. We use dynamic
- * imports instead of Ruby autoload, so this achieves the equivalent
- * result for our ctor-slot registration pattern.
+ * **Rails parity note:** Rails' `Associations.eager_load!` uses Ruby's
+ * `ActiveSupport::Autoload` to force-load `BelongsToAssociation`,
+ * `HasManyAssociation`, `Preloader`, `JoinDependency`, `AssociationScope`,
+ * etc. In TypeScript/ESM there is no `autoload` — those modules are
+ * already statically imported throughout the codebase and therefore
+ * always present. The only genuinely lazy initialization in our port is
+ * the `CollectionProxy` constructor-slot, which this method resolves.
  *
  * Mirrors: ActiveRecord::Associations.eager_load!
  */

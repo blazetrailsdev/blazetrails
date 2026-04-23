@@ -13,4 +13,5 @@ export interface DatabaseStatements {
   execInsert(sql: string, name?: string | null, binds?: unknown[], pk?: string): Promise<unknown>;
   explain(sql: string, binds?: unknown[], options?: { extended?: boolean }): Promise<string>;
   lastInsertedId(result: unknown): number;
+  highPrecisionCurrentTimestamp(): string;
 }

@@ -434,6 +434,10 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     return sql;
   }
 
+  highPrecisionCurrentTimestamp(): string {
+    return "CURRENT_TIMESTAMP(6)";
+  }
+
   async foreignKeys(tableName: string): Promise<ForeignKeyDefinition[]> {
     void tableName;
     return [];

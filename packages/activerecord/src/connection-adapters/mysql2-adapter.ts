@@ -959,4 +959,8 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
     }
     return results;
   }
+
+  newClient(config: mysql.PoolOptions): mysql.Pool {
+    return mysql.createPool(config);
+  }
 }

@@ -101,6 +101,34 @@ export function quotedBinaryString(value: Buffer): string {
   return `x'${value.toString("hex")}'`;
 }
 
+export function quotedBinary(value: { toS?: () => string; toString: () => string }): string {
+  return `x'${Buffer.from(value.toString(), "binary").toString("hex")}'`;
+}
+
+export function unquoteIdentifier(identifier: string | null | undefined): string | null {
+  if (identifier && identifier.startsWith("`")) return identifier.slice(1, -1);
+  return identifier ?? null;
+}
+
+export function castBoundValue(value: unknown): unknown {
+  if (typeof value === "number" || typeof value === "bigint") return String(value);
+  if (value === true) return "1";
+  if (value === false) return "0";
+  return value;
+}
+
+// Mirrors Rails' MySQL::Quoting.column_name_matcher — validates column name
+// expressions (including `table`.`column` and function call forms).
+export function columnNameMatcher(): RegExp {
+  return /^(?:(?:\w+\.|`\w+`\.)?(?:\w+|`\w+`)|\w+\([^)]*\))(?:(?:\s+AS)?\s+(?:\w+|`\w+`))?(?:\s*,\s*(?:(?:\w+\.|`\w+`\.)?(?:\w+|`\w+`)|\w+\([^)]*\))(?:(?:\s+AS)?\s+(?:\w+|`\w+`))?)*$/i;
+}
+
+// Mirrors Rails' MySQL::Quoting.column_name_with_order_matcher — like
+// columnNameMatcher but also allows COLLATE and ASC/DESC suffixes.
+export function columnNameWithOrderMatcher(): RegExp {
+  return /^(?:(?:\w+\.|`\w+`\.)?(?:\w+|`\w+`)|\w+\([^)]*\))(?:\s+COLLATE\s+(?:\w+|"\w+"))?(?:\s+ASC|\s+DESC)?(?:\s*,\s*(?:(?:\w+\.|`\w+`\.)?(?:\w+|`\w+`)|\w+\([^)]*\))(?:\s+COLLATE\s+(?:\w+|"\w+"))?(?:\s+ASC|\s+DESC)?)*$/i;
+}
+
 /**
  * Quote a value for inclusion in a SQL literal.
  *

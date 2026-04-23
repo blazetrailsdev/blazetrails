@@ -2440,12 +2440,7 @@ export class Base extends Model {
    * Mirrors: ActiveRecord::Base.column_defaults
    */
   static get columnDefaults(): Record<string, unknown> {
-    const result: Record<string, unknown> = {};
-    for (const [name, def] of this._attributeDefinitions) {
-      result[name] =
-        typeof def.defaultValue === "function" ? def.defaultValue() : (def.defaultValue ?? null);
-    }
-    return result;
+    return this._defaultAttributes().deepDup().toHash();
   }
 
   // -- Strict loading class-level default --

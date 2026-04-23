@@ -69,16 +69,21 @@ export function defineAttribute(
 
   // Install prototype accessor so the attribute is readable/writable by name,
   // matching what applyColumnsHash does for schema-reflected columns.
-  if (this.prototype && !Object.prototype.hasOwnProperty.call(this.prototype, name)) {
-    Object.defineProperty(this.prototype, name, {
-      get(this: { readAttribute(n: string): unknown }) {
-        return this.readAttribute(name);
-      },
-      set(this: { writeAttribute(n: string, v: unknown): void }, value: unknown) {
-        this.writeAttribute(name, value);
-      },
-      configurable: true,
-    });
+  if (this.prototype) {
+    if (name === "id" && Object.prototype.hasOwnProperty.call(this.prototype, "id")) {
+      // Let Base.prototype.id (the CPK-aware getter) take precedence.
+      delete (this.prototype as Record<string, unknown>)["id"];
+    } else if (!Object.prototype.hasOwnProperty.call(this.prototype, name)) {
+      Object.defineProperty(this.prototype, name, {
+        get(this: { readAttribute(n: string): unknown }) {
+          return this.readAttribute(name);
+        },
+        set(this: { writeAttribute(n: string, v: unknown): void }, value: unknown) {
+          this.writeAttribute(name, value);
+        },
+        configurable: true,
+      });
+    }
   }
 }
 

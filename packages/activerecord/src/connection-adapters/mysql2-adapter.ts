@@ -919,7 +919,8 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
          AND fk.table_schema = DATABASE()
          AND fk.table_name = ${mysqlQuoteString(tableName)}
          AND rc.constraint_schema = DATABASE()
-         AND rc.table_name = ${mysqlQuoteString(tableName)}`,
+         AND rc.table_name = ${mysqlQuoteString(tableName)}
+       ORDER BY fk.constraint_name, fk.ordinal_position`,
     )) as Array<Record<string, unknown>>;
 
     const grouped = new Map<string, Array<Record<string, unknown>>>();

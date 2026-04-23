@@ -848,6 +848,8 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
 
     // Rails reads deferrable from the CREATE TABLE SQL since PRAGMA doesn't expose it.
     const deferrableByKey = this._parseFkDeferrable(tableName);
+    // Use explicit CONSTRAINT names from DDL when available (PRAGMA doesn't expose them).
+    const namesByColumn = this._parseForeignKeyNames(tableName);
 
     const results: ForeignKeyDefinition[] = [];
     for (const group of grouped.values()) {
@@ -860,7 +862,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
         group.length === 1 ? (first.from as string) : group.map((r) => r.from as string).join(",");
       const primaryKey =
         group.length === 1 ? (first.to as string) : group.map((r) => r.to as string).join(",");
-      const name = `fk_${bare}_${column}`;
+      const name = namesByColumn.get(column) ?? `fk_${bare}_${column}`;
       const deferrable = deferrableByKey.get(`${toTable},${column},${primaryKey}`);
       results.push(
         new ForeignKeyDefinition(

@@ -2553,8 +2553,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         row.name as string,
         this.extractForeignKeyAction(row.on_delete as string),
         this.extractForeignKeyAction(row.on_update as string),
-        this.extractConstraintDeferrable(row.deferrable as boolean, row.deferred as boolean) ||
-          undefined,
+        this.extractConstraintDeferrable(row.deferrable as boolean, row.deferred as boolean),
         (row.valid as boolean) ?? true,
       );
     });

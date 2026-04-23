@@ -1,3 +1,4 @@
+import { prepend } from "@blazetrails/activesupport";
 import { ADDITIONAL_VALUE_BRAND, EncryptedAttributeType } from "./encrypted-attribute-type.js";
 import { getAttributeType } from "./encryptable-record.js";
 
@@ -29,52 +30,27 @@ export class ExtendedDeterministicQueries {
   }): void {
     if (this._installed) return;
 
-    const relProto = targets.Relation.prototype;
-    const eatProto = targets.EncryptedAttributeType.prototype;
-
-    // Capture every original first so we can leave state untouched if any
-    // target is missing. Setting _installed only after all assignments
-    // succeed prevents a partial-patch state that would permanently
-    // block retries via the idempotency guard above.
-    const originalWhere = relProto.where;
-    const originalExists = relProto.exists;
-    const originalScopeForCreate = relProto.scopeForCreate;
-    const originalFindBy = targets.Base.findBy;
-    const originalSerialize = eatProto.serialize;
-
-    const missing: string[] = [];
-    if (typeof originalWhere !== "function") missing.push("Relation.prototype.where");
-    if (typeof originalExists !== "function") missing.push("Relation.prototype.exists");
-    if (typeof originalScopeForCreate !== "function")
-      missing.push("Relation.prototype.scopeForCreate");
-    if (typeof originalFindBy !== "function") missing.push("Base.findBy");
-    if (typeof originalSerialize !== "function")
-      missing.push("EncryptedAttributeType.prototype.serialize");
-    if (missing.length > 0) {
-      throw new Error(
-        `ExtendedDeterministicQueries.installSupport: missing target method(s): ${missing.join(", ")}`,
-      );
-    }
-
-    relProto.where = function (this: unknown, ...args: unknown[]) {
-      return RelationQueries.where(originalWhere, this, args);
-    };
-    relProto.exists = function (this: unknown, ...args: unknown[]) {
-      return RelationQueries.isExists(originalExists, this, args);
-    };
-    relProto.scopeForCreate = function (this: unknown) {
-      return RelationQueries.scopeForCreate(originalScopeForCreate, this);
-    };
-    const nonNullFindBy: Function = originalFindBy!;
-    targets.Base.findBy = function (this: unknown, ...args: unknown[]) {
-      return CoreQueries.findBy(nonNullFindBy, this, args);
-    };
-    eatProto.serialize = function (this: unknown, data: unknown) {
-      return ExtendedEncryptableType.serialize(
-        (v: unknown) => originalSerialize.call(this, v),
-        data,
-      );
-    };
+    prepend(targets.Relation.prototype, {
+      where(super_, ...args) {
+        return RelationQueries.where(super_, this, args);
+      },
+      exists(super_, ...args) {
+        return RelationQueries.isExists(super_, this, args);
+      },
+      scopeForCreate(super_) {
+        return RelationQueries.scopeForCreate(super_, this);
+      },
+    });
+    prepend(targets.Base as unknown as Record<string, unknown>, {
+      findBy(super_, ...args) {
+        return CoreQueries.findBy(super_, this, args);
+      },
+    });
+    prepend(targets.EncryptedAttributeType.prototype, {
+      serialize(super_, data) {
+        return ExtendedEncryptableType.serialize((v: unknown) => super_.call(this, v), data);
+      },
+    });
 
     this._installed = true;
   }

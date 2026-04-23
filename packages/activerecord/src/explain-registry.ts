@@ -51,6 +51,10 @@ function currentSlot(): Slot {
 }
 
 export class ExplainRegistry {
+  constructor() {
+    ExplainRegistry.reset();
+  }
+
   static get collect(): boolean {
     return currentSlot().collect;
   }

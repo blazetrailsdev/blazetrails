@@ -212,4 +212,5 @@ export const ClassMethods = {
   updateCounters,
   resetCounters,
   counterCacheColumnQ,
+  isCounterCacheColumn: counterCacheColumnQ,
 };

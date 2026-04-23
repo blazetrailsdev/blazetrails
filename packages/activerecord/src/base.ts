@@ -1807,6 +1807,7 @@ export class Base extends Model {
   declare static updateCounters: typeof CounterCache.updateCounters;
   declare static resetCounters: typeof CounterCache.resetCounters;
   declare static counterCacheColumnQ: typeof CounterCache.counterCacheColumnQ;
+  declare static isCounterCacheColumn: typeof CounterCache.counterCacheColumnQ;
 
   /**
    * Instantiate a model from a database row (marks it as persisted).

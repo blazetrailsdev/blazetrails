@@ -63,6 +63,8 @@ export class Model {
 
   // -- Class-level registries --
   static includeRootInJson: boolean | string = false;
+  // Rails: class_attribute :param_delimiter, instance_reader: false, default: "-"
+  // (activemodel/lib/active_model/conversion.rb:32)
   static paramDelimiter: string = "-";
   static _attributeDefinitions: Map<string, AttributeDefinition> = new Map();
   static _attributeMethodPatterns: AttributeMethodPattern[] = [];

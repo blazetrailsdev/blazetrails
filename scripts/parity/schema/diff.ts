@@ -8,12 +8,19 @@
  * D7: always runs all fixtures — never fail-fast.
  */
 
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, basename } from "node:path";
 import Ajv from "ajv/dist/2020.js";
 import { createTwoFilesPatch } from "diff";
 
 const SCHEMA_PATH = "scripts/parity/canonical/schema.schema.json";
+
+function assertRepoRoot(): void {
+  if (!existsSync(SCHEMA_PATH)) {
+    process.stderr.write(`parity diff: must be run from repo root (${SCHEMA_PATH} not found)\n`);
+    process.exit(1);
+  }
+}
 
 function usage(): never {
   process.stderr.write(
@@ -57,6 +64,7 @@ function listJsonFiles(dir: string): string[] {
 }
 
 async function main(): Promise<void> {
+  assertRepoRoot();
   const { railsDir, trailsDir } = parseArgs();
 
   const schemaJson = JSON.parse(readFileSync(SCHEMA_PATH, "utf8"));
@@ -72,22 +80,23 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const only_rails = [...railsFiles].filter((f) => !trailsFiles.has(f));
-  const only_trails = [...trailsFiles].filter((f) => !railsFiles.has(f));
-  if (only_rails.length > 0)
-    process.stderr.write(`parity diff: only in rails: ${only_rails.join(", ")}\n`);
-  if (only_trails.length > 0)
-    process.stderr.write(`parity diff: only in trails: ${only_trails.join(", ")}\n`);
+  const onlyRails = [...railsFiles].filter((f) => !trailsFiles.has(f));
+  const onlyTrails = [...trailsFiles].filter((f) => !railsFiles.has(f));
+  if (onlyRails.length > 0)
+    process.stderr.write(`parity diff: only in rails: ${onlyRails.join(", ")}\n`);
+  if (onlyTrails.length > 0)
+    process.stderr.write(`parity diff: only in trails: ${onlyTrails.join(", ")}\n`);
 
-  let failures = 0;
+  let failedFixtures = 0;
 
   for (const file of fixtures) {
     const name = basename(file, ".json");
     const railsRaw = JSON.parse(readFileSync(join(railsDir, file), "utf8"));
     const trailsRaw = JSON.parse(readFileSync(join(trailsDir, file), "utf8"));
 
-    // Validate both against canonical schema before diffing
-    let validationFailed = false;
+    // Validate both against canonical schema before diffing.
+    // Count at fixture level (not document level) so summary is accurate.
+    let fixtureFailed = false;
     for (const [label, doc] of [
       ["rails", railsRaw],
       ["trails", trailsRaw],
@@ -95,11 +104,13 @@ async function main(): Promise<void> {
       if (!validate(doc)) {
         process.stdout.write(`FAIL  ${name}  (${label} output fails schema validation)\n`);
         process.stdout.write(`      ${ajv.errorsText(validate.errors)}\n`);
-        failures++;
-        validationFailed = true;
+        fixtureFailed = true;
       }
     }
-    if (validationFailed) continue;
+    if (fixtureFailed) {
+      failedFixtures++;
+      continue;
+    }
 
     // Stable JSON normalisation then line diff
     const railsNorm = stableJson(railsRaw);
@@ -108,7 +119,7 @@ async function main(): Promise<void> {
     if (railsNorm === trailsNorm) {
       process.stdout.write(`PASS  ${name}\n`);
     } else {
-      failures++;
+      failedFixtures++;
       process.stdout.write(`FAIL  ${name}\n`);
       const patch = createTwoFilesPatch(
         `rails/${file}`,
@@ -123,8 +134,10 @@ async function main(): Promise<void> {
     }
   }
 
-  process.stdout.write(`\n${fixtures.length - failures}/${fixtures.length} fixtures passed\n`);
-  if (failures > 0) process.exit(1);
+  process.stdout.write(
+    `\n${fixtures.length - failedFixtures}/${fixtures.length} fixtures passed\n`,
+  );
+  if (failedFixtures > 0) process.exit(1);
 }
 
 main().catch((err: unknown) => {

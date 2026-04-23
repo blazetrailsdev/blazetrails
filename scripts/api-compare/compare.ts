@@ -258,6 +258,16 @@ export function superclassesMatch(
   return tsChain.some((ancestor) => nameMatches(rubySuper, ancestor));
 }
 
+/**
+ * Whether a given method belongs to the current comparison bucket.
+ * Default mode (showPrivates=false) keeps only public API methods; with
+ * `--privates` the comparison runs exclusively against internal methods.
+ * Exported so compare.test.ts can pin the filter semantics.
+ */
+export function methodInMode(m: MethodInfo, showPrivates: boolean): boolean {
+  return showPrivates ? m.internal === true : m.internal !== true;
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -283,8 +293,7 @@ function main() {
   // `#`-prefixed fields). Without it, internal methods are filtered out
   // and the numbers match the historical public-API coverage.
   const showPrivates = args.includes("--privates");
-  const methodMatchesMode = (m: MethodInfo): boolean =>
-    showPrivates ? m.internal === true : m.internal !== true;
+  const methodMatchesMode = (m: MethodInfo): boolean => methodInMode(m, showPrivates);
 
   const rubyPath = path.join(OUTPUT_DIR, "rails-api.json");
   const tsPath = path.join(OUTPUT_DIR, "ts-api.json");
@@ -805,8 +814,10 @@ function main() {
     });
   }
 
-  // Write JSON
-  const jsonPath = path.join(OUTPUT_DIR, "api-comparison.json");
+  // Write JSON. Separate file for the --privates run so the public artifact
+  // isn't clobbered when both run back-to-back in CI.
+  const jsonFilename = showPrivates ? "api-comparison-privates.json" : "api-comparison.json";
+  const jsonPath = path.join(OUTPUT_DIR, jsonFilename);
   fs.writeFileSync(
     jsonPath,
     JSON.stringify({ generatedAt: new Date().toISOString(), results }, null, 2),

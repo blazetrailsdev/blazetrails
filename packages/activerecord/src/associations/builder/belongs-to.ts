@@ -1,7 +1,8 @@
-import { underscore } from "@blazetrails/activesupport";
+import { underscore, pluralize } from "@blazetrails/activesupport";
 import { SingularAssociation } from "./singular-association.js";
 import { beforeValidation, afterCreate, afterUpdate, afterDestroy } from "../../callbacks.js";
 import { resolveModel } from "../../associations.js";
+import { _pendingCounterCacheColumns } from "../../counter-cache.js";
 
 /**
  * Mirrors: ActiveRecord::Associations::Builder::BelongsTo
@@ -53,6 +54,29 @@ export class BelongsTo extends SingularAssociation {
 
   static addCounterCacheCallbacks(model: any, reflection: any): void {
     const name = reflection.name;
+
+    // Register the counter column on the target class so isCounterCacheColumn
+    // works on the has-many side — mirrors Rails' builder/belongs_to.rb line:
+    //   klass._counter_cache_columns |= [cache_column]
+    const counterCache = reflection.options?.counterCache;
+    const cacheColumn: string =
+      typeof counterCache === "string"
+        ? counterCache
+        : `${pluralize(underscore(model.name))}_count`;
+    const targetClassName =
+      reflection.options?.className ?? (name.charAt(0).toUpperCase() + name.slice(1));
+    try {
+      const targetClass = resolveModel(targetClassName);
+      const existing: Set<string> = (targetClass as any)._counterCacheColumns ?? new Set();
+      existing.add(cacheColumn);
+      (targetClass as any)._counterCacheColumns = existing;
+    } catch {
+      // Target class not registered yet — store in pending map; getCounterCacheColumns
+      // will merge it when the target class is first queried.
+      const pending = _pendingCounterCacheColumns.get(targetClassName) ?? new Set<string>();
+      pending.add(cacheColumn);
+      _pendingCounterCacheColumns.set(targetClassName, pending);
+    }
 
     // Rails only registers after_update in add_counter_cache_callbacks.
     // Create/destroy counter handling is done by updateCounterCaches()

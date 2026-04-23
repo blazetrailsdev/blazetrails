@@ -1,6 +1,10 @@
 import type { Base } from "./base.js";
 import { Nodes, sql as arelSql } from "@blazetrails/arel";
 
+// Columns registered before the target class was available in the model registry.
+// Keyed by class name (e.g. "Person" -> Set{"cars_count"}).
+export const _pendingCounterCacheColumns = new Map<string, Set<string>>();
+
 /**
  * Counter cache operations for ActiveRecord models.
  *
@@ -162,7 +166,6 @@ export async function resetCounters(
  * resolves to this column name.
  *
  * Mirrors: ActiveRecord::CounterCache::ClassMethods#counter_cache_column?
- * (The `Q` suffix mirrors Ruby's `?` predicate convention.)
  */
 export function isCounterCacheColumn(this: typeof Base, columnName: string): boolean {
   const counterCols = getCounterCacheColumns(this);
@@ -185,21 +188,14 @@ export function loadSchemaBang(this: typeof Base): void {
 }
 
 function getCounterCacheColumns(modelClass: typeof Base): Set<string> {
-  const cached = (modelClass as any)._counterCacheColumns;
-  if (cached) return cached;
-  const cols = new Set<string>();
-  const associations: any[] = (modelClass as any)._associations ?? [];
-  for (const assoc of associations) {
-    if (assoc.type === "belongsTo" && assoc.options?.counterCache) {
-      const col =
-        typeof assoc.options.counterCache === "string"
-          ? assoc.options.counterCache
-          : `${assoc.name}_count`;
-      cols.add(col);
-    }
-  }
-  (modelClass as any)._counterCacheColumns = cols;
-  return cols;
+  const direct: Set<string> = (modelClass as any)._counterCacheColumns ?? new Set<string>();
+  const pending = _pendingCounterCacheColumns.get(modelClass.name);
+  if (!pending) return direct;
+  // Merge pending into direct and promote
+  for (const col of pending) direct.add(col);
+  (modelClass as any)._counterCacheColumns = direct;
+  _pendingCounterCacheColumns.delete(modelClass.name);
+  return direct;
 }
 
 /**

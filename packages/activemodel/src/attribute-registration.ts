@@ -80,6 +80,62 @@ class PendingDecorator implements PendingModification {
 }
 
 // ---------------------------------------------------------------------------
+// Subclass registry
+// Mirrors: ActiveSupport::DescendantsTracker used by reset_default_attributes
+// ---------------------------------------------------------------------------
+
+/**
+ * Maps each class to its set of known direct subclasses (as WeakRefs to avoid
+ * preventing GC). Populated lazily when _defaultAttributes() is first built
+ * for a class that has a superclass in the attribute system.
+ *
+ * Mirrors: ActiveSupport::DescendantsTracker (Rails registers via `inherited`
+ * hook; we register lazily on first _defaultAttributes() call instead).
+ */
+const directSubclasses = new WeakMap<object, Set<WeakRef<object>>>();
+
+function registerWithSuperclass(cls: AnyAttributeHost): void {
+  const superclass = Object.getPrototypeOf(cls);
+  if (!superclass || superclass === Function.prototype) return;
+  // Only register if the superclass participates in the attribute system
+  // (has _cachedDefaultAttributes or _attributeDefinitions as own or inherited).
+  if (!("_attributeDefinitions" in superclass)) return;
+  if (!directSubclasses.has(superclass)) {
+    directSubclasses.set(superclass, new Set());
+  }
+  directSubclasses.get(superclass)!.add(new WeakRef(cls));
+}
+
+function getDirectSubclasses(cls: AnyAttributeHost): AnyAttributeHost[] {
+  const refs = directSubclasses.get(cls);
+  if (!refs) return [];
+  const alive: AnyAttributeHost[] = [];
+  for (const ref of refs) {
+    const sub = ref.deref();
+    if (sub) {
+      alive.push(sub);
+    } else {
+      refs.delete(ref);
+    }
+  }
+  return alive;
+}
+
+/**
+ * Clear the cached default AttributeSet on this class and all known
+ * subclasses, so the next call to _defaultAttributes() recomputes.
+ *
+ * Mirrors: ActiveModel::AttributeRegistration::ClassMethods#reset_default_attributes
+ * which calls reset_default_attributes! then recurses via subclasses.each.
+ */
+export function resetDefaultAttributes(cls: AnyAttributeHost): void {
+  cls._cachedDefaultAttributes = null;
+  for (const sub of getDirectSubclasses(cls)) {
+    resetDefaultAttributes(sub);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -161,6 +217,11 @@ export function pushPendingDecorator(
  */
 export function _defaultAttributes(this: AnyAttributeHost): AttributeSet {
   if (!this._cachedDefaultAttributes) {
+    // Register with our superclass so resetDefaultAttributes() cascades to us
+    // when the superclass gains new attribute declarations. Mirrors the
+    // ActiveSupport::DescendantsTracker registration that Rails does via
+    // the `inherited` hook; we do it lazily here instead.
+    registerWithSuperclass(this);
     const attributeSet = new AttributeSet(new Map<string, Attribute>());
     applyPendingAttributeModifications(this, attributeSet);
     this._cachedDefaultAttributes = attributeSet;
@@ -201,7 +262,7 @@ export function decorateAttributes(
     }
   }
 
-  this._cachedDefaultAttributes = null;
+  resetDefaultAttributes(this);
 }
 
 /**

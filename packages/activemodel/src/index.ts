@@ -22,6 +22,7 @@ export {
 export {
   applyPendingAttributeModifications,
   pushPendingDecorator,
+  resetDefaultAttributes,
 } from "./attribute-registration.js";
 export { Attribute, FromDatabase, FromUser, WithCastValue } from "./attribute.js";
 export { UserProvidedDefault } from "./attribute/user-provided-default.js";

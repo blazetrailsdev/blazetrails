@@ -13,6 +13,7 @@ import {
   AttributeSet,
   type Type,
   applyPendingAttributeModifications,
+  resetDefaultAttributes,
 } from "@blazetrails/activemodel";
 import { isStiSubclass, getStiBase } from "./inheritance.js";
 import type { Base } from "./base.js";
@@ -86,7 +87,7 @@ export function defineAttribute(
     source: userProvidedDefault ? "user" : "schema",
   });
 
-  this._cachedDefaultAttributes = null;
+  resetDefaultAttributes(this);
   this._attributesBuilder = undefined;
   applyPendingEncryptions(this);
 

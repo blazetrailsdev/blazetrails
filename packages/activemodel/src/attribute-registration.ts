@@ -139,13 +139,14 @@ function getDirectSubclasses(cls: AnyAttributeHost): AnyAttributeHost[] {
  */
 export function resetDefaultAttributes(cls: AnyAttributeHost): void {
   cls._cachedDefaultAttributes = null;
-  // _attributesBuilder is an AR-specific derived cache derived from
-  // _attributeDefinitions. Always clear it (creating an own-property shadow
-  // if needed) so that prototype-chain lookup doesn't return a stale
-  // superclass builder on a subclass that has just had attributes changed.
-  // Skip only classes that have never participated in AR schema building
-  // (i.e., the property is absent from the entire chain).
-  if ("_attributesBuilder" in cls) cls._attributesBuilder = undefined;
+  // _attributesBuilder is an AR-specific derived cache. Unconditionally
+  // shadow it with undefined so prototype-chain lookup never returns a stale
+  // superclass builder after this class's attributes change. For STI
+  // subclasses, attributesBuilder() removes the shadow after writing the
+  // fresh builder to cacheHost, restoring normal prototype-chain access.
+  // AM-only classes that never call attributesBuilder() carry the undefined
+  // own property harmlessly (a single extra slot per class).
+  cls._attributesBuilder = undefined;
   for (const sub of getDirectSubclasses(cls)) {
     resetDefaultAttributes(sub);
   }

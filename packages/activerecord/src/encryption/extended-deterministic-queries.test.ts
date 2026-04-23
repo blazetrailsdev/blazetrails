@@ -330,3 +330,49 @@ describe("ActiveRecord::Encryption::ExtendedDeterministicQueries.installSupport"
   void CoreQueries;
   void Relation;
 });
+
+describe("installExtendedQueriesIfConfigured", () => {
+  it("is a no-op when Configurable.config.extendQueries is false", async () => {
+    const { Configurable } = await import("./configurable.js");
+    const { installExtendedQueriesIfConfigured } = await import("./install.js");
+    const prev = Configurable.config.extendQueries;
+    Configurable.config.extendQueries = false;
+    try {
+      // Simulate a fresh process.
+      (ExtendedDeterministicQueries as any)._installed = false;
+      const installed = installExtendedQueriesIfConfigured();
+      expect(installed).toBe(false);
+      expect(ExtendedDeterministicQueries.installed).toBe(false);
+    } finally {
+      Configurable.config.extendQueries = prev;
+      (ExtendedDeterministicQueries as any)._installed = false;
+    }
+  });
+
+  it("installs the patches onto the real Relation/Base/EncryptedAttributeType when extendQueries=true", async () => {
+    const { Configurable } = await import("./configurable.js");
+    const { installExtendedQueriesIfConfigured } = await import("./install.js");
+
+    const origWhere = Relation.prototype.where;
+    const origFindBy = (Base as any).findBy;
+    const origSerialize = EncryptedAttributeType.prototype.serialize;
+
+    const prev = Configurable.config.extendQueries;
+    Configurable.config.extendQueries = true;
+    (ExtendedDeterministicQueries as any)._installed = false;
+    try {
+      const installed = installExtendedQueriesIfConfigured();
+      expect(installed).toBe(true);
+      expect(Relation.prototype.where).not.toBe(origWhere);
+      expect((Base as any).findBy).not.toBe(origFindBy);
+      expect(EncryptedAttributeType.prototype.serialize).not.toBe(origSerialize);
+    } finally {
+      // Restore to avoid bleeding into sibling tests in the same process.
+      Relation.prototype.where = origWhere;
+      (Base as any).findBy = origFindBy;
+      EncryptedAttributeType.prototype.serialize = origSerialize;
+      (ExtendedDeterministicQueries as any)._installed = false;
+      Configurable.config.extendQueries = prev;
+    }
+  });
+});

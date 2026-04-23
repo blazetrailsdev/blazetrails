@@ -23,6 +23,7 @@ import { EncryptedAttributeType } from "./encryption/encrypted-attribute-type.js
 import { Scheme, type SchemeOptions } from "./encryption/scheme.js";
 import type { EncryptorLike } from "./encryption/encryptor.js";
 import { Cipher } from "./encryption/cipher/aes256-gcm.js";
+import { installExtendedQueriesIfConfigured } from "./encryption/install.js";
 
 /**
  * The simple encryptor surface `Base.encrypts({ encryptor })` accepts.
@@ -198,6 +199,12 @@ export function encrypts(klass: any, ...args: Array<string | EncryptsOptions>): 
   if (klass._attributeDefinitions?.size > 0) {
     applyPendingEncryptions(klass);
   }
+
+  // Rails wires ExtendedDeterministicQueries via a railtie at app boot;
+  // we don't have that lifecycle hook, so trigger idempotently on the
+  // first `encrypts(...)` call when the config opts in. Matches the
+  // intent of `config.active_record.encryption.extend_queries`.
+  installExtendedQueriesIfConfigured();
 }
 
 /**

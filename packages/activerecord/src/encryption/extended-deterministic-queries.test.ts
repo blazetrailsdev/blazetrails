@@ -127,11 +127,6 @@ describe("ActiveRecord::Encryption::ExtendedDeterministicQueries::RelationQuerie
   });
 
   it("reads IN-array values from a real Relation via whereValuesHash() (integration)", () => {
-    // End-to-end check that Relation#whereValuesHash now exposes IN-array
-    // predicates (the Copilot #3 concern on #737). Uses scalar values to
-    // stay orthogonal to PredicateBuilder's ArrayHandler handling of
-    // AdditionalValue objects (tracked separately — ArrayHandler turns
-    // object-arrays into OR chains which whereValuesHash cannot extract).
     const adapter = createTestAdapter();
     class Contact extends Base {
       static {
@@ -145,5 +140,34 @@ describe("ActiveRecord::Encryption::ExtendedDeterministicQueries::RelationQuerie
     expect(rel.whereValuesHash()).toEqual({ email: ["a@x", "b@x"] });
     // scope_for_create filters the IN array out (Rails: equality_only=true).
     expect(rel.scopeForCreate()).toEqual({});
+  });
+
+  it("unwraps AdditionalValue trailers end-to-end on a real Relation", () => {
+    const adapter = createTestAdapter();
+    const type = makeType(true);
+    const prevType = makeType(true);
+
+    class Contact extends Base {
+      static {
+        this._tableName = "contacts";
+        this.attribute("id", "integer");
+        this.attribute("email", "string");
+        this.adapter = adapter;
+      }
+    }
+    (Contact as any)._encryptedAttributes = new Set(["email"]);
+    const defs = (Contact as any)._attributeDefinitions as Map<string, { type: unknown }>;
+    defs.set("email", { type });
+
+    const avCurrent = new AdditionalValue("plain@example.com", type);
+    const avPrev = new AdditionalValue("plain@example.com", prevType);
+    const rel = Contact.all().where({ email: [avCurrent, avPrev] });
+
+    const hash = rel.whereValuesHash();
+    expect(Array.isArray(hash.email)).toBe(true);
+    expect((hash.email as unknown[])[0]).toBe(avCurrent);
+
+    const scope = RelationQueries.scopeForCreate(() => ({}), rel);
+    expect(scope.email).toBe(avCurrent.value);
   });
 });

@@ -18,6 +18,7 @@ import {
   DeleteRestrictionError,
   touchBelongsToParents,
 } from "./index.js";
+import { AssociationNotFoundError } from "./associations/errors.js";
 import { createTestAdapter } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
 import {
@@ -7993,17 +7994,21 @@ describe("CollectionProxyDelegation", () => {
 });
 
 describe("eagerLoadBang", () => {
-  it("initializes CollectionProxy and association() without error", async () => {
+  it("resolves without error and registers CollectionProxy so association() does not throw 'not registered'", async () => {
     const { eagerLoadBang, association } = await import("./associations.js");
     await expect(eagerLoadBang()).resolves.toBeUndefined();
 
-    class Post extends Base {
+    class EagerPost extends Base {
       static {
         this.attribute("title", "string");
         this.adapter = createTestAdapter();
       }
     }
-    const post = new Post({ title: "hi" });
-    expect(() => association(post, "nonexistent")).toThrow();
+    const post = new EagerPost({ title: "hi" });
+    // After eagerLoadBang, CollectionProxy IS registered.
+    // association() throws for a missing definition — not the
+    // "CollectionProxy not registered" error — confirming CP is wired.
+    expect(() => association(post, "nonexistent")).toThrow(/not found/i);
+    expect(() => association(post, "nonexistent")).not.toThrow(/CollectionProxy not registered/);
   });
 });

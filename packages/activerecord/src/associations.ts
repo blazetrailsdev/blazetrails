@@ -7,10 +7,15 @@ import { _CollectionProxyCtor } from "./associations/collection-proxy-slot.js";
 export { _setCollectionProxyCtor } from "./associations/collection-proxy-slot.js";
 
 /**
- * Forces all association-related modules to load eagerly. Mirrors
- * Rails' `ActiveRecord::Associations.eager_load!` which calls
- * `Preloader.eager_load!` and `JoinDependency.eager_load!` — the
- * Ruby autoload equivalent of our dynamic-import initialization.
+ * Eagerly initializes the association modules needed for the
+ * constructor-slot registration cycle used by `association()` and
+ * `CollectionProxy`. Delegates to `initializeAssociations()` so
+ * subpath consumers don't need to call it directly.
+ *
+ * In Rails, `Associations.eager_load!` forces Ruby autoloaded constants
+ * (`Preloader`, `JoinDependency`) to load immediately. We use dynamic
+ * imports instead of Ruby autoload, so this achieves the equivalent
+ * result for our ctor-slot registration pattern.
  *
  * Mirrors: ActiveRecord::Associations.eager_load!
  */

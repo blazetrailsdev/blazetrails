@@ -60,11 +60,26 @@ describe("AttributeAssignmentTest", () => {
       static {
         this.attribute("name", "string");
       }
+      set name(_v: string) {
+        throw new globalThis.Error("boom");
+      }
     }
     const p = new Person({});
-    // Normal assignment should work
-    p.assignAttributes({ name: "test" });
-    expect(p.readAttribute("name")).toBe("test");
+    expect(() => p.assignAttributes({ name: "test" })).toThrow("boom");
+  });
+
+  it("routes through user-defined setter if present", () => {
+    class Person extends Model {
+      static {
+        this.attribute("name", "string");
+      }
+      set name(v: string) {
+        super.writeAttribute("name", v.trim().toUpperCase());
+      }
+    }
+    const p = new Person({});
+    p.assignAttributes({ name: "  bob  " });
+    expect(p.readAttribute("name")).toBe("BOB");
   });
 
   it("an ArgumentError is raised if a non-hash-like object is passed", () => {

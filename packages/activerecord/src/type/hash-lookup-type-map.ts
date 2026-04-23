@@ -10,11 +10,8 @@ export class HashLookupTypeMap {
   private _mapping: Map<string | number, (lookupKey: string | number, ...args: unknown[]) => Type> =
     new Map();
   private _cache: Map<string | number, Map<string, Type>> = new Map();
-  private _parent: HashLookupTypeMap | null;
-
-  constructor(parent: HashLookupTypeMap | null = null) {
-    this._parent = parent;
-  }
+  // Rails accepts a parent param for API compatibility but does not use it.
+  constructor(_parent: HashLookupTypeMap | null = null) {}
 
   lookup(lookupKey: string | number, ...args: unknown[]): Type {
     return this.fetch(lookupKey, ...args, () => new ValueType());
@@ -121,7 +118,6 @@ export class HashLookupTypeMap {
   ): Type {
     const factory = this._mapping.get(type);
     if (factory) return factory(type, ...args);
-    if (this._parent) return this._parent.performFetch(type, args, fallback);
     if (fallback) return fallback(type, ...args);
     return new ValueType();
   }

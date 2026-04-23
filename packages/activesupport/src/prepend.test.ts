@@ -113,6 +113,32 @@ describe("prepend", () => {
     expect(Frozen.prototype.a).toBe(origA);
   });
 
+  it("throws before mutating when an own property is a non-configurable accessor (atomicity)", () => {
+    const target: Record<string, unknown> = {};
+    Object.defineProperty(target, "reader", {
+      get() {
+        return () => "accessor";
+      },
+      configurable: false,
+      enumerable: false,
+    });
+    Object.defineProperty(target, "loose", {
+      value: () => "loose",
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
+    const origLoose = target.loose;
+    expect(() =>
+      prepend(target, {
+        loose: (s: Function) => `w-${s.call(undefined)}`,
+        reader: (s: Function) => `w-${s.call(undefined)}`,
+      }),
+    ).toThrow(/non-configurable accessor/);
+    // `loose` must NOT have been wrapped — atomicity guarantee.
+    expect(target.loose).toBe(origLoose);
+  });
+
   it("throws before mutating when an own property is non-configurable + non-writable (atomicity)", () => {
     const target: Record<string, unknown> = {};
     Object.defineProperty(target, "locked", {

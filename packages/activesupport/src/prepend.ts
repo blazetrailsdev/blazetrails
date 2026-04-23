@@ -56,13 +56,27 @@ export function prepend<T extends object>(target: T, mod: PrependModule): void {
     if (typeof original !== "function") {
       throw new Error(`prepend: cannot wrap ${name} — target has no method with that name`);
     }
-    // If an own property exists and is non-configurable and non-writable,
-    // `Object.defineProperty` below would throw. Detect now.
+    // If an own property exists and is non-configurable, `defineProperty`
+    // below can still throw — three sub-cases:
+    //   - non-writable data descriptor: can't change `value`.
+    //   - accessor descriptor (get/set): can't convert to a data descriptor.
+    //   - writable data descriptor: can change `value` but not `enumerable`
+    //     — our wrap copies enumerable from the existing shape, so this
+    //     one works.
+    // Reject the first two up front to preserve the all-or-nothing
+    // contract; the third is safe.
     const own = Object.getOwnPropertyDescriptor(target, name);
-    if (own && own.configurable === false && own.writable === false) {
-      throw new TypeError(
-        `prepend: cannot wrap ${name} — target's own property is non-configurable and non-writable`,
-      );
+    if (own && own.configurable === false) {
+      if (own.get || own.set) {
+        throw new TypeError(
+          `prepend: cannot wrap ${name} — target's own property is a non-configurable accessor`,
+        );
+      }
+      if (own.writable !== true) {
+        throw new TypeError(
+          `prepend: cannot wrap ${name} — target's own property is non-configurable and non-writable`,
+        );
+      }
     }
   }
 

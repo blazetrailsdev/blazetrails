@@ -135,6 +135,23 @@ export function pushPendingDefault(cls: AnyAttributeHost, name: string, value: u
 }
 
 /**
+ * Push a decorator onto the pending-modification queue.
+ * Called by decorateAttributes and AR's applyPendingEncryptions.
+ *
+ * Mirrors: the PendingDecorator push inside ActiveModel::AttributeRegistration#decorate_attributes
+ */
+export function pushPendingDecorator(
+  cls: AnyAttributeHost,
+  names: string[] | null,
+  decorator: (name: string, type: Type) => Type,
+): void {
+  if (!Object.prototype.hasOwnProperty.call(cls, "_pendingAttributeModifications")) {
+    cls._pendingAttributeModifications = [];
+  }
+  cls._pendingAttributeModifications.push(new PendingDecorator(names, decorator));
+}
+
+/**
  * Mirrors: ActiveModel::AttributeRegistration::ClassMethods#_default_attributes
  *
  * Seeds an empty AttributeSet and replays all pending attribute modifications
@@ -154,17 +171,23 @@ export function _defaultAttributes(this: AnyAttributeHost): AttributeSet {
 /**
  * Mirrors: ActiveModel::AttributeRegistration::ClassMethods#decorate_attributes
  *
- * Applies a type decorator immediately to `_attributeDefinitions` and clears
- * the cached AttributeSet. In Rails this pushes a PendingDecorator to the
- * pending queue; here we write directly to _attributeDefinitions so that
- * the decoration is captured in the phase-1 seed of _defaultAttributes and
- * not double-applied via the pending queue.
+ * Pushes a PendingDecorator onto the modification queue so it replays in the
+ * correct order during _defaultAttributes (after any PendingType entries that
+ * precede it). Also updates _attributeDefinitions immediately so backward-compat
+ * reads (typeForAttribute, columnForAttribute) and double-decoration guards
+ * see the decorated type without waiting for _defaultAttributes to be rebuilt.
  */
 export function decorateAttributes(
   this: AnyAttributeHost,
   names: string[] | null,
   decorator: (name: string, type: Type) => Type,
 ): void {
+  // Push to pending queue so _defaultAttributes replays in declaration order.
+  pushPendingDecorator(this, names, decorator);
+
+  // Also apply immediately to _attributeDefinitions for backward compat and
+  // so guards like `def.type instanceof EncryptedAttributeType` work without
+  // forcing a _defaultAttributes rebuild.
   if (!Object.prototype.hasOwnProperty.call(this, "_attributeDefinitions")) {
     this._attributeDefinitions = new Map(this._attributeDefinitions);
   }

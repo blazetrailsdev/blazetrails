@@ -13,7 +13,7 @@ function freshAdapter(): DatabaseAdapter {
 // -- Phase 2000: Core --
 
 describe("encrypts()", () => {
-  it.skip("encrypts and decrypts attributes transparently", async () => {
+  it("encrypts and decrypts attributes transparently", async () => {
     const adapter = freshAdapter();
     class User extends Base {
       static {
@@ -51,7 +51,7 @@ describe("encrypts()", () => {
     expect(loaded.secret).toBe("my-secret-data");
   });
 
-  it.skip("supports custom encryptor", async () => {
+  it("supports custom encryptor", async () => {
     const adapter = freshAdapter();
     const customEncryptor = {
       encrypt: (v: string) => `ENC:${v}`,

@@ -6354,7 +6354,7 @@ describe("CalculationsTest", () => {
   });
 
   // Rails guide: encrypts — encrypted attributes
-  it.skip("encrypts() transparently encrypts and decrypts attributes", async () => {
+  it("encrypts() transparently encrypts and decrypts attributes", async () => {
     const adapter = createTestAdapter();
     class User extends Base {
       static {

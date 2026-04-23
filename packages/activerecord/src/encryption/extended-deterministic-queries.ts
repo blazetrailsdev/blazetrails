@@ -10,8 +10,55 @@ import { getAttributeType } from "./encryptable-record.js";
 export class ExtendedDeterministicQueries {
   private static _installed = false;
 
-  static installSupport(): void {
+  /**
+   * Install the query-expansion patches. Rails does this via `prepend`:
+   *
+   *   ActiveRecord::Relation.prepend(RelationQueries)
+   *   ActiveRecord::Base.include(CoreQueries)
+   *   ActiveRecord::Encryption::EncryptedAttributeType.prepend(ExtendedEncryptableType)
+   *
+   * TS has no prepend, so we wrap prototype methods in place. Idempotent.
+   * Call this once during app boot when
+   * `Configurable.config.extendQueries` is true (Rails'
+   * `config.active_record.encryption.extend_queries`).
+   */
+  static installSupport(targets: {
+    Relation: { prototype: Record<string, Function> };
+    Base: Record<string, Function> & { findBy?: Function };
+    EncryptedAttributeType: { prototype: Record<string, Function> };
+  }): void {
+    if (this._installed) return;
     this._installed = true;
+
+    const relProto = targets.Relation.prototype;
+    const originalWhere = relProto.where;
+    relProto.where = function (this: unknown, ...args: unknown[]) {
+      return RelationQueries.where(originalWhere, this, args);
+    };
+
+    const originalExists = relProto.exists;
+    relProto.exists = function (this: unknown, ...args: unknown[]) {
+      return RelationQueries.isExists(originalExists, this, args);
+    };
+
+    const originalScopeForCreate = relProto.scopeForCreate;
+    relProto.scopeForCreate = function (this: unknown) {
+      return RelationQueries.scopeForCreate(originalScopeForCreate, this);
+    };
+
+    const originalFindBy = targets.Base.findBy!;
+    targets.Base.findBy = function (this: unknown, ...args: unknown[]) {
+      return CoreQueries.findBy(originalFindBy, this, args);
+    };
+
+    const eatProto = targets.EncryptedAttributeType.prototype;
+    const originalSerialize = eatProto.serialize;
+    eatProto.serialize = function (this: unknown, data: unknown) {
+      return ExtendedEncryptableType.serialize(
+        (v: unknown) => originalSerialize.call(this, v),
+        data,
+      );
+    };
   }
 
   static get installed(): boolean {
@@ -107,10 +154,7 @@ export class RelationQueries {
     return originalExists.call(relation, ...EncryptedQuery.processArguments(relation, args, true));
   }
 
-  static scopeForCreate(
-    originalScopeForCreate: () => Record<string, unknown>,
-    relation: any,
-  ): Record<string, unknown> {
+  static scopeForCreate(originalScopeForCreate: Function, relation: any): Record<string, unknown> {
     const model = relation.model ?? relation;
     const encryptedAttrs = model._encryptedAttributes as Set<string> | undefined;
     if (!encryptedAttrs?.size) return originalScopeForCreate.call(relation);

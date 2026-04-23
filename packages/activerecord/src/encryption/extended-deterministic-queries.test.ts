@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   AdditionalValue,
+  CoreQueries,
+  EncryptedQuery,
+  ExtendedDeterministicQueries,
   ExtendedEncryptableType,
   RelationQueries,
 } from "./extended-deterministic-queries.js";
@@ -8,8 +11,8 @@ import { EncryptedAttributeType } from "./encrypted-attribute-type.js";
 import { Scheme } from "./scheme.js";
 import { NullEncryptor } from "./null-encryptor.js";
 import { Base } from "../base.js";
+import { Relation } from "../relation.js";
 import { createTestAdapter } from "../test-adapter.js";
-import "../relation.js";
 
 describe("ActiveRecord::Encryption::ExtendedDeterministicQueriesTest", () => {
   it.skip("Finds records when data is unencrypted", () => {});
@@ -170,4 +173,160 @@ describe("ActiveRecord::Encryption::ExtendedDeterministicQueries::RelationQuerie
     const scope = RelationQueries.scopeForCreate(() => ({}), rel);
     expect(scope.email).toBe(avCurrent.value);
   });
+});
+
+describe("ActiveRecord::Encryption::ExtendedDeterministicQueries.installSupport", () => {
+  // Use isolated classes / prototype clones so patches don't bleed into
+  // the other test files running in the same process.
+  function isolatedTargets() {
+    class FakeRelation {
+      _modelClass: any;
+      constructor(model: any) {
+        this._modelClass = model;
+      }
+      get model() {
+        return this._modelClass;
+      }
+      where(conditions: Record<string, unknown>) {
+        (this as any)._lastWhere = conditions;
+        return this;
+      }
+      async exists(conditions: Record<string, unknown>) {
+        (this as any)._lastExists = conditions;
+        return true;
+      }
+      scopeForCreate() {
+        return { fromOriginal: true } as Record<string, unknown>;
+      }
+      whereValuesHash() {
+        return (this as any)._wheres ?? {};
+      }
+    }
+    class FakeBase {
+      static findBy(conditions: Record<string, unknown>) {
+        (this as any)._lastFindBy = conditions;
+        return "hit";
+      }
+    }
+    class FakeEat extends EncryptedAttributeType {}
+    return { Relation: FakeRelation, Base: FakeBase, EncryptedAttributeType: FakeEat };
+  }
+
+  function withFreshInstaller<T>(fn: () => T): T {
+    (ExtendedDeterministicQueries as any)._installed = false;
+    try {
+      return fn();
+    } finally {
+      (ExtendedDeterministicQueries as any)._installed = false;
+    }
+  }
+
+  it("patches Relation.prototype.where to run processArguments", () => {
+    withFreshInstaller(() => {
+      const targets = isolatedTargets();
+      ExtendedDeterministicQueries.installSupport(targets as any);
+
+      const prev = new Scheme({ deterministic: true, encryptor: new NullEncryptor() });
+      const type = new EncryptedAttributeType({
+        scheme: new Scheme({
+          deterministic: true,
+          encryptor: new NullEncryptor(),
+          previousSchemes: [prev],
+        }),
+      });
+      const model = {
+        _encryptedAttributes: new Set(["email"]),
+        _attributeDefinitions: new Map([["email", { type }]]),
+      };
+      const rel = new (targets.Relation as any)(model);
+      rel.where({ email: "a@x" });
+      const captured = rel._lastWhere.email as unknown[];
+      expect(Array.isArray(captured)).toBe(true);
+      // See allCiphertextsFor: our expansion puts AV(current) at [0] (not
+      // plaintext like Rails) because our PredicateBuilder bypasses
+      // EncryptedAttributeType.serialize for raw scalars in IN arrays.
+      expect(captured[0]).toBeInstanceOf(AdditionalValue);
+      expect((captured[0] as AdditionalValue).value).toBeDefined();
+      expect(captured[1]).toBeInstanceOf(AdditionalValue);
+    });
+  });
+
+  it("patches Relation.prototype.scopeForCreate to unwrap AdditionalValue[0]", () => {
+    withFreshInstaller(() => {
+      const targets = isolatedTargets();
+      ExtendedDeterministicQueries.installSupport(targets as any);
+
+      const type = new EncryptedAttributeType({
+        scheme: new Scheme({ deterministic: true, encryptor: new NullEncryptor() }),
+      });
+      const av = new AdditionalValue("plain@x", type);
+      const model = {
+        _encryptedAttributes: new Set(["email"]),
+        _attributeDefinitions: new Map([["email", { type }]]),
+      };
+      const rel = new (targets.Relation as any)(model);
+      rel._wheres = { email: [av] };
+      expect(rel.scopeForCreate()).toEqual({ fromOriginal: true, email: av.value });
+    });
+  });
+
+  it("patches Base.findBy to run processArguments with checkForAdditionalValues=false", () => {
+    withFreshInstaller(() => {
+      const targets = isolatedTargets();
+      ExtendedDeterministicQueries.installSupport(targets as any);
+
+      const prev = new Scheme({ deterministic: true, encryptor: new NullEncryptor() });
+      const type = new EncryptedAttributeType({
+        scheme: new Scheme({
+          deterministic: true,
+          encryptor: new NullEncryptor(),
+          previousSchemes: [prev],
+        }),
+      });
+      class Contact extends (targets.Base as any) {
+        static _encryptedAttributes = new Set(["email"]);
+        static _attributeDefinitions = new Map([["email", { type }]]);
+      }
+      (Contact as any).findBy({ email: "x" });
+      const captured = (Contact as any)._lastFindBy.email as unknown[];
+      expect(Array.isArray(captured)).toBe(true);
+      expect(captured[0]).toBeInstanceOf(AdditionalValue);
+      expect(captured[1]).toBeInstanceOf(AdditionalValue);
+    });
+  });
+
+  it("patches EncryptedAttributeType.prototype.serialize to passthrough AdditionalValue", () => {
+    withFreshInstaller(() => {
+      const targets = isolatedTargets();
+      ExtendedDeterministicQueries.installSupport(targets as any);
+
+      const type = new (targets.EncryptedAttributeType as typeof EncryptedAttributeType)({
+        scheme: new Scheme({ deterministic: true, encryptor: new NullEncryptor() }),
+      });
+      const av = new AdditionalValue("plain", type);
+      expect(type.serialize(av)).toBe(av.value);
+      // Non-AdditionalValue still flows through the original serialize path.
+      expect(typeof type.serialize("raw")).toBe("string");
+    });
+  });
+
+  it("is idempotent — second call is a no-op", () => {
+    withFreshInstaller(() => {
+      const targets = isolatedTargets();
+      const originalWhere = targets.Relation.prototype.where;
+      ExtendedDeterministicQueries.installSupport(targets as any);
+      const firstPatched = targets.Relation.prototype.where;
+      ExtendedDeterministicQueries.installSupport(targets as any);
+      const secondPatched = targets.Relation.prototype.where;
+      expect(firstPatched).not.toBe(originalWhere);
+      expect(secondPatched).toBe(firstPatched);
+      expect(ExtendedDeterministicQueries.installed).toBe(true);
+    });
+  });
+
+  // Satisfy no-unused-imports: these identifiers are exported for use by
+  // external call sites, referenced here to prevent tree-shaking warnings.
+  void EncryptedQuery;
+  void CoreQueries;
+  void Relation;
 });

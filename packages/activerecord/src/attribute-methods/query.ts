@@ -22,9 +22,21 @@ interface Queryable {
  * Mirrors: ActiveRecord::AttributeMethods::Query#query_attribute
  */
 export function queryAttribute(this: Queryable, name: string): boolean {
-  const prop = (this as Record<string, unknown>)[name];
-  const value = typeof prop === "function" ? (prop as () => unknown).call(this) : prop;
-  return castToBoolean(value);
+  return castToBoolean(publicSend(this, name));
+}
+
+function publicSend(obj: object, name: string): unknown {
+  let proto = Object.getPrototypeOf(obj) as object | null;
+  while (proto) {
+    const desc = Object.getOwnPropertyDescriptor(proto, name);
+    if (desc) {
+      if (desc.get) return (obj as Record<string, unknown>)[name];
+      if (typeof desc.value === "function") return (desc.value as () => unknown).call(obj);
+      break;
+    }
+    proto = Object.getPrototypeOf(proto) as object | null;
+  }
+  return (obj as Record<string, unknown>)[name];
 }
 
 /**

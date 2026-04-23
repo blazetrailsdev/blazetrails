@@ -25,14 +25,13 @@ interface AttributeHolder {
 }
 
 /**
- * Skips alias resolution and the primary-key "id" redirect — used internally
- * where attribute names are already canonical.
+ * Reads directly from the attribute store, bypassing any model-level
+ * overrides of `readAttribute` (e.g. alias resolution or the serialize.ts
+ * patch). Used internally where the attribute name is already canonical.
  *
- * In Rails, `_read_attribute` returns the deserialized value because
- * serialization lives inside the attribute type. In this codebase,
- * serialize.ts patches `readAttribute` at the model level, so
- * `_readAttribute` bypasses that patch and returns the raw stored value
- * for serialized columns. This matches Rails' intent; the gap is architectural.
+ * Rails' public `read_attribute` also resolves `"id"` to the primary-key
+ * column name. That redirect will live in our AR-level `readAttribute`
+ * override once implemented; `_readAttribute` intentionally skips it.
  *
  * Mirrors: ActiveRecord::AttributeMethods::Read#_read_attribute
  */

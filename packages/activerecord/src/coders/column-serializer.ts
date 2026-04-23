@@ -97,6 +97,7 @@ export class ColumnSerializer {
       ) {
         throw new TypeError(
           `Cannot serialize ${this._objectClass.name}. Classes passed to \`serialize\` must have a 0 argument constructor.`,
+          { cause: e },
         );
       }
     }

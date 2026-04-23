@@ -1,0 +1,5 @@
+users    = Arel::Table.new(:users)
+posts    = Arel::Table.new(:posts)
+comments = Arel::Table.new(:comments)
+sub = posts.join(comments).on(posts[:id].eq(comments[:post_id]))
+users.join(sub).on(posts[:user_id].eq(users[:id]))

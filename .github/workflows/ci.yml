@@ -361,8 +361,6 @@ jobs:
           path: scripts/parity/schema/ruby/Gemfile.lock
           retention-days: 7
       - run: pnpm install --frozen-lockfile
-      - name: Build dependency packages for trails introspection
-        run: pnpm --filter @blazetrails/arel --filter @blazetrails/activesupport --filter @blazetrails/activemodel build
       - name: Run Rails-side dump
         run: pnpm tsx scripts/parity/run.ts --side=rails
       - uses: actions/upload-artifact@v4

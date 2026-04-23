@@ -86,7 +86,7 @@ module Canonicalize
       "name"      => col[:name],
       "type"      => canonical_type,
       "null"      => col[:null],
-      "default"   => coerce_default(col[:default]),
+      "default"   => col[:default].nil? ? nil : col[:default].to_s,
       "limit"     => col[:limit],
       "precision" => col[:precision],
       "scale"     => col[:scale],
@@ -105,26 +105,4 @@ module Canonicalize
     }
   end
 
-  # Coerce an AR default value (already deserialized by AR's type system)
-  # into a canonical scalar: String | Integer | Float | true | false | nil.
-  def self.coerce_default(value)
-    return nil if value.nil?
-    return value if value == true || value == false
-    return value.to_i if value.is_a?(Integer)
-    # Float and BigDecimal (AR uses BigDecimal for :decimal columns) → JSON number.
-    return value.to_f if value.is_a?(Numeric)
-    # String — coerce to number when it parses like one, matching the node-side
-    # coerceDefault behaviour. SQLite PRAGMA dflt_value is always a string so
-    # AR returns e.g. "1" for DEFAULT 1 on an integer column. Using Float()
-    # handles more formats ("1e3", ".5", whitespace) closer to JS Number().
-    str = value.to_s
-    begin
-      number = Float(str)
-      return str unless number.finite?
-      return number.to_i if number % 1 == 0
-      number
-    rescue ArgumentError, TypeError
-      str
-    end
-  end
 end

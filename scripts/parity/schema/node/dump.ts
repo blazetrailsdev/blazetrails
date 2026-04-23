@@ -127,7 +127,8 @@ async function main(): Promise<void> {
       process.stderr.write(
         `parity dump: table mismatch\n  expected: ${JSON.stringify(expectedTableNames)}\n  actual:   ${JSON.stringify(actualTableNames)}\n`,
       );
-      process.exit(2);
+      process.exitCode = 2;
+      return;
     }
 
     const actualIndexCount = canonical.tables.reduce((n, t) => n + t.indexes.length, 0);
@@ -135,15 +136,23 @@ async function main(): Promise<void> {
       process.stderr.write(
         `parity dump: index count mismatch\n  expected: ${expected.indexCount}\n  actual:   ${actualIndexCount}\n`,
       );
-      process.exit(2);
+      process.exitCode = 2;
+      return;
     }
 
     // 6. Write canonical JSON
     writeFileSync(outPathAbs, JSON.stringify(canonical, null, 2) + "\n");
     process.stdout.write(`parity dump (trails): wrote ${outPathAbs}\n`);
   } finally {
-    // Close the connection before deleting the temp file to avoid EBUSY on
-    // some platforms when better-sqlite3 holds the file open.
+    // Explicitly close the adapter's DB handle before removing the temp file.
+    // Base.removeConnection() only drops the pool reference; the adapter (and
+    // its better-sqlite3 handle) may still be open, causing EBUSY on Windows.
+    try {
+      const a = Base.adapter as { close?: () => void };
+      if (typeof a.close === "function") a.close();
+    } catch {
+      /* adapter unavailable or already closed */
+    }
     try {
       Base.removeConnection();
     } catch {

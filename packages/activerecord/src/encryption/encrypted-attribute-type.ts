@@ -142,6 +142,6 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
 
   get supportUnencryptedData(): boolean {
     if (this._previousType) return false;
-    return Configurable.config.supportUnencryptedData ?? false;
+    return Configurable.config.supportUnencryptedData && this.scheme.isSupportUnencryptedData();
   }
 }

@@ -38,6 +38,9 @@ export class SchemaCreation extends AbstractSchemaCreation {
     if (options.onUpdate) {
       sql += ` ${this.actionSql("UPDATE", options.onUpdate as ReferentialAction)}`;
     }
+    if (options.deferrable) {
+      sql += ` DEFERRABLE INITIALLY ${(options.deferrable as string).toUpperCase()}`;
+    }
     if (options.validate === false) {
       sql += " NOT VALID";
     }

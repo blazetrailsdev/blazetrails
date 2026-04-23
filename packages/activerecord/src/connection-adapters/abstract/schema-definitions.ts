@@ -851,6 +851,18 @@ export class TableDefinition {
           fkSql += ` ON DELETE ${fk.onDelete.toUpperCase().replace("NULLIFY", "SET NULL").replace("NO_ACTION", "NO ACTION")}`;
         if (fk.onUpdate)
           fkSql += ` ON UPDATE ${fk.onUpdate.toUpperCase().replace("NULLIFY", "SET NULL").replace("NO_ACTION", "NO ACTION")}`;
+        if (fk.deferrable) {
+          if (this._adapterName !== "postgres") {
+            throw new Error("Foreign key deferrable is only supported on PostgreSQL");
+          }
+          fkSql += ` DEFERRABLE INITIALLY ${fk.deferrable.toUpperCase()}`;
+        }
+        if (!fk.isValidate) {
+          if (this._adapterName !== "postgres") {
+            throw new Error("Foreign key validate: false is only supported on PostgreSQL");
+          }
+          fkSql += " NOT VALID";
+        }
         tableElements.push(fkSql);
       }
       sql += ` (${tableElements.join(", ")})`;

@@ -311,18 +311,32 @@ describe("NamingWithNamespacedModelInIsolatedNamespaceTest", () => {
   });
 });
 
+// Ports Rails `NameWithAnonymousClassTest`
+// (activemodel/test/cases/naming_test.rb:166-182): anonymous classes
+// (nil/blank `name`) must raise unless an explicit `name:` override is
+// supplied.
 describe("NameWithAnonymousClassTest", () => {
   it("anonymous class without name argument", () => {
-    const name = new ModelName("");
-    expect(name.singular).toBe("");
-    expect(name.plural).toBe("");
+    expect(() => new ModelName("")).toThrow(/cannot be blank/);
   });
 
   it("anonymous class with name argument", () => {
-    const mn = new ModelName("CustomName");
-    expect(mn.name).toBe("CustomName");
-    expect(mn.singular).toBe("custom_name");
-    expect(mn.plural).toBe("custom_names");
+    const mn = new ModelName("", { name: "Anonymous" });
+    expect(mn.name).toBe("Anonymous");
+    expect(mn.singular).toBe("anonymous");
+    expect(mn.element).toBe("anonymous");
+    expect(mn.paramKey).toBe("anonymous");
+  });
+});
+
+describe("ModelName namespace Module-or-string parity", () => {
+  it("accepts namespace as an object with a name property (Rails Module arg)", () => {
+    // Rails: `ActiveModel::Name.new(Blog::Post, Blog)` — passes the Module.
+    const asObject = new ModelName("Blog::Post", { namespace: { name: "Blog" } });
+    const asString = new ModelName("Blog::Post", { namespace: "Blog" });
+    expect(asObject.paramKey).toBe(asString.paramKey);
+    expect(asObject.routeKey).toBe(asString.routeKey);
+    expect(asObject.unnamespaced).toBe("Post");
   });
 });
 

@@ -131,13 +131,28 @@ export class ModelName {
    */
   constructor(
     className: string,
-    options?: { namespace?: string; klass?: ModelLike; name?: string },
+    options?: { namespace?: string | { name: string }; klass?: ModelLike; name?: string },
   ) {
     this._klass = options?.klass ?? null;
-    this.namespace = options?.namespace ?? null;
+    // Rails' `namespace` arg is a Module; its `.name` is what
+    // `delete_prefix("#{namespace.name}::")` uses. Accept either the string
+    // form (most common from TS callers) or an object with a `.name` for
+    // parity with callers porting code that passes a class/module reference.
+    const rawNamespace = options?.namespace ?? null;
+    this.namespace = typeof rawNamespace === "string" ? rawNamespace : (rawNamespace?.name ?? null);
 
     // Rails: @name = name || klass.name
     this.name = options?.name ?? className;
+
+    // Rails: raise ArgumentError if @name.blank?
+    // (activemodel/lib/active_model/naming.rb:169). Ruby's `#blank?` treats
+    // nil / empty / whitespace-only as blank.
+    if (!this.name || !this.name.trim()) {
+      throw new Error(
+        "Class name cannot be blank. You need to supply a name argument when anonymous class given",
+      );
+    }
+
     // Rails: @unnamespaced = @name.delete_prefix("#{namespace.name}::") if namespace
     this.unnamespaced = this.namespace
       ? this.name.startsWith(`${this.namespace}::`)

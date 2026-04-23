@@ -2,6 +2,7 @@ import { Type } from "./type/value.js";
 import { typeRegistry } from "./type/registry.js";
 import { Attribute } from "./attribute.js";
 import { AttributeSet } from "./attribute-set.js";
+import { pushPendingType, pushPendingDefault } from "./attribute-registration.js";
 
 export interface AttributeDefinition {
   name: string;
@@ -83,6 +84,15 @@ export function attribute(
     userProvided,
     source: userProvided ? "user" : "schema",
   });
+
+  // Push to pending-modification queue so _defaultAttributes() replays in
+  // the correct order relative to schema-reflected columns (AR) or other
+  // pending modifications (AM inheritance).
+  // Mirrors: ActiveModel::AttributeRegistration#attribute
+  pushPendingType(this, name, type);
+  if (options?.default !== undefined) {
+    pushPendingDefault(this, name, defaultValue);
+  }
 
   // Mirrors: Rails reset_default_attributes — clear cached AttributeSet
   this._cachedDefaultAttributes = null;

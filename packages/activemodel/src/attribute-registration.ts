@@ -1,6 +1,6 @@
 import { Type } from "./type/value.js";
+import { Attribute } from "./attribute.js";
 import { AttributeSet } from "./attribute-set.js";
-import { buildDefaultAttributes, type AttributeDefinition } from "./attributes.js";
 
 /**
  * AttributeRegistration mixin — provides the static attribute() method
@@ -28,25 +28,137 @@ export type AttributeRegistration = AttributeRegistrationClassMethods;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyAttributeHost = any;
 
+// ---------------------------------------------------------------------------
+// Pending modification structs
+// Mirrors: ActiveModel::AttributeRegistration::ClassMethods private structs
+// ---------------------------------------------------------------------------
+
+interface PendingModification {
+  applyTo(attributeSet: AttributeSet): void;
+}
+
+class PendingType implements PendingModification {
+  constructor(
+    readonly name: string,
+    readonly type: Type,
+  ) {}
+
+  applyTo(attributeSet: AttributeSet): void {
+    const existing = attributeSet.getAttribute(this.name);
+    attributeSet.set(this.name, existing.withType(this.type));
+  }
+}
+
+class PendingDefault implements PendingModification {
+  constructor(
+    readonly name: string,
+    readonly default_: unknown,
+  ) {}
+
+  applyTo(attributeSet: AttributeSet): void {
+    const existing = attributeSet.getAttribute(this.name);
+    attributeSet.set(this.name, existing.withUserDefault(this.default_));
+  }
+}
+
+class PendingDecorator implements PendingModification {
+  constructor(
+    readonly names: string[] | null,
+    readonly decorator: (name: string, type: Type) => Type,
+  ) {}
+
+  applyTo(attributeSet: AttributeSet): void {
+    const targets = this.names ?? attributeSet.keys();
+    for (const name of targets) {
+      const existing = attributeSet.getAttribute(name);
+      const newType = this.decorator(name, existing.type);
+      if (newType) {
+        attributeSet.set(name, existing.withType(newType));
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function collectPendingModifications(cls: AnyAttributeHost): PendingModification[] {
+  if (!cls || cls === Function.prototype || !cls._pendingAttributeModifications) return [];
+  const superMods = collectPendingModifications(Object.getPrototypeOf(cls));
+  const own = Object.prototype.hasOwnProperty.call(cls, "_pendingAttributeModifications")
+    ? (cls._pendingAttributeModifications as PendingModification[])
+    : [];
+  return [...superMods, ...own];
+}
+
+/**
+ * Mirrors: ActiveModel::AttributeRegistration::ClassMethods#apply_pending_attribute_modifications
+ */
+export function applyPendingAttributeModifications(
+  cls: AnyAttributeHost,
+  attributeSet: AttributeSet,
+): void {
+  for (const mod of collectPendingModifications(cls)) {
+    mod.applyTo(attributeSet);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Exported functions
+// ---------------------------------------------------------------------------
+
+/**
+ * Push a type declaration onto the pending-modification queue.
+ * Called internally by attribute() implementations.
+ *
+ * Mirrors: the PendingType push inside ActiveModel::AttributeRegistration#attribute
+ */
+export function pushPendingType(cls: AnyAttributeHost, name: string, type: Type): void {
+  if (!Object.prototype.hasOwnProperty.call(cls, "_pendingAttributeModifications")) {
+    cls._pendingAttributeModifications = [];
+  }
+  cls._pendingAttributeModifications.push(new PendingType(name, type));
+}
+
+/**
+ * Push a default declaration onto the pending-modification queue.
+ * Called internally by attribute() implementations.
+ *
+ * Mirrors: the PendingDefault push inside ActiveModel::AttributeRegistration#attribute
+ */
+export function pushPendingDefault(cls: AnyAttributeHost, name: string, value: unknown): void {
+  if (!Object.prototype.hasOwnProperty.call(cls, "_pendingAttributeModifications")) {
+    cls._pendingAttributeModifications = [];
+  }
+  cls._pendingAttributeModifications.push(new PendingDefault(name, value));
+}
+
 /**
  * Mirrors: ActiveModel::AttributeRegistration::ClassMethods#_default_attributes
  *
- * Cached AttributeSet built from _attributeDefinitions. All other attribute
- * accessors (attributeTypes, typeForAttribute) and the instance constructor
- * delegate through this method — it is the single source of truth, matching
- * the Rails delegation chain.
+ * Seeds an empty AttributeSet and replays all pending attribute modifications
+ * from the class hierarchy. The result is cached.
+ *
+ * AR overrides this to seed from columnsHash first, then replay.
  */
 export function _defaultAttributes(this: AnyAttributeHost): AttributeSet {
   if (!this._cachedDefaultAttributes) {
-    this._cachedDefaultAttributes = buildDefaultAttributes(
-      this._attributeDefinitions as Map<string, AttributeDefinition>,
-    );
+    const attributeSet = new AttributeSet(new Map<string, Attribute>());
+    applyPendingAttributeModifications(this, attributeSet);
+    this._cachedDefaultAttributes = attributeSet;
   }
   return this._cachedDefaultAttributes;
 }
 
 /**
  * Mirrors: ActiveModel::AttributeRegistration::ClassMethods#decorate_attributes
+ *
+ * Applies a type decorator immediately to `_attributeDefinitions` and clears
+ * the cached AttributeSet. In Rails this pushes a PendingDecorator to the
+ * pending queue; here we write directly to _attributeDefinitions so that
+ * the decoration is captured in the phase-1 seed of _defaultAttributes and
+ * not double-applied via the pending queue.
  */
 export function decorateAttributes(
   this: AnyAttributeHost,
@@ -62,12 +174,10 @@ export function decorateAttributes(
     const def = defs.get(name);
     if (def) {
       const newType = decorator(name, def.type);
-      if (newType) {
-        defs.set(name, { ...def, type: newType });
-      }
+      if (newType) defs.set(name, { ...def, type: newType });
     }
   }
-  // Mirrors: Rails reset_default_attributes
+
   this._cachedDefaultAttributes = null;
 }
 

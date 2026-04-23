@@ -19,6 +19,7 @@ export {
   ForcedMutationTracker,
   NullMutationTracker,
 } from "./attribute-mutation-tracker.js";
+export { applyPendingAttributeModifications } from "./attribute-registration.js";
 export { Attribute, FromDatabase, FromUser, WithCastValue } from "./attribute.js";
 export { UserProvidedDefault } from "./attribute/user-provided-default.js";
 export { AttributeSet } from "./attribute-set.js";

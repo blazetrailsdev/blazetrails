@@ -270,4 +270,42 @@ describe("AttributeRegistrationTest", () => {
     expect(p.typeForAttribute("name")).not.toBeNull();
     expect(p.typeForAttribute("missing_key")).toBeNull();
   });
+
+  it("_pendingAttributeModifications queue is populated by attribute()", () => {
+    class MyModel extends Model {
+      static {
+        this.attribute("name", "string");
+        this.attribute("age", "integer", { default: 0 });
+      }
+    }
+    const queue = (MyModel as any)._pendingAttributeModifications;
+    expect(queue).toBeDefined();
+    expect(queue.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("_default_attributes seeds empty set and replays pending queue", () => {
+    class MyModel extends Model {
+      static {
+        this.attribute("score", "integer", { default: 10 });
+      }
+    }
+    const defaults = (MyModel as any)._defaultAttributes();
+    expect(defaults.getAttribute("score").value).toBe(10);
+  });
+
+  it("pending queue from superclass is replayed before subclass queue", () => {
+    class Parent extends Model {
+      static {
+        this.attribute("role", "string", { default: "user" });
+      }
+    }
+    class Child extends Parent {
+      static {
+        this.attribute("role", "string", { default: "admin" });
+      }
+    }
+    // Child's pending queue replays after parent's, so child's default wins
+    const defaults = (Child as any)._defaultAttributes();
+    expect(defaults.getAttribute("role").value).toBe("admin");
+  });
 });

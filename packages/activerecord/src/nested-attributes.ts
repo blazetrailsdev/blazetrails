@@ -3,7 +3,7 @@ import { modelRegistry } from "./associations.js";
 import { ActiveRecordError, UnknownAttributeError } from "./errors.js";
 import { singularize, camelize, underscore } from "@blazetrails/activesupport";
 import { Table, UpdateManager } from "@blazetrails/arel";
-import { markedForDestruction } from "./autosave-association.js";
+import { isMarkedForDestruction } from "./autosave-association.js";
 
 /**
  * Raised when more nested-attribute records are provided than the
@@ -26,7 +26,7 @@ export class TooManyRecords extends ActiveRecordError {
  * Mirrors: ActiveRecord::NestedAttributes#_destroy
  */
 export function _destroy(this: Base): boolean {
-  return markedForDestruction.call(this as any);
+  return isMarkedForDestruction(this);
 }
 
 interface NestedAttributeOptions {

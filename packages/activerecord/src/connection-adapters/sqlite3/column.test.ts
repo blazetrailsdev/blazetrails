@@ -6,9 +6,15 @@ function makeColumn(options: {
   defaultValue?: unknown;
   generatedType?: "stored" | "virtual" | null;
 }): Column {
-  return new Column("col", options.defaultValue ?? null, new SqlTypeMetadata({ sqlType: "text" }), true, {
-    generatedType: options.generatedType,
-  });
+  return new Column(
+    "col",
+    options.defaultValue ?? null,
+    new SqlTypeMetadata({ sqlType: "text" }),
+    true,
+    {
+      generatedType: options.generatedType,
+    },
+  );
 }
 
 describe("SQLite3::Column#hasDefault", () => {

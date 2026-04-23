@@ -2531,7 +2531,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     const rows = await this.schemaQuery(`
       SELECT t2.oid::regclass::text AS to_table, a1.attname AS column, a2.attname AS primary_key,
              c.conname AS name, c.confupdtype AS on_update, c.confdeltype AS on_delete,
-             c.convalidated AS valid, c.condeferrable AS deferrable, c.condeferred AS deferred
+             c.convalidated AS valid, c.condeferrable AS deferrable, c.condeferred AS deferred,
+             c.conkey, c.confkey, c.conrelid, c.confrelid
       FROM pg_constraint c
       JOIN pg_class t1 ON c.conrelid = t1.oid
       JOIN pg_class t2 ON c.confrelid = t2.oid
@@ -2543,20 +2544,41 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         AND t3.nspname = ${scope.schema}
       ORDER BY c.conname
     `);
-    return rows.map((row) => {
-      const toTable = unquoteIdentifier(row.to_table as string);
-      return new ForeignKeyDefinition(
-        tableName,
-        toTable,
-        unquoteIdentifier(row.column as string),
-        row.primary_key as string,
-        row.name as string,
-        this.extractForeignKeyAction(row.on_delete as string),
-        this.extractForeignKeyAction(row.on_update as string),
-        this.extractConstraintDeferrable(row.deferrable as boolean, row.deferred as boolean),
-        (row.valid as boolean) ?? true,
-      );
-    });
+    return Promise.all(
+      rows.map(async (row) => {
+        const toTable = unquoteIdentifier(row.to_table as string);
+        const conkey = String(row.conkey)
+          .replace(/[{}]/g, "")
+          .split(",")
+          .map(Number);
+        const confkey = String(row.confkey)
+          .replace(/[{}]/g, "")
+          .split(",")
+          .map(Number);
+        let column: string;
+        let primaryKey: string;
+        if (conkey.length > 1) {
+          const cols = await this.columnNamesFromColumnNumbers(row.conrelid as number, conkey);
+          const pks = await this.columnNamesFromColumnNumbers(row.confrelid as number, confkey);
+          column = cols.join(",");
+          primaryKey = pks.join(",");
+        } else {
+          column = unquoteIdentifier(row.column as string);
+          primaryKey = row.primary_key as string;
+        }
+        return new ForeignKeyDefinition(
+          tableName,
+          toTable,
+          column,
+          primaryKey,
+          row.name as string,
+          this.extractForeignKeyAction(row.on_delete as string),
+          this.extractForeignKeyAction(row.on_update as string),
+          this.extractConstraintDeferrable(row.deferrable as boolean, row.deferred as boolean),
+          (row.valid as boolean) ?? true,
+        );
+      }),
+    );
   }
 
   async foreignTables(): Promise<string[]> {

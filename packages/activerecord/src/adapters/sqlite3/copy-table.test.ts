@@ -251,6 +251,18 @@ describe("CopyTableTest", () => {
     expect(fks).toHaveLength(0);
   });
 
+  it("foreignKeys extracts deferrable from CREATE TABLE SQL", async () => {
+    adapter.exec(`CREATE TABLE "refs" ("id" INTEGER PRIMARY KEY)`);
+    adapter.exec(
+      `CREATE TABLE "deferred_fks" ("id" INTEGER PRIMARY KEY, "ref_id" INTEGER,
+       CONSTRAINT "fk_deferred" FOREIGN KEY("ref_id") REFERENCES "refs"("id") DEFERRABLE INITIALLY DEFERRED)`,
+    );
+    const fks = await adapter.foreignKeys("deferred_fks");
+    expect(fks).toHaveLength(1);
+    expect(fks[0].name).toBe("fk_deferred");
+    expect(fks[0].deferrable).toBe("deferred");
+  });
+
   it("remove check constraint with ifExists does not throw when missing", async () => {
     adapter.exec(`CREATE TABLE "things" ("id" INTEGER PRIMARY KEY, "val" INTEGER)`);
     await expect(

@@ -8,6 +8,17 @@
  * Mirrors: ActiveRecord::Attributes
  */
 
+import { Attribute, AttributeSet, type Type } from "@blazetrails/activemodel";
+
+type AnyClass = any;
+
+interface AttributeDefinition {
+  name: string;
+  type: Type;
+  defaultValue?: unknown;
+  userProvided?: boolean;
+}
+
 /**
  * Static interface for the Attributes module.
  *
@@ -15,4 +26,94 @@
  */
 export interface Attributes {
   attribute(name: string, type: string, options?: { default?: unknown }): void;
+  defineAttribute(
+    name: string,
+    castType: Type,
+    options?: { default?: unknown; userProvidedDefault?: boolean },
+  ): void;
+  _defaultAttributes(): AttributeSet;
+}
+
+const NO_DEFAULT = Symbol("NO_DEFAULT");
+
+/**
+ * Lower-level attribute registration that accepts a resolved type object
+ * directly, bypassing string-based type lookup. Used by adapters after
+ * `lookupCastTypeFromColumn` and by code that already has a type in hand.
+ *
+ * Mirrors: ActiveRecord::Attributes::ClassMethods#define_attribute
+ */
+export function defineAttribute(
+  this: AnyClass,
+  name: string,
+  castType: Type,
+  options: { default?: unknown; userProvidedDefault?: boolean } = {},
+): void {
+  const { default: defaultValue = NO_DEFAULT, userProvidedDefault = true } = options;
+
+  if (!Object.prototype.hasOwnProperty.call(this, "_attributeDefinitions")) {
+    this._attributeDefinitions = new Map(this._attributeDefinitions);
+  }
+
+  const existing: AttributeDefinition | undefined = this._attributeDefinitions.get(name);
+  const resolvedDefault = defaultValue === NO_DEFAULT ? existing?.defaultValue : defaultValue;
+
+  this._attributeDefinitions.set(name, {
+    name,
+    type: castType,
+    defaultValue: resolvedDefault ?? null,
+    userProvided: userProvidedDefault,
+  });
+
+  this._cachedDefaultAttributes = null;
+
+  // Install prototype accessor so the attribute is readable/writable by name,
+  // matching what applyColumnsHash does for schema-reflected columns.
+  if (this.prototype && !Object.prototype.hasOwnProperty.call(this.prototype, name)) {
+    Object.defineProperty(this.prototype, name, {
+      get(this: { readAttribute(n: string): unknown }) {
+        return this.readAttribute(name);
+      },
+      set(this: { writeAttribute(n: string, v: unknown): void }, value: unknown) {
+        this.writeAttribute(name, value);
+      },
+      configurable: true,
+    });
+  }
+}
+
+/**
+ * Build the AttributeSet that seeds every new record's `_attributes`.
+ *
+ * Rails seeds from `columns_hash` (with `Attribute.from_database` for each
+ * column default) then calls `apply_pending_attribute_modifications`. Our
+ * architecture merges those two steps: schema reflection populates
+ * `_attributeDefinitions` with column defaults and types, and this method
+ * converts that map into an `AttributeSet` using the same Attribute factory
+ * methods Rails uses. The result is semantically equivalent.
+ *
+ * Mirrors: ActiveRecord::Attributes::ClassMethods#_default_attributes
+ */
+export function _defaultAttributes(this: AnyClass): AttributeSet {
+  if (!this._cachedDefaultAttributes) {
+    const defs: Map<string, AttributeDefinition> = this._attributeDefinitions;
+    const attrMap = new Map<string, Attribute>();
+
+    for (const [name, def] of defs) {
+      const userProvided = def.userProvided ?? true;
+      if (def.defaultValue != null) {
+        if (userProvided) {
+          const base = Attribute.withCastValue(name, null, def.type);
+          attrMap.set(name, base.withUserDefault(def.defaultValue));
+        } else {
+          attrMap.set(name, Attribute.fromDatabase(name, def.defaultValue, def.type));
+        }
+      } else {
+        attrMap.set(name, Attribute.withCastValue(name, null, def.type));
+      }
+    }
+
+    this._cachedDefaultAttributes = new AttributeSet(attrMap);
+  }
+  return this._cachedDefaultAttributes;
 }

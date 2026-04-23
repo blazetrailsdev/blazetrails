@@ -28,37 +28,44 @@ export class ExtendedDeterministicQueries {
     EncryptedAttributeType: { prototype: Record<string, Function> };
   }): void {
     if (this._installed) return;
-    this._installed = true;
 
     const relProto = targets.Relation.prototype;
+    const eatProto = targets.EncryptedAttributeType.prototype;
+
+    // Capture every original first so we can leave state untouched if any
+    // target is missing. Setting _installed only after all assignments
+    // succeed prevents a partial-patch state that would permanently
+    // block retries via the idempotency guard above.
     const originalWhere = relProto.where;
+    const originalExists = relProto.exists;
+    const originalScopeForCreate = relProto.scopeForCreate;
+    const originalFindBy = targets.Base.findBy;
+    const originalSerialize = eatProto.serialize;
+
+    if (!originalFindBy) {
+      throw new Error("ExtendedDeterministicQueries.installSupport: Base.findBy is missing");
+    }
+
     relProto.where = function (this: unknown, ...args: unknown[]) {
       return RelationQueries.where(originalWhere, this, args);
     };
-
-    const originalExists = relProto.exists;
     relProto.exists = function (this: unknown, ...args: unknown[]) {
       return RelationQueries.isExists(originalExists, this, args);
     };
-
-    const originalScopeForCreate = relProto.scopeForCreate;
     relProto.scopeForCreate = function (this: unknown) {
       return RelationQueries.scopeForCreate(originalScopeForCreate, this);
     };
-
-    const originalFindBy = targets.Base.findBy!;
     targets.Base.findBy = function (this: unknown, ...args: unknown[]) {
       return CoreQueries.findBy(originalFindBy, this, args);
     };
-
-    const eatProto = targets.EncryptedAttributeType.prototype;
-    const originalSerialize = eatProto.serialize;
     eatProto.serialize = function (this: unknown, data: unknown) {
       return ExtendedEncryptableType.serialize(
         (v: unknown) => originalSerialize.call(this, v),
         data,
       );
     };
+
+    this._installed = true;
   }
 
   static get installed(): boolean {

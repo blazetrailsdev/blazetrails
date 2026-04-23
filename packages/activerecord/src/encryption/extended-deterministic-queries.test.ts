@@ -324,8 +324,10 @@ describe("ActiveRecord::Encryption::ExtendedDeterministicQueries.installSupport"
     });
   });
 
-  // Satisfy no-unused-imports: these identifiers are exported for use by
-  // external call sites, referenced here to prevent tree-shaking warnings.
+  // These identifiers are only used inside the wrappers / through
+  // Relation.prototype, so TypeScript's unused-import checks flag them.
+  // The `void` references silence those checks without changing runtime
+  // behavior.
   void EncryptedQuery;
   void CoreQueries;
   void Relation;

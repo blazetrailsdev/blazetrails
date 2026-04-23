@@ -14,11 +14,12 @@ import { ExtendedDeterministicQueries } from "./extended-deterministic-queries.j
  * when `config.active_record.encryption.extend_queries` is set.
  *
  * Safe to call multiple times — `installSupport` is idempotent. Returns
- * `true` when the patches are active after the call, `false` when
- * `extendQueries` is disabled and nothing was installed.
+ * the effective install state: `true` when the patches are active after
+ * this call (whether installed now or in a prior call), `false` when
+ * disabled and nothing has been installed yet.
  */
 export function installExtendedQueriesIfConfigured(): boolean {
-  if (!Configurable.config.extendQueries) return false;
+  if (!Configurable.config.extendQueries) return ExtendedDeterministicQueries.installed;
   ExtendedDeterministicQueries.installSupport({
     Relation: Relation as unknown as { prototype: Record<string, Function> },
     Base: Base as unknown as Record<string, Function>,

@@ -9,12 +9,14 @@ require "open3"
 # Integration tests for dump.rb — runs the script against real fixtures.
 # Must be run from the repo root.
 
+GEMFILE     = File.expand_path("../../schema/ruby/Gemfile", __dir__)
 DUMP_SCRIPT = File.expand_path("dump.rb", __dir__)
 FIXTURES    = File.expand_path("../../fixtures", __dir__)
 
 def run_dump(fixture, frozen_at: nil)
   out = Dir::Tmpname.make_tmpname("/tmp/parity-test-", ".json")
-  cmd = ["ruby", DUMP_SCRIPT, "#{FIXTURES}/#{fixture}", out]
+  cmd = ["bundle", "exec", "--gemfile=#{GEMFILE}", "ruby", DUMP_SCRIPT,
+         "#{FIXTURES}/#{fixture}", out]
   cmd += ["--frozen-at", frozen_at] if frozen_at
   stdout, stderr, status = Open3.capture3(*cmd)
   [status.exitstatus, stdout, stderr, out]

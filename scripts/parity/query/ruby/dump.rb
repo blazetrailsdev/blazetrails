@@ -92,11 +92,13 @@ Dir.mktmpdir("parity-query-ruby-") do |tmpdir|
     #      to_sql(engine) in Rails 8.0 (arel/tree_manager.rb:53, arel/nodes/node.rb:148).
     #    - Binds are extracted via conn.to_sql_and_binds when the result is a manager.
     sql_str, binds = if result.respond_to?(:ast)
-      # Manager (SelectManager, InsertManager, etc.) — use connection for bind extraction
-      raw_sql, raw_binds = conn.to_sql_and_binds(result.ast)
+      # Manager (SelectManager etc.) — pass the whole manager for bind extraction.
+      # connection#to_sql_and_binds accepts an Arel manager or SQL string.
+      raw_sql, raw_binds = conn.to_sql_and_binds(result)
       [raw_sql.strip, raw_binds.map { |b| b.value.to_s }]
     elsif result.respond_to?(:to_sql)
-      # Plain node (Attribute, predicate, etc.)
+      # Plain node (Attribute, predicate, etc.) — Arel::Nodes::Node#to_sql
+      # (arel/nodes/node.rb:148) uses the visitor with the connection's engine.
       [result.to_sql.strip, []]
     else
       raise "query.rb returned #{result.class}: expected an Arel node or manager"
@@ -106,7 +108,7 @@ Dir.mktmpdir("parity-query-ruby-") do |tmpdir|
     canonical = {
       "version"  => 1,
       "fixture"  => fixture_name,
-      "frozenAt" => frozen_at || Time.now.utc.strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+      "frozenAt" => frozen_at || Time.now.utc.iso8601(3),
       "sql"      => sql_str,
       "binds"    => binds,
     }

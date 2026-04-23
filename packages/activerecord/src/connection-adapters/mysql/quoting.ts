@@ -101,8 +101,9 @@ export function quotedBinaryString(value: Buffer): string {
   return `x'${value.toString("hex")}'`;
 }
 
-export function quotedBinary(value: { toS?: () => string; toString: () => string }): string {
-  return `x'${Buffer.from(value.toString(), "binary").toString("hex")}'`;
+export function quotedBinary(value: Buffer | string): string {
+  const hex = Buffer.isBuffer(value) ? value.toString("hex") : Buffer.from(value, "binary").toString("hex");
+  return `x'${hex}'`;
 }
 
 export function unquoteIdentifier(identifier: string | null | undefined): string | null {

@@ -57,9 +57,18 @@ export interface SchemaStatements {
   ): Promise<void>;
   columns(tableName: string): Promise<unknown[]>;
   columnDefinitions(tableName: string): Promise<unknown[]>;
-  removeColumn(tableName: string, columnName: string, type?: string, options?: Record<string, unknown>): Promise<void>;
+  removeColumn(
+    tableName: string,
+    columnName: string,
+    type?: string,
+    options?: Record<string, unknown>,
+  ): Promise<void>;
   createTable(tableName: string, options?: Record<string, unknown>): Promise<void>;
-  removeForeignKey(fromTable: string, toTable?: string, options?: Record<string, unknown>): Promise<void>;
+  removeForeignKey(
+    fromTable: string,
+    toTable?: string,
+    options?: Record<string, unknown>,
+  ): Promise<void>;
   internalStringOptionsForPrimaryKey(): Record<string, unknown>;
   updateTableDefinition(tableName: string, base: unknown): unknown;
   createSchemaDumper(options?: Record<string, unknown>): unknown;

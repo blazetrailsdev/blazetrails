@@ -9,11 +9,7 @@
  */
 
 import { AbstractMysqlAdapter } from "./abstract-mysql-adapter.js";
-import {
-  DatabaseConnectionError,
-  NoDatabaseError,
-  ConnectionNotEstablished,
-} from "../errors.js";
+import { DatabaseConnectionError, NoDatabaseError, ConnectionNotEstablished } from "../errors.js";
 
 const SSL_MODES: Record<string, number> = {
   SSL_MODE_DISABLED: 0,
@@ -35,9 +31,7 @@ export class TrilogyAdapter extends AbstractMysqlAdapter {
 
   static newClient(config: Record<string, unknown>): never {
     void config;
-    throw new Error(
-      "TrilogyAdapter: no Trilogy JS driver available. Use Mysql2Adapter instead.",
-    );
+    throw new Error("TrilogyAdapter: no Trilogy JS driver available. Use Mysql2Adapter instead.");
   }
 
   static parseSslMode(mode: number | string): number {

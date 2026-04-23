@@ -18,11 +18,11 @@ affect semantic meaning won't break the diff.
 
 The current version is **1**. Bumping `version` requires a single PR that:
 
-1. Updates `schema.schema.json` (change `const: 1` to `const: 2` etc.).
+1. Updates `schema.schema.json`: change the `version` const, update `$id` to end in `/v2` (or `/v3` etc.), add/remove fields.
 2. Updates `types.ts`.
 3. Updates both canonicalizers:
-   `scripts/parity/schema/ruby/canonicalize.rb` and
-   `scripts/parity/schema/node/canonicalize.ts`.
+   `scripts/parity/schema/ruby/canonicalize.rb` (added in PR4) and
+   `scripts/parity/schema/node/canonicalize.ts` (added in PR3).
 4. Updates or regenerates any checked-in baseline JSON files.
 
 Never bump the version in a PR that also changes canonicalizer behavior — split
@@ -68,5 +68,5 @@ unknown types — a thrown error surfaces a gap that needs an explicit decision.
 - Default expressions (e.g. `CURRENT_TIMESTAMP`) — `default` is `null` in v1
   for expression defaults
 - Collations
-- Composite PK ordering beyond a `string[]`
+- Composite PK ordering guarantees beyond `[string, string, ...string[]]`
 - SQLite `WITHOUT ROWID` tables

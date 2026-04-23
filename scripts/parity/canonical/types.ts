@@ -26,8 +26,8 @@ export interface CanonicalColumn {
 
 export interface CanonicalIndex {
   name: string;
-  /** Column names in index declaration order */
-  columns: string[];
+  /** Column names in index declaration order (at least one) */
+  columns: [string, ...string[]];
   unique: boolean;
   /** Partial-index predicate, or null */
   where: string | null;
@@ -35,8 +35,8 @@ export interface CanonicalIndex {
 
 export interface CanonicalTable {
   name: string;
-  /** string = single-column PK, string[] = composite PK, null = no PK */
-  primaryKey: string | string[] | null;
+  /** string = single-column PK, tuple of ≥2 = composite PK, null = no PK */
+  primaryKey: string | [string, string, ...string[]] | null;
   /** Columns in declaration order */
   columns: CanonicalColumn[];
   /** Explicit indexes sorted by name ASC; sqlite_autoindex_* excluded */

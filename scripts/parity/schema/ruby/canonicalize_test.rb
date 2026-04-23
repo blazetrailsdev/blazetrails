@@ -148,6 +148,16 @@ class CanonicalizeTest < Minitest::Test
     assert_equal 1.5, Canonicalize.call(native)["tables"][0]["columns"][0]["default"]
   end
 
+  def test_scientific_notation_default_as_string
+    native = { "t" => table(columns: [col("big", :float, null: false, default: "1e3")]) }
+    assert_equal 1000, Canonicalize.call(native)["tables"][0]["columns"][0]["default"]
+  end
+
+  def test_infinity_default_stays_as_string
+    native = { "t" => table(columns: [col("x", :float, null: false, default: "Infinity")]) }
+    assert_equal "Infinity", Canonicalize.call(native)["tables"][0]["columns"][0]["default"]
+  end
+
   def test_string_default
     native = { "t" => table(columns: [col("status", :string, null: false, default: "active")]) }
     assert_equal "active", Canonicalize.call(native)["tables"][0]["columns"][0]["default"]

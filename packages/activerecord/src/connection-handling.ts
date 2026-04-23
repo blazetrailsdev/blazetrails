@@ -254,11 +254,13 @@ export function isConnectedQ(this: typeof Base): boolean {
 export const isConnected = isConnectedQ;
 
 export function connection(this: typeof Base): DatabaseAdapter {
-  return connectionPool.call(this).activeConnection ?? leaseConnection.call(this);
+  const pool = connectionPool.call(this);
+  if (pool.isPermanentLease()) return pool.leaseConnection();
+  return pool.activeConnection ?? pool.leaseConnection();
 }
 
 export function isPrimaryClass(this: typeof Base): boolean {
-  return (this as any)._isBaseClass === true || coreIsApplicationRecordClass.call(this as any);
+  return this.name === "Base" || coreIsApplicationRecordClass.call(this as any);
 }
 
 export function adapterClass(this: typeof Base): Promise<new (...args: unknown[]) => unknown> {

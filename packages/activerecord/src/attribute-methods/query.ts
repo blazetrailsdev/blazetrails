@@ -10,6 +10,7 @@ const booleanType = new BooleanType();
 
 interface Queryable {
   readAttribute(name: string): unknown;
+  _readAttribute(name: string): unknown;
 }
 
 /**
@@ -22,7 +23,20 @@ interface Queryable {
  * Mirrors: ActiveRecord::AttributeMethods::Query#query_attribute
  */
 export function queryAttribute(this: Queryable, name: string): boolean {
-  const value = this.readAttribute(name);
+  return castToBoolean(this.readAttribute(name));
+}
+
+/**
+ * Like queryAttribute but reads via _readAttribute, bypassing alias
+ * resolution — used internally where the name is already canonical.
+ *
+ * Mirrors: ActiveRecord::AttributeMethods::Query#_query_attribute
+ */
+export function _queryAttribute(this: Queryable, name: string): boolean {
+  return castToBoolean(this._readAttribute(name));
+}
+
+function castToBoolean(value: unknown): boolean {
   if (value === null || value === undefined) return false;
   if (typeof value === "number") return value !== 0;
   const cast = booleanType.cast(value);

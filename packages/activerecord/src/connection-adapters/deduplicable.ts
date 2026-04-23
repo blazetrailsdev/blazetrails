@@ -12,7 +12,7 @@ export interface Deduplicable {
   deduplicateKey(): string;
 }
 
-const registries = new Map<string, WeakRef<any>>();
+const registries = new Map<string, WeakRef<object>>();
 
 export function registry(): Map<string, WeakRef<object>> {
   return registries;

@@ -7,6 +7,9 @@ import {
 import { EncryptedAttributeType } from "./encrypted-attribute-type.js";
 import { Scheme } from "./scheme.js";
 import { NullEncryptor } from "./null-encryptor.js";
+import { Base } from "../base.js";
+import { createTestAdapter } from "../test-adapter.js";
+import "../relation.js";
 
 describe("ActiveRecord::Encryption::ExtendedDeterministicQueriesTest", () => {
   it.skip("Finds records when data is unencrypted", () => {});
@@ -121,5 +124,26 @@ describe("ActiveRecord::Encryption::ExtendedDeterministicQueries::RelationQuerie
     };
     const result = RelationQueries.scopeForCreate(() => ({}), relation);
     expect(result.email).toBeUndefined();
+  });
+
+  it("reads IN-array values from a real Relation via whereValuesHash() (integration)", () => {
+    // End-to-end check that Relation#whereValuesHash now exposes IN-array
+    // predicates (the Copilot #3 concern on #737). Uses scalar values to
+    // stay orthogonal to PredicateBuilder's ArrayHandler handling of
+    // AdditionalValue objects (tracked separately — ArrayHandler turns
+    // object-arrays into OR chains which whereValuesHash cannot extract).
+    const adapter = createTestAdapter();
+    class Contact extends Base {
+      static {
+        this._tableName = "contacts";
+        this.attribute("id", "integer");
+        this.attribute("email", "string");
+        this.adapter = adapter;
+      }
+    }
+    const rel = Contact.all().where({ email: ["a@x", "b@x"] });
+    expect(rel.whereValuesHash()).toEqual({ email: ["a@x", "b@x"] });
+    // scope_for_create filters the IN array out (Rails: equality_only=true).
+    expect(rel.scopeForCreate()).toEqual({});
   });
 });

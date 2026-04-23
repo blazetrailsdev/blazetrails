@@ -88,18 +88,41 @@ export class EncryptedQuery {
 }
 
 /**
- * Mixin that patches Relation#where and Relation#exists? to expand
- * encrypted query arguments via EncryptedQuery.processArguments.
+ * Mixin that patches Relation#where, #exists?, and #scope_for_create to
+ * expand encrypted query arguments via EncryptedQuery.processArguments.
  *
  * Mirrors: ActiveRecord::Encryption::ExtendedDeterministicQueries::RelationQueries
  */
 export class RelationQueries {
-  static patchWhere(originalWhere: Function, relation: any, args: unknown[]): unknown {
+  static where(originalWhere: Function, relation: any, args: unknown[]): unknown {
     return originalWhere.call(relation, ...EncryptedQuery.processArguments(relation, args, true));
   }
 
-  static patchExists(originalExists: Function, relation: any, args: unknown[]): unknown {
+  static isExists(originalExists: Function, relation: any, args: unknown[]): unknown {
     return originalExists.call(relation, ...EncryptedQuery.processArguments(relation, args, true));
+  }
+
+  static scopeForCreate(
+    originalScopeForCreate: () => Record<string, unknown>,
+    relation: any,
+  ): Record<string, unknown> {
+    const model = relation._modelClass ?? relation;
+    const encryptedAttrs = model._encryptedAttributes as Set<string> | undefined;
+    if (!encryptedAttrs?.size) return originalScopeForCreate.call(relation);
+
+    const scopeAttrs = originalScopeForCreate.call(relation);
+    const wheres = relation.whereValuesHash?.() ?? {};
+    for (const attrName of encryptedAttrs) {
+      const values = wheres[attrName];
+      if (
+        Array.isArray(values) &&
+        values.length > 1 &&
+        values.slice(1).every((v: unknown) => v instanceof AdditionalValue)
+      ) {
+        scopeAttrs[attrName] = values[0];
+      }
+    }
+    return scopeAttrs;
   }
 }
 
@@ -109,7 +132,7 @@ export class RelationQueries {
  * Mirrors: ActiveRecord::Encryption::ExtendedDeterministicQueries::CoreQueries
  */
 export class CoreQueries {
-  static patchFindBy(originalFindBy: Function, klass: any, args: unknown[]): unknown {
+  static findBy(originalFindBy: Function, klass: any, args: unknown[]): unknown {
     return originalFindBy.call(klass, ...EncryptedQuery.processArguments(klass, args, false));
   }
 }

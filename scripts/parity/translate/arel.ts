@@ -136,7 +136,21 @@ function translateQuery(
     .replace(/\.not_eq\(/g, ".notEq(")
     // .not_in → .notIn
     .replace(/\.not_in\(/g, ".notIn(")
-    // .not_in_any → .notInAny (attributes/attribute.ts:318)
+    // .not_in_any → .notInAny with arg wrapping: each element becomes its own inner array.
+    // Rails: col.not_in_any(["A","B"]) = grouping_any(:not_in, ["A","B"])
+    //   = NOT IN ('A') OR NOT IN ('B')
+    // Trails: col.notInAny([["A"], ["B"]]) = same semantics (each inner array → one notIn call)
+    .replace(
+      /\.not_in_any\(\[([^\]]+)\]\)/g,
+      (_, inner) =>
+        ".notInAny([" +
+        inner
+          .split(",")
+          .map((v: string) => `[${v.trim()}]`)
+          .join(", ") +
+        "])",
+    )
+    // Fallback for other not_in_any forms (just rename; review generated output)
     .replace(/\.not_in_any\(/g, ".notInAny(")
     // .is_distinct_from → .isDistinctFrom
     .replace(/\.is_distinct_from\(/g, ".isDistinctFrom(")
@@ -162,9 +176,11 @@ function translateQuery(
     .replace(/Arel::Table\.new\(:(\w+)\)/g, 'new Table("$1")')
     // Arel::Nodes::NamedFunction.new → new Nodes.NamedFunction
     .replace(/Arel::Nodes::NamedFunction\.new\(/g, "new Nodes.NamedFunction(")
-    // Arel::Nodes::OuterJoin / bare OuterJoin → Nodes.OuterJoin
+    // Arel::Nodes::OuterJoin → Nodes.OuterJoin
     .replace(/Arel::Nodes::OuterJoin/g, "Nodes.OuterJoin")
-    .replace(/\bOuterJoin\b/g, "Nodes.OuterJoin")
+    // Bare OuterJoin → Nodes.OuterJoin, but not if already preceded by "Nodes."
+    // (negative lookbehind prevents double-translation to Nodes.Nodes.OuterJoin)
+    .replace(/(?<!Nodes\.)OuterJoin\b/g, "Nodes.OuterJoin")
     // Arel::Nodes::Window.new → new Nodes.Window()
     .replace(/Arel::Nodes::Window\.new/g, "new Nodes.Window()")
     // Arel::Nodes::As.new → new Nodes.As

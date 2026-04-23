@@ -222,7 +222,7 @@ async function processNestedAttributes(record: Base): Promise<void> {
         // For belongs_to, create the target and set FK on *this* record
         const created = await (targetModel as any).create(childAttrs);
         if (created && created.id != null) {
-          // Use writeAttribute + direct save to avoid re-triggering nested attributes
+          // Use _writeAttribute + direct persistence to avoid re-triggering nested attributes
           record._writeAttribute(foreignKey, created.id);
           const arelTable = (ctor as any).arelTable as Table;
           const um = new UpdateManager()

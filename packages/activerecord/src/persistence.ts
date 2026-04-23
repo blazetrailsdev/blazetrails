@@ -282,8 +282,6 @@ export function isPreviouslyPersisted(this: PersistenceRecordDispatch): boolean 
 /** Read/write contract used by every increment/decrement/toggle function. */
 interface AttributeIO {
   readAttribute(name: string): unknown;
-  _readAttribute(name: string): unknown;
-  _writeAttribute(name: string, value: unknown): void;
   writeAttribute(name: string, value: unknown): void;
 }
 

@@ -13,7 +13,6 @@ interface DirtyRecord {
   changes: Record<string, [unknown, unknown]>;
   previousChanges: Record<string, [unknown, unknown]>;
   readAttribute(name: string): unknown;
-  _readAttribute(name: string): unknown;
 }
 
 /**

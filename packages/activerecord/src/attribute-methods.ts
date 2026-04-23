@@ -208,10 +208,10 @@ export function defineAttributeMethods(this: AttributeMethodsHost): boolean {
     if (Object.prototype.hasOwnProperty.call(this.prototype, name)) continue;
     Object.defineProperty(this.prototype, name, {
       get(this: any) {
-        return this._readAttribute(name);
+        return this.readAttribute(name);
       },
       set(this: any, value: unknown) {
-        this._writeAttribute(name, value);
+        this.writeAttribute(name, value);
       },
       configurable: true,
     });

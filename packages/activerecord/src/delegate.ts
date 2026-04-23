@@ -49,7 +49,7 @@ export function delegate(
         if (typeof (target as any)[method] === "function") {
           return (target as any)[method]();
         }
-        return target._readAttribute(method);
+        return target.readAttribute(method);
       },
       writable: true,
       configurable: true,

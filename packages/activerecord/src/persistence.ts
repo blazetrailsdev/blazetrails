@@ -309,8 +309,8 @@ interface ToggleBangRecord extends AttributeIO {
 
 /** Mirrors: ActiveRecord::Persistence#increment */
 export function increment<T extends AttributeIO>(this: T, attribute: string, by: number = 1): T {
-  const current = Number(this._readAttribute(attribute)) || 0;
-  this._writeAttribute(attribute, current + by);
+  const current = Number(this.readAttribute(attribute)) || 0;
+  this.writeAttribute(attribute, current + by);
   return this;
 }
 
@@ -329,7 +329,7 @@ export function decrement<T extends AttributeIO & { increment(a: string, b?: num
 
 /** Mirrors: ActiveRecord::Persistence#toggle */
 export function toggle<T extends AttributeIO>(this: T, attribute: string): T {
-  this._writeAttribute(attribute, !this._readAttribute(attribute));
+  this.writeAttribute(attribute, !this.readAttribute(attribute));
   return this;
 }
 

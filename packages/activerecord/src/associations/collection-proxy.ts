@@ -1405,9 +1405,9 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       }
       if (Array.isArray(conditions)) {
         const idSet = new Set(conditions);
-        return records.some((r) => idSet.has(r._readAttribute(pk)));
+        return records.some((r) => idSet.has(r.readAttribute(pk)));
       }
-      return records.some((r) => r._readAttribute(pk) === conditions);
+      return records.some((r) => r.readAttribute(pk) === conditions);
     }
     this._checkStrictLoading();
     return this.scope().exists(conditions);
@@ -1980,7 +1980,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       throw new Error(`Column name is required for calculation operation: ${op}`);
     }
     const values = records
-      .map((r) => r._readAttribute(columnName))
+      .map((r) => r.readAttribute(columnName))
       .filter((v) => v != null) as number[];
     switch (op) {
       case "sum":

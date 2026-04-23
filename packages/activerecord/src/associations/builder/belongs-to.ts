@@ -58,10 +58,9 @@ export class BelongsTo extends SingularAssociation {
     // Register the counter column on the target class so isCounterCacheColumn
     // works on the has-many side — mirrors Rails' builder/belongs_to.rb line:
     //   klass._counter_cache_columns |= [cache_column]
-    const counterCache = reflection.options?.counterCache;
     const cacheColumn: string =
-      typeof counterCache === "string"
-        ? counterCache
+      typeof reflection.counterCacheColumn === "function"
+        ? (reflection.counterCacheColumn() ?? `${pluralize(underscore(model.name))}_count`)
         : `${pluralize(underscore(model.name))}_count`;
     const targetClassName = reflection.options?.className ?? camelize(name);
     try {

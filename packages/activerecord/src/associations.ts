@@ -134,6 +134,10 @@ export function registerModel(nameOrModel: string | typeof Base, model?: typeof 
   if (typeof nameOrModel === "string") {
     if (!model) throw new Error("registerModel(name, model) requires a model class");
     modelRegistry.set(nameOrModel, model);
+    // Attach registry key so counter-cache pending-map lookup can match it.
+    const keys: string[] = (model as any)._registryKeys ?? [];
+    if (!keys.includes(nameOrModel)) keys.push(nameOrModel);
+    (model as any)._registryKeys = keys;
   } else {
     modelRegistry.set(nameOrModel.name, nameOrModel);
   }

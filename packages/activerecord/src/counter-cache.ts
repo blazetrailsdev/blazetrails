@@ -189,11 +189,13 @@ export function loadSchemaBang(this: typeof Base): void {
 
 function getCounterCacheColumns(modelClass: typeof Base): Set<string> {
   const direct: Set<string> = (modelClass as any)._counterCacheColumns ?? new Set<string>();
-  // Collect matching pending keys: exact class name or "Namespace::ClassName" suffix.
+  // Collect matching pending keys: exact class name, registry aliases, or "::ClassName" suffix.
+  const registryKeys: string[] = (modelClass as any)._registryKeys ?? [];
   const suffix = `::${modelClass.name}`;
   const matchingKeys: string[] = [];
   for (const key of _pendingCounterCacheColumns.keys()) {
-    if (key === modelClass.name || key.endsWith(suffix)) matchingKeys.push(key);
+    if (key === modelClass.name || registryKeys.includes(key) || key.endsWith(suffix))
+      matchingKeys.push(key);
   }
   if (matchingKeys.length === 0) return direct;
   for (const key of matchingKeys) {

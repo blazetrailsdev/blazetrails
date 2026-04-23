@@ -11,7 +11,7 @@
  */
 
 import { readdirSync, mkdirSync, existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { spawn } from "node:child_process";
 
 const FIXTURES_DIR = "scripts/parity/fixtures";
@@ -74,6 +74,14 @@ async function runTrails(): Promise<void> {
 }
 
 async function runDiff(): Promise<void> {
+  for (const dir of [OUT_RAILS, OUT_TRAILS]) {
+    if (!existsSync(dir)) {
+      process.stderr.write(
+        `parity run: ${dir} does not exist — run --side=rails and --side=trails first\n`,
+      );
+      process.exit(1);
+    }
+  }
   await run("pnpm", [
     "exec",
     "tsx",

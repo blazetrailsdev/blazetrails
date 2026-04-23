@@ -86,7 +86,8 @@ async function main(): Promise<void> {
     const railsRaw = JSON.parse(readFileSync(join(railsDir, file), "utf8"));
     const trailsRaw = JSON.parse(readFileSync(join(trailsDir, file), "utf8"));
 
-    // Validate both against canonical schema
+    // Validate both against canonical schema before diffing
+    let validationFailed = false;
     for (const [label, doc] of [
       ["rails", railsRaw],
       ["trails", trailsRaw],
@@ -95,9 +96,10 @@ async function main(): Promise<void> {
         process.stdout.write(`FAIL  ${name}  (${label} output fails schema validation)\n`);
         process.stdout.write(`      ${ajv.errorsText(validate.errors)}\n`);
         failures++;
-        continue;
+        validationFailed = true;
       }
     }
+    if (validationFailed) continue;
 
     // Stable JSON normalisation then line diff
     const railsNorm = stableJson(railsRaw);

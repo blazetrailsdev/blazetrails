@@ -87,7 +87,10 @@ describe("ActiveRecord::Encryption::ExtendedDeterministicQueries::RelationQuerie
     };
 
     const result = RelationQueries.scopeForCreate(() => ({}), relation);
-    expect(result.email).toBe(avCurrent.value);
+    // scope_for_create keeps the AV reference so serialize unwraps to
+    // ciphertext on save without re-encrypting (our cast->toString
+    // path would otherwise double-encrypt a plaintext-unwrapped value).
+    expect(result.email).toBe(avCurrent);
   });
 
   it("leaves attributes alone when whereValuesHash has no matching entry", () => {
@@ -168,10 +171,12 @@ describe("ActiveRecord::Encryption::ExtendedDeterministicQueries::RelationQuerie
 
     const hash = rel.whereValuesHash();
     expect(Array.isArray(hash.email)).toBe(true);
-    expect((hash.email as unknown[])[0]).toBe(avCurrent);
+    expect((hash.email as unknown[])[0]).toBeInstanceOf(AdditionalValue);
+    expect(((hash.email as AdditionalValue[])[0] as AdditionalValue).value).toBe(avCurrent.value);
 
     const scope = RelationQueries.scopeForCreate(() => ({}), rel);
-    expect(scope.email).toBe(avCurrent.value);
+    expect(scope.email).toBeInstanceOf(AdditionalValue);
+    expect((scope.email as AdditionalValue).value).toBe(avCurrent.value);
   });
 });
 
@@ -266,7 +271,7 @@ describe("ActiveRecord::Encryption::ExtendedDeterministicQueries.installSupport"
       };
       const rel = new (targets.Relation as any)(model);
       rel._wheres = { email: [av] };
-      expect(rel.scopeForCreate()).toEqual({ fromOriginal: true, email: av.value });
+      expect(rel.scopeForCreate()).toEqual({ fromOriginal: true, email: av });
     });
   });
 

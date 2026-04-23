@@ -1,10 +1,11 @@
 import { Type, ValueType, StringType } from "@blazetrails/activemodel";
-import type { Scheme } from "./scheme.js";
+import { Scheme } from "./scheme.js";
 import type { EncryptorLike } from "./encryptor.js";
 import type { WrappedType } from "./wrapped-type.js";
 import { isEncryptionDisabled, isProtectedMode } from "./context.js";
 import { Configurable } from "./configurable.js";
 import { Encryption as EncryptionError } from "./errors.js";
+import { NullEncryptor } from "./null-encryptor.js";
 
 /**
  * An ActiveModel type that encrypts/decrypts attribute values. This is
@@ -21,6 +22,8 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
   private _default?: unknown;
   private _encryptor: EncryptorLike;
   private _previousTypes?: EncryptedAttributeType[];
+  private _previousTypesMemo?: EncryptedAttributeType[];
+  private _previousTypesMemoKey?: boolean;
 
   constructor(options: {
     scheme: Scheme;
@@ -56,6 +59,12 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
   }
 
   cast(value: unknown): unknown {
+    // AdditionalValue instances must pass through cast unchanged so that
+    // serialize() can unwrap them to their pre-computed ciphertext via
+    // ExtendedEncryptableType. Without this, the default cast coerces
+    // the AV to a string (via toString), which then gets re-encrypted
+    // on serialize, producing a double-encrypted blob.
+    if (isAdditionalValue(value)) return value;
     return this.castType.cast(value);
   }
 
@@ -95,9 +104,19 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
   }
 
   get previousTypes(): EncryptedAttributeType[] {
-    if (!this._previousTypes) {
-      this._previousTypes = (this.scheme.previousSchemes ?? []).map(
-        (s: Scheme) =>
+    // Memoize on supportUnencryptedData so the clean-text scheme gets
+    // recomputed if the config toggles at runtime (Rails does the same
+    // via @previous_types[support_unencrypted_data?]).
+    const key = this.supportUnencryptedData;
+    if (!this._previousTypesMemo || this._previousTypesMemoKey !== key) {
+      const schemes: Scheme[] = [...(this.scheme.previousSchemes ?? [])];
+      if (this.supportUnencryptedData) {
+        // Append a NullEncryptor-backed scheme so query expansion
+        // produces a plaintext fallback (matches Rails' clean_text_scheme).
+        schemes.push(this._cleanTextScheme());
+      }
+      this._previousTypesMemo = schemes.map(
+        (s) =>
           new EncryptedAttributeType({
             scheme: s,
             castType: this.castType,
@@ -105,8 +124,17 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
             default: this._default,
           }),
       );
+      this._previousTypesMemoKey = key;
     }
-    return this._previousTypes;
+    return this._previousTypesMemo;
+  }
+
+  private _cleanTextScheme(): Scheme {
+    return new Scheme({
+      deterministic: this.scheme.deterministic,
+      downcase: this.scheme.downcase,
+      encryptor: new NullEncryptor(),
+    });
   }
 
   private decrypt(value: unknown): unknown {
@@ -146,4 +174,22 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
       Configurable.config.supportUnencryptedData === true && this.scheme.isSupportUnencryptedData()
     );
   }
+}
+
+/**
+ * Brand symbol set on every `AdditionalValue` instance. Checked by
+ * `EncryptedAttributeType.cast` to let AVs pass through cast unchanged;
+ * a direct `instanceof AdditionalValue` import would introduce a cycle
+ * between this module and `extended-deterministic-queries.ts`.
+ */
+export const ADDITIONAL_VALUE_BRAND: unique symbol = Symbol.for(
+  "activerecord.encryption.AdditionalValue",
+);
+
+function isAdditionalValue(value: unknown): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as Record<symbol, unknown>)[ADDITIONAL_VALUE_BRAND] === true
+  );
 }

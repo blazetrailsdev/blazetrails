@@ -1,4 +1,4 @@
-import { EncryptedAttributeType } from "./encrypted-attribute-type.js";
+import { ADDITIONAL_VALUE_BRAND, EncryptedAttributeType } from "./encrypted-attribute-type.js";
 import { getAttributeType } from "./encryptable-record.js";
 
 /**
@@ -42,8 +42,18 @@ export class ExtendedDeterministicQueries {
     const originalFindBy = targets.Base.findBy;
     const originalSerialize = eatProto.serialize;
 
-    if (!originalFindBy) {
-      throw new Error("ExtendedDeterministicQueries.installSupport: Base.findBy is missing");
+    const missing: string[] = [];
+    if (typeof originalWhere !== "function") missing.push("Relation.prototype.where");
+    if (typeof originalExists !== "function") missing.push("Relation.prototype.exists");
+    if (typeof originalScopeForCreate !== "function")
+      missing.push("Relation.prototype.scopeForCreate");
+    if (typeof originalFindBy !== "function") missing.push("Base.findBy");
+    if (typeof originalSerialize !== "function")
+      missing.push("EncryptedAttributeType.prototype.serialize");
+    if (missing.length > 0) {
+      throw new Error(
+        `ExtendedDeterministicQueries.installSupport: missing target method(s): ${missing.join(", ")}`,
+      );
     }
 
     relProto.where = function (this: unknown, ...args: unknown[]) {
@@ -55,8 +65,9 @@ export class ExtendedDeterministicQueries {
     relProto.scopeForCreate = function (this: unknown) {
       return RelationQueries.scopeForCreate(originalScopeForCreate, this);
     };
+    const nonNullFindBy: Function = originalFindBy!;
     targets.Base.findBy = function (this: unknown, ...args: unknown[]) {
-      return CoreQueries.findBy(originalFindBy, this, args);
+      return CoreQueries.findBy(nonNullFindBy, this, args);
     };
     eatProto.serialize = function (this: unknown, data: unknown) {
       return ExtendedEncryptableType.serialize(
@@ -174,9 +185,12 @@ export class RelationQueries {
       const values = wheres[attrName];
       if (Array.isArray(values) && values[0] instanceof AdditionalValue) {
         // Our expansion stores AdditionalValue(current) at index 0 (see
-        // allCiphertextsFor). Unwrap to the ciphertext so the created
-        // record stores the current-scheme-encrypted value directly.
-        scopeAttrs[attrName] = (values[0] as AdditionalValue).value;
+        // allCiphertextsFor). Keep the AV reference — when the new record
+        // saves, EncryptedAttributeType.serialize (patched via
+        // ExtendedEncryptableType) unwraps it to the ciphertext without
+        // re-encrypting. Writing values[0].value directly would serialize
+        // the ciphertext as plaintext, producing a double-encrypted blob.
+        scopeAttrs[attrName] = values[0];
       }
     }
     return scopeAttrs;
@@ -203,6 +217,9 @@ export class CoreQueries {
 export class AdditionalValue {
   readonly value: unknown;
   readonly type: EncryptedAttributeType;
+  // Brand flag so EncryptedAttributeType.cast can identify AV instances
+  // without importing this module (which would be circular).
+  readonly [ADDITIONAL_VALUE_BRAND] = true;
 
   constructor(value: unknown, type: EncryptedAttributeType) {
     this.type = type;

@@ -271,8 +271,17 @@ export async function performFindBy(
   this: FinderRelation,
   conditions: Record<string, unknown>,
 ): Promise<any | null> {
-  const records = await this.where(conditions).limit(1).toArray();
-  return records[0] ?? null;
+  try {
+    const records = await this.where(conditions).limit(1).toArray();
+    return records[0] ?? null;
+  } catch (err) {
+    // Rails: `find_by` returns nil for out-of-range values (e.g. an
+    // integer larger than the column width). Nothing matches such a
+    // value, so there's nothing to find. Our IntegerType.serialize
+    // surfaces this as a RangeError; treat it the same.
+    if (err instanceof RangeError) return null;
+    throw err;
+  }
 }
 
 export async function performFindByBang(

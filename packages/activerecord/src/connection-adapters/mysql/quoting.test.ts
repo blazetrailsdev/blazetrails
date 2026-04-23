@@ -61,6 +61,10 @@ describe("MySQL quoting — typeCast", () => {
     expect(typeCast(BigInt(9))).toBe(BigInt(9));
   });
 
+  it("quotes Buffer values as hex literals via quotedBinary", () => {
+    expect(quote(Buffer.from([0xca, 0xfe]))).toBe("x'cafe'");
+  });
+
   it("returns Date as the full unquoted datetime string (no surrounding quotes)", () => {
     // typeCast's contract: unquoted primitive suitable as a bind
     // value. It's `quote()`'s job to add the surrounding quotes.

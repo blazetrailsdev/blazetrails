@@ -26,22 +26,24 @@ export class TrilogyAdapter extends AbstractMysqlAdapter {
 
   constructor(config: Record<string, unknown> = {}) {
     super();
+    // Fail fast — no Trilogy JS driver available.
     TrilogyAdapter.newClient(config);
   }
 
-  static newClient(config: Record<string, unknown>): never {
+  static newClient(config: Record<string, unknown>): unknown {
     void config;
     throw new Error("TrilogyAdapter: no Trilogy JS driver available. Use Mysql2Adapter instead.");
   }
 
   static parseSslMode(mode: number | string): number {
     if (typeof mode === "number") return mode;
-    let m = mode.toUpperCase();
+    const trimmed = mode.trim();
+    if (trimmed.length === 0) throw new Error(`Invalid SSL mode: ${JSON.stringify(mode)}`);
+    let m = trimmed.toUpperCase();
     if (!m.startsWith("SSL_MODE_")) m = `SSL_MODE_${m}`;
     const sslMode = SSL_MODES[m];
     if (sslMode !== undefined) return sslMode;
-    const numeric = Number(mode);
-    if (Number.isFinite(numeric)) return numeric;
+    if (/^\d+$/.test(trimmed)) return Number(trimmed);
     throw new Error(`Invalid SSL mode: ${mode}`);
   }
 

@@ -4,6 +4,23 @@ import { I18n } from "./i18n.js";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRecord = any;
 
+// Rails `CALLBACKS_OPTIONS` / `MESSAGE_OPTIONS` — option keys that are
+// stripped from the identity of an error for strict-match / hash purposes
+// (activemodel/lib/active_model/error.rb:10-11). Both snake and camel
+// spellings are accepted since our codebase normalizes to camel while
+// Rails-ported code may leak snake-cased keys.
+const CALLBACKS_OPTIONS = new Set<string>([
+  "if",
+  "unless",
+  "on",
+  "allow_nil",
+  "allow_blank",
+  "strict",
+  "allowNil",
+  "allowBlank",
+]);
+const MESSAGE_OPTIONS = new Set<string>(["message"]);
+
 /**
  * Represents one single error.
  *
@@ -82,17 +99,41 @@ export class Error {
     return Error.fullMessage(this.attribute, this.message, this.base);
   }
 
-  match(attribute: string, type?: string): boolean {
+  /**
+   * See if this error matches `attribute`, `type`, and `options`. Mirrors
+   * Rails `Error#match?` (activemodel/lib/active_model/error.rb:166-174):
+   * subset match — every key in `options` must `===` the corresponding
+   * value in `this.options`; extra keys on the error are ignored.
+   */
+  match(attribute: string, type?: string, options?: Record<string, unknown>): boolean {
     if (this.attribute !== attribute) return false;
     if (type !== undefined && this.type !== type) return false;
+    if (options) {
+      for (const [key, value] of Object.entries(options)) {
+        if (this.options[key] !== value) return false;
+      }
+    }
     return true;
   }
 
+  /**
+   * Strict match — Rails `Error#strict_match?`
+   * (activemodel/lib/active_model/error.rb:184-188): attribute/type must
+   * match and `options` must equal the error's `@options` with
+   * `CALLBACKS_OPTIONS` and `MESSAGE_OPTIONS` stripped.
+   */
   strictMatch(attribute: string, type: string, options?: Record<string, unknown>): boolean {
     if (!this.match(attribute, type)) return false;
-    if (!options) return true;
-    for (const [key, value] of Object.entries(options)) {
-      if (this.options[key] !== value) return false;
+    const expected = options ?? {};
+    const own: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(this.options)) {
+      if (!CALLBACKS_OPTIONS.has(k) && !MESSAGE_OPTIONS.has(k)) own[k] = v;
+    }
+    const expectedKeys = Object.keys(expected);
+    const ownKeys = Object.keys(own);
+    if (expectedKeys.length !== ownKeys.length) return false;
+    for (const k of expectedKeys) {
+      if (!(k in own) || own[k] !== expected[k]) return false;
     }
     return true;
   }

@@ -675,6 +675,46 @@ describe("ErrorsTest", () => {
     expect(target.objects[0].constructor.name).toBe("NestedError");
   });
 
+  describe("where/delete/added/import option-aware filtering (Rails fidelity)", () => {
+    // Rails errors.rb:189-194, 215-222, 372-388, 154-161 —
+    // where/delete/added?/import accept **options and filter on them.
+    it("where filters by options subset match", () => {
+      const errors = new Errors({});
+      errors.add("age", "too_short", { count: 3 });
+      errors.add("age", "too_short", { count: 5 });
+      expect(errors.where("age", "too_short", { count: 3 })).toHaveLength(1);
+      expect(errors.where("age", "too_short", { count: 7 })).toHaveLength(0);
+    });
+
+    it("delete filters by options subset match", () => {
+      const errors = new Errors({});
+      errors.add("age", "too_short", { count: 3 });
+      errors.add("age", "too_short", { count: 5 });
+      const removed = errors.delete("age", "too_short", { count: 3 });
+      expect(removed).toHaveLength(1);
+      expect(errors.count).toBe(1);
+      expect(errors.objects[0].options.count).toBe(5);
+    });
+
+    it("added? distinguishes between option values", () => {
+      // Rails behavior: different option values are different errors.
+      const errors = new Errors({});
+      errors.add("age", "too_short", { count: 3 });
+      expect(errors.added("age", "too_short", { count: 3 })).toBe(true);
+      expect(errors.added("age", "too_short", { count: 5 })).toBe(false);
+    });
+
+    it("import accepts :attribute and :type override", () => {
+      const source = new Errors({});
+      source.add("name", "invalid");
+      const target = new Errors({});
+      target.import(source.objects[0], { attribute: "title", type: "wrong" });
+      const imported = target.objects[0];
+      expect(imported.attribute).toBe("title");
+      expect(imported.type).toBe("wrong");
+    });
+  });
+
   it("copy! deep-dups the inner error on NestedError (no shared mutable state)", () => {
     // Rails `deep_dup` on a NestedError recurses into `@inner_error`, so the
     // duplicated wrapper's inner error is independent of the source's.
@@ -792,15 +832,21 @@ describe("ErrorsTest", () => {
   });
 
   it("added? ignores callback option", () => {
+    // Rails errors_test.rb:258-263 — error added WITH `if:` callback option,
+    // queried without; strict_match strips CALLBACKS_OPTIONS from the
+    // error's own options so they don't block the match.
     const errors = new Errors({});
-    errors.add("name", "blank");
-    expect(errors.added("name", "blank", { callback: () => {} })).toBe(true);
+    errors.add("name", "too_long", { if: () => true });
+    expect(errors.added("name", "too_long")).toBe(true);
   });
 
   it("added? ignores message option", () => {
+    // Rails errors_test.rb:265-270 — error added with `message:` proc,
+    // queried without; MESSAGE_OPTIONS are stripped from the error's
+    // own options for strict_match purposes.
     const errors = new Errors({});
-    errors.add("name", "blank");
-    expect(errors.added("name", "blank", { message: "different" })).toBe(true);
+    errors.add("name", "too_long", { message: () => "foo" } as Record<string, unknown>);
+    expect(errors.added("name", "too_long")).toBe(true);
   });
 
   it("added? handles proc messages", () => {

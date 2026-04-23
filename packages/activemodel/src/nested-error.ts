@@ -21,10 +21,16 @@ export class NestedError extends ActiveModelError {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     base: any,
     innerError: ErrorLike,
-    options?: { attribute?: string },
+    options?: { attribute?: string; type?: string },
   ) {
+    // Rails `NestedError#initialize`
+    // (activemodel/lib/active_model/nested_error.rb:8-15): `@type =
+    // override_options.fetch(:type) { inner_error.type }`. Raw type stays
+    // as the inner's `raw_type` so message generation still keys off the
+    // original symbol.
     const attribute = options?.attribute ?? innerError.attribute;
-    super(base, attribute, innerError.rawType ?? innerError.type, innerError.options ?? {});
+    const rawType = innerError.rawType ?? innerError.type;
+    super(base, attribute, options?.type ?? rawType, innerError.options ?? {});
     this.innerError = innerError;
   }
 

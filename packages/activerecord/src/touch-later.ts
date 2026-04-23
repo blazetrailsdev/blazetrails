@@ -1,5 +1,5 @@
 import type { Base } from "./base.js";
-import { ActiveRecordError } from "./errors.js";
+import { ActiveRecordError, ReadOnlyRecord } from "./errors.js";
 import {
   touch as timestampTouch,
   timestampAttributesForUpdateInModel,
@@ -37,6 +37,7 @@ function raiseRecordNotTouchedError(): never {
  */
 export async function touchLater(this: Base, ...names: string[]): Promise<void> {
   if (!this.isPersisted()) raiseRecordNotTouchedError();
+  if (this.isReadonly()) throw new ReadOnlyRecord(`${this.constructor.name} is marked as readonly`);
   if (isNoTouchingApplied(this.constructor as typeof Base)) return;
 
   const ctor = this.constructor as typeof Base;
@@ -55,7 +56,7 @@ export async function touchLater(this: Base, ...names: string[]): Promise<void> 
   }
 
   self._touchTime = currentTimeFromProperTimezone();
-  surreptitouslyTouch(this, self._deferTouchAttrs as string[], self._touchTime as Date);
+  surreptitiouslyTouch(this, self._deferTouchAttrs as string[], self._touchTime as Date);
 
   // Register with the current transaction so beforeCommitted! fires before
   // commit — mirrors Rails' add_to_transaction call in touch_later.
@@ -82,7 +83,7 @@ export async function touchLater(this: Base, ...names: string[]): Promise<void> 
         touch,
       );
     } else if (r.macro === "hasOne") {
-      await (HasOneBuilder as any).touchRecord?.(this, r.name, touch);
+      await HasOneBuilder.touchRecord(this, r.name, touch);
     }
   }
 }
@@ -122,7 +123,7 @@ export async function beforeCommittedBang(this: Base): Promise<void> {
 // Private helpers
 // ---------------------------------------------------------------------------
 
-function surreptitouslyTouch(record: Base, attrNames: string[], time: Date): void {
+function surreptitiouslyTouch(record: Base, attrNames: string[], time: Date): void {
   for (const attr of attrNames) {
     (record as any).writeAttribute(attr, time);
     if (typeof (record as any).clearAttributeChanges === "function") {
@@ -133,7 +134,7 @@ function surreptitouslyTouch(record: Base, attrNames: string[], time: Date): voi
 
 async function touchDeferredAttributes(record: Base): Promise<void> {
   const self = record as any;
-  const time: Date = self._touchTime ?? new Date();
+  const time: Date = self._touchTime ?? currentTimeFromProperTimezone();
 
   // Build attrs from all deferred columns, preserving the exact timestamp
   // set at touchLater time — mirrors touch(time: @_touch_time) in Rails.

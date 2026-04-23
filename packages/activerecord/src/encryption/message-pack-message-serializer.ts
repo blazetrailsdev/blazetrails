@@ -29,4 +29,8 @@ export class MessagePackMessageSerializer {
   load(serialized: string): Message {
     return this._fallback.load(serialized);
   }
+
+  isBinary(): boolean {
+    return true;
+  }
 }

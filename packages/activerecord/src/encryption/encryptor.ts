@@ -134,4 +134,8 @@ export class Encryptor {
       return false;
     }
   }
+
+  isBinary(): boolean {
+    return this._serializer.isBinary();
+  }
 }

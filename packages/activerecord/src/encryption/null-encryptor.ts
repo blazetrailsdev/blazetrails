@@ -16,4 +16,8 @@ export class NullEncryptor {
   encrypted(_text: string): boolean {
     return false;
   }
+
+  isBinary(): boolean {
+    return false;
+  }
 }

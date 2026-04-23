@@ -65,6 +65,10 @@ describe("ActiveRecord::Encryption::EncryptorTest", () => {
     /* needs key provider integration with metadata */
   });
 
+  it("binary? returns false (delegates to the JSON serializer)", () => {
+    expect(new Encryptor().isBinary()).toBe(false);
+  });
+
   it("encrypted? returns whether the passed text is encrypted", () => {
     const enc = new Encryptor();
     const key = generateKey();

@@ -16,4 +16,8 @@ describe("ActiveRecord::Encryption::NullEncryptorTest", () => {
     const enc = new NullEncryptor();
     expect(enc.encrypted("hello")).toBe(false);
   });
+
+  it("binary? returns false", () => {
+    expect(new NullEncryptor().isBinary()).toBe(false);
+  });
 });

@@ -22,6 +22,35 @@ const CALLBACKS_OPTIONS = new Set<string>([
 const MESSAGE_OPTIONS = new Set<string>(["message"]);
 
 /**
+ * Value equality that matches Ruby `==` for the common option shapes:
+ * primitives (identity), arrays (elementwise), and plain objects (key-set +
+ * recursive value equality). Rails relies on `Array#==` / `Hash#==` here
+ * since option values like `in: [1,2,3]` / `count: 2..5` are frequently
+ * collections, and reference equality in JS would silently fail to match.
+ */
+function optionsEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a == null || b == null) return false;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (!optionsEqual(a[i], b[i])) return false;
+    return true;
+  }
+  if (typeof a === "object" && typeof b === "object") {
+    const ak = Object.keys(a as object);
+    const bk = Object.keys(b as object);
+    if (ak.length !== bk.length) return false;
+    for (const k of ak) {
+      if (!Object.prototype.hasOwnProperty.call(b, k)) return false;
+      if (!optionsEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]))
+        return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+/**
  * Represents one single error.
  *
  * Mirrors: ActiveModel::Error
@@ -110,7 +139,7 @@ export class Error {
     if (type !== undefined && this.type !== type) return false;
     if (options) {
       for (const [key, value] of Object.entries(options)) {
-        if (this.options[key] !== value) return false;
+        if (!optionsEqual(this.options[key], value)) return false;
       }
     }
     return true;
@@ -133,7 +162,7 @@ export class Error {
     const ownKeys = Object.keys(own);
     if (expectedKeys.length !== ownKeys.length) return false;
     for (const k of expectedKeys) {
-      if (!(k in own) || own[k] !== expected[k]) return false;
+      if (!(k in own) || !optionsEqual(own[k], expected[k])) return false;
     }
     return true;
   }

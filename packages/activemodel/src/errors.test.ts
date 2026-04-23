@@ -704,6 +704,22 @@ describe("ErrorsTest", () => {
       expect(errors.added("age", "too_short", { count: 5 })).toBe(false);
     });
 
+    it("where matches structurally-equal array options (not just by reference)", () => {
+      // Rails `Array#==` is elementwise; option values like
+      // `in: [1,2,3]` must match a differently-allocated `[1,2,3]`.
+      const errors = new Errors({});
+      errors.add("role", "inclusion", { in: [1, 2, 3] });
+      expect(errors.where("role", "inclusion", { in: [1, 2, 3] })).toHaveLength(1);
+      expect(errors.where("role", "inclusion", { in: [1, 2] })).toHaveLength(0);
+    });
+
+    it("added? matches structurally-equal nested object options", () => {
+      const errors = new Errors({});
+      errors.add("age", "out_of_range", { range: { min: 1, max: 5 } });
+      expect(errors.added("age", "out_of_range", { range: { min: 1, max: 5 } })).toBe(true);
+      expect(errors.added("age", "out_of_range", { range: { min: 1, max: 9 } })).toBe(false);
+    });
+
     it("import accepts :attribute and :type override", () => {
       const source = new Errors({});
       source.add("name", "invalid");

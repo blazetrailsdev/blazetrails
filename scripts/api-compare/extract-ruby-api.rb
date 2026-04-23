@@ -913,6 +913,16 @@ def run
   puts "\nWritten to #{output_path}"
 end
 
+def tag_internal(methods)
+  methods.map do |m|
+    if m[:visibility] == "public"
+      m
+    else
+      m.merge(internal: true)
+    end
+  end
+end
+
 def filter_public(info)
   {
     name: info[:name],
@@ -921,8 +931,8 @@ def filter_public(info)
     file: info[:file],
     includes: info[:includes].uniq,
     extends: info[:extends].uniq,
-    instanceMethods: info[:instanceMethods].select { |m| m[:visibility] == "public" },
-    classMethods: info[:classMethods].select { |m| m[:visibility] == "public" },
+    instanceMethods: tag_internal(info[:instanceMethods]),
+    classMethods: tag_internal(info[:classMethods]),
   }
 end
 

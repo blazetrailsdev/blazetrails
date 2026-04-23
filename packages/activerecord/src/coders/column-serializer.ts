@@ -80,6 +80,8 @@ export class ColumnSerializer {
    */
   assertValidValue(object: unknown, action: string): void {
     if (object == null) return;
+    // Object is the universal superclass — mirrors Ruby's `Object === anything`.
+    if (this._objectClass === (Object as unknown)) return;
     if (!(object instanceof this._objectClass)) {
       throw new SerializationTypeMismatch(
         `can't ${action} \`${this._attrName}\`: was supposed to be a ${this._objectClass.name}, ` +
@@ -90,6 +92,13 @@ export class ColumnSerializer {
 
   checkArityOfConstructor(): void {
     if (this._objectClass === (Object as unknown)) return;
+    // Check declared parameter count first — JS Function.length counts required params.
+    if (this._objectClass.length > 0) {
+      throw new TypeError(
+        `Cannot serialize ${this._objectClass.name}. Classes passed to \`serialize\` must have a 0 argument constructor.`,
+      );
+    }
+    // Also try instantiation to catch constructors that throw without params.
     try {
       new (this._objectClass as new () => unknown)();
     } catch (e: unknown) {

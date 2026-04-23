@@ -20,6 +20,15 @@ describe("ColumnSerializerTest", () => {
     expect(cs.load(null)).toBeNull();
   });
 
+  it("dump and assert_valid_value accept primitives when no objectClass given", () => {
+    const cs = new ColumnSerializer("attr", JsonCoder);
+    // Default objectClass is Object — mirrors Ruby `Object === anything` (no restriction).
+    expect(() => cs.dump(1)).not.toThrow();
+    expect(() => cs.dump("hello")).not.toThrow();
+    expect(() => cs.assertValidValue(42, "dump")).not.toThrow();
+    expect(() => cs.assertValidValue(true, "dump")).not.toThrow();
+  });
+
   it("load returns new instance for nil payload with custom class", () => {
     class MyList {
       items: unknown[] = [];

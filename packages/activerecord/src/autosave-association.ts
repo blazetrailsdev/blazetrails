@@ -316,7 +316,7 @@ async function autosaveHasMany(record: Base, assoc: AssociationDefinition): Prom
       const foreignKey = assoc.options.foreignKey ?? `${underscore(ctor.name)}_id`;
       const primaryKey = assoc.options.primaryKey ?? ctor.primaryKey;
       const pkValue = record._readAttribute(primaryKey as string);
-      if (pkValue != null) child.writeAttribute(foreignKey as string, pkValue);
+      if (pkValue != null) child._writeAttribute(foreignKey as string, pkValue);
 
       const saved = await child.save();
       if (!saved) {
@@ -344,7 +344,7 @@ async function autosaveHasOne(record: Base, assoc: AssociationDefinition): Promi
     const foreignKey = assoc.options.foreignKey ?? `${underscore(ctor.name)}_id`;
     const primaryKey = assoc.options.primaryKey ?? ctor.primaryKey;
     const pkValue = record._readAttribute(primaryKey as string);
-    if (pkValue != null) childRecord.writeAttribute(foreignKey as string, pkValue);
+    if (pkValue != null) childRecord._writeAttribute(foreignKey as string, pkValue);
 
     const saved = await childRecord.save();
     if (!saved) {
@@ -381,7 +381,7 @@ async function _autosaveBelongsTo(record: Base, assoc: AssociationDefinition): P
     const foreignKey = assoc.options.foreignKey ?? `${underscore(assoc.name)}_id`;
     const primaryKey = assoc.options.primaryKey ?? "id";
     const pkValue = assocRecord._readAttribute(primaryKey as string);
-    if (pkValue != null) record.writeAttribute(foreignKey as string, pkValue);
+    if (pkValue != null) record._writeAttribute(foreignKey as string, pkValue);
   }
   return true;
 }

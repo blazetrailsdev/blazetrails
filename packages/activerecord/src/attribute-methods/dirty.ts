@@ -13,6 +13,7 @@ interface DirtyRecord {
   changes: Record<string, [unknown, unknown]>;
   previousChanges: Record<string, [unknown, unknown]>;
   readAttribute(name: string): unknown;
+  _readAttribute(name: string): unknown;
 }
 
 /**
@@ -43,7 +44,7 @@ export function savedChangeToAttribute(
  */
 export function attributeBeforeLastSave(record: DirtyRecord, attr: string): unknown {
   const change = savedChangeToAttribute(record, attr);
-  return change ? change[0] : record.readAttribute(attr);
+  return change ? change[0] : record._readAttribute(attr);
 }
 
 /**
@@ -92,7 +93,7 @@ export function attributeChangeToBeSaved(
  */
 export function attributeInDatabase(record: DirtyRecord, attr: string): unknown {
   const change = attributeChangeToBeSaved(record, attr);
-  return change ? change[0] : record.readAttribute(attr);
+  return change ? change[0] : record._readAttribute(attr);
 }
 
 /**

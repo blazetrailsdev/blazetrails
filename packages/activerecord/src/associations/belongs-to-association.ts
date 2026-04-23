@@ -296,8 +296,8 @@ export class BelongsToAssociation extends SingularAssociation {
           : (record as any)[pkCol]
         : null;
 
-      if (typeof this.owner.writeAttribute === "function") {
-        (this.owner as any).writeAttribute(fks[i], value);
+      if (typeof (this.owner as any)._writeAttribute === "function") {
+        (this.owner as any)._writeAttribute(fks[i], value);
       } else {
         (this.owner as any)[fks[i]] = value;
       }

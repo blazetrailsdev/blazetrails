@@ -165,7 +165,9 @@ export class BelongsTo extends SingularAssociation {
 
     // Touch the current parent by looking it up via FK value.
     const currentFkValues = fkColumns.map((col) =>
-      typeof record.readAttribute === "function" ? record.readAttribute(col) : record[col],
+      typeof (record as any)._readAttribute === "function"
+        ? (record as any)._readAttribute(col)
+        : record[col],
     );
     if (currentFkValues.every((v) => v != null)) {
       const association =

@@ -68,6 +68,31 @@ describe("AttributeAssignmentTest", () => {
     expect(() => p.assignAttributes({ name: "test" })).toThrow("boom");
   });
 
+  it("finds inherited setter even when subclass defines a getter-only accessor", () => {
+    class Base extends Model {
+      static {
+        this.attribute("name", "string");
+      }
+      set name(v: string) {
+        (this as Base).writeAttribute("name", (v as string).toUpperCase());
+      }
+      // getter mirrors the default attribute read
+      get name(): string {
+        return this.readAttribute("name") as string;
+      }
+    }
+    class Child extends Base {
+      // shadow with getter-only — Rails' `public_send("name=", v)` would still
+      // dispatch to Base#name=; our walk must too.
+      override get name(): string {
+        return (super.name as string) + "!";
+      }
+    }
+    const c = new Child({});
+    c.assignAttributes({ name: "bob" });
+    expect(c.readAttribute("name")).toBe("BOB");
+  });
+
   it("routes through instance-own setter (JS singleton method)", () => {
     class Person extends Model {
       static {

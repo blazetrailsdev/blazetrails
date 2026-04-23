@@ -65,19 +65,17 @@ export function assignAttributes(model: AttributeAssignment, newAttributes: unkn
  *   `hasOwnProperty` guard in `attributes.ts` preserves a user-authored
  *   `set name` if declared in the class body.
  *
- * A shadowing data (non-accessor) descriptor stops the walk and returns
- * `null`: higher-up setters are unreachable via `obj[key] = v` in that case,
- * and Rails likewise only dispatches to `name=` when the method actually
- * exists.
+ * Walks the full chain regardless of shadowing descriptors: Ruby looks up
+ * `name=` as its own method, independent of any `name` getter. A get-only
+ * accessor or a data descriptor at one level does not hide a setter
+ * defined higher up, so neither should our walk.
  */
 function findSetter(model: object, key: string): ((this: object, value: unknown) => void) | null {
   let obj: object | null = model;
   while (obj && obj !== Object.prototype) {
     const desc = Object.getOwnPropertyDescriptor(obj, key);
-    if (desc) {
-      return typeof desc.set === "function"
-        ? (desc.set as (this: object, value: unknown) => void)
-        : null;
+    if (desc && typeof desc.set === "function") {
+      return desc.set as (this: object, value: unknown) => void;
     }
     obj = Object.getPrototypeOf(obj);
   }

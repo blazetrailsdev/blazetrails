@@ -846,6 +846,9 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
       grouped.get(id)!.push(row);
     }
 
+    // Rails reads deferrable from the CREATE TABLE SQL since PRAGMA doesn't expose it.
+    const deferrableByKey = this._parseFkDeferrable(tableName);
+
     const results: ForeignKeyDefinition[] = [];
     for (const group of grouped.values()) {
       group.sort((a, b) => (a.seq as number) - (b.seq as number));
@@ -858,11 +861,40 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
       const primaryKey =
         group.length === 1 ? (first.to as string) : group.map((r) => r.to as string).join(",");
       const name = `fk_${bare}_${column}`;
+      const deferrable = deferrableByKey.get(`${toTable},${column},${primaryKey}`);
       results.push(
-        new ForeignKeyDefinition(tableName, toTable, column, primaryKey, name, onDelete, onUpdate),
+        new ForeignKeyDefinition(
+          tableName,
+          toTable,
+          column,
+          primaryKey,
+          name,
+          onDelete,
+          onUpdate,
+          deferrable,
+        ),
       );
     }
     return results;
+  }
+
+  // Mirrors Rails' SQLite3Adapter FK deferrable extraction — reads DEFERRABLE
+  // from CREATE TABLE SQL since PRAGMA foreign_key_list doesn't expose it.
+  private _parseFkDeferrable(
+    tableName: string,
+  ): Map<string, "immediate" | "deferred"> {
+    const createSql = this._getCreateTableSql(tableName);
+    const result = new Map<string, "immediate" | "deferred">();
+    if (!createSql) return result;
+    const fkRegex =
+      /FOREIGN KEY\s*\("?([^",)]+)"?\)\s*REFERENCES\s*"?([^"(,\s]+)"?\s*\("?([^",)]+)"?\)[^,)]*DEFERRABLE\s+INITIALLY\s+(\w+)/gi;
+    let match;
+    while ((match = fkRegex.exec(createSql)) !== null) {
+      const [, fromCol, toTbl, toCol, mode] = match;
+      const key = `${toTbl},${fromCol.trim()},${toCol.trim()}`;
+      result.set(key, mode.toLowerCase() === "deferred" ? "deferred" : "immediate");
+    }
+    return result;
   }
 
   private _extractFkAction(

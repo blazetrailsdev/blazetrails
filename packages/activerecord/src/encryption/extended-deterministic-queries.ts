@@ -1,5 +1,9 @@
 import { EncryptedAttributeType } from "./encrypted-attribute-type.js";
-import { getAttributeType } from "./encryptable-record.js";
+import { EncryptableRecord, getAttributeType } from "./encryptable-record.js";
+
+function modelFor(owner: any): any {
+  return typeof owner?.model !== "undefined" && owner.model !== owner ? owner.model : owner;
+}
 
 /**
  * Automatically expands encrypted arguments to support querying both
@@ -31,9 +35,9 @@ export class EncryptedQuery {
     args: unknown[],
     checkForAdditionalValues: boolean,
   ): unknown[] {
-    const model = owner._modelClass ?? owner;
-    const encryptedAttrs = model._encryptedAttributes as Set<string> | undefined;
-    if (!encryptedAttrs?.size) return args;
+    const model = modelFor(owner);
+    const deterministicAttrs = EncryptableRecord.deterministicEncryptedAttributes(model);
+    if (!deterministicAttrs.size) return args;
 
     if (!Array.isArray(args) || args.length === 0) return args;
     const options = args[0];
@@ -42,10 +46,9 @@ export class EncryptedQuery {
     const result = { ...options } as Record<string, unknown>;
     let modified = false;
 
-    for (const attrName of encryptedAttrs) {
+    for (const attrName of deterministicAttrs) {
       const type = getAttributeType(model, attrName);
       if (!(type instanceof EncryptedAttributeType)) continue;
-      if (!type.deterministic) continue;
       if (!type.previousTypes.length) continue;
       const value = result[attrName];
       if (value === undefined) continue;
@@ -106,17 +109,16 @@ export class RelationQueries {
     originalScopeForCreate: () => Record<string, unknown>,
     relation: any,
   ): Record<string, unknown> {
-    const model = relation._modelClass ?? relation;
-    const encryptedAttrs = model._encryptedAttributes as Set<string> | undefined;
-    if (!encryptedAttrs?.size) return originalScopeForCreate.call(relation);
+    const model = modelFor(relation);
+    const deterministicAttrs = EncryptableRecord.deterministicEncryptedAttributes(model);
+    if (!deterministicAttrs.size) return originalScopeForCreate.call(relation);
 
     const scopeAttrs = originalScopeForCreate.call(relation);
-    const wheres = relation.whereValuesHash?.() ?? {};
-    for (const attrName of encryptedAttrs) {
+    const wheres = relation.whereValuesHash();
+    for (const attrName of deterministicAttrs) {
       const values = wheres[attrName];
       if (
         Array.isArray(values) &&
-        values.length > 1 &&
         values.slice(1).every((v: unknown) => v instanceof AdditionalValue)
       ) {
         scopeAttrs[attrName] = values[0];

@@ -91,12 +91,19 @@ async function main(): Promise<void> {
         scale: col.scale,
       }));
 
-      const indexes: NativeIndex[] = idxDefs.map((idx) => ({
-        name: idx.name ?? "",
-        columns: idx.columns,
-        unique: idx.unique,
-        where: idx.where ?? null,
-      }));
+      const indexes: NativeIndex[] = idxDefs.map((idx) => {
+        if (!idx.name || idx.name.trim() === "") {
+          throw new Error(
+            `parity dump: index on "${tableName}" has no name (columns: ${JSON.stringify(idx.columns)})`,
+          );
+        }
+        return {
+          name: idx.name,
+          columns: idx.columns,
+          unique: idx.unique,
+          where: idx.where ?? null,
+        };
+      });
 
       nativeDump[tableName] = { columns, indexes };
     }

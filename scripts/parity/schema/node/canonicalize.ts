@@ -129,12 +129,17 @@ function canonicalizeTable(name: string, native: NativeTable): CanonicalTable {
   const indexes: CanonicalIndex[] = native.indexes
     .filter((idx) => !idx.name.startsWith(AUTOINDEX_PREFIX))
     .sort((a, b) => a.name.localeCompare(b.name))
-    .map((idx) => ({
-      name: idx.name,
-      columns: idx.columns as [string, ...string[]],
-      unique: idx.unique,
-      where: idx.where ?? null,
-    }));
+    .map((idx) => {
+      if (idx.columns.length === 0) {
+        throw new Error(`canonicalize: index "${idx.name}" on table "${name}" has no columns`);
+      }
+      return {
+        name: idx.name,
+        columns: idx.columns as [string, ...string[]],
+        unique: idx.unique,
+        where: idx.where ?? null,
+      };
+    });
 
   return { name, primaryKey, columns, indexes };
 }

@@ -486,12 +486,21 @@ export class Model {
   }
 
   /**
-   * Return validators registered for a specific attribute. O(1) lookup —
-   * Rails `_validators[attribute.to_sym]`
+   * Return validators registered for a specific attribute. O(1) bucket
+   * lookup — Rails `_validators[attribute.to_sym]`
    * (activemodel/lib/active_model/validations.rb:266-270).
+   *
+   * Returns a fresh array each call (same shape whether the bucket is
+   * populated or empty). Deliberately does NOT mirror Rails' default-proc
+   * auto-vivification (`Hash.new { |h,k| h[k] = [] }`) — that's a Ruby
+   * hash artifact that would turn reads into state mutations, and on a
+   * subclass it would also require eagerly invoking
+   * `_ensureOwnValidators()` just to avoid polluting the parent's map.
+   * Returning an immutable copy keeps both concerns away from the reader.
    */
   static validatorsOn(attribute: string): Array<ValidatorBase | EachValidator> {
-    return this._validators.get(attribute) ?? [];
+    const bucket = this._validators.get(attribute);
+    return bucket ? [...bucket] : [];
   }
 
   // -- Individual validator helper methods --

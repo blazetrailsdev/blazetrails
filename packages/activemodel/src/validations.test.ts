@@ -1150,5 +1150,26 @@ describe("ValidationsTest", () => {
       expect(Person.validators()).toEqual([]);
       expect(Person.validatorsOn("name")).toEqual([]);
     });
+
+    it("validatorsOn returns a fresh array (no state-mutating reads)", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { presence: true });
+        }
+      }
+      // Reading an unseen attribute must NOT create a bucket (unlike Rails'
+      // default-proc hash) — the TS API keeps reads side-effect-free.
+      Person.validatorsOn("never_registered");
+      expect(Array.from(Person._validators.keys())).not.toContain("never_registered");
+
+      // Mutating the returned array must NOT affect internal state.
+      const a = Person.validatorsOn("name");
+      a.length = 0;
+      expect(Person.validatorsOn("name")).toHaveLength(1);
+
+      // Consecutive calls return independent arrays.
+      expect(Person.validatorsOn("name")).not.toBe(Person.validatorsOn("name"));
+    });
   });
 });

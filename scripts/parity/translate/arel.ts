@@ -224,7 +224,10 @@ function main(): void {
     const rbPath = join(dir, "query.rb");
     const tsPath = join(dir, "query.ts");
 
-    if (!force && existsSync(rbPath) && existsSync(tsPath)) {
+    // Skip if either file exists (not just both) — avoids clobbering hand edits.
+    const rbExists = existsSync(rbPath);
+    const tsExists = existsSync(tsPath);
+    if (!force && (rbExists || tsExists)) {
       skipped++;
       continue;
     }

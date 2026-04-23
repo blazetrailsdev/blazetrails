@@ -186,9 +186,11 @@ function translateQuery(
   // to method chains (.add/.subtract/.multiply/.divide) with regex; those
   // fixtures are hand-translated in query.ts directly.
 
-  // Determine needed imports
+  // Determine needed imports.
+  // Note: `~` (BitwiseNot) is caught by NON_TRANSLATABLE so it never reaches here;
+  // fixtures using BitwiseNot are hand-translated (e.g. arel-30/query.ts).
   const imports: string[] = ["Table"];
-  if (tsExpr.includes("Nodes.") || tsExpr.includes("BitwiseNot")) imports.push("Nodes");
+  if (tsExpr.includes("Nodes.")) imports.push("Nodes");
   if (tsExpr.includes("sql(")) imports.push("sql");
   if (/\bstar\b/.test(tsExpr) && !tsExpr.includes(".star")) imports.push("star");
 

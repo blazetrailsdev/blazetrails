@@ -1,2 +1,2 @@
 posts = Arel::Table.new(:posts)
-posts.project(Arel::Nodes::SqlLiteral.new('id'), Arel::Nodes::SqlLiteral.new('title'))
+posts.project(posts[:id], posts[:title])

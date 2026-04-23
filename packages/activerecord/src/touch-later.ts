@@ -60,11 +60,20 @@ export async function touchLater(this: Base, ...names: string[]): Promise<void> 
 
   // Register with the current transaction so beforeCommitted! fires before
   // commit — mirrors Rails' add_to_transaction call in touch_later.
+  // Only defer when the adapter supports addTransactionRecord AND a real
+  // (non-null) transaction is currently open. NullTransaction.addRecord is
+  // a no-op, so deferring into it would silently lose the flush.
   const adapter = ctor.adapter as any;
-  if (typeof adapter?.addTransactionRecord === "function") {
+  const hasAddRecord = typeof adapter?.addTransactionRecord === "function";
+  const currentTx = adapter?.currentTransaction;
+  const hasOpenRealTransaction =
+    hasAddRecord &&
+    currentTx != null &&
+    currentTx.open === true &&
+    typeof currentTx.addRecord === "function";
+  if (hasOpenRealTransaction) {
     adapter.addTransactionRecord(this);
-  } else if (!adapter?.currentTransaction?.()) {
-    // No active transaction — flush immediately so the DB is updated.
+  } else {
     await touchDeferredAttributes(this);
     return;
   }
@@ -97,10 +106,18 @@ export async function touchLater(this: Base, ...names: string[]): Promise<void> 
 export async function touch(this: Base, ...names: string[]): Promise<boolean> {
   const self = this as any;
   if (self._deferTouchAttrs?.length) {
-    const merged: string[] = [...new Set([...names, ...(self._deferTouchAttrs as string[])])];
+    const deferredAttrs = self._deferTouchAttrs as string[];
+    const deferredTime = self._touchTime as Date | null;
+    const merged: string[] = [...new Set([...names, ...deferredAttrs])];
     self._deferTouchAttrs = null;
     self._touchTime = null;
-    return timestampTouch.call(this, ...merged);
+    try {
+      return await timestampTouch.call(this, ...merged);
+    } catch (error) {
+      self._deferTouchAttrs = deferredAttrs;
+      self._touchTime = deferredTime;
+      throw error;
+    }
   }
   return timestampTouch.call(this, ...names);
 }
@@ -134,17 +151,25 @@ function surreptitiouslyTouch(record: Base, attrNames: string[], time: Date): vo
 
 async function touchDeferredAttributes(record: Base): Promise<void> {
   const self = record as any;
+  const deferredAttrs = self._deferTouchAttrs as string[];
   const time: Date = self._touchTime ?? currentTimeFromProperTimezone();
 
   // Build attrs from all deferred columns, preserving the exact timestamp
   // set at touchLater time — mirrors touch(time: @_touch_time) in Rails.
   const attrs: Record<string, unknown> = {};
-  for (const attr of self._deferTouchAttrs as string[]) attrs[attr] = time;
+  for (const attr of deferredAttrs) attrs[attr] = time;
 
+  await record.updateColumns(attrs);
+
+  // Clear state only after successful update — mirrors touch_deferred_attributes
+  // calling touch() which clears @_defer_touch_attrs / @_touch_time on return.
   self._deferTouchAttrs = null;
   self._touchTime = null;
 
-  await record.updateColumns(attrs);
+  // Run after_touch callbacks — mirrors touch() going through Timestamp#touch
+  // which fires the after_touch chain.
+  const ctor = record.constructor as typeof Base;
+  await (ctor as any)._callbackChain?.runAfterAsync?.("touch", record);
 }
 
 export const InstanceMethods = {

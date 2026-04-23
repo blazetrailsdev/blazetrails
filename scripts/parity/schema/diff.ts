@@ -77,15 +77,15 @@ async function main(): Promise<void> {
 
   const railsFiles = new Set(listJsonFiles(railsDir));
   const trailsFiles = new Set(listJsonFiles(trailsDir));
-  const fixtures = [...railsFiles].filter((f) => trailsFiles.has(f)).sort();
 
-  if (fixtures.length === 0) {
-    process.stderr.write("parity diff: no matching fixture JSON files found in both dirs\n");
+  if (railsFiles.size + trailsFiles.size === 0) {
+    process.stderr.write("parity diff: no fixture JSON files found in either dir\n");
     process.exit(1);
   }
 
   const onlyRails = [...railsFiles].filter((f) => !trailsFiles.has(f));
   const onlyTrails = [...trailsFiles].filter((f) => !railsFiles.has(f));
+  const fixtures = [...railsFiles].filter((f) => trailsFiles.has(f)).sort();
   // Asymmetric fixtures are a failure — parity is unverified for them.
   // Still proceed to diff the shared set (D7: never fail-fast).
   let failedFixtures = onlyRails.length + onlyTrails.length;

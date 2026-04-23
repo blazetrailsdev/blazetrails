@@ -118,7 +118,8 @@ async function main(): Promise<void> {
   } else if (side === "diff") {
     await runDiff();
   } else {
-    // all: rails + trails in parallel (both sides run to completion even if one fails), then diff
+    // all: rails + trails in parallel — allSettled ensures the other side finishes even if one fails.
+    // Within each side, fixtures run serially; a failure in one fixture stops that side.
     const results = await Promise.allSettled([runRails(), runTrails()]);
     const errors = results
       .filter((r): r is PromiseRejectedResult => r.status === "rejected")

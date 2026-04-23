@@ -10,7 +10,8 @@ export class HashLookupTypeMap {
   private _mapping: Map<string | number, (lookupKey: string | number, ...args: unknown[]) => Type> =
     new Map();
   private _cache: Map<string | number, Map<string, Type>> = new Map();
-  // Rails accepts a parent param for API compatibility but does not use it.
+  // Rails' HashLookupTypeMap#initialize accepts a parent param but never uses it
+  // (unlike TypeMap which does delegate). Accepted here for API compatibility only.
   constructor(_parent: HashLookupTypeMap | null = null) {}
 
   lookup(lookupKey: string | number, ...args: unknown[]): Type {

@@ -6,7 +6,7 @@ import { SerializationTypeMismatch } from "../errors.js";
 describe("ColumnSerializerTest", () => {
   it("dump returns nil for nil", () => {
     const cs = new ColumnSerializer("attr", JsonCoder);
-    expect(cs.dump(null)).toBeUndefined();
+    expect(cs.dump(null)).toBeNull();
   });
 
   it("dump serializes valid object", () => {

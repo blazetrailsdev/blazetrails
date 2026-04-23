@@ -1,6 +1,6 @@
 import { SerializationTypeMismatch } from "../errors.js";
 
-type CoderLike = { dump(obj: unknown): unknown; load(payload: unknown): unknown };
+type CoderLike = { dump(obj: unknown): string | null; load(payload: unknown): unknown };
 type ClassLike = new (...args: unknown[]) => unknown;
 
 /**
@@ -48,8 +48,8 @@ export class ColumnSerializer {
   /**
    * Mirrors: ActiveRecord::Coders::ColumnSerializer#dump
    */
-  dump(object: unknown): unknown {
-    if (object == null) return undefined;
+  dump(object: unknown): string | null {
+    if (object == null) return null;
     this.assertValidValue(object, "dump");
     return this._coder.dump(object);
   }
@@ -78,7 +78,7 @@ export class ColumnSerializer {
   /**
    * Mirrors: ActiveRecord::Coders::ColumnSerializer#assert_valid_value
    */
-  assertValidValue(object: unknown, action: string): void {
+  assertValidValue(object: unknown, action = "serialize"): void {
     if (object == null) return;
     // Object is the universal superclass — mirrors Ruby's `Object === anything`.
     if (this._objectClass === (Object as unknown)) return;
@@ -92,13 +92,9 @@ export class ColumnSerializer {
 
   checkArityOfConstructor(): void {
     if (this._objectClass === (Object as unknown)) return;
-    // Check declared parameter count first — JS Function.length counts required params.
-    if (this._objectClass.length > 0) {
-      throw new TypeError(
-        `Cannot serialize ${this._objectClass.name}. Classes passed to \`serialize\` must have a 0 argument constructor.`,
-      );
-    }
-    // Also try instantiation to catch constructors that throw without params.
+    // Mirrors Rails: catch ArgumentError from object_class.new with no args.
+    // In JS, Function.length is unreliable (optional params have length 1 too),
+    // so we rely solely on whether new objectClass() succeeds.
     try {
       new (this._objectClass as new () => unknown)();
     } catch (e: unknown) {

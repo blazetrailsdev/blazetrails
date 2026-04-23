@@ -353,6 +353,13 @@ jobs:
       - name: Bundle install
         run: bundle install --jobs 4 --retry 3 --path vendor/bundle
         working-directory: scripts/parity/schema/ruby
+      - name: Upload Gemfile.lock artifact (commit this to the repo for stable caching)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-ruby-gemfile-lock
+          path: scripts/parity/schema/ruby/Gemfile.lock
+          retention-days: 7
       - run: pnpm install --frozen-lockfile
       - name: Build dependency packages for trails introspection
         run: pnpm --filter @blazetrails/arel --filter @blazetrails/activesupport --filter @blazetrails/activemodel build

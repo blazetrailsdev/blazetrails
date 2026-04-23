@@ -1,5 +1,5 @@
 -- Fixture for statement: arel-14
--- Query: users[:name].not_in(%w[Mike Molly])
+-- Query: users[:name].not_in_any(%w[Mike Molly])
 
 CREATE TABLE users (
   id INTEGER PRIMARY KEY,

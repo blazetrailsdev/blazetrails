@@ -116,8 +116,8 @@ function translateQuery(
     .replace(/\.not_eq\(/g, ".notEq(")
     // .not_in → .notIn
     .replace(/\.not_in\(/g, ".notIn(")
-    // .not_in_any → .notIn  (trails has notIn; notInAny is not exposed)
-    .replace(/\.not_in_any\(/g, ".notIn(")
+    // .not_in_any → .notInAny (attributes/attribute.ts:318)
+    .replace(/\.not_in_any\(/g, ".notInAny(")
     // .is_distinct_from → .isDistinctFrom
     .replace(/\.is_distinct_from\(/g, ".isDistinctFrom(")
     // .does_not_match_regexp → .doesNotMatchRegexp

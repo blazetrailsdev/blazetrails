@@ -145,7 +145,7 @@ export interface SchemaStatements {
     tableName: string,
     columnName: string,
     defaultOrChanges: unknown,
-  ): ChangeColumnDefaultDefinition;
+  ): Promise<ChangeColumnDefaultDefinition | undefined>;
   addIndex(
     tableName: string,
     columnName: string | string[],

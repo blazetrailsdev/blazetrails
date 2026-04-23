@@ -104,10 +104,13 @@ export class ChangeColumnDefinition {
 }
 
 export class ChangeColumnDefaultDefinition {
+  readonly default: unknown;
   constructor(
     readonly column: ColumnDefinition,
-    readonly default_: unknown,
-  ) {}
+    defaultValue: unknown,
+  ) {
+    this.default = defaultValue;
+  }
 }
 
 export interface ColumnOptions {

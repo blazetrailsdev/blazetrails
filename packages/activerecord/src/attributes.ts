@@ -11,6 +11,7 @@
 import { Attribute, AttributeSet, type Type } from "@blazetrails/activemodel";
 import { isStiSubclass, getStiBase } from "./inheritance.js";
 import type { Base } from "./base.js";
+import { applyPendingEncryptions } from "./encryption.js";
 
 type AnyClass = any;
 
@@ -69,13 +70,18 @@ export function defineAttribute(
   const resolvedDefault = defaultValue === NO_DEFAULT ? existing?.defaultValue : defaultValue;
 
   this._attributeDefinitions.set(name, {
+    // Spread existing to preserve metadata fields (source, virtual, etc.)
+    // that other code paths (resetColumnInformation, schema reflection) rely on.
+    ...existing,
     name,
     type: castType,
     defaultValue: resolvedDefault ?? null,
     userProvided: userProvidedDefault,
+    source: userProvidedDefault ? "user" : "schema",
   });
 
   this._cachedDefaultAttributes = null;
+  applyPendingEncryptions(this);
 
   // Install prototype accessor so the attribute is readable/writable by name,
   // matching what applyColumnsHash does for schema-reflected columns.

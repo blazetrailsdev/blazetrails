@@ -216,11 +216,9 @@ export function applyPendingEncryptions(klass: any): void {
     // Route through decorateAttributes so the encryption PendingDecorator
     // lands in the pending queue in declaration order (after any PendingType),
     // ensuring _defaultAttributes replays correctly.
-    const capturedScheme = scheme;
     klass.decorateAttributes(
       [name],
-      (_attrName: string, castType: Type) =>
-        new EncryptedAttributeType({ scheme: capturedScheme, castType }),
+      (_attrName: string, castType: Type) => new EncryptedAttributeType({ scheme, castType }),
     );
   }
 }

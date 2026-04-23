@@ -280,7 +280,8 @@ describe("AttributeRegistrationTest", () => {
     }
     const queue = (MyModel as any)._pendingAttributeModifications;
     expect(queue).toBeDefined();
-    expect(queue.length).toBeGreaterThanOrEqual(2);
+    // "name" → PendingType; "age" → PendingType + PendingDefault
+    expect(queue.length).toBe(3);
   });
 
   it("_default_attributes seeds empty set and replays pending queue", () => {

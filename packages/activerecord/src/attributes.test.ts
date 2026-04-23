@@ -706,6 +706,37 @@ describe("DefaultAttributesTest", () => {
     const p = new Post({});
     expect(p.status).toBe("draft");
   });
+
+  it("_defaultAttributes seeds schema columns via fromDatabase then replays user pending queue", () => {
+    const adp = createTestAdapter();
+    const intType = typeRegistry.lookup("integer");
+    class Post extends Base {
+      static {
+        this.adapter = adp;
+      }
+    }
+    Post.defineAttribute("views", intType, { default: 0, userProvidedDefault: false });
+    Post.attribute("title", "string", { default: "untitled" });
+
+    const defaults = Post._defaultAttributes();
+    expect(defaults.getAttribute("views").value).toBe(0);
+    expect(defaults.getAttribute("title").value).toBe("untitled");
+  });
+
+  it("user attribute() declaration overrides schema column type via pending queue", () => {
+    const adp = createTestAdapter();
+    const intType = typeRegistry.lookup("integer");
+    class Post extends Base {
+      static {
+        this.adapter = adp;
+      }
+    }
+    Post.defineAttribute("score", intType, { default: 0, userProvidedDefault: false });
+    Post.attribute("score", "string");
+
+    const defaults = Post._defaultAttributes();
+    expect(defaults.getAttribute("score").type.name).toBe("string");
+  });
 });
 
 describe("DefineAttributeSTITest", () => {
@@ -755,43 +786,5 @@ describe("DefineAttributeSTITest", () => {
     // Base.prototype.id (the CPK-aware getter) must still be used, not a plain accessor
     const ownDesc = Object.getOwnPropertyDescriptor(Post.prototype, "id");
     expect(ownDesc).toBeUndefined();
-  });
-
-  it("_defaultAttributes seeds schema columns via Attribute.fromDatabase and replays user pending modifications", () => {
-    const adp = createTestAdapter();
-    const intType = typeRegistry.lookup("integer");
-    class Post extends Base {
-      static {
-        this.adapter = adp;
-      }
-    }
-    // Simulate schema reflection (source: "schema")
-    Post.defineAttribute("views", intType, { default: 0, userProvidedDefault: false });
-    // User declaration layered on top
-    Post.attribute("title", "string", { default: "untitled" });
-
-    const defaults = Post._defaultAttributes();
-    // Schema column is present (seeded via fromDatabase)
-    expect(defaults.getAttribute("views").value).toBe(0);
-    // User declaration is present (replayed from pending queue)
-    expect(defaults.getAttribute("title").value).toBe("untitled");
-  });
-
-  it("user attribute() declaration overrides schema column type via pending queue", () => {
-    const adp = createTestAdapter();
-    const intType = typeRegistry.lookup("integer");
-    class Post extends Base {
-      static {
-        this.adapter = adp;
-      }
-    }
-    // Schema reflection registers "score" as integer
-    Post.defineAttribute("score", intType, { default: 0, userProvidedDefault: false });
-    // User overrides type to string via attribute()
-    Post.attribute("score", "string");
-
-    const defaults = Post._defaultAttributes();
-    // Pending queue replays after schema seed → user string type wins
-    expect(defaults.getAttribute("score").type.name).toBe("string");
   });
 });

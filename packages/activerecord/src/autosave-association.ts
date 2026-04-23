@@ -379,7 +379,8 @@ async function _autosaveBelongsTo(record: Base, assoc: AssociationDefinition): P
     }
 
     const foreignKey = assoc.options.foreignKey ?? `${underscore(assoc.name)}_id`;
-    const primaryKey = assoc.options.primaryKey ?? "id";
+    const primaryKey =
+      assoc.options.primaryKey ?? (assocRecord.constructor as typeof Base).primaryKey ?? "id";
     const pkValue = assocRecord._readAttribute(primaryKey as string);
     if (pkValue != null) record._writeAttribute(foreignKey as string, pkValue);
   }

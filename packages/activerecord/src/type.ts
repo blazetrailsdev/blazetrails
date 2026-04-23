@@ -87,6 +87,21 @@ export function defaultValue(): Type {
   return new ValueType();
 }
 
+/**
+ * Return the adapter name symbol for a given model's connection.
+ *
+ * Mirrors: ActiveRecord::Type.adapter_name_from
+ */
+export function adapterNameFrom(model: { adapter?: { adapterName?: string } }): string {
+  return model.adapter?.adapterName ?? "abstract";
+}
+
+// currentAdapterName is private in Rails — exposed here for api:compare parity only.
+// Call adapterNameFrom(Base) directly when the Base class is available.
+export function currentAdapterName(getBase?: () => { adapter?: { adapterName?: string } }): string {
+  return getBase ? adapterNameFrom(getBase()) : "abstract";
+}
+
 // Override ActiveModel's type registry with AR-specific types so that
 // Model.attribute() calls resolve to timezone-aware Date/DateTime/Time,
 // AR's Text, Json, etc.

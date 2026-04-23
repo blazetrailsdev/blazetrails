@@ -100,6 +100,7 @@ const NON_TRANSLATABLE = [
   /\bquoted\(/, // unresolved helper: quoted('%Y%m') not a standard Arel method
   /:\w+\s*,/, // symbol args that aren't table/col refs: project(:id, :title)
   /\/\./, // slash-separated variant lists: users[:age].sum/.average/.minimum
+  /\.arel_table\b/, // Rails model.arel_table requires pluralisation/snake_case knowledge
 ];
 
 function isNonTranslatable(query: string): boolean {
@@ -250,6 +251,11 @@ function main(): void {
   for (const name of fixtures) {
     const dir = join(FIXTURES_DIR, name);
     if (!existsSync(join(dir, "schema.sql"))) {
+      if (fixture) {
+        // Explicit --fixture target: fail fast so typos don't look like success.
+        process.stderr.write(`parity translate: fixture not found: ${dir}/schema.sql\n`);
+        process.exit(1);
+      }
       process.stderr.write(`  skip ${name}: no schema.sql\n`);
       continue;
     }

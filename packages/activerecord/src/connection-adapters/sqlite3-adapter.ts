@@ -862,7 +862,8 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
         group.length === 1 ? (first.from as string) : group.map((r) => r.from as string).join(",");
       const primaryKey =
         group.length === 1 ? (first.to as string) : group.map((r) => r.to as string).join(",");
-      const name = namesByColumn.get(column) ?? `fk_${bare}_${column}`;
+      const nameKey = column.replace(/,/g, "_");
+      const name = namesByColumn.get(column) ?? `fk_${bare}_${nameKey}`;
       const deferrable = deferrableByKey.get(`${toTable},${column},${primaryKey}`);
       results.push(
         new ForeignKeyDefinition(

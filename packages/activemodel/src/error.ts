@@ -31,6 +31,17 @@ export class Error {
     this.options = options;
   }
 
+  /**
+   * Return a deep-duped copy of this error, optionally rebinding `base` to a
+   * new model instance. Mirrors Rails' usage in
+   * `ActiveModel::Errors#copy!` where each error is `deep_dup`ed and then
+   * its `@base` is reset to the receiver
+   * (activemodel/lib/active_model/errors.rb:138-143).
+   */
+  dupWithBase(newBase: AnyRecord): Error {
+    return new Error(newBase, this.attribute, this.rawType, { ...this.options });
+  }
+
   get message(): string {
     const msg = this.options.message;
     if (typeof msg === "string") {

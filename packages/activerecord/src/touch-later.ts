@@ -57,6 +57,17 @@ export async function touchLater(this: Base, ...names: string[]): Promise<void> 
   self._touchTime = currentTimeFromProperTimezone();
   surreptitouslyTouch(this, self._deferTouchAttrs as string[], self._touchTime as Date);
 
+  // Register with the current transaction so beforeCommitted! fires before
+  // commit — mirrors Rails' add_to_transaction call in touch_later.
+  const adapter = ctor.adapter as any;
+  if (typeof adapter?.addTransactionRecord === "function") {
+    adapter.addTransactionRecord(this);
+  } else if (!adapter?.currentTransaction?.()) {
+    // No active transaction — flush immediately so the DB is updated.
+    await touchDeferredAttributes(this);
+    return;
+  }
+
   // Touch belongs_to / has_one parents that have touch: option — mirrors the
   // reflect_on_all_associations loop in Rails' touch_later.
   for (const r of reflectOnAllAssociations(ctor)) {

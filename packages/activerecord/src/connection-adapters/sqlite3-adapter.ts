@@ -880,9 +880,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
 
   // Mirrors Rails' SQLite3Adapter FK deferrable extraction — reads DEFERRABLE
   // from CREATE TABLE SQL since PRAGMA foreign_key_list doesn't expose it.
-  private _parseFkDeferrable(
-    tableName: string,
-  ): Map<string, "immediate" | "deferred"> {
+  private _parseFkDeferrable(tableName: string): Map<string, "immediate" | "deferred"> {
     const createSql = this._getCreateTableSql(tableName);
     const result = new Map<string, "immediate" | "deferred">();
     if (!createSql) return result;

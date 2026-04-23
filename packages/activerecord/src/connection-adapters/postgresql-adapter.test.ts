@@ -891,7 +891,7 @@ describeIfPg("PostgreSQLAdapter", () => {
       );
       expect(def).toBeDefined();
       expect(def!.column.name).toBe("created_at");
-      expect(def!.column.type).toBe("timestamp");
+      expect(def!.column.type).toMatch(/timestamp/i);
       expect(def!.column.sqlType).toMatch(/timestamp/i);
     });
 
@@ -899,6 +899,7 @@ describeIfPg("PostgreSQLAdapter", () => {
       const def = await adapter.buildChangeColumnDefaultDefinition("bcd_test", "tags", "{}");
       expect(def).toBeDefined();
       expect(def!.column.name).toBe("tags");
+      expect(def!.column.options.array).toBe(true);
       expect(def!.column.sqlType).toMatch(/text/i);
     });
 

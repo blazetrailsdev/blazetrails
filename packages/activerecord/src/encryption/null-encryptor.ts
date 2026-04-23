@@ -13,7 +13,7 @@ export class NullEncryptor {
     return encryptedText;
   }
 
-  encrypted(_text: string): boolean {
+  isEncrypted(_text: string): boolean {
     return false;
   }
 

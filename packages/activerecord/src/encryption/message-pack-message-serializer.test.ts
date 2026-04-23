@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { MessagePackMessageSerializer } from "./message-pack-message-serializer.js";
 
 describe("ActiveRecord::Encryption::MessagePackMessageSerializerTest", () => {
-  it("binary? returns true", () => {
-    expect(new MessagePackMessageSerializer().isBinary()).toBe(true);
+  it("binary? returns false because this implementation uses JSON, not MessagePack binary", () => {
+    expect(new MessagePackMessageSerializer().isBinary()).toBe(false);
   });
 
   it.skip("serializes messages", () => {});

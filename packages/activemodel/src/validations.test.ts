@@ -979,4 +979,35 @@ describe("ValidationsTest", () => {
     }
     expect(() => new Topic({}).isValid()).toThrow(/title/i);
   });
+
+  describe("return-shape parity", () => {
+    class Topic extends Model {
+      static {
+        this.attribute("title", "string");
+        this.validates("title", { presence: true });
+      }
+    }
+
+    it("validate returns boolean (Rails alias_method :validate, :valid?)", () => {
+      expect(new Topic({ title: "ok" }).validate()).toBe(true);
+      expect(new Topic({}).validate()).toBe(false);
+    });
+
+    it("invalid? accepts a context argument", () => {
+      class Scoped extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { presence: true, on: "create" });
+        }
+      }
+      const s = new Scoped({});
+      expect(s.isInvalid()).toBe(false);
+      expect(s.isInvalid("create")).toBe(true);
+    });
+
+    it("validate! returns true and raises otherwise (never returns false)", () => {
+      expect(new Topic({ title: "ok" }).validateBang()).toBe(true);
+      expect(() => new Topic({}).validateBang()).toThrow(/Validation failed/);
+    });
+  });
 });

@@ -38,6 +38,11 @@ export interface NativeTable {
   /** Columns in declaration order (as returned by introspectColumns). */
   columns: NativeColumn[];
   indexes: NativeIndex[];
+  /**
+   * Primary key column names in PK-position order (from adapter.primaryKey,
+   * which sorts by PRAGMA table_info `pk` field). Empty array = no PK.
+   */
+  primaryKeyColumns: string[];
 }
 
 /** Output shape of dump.ts — keyed by table name. */
@@ -105,8 +110,9 @@ function coerceDefault(raw: string | null): string | number | boolean | null {
 }
 
 function canonicalizeTable(name: string, native: NativeTable): CanonicalTable {
-  // Primary key
-  const pkCols = native.columns.filter((c) => c.primaryKey).map((c) => c.name);
+  // Primary key — use primaryKeyColumns (pk-position order from adapter.primaryKey)
+  // rather than filtering columns array, so composite PK ordering matches Rails.
+  const pkCols = native.primaryKeyColumns;
   const primaryKey: CanonicalTable["primaryKey"] =
     pkCols.length === 0
       ? null

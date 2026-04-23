@@ -2,7 +2,7 @@
 /**
  * Usage: tsx scripts/parity/schema/node/dump.ts <fixture-dir> <out.json>
  *
- * Must be run from the repo root so relative imports to packages/ resolve.
+ * Must be run from the repo root so fixture paths and output paths resolve correctly.
  *
  * Applies <fixture-dir>/schema.sql to a fresh SQLite database, introspects
  * it using the trails ActiveRecord adapter, canonicalizes the result, and
@@ -16,12 +16,13 @@ import { readFileSync, mkdtempSync, writeFileSync, rmSync, existsSync } from "no
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 // Relative imports so tsx can resolve from source without a prior build.
-// These paths resolve from the repo root (CWD when the script is run).
+// These paths are resolved relative to this file's location by the module system.
 import { Base } from "../../../../packages/activerecord/src/base.js";
 import {
   introspectTables,
   introspectColumns,
   introspectIndexes,
+  introspectPrimaryKey,
 } from "../../../../packages/activerecord/src/schema-introspection.js";
 import { canonicalize } from "./canonicalize.js";
 import type { NativeDump, NativeColumn, NativeIndex } from "./canonicalize.js";
@@ -64,8 +65,11 @@ async function main(): Promise<void> {
     // 1. Apply schema.sql to a fresh temp SQLite file via better-sqlite3
     const sql = readFileSync(join(fixtureDirAbs, "schema.sql"), "utf8");
     const db = new Database(dbPath);
-    db.exec(sql);
-    db.close();
+    try {
+      db.exec(sql);
+    } finally {
+      db.close();
+    }
 
     // 2. Connect via trails adapter
     await Base.establishConnection(`sqlite3://${dbPath}`);
@@ -105,7 +109,8 @@ async function main(): Promise<void> {
         };
       });
 
-      nativeDump[tableName] = { columns, indexes };
+      const primaryKeyColumns = await introspectPrimaryKey(adapter, tableName);
+      nativeDump[tableName] = { columns, indexes, primaryKeyColumns };
     }
 
     // 4. Canonicalize

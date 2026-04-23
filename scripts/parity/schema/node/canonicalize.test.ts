@@ -79,6 +79,7 @@ describe("canonicalize", () => {
           },
         ],
         indexes: [],
+        primaryKeyColumns: ["id"],
       },
     };
 
@@ -142,6 +143,7 @@ describe("canonicalize", () => {
           },
         ],
         indexes: [],
+        primaryKeyColumns: [],
       },
     };
     const [table] = canonicalize(native).tables;
@@ -164,6 +166,7 @@ describe("canonicalize", () => {
           },
         ],
         indexes: [],
+        primaryKeyColumns: ["id"],
       },
       apple: {
         columns: [
@@ -179,6 +182,7 @@ describe("canonicalize", () => {
           },
         ],
         indexes: [],
+        primaryKeyColumns: ["id"],
       },
     };
     const result = canonicalize(native);
@@ -201,6 +205,7 @@ describe("canonicalize", () => {
           },
         ],
         indexes: [],
+        primaryKeyColumns: ["id"],
       },
       schema_migrations: {
         columns: [
@@ -216,6 +221,7 @@ describe("canonicalize", () => {
           },
         ],
         indexes: [],
+        primaryKeyColumns: [],
       },
       ar_internal_metadata: {
         columns: [
@@ -231,6 +237,7 @@ describe("canonicalize", () => {
           },
         ],
         indexes: [],
+        primaryKeyColumns: [],
       },
     };
     const result = canonicalize(native);
@@ -257,6 +264,7 @@ describe("canonicalize", () => {
           { name: "idx_posts_z", columns: ["created_at"], unique: false },
           { name: "idx_posts_a", columns: ["author_id"], unique: false },
         ],
+        primaryKeyColumns: ["id"],
       },
     };
     const [table] = canonicalize(native).tables;
@@ -289,10 +297,46 @@ describe("canonicalize", () => {
           },
         ],
         indexes: [],
+        primaryKeyColumns: ["tag_id", "taggable_id"],
       },
     };
     const [table] = canonicalize(native).tables;
     expect(table!.primaryKey).toEqual(["tag_id", "taggable_id"]);
+  });
+
+  it("uses primaryKeyColumns order, not column declaration order, for composite PK", () => {
+    // Simulates PRIMARY KEY (b, a) where a appears first in the table definition.
+    // Rails preserves the PK constraint order via PRAGMA table_info `pk` position.
+    const native: NativeDump = {
+      items: {
+        columns: [
+          {
+            name: "a",
+            sqlType: "INTEGER",
+            primaryKey: true,
+            null: false,
+            default: null,
+            limit: null,
+            precision: null,
+            scale: null,
+          },
+          {
+            name: "b",
+            sqlType: "INTEGER",
+            primaryKey: true,
+            null: false,
+            default: null,
+            limit: null,
+            precision: null,
+            scale: null,
+          },
+        ],
+        indexes: [],
+        primaryKeyColumns: ["b", "a"], // PK constraint order: b first, then a
+      },
+    };
+    const [table] = canonicalize(native).tables;
+    expect(table!.primaryKey).toEqual(["b", "a"]);
   });
 
   it("represents no-PK table", () => {
@@ -311,6 +355,7 @@ describe("canonicalize", () => {
           },
         ],
         indexes: [],
+        primaryKeyColumns: [],
       },
     };
     const [table] = canonicalize(native).tables;
@@ -343,6 +388,7 @@ describe("canonicalize", () => {
           },
         ],
         indexes: [],
+        primaryKeyColumns: [],
       },
     };
     const [table] = canonicalize(native).tables;
@@ -366,6 +412,7 @@ describe("canonicalize", () => {
           },
         ],
         indexes: [],
+        primaryKeyColumns: [],
       },
     };
     const [table] = canonicalize(native).tables;
@@ -388,6 +435,7 @@ describe("canonicalize", () => {
           },
         ],
         indexes: [],
+        primaryKeyColumns: [],
       },
     };
     expect(() => canonicalize(native)).toThrow(/unknown SQL type "UNKNOWNTYPE"/);

@@ -9,21 +9,21 @@ import { BooleanType } from "@blazetrails/activemodel";
 const booleanType = new BooleanType();
 
 interface Queryable {
-  readAttribute(name: string): unknown;
   _readAttribute(name: string): unknown;
+  [key: string]: unknown;
 }
 
 /**
  * Query whether an attribute value is truthy.
- * Equivalent to Ruby's `record.attribute?` pattern.
  *
- * Uses ActiveModel's BooleanType for consistent casting with the
- * rest of the framework (handles "0", "f", "false", "off", "no", etc.).
+ * Calls the getter method by name (like Rails' public_send), so overridden
+ * getters and virtual attributes are respected.
  *
  * Mirrors: ActiveRecord::AttributeMethods::Query#query_attribute
  */
 export function queryAttribute(this: Queryable, name: string): boolean {
-  return castToBoolean(this.readAttribute(name));
+  const value = (this as Record<string, unknown>)[name];
+  return castToBoolean(value);
 }
 
 /**

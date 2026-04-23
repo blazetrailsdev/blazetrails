@@ -75,11 +75,16 @@ function parseSchemaSql(dir: string): FixtureInfo {
 // Patterns in `-- Query:` annotations that can't be reliably auto-translated.
 // Queries matching these get a TODO body rather than broken generated code.
 const NON_TRANSLATABLE = [
-  /\.\.\./, // truncated annotations like "posts.join(comments, OuterJoin)..."
-  /^[A-Z].*\s+/, // prose descriptions (e.g. "Simple CTE: ...")
+  /\.\.\./, // truncated annotations: "posts.join(comments, OuterJoin)..."
+  /^[A-Z].*\s+/, // prose descriptions: "Simple CTE: ...", "WITH users_top AS ..."
   /COUNT\(/, // raw SQL fragments
   /WITH\s/, // WITH clause prose
   /ORDER BY/, // raw SQL ORDER BY prose
+  /~/, // bitwise NOT — operand boundary can't be determined safely with regex
+  /;/, // multi-statement forms: "replies = comments.alias; comments.join(...)"
+  /\bquoted\(/, // unresolved helper: quoted('%Y%m') not a standard Arel method
+  /:\w+\s*,/, // symbol args that aren't table/col refs: project(:id, :title)
+  /\/\./, // slash-separated variant lists: users[:age].sum/.average/.minimum
 ];
 
 function isNonTranslatable(query: string): boolean {
@@ -160,10 +165,8 @@ function translateQuery(
     .replace(/\.distinct\b(?!\()/g, ".distinct()")
     .replace(/\.not\b(?!\()/g, ".not()")
     .replace(/\.desc\b(?!\()/g, ".desc()")
-    .replace(/\.asc\b(?!\()/g, ".asc()")
-    // ~ (bitwise NOT) is complex when applied to sub-expressions — emit TODO.
-    // The committed arel-30/query.ts uses new Nodes.BitwiseNot(...) directly.
-    .replace(/~\S+/, "/* TODO: new Nodes.BitwiseNot(...) */");
+    .replace(/\.asc\b(?!\()/g, ".asc()");
+  // (~ is caught by NON_TRANSLATABLE above; no rule needed here)
   // NOTE: Ruby infix arithmetic (+, -, *, /) cannot be reliably rewritten
   // to method chains (.add/.subtract/.multiply/.divide) with regex; those
   // fixtures are hand-translated in query.ts directly.

@@ -1086,4 +1086,69 @@ describe("ValidationsTest", () => {
       expect(t.validationContext).toBe(null);
     });
   });
+
+  describe("_validators hash-of-arrays (Rails fidelity)", () => {
+    // Rails `_validators = Hash.new { |h, k| h[k] = [] }`
+    // (activemodel/lib/active_model/validations.rb:50) — per-attribute
+    // buckets, O(1) `validators_on`, dup-in-inherited.
+    it("validatorsOn is O(1) per-attribute lookup", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.attribute("age", "integer");
+          this.validates("name", { presence: true });
+          this.validates("age", { numericality: true });
+        }
+      }
+      expect(Person.validatorsOn("name")).toHaveLength(1);
+      expect(Person.validatorsOn("age")).toHaveLength(1);
+      expect(Person.validatorsOn("nonexistent")).toEqual([]);
+    });
+
+    it("validators() returns a uniq flat list across all attribute buckets", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.attribute("email", "string");
+          // validates_each binds one validator across two attributes —
+          // it lands in both buckets and must still appear once via
+          // `validators()` (Rails: `_validators.values.flatten.uniq`).
+          this.validatesEach(["name", "email"], () => {});
+        }
+      }
+      expect(Person.validators()).toHaveLength(1);
+      expect(Person.validatorsOn("name")).toHaveLength(1);
+      expect(Person.validatorsOn("email")).toHaveLength(1);
+      expect(Person.validatorsOn("name")[0]).toBe(Person.validatorsOn("email")[0]);
+    });
+
+    it("subclass inherits validators but its changes don't leak up", () => {
+      class Base extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { presence: true });
+        }
+      }
+      class Child extends Base {}
+      // Subclass sees parent's validators…
+      expect(Child.validatorsOn("name")).toHaveLength(1);
+      // …and adding one on the subclass must not affect the parent.
+      Child.validates("name", { length: { minimum: 2 } });
+      expect(Child.validatorsOn("name")).toHaveLength(2);
+      expect(Base.validatorsOn("name")).toHaveLength(1);
+    });
+
+    it("clearValidators! empties the map", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { presence: true });
+        }
+      }
+      expect(Person.validators()).toHaveLength(1);
+      Person.clearValidatorsBang();
+      expect(Person.validators()).toEqual([]);
+      expect(Person.validatorsOn("name")).toEqual([]);
+    });
+  });
 });

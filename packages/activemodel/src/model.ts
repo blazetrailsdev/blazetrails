@@ -71,7 +71,12 @@ export class Model {
   static _attributeAliases: Record<string, string> = {};
   static _aliasesByAttributeName: Map<string, string[]> = new Map();
   static _generatedMethods: Set<string> = new Set();
-  static _validators: Array<ValidatorBase | EachValidator> = [];
+  // Rails: `class_attribute :_validators, … default: Hash.new { |h, k| h[k] = [] }`
+  // (activemodel/lib/active_model/validations.rb:50). Map keyed by attribute
+  // name (or `null` for validators registered without `attributes:`). O(1)
+  // `validatorsOn(attr)` and matches Rails' per-attribute dup semantics in
+  // `inherited(base)` (validations.rb:287-291).
+  static _validators: Map<string | null, Array<ValidatorBase | EachValidator>> = new Map();
   static _callbackChain: CallbackChain = new CallbackChain();
   private static _modelName: ModelName | null = null;
 
@@ -352,7 +357,8 @@ export class Model {
   }
 
   static clearValidatorsBang(): void {
-    this._validators = [];
+    // Rails: `_validators.clear` (activemodel/lib/active_model/validations.rb:248).
+    this._validators = new Map();
     this._ensureOwnCallbacks();
     this._callbackChain.clearEvent("validate");
   }
@@ -387,8 +393,7 @@ export class Model {
     options: ConditionalOptions = {},
   ): void {
     const validator = new BlockValidator({ attributes, ...options }, fn);
-    this._ensureOwnValidators();
-    this._validators.push(validator);
+    this._registerValidator(validator);
     this._ensureOwnCallbacks();
     this._callbackChain.register(
       "before",
@@ -434,8 +439,7 @@ export class Model {
           (validator as AnyRecord).checkValidityBang();
         }
       }
-      this._ensureOwnValidators();
-      this._validators.push(validator as ValidatorBase);
+      this._registerValidator(validator as ValidatorBase);
 
       let callbackFn: CallbackFn;
       if (isStrict) {
@@ -467,19 +471,27 @@ export class Model {
    * Mirrors: ActiveModel::Validations.validators
    */
   static validators(): Array<ValidatorBase | EachValidator> {
-    return [...this._validators];
+    // Rails: `_validators.values.flatten.uniq`
+    // (activemodel/lib/active_model/validations.rb:204-206).
+    const seen = new Set<ValidatorBase | EachValidator>();
+    const out: Array<ValidatorBase | EachValidator> = [];
+    for (const bucket of this._validators.values()) {
+      for (const v of bucket) {
+        if (seen.has(v)) continue;
+        seen.add(v);
+        out.push(v);
+      }
+    }
+    return out;
   }
 
   /**
-   * Return validators registered for a specific attribute.
-   *
-   * Mirrors: ActiveModel::Validations.validators_on
+   * Return validators registered for a specific attribute. O(1) lookup —
+   * Rails `_validators[attribute.to_sym]`
+   * (activemodel/lib/active_model/validations.rb:266-270).
    */
   static validatorsOn(attribute: string): Array<ValidatorBase | EachValidator> {
-    return this._validators.filter((v) => {
-      const attributes = (v as AnyRecord).attributes;
-      return Array.isArray(attributes) && attributes.includes(attribute);
-    });
+    return this._validators.get(attribute) ?? [];
   }
 
   // -- Individual validator helper methods --
@@ -852,8 +864,34 @@ export class Model {
   }
 
   private static _ensureOwnValidators(): void {
+    // Rails: `dup = _validators.dup; base._validators = dup.each { |k, v| dup[k] = v.dup }`
+    // (activemodel/lib/active_model/validations.rb:287-291). Each subclass
+    // gets an independent top-level Map whose per-attribute arrays are also
+    // fresh — so push/delete on the subclass never leaks back up the chain.
     if (!Object.prototype.hasOwnProperty.call(this, "_validators")) {
-      this._validators = [...this._validators];
+      const cloned = new Map<string | null, Array<ValidatorBase | EachValidator>>();
+      for (const [k, arr] of this._validators) cloned.set(k, [...arr]);
+      this._validators = cloned;
+    }
+  }
+
+  /**
+   * Register `validator` under each of its declared attributes (or under
+   * the `null` key when none are declared — Rails matches this in
+   * `validates_with` via `_validators[nil] << validator`).
+   */
+  private static _registerValidator(validator: ValidatorBase | EachValidator): void {
+    this._ensureOwnValidators();
+    const attrs = (validator as AnyRecord).attributes;
+    const keys: Array<string | null> =
+      Array.isArray(attrs) && attrs.length > 0 ? attrs.map(String) : [null];
+    for (const key of keys) {
+      let bucket = this._validators.get(key);
+      if (!bucket) {
+        bucket = [];
+        this._validators.set(key, bucket);
+      }
+      bucket.push(validator);
     }
   }
 

@@ -18,7 +18,6 @@ import {
   DeleteRestrictionError,
   touchBelongsToParents,
 } from "./index.js";
-import { AssociationNotFoundError } from "./associations/errors.js";
 import { createTestAdapter } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
 import {

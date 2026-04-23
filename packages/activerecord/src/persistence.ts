@@ -282,6 +282,8 @@ export function isPreviouslyPersisted(this: PersistenceRecordDispatch): boolean 
 /** Read/write contract used by every increment/decrement/toggle function. */
 interface AttributeIO {
   readAttribute(name: string): unknown;
+  _readAttribute(name: string): unknown;
+  _writeAttribute(name: string, value: unknown): void;
   writeAttribute(name: string, value: unknown): void;
 }
 
@@ -307,8 +309,8 @@ interface ToggleBangRecord extends AttributeIO {
 
 /** Mirrors: ActiveRecord::Persistence#increment */
 export function increment<T extends AttributeIO>(this: T, attribute: string, by: number = 1): T {
-  const current = Number(this.readAttribute(attribute)) || 0;
-  this.writeAttribute(attribute, current + by);
+  const current = Number(this._readAttribute(attribute)) || 0;
+  this._writeAttribute(attribute, current + by);
   return this;
 }
 
@@ -327,7 +329,7 @@ export function decrement<T extends AttributeIO & { increment(a: string, b?: num
 
 /** Mirrors: ActiveRecord::Persistence#toggle */
 export function toggle<T extends AttributeIO>(this: T, attribute: string): T {
-  this.writeAttribute(attribute, !this.readAttribute(attribute));
+  this._writeAttribute(attribute, !this._readAttribute(attribute));
   return this;
 }
 
@@ -509,6 +511,7 @@ interface SaveRecord {
   _newRecord: boolean;
   _attributes: { set(key: string, val: unknown): void };
   readAttribute(name: string): unknown;
+  _readAttribute(name: string): unknown;
   constructor: {
     name: string;
     _attributeDefinitions: Map<string, unknown>;
@@ -545,7 +548,7 @@ export async function save<T extends SaveRecord>(
   // Auto-set STI type column on new records
   if (this._newRecord && isStiSubclass(ctor)) {
     const col = getInheritanceColumn(getStiBase(ctor));
-    if (col && !this.readAttribute(col)) {
+    if (col && !this._readAttribute(col)) {
       this._attributes.set(col, this.constructor.name);
     }
   }

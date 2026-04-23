@@ -51,7 +51,7 @@ export function composedOf(
   // Getter: read mapped attributes and instantiate the value object
   Object.defineProperty(modelClass.prototype, name, {
     get(this: Base): unknown {
-      const args = options.mapping.map(([modelAttr]) => this.readAttribute(modelAttr));
+      const args = options.mapping.map(([modelAttr]) => this._readAttribute(modelAttr));
       // If all args are null, return null
       if (args.every((a) => a === null || a === undefined)) return null;
       return new options.className(...args);
@@ -59,7 +59,7 @@ export function composedOf(
     set(this: Base, value: unknown): void {
       if (value === null || value === undefined) {
         for (const [modelAttr] of options.mapping) {
-          this.writeAttribute(modelAttr, null);
+          this._writeAttribute(modelAttr, null);
         }
         return;
       }
@@ -67,7 +67,7 @@ export function composedOf(
       // If it's an instance of the class, decompose it
       if (value instanceof options.className) {
         for (const [modelAttr, valueAttr] of options.mapping) {
-          this.writeAttribute(modelAttr, (value as any)[valueAttr]);
+          this._writeAttribute(modelAttr, (value as any)[valueAttr]);
         }
         return;
       }
@@ -77,7 +77,7 @@ export function composedOf(
         const converted = options.converter(value);
         if (converted instanceof options.className) {
           for (const [modelAttr, valueAttr] of options.mapping) {
-            this.writeAttribute(modelAttr, (converted as any)[valueAttr]);
+            this._writeAttribute(modelAttr, (converted as any)[valueAttr]);
           }
         }
       }

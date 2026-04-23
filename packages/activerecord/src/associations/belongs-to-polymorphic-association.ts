@@ -84,8 +84,8 @@ export class BelongsToPolymorphicAssociation extends BelongsToAssociation {
   private readForeignType(): string | null {
     const ft = this.foreignTypeName();
     const value =
-      typeof this.owner.readAttribute === "function"
-        ? this.owner.readAttribute(ft)
+      typeof (this.owner as any)._readAttribute === "function"
+        ? (this.owner as any)._readAttribute(ft)
         : (this.owner as any)[ft];
     return (value as string) ?? null;
   }

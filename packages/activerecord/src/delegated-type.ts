@@ -61,7 +61,7 @@ export function delegatedType(
   // Add instance method: delegatedClass (e.g. entryableClass)
   Object.defineProperty(modelClass.prototype, `${role}Class`, {
     get(this: Base) {
-      const typeName = this.readAttribute(foreignType) as string | null;
+      const typeName = this._readAttribute(foreignType) as string | null;
       if (!typeName) return null;
       return typeName;
     },
@@ -71,7 +71,7 @@ export function delegatedType(
   // Add instance method: delegatedName (e.g. entryableName)
   Object.defineProperty(modelClass.prototype, `${role}Name`, {
     get(this: Base) {
-      const typeName = this.readAttribute(foreignType) as string | null;
+      const typeName = this._readAttribute(foreignType) as string | null;
       if (!typeName) return null;
       return typeName.toLowerCase().replace(/.*::/, "");
     },
@@ -85,7 +85,7 @@ export function delegatedType(
     // Type predicate: isMessage(), isComment()
     Object.defineProperty(modelClass.prototype, `is${typeName}`, {
       value: function (this: Base): boolean {
-        return this.readAttribute(foreignType) === typeName;
+        return this._readAttribute(foreignType) === typeName;
       },
       writable: true,
       configurable: true,
@@ -106,8 +106,8 @@ export function delegatedType(
     // Accessor: entry.message → returns the record if type matches
     Object.defineProperty(modelClass.prototype, snakeName, {
       get(this: Base) {
-        if (this.readAttribute(foreignType) !== typeName) return null;
-        return this.readAttribute(foreignKey);
+        if (this._readAttribute(foreignType) !== typeName) return null;
+        return this._readAttribute(foreignKey);
       },
       configurable: true,
     });
@@ -115,9 +115,9 @@ export function delegatedType(
     // Builder method: entry.buildMessage(attrs) → sets type and returns
     Object.defineProperty(modelClass.prototype, `build${typeName}`, {
       value: function (this: Base, attrs: Record<string, unknown> = {}): Base {
-        this.writeAttribute(foreignType, typeName);
+        this._writeAttribute(foreignType, typeName);
         for (const [k, v] of Object.entries(attrs)) {
-          this.writeAttribute(k, v);
+          this._writeAttribute(k, v);
         }
         return this;
       },

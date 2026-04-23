@@ -186,10 +186,10 @@ export function aliasAttributeMethodDefinition(
   if (this.prototype && !(newName in this.prototype)) {
     Object.defineProperty(this.prototype, newName, {
       get(this: any) {
-        return this.readAttribute(oldName);
+        return this._readAttribute(oldName);
       },
       set(this: any, value: unknown) {
-        this.writeAttribute(oldName, value);
+        this._writeAttribute(oldName, value);
       },
       configurable: true,
     });
@@ -208,10 +208,10 @@ export function defineAttributeMethods(this: AttributeMethodsHost): boolean {
     if (Object.prototype.hasOwnProperty.call(this.prototype, name)) continue;
     Object.defineProperty(this.prototype, name, {
       get(this: any) {
-        return this.readAttribute(name);
+        return this._readAttribute(name);
       },
       set(this: any, value: unknown) {
-        this.writeAttribute(name, value);
+        this._writeAttribute(name, value);
       },
       configurable: true,
     });

@@ -7,6 +7,18 @@ import { _CollectionProxyCtor } from "./associations/collection-proxy-slot.js";
 export { _setCollectionProxyCtor } from "./associations/collection-proxy-slot.js";
 
 /**
+ * Forces all association-related modules to load eagerly. Mirrors
+ * Rails' `ActiveRecord::Associations.eager_load!` which calls
+ * `Preloader.eager_load!` and `JoinDependency.eager_load!` — the
+ * Ruby autoload equivalent of our dynamic-import initialization.
+ *
+ * Mirrors: ActiveRecord::Associations.eager_load!
+ */
+export async function eagerLoadBang(): Promise<void> {
+  await initializeAssociations();
+}
+
+/**
  * Explicit initialization hook for subpath consumers.
  *
  * The package entry (`@blazetrails/activerecord`) loads
@@ -20,18 +32,6 @@ export { _setCollectionProxyCtor } from "./associations/collection-proxy-slot.js
  * dependency cycle (associations → CP → Relation → Base →
  * associations) that forced the late-binding in the first place.
  */
-/**
- * Forces all association-related modules to load eagerly. Mirrors
- * Rails' `ActiveRecord::Associations.eager_load!` which calls
- * `Preloader.eager_load!` and `JoinDependency.eager_load!` — the
- * Ruby autoload equivalent of our dynamic-import initialization.
- *
- * Mirrors: ActiveRecord::Associations.eager_load!
- */
-export async function eagerLoadBang(): Promise<void> {
-  await initializeAssociations();
-}
-
 export async function initializeAssociations(): Promise<void> {
   // Load both ctor slots. `association-relation.js` imports
   // `collection-proxy.js` for the late-bind ctor setter, so importing

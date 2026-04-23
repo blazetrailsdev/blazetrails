@@ -7991,3 +7991,19 @@ describe("CollectionProxyDelegation", () => {
     expect(reflectOnAllAssociations(BtAuthor).map((r) => r.name)).toContain("bt_tags");
   });
 });
+
+describe("eagerLoadBang", () => {
+  it("initializes CollectionProxy and association() without error", async () => {
+    const { eagerLoadBang, association } = await import("./associations.js");
+    await expect(eagerLoadBang()).resolves.toBeUndefined();
+
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = createTestAdapter();
+      }
+    }
+    const post = new Post({ title: "hi" });
+    expect(() => association(post, "nonexistent")).toThrow();
+  });
+});

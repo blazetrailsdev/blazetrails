@@ -71,11 +71,16 @@ export function attribute(
   },
 ): void {
   const type = typeRegistry.lookup(typeName);
-  const defaultValue = options?.default ?? null;
   const userProvided = options?.userProvidedDefault !== false;
   if (!Object.prototype.hasOwnProperty.call(this, "_attributeDefinitions")) {
     this._attributeDefinitions = new Map(this._attributeDefinitions);
   }
+  const existing = this._attributeDefinitions.get(name);
+  // Preserve the existing defaultValue when no default is explicitly provided,
+  // matching Rails' PendingType behavior: with_type only changes the type and
+  // leaves the current default/value untouched.
+  const defaultValue =
+    options?.default !== undefined ? options.default : (existing?.defaultValue ?? null);
   this._attributeDefinitions.set(name, {
     name,
     type,

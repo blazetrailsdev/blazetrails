@@ -117,11 +117,12 @@ export function defineAttribute(
  *
  * Mirrors: ActiveRecord::Attributes::ClassMethods#_default_attributes
  *
- * Seeds from schema-reflected columns (`_attributeDefinitions` where
- * `source === "schema"`) using `Attribute.fromDatabase` for each column,
- * then replays user-declared `attribute()` calls from the pending-modification
- * queue. This matches Rails' two-phase approach: `columns_hash` seed →
- * `apply_pending_attribute_modifications`.
+ * Seeds from `_attributeDefinitions` (all entries — the equivalent of Rails'
+ * `columns_hash`) then replays user-declared `attribute()` calls from the
+ * pending-modification queue. Schema entries are built with
+ * `Attribute.fromDatabase`; direct `defineAttribute()` entries use
+ * `withCastValue`/`withUserDefault`. Matches Rails' two-phase approach:
+ * `columns_hash` seed → `apply_pending_attribute_modifications`.
  */
 export function _defaultAttributes(this: AnyClass): AttributeSet {
   // For STI subclasses, delegate to the STI base so cache invalidation
@@ -131,10 +132,12 @@ export function _defaultAttributes(this: AnyClass): AttributeSet {
     : this;
 
   if (!cacheHost._cachedDefaultAttributes) {
-    // Phase 1: seed from _attributeDefinitions — the equivalent of Rails'
-    // columns_hash.transform_values { Attribute.from_database(...) }. This
-    // covers both schema-reflected columns (source: "schema") and any
-    // direct defineAttribute() calls (source: "user").
+    // Phase 1: seed from _attributeDefinitions (all entries — schema-reflected
+    // columns and direct defineAttribute() calls). Schema entries use
+    // Attribute.fromDatabase; user entries use withCastValue + withUserDefault.
+    // Mirrors: columns_hash.transform_values { Attribute.from_database(...) }
+    // (our _attributeDefinitions is the equivalent of columns_hash since both
+    // schema and user-direct entries live there).
     const defs: Map<string, AttributeDefinition> = cacheHost._attributeDefinitions;
     const attrMap = new Map<string, Attribute>();
     for (const [name, def] of defs) {

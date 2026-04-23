@@ -1,0 +1,63 @@
+# frozen_string_literal: true
+
+require "bundler/setup"
+require "minitest/autorun"
+require "json"
+require "tmpdir"
+require "open3"
+
+# Integration tests for dump.rb — runs the script against real fixtures.
+# Must be run from the repo root.
+
+DUMP_SCRIPT = File.expand_path("dump.rb", __dir__)
+FIXTURES    = File.expand_path("../../fixtures", __dir__)
+
+def run_dump(fixture, frozen_at: nil)
+  out = Dir::Tmpname.make_tmpname("/tmp/parity-test-", ".json")
+  cmd = ["ruby", DUMP_SCRIPT, "#{FIXTURES}/#{fixture}", out]
+  cmd += ["--frozen-at", frozen_at] if frozen_at
+  stdout, stderr, status = Open3.capture3(*cmd)
+  [status.exitstatus, stdout, stderr, out]
+end
+
+class DumpTest < Minitest::Test
+  def test_arel_01_table_object
+    code, _stdout, stderr, out_path = run_dump("arel-01")
+    assert_equal 0, code, "dump failed: #{stderr}"
+    result = JSON.parse(File.read(out_path))
+    assert_equal 1,         result["version"]
+    assert_equal "arel-01", result["fixture"]
+    assert_match(/"users"/i, result["sql"])
+    assert_equal [],        result["binds"]
+  ensure
+    File.delete(out_path) if File.exist?(out_path)
+  end
+
+  def test_arel_06_eq_predicate
+    code, _stdout, stderr, out_path = run_dump("arel-06")
+    assert_equal 0, code, "dump failed: #{stderr}"
+    result = JSON.parse(File.read(out_path))
+    assert_match(/"users"\."name" = /i, result["sql"])
+  ensure
+    File.delete(out_path) if File.exist?(out_path)
+  end
+
+  def test_arel_09_lt_predicate
+    code, _stdout, stderr, out_path = run_dump("arel-09")
+    assert_equal 0, code, "dump failed: #{stderr}"
+    result = JSON.parse(File.read(out_path))
+    assert_match(/"users"\."age" < /i, result["sql"])
+  ensure
+    File.delete(out_path) if File.exist?(out_path)
+  end
+
+  def test_frozen_at_forwarded
+    frozen = "2026-01-01T00:00:00.000Z"
+    code, _stdout, stderr, out_path = run_dump("arel-01", frozen_at: frozen)
+    assert_equal 0, code, "dump failed: #{stderr}"
+    result = JSON.parse(File.read(out_path))
+    assert_equal frozen, result["frozenAt"]
+  ensure
+    File.delete(out_path) if File.exist?(out_path)
+  end
+end

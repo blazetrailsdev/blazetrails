@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   AdditionalValue,
+  EncryptedQuery,
   ExtendedDeterministicQueries,
   ExtendedEncryptableType,
   RelationQueries,
@@ -51,6 +52,63 @@ describe("ActiveRecord::Encryption::ExtendedDeterministicQueries::AdditionalValu
     const type = makeType();
     const av = new AdditionalValue("42", type);
     expect(+av).toBe(42);
+  });
+});
+
+describe("ActiveRecord::Encryption::ExtendedDeterministicQueries::EncryptedQuery#processArguments", () => {
+  // Use a deterministic scheme with a previous scheme so expansion
+  // actually produces AdditionalValue wrappers we can assert on.
+  function modelWithDeterministicEmail() {
+    const prev = new Scheme({ deterministic: true, encryptor: new NullEncryptor() });
+    const type = new EncryptedAttributeType({
+      scheme: new Scheme({
+        deterministic: true,
+        encryptor: new NullEncryptor(),
+        previousSchemes: [prev],
+      }),
+    });
+    return {
+      _encryptedAttributes: new Set(["email"]),
+      _attributeDefinitions: new Map([["email", { type }]]),
+    };
+  }
+
+  it("short-circuits when checkForAdditionalValues=true and the last array element is an AdditionalValue", () => {
+    // Rails: `return value if check_for_additional_values && value.last.is_a?(AdditionalValue)`.
+    // Prevents a chained `.where()` on the same relation from re-expanding
+    // an already-expanded condition into AV-of-AV.
+    const model = modelWithDeterministicEmail();
+    const type = (model._attributeDefinitions.get("email") as any).type as EncryptedAttributeType;
+    const already = [new AdditionalValue("x", type)];
+    const out = EncryptedQuery.processArguments(model, [{ email: already }], true) as [
+      Record<string, unknown>,
+    ];
+    expect(out[0].email).toBe(already);
+  });
+
+  it("does not short-circuit when checkForAdditionalValues=false (findBy path always expands)", () => {
+    const model = modelWithDeterministicEmail();
+    const type = (model._attributeDefinitions.get("email") as any).type as EncryptedAttributeType;
+    const already = [new AdditionalValue("x", type)];
+    const [out] = EncryptedQuery.processArguments(model, [{ email: already }], false) as [
+      Record<string, unknown[]>,
+    ];
+    // Without short-circuit, the AV is re-expanded (wrapped in a fresh AV).
+    expect(out.email.length).toBeGreaterThan(already.length);
+  });
+
+  it("preserves in-place AdditionalValue elements when checkForAdditionalValues=true", () => {
+    // Rails: within flat_map, `each_value` that is already an AV passes
+    // through untouched instead of running through additional_values_for.
+    const model = modelWithDeterministicEmail();
+    const type = (model._attributeDefinitions.get("email") as any).type as EncryptedAttributeType;
+    const av = new AdditionalValue("x", type);
+    // Mix: a plaintext AND an AV that isn't last — so the whole-array
+    // short-circuit doesn't apply, but the per-element check should.
+    const [out] = EncryptedQuery.processArguments(model, [{ email: [av, "y"] }], true) as [
+      Record<string, unknown[]>,
+    ];
+    expect(out.email[0]).toBe(av);
   });
 });
 

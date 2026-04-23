@@ -126,12 +126,34 @@ export class EncryptedQuery {
 
   private static processEncryptedQueryArgument(
     value: unknown,
-    _checkForAdditionalValues: boolean,
+    checkForAdditionalValues: boolean,
     type: EncryptedAttributeType,
   ): unknown {
     if (value === null) return value;
+
+    // Rails' process_encrypted_query_argument short-circuits when the
+    // caller is a Relation (`where`/`exists?`) and the value is already
+    // an expanded array whose last element is an AdditionalValue — that
+    // means a previous `where` on the same relation already ran
+    // processArguments, and re-expanding would produce AV-of-AV. Only
+    // checked for Relation paths (checkForAdditionalValues=true);
+    // `findBy` via CoreQueries uses false and always expands because
+    // its inputs come straight from the user.
+    if (
+      checkForAdditionalValues &&
+      Array.isArray(value) &&
+      value.length > 0 &&
+      value[value.length - 1] instanceof AdditionalValue
+    ) {
+      return value;
+    }
+
     if (Array.isArray(value)) {
-      return value.flatMap((v) => (v === null ? [v] : this.allCiphertextsFor(v, type)));
+      return value.flatMap((v) => {
+        if (v === null) return [v];
+        if (checkForAdditionalValues && v instanceof AdditionalValue) return [v];
+        return this.allCiphertextsFor(v, type);
+      });
     }
     return this.allCiphertextsFor(value, type);
   }

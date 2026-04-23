@@ -38,11 +38,18 @@ export function prepend<T extends object>(target: T, mod: PrependModule): void {
     throw new TypeError("prepend: target must be an object or function");
   }
 
-  // Pre-validate every method exists before mutating anything. Mirrors
-  // Rails' all-or-nothing `Module#prepend` — a missing method should
-  // leave the target state untouched instead of applying partial wraps.
+  // Pre-validate every method exists on the target and every wrapper
+  // value is actually a function, before mutating anything. Mirrors
+  // Rails' all-or-nothing `Module#prepend` — a missing method or
+  // malformed module value should leave the target state untouched
+  // instead of applying partial wraps.
   const names = Object.keys(mod);
   for (const name of names) {
+    if (typeof mod[name] !== "function") {
+      throw new TypeError(
+        `prepend: module entry ${name} must be a function, got ${typeof mod[name]}`,
+      );
+    }
     const original = (target as Record<string, unknown>)[name];
     if (typeof original !== "function") {
       throw new Error(`prepend: cannot wrap ${name} — target has no method with that name`);

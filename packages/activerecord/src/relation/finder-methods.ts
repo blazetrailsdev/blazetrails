@@ -8,6 +8,7 @@
  * Mirrors: ActiveRecord::FinderMethods
  */
 
+import { ActiveModelRangeError } from "@blazetrails/activemodel";
 import { RecordNotFound, RecordNotSaved, RecordNotUnique, SoleRecordExceeded } from "../errors.js";
 
 // ---------------------------------------------------------------------------
@@ -275,11 +276,13 @@ export async function performFindBy(
     const records = await this.where(conditions).limit(1).toArray();
     return records[0] ?? null;
   } catch (err) {
-    // Rails: `find_by` returns nil for out-of-range values (e.g. an
-    // integer larger than the column width). Nothing matches such a
-    // value, so there's nothing to find. Our IntegerType.serialize
-    // surfaces this as a RangeError; treat it the same.
-    if (err instanceof RangeError) return null;
+    // Rails: `find_by` returns nil for values that can't be serialized
+    // for the attribute's type (e.g. an integer larger than the column
+    // width). Rails catches `::RangeError` at the statement-cache
+    // bind layer; we don't have that layer, so scope the catch to the
+    // typed `ActiveModelRangeError` thrown by `IntegerType.serialize`
+    // — a broader `RangeError` catch would mask unrelated errors.
+    if (err instanceof ActiveModelRangeError) return null;
     throw err;
   }
 }

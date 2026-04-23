@@ -2338,7 +2338,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     columnName: string,
     defaultOrChanges: unknown,
   ): Promise<ChangeColumnDefaultDefinition | undefined> {
-    const col = (await this.columns(tableName)).find((c) => (c as Column).name === columnName);
+    const col = (await this.columns(tableName)).find((c) => c.name === columnName);
     if (!col) return undefined;
     const defaultValue =
       defaultOrChanges !== null &&
@@ -2346,10 +2346,9 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       "to" in (defaultOrChanges as object)
         ? (defaultOrChanges as { to: unknown }).to
         : defaultOrChanges;
-    const pgCol = col as Column;
-    const semanticType = (pgCol.type ?? "string") as ColumnType;
+    const semanticType = (col.type ?? "string") as ColumnType;
     const cd = new ColumnDefinition(columnName, semanticType);
-    cd.sqlType = pgCol.sqlType ?? undefined;
+    cd.sqlType = col.sqlType ?? undefined;
     return new ChangeColumnDefaultDefinition(cd, defaultValue);
   }
 

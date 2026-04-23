@@ -860,9 +860,14 @@ describeIfPg("PostgreSQLAdapter", () => {
 
   describe("buildChangeColumnDefaultDefinition", () => {
     beforeEach(async () => {
-      await adapter.exec(
-        `CREATE TABLE "bcd_test" ("id" SERIAL PRIMARY KEY, "score" INTEGER DEFAULT 0)`,
-      );
+      await adapter.exec(`
+        CREATE TABLE "bcd_test" (
+          "id" SERIAL PRIMARY KEY,
+          "score" INTEGER DEFAULT 0,
+          "created_at" TIMESTAMP WITHOUT TIME ZONE,
+          "tags" TEXT[]
+        )
+      `);
     });
 
     afterEach(async () => {
@@ -876,6 +881,25 @@ describeIfPg("PostgreSQLAdapter", () => {
       expect(def!.default).toBe(42);
       expect(def!.column.type).toBe("integer");
       expect(def!.column.sqlType).toBe("integer");
+    });
+
+    it("preserves semantic type and raw sqlType for timestamp column", async () => {
+      const def = await adapter.buildChangeColumnDefaultDefinition(
+        "bcd_test",
+        "created_at",
+        "NOW()",
+      );
+      expect(def).toBeDefined();
+      expect(def!.column.name).toBe("created_at");
+      expect(def!.column.type).toBe("timestamp");
+      expect(def!.column.sqlType).toMatch(/timestamp/i);
+    });
+
+    it("preserves array column type", async () => {
+      const def = await adapter.buildChangeColumnDefaultDefinition("bcd_test", "tags", "{}");
+      expect(def).toBeDefined();
+      expect(def!.column.name).toBe("tags");
+      expect(def!.column.sqlType).toMatch(/text/i);
     });
 
     it("extracts :to from an object with a to key", async () => {

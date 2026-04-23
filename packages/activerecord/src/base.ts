@@ -2790,6 +2790,8 @@ include(Base, LockingPessimistic.InstanceMethods);
 include(Base, Timestamp.InstanceMethods);
 include(Base, TouchLater.InstanceMethods);
 include(Base, _Aggregations.InstanceMethods);
+// Aggregations#reload must override Persistence#reload (include() won't replace).
+(Base.prototype as any).reload = _Aggregations.reload;
 include(Base, AutosaveAssociation);
 include(Base, _AssocInstance.InstanceMethods);
 include(Base, {

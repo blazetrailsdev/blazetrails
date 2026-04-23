@@ -427,7 +427,10 @@ describe("AggregationsTest", () => {
     const addr1 = (c as any).address;
     expect(addr1.city).toBe("BOS");
 
-    c.address_city = "CHI";
+    // Bypass the cache by writing directly to DB, then reload to clear it —
+    // mirrors the Rails test (update_all + reload to flush @aggregation_cache).
+    await c.updateColumn("address_city", "CHI");
+    await c.reload();
     const addr2 = (c as any).address;
     expect(addr2.city).toBe("CHI");
   });

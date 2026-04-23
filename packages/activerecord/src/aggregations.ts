@@ -2,32 +2,53 @@ import type { Base } from "./base.js";
 import { reload as persistenceReload } from "./persistence.js";
 
 /**
- * Aggregation cache lifecycle hooks mixed into every model.
- *
- * Rails memoizes composed-of value objects in an `@aggregation_cache` hash.
- * Our implementation computes value objects on the fly (no cache), so the
- * cache management methods are no-ops — but the API surface must be present.
+ * Aggregation cache — memoizes composed-of value objects so repeated reads
+ * return the same frozen instance instead of allocating new ones each time.
  *
  * Mirrors: ActiveRecord::Aggregations
  */
 
+// ---------------------------------------------------------------------------
+// Cache accessors used by composed-of.ts
+// ---------------------------------------------------------------------------
+
+export function getAggregationCache(record: Base): Map<string, unknown> {
+  const self = record as any;
+  if (!self._aggregationCache) self._aggregationCache = new Map<string, unknown>();
+  return self._aggregationCache as Map<string, unknown>;
+}
+
+export function clearAggregationCache(record: Base): void {
+  if (record.isPersisted()) {
+    getAggregationCache(record).clear();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Public instance methods
+// ---------------------------------------------------------------------------
+
 /**
- * Dup the aggregation cache when the record is duped.
- * No-op: our composed-of computes on the fly with no cache.
+ * Dup the aggregation cache so the duped record gets independent memoized
+ * value objects.
  *
  * Mirrors: ActiveRecord::Aggregations#initialize_dup
  */
 export function initializeDup(this: Base, _other: unknown): void {
-  // Our composed-of accessors are computed on demand — nothing to dup.
+  const self = this as any;
+  if (self._aggregationCache) {
+    self._aggregationCache = new Map(self._aggregationCache as Map<string, unknown>);
+  }
 }
 
 /**
- * Clear the aggregation cache before reloading from the database.
- * No-op cache clear since we have no cache; delegates to persistence reload.
+ * Clear the aggregation cache before reloading from the database so stale
+ * value objects are not returned after the reload.
  *
  * Mirrors: ActiveRecord::Aggregations#reload
  */
 export async function reload(this: Base): Promise<Base> {
+  clearAggregationCache(this);
   return (persistenceReload as unknown as (this: Base) => Promise<Base>).call(this);
 }
 

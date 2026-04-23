@@ -1122,6 +1122,36 @@ describe("ValidationsTest", () => {
       expect(Person.validatorsOn("name")[0]).toBe(Person.validatorsOn("email")[0]);
     });
 
+    it("inheritance is copy-on-first-write (subclass sees parent writes made before its own first write)", () => {
+      // Documented divergence from Rails. Rails' `inherited(base)` hook runs
+      // eagerly at `class Child < Base; end` time and snapshots
+      // `_validators`, so subsequent `Base.validates` additions don't reach
+      // `Child`. JS has no `inherited` hook that fires at subclass
+      // definition, so we defer the dup until Child's first write. In this
+      // window, Child still reads Base's Map via the prototype chain.
+      class Base extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validates("name", { presence: true });
+        }
+      }
+      class Child extends Base {}
+      expect(Child.validatorsOn("name")).toHaveLength(1);
+      // Parent adds another validator AFTER Child is defined, and Child has
+      // not yet registered anything of its own. Copy-on-first-write
+      // semantics: Child still sees Base's map, so the new validator
+      // propagates.
+      Base.validates("name", { length: { minimum: 2 } });
+      expect(Child.validatorsOn("name")).toHaveLength(2);
+      // As soon as Child writes, it detaches. Further Base writes stay on
+      // Base.
+      Child.validates("name", { length: { maximum: 10 } });
+      Base.validates("name", { format: { with: /x/ } });
+      expect(Child.validatorsOn("name")).toHaveLength(3);
+      expect(Base.validatorsOn("name")).toHaveLength(3);
+      expect(Child.validatorsOn("name")).not.toContain(Base.validatorsOn("name")[2]);
+    });
+
     it("subclass inherits validators but its changes don't leak up", () => {
       class Base extends Model {
         static {

@@ -81,9 +81,19 @@ export class Model {
   static _generatedMethods: Set<string> = new Set();
   // Rails: `class_attribute :_validators, … default: Hash.new { |h, k| h[k] = [] }`
   // (activemodel/lib/active_model/validations.rb:50). Map keyed by attribute
-  // name (or `null` for validators registered without `attributes:`). O(1)
-  // `validatorsOn(attr)` and matches Rails' per-attribute dup semantics in
-  // `inherited(base)` (validations.rb:287-291).
+  // name (or `null` for validators registered without `attributes:`); O(1)
+  // `validatorsOn(attr)` via direct bucket lookup.
+  //
+  // Subclass isolation is copy-on-first-write rather than Rails'
+  // eager-on-`inherited`. JS has no `inherited` hook that fires when a
+  // subclass is defined, so we defer the dup until the subclass first
+  // writes (see `_ensureOwnValidators`). Behavioral consequence: if a
+  // subclass never registers its own validator, it keeps reading through
+  // the prototype chain and will see validators the parent adds *after*
+  // the subclass was defined. Identical in all cases where a subclass
+  // registers at least one validator (the standard pattern for
+  // `static { this.validates(...) }` blocks at class-definition time);
+  // only the "defined but never written to" window diverges from Rails.
   static _validators: Map<string | null, Array<ValidatorLike>> = new Map();
   static _callbackChain: CallbackChain = new CallbackChain();
   private static _modelName: ModelName | null = null;
@@ -894,10 +904,13 @@ export class Model {
   }
 
   private static _ensureOwnValidators(): void {
-    // Rails: `dup = _validators.dup; base._validators = dup.each { |k, v| dup[k] = v.dup }`
-    // (activemodel/lib/active_model/validations.rb:287-291). Each subclass
-    // gets an independent top-level Map whose per-attribute arrays are also
-    // fresh — so push/delete on the subclass never leaks back up the chain.
+    // Copy-on-first-write dup. Rails' `inherited(base)` hook
+    // (activemodel/lib/active_model/validations.rb:287-291) does this
+    // eagerly at class-definition time; JS has no such hook, so we defer
+    // the dup until the first write on the subclass. Produces an
+    // independent top-level Map whose per-attribute arrays are also fresh,
+    // matching Rails' `dup.each { |k, v| dup[k] = v.dup }` — downward
+    // writes from the subclass never leak up to the parent.
     if (!Object.prototype.hasOwnProperty.call(this, "_validators")) {
       const cloned = new Map<string | null, Array<ValidatorLike>>();
       for (const [k, arr] of this._validators) cloned.set(k, [...arr]);

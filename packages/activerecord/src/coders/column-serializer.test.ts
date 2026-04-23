@@ -37,12 +37,14 @@ describe("ColumnSerializerTest", () => {
     expect(() => cs.assertValidValue("not a list", "dump")).toThrow(SerializationTypeMismatch);
   });
 
-  it("check_arity_of_constructor raises for classes requiring args", () => {
-    class RequiresArg {
-      constructor(required: string) {
-        if (!required) throw new Error("required");
+  it("check_arity_of_constructor raises for classes that throw during construction", () => {
+    // Rails catches ArgumentError from `ObjectClass.new` with no args.
+    // In JS, we detect constructors that throw when called with no arguments.
+    class ThrowsOnConstruct {
+      constructor() {
+        throw new Error("cannot construct without args");
       }
     }
-    expect(() => new ColumnSerializer("attr", JsonCoder, RequiresArg as any)).toThrow(TypeError);
+    expect(() => new ColumnSerializer("attr", JsonCoder, ThrowsOnConstruct)).toThrow(TypeError);
   });
 });

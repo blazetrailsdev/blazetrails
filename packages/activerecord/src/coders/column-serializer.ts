@@ -89,20 +89,14 @@ export class ColumnSerializer {
   }
 
   checkArityOfConstructor(): void {
+    if (this._objectClass === (Object as unknown)) return;
     try {
-      this.load(null);
+      new (this._objectClass as new () => unknown)();
     } catch (e: unknown) {
-      if (
-        (e instanceof TypeError || e instanceof Error) &&
-        (String(e).includes("argument") || String(e).includes("required"))
-      ) {
-        throw new TypeError(
-          `Cannot serialize ${this._objectClass.name}. Classes passed to \`serialize\` must have a 0 argument constructor.`,
-          { cause: e },
-        );
-      } else if (!(e instanceof SerializationTypeMismatch)) {
-        throw e;
-      }
+      throw new TypeError(
+        `Cannot serialize ${this._objectClass.name}. Classes passed to \`serialize\` must have a 0 argument constructor.`,
+        { cause: e },
+      );
     }
   }
 }

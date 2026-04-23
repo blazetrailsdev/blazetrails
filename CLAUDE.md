@@ -50,7 +50,6 @@ use `include()` / `Included<>` from `@blazetrails/activesupport`. See
 `activesupport/src/include.ts` and `relation.ts` + `relation/query-methods.ts`.
 
 When NOT to use this:
-
 - Ruby lifecycle hooks (`extended`, `included`, `inherited`) — no TS
   equivalent. Don't stub them; add them to the skip list in
   `scripts/api-compare/compare.ts`.
@@ -75,7 +74,7 @@ When NOT to use this:
   comments for non-obvious context (hidden bug, broader invariant, etc.).
 - Do NOT add empty stubs or placeholder interfaces. If a feature isn't
   implemented yet, don't create an empty file for it.
-- **NEVER rename or reword test names.** Test names are how `test:compare`
+- **NEVER rename or reword test names.** Test names are how `api:compare`
   matches our tests to Rails tests. If a test fails or the behavior doesn't
   match the name, fix the implementation — not the name. Read the
   corresponding Rails test first.

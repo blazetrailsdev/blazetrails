@@ -9,6 +9,8 @@
  */
 
 import { Attribute, AttributeSet, type Type } from "@blazetrails/activemodel";
+import { isStiSubclass, getStiBase } from "./inheritance.js";
+import type { Base } from "./base.js";
 
 type AnyClass = any;
 
@@ -49,6 +51,14 @@ export function defineAttribute(
   castType: Type,
   options: { default?: unknown; userProvidedDefault?: boolean } = {},
 ): void {
+  // STI subclasses share the base's _attributeDefinitions — route to the
+  // base to avoid forking a subclass-local map that drifts from the base.
+  if (isStiSubclass(this as typeof Base)) {
+    const stiBase = getStiBase(this as typeof Base);
+    (stiBase as AnyClass).defineAttribute(name, castType, options);
+    return;
+  }
+
   const { default: defaultValue = NO_DEFAULT, userProvidedDefault = true } = options;
 
   if (!Object.prototype.hasOwnProperty.call(this, "_attributeDefinitions")) {
@@ -70,9 +80,11 @@ export function defineAttribute(
   // Install prototype accessor so the attribute is readable/writable by name,
   // matching what applyColumnsHash does for schema-reflected columns.
   if (this.prototype) {
-    if (name === "id" && Object.prototype.hasOwnProperty.call(this.prototype, "id")) {
+    if (name === "id") {
       // Let Base.prototype.id (the CPK-aware getter) take precedence.
-      delete (this.prototype as Record<string, unknown>)["id"];
+      if (Object.prototype.hasOwnProperty.call(this.prototype, "id")) {
+        delete (this.prototype as Record<string, unknown>)["id"];
+      }
     } else if (!Object.prototype.hasOwnProperty.call(this.prototype, name)) {
       Object.defineProperty(this.prototype, name, {
         get(this: { readAttribute(n: string): unknown }) {
@@ -100,8 +112,14 @@ export function defineAttribute(
  * Mirrors: ActiveRecord::Attributes::ClassMethods#_default_attributes
  */
 export function _defaultAttributes(this: AnyClass): AttributeSet {
-  if (!this._cachedDefaultAttributes) {
-    const defs: Map<string, AttributeDefinition> = this._attributeDefinitions;
+  // For STI subclasses, delegate to the STI base so cache invalidation
+  // from Base.attribute/defineAttribute (always routed to the base) is coherent.
+  const cacheHost = isStiSubclass(this as typeof Base)
+    ? (getStiBase(this as typeof Base) as AnyClass)
+    : this;
+
+  if (!cacheHost._cachedDefaultAttributes) {
+    const defs: Map<string, AttributeDefinition> = cacheHost._attributeDefinitions;
     const attrMap = new Map<string, Attribute>();
 
     for (const [name, def] of defs) {
@@ -118,7 +136,7 @@ export function _defaultAttributes(this: AnyClass): AttributeSet {
       }
     }
 
-    this._cachedDefaultAttributes = new AttributeSet(attrMap);
+    cacheHost._cachedDefaultAttributes = new AttributeSet(attrMap);
   }
-  return this._cachedDefaultAttributes;
+  return cacheHost._cachedDefaultAttributes;
 }

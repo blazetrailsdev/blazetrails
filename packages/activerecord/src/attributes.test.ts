@@ -707,3 +707,53 @@ describe("DefaultAttributesTest", () => {
     expect(p.status).toBe("draft");
   });
 });
+
+describe("DefineAttributeSTITest", () => {
+  it("defineAttribute on STI subclass routes to the STI base", () => {
+    const adp = createTestAdapter();
+    const intType = typeRegistry.lookup("integer");
+    class Animal extends Base {
+      static {
+        this.attribute("name", "string");
+        this.attribute("type", "string");
+        (this as any)._inheritanceColumn = "type";
+        this.adapter = adp;
+      }
+    }
+    class Dog extends (Animal as any) {}
+    // Defining on subclass should land on the base
+    (Dog as any).defineAttribute("legs", intType, { default: 4 });
+    expect((Animal as any)._attributeDefinitions.has("legs")).toBe(true);
+    const d = new (Dog as any)({});
+    expect(d.legs).toBe(4);
+  });
+
+  it("_defaultAttributes on STI subclass uses the base cache", () => {
+    const adp = createTestAdapter();
+    class Vehicle extends Base {
+      static {
+        this.attribute("speed", "integer", { default: 60 });
+        this.adapter = adp;
+      }
+    }
+    class Car extends (Vehicle as any) {}
+    const baseDefaults = (Vehicle as any)._defaultAttributes();
+    const subDefaults = (Car as any)._defaultAttributes();
+    expect(baseDefaults).toBe(subDefaults);
+  });
+
+  it("defineAttribute for id does not install an accessor", () => {
+    const adp = createTestAdapter();
+    const strType = typeRegistry.lookup("string");
+    class Post extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adp;
+      }
+    }
+    Post.defineAttribute("id", strType);
+    // Base.prototype.id (the CPK-aware getter) must still be used, not a plain accessor
+    const ownDesc = Object.getOwnPropertyDescriptor(Post.prototype, "id");
+    expect(ownDesc).toBeUndefined();
+  });
+});

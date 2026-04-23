@@ -5,7 +5,7 @@
  */
 
 import { SchemaCreation as AbstractSchemaCreation } from "../abstract/schema-creation.js";
-import type { ReferentialAction } from "../abstract/schema-definitions.js";
+import type { ForeignKeyDefinition, ReferentialAction } from "../abstract/schema-definitions.js";
 import { quoteIdentifier, quoteTableName } from "../abstract/quoting.js";
 import { singularize, underscore } from "@blazetrails/activesupport";
 import { Utils } from "./utils.js";
@@ -13,6 +13,13 @@ import { Utils } from "./utils.js";
 export class SchemaCreation extends AbstractSchemaCreation {
   constructor() {
     super("postgres");
+  }
+
+  protected override visitForeignKeyDefinition(o: ForeignKeyDefinition): string {
+    let sql = super.visitForeignKeyDefinition(o);
+    if (o.deferrable) sql += ` DEFERRABLE INITIALLY ${o.deferrable.toUpperCase()}`;
+    if (!o.isValidate) sql += " NOT VALID";
+    return sql;
   }
 
   visitAddForeignKey(fromTable: string, toTable: string, options: Record<string, unknown>): string {

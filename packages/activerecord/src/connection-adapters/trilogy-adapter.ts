@@ -26,7 +26,7 @@ export class TrilogyAdapter extends AbstractMysqlAdapter {
 
   constructor(config: Record<string, unknown> = {}) {
     super();
-    void config;
+    TrilogyAdapter.newClient(config);
   }
 
   static newClient(config: Record<string, unknown>): never {

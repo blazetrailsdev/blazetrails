@@ -122,16 +122,32 @@ export function castBoundValue(value: unknown): unknown {
   return value;
 }
 
-// Mirrors Rails' MySQL::Quoting.column_name_matcher — validates column name
-// expressions (including `table`.`column` and function call forms).
+// Mirrors Rails' MySQL::Quoting.column_name_matcher. JS can't replicate Ruby's
+// recursive \g<n> back-references, so we limit function arguments to plain
+// identifiers and column references (no nested expressions), which is stricter
+// than Rails but prevents injection via function call arguments.
 export function columnNameMatcher(): RegExp {
-  return /^(?:(?:\w+\.|`\w+`\.)?(?:\w+|`\w+`)|\w+\([^)]*\))(?:(?:\s+AS)?\s+(?:\w+|`\w+`))?(?:\s*,\s*(?:(?:\w+\.|`\w+`\.)?(?:\w+|`\w+`)|\w+\([^)]*\))(?:(?:\s+AS)?\s+(?:\w+|`\w+`))?)*$/i;
+  const id = String.raw`(?:\w+|` + "`" + String.raw`\w+` + "`" + String.raw`)`;
+  const col = String.raw`(?:${id}\.)?${id}`;
+  const fnArg = String.raw`(?:\*|${col})`;
+  const fnCall = String.raw`\w+\(\s*(?:${fnArg}(?:\s*,\s*${fnArg})*)?\s*\)`;
+  const expr = String.raw`(?:${col}|${fnCall})`;
+  const aliased = String.raw`${expr}(?:(?:\s+AS)?\s+${id})?`;
+  return new RegExp(`^${aliased}(?:\\s*,\\s*${aliased})*$`, "i");
 }
 
 // Mirrors Rails' MySQL::Quoting.column_name_with_order_matcher — like
 // columnNameMatcher but also allows COLLATE and ASC/DESC suffixes.
 export function columnNameWithOrderMatcher(): RegExp {
-  return /^(?:(?:\w+\.|`\w+`\.)?(?:\w+|`\w+`)|\w+\([^)]*\))(?:\s+COLLATE\s+(?:\w+|"\w+"))?(?:\s+ASC|\s+DESC)?(?:\s*,\s*(?:(?:\w+\.|`\w+`\.)?(?:\w+|`\w+`)|\w+\([^)]*\))(?:\s+COLLATE\s+(?:\w+|"\w+"))?(?:\s+ASC|\s+DESC)?)*$/i;
+  const id = String.raw`(?:\w+|` + "`" + String.raw`\w+` + "`" + String.raw`)`;
+  const col = String.raw`(?:${id}\.)?${id}`;
+  const fnArg = String.raw`(?:\*|${col})`;
+  const fnCall = String.raw`\w+\(\s*(?:${fnArg}(?:\s*,\s*${fnArg})*)?\s*\)`;
+  const expr = String.raw`(?:${col}|${fnCall})`;
+  const collate = String.raw`(?:\s+COLLATE\s+(?:\w+|"\w+"))?`;
+  const dir = String.raw`(?:\s+ASC|\s+DESC)?`;
+  const ordered = String.raw`${expr}${collate}${dir}`;
+  return new RegExp(`^${ordered}(?:\\s*,\\s*${ordered})*$`, "i");
 }
 
 /**

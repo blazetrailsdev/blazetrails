@@ -159,6 +159,11 @@ describe("MySQL quoting — columnNameMatcher", () => {
   it("rejects SQL injection attempts", () => {
     expect(re.test("name; DROP TABLE users")).toBe(false);
   });
+
+  it("rejects boolean operators in function arguments", () => {
+    expect(re.test("concat(name OR 1=1)")).toBe(false);
+    expect(re.test("upper(name AND 1=1)")).toBe(false);
+  });
 });
 
 describe("MySQL quoting — columnNameWithOrderMatcher", () => {

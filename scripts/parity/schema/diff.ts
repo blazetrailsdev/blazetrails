@@ -96,46 +96,53 @@ async function main(): Promise<void> {
 
   for (const file of fixtures) {
     const name = basename(file, ".json");
-    const railsRaw = JSON.parse(readFileSync(join(railsDir, file), "utf8"));
-    const trailsRaw = JSON.parse(readFileSync(join(trailsDir, file), "utf8"));
+    try {
+      const railsRaw = JSON.parse(readFileSync(join(railsDir, file), "utf8"));
+      const trailsRaw = JSON.parse(readFileSync(join(trailsDir, file), "utf8"));
 
-    // Validate both against canonical schema before diffing.
-    // Count at fixture level (not document level) so summary is accurate.
-    let fixtureFailed = false;
-    for (const [label, doc] of [
-      ["rails", railsRaw],
-      ["trails", trailsRaw],
-    ] as const) {
-      if (!validate(doc)) {
-        process.stdout.write(`FAIL  ${name}  (${label} output fails schema validation)\n`);
-        process.stdout.write(`      ${ajv.errorsText(validate.errors)}\n`);
-        fixtureFailed = true;
+      // Validate both against canonical schema before diffing.
+      // Count at fixture level (not document level) so summary is accurate.
+      let fixtureFailed = false;
+      for (const [label, doc] of [
+        ["rails", railsRaw],
+        ["trails", trailsRaw],
+      ] as const) {
+        if (!validate(doc)) {
+          process.stdout.write(`FAIL  ${name}  (${label} output fails schema validation)\n`);
+          process.stdout.write(`      ${ajv.errorsText(validate.errors)}\n`);
+          fixtureFailed = true;
+        }
       }
-    }
-    if (fixtureFailed) {
-      failedFixtures++;
-      continue;
-    }
+      if (fixtureFailed) {
+        failedFixtures++;
+        continue;
+      }
 
-    // Stable JSON normalisation then line diff
-    const railsNorm = stableJson(railsRaw);
-    const trailsNorm = stableJson(trailsRaw);
+      // Stable JSON normalisation then line diff
+      const railsNorm = stableJson(railsRaw);
+      const trailsNorm = stableJson(trailsRaw);
 
-    if (railsNorm === trailsNorm) {
-      process.stdout.write(`PASS  ${name}\n`);
-    } else {
+      if (railsNorm === trailsNorm) {
+        process.stdout.write(`PASS  ${name}\n`);
+      } else {
+        failedFixtures++;
+        process.stdout.write(`FAIL  ${name}\n`);
+        const patch = createTwoFilesPatch(
+          `rails/${file}`,
+          `trails/${file}`,
+          railsNorm,
+          trailsNorm,
+          "",
+          "",
+          { context: 4 },
+        );
+        process.stdout.write(patch);
+      }
+    } catch (err: unknown) {
       failedFixtures++;
-      process.stdout.write(`FAIL  ${name}\n`);
-      const patch = createTwoFilesPatch(
-        `rails/${file}`,
-        `trails/${file}`,
-        railsNorm,
-        trailsNorm,
-        "",
-        "",
-        { context: 4 },
+      process.stdout.write(
+        `FAIL  ${name}  (${err instanceof Error ? err.message : String(err)})\n`,
       );
-      process.stdout.write(patch);
     }
   }
 

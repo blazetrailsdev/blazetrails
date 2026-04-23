@@ -118,8 +118,12 @@ async function main(): Promise<void> {
   } else if (side === "diff") {
     await runDiff();
   } else {
-    // all: rails + trails in parallel, then diff
-    await Promise.all([runRails(), runTrails()]);
+    // all: rails + trails in parallel (both sides run to completion even if one fails), then diff
+    const results = await Promise.allSettled([runRails(), runTrails()]);
+    const errors = results
+      .filter((r): r is PromiseRejectedResult => r.status === "rejected")
+      .map((r) => (r.reason instanceof Error ? r.reason.message : String(r.reason)));
+    if (errors.length > 0) throw new Error(errors.join("\n"));
     await runDiff();
   }
 }

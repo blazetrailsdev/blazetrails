@@ -10,7 +10,7 @@
  * Must be run from the repo root.
  */
 
-import { readdirSync, mkdirSync, existsSync } from "node:fs";
+import { readdirSync, mkdirSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 
@@ -68,6 +68,7 @@ function run(cmd: string, args: string[]): Promise<void> {
 }
 
 async function runRails(): Promise<void> {
+  rmSync(OUT_RAILS, { recursive: true, force: true });
   mkdirSync(OUT_RAILS, { recursive: true });
   for (const fixture of fixtures()) {
     const fixtureDir = join(FIXTURES_DIR, fixture);
@@ -77,6 +78,7 @@ async function runRails(): Promise<void> {
 }
 
 async function runTrails(): Promise<void> {
+  rmSync(OUT_TRAILS, { recursive: true, force: true });
   mkdirSync(OUT_TRAILS, { recursive: true });
   for (const fixture of fixtures()) {
     const fixtureDir = join(FIXTURES_DIR, fixture);

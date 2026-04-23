@@ -1,3 +1,4 @@
+import { DescendantsTracker } from "@blazetrails/activesupport";
 import { Type } from "./type/value.js";
 import { Attribute } from "./attribute.js";
 import { AttributeSet } from "./attribute-set.js";
@@ -85,49 +86,24 @@ class PendingDecorator implements PendingModification {
 // ---------------------------------------------------------------------------
 
 /**
- * Maps each class to its set of known direct subclasses (as WeakRefs to avoid
- * preventing GC). Populated lazily when _defaultAttributes() is first built
- * for a class that has a superclass in the attribute system.
+ * Register cls as a direct subclass of its prototype-chain superclass so
+ * resetDefaultAttributes() can cascade to it.
  *
- * Mirrors: ActiveSupport::DescendantsTracker (Rails registers via `inherited`
- * hook; we register lazily on first _defaultAttributes() call instead).
+ * Delegates to DescendantsTracker (WeakRef-backed, dedup'd) — the same
+ * infrastructure Rails uses via ActiveSupport::DescendantsTracker. Rails
+ * registers via the `inherited` hook; we register lazily on the first
+ * _defaultAttributes() call instead (same effect: only classes that have
+ * a cache worth invalidating are tracked).
+ *
+ * Mirrors: ActiveSupport::DescendantsTracker registration triggered by
+ * Class.inherited in Rails.
  */
-const directSubclasses = new WeakMap<object, Set<WeakRef<object>>>();
-// Tracks (superclass, subclass) pairs already registered so each relationship
-// is recorded exactly once, even after repeated _defaultAttributes() rebuilds.
-const registeredPairs = new WeakMap<object, WeakSet<object>>();
-
 export function registerWithSuperclass(cls: AnyAttributeHost): void {
   const superclass = Object.getPrototypeOf(cls);
   if (!superclass || superclass === Function.prototype) return;
   // Only register if the superclass participates in the attribute system.
   if (!("_attributeDefinitions" in superclass)) return;
-  // Deduplicate: each (superclass, subclass) pair registered only once.
-  if (!registeredPairs.has(superclass)) {
-    registeredPairs.set(superclass, new WeakSet());
-  }
-  const seen = registeredPairs.get(superclass)!;
-  if (seen.has(cls)) return;
-  seen.add(cls);
-  if (!directSubclasses.has(superclass)) {
-    directSubclasses.set(superclass, new Set());
-  }
-  directSubclasses.get(superclass)!.add(new WeakRef(cls));
-}
-
-function getDirectSubclasses(cls: AnyAttributeHost): AnyAttributeHost[] {
-  const refs = directSubclasses.get(cls);
-  if (!refs) return [];
-  const alive: AnyAttributeHost[] = [];
-  for (const ref of refs) {
-    const sub = ref.deref();
-    if (sub) {
-      alive.push(sub);
-    } else {
-      refs.delete(ref);
-    }
-  }
-  return alive;
+  DescendantsTracker.registerSubclass(superclass, cls);
 }
 
 /**
@@ -147,7 +123,7 @@ export function resetDefaultAttributes(cls: AnyAttributeHost): void {
   // AM-only classes that never call attributesBuilder() carry the undefined
   // own property harmlessly (a single extra slot per class).
   cls._attributesBuilder = undefined;
-  for (const sub of getDirectSubclasses(cls)) {
+  for (const sub of DescendantsTracker.subclasses(cls)) {
     resetDefaultAttributes(sub);
   }
 }

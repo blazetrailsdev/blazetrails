@@ -37,9 +37,14 @@ export class ArrayHandler {
     //   values = value.map { |x| x.is_a?(Base) ? x.id : x }
     //   nils = values.compact!
     //   ranges = values.extract! { |v| v.is_a?(Range) }
-    // Everything that isn't a Base record, nil, or Range stays in `values`
-    // and lands in the In/HomogeneousIn branch — including arbitrary
-    // objects like AdditionalValue (for encrypted deterministic queries).
+    // Everything that isn't a Base record, nil, or Range stays in `values`,
+    // including arbitrary objects like AdditionalValue (for encrypted
+    // deterministic queries). A single remaining value is routed through
+    // `predicateBuilder.build(...)` (typically producing an Equality);
+    // multiple values use the In/HomogeneousIn branch. Passing Relations
+    // inside the array is unsupported here — Rails would likewise fail
+    // to serialize them inside HomogeneousIn; use `where(col: relation)`
+    // for subqueries instead.
     const scalarValues: unknown[] = [];
     let hasNull = false;
     const ranges: Range[] = [];

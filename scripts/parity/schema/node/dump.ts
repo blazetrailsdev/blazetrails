@@ -72,7 +72,8 @@ async function main(): Promise<void> {
     }
 
     // 2. Connect via trails adapter
-    await Base.establishConnection(`sqlite3://${dbPath}`);
+    // Pass dbPath directly — adapterNameFromUrl recognises .db extension as sqlite.
+    await Base.establishConnection(dbPath);
     const adapter = Base.adapter;
 
     // 3. Introspect tables, columns, indexes
@@ -158,7 +159,13 @@ async function main(): Promise<void> {
     } catch {
       /* already removed or never opened */
     }
-    rmSync(tmpDir, { recursive: true, force: true });
+    try {
+      rmSync(tmpDir, { recursive: true, force: true });
+    } catch (err) {
+      process.stderr.write(
+        `parity dump: warning: failed to remove temp dir ${tmpDir}: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
+    }
   }
 }
 

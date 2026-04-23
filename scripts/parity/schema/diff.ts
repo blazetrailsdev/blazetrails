@@ -86,12 +86,13 @@ async function main(): Promise<void> {
 
   const onlyRails = [...railsFiles].filter((f) => !trailsFiles.has(f));
   const onlyTrails = [...trailsFiles].filter((f) => !railsFiles.has(f));
-  if (onlyRails.length > 0)
-    process.stderr.write(`parity diff: only in rails: ${onlyRails.join(", ")}\n`);
-  if (onlyTrails.length > 0)
-    process.stderr.write(`parity diff: only in trails: ${onlyTrails.join(", ")}\n`);
-
-  let failedFixtures = 0;
+  // Asymmetric fixtures are a failure — parity is unverified for them.
+  // Still proceed to diff the shared set (D7: never fail-fast).
+  let failedFixtures = onlyRails.length + onlyTrails.length;
+  for (const f of onlyRails)
+    process.stdout.write(`FAIL  ${basename(f, ".json")}  (missing from trails output)\n`);
+  for (const f of onlyTrails)
+    process.stdout.write(`FAIL  ${basename(f, ".json")}  (missing from rails output)\n`);
 
   for (const file of fixtures) {
     const name = basename(file, ".json");
@@ -138,9 +139,8 @@ async function main(): Promise<void> {
     }
   }
 
-  process.stdout.write(
-    `\n${fixtures.length - failedFixtures}/${fixtures.length} fixtures passed\n`,
-  );
+  const totalFixtures = fixtures.length + onlyRails.length + onlyTrails.length;
+  process.stdout.write(`\n${totalFixtures - failedFixtures}/${totalFixtures} fixtures passed\n`);
   if (failedFixtures > 0) process.exit(1);
 }
 

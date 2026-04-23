@@ -15,6 +15,13 @@ import { join } from "node:path";
 import { spawn } from "node:child_process";
 
 const FIXTURES_DIR = "scripts/parity/fixtures";
+
+function assertRepoRoot(): void {
+  if (!existsSync(FIXTURES_DIR)) {
+    process.stderr.write(`parity run: must be run from repo root (${FIXTURES_DIR} not found)\n`);
+    process.exit(1);
+  }
+}
 const OUT_RAILS = "scripts/parity/.out/rails";
 const OUT_TRAILS = "scripts/parity/.out/trails";
 const GEMFILE = "scripts/parity/schema/ruby/Gemfile";
@@ -99,6 +106,7 @@ async function runDiff(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  assertRepoRoot();
   const side = parseSide();
 
   if (side === "rails") {

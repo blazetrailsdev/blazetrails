@@ -113,6 +113,12 @@ module Canonicalize
     return value.to_i if value.is_a?(Integer)
     # Float and BigDecimal (AR uses BigDecimal for :decimal columns) → JSON number.
     return value.to_f if value.is_a?(Numeric)
-    value.to_s
+    # String — coerce to number when it looks like one, matching the node-side
+    # coerceDefault behaviour. SQLite PRAGMA dflt_value is always a string so
+    # AR returns e.g. "1" for DEFAULT 1 on an integer column.
+    str = value.to_s
+    return str.to_i if str =~ /\A-?\d+\z/
+    return str.to_f if str =~ /\A-?\d+\.\d+\z/
+    str
   end
 end

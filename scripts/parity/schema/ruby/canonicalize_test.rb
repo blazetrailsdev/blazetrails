@@ -137,6 +137,17 @@ class CanonicalizeTest < Minitest::Test
     assert_equal 0, Canonicalize.call(native)["tables"][0]["columns"][0]["default"]
   end
 
+  def test_integer_default_as_string
+    # AR returns col.default as the raw PRAGMA dflt_value string e.g. "1" for DEFAULT 1.
+    native = { "t" => table(columns: [col("active", :integer, null: false, default: "1")]) }
+    assert_equal 1, Canonicalize.call(native)["tables"][0]["columns"][0]["default"]
+  end
+
+  def test_float_default_as_string
+    native = { "t" => table(columns: [col("rate", :float, null: false, default: "1.5")]) }
+    assert_equal 1.5, Canonicalize.call(native)["tables"][0]["columns"][0]["default"]
+  end
+
   def test_string_default
     native = { "t" => table(columns: [col("status", :string, null: false, default: "active")]) }
     assert_equal "active", Canonicalize.call(native)["tables"][0]["columns"][0]["default"]

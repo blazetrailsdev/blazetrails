@@ -164,7 +164,7 @@ export async function resetCounters(
  * Mirrors: ActiveRecord::CounterCache::ClassMethods#counter_cache_column?
  * (The `Q` suffix mirrors Ruby's `?` predicate convention.)
  */
-export function counterCacheColumnQ(this: typeof Base, columnName: string): boolean {
+export function isCounterCacheColumn(this: typeof Base, columnName: string): boolean {
   const counterCols = getCounterCacheColumns(this);
   return counterCols.has(columnName);
 }
@@ -177,7 +177,7 @@ export function counterCacheColumnQ(this: typeof Base, columnName: string): bool
  * `ActiveRecord::CounterCache#load_schema!` performs (a private extension
  * point inside `ClassMethods`). Not currently part of `ClassMethods`
  * because, like in Rails, it's an internal hook into the schema loader
- * rather than a user-facing class method — `counterCacheColumnQ` lazily
+ * rather than a user-facing class method — `isCounterCacheColumn` lazily
  * primes the same cache via `getCounterCacheColumns` on first read.
  */
 export function loadSchemaBang(this: typeof Base): void {
@@ -211,6 +211,5 @@ export const ClassMethods = {
   decrementCounter,
   updateCounters,
   resetCounters,
-  counterCacheColumnQ,
-  isCounterCacheColumn: counterCacheColumnQ,
+  isCounterCacheColumn,
 };

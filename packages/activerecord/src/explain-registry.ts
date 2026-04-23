@@ -52,7 +52,10 @@ function currentSlot(): Slot {
 
 export class ExplainRegistry {
   constructor() {
-    ExplainRegistry.reset();
+    // Rails' initialize calls reset() on per-instance state (@collect, @queries).
+    // Our implementation stores state in an async-local slot rather than per-instance
+    // fields, so the constructor is a no-op — the slot is initialized lazily on first
+    // access via currentSlot().
   }
 
   static get collect(): boolean {

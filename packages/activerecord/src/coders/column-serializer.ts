@@ -1,5 +1,8 @@
 import { SerializationTypeMismatch } from "../errors.js";
 
+type CoderLike = { dump(obj: unknown): unknown; load(payload: unknown): unknown };
+type ClassLike = new (...args: unknown[]) => unknown;
+
 /**
  * Wraps a coder (e.g. YAML, JSON) with object-class validation so that
  * serialized columns only accept instances of the declared class.
@@ -7,34 +10,38 @@ import { SerializationTypeMismatch } from "../errors.js";
  * Mirrors: ActiveRecord::Coders::ColumnSerializer
  */
 export class ColumnSerializer {
-  readonly objectClass: new (...args: unknown[]) => unknown;
-  readonly coder: { dump(obj: unknown): unknown; load(payload: unknown): unknown };
   private _attrName: string;
+  private _objectClass: ClassLike;
+  private _coder: CoderLike;
+
+  get objectClass(): ClassLike {
+    return this._objectClass;
+  }
+
+  get coder(): CoderLike {
+    return this._coder;
+  }
 
   constructor(
     attrName: string,
-    coder: { dump(obj: unknown): unknown; load(payload: unknown): unknown },
-    objectClass: new (...args: unknown[]) => unknown = Object as unknown as new () => unknown,
+    coder: CoderLike,
+    objectClass: ClassLike = Object as unknown as ClassLike,
   ) {
     this._attrName = attrName;
-    this.objectClass = objectClass;
-    this.coder = coder;
-    this._checkArityOfConstructor();
+    this._objectClass = objectClass;
+    this._coder = coder;
+    this.checkArityOfConstructor();
   }
 
   /**
-   * Restore from a serialized YAML coder representation.
+   * Restore from a serialized coder representation.
    *
    * Mirrors: ActiveRecord::Coders::ColumnSerializer#init_with
    */
-  initWith(coder: {
-    attr_name: string;
-    object_class: new (...args: unknown[]) => unknown;
-    coder: { dump(obj: unknown): unknown; load(payload: unknown): unknown };
-  }): void {
-    this._attrName = coder.attr_name;
-    (this as any).objectClass = coder.object_class;
-    (this as any).coder = coder.coder;
+  initWith(coder: { attrName: string; objectClass: ClassLike; coder: CoderLike }): void {
+    this._attrName = coder.attrName;
+    this._objectClass = coder.objectClass;
+    this._coder = coder.coder;
   }
 
   /**
@@ -43,7 +50,7 @@ export class ColumnSerializer {
   dump(object: unknown): unknown {
     if (object == null) return undefined;
     this.assertValidValue(object, "dump");
-    return this.coder.dump(object);
+    return this._coder.dump(object);
   }
 
   /**
@@ -51,17 +58,17 @@ export class ColumnSerializer {
    */
   load(payload: unknown): unknown {
     if (payload == null) {
-      if (this.objectClass !== (Object as unknown)) {
-        return new (this.objectClass as new () => unknown)();
+      if (this._objectClass !== (Object as unknown)) {
+        return new (this._objectClass as new () => unknown)();
       }
       return null;
     }
 
-    let object = this.coder.load(payload);
+    let object = this._coder.load(payload);
     this.assertValidValue(object, "load");
 
-    if (object == null && this.objectClass !== (Object as unknown)) {
-      object = new (this.objectClass as new () => unknown)();
+    if (object == null && this._objectClass !== (Object as unknown)) {
+      object = new (this._objectClass as new () => unknown)();
     }
 
     return object;
@@ -72,21 +79,24 @@ export class ColumnSerializer {
    */
   assertValidValue(object: unknown, action: string): void {
     if (object == null) return;
-    if (!(object instanceof this.objectClass)) {
+    if (!(object instanceof this._objectClass)) {
       throw new SerializationTypeMismatch(
-        `can't ${action} \`${this._attrName}\`: was supposed to be a ${this.objectClass.name}, ` +
+        `can't ${action} \`${this._attrName}\`: was supposed to be a ${this._objectClass.name}, ` +
           `but was a ${(object as object).constructor?.name ?? typeof object}. -- ${String(object)}`,
       );
     }
   }
 
-  private _checkArityOfConstructor(): void {
+  checkArityOfConstructor(): void {
     try {
       this.load(null);
     } catch (e: unknown) {
-      if (e instanceof TypeError && String(e).includes("argument")) {
+      if (
+        (e instanceof TypeError || e instanceof Error) &&
+        (String(e).includes("argument") || String(e).includes("required"))
+      ) {
         throw new TypeError(
-          `Cannot serialize ${this.objectClass.name}. Classes passed to \`serialize\` must have a 0 argument constructor.`,
+          `Cannot serialize ${this._objectClass.name}. Classes passed to \`serialize\` must have a 0 argument constructor.`,
         );
       }
     }

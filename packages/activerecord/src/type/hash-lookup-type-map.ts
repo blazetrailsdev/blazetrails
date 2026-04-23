@@ -114,7 +114,7 @@ export class HashLookupTypeMap {
     return [...this._mapping.keys()];
   }
 
-  performFetch(
+  private performFetch(
     type: string | number,
     args: unknown[],
     fallback?: (lookupKey: string | number, ...args: unknown[]) => Type,

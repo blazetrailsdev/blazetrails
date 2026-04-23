@@ -88,9 +88,11 @@ const users = new Table("users");
 users.get("name").eq("amy");
 ```
 
-The last expression is the one `.toSql()` is called on. All nodes and
-managers expose `.toSql()` via the base `Node` class (`nodes/node.ts:30`);
-no `ToSql` import is needed in the runner (`packages/arel/src/nodes/node.ts:30`).
+The last expression is the one `.toSql()` is called on. Node expressions
+expose it via the base `Node` class (`packages/arel/src/nodes/node.ts:30`);
+manager expressions such as `SelectManager` inherit it from `TreeManager`
+(`packages/arel/src/tree-manager.ts:72`). No separate `ToSql` import is
+needed in the runner.
 
 ---
 
@@ -158,8 +160,8 @@ the trails Arel source (`packages/arel/src/`).
 - Passes it to both ruby and node sides as an environment variable.
 - Ruby: `ActiveSupport::Testing::TimeHelpers#travel_to(Time.parse(ENV["PARITY_FROZEN_AT"]))`
   — from `activesupport` (already a dep via `activerecord`).
-- Node: `import FakeTimers from "@sinonjs/fake-timers"` — installed as root
-  devDependency. `const clock = FakeTimers.install({ now: new Date(frozenAt) })`.
+- Node: `import FakeTimers from "@sinonjs/fake-timers"` — planned root
+  devDependency, added in PR4. `const clock = FakeTimers.install({ now: new Date(frozenAt) })`.
   Call `clock.uninstall()` after the query runs.
 - `frozenAt` written into the canonical output JSON for auditability.
 
@@ -237,7 +239,7 @@ Files to add:
    - Install `FakeTimers` if `frozenAt` present.
    - Dynamic import of `query.ts` from the fixture dir.
    - Call `.toSql()` on the result. All nodes and managers expose it
-     via the base `Node` class; no `ToSql` import is needed.
+     via `Node` (nodes) or `TreeManager` (managers); no `ToSql` import is needed.
    - Write canonical JSON.
 2. Root devDependency: `@sinonjs/fake-timers` + `@types/sinonjs__fake-timers`.
 

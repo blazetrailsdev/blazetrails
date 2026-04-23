@@ -22,7 +22,7 @@
     },
     "sql": {
       "type": "string",
-      "description": "SQL string produced by to_sql (Ruby) or .toSql() (TypeScript) on the expression returned by the query script. All nodes and managers expose .toSql() via the base Node class."
+      "description": "SQL string produced by to_sql (Ruby) or .toSql() (TypeScript) on the expression returned by the query script. The expression may be an Arel node or a manager, each exposing .toSql() through its own API surface."
     },
     "binds": {
       "type": "array",

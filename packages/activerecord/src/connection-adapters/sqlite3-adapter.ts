@@ -888,11 +888,19 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     const result = new Map<string, "immediate" | "deferred">();
     if (!createSql) return result;
     const fkRegex =
-      /FOREIGN KEY\s*\("?([^",)]+)"?\)\s*REFERENCES\s*"?([^"(,\s]+)"?\s*\("?([^",)]+)"?\)[^,)]*DEFERRABLE\s+INITIALLY\s+(\w+)/gi;
+      /FOREIGN KEY\s*\(([^)]+)\)\s*REFERENCES\s*"?([^"(,\s]+)"?\s*\(([^)]+)\)[^,)]*DEFERRABLE\s+INITIALLY\s+(\w+)/gi;
     let match;
     while ((match = fkRegex.exec(createSql)) !== null) {
-      const [, fromCol, toTbl, toCol, mode] = match;
-      const key = `${toTbl},${fromCol.trim()},${toCol.trim()}`;
+      const [, fromCols, toTbl, toCols, mode] = match;
+      const fromKey = fromCols
+        .split(",")
+        .map((c) => c.trim().replace(/^"|"$/g, ""))
+        .join(",");
+      const toKey = toCols
+        .split(",")
+        .map((c) => c.trim().replace(/^"|"$/g, ""))
+        .join(",");
+      const key = `${toTbl},${fromKey},${toKey}`;
       result.set(key, mode.toLowerCase() === "deferred" ? "deferred" : "immediate");
     }
     return result;
@@ -1420,9 +1428,11 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     const fkNames = this._parseForeignKeyNames(tableName);
 
     for (const fk of fks) {
-      const cols = Array.isArray(fk.column) ? fk.column : [fk.column];
+      const cols = fk.column.includes(",") ? fk.column.split(",").map((c) => c.trim()) : [fk.column];
       if (!cols.every((c) => colNames.includes(c))) continue;
-      const pks = Array.isArray(fk.primaryKey) ? fk.primaryKey : [fk.primaryKey];
+      const pks = fk.primaryKey.includes(",")
+        ? fk.primaryKey.split(",").map((c) => c.trim())
+        : [fk.primaryKey];
       const colList = cols.map((c) => quoteColumnName(c)).join(", ");
       const pkList = pks.map((c) => quoteColumnName(c)).join(", ");
       let fkSql = "";

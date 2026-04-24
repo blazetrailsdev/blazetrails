@@ -1803,8 +1803,6 @@ describe("Base.inheritanceColumn", () => {
 // ==========================================================================
 
 import { isFinderNeedsTypeCondition, stiClassFor, polymorphicClassFor } from "./inheritance.js";
-import { registerModel } from "./associations.js";
-import { SubclassNotFound } from "./errors.js";
 
 describe("InheritanceTest — new parity methods", () => {
   it("finder_needs_type_condition? returns false for base class", () => {

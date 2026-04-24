@@ -60,6 +60,21 @@ end
 fixture_dir, out_path, frozen_at = parse_args(ARGV)
 fixture_name = File.basename(fixture_dir)
 
+# Validate and parse frozen_at — must be ISO 8601 UTC (trailing Z required).
+# Time.parse is too permissive; enforce the format from canonical/query.schema.json.
+frozen_time = if frozen_at
+  unless frozen_at.match?(/\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z\z/)
+    warn "--frozen-at must be ISO 8601 UTC with trailing Z (e.g. 2026-01-01T00:00:00.000Z)"
+    exit 1
+  end
+  Time.iso8601(frozen_at).utc
+else
+  # Always freeze time so the output is deterministic even when --frozen-at is
+  # omitted. Capture once and use for both travel_to and the frozenAt field.
+  Time.now.utc
+end
+frozen_ts = frozen_time.iso8601(3)  # e.g. "2026-04-24T00:00:00.000Z"
+
 # TimeHelper mixin — provides travel_to / travel_back
 module TimeHelper
   include ActiveSupport::Testing::TimeHelpers
@@ -79,13 +94,16 @@ Dir.mktmpdir("parity-query-ruby-") do |tmpdir|
     ActiveRecord::Base.establish_connection(adapter: "sqlite3", database: db_path)
     conn = ActiveRecord::Base.connection
 
-    # 3. Freeze time if requested (activesupport travel_to)
-    time_helper.travel_to(Time.parse(frozen_at)) if frozen_at
+    # 3. Always freeze time so query evaluation is deterministic
+    time_helper.travel_to(frozen_time)
 
-    # 4. Evaluate query.rb — last expression is the Arel node/manager to dump
-    query_source = File.read(File.join(fixture_dir, "query.rb"))
+    # 4. Evaluate query.rb — last expression is the Arel node/manager to dump.
+    # Pass the file path and TOPLEVEL_BINDING so stack traces reference query.rb
+    # line numbers, not "(eval)", and local vars from this script don't leak in.
+    query_path   = File.join(fixture_dir, "query.rb")
+    query_source = File.read(query_path)
     # rubocop:disable Security/Eval
-    result = eval(query_source)
+    result = eval(query_source, TOPLEVEL_BINDING, query_path)
     # rubocop:enable Security/Eval
     raise "[#{fixture_name}] query.rb returned nil" if result.nil?
 
@@ -105,8 +123,6 @@ Dir.mktmpdir("parity-query-ruby-") do |tmpdir|
     else
       raise "[#{fixture_name}] query.rb returned #{result.class}: expected an Arel node or manager"
     end
-
-    frozen_ts = frozen_at || Time.now.utc.iso8601(3)
 
     # 6. Write CanonicalQuery JSON
     canonical = {
@@ -129,7 +145,7 @@ Dir.mktmpdir("parity-query-ruby-") do |tmpdir|
     puts "  → #{out_path}"
 
   ensure
-    time_helper.travel_back if frozen_at
+    time_helper.travel_back
     begin
       ActiveRecord::Base.remove_connection
     rescue StandardError

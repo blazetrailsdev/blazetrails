@@ -59,8 +59,7 @@ export function composedOf(
       const args = options.mapping.map(([modelAttr]) => this.readAttribute(modelAttr));
       if (args.every((a) => a === null || a === undefined)) return null;
 
-      const obj = new options.className(...args);
-      // Rails freezes the cached object; we store it as-is (freeze is opt-in in JS)
+      const obj = Object.freeze(new options.className(...args));
       cache.set(name, obj);
       return obj;
     },
@@ -77,12 +76,16 @@ export function composedOf(
         return;
       }
 
-      // If it's an instance of the class, decompose it and cache
+      // If it's an instance of the class, decompose it and cache frozen copy.
+      // Rails does part.dup.freeze — we freeze a shallow copy via spread.
       if (value instanceof options.className) {
         for (const [modelAttr, valueAttr] of options.mapping) {
           this.writeAttribute(modelAttr, (value as any)[valueAttr]);
         }
-        cache.set(name, value);
+        cache.set(
+          name,
+          Object.freeze(Object.assign(Object.create(Object.getPrototypeOf(value)), value)),
+        );
         return;
       }
 
@@ -93,7 +96,12 @@ export function composedOf(
           for (const [modelAttr, valueAttr] of options.mapping) {
             this.writeAttribute(modelAttr, (converted as any)[valueAttr]);
           }
-          cache.set(name, converted);
+          cache.set(
+            name,
+            Object.freeze(
+              Object.assign(Object.create(Object.getPrototypeOf(converted)), converted),
+            ),
+          );
         }
       }
     },

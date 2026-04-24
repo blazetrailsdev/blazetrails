@@ -30,19 +30,15 @@ export function clearAggregationCache(record: Base): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Reset the aggregation cache so the duped record builds independent
- * value objects on demand.
- *
- * Rails dups the cache (sharing frozen value-object references), but since
- * we don't freeze cached objects we clear instead — same result with no
- * shared mutable state risk.
+ * Shallow-copy the aggregation cache into the duped record.
+ * Cached value objects are frozen so sharing references across the dup is safe.
  *
  * Mirrors: ActiveRecord::Aggregations#initialize_dup
  */
 export function initializeDup(this: Base, _other: unknown): void {
   const self = this as any;
   if (self._aggregationCache) {
-    self._aggregationCache = new Map<string, unknown>();
+    self._aggregationCache = new Map(self._aggregationCache as Map<string, unknown>);
   }
 }
 

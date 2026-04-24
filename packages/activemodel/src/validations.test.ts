@@ -1081,6 +1081,26 @@ describe("ValidationsTest", () => {
       expect(captured).toEqual([["create", "publish"]]);
     });
 
+    it("valid?(null) clears the context (Rails sets it to nil on entry)", () => {
+      // Rails `valid?(context = nil)` always assigns
+      // `context_for_validation.context = context` — passing nil clears.
+      const captured: Array<string | string[] | null> = [];
+      class Scoped extends Model {
+        static {
+          this.attribute("name", "string");
+          this.validate((r: InstanceType<typeof Scoped>) => {
+            captured.push(r.validationContext);
+          });
+        }
+      }
+      const m = new Scoped({});
+      m.isValid("previous");
+      m.isValid(null);
+      // First call saw "previous"; second call saw null (explicit clear),
+      // not "previous" carried over.
+      expect(captured).toEqual(["previous", null]);
+    });
+
     it("valid? restores previous context in ensure/finally even on failure", () => {
       // Rails validations.rb:361-368 uses `ensure` to restore context.
       class Scoped extends Model {

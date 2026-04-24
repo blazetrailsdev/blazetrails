@@ -1217,23 +1217,30 @@ export class Model {
   // validators all fire. See `validations.rb:361-368` and `:294-306`.
   _validationContext: string | string[] | null = null;
 
-  isValid(context?: string | string[] | ValidationContext): boolean {
+  isValid(context?: string | string[] | ValidationContext | null): boolean {
     this.errors.clear();
     const ctor = this.constructor as typeof Model;
-    // Accept string, string[], or ValidationContext. A ValidationContext
-    // exposes `.context` (possibly array) which we copy so downstream
-    // mutations on the instance can't leak into our frame.
-    let normalized: string | string[] | undefined;
-    if (context instanceof ValidationContext) {
+    // Rails `valid?(context = nil)` (validations.rb:361-368) always
+    // assigns `context_for_validation.context = context` on entry,
+    // restoring in `ensure`. So an explicit `null` is a clear, not a
+    // no-op. We distinguish `undefined` (argument omitted — Rails'
+    // default → nil) from `null` (explicit clear — also nil) by
+    // collapsing both to `null`. For `ValidationContext` / Array we
+    // deep-copy to prevent caller-side mutation from leaking into
+    // our frame.
+    let normalized: string | string[] | null;
+    if (context === undefined || context === null) {
+      normalized = null;
+    } else if (context instanceof ValidationContext) {
       const inner = context.context;
-      normalized = Array.isArray(inner) ? [...inner] : (inner ?? undefined);
+      normalized = Array.isArray(inner) ? [...inner] : inner;
     } else if (Array.isArray(context)) {
       normalized = [...context];
     } else {
       normalized = context;
     }
     const prevContext = this._validationContext;
-    this._validationContext = normalized ?? this._validationContext;
+    this._validationContext = normalized;
 
     try {
       const completed = ctor._callbackChain.runCallbacks("validation", this, () => {

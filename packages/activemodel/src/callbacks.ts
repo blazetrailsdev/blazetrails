@@ -231,6 +231,19 @@ export class CallbackChain {
     fn: CallbackFn | AroundCallbackFn | CallbackObject,
     conditions?: CallbackConditions,
   ): void {
+    // `on:` is a transactional-only option: Rails' `ActiveRecord::Transactions`
+    // uses it to scope `after_commit` / `after_rollback` callbacks to
+    // specific actions (`:create` / `:update` / `:destroy`). For every
+    // other event it's meaningless — silently accepting it would
+    // register a callback whose `on:` filter is never consulted (see
+    // `_shouldRun` below, which only applies `on` for commit/rollback).
+    // Reject at register-time so the error surfaces immediately rather
+    // than at run-time when the callback silently doesn't fire.
+    if (conditions?.on !== undefined && event !== "commit" && event !== "rollback") {
+      throw new ArgumentError(
+        `Unknown key: :on. The :on option is only supported for :commit and :rollback callbacks (got :${event})`,
+      );
+    }
     const resolved: CallbackFn | AroundCallbackFn =
       typeof fn === "function"
         ? (fn as CallbackFn | AroundCallbackFn)

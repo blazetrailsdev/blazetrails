@@ -505,6 +505,21 @@ describe("Generic Model.setCallback / skipCallback / resetCallbacks (Rails fidel
     expect(log).toEqual(["fn", "block"]);
   });
 
+  it("CallbackChain.register rejects on: for non-commit/rollback events", () => {
+    // Register-level gate — every path (setCallback, generated
+    // beforeX/afterX, plugin-direct chain.register) funnels here, so
+    // rejecting once at the chain catches `defineModelCallbacks`
+    // helpers too, not just setCallback.
+    const chain = new CallbackChain();
+    expect(() => chain.register("before", "save", () => {}, { on: "create" })).toThrow(/:on/);
+  });
+
+  it("CallbackChain.register accepts on: for commit/rollback events", () => {
+    const chain = new CallbackChain();
+    expect(() => chain.register("after", "commit", () => {}, { on: "create" })).not.toThrow();
+    expect(() => chain.register("after", "rollback", () => {}, { on: "update" })).not.toThrow();
+  });
+
   it("resetCallbacks clears CallbackObject-registered callbacks too", () => {
     // Companion to the skipCallback-with-object case: resetCallbacks
     // must sweep the event bucket regardless of whether its entries

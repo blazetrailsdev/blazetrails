@@ -934,7 +934,7 @@ export class Model {
     event: string,
     timing: "around",
     fn:
-      | ((record: InstanceType<T>, block: () => void) => void | boolean | Promise<void | boolean>)
+      | ((record: InstanceType<T>, proceed: () => void | Promise<void>) => void | Promise<void>)
       | CallbackObject,
     options?: CallbackConditions<InstanceType<T>>,
   ): void;

@@ -133,16 +133,25 @@ function run(cmd: string, args: string[], opts: RunOptions = {}): Promise<void> 
       stdio: opts.buffered ? ["ignore", "pipe", "pipe"] : "inherit",
       env: opts.env ? { ...process.env, ...opts.env } : process.env,
     });
-    let stdoutBuf = "";
-    let stderrBuf = "";
+    // Tagged chunks preserve arrival order across stdout and stderr so an
+    // interleaved error message still lines up with the surrounding stdout
+    // context when flushed. Flushed per-stream at the end so parent's own
+    // stderr stream still gets stderr output (for log filters, tools that
+    // split streams, etc.).
+    const chunks: Array<{ stream: "out" | "err"; text: string }> = [];
     if (opts.buffered) {
-      proc.stdout?.setEncoding("utf8").on("data", (c: string) => (stdoutBuf += c));
-      proc.stderr?.setEncoding("utf8").on("data", (c: string) => (stderrBuf += c));
+      proc.stdout
+        ?.setEncoding("utf8")
+        .on("data", (c: string) => chunks.push({ stream: "out", text: c }));
+      proc.stderr
+        ?.setEncoding("utf8")
+        .on("data", (c: string) => chunks.push({ stream: "err", text: c }));
     }
     const flush = () => {
       if (!opts.buffered) return;
-      if (stdoutBuf) process.stdout.write(stdoutBuf);
-      if (stderrBuf) process.stderr.write(stderrBuf);
+      for (const c of chunks) {
+        (c.stream === "out" ? process.stdout : process.stderr).write(c.text);
+      }
     };
     proc.on("close", (code, signal) => {
       flush();
@@ -163,8 +172,21 @@ function run(cmd: string, args: string[], opts: RunOptions = {}): Promise<void> 
 
 // Bound concurrency so we don't fork 53 bundler or tsx processes at once.
 // Default 4 — safe for Ruby bundler memory and reasonable on 2-core CI runners.
-// Override with PARITY_CONCURRENCY for local tuning.
-const CONCURRENCY = Math.max(1, Number(process.env.PARITY_CONCURRENCY) || 4);
+// Override with PARITY_CONCURRENCY for local tuning; must be a positive integer.
+function parseConcurrency(raw: string | undefined): number {
+  if (raw === undefined || raw === "") return 4;
+  const trimmed = raw.trim();
+  const parsed = Number.parseInt(trimmed, 10);
+  if (!Number.isFinite(parsed) || parsed < 1 || String(parsed) !== trimmed) {
+    process.stderr.write(
+      `parity run: PARITY_CONCURRENCY must be a positive integer (got ${JSON.stringify(raw)})\n`,
+    );
+    process.exit(1);
+  }
+  return parsed;
+}
+
+const CONCURRENCY = parseConcurrency(process.env.PARITY_CONCURRENCY);
 
 async function runPool<T>(items: T[], worker: (item: T) => Promise<void>): Promise<void> {
   const queue = [...items];

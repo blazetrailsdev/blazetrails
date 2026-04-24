@@ -1853,20 +1853,35 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return pgTypeCast(value);
   }
 
-  columnsForDistinct(columns: string, orders: string[]): string {
-    if (!orders || orders.length === 0) return columns;
-    const orderColumns = orders
-      .map((o) => o.replace(/\s+(ASC|DESC)\s*(NULLS\s+(FIRST|LAST))?\s*/gi, "").trim())
-      .filter((c) => c.length > 0);
+  columnsForDistinct(columns: string, orders: (string | Nodes.Node)[]): string {
+    const visitor = this.arelVisitor;
+    const orderColumns = (orders ?? [])
+      .map((o) => (typeof o === "string" ? o : visitor.compile(o as Nodes.Node)))
+      .filter((o) => o.trim().length > 0)
+      .map((o, i) => {
+        const col = o
+          .replace(/\s+(?:ASC|DESC)\b/gi, "")
+          .replace(/\s+NULLS\s+(?:FIRST|LAST)\b/gi, "")
+          .trim();
+        return col.length > 0 ? `${col} AS alias_${i}` : null;
+      })
+      .filter((c): c is string => c !== null);
     if (orderColumns.length === 0) return columns;
-    return `${columns}, ${orderColumns.join(", ")}`;
+    return [...orderColumns, columns].join(", ");
   }
 
   async extensions(): Promise<string[]> {
-    const rows = await this.schemaQuery(
-      `SELECT extname FROM pg_extension WHERE extname != 'plpgsql'`,
-    );
-    return rows.map((r) => r.extname as string);
+    const rows = await this.schemaQuery(`
+      SELECT pg_extension.extname, n.nspname AS schema
+      FROM pg_extension
+      JOIN pg_namespace n ON pg_extension.extnamespace = n.oid
+      WHERE pg_extension.extname != 'plpgsql'
+    `);
+    const current = await this.currentSchema();
+    return rows.map((r) => {
+      const schema = r.schema === current ? null : (r.schema as string);
+      return [schema, r.extname as string].filter(Boolean).join(".");
+    });
   }
 
   async extensionEnabled(name: string): Promise<boolean> {

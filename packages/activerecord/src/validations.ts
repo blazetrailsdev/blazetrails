@@ -9,9 +9,11 @@ import type { ValidationContext } from "@blazetrails/activemodel";
 import { ActiveRecordError } from "./errors.js";
 
 /**
- * Anything Rails' `valid?(context = nil)` accepts — shared between
- * AM's `Model.isValid` and AR's `valid?` override so the signatures
- * stay substitutable.
+ * Rails-style validation contexts (`string`, `string[]`, or `null` —
+ * matching what `valid?(context = nil)` accepts in Rails) plus this
+ * library's `ValidationContext` wrapper class. Shared between AM's
+ * `Model.isValid` and AR's `valid?` override so the signatures stay
+ * substitutable.
  */
 export type ValidationContextArg = string | string[] | ValidationContext | null;
 import { AbsenceValidator } from "./validations/absence.js";

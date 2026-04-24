@@ -32,7 +32,17 @@ describe("ActiveRecord::Encryption::ConfigurableTest", () => {
   });
 
   it("can access context properties with top level getters", () => {
-    expect(Configurable.keyProvider).toBe(Contexts.context.keyProvider);
+    // Set salt so DerivedSecretKeyProvider can run PBKDF2.
+    Configurable.config.keyDerivationSalt = "the salt";
+    const keyProvider = new DerivedSecretKeyProvider("some secret");
+
+    expect(Configurable.keyProvider).toBeUndefined();
+
+    Contexts.withEncryptionContext({ keyProvider }, () => {
+      expect(Configurable.keyProvider).toBe(keyProvider);
+    });
+
+    expect(Configurable.keyProvider).toBeUndefined();
   });
 
   it(".configure configures initial config properties", () => {

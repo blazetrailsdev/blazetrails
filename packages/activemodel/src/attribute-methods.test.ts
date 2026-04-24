@@ -289,6 +289,22 @@ describe("AttributeMethodsTest", () => {
     expect(p.changes).toEqual({ name: ["Alice", "Ally"] });
   });
 
+  it("hasAttribute and readAttributeBeforeTypeCast resolve alias names", () => {
+    // Rails `has_attribute?` and `read_attribute_before_type_cast` both go
+    // through `attribute_aliases[name] || name` (attribute_methods.rb).
+    class Person extends Model {
+      static {
+        this.attribute("age", "integer");
+        this.aliasAttribute("years", "age");
+      }
+    }
+    const p = new Person({ age: "42" });
+    expect(p.hasAttribute("years")).toBe(true);
+    expect(p.hasAttribute("age")).toBe(true);
+    expect(p.hasAttribute("nope")).toBe(false);
+    expect(p.readAttributeBeforeTypeCast("years")).toBe("42");
+  });
+
   it("name clashes are handled", () => {
     // Attributes with the same name as existing methods should still work via readAttribute
     class Person extends Model {

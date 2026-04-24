@@ -1174,7 +1174,8 @@ export class Model {
    * Mirrors: ActiveModel::Dirty#attribute_before_type_cast
    */
   readAttributeBeforeTypeCast(name: string): unknown {
-    return this._attributes.getAttribute(name).valueBeforeTypeCast ?? null;
+    const resolved = resolveAliasName(this.constructor as typeof Model, name);
+    return this._attributes.getAttribute(resolved).valueBeforeTypeCast ?? null;
   }
 
   /**
@@ -1203,7 +1204,9 @@ export class Model {
    * Mirrors: ActiveModel::AttributeMethods#has_attribute?
    */
   hasAttribute(name: string): boolean {
-    return (this.constructor as typeof Model)._attributeDefinitions.has(name);
+    const ctor = this.constructor as typeof Model;
+    const resolved = resolveAliasName(ctor, name);
+    return ctor._attributeDefinitions.has(resolved);
   }
 
   /**

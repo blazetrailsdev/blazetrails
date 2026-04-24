@@ -1626,7 +1626,7 @@ describe("CallbacksTest", () => {
         this.attribute("name", "string");
         this.adapter = adapter;
         this.beforeSave(async (r: any) => {
-          await new Promise((res) => setTimeout(res, 5));
+          await Promise.resolve();
           order.push(`before:${r.name}`);
         });
         this.afterSave((r: any) => {

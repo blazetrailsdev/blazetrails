@@ -598,7 +598,7 @@ describe("unified sync/async runner", () => {
     const chain = new CallbackChain();
     const log: string[] = [];
     chain.register("before", "save", async () => {
-      await new Promise((r) => setTimeout(r, 5));
+      await Promise.resolve();
       log.push("b1");
     });
     chain.register("before", "save", () => {

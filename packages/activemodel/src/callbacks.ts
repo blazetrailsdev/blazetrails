@@ -533,7 +533,21 @@ export class CallbackChain {
           if (isThenable(result)) pendingProceed = result as Promise<void>;
           return result;
         };
-        const cbResult = (cb.fn as AroundCallbackFn)(record, wrappedProceed);
+        let cbResult: void | Promise<void>;
+        try {
+          cbResult = (cb.fn as AroundCallbackFn)(record, wrappedProceed);
+        } catch (aroundError) {
+          // Sync throw from an around callback after it already kicked off an
+          // async proceed(). Consume the pending rejection so the caller sees
+          // only the thrown error, not a stray unhandled rejection.
+          if (pendingProceed) {
+            return (async () => {
+              await pendingProceed!.catch(() => {});
+              throw aroundError;
+            })();
+          }
+          throw aroundError;
+        }
         if (isThenable(cbResult) || pendingProceed) {
           if (opts?.strict === "sync") {
             swallowRejection(cbResult);

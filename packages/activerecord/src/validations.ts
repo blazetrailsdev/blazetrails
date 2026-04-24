@@ -90,7 +90,7 @@ export function _setSuperIsValid(fn: (context?: string | string[] | null) => boo
  * :update for persisted). Sets _validationContext for the duration
  * matching Rails' with_validation_context.
  */
-export function isValid(this: any, context?: string | string[]): boolean {
+export function isValid(this: any, context?: string | string[] | null): boolean {
   const effectiveContext =
     context ?? this._validationContext ?? defaultValidationContext.call(this);
   if (_superIsValid == null) {
@@ -112,7 +112,7 @@ export function isValid(this: any, context?: string | string[]): boolean {
  * Mirrors: ActiveRecord::Validations#validate — inherited alias of `valid?`
  * (activemodel/lib/active_model/validations.rb:370).
  */
-export function validate(this: any, context?: string | string[]): boolean {
+export function validate(this: any, context?: string | string[] | null): boolean {
   return isValid.call(this, context);
 }
 

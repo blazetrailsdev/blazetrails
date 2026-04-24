@@ -256,6 +256,9 @@ export interface MismatchedForeignKeyOptions {
  *
  * Mirrors: ActiveRecord::MismatchedForeignKey (errors.rb:238)
  *
+ * Intentionally extends StatementInvalid (not InvalidForeignKey) — matches
+ * Rails where MismatchedForeignKey < StatementInvalid, not < InvalidForeignKey.
+ *
  * Provides a human-readable message describing the mismatch and suggesting
  * the correct column type to use.
  */

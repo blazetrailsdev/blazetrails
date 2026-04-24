@@ -85,11 +85,17 @@ const ER_QUERY_INTERRUPTED = 1317;
 const ER_QUERY_TIMEOUT = 3024;
 const ER_TABLE_EXISTS = 1050;
 
-export abstract class AbstractMysqlAdapter extends AbstractAdapter {
+export class AbstractMysqlAdapter extends AbstractAdapter {
   static readonly Version = Version;
 
-  /** Implemented by concrete adapters (Mysql2Adapter, TrilogyAdapter). */
-  abstract columns(tableName: string): Promise<Column[]>;
+  /**
+   * Return Column objects for a table. Concrete adapters (Mysql2Adapter,
+   * TrilogyAdapter) override this. The default throws so that unimplemented
+   * adapters fail loudly if FK enrichment is ever triggered.
+   */
+  async columns(_tableName: string): Promise<Column[]> {
+    throw new Error(`${this.constructor.name} must implement columns()`);
+  }
 
   protected _mariadb = false;
   protected _databaseVersion: Version | null = null;

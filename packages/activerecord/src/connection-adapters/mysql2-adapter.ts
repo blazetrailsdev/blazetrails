@@ -288,6 +288,14 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
         // typed exception classes via _translateException.
         let translated = this._translateException(e, driverSql, driverBinds);
         if (translated instanceof MismatchedForeignKey) {
+          // Release the connection before enrichment — _enrichMismatchedForeignKey
+          // calls columns() which needs its own pool connection. Holding the
+          // current connection while waiting for another would deadlock on
+          // small pools (e.g. connectionLimit: 1).
+          if (conn) {
+            this.releaseConn(conn);
+            conn = undefined;
+          }
           translated = await this._enrichMismatchedForeignKey(translated);
         }
         payload.exception = translated;
@@ -345,6 +353,10 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
         // exception classes via _translateException.
         let translated = this._translateException(e, driverSql, driverBinds);
         if (translated instanceof MismatchedForeignKey) {
+          if (conn) {
+            this.releaseConn(conn);
+            conn = undefined;
+          }
           translated = await this._enrichMismatchedForeignKey(translated);
         }
         payload.exception = translated;

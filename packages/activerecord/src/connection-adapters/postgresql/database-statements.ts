@@ -10,11 +10,14 @@ import type { Result } from "../../result.js";
 
 // Mirrors: PostgreSQL::DatabaseStatements::READ_QUERY (database_statements.rb:19-21)
 // Mirrors Rails' build_read_query_regexp which combines the default read list
-// (begin, commit, explain, release, rollback, savepoint, select, with) with
+// (begin, commit, explain, release, rollback, savepoint, select) with
 // the PG-specific additions (close, declare, fetch, move, set, show).
+// `with` is intentionally excluded: PostgreSQL CTEs can perform writes
+// (e.g. WITH x AS (INSERT ...) SELECT ...) and must not be treated as
+// universally read-only — those queries fall through to isWriteQuerySql.
 // Leading whitespace and block/line comments are also allowed before the keyword.
 export const READ_QUERY =
-  /^(?:\s|\/\*.*?\*\/|--[^\n]*\n)*(?:\([\s(]*)*(?:begin|close|commit|declare|explain|fetch|move|release|rollback|savepoint|select|set|show|with)\b/is;
+  /^(?:\s|\/\*.*?\*\/|--[^\n]*\n)*(?:\([\s(]*)*(?:begin|close|commit|declare|explain|fetch|move|release|rollback|savepoint|select|set|show)\b/is;
 
 export interface DatabaseStatements {
   execQuery(sql: string, name?: string | null, binds?: unknown[]): Promise<Result>;

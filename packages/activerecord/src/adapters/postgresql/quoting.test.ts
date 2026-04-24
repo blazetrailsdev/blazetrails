@@ -3,6 +3,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { describeIfPg, PostgreSQLAdapter, PG_TEST_URL } from "./test-helper.js";
+import { IntegerOutOf64BitRange } from "../../connection-adapters/postgresql/quoting.js";
 
 describeIfPg("PostgreSQLAdapter", () => {
   let adapter: PostgreSQLAdapter;
@@ -123,9 +124,9 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it("raise when int is wider than 64bit", async () => {
       const tooBig = BigInt("9223372036854775808"); // MAX_INT64 + 1
-      expect(() => adapter.quote(tooBig)).toThrow();
+      expect(() => adapter.quote(tooBig)).toThrow(IntegerOutOf64BitRange);
       const tooSmall = BigInt("-9223372036854775809"); // MIN_INT64 - 1
-      expect(() => adapter.quote(tooSmall)).toThrow();
+      expect(() => adapter.quote(tooSmall)).toThrow(IntegerOutOf64BitRange);
     });
 
     it("do not raise when int is not wider than 64bit", async () => {

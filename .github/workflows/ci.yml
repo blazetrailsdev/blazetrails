@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       docs_only: ${{ steps.filter.outputs.docs_only }}
+      parity_relevant: ${{ steps.filter.outputs.parity_relevant }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,24 +40,41 @@ jobs:
           # reliably compute a diff — fall back to running the full matrix.
           if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            echo "parity_relevant=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if ! files=$(git diff --name-only "$base" "$head" 2>/dev/null); then
             echo "git diff failed (base may be unreachable after force-push) — running full matrix"
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            echo "parity_relevant=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           echo "Changed files:"
           echo "$files"
           if [ -z "$files" ]; then
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            echo "parity_relevant=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # Any line that does NOT start with `docs/` flips the switch.
+          # docs_only: any line NOT starting with `docs/` flips the switch.
           if echo "$files" | grep -qv '^docs/'; then
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
           else
             echo "docs_only=true" >> "$GITHUB_OUTPUT"
+          fi
+          # parity_relevant: true when any change could shift Rails↔trails
+          # SQL output. Covers the parity harness itself, fixtures, the TS
+          # packages whose compiled output the runners import, the bin
+          # shims, pnpm lock (dep graph), and the workflow file itself
+          # (changing build steps is a reason to re-run). Everything else
+          # (rack, actionpack, actionview, trailties, website, top-level
+          # docs, eslint plugin, etc.) cannot affect introspection or query
+          # serialization and is skipped.
+          parity_paths='^scripts/parity/|^packages/activesupport/src/|^packages/activemodel/src/|^packages/arel/src/|^packages/activerecord/src/|^packages/activerecord/bin/|^packages/activerecord/package\.json$|^packages/activesupport/package\.json$|^packages/activemodel/package\.json$|^packages/arel/package\.json$|^package\.json$|^pnpm-lock\.yaml$|^\.github/workflows/ci\.yml$'
+          if echo "$files" | grep -qE "$parity_paths"; then
+            echo "parity_relevant=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "parity_relevant=false" >> "$GITHUB_OUTPUT"
           fi
 
   build-and-typecheck:
@@ -330,7 +348,9 @@ jobs:
   schema-parity-rails:
     name: Schema Parity (Rails side)
     needs: changes
-    if: needs.changes.outputs.docs_only != 'true'
+    if: >-
+      needs.changes.outputs.docs_only != 'true' &&
+      needs.changes.outputs.parity_relevant == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -372,7 +392,9 @@ jobs:
   schema-parity-trails:
     name: Schema Parity (trails side)
     needs: changes
-    if: needs.changes.outputs.docs_only != 'true'
+    if: >-
+      needs.changes.outputs.docs_only != 'true' &&
+      needs.changes.outputs.parity_relevant == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -402,6 +424,7 @@ jobs:
       - schema-parity-trails
     if: >-
       needs.changes.outputs.docs_only != 'true' &&
+      needs.changes.outputs.parity_relevant == 'true' &&
       needs.schema-parity-rails.result == 'success' &&
       needs.schema-parity-trails.result == 'success'
     runs-on: ubuntu-latest
@@ -429,7 +452,9 @@ jobs:
   query-parity-frozen-at:
     name: Query Parity (compute frozen-at)
     needs: changes
-    if: needs.changes.outputs.docs_only != 'true'
+    if: >-
+      needs.changes.outputs.docs_only != 'true' &&
+      needs.changes.outputs.parity_relevant == 'true'
     runs-on: ubuntu-latest
     outputs:
       # Minted once per workflow run and consumed by both dump jobs so they
@@ -448,7 +473,9 @@ jobs:
     needs:
       - changes
       - query-parity-frozen-at
-    if: needs.changes.outputs.docs_only != 'true'
+    if: >-
+      needs.changes.outputs.docs_only != 'true' &&
+      needs.changes.outputs.parity_relevant == 'true'
     runs-on: ubuntu-latest
     env:
       PARITY_FROZEN_AT: ${{ needs.query-parity-frozen-at.outputs.value }}
@@ -487,7 +514,9 @@ jobs:
     needs:
       - changes
       - query-parity-frozen-at
-    if: needs.changes.outputs.docs_only != 'true'
+    if: >-
+      needs.changes.outputs.docs_only != 'true' &&
+      needs.changes.outputs.parity_relevant == 'true'
     runs-on: ubuntu-latest
     env:
       PARITY_FROZEN_AT: ${{ needs.query-parity-frozen-at.outputs.value }}
@@ -528,6 +557,7 @@ jobs:
       - query-parity-trails
     if: >-
       needs.changes.outputs.docs_only != 'true' &&
+      needs.changes.outputs.parity_relevant == 'true' &&
       needs.query-parity-rails.result == 'success' &&
       needs.query-parity-trails.result == 'success'
     runs-on: ubuntu-latest

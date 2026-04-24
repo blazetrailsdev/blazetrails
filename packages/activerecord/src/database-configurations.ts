@@ -89,8 +89,14 @@ export class DatabaseConfigurations {
     } else {
       // Mirrors Rails: DatabaseConfigurations#initialize calls build_configs which
       // merges DATABASE_URL via environment_url_config + merge_db_environment_variables.
-      const env = process.env.NODE_ENV || DatabaseConfigurations._defaultEnv;
-      this._configurations = this._buildConfigs(this._mergeDatabaseUrl(configurations, env));
+      // Uses DatabaseConfigurations.defaultEnv (set by app bootstrap from RAILS_ENV/RACK_ENV),
+      // not NODE_ENV — matching Rails' env resolution semantics.
+      this._configurations = this._buildConfigs(
+        this._mergeDatabaseUrl(
+          configurations,
+          process.env.NODE_ENV || DatabaseConfigurations._defaultEnv,
+        ),
+      );
     }
     // Register this instance as the current one for HashConfig.isPrimary lookup
     _currentConfigurations = this;
@@ -243,8 +249,9 @@ export class DatabaseConfigurations {
    */
   static fromEnv(raw: RawConfigurations = {}): DatabaseConfigurations {
     const instance = new DatabaseConfigurations([]);
-    const env = process.env.NODE_ENV || DatabaseConfigurations._defaultEnv;
-    instance._configurations = instance._buildConfigs(instance._mergeDatabaseUrl(raw, env));
+    instance._configurations = instance._buildConfigs(
+      instance._mergeDatabaseUrl(raw, process.env.NODE_ENV || DatabaseConfigurations._defaultEnv),
+    );
     return instance;
   }
 
@@ -290,7 +297,7 @@ export class DatabaseConfigurations {
       // Three-level: merge URL into the "primary" entry only (don't override existing url:)
       const nested = { ...(envConfig as Record<string, DatabaseConfigOptions>) };
       if (nested.primary) {
-        if (!nested.primary.url) nested.primary = { ...nested.primary, url: databaseUrl };
+        if (!("url" in nested.primary)) nested.primary = { ...nested.primary, url: databaseUrl };
       } else {
         nested.primary = { url: databaseUrl };
       }
@@ -298,7 +305,7 @@ export class DatabaseConfigurations {
     } else {
       const existing = envConfig as DatabaseConfigOptions;
       // Don't override an explicit url: key in the config (Rails: env-specific url takes precedence)
-      if (!existing.url) {
+      if (!("url" in existing)) {
         merged[currentEnv] = { ...existing, url: databaseUrl };
       }
     }
@@ -312,8 +319,10 @@ export class DatabaseConfigurations {
       // Mirrors Rails: build_db_config_from_raw_config — string must have a URI scheme
       if (typeof envConfig === "string") {
         if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(envConfig)) {
+          // Redact credentials before including in error message
+          const safe = envConfig.replace(/^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)[^@/]+@/, "$1***@");
           throw new InvalidConfigurationError(
-            `'{ ${envName} => ${envConfig} }' is not a valid configuration. Expected '${envConfig}' to be a URL string or a Hash.`,
+            `'{ ${envName} => ${safe} }' is not a valid configuration. Expected a URL string or a Hash.`,
           );
         }
         configs.push(
@@ -323,7 +332,7 @@ export class DatabaseConfigurations {
       }
       if (typeof envConfig !== "object" || envConfig === null) {
         throw new InvalidConfigurationError(
-          `'{ ${envName} => ${String(envConfig)} }' is not a valid configuration. Expected a URL string or Hash.`,
+          `'{ ${envName} => [${typeof envConfig}] }' is not a valid configuration. Expected a URL string or a Hash.`,
         );
       }
       if (this._isThreeLevelConfig(envConfig)) {

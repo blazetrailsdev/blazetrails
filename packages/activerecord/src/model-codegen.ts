@@ -188,12 +188,13 @@ export function generateModels(
 
       fromCls.associations.push({ kind: "belongsTo", name: belongsToName, opts: belongsToOpts });
 
-      // hasMany on the target side. The association name is always the
-      // source table's pluralised (stripped) form — no _id branch matters
-      // here, unlike belongsTo. Self-referential case still lands here and
-      // the user likely renames to "children"; generator emits the
-      // table-derived default.
-      const hasManyName = pluralize(strip(fk.fromTable));
+      // hasMany on the target side. Derive the association name from the
+      // already-singular source class name, then pluralise — pluralising
+      // the table name directly would mangle irregular already-plural
+      // tables (e.g. `children` → `childrens`, `people` → `peoples`).
+      // Self-referential case still lands here and the user likely
+      // renames to "children"; generator emits the class-derived default.
+      const hasManyName = pluralize(underscore(fromCls.name));
 
       // Rails convention for hasMany(name) infers:
       //   foreignKey = "${underscore(current_class_name)}_id"

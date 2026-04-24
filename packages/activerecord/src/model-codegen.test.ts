@@ -226,6 +226,20 @@ describe("generateModels", () => {
     ).toThrow(/class name collision.*"blog_posts".*"posts".*classify to `Post`/);
   });
 
+  it("doesn't mangle hasMany name for irregular-plural source tables", () => {
+    // people → Person → pluralize("person") → "people". If we pluralized
+    // the table name directly, "people" (already plural) would become
+    // "peoples". Covers the same hazard for "children", "men", etc.
+    const tables = [
+      table("companies"),
+      table("people", { foreignKeys: [fk("people", "companies", "company_id")] }),
+    ];
+    const out = generateModels(tables, { noHeader: true, now: NOW });
+    // The inverse hasMany on Company should be "people", not "peoples".
+    expect(out).toContain('this.hasMany("people");');
+    expect(out).not.toMatch(/this\.hasMany\("peoples"\)/);
+  });
+
   it("sorts belongsTo by association name, not FK column", () => {
     // Two FKs on books: `author_id` → authors (belongsTo "author") and
     // `written_for_id` → publishers (belongsTo "written_for"). Sorted by

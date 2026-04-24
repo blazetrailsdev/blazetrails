@@ -32,7 +32,7 @@ describe("WriteTest", () => {
     expect(p._readAttribute("content")).toBe("via alias");
   });
 
-  it("_write_attribute enforces readonly check (mirrors Rails HasReadonlyAttributes)", () => {
+  it("_write_attribute bypasses readonly check", () => {
     createTestAdapter();
     class Item extends Base {
       static {
@@ -42,7 +42,8 @@ describe("WriteTest", () => {
     }
     const item = new Item({ code: "A" });
     (item as any)._newRecord = false;
-    // Rails HasReadonlyAttributes overrides _write_attribute to also raise
+    // Rails HasReadonlyAttributes overrides _write_attribute to also enforce readonly —
+    // in our implementation _writeAttribute also raises, matching Rails behavior.
     expect(() => item._writeAttribute("code", "B")).toThrow(ReadonlyAttributeError);
   });
 });

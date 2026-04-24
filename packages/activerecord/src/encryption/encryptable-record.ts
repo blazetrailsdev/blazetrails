@@ -2,6 +2,33 @@ import { Scheme, type SchemeOptions } from "./scheme.js";
 import { EncryptedAttributeType } from "./encrypted-attribute-type.js";
 import { Configurable } from "./configurable.js";
 
+/**
+ * Mirrors Rails' EncryptableRecord#global_previous_schemes_for.
+ * Exported so encryption.ts (Base.encrypts path) can use the same logic.
+ * Filters config.previousSchemes to those compatible with the given scheme
+ * and merges each one so per-attribute settings (deterministic, downcase)
+ * are preserved in the fallback scheme.
+ */
+export function globalPreviousSchemesFor(scheme: Scheme): Scheme[] {
+  return Configurable.config.previousSchemes
+    .map((opts) => new Scheme(opts))
+    .filter((prev) => scheme.isCompatibleWith(prev))
+    .map((prev) => scheme.merge(prev));
+}
+
+/**
+ * Mirrors Rails' EncryptableRecord#scheme_for.
+ * Builds the scheme with global previous schemes prepended to any
+ * per-attribute previousSchemes declared in options.
+ */
+function schemeFor(options: SchemeOptions): Scheme {
+  const { previousSchemes: localPrevious = [], ...rest } = options;
+  const base = new Scheme(rest);
+  const globalPrevious = globalPreviousSchemesFor(base);
+  const allPrevious = [...globalPrevious, ...localPrevious.map((o) => new Scheme(o))];
+  return allPrevious.length > 0 ? new Scheme({ ...rest, previousSchemes: allPrevious }) : base;
+}
+
 const ORIGINAL_ATTRIBUTE_PREFIX = "original_";
 
 /**
@@ -32,7 +59,7 @@ export class EncryptableRecord {
       }
     }
 
-    const scheme = new Scheme(options);
+    const scheme = schemeFor(options);
 
     if (!modelClass._encryptedAttributes) {
       modelClass._encryptedAttributes = new Set<string>();

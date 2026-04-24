@@ -240,8 +240,7 @@ describe("SerializationTest", () => {
     // → string, Time/Date → ISO8601, Symbol → string. Our helper ports
     // the subset that actually occurs in JS: BigInt → string, Date →
     // ISO8601 (so the hash form already contains strings, not Date
-    // objects), recurse into arrays/objects, call `asJson()`/`toJSON()`
-    // on nested values.
+    // objects), and recursive coercion within arrays/objects.
     it("asJson coerces bigint attributes to string (JSON.stringify-safe)", () => {
       class Row extends Model {
         static {
@@ -371,9 +370,11 @@ describe("SerializationTest", () => {
       (b as unknown as { _cachedAssociations: Map<string, unknown> })._cachedAssociations = new Map(
         [["next", a]],
       );
-      // serializableHash is non-recursive through associations — the
-      // include option must be passed explicitly, and each level is
-      // flattened once. So asJson won't loop; it emits a single level.
+      // serializableHash only traverses associations that are
+      // explicitly included. Here we include "next" on `a`, so that
+      // association is serialized once; it won't keep traversing
+      // `b.next` unless a nested include is provided. So asJson emits
+      // a single hop and doesn't loop.
       expect(() => a.asJson({ include: ["next"] })).not.toThrow();
       const json = a.asJson({ include: ["next"] }) as { next: { name: string } };
       expect(json.next.name).toBe("b");

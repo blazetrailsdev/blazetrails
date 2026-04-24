@@ -155,6 +155,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   private _useInsertReturning = true;
   private _minMessages = "warning";
   private _sessionVariables: Record<string, string | boolean | null | "default"> = {};
+  private _configuredClients = new WeakSet<pg.PoolClient>();
   // Per-pg.Client statement pool. PG's prepared statements are
   // session-scoped, so each physical client gets its own pool with
   // its own counter (matching Rails' `PostgreSQL::StatementPool`).
@@ -231,7 +232,6 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       this._minMessages = "warning";
       this._sessionVariables = {};
       this._driverPool = new pg.Pool({ connectionString: config });
-      this._driverPool.on("connect", (client) => this._configureConnection(client));
       return;
     }
     // Rails' database.yml merges driver connection params + adapter
@@ -256,23 +256,32 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     this._minMessages = minMessages ?? "warning";
     this._sessionVariables = variables ?? {};
     this._driverPool = new pg.Pool(pgConfig);
-    this._driverPool.on("connect", (client) => this._configureConnection(client));
   }
 
   /**
    * Mirrors: PostgreSQLAdapter#configure_connection. Runs once per new
-   * physical connection (via pool 'connect' event). Sets client_min_messages
-   * and any session variables from the `variables:` config key.
+   * physical connection, tracked by WeakSet so it runs exactly once per
+   * client regardless of how many times the client is checked out from
+   * the pool. Called (and awaited) inside _acquireFreshClient so errors
+   * propagate and misconfigured clients are never handed to user code.
    */
-  private _configureConnection(client: pg.PoolClient): void {
-    const stmts: string[] = [`SET client_min_messages TO '${this._minMessages}'`];
+  private async _maybeConfigureConnection(client: pg.PoolClient): Promise<void> {
+    if (this._configuredClients.has(client)) return;
+    this._configuredClients.add(client);
+    // Mirrors: set_standard_conforming_strings — required for correct quoting behaviour.
+    await client.query("SET standard_conforming_strings = on");
+    // Mirrors: SET intervalstyle — ISO 8601 so intervals parse cleanly.
+    await client.query("SET intervalstyle = iso_8601");
+    await client.query(`SET client_min_messages TO ${this.quoteLiteral(this._minMessages)}`);
     for (const [key, val] of Object.entries(this._sessionVariables)) {
       if (val === null) continue;
-      const pgVal =
-        val === true ? "on" : val === false ? "off" : val === "default" ? "DEFAULT" : `'${val}'`;
-      stmts.push(`SET ${key} = ${pgVal}`);
+      if (val === "default") {
+        await client.query(`SET SESSION ${key} TO DEFAULT`);
+      } else {
+        const pgVal = val === true ? "on" : val === false ? "off" : String(val);
+        await client.query(`SET SESSION ${key} TO ${this.quoteLiteral(pgVal)}`);
+      }
     }
-    client.query(stmts.join("; ")).catch(() => {});
   }
 
   /**
@@ -576,6 +585,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     if (!this._driverPool) throw new Error("PostgreSQLAdapter: connection is closed");
     const client = await this._driverPool.connect();
     try {
+      await this._maybeConfigureConnection(client);
       await this._maybeDrainOrphanedPreparedStatements(client);
     } catch (error) {
       client.release(error instanceof Error ? error : new Error(String(error)));

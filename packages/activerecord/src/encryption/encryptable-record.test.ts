@@ -312,4 +312,8 @@ describe("ActiveRecord::Encryption::EncryptableRecordTest", () => {
   it.skip("binary data can be encrypted uncompressed", () => {});
   it.skip("serialized binary data can be encrypted", () => {});
   it.skip("deterministic ciphertexts remain constant", () => {});
+  it.skip("can compress data with custom compressor", () => {});
+  it.skip("type method returns cast type", () => {});
+  it.skip("encrypts normalized data", () => {});
+  it.skip("encrypts attribute data", () => {});
 });

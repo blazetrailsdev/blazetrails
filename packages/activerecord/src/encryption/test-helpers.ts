@@ -83,7 +83,8 @@ export function freshAdapter(): DatabaseAdapter {
 // ─── Model factories ──────────────────────────────────────────────────────────
 
 /**
- * Creates a fresh model with only string attributes — no pre-applied encryption.
+ * Creates a fresh model with the given attributes — no pre-applied encryption.
+ * Attribute types are passed as strings (e.g. "integer", "string").
  * Use this when you need to apply a specific encryption scheme to an attribute
  * without the idempotency guard blocking a second encrypts() call.
  */

@@ -77,21 +77,62 @@ interface PlannedClass {
 const BUILTIN_IGNORE = new Set(["schema_migrations", "ar_internal_metadata"]);
 
 /**
- * Strip a PostgreSQL schema qualifier from a table identifier.
+ * Strip a PostgreSQL schema qualifier from a table identifier and drop
+ * surrounding double quotes that PG adds when identifiers need quoting
+ * (mixed case, reserved words, embedded spaces/dots).
  *
  * The PG adapter's FK introspection selects `t1.oid::regclass::text` /
- * `t2.oid::regclass::text`, which PostgreSQL renders as `schema.table`
- * when the table lives outside the current search_path (bare `table`
- * otherwise). `introspectTables()` returns unqualified names, so FK
- * targets coming from a non-default schema wouldn't match the class map
- * without this normalisation.
+ * `t2.oid::regclass::text`, which PostgreSQL renders as:
+ *   - `table`                    — unqualified, bare (search_path hit)
+ *   - `schema.table`             — qualified, bare
+ *   - `schema."Mixed"`           — qualified, target needs quoting
+ *   - `"other schema"."authors"` — qualified, schema needs quoting
+ *   - `"a""b"."c"`               — embedded double quote ("" escape)
  *
- * SQLite and MySQL both return unqualified names, so this is a no-op
- * for those adapters.
+ * `introspectTables()` returns unqualified, unquoted names, so the FK
+ * target needs both the schema prefix stripped AND the surrounding
+ * quotes removed — otherwise `classes.get(toTableUnqual)` silently
+ * misses and the association drops. We walk the string tracking quote
+ * state rather than using `lastIndexOf(".")`, which would misbehave on
+ * quoted schema names containing a literal dot.
+ *
+ * SQLite and MySQL return unqualified unquoted names, so this is a
+ * no-op for those adapters.
  */
-function unqualify(tableName: string): string {
-  const dot = tableName.lastIndexOf(".");
-  return dot >= 0 ? tableName.slice(dot + 1) : tableName;
+export function unqualify(tableName: string): string {
+  const parts: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < tableName.length; i++) {
+    const ch = tableName[i]!;
+    if (ch === '"') {
+      current += ch;
+      // "" inside a quoted identifier is an escaped double-quote —
+      // stays inside the identifier, doesn't toggle state.
+      if (inQuotes && tableName[i + 1] === '"') {
+        current += tableName[i + 1]!;
+        i++;
+        continue;
+      }
+      inQuotes = !inQuotes;
+      continue;
+    }
+    if (ch === "." && !inQuotes) {
+      parts.push(current);
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+  parts.push(current);
+  return unquoteIdentifier(parts[parts.length - 1]!);
+}
+
+function unquoteIdentifier(id: string): string {
+  if (id.length >= 2 && id[0] === '"' && id[id.length - 1] === '"') {
+    return id.slice(1, -1).replaceAll('""', '"');
+  }
+  return id;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateModels } from "./model-codegen.js";
+import { generateModels, unqualify } from "./model-codegen.js";
 import type { IntrospectedTable } from "./model-codegen.js";
 import { ForeignKeyDefinition } from "./connection-adapters/abstract/schema-definitions.js";
 
@@ -302,6 +302,41 @@ describe("generateModels", () => {
     expect(out).toContain(
       'this.hasMany("editor_posts", { className: "Post", foreignKey: "editor_id" });',
     );
+  });
+
+  it("resolves quoted schema-qualified FK targets from the PG adapter", () => {
+    // PG quotes identifiers that need it (mixed case, reserved words,
+    // spaces). regclass::text may return any of:
+    //   other_schema."Authors"      (quoted target)
+    //   "other schema"."authors"    (quoted schema)
+    //   "a""b"."c"                  (embedded double-quote)
+    // All must unqualify to the bare name so classes.get() hits.
+    const tables = [
+      table("authors"),
+      table("a"),
+      table("books", {
+        foreignKeys: [
+          fk("books", 'other_schema."authors"', "author_id"),
+          fk("books", '"weird schema"."a"', "a_id"),
+        ],
+      }),
+    ];
+    const out = generateModels(tables, { noHeader: true, now: NOW });
+    expect(out).toContain('this.belongsTo("author");');
+    expect(out).toContain('this.belongsTo("a");');
+    // No stray quotes, schema prefixes, or unmatched dots anywhere.
+    expect(out).not.toMatch(/["']\./);
+  });
+
+  it("unqualify() strips quoted identifiers and schemas correctly", () => {
+    expect(unqualify("authors")).toBe("authors");
+    expect(unqualify("schema.authors")).toBe("authors");
+    expect(unqualify('schema."Authors"')).toBe("Authors");
+    expect(unqualify('"other schema"."authors"')).toBe("authors");
+    // Embedded escaped double quote inside a quoted identifier: "" → ".
+    expect(unqualify('"a""b"."c"')).toBe("c");
+    // A quoted identifier that itself contains a dot must not be split.
+    expect(unqualify('schema."tab.le"')).toBe("tab.le");
   });
 
   it("resolves schema-qualified FK targets from the PG adapter", () => {

@@ -73,6 +73,24 @@ interface PlannedClass {
 const BUILTIN_IGNORE = new Set(["schema_migrations", "ar_internal_metadata"]);
 
 /**
+ * Strip a PostgreSQL schema qualifier from a table identifier.
+ *
+ * The PG adapter's FK introspection selects `t1.oid::regclass::text` /
+ * `t2.oid::regclass::text`, which PostgreSQL renders as `schema.table`
+ * when the table lives outside the current search_path (bare `table`
+ * otherwise). `introspectTables()` returns unqualified names, so FK
+ * targets coming from a non-default schema wouldn't match the class map
+ * without this normalisation.
+ *
+ * SQLite and MySQL both return unqualified names, so this is a no-op
+ * for those adapters.
+ */
+function unqualify(tableName: string): string {
+  const dot = tableName.lastIndexOf(".");
+  return dot >= 0 ? tableName.slice(dot + 1) : tableName;
+}
+
+/**
  * Generate a TS module containing one `export class X extends Base { ... }`
  * per introspected table, with `belongsTo` / `hasMany` inferred from FKs.
  */
@@ -163,6 +181,10 @@ export function generateModels(
     // belongsTo output order is re-sorted by association name below.
     const fks = [...t.foreignKeys].sort((a, b) => a.column.localeCompare(b.column));
     for (const fk of fks) {
+      // Normalise PG-qualified table names (e.g. "other_schema.authors" →
+      // "authors") before class lookup and name derivation. classes Map is
+      // keyed by the unqualified names returned from introspectTables().
+      const toTableUnqual = unqualify(fk.toTable);
       // Composite FK: emit TODO comment, no association.
       if (fk.column.includes(",")) {
         fromCls.leadingComments.push(
@@ -171,7 +193,7 @@ export function generateModels(
         continue;
       }
       // If the target table was filtered out, skip — no class to point at.
-      const toCls = classes.get(fk.toTable);
+      const toCls = classes.get(toTableUnqual);
       if (!toCls) continue;
 
       // belongsTo name: strip _id if present, otherwise fall back to the
@@ -180,7 +202,7 @@ export function generateModels(
       const belongsToName =
         fk.column.endsWith("_id") && fk.column !== "_id"
           ? fk.column.slice(0, -3)
-          : underscore(singularize(strip(fk.toTable)));
+          : underscore(singularize(strip(toTableUnqual)));
 
       // Rails convention for belongsTo(name) infers:
       //   foreignKey = "${name}_id"
@@ -215,9 +237,9 @@ export function generateModels(
       if (fk.column !== hmConventionalForeignKey) hmOpts.foreignKey = fk.column;
       if (fromCls.name !== hmConventionalClassName) hmOpts.className = fromCls.name;
 
-      const pending = hasManyByTable.get(fk.toTable) ?? [];
-      pending.push({ toTable: fk.toTable, name: hasManyName, opts: hmOpts });
-      hasManyByTable.set(fk.toTable, pending);
+      const pending = hasManyByTable.get(toTableUnqual) ?? [];
+      pending.push({ toTable: toTableUnqual, name: hasManyName, opts: hmOpts });
+      hasManyByTable.set(toTableUnqual, pending);
     }
   }
 
@@ -250,7 +272,9 @@ export function generateModels(
       kept.reduce(
         (n, t) =>
           n +
-          t.foreignKeys.filter((fk) => !fk.column.includes(",") && classes.has(fk.toTable)).length,
+          t.foreignKeys.filter(
+            (fk) => !fk.column.includes(",") && classes.has(unqualify(fk.toTable)),
+          ).length,
         0,
       );
     out.push(`//`);

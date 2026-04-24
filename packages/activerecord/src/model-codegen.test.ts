@@ -239,6 +239,26 @@ describe("generateModels", () => {
     ).toThrow(/class name collision.*"blog_posts".*"posts".*classify to `Post`/);
   });
 
+  it("resolves schema-qualified FK targets from the PG adapter", () => {
+    // PostgreSQL's FK introspection renders the target via `regclass::text`,
+    // which returns "schema.table" for tables in a non-default schema.
+    // introspectTables() returns unqualified names, so the class map is
+    // keyed by "authors" (not "other_schema.authors"). The codegen layer
+    // must strip the schema prefix on lookup or the association and its
+    // inverse has_many both silently drop.
+    const tables = [
+      table("authors"),
+      table("books", {
+        foreignKeys: [fk("books", "other_schema.authors", "author_id")],
+      }),
+    ];
+    const out = generateModels(tables, { noHeader: true, now: NOW });
+    expect(out).toContain('this.belongsTo("author");');
+    expect(out).toContain('this.hasMany("books");');
+    // The dotted form should not leak into generated names anywhere.
+    expect(out).not.toMatch(/other_schema\./);
+  });
+
   it("doesn't mangle hasMany name for irregular-plural source tables", () => {
     // people → Person → pluralize("person") → "people". If we pluralized
     // the table name directly, "people" (already plural) would become

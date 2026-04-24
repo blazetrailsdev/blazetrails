@@ -9,7 +9,9 @@ import {
 describeIfMysql("Mysql2Adapter", () => {
   let adapter: Mysql2Adapter;
   const type = new BigIntegerType({ limit: 8 });
-  const BIG = 2n ** 62n; // well above Number.MAX_SAFE_INTEGER
+  // 2^62 — 19 digits, well above the 15-digit threshold where mysql2
+  // switches from number to string with supportBigNumbers:true.
+  const BIG = 2n ** 62n;
 
   beforeEach(async () => {
     adapter = new Mysql2Adapter(MYSQL_TEST_URL);
@@ -29,13 +31,12 @@ describeIfMysql("Mysql2Adapter", () => {
   });
 
   describe("MySQL bigint round-trip", () => {
-    it("preserves exact value above Number.MAX_SAFE_INTEGER", async () => {
-      const unsafe = 9007199254740993n; // Number.MAX_SAFE_INTEGER + 2
+    it("preserves exact value above Number.MAX_SAFE_INTEGER via BigIntegerType", async () => {
+      const unsafe = 9007199254740993n; // Number.MAX_SAFE_INTEGER + 2 (16 digits)
       await adapter.executeMutation(`INSERT INTO \`bigint_rt\` (\`score\`) VALUES (?)`, [unsafe]);
       const rows = await adapter.execute(`SELECT \`score\` FROM \`bigint_rt\``);
-      // mysql2 with bigNumberStrings:true returns BIGINT as decimal string
-      expect(typeof rows[0].score).toBe("string");
-      // BigIntegerType.cast converts to bigint
+      // mysql2 supportBigNumbers:true returns string for values that can't be
+      // represented exactly as a JS number — BigIntegerType.cast handles both.
       expect(type.cast(rows[0].score)).toBe(unsafe);
     });
 
@@ -46,13 +47,20 @@ describeIfMysql("Mysql2Adapter", () => {
       expect(type.cast(rows[0].score)).toBe(BIG + 1n);
     });
 
-    it("INT column in same row is unaffected by bigNumberStrings", async () => {
+    it("safe-range BIGINT returns as number (auto-increment IDs unaffected)", async () => {
+      await adapter.executeMutation(`INSERT INTO \`bigint_rt\` (\`score\`) VALUES (?)`, [42]);
+      const rows = await adapter.execute(`SELECT \`id\`, \`score\` FROM \`bigint_rt\``);
+      // Small BIGINT values (< 10^15) stay as JS number — existing code unaffected.
+      expect(typeof rows[0].id).toBe("number");
+      expect(typeof rows[0].score).toBe("number");
+    });
+
+    it("INT column is unaffected by supportBigNumbers", async () => {
       await adapter.executeMutation(
         `INSERT INTO \`bigint_rt\` (\`score\`, \`count\`) VALUES (?, ?)`,
         [BIG, 42],
       );
-      const rows = await adapter.execute(`SELECT \`score\`, \`count\` FROM \`bigint_rt\``);
-      // INT columns are not affected by supportBigNumbers — they return number
+      const rows = await adapter.execute(`SELECT \`count\` FROM \`bigint_rt\``);
       expect(typeof rows[0].count).toBe("number");
       expect(rows[0].count).toBe(42);
     });

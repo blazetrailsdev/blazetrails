@@ -574,15 +574,19 @@ export class AbstractAdapter {
     fnOrOpts?:
       | ((tx?: unknown) => Promise<T> | T)
       | { requiresNew?: boolean; isolation?: string; joinable?: boolean },
-    fn?: (tx?: unknown) => Promise<T> | T,
+    fnOrOpts2?:
+      | ((tx?: unknown) => Promise<T> | T)
+      | { requiresNew?: boolean; isolation?: string; joinable?: boolean },
   ): Promise<T | undefined> {
     let opts: { requiresNew?: boolean; isolation?: string; joinable?: boolean } = {};
     let block: (tx?: unknown) => Promise<T> | T;
     if (typeof fnOrOpts === "function") {
       block = fnOrOpts;
+      // Support both (fn) and (fn, opts) — fixture loading uses the latter
+      if (fnOrOpts2 && typeof fnOrOpts2 !== "function") opts = fnOrOpts2;
     } else {
       opts = fnOrOpts ?? {};
-      block = fn!;
+      block = fnOrOpts2 as (tx?: unknown) => Promise<T> | T;
     }
     return dbStatementsTransaction.call(this as any, block, opts) as Promise<T | undefined>;
   }

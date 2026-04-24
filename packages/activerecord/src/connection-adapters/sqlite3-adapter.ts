@@ -27,7 +27,6 @@ import {
   FloatType,
   BooleanType,
   BinaryType,
-  BigIntegerType,
   DecimalType,
 } from "@blazetrails/activemodel";
 import { getFs, Notifications } from "@blazetrails/activesupport";
@@ -276,7 +275,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
       );
     }
     if (!this.isSharedCache()) {
-      throw new Error(
+      throw new TransactionIsolationError(
         "You need to enable the shared-cache mode in SQLite mode before attempting to change the transaction isolation level",
       );
     }
@@ -467,7 +466,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     map.registerType("text", new TextType());
     map.registerType("integer", sqlite3Int());
     map.registerType("float", new FloatType());
-    map.registerType(/decimal/i, undefined, (sqlType) => {
+    map.registerType(/decimal|numeric/i, undefined, (sqlType) => {
       const precisionMatch = /\(\s*(\d+)/.exec(sqlType);
       const precision = precisionMatch ? parseInt(precisionMatch[1], 10) : undefined;
       const scaleMatch = /\(\s*\d+\s*,\s*(\d+)\s*\)/.exec(sqlType);
@@ -492,7 +491,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     map.registerType("numeric", new DecimalWithoutScale());
     // SQLite type affinity — regex matches for flexible type names
     map.registerType(/int/i, undefined, (lookupKey) => {
-      if (/bigint/i.test(lookupKey)) return new BigIntegerType();
+      if (/bigint/i.test(lookupKey)) return sqlite3Int(8);
       return sqlite3Int();
     });
     // Explicit "bigint" registered after /int/i so it takes priority (TypeMap

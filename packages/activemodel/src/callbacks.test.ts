@@ -548,3 +548,105 @@ describe("Generic Model.setCallback / skipCallback / resetCallbacks (Rails fidel
     expect(log).toEqual(["prepended", "registered-first", "block"]);
   });
 });
+
+describe("unified sync/async runner", () => {
+  it("returns a boolean synchronously when all callbacks and block are sync", () => {
+    const chain = new CallbackChain();
+    const log: string[] = [];
+    chain.register("before", "save", () => {
+      log.push("before");
+    });
+    chain.register("after", "save", () => {
+      log.push("after");
+    });
+    const result = chain.runCallbacks("save", {}, () => log.push("block"));
+    expect(result).toBe(true);
+    expect(log).toEqual(["before", "block", "after"]);
+  });
+
+  it("returns a Promise when a before callback is async", async () => {
+    const chain = new CallbackChain();
+    const log: string[] = [];
+    chain.register("before", "save", async () => {
+      await Promise.resolve();
+      log.push("before");
+    });
+    chain.register("after", "save", () => {
+      log.push("after");
+    });
+    const result = chain.runCallbacks("save", {}, () => log.push("block"));
+    expect(result).toBeInstanceOf(Promise);
+    expect(await result).toBe(true);
+    expect(log).toEqual(["before", "block", "after"]);
+  });
+
+  it("returns a Promise when the block is async", async () => {
+    const chain = new CallbackChain();
+    const log: string[] = [];
+    chain.register("before", "save", () => log.push("before"));
+    chain.register("after", "save", () => log.push("after"));
+    const result = chain.runCallbacks("save", {}, async () => {
+      await Promise.resolve();
+      log.push("block");
+    });
+    expect(result).toBeInstanceOf(Promise);
+    expect(await result).toBe(true);
+    expect(log).toEqual(["before", "block", "after"]);
+  });
+
+  it("awaits async callbacks in order", async () => {
+    const chain = new CallbackChain();
+    const log: string[] = [];
+    chain.register("before", "save", async () => {
+      await new Promise((r) => setTimeout(r, 5));
+      log.push("b1");
+    });
+    chain.register("before", "save", () => {
+      log.push("b2");
+    });
+    chain.register("after", "save", async () => {
+      await Promise.resolve();
+      log.push("a1");
+    });
+    await chain.runCallbacks("save", {}, () => log.push("block"));
+    expect(log).toEqual(["b1", "b2", "block", "a1"]);
+  });
+
+  it("async before halts chain when resolving to false", async () => {
+    const chain = new CallbackChain();
+    const log: string[] = [];
+    chain.register("before", "save", async () => false);
+    chain.register("after", "save", () => log.push("after"));
+    const ok = await chain.runCallbacks("save", {}, () => log.push("block"));
+    expect(ok).toBe(false);
+    expect(log).toEqual([]);
+  });
+
+  it("strict: 'sync' throws when a before callback returns a Promise", () => {
+    const chain = new CallbackChain();
+    chain.register("before", "validation", async () => {});
+    expect(() => chain.runCallbacks("validation", {}, () => {}, { strict: "sync" })).toThrow(
+      /Async callback registered on sync event 'validation'/,
+    );
+  });
+
+  it("strict: 'sync' throws when an after callback returns a Promise", () => {
+    const chain = new CallbackChain();
+    chain.register("after", "initialize", async () => {});
+    expect(() => chain.runAfter("initialize", {}, { strict: "sync" })).toThrow(
+      /Async callback registered on sync event 'initialize'/,
+    );
+  });
+
+  it("strict: 'sync' allows fully-sync chains", () => {
+    const chain = new CallbackChain();
+    const log: string[] = [];
+    chain.register("before", "validation", () => log.push("before"));
+    chain.register("after", "validation", () => log.push("after"));
+    const result = chain.runCallbacks("validation", {}, () => log.push("block"), {
+      strict: "sync",
+    });
+    expect(result).toBe(true);
+    expect(log).toEqual(["before", "block", "after"]);
+  });
+});

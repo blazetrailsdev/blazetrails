@@ -417,7 +417,7 @@ export class Model {
     this._callbackChain.register(
       "before",
       "validate",
-      (record: AnyRecord) => validator.validate(record),
+      (record: AnyRecord) => validator.validate(record) as unknown as void,
       this._buildValidateConditions(options),
     );
   }
@@ -487,7 +487,7 @@ export class Model {
           }
         };
       } else {
-        callbackFn = (record: AnyRecord) => validator.validate(record);
+        callbackFn = (record: AnyRecord) => validator.validate(record) as unknown as void;
       }
 
       this._ensureOwnCallbacks();
@@ -1212,7 +1212,7 @@ export class Model {
     // then fire after_initialize in Rails-compatible order.
     const callbackSuppressor = ctor as typeof ctor & { _suppressInitializeCallback?: boolean };
     if (callbackSuppressor._suppressInitializeCallback !== true) {
-      ctor._callbackChain.runAfter("initialize", this);
+      ctor._callbackChain.runAfter("initialize", this, { strict: "sync" });
     }
   }
 
@@ -1373,9 +1373,14 @@ export class Model {
     this._validationContext = normalized;
 
     try {
-      const completed = ctor._callbackChain.runCallbacks("validation", this, () => {
-        this._runValidateCallbacks();
-      });
+      const completed = ctor._callbackChain.runCallbacks(
+        "validation",
+        this,
+        () => {
+          this._runValidateCallbacks();
+        },
+        { strict: "sync" },
+      );
       if (!completed) return false;
       return this.errors.empty;
     } finally {
@@ -1385,7 +1390,7 @@ export class Model {
 
   private _runValidateCallbacks(): void {
     const ctor = this.constructor as typeof Model;
-    ctor._callbackChain.runBefore("validate", this);
+    ctor._callbackChain.runBefore("validate", this, { strict: "sync" });
   }
 
   /**
@@ -1876,7 +1881,7 @@ export class Model {
 
   // -- Callbacks helper for subclasses --
 
-  runCallbacks(event: string, block: () => void): boolean {
+  runCallbacks(event: string, block: () => unknown): boolean | Promise<boolean> {
     return (this.constructor as typeof Model)._callbackChain.runCallbacks(event, this, block);
   }
 }

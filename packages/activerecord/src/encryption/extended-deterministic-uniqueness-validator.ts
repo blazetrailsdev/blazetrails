@@ -13,8 +13,33 @@ import { withoutEncryption } from "./context.js";
 export class ExtendedDeterministicUniquenessValidator {
   private static _installed = false;
 
-  static installSupport(): void {
+  /**
+   * Wraps UniquenessValidator#validateEach so uniqueness checks also cover
+   * values encrypted with previous schemes.
+   *
+   * Mirrors: Rails' ExtendedDeterministicUniquenessValidator.install_support which
+   * prepends EncryptedUniquenessValidator into ActiveRecord::Validations::UniquenessValidator.
+   */
+  static installSupport({
+    UniquenessValidator,
+    EncryptedUniquenessValidator: EUV,
+  }: {
+    UniquenessValidator: { prototype: { validateEach: Function } };
+    EncryptedUniquenessValidator: typeof EncryptedUniquenessValidator;
+  }): void {
+    if (this._installed) return;
     this._installed = true;
+
+    const original = UniquenessValidator.prototype.validateEach;
+    const validator = new EUV();
+    UniquenessValidator.prototype.validateEach = function (
+      this: unknown,
+      record: any,
+      attribute: string,
+      value: unknown,
+    ) {
+      validator.validateEach(original.bind(this), record, attribute, value);
+    };
   }
 
   static get installed(): boolean {

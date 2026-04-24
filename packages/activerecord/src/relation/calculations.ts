@@ -205,9 +205,10 @@ async function groupedAggregate(
 }
 
 /**
- * SQL COUNT() results are returned as JS number. Tables with more than
- * 2^53-1 rows would lose precision; this matches Rails which returns
- * arbitrary-precision Integer but the practical risk is negligible.
+ * SQL COUNT() results are returned as JS number. This diverges from
+ * Rails, which returns arbitrary-precision Integer. Tables with more
+ * than 2^53-1 rows would silently lose precision; the practical risk
+ * is negligible but the divergence is documented.
  */
 export async function performCount(
   this: CalculationRelation,

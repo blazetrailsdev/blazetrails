@@ -2182,12 +2182,15 @@ export class Relation<T extends Base> {
    * Pluck the primary key values.
    *
    * Mirrors: ActiveRecord::Relation#ids
+   *
+   * Single-column PKs: returns flat array (string | number | bigint).
+   * big_integer PKs return JS bigint after driver normalization.
+   * Composite PKs: returns an array of tuples (unknown[][]).
    */
   async ids(): Promise<unknown[]> {
-    // Runtime values are string | number | bigint for single-column PKs,
-    // or unknown[] (tuple) for composite PKs. bigint PKs (big_integer
-    // columns) return JS bigint after driver normalization (PR #783).
-    return this.pluck(this._modelClass.primaryKey as string);
+    const pk = this._modelClass.primaryKey;
+    const cols = Array.isArray(pk) ? pk : [pk];
+    return this.pluck(...(cols as [string, ...string[]]));
   }
 
   /**

@@ -6431,7 +6431,7 @@ describe("AssociationProxyTest", () => {
   }
 
   it("push does not lose additions to new record", async () => {
-    const { APPost, APComment } = setupProxyModels();
+    const { APPost } = setupProxyModels();
     const post = await APPost.create({ title: "proxy test" });
     const proxy = association(post, "apComments");
     const comment = new APComment({ body: "new comment" });
@@ -6442,7 +6442,7 @@ describe("AssociationProxyTest", () => {
   });
 
   it("append behaves like push", async () => {
-    const { APPost, APComment } = setupProxyModels();
+    const { APPost } = setupProxyModels();
     const post = await APPost.create({ title: "concat test" });
     const proxy = association(post, "apComments");
     const c1 = new APComment({ body: "c1" });
@@ -6460,7 +6460,7 @@ describe("AssociationProxyTest", () => {
   });
 
   it("load does load target", async () => {
-    const { APPost, APComment } = setupProxyModels();
+    const { APPost } = setupProxyModels();
     const post = await APPost.create({ title: "load test" });
     await APComment.create({ body: "loaded", ap_post_id: post.id });
     const proxy = association(post, "apComments");
@@ -6496,7 +6496,7 @@ describe("AssociationProxyTest", () => {
   });
 
   it("scoped allows conditions", async () => {
-    const { APPost, APComment } = setupProxyModels();
+    const { APPost } = setupProxyModels();
     const post = await APPost.create({ title: "scoped" });
     await APComment.create({ body: "match", ap_post_id: post.id });
     await APComment.create({ body: "other", ap_post_id: post.id });
@@ -6516,7 +6516,7 @@ describe("AssociationProxyTest", () => {
   });
 
   it("first! works on loaded associations", async () => {
-    const { APPost, APComment } = setupProxyModels();
+    const { APPost } = setupProxyModels();
     const post = await APPost.create({ title: "first!" });
     await APComment.create({ body: "first one", ap_post_id: post.id });
     const proxy = association(post, "apComments");
@@ -6536,7 +6536,7 @@ describe("AssociationProxyTest", () => {
   });
 
   it("push does not load target", async () => {
-    const { APPost, APComment } = setupProxyModels();
+    const { APPost } = setupProxyModels();
     const post = await APPost.create({ title: "push no load" });
     const proxy = association(post, "apComments");
     expect(proxy.loaded).toBe(false);
@@ -6548,7 +6548,7 @@ describe("AssociationProxyTest", () => {
     /* Rails: david.categories << category; assert_not david.categories.loaded? — needs has_many_through push-without-load */
   });
   it("push followed by save does not load target", async () => {
-    const { APPost, APComment } = setupProxyModels();
+    const { APPost } = setupProxyModels();
     const post = await APPost.create({ title: "push save no load" });
     const proxy = association(post, "apComments");
     const comment = new APComment({ body: "pushed" });
@@ -6557,7 +6557,7 @@ describe("AssociationProxyTest", () => {
     expect(proxy.loaded).toBe(false);
   });
   it("save on parent does not load target", async () => {
-    const { APPost, APComment } = setupProxyModels();
+    const { APPost } = setupProxyModels();
     const post = await APPost.create({ title: "parent save no load" });
     const proxy = (post as any).association("apComments");
     expect(proxy.loaded).toBe(false);
@@ -6575,7 +6575,7 @@ describe("AssociationProxyTest", () => {
     /* requires autosave */
   });
   it("reload returns association", async () => {
-    const { APPost, APComment } = setupProxyModels();
+    const { APPost } = setupProxyModels();
     const post = await APPost.create({ title: "reload test" });
     await APComment.create({ body: "original", ap_post_id: post.id });
     const proxy = association(post, "apComments");
@@ -6587,7 +6587,7 @@ describe("AssociationProxyTest", () => {
     expect(records[0].body).toBe("original");
   });
   it("getting a scope from an association", async () => {
-    const { APPost, APComment } = setupProxyModels();
+    const { APPost } = setupProxyModels();
     const post = await APPost.create({ title: "scope test" });
     await APComment.create({ body: "scoped", ap_post_id: post.id });
     const proxy = association(post, "apComments");
@@ -6603,7 +6603,7 @@ describe("AssociationProxyTest", () => {
     /* Rails: sets inverse_of on loaded records — needs inverse_of population on collection load */
   });
   it("pluck uses loaded target", async () => {
-    const { APPost, APComment } = setupProxyModels();
+    const { APPost } = setupProxyModels();
     const post = await APPost.create({ title: "pluck test" });
     const comment = await APComment.create({ body: "plucked", ap_post_id: post.id });
     const proxy = association(post, "apComments");
@@ -6615,7 +6615,7 @@ describe("AssociationProxyTest", () => {
     expect(bodies).toEqual(["plucked"]);
   });
   it("pick uses loaded target", async () => {
-    const { APPost, APComment } = setupProxyModels();
+    const { APPost } = setupProxyModels();
     const post = await APPost.create({ title: "pick test" });
     const comment = await APComment.create({ body: "picked", ap_post_id: post.id });
     const proxy = association(post, "apComments");
@@ -6627,7 +6627,7 @@ describe("AssociationProxyTest", () => {
     expect(body).toBe("picked");
   });
   it("reset unloads target", async () => {
-    const { APPost, APComment } = setupProxyModels();
+    const { APPost } = setupProxyModels();
     const post = await APPost.create({ title: "reset test" });
     await APComment.create({ body: "will reset", ap_post_id: post.id });
     const proxy = association(post, "apComments");
@@ -6663,7 +6663,7 @@ describe("AssociationProxyTest", () => {
     expect(builtRecords[0].body).toBe("built");
   });
   it("load preserves in-memory instances added via push", async () => {
-    const { APPost, APComment } = setupProxyModels();
+    const { APPost } = setupProxyModels();
     const post = await APPost.create({ title: "load merge" });
     const proxy = association(post, "apComments");
     const comment = await APComment.create({ body: "original", ap_post_id: post.id });

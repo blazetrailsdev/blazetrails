@@ -20,10 +20,14 @@ import { ActiveRecordError } from "./errors.js";
  *
  * Mirrors: ActiveRecord.raise_on_assign_to_attr_readonly
  */
-export let raiseOnAssignToAttrReadonly = true;
+let _raiseOnAssignToAttrReadonly = true;
+
+export function getRaiseOnAssignToAttrReadonly(): boolean {
+  return _raiseOnAssignToAttrReadonly;
+}
 
 export function setRaiseOnAssignToAttrReadonly(value: boolean): void {
-  raiseOnAssignToAttrReadonly = value;
+  _raiseOnAssignToAttrReadonly = value;
 }
 
 export class ReadonlyAttributeError extends ActiveRecordError {
@@ -105,7 +109,7 @@ export function writeAttribute(this: Base, name: string, value: unknown): void {
   }
   const ctor = this.constructor as typeof Base;
   if (this._newRecord === false && ctor.readonlyAttributeQ(String(name))) {
-    if (raiseOnAssignToAttrReadonly) {
+    if (_raiseOnAssignToAttrReadonly) {
       throw new ReadonlyAttributeError(String(name));
     }
     return; // silently skip — mirrors Rails' non-raising mode
@@ -123,7 +127,7 @@ export function writeAttribute(this: Base, name: string, value: unknown): void {
 export function _writeAttribute(this: Base, name: string, value: unknown): void {
   const ctor = this.constructor as typeof Base;
   if (this._newRecord === false && ctor.readonlyAttributeQ(String(name))) {
-    if (raiseOnAssignToAttrReadonly) {
+    if (_raiseOnAssignToAttrReadonly) {
       throw new ReadonlyAttributeError(String(name));
     }
     return;

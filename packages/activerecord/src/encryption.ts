@@ -142,9 +142,10 @@ function buildScheme(options: EncryptsOptions): Scheme {
     schemeOptions.supportUnencryptedData !== undefined;
 
   // Switch to the real Scheme whenever any encryption key material is configured.
-  // If config is incomplete, Config.get() raises ConfigError at serialize/
-  // deserialize time — more informative than silently using the AR_ENC:base64
-  // shim and storing unencrypted data.
+  // If config is incomplete (e.g. only keyDerivationSalt set, no primaryKey),
+  // Scheme._defaultKeyProvider() returns undefined and Encryptor raises
+  // "No encryption key provided" at serialize/deserialize time — still more
+  // informative than silently storing AR_ENC:base64 data.
   const { primaryKey, deterministicKey, keyDerivationSalt } = Configurable.config;
   const hasConfiguredKeys =
     primaryKey !== undefined || deterministicKey !== undefined || keyDerivationSalt !== undefined;

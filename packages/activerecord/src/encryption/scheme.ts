@@ -13,40 +13,40 @@ import { DerivedSecretKeyProvider } from "./derived-secret-key-provider.js";
 import { DeterministicKeyProvider } from "./deterministic-key-provider.js";
 import { Key } from "./key.js";
 
-// Module-level single-entry cache for the default key provider. Avoids storing
-// plaintext key material as Map keys while still sharing one derived key provider
-// across all Scheme instances for the same config. A generation counter tracks
-// config changes — any change to primaryKey, salt, or digestClass creates a
-// new entry without retaining the old key material.
-let _defaultKeyProviderEntry: { gen: number; provider: DerivedSecretKeyProvider } | undefined;
-let _defaultKeyProviderGen = 0;
-let _defaultKeyProviderLastPk: string | string[] | undefined;
-let _defaultKeyProviderLastSalt: string | undefined;
-let _defaultKeyProviderLastDigest: string | undefined;
+// Module-level single-entry cache for the default key provider. Shared across
+// all Scheme instances so PBKDF2 runs once per (primaryKey, salt, digest) tuple.
+// Uses stable string serialisation for primaryKey so array instances compare by
+// value rather than reference, avoiding spurious re-derivations.
+let _defaultKeyProviderEntry: DerivedSecretKeyProvider | undefined;
+let _defaultKeyProviderSig: string | undefined;
+
+function stableKeySignature(
+  primaryKey: string | string[],
+  keyDerivationSalt: string | undefined,
+  hashDigestClass: string,
+): string {
+  // Stable serialisation so equivalent string[] values always hit the same cache
+  // entry regardless of array instance identity.
+  const pk = Array.isArray(primaryKey) ? primaryKey.slice().sort().join(",") : primaryKey;
+  return `${pk}|${keyDerivationSalt ?? ""}|${hashDigestClass}`;
+}
 
 function getOrCreateDefaultKeyProvider(
   primaryKey: string | string[],
   keyDerivationSalt: string | undefined,
   hashDigestClass: string,
 ): DerivedSecretKeyProvider {
-  // Bump generation if any input changed, so stale entries are not reused.
-  if (
-    primaryKey !== _defaultKeyProviderLastPk ||
-    keyDerivationSalt !== _defaultKeyProviderLastSalt ||
-    hashDigestClass !== _defaultKeyProviderLastDigest
-  ) {
-    _defaultKeyProviderGen++;
-    _defaultKeyProviderLastPk = primaryKey;
-    _defaultKeyProviderLastSalt = keyDerivationSalt;
-    _defaultKeyProviderLastDigest = hashDigestClass;
+  const sig = stableKeySignature(primaryKey, keyDerivationSalt, hashDigestClass);
+  if (!_defaultKeyProviderEntry || _defaultKeyProviderSig !== sig) {
+    _defaultKeyProviderEntry = new DerivedSecretKeyProvider(primaryKey);
+    _defaultKeyProviderSig = sig;
   }
-  if (!_defaultKeyProviderEntry || _defaultKeyProviderEntry.gen !== _defaultKeyProviderGen) {
-    _defaultKeyProviderEntry = {
-      gen: _defaultKeyProviderGen,
-      provider: new DerivedSecretKeyProvider(primaryKey),
-    };
-  }
-  return _defaultKeyProviderEntry.provider;
+  return _defaultKeyProviderEntry;
+}
+
+function clearDefaultKeyProviderCache(): void {
+  _defaultKeyProviderEntry = undefined;
+  _defaultKeyProviderSig = undefined;
 }
 
 export interface SchemeOptions {
@@ -169,11 +169,13 @@ export class Scheme {
   private _defaultKeyProvider(): unknown {
     const ctxKp = Configurable.keyProvider;
     if (ctxKp != null) return ctxKp;
-    if (Configurable.config.primaryKey == null) return undefined;
-    // Use Config.get() so accessing primaryKey raises ConfigError with the
-    // specific message "Missing encryption key: primaryKey" when unset,
-    // aligning with Config's required-key semantics and Rails' behavior.
-    const primaryKey = Configurable.config.get("primaryKey") as string | string[];
+    if (Configurable.config.primaryKey == null) {
+      // No primary key configured — clear any stale cached provider so old
+      // key material can be GC'd (e.g. after config reset in tests).
+      clearDefaultKeyProviderCache();
+      return undefined;
+    }
+    const primaryKey = Configurable.config.primaryKey;
     const { keyDerivationSalt, hashDigestClass } = Configurable.config;
     return getOrCreateDefaultKeyProvider(primaryKey, keyDerivationSalt, hashDigestClass);
   }

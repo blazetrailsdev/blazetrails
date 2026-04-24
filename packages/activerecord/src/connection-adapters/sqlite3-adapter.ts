@@ -31,6 +31,7 @@ import {
 } from "@blazetrails/activemodel";
 import { getFs, Notifications } from "@blazetrails/activesupport";
 import { typeCastedBinds } from "./abstract/database-statements.js";
+import { isWriteQuerySql } from "./sql-classification.js";
 import {
   quote as sqliteQuote,
   typeCast as sqliteTypeCast,
@@ -178,13 +179,13 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     // handle internally, but we no longer cache across executes.
     if (!this.preparedStatements) {
       const stmt = this.db.prepare(sql);
-      this._maybeEnableSafeIntegers(stmt);
+      this._maybeEnableSafeIntegers(sql, stmt);
       return stmt;
     }
     let stmt = this._statementPool.get(sql);
     if (!stmt) {
       stmt = this.db.prepare(sql);
-      this._maybeEnableSafeIntegers(stmt);
+      this._maybeEnableSafeIntegers(sql, stmt);
       this._statementPool.set(sql, stmt);
     }
     return stmt;
@@ -194,14 +195,9 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   // so the driver returns JS bigint rather than a lossy number. Non-bigint integer
   // columns in the same row also return bigint when safeIntegers is enabled —
   // IntegerType.cast handles bigint → number for those.
-  // columns() throws for non-SELECT statements; skip safeIntegers in that case.
-  private _maybeEnableSafeIntegers(stmt: Database.Statement): void {
-    let cols: Database.ColumnDefinition[];
-    try {
-      cols = stmt.columns();
-    } catch {
-      return;
-    }
+  private _maybeEnableSafeIntegers(sql: string, stmt: Database.Statement): void {
+    if (isWriteQuerySql(sql)) return;
+    const cols = stmt.columns();
     if (cols.some((c) => c.type !== null && /bigint/i.test(c.type))) {
       stmt.safeIntegers(true);
     }

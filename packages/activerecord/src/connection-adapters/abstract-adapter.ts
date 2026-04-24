@@ -588,6 +588,9 @@ export class AbstractAdapter {
       opts = fnOrOpts ?? {};
       block = fnOrOpts2 as (tx?: unknown) => Promise<T> | T;
     }
+    if (typeof block !== "function") {
+      throw new TypeError("transaction requires a function block");
+    }
     return dbStatementsTransaction.call(this as any, block, opts) as Promise<T | undefined>;
   }
 

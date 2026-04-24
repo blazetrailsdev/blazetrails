@@ -263,7 +263,9 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
    */
   private _previousReadUncommitted: unknown = null;
 
-  async beginDeferredTransaction(): Promise<void> {
+  // Mirrors: SQLite3::DatabaseStatements#begin_deferred_transaction
+  async beginDeferredTransaction(isolation?: string | null): Promise<void> {
+    if (isolation) return this.beginIsolatedDbTransaction(isolation);
     return this.beginDbTransaction();
   }
 
@@ -1140,7 +1142,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     let rows: Array<{ name: string }>;
     try {
       rows = (await this.execute(
-        "SELECT name FROM pragma_table_list WHERE schema <> 'temp' AND type = 'table' AND name NOT IN ('sqlite_sequence', 'sqlite_schema') ORDER BY name",
+        "SELECT name FROM pragma_table_list WHERE schema <> 'temp' AND type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
         [],
         "SCHEMA",
       )) as Array<{ name: string }>;

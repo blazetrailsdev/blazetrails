@@ -27,7 +27,9 @@ function stableKeySignature(
 ): string {
   // JSON.stringify preserves array order (key rotation order is semantically
   // meaningful) and is unambiguous — no comma-collision risk from key strings.
-  return JSON.stringify([primaryKey, keyDerivationSalt ?? "", hashDigestClass]);
+  // Use null for undefined so missing salt is distinct from empty-string salt,
+  // ensuring cache invalidation when keyDerivationSalt is cleared.
+  return JSON.stringify([primaryKey, keyDerivationSalt ?? null, hashDigestClass]);
 }
 
 function getOrCreateDefaultKeyProvider(

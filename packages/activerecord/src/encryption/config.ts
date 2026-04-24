@@ -6,8 +6,6 @@
 
 import { ConfigError } from "./errors.js";
 import type { SchemeOptions } from "./scheme.js";
-import { KeyGenerator } from "./key-generator.js";
-import { DerivedSecretKeyProvider } from "./derived-secret-key-provider.js";
 
 export class Config {
   primaryKey?: string | string[];
@@ -20,6 +18,7 @@ export class Config {
   addToFilterParameters: boolean = true;
   excludeFromFilterParameters: string[] = [];
   previousSchemes: SchemeOptions[] = [];
+  supportSha1ForNonDeterministicEncryption: boolean = false;
   extendQueries: boolean = false;
   hashDigestClass: string = "SHA1";
   keyProviderClass?: string;
@@ -41,16 +40,6 @@ export class Config {
   set previous(schemes: SchemeOptions[]) {
     for (const props of schemes) {
       this.previousSchemes.push(props);
-    }
-  }
-
-  set supportSha1ForNonDeterministicEncryption(value: boolean) {
-    if (value && this.primaryKey) {
-      const sha1KeyGenerator = new KeyGenerator("SHA1");
-      const sha1KeyProvider = new DerivedSecretKeyProvider(this.primaryKey, {
-        keyGenerator: sha1KeyGenerator,
-      });
-      this.previousSchemes.push({ keyProvider: sha1KeyProvider });
     }
   }
 

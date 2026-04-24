@@ -1,6 +1,8 @@
 import { Scheme, type SchemeOptions } from "./scheme.js";
 import { EncryptedAttributeType } from "./encrypted-attribute-type.js";
 import { Configurable } from "./configurable.js";
+import { KeyGenerator } from "./key-generator.js";
+import { DerivedSecretKeyProvider } from "./derived-secret-key-provider.js";
 
 /**
  * Mirrors Rails' EncryptableRecord#global_previous_schemes_for.
@@ -10,7 +12,20 @@ import { Configurable } from "./configurable.js";
  * are preserved in the fallback scheme.
  */
 export function globalPreviousSchemesFor(scheme: Scheme): Scheme[] {
-  return Configurable.config.previousSchemes
+  const config = Configurable.config;
+  const allSchemeOptions: SchemeOptions[] = [...config.previousSchemes];
+
+  // Mirrors Rails' support_sha1_for_non_deterministic_encryption= setter:
+  // builds the SHA1 DerivedSecretKeyProvider lazily here (not in Config) to
+  // avoid a config → key-generator → configurable → config circular import.
+  if (config.supportSha1ForNonDeterministicEncryption && config.primaryKey) {
+    const sha1KeyProvider = new DerivedSecretKeyProvider(config.primaryKey, {
+      keyGenerator: new KeyGenerator("SHA1"),
+    });
+    allSchemeOptions.push({ keyProvider: sha1KeyProvider });
+  }
+
+  return allSchemeOptions
     .map((opts) => new Scheme(opts))
     .filter((prev) => scheme.isCompatibleWith(prev))
     .map((prev) => scheme.merge(prev));

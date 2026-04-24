@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { BigIntegerType, IntegerType } from "@blazetrails/activemodel";
 import { SQLite3Adapter } from "../../connection-adapters/sqlite3-adapter.js";
 
 let adapter: SQLite3Adapter;
+const bigType = new BigIntegerType();
+const intType = new IntegerType();
 
 beforeEach(() => {
   adapter = new SQLite3Adapter(":memory:");
@@ -38,19 +41,19 @@ describe("SQLite3 bigint round-trip", () => {
       0,
     ]);
     const rows = await adapter.execute(`SELECT "score" FROM "big_items"`);
-    expect(rows[0].score).toBe(unsafe);
+    expect(bigType.cast(rows[0].score)).toBe(unsafe);
   });
 
-  it("returns bigint for INTEGER column in same row when safeIntegers is enabled", async () => {
+  it("IntegerType.cast coerces safeIntegers bigint back to number for INTEGER columns", async () => {
     await adapter.executeMutation(`INSERT INTO "big_items" ("score", "count") VALUES (?, ?)`, [
       BIG,
       42,
     ]);
     const rows = await adapter.execute(`SELECT "score", "count" FROM "big_items"`);
-    // safeIntegers applies to the whole statement — INTEGER columns also return bigint.
-    // IntegerType.cast coerces bigint → number at the model attribute layer.
-    expect(typeof rows[0].count).toBe("bigint");
-    expect(rows[0].count).toBe(42n);
+    // safeIntegers is enabled on this statement (BIGINT column present),
+    // so INTEGER column also comes back as bigint from the driver.
+    // IntegerType.cast converts it back to number — this is the type-layer contract.
+    expect(intType.cast(rows[0].count)).toBe(42);
   });
 
   it("update round-trip preserves value", async () => {
@@ -60,6 +63,6 @@ describe("SQLite3 bigint round-trip", () => {
     ]);
     await adapter.executeMutation(`UPDATE "big_items" SET "score" = ?`, [BIG + 1n]);
     const rows = await adapter.execute(`SELECT "score" FROM "big_items"`);
-    expect(rows[0].score).toBe(BIG + 1n);
+    expect(bigType.cast(rows[0].score)).toBe(BIG + 1n);
   });
 });

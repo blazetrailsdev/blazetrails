@@ -262,7 +262,7 @@ export {
   TooManyRecords,
 } from "./nested-attributes.js";
 // hasSecureToken requires node:crypto — use subpath: @blazetrails/activerecord/secure-token
-export { composedOf } from "./composed-of.js";
+export { composedOf } from "./aggregations.js";
 export { serialize } from "./serialize.js";
 // Encryption is exposed via the subpath export. Use:
 // `import { ... } from "@blazetrails/activerecord/encryption"`.

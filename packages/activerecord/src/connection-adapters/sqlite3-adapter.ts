@@ -1182,9 +1182,9 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   private _extractValueFromDefault(dfltValue: string | null): unknown {
     if (dfltValue === null) return null;
     if (/^null$/i.test(dfltValue)) return null;
-    const singleQuoted = /^'([\s\S]*)'$/m.exec(dfltValue);
+    const singleQuoted = /^'([\s\S]*)'$/.exec(dfltValue);
     if (singleQuoted) return singleQuoted[1].replace(/''/g, "'");
-    const doubleQuoted = /^"([\s\S]*)"$/m.exec(dfltValue);
+    const doubleQuoted = /^"([\s\S]*)"$/.exec(dfltValue);
     if (doubleQuoted) return doubleQuoted[1].replace(/""/g, '"');
     if (/^-?\d+(\.\d*)?$/.test(dfltValue)) return dfltValue;
     const hexMatch = /^x'(.*)'$/i.exec(dfltValue);
@@ -1452,7 +1452,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     const colDefs = colNames.map((name) => {
       const col = columns[name];
       let def = `${quoteColumnName(name)} ${col.type ?? "TEXT"}`;
-      const collation = col.collation ?? existingCollations.get(name);
+      const collation = col.collation === undefined ? existingCollations.get(name) : col.collation;
       if (collation) def += ` COLLATE ${quoteColumnName(String(collation))}`;
       if (!compositePk && col.pk) def += " PRIMARY KEY";
       if (col.notnull) def += " NOT NULL";

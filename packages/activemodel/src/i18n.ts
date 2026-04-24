@@ -227,11 +227,17 @@ class I18nService {
   ): string | undefined {
     // Rails allows Procs as translation values; they're invoked with the
     // lookup key + options hash (i18n/lib/i18n/backend/base.rb `resolve`).
+    // Inject the effective locale so lambdas can branch on it even when
+    // the caller relied on the service-wide `I18n.locale`.
     if (typeof value === "function") {
+      const effectiveOptions = {
+        ...(options ?? {}),
+        locale: options?.locale ?? this._locale,
+      };
       return this.resolve(
-        (value as TranslationLambda)(key, (options ?? {}) as Record<string, unknown>),
+        (value as TranslationLambda)(key, effectiveOptions as Record<string, unknown>),
         key,
-        options,
+        effectiveOptions,
       );
     }
     const opts = this._interpolationOptions(options);

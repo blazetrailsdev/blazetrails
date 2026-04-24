@@ -102,6 +102,14 @@ describe("I18n", () => {
       expect(I18n.t("greet", { n: 4 })).toBe("fn:greet:4");
     });
 
+    it("passes the effective locale into lambdas even when caller omits it", () => {
+      I18n.storeTranslations("en", {
+        who: (_key, options) => `locale:${(options as { locale?: string }).locale}`,
+      });
+      I18n.locale = "fr";
+      expect(I18n.t("who")).toBe("locale:fr");
+    });
+
     it("interpolates the string returned by a lambda", () => {
       I18n.storeTranslations("en", {
         shout: () => "HEY %{name}",

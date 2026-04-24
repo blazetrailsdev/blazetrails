@@ -24,6 +24,7 @@ import { Scheme, type SchemeOptions } from "./encryption/scheme.js";
 import type { EncryptorLike } from "./encryption/encryptor.js";
 import { Cipher } from "./encryption/cipher/aes256-gcm.js";
 import { globalPreviousSchemesFor } from "./encryption/encryptable-record.js";
+import { Configurable } from "./encryption/configurable.js";
 
 /**
  * The simple encryptor surface `Base.encrypts({ encryptor })` accepts.
@@ -140,9 +141,17 @@ function buildScheme(options: EncryptsOptions): Scheme {
     schemeOptions.compressor !== undefined ||
     schemeOptions.supportUnencryptedData !== undefined;
 
+  // When real encryption keys are configured, use the standard scheme so
+  // encrypts() with no options picks up the global key provider from config
+  // (mirrors Rails' default behavior). Fall back to the dev-only AR_ENC:base64
+  // encryptor only when no keys are configured at all.
+  const hasConfiguredKeys =
+    Configurable.config.primaryKey !== undefined ||
+    Configurable.config.keyDerivationSalt !== undefined;
+
   const coreOpts: SchemeOptions = encryptor
     ? { ...schemeOptions, encryptor: new LegacyEncryptorShim(encryptor) }
-    : hasSchemeOptions
+    : hasSchemeOptions || hasConfiguredKeys
       ? schemeOptions
       : { encryptor: new LegacyEncryptorShim(defaultEncryptor) };
 

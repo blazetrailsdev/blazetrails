@@ -74,7 +74,7 @@ export class Scheme {
       this._keyProviderParam ??
       this._keyProviderFromKey() ??
       this._deterministicKeyProvider() ??
-      undefined
+      this._defaultKeyProvider()
     );
   }
 
@@ -123,6 +123,18 @@ export class Scheme {
     if (this.key != null) {
       this._cachedKeyProviderFromKey ??= new DerivedSecretKeyProvider(this.key);
       return this._cachedKeyProviderFromKey;
+    }
+    return undefined;
+  }
+
+  // Mirrors Rails' Scheme#default_key_provider → ActiveRecord::Encryption.key_provider.
+  // Returns the context's keyProvider if set, otherwise derives one from config.primaryKey.
+  private _defaultKeyProvider(): unknown {
+    const ctxKp = (Configurable as any).keyProvider;
+    if (ctxKp != null) return ctxKp;
+    const primaryKey = Configurable.config.primaryKey;
+    if (primaryKey != null) {
+      return new DerivedSecretKeyProvider(primaryKey);
     }
     return undefined;
   }

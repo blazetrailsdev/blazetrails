@@ -305,7 +305,7 @@ export async function encryptRecord(record: any): Promise<void> {
   const plaintextValues: Record<string, unknown> = {};
   const assignments: Record<string, unknown> = {};
   for (const attr of encryptedAttrs) {
-    const plaintext = record[attr];
+    const plaintext = record.readAttribute(attr);
     plaintextValues[attr] = plaintext;
     // Explicitly serialize via the type so updateColumns writes ciphertext —
     // updateColumns uses cast() not serialize(), so we pre-serialize here.
@@ -346,7 +346,7 @@ export async function decryptRecord(record: any): Promise<void> {
     if (type instanceof EncryptedAttributeType && type.isEncrypted(raw)) {
       assignments[attr] = type.deserialize(raw);
     } else {
-      assignments[attr] = record[attr];
+      assignments[attr] = record.readAttribute(attr);
     }
   }
   await withoutEncryption(() => record.updateColumns(assignments));

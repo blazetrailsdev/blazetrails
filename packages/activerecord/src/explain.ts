@@ -15,8 +15,8 @@ import type { ExplainOption } from "./adapter.js";
  * Mirrors: ActiveRecord::Explain#collecting_queries_for_explain
  */
 export async function collectingQueriesForExplain<T>(
-  fn: () => T | Promise<T>,
-): Promise<{ result: T; queries: [string, unknown[]][] }> {
+  fn: () => Promise<T>,
+): Promise<{ value: T; queries: [string, unknown[]][] }> {
   return ExplainRegistry.collectingQueries(fn);
 }
 

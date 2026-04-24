@@ -13,7 +13,7 @@ import { BigIntegerType } from "@blazetrails/activemodel";
 
 interface CalculationRelation {
   _modelClass: {
-    arelTable: { typeForAttribute(col: string): { cast(v: unknown): unknown } | null };
+    arelTable: any;
     primaryKey: string | string[];
     adapter: { execute(sql: string): Promise<Record<string, unknown>[]> };
   };
@@ -57,19 +57,20 @@ function castAggValue(
   rel: CalculationRelation,
   coerceNumeric: boolean,
 ): unknown {
+  const table = rel._modelClass.arelTable as { typeForAttribute?(c: string): unknown };
+  const colType = column !== "*" ? table.typeForAttribute?.(column) : null;
+
   if (!coerceNumeric) {
     // minimum/maximum: route through column type so big_integer columns
     // return bigint rather than the raw driver string/number.
     if (val === null || val === undefined) return null;
-    const type = column !== "*" ? rel._modelClass.arelTable.typeForAttribute(column) : null;
-    if (type instanceof BigIntegerType) return type.cast(val);
+    if (colType instanceof BigIntegerType) return colType.cast(val);
     return val;
   }
 
   if (fn === "sum") {
     // Default for empty result set: 0 or 0n depending on column type.
-    const type = column !== "*" ? rel._modelClass.arelTable.typeForAttribute(column) : null;
-    if (type instanceof BigIntegerType) return type.cast(val ?? 0) ?? 0n;
+    if (colType instanceof BigIntegerType) return colType.cast(val ?? 0) ?? 0n;
     return Number(val ?? 0);
   }
 
@@ -116,12 +117,11 @@ function wrapBigintAgg(innerSql: string, grouped = false): string {
 }
 
 function isBigintColumn(rel: CalculationRelation, fn: AggFn, column: string): boolean {
-  return (
-    fn !== "count" &&
-    fn !== "average" &&
-    column !== "*" &&
-    rel._modelClass.arelTable.typeForAttribute(column) instanceof BigIntegerType
-  );
+  if (fn === "count" || fn === "average" || column === "*") return false;
+  const table = rel._modelClass.arelTable as {
+    typeForAttribute?(col: string): unknown;
+  };
+  return table.typeForAttribute?.(column) instanceof BigIntegerType;
 }
 
 async function singleAggregate(

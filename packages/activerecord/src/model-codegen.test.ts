@@ -223,7 +223,37 @@ describe("generateModels", () => {
         noHeader: true,
         now: NOW,
       }),
-    ).toThrow(/class name collision.*(posts|blog_posts).*(posts|blog_posts).*class Post/);
+    ).toThrow(/class name collision.*"blog_posts".*"posts".*classify to `Post`/);
+  });
+
+  it("sorts belongsTo by association name, not FK column", () => {
+    // Two FKs on books: `author_id` → authors (belongsTo "author") and
+    // `written_for_id` → publishers (belongsTo "written_for"). Sorted by
+    // association name, "author" comes before "written_for"; sorted by
+    // column, "author_id" < "written_for_id" — same order in this case.
+    // But if we had "z_author_id" (belongsTo "z_author") and "a_foo_id"
+    // (belongsTo "a_foo"), column-sort would put "a_foo" first, and
+    // name-sort should still put "a_foo" first. Harder: pick cases that
+    // differ between the two sorts.
+    //
+    // Non-convention column `zzz_ref` → authors (belongsTo "author"
+    // because column doesn't end with _id) plus convention column
+    // `publisher_id` → publishers (belongsTo "publisher"). Column sort:
+    // publisher_id < zzz_ref → publisher, author. Name sort: author,
+    // publisher. Verify name-sort.
+    const tables = [
+      table("authors"),
+      table("publishers"),
+      table("books", {
+        foreignKeys: [fk("books", "publishers", "publisher_id"), fk("books", "authors", "zzz_ref")],
+      }),
+    ];
+    const out = generateModels(tables, { noHeader: true, now: NOW });
+    const bookBlock = out.slice(out.indexOf("export class Book"));
+    const authorIdx = bookBlock.indexOf('this.belongsTo("author"');
+    const publisherIdx = bookBlock.indexOf('this.belongsTo("publisher"');
+    expect(authorIdx).toBeGreaterThanOrEqual(0);
+    expect(publisherIdx).toBeGreaterThan(authorIdx);
   });
 
   it("renders a full three-table example exactly", () => {

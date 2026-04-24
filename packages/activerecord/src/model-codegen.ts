@@ -54,12 +54,18 @@ export interface GenerateModelsOptions {
   now?: Date;
 }
 
+interface PendingAssoc {
+  kind: "belongsTo" | "hasMany";
+  name: string;
+  opts: Record<string, string>;
+}
+
 interface PlannedClass {
   name: string;
   tableName: string;
   primaryKey: string | string[] | null;
-  /** Ordered belongsTo then hasMany, alphabetical within each group. */
-  body: string[];
+  /** Collected pre-sort; finalised by serializeClassBody() below. */
+  associations: PendingAssoc[];
   /** Comments (TODO / NOTE / WARNING) prepended at the top of the static block. */
   leadingComments: string[];
 }
@@ -113,9 +119,13 @@ export function generateModels(
     const className = classNameForTable(t.name);
     const existing = nameToTable.get(className);
     if (existing !== undefined) {
+      // Thrown as a plain Error with a library-neutral message. The CLI
+      // wrapper (trails-models-dump) prefixes with "trails-models-dump:"
+      // and surfaces flag-specific guidance; this module has no knowledge
+      // of how callers reached it.
+      const [a, b] = [existing, t.name].sort();
       throw new Error(
-        `trails-models-dump: class name collision: both "${existing}" and "${t.name}" would generate \`class ${className}\`. ` +
-          `Adjust --strip-prefix/--strip-suffix, --ignore one of them, or rename a table.`,
+        `model-codegen: class name collision: tables "${a}" and "${b}" both classify to \`${className}\`.`,
       );
     }
     nameToTable.set(className, t.name);
@@ -123,7 +133,7 @@ export function generateModels(
       name: className,
       tableName: t.name,
       primaryKey: t.primaryKey,
-      body: [],
+      associations: [],
       leadingComments: [],
     });
   }
@@ -141,7 +151,9 @@ export function generateModels(
   for (const t of kept) {
     const fromCls = classes.get(t.name);
     if (!fromCls) continue;
-    // Sort FKs by column for stable output.
+    // Sort FKs by column here only so TODO-comment ordering is stable for
+    // composite FKs (which share a class and share no belongsTo name).
+    // belongsTo output order is re-sorted by association name below.
     const fks = [...t.foreignKeys].sort((a, b) => a.column.localeCompare(b.column));
     for (const fk of fks) {
       // Composite FK: emit TODO comment, no association.
@@ -174,7 +186,7 @@ export function generateModels(
       if (fk.column !== expectedForeignKey) belongsToOpts.foreignKey = fk.column;
       if (toCls.name !== conventionalClassName) belongsToOpts.className = toCls.name;
 
-      fromCls.body.push(formatAssoc("belongsTo", belongsToName, belongsToOpts));
+      fromCls.associations.push({ kind: "belongsTo", name: belongsToName, opts: belongsToOpts });
 
       // hasMany on the target side. The association name is always the
       // source table's pluralised (stripped) form — no _id branch matters
@@ -184,12 +196,13 @@ export function generateModels(
       const hasManyName = pluralize(strip(fk.fromTable));
 
       // Rails convention for hasMany(name) infers:
-      //   foreignKey = "${underscore(singularize(current_class_name))}_id"
+      //   foreignKey = "${underscore(current_class_name)}_id"
       //   className  = classify(singularize(name))
-      // Generator compares against that so stripped-prefix cases
-      // (e.g. blog_posts → Post) correctly emit `className`.
+      // Note: the foreign-key default does NOT singularize the class name
+      // (class names are already singular). Singularizing would mangle
+      // class names ending in "s" like "Canvas" → "Canva".
       const hmConventionalClassName = classify(singularize(hasManyName));
-      const hmConventionalForeignKey = `${underscore(singularize(toCls.name))}_id`;
+      const hmConventionalForeignKey = `${underscore(toCls.name)}_id`;
       const hmOpts: Record<string, string> = {};
       if (fk.column !== hmConventionalForeignKey) hmOpts.foreignKey = fk.column;
       if (fromCls.name !== hmConventionalClassName) hmOpts.className = fromCls.name;
@@ -200,13 +213,16 @@ export function generateModels(
     }
   }
 
-  // Fold hasMany additions into each class, sorted by name.
+  // Fold hasMany additions into each class. Ordering is finalised at
+  // serialize time (belongsTo group first, sorted by name; then hasMany
+  // group, sorted by name) so belongsTo entries from non-conventional FK
+  // columns still sort alphabetically by association name, not by the
+  // underlying column.
   for (const [tableName, hms] of hasManyByTable) {
     const cls = classes.get(tableName);
     if (!cls) continue;
-    hms.sort((a, b) => a.name.localeCompare(b.name));
     for (const hm of hms) {
-      cls.body.push(formatAssoc("hasMany", hm.name, hm.opts));
+      cls.associations.push({ kind: "hasMany", name: hm.name, opts: hm.opts });
     }
   }
 
@@ -267,8 +283,18 @@ export function generateModels(
     for (const c of cls.leadingComments) {
       staticLines.push(`    ${c}`);
     }
-    for (const line of cls.body) {
-      staticLines.push(`    ${line}`);
+    // Sort belongsTo first then hasMany, alphabetical by association name
+    // within each group. Matches the PR description's stated contract and
+    // keeps diffs stable across regenerations even when FK columns are
+    // non-conventional (which would otherwise drive column-based ordering).
+    const belongsTo = cls.associations
+      .filter((a) => a.kind === "belongsTo")
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const hasMany = cls.associations
+      .filter((a) => a.kind === "hasMany")
+      .sort((a, b) => a.name.localeCompare(b.name));
+    for (const a of [...belongsTo, ...hasMany]) {
+      staticLines.push(`    ${formatAssoc(a.kind, a.name, a.opts)}`);
     }
 
     if (staticLines.length === 0) {

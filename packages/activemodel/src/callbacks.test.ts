@@ -481,6 +481,25 @@ describe("Generic Model.setCallback / skipCallback / resetCallbacks (Rails fidel
     expect(log).toEqual(["fn-kept", "block"]);
   });
 
+  it("resetCallbacks clears CallbackObject-registered callbacks too", () => {
+    // Companion to the skipCallback-with-object case: resetCallbacks
+    // must sweep the event bucket regardless of whether its entries
+    // came from functions or CallbackObjects.
+    const log: string[] = [];
+    class Thing extends Model {}
+    const obj = {
+      beforeSave() {
+        log.push("obj-before");
+      },
+    };
+    Thing.setCallback("save", "before", obj);
+    Thing.setCallback("save", "before", () => log.push("fn"));
+
+    Thing.resetCallbacks("save");
+    new Thing().runCallbacks("save", () => log.push("block-after-reset"));
+    expect(log).toEqual(["block-after-reset"]);
+  });
+
   it("setCallback respects prepend: true (runs before earlier-registered)", () => {
     const log: string[] = [];
     class Thing extends Model {}

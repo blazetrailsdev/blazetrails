@@ -81,7 +81,8 @@ describe("ActiveRecord::Encryption::Aes256GcmTest", () => {
   it("inspect_does not show secrets", () => {
     const secret = generateKey();
     const cipher = new Cipher(secret);
-    const inspected = inspect(cipher);
-    expect(inspected).not.toContain(secret);
+    expect(inspect(cipher)).not.toContain(secret);
+    expect(JSON.stringify(cipher)).not.toContain(secret);
+    expect(Object.keys(cipher)).not.toContain("secret");
   });
 });

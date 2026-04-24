@@ -347,7 +347,9 @@ describe("SerializationTest", () => {
       const r = new Row({ id: big, name: "row-2" });
       expect(() => JSON.stringify(r)).not.toThrow();
       const parsed = JSON.parse(JSON.stringify(r));
-      // bigint is coerced to decimal string; consumers must parse with BigInt().
+      // bigint is coerced to decimal string (not number — JS number loses
+      // precision above 2^53-1). Consumers must parse with BigInt(str).
+      expect(typeof parsed.id).toBe("string");
       expect(parsed.id).toBe("4611686018427387904");
       expect(parsed.name).toBe("row-2");
     });

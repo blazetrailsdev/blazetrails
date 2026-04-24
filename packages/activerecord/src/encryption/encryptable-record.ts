@@ -138,10 +138,25 @@ export class EncryptableRecord {
           // adapter-resolved type (applyPendingEncryptions re-runs after).
           userProvided: existingDef?.userProvided ?? false,
           source: existingDef?.source ?? "schema",
+          ...((existingDef as any)?.limit != null ? { limit: (existingDef as any).limit } : {}),
         });
       }
 
+      if (Configurable.config.validateColumnSize) {
+        EncryptableRecord.validateColumnSize(modelClass, name);
+      }
+
       Configurable.encryptedAttributeWasDeclared(modelClass, name);
+    }
+  }
+
+  static validateColumnSize(modelClass: any, attribute: string): void {
+    if (typeof modelClass.validatesLengthOf !== "function") return;
+    const limit =
+      (modelClass._attributeDefinitions?.get(attribute) as any)?.limit ??
+      modelClass.columnsHash?.()[attribute]?.limit;
+    if (limit != null) {
+      modelClass.validatesLengthOf(attribute, { maximum: limit });
     }
   }
 

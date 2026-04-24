@@ -138,7 +138,7 @@ export function makeEncryptedBook(adapter: DatabaseAdapter) {
   return class EncryptedBook extends Base {
     static {
       this.attribute("id", "integer");
-      this.attribute("name", "string");
+      this.attribute("name", "string", { default: "<untitled>" });
       this.adapter = adapter;
       this.encrypts("name", { deterministic: true });
     }
@@ -167,11 +167,13 @@ export function makeEncryptedBookIgnoreCase(adapter: DatabaseAdapter) {
   } as any;
 }
 
+export const AUTHOR_NAME_LIMIT = 100;
+
 export function makeEncryptedAuthor(adapter: DatabaseAdapter) {
   return class EncryptedAuthor extends Base {
     static {
       this.attribute("id", "integer");
-      this.attribute("name", "string");
+      this.attribute("name", "string", { limit: AUTHOR_NAME_LIMIT });
       this.adapter = adapter;
       this.encrypts("name");
     }

@@ -16,6 +16,7 @@ import {
   withEncryptionContext,
   withoutEncryption,
   DecryptionError,
+  AUTHOR_NAME_LIMIT,
 } from "./test-helpers.js";
 import { Configurable } from "./configurable.js";
 import { EncryptableRecord } from "./encryptable-record.js";
@@ -302,13 +303,59 @@ describe("ActiveRecord::Encryption::EncryptableRecordTest", () => {
   it.skip("encryption errors when saving records will raise the error and don't save anything", () => {});
   it.skip("can't modify encrypted attributes when frozen_encryption is true", () => {});
   it.skip("can only save unencrypted attributes when frozen encryption is true", () => {});
-  it.skip("validate column sizes", () => {});
-  it.skip("forces UTF-8 encoding for deterministic attributes by default", () => {});
-  it.skip("forces encoding for deterministic attributes based on the configured option", () => {});
-  it.skip("forced encoding for deterministic attributes will replace invalid characters", () => {});
-  it.skip("forced encoding for deterministic attributes can be disabled", () => {});
-  it.skip("support encrypted attributes defined on columns with default values", () => {});
-  it.skip("loading records with encrypted attributes defined on columns with default values", () => {});
+  it("validate column sizes", async () => {
+    const Author = makeEncryptedAuthor(freshAdapter());
+    new Author();
+    expect(new Author({ name: "jorge" }).isValid()).toBe(true);
+    expect(new Author({ name: "a".repeat(AUTHOR_NAME_LIMIT + 1) }).isValid()).toBe(false);
+    const author = await Author.create({ name: "a".repeat(AUTHOR_NAME_LIMIT + 1) });
+    expect(author.isValid()).toBe(false);
+  });
+
+  it("forces UTF-8 encoding for deterministic attributes by default", async () => {
+    const Book = makeEncryptedBook(freshAdapter());
+    new Book();
+    const book = await Book.create({ name: "Dune" });
+    const reloaded = await Book.find(book.id);
+    expect(reloaded.name).toBe("Dune");
+  });
+
+  it("forces encoding for deterministic attributes based on the configured option", async () => {
+    Configurable.config.forcedEncodingForDeterministicEncryption = "ASCII";
+    const Book = makeEncryptedBook(freshAdapter());
+    new Book();
+    const book = await Book.create({ name: "Dune" });
+    const reloaded = await Book.find(book.id);
+    expect(reloaded.name).toBe("Dune");
+  });
+
+  it("forced encoding for deterministic attributes will replace invalid characters", async () => {
+    const Book = makeEncryptedBook(freshAdapter());
+    new Book();
+    const book = await Book.create({ name: "Hello ú" });
+    const reloaded = await Book.find(book.id);
+    expect(typeof reloaded.name).toBe("string");
+  });
+
+  it("forced encoding for deterministic attributes can be disabled", async () => {
+    Configurable.config.forcedEncodingForDeterministicEncryption = "";
+    const Book = makeEncryptedBook(freshAdapter());
+    new Book();
+    const book = await Book.create({ name: "Dune" });
+    const reloaded = await Book.find(book.id);
+    expect(reloaded.name).toBe("Dune");
+  });
+
+  it("support encrypted attributes defined on columns with default values", async () => {
+    const Book = makeEncryptedBook(freshAdapter());
+    new Book();
+    const book = await Book.create({});
+    await assertEncryptedAttribute(book, "name", "<untitled>");
+  });
+
+  it.skip("loading records with encrypted attributes defined on columns with default values", () => {
+    // requires upsert/insert_on_duplicate_update support
+  });
   it.skip("can dump and load records that use encryption", () => {});
   it.skip("supports decrypting data encrypted non deterministically with SHA1 when digest class is SHA256", () => {});
   it.skip("when ignore_case: true, it keeps both the attribute and the _original counterpart encrypted", () => {});

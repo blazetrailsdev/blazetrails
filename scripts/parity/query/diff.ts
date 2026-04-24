@@ -30,7 +30,10 @@ const SCHEMA_PATH = "scripts/parity/canonical/query.schema.json";
 const KNOWN_GAPS_PATH =
   process.env.PARITY_KNOWN_GAPS_PATH || "scripts/parity/canonical/query-known-gaps.json";
 const FIXTURES_DIR = process.env.PARITY_FIXTURES_DIR || "scripts/parity/fixtures";
-const FIXTURE_PATTERN = /^arel-/;
+// Pre-includes the v2 "ar-" AR-style prefix so widening the orchestrator's
+// matcher (scripts/parity/run.ts) doesn't silently un-classify new fixtures.
+// Numeric-prefixed dirs are schema fixtures and are deliberately excluded.
+const FIXTURE_PATTERN = /^(arel|ar)-/;
 
 interface KnownGap {
   /** Human-readable explanation and (if applicable) tracking link. */
@@ -212,7 +215,9 @@ async function main(): Promise<void> {
               `FAIL  ${name}  (expected ${gap.side}, actual diff: ${gap.reason})\n`,
             );
           } else {
-            process.stdout.write(`FAIL  ${name}  (SQL differs — not in known-gaps)\n`);
+            // "output differs" not "SQL differs" — the diff compares the whole
+            // CanonicalQuery JSON (sql + binds + frozenAt), not just sql.
+            process.stdout.write(`FAIL  ${name}  (output differs — not in known-gaps)\n`);
           }
           const patch = createTwoFilesPatch(
             `rails/${file}`,

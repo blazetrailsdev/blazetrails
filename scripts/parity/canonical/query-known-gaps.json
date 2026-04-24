@@ -5,7 +5,7 @@
   },
   "arel-04": {
     "side": "rails-missing",
-    "reason": "fixture returns posts[Arel.star] (an Attribute); same as arel-03 — Rails Arel::Attribute#to_sql undefined, trails renders 'posts'.'*'."
+    "reason": "fixture returns posts[Arel.star] (an Attribute); same as arel-03 — Rails Arel::Attribute#to_sql undefined, trails renders \"posts\".\"*\" (identifiers are double-quoted)."
   },
   "arel-16": {
     "side": "both-missing",
@@ -49,7 +49,7 @@
   },
   "arel-44": {
     "side": "diff",
-    "reason": "subquery alias quoting: trails wraps the alias in double quotes ('\\'sub\\''); Rails emits the alias bare (sub). Real ToSql visitor divergence."
+    "reason": "subquery alias quoting: Rails emits the alias bare (sub); trails emits the quoted identifier (\"sub\"). Real ToSql visitor divergence."
   },
   "arel-47": {
     "side": "trails-missing",

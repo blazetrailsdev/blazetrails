@@ -124,7 +124,7 @@ describe("diff.ts classification", () => {
     writeGaps({});
     const { code, stdout } = runDiff(railsDir, trailsDir, gapsPath, fixturesDir);
     expect(stdout).toMatch(/FAIL\s+d\b/);
-    expect(stdout).toMatch(/SQL differs/);
+    expect(stdout).toMatch(/output differs/);
     expect(code).toBe(1);
   });
 

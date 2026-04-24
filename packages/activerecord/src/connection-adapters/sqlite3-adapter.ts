@@ -406,12 +406,13 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
    * Mirrors: ActiveRecord::ConnectionAdapters::SQLite3Adapter#lookup_cast_type
    */
   lookupCastType(sqlType: string): import("@blazetrails/activemodel").Type {
-    // Strip precision/scale metadata and normalize for lookup.
-    // e.g. "DECIMAL(10, 0)" → "decimal", "VARCHAR(255)" → "varchar"
-    const normalized = sqlType
-      .toLowerCase()
-      .replace(/\(.*\)/, "")
-      .trim();
+    // Pass the full sql type to the map so regex registrations (e.g. /decimal/i)
+    // can inspect precision/scale. Fall back to the bare normalized key when
+    // no full-string match is found.
+    const lower = sqlType.toLowerCase().trim();
+    const full = this._nativeTypeMap.fetch(lower);
+    if (full.type() !== "value") return full;
+    const normalized = lower.replace(/\(.*\)/, "").trim();
     return this._nativeTypeMap.lookup(normalized);
   }
 
@@ -425,28 +426,48 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     return this._nativeTypeMap;
   }
 
+  // Mirrors: ActiveRecord::ConnectionAdapters::SQLite3Adapter::SQLite3Integer
+  // INTEGER in SQLite can store up to 8 bytes; default _limit to 8 when none given.
   private static _buildTypeMap(): TypeMap {
+    const sqlite3Int = (limit?: number) => new IntegerType({ limit: limit ?? 8 });
     const map = new TypeMap();
     map.registerType("string", new StringType());
     map.registerType("text", new TextType());
-    map.registerType("integer", new IntegerType());
+    map.registerType("integer", sqlite3Int());
     map.registerType("float", new FloatType());
+    map.registerType(/decimal/i, undefined, (sqlType) => {
+      const precisionMatch = /\(\s*(\d+)/.exec(sqlType);
+      const precision = precisionMatch ? parseInt(precisionMatch[1], 10) : undefined;
+      const scaleMatch = /\(\s*\d+\s*,\s*(\d+)\s*\)/.exec(sqlType);
+      // Rails: extract_scale returns 0 when no scale specified; use DecimalWithoutScale
+      const scale = scaleMatch
+        ? parseInt(scaleMatch[1], 10)
+        : precision !== undefined
+          ? 0
+          : undefined;
+      if (scale === 0) return new DecimalWithoutScale({ precision });
+      return new DecimalType({ precision, scale });
+    });
     map.registerType("decimal", new DecimalType());
     map.registerType("boolean", new BooleanType());
     map.registerType("date", new DateType());
     map.registerType("datetime", new DateTimeType());
+    map.registerType("timestamp", new DateTimeType());
     map.registerType("time", new TimeType());
     map.registerType("blob", new BinaryType());
     map.registerType("binary", new BinaryType());
     map.registerType("json", new JsonType());
-    map.registerType("bigint", new BigIntegerType());
     map.registerType("numeric", new DecimalWithoutScale());
     // SQLite type affinity — regex matches for flexible type names
     map.registerType(/int/i, undefined, (lookupKey) => {
       if (/bigint/i.test(lookupKey)) return new BigIntegerType();
-      return new IntegerType();
+      return sqlite3Int();
     });
-    map.registerType(/char|clob/i, undefined, () => new StringType());
+    // Explicit "bigint" registered after /int/i so it takes priority (TypeMap
+    // reverses entries; last registered wins on exact matches vs regex).
+    map.registerType("bigint", sqlite3Int(8));
+    map.registerType(/char/i, undefined, () => new StringType());
+    map.registerType(/clob/i, undefined, () => new TextType());
     map.registerType(/blob/i, undefined, () => new BinaryType());
     map.registerType(/real|floa|doub/i, undefined, () => new FloatType());
     return map;

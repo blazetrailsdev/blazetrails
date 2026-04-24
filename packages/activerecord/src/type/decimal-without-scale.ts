@@ -14,9 +14,9 @@
  * ```
  */
 
-import { BigIntegerType } from "@blazetrails/activemodel";
+import { IntegerType } from "@blazetrails/activemodel";
 
-export class DecimalWithoutScale extends BigIntegerType {
+export class DecimalWithoutScale extends IntegerType {
   override readonly name: string = "decimal";
 
   override type(): string {

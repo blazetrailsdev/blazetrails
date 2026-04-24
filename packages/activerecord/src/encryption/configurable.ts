@@ -53,8 +53,12 @@ export class Configurable {
     for (const hook of _configureHooks) hook();
   }
 
-  static onConfigure(hook: () => void): void {
+  static onConfigure(hook: () => void): () => void {
     _configureHooks.push(hook);
+    return () => {
+      const idx = _configureHooks.indexOf(hook);
+      if (idx !== -1) _configureHooks.splice(idx, 1);
+    };
   }
 
   static onEncryptedAttributeDeclared(callback: (klass: any, name: string) => void): () => void {

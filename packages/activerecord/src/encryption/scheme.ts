@@ -29,7 +29,10 @@ function stableKeySignature(
   // meaningful) and is unambiguous — no comma-collision risk from key strings.
   // Use null for undefined so missing salt is distinct from empty-string salt,
   // ensuring cache invalidation when keyDerivationSalt is cleared.
-  return JSON.stringify([primaryKey, keyDerivationSalt ?? null, hashDigestClass]);
+  // Normalize digest the same way KeyGenerator does (lowercase, no hyphens)
+  // so "SHA-256" and "sha256" resolve to the same cache entry.
+  const digest = hashDigestClass.toLowerCase().replace(/-/g, "");
+  return JSON.stringify([primaryKey, keyDerivationSalt ?? null, digest]);
 }
 
 function getOrCreateDefaultKeyProvider(

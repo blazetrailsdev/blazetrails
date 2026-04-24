@@ -35,6 +35,9 @@ export class LazilyDefineAttributes {
  */
 function isNonStringIterable(value: unknown): value is Iterable<unknown> {
   if (typeof value !== "object" || value === null) return false;
+  // Boxed strings (`new String("yes")`) are iterable by char; Ruby's
+  // `Array("yes")` still wraps as `["yes"]`, so treat them as scalars.
+  if (value instanceof String) return false;
   return typeof (value as { [Symbol.iterator]?: unknown })[Symbol.iterator] === "function";
 }
 

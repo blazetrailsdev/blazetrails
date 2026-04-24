@@ -2803,7 +2803,7 @@ include(Base, {
   queryAttribute: _queryAttribute,
   _queryAttribute: _queryAttributeFn,
   _readAttribute: _readAttributeFn,
-  _writeAttribute: _writeAttributeFn,
+  _writeAttribute: ReadonlyAttributes._writeAttribute,
   // PrimaryKey
   toKey: _toKey,
 });

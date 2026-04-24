@@ -794,7 +794,7 @@ describe("BasicsTest", () => {
   });
 
   it.skip("inherited from scoped find", () => {
-    /* not in Rails test suite — fabricated test name, removing in favour of implemented STI tests */
+    /* not in Rails test suite — fabricated test name; kept as placeholder only */
   });
 
   it.skip("model classes with matching names", () => {

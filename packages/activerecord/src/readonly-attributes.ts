@@ -88,10 +88,10 @@ export function readonlyAttributeQ(this: typeof Base, attribute: string): boolea
  * readonly_attributes.rb (line 49). Adds two guards before delegating to the
  * base Model implementation:
  *
- *   - frozen record: raises `Cannot modify a frozen X` (matching the
- *     pre-extraction message and test coverage).
- *   - readonly column on a persisted record: raises ReadonlyAttributeError,
- *     matching Rails' HasReadonlyAttributes#write_attribute.
+ *   - frozen record: raises `Cannot modify a frozen X`.
+ *   - readonly column on a persisted record: raises `ReadonlyAttributeError`
+ *     when `getRaiseOnAssignToAttrReadonly()` is true (default); silently
+ *     skips the write when false — mirrors `raise_on_assign_to_attr_readonly`.
  *
  * During construction the `_newRecord` field initializer on `Base` hasn't
  * run yet when `Model`'s constructor invokes `writeAttribute` — gate the

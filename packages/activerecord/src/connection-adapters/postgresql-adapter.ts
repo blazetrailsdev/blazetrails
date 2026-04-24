@@ -23,7 +23,7 @@ import {
   initializeTypeMap as staticInitializeTypeMap,
 } from "./postgresql/type-map-init.js";
 import { inspectExplainOption } from "../adapter.js";
-import type { DatabaseAdapter, ExplainOption, TrailsAdapterOptions } from "../adapter.js";
+import type { DatabaseAdapter, ExplainOption, PostgreSQLAdapterOptions } from "../adapter.js";
 import {
   ConnectionNotEstablished,
   DatabaseConnectionError,
@@ -223,7 +223,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     }
   }
 
-  constructor(config: string | (pg.PoolConfig & TrailsAdapterOptions)) {
+  constructor(config: string | (pg.PoolConfig & PostgreSQLAdapterOptions)) {
     super();
     // Rails: `PostgreSQLAdapter` inherits the abstract adapter's
     // `default_prepared_statements = true`.

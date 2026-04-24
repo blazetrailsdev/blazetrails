@@ -481,6 +481,30 @@ describe("Generic Model.setCallback / skipCallback / resetCallbacks (Rails fidel
     expect(log).toEqual(["fn-kept", "block"]);
   });
 
+  it("skipCallback removes a CallbackObject registered via beforeX/afterX helpers", () => {
+    // The generated `beforeX`/`afterX`/`aroundX` helpers from
+    // `defineModelCallbacks` pass the original filter straight to
+    // `register` so skipCallback(event, timing, originalObject) can
+    // find and remove it by reference.
+    const log: string[] = [];
+    class Thing extends Model {
+      static {
+        this.defineModelCallbacks("ship");
+      }
+    }
+    const obj = {
+      beforeShip() {
+        log.push("obj");
+      },
+    };
+    (Thing as unknown as { beforeShip: (o: object) => void }).beforeShip(obj);
+    (Thing as unknown as { beforeShip: (fn: () => void) => void }).beforeShip(() => log.push("fn"));
+
+    expect(Thing.skipCallback("ship", "before", obj)).toBe(true);
+    new Thing().runCallbacks("ship", () => log.push("block"));
+    expect(log).toEqual(["fn", "block"]);
+  });
+
   it("resetCallbacks clears CallbackObject-registered callbacks too", () => {
     // Companion to the skipCallback-with-object case: resetCallbacks
     // must sweep the event bucket regardless of whether its entries

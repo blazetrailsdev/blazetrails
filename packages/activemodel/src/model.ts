@@ -923,6 +923,20 @@ export class Model {
   static setCallback<T extends typeof Model>(
     this: T,
     event: string,
+    timing: "before" | "after",
+    fn: CallbackFn | CallbackObject,
+    options?: CallbackConditions<InstanceType<T>>,
+  ): void;
+  static setCallback<T extends typeof Model>(
+    this: T,
+    event: string,
+    timing: "around",
+    fn: AroundCallbackFn | CallbackObject,
+    options?: CallbackConditions<InstanceType<T>>,
+  ): void;
+  static setCallback<T extends typeof Model>(
+    this: T,
+    event: string,
     timing: "before" | "after" | "around",
     fn: CallbackFn | AroundCallbackFn | CallbackObject,
     options?: CallbackConditions<InstanceType<T>>,

@@ -86,6 +86,13 @@ export function defineModelCallbacks(this: any, ...args: unknown[]): void {
   for (const event of eventNames) {
     const capitalizedEvent = event.charAt(0).toUpperCase() + event.slice(1);
 
+    // NB: pass `fnOrObject` directly to `register`; `register` already
+    // handles `resolveCallback` internally AND stores the original
+    // filter for identity-based removal via `skip()`. Pre-resolving here
+    // would make the stored filter the wrapper function, breaking
+    // `Model.skipCallback(event, timing, originalObject)` for entries
+    // registered through the generated `beforeX`/`afterX`/`aroundX`
+    // helpers.
     if (timings.includes("before")) {
       const methodName = `before${capitalizedEvent}`;
       Object.defineProperty(this, methodName, {
@@ -93,8 +100,7 @@ export function defineModelCallbacks(this: any, ...args: unknown[]): void {
           if (!Object.prototype.hasOwnProperty.call(this, "_callbackChain")) {
             this._callbackChain = this._callbackChain.clone();
           }
-          const fn = resolveCallback(fnOrObject, "before", event);
-          this._callbackChain.register("before", event, fn, conditions);
+          this._callbackChain.register("before", event, fnOrObject, conditions);
         },
         writable: true,
         configurable: true,
@@ -108,8 +114,7 @@ export function defineModelCallbacks(this: any, ...args: unknown[]): void {
           if (!Object.prototype.hasOwnProperty.call(this, "_callbackChain")) {
             this._callbackChain = this._callbackChain.clone();
           }
-          const fn = resolveCallback(fnOrObject, "after", event);
-          this._callbackChain.register("after", event, fn, conditions);
+          this._callbackChain.register("after", event, fnOrObject, conditions);
         },
         writable: true,
         configurable: true,
@@ -126,8 +131,7 @@ export function defineModelCallbacks(this: any, ...args: unknown[]): void {
           if (!Object.prototype.hasOwnProperty.call(this, "_callbackChain")) {
             this._callbackChain = this._callbackChain.clone();
           }
-          const fn = resolveCallback(fnOrObject, "around", event);
-          this._callbackChain.register("around", event, fn as AroundCallbackFn, conditions);
+          this._callbackChain.register("around", event, fnOrObject, conditions);
         },
         writable: true,
         configurable: true,

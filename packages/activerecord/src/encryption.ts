@@ -145,12 +145,12 @@ function buildScheme(options: EncryptsOptions): Scheme {
   // encrypts() with no options picks up the global key provider from config
   // (mirrors Rails' default behavior). Fall back to the dev-only AR_ENC:base64
   // encryptor only when no keys are configured at all.
-  // Only switch to the real Scheme when both primaryKey and keyDerivationSalt
-  // are set — DerivedSecretKeyProvider.deriveKeyFrom throws if the salt is
-  // missing, so a primaryKey alone would fail at serialize time.
-  const hasConfiguredKeys =
-    Configurable.config.primaryKey !== undefined &&
-    Configurable.config.keyDerivationSalt !== undefined;
+  // Switch to the real Scheme whenever any encryption key material is configured.
+  // If config is incomplete (e.g. primaryKey set but keyDerivationSalt missing),
+  // Config.get() will raise ConfigError at serialize/deserialize time — which
+  // is more informative than silently falling back to the AR_ENC:base64 shim
+  // and storing only base64-encoded data.
+  const hasConfiguredKeys = Configurable.config.primaryKey !== undefined;
 
   const coreOpts: SchemeOptions = encryptor
     ? { ...schemeOptions, encryptor: new LegacyEncryptorShim(encryptor) }

@@ -196,7 +196,9 @@ export function assertEncryptedAttribute(
   }
 
   // Verify the DB-bound value differs from the plaintext — confirms real encryption.
-  if (expectedValue !== null && expectedValue !== undefined && expectedValue !== "") {
+  // Empty strings are also encrypted by EncryptedAttributeType.serialize(), so
+  // include them in this check (only skip null/undefined).
+  if (expectedValue !== null && expectedValue !== undefined) {
     const dbValues = model._attributes.valuesForDatabase();
     const dbValue = dbValues[attrName];
     if (dbValue === expectedValue) {

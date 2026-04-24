@@ -107,6 +107,10 @@ describe("ActiveRecord::Encryption::EncryptableRecordTest", () => {
     // Rails serializes empty strings the same as any other value (encrypts them).
     // "ignores" means the value round-trips correctly, not that encryption is skipped.
     expect(book.name).toBe("");
+    // Verify the DB-bound value is ciphertext, not the empty string itself.
+    const dbValues = book._attributes.valuesForDatabase();
+    expect(dbValues.name).not.toBe("");
+    expect(dbValues.name).not.toBeNull();
     const reloaded = await Book.find(book.id);
     expect(reloaded.name).toBe("");
   });

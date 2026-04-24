@@ -1,16 +1,4 @@
 {
-  "arel-03": {
-    "side": "rails-missing",
-    "reason": "fixture returns a bare Arel::Attributes::Attribute (posts[:id]); Rails Arel::Attribute does not implement #to_sql — trails Attribute#toSql emits a quoted column ref. Fixture-design divergence; upstream Rails treats bare attributes as non-renderable."
-  },
-  "arel-04": {
-    "side": "rails-missing",
-    "reason": "fixture returns posts[Arel.star] (an Attribute); same as arel-03 — Rails Arel::Attribute#to_sql undefined, trails renders \"posts\".\"*\" (identifiers are double-quoted)."
-  },
-  "arel-16": {
-    "side": "both-missing",
-    "reason": "does_not_match_regexp: Rails does not expose it on SQLite (regex operators are adapter-specific); trails ToSql visitor errors with 'NotRegexp is not supported by the base ToSql visitor'. Needs adapter-specific visitors on both sides."
-  },
   "arel-17": {
     "side": "diff",
     "reason": "is_distinct_from: trails emits 'IS DISTINCT FROM' (SQL standard); Rails on SQLite emits 'IS NOT' (SQLite extension). Both are semantically equivalent but lexically differ."

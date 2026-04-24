@@ -9,11 +9,11 @@ describeIfPg("PostgreSQLAdapter", () => {
   let adapter: PostgreSQLAdapter;
   beforeEach(async () => {
     adapter = new PostgreSQLAdapter(PG_TEST_URL);
-    await adapter.exec(`DROP TABLE IF EXISTS ex`);
-    await adapter.exec(`CREATE TABLE ex (id serial primary key, data character varying(255))`);
+    await adapter.exec(`DROP TABLE IF EXISTS pw_ex`);
+    await adapter.exec(`CREATE TABLE pw_ex (id serial primary key, data character varying(255))`);
   });
   afterEach(async () => {
-    await adapter.exec(`DROP TABLE IF EXISTS ex`);
+    await adapter.exec(`DROP TABLE IF EXISTS pw_ex`);
     await adapter.close();
   });
 
@@ -43,7 +43,7 @@ describeIfPg("PostgreSQLAdapter", () => {
       preventWrites(adapter);
       await adapter.beginTransaction();
       try {
-        await adapter.execute("DECLARE cur_ex CURSOR FOR SELECT * FROM ex");
+        await adapter.execute("DECLARE cur_ex CURSOR FOR SELECT * FROM pw_ex");
         await adapter.execute("FETCH cur_ex");
         await adapter.execute("MOVE cur_ex");
         await adapter.execute("CLOSE cur_ex");
@@ -55,33 +55,33 @@ describeIfPg("PostgreSQLAdapter", () => {
     it("errors when an insert query is called while preventing writes", async () => {
       preventWrites(adapter);
       await expect(
-        adapter.execute("INSERT INTO ex (data) VALUES ('138853948594')"),
+        adapter.execute("INSERT INTO pw_ex (data) VALUES ('138853948594')"),
       ).rejects.toBeInstanceOf(ReadOnlyError);
     });
 
     it("errors when an update query is called while preventing writes", async () => {
       allowWrites(adapter);
-      await adapter.execute("INSERT INTO ex (data) VALUES ('138853948594')");
+      await adapter.execute("INSERT INTO pw_ex (data) VALUES ('138853948594')");
       preventWrites(adapter);
       await expect(
-        adapter.execute("UPDATE ex SET data = '9989' WHERE data = '138853948594'"),
+        adapter.execute("UPDATE pw_ex SET data = '9989' WHERE data = '138853948594'"),
       ).rejects.toBeInstanceOf(ReadOnlyError);
     });
 
     it("errors when a delete query is called while preventing writes", async () => {
       allowWrites(adapter);
-      await adapter.execute("INSERT INTO ex (data) VALUES ('138853948594')");
+      await adapter.execute("INSERT INTO pw_ex (data) VALUES ('138853948594')");
       preventWrites(adapter);
       await expect(
-        adapter.execute("DELETE FROM ex WHERE data = '138853948594'"),
+        adapter.execute("DELETE FROM pw_ex WHERE data = '138853948594'"),
       ).rejects.toBeInstanceOf(ReadOnlyError);
     });
 
     it("doesnt error when a select query is called while preventing writes", async () => {
       allowWrites(adapter);
-      await adapter.execute("INSERT INTO ex (data) VALUES ('138853948594')");
+      await adapter.execute("INSERT INTO pw_ex (data) VALUES ('138853948594')");
       preventWrites(adapter);
-      const rows = await adapter.execute("SELECT * FROM ex WHERE data = '138853948594'");
+      const rows = await adapter.execute("SELECT * FROM pw_ex WHERE data = '138853948594'");
       expect(rows).toHaveLength(1);
     });
 
@@ -98,10 +98,10 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it("doesnt error when a read query with leading chars is called while preventing writes", async () => {
       allowWrites(adapter);
-      await adapter.execute("INSERT INTO ex (data) VALUES ('138853948594')");
+      await adapter.execute("INSERT INTO pw_ex (data) VALUES ('138853948594')");
       preventWrites(adapter);
       const rows = await adapter.execute(
-        "/*action:index*/(\n( SELECT * FROM ex WHERE data = '138853948594' ) )",
+        "/*action:index*/(\n( SELECT * FROM pw_ex WHERE data = '138853948594' ) )",
       );
       expect(rows).toHaveLength(1);
     });

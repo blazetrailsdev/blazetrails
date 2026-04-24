@@ -10,7 +10,7 @@ describeIfPg("PostgreSQLAdapter", () => {
     adapter = new PostgreSQLAdapter(PG_TEST_URL);
   });
   afterEach(async () => {
-    await adapter.exec(`DROP TABLE IF EXISTS ex CASCADE`);
+    await adapter.exec(`DROP TABLE IF EXISTS dt_ex CASCADE`);
     await adapter.close();
   });
 
@@ -47,16 +47,16 @@ describeIfPg("PostgreSQLAdapter", () => {
 
   describe("PostgreSQLInternalDatatypeTest", () => {
     it("name column type", async () => {
-      await adapter.exec(`CREATE TABLE ex (data name)`);
-      const cols = await adapter.columns("ex");
+      await adapter.exec(`CREATE TABLE dt_ex (data name)`);
+      const cols = await adapter.columns("dt_ex");
       const col = cols.find((c) => c.name === "data");
       expect(col).toBeDefined();
       expect(col!.baseType).toBe("string");
     });
 
     it("char column type", async () => {
-      await adapter.exec(`CREATE TABLE ex (data "char")`);
-      const cols = await adapter.columns("ex");
+      await adapter.exec(`CREATE TABLE dt_ex (data "char")`);
+      const cols = await adapter.columns("dt_ex");
       const col = cols.find((c) => c.name === "data");
       expect(col).toBeDefined();
       expect(col!.baseType).toBe("string");

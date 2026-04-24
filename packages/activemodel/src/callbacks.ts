@@ -194,8 +194,21 @@ export interface RunCallbacksOptions {
 
 function isThenable(v: unknown): v is Promise<unknown> {
   return (
-    v !== null && typeof v === "object" && typeof (v as { then?: unknown }).then === "function"
+    v !== null &&
+    (typeof v === "object" || typeof v === "function") &&
+    typeof (v as { then?: unknown }).then === "function"
   );
+}
+
+/**
+ * Consume a thenable's rejection before throwing in strict-sync mode,
+ * so the error we throw isn't accompanied by an unhandled-rejection
+ * warning (or process termination under `--unhandled-rejections=strict`).
+ */
+function swallowRejection(v: unknown): void {
+  if (isThenable(v)) {
+    void Promise.resolve(v as Promise<unknown>).catch(() => {});
+  }
 }
 
 export type CallbackTiming = "before" | "after" | "around";
@@ -386,6 +399,7 @@ export class CallbackChain {
       const result = (cb.fn as CallbackFn)(record);
       if (isThenable(result)) {
         if (opts?.strict === "sync") {
+          swallowRejection(result);
           throw new Error(
             `Async callback registered on sync event '${event}' — before callback returned a Promise`,
           );
@@ -435,6 +449,7 @@ export class CallbackChain {
       const result = (cb.fn as CallbackFn)(record);
       if (isThenable(result)) {
         if (opts?.strict === "sync") {
+          swallowRejection(result);
           throw new Error(
             `Async callback registered on sync event '${event}' — after callback returned a Promise`,
           );
@@ -521,6 +536,8 @@ export class CallbackChain {
         const cbResult = (cb.fn as AroundCallbackFn)(record, wrappedProceed);
         if (isThenable(cbResult) || pendingProceed) {
           if (opts?.strict === "sync") {
+            swallowRejection(cbResult);
+            swallowRejection(pendingProceed);
             throw new Error(
               `Async callback registered on sync event '${event}' — around callback or block returned a Promise`,
             );
@@ -549,6 +566,7 @@ export class CallbackChain {
 
     if (isThenable(chainResult)) {
       if (opts?.strict === "sync") {
+        swallowRejection(chainResult);
         throw new Error(
           `Async callback registered on sync event '${event}' — around callback or block returned a Promise`,
         );

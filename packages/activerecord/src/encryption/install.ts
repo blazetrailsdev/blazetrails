@@ -23,8 +23,9 @@ import {
  * when `config.active_record.encryption.extend_queries` is set.
  *
  * Safe to call multiple times — both installers are idempotent. Returns
- * `true` when `ExtendedDeterministicQueries` patches are active after this
- * call (whether installed now or in a prior call), `false` when disabled.
+ * whether `ExtendedDeterministicQueries` patches are currently installed,
+ * regardless of the current `extendQueries` flag (i.e. returns `true`
+ * even if patches were installed in a prior call before the flag was cleared).
  * Note: `ExtendedDeterministicUniquenessValidator` is installed at the same
  * time; call `ExtendedDeterministicUniquenessValidator.resetSupport()` in
  * test teardown to undo the `UniquenessValidator#validateEach` patch.

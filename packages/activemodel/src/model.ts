@@ -1521,6 +1521,17 @@ export class Model {
   }
 
   /**
+   * JSON.stringify hook — delegates to `asJson()` so
+   * `JSON.stringify(model)` produces the same output as
+   * `model.toJson()`. Without this, the default walker would
+   * enumerate internal fields (`_attributes`, `_dirty`, `errors`, …)
+   * and potentially throw on BigInt attributes.
+   */
+  toJSON(): unknown {
+    return this.asJson();
+  }
+
+  /**
    * Deserialize a JSON string into this model's attributes.
    *
    * Mirrors: ActiveModel::Serializers::JSON#from_json

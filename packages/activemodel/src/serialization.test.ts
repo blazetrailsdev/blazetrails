@@ -300,6 +300,23 @@ describe("SerializationTest", () => {
       expect(() => JSON.stringify(json)).not.toThrow();
     });
 
+    it("JSON.stringify(model) delegates to asJson via toJSON()", () => {
+      // Direct `JSON.stringify(model)` should match `model.toJson()` —
+      // without the hook, the default walker would enumerate
+      // `_attributes`/`_dirty`/`errors`/etc. and potentially throw on
+      // BigInt state.
+      class Row extends Model {
+        static {
+          this.attribute("id", "big_integer");
+          this.attribute("name", "string");
+        }
+      }
+      const r = new Row({ id: "42", name: "row-1" });
+      expect(JSON.stringify(r)).toBe(r.toJson());
+      const parsed = JSON.parse(JSON.stringify(r));
+      expect(parsed).toEqual({ id: "42", name: "row-1" });
+    });
+
     it("asJson is idempotent on JSON-safe values", () => {
       class Person extends Model {
         static {

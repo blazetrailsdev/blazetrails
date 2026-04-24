@@ -67,7 +67,7 @@ describe("ActiveRecord::Encryption::UniquenessValidationsTest", () => {
 
     await Book.create({ name: "dune" });
     const dup = await Book.create({ name: "dune" });
-    expect(dup.errors.count).toBeGreaterThan(0);
+    expect(dup.errors.count).toBe(1);
   });
 
   it.skip("uniqueness validations work when mixing encrypted an unencrypted data", () => {
@@ -94,7 +94,7 @@ describe("ActiveRecord::Encryption::UniquenessValidationsTest", () => {
     await OldBook.create({ name: "dune" });
     // The previous scheme has downcase:true, so "DUNE" should collide with "dune".
     const dup = await OldBook.create({ name: "DUNE" });
-    expect(dup.errors.count).toBeGreaterThan(0);
+    expect(dup.errors.count).toBe(1);
   });
 
   it("uniqueness validation does not revalidate the attribute with current encryption type", async () => {

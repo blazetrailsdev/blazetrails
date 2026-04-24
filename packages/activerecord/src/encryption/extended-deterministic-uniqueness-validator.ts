@@ -1,6 +1,6 @@
 import { EncryptedAttributeType } from "./encrypted-attribute-type.js";
 import { EncryptableRecord, getAttributeType } from "./encryptable-record.js";
-import { AdditionalValue } from "./extended-deterministic-queries.js";
+import { AdditionalValue, ExtendedDeterministicQueries } from "./extended-deterministic-queries.js";
 import { withoutEncryption } from "./context.js";
 
 /**
@@ -93,11 +93,17 @@ export class EncryptedUniquenessValidator {
     const encryptedType = getAttributeType(klass, attribute);
     if (!(encryptedType instanceof EncryptedAttributeType)) return;
 
-    const prevCiphertexts = encryptedType.previousTypes.map((pt) => pt.serialize(value));
-    if (prevCiphertexts.length > 0) {
-      withoutEncryption(() => {
-        originalValidateEach(record, attribute, prevCiphertexts);
-      });
+    // When ExtendedDeterministicQueries is installed it already expands the
+    // WHERE clause to cover all previous-scheme ciphertexts, so the first
+    // originalValidateEach call above is sufficient. Only issue the extra
+    // query when the WHERE expansion is not active.
+    if (!ExtendedDeterministicQueries.installed) {
+      const prevCiphertexts = encryptedType.previousTypes.map((pt) => pt.serialize(value));
+      if (prevCiphertexts.length > 0) {
+        withoutEncryption(() => {
+          originalValidateEach(record, attribute, prevCiphertexts);
+        });
+      }
     }
   }
 

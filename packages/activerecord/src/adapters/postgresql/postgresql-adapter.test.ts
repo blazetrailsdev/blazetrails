@@ -609,14 +609,23 @@ describeIfPg("PostgreSQLAdapter", () => {
       expect(indexes.find((i) => i.name === "idx_nulls_nd")).toBeDefined();
     });
     it("columns for distinct with nulls", async () => {
-      expect(adapter.columnsForDistinct("posts.id", ["posts.created_at desc NULLS FIRST"])).toBe(
-        "posts.created_at AS alias_0, posts.id",
+      expect(adapter.columnsForDistinct("posts.title", ["posts.updater_id desc nulls first"])).toBe(
+        "posts.updater_id AS alias_0, posts.title",
+      );
+      expect(adapter.columnsForDistinct("posts.title", ["posts.updater_id desc nulls last"])).toBe(
+        "posts.updater_id AS alias_0, posts.title",
       );
     });
 
     it("columns for distinct without order specifiers", async () => {
-      expect(adapter.columnsForDistinct("posts.id", ["posts.created_at"])).toBe(
-        "posts.created_at AS alias_0, posts.id",
+      expect(adapter.columnsForDistinct("posts.title", ["posts.updater_id"])).toBe(
+        "posts.updater_id AS alias_0, posts.title",
+      );
+      expect(adapter.columnsForDistinct("posts.title", ["posts.updater_id nulls last"])).toBe(
+        "posts.updater_id AS alias_0, posts.title",
+      );
+      expect(adapter.columnsForDistinct("posts.title", ["posts.updater_id nulls first"])).toBe(
+        "posts.updater_id AS alias_0, posts.title",
       );
     });
     it.skip("raise error when cannot translate exception", async () => {});

@@ -1855,31 +1855,33 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
 
   columnsForDistinct(columns: string, orders: (string | Nodes.Node)[]): string {
     const visitor = this.arelVisitor;
+    // Mirrors Rails two-pass compact_blank: filter blanks before AND after stripping
+    // so an order that becomes empty after stripping (e.g. bare "DESC") doesn't
+    // consume an alias index slot and shift subsequent aliases.
     const orderColumns = (orders ?? [])
       .map((o) => (typeof o === "string" ? o : visitor.compile(o as Nodes.Node)))
       .filter((o) => o.trim().length > 0)
-      .map((o, i) => {
-        const col = o
+      .map((o) =>
+        o
           .replace(/\s+(?:ASC|DESC)\b/gi, "")
           .replace(/\s+NULLS\s+(?:FIRST|LAST)\b/gi, "")
-          .trim();
-        return col.length > 0 ? `${col} AS alias_${i}` : null;
-      })
-      .filter((c): c is string => c !== null);
+          .trim(),
+      )
+      .filter((col) => col.length > 0)
+      .map((col, i) => `${col} AS alias_${i}`);
     if (orderColumns.length === 0) return columns;
     return [...orderColumns, columns].join(", ");
   }
 
   async extensions(): Promise<string[]> {
     const rows = await this.schemaQuery(`
-      SELECT pg_extension.extname, n.nspname AS schema
+      SELECT pg_extension.extname, n.nspname AS schema,
+             current_schema() AS current_schema
       FROM pg_extension
       JOIN pg_namespace n ON pg_extension.extnamespace = n.oid
-      WHERE pg_extension.extname != 'plpgsql'
     `);
-    const current = await this.currentSchema();
     return rows.map((r) => {
-      const schema = r.schema === current ? null : (r.schema as string);
+      const schema = r.schema === r.current_schema ? null : (r.schema as string);
       return [schema, r.extname as string].filter(Boolean).join(".");
     });
   }

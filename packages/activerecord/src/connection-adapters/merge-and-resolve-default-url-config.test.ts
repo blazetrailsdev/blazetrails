@@ -2,18 +2,24 @@
  * Mirrors Rails activerecord/test/cases/connection_adapters/merge_and_resolve_default_url_config_test.rb
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { DatabaseConfigurations, InvalidConfigurationError } from "../database-configurations.js";
+import {
+  DatabaseConfigurations,
+  InvalidConfigurationError,
+  type RawConfigurations,
+} from "../database-configurations.js";
 
 const DEFAULT_ENV = "default_env";
 
 let savedDatabaseUrl: string | undefined;
 let savedRailsEnv: string | undefined;
 let savedRackEnv: string | undefined;
+let savedDefaultEnv: string;
 
 beforeEach(() => {
   savedDatabaseUrl = process.env["DATABASE_URL"];
   savedRailsEnv = process.env["RAILS_ENV"];
   savedRackEnv = process.env["RACK_ENV"];
+  savedDefaultEnv = DatabaseConfigurations.defaultEnv;
   delete process.env["DATABASE_URL"];
   delete process.env["RAILS_ENV"];
   delete process.env["RACK_ENV"];
@@ -27,27 +33,27 @@ afterEach(() => {
   else delete process.env["RAILS_ENV"];
   if (savedRackEnv !== undefined) process.env["RACK_ENV"] = savedRackEnv;
   else delete process.env["RACK_ENV"];
-  DatabaseConfigurations.defaultEnv = "development";
+  DatabaseConfigurations.defaultEnv = savedDefaultEnv;
 });
 
 function resolveConfig(
-  config: Record<string, unknown>,
+  config: RawConfigurations,
   envName: string = DEFAULT_ENV,
 ): Record<string, unknown> | null {
-  const configs = DatabaseConfigurations.fromRaw(config as any);
+  const configs = DatabaseConfigurations.fromRaw(config);
   const found = configs.configsFor({ envName, name: "primary" })[0];
   return found?.configurationHash ?? null;
 }
 
-function resolveDbConfig(spec: string, config: Record<string, unknown>) {
-  const configs = DatabaseConfigurations.fromRaw(config as any);
+function resolveDbConfig(spec: string, config: RawConfigurations) {
+  const configs = DatabaseConfigurations.fromRaw(config);
   return configs.resolve(spec);
 }
 
 describe("MergeAndResolveDefaultUrlConfigTest", () => {
   it("invalid string config", () => {
     const config = { foo: "bar" };
-    expect(() => resolveConfig(config as any)).toThrow(InvalidConfigurationError);
+    expect(() => resolveConfig(config)).toThrow(InvalidConfigurationError);
   });
 
   it.skip("invalid symbol config", () => {
@@ -57,7 +63,7 @@ describe("MergeAndResolveDefaultUrlConfigTest", () => {
   it("resolver with database uri and current env symbol key", () => {
     process.env["DATABASE_URL"] = "postgres://localhost/foo";
     const config = { not_production: { adapter: "abstract", database: "not_foo" } };
-    const actual = resolveDbConfig(DEFAULT_ENV, config as any);
+    const actual = resolveDbConfig(DEFAULT_ENV, config);
     expect(actual.configurationHash).toEqual({
       adapter: "postgresql",
       database: "foo",
@@ -69,7 +75,7 @@ describe("MergeAndResolveDefaultUrlConfigTest", () => {
     process.env["DATABASE_URL"] = "postgres://localhost/foo";
     DatabaseConfigurations.defaultEnv = "foo";
     const config = { not_production: { adapter: "abstract", database: "not_foo" } };
-    const actual = resolveDbConfig("foo", config as any);
+    const actual = resolveDbConfig("foo", config);
     expect(actual.configurationHash).toEqual({
       adapter: "postgresql",
       database: "foo",
@@ -80,7 +86,7 @@ describe("MergeAndResolveDefaultUrlConfigTest", () => {
   it("resolver with nil database url and current env", () => {
     DatabaseConfigurations.defaultEnv = "foo";
     const config = { foo: { adapter: "postgresql", url: undefined } };
-    const actual = resolveDbConfig("foo", config as any);
+    const actual = resolveDbConfig("foo", config);
     expect(actual.configurationHash).toEqual({ adapter: "postgresql" });
   });
 
@@ -88,7 +94,7 @@ describe("MergeAndResolveDefaultUrlConfigTest", () => {
     process.env["DATABASE_URL"] = "postgres://localhost/foo";
     DatabaseConfigurations.defaultEnv = "foo";
     const config = { not_production: { adapter: "abstract", database: "not_foo" } };
-    const actual = resolveDbConfig("foo", config as any);
+    const actual = resolveDbConfig("foo", config);
     expect(actual.configurationHash).toEqual({
       adapter: "postgresql",
       database: "foo",
@@ -99,7 +105,7 @@ describe("MergeAndResolveDefaultUrlConfigTest", () => {
   it("resolver with database uri and known key", () => {
     process.env["DATABASE_URL"] = "postgres://localhost/foo";
     const config = { production: { adapter: "abstract", database: "not_foo", host: "localhost" } };
-    const actual = resolveDbConfig("production", config as any);
+    const actual = resolveDbConfig("production", config);
     expect(actual.configurationHash).toEqual({
       adapter: "abstract",
       database: "not_foo",
@@ -114,7 +120,7 @@ describe("MergeAndResolveDefaultUrlConfigTest", () => {
       production: { adapter: "postgresql", database: "foo_prod" },
       test: { adapter: "postgresql", database: "foo_test" },
     };
-    const actual = resolveDbConfig("test", config as any);
+    const actual = resolveDbConfig("test", config);
     expect(actual.configurationHash).toEqual({
       adapter: "postgresql",
       database: "foo_test",
@@ -125,13 +131,13 @@ describe("MergeAndResolveDefaultUrlConfigTest", () => {
   it("resolver with database uri and unknown symbol key", () => {
     process.env["DATABASE_URL"] = "postgres://localhost/foo";
     const config = { not_production: { adapter: "abstract", database: "not_foo" } };
-    expect(() => resolveDbConfig("production", config as any)).toThrow();
+    expect(() => resolveDbConfig("production", config)).toThrow();
   });
 
   it("resolver with database uri and supplied url", () => {
     process.env["DATABASE_URL"] = "abstract://not-localhost/not_foo";
     const config = { production: { adapter: "abstract", database: "also_not_foo" } };
-    const actual = resolveDbConfig("postgres://localhost/foo", config as any);
+    const actual = resolveDbConfig("postgres://localhost/foo", config);
     expect(actual.configurationHash).toEqual({
       adapter: "postgresql",
       database: "foo",
@@ -145,26 +151,26 @@ describe("MergeAndResolveDefaultUrlConfigTest", () => {
 
   it("jdbc url", () => {
     const config = { production: { adapter: "abstract", url: "jdbc:postgres://localhost/foo" } };
-    const actual = resolveConfig(config as any, "production");
+    const actual = resolveConfig(config, "production");
     expect(actual).toEqual({ adapter: "abstract", url: "jdbc:postgres://localhost/foo" });
   });
 
   it("http url", () => {
     const config = { production: { adapter: "abstract", url: "http://example.com/path" } };
-    const actual = resolveConfig(config as any, "production");
+    const actual = resolveConfig(config, "production");
     expect(actual).toEqual({ adapter: "abstract", url: "http://example.com/path" });
   });
 
   it("https url", () => {
     const config = { production: { adapter: "abstract", url: "https://example.com" } };
-    const actual = resolveConfig(config as any, "production");
+    const actual = resolveConfig(config, "production");
     expect(actual).toEqual({ adapter: "abstract", url: "https://example.com" });
   });
 
   it("environment does not exist in config url does exist", () => {
     process.env["DATABASE_URL"] = "postgres://localhost/foo";
     const config = { not_default_env: { adapter: "abstract", database: "not_foo" } };
-    const actual = resolveConfig(config as any, DEFAULT_ENV);
+    const actual = resolveConfig(config, DEFAULT_ENV);
     expect(actual).toEqual({ adapter: "postgresql", database: "foo", host: "localhost" });
   });
 
@@ -174,25 +180,25 @@ describe("MergeAndResolveDefaultUrlConfigTest", () => {
 
   it("string connection", () => {
     const config = { default_env: "postgres://localhost/foo" };
-    const actual = resolveConfig(config as any, DEFAULT_ENV);
+    const actual = resolveConfig(config, DEFAULT_ENV);
     expect(actual).toEqual({ adapter: "postgresql", database: "foo", host: "localhost" });
   });
 
   it("url sub key", () => {
     const config = { default_env: { url: "postgres://localhost/foo" } };
-    const actual = resolveConfig(config as any);
+    const actual = resolveConfig(config);
     expect(actual).toEqual({ adapter: "postgresql", database: "foo", host: "localhost" });
   });
 
   it("url removed from hash", () => {
     const config = { default_env: { url: "postgres://localhost/foo" } };
-    const actual = resolveDbConfig(DEFAULT_ENV, config as any);
+    const actual = resolveDbConfig(DEFAULT_ENV, config);
     expect(actual.configurationHash).not.toHaveProperty("url");
   });
 
   it("url with equals in query value", () => {
     const config = { default_env: { url: "postgresql://localhost/foo?options=-cmyoption=on" } };
-    const actual = resolveConfig(config as any);
+    const actual = resolveConfig(config);
     expect(actual).toEqual({
       options: "-cmyoption=on",
       adapter: "postgresql",
@@ -203,7 +209,7 @@ describe("MergeAndResolveDefaultUrlConfigTest", () => {
 
   it("hash", () => {
     const config = { production: { adapter: "postgresql", database: "foo" } };
-    const actual = resolveConfig(config as any, "production");
+    const actual = resolveConfig(config, "production");
     expect(actual).toEqual({ adapter: "postgresql", database: "foo" });
   });
 
@@ -242,7 +248,7 @@ describe("MergeAndResolveDefaultUrlConfigTest", () => {
   it("url sub key with database url", () => {
     process.env["DATABASE_URL"] = "abstract://localhost/NOT_FOO";
     const config = { default_env: { url: "postgres://localhost/foo" } };
-    const actual = resolveConfig(config as any);
+    const actual = resolveConfig(config);
     expect(actual).toEqual({ adapter: "postgresql", database: "foo", host: "localhost" });
   });
 
@@ -252,12 +258,12 @@ describe("MergeAndResolveDefaultUrlConfigTest", () => {
       default_env: { adapter: "abstract", database: "foo" },
       other_env: { url: "postgres://foohost/bardb" },
     };
-    expect(resolveConfig(config as any, DEFAULT_ENV)).toEqual({
+    expect(resolveConfig(config, DEFAULT_ENV)).toEqual({
       database: "baz",
       adapter: "postgresql",
       host: "localhost",
     });
-    expect(resolveConfig(config as any, "other_env")).toEqual({
+    expect(resolveConfig(config, "other_env")).toEqual({
       adapter: "postgresql",
       database: "bardb",
       host: "foohost",
@@ -267,7 +273,7 @@ describe("MergeAndResolveDefaultUrlConfigTest", () => {
   it("merge no conflicts with database url", () => {
     process.env["DATABASE_URL"] = "postgres://localhost/foo";
     const config = { default_env: { adapter: "abstract", pool: "5" } };
-    const actual = resolveConfig(config as any);
+    const actual = resolveConfig(config);
     expect(actual).toEqual({
       adapter: "postgresql",
       database: "foo",
@@ -279,7 +285,7 @@ describe("MergeAndResolveDefaultUrlConfigTest", () => {
   it("merge conflicts with database url", () => {
     process.env["DATABASE_URL"] = "postgres://localhost/foo";
     const config = { default_env: { adapter: "abstract", database: "NOT-FOO", pool: "5" } };
-    const actual = resolveConfig(config as any);
+    const actual = resolveConfig(config);
     expect(actual).toEqual({
       adapter: "postgresql",
       database: "foo",
@@ -291,7 +297,7 @@ describe("MergeAndResolveDefaultUrlConfigTest", () => {
   it("merge no conflicts with database url and adapter", () => {
     process.env["DATABASE_URL"] = "postgres://localhost/foo";
     const config = { default_env: { adapter: "postgresql", pool: "5" } };
-    const actual = resolveConfig(config as any);
+    const actual = resolveConfig(config);
     expect(actual).toEqual({
       adapter: "postgresql",
       database: "foo",
@@ -303,7 +309,7 @@ describe("MergeAndResolveDefaultUrlConfigTest", () => {
   it("merge no conflicts with database url and numeric pool", () => {
     process.env["DATABASE_URL"] = "postgres://localhost/foo";
     const config = { default_env: { adapter: "abstract", pool: 5 } };
-    const actual = resolveConfig(config as any);
+    const actual = resolveConfig(config);
     expect(actual).toEqual({ adapter: "postgresql", database: "foo", host: "localhost", pool: 5 });
   });
 
@@ -316,12 +322,12 @@ describe("MergeAndResolveDefaultUrlConfigTest", () => {
       },
     };
 
-    let configs = DatabaseConfigurations.fromRaw(config as any);
+    let configs = DatabaseConfigurations.fromRaw(config);
     let actual = configs.configsFor({ envName: DEFAULT_ENV, name: "primary" })[0]!
       .configurationHash;
     expect(actual).toEqual({ adapter: "postgresql", database: "foo", host: "localhost", pool: 5 });
 
-    configs = DatabaseConfigurations.fromRaw(config as any);
+    configs = DatabaseConfigurations.fromRaw(config);
     actual = configs.configsFor({ envName: DEFAULT_ENV, name: "animals" })[0]!.configurationHash;
     expect(actual).toEqual({ adapter: "abstract", pool: 5 });
   });
@@ -336,14 +342,14 @@ describe("MergeAndResolveDefaultUrlConfigTest", () => {
       production: { adapter: "abstract", database: "not_foo", host: "localhost" },
       default_env: {},
     };
-    const actual1 = resolveDbConfig("production", config as any);
+    const actual1 = resolveDbConfig("production", config);
     expect(actual1.configurationHash).toEqual({
       adapter: "abstract",
       database: "not_foo",
       host: "localhost",
     });
 
-    const actual2 = resolveDbConfig(DEFAULT_ENV, config as any);
+    const actual2 = resolveDbConfig(DEFAULT_ENV, config);
     expect(actual2.configurationHash).toEqual({
       host: "localhost",
       database: "foo",

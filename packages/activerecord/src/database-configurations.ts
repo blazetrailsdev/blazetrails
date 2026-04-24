@@ -18,9 +18,9 @@ export class InvalidConfigurationError extends Error {
   }
 }
 
-type RawConfigurations = Record<
+export type RawConfigurations = Record<
   string,
-  Record<string, DatabaseConfigOptions> | DatabaseConfigOptions
+  Record<string, DatabaseConfigOptions> | DatabaseConfigOptions | string
 >;
 
 /**
@@ -89,7 +89,8 @@ export class DatabaseConfigurations {
     } else {
       // Mirrors Rails: DatabaseConfigurations#initialize calls build_configs which
       // merges DATABASE_URL via environment_url_config + merge_db_environment_variables.
-      this._configurations = this._buildConfigs(this._mergeDatabaseUrl(configurations));
+      const env = process.env.NODE_ENV || DatabaseConfigurations._defaultEnv;
+      this._configurations = this._buildConfigs(this._mergeDatabaseUrl(configurations, env));
     }
     // Register this instance as the current one for HashConfig.isPrimary lookup
     _currentConfigurations = this;
@@ -208,8 +209,10 @@ export class DatabaseConfigurations {
     const defaultEnv = DatabaseConfigurations.defaultEnv;
     if (typeof config === "string") {
       // Mirrors Rails: resolve(symbol) → resolve_symbol_connection → find_db_config
-      // If the string looks like an env name (no URL scheme), find the db config for it.
-      if (!config.includes("://") && !config.startsWith("jdbc:")) {
+      // Strings with a URI scheme (e.g. "postgres://", "sqlite3:") are treated as URLs.
+      // Strings without a scheme are treated as env names (mirrors Ruby symbol lookup).
+      const hasScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(config);
+      if (!hasScheme) {
         const found = this.findDbConfig(config);
         if (found) return found;
         throw new Error(
@@ -240,7 +243,8 @@ export class DatabaseConfigurations {
    */
   static fromEnv(raw: RawConfigurations = {}): DatabaseConfigurations {
     const instance = new DatabaseConfigurations([]);
-    instance._configurations = instance._buildConfigs(instance._mergeDatabaseUrl(raw));
+    const env = process.env.NODE_ENV || DatabaseConfigurations._defaultEnv;
+    instance._configurations = instance._buildConfigs(instance._mergeDatabaseUrl(raw, env));
     return instance;
   }
 
@@ -260,11 +264,11 @@ export class DatabaseConfigurations {
     const hasConfigs = Object.keys(raw).length > 0;
 
     if (!hasConfigs) {
-      const env = envOverride ?? process.env.NODE_ENV ?? DatabaseConfigurations._defaultEnv;
+      const env = envOverride ?? DatabaseConfigurations._defaultEnv;
       return { [env]: { url: databaseUrl } };
     }
 
-    const currentEnv = envOverride ?? process.env.NODE_ENV ?? DatabaseConfigurations._defaultEnv;
+    const currentEnv = envOverride ?? DatabaseConfigurations._defaultEnv;
 
     // Check if any config matches the current env
     const hasDefaultEnvConfig = Object.prototype.hasOwnProperty.call(raw, currentEnv);

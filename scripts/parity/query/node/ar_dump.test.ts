@@ -78,23 +78,41 @@ describe("ar_dump.ts", () => {
   });
 
   it("exits 1 with a useful message on --frozen-at without a value", () => {
-    const res = spawnSync(
-      TSX_BIN,
-      [AR_DUMP, join(FIXTURES, "ar-00"), "/tmp/unused.json", "--frozen-at"],
-      { encoding: "utf8", cwd: REPO_ROOT },
-    );
-    expect(res.status).toBe(1);
-    expect(res.stderr).toMatch(/--frozen-at requires a value/);
+    // tmpdir() rather than a hard-coded /tmp path — portable on Windows
+    // and in restricted CI sandboxes.
+    const outDir = mkdtempSync(join(tmpdir(), "parity-ar-test-"));
+    try {
+      const res = spawnSync(
+        TSX_BIN,
+        [AR_DUMP, join(FIXTURES, "ar-00"), join(outDir, "unused.json"), "--frozen-at"],
+        { encoding: "utf8", cwd: REPO_ROOT },
+      );
+      expect(res.status).toBe(1);
+      expect(res.stderr).toMatch(/--frozen-at requires a value/);
+    } finally {
+      rmSync(outDir, { recursive: true, force: true });
+    }
   });
 
   it("exits 1 with a useful message on invalid --frozen-at", () => {
-    const res = spawnSync(
-      TSX_BIN,
-      [AR_DUMP, join(FIXTURES, "ar-00"), "/tmp/unused.json", "--frozen-at", "not-a-date"],
-      { encoding: "utf8", cwd: REPO_ROOT },
-    );
-    expect(res.status).toBe(1);
-    expect(res.stderr).toMatch(/--frozen-at must be ISO 8601 UTC/);
+    const outDir = mkdtempSync(join(tmpdir(), "parity-ar-test-"));
+    try {
+      const res = spawnSync(
+        TSX_BIN,
+        [
+          AR_DUMP,
+          join(FIXTURES, "ar-00"),
+          join(outDir, "unused.json"),
+          "--frozen-at",
+          "not-a-date",
+        ],
+        { encoding: "utf8", cwd: REPO_ROOT },
+      );
+      expect(res.status).toBe(1);
+      expect(res.stderr).toMatch(/--frozen-at must be ISO 8601 UTC/);
+    } finally {
+      rmSync(outDir, { recursive: true, force: true });
+    }
   });
 
   it("exits non-zero on an unknown fixture directory", () => {

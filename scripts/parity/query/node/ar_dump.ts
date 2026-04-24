@@ -6,9 +6,12 @@
  *
  * Like scripts/parity/query/node/dump.ts but for ActiveRecord query
  * fixtures: applies schema.sql, calls Base.establishConnection(dbPath),
- * dynamic-imports query.ts (which in turn imports models.ts and
- * references the model classes), and calls .toSql() on the default
- * export — expected to be an AR Relation.
+ * dynamic-imports query.ts (which in turn imports the models module,
+ * typically via an ESM specifier like `./models.js` even though the
+ * source file is `models.ts` — this is the Node/ESM TypeScript
+ * convention, and tsx rewrites the `.js` back to the real `.ts`),
+ * and calls .toSql() on the default export — expected to be an AR
+ * Relation.
  *
  * Time is always frozen. --frozen-at behaves identically to the arel runner.
  *
@@ -137,16 +140,18 @@ async function main(): Promise<void> {
       db.close();
     }
 
-    // 2. Connect via trails AR — models.ts's class definitions inherit
-    //    from Base and read Base.adapter lazily, so the connection must
-    //    exist before any model method is invoked. establishConnection
+    // 2. Connect via trails AR — the models module's class definitions
+    //    inherit from Base and read Base.adapter lazily, so the connection
+    //    must exist before any model method is invoked. establishConnection
     //    sets Base.adapter for the whole process.
     await Base.establishConnection(dbPath);
 
     // 3. Import query.ts. Fixtures end with `export default <relation>`
-    //    and typically `import { Book } from "./models.ts"` to reference
-    //    model classes — that side-effect-loads models.ts which registers
-    //    the classes against the current Base.adapter.
+    //    and typically `import { Book } from "./models.js"` (ESM convention
+    //    — the `.js` specifier resolves to the `models.ts` source via tsx)
+    //    to reference model classes — that side-effect-loads the models
+    //    module which registers the classes against the current
+    //    Base.adapter.
     const queryUrl = pathToFileURL(join(fixtureDirAbs, "query.ts")).href;
     const mod = (await import(queryUrl)) as { default: unknown };
     const result = mod.default;

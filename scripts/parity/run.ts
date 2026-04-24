@@ -117,13 +117,35 @@ function fixtures(cfg: TypeConfig): string[] {
     .sort();
 }
 
-function run(cmd: string, args: string[], env?: NodeJS.ProcessEnv): Promise<void> {
+interface RunOptions {
+  env?: NodeJS.ProcessEnv;
+  /**
+   * When true, buffer the child's stdout/stderr and flush them in one
+   * contiguous block on exit. Used when fixtures run in parallel so each
+   * fixture's log lines stay grouped instead of interleaving with others.
+   */
+  buffered?: boolean;
+}
+
+function run(cmd: string, args: string[], opts: RunOptions = {}): Promise<void> {
   return new Promise((resolve, reject) => {
     const proc = spawn(cmd, args, {
-      stdio: "inherit",
-      env: env ? { ...process.env, ...env } : process.env,
+      stdio: opts.buffered ? ["ignore", "pipe", "pipe"] : "inherit",
+      env: opts.env ? { ...process.env, ...opts.env } : process.env,
     });
+    let stdoutBuf = "";
+    let stderrBuf = "";
+    if (opts.buffered) {
+      proc.stdout?.setEncoding("utf8").on("data", (c: string) => (stdoutBuf += c));
+      proc.stderr?.setEncoding("utf8").on("data", (c: string) => (stderrBuf += c));
+    }
+    const flush = () => {
+      if (!opts.buffered) return;
+      if (stdoutBuf) process.stdout.write(stdoutBuf);
+      if (stderrBuf) process.stderr.write(stderrBuf);
+    };
     proc.on("close", (code, signal) => {
+      flush();
       if (code === 0) {
         resolve();
         return;
@@ -132,7 +154,10 @@ function run(cmd: string, args: string[], env?: NodeJS.ProcessEnv): Promise<void
       const status = code === null ? `signal ${signal}` : `${code}`;
       reject(new Error(`${command} exited ${status}`));
     });
-    proc.on("error", reject);
+    proc.on("error", (err) => {
+      flush();
+      reject(err);
+    });
   });
 }
 
@@ -157,14 +182,19 @@ function dumpOne(cfg: TypeConfig, label: "rails" | "trails", fixture: string): P
   const fixtureDir = join(FIXTURES_DIR, fixture);
   const outDir = label === "rails" ? cfg.outRails : cfg.outTrails;
   const outFile = join(outDir, `${fixture}.json`);
+  // Buffered so each fixture's verbose dump output prints as one contiguous
+  // block — otherwise concurrent workers interleave lines and CI logs become
+  // unreadable.
   if (label === "rails") {
     return run(
       "bundle",
       ["exec", "ruby", cfg.rubyDump, fixtureDir, outFile, ...cfg.extraDumpArgs],
-      { BUNDLE_GEMFILE: GEMFILE },
+      { env: { BUNDLE_GEMFILE: GEMFILE }, buffered: true },
     );
   }
-  return run("pnpm", ["exec", "tsx", cfg.nodeDump, fixtureDir, outFile, ...cfg.extraDumpArgs]);
+  return run("pnpm", ["exec", "tsx", cfg.nodeDump, fixtureDir, outFile, ...cfg.extraDumpArgs], {
+    buffered: true,
+  });
 }
 
 async function runRails(cfg: TypeConfig): Promise<void> {

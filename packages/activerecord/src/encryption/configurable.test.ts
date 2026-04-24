@@ -58,16 +58,20 @@ describe("ActiveRecord::Encryption::ConfigurableTest", () => {
     let capturedKlass: any = null;
     let capturedName: string | null = null;
 
-    Configurable.onEncryptedAttributeDeclared((klass, name) => {
+    const dispose = Configurable.onEncryptedAttributeDeclared((klass, name) => {
       capturedKlass = klass;
       capturedName = name;
     });
 
-    const modelClass = { _attributeDefinitions: new Map() };
-    EncryptableRecord.encrypts(modelClass, "isbn");
+    try {
+      const modelClass = { _attributeDefinitions: new Map() };
+      EncryptableRecord.encrypts(modelClass, "isbn");
 
-    expect(capturedKlass).toBe(modelClass);
-    expect(capturedName).toBe("isbn");
+      expect(capturedKlass).toBe(modelClass);
+      expect(capturedName).toBe("isbn");
+    } finally {
+      dispose();
+    }
   });
 
   it.skip("installing autofiltered parameters will add the encrypted attribute as a filter parameter using the dot notation", () => {});

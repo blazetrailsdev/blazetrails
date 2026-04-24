@@ -3,10 +3,10 @@ import {
   withoutEncryption as _withoutEnc,
   protectingEncryptedData as _protecting,
   getEncryptionContext,
+  getDefaultContext,
+  resetDefaultContext as _resetDefaultContext,
   type EncryptionContext,
 } from "./context.js";
-
-let _defaultContext: EncryptionContext = {};
 
 /**
  * Class-based API for managing encryption contexts. Delegates to the
@@ -37,10 +37,10 @@ export class Contexts {
   }
 
   static get defaultContext(): EncryptionContext {
-    return _defaultContext;
+    return getDefaultContext();
   }
 
   static resetDefaultContext(): void {
-    _defaultContext = {};
+    _resetDefaultContext();
   }
 }

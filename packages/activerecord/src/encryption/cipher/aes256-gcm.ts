@@ -23,6 +23,13 @@ export class Cipher {
     this.deterministic = options?.deterministic ?? false;
   }
 
+  // Mirrors Rails' inspect override — never expose the secret in debug output.
+  // Symbol.for("nodejs.util.inspect.custom") is the stable public symbol
+  // used by Node's util.inspect without importing "util" directly.
+  [Symbol.for("nodejs.util.inspect.custom")](): string {
+    return `Cipher {}`;
+  }
+
   encrypt(
     data: string | Buffer,
     key: string,

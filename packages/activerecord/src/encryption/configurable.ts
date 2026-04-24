@@ -50,8 +50,12 @@ export class Configurable {
     Contexts.resetDefaultContext();
   }
 
-  static onEncryptedAttributeDeclared(callback: (klass: any, name: string) => void): void {
+  static onEncryptedAttributeDeclared(callback: (klass: any, name: string) => void): () => void {
     _listeners.push(callback);
+    return () => {
+      const idx = _listeners.indexOf(callback);
+      if (idx !== -1) _listeners.splice(idx, 1);
+    };
   }
 
   static encryptedAttributeWasDeclared(klass: any, name: string): void {

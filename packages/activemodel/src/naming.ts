@@ -222,11 +222,12 @@ export class ModelName {
   //   delegate :==, :===, :<=>, :=~, :"!~", :eql?, :match?, :to_s,
   //            :to_str, :as_json, to: :name
   //
-  // JS can't overload `==`/`<=>`/`=~`, so we expose each as a method and
-  // install `Symbol.toPrimitive` so `String(modelName)`,
-  // `` `${modelName}` ``, and `modelName + ""` all coerce to the class
-  // name — enough for route helpers, form keys, and Jest/Vitest
-  // equality when comparing to plain strings.
+  // JS can't overload operators, so we expose methods + the one coercion
+  // hook JS does have: `Symbol.toPrimitive`. That covers IMPLICIT string
+  // coercion only — `String(modelName)`, template literals, `modelName +
+  // ""`, and loose `==` against a string. It does NOT trigger on strict
+  // `===` / `Object.is` / Jest's `toBe` (those compare identity without
+  // coercion); for those, callers use `mn.name` or `mn.equals(other)`.
   // ---------------------------------------------------------------------------
 
   /**
@@ -255,11 +256,18 @@ export class ModelName {
 
   /**
    * Mirrors Rails `@name <=> other` (String#<=>). Returns `-1`, `0`,
-   * or `1`. Throws for non-string/non-ModelName arguments — matches
-   * Ruby's `nil` Spaceship result being an error in a TS context.
+   * or `1`. Throws `ArgumentError` for non-string / non-ModelName
+   * arguments — Ruby's `nil` Spaceship result is an error in TS.
    */
-  compare(other: ModelName | string): -1 | 0 | 1 {
-    const rhs = other instanceof ModelName ? other.name : other;
+  compare(other: unknown): -1 | 0 | 1 {
+    let rhs: string;
+    if (other instanceof ModelName) {
+      rhs = other.name;
+    } else if (typeof other === "string") {
+      rhs = other;
+    } else {
+      throw new ArgumentError("comparison of ModelName with non-string failed");
+    }
     if (this.name === rhs) return 0;
     return this.name < rhs ? -1 : 1;
   }
@@ -268,9 +276,18 @@ export class ModelName {
    * Mirrors Rails `@name.match?(regexp)`. Returns whether the class
    * name matches the given regex (boolean — this is `match?` semantic,
    * not the integer position that Ruby `=~` returns).
+   *
+   * Preserves `pattern.lastIndex` so repeated calls with `/g` or `/y`
+   * regexes stay stable — `RegExp.prototype.test` advances `lastIndex`
+   * on stateful flags, but Ruby `match?` is stateless.
    */
   match(pattern: RegExp): boolean {
-    return pattern.test(this.name);
+    const savedLastIndex = pattern.lastIndex;
+    try {
+      return pattern.test(this.name);
+    } finally {
+      pattern.lastIndex = savedLastIndex;
+    }
   }
 
   /**

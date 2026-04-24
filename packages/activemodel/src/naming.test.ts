@@ -464,6 +464,29 @@ describe("ModelName is string-ish (Rails String-inheritance analog)", () => {
     expect(mn.match(/\d/)).toBe(false);
   });
 
+  it("match stays stable when reusing global and sticky regexps", () => {
+    // RegExp.prototype.test advances `lastIndex` on /g and /y flags, so a
+    // second call on the same regex can flip false without care. Our
+    // `match` saves/restores `lastIndex` so repeated calls are stable
+    // (Ruby `match?` is stateless).
+    const mn = new ModelName("BlogPost");
+    const globalRe = /Post/g;
+    const stickyRe = /Blog/y;
+    expect(mn.match(globalRe)).toBe(true);
+    expect(mn.match(globalRe)).toBe(true);
+    expect(mn.match(stickyRe)).toBe(true);
+    expect(mn.match(stickyRe)).toBe(true);
+    expect(globalRe.lastIndex).toBe(0);
+    expect(stickyRe.lastIndex).toBe(0);
+  });
+
+  it("compare throws ArgumentError on non-string/non-ModelName input", () => {
+    const mn = new ModelName("Post");
+    expect(() => mn.compare(42 as unknown as string)).toThrow(ArgumentError);
+    expect(() => mn.compare(null as unknown as string)).toThrow(ArgumentError);
+    expect(() => mn.compare(undefined as unknown as string)).toThrow(ArgumentError);
+  });
+
   it("== operator coerces via Symbol.toPrimitive to the class name", () => {
     // Rails `model_name == "Post"` is true because Name < String.
     // JS `==` between object and string triggers primitive coercion,

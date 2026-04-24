@@ -71,7 +71,7 @@ interface PlannedClass {
   name: string;
   tableName: string;
   primaryKey: string | string[] | null;
-  /** Collected pre-sort; finalised by serializeClassBody() below. */
+  /** Collected pre-sort; finalised inline in generateModels() before emitting. */
   associations: PendingAssoc[];
   /** Comments (TODO / NOTE / WARNING) prepended at the top of the static block. */
   leadingComments: string[];
@@ -192,13 +192,14 @@ export function generateModels(
     const className = classNameForTable(t.name);
     const existing = nameToTable.get(className);
     if (existing !== undefined) {
-      // Thrown as a plain Error with a library-neutral message. The CLI
-      // wrapper (trails-models-dump) prefixes with "trails-models-dump:"
-      // and surfaces flag-specific guidance; this module has no knowledge
-      // of how callers reached it.
+      // Thrown as a plain Error with a library-neutral message (no
+      // "model-codegen:" or similar prefix). The CLI wrapper
+      // (trails-models-dump) prefixes the thrown message with
+      // "trails-models-dump:" at its top-level catch; surfacing the
+      // library's own prefix here would cause double-prefixing.
       const [a, b] = [existing, t.name].sort();
       throw new Error(
-        `model-codegen: class name collision: tables "${a}" and "${b}" both classify to \`${className}\`.`,
+        `class name collision: tables "${a}" and "${b}" both classify to \`${className}\`.`,
       );
     }
     nameToTable.set(className, t.name);

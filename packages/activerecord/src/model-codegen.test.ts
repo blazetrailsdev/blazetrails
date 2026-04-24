@@ -317,9 +317,12 @@ describe("generateModels", () => {
     // className option since neither matches classify(name) === User.
     expect(out).toContain('this.belongsTo("author", { className: "User" });');
     expect(out).toContain('this.belongsTo("editor", { className: "User" });');
-    // User gets "posts" first (column-alphabetical: author_id first),
-    // then "editor_posts" disambiguated with className + foreignKey
-    // because the non-conventional name no longer matches Post.
+    // On User: the disambiguation rule picks the conventional "posts"
+    // name for whichever FK is encountered first (FKs iterate column-
+    // alphabetical: author_id first, so that side gets "posts"); the
+    // second gets "editor_posts" with className + foreignKey options.
+    // hasMany lines are then sorted alphabetically by association name
+    // at emit time, so "editor_posts" lands before "posts".
     expect(out).toContain('this.hasMany("posts", { foreignKey: "author_id" });');
     expect(out).toContain(
       'this.hasMany("editor_posts", { className: "Post", foreignKey: "editor_id" });',

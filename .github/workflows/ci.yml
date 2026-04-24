@@ -426,15 +426,32 @@ jobs:
       - name: Diff canonical outputs
         run: pnpm tsx scripts/parity/schema/diff.ts --rails-dir scripts/parity/.out/rails --trails-dir scripts/parity/.out/trails
 
-  query-parity-rails:
-    name: Query Parity (Rails side)
+  query-parity-frozen-at:
+    name: Query Parity (compute frozen-at)
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
+    outputs:
+      # Minted once per workflow run and consumed by both dump jobs so they
+      # freeze time to the same instant. ISO-8601 UTC with ms precision and
+      # trailing Z — matches scripts/parity/canonical/query.schema.json.
+      value: ${{ steps.gen.outputs.value }}
+    steps:
+      - id: gen
+        run: |
+          ts=$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")
+          echo "value=$ts" >> "$GITHUB_OUTPUT"
+          echo "frozen-at: $ts"
+
+  query-parity-rails:
+    name: Query Parity (Rails side)
+    needs:
+      - changes
+      - query-parity-frozen-at
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
     env:
-      # Both sides must agree on the frozen timestamp for parity to hold.
-      # Picked once per workflow file; bump when adding time-dependent fixtures.
-      PARITY_FROZEN_AT: "2026-04-24T00:00:00.000Z"
+      PARITY_FROZEN_AT: ${{ needs.query-parity-frozen-at.outputs.value }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -467,11 +484,13 @@ jobs:
 
   query-parity-trails:
     name: Query Parity (trails side)
-    needs: changes
+    needs:
+      - changes
+      - query-parity-frozen-at
     if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     env:
-      PARITY_FROZEN_AT: "2026-04-24T00:00:00.000Z"
+      PARITY_FROZEN_AT: ${{ needs.query-parity-frozen-at.outputs.value }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -544,6 +563,7 @@ jobs:
       - schema-parity-rails
       - schema-parity-trails
       - schema-parity-diff
+      - query-parity-frozen-at
       - query-parity-rails
       - query-parity-trails
       - query-parity-diff

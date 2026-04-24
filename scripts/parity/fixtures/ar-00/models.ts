@@ -2,6 +2,6 @@ import { Base } from "@blazetrails/activerecord";
 
 export class Book extends Base {
   static {
-    this._tableName = "books";
+    this.tableName = "books";
   }
 }

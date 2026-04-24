@@ -58,10 +58,11 @@ function parityTypeConfig(type: ParityType): TypeConfig {
       extraDumpArgs: [],
     };
   }
-  // Query fixtures for v1 scope are Arel-only (arel-01..arel-55).
-  // AR-style fixtures (ar-XX) are planned for v2 and will land under this
-  // same type. scripts/parity/query/diff.ts already seeds from both arel-* and
-  // ar-* so flipping this matcher is the only change needed when v2 lands.
+  // Query fixtures for v1 scope are Arel-only (arel-* under scripts/parity/
+  // fixtures/). AR-style fixtures (ar-*) are planned for v2 and will land
+  // under this same type. scripts/parity/query/diff.ts already seeds from
+  // both arel-* and ar-* so flipping this matcher is the only change needed
+  // when v2 lands.
   const frozen = process.env.PARITY_FROZEN_AT;
   return {
     matches: (name) => /^arel-/.test(name),

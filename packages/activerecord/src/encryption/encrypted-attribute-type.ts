@@ -215,7 +215,7 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
     const forced = Configurable.config.forcedEncodingForDeterministicEncryption;
     if (!forced) return value;
     const enc = _normalizeEncoding(forced);
-    if (enc === "utf8") return value;
+    if (enc === null || enc === "utf8") return value;
     return _replaceUnencodable(value, enc === "ascii" ? 0x7f : 0xff);
   }
 

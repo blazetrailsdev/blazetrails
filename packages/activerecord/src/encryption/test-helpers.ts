@@ -36,6 +36,7 @@ interface ConfigSnapshot {
   keyDerivationSalt: string | undefined;
   supportUnencryptedData: boolean;
   previousSchemes: typeof Configurable.config.previousSchemes;
+  forcedEncodingForDeterministicEncryption: string;
 }
 
 export function snapshotEncryptionConfig(): ConfigSnapshot {
@@ -46,6 +47,7 @@ export function snapshotEncryptionConfig(): ConfigSnapshot {
     keyDerivationSalt: c.keyDerivationSalt,
     supportUnencryptedData: c.supportUnencryptedData,
     previousSchemes: [...c.previousSchemes],
+    forcedEncodingForDeterministicEncryption: c.forcedEncodingForDeterministicEncryption,
   };
 }
 
@@ -56,6 +58,7 @@ export function restoreEncryptionConfig(snapshot: ConfigSnapshot): void {
   c.keyDerivationSalt = snapshot.keyDerivationSalt;
   c.supportUnencryptedData = snapshot.supportUnencryptedData;
   c.previousSchemes = snapshot.previousSchemes;
+  c.forcedEncodingForDeterministicEncryption = snapshot.forcedEncodingForDeterministicEncryption;
   Contexts.resetDefaultContext();
   // Eagerly clear so the previous test's key material doesn't linger in
   // memory after config reset — the lazy clear on next keyProvider access

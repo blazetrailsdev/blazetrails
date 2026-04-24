@@ -208,7 +208,16 @@ export function coerceForJson(
     inProgress.add(value);
     try {
       for (const [k, val] of Object.entries(v)) {
-        out[k] = coerceForJson(val, seen, inProgress);
+        // Use defineProperty so an own `__proto__` key (common on
+        // JSON.parse output) is written as a data property rather than
+        // invoking `Object.prototype.__proto__`'s setter and polluting
+        // the output's prototype.
+        Object.defineProperty(out, k, {
+          value: coerceForJson(val, seen, inProgress),
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
       }
     } finally {
       inProgress.delete(value);

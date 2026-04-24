@@ -410,6 +410,21 @@ describe("SerializationTest", () => {
       expect(() => JSON.stringify(out)).not.toThrow();
     });
 
+    it("coerceForJson is safe against __proto__ prototype pollution", async () => {
+      // JSON.parse('{"__proto__": {"polluted": true}}') produces an own
+      // `__proto__` key. Naïve `out[k] = val` assignment would invoke
+      // `Object.prototype.__proto__`'s setter and mutate the output's
+      // prototype. `Object.defineProperty` treats it as a data key.
+      const { coerceForJson } = await import("./serialization.js");
+      const hostile = JSON.parse('{"__proto__": {"polluted": true}, "legit": 1}');
+      const out = coerceForJson(hostile) as Record<string, unknown>;
+      // Output's prototype should NOT be polluted.
+      expect(Object.getPrototypeOf(out)).toBe(Object.prototype);
+      // Plain Object should still return polluted=undefined (sanity).
+      expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+      expect(out.legit).toBe(1);
+    });
+
     it("coerceForJson maps undefined to null (matches Ruby nil → JSON null)", async () => {
       // `JSON.stringify({ a: undefined })` silently drops the key,
       // which would make an unset attribute disappear from output.

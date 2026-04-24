@@ -95,3 +95,51 @@ export const {
   testModelNaming,
   testErrorsAref,
 } = Tests;
+
+/**
+ * The Rails-canonical Lint::Tests as a name -> assertion list.
+ *
+ * Mirrors the discoverable `test_*` methods on `ActiveModel::Lint::Tests`,
+ * allowing a test framework to enumerate and dispatch them — same role
+ * as MiniTest's `include ActiveModel::Lint::Tests` (lint.rb).
+ */
+export const lintTests: ReadonlyArray<{ name: string; run(model: unknown): void }> = [
+  { name: "to_key", run: (m) => Tests.testToKey(m as never) },
+  { name: "to_param", run: (m) => Tests.testToParam(m as never) },
+  { name: "to_partial_path", run: (m) => Tests.testToPartialPath(m as never) },
+  { name: "persisted?", run: (m) => Tests.testPersisted(m as never) },
+  { name: "model_naming", run: (m) => Tests.testModelNaming(m as never) },
+  { name: "errors_aref", run: (m) => Tests.testErrorsAref(m as never) },
+  { name: "errors", run: (m) => Tests.testErrors(m as never) },
+];
+
+interface MinimalDescribe {
+  (label: string, body: () => void): void;
+}
+interface MinimalIt {
+  (label: string, body: () => void): void;
+}
+
+/**
+ * Vitest-friendly translation of Rails' `include ActiveModel::Lint::Tests`.
+ * Pass in your testing framework's `describe`/`it` and a factory that
+ * builds a fresh model for each assertion; emits one `it` per Rails
+ * `test_*` method, mirroring how MiniTest discovers them.
+ *
+ * Example:
+ *   import { describe, it } from "vitest";
+ *   import { describeLint } from "@blazetrails/activemodel";
+ *   describeLint({ describe, it }, () => new Post());
+ */
+export function describeLint(
+  framework: { describe: MinimalDescribe; it: MinimalIt },
+  buildModel: () => unknown,
+  options: { label?: string } = {},
+): void {
+  const label = options.label ?? "ActiveModel::Lint";
+  framework.describe(label, () => {
+    for (const t of lintTests) {
+      framework.it(t.name, () => t.run(buildModel()));
+    }
+  });
+}

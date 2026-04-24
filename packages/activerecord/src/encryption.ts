@@ -141,10 +141,6 @@ function buildScheme(options: EncryptsOptions): Scheme {
     schemeOptions.compressor !== undefined ||
     schemeOptions.supportUnencryptedData !== undefined;
 
-  // When real encryption keys are configured, use the standard scheme so
-  // encrypts() with no options picks up the global key provider from config
-  // (mirrors Rails' default behavior). Fall back to the dev-only AR_ENC:base64
-  // encryptor only when no keys are configured at all.
   // Switch to the real Scheme whenever any encryption key material is configured.
   // If config is incomplete, Config.get() raises ConfigError at serialize/
   // deserialize time — more informative than silently using the AR_ENC:base64

@@ -57,3 +57,7 @@ export const InstanceMethods = {
   initializeDup,
   reload,
 };
+
+// Re-export composedOf so api:compare finds it under aggregations.ts
+// (Rails defines it in ActiveRecord::Aggregations::ClassMethods).
+export { composedOf } from "./composed-of.js";

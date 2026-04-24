@@ -216,3 +216,67 @@ export function instantiateSti(baseClass: typeof Base, row: Record<string, unkno
   const subclass = findStiClass(baseClass, typeName);
   return directInstantiate(subclass, row);
 }
+
+// ---------------------------------------------------------------------------
+// Methods missing from api:compare — added for 100% parity
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true if a WHERE clause is needed to scope queries by type when STI
+ * is active.  Lazily memoized on the class.
+ *
+ * Mirrors: ActiveRecord::Inheritance::ClassMethods#finder_needs_type_condition?
+ */
+export function isFinderNeedsTypeCondition(modelClass: typeof Base): boolean {
+  const cached = (modelClass as any)._finderNeedsTypeCondition;
+  if (cached !== undefined) return cached === true;
+  const result = !isDescendsFromActiveRecord(modelClass);
+  (modelClass as any)._finderNeedsTypeCondition = result;
+  return result;
+}
+
+let _applicationRecordClass: typeof Base | null = null;
+
+/**
+ * Declare this class as the top-level application record base class and mark
+ * it abstract.  Only one class per application may be designated as the
+ * primary abstract class.
+ *
+ * Mirrors: ActiveRecord::Inheritance::ClassMethods#primary_abstract_class
+ */
+export function primaryAbstractClass(modelClass: typeof Base): void {
+  if (_applicationRecordClass && _applicationRecordClass.name !== modelClass.name) {
+    throw new Error(
+      `The \`primary_abstract_class\` is already set to ${_applicationRecordClass.name}. ` +
+        "There can only be one `primary_abstract_class` in an application.",
+    );
+  }
+  (modelClass as any).abstractClass = true;
+  _applicationRecordClass = modelClass;
+}
+
+/**
+ * Returns the class corresponding to the STI type name stored in the
+ * inheritance column.
+ *
+ * Mirrors: ActiveRecord::Inheritance::ClassMethods#sti_class_for
+ */
+export function stiClassFor(modelClass: typeof Base, typeName: string): typeof Base {
+  try {
+    return findStiClass(modelClass, typeName);
+  } catch {
+    throw new Error(
+      `The single-table inheritance mechanism failed to locate the subclass: '${typeName}'. ` +
+        `This error is raised because the column '${getInheritanceColumn(modelClass) ?? "type"}' is reserved for storing the class in case of inheritance.`,
+    );
+  }
+}
+
+/**
+ * Returns the class corresponding to a polymorphic type column value.
+ *
+ * Mirrors: ActiveRecord::Inheritance::ClassMethods#polymorphic_class_for
+ */
+export function polymorphicClassFor(modelClass: typeof Base, name: string): typeof Base {
+  return computeType(modelClass, name);
+}

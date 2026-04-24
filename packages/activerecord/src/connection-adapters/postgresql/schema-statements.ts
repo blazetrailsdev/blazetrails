@@ -237,7 +237,7 @@ export interface SchemaStatements {
   ): string;
   columnsForDistinct(
     columns: string | string[],
-    orders: (string | import("@blazetrails/arel").Nodes.Node)[],
+    orders?: (string | import("@blazetrails/arel").Nodes.Node)[],
   ): string;
   updateTableDefinition(tableName: string, base: unknown): unknown;
   createSchemaDumper(options: unknown): unknown;

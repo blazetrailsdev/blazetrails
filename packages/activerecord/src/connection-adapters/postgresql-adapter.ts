@@ -1853,7 +1853,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return pgTypeCast(value);
   }
 
-  columnsForDistinct(columns: string | string[], orders: (string | Nodes.Node)[]): string {
+  columnsForDistinct(columns: string | string[], orders?: (string | Nodes.Node)[]): string {
     const base = Array.isArray(columns) ? columns.join(", ") : columns;
     const visitor = this.arelVisitor;
     // Mirrors Rails two-pass compact_blank: filter blanks before AND after stripping

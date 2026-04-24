@@ -60,6 +60,8 @@ describe("MysqlTypeLookupTest", () => {
   it("binary types", () => {
     assertLookupType("binary", "bit");
     assertLookupType("binary", "BIT");
+    assertLookupType("binary", "binary(100)");
+    assertLookupType("binary", "varbinary(255)");
   });
 
   it("integer types", () => {

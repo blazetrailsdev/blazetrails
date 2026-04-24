@@ -599,6 +599,8 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     map.registerType(/^int/i, undefined, intType(4));
     map.registerType(/^year/i, undefined, () => new IntegerType());
     map.registerType(/^bit/i, undefined, () => new BinaryType());
+    map.registerType(/^binary/i, undefined, () => new BinaryType());
+    map.registerType(/^varbinary/i, undefined, () => new BinaryType());
     map.registerType(/^enum/i, undefined, () => new StringType());
     map.registerType(/^set/i, undefined, () => new StringType());
     map.registerType(/^char/i, undefined, () => new StringType());
@@ -609,7 +611,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     map.registerType("date", new DateType());
     map.registerType(/^datetime/i, undefined, () => new DateTimeType());
     map.registerType(/^timestamp/i, undefined, () => new DateTimeType());
-    map.registerType(/^time/i, undefined, () => new TimeType());
+    map.registerType(/^time\b/i, undefined, () => new TimeType());
     map.registerType("json", new JsonType());
     // emulate_booleans: tinyint(1) → boolean
     if (options.emulateBooleans) {
@@ -645,8 +647,10 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
 
   lookupCastTypeFromColumn(column: {
     sqlType?: string | null;
-  }): import("@blazetrails/activemodel").Type {
-    return this.lookupCastType(column.sqlType ?? "");
+  }): import("@blazetrails/activemodel").Type | null {
+    const sqlType = column.sqlType?.trim();
+    if (!sqlType) return null;
+    return this.lookupCastType(sqlType);
   }
 
   static extendedTypeMap(options: {

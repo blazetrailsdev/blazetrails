@@ -222,7 +222,7 @@ export function assertEncryptedAttribute(
  */
 export function ciphertextFor(model: any, attrName: string): unknown {
   const klass = model.constructor as any;
-  const type = klass._attributeDefinitions?.get?.(attrName)?.type;
+  const type = klass._attributeDefinitions?.get(attrName)?.type;
   if (type && typeof type.serialize === "function" && typeof type.isEncrypted === "function") {
     const value = model[attrName];
     return type.serialize(value);

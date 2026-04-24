@@ -53,10 +53,11 @@ describe("PredicationsMixin", () => {
       expect(sql).toBe("(NULL)");
     });
 
-    it("eqAll([]) does not crash and renders as a true-ish predicate", () => {
+    it("eqAll([]) does not crash and renders as an empty grouped AND", () => {
+      // Matches Attribute#groupedAll: an empty And inside a Grouping
+      // visits to `()`, the same as Rails' empty-And rendering.
       const sql = new Visitors.ToSql().compile(bn.eqAll([]));
-      // The only content inside the Grouping is a TRUE node — no NOT.
-      expect(sql).not.toContain("NOT");
+      expect(sql).toBe("()");
     });
 
     it("in(scalar) wraps the scalar (Rails quoted_node fallthrough)", () => {

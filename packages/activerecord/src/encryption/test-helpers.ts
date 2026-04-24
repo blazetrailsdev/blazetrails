@@ -83,6 +83,28 @@ export function freshAdapter(): DatabaseAdapter {
 // ─── Model factories ──────────────────────────────────────────────────────────
 
 /**
+ * Creates a fresh model with only string attributes — no pre-applied encryption.
+ * Use this when you need to apply a specific encryption scheme to an attribute
+ * without the idempotency guard blocking a second encrypts() call.
+ */
+let _freshModelCounter = 0;
+
+export function makeFreshModel(adapter: DatabaseAdapter, attributes: Record<string, string>): any {
+  // Use a unique counter so each call gets a distinct class name and table name.
+  const tableName = `fresh_model_${++_freshModelCounter}`;
+  const klass = class extends Base {
+    static {
+      this._tableName = tableName;
+      for (const [name, type] of Object.entries(attributes)) {
+        this.attribute(name, type);
+      }
+      this.adapter = adapter;
+    }
+  } as any;
+  return klass;
+}
+
+/**
  * EncryptedPost: title and body are both encrypted (non-deterministic).
  * Mirrors Rails' post_encrypted.rb / EncryptedPost.
  */
@@ -190,20 +212,17 @@ export function assertEncryptedAttribute(
 }
 
 /**
- * Returns the serialized (encrypted) form of an attribute's current value.
- * Mirrors Rails' model.ciphertext_for(:attr) — the value as stored in the DB.
- */
-/**
  * Returns a freshly-serialized (encrypted) form of the attribute's current value.
  *
  * For deterministic encryption, serialize() is idempotent so this equals the
- * stored DB ciphertext. For non-deterministic encryption, a fresh IV is used
- * each call — use this only for comparing two freshly-serialized values (e.g.,
- * to assert two records produce different ciphertexts), not for reading back
- * what's actually stored in the DB.
+ * stored DB ciphertext — suitable for equality comparisons across records.
+ * For non-deterministic encryption, a fresh IV is used each call, so the result
+ * differs from what is stored in the DB. Use this only for comparing two
+ * freshly-serialized values (e.g., asserting two records produce different
+ * ciphertexts), not for reading back the actual persisted ciphertext.
  *
- * Mirrors Rails' model.ciphertext_for(:attr) in spirit — use with the same
- * caveat that Rails' version reads from the DB whereas this re-serializes.
+ * Mirrors Rails' model.ciphertext_for(:attr) in spirit, with the caveat that
+ * Rails reads the stored value whereas this re-serializes the current attribute.
  */
 export function ciphertextFor(model: any, attrName: string): unknown {
   const klass = model.constructor as any;

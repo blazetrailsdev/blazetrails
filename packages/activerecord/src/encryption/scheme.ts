@@ -133,7 +133,7 @@ export class Scheme {
   // Returns the context's keyProvider if set, otherwise derives one from config.primaryKey.
   // Memoized on the primaryKey value to avoid repeated PBKDF2 calls.
   private _defaultKeyProvider(): unknown {
-    const ctxKp = (Configurable as any).keyProvider;
+    const ctxKp = Configurable.keyProvider;
     if (ctxKp != null) return ctxKp;
     const { primaryKey, keyDerivationSalt } = Configurable.config;
     if (primaryKey != null) {

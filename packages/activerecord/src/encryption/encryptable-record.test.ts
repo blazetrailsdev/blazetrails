@@ -9,6 +9,7 @@ import {
   makeEncryptedBookWithDowncaseName,
   makeEncryptedBookIgnoreCase,
   makeEncryptedAuthor,
+  makeFreshModel,
   makeKeyProvider,
   assertEncryptedAttribute,
   ciphertextFor,
@@ -111,31 +112,32 @@ describe("ActiveRecord::Encryption::EncryptableRecordTest", () => {
   });
 
   it("can configure a custom key provider on a per-record-class basis through the :key_provider option", async () => {
-    const adapter = freshAdapter();
     const keyProvider = makeKeyProvider("custom-post-body-key-provider-32b!!");
-    const BasePost = makeEncryptedPost(adapter);
-    class PostWithCustomKeyProvider extends (BasePost as any) {
-      static {
-        this.encrypts("body", { keyProvider });
-      }
-    }
-    const post = await PostWithCustomKeyProvider.create({
-      title: "The Starfleet is here!",
-      body: "take cover!",
-    });
+    // Use makeFreshModel to avoid the idempotency guard that skips re-encrypting
+    // an attribute already wrapped with EncryptedAttributeType.
+    const Post = makeFreshModel(freshAdapter(), { id: "integer", title: "string", body: "string" });
+    Post.encrypts("title");
+    Post.encrypts("body", { keyProvider });
+
+    const post = await Post.create({ title: "The Starfleet is here!", body: "take cover!" });
     assertEncryptedAttribute(post, "body", "take cover!");
+
+    // Verify round-trip: reload and decrypt using the scheme's own key provider.
+    const reloaded = await Post.find(post.id);
+    expect(reloaded.body).toBe("take cover!");
   });
 
   it("can configure a custom key on a per-record-class basis through the :key option", async () => {
-    const adapter = freshAdapter();
-    const BaseAuthor = makeEncryptedAuthor(adapter);
-    class AuthorWithKey extends (BaseAuthor as any) {
-      static {
-        this.encrypts("name", { key: "a-custom-key-for-author-32bytes!!" });
-      }
-    }
-    const author = await AuthorWithKey.create({ name: "Stephen King" });
+    const customKey = "a-custom-key-for-author-32bytes!!";
+    const Author = makeFreshModel(freshAdapter(), { id: "integer", name: "string" });
+    Author.encrypts("name", { key: customKey });
+
+    const author = await Author.create({ name: "Stephen King" });
     assertEncryptedAttribute(author, "name", "Stephen King");
+
+    // Verify round-trip: reload and decrypt using the scheme's own key.
+    const reloaded = await Author.find(author.id);
+    expect(reloaded.name).toBe("Stephen King");
   });
 
   it("encrypts multiple attributes with different options at the same time", async () => {

@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import Ajv from "ajv/dist/2020.js";
 
 // Integration tests for dump.ts — runs the script against real fixtures.
 
@@ -126,6 +127,25 @@ describe("dump.ts", () => {
     try {
       expect(code).toBe(1);
       expect(stderr).toMatch(/--frozen-at must be ISO 8601 UTC with trailing Z/);
+    } finally {
+      cleanup(outPath);
+    }
+  });
+
+  it("emits output that validates against query.schema.json", () => {
+    const schemaPath = resolve(SCRIPT_DIR, "../../canonical/query.schema.json");
+    const schema = JSON.parse(readFileSync(schemaPath, "utf8"));
+    const ajv = new Ajv({ strict: false });
+    const validate = ajv.compile(schema);
+
+    const { code, stdout, stderr, outPath } = runDump("arel-06");
+    try {
+      expect(code, `dump failed\nstdout: ${stdout}\nstderr: ${stderr}`).toBe(0);
+      const result = JSON.parse(readFileSync(outPath, "utf8"));
+      const ok = validate(result);
+      expect(ok, `schema validation failed: ${JSON.stringify(validate.errors, null, 2)}`).toBe(
+        true,
+      );
     } finally {
       cleanup(outPath);
     }

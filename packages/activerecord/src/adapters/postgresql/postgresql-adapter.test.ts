@@ -634,7 +634,8 @@ describeIfPg("PostgreSQLAdapter", () => {
     it.skip("unparsed defaults are at least set when saving", async () => {});
     it.skip("only check for insensitive comparison capability once", async () => {});
     it("extensions omits current schema name", async () => {
-      await adapter.exec(`DROP EXTENSION IF EXISTS hstore`);
+      const wasEnabled = await adapter.extensionEnabled("hstore");
+      if (wasEnabled) await adapter.disableExtension("hstore");
       await adapter.exec(`CREATE SCHEMA IF NOT EXISTS customschema`);
       try {
         await adapter.exec(`CREATE EXTENSION hstore SCHEMA customschema`);
@@ -642,18 +643,18 @@ describeIfPg("PostgreSQLAdapter", () => {
         expect(exts).toContain("customschema.hstore");
       } finally {
         await adapter.exec(`DROP SCHEMA IF EXISTS customschema CASCADE`);
-        await adapter.exec(`DROP EXTENSION IF EXISTS hstore`);
+        if (wasEnabled) await adapter.enableExtension("hstore");
       }
     });
 
     it("extensions includes non current schema name", async () => {
-      await adapter.exec(`DROP EXTENSION IF EXISTS hstore`);
+      const wasEnabled = await adapter.extensionEnabled("hstore");
+      if (!wasEnabled) await adapter.enableExtension("hstore");
       try {
-        await adapter.exec(`CREATE EXTENSION hstore`);
         const exts = await adapter.extensions();
         expect(exts).toContain("hstore");
       } finally {
-        await adapter.exec(`DROP EXTENSION IF EXISTS hstore`);
+        if (!wasEnabled) await adapter.disableExtension("hstore");
       }
     });
     it.skip("ignores warnings when behaviour ignore", async () => {});

@@ -1853,7 +1853,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     return pgTypeCast(value);
   }
 
-  columnsForDistinct(columns: string, orders: (string | Nodes.Node)[]): string {
+  columnsForDistinct(columns: string | string[], orders: (string | Nodes.Node)[]): string {
+    const base = Array.isArray(columns) ? columns.join(", ") : columns;
     const visitor = this.arelVisitor;
     // Mirrors Rails two-pass compact_blank: filter blanks before AND after stripping
     // so an order that becomes empty after stripping (e.g. bare "DESC") doesn't
@@ -1869,11 +1870,13 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       )
       .filter((col) => col.length > 0)
       .map((col, i) => `${col} AS alias_${i}`);
-    if (orderColumns.length === 0) return columns;
-    return [...orderColumns, columns].join(", ");
+    if (orderColumns.length === 0) return base;
+    return [...orderColumns, base].join(", ");
   }
 
   async extensions(): Promise<string[]> {
+    // Rails does not filter plpgsql or any built-in extension — the full list
+    // (including pg_catalog.plpgsql) is returned, matching PostgreSQLAdapter#extensions.
     const rows = await this.schemaQuery(`
       SELECT pg_extension.extname, n.nspname AS schema,
              current_schema() AS current_schema

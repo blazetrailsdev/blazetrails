@@ -152,9 +152,7 @@ export class EncryptableRecord {
 
   static validateColumnSize(modelClass: any, attribute: string): void {
     if (typeof modelClass.validatesLengthOf !== "function") return;
-    const limit =
-      (modelClass._attributeDefinitions?.get(attribute) as any)?.limit ??
-      modelClass.columnsHash?.()[attribute]?.limit;
+    const limit = (modelClass._attributeDefinitions?.get(attribute) as any)?.limit;
     if (limit == null) return;
     // Guard against double registration (called at encrypts() time and again
     // after schema reflection). Check whether a LengthValidator with this

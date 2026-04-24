@@ -192,11 +192,11 @@ export class AssociationRelation<T extends Base> extends Relation<T> {
 
   // @ts-expect-error — Relation defines `count` as a property; override
   //   as a method so we can gate strict-loading before dispatching.
-  async count(column?: string): Promise<number | Record<string, number>> {
+  async count(column?: string): Promise<number | bigint | Record<string, number | bigint>> {
     this._checkStrictLoading();
     return (
       Relation.prototype as unknown as {
-        count: (col?: string) => Promise<number | Record<string, number>>;
+        count: (col?: string) => Promise<number | bigint | Record<string, number | bigint>>;
       }
     ).count.call(this, column);
   }
@@ -204,11 +204,11 @@ export class AssociationRelation<T extends Base> extends Relation<T> {
   // @ts-expect-error — sum/average/minimum/maximum are also property-
   //   assigned on Relation (from the Calculations mixin); override as
   //   methods to gate strict-loading before each SQL entry point.
-  async sum(column?: string): Promise<number | Record<string, number>> {
+  async sum(column?: string): Promise<number | bigint | Record<string, number | bigint>> {
     this._checkStrictLoading();
     return (
       Relation.prototype as unknown as {
-        sum: (col?: string) => Promise<number | Record<string, number>>;
+        sum: (col?: string) => Promise<number | bigint | Record<string, number | bigint>>;
       }
     ).sum.call(this, column);
   }
@@ -256,13 +256,13 @@ export class AssociationRelation<T extends Base> extends Relation<T> {
   override async calculate(
     operation: "count" | "sum" | "average" | "minimum" | "maximum",
     column?: string,
-  ): Promise<number | Record<string, number>> {
+  ): Promise<number | bigint | Record<string, number | bigint>> {
     this._checkStrictLoading();
     return (
       super.calculate as unknown as (
         op: string,
         col?: string,
-      ) => Promise<number | Record<string, number>>
+      ) => Promise<number | bigint | Record<string, number | bigint>>
     ).call(this, operation, column);
   }
 

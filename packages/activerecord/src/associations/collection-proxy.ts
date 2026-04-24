@@ -796,7 +796,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         const box = await this._djarForCount();
         if (!box) return 0;
         const djar = (box as { djar: unknown }).djar as {
-          count: () => Promise<number | Record<string, number>>;
+          count: () => Promise<number | bigint | Record<string, number | bigint>>;
         };
         const c = await djar.count();
         if (typeof c !== "number") {
@@ -825,7 +825,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     // `COUNT(*)` Rails would.
     const countFn = (
       Relation.prototype as unknown as {
-        count: (this: unknown) => Promise<number | Record<string, number>>;
+        count: (this: unknown) => Promise<number | bigint | Record<string, number | bigint>>;
       }
     ).count;
     const counted = this._relationStateDiverged()
@@ -848,17 +848,19 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
   // and drop in-place mutations.
   // @ts-expect-error sum is a property on Relation (Calculations mixin);
   //   method override is intentional to gate + honor divergence.
-  async sum(column?: string): Promise<number | Record<string, number>> {
+  async sum(column?: string): Promise<number | bigint | Record<string, number | bigint>> {
     this._checkStrictLoading();
     const fn = (
       Relation.prototype as unknown as {
-        sum: (col?: string) => Promise<number | Record<string, number>>;
+        sum: (col?: string) => Promise<number | bigint | Record<string, number | bigint>>;
       }
     ).sum;
     if (this._relationStateDiverged()) return fn.call(this, column);
     const s = this.scope();
     return (
-      s as unknown as { sum: (col?: string) => Promise<number | Record<string, number>> }
+      s as unknown as {
+        sum: (col?: string) => Promise<number | bigint | Record<string, number | bigint>>;
+      }
     ).sum(column);
   }
 

@@ -40,18 +40,21 @@ const SQL_FN_NAMES: Record<AggFn, string> = {
 };
 
 /**
- * Cast an aggregate result value through the column's type.
+ * Cast an aggregate result value. Partially mirrors Rails'
+ * `type_cast_calculated_value` (calculations.rb:627).
  *
- * Mirrors Rails' `type_cast_calculated_value` (calculations.rb:627):
- *   - count  → JS number. Very large SQL COUNT() results (> 2^53) would
- *              lose precision; this matches Rails which returns Integer.
- *   - sum    → type.deserialize(value || 0) — uses column type
- *   - min/max → type.deserialize(value) — uses column type
- *   - average → JS number (Rails returns BigDecimal for integer columns;
- *              we return number — documented limitation)
+ *   - count   → JS number via Number(val). SQL COUNT() > 2^53-1 loses
+ *               precision (Rails returns arbitrary-precision Integer).
+ *   - sum     → for BigIntegerType: type.deserialize(val ?? 0) → bigint;
+ *               otherwise Number(val ?? 0) → number.
+ *   - min/max → for BigIntegerType: type.deserialize(val) → bigint;
+ *               otherwise returns raw driver value.
+ *   - average → JS number via Number(val). Rails returns BigDecimal for
+ *               integer/decimal columns — documented limitation.
  *
- * Uses `type.deserialize` to match Rails semantics and allow types to
- * override deserialize independently of cast in the future.
+ * Only BigIntegerType is dispatched through the column type today.
+ * Other types fall back to Number() or raw value. Extend castAggValue
+ * when additional types need precision-preserving deserialize dispatch.
  */
 function castAggValue(
   val: unknown,

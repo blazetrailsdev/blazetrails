@@ -134,6 +134,48 @@ export class DirtyTracker {
     }
   }
 
+  /**
+   * Pending changes diff against the values loaded from the database —
+   * what will be written on the next save. Cleared by `changesApplied()`.
+   *
+   * Mirrors: ActiveModel::Dirty#mutations_from_database
+   * (activemodel/lib/active_model/dirty.rb + attribute_mutation_tracker.rb).
+   */
+  get mutationsFromDatabase(): Record<string, [unknown, unknown]> {
+    return this.changes;
+  }
+
+  /**
+   * Snapshot of `mutations_from_database` at the moment of the last save.
+   * Lives until the next save.
+   *
+   * Mirrors: ActiveModel::Dirty#mutations_before_last_save
+   */
+  get mutationsBeforeLastSave(): Record<string, [unknown, unknown]> {
+    return this.previousChanges;
+  }
+
+  /**
+   * Drop all pending assignment tracking without reverting values. Used
+   * by transactional rollback: the in-memory values stay, but the record
+   * no longer reports them as changed.
+   *
+   * Mirrors: ActiveModel::Dirty#forget_attribute_assignments
+   */
+  forgetAttributeAssignments(): void {
+    this._changedAttributes.clear();
+  }
+
+  /**
+   * Drop a single attribute's pending change without reverting its value.
+   *
+   * Mirrors: ActiveModel::Dirty#clear_attribute_change
+   * (-> mutation_tracker.forget_change(name)).
+   */
+  clearAttributeChange(name: string): void {
+    this._changedAttributes.delete(name);
+  }
+
   initAttributes(
     attributes: Map<string, unknown> | { snapshotValues(): Map<string, unknown> },
   ): void {

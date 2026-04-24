@@ -264,7 +264,13 @@ export class CallbackChain {
   }
 
   /**
-   * Remove the first registered entry matching `event + timing + fn`.
+   * Remove the first registered entry matching `event + timing + filter`.
+   * Identity-matches on the caller's original filter (function OR
+   * `CallbackObject`), not on the resolved runtime `fn` — so an object
+   * registered via `register(..., obj)` can be removed with the same
+   * object reference even though the chain internally resolves it to
+   * a bound method.
+   *
    * Mirrors Rails `CallbackChain#delete` used internally by
    * `skip_callback` (activesupport/lib/active_support/callbacks.rb:786-808).
    * Returns `true` if a matching entry was found and removed, `false`

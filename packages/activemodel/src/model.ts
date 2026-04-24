@@ -918,20 +918,24 @@ export class Model {
    * (activesupport/lib/active_support/callbacks.rb:737-749). `filter` may be
    * a function (most common in TS) or a method-object that our existing
    * `CallbackChain.register` accepts; `options` covers the usual Rails
-   * conditionals (`if`, `unless`, `on`, `prepend`).
+   * conditionals (`if`, `unless`, `prepend`). `on` is only valid for
+   * transactional callbacks (`commit` / `rollback`) — any other event
+   * raises if `on` is set, matching the existing per-event helpers.
    */
   static setCallback<T extends typeof Model>(
     this: T,
     event: string,
     timing: "before" | "after",
-    fn: CallbackFn | CallbackObject,
+    fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | CallbackObject,
     options?: CallbackConditions<InstanceType<T>>,
   ): void;
   static setCallback<T extends typeof Model>(
     this: T,
     event: string,
     timing: "around",
-    fn: AroundCallbackFn | CallbackObject,
+    fn:
+      | ((record: InstanceType<T>, block: () => void) => void | boolean | Promise<void | boolean>)
+      | CallbackObject,
     options?: CallbackConditions<InstanceType<T>>,
   ): void;
   static setCallback<T extends typeof Model>(

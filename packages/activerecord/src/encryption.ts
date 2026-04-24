@@ -25,6 +25,7 @@ import type { EncryptorLike } from "./encryption/encryptor.js";
 import { Cipher } from "./encryption/cipher/aes256-gcm.js";
 import { globalPreviousSchemesFor } from "./encryption/encryptable-record.js";
 import { Configurable } from "./encryption/configurable.js";
+import { withoutEncryption } from "./encryption/context.js";
 
 /**
  * The simple encryptor surface `Base.encrypts({ encryptor })` accepts.
@@ -265,10 +266,12 @@ export function isEncryptedAttribute(klass: any, attr: string): boolean {
  */
 export function encryptedAttributeQ(record: any, attributeName: string): boolean {
   const klass = record.constructor as any;
-  if (!klass._encryptedAttributes?.has(attributeName)) return false;
-  const type = klass._attributeDefinitions?.get(attributeName)?.type;
+  // Resolve attribute aliases (mirrors Rails' attribute_aliases lookup).
+  const resolved = klass._attributeAliases?.[attributeName] ?? attributeName;
+  if (!klass._encryptedAttributes?.has(resolved)) return false;
+  const type = klass._attributeDefinitions?.get(resolved)?.type;
   if (!(type instanceof EncryptedAttributeType)) return false;
-  const rawValue = record.readAttributeBeforeTypeCast(attributeName);
+  const rawValue = record.readAttributeBeforeTypeCast(resolved);
   return type.isEncrypted(rawValue);
 }
 
@@ -280,10 +283,12 @@ export function encryptedAttributeQ(record: any, attributeName: string): boolean
  * Mirrors: ActiveRecord::Encryption::EncryptableRecord#ciphertext_for
  */
 export function ciphertextFor(record: any, attributeName: string): unknown {
+  const klass = record.constructor as any;
+  const resolved = klass._attributeAliases?.[attributeName] ?? attributeName;
   if (encryptedAttributeQ(record, attributeName)) {
-    return record.readAttributeBeforeTypeCast(attributeName);
+    return record.readAttributeBeforeTypeCast(resolved);
   }
-  return record._attributes.valuesForDatabase()[attributeName];
+  return record._attributes.valuesForDatabase()[resolved];
 }
 
 /**
@@ -294,11 +299,27 @@ export async function encryptRecord(record: any): Promise<void> {
   const klass = record.constructor as any;
   const encryptedAttrs: Set<string> = klass._encryptedAttributes ?? new Set();
   if (encryptedAttrs.size === 0) return;
+
+  // Save plaintext values before calling updateColumns, which would overwrite
+  // in-memory attributes with the ciphertext (since updateColumns uses cast()).
+  const plaintextValues: Record<string, unknown> = {};
   const assignments: Record<string, unknown> = {};
   for (const attr of encryptedAttrs) {
-    assignments[attr] = record[attr];
+    const plaintext = record[attr];
+    plaintextValues[attr] = plaintext;
+    // Explicitly serialize via the type so updateColumns writes ciphertext —
+    // updateColumns uses cast() not serialize(), so we pre-serialize here.
+    const type = klass._attributeDefinitions?.get(attr)?.type;
+    assignments[attr] =
+      type instanceof EncryptedAttributeType ? type.serialize(plaintext) : plaintext;
   }
+
   await record.updateColumns(assignments);
+
+  // Restore plaintext in-memory so record.attr still reads as plaintext.
+  for (const [attr, plaintext] of Object.entries(plaintextValues)) {
+    record._attributes.set(attr, plaintext);
+  }
 }
 
 /**
@@ -311,7 +332,6 @@ export async function decryptRecord(record: any): Promise<void> {
   const encryptedAttrs: Set<string> = klass._encryptedAttributes ?? new Set();
   if (encryptedAttrs.size === 0) return;
 
-  const { withoutEncryption } = await import("./encryption/context.js");
   const assignments: Record<string, unknown> = {};
   for (const attr of encryptedAttrs) {
     const type = klass._attributeDefinitions?.get(attr)?.type;

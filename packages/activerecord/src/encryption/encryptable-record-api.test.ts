@@ -37,6 +37,13 @@ describe("ActiveRecord::Encryption::EncryptableRecordApiTest", () => {
 
     assertEncryptedAttribute(post, "title", title);
     assertEncryptedAttribute(post, "body", body);
+
+    // Verify the DB was actually updated with ciphertext.
+    const reloaded = await Post.find(post.id);
+    expect(reloaded.readAttributeBeforeTypeCast("title")).not.toBe(title);
+    expect(reloaded.readAttributeBeforeTypeCast("body")).not.toBe(body);
+    expect(reloaded.title).toBe(title);
+    expect(reloaded.body).toBe(body);
   });
 
   it("encrypt won't fail for classes without attributes to encrypt", async () => {
@@ -90,6 +97,7 @@ describe("ActiveRecord::Encryption::EncryptableRecordApiTest", () => {
 
     const reloaded = await Post.find(post.id);
     assertEncryptedAttribute(reloaded, "title", "the Starfleet is here");
+    expect(reloaded.encryptedAttribute("title")).toBe(true);
   });
 
   it("encrypted_attribute? returns false for regular attributes", async () => {
@@ -178,6 +186,8 @@ describe("ActiveRecord::Encryption::EncryptableRecordApiTest", () => {
       await author.encrypt();
       const reloaded = await Author.find(author.id);
       expect(reloaded.name).toBe("dhh");
+      // Verify the DB row was re-encrypted with the current scheme.
+      expect(reloaded.readAttributeBeforeTypeCast("name")).not.toBe(oldCiphertext);
     }
   });
 

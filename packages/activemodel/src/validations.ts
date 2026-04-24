@@ -39,7 +39,7 @@ export interface Validations {
    * `validation_context` surfaces `context_for_validation.context`
    * directly (Symbol or Array of Symbols).
    */
-  readonly validationContext: string | string[] | ValidationContext | null;
+  readonly validationContext: string | string[] | null;
 }
 
 /**
@@ -110,12 +110,10 @@ export class ValidationError extends globalThis.Error {
  * segment as a string. `.context` is now `string | string[] | null`.
  */
 export class ValidationContext {
-  readonly name: string;
   private _context: string | string[] | null;
 
   constructor(context: string | string[] | null = null) {
     this._context = context;
-    this.name = Array.isArray(context) ? (context[0] ?? "") : (context ?? "");
   }
 
   get context(): string | string[] | null {
@@ -124,6 +122,16 @@ export class ValidationContext {
 
   set context(value: string | string[] | null) {
     this._context = value;
+  }
+
+  /**
+   * First-segment string form of the current context — live getter so it
+   * stays consistent with `.context` after mutation via the setter.
+   * `""` when the context is null.
+   */
+  get name(): string {
+    const c = this._context;
+    return Array.isArray(c) ? (c[0] ?? "") : (c ?? "");
   }
 
   toString(): string {

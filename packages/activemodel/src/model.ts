@@ -981,7 +981,7 @@ export class Model {
         const ctx = record._validationContext;
         if (ctx == null) return false;
         const current = Array.isArray(ctx) ? ctx : [ctx];
-        return current.some((c: unknown) => registeredSet.has(c));
+        return current.some((c: unknown) => registeredSet.has(c as string));
       });
     }
 

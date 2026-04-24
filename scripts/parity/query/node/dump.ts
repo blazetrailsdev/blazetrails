@@ -66,9 +66,11 @@ function parseArgs(argv: string[]): {
   return { fixtureDir, outPath, frozenAt };
 }
 
-// Shape check: ISO 8601 UTC with trailing Z, fractional seconds capped at 3 digits
-// (JS Date resolves to ms — more precision would silently round on round-trip).
-const ISO_UTC_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
+// Shape check: ISO 8601 UTC with trailing Z. Matches scripts/parity/canonical/
+// query.schema.json and the Ruby runner's regex — any fractional precision is
+// accepted by the contract. Semantic validity (calendar-valid date) is enforced
+// below via Date.parse().
+const ISO_UTC_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
 const DEFAULT_FROZEN_AT = "2000-01-01T00:00:00.000Z";
 
 // Primitive-safe name for error/debug output. Handles null/undefined/strings/numbers

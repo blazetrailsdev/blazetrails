@@ -11,7 +11,11 @@ import Ajv from "ajv/dist/2020.js";
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const DUMP_SCRIPT = join(SCRIPT_DIR, "dump.ts");
 const FIXTURES = resolve(SCRIPT_DIR, "../../fixtures");
-const TSX_BIN = resolve(SCRIPT_DIR, "../../../../node_modules/.bin/tsx");
+const TSX_BIN = resolve(
+  SCRIPT_DIR,
+  "../../../../node_modules/.bin",
+  process.platform === "win32" ? "tsx.cmd" : "tsx",
+);
 
 interface RunResult {
   code: number;

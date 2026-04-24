@@ -116,9 +116,14 @@ function translateQuery(
   const tsDecls = tables.map((t) => `const ${t} = new Table("${t}");`).join("\n");
 
   if (isNonTranslatable(query)) {
+    // Keep the same module shape as translatable queries (default export) so the
+    // Node runner fails with a clear message rather than "default export is
+    // undefined". The thrown-error default makes the TODO explicit at evaluation.
+    const todo = `// TODO: translate — ${query}`;
+    const throwExpr = `((() => { throw new Error("parity fixture not translated: ${query.replace(/["\\]/g, "\\$&")}"); })())`;
     return {
       rb: `${rbDecls}\n# TODO: translate — ${query}`,
-      ts: `${tsDecls}\n// TODO: translate — ${query}`,
+      ts: `${tsDecls}\n${todo}\nexport default ${throwExpr};`,
       imports: ["Table"],
     };
   }

@@ -157,6 +157,7 @@ describe("global previous schemes wiring — config.previous → EncryptableReco
   beforeEach(() => {
     savedSupportUnencryptedData = Configurable.config.supportUnencryptedData;
     savedPreviousSchemes = [...Configurable.config.previousSchemes];
+    Configurable.config.previousSchemes = [];
   });
 
   afterEach(() => {

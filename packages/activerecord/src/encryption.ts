@@ -129,9 +129,20 @@ export interface EncryptsOptions extends Omit<SchemeOptions, "encryptor"> {
 function buildScheme(options: EncryptsOptions): Scheme {
   const { encryptor, previousSchemes: localPrevious = [], ...schemeOptions } = options;
 
+  const hasSchemeOptions =
+    schemeOptions.key !== undefined ||
+    schemeOptions.keyProvider !== undefined ||
+    schemeOptions.deterministic !== undefined ||
+    schemeOptions.downcase !== undefined ||
+    schemeOptions.ignoreCase !== undefined ||
+    localPrevious.length > 0 ||
+    schemeOptions.compress !== undefined ||
+    schemeOptions.compressor !== undefined ||
+    schemeOptions.supportUnencryptedData !== undefined;
+
   const coreOpts: SchemeOptions = encryptor
     ? { ...schemeOptions, encryptor: new LegacyEncryptorShim(encryptor) }
-    : Object.keys(schemeOptions).length > 0
+    : hasSchemeOptions
       ? schemeOptions
       : { encryptor: new LegacyEncryptorShim(defaultEncryptor) };
 

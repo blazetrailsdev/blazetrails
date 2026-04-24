@@ -795,7 +795,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     const fkPat = fkFromMsg ?? "\\w+";
 
     const match = new RegExp(
-      String.raw`(?:CREATE|ALTER)\s+TABLE\s*(?:\`?\w+\`?\.)?` +
+      String.raw`(?:CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?|ALTER\s+TABLE\s+)(?:\`?\w+\`?\.)?` +
         String.raw`\`?(?<table>\w+)\`?.+?` +
         String.raw`FOREIGN\s+KEY\s*\(\`?(?<foreign_key>${fkPat})\`?\)\s*` +
         String.raw`REFERENCES\s*\`?(?<target_table>\w+)\`?\s*\(\`?(?<primary_key>\w+)\`?\)`,

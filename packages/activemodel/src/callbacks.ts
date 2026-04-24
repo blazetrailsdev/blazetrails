@@ -243,10 +243,25 @@ export class CallbackChain {
     // rejects — matches `_rejectOnOption`'s `"on" in conditions` and
     // Rails' "unknown key" semantics. An explicit `on` (even undefined)
     // signals caller intent that doesn't apply here.
-    if (conditions && "on" in conditions && event !== "commit" && event !== "rollback") {
-      throw new ArgumentError(
-        `Unknown key: :on. The :on option is only supported for :commit and :rollback callbacks (got :${event})`,
-      );
+    if (conditions && "on" in conditions) {
+      if (event !== "commit" && event !== "rollback") {
+        throw new ArgumentError(
+          `Unknown key: :on. The :on option is only supported for :commit and :rollback callbacks (got :${event})`,
+        );
+      }
+      // Validate the value here too so `defineModelCallbacks` helpers
+      // and direct `chain.register` calls surface the same error
+      // Rails raises from `after_commit`/`after_rollback`:
+      // "on conditions … have to be one of [:create, :destroy, :update]".
+      const on = conditions.on;
+      const values = Array.isArray(on) ? on : [on];
+      for (const v of values) {
+        if (v !== "create" && v !== "update" && v !== "destroy") {
+          throw new ArgumentError(
+            `:on conditions for after_commit and after_rollback callbacks have to be one of [:create, :destroy, :update]`,
+          );
+        }
+      }
     }
     const resolved: CallbackFn | AroundCallbackFn =
       typeof fn === "function"

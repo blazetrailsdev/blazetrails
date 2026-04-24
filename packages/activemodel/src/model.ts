@@ -945,20 +945,12 @@ export class Model {
     fn: CallbackFn | AroundCallbackFn | CallbackObject,
     options?: CallbackConditions<InstanceType<T>>,
   ): void {
-    // Apply the same `on:`-validation rules the per-event helpers do so
-    // a call that targets (say) `"save"` with `on: :create` surfaces
-    // the same error rather than silently registering a callback that
-    // can never fire. `on:` is only meaningful for transactional
-    // events (commit/rollback); everything else rejects.
-    if (options) {
-      if (event === "commit" || event === "rollback") {
-        if (options.on !== undefined) {
-          _validateOnCondition(options.on);
-        }
-      } else {
-        _rejectOnOption(options);
-      }
-    }
+    // `CallbackChain.register` below enforces both `on:` applicability
+    // (only commit/rollback) and value validity
+    // (:create/:update/:destroy) using key-presence checks, so every
+    // entry point — setCallback, defineModelCallbacks helpers, direct
+    // chain.register — shares the same gate. No extra guard needed
+    // here.
     this._ensureOwnCallbacks();
     this._callbackChain.register(
       timing,

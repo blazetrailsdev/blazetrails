@@ -203,10 +203,15 @@ export function generateModels(
       // belongsTo name: strip _id if present, otherwise fall back to the
       // underscored singular of the target table name — matching Rails'
       // convention so callers of Model.some_fk see the right association.
+      // stripPrefix/stripSuffix deliberately do NOT apply here — they
+      // reshape class names (the TS identifier) but association names
+      // follow Rails convention off the real table. A FK to blog_posts
+      // via a non-convention column should still emit belongsTo("blog_post"),
+      // never belongsTo("post").
       const belongsToName =
         fk.column.endsWith("_id") && fk.column !== "_id"
           ? fk.column.slice(0, -3)
-          : underscore(singularize(strip(toTableUnqual)));
+          : underscore(singularize(toTableUnqual));
 
       // Rails convention for belongsTo(name) infers:
       //   foreignKey = "${name}_id"

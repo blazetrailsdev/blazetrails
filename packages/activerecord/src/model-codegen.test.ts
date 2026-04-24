@@ -176,6 +176,33 @@ describe("generateModels", () => {
     expect(out).toContain('this._tableName = "blog_posts";');
   });
 
+  it("strip-prefix does not change belongsTo association names (only class names)", () => {
+    // FK column `written_by` doesn't end in _id so belongsTo name falls
+    // back to the target table's singular. `blog_posts` with stripPrefix
+    // "blog_" yields `class Post`, but the *association* name should stay
+    // conventionally derived from the full table: "blog_post". Class and
+    // association names serve different purposes — strip only reshapes
+    // the class identifier.
+    const tables = [
+      table("blog_posts"),
+      table("comments", {
+        foreignKeys: [fk("comments", "blog_posts", "written_by")],
+      }),
+    ];
+    const out = generateModels(tables, {
+      stripPrefix: "blog_",
+      noHeader: true,
+      now: NOW,
+    });
+    expect(out).toContain("export class Post extends Base {");
+    // Association name stays "blog_post" (from the real table), with
+    // className: "Post" since the default classify("blog_post") = "BlogPost"
+    // doesn't match the stripped class.
+    expect(out).toContain(
+      'this.belongsTo("blog_post", { className: "Post", foreignKey: "written_by" });',
+    );
+  });
+
   it("strips suffix before classify but preserves full _tableName", () => {
     const out = generateModels([table("posts_archive")], {
       stripSuffix: "_archive",

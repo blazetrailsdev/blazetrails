@@ -35,6 +35,21 @@ describe("DecimalTest", () => {
     expect(type.cast("1.23")).toBe("1.230");
   });
 
+  it("apply_scale handles leading-dot and trailing-dot numeric forms", () => {
+    const type = new Types.DecimalType({ scale: 2 });
+    // `_castWithoutScale` can emit forms like ".5" or "1." — applyScale
+    // must normalize them, not silently pass through.
+    expect(type.applyScale(".5")).toBe("0.50");
+    expect(type.applyScale("1.")).toBe("1.00");
+  });
+
+  it("apply_scale does not OOM on adversarial exponents", () => {
+    // `"1e10000000"` would force splitDecimal to allocate a ~10M-digit
+    // string if expanded naively. The cap leaves the raw form alone.
+    const type = new Types.DecimalType({ scale: 2 });
+    expect(type.applyScale("1e10000000")).toBe("1e10000000");
+  });
+
   it("apply_scale rounds half away from zero", () => {
     // Ruby BigDecimal#round default is ROUND_HALF_UP (away from zero).
     const type = new Types.DecimalType({ scale: 2 });

@@ -38,9 +38,11 @@ describe("DateTest", () => {
   });
 
   it("cast falls through to fallback parser for non-ISO strings", () => {
+    // Use an ISO-datetime form — deterministic across JS runtimes but
+    // does not match the ISO_DATE fast path (which is YYYY-MM-DD only).
     const type = new Types.DateType();
-    const d = type.cast("June 1, 2024");
+    const d = type.cast("2024-06-01T00:00:00Z");
     expect(d).toBeInstanceOf(Date);
-    expect(d!.getFullYear()).toBe(2024);
+    expect(d!.getUTCFullYear()).toBe(2024);
   });
 });

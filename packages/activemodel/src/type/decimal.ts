@@ -64,6 +64,15 @@ export class DecimalType extends ValueType<string> {
  * Normalize a decimal-string representation (including scientific notation
  * as emitted by JS `String(1e-7)`) into `sign` + integer + fractional parts.
  */
+/**
+ * Cap exponent magnitude so adversarial input like `"1e10000000"` can't
+ * drive `padEnd`/`padStart` into allocating multi-gigabyte strings. At
+ * |exp| > this many digits the value has more precision than any
+ * realistic `scale:` will keep anyway; returning null makes `applyScale`
+ * leave the raw form alone rather than OOM the process.
+ */
+const MAX_EXPONENT_EXPANSION = 4000;
+
 function splitDecimal(raw: string): { sign: "" | "-"; intPart: string; fracPart: string } | null {
   let s = raw;
   let sign: "" | "-" = "";
@@ -73,12 +82,15 @@ function splitDecimal(raw: string): { sign: "" | "-"; intPart: string; fracPart:
   } else if (s.startsWith("+")) {
     s = s.slice(1);
   }
-  // Expand scientific notation into plain digits.
-  const m = s.match(/^(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/);
+  // Accept the same numeric forms `_castWithoutScale` emits: `1`, `1.`,
+  // `.5`, `1.5`, `1e3`, `1.e3`. Reject input with no digits at all.
+  const m = s.match(/^(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/);
   if (!m) return null;
-  let intPart = m[1];
+  if (m[1] === "" && (m[2] ?? "") === "") return null;
+  let intPart = m[1] || "0";
   let fracPart = m[2] ?? "";
   const exp = m[3] ? Number(m[3]) : 0;
+  if (Math.abs(exp) > MAX_EXPONENT_EXPANSION) return null;
   if (exp > 0) {
     if (fracPart.length >= exp) {
       intPart += fracPart.slice(0, exp);

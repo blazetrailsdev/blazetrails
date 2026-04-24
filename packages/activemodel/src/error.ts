@@ -181,7 +181,8 @@ export class Error {
     const ownKeys = Object.keys(own);
     if (expectedKeys.length !== ownKeys.length) return false;
     for (const k of expectedKeys) {
-      if (!(k in own) || !optionsEqual(own[k], expected[k])) return false;
+      if (!Object.prototype.hasOwnProperty.call(own, k) || !optionsEqual(own[k], expected[k]))
+        return false;
     }
     return true;
   }

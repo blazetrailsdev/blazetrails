@@ -119,6 +119,19 @@ describe("AcceptanceValidationTest", () => {
     expect(p2.isValid()).toBe(true);
   });
 
+  it("validates acceptance with a scalar accept option", () => {
+    // Rails' `acceptable_option?` does `Array(options[:accept]).include?(value)`,
+    // so a non-array `accept:` is normalized to a one-element list.
+    class Terms extends Model {
+      static {
+        this.attribute("terms", "string");
+        this.validates("terms", { acceptance: { accept: "yes" } });
+      }
+    }
+    expect(new Terms({ terms: "yes" }).isValid()).toBe(true);
+    expect(new Terms({ terms: "y" }).isValid()).toBe(false);
+  });
+
   it("setup! auto-defines attribute when not explicitly declared", () => {
     class Agreement extends Model {
       static {

@@ -31,7 +31,9 @@ export abstract class NodeExpression extends Node {
   quotedNode(other: unknown): Node {
     if (other instanceof Node) return other;
     if (_buildQuoted) return _buildQuoted(other, this);
-    throw new Error("NodeExpression.quotedNode called before buildQuoted was registered");
+    throw new Error(
+      'NodeExpression.quotedNode called before buildQuoted was registered. Import from "@blazetrails/arel" so Arel package initialization runs and wires node registries.',
+    );
   }
 }
 

@@ -33,10 +33,18 @@ export interface PredicationHost {
 }
 
 function groupedAny(nodes: Node[]): Grouping {
+  // Empty `*_any([])` = false; Rails' `Or.inject` on [] returns nil and
+  // the visitor renders `NULL`, which falsifies the predicate anyway —
+  // be explicit about it here so callers get deterministic SQL instead
+  // of a TypeError from `Array#reduce` without an initial value.
+  if (nodes.length === 0) return new Grouping(new Not(new True()));
   return new Grouping(nodes.reduce((acc, n) => new Or(acc, n)));
 }
 
 function groupedAll(nodes: Node[]): Grouping {
+  // Empty `*_all([])` = true, matching SQL's vacuous-AND semantics and
+  // Rails' empty-Ands short-circuit.
+  if (nodes.length === 0) return new Grouping(new True());
   return new Grouping(new And(nodes));
 }
 
@@ -74,23 +82,28 @@ export const Predications = {
 
   matches(
     this: PredicationHost,
-    pattern: string | { ast: Node },
+    pattern: unknown,
     escape: string | null = null,
     caseSensitive = false,
   ): Matches {
-    const right =
-      typeof pattern === "string" ? this.quotedNode(pattern) : (pattern as { ast: Node }).ast;
-    return new Matches(this as unknown as Node, right, escape, caseSensitive);
+    // Rails: `Nodes::Matches.new self, quoted_node(other), ...`.
+    // `quotedNode` (→ buildQuoted) already unwraps SelectManager/TreeManager
+    // `.ast` and passes Nodes through untouched, so we don't need a
+    // separate branch for AST-bearing inputs here.
+    return new Matches(this as unknown as Node, this.quotedNode(pattern), escape, caseSensitive);
   },
   doesNotMatch(
     this: PredicationHost,
-    pattern: string | { ast: Node },
+    pattern: unknown,
     escape: string | null = null,
     caseSensitive = false,
   ): DoesNotMatch {
-    const right =
-      typeof pattern === "string" ? this.quotedNode(pattern) : (pattern as { ast: Node }).ast;
-    return new DoesNotMatch(this as unknown as Node, right, escape, caseSensitive);
+    return new DoesNotMatch(
+      this as unknown as Node,
+      this.quotedNode(pattern),
+      escape,
+      caseSensitive,
+    );
   },
   matchesRegexp(this: PredicationHost, pattern: string, caseSensitive = true): RegexpNode {
     return new RegexpNode(this as unknown as Node, this.quotedNode(pattern), caseSensitive);
@@ -99,26 +112,33 @@ export const Predications = {
     return new NotRegexp(this as unknown as Node, this.quotedNode(pattern), caseSensitive);
   },
 
-  in(this: PredicationHost, values: unknown[] | { ast: Node }): In {
-    if (!Array.isArray(values) && values && typeof values === "object" && "ast" in values) {
-      return new In(this as unknown as Node, (values as { ast: Node }).ast);
+  in(this: PredicationHost, other: unknown[] | { ast: Node } | Node | unknown): In {
+    // Mirrors Arel::Predications#in:
+    //   SelectManager → In(self, other.ast)
+    //   Enumerable    → In(self, quoted_array(other))
+    //   else          → In(self, quoted_node(other))
+    if (Array.isArray(other)) {
+      return new In(
+        this as unknown as Node,
+        other.map((v) => this.quotedNode(v)) as unknown as Node,
+      );
     }
-    // Route each element through the host's quotedNode so type-casting
-    // subclasses (Attribute, ...) get a chance to coerce per-value.
-    // Mirrors: Predications#quoted_array → quoted_node(v).
-    return new In(
-      this as unknown as Node,
-      (values as unknown[]).map((v) => this.quotedNode(v)) as unknown as Node,
-    );
+    if (other && typeof other === "object" && !(other instanceof Node) && "ast" in other) {
+      return new In(this as unknown as Node, (other as { ast: Node }).ast);
+    }
+    return new In(this as unknown as Node, this.quotedNode(other));
   },
-  notIn(this: PredicationHost, values: unknown[] | { ast: Node }): NotIn {
-    if (!Array.isArray(values) && values && typeof values === "object" && "ast" in values) {
-      return new NotIn(this as unknown as Node, (values as { ast: Node }).ast);
+  notIn(this: PredicationHost, other: unknown[] | { ast: Node } | Node | unknown): NotIn {
+    if (Array.isArray(other)) {
+      return new NotIn(
+        this as unknown as Node,
+        other.map((v) => this.quotedNode(v)) as unknown as Node,
+      );
     }
-    return new NotIn(
-      this as unknown as Node,
-      (values as unknown[]).map((v) => this.quotedNode(v)) as unknown as Node,
-    );
+    if (other && typeof other === "object" && !(other instanceof Node) && "ast" in other) {
+      return new NotIn(this as unknown as Node, (other as { ast: Node }).ast);
+    }
+    return new NotIn(this as unknown as Node, this.quotedNode(other));
   },
 
   between(

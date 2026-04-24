@@ -42,6 +42,29 @@ describe("PredicationsMixin", () => {
     });
   });
 
+  describe("edge cases (via the mixin, not Attribute's inline predications)", () => {
+    const bn = new Nodes.BitwiseNot(users.get("flags"));
+
+    it("eqAny([]) does not crash and renders as a false-ish predicate", () => {
+      // Rails' `Or.inject` on [] returns nil and the visitor renders
+      // NULL (falsy). We produce an explicit NOT(TRUE) for the same
+      // effect without a TypeError from Array#reduce without an initial.
+      const sql = new Visitors.ToSql().compile(bn.eqAny([]));
+      expect(sql).toContain("NOT");
+    });
+
+    it("eqAll([]) does not crash and renders as a true-ish predicate", () => {
+      const sql = new Visitors.ToSql().compile(bn.eqAll([]));
+      // The only content inside the Grouping is a TRUE node — no NOT.
+      expect(sql).not.toContain("NOT");
+    });
+
+    it("in(scalar) wraps the scalar (Rails quoted_node fallthrough)", () => {
+      const sql = new Visitors.ToSql().compile(bn.in(7));
+      expect(sql).toBe(' ~ "users"."flags" IN (7)');
+    });
+  });
+
   describe("on NamedFunction (via Function → NodeExpression mixin)", () => {
     it("count().gt(n) produces HAVING-ready comparison", () => {
       // arel-47: photos[:id].count.gt(5)

@@ -31,7 +31,11 @@ export interface IntrospectedTable {
    */
   primaryKey: string | string[] | null;
   foreignKeys: ForeignKeyDefinition[];
-  /** Used for polymorphic + STI detection; empty list is fine. */
+  /**
+   * Reserved for future polymorphic + STI detection; currently unused by
+   * this generator. Callers should still populate it when cheap so later
+   * versions can infer `{ polymorphic: true }` and STI subclass hints.
+   */
   columns: { name: string; type: string }[];
 }
 

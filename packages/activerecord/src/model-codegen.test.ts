@@ -14,12 +14,15 @@ function table(
     columns?: { name: string; type: string }[];
   } = {},
 ): IntrospectedTable {
-  // `"primaryKey" in opts` rather than `?? "id"` so explicit `null`
-  // (views / PK-less tables) survives. `null ?? "id"` would return "id".
-  const primaryKey = "primaryKey" in opts ? opts.primaryKey! : "id";
+  // Preserve explicit null and [] (no-PK views) but treat `undefined`
+  // the same as an omitted option — tests shouldn't construct an
+  // impossible `primaryKey: undefined` shape just because the key
+  // was present.
+  const primaryKey: string | string[] | null =
+    "primaryKey" in opts && opts.primaryKey !== undefined ? opts.primaryKey : "id";
   return {
     name,
-    primaryKey: primaryKey as string | string[] | null,
+    primaryKey,
     foreignKeys: opts.foreignKeys ?? [],
     columns: opts.columns ?? [],
   };
@@ -171,6 +174,16 @@ describe("generateModels", () => {
     });
     expect(out).toContain("export class Post extends Base {");
     expect(out).toContain('this._tableName = "blog_posts";');
+  });
+
+  it("strips suffix before classify but preserves full _tableName", () => {
+    const out = generateModels([table("posts_archive")], {
+      stripSuffix: "_archive",
+      noHeader: true,
+      now: NOW,
+    });
+    expect(out).toContain("export class Post extends Base {");
+    expect(out).toContain('this._tableName = "posts_archive";');
   });
 
   it("sorts classes alphabetically and hasMany names alphabetically within a class", () => {

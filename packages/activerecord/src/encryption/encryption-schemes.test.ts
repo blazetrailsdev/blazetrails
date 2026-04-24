@@ -59,44 +59,67 @@ describe("ActiveRecord::Encryption::EncryptionSchemesTest", () => {
   it("use global previous schemes to decrypt data encrypted with previous schemes", () => {
     Configurable.config.supportUnencryptedData = false;
 
-    const prev1Scheme = new Scheme({ encryptor: new TestEncryptor({ "0": "1" }) });
-    const prev2Scheme = new Scheme({ encryptor: new TestEncryptor({ "1": "2" }) });
-    const type = makeType(new TestEncryptor({ "0": "1" }), [prev1Scheme, prev2Scheme]);
+    const prev1Scheme = new Scheme({
+      encryptor: new TestEncryptor({ legacy1: "legacy_cipher_1" }),
+    });
+    const prev2Scheme = new Scheme({
+      encryptor: new TestEncryptor({ legacy2: "legacy_cipher_2" }),
+    });
+    const type = makeType(new TestEncryptor({ current: "current_cipher" }), [
+      prev1Scheme,
+      prev2Scheme,
+    ]);
 
     expect(type.previousTypes).toHaveLength(2);
     const [previousType1, previousType2] = type.previousTypes;
 
-    const ciphertext1 = previousType1.serialize("1") as string;
-    expect(type.deserialize(ciphertext1)).toBe("0");
+    // primary cannot decrypt legacy ciphertexts — falls back to previousType1
+    const ciphertext1 = previousType1.serialize("legacy1") as string;
+    expect(type.deserialize(ciphertext1)).toBe("legacy1");
 
-    const ciphertext2 = previousType2.serialize("2") as string;
-    expect(type.deserialize(ciphertext2)).toBe("1");
+    // primary and previousType1 cannot decrypt — falls back to previousType2
+    const ciphertext2 = previousType2.serialize("legacy2") as string;
+    expect(type.deserialize(ciphertext2)).toBe("legacy2");
   });
 
   it("use global previous schemes to decrypt data encrypted with previous schemes with unencrypted data", () => {
     Configurable.config.supportUnencryptedData = true;
 
-    const prev1Scheme = new Scheme({ encryptor: new TestEncryptor({ "0": "1" }) });
-    const prev2Scheme = new Scheme({ encryptor: new TestEncryptor({ "1": "2" }) });
-    const type = makeType(new TestEncryptor({ "0": "1" }), [prev1Scheme, prev2Scheme]);
+    const prev1Scheme = new Scheme({
+      encryptor: new TestEncryptor({ legacy1: "legacy_cipher_1" }),
+    });
+    const prev2Scheme = new Scheme({
+      encryptor: new TestEncryptor({ legacy2: "legacy_cipher_2" }),
+    });
+    const type = makeType(new TestEncryptor({ current: "current_cipher" }), [
+      prev1Scheme,
+      prev2Scheme,
+    ]);
 
     // clean-text scheme is appended when supportUnencryptedData → 3 total
     expect(type.previousTypes).toHaveLength(3);
     const [previousType1, previousType2] = type.previousTypes;
 
-    const ciphertext1 = previousType1.serialize("1") as string;
-    expect(type.deserialize(ciphertext1)).toBe("0");
+    const ciphertext1 = previousType1.serialize("legacy1") as string;
+    expect(type.deserialize(ciphertext1)).toBe("legacy1");
 
-    const ciphertext2 = previousType2.serialize("2") as string;
-    expect(type.deserialize(ciphertext2)).toBe("1");
+    const ciphertext2 = previousType2.serialize("legacy2") as string;
+    expect(type.deserialize(ciphertext2)).toBe("legacy2");
   });
 
   it("returns ciphertext all the previous schemes fail to decrypt and support for unencrypted data is on", () => {
     Configurable.config.supportUnencryptedData = true;
 
-    const prev1Scheme = new Scheme({ encryptor: new TestEncryptor({ "0": "1" }) });
-    const prev2Scheme = new Scheme({ encryptor: new TestEncryptor({ "1": "2" }) });
-    const type = makeType(new TestEncryptor({ "0": "1" }), [prev1Scheme, prev2Scheme]);
+    const prev1Scheme = new Scheme({
+      encryptor: new TestEncryptor({ legacy1: "legacy_cipher_1" }),
+    });
+    const prev2Scheme = new Scheme({
+      encryptor: new TestEncryptor({ legacy2: "legacy_cipher_2" }),
+    });
+    const type = makeType(new TestEncryptor({ current: "current_cipher" }), [
+      prev1Scheme,
+      prev2Scheme,
+    ]);
 
     expect(type.deserialize("some ciphertext")).toBe("some ciphertext");
   });
@@ -104,9 +127,16 @@ describe("ActiveRecord::Encryption::EncryptionSchemesTest", () => {
   it("raise decryption error when all the previous schemes fail to decrypt", () => {
     Configurable.config.supportUnencryptedData = false;
 
-    const prev1Scheme = new Scheme({ encryptor: new TestEncryptor({ "0": "1" }) });
-    const prev2Scheme = new Scheme({ encryptor: new TestEncryptor({ "1": "2" }) });
-    const type = makeType(new TestEncryptor({ "0": "1" }), [prev1Scheme, prev2Scheme]);
+    const prev1Scheme = new Scheme({
+      encryptor: new TestEncryptor({ legacy1: "legacy_cipher_1" }),
+    });
+    const prev2Scheme = new Scheme({
+      encryptor: new TestEncryptor({ legacy2: "legacy_cipher_2" }),
+    });
+    const type = makeType(new TestEncryptor({ current: "current_cipher" }), [
+      prev1Scheme,
+      prev2Scheme,
+    ]);
 
     expect(() => type.deserialize("some invalid ciphertext")).toThrow(DecryptionError);
   });

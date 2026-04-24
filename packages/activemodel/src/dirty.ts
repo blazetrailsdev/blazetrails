@@ -173,14 +173,10 @@ export class DirtyTracker {
   forgetAttributeAssignments(
     attributes: Map<string, unknown> | { snapshotValues(): Map<string, unknown> },
   ): void {
-    if (attributes instanceof Map) {
-      this._originalAttributes = new Map(attributes);
-      this._originalHas = new Set(attributes.keys());
-    } else {
-      this._originalAttributes = attributes.snapshotValues();
-      this._originalHas = new Set(this._originalAttributes.keys());
-    }
-    this._changedAttributes.clear();
+    // Same shape as snapshot(): reset baseline + clear pending changes.
+    // `snapshot` also clears `_changedAttributes`, so the single call
+    // covers both sides of Rails' `forget_attribute_assignments`.
+    this.snapshot(attributes);
   }
 
   /**
@@ -192,13 +188,33 @@ export class DirtyTracker {
    * -> `mutation_tracker.forget_change(name)`.
    */
   clearAttributeChange(
-    attributes: Map<string, unknown> | { snapshotValues(): Map<string, unknown> },
+    attributes:
+      | Map<string, unknown>
+      | { has(name: string): boolean; fetchValue(name: string): unknown }
+      | { snapshotValues(): Map<string, unknown> },
     name: string,
   ): void {
     this._changedAttributes.delete(name);
-    const snap = attributes instanceof Map ? attributes : attributes.snapshotValues();
-    if (snap.has(name)) {
-      this._originalAttributes.set(name, snap.get(name));
+    // Fast path: avoid snapshotting every attribute when only one baseline
+    // needs rebinding. AttributeSet exposes has/fetchValue per-attribute;
+    // fall back to the full snapshot for plain Maps / other shapes.
+    let has: boolean;
+    let value: unknown;
+    const perAttr = attributes as { has?: unknown; fetchValue?: unknown };
+    if (typeof perAttr.has === "function" && typeof perAttr.fetchValue === "function") {
+      const src = attributes as { has(n: string): boolean; fetchValue(n: string): unknown };
+      has = src.has(name);
+      value = has ? src.fetchValue(name) : undefined;
+    } else {
+      const snap =
+        attributes instanceof Map
+          ? attributes
+          : (attributes as { snapshotValues(): Map<string, unknown> }).snapshotValues();
+      has = snap.has(name);
+      value = snap.get(name);
+    }
+    if (has) {
+      this._originalAttributes.set(name, value);
       this._originalHas.add(name);
     } else {
       this._originalAttributes.delete(name);

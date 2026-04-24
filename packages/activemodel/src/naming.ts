@@ -216,6 +216,62 @@ export class ModelName {
     return this.collection;
   }
 
+  // ---------------------------------------------------------------------------
+  // String-ness — Rails `ActiveModel::Name < String` (naming.rb:10, :151-152):
+  //   include Comparable
+  //   delegate :==, :===, :<=>, :=~, :"!~", :eql?, :match?, :to_s,
+  //            :to_str, :as_json, to: :name
+  //
+  // JS can't overload `==`/`<=>`/`=~`, so we expose each as a method and
+  // install `Symbol.toPrimitive` so `String(modelName)`,
+  // `` `${modelName}` ``, and `modelName + ""` all coerce to the class
+  // name — enough for route helpers, form keys, and Jest/Vitest
+  // equality when comparing to plain strings.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Mirrors Rails `to_s` / `to_str` delegated to `@name`
+   * (naming.rb:131-152). `name` is Ruby's full constant path
+   * (`"Blog::Post"`); in TS we keep `name` as the bare identifier
+   * (`"Post"`) and let namespace segments live on `.namespace`.
+   */
+  toString(): string {
+    return this.name;
+  }
+
+  /** Implicit coercion hook so `String(mn)`, `"${mn}"`, `mn + ""` all work. */
+  [Symbol.toPrimitive](_hint: string): string {
+    return this.name;
+  }
+
+  /**
+   * Mirrors Rails `@name == other` (String#==). Accepts another
+   * `ModelName` (compared by `.name`) or any string.
+   */
+  equals(other: unknown): boolean {
+    if (other instanceof ModelName) return this.name === other.name;
+    return typeof other === "string" && this.name === other;
+  }
+
+  /**
+   * Mirrors Rails `@name <=> other` (String#<=>). Returns `-1`, `0`,
+   * or `1`. Throws for non-string/non-ModelName arguments — matches
+   * Ruby's `nil` Spaceship result being an error in a TS context.
+   */
+  compare(other: ModelName | string): -1 | 0 | 1 {
+    const rhs = other instanceof ModelName ? other.name : other;
+    if (this.name === rhs) return 0;
+    return this.name < rhs ? -1 : 1;
+  }
+
+  /**
+   * Mirrors Rails `@name.match?(regexp)` / `=~`. Returns whether the
+   * class name matches the given regex.
+   */
+  match(pattern: RegExp): boolean {
+    return pattern.test(this.name);
+  }
+
   get human(): string {
     if (!this._klass) return this._humanFallback;
 

@@ -426,6 +426,45 @@ describe("ModelName namespace accepts Module-like {name}", () => {
   });
 });
 
+// Rails `ActiveModel::Name` includes Comparable and delegates ==/<=>/
+// =~/match?/to_s/to_str/as_json to @name (naming.rb:10, :151-152). JS
+// can't overload those operators, so we expose methods + Symbol.toPrimitive.
+describe("ModelName is string-ish (Rails String-inheritance analog)", () => {
+  it("toString returns the class name", () => {
+    expect(new ModelName("Post").toString()).toBe("Post");
+    expect(String(new ModelName("Post"))).toBe("Post");
+    expect(`${new ModelName("Post")}`).toBe("Post");
+  });
+
+  it("Symbol.toPrimitive coerces to the class name in string concatenation", () => {
+    const mn = new ModelName("Post");
+    expect("Model: " + mn).toBe("Model: Post");
+  });
+
+  it("equals compares against strings and other ModelName instances", () => {
+    const mn = new ModelName("Post");
+    expect(mn.equals("Post")).toBe(true);
+    expect(mn.equals("Other")).toBe(false);
+    expect(mn.equals(new ModelName("Post"))).toBe(true);
+    expect(mn.equals(new ModelName("Other"))).toBe(false);
+    expect(mn.equals(42)).toBe(false);
+  });
+
+  it("compare returns -1/0/1 matching String#<=>", () => {
+    const mn = new ModelName("BlogPost");
+    expect(mn.compare("BlogPost")).toBe(0);
+    expect(mn.compare("Blog")).toBe(1);
+    expect(mn.compare("BlogPosts")).toBe(-1);
+    expect(mn.compare(new ModelName("BlogPost"))).toBe(0);
+  });
+
+  it("match tests a regexp against the class name", () => {
+    const mn = new ModelName("BlogPost");
+    expect(mn.match(/Post/)).toBe(true);
+    expect(mn.match(/\d/)).toBe(false);
+  });
+});
+
 describe("OverridingAccessorsTest", () => {
   it("overriding accessors keys", () => {
     class Person extends Model {

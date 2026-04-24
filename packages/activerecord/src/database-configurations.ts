@@ -94,6 +94,21 @@ export class DatabaseConfigurations {
   }
 
   /**
+   * Build a DatabaseConfigurations from raw config, merging DATABASE_URL.
+   * Mirrors Rails' DatabaseConfigurations.new which auto-merges DATABASE_URL.
+   * Use this when you want Rails-compatible behavior (constructor + URL merge).
+   */
+  static fromRaw(configurations: RawConfigurations = {}): DatabaseConfigurations {
+    const instance = new DatabaseConfigurations([]);
+    // Use static defaultEnv (not NODE_ENV) — mirrors Rails' DatabaseConfigurations.new
+    instance._configurations = instance._buildConfigs(
+      instance._mergeDatabaseUrl(configurations, DatabaseConfigurations._defaultEnv),
+    );
+    _currentConfigurations = instance;
+    return instance;
+  }
+
+  /**
    * Mirrors: DatabaseConfigurations#empty?
    */
   get empty(): boolean {
@@ -189,6 +204,15 @@ export class DatabaseConfigurations {
     if (config instanceof DatabaseConfig) return config;
     const defaultEnv = DatabaseConfigurations.defaultEnv;
     if (typeof config === "string") {
+      // Mirrors Rails: resolve(symbol) → resolve_symbol_connection → find_db_config
+      // If the string looks like an env name (no URL scheme), find the db config for it.
+      if (!config.includes("://") && !config.startsWith("jdbc:")) {
+        const found = this.findDbConfig(config);
+        if (found) return found;
+        throw new Error(
+          `The \`${config}\` database is not configured for the \`${defaultEnv}\` environment.`,
+        );
+      }
       return new UrlConfig(defaultEnv, "primary", config);
     }
     if (typeof config === "object" && config !== null) {
@@ -220,43 +244,55 @@ export class DatabaseConfigurations {
   /**
    * Merge DATABASE_URL into the raw configurations.
    *
-   * When DATABASE_URL is set:
-   * - If raw configs exist, the URL is merged into each environment's
-   *   primary config (the URL takes precedence).
-   * - If no raw configs exist, a config is synthesized for the current env.
+   * Mirrors Rails: merge_db_environment_variables — only merges into the
+   * current default env's primary config. If no config exists for the
+   * default env, adds one from the URL.
    *
    * Mirrors: ActiveRecord::DatabaseConfigurations#build_url_hash
    */
-  private _mergeDatabaseUrl(raw: RawConfigurations): RawConfigurations {
+  private _mergeDatabaseUrl(raw: RawConfigurations, envOverride?: string): RawConfigurations {
     const databaseUrl = process.env.DATABASE_URL;
     if (!databaseUrl) return raw;
 
     const hasConfigs = Object.keys(raw).length > 0;
 
     if (!hasConfigs) {
-      const env = process.env.NODE_ENV || DatabaseConfigurations._defaultEnv;
+      const env = envOverride ?? process.env.NODE_ENV ?? DatabaseConfigurations._defaultEnv;
       return { [env]: { url: databaseUrl } };
     }
 
-    const merged: RawConfigurations = {};
-    for (const [envName, envConfig] of Object.entries(raw)) {
-      if (typeof envConfig !== "object" || envConfig === null) {
-        merged[envName] = envConfig;
-        continue;
-      }
+    const currentEnv = envOverride ?? process.env.NODE_ENV ?? DatabaseConfigurations._defaultEnv;
 
-      if (this._isThreeLevelConfig(envConfig)) {
-        // Three-level: merge URL into the "primary" entry only
-        const nested = { ...envConfig } as Record<string, DatabaseConfigOptions>;
-        if (nested.primary) {
-          nested.primary = { ...nested.primary, url: databaseUrl };
-        } else {
-          // Add a primary entry if one doesn't exist
-          nested.primary = { url: databaseUrl };
-        }
-        merged[envName] = nested;
+    // Check if any config matches the current env
+    const hasDefaultEnvConfig = Object.prototype.hasOwnProperty.call(raw, currentEnv);
+
+    const merged: RawConfigurations = { ...raw };
+
+    if (!hasDefaultEnvConfig) {
+      // Rails: unless db_configs.find(&:for_current_env?) → add URL config for default env
+      merged[currentEnv] = { url: databaseUrl };
+      return merged;
+    }
+
+    const envConfig = raw[currentEnv];
+    if (typeof envConfig !== "object" || envConfig === null) {
+      return merged;
+    }
+
+    if (this._isThreeLevelConfig(envConfig)) {
+      // Three-level: merge URL into the "primary" entry only (don't override existing url:)
+      const nested = { ...(envConfig as Record<string, DatabaseConfigOptions>) };
+      if (nested.primary) {
+        if (!nested.primary.url) nested.primary = { ...nested.primary, url: databaseUrl };
       } else {
-        merged[envName] = { ...envConfig, url: databaseUrl } as DatabaseConfigOptions;
+        nested.primary = { url: databaseUrl };
+      }
+      merged[currentEnv] = nested;
+    } else {
+      const existing = envConfig as DatabaseConfigOptions;
+      // Don't override an explicit url: key in the config (Rails: env-specific url takes precedence)
+      if (!existing.url) {
+        merged[currentEnv] = { ...existing, url: databaseUrl };
       }
     }
     return merged;
@@ -266,6 +302,23 @@ export class DatabaseConfigurations {
     const configs: DatabaseConfig[] = [];
 
     for (const [envName, envConfig] of Object.entries(raw)) {
+      // Mirrors Rails: build_db_config_from_raw_config — string must have a URI scheme
+      if (typeof envConfig === "string") {
+        if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(envConfig)) {
+          throw new InvalidConfigurationError(
+            `'{ ${envName} => ${envConfig} }' is not a valid configuration. Expected '${envConfig}' to be a URL string or a Hash.`,
+          );
+        }
+        configs.push(
+          this._buildConfig(envName, "primary", { url: envConfig } as DatabaseConfigOptions),
+        );
+        continue;
+      }
+      if (typeof envConfig !== "object" || envConfig === null) {
+        throw new InvalidConfigurationError(
+          `'{ ${envName} => ${String(envConfig)} }' is not a valid configuration. Expected a URL string or Hash.`,
+        );
+      }
       if (this._isThreeLevelConfig(envConfig)) {
         for (const [name, dbConfig] of Object.entries(
           envConfig as Record<string, DatabaseConfigOptions>,

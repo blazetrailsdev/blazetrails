@@ -50,6 +50,13 @@ describe("DecimalTest", () => {
     expect(type.applyScale("1e10000000")).toBe("1e10000000");
   });
 
+  it("apply_scale ignores non-integer/negative scale values", () => {
+    // Ruby BigDecimal#round(n) requires an Integer; rather than invent
+    // new semantics, leave the raw value alone for scale = 2.5 / -1.
+    expect(new Types.DecimalType({ scale: 2.5 }).applyScale("1.234")).toBe("1.234");
+    expect(new Types.DecimalType({ scale: -1 }).applyScale("1.234")).toBe("1.234");
+  });
+
   it("apply_scale rounds half away from zero", () => {
     // Ruby BigDecimal#round default is ROUND_HALF_UP (away from zero).
     const type = new Types.DecimalType({ scale: 2 });

@@ -26,6 +26,11 @@ export class DecimalType extends ValueType<string> {
   applyScale(value: string | null): string | null {
     if (value === null) return null;
     if (this.scale === undefined) return value;
+    // Ruby `BigDecimal#round(n)` only accepts an Integer argument; a
+    // non-integer or negative TS `scale:` option would just misfire our
+    // slice/charCodeAt math, so leave the value untouched rather than
+    // invent new semantics.
+    if (!Number.isInteger(this.scale) || this.scale < 0) return value;
     return roundHalfUpToScale(value, this.scale);
   }
 
@@ -65,11 +70,12 @@ export class DecimalType extends ValueType<string> {
  * as emitted by JS `String(1e-7)`) into `sign` + integer + fractional parts.
  */
 /**
- * Cap exponent magnitude so adversarial input like `"1e10000000"` can't
- * drive `padEnd`/`padStart` into allocating multi-gigabyte strings. At
- * |exp| > this many digits the value has more precision than any
- * realistic `scale:` will keep anyway; returning null makes `applyScale`
- * leave the raw form alone rather than OOM the process.
+ * Normalize a decimal-string representation (including scientific notation
+ * as emitted by JS `String(1e-7)`) into `sign` + integer + fractional
+ * parts. Exponent magnitude is capped at `MAX_EXPONENT_EXPANSION` so
+ * adversarial input like `"1e10000000"` can't drive `padEnd`/`padStart`
+ * into allocating multi-gigabyte strings; over the cap we return null and
+ * callers leave the raw form alone.
  */
 const MAX_EXPONENT_EXPANSION = 4000;
 

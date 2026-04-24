@@ -44,7 +44,10 @@ export class DateType extends ValueType<Date> {
    */
   newDate(year: number, month: number, day: number): Date | null {
     if (!year || year === 0) return null;
-    const d = new Date(Date.UTC(year, month - 1, day));
+    // `Date.UTC(y, ...)` interprets 0–99 as 1900–1999; use setUTCFullYear
+    // so "0001-01-01" round-trips as literal year 1 instead of 1901.
+    const d = new Date(Date.UTC(2000, month - 1, day));
+    d.setUTCFullYear(year);
     if (isNaN(d.getTime())) return null;
     // Reject overflow — Date(UTC) silently normalizes month=13 into Jan
     // of the next year; Rails raises and we want `null` instead.

@@ -24,6 +24,13 @@ describe("DateTest", () => {
     expect(type.fastStringToDate("2024-06-01T00:00:00")).toBeNull();
   });
 
+  it("new_date preserves literal years 1–99 (not the JS Date.UTC 1900+ hack)", () => {
+    const type = new Types.DateType();
+    expect(type.newDate(1, 1, 1)!.getUTCFullYear()).toBe(1);
+    expect(type.cast("0001-01-01")!.getUTCFullYear()).toBe(1);
+    expect(type.newDate(99, 12, 31)!.getUTCFullYear()).toBe(99);
+  });
+
   it("new_date rejects year 0 and day/month overflow", () => {
     // Mirrors Rails new_date, which returns nil when year is 0 or when
     // Date.new raises ArgumentError.

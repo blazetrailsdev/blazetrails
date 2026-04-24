@@ -269,11 +269,11 @@ export class DatabaseConfigurations {
     const hasConfigs = Object.keys(raw).length > 0;
 
     if (!hasConfigs) {
-      const env = envOverride ?? DatabaseConfigurations._defaultEnv;
+      const env = envOverride ?? DatabaseConfigurations.defaultEnv;
       return { [env]: { url: databaseUrl } };
     }
 
-    const currentEnv = envOverride ?? DatabaseConfigurations._defaultEnv;
+    const currentEnv = envOverride ?? DatabaseConfigurations.defaultEnv;
 
     // Check if any config matches the current env
     const hasDefaultEnvConfig = Object.prototype.hasOwnProperty.call(raw, currentEnv);

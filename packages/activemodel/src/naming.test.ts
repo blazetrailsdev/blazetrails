@@ -482,9 +482,40 @@ describe("ModelName is string-ish (Rails String-inheritance analog)", () => {
 
   it("compare throws ArgumentError on non-string/non-ModelName input", () => {
     const mn = new ModelName("Post");
-    expect(() => mn.compare(42 as unknown as string)).toThrow(ArgumentError);
-    expect(() => mn.compare(null as unknown as string)).toThrow(ArgumentError);
-    expect(() => mn.compare(undefined as unknown as string)).toThrow(ArgumentError);
+    expect(() => mn.compare(42)).toThrow(ArgumentError);
+    expect(() => mn.compare(null)).toThrow(ArgumentError);
+    expect(() => mn.compare(undefined)).toThrow(ArgumentError);
+  });
+
+  it("match throws ArgumentError on non-RegExp input", () => {
+    const mn = new ModelName("Post");
+    expect(() => mn.match("Post")).toThrow(ArgumentError);
+    expect(() => mn.match(null)).toThrow(ArgumentError);
+    expect(() => mn.match(undefined)).toThrow(ArgumentError);
+  });
+
+  it("equals / compare distinguish namespaced models with the same bare name", () => {
+    // Two ModelName instances share the same `name: "Post"` but differ
+    // in namespace — must not compare equal, must sort deterministically.
+    const blogPost = new ModelName("Post", { namespace: "Blog" });
+    const adminPost = new ModelName("Post", { namespace: "Admin" });
+    const blogPost2 = new ModelName("Post", { namespace: "Blog" });
+    const barePost = new ModelName("Post");
+
+    expect(blogPost.equals(adminPost)).toBe(false);
+    expect(blogPost.equals(blogPost2)).toBe(true);
+    expect(blogPost.equals(barePost)).toBe(false);
+    // Admin < Blog lexicographically on the namespace segment.
+    expect(blogPost.compare(adminPost)).toBe(1);
+    expect(adminPost.compare(blogPost)).toBe(-1);
+    expect(blogPost.compare(blogPost2)).toBe(0);
+
+    // String coercion still yields just the bare name (user-enforced:
+    // no Ruby "::" in TS output). Callers that need namespace-aware
+    // identity use `.equals` / `.namespace`.
+    expect(String(blogPost)).toBe("Post");
+    expect(String(adminPost)).toBe("Post");
+    expect(blogPost.equals("Post")).toBe(true);
   });
 
   it("== operator coerces via Symbol.toPrimitive to the class name", () => {

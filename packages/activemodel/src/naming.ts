@@ -1,6 +1,14 @@
 import { underscore, pluralize, singularize, humanize } from "@blazetrails/activesupport";
 import { ArgumentError } from "./attribute-assignment.js";
 
+function sameSegments(a: readonly string[] | null, b: readonly string[] | null): boolean {
+  if (a === b) return true;
+  if (a == null || b == null) return false;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
 /**
  * Naming mixin — provides model_name on classes and naming helpers.
  *
@@ -232,9 +240,15 @@ export class ModelName {
 
   /**
    * Mirrors Rails `to_s` / `to_str` delegated to `@name`
-   * (naming.rb:131-152). `name` is Ruby's full constant path
-   * (`"Blog::Post"`); in TS we keep `name` as the bare identifier
-   * (`"Post"`) and let namespace segments live on `.namespace`.
+   * (naming.rb:131-152). Rails' `@name` is the full constant path
+   * (`"Blog::Post"`). TS has no `::` constant syntax and we
+   * deliberately reject `::` at the input boundary (see constructor),
+   * so `toString` returns the bare identifier (`"Post"`). Two
+   * instances with the same bare name but different namespaces will
+   * coerce to the same string — callers that care about namespaced
+   * identity should use `.equals(other)` / `.compare(other)` (which
+   * compare the full name + namespace identity) or read `.namespace`
+   * directly.
    */
   toString(): string {
     return this.name;
@@ -246,30 +260,41 @@ export class ModelName {
   }
 
   /**
-   * Mirrors Rails `@name == other` (String#==). Accepts another
-   * `ModelName` (compared by `.name`) or any string.
+   * Mirrors Rails `@name == other` (String#==). When comparing to
+   * another `ModelName`, both the bare name AND namespace segments
+   * must match — so `ModelName("Post")` and
+   * `ModelName("Post", { namespace: "Blog" })` are NOT equal. When
+   * comparing to a string, only `.name` is matched (a plain string
+   * can't express a namespace).
    */
   equals(other: unknown): boolean {
-    if (other instanceof ModelName) return this.name === other.name;
+    if (other instanceof ModelName) {
+      if (this.name !== other.name) return false;
+      return sameSegments(this.namespace, other.namespace);
+    }
     return typeof other === "string" && this.name === other;
   }
 
   /**
    * Mirrors Rails `@name <=> other` (String#<=>). Returns `-1`, `0`,
    * or `1`. Throws `ArgumentError` for non-string / non-ModelName
-   * arguments — Ruby's `nil` Spaceship result is an error in TS.
+   * arguments. For ModelName-to-ModelName, compares the full
+   * identity (name + namespace) so namespace-differing models sort
+   * distinctly; for ModelName-to-string, compares `.name` only.
    */
   compare(other: unknown): -1 | 0 | 1 {
-    let rhs: string;
     if (other instanceof ModelName) {
-      rhs = other.name;
-    } else if (typeof other === "string") {
-      rhs = other;
-    } else {
-      throw new ArgumentError("comparison of ModelName with non-string failed");
+      if (this.name !== other.name) return this.name < other.name ? -1 : 1;
+      if (sameSegments(this.namespace, other.namespace)) return 0;
+      const l = (this.namespace ?? []).join("/");
+      const r = (other.namespace ?? []).join("/");
+      return l < r ? -1 : 1;
     }
-    if (this.name === rhs) return 0;
-    return this.name < rhs ? -1 : 1;
+    if (typeof other === "string") {
+      if (this.name === other) return 0;
+      return this.name < other ? -1 : 1;
+    }
+    throw new ArgumentError("comparison of ModelName with non-string failed");
   }
 
   /**
@@ -281,7 +306,10 @@ export class ModelName {
    * regexes stay stable — `RegExp.prototype.test` advances `lastIndex`
    * on stateful flags, but Ruby `match?` is stateless.
    */
-  match(pattern: RegExp): boolean {
+  match(pattern: unknown): boolean {
+    if (!(pattern instanceof RegExp)) {
+      throw new ArgumentError("ModelName#match requires a RegExp");
+    }
     const savedLastIndex = pattern.lastIndex;
     try {
       return pattern.test(this.name);

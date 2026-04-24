@@ -12,7 +12,10 @@ import type { Math as MathMixin } from "../math.js";
  *
  * Mirrors: Arel::Nodes::NodeExpression — which `include`s Arel::Expressions,
  *   Arel::Predications, Arel::AliasPredication, Arel::OrderPredications,
- *   and Arel::Math.
+ *   and Arel::Math. Trails applies Predications + Math here; asc/desc
+ *   (OrderPredications) and `as()` (AliasPredication) live on subclasses
+ *   to avoid module-load cycles with `ascending.ts` / `descending.ts` /
+ *   `binary.ts` — those files all ultimately depend on NodeExpression.
  */
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export abstract class NodeExpression extends Node {

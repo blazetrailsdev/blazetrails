@@ -192,7 +192,7 @@ export interface RunCallbacksOptions {
   strict?: "sync";
 }
 
-function isThenable(v: unknown): v is Promise<unknown> {
+function isThenable(v: unknown): v is PromiseLike<unknown> {
   return (
     v !== null &&
     (typeof v === "object" || typeof v === "function") &&
@@ -207,7 +207,7 @@ function isThenable(v: unknown): v is Promise<unknown> {
  */
 function swallowRejection(v: unknown): void {
   if (isThenable(v)) {
-    void Promise.resolve(v as Promise<unknown>).catch(() => {});
+    void Promise.resolve(v).catch(() => {});
   }
 }
 
@@ -494,7 +494,7 @@ export class CallbackChain {
   ): boolean | Promise<boolean> {
     const beforeResult = this.runBefore(event, record, opts);
     if (isThenable(beforeResult)) {
-      return beforeResult.then((ok) =>
+      return Promise.resolve(beforeResult).then((ok) =>
         ok ? this._runAroundBlockAndAfter(event, record, block, opts) : false,
       );
     }
@@ -516,7 +516,7 @@ export class CallbackChain {
     const trackedBlock = (): void | Promise<void> => {
       const r = block();
       if (isThenable(r)) {
-        return r.then(() => {
+        return Promise.resolve(r).then(() => {
           blockExecuted = true;
         });
       }
@@ -576,7 +576,7 @@ export class CallbackChain {
     const finish = (): boolean | Promise<boolean> => {
       if (!blockExecuted) return false;
       const afterResult = this.runAfter(event, record, opts);
-      if (isThenable(afterResult)) return afterResult.then(() => true);
+      if (isThenable(afterResult)) return Promise.resolve(afterResult).then(() => true);
       return true;
     };
 
@@ -587,7 +587,7 @@ export class CallbackChain {
           `Async callback registered on sync event '${event}' — around callback or block returned a Promise`,
         );
       }
-      return chainResult.then(finish);
+      return Promise.resolve(chainResult).then(finish);
     }
     return finish();
   }

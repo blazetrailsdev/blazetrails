@@ -1890,6 +1890,16 @@ export class Model {
   runCallbacks(
     event: string,
     block: () => unknown,
+    opts: RunCallbacksOptions & { strict: "sync" },
+  ): boolean;
+  runCallbacks(
+    event: string,
+    block: () => unknown,
+    opts?: RunCallbacksOptions,
+  ): boolean | Promise<boolean>;
+  runCallbacks(
+    event: string,
+    block: () => unknown,
     opts?: RunCallbacksOptions,
   ): boolean | Promise<boolean> {
     return (this.constructor as typeof Model)._callbackChain.runCallbacks(event, this, block, opts);

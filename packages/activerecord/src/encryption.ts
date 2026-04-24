@@ -322,6 +322,11 @@ export async function encryptRecord(record: any): Promise<void> {
   for (const [attr, plaintext] of Object.entries(plaintextValues)) {
     record._attributes.writeCastValue(attr, plaintext);
   }
+  // Re-snapshot the dirty tracker so it sees the restored plaintext as the
+  // clean state — updateColumns already called changesApplied() with the
+  // ciphertext values, which would make subsequent attribute writes appear
+  // to change "from" the ciphertext rather than the plaintext.
+  record.changesApplied();
 }
 
 /**

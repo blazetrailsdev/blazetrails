@@ -40,7 +40,10 @@ def parse_args(argv)
     when "--frozen-at"
       i += 1
       val = argv[i]
-      (warn "--frozen-at requires a value"; exit 1) unless val
+      if val.nil? || val.start_with?("--")
+        warn "--frozen-at requires a value"
+        exit 1
+      end
       frozen_at = val
     else
       if fixture_dir.nil?
@@ -129,13 +132,14 @@ Dir.mktmpdir("parity-query-ruby-") do |tmpdir|
     end
 
     binds = Array(raw_binds).map do |b|
-      if b.respond_to?(:value_before_type_cast)
-        b.value_before_type_cast.to_s
+      raw = if b.respond_to?(:value_before_type_cast)
+        b.value_before_type_cast
       elsif b.respond_to?(:value)
-        b.value.to_s
+        b.value
       else
-        b.to_s
+        b
       end
+      raw.nil? ? nil : raw.to_s
     end
     sql_str = raw_sql.strip
 

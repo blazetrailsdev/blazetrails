@@ -78,4 +78,30 @@ class DumpTest < Minitest::Test
   ensure
     File.delete(out_path) if File.exist?(out_path)
   end
+
+  def test_frozen_at_missing_value
+    tf = Tempfile.new(["parity-test-", ".json"])
+    out = tf.path
+    tf.close
+    cmd = ["bundle", "exec", "--gemfile=#{GEMFILE}", "ruby", DUMP_SCRIPT,
+           "#{FIXTURES}/arel-01", out, "--frozen-at"]
+    _stdout, stderr, status = Open3.capture3(*cmd)
+    assert_equal 1, status.exitstatus
+    assert_match(/--frozen-at requires a value/, stderr)
+  ensure
+    File.delete(out) if File.exist?(out)
+  end
+
+  def test_frozen_at_invalid_format
+    tf = Tempfile.new(["parity-test-", ".json"])
+    out = tf.path
+    tf.close
+    cmd = ["bundle", "exec", "--gemfile=#{GEMFILE}", "ruby", DUMP_SCRIPT,
+           "#{FIXTURES}/arel-01", out, "--frozen-at", "not-a-timestamp"]
+    _stdout, stderr, status = Open3.capture3(*cmd)
+    assert_equal 1, status.exitstatus
+    assert_match(/--frozen-at must be ISO 8601 UTC with trailing Z/, stderr)
+  ensure
+    File.delete(out) if File.exist?(out)
+  end
 end

@@ -3,7 +3,7 @@ import { reload as persistenceReload } from "./persistence.js";
 
 /**
  * Aggregation cache — memoizes composed-of value objects so repeated reads
- * return the same frozen instance instead of allocating new ones each time.
+ * return the same cached instance instead of allocating new ones each time.
  *
  * Mirrors: ActiveRecord::Aggregations
  */
@@ -19,8 +19,9 @@ export function getAggregationCache(record: Base): Map<string, unknown> {
 }
 
 export function clearAggregationCache(record: Base): void {
-  if (record.isPersisted()) {
-    getAggregationCache(record).clear();
+  const self = record as any;
+  if (self._aggregationCache && record.isPersisted()) {
+    (self._aggregationCache as Map<string, unknown>).clear();
   }
 }
 

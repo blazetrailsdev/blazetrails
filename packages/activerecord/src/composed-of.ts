@@ -71,7 +71,9 @@ export function composedOf(
         for (const [modelAttr] of options.mapping) {
           this.writeAttribute(modelAttr, null);
         }
-        cache.set(name, null);
+        // Don't cache null — let the reader recompute (mirrors Rails where
+        // nil cache entry triggers a rebuild attempt on next read).
+        cache.delete(name);
         return;
       }
 

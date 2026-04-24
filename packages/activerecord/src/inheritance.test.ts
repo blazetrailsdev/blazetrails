@@ -1802,12 +1802,7 @@ describe("Base.inheritanceColumn", () => {
 // InheritanceTest — targets inheritance_test.rb (continued)
 // ==========================================================================
 
-import {
-  isFinderNeedsTypeCondition,
-  primaryAbstractClass,
-  stiClassFor,
-  polymorphicClassFor,
-} from "./inheritance.js";
+import { isFinderNeedsTypeCondition, stiClassFor, polymorphicClassFor } from "./inheritance.js";
 import { registerModel } from "./associations.js";
 import { SubclassNotFound } from "./errors.js";
 

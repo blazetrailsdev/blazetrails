@@ -9,7 +9,8 @@ describeIfPg("PostgreSQLAdapter", () => {
   let adapter: PostgreSQLAdapter;
   beforeEach(async () => {
     adapter = new PostgreSQLAdapter(PG_TEST_URL);
-    await adapter.exec(`CREATE TEMP TABLE ex (id serial primary key, data character varying(255))`);
+    await adapter.exec(`DROP TABLE IF EXISTS ex`);
+    await adapter.exec(`CREATE TABLE ex (id serial primary key, data character varying(255))`);
   });
   afterEach(async () => {
     await adapter.exec(`DROP TABLE IF EXISTS ex`);

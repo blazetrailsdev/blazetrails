@@ -13,6 +13,27 @@ import { DerivedSecretKeyProvider } from "./derived-secret-key-provider.js";
 import { DeterministicKeyProvider } from "./deterministic-key-provider.js";
 import { Key } from "./key.js";
 
+// Module-level cache for the default key provider, shared across all Scheme
+// instances. PBKDF2 is expensive (65536 iterations); by caching globally keyed
+// on the config tuple, derivation happens once per config rather than once per
+// Scheme instance (i.e. once per encrypted attribute declaration).
+const _defaultKeyProviderCache = new Map<string, DerivedSecretKeyProvider>();
+
+function getOrCreateDefaultKeyProvider(
+  primaryKey: string | string[],
+  keyDerivationSalt: string | undefined,
+  hashDigestClass: string,
+): DerivedSecretKeyProvider {
+  const cacheKey =
+    JSON.stringify(primaryKey) + "|" + (keyDerivationSalt ?? "") + "|" + hashDigestClass;
+  let provider = _defaultKeyProviderCache.get(cacheKey);
+  if (!provider) {
+    provider = new DerivedSecretKeyProvider(primaryKey);
+    _defaultKeyProviderCache.set(cacheKey, provider);
+  }
+  return provider;
+}
+
 export interface SchemeOptions {
   keyProvider?: unknown;
   key?: string;
@@ -30,8 +51,6 @@ export class Scheme {
   private _keyProviderParam?: unknown;
   private _cachedKeyProviderFromKey?: DerivedSecretKeyProvider;
   private _cachedDeterministicKeyProvider?: DeterministicKeyProvider;
-  private _cachedDefaultKeyProvider?: DerivedSecretKeyProvider;
-  private _cachedDefaultKeyProviderKey?: string;
   key?: string;
   deterministic: boolean;
   downcase: boolean;
@@ -135,21 +154,9 @@ export class Scheme {
   private _defaultKeyProvider(): unknown {
     const ctxKp = Configurable.keyProvider;
     if (ctxKp != null) return ctxKp;
-    const { primaryKey, keyDerivationSalt } = Configurable.config;
+    const { primaryKey, keyDerivationSalt, hashDigestClass } = Configurable.config;
     if (primaryKey != null) {
-      // Keyed on all derivation inputs: primaryKey, keyDerivationSalt, and
-      // hashDigestClass (KeyGenerator reads this at construction time).
-      const cacheKey =
-        JSON.stringify(primaryKey) +
-        "|" +
-        (keyDerivationSalt ?? "") +
-        "|" +
-        Configurable.config.hashDigestClass;
-      if (!this._cachedDefaultKeyProvider || this._cachedDefaultKeyProviderKey !== cacheKey) {
-        this._cachedDefaultKeyProvider = new DerivedSecretKeyProvider(primaryKey);
-        this._cachedDefaultKeyProviderKey = cacheKey;
-      }
-      return this._cachedDefaultKeyProvider;
+      return getOrCreateDefaultKeyProvider(primaryKey, keyDerivationSalt, hashDigestClass);
     }
     return undefined;
   }

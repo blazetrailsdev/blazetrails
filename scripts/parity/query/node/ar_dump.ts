@@ -190,6 +190,17 @@ async function main(): Promise<void> {
     process.stdout.write(`  → ${outPathAbs}\n`);
   } finally {
     clock.uninstall();
+    // Explicitly close the adapter's SQLite handle before removing the
+    // temp dir. Base.removeConnection() drops the pool reference but may
+    // leave the underlying better-sqlite3 handle open, causing EBUSY /
+    // EPERM on Windows when rmSync tries to delete the .db file. Pattern
+    // mirrors scripts/parity/schema/node/dump.ts:152-153.
+    try {
+      const a = Base.adapter as { close?: () => void };
+      if (typeof a.close === "function") a.close();
+    } catch {
+      /* adapter unavailable or already closed */
+    }
     try {
       Base.removeConnection();
     } catch {

@@ -153,6 +153,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   private _typeMap: HashLookupTypeMap | null = null;
   private _maxIdentifierLength: number | null = null;
   private _useInsertReturning = true;
+  private _minMessages = "warning";
+  private _sessionVariables: Record<string, string | boolean | null | "default"> = {};
   // Per-pg.Client statement pool. PG's prepared statements are
   // session-scoped, so each physical client gets its own pool with
   // its own counter (matching Rails' `PostgreSQL::StatementPool`).
@@ -226,7 +228,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     // `default_prepared_statements = true`.
     this.preparedStatements = true;
     if (typeof config === "string") {
+      this._minMessages = "warning";
+      this._sessionVariables = {};
       this._driverPool = new pg.Pool({ connectionString: config });
+      this._driverPool.on("connect", (client) => this._configureConnection(client));
       return;
     }
     // Rails' database.yml merges driver connection params + adapter
@@ -237,11 +242,37 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     // `pg.Pool` is constructed — otherwise a throw here would leave
     // a live driver pool with no cleanup path on the half-built
     // adapter.
-    const { statementLimit, preparedStatements, insertReturning, ...pgConfig } = config;
+    const {
+      statementLimit,
+      preparedStatements,
+      insertReturning,
+      minMessages,
+      variables,
+      ...pgConfig
+    } = config;
     if (statementLimit !== undefined) this.statementLimit = statementLimit;
     if (preparedStatements !== undefined) this.preparedStatements = preparedStatements;
     if (insertReturning !== undefined) this._useInsertReturning = insertReturning;
+    this._minMessages = minMessages ?? "warning";
+    this._sessionVariables = variables ?? {};
     this._driverPool = new pg.Pool(pgConfig);
+    this._driverPool.on("connect", (client) => this._configureConnection(client));
+  }
+
+  /**
+   * Mirrors: PostgreSQLAdapter#configure_connection. Runs once per new
+   * physical connection (via pool 'connect' event). Sets client_min_messages
+   * and any session variables from the `variables:` config key.
+   */
+  private _configureConnection(client: pg.PoolClient): void {
+    const stmts: string[] = [`SET client_min_messages TO '${this._minMessages}'`];
+    for (const [key, val] of Object.entries(this._sessionVariables)) {
+      if (val === null) continue;
+      const pgVal =
+        val === true ? "on" : val === false ? "off" : val === "default" ? "DEFAULT" : `'${val}'`;
+      stmts.push(`SET ${key} = ${pgVal}`);
+    }
+    client.query(stmts.join("; ")).catch(() => {});
   }
 
   /**

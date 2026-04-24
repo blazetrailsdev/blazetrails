@@ -28,6 +28,10 @@ export interface TrailsAdapterOptions {
   preparedStatements?: boolean;
   // Mirrors: database.yml `insert_returning` — set false to disable RETURNING
   insertReturning?: boolean;
+  // Mirrors: database.yml `min_messages` — SET client_min_messages on connect (default: "warning")
+  minMessages?: string;
+  // Mirrors: database.yml `variables:` — SET key = value on each new connection
+  variables?: Record<string, string | boolean | null | "default">;
 }
 
 /**

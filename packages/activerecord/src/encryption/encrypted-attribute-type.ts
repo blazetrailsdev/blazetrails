@@ -28,12 +28,12 @@ function _normalizeEncoding(encoding: string): "utf8" | "ascii" | "latin1" | nul
 }
 
 function _replaceUnencodable(value: string, maxCodePoint: number): string {
-  let out = "";
+  const out: string[] = [];
   for (const char of value) {
     const cp = char.codePointAt(0)!;
-    out += cp > maxCodePoint || (cp >= 0xd800 && cp <= 0xdfff) ? "?" : char;
+    out.push(cp > maxCodePoint || (cp >= 0xd800 && cp <= 0xdfff) ? "?" : char);
   }
-  return out;
+  return out.join("");
 }
 
 /**

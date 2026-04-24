@@ -30,6 +30,8 @@ export class Scheme {
   private _keyProviderParam?: unknown;
   private _cachedKeyProviderFromKey?: DerivedSecretKeyProvider;
   private _cachedDeterministicKeyProvider?: DeterministicKeyProvider;
+  private _cachedDefaultKeyProvider?: DerivedSecretKeyProvider;
+  private _cachedDefaultKeyProviderKey?: string | string[];
   key?: string;
   deterministic: boolean;
   downcase: boolean;
@@ -129,12 +131,17 @@ export class Scheme {
 
   // Mirrors Rails' Scheme#default_key_provider → ActiveRecord::Encryption.key_provider.
   // Returns the context's keyProvider if set, otherwise derives one from config.primaryKey.
+  // Memoized on the primaryKey value to avoid repeated PBKDF2 calls.
   private _defaultKeyProvider(): unknown {
     const ctxKp = (Configurable as any).keyProvider;
     if (ctxKp != null) return ctxKp;
     const primaryKey = Configurable.config.primaryKey;
     if (primaryKey != null) {
-      return new DerivedSecretKeyProvider(primaryKey);
+      if (!this._cachedDefaultKeyProvider || this._cachedDefaultKeyProviderKey !== primaryKey) {
+        this._cachedDefaultKeyProvider = new DerivedSecretKeyProvider(primaryKey);
+        this._cachedDefaultKeyProviderKey = primaryKey;
+      }
+      return this._cachedDefaultKeyProvider;
     }
     return undefined;
   }

@@ -69,7 +69,7 @@ export function connectsTo(
 
   for (const [shard, dbKeys] of Object.entries(shardEntries)) {
     for (const [role, dbKey] of Object.entries(dbKeys)) {
-      const env = process.env.NODE_ENV || DatabaseConfigurations.defaultEnv;
+      const env = DatabaseConfigurations.defaultEnv;
       const found = configs.configsFor({ envName: env, name: dbKey });
       const dbConfig = found[0] ?? new HashConfig(env, dbKey, {});
       const pool = this.connectionHandler.establishConnection(dbConfig, {
@@ -462,11 +462,11 @@ async function establishWithConfig(
     adapterArg = url;
   }
 
-  const dbConfig = new HashConfig(
-    process.env.NODE_ENV || DatabaseConfigurations.defaultEnv,
-    "primary",
-    { adapter: adapterName, url, ...config },
-  );
+  const dbConfig = new HashConfig(DatabaseConfigurations.defaultEnv, "primary", {
+    adapter: adapterName,
+    url,
+    ...config,
+  });
 
   modelClass.connectionHandler.establishConnection(dbConfig, {
     owner: modelClass.connectionClassForSelf(),

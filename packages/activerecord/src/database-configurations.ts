@@ -92,10 +92,7 @@ export class DatabaseConfigurations {
       // Uses DatabaseConfigurations.defaultEnv (set by app bootstrap from RAILS_ENV/RACK_ENV),
       // not NODE_ENV — matching Rails' env resolution semantics.
       this._configurations = this._buildConfigs(
-        this._mergeDatabaseUrl(
-          configurations,
-          process.env.NODE_ENV || DatabaseConfigurations._defaultEnv,
-        ),
+        this._mergeDatabaseUrl(configurations, DatabaseConfigurations._defaultEnv),
       );
     }
     // Register this instance as the current one for HashConfig.isPrimary lookup
@@ -112,7 +109,7 @@ export class DatabaseConfigurations {
   static fromRaw(configurations: RawConfigurations = {}): DatabaseConfigurations {
     const instance = new DatabaseConfigurations([]);
     instance._configurations = instance._buildConfigs(
-      instance._mergeDatabaseUrl(configurations, DatabaseConfigurations._defaultEnv),
+      instance._mergeDatabaseUrl(configurations, DatabaseConfigurations.defaultEnv),
     );
     _currentConfigurations = instance;
     return instance;
@@ -249,9 +246,10 @@ export class DatabaseConfigurations {
    */
   static fromEnv(raw: RawConfigurations = {}): DatabaseConfigurations {
     const instance = new DatabaseConfigurations([]);
-    instance._configurations = instance._buildConfigs(
-      instance._mergeDatabaseUrl(raw, process.env.NODE_ENV || DatabaseConfigurations._defaultEnv),
-    );
+    // NODE_ENV is the TS equivalent of Rails.env — use it when available so
+    // that DATABASE_URL merges into the active runtime environment.
+    const env = process.env.NODE_ENV || DatabaseConfigurations.defaultEnv;
+    instance._configurations = instance._buildConfigs(instance._mergeDatabaseUrl(raw, env));
     return instance;
   }
 

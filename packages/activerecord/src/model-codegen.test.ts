@@ -127,6 +127,19 @@ describe("generateModels", () => {
     expect(out).toContain('this._primaryKey = ["tenant_id","id"];');
   });
 
+  it("skips tables with an empty-array primary key (introspection's no-PK shape)", () => {
+    // schema-introspection.introspectPrimaryKey() normalises adapter-level
+    // null to []. Callers who feed that output straight in should still
+    // get view-filtering.
+    const out = generateModels(
+      [table("real_table"), table("v_users_summary", { primaryKey: [] })],
+      { sourceHint: "sqlite:app.db", now: NOW },
+    );
+    expect(out).toContain("SKIPPED v_users_summary: no primary key");
+    expect(out).toContain("export class RealTable extends Base {");
+    expect(out).not.toMatch(/export class VUsersSummary/);
+  });
+
   it("skips tables with null primary key and logs them in the header tally", () => {
     const out = generateModels(
       [table("real_table"), table("v_users_summary", { primaryKey: null })],

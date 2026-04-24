@@ -84,11 +84,18 @@ export function generateModels(
   const now = opts.now ?? new Date();
 
   // Filter: skip built-in bookkeeping tables and tables with no PK (views).
+  // Accept both `null` and `[]` as the "no PK" signal — introspectPrimaryKey()
+  // in schema-introspection.ts normalises adapter-level null to [], so the
+  // documented pipeline (introspectTables + introspectPrimaryKey + ...) feeds
+  // [] for PK-less tables. Handling both forms means callers don't have to
+  // re-normalise before calling generateModels.
+  const hasNoPk = (pk: string | string[] | null): boolean =>
+    pk === null || (Array.isArray(pk) && pk.length === 0);
   const skipped: Array<{ name: string; reason: string }> = [];
   const kept: IntrospectedTable[] = [];
   for (const t of tables) {
     if (BUILTIN_IGNORE.has(t.name)) continue;
-    if (t.primaryKey === null) {
+    if (hasNoPk(t.primaryKey)) {
       skipped.push({ name: t.name, reason: "no primary key (likely a view)" });
       continue;
     }

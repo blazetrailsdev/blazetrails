@@ -391,3 +391,67 @@ describe("CallbackChain.run", () => {
     expect(log).toEqual(["block", "after1", "after2"]);
   });
 });
+
+describe("Generic Model.setCallback / skipCallback / resetCallbacks (Rails fidelity)", () => {
+  // Rails `set_callback(name, type, filter, options)` /
+  // `skip_callback(...)` / `reset_callbacks(name)` from
+  // `ActiveSupport::Callbacks::ClassMethods`.
+  it("setCallback registers a function for arbitrary event + timing", () => {
+    const log: string[] = [];
+    class Thing extends Model {}
+    Thing.setCallback("save", "before", () => log.push("before"));
+    Thing.setCallback("save", "after", () => log.push("after"));
+    new Thing().runCallbacks("save", () => log.push("block"));
+    expect(log).toEqual(["before", "block", "after"]);
+  });
+
+  it("skipCallback removes a previously registered callback by reference", () => {
+    const log: string[] = [];
+    class Thing extends Model {}
+    const cb = () => log.push("skipped-callback");
+    Thing.setCallback("save", "before", cb);
+    Thing.setCallback("save", "before", () => log.push("kept"));
+
+    expect(Thing.skipCallback("save", "before", cb)).toBe(true);
+    new Thing().runCallbacks("save", () => log.push("block"));
+    expect(log).toEqual(["kept", "block"]);
+  });
+
+  it("skipCallback returns false on miss (Rails raises unless :raise => false)", () => {
+    class Thing extends Model {}
+    expect(Thing.skipCallback("save", "before", () => undefined)).toBe(false);
+  });
+
+  it("resetCallbacks clears all callbacks for an event", () => {
+    const log: string[] = [];
+    class Thing extends Model {}
+    Thing.setCallback("save", "before", () => log.push("before"));
+    Thing.setCallback("save", "after", () => log.push("after"));
+    Thing.setCallback("update", "before", () => log.push("update-before"));
+
+    Thing.resetCallbacks("save");
+    new Thing().runCallbacks("save", () => log.push("save-block"));
+    new Thing().runCallbacks("update", () => log.push("update-block"));
+    expect(log).toEqual(["save-block", "update-before", "update-block"]);
+  });
+
+  it("setCallback on subclass does not leak up to parent (copy-on-first-write)", () => {
+    const log: string[] = [];
+    class Parent extends Model {}
+    class Child extends Parent {}
+    Child.setCallback("save", "before", () => log.push("child"));
+    new Parent().runCallbacks("save", () => log.push("parent-block"));
+    expect(log).toEqual(["parent-block"]);
+    new Child().runCallbacks("save", () => log.push("child-block"));
+    expect(log).toEqual(["parent-block", "child", "child-block"]);
+  });
+
+  it("setCallback respects prepend: true (runs before earlier-registered)", () => {
+    const log: string[] = [];
+    class Thing extends Model {}
+    Thing.setCallback("save", "before", () => log.push("registered-first"));
+    Thing.setCallback("save", "before", () => log.push("prepended"), { prepend: true });
+    new Thing().runCallbacks("save", () => log.push("block"));
+    expect(log).toEqual(["prepended", "registered-first", "block"]);
+  });
+});

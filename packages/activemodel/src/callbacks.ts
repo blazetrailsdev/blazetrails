@@ -250,6 +250,27 @@ export class CallbackChain {
     this.callbacks = this.callbacks.filter((c) => c.event !== event);
   }
 
+  /**
+   * Remove the first registered entry matching `event + timing + fn`.
+   * Mirrors Rails `CallbackChain#delete` used internally by
+   * `skip_callback` (activesupport/lib/active_support/callbacks.rb:786-808).
+   * Returns `true` if a matching entry was found and removed, `false`
+   * otherwise — callers decide whether a miss is an error (Rails'
+   * default raises unless `raise: false` is passed).
+   */
+  skip(
+    event: CallbackEvent,
+    timing: CallbackTiming,
+    fn: CallbackFn | AroundCallbackFn | CallbackObject,
+  ): boolean {
+    const idx = this.callbacks.findIndex(
+      (c) => c.event === event && c.timing === timing && c.fn === fn,
+    );
+    if (idx === -1) return false;
+    this.callbacks.splice(idx, 1);
+    return true;
+  }
+
   clone(): CallbackChain {
     const copy = new CallbackChain();
     copy.callbacks = [...this.callbacks];

@@ -24,11 +24,6 @@ export class TrilogyAdapter extends AbstractMysqlAdapter {
     return "Trilogy";
   }
 
-  async columns(_tableName: string) {
-    // Trilogy driver not yet implemented — stub satisfies abstract contract.
-    return [];
-  }
-
   constructor(config: Record<string, unknown> = {}) {
     super();
     // Fail fast — no Trilogy JS driver available.

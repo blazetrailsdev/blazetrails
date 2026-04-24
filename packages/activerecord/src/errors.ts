@@ -283,7 +283,17 @@ export class MismatchedForeignKey extends StatementInvalid {
 
     let msg: string;
     if (table && foreignKey && targetTable && primaryKey && primaryKeySqlType) {
-      const type = primaryKeyType ?? primaryKeySqlType.split("(")[0].toLowerCase();
+      // Normalize the SQL type to a Rails migration type keyword, matching
+      // the same logic in _enrichMismatchedForeignKey (abstract_mysql_adapter.rb).
+      const type =
+        primaryKeyType ??
+        (/bigint/i.test(primaryKeySqlType)
+          ? "bigint"
+          : /int/i.test(primaryKeySqlType)
+            ? "integer"
+            : /varchar|char|text/i.test(primaryKeySqlType)
+              ? "string"
+              : primaryKeySqlType.split("(")[0].toLowerCase());
       msg = [
         `Column \`${foreignKey}\` on table \`${table}\` does not match column \`${primaryKey}\` on \`${targetTable}\`,`,
         `which has type \`${primaryKeySqlType}\`.`,
@@ -295,7 +305,6 @@ export class MismatchedForeignKey extends StatementInvalid {
         "There is a mismatch between the foreign key and primary key column types. " +
         "Verify that the foreign key column type and the primary key of the associated table match types.";
     }
-    if (originalMessage) msg += `\nOriginal message: ${originalMessage}`;
 
     super(msg, rest);
     this.name = "MismatchedForeignKey";

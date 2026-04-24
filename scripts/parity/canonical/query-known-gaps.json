@@ -54,9 +54,5 @@
   "arel-47": {
     "side": "trails-missing",
     "reason": "photos[:id].count.gt(5): trails Attribute#count returns a node without predication methods — HAVING aggregate-comparison chain incomplete."
-  },
-  "arel-55": {
-    "side": "rails-missing",
-    "reason": "Arel::Attributes::Attribute#multiply does not exist upstream (only Attribute supports arithmetic via '*'); the hand-translated Ruby fixture uses a method that Rails doesn't expose. Fixture needs rewriting to use '*' or Arel::Nodes::Multiplication directly."
   }
 }

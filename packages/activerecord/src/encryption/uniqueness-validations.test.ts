@@ -6,33 +6,60 @@ import {
   restoreEncryptionConfig,
   makeEncryptedBookWithDowncaseName,
   makeFreshModel,
+  makeKeyProvider,
+  makeEncryptedBook,
 } from "./test-helpers.js";
 import { Configurable } from "./configurable.js";
 import { installExtendedQueriesIfConfigured } from "./install.js";
 import { ExtendedDeterministicUniquenessValidator } from "./extended-deterministic-uniqueness-validator.js";
+import { ExtendedDeterministicQueries } from "./extended-deterministic-queries.js";
 import { UniquenessValidator } from "../validations.js";
+import { EncryptedAttributeType } from "./encrypted-attribute-type.js";
+import { Relation } from "../relation.js";
+import { Base } from "../index.js";
+import { Scheme } from "./scheme.js";
 
 describe("ActiveRecord::Encryption::UniquenessValidationsTest", () => {
   let configSnapshot: ReturnType<typeof snapshotEncryptionConfig>;
   let savedExtendQueries: boolean;
+  const savedMethods: {
+    where?: Function;
+    exists?: Function;
+    scopeForCreate?: Function;
+    findBy?: Function;
+    serialize?: Function;
+  } = {};
 
   beforeEach(() => {
     configSnapshot = snapshotEncryptionConfig();
     savedExtendQueries = Configurable.config.extendQueries;
     Configurable.config.previousSchemes = [];
     configureEncryption();
-    // Install extended uniqueness validator so previous-scheme ciphertexts
-    // are checked during uniqueness validation.
+
+    // Snapshot prototype methods before installing query patches.
+    savedMethods.where = Relation.prototype.where;
+    savedMethods.exists = (Relation.prototype as any).exists;
+    savedMethods.scopeForCreate = (Relation.prototype as any).scopeForCreate;
+    savedMethods.findBy = (Base as any).findBy;
+    savedMethods.serialize = EncryptedAttributeType.prototype.serialize;
+
     Configurable.config.extendQueries = true;
     installExtendedQueriesIfConfigured();
   });
 
   afterEach(() => {
+    // Restore prototype methods to avoid cross-test pollution.
+    Relation.prototype.where = savedMethods.where as typeof Relation.prototype.where;
+    (Relation.prototype as any).exists = savedMethods.exists;
+    (Relation.prototype as any).scopeForCreate = savedMethods.scopeForCreate;
+    (Base as any).findBy = savedMethods.findBy;
+    EncryptedAttributeType.prototype.serialize =
+      savedMethods.serialize as typeof EncryptedAttributeType.prototype.serialize;
+    (ExtendedDeterministicQueries as any)._installed = false;
+    ExtendedDeterministicUniquenessValidator.resetSupport(UniquenessValidator);
+
     restoreEncryptionConfig(configSnapshot);
     Configurable.config.extendQueries = savedExtendQueries;
-    // Restore the original UniquenessValidator#validateEach to prevent
-    // cross-test pollution in shared Vitest workers.
-    ExtendedDeterministicUniquenessValidator.resetSupport(UniquenessValidator);
   });
 
   it("uniqueness validations work", async () => {
@@ -73,12 +100,19 @@ describe("ActiveRecord::Encryption::UniquenessValidationsTest", () => {
   });
 
   it("uniqueness validation does not revalidate the attribute with current encryption type", async () => {
-    const Book = makeEncryptedBookWithDowncaseName(freshAdapter());
+    // Configure a previous scheme so previousTypes is non-empty — this exercises
+    // the code path that would trigger multiple validateEach calls and verifies
+    // the error count stays at 1 (not duplicated per scheme).
+    const prevKeyProvider = makeKeyProvider("prev-key-for-uniqueness-test-32b!!");
+    const prevScheme = new Scheme({ keyProvider: prevKeyProvider, deterministic: true });
+    Configurable.config.previousSchemes = [prevScheme];
+
+    const Book = makeEncryptedBook(freshAdapter()); // deterministic encrypted name
     Book.validatesUniqueness("name");
     new Book();
 
-    await Book.create({ name: "dune" });
-    const dup = await Book.create({ name: "dune" });
+    await Book.create({ name: "Dune" });
+    const dup = await Book.create({ name: "Dune" });
     expect(dup.errors.count).toBe(1);
   });
 });

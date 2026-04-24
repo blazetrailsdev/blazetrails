@@ -17,8 +17,6 @@ import { UniquenessValidator } from "../validations.js";
 import { EncryptedAttributeType } from "./encrypted-attribute-type.js";
 import { Relation } from "../relation.js";
 import { Base } from "../index.js";
-import { Scheme } from "./scheme.js";
-
 describe("ActiveRecord::Encryption::UniquenessValidationsTest", () => {
   let configSnapshot: ReturnType<typeof snapshotEncryptionConfig>;
   let savedExtendQueries: boolean;
@@ -104,8 +102,7 @@ describe("ActiveRecord::Encryption::UniquenessValidationsTest", () => {
     // the code path that would trigger multiple validateEach calls and verifies
     // the error count stays at 1 (not duplicated per scheme).
     const prevKeyProvider = makeKeyProvider("prev-key-for-uniqueness-test-32b!!");
-    const prevScheme = new Scheme({ keyProvider: prevKeyProvider, deterministic: true });
-    Configurable.config.previousSchemes = [prevScheme];
+    Configurable.config.previous = [{ keyProvider: prevKeyProvider, deterministic: true }];
 
     const Book = makeEncryptedBook(freshAdapter()); // deterministic encrypted name
     Book.validatesUniqueness("name");

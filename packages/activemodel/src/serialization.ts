@@ -116,17 +116,23 @@ export function serializableHash(
  *
  * - BigDecimal → string (to preserve precision)
  * - Time / Date / DateTime → ISO 8601 string
- * - Symbol → string
+ * - Symbol → string (Ruby symbols are interned strings)
  *
  * We cover the JS analog:
  * - `bigint` → string (JSON.stringify throws otherwise)
- * - `Date` → ISO 8601 string (pre-serialize so downstream equality
- *   checks on the hash form see the coerced value, not a Date
- *   instance that JSON.stringify would handle separately)
+ * - `Date` → ISO 8601 string, or `null` for invalid dates (matches
+ *   `Date.prototype.toJSON`)
  * - Plain arrays / objects → recurse
  * - Anything with its own `asJson()` or `toJSON()` → call it and recurse
  *   (matches Rails' `respond_to?(:as_json)` protocol)
  * - Everything else → pass through (numbers, strings, booleans, null)
+ *
+ * Note on JS Symbols: we intentionally do NOT coerce. Ruby symbols
+ * are interned-string identifiers (Rails' `:active ≈ "active"`). JS
+ * `Symbol()` is a unique identity sigil — different concept. Coercing
+ * would misrepresent it. `JSON.stringify` already drops symbol-valued
+ * properties per spec, which correctly signals "this doesn't
+ * serialize".
  */
 export function coerceForJson(
   value: unknown,
@@ -135,13 +141,13 @@ export function coerceForJson(
 ): unknown {
   if (value === null || value === undefined) return value;
   if (typeof value === "bigint") return value.toString();
-  if (typeof value === "symbol") {
-    // Rails `Symbol#as_json` returns the symbol's name as a string.
-    // JSON.stringify silently drops object properties whose value is a
-    // Symbol, so without this we'd emit `{}` for a symbol attribute —
-    // contradicting the "JSON-safe" contract of asJson.
-    return value.description ?? "";
-  }
+  // Note: no JS `Symbol` handling. Ruby symbols are interned-string
+  // identifiers (`:active` ≈ "active"), which is why Rails
+  // `Symbol#as_json` returns the name. JS `Symbol()` is a unique
+  // identity sigil (well-known symbols, private keys) — coercing to
+  // its description would misrepresent its role. Leave symbols alone;
+  // `JSON.stringify` already drops them per spec, which correctly
+  // signals "this doesn't serialize".
   if (value instanceof Date) {
     // Invalid Date (e.g. `new Date("bad")`) throws on `toISOString`.
     // `Date.prototype.toJSON` returns null in that case — match it so

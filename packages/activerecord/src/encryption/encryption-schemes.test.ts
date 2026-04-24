@@ -143,7 +143,6 @@ describe("ActiveRecord::Encryption::EncryptionSchemesTest", () => {
     expect(() => type.deserialize("some invalid ciphertext")).toThrow(DecryptionError);
   });
 
-
   it.skip("deterministic encryption is fixed by default: it will always use the oldest scheme to encrypt data", () => {});
   it.skip("don't use global previous schemes with a different deterministic nature", () => {});
   it.skip("deterministic encryption will use the newest encryption scheme to encrypt data when setting it to { fixed: false }", () => {});

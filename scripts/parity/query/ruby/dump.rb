@@ -83,9 +83,11 @@ Dir.mktmpdir("parity-query-ruby-") do |tmpdir|
     time_helper.travel_to(Time.parse(frozen_at)) if frozen_at
 
     # 4. Evaluate query.rb — last expression is the Arel node/manager to dump
+    query_source = File.read(File.join(fixture_dir, "query.rb"))
     # rubocop:disable Security/Eval
-    result = eval(File.read(File.join(fixture_dir, "query.rb")))
+    result = eval(query_source)
     # rubocop:enable Security/Eval
+    raise "[#{fixture_name}] query.rb returned nil" if result.nil?
 
     # 5. Get SQL and binds.
     #    - Arel::TreeManager (SelectManager etc.) and Arel::Nodes::Node both expose
@@ -101,21 +103,30 @@ Dir.mktmpdir("parity-query-ruby-") do |tmpdir|
       # (arel/nodes/node.rb:148) uses the visitor with the connection's engine.
       [result.to_sql.strip, []]
     else
-      raise "query.rb returned #{result.class}: expected an Arel node or manager"
+      raise "[#{fixture_name}] query.rb returned #{result.class}: expected an Arel node or manager"
     end
+
+    frozen_ts = frozen_at || Time.now.utc.iso8601(3)
 
     # 6. Write CanonicalQuery JSON
     canonical = {
       "version"  => 1,
       "fixture"  => fixture_name,
-      "frozenAt" => frozen_at || Time.now.utc.iso8601(3),
+      "frozenAt" => frozen_ts,
       "sql"      => sql_str,
       "binds"    => binds,
     }
 
     FileUtils.mkdir_p(File.dirname(out_path))
     File.write(out_path, JSON.pretty_generate(canonical) + "\n")
-    puts "parity query dump (rails): wrote #{out_path}"
+
+    # Verbose output for debugging in CI logs
+    puts "[rails] #{fixture_name}"
+    puts "  result type : #{result.class}"
+    puts "  sql         : #{sql_str}"
+    puts "  binds (#{binds.length})  : #{binds.inspect}" unless binds.empty?
+    puts "  frozenAt    : #{frozen_ts}"
+    puts "  → #{out_path}"
 
   ensure
     time_helper.travel_back if frozen_at

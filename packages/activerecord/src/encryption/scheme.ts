@@ -13,25 +13,40 @@ import { DerivedSecretKeyProvider } from "./derived-secret-key-provider.js";
 import { DeterministicKeyProvider } from "./deterministic-key-provider.js";
 import { Key } from "./key.js";
 
-// Module-level cache for the default key provider, shared across all Scheme
-// instances. PBKDF2 is expensive (65536 iterations); by caching globally keyed
-// on the config tuple, derivation happens once per config rather than once per
-// Scheme instance (i.e. once per encrypted attribute declaration).
-const _defaultKeyProviderCache = new Map<string, DerivedSecretKeyProvider>();
+// Module-level single-entry cache for the default key provider. Avoids storing
+// plaintext key material as Map keys while still sharing one derived key provider
+// across all Scheme instances for the same config. A generation counter tracks
+// config changes — any change to primaryKey, salt, or digestClass creates a
+// new entry without retaining the old key material.
+let _defaultKeyProviderEntry: { gen: number; provider: DerivedSecretKeyProvider } | undefined;
+let _defaultKeyProviderGen = 0;
+let _defaultKeyProviderLastPk: string | string[] | undefined;
+let _defaultKeyProviderLastSalt: string | undefined;
+let _defaultKeyProviderLastDigest: string | undefined;
 
 function getOrCreateDefaultKeyProvider(
   primaryKey: string | string[],
   keyDerivationSalt: string | undefined,
   hashDigestClass: string,
 ): DerivedSecretKeyProvider {
-  const cacheKey =
-    JSON.stringify(primaryKey) + "|" + (keyDerivationSalt ?? "") + "|" + hashDigestClass;
-  let provider = _defaultKeyProviderCache.get(cacheKey);
-  if (!provider) {
-    provider = new DerivedSecretKeyProvider(primaryKey);
-    _defaultKeyProviderCache.set(cacheKey, provider);
+  // Bump generation if any input changed, so stale entries are not reused.
+  if (
+    primaryKey !== _defaultKeyProviderLastPk ||
+    keyDerivationSalt !== _defaultKeyProviderLastSalt ||
+    hashDigestClass !== _defaultKeyProviderLastDigest
+  ) {
+    _defaultKeyProviderGen++;
+    _defaultKeyProviderLastPk = primaryKey;
+    _defaultKeyProviderLastSalt = keyDerivationSalt;
+    _defaultKeyProviderLastDigest = hashDigestClass;
   }
-  return provider;
+  if (!_defaultKeyProviderEntry || _defaultKeyProviderEntry.gen !== _defaultKeyProviderGen) {
+    _defaultKeyProviderEntry = {
+      gen: _defaultKeyProviderGen,
+      provider: new DerivedSecretKeyProvider(primaryKey),
+    };
+  }
+  return _defaultKeyProviderEntry.provider;
 }
 
 export interface SchemeOptions {
@@ -154,11 +169,13 @@ export class Scheme {
   private _defaultKeyProvider(): unknown {
     const ctxKp = Configurable.keyProvider;
     if (ctxKp != null) return ctxKp;
-    const { primaryKey, keyDerivationSalt, hashDigestClass } = Configurable.config;
-    if (primaryKey != null) {
-      return getOrCreateDefaultKeyProvider(primaryKey, keyDerivationSalt, hashDigestClass);
-    }
-    return undefined;
+    if (Configurable.config.primaryKey == null) return undefined;
+    // Use Config.get() so accessing primaryKey raises ConfigError with the
+    // specific message "Missing encryption key: primaryKey" when unset,
+    // aligning with Config's required-key semantics and Rails' behavior.
+    const primaryKey = Configurable.config.get("primaryKey") as string | string[];
+    const { keyDerivationSalt, hashDigestClass } = Configurable.config;
+    return getOrCreateDefaultKeyProvider(primaryKey, keyDerivationSalt, hashDigestClass);
   }
 
   private _deterministicKeyProvider(): DeterministicKeyProvider | undefined {

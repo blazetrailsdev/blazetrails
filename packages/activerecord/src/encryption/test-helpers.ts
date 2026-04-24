@@ -91,7 +91,8 @@ export function freshAdapter(): DatabaseAdapter {
 let _freshModelCounter = 0;
 
 export function makeFreshModel(adapter: DatabaseAdapter, attributes: Record<string, string>): any {
-  // Use a unique counter so each call gets a distinct class name and table name.
+  // Each call gets a unique table name via the counter. The class itself is
+  // anonymous (no unique class name), which is fine for test isolation.
   const tableName = `fresh_model_${++_freshModelCounter}`;
   const klass = class extends Base {
     static {

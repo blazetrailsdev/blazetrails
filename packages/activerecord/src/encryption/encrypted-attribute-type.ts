@@ -189,12 +189,15 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
   private _applyForcedEncoding(value: string): string {
     const forced = Configurable.config.forcedEncodingForDeterministicEncryption;
     if (!forced) return value;
-    // In JS all strings are UTF-16 internally. Encode to a Buffer using the
-    // target encoding (with replacement for unmappable chars) then decode back.
-    // This mirrors Rails' String#encode(encoding, invalid: :replace, undef: :replace).
-    const encoding = forced.toLowerCase().replace(/-/g, "") as BufferEncoding;
+    // JS strings are always valid Unicode (UTF-16 internally). Normalize by
+    // encoding to a Buffer with the target encoding (replacing unencodable chars)
+    // then decoding back to a JS string. Mirrors Rails' String#encode with
+    // invalid: :replace, undef: :replace. For UTF-8 (the default) this is a
+    // no-op since all JS strings are valid Unicode.
+    const enc = forced.toLowerCase().replace(/[^a-z0-9]/g, "") as BufferEncoding;
     try {
-      return Buffer.from(value, "utf8").toString(encoding === "utf8" ? "utf8" : encoding);
+      const buf = Buffer.from(value, enc);
+      return buf.toString(enc);
     } catch {
       return value;
     }

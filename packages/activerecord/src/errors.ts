@@ -237,6 +237,21 @@ export class InvalidForeignKey extends WrappedDatabaseException {
   }
 }
 
+/**
+ * Normalize a MySQL SQL column type to its Rails migration type keyword.
+ * E.g. `int(11)` → `integer`, `bigint(20)` → `bigint`, `varchar(255)` → `string`.
+ *
+ * Used by both MismatchedForeignKey (error construction) and
+ * _enrichMismatchedForeignKey (adapter enrichment) to keep suggestion
+ * messages consistent.
+ */
+export function sqlTypeToMigrationKeyword(sqlType: string): string {
+  if (/bigint/i.test(sqlType)) return "bigint";
+  if (/int/i.test(sqlType)) return "integer";
+  if (/varchar|char|text/i.test(sqlType)) return "string";
+  return sqlType.split("(")[0].toLowerCase();
+}
+
 export interface MismatchedForeignKeyOptions {
   message?: string;
   sql?: string;
@@ -283,17 +298,7 @@ export class MismatchedForeignKey extends StatementInvalid {
 
     let msg: string;
     if (table && foreignKey && targetTable && primaryKey && primaryKeySqlType) {
-      // Normalize the SQL type to a Rails migration type keyword, matching
-      // the same logic in _enrichMismatchedForeignKey (abstract_mysql_adapter.rb).
-      const type =
-        primaryKeyType ??
-        (/bigint/i.test(primaryKeySqlType)
-          ? "bigint"
-          : /int/i.test(primaryKeySqlType)
-            ? "integer"
-            : /varchar|char|text/i.test(primaryKeySqlType)
-              ? "string"
-              : primaryKeySqlType.split("(")[0].toLowerCase());
+      const type = primaryKeyType ?? sqlTypeToMigrationKeyword(primaryKeySqlType);
       msg = [
         `Column \`${foreignKey}\` on table \`${table}\` does not match column \`${primaryKey}\` on \`${targetTable}\`,`,
         `which has type \`${primaryKeySqlType}\`.`,

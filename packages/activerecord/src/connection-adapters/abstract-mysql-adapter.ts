@@ -19,6 +19,7 @@ import {
   RecordNotUnique,
   StatementInvalid,
   ValueTooLong,
+  sqlTypeToMigrationKeyword,
 } from "../errors.js";
 import { sql as arelSql, type Nodes } from "@blazetrails/arel";
 import { StatementPool as ConnectionStatementPool } from "./statement-pool.js";
@@ -835,13 +836,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
       if (!col) return err;
 
       const sqlType = col.sqlTypeMetadata?.sqlType ?? col.sqlTypeMetadata?.type ?? "";
-      const primaryKeyType = /bigint/i.test(sqlType)
-        ? "bigint"
-        : /int/i.test(sqlType)
-          ? "integer"
-          : /varchar|char|text/i.test(sqlType)
-            ? "string"
-            : sqlType.split("(")[0].toLowerCase();
+      const primaryKeyType = sqlTypeToMigrationKeyword(sqlType);
 
       return new MismatchedForeignKey({
         message: err.cause instanceof Error ? err.cause.message : undefined,

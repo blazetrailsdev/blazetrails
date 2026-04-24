@@ -174,7 +174,7 @@ function resolveCallback(
  * registered callback and block is synchronous, and returns a Promise
  * as soon as any callback or block returns a thenable. Pass
  * `{ strict: "sync" }` on events that must remain synchronous
- * (validation, initialize, find); the runner throws if any callback
+ * (validation, validate, initialize, find); the runner throws if any callback
  * returns a Promise on such events.
  *
  * AroundCallbackFn's proceed() returns void | Promise<void> because the
@@ -246,7 +246,7 @@ interface CallbackEntry {
  * synchronously when every callback and block is synchronous, as a Promise
  * as soon as any callback or block returns a thenable. Async call sites
  * (save/destroy/touch/commit) simply `await` the result. Sync call sites
- * (validation/initialize/find) pass `{ strict: "sync" }` so that a
+ * (validation/validate/initialize/find) pass `{ strict: "sync" }` so that a
  * registered async callback throws loudly instead of being silently
  * awaited or dropped.
  */
@@ -530,7 +530,9 @@ export class CallbackChain {
         let pendingProceed: Promise<void> | undefined;
         const wrappedProceed = () => {
           const result = prev();
-          if (isThenable(result)) pendingProceed = result as Promise<void>;
+          // Normalize to a real Promise so .catch() below is always safe;
+          // `isThenable` accepts any A+ thenable, which may lack `.catch`.
+          if (isThenable(result)) pendingProceed = Promise.resolve(result) as Promise<void>;
           return result;
         };
         let cbResult: void | Promise<void>;

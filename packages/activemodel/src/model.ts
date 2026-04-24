@@ -12,6 +12,7 @@ import {
   AroundCallbackFn,
   type CallbackObject,
   CallbackConditions,
+  type RunCallbacksOptions,
   defineModelCallbacks,
 } from "./callbacks.js";
 import { serializableHash, SerializeOptions, coerceForJson } from "./serialization.js";
@@ -1886,8 +1887,12 @@ export class Model {
 
   // -- Callbacks helper for subclasses --
 
-  runCallbacks(event: string, block: () => unknown): boolean | Promise<boolean> {
-    return (this.constructor as typeof Model)._callbackChain.runCallbacks(event, this, block);
+  runCallbacks(
+    event: string,
+    block: () => unknown,
+    opts?: RunCallbacksOptions,
+  ): boolean | Promise<boolean> {
+    return (this.constructor as typeof Model)._callbackChain.runCallbacks(event, this, block, opts);
   }
 }
 

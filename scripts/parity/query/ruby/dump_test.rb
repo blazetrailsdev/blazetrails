@@ -56,6 +56,17 @@ class DumpTest < Minitest::Test
     File.delete(out_path) if File.exist?(out_path)
   end
 
+  def test_arel_21_select_manager_with_where
+    # arel-21 returns a SelectManager — exercises the to_sql_and_binds branch
+    code, _stdout, stderr, out_path = run_dump("arel-21")
+    assert_equal 0, code, "dump failed: #{stderr}"
+    result = JSON.parse(File.read(out_path))
+    assert_match(/SELECT/i, result["sql"], "expected SELECT statement from SelectManager")
+    assert_match(/WHERE/i,  result["sql"], "expected WHERE clause")
+  ensure
+    File.delete(out_path) if File.exist?(out_path)
+  end
+
   def test_frozen_at_forwarded
     frozen = "2026-01-01T00:00:00.000Z"
     code, _stdout, stderr, out_path = run_dump("arel-01", frozen_at: frozen)

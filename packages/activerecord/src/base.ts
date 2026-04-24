@@ -136,7 +136,7 @@ import { Associations as _Associations, updateCounterCaches } from "./associatio
 /** @internal */
 export function quoteSqlValue(v: unknown, asArray = false): string {
   if (v === null || v === undefined) return "NULL";
-  if (typeof v === "number") return String(v);
+  if (typeof v === "number" || typeof v === "bigint") return String(v);
   if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
   if (v instanceof Date) return `'${v.toISOString()}'`;
   if (asArray && Array.isArray(v)) {

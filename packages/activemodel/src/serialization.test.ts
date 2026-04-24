@@ -391,6 +391,28 @@ describe("SerializationTest", () => {
       expect(() => JSON.stringify(out)).not.toThrow();
     });
 
+    it("coerceForJson does not shell open class instances (no internal-field leak)", async () => {
+      // A raw Model instance reaching coerceForJson (e.g. as a direct
+      // attribute value) must NOT be walked via Object.entries — that
+      // would expose _attributes/_dirty/errors/etc. Instead, it passes
+      // through as the instance itself, and JSON.stringify will later
+      // invoke its toJSON() (which calls asJson with its own
+      // coerceForJson context).
+      const { coerceForJson } = await import("./serialization.js");
+      class Wrapper {
+        public internal = "hidden";
+        toJSON() {
+          return { kind: "wrapper" };
+        }
+      }
+      const w = new Wrapper();
+      const out = coerceForJson({ nested: w }) as { nested: unknown };
+      // Pass-through — still the class instance, not `{ internal: "..." }`.
+      expect(out.nested).toBe(w);
+      // JSON.stringify at the end invokes toJSON on the instance.
+      expect(JSON.parse(JSON.stringify(out))).toEqual({ nested: { kind: "wrapper" } });
+    });
+
     it("asJson is idempotent on JSON-safe values", () => {
       class Person extends Model {
         static {

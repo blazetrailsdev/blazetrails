@@ -185,6 +185,16 @@ export function coerceForJson(
     return out;
   }
   if (typeof value === "object") {
+    // Only recurse into plain objects (no prototype, or
+    // `Object.prototype` directly). Class instances keep an opaque
+    // pass-through so their internals don't leak — e.g. a `Model`
+    // reached here as a raw attribute value would expose
+    // `_attributes`/`_dirty`/`errors` via `Object.entries`. For these,
+    // JSON.stringify will invoke the instance's own `toJSON()` at
+    // encode time, which is the right Rails-parity boundary.
+    const proto = Object.getPrototypeOf(value);
+    if (proto !== null && proto !== Object.prototype) return value;
+
     if (inProgress.has(value)) return null;
     if (seen.has(value)) return seen.get(value);
     const v = value as Record<string, unknown>;

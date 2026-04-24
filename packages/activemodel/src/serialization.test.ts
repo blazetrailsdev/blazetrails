@@ -317,6 +317,14 @@ describe("SerializationTest", () => {
       expect(parsed).toEqual({ id: "42", name: "row-1" });
     });
 
+    it("coerceForJson maps invalid Date to null (matches Date.prototype.toJSON)", async () => {
+      // Date.prototype.toJSON returns null for invalid dates; toISOString
+      // throws. asJson must stay JSON-safe even for garbage input.
+      const { coerceForJson } = await import("./serialization.js");
+      const out = coerceForJson({ at: new Date("not a date") }) as { at: unknown };
+      expect(out.at).toBe(null);
+    });
+
     it("coerceForJson maps symbol values to their description (Rails Symbol#as_json)", async () => {
       // JSON.stringify silently drops props whose value is a Symbol.
       // Rails `Symbol#as_json` returns the symbol's name as a string.

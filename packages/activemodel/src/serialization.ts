@@ -142,7 +142,12 @@ export function coerceForJson(
     // contradicting the "JSON-safe" contract of asJson.
     return value.description ?? "";
   }
-  if (value instanceof Date) return value.toISOString();
+  if (value instanceof Date) {
+    // Invalid Date (e.g. `new Date("bad")`) throws on `toISOString`.
+    // `Date.prototype.toJSON` returns null in that case — match it so
+    // `asJson` stays JSON-safe regardless of attribute hygiene.
+    return Number.isNaN(value.getTime()) ? null : value.toISOString();
+  }
   if (Array.isArray(value)) {
     // True cycle: short-circuit to null (Rails' JSON encoder raises, but
     // `null` is less hostile for accidental self-refs and JSON.stringify

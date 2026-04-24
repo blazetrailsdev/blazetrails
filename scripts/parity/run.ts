@@ -190,14 +190,27 @@ const CONCURRENCY = parseConcurrency(process.env.PARITY_CONCURRENCY);
 
 async function runPool<T>(items: T[], worker: (item: T) => Promise<void>): Promise<void> {
   const queue = [...items];
+  // Fail-fast: as soon as any worker errors, stop pulling new items from the
+  // queue. In-flight work finishes (we can't kill spawned children here), but
+  // no further fixtures are scheduled, so a broken fixture doesn't spawn 50
+  // more Ruby/tsx processes before the error surfaces. Query mode wraps each
+  // dump in try/catch inside the worker so this branch never triggers there.
+  let firstError: unknown;
   const workers = Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
     for (;;) {
+      if (firstError !== undefined) return;
       const item = queue.shift();
       if (item === undefined) return;
-      await worker(item);
+      try {
+        await worker(item);
+      } catch (err) {
+        if (firstError === undefined) firstError = err;
+        return;
+      }
     }
   });
   await Promise.all(workers);
+  if (firstError !== undefined) throw firstError;
 }
 
 function dumpOne(cfg: TypeConfig, label: "rails" | "trails", fixture: string): Promise<void> {

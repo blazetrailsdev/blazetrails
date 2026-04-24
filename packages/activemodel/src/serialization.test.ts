@@ -410,6 +410,25 @@ describe("SerializationTest", () => {
       expect(() => JSON.stringify(out)).not.toThrow();
     });
 
+    it("coerceForJson maps undefined to null (matches Ruby nil → JSON null)", async () => {
+      // `JSON.stringify({ a: undefined })` silently drops the key,
+      // which would make an unset attribute disappear from output.
+      // Ruby `nil` serializes to JSON `null`, so we match that.
+      const { coerceForJson } = await import("./serialization.js");
+      const out = coerceForJson({ name: "x", missing: undefined, nested: [undefined, 1] }) as {
+        name: unknown;
+        missing: unknown;
+        nested: unknown[];
+      };
+      expect(out.missing).toBe(null);
+      expect(out.nested).toEqual([null, 1]);
+      expect(JSON.parse(JSON.stringify(out))).toEqual({
+        name: "x",
+        missing: null,
+        nested: [null, 1],
+      });
+    });
+
     it("coerceForJson does not shell open class instances (no internal-field leak)", async () => {
       // A raw Model instance reaching coerceForJson (e.g. as a direct
       // attribute value) must NOT be walked via Object.entries — that

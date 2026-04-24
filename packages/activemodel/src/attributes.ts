@@ -112,11 +112,13 @@ export function attribute(
   // e.g. `toJSON` / `asJson` / `freeze` / `attributes` would shadow the
   // framework method on this subclass — JSON.stringify would hit the
   // attribute getter instead of `Model#toJSON`, serialization callers
-  // would get the raw value instead of the mixin, etc. The framework
-  // writes through `_attributes` directly via `writeAttribute`, so
-  // skipping the accessor doesn't lose attribute functionality; users
-  // just have to read the value via `readAttribute(name)` instead of
-  // `instance[name]`.
+  // would get the raw value instead of the mixin, etc. The attribute
+  // still round-trips via `readAttribute(name)` / `writeAttribute(name,
+  // value)`, which operate on `_attributes` directly — callers MUST use
+  // those methods for reserved names, NOT direct property access
+  // (`instance[name]`) or assignment (`instance[name] = value`). Direct
+  // assignment would create an own property on the instance and shadow
+  // the framework method per-instance.
   const alreadyDefined =
     name in this.prototype && !Object.prototype.hasOwnProperty.call(this.prototype, name);
   if (!Object.prototype.hasOwnProperty.call(this.prototype, name) && !alreadyDefined) {

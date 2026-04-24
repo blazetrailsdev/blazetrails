@@ -148,7 +148,12 @@ export function coerceForJson(
   seen: WeakMap<object, unknown> = new WeakMap(),
   inProgress: WeakSet<object> = new WeakSet(),
 ): unknown {
-  if (value === null || value === undefined) return value;
+  // `null` is valid JSON. `undefined` is not — `JSON.stringify` silently
+  // drops object properties whose value is `undefined`, so an attribute
+  // that happens to be unset would just disappear from the output
+  // instead of appearing as `null` (matches Ruby `nil` mapping to JSON
+  // `null`). Normalize both to `null` at the top of the recursion.
+  if (value === null || value === undefined) return null;
   if (typeof value === "bigint") return value.toString();
   // Note: no JS `Symbol` handling. Ruby symbols are interned-string
   // identifiers (`:active` ≈ "active"), which is why Rails

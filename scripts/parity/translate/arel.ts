@@ -213,7 +213,7 @@ function translateQuery(
 
   return {
     rb: `${rbDecls}\n${query}`,
-    ts: `${tsDecls}\n${tsExpr};`,
+    ts: `${tsDecls}\nexport default ${tsExpr};`,
     imports: [...new Set(imports)].sort(),
   };
 }

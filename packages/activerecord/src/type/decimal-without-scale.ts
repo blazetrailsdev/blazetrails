@@ -12,8 +12,8 @@
 import { IntegerType } from "@blazetrails/activemodel";
 
 export class DecimalWithoutScale extends IntegerType {
-  // Default limit to 8 bytes — matches Rails' BigInteger ancestry (unbounded)
-  // while keeping integer truncation semantics from IntegerType.
+  // Default limit to 8 bytes — matching Rails' BigInteger ancestry as an
+  // 8-byte signed integer range while keeping IntegerType truncation semantics.
   constructor(options: ConstructorParameters<typeof IntegerType>[0] = {}) {
     super({ ...options, limit: options.limit ?? 8 });
   }

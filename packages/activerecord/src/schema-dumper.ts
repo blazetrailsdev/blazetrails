@@ -268,6 +268,10 @@ function cleanDefault(raw: unknown): unknown {
  */
 class AdapterSchemaSource implements SchemaSource {
   private _adapter: DatabaseAdapter;
+
+  get adapter(): DatabaseAdapter {
+    return this._adapter;
+  }
   // Lazily constructed on first `indexes()` call so the static import
   // cycle (schema-dumper -> schema-statements -> abstract/schema-dumper
   // -> schema-dumper) doesn't fire at module init. Type-only import
@@ -429,14 +433,15 @@ export class SchemaDumper {
   // Mirrors: SQLite3::SchemaDumper#virtual_tables — emits createVirtualTable
   // calls for any virtual tables found via the adapter.
   protected dumpVirtualTables(lines: string[]): void | Promise<void> {
-    const adapter = (this._source as any)?._adapter;
-    if (!adapter || typeof adapter.virtualTables !== "function") return;
+    const adapter = this._source instanceof AdapterSchemaSource ? this._source.adapter : undefined;
+    if (!adapter || typeof (adapter as any).virtualTables !== "function") return;
     return this._dumpVirtualTablesAsync(lines);
   }
 
   private async _dumpVirtualTablesAsync(lines: string[]): Promise<void> {
-    const adapter = (this._source as any)?._adapter;
-    const tables: Record<string, [string, string]> = await adapter.virtualTables();
+    const adapter = this._source instanceof AdapterSchemaSource ? this._source.adapter : undefined;
+    if (!adapter) return;
+    const tables: Record<string, [string, string]> = await (adapter as any).virtualTables();
     const names = Object.keys(tables).sort();
     if (names.length === 0) return;
     lines.push("");

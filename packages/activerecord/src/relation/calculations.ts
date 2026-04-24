@@ -10,6 +10,7 @@
 
 import { Nodes } from "@blazetrails/arel";
 import { BigIntegerType } from "@blazetrails/activemodel";
+import { detectAdapterName } from "../adapter-name.js";
 
 interface CalculationRelation {
   _modelClass: {
@@ -114,19 +115,20 @@ function buildAggNode(table: any, fn: AggFn, column: string, distinct: boolean):
  * Both are handled by BigIntegerType.cast without any SQL wrapping.
  */
 function needsBigintCast(rel: CalculationRelation): boolean {
-  return (rel._modelClass.adapter as any).adapterName === "SQLite";
+  return detectAdapterName(rel._modelClass.adapter as any) === "sqlite";
 }
 
 /**
  * Wrap a bigint aggregate SQL in CAST(... AS TEXT) so SQLite returns
  * a decimal string instead of a lossy number. Only used when
- * needsBigintCast() is true.
+ * needsBigintCast() is true. Aliases are quoted to match SQLite's
+ * identifier quoting convention.
  */
 function wrapBigintAgg(innerSql: string, grouped = false): string {
   if (grouped) {
-    return `SELECT group_key, CAST(val AS TEXT) AS val FROM (${innerSql}) AS _bigint_agg`;
+    return `SELECT "group_key", CAST("val" AS TEXT) AS "val" FROM (${innerSql}) AS "_bigint_agg"`;
   }
-  return `SELECT CAST(val AS TEXT) AS val FROM (${innerSql}) AS _bigint_agg`;
+  return `SELECT CAST("val" AS TEXT) AS "val" FROM (${innerSql}) AS "_bigint_agg"`;
 }
 
 function isBigintColumn(rel: CalculationRelation, fn: AggFn, column: string): boolean {
@@ -261,7 +263,13 @@ export async function performSum(
   this: CalculationRelation,
   column?: string,
 ): Promise<number | bigint | Record<string, number | bigint>> {
-  if (this._isNone) return this._groupColumns.length > 0 ? {} : 0;
+  if (this._isNone) {
+    if (this._groupColumns.length > 0) return {};
+    const zeroType = column
+      ? (this._modelClass.arelTable as any)?.typeForAttribute?.(column)
+      : null;
+    return zeroType instanceof BigIntegerType ? 0n : 0;
+  }
   if (!column) return 0;
   if (this._groupColumns.length > 0) {
     return groupedAggregate(this, "sum", column, true) as Promise<Record<string, number | bigint>>;

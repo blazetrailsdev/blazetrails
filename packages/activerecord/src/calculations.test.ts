@@ -7504,6 +7504,13 @@ describe("bigint aggregates (big_integer columns)", () => {
     expect(result["b"]).toBe(2n);
   });
 
+  it("sum with none() returns 0n for big_integer column", async () => {
+    const Score = makeBigModel();
+    const result = await Score.none().sum("value");
+    expect(typeof result).toBe("bigint");
+    expect(result).toBe(0n);
+  });
+
   it("average of big_integer column returns number (Rails BigDecimal → JS number)", async () => {
     // Rails returns BigDecimal for average on integer columns; we return number.
     // This is a documented limitation — average is never a bigint in our impl.

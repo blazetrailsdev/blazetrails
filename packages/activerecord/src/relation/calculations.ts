@@ -102,12 +102,25 @@ function buildAggNode(table: any, fn: AggFn, column: string, distinct: boolean):
 }
 
 /**
- * Wrap a bigint aggregate SQL in CAST(... AS TEXT) so all adapters
- * return a decimal string. SQLite's SUM/MIN/MAX on computed columns has
- * no declared type, so `safeIntegers` is not enabled — it returns a lossy
- * JS number for values above Number.MAX_SAFE_INTEGER. Wrapping in a
- * subquery with CAST sidesteps that at the SQL level; BigIntegerType.cast
- * then converts the string to bigint with full precision.
+ * Whether this adapter needs a CAST-to-TEXT subquery to get a bigint
+ * aggregate value back as a string rather than a lossy JS number.
+ *
+ * SQLite's SUM/MIN/MAX on computed columns has no declared type, so
+ * `_maybeEnableSafeIntegers` doesn't trigger. The driver returns a lossy
+ * JS number for values above Number.MAX_SAFE_INTEGER.
+ *
+ * PG: pg-types returns int8 aggregate as a string natively.
+ * MySQL: supportBigNumbers:true returns large sums as strings.
+ * Both are handled by BigIntegerType.cast without any SQL wrapping.
+ */
+function needsBigintCast(rel: CalculationRelation): boolean {
+  return (rel._modelClass.adapter as any).adapterName === "SQLite";
+}
+
+/**
+ * Wrap a bigint aggregate SQL in CAST(... AS TEXT) so SQLite returns
+ * a decimal string instead of a lossy number. Only used when
+ * needsBigintCast() is true.
  */
 function wrapBigintAgg(innerSql: string, grouped = false): string {
   if (grouped) {
@@ -138,7 +151,8 @@ async function singleAggregate(
   rel._applyWheresToManager(manager, table);
 
   const innerSql = manager.toSql();
-  const sql = isBigintColumn(rel, fn, column) ? wrapBigintAgg(innerSql) : innerSql;
+  const sql =
+    isBigintColumn(rel, fn, column) && needsBigintCast(rel) ? wrapBigintAgg(innerSql) : innerSql;
   const rows = await rel._modelClass.adapter.execute(sql);
   const val = rows[0]?.val;
   if (val === undefined || val === null) {
@@ -165,7 +179,10 @@ async function groupedAggregate(
   if (rel._offsetValue !== null) manager.skip(rel._offsetValue);
 
   const innerSql = manager.toSql();
-  const sql = isBigintColumn(rel, fn, column) ? wrapBigintAgg(innerSql, true) : innerSql;
+  const sql =
+    isBigintColumn(rel, fn, column) && needsBigintCast(rel)
+      ? wrapBigintAgg(innerSql, true)
+      : innerSql;
   const rows = await rel._modelClass.adapter.execute(sql);
 
   const result: Record<string, unknown> = {};

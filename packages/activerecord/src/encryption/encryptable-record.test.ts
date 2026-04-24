@@ -223,10 +223,12 @@ describe("ActiveRecord::Encryption::EncryptableRecordTest", () => {
     const Author = makeEncryptedAuthor(freshAdapter());
     const author = await withoutEncryption(() => Author.create({ name: "Stephen King" }));
 
-    await expect(async () => {
-      const reloaded = await Author.find(author.id);
-      return reloaded.name;
-    }).rejects.toThrow(DecryptionError);
+    await expect(
+      (async () => {
+        const reloaded = await Author.find(author.id);
+        return reloaded.name;
+      })(),
+    ).rejects.toThrow(DecryptionError);
   });
 
   it("by default, it's case sensitive", async () => {

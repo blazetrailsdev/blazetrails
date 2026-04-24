@@ -103,7 +103,11 @@ describe("ActiveRecord::Encryption::EncryptableRecordTest", () => {
   it("ignores empty values", async () => {
     const Book = makeEncryptedBook(freshAdapter());
     const book = await Book.create({ name: "" });
+    // Rails serializes empty strings the same as any other value (encrypts them).
+    // "ignores" means the value round-trips correctly, not that encryption is skipped.
     expect(book.name).toBe("");
+    const reloaded = await Book.find(book.id);
+    expect(reloaded.name).toBe("");
   });
 
   it("can configure a custom key provider on a per-record-class basis through the :key_provider option", async () => {

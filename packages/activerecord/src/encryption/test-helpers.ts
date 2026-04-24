@@ -193,6 +193,18 @@ export function assertEncryptedAttribute(
  * Returns the serialized (encrypted) form of an attribute's current value.
  * Mirrors Rails' model.ciphertext_for(:attr) — the value as stored in the DB.
  */
+/**
+ * Returns a freshly-serialized (encrypted) form of the attribute's current value.
+ *
+ * For deterministic encryption, serialize() is idempotent so this equals the
+ * stored DB ciphertext. For non-deterministic encryption, a fresh IV is used
+ * each call — use this only for comparing two freshly-serialized values (e.g.,
+ * to assert two records produce different ciphertexts), not for reading back
+ * what's actually stored in the DB.
+ *
+ * Mirrors Rails' model.ciphertext_for(:attr) in spirit — use with the same
+ * caveat that Rails' version reads from the DB whereas this re-serializes.
+ */
 export function ciphertextFor(model: any, attrName: string): unknown {
   const klass = model.constructor as any;
   const type = klass._attributeDefinitions?.get?.(attrName)?.type;

@@ -147,7 +147,8 @@ function buildScheme(options: EncryptsOptions): Scheme {
   // encryptor only when no keys are configured at all.
   const hasConfiguredKeys =
     Configurable.config.primaryKey !== undefined ||
-    Configurable.config.keyDerivationSalt !== undefined;
+    Configurable.config.keyDerivationSalt !== undefined ||
+    Configurable.config.deterministicKey !== undefined;
 
   const coreOpts: SchemeOptions = encryptor
     ? { ...schemeOptions, encryptor: new LegacyEncryptorShim(encryptor) }

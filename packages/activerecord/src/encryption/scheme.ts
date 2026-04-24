@@ -31,7 +31,7 @@ export class Scheme {
   private _cachedKeyProviderFromKey?: DerivedSecretKeyProvider;
   private _cachedDeterministicKeyProvider?: DeterministicKeyProvider;
   private _cachedDefaultKeyProvider?: DerivedSecretKeyProvider;
-  private _cachedDefaultKeyProviderKey?: string | string[];
+  private _cachedDefaultKeyProviderKey?: string;
   key?: string;
   deterministic: boolean;
   downcase: boolean;
@@ -135,11 +135,13 @@ export class Scheme {
   private _defaultKeyProvider(): unknown {
     const ctxKp = (Configurable as any).keyProvider;
     if (ctxKp != null) return ctxKp;
-    const primaryKey = Configurable.config.primaryKey;
+    const { primaryKey, keyDerivationSalt } = Configurable.config;
     if (primaryKey != null) {
-      if (!this._cachedDefaultKeyProvider || this._cachedDefaultKeyProviderKey !== primaryKey) {
+      // Keyed on both primaryKey and keyDerivationSalt since both affect the derived key.
+      const cacheKey = JSON.stringify(primaryKey) + "|" + (keyDerivationSalt ?? "");
+      if (!this._cachedDefaultKeyProvider || this._cachedDefaultKeyProviderKey !== cacheKey) {
         this._cachedDefaultKeyProvider = new DerivedSecretKeyProvider(primaryKey);
-        this._cachedDefaultKeyProviderKey = primaryKey;
+        this._cachedDefaultKeyProviderKey = cacheKey;
       }
       return this._cachedDefaultKeyProvider;
     }

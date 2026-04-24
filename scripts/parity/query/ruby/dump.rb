@@ -121,15 +121,16 @@ Dir.mktmpdir("parity-query-ruby-") do |tmpdir|
     end
 
     # 5. Get SQL and binds.
-    #    conn.to_sql_and_binds accepts a SelectManager directly — it calls .ast internally
-    #    (DatabaseStatements#to_sql_and_binds in AR 8). Plain nodes raise TypeError/
-    #    ArgumentError/NoMethodError; fall back to direct to_sql for those.
-    raw_sql, raw_binds = begin
-      conn.to_sql_and_binds(result)
-    rescue TypeError, ArgumentError, NoMethodError
-      # Plain node — Arel::Nodes::Node#to_sql (arel/nodes/node.rb:148)
-      [result.to_sql.strip, []]
-    end
+    #    Managers expose .ast; pass it directly to to_sql_and_binds which compiles via
+    #    the visitor and returns Rails-style bind objects. Plain nodes (no .ast) are
+    #    rendered directly via to_sql — they carry no bind params.
+    raw_sql, raw_binds =
+      if result.respond_to?(:ast)
+        conn.to_sql_and_binds(result.ast)
+      else
+        # Plain node — Arel::Nodes::Node#to_sql (arel/nodes/node.rb:148)
+        [result.to_sql.strip, []]
+      end
 
     binds = Array(raw_binds).map do |b|
       raw = if b.respond_to?(:value_before_type_cast)
@@ -139,7 +140,8 @@ Dir.mktmpdir("parity-query-ruby-") do |tmpdir|
       else
         b
       end
-      raw.nil? ? nil : raw.to_s
+      # nil bind = SQL NULL; keep as "NULL" so binds array stays string[] per schema
+      raw.nil? ? "NULL" : raw.to_s
     end
     sql_str = raw_sql.strip
 

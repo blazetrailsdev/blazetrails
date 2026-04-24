@@ -177,14 +177,34 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     // `prepared_statements`. better-sqlite3 still uses its own statement
     // handle internally, but we no longer cache across executes.
     if (!this.preparedStatements) {
-      return this.db.prepare(sql);
+      const stmt = this.db.prepare(sql);
+      this._maybeEnableSafeIntegers(stmt);
+      return stmt;
     }
     let stmt = this._statementPool.get(sql);
     if (!stmt) {
       stmt = this.db.prepare(sql);
+      this._maybeEnableSafeIntegers(stmt);
       this._statementPool.set(sql, stmt);
     }
     return stmt;
+  }
+
+  // Enable safeIntegers on SELECT statements that return bigint-declared columns
+  // so the driver returns JS bigint rather than a lossy number. Non-bigint integer
+  // columns in the same row also return bigint when safeIntegers is enabled —
+  // IntegerType.cast handles bigint → number for those.
+  // columns() throws for non-SELECT statements; skip safeIntegers in that case.
+  private _maybeEnableSafeIntegers(stmt: Database.Statement): void {
+    let cols: Database.ColumnDefinition[];
+    try {
+      cols = stmt.columns();
+    } catch {
+      return;
+    }
+    if (cols.some((c) => c.type !== null && /bigint/i.test(c.type))) {
+      stmt.safeIntegers(true);
+    }
   }
 
   /**

@@ -961,6 +961,10 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
   }
 
   static newClient(config: mysql.PoolOptions): mysql.Pool {
-    return mysql.createPool(config);
+    // Return BIGINT columns as decimal strings so BigIntegerType.cast() can
+    // convert to JS bigint without precision loss. bigNumberStrings:true means
+    // ALL LONGLONG values come back as strings (both text and binary protocol).
+    // Callers may override via explicit false in their config.
+    return mysql.createPool({ supportBigNumbers: true, bigNumberStrings: true, ...config });
   }
 }

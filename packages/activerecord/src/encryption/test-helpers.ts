@@ -173,12 +173,12 @@ export function makeEncryptedAuthor(adapter: DatabaseAdapter) {
 
 /**
  * Mirrors Rails' assert_encrypted_attribute.
- * Checks that the serialized (DB) form is ciphertext (≠ plaintext) and
+ * Checks that the actual DB-bound value is ciphertext (≠ plaintext) and
  * that reading the attribute returns the expected plaintext.
  *
- * Uses the attribute type's serialize() to get the ciphertext form rather
- * than readAttributeBeforeTypeCast, which returns the in-memory before-cast
- * value (not the DB ciphertext for in-memory created records).
+ * Uses _attributes.valuesForDatabase() to get the exact value that would
+ * be written to the DB, matching what Rails' assert_encrypted_attribute
+ * checks via read_attribute_before_type_cast on a persisted record.
  */
 export function assertEncryptedAttribute(
   model: any,
@@ -194,19 +194,15 @@ export function assertEncryptedAttribute(
     );
   }
 
-  // Verify the serialized form (what goes to DB) differs from the plaintext.
+  // Verify the DB-bound value differs from the plaintext — confirms real encryption.
   if (expectedValue !== null && expectedValue !== undefined && expectedValue !== "") {
-    const klass = model.constructor as any;
-    const typeDef = klass._attributeDefinitions?.get?.(attrName);
-    const type = typeDef?.type;
-    if (type && typeof type.serialize === "function") {
-      const serialized = type.serialize(expectedValue);
-      if (serialized === expectedValue) {
-        throw new Error(
-          `assertEncryptedAttribute: expected ${attrName} to be encrypted ` +
-            `(serialized ≠ plaintext), but serialize returned the plaintext unchanged.`,
-        );
-      }
+    const dbValues = model._attributes.valuesForDatabase();
+    const dbValue = dbValues[attrName];
+    if (dbValue === expectedValue) {
+      throw new Error(
+        `assertEncryptedAttribute: expected ${attrName} to be encrypted ` +
+          `(DB value ≠ plaintext), but valuesForDatabase() returned the plaintext unchanged.`,
+      );
     }
   }
 }

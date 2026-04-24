@@ -137,8 +137,14 @@ export class Scheme {
     if (ctxKp != null) return ctxKp;
     const { primaryKey, keyDerivationSalt } = Configurable.config;
     if (primaryKey != null) {
-      // Keyed on both primaryKey and keyDerivationSalt since both affect the derived key.
-      const cacheKey = JSON.stringify(primaryKey) + "|" + (keyDerivationSalt ?? "");
+      // Keyed on all derivation inputs: primaryKey, keyDerivationSalt, and
+      // hashDigestClass (KeyGenerator reads this at construction time).
+      const cacheKey =
+        JSON.stringify(primaryKey) +
+        "|" +
+        (keyDerivationSalt ?? "") +
+        "|" +
+        Configurable.config.hashDigestClass;
       if (!this._cachedDefaultKeyProvider || this._cachedDefaultKeyProviderKey !== cacheKey) {
         this._cachedDefaultKeyProvider = new DerivedSecretKeyProvider(primaryKey);
         this._cachedDefaultKeyProviderKey = cacheKey;

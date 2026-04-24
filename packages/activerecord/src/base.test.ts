@@ -9,6 +9,7 @@ import {
   AttributeAssignmentError,
   NotImplementedError,
   ReadonlyAttributeError,
+  getRaiseOnAssignToAttrReadonly,
   setRaiseOnAssignToAttrReadonly,
 } from "./index.js";
 import { SubclassNotFound, NameError } from "./errors.js";
@@ -1859,6 +1860,7 @@ describe("BasicsTest", () => {
     expect(ConcreteModel.readonlyAttributes).toContain("code");
   });
   it("readonly attributes when configured to not raise", async () => {
+    const prev = getRaiseOnAssignToAttrReadonly();
     setRaiseOnAssignToAttrReadonly(false);
     try {
       class NonRaisingPost extends Base {
@@ -1899,7 +1901,7 @@ describe("BasicsTest", () => {
       expect(post.readAttribute("title")).toBe("cannot change this");
       expect(post.readAttribute("body")).toBe("changed via update");
     } finally {
-      setRaiseOnAssignToAttrReadonly(true);
+      setRaiseOnAssignToAttrReadonly(prev);
     }
   });
   it("readonly attributes on belongs to association", async () => {

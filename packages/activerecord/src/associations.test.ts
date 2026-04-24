@@ -6559,7 +6559,7 @@ describe("AssociationProxyTest", () => {
   it("save on parent does not load target", async () => {
     const { APPost } = setupProxyModels();
     const post = await APPost.create({ title: "parent save no load" });
-    const proxy = (post as any).association("apComments");
+    const proxy = association(post, "apComments");
     expect(proxy.loaded).toBe(false);
     // update_columns on parent should not trigger association loading
     await post.updateColumns({ title: "updated" });

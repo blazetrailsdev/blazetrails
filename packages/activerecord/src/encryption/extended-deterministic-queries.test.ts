@@ -646,6 +646,7 @@ describe("installExtendedQueriesIfConfigured", () => {
       (Base as any).findBy = origFindBy;
       EncryptedAttributeType.prototype.serialize = origSerialize;
       (ExtendedDeterministicQueries as any)._installed = false;
+      ExtendedDeterministicUniquenessValidator.resetSupport(UniquenessValidator);
       Configurable.config.extendQueries = prev;
     }
   });

@@ -25,7 +25,7 @@ function schemeFor(options: SchemeOptions): Scheme {
   const { previousSchemes: localPrevious = [], ...rest } = options;
   const base = new Scheme(rest);
   const globalPrevious = globalPreviousSchemesFor(base);
-  const allPrevious = [...globalPrevious, ...localPrevious.map((o) => new Scheme(o))];
+  const allPrevious = [...globalPrevious, ...localPrevious];
   return allPrevious.length > 0 ? new Scheme({ ...rest, previousSchemes: allPrevious }) : base;
 }
 

@@ -5,6 +5,7 @@ import { Configurable } from "./configurable.js";
 import { Decryption as DecryptionError } from "./errors.js";
 import type { EncryptorLike } from "./encryptor.js";
 import { EncryptableRecord } from "./encryptable-record.js";
+import type { SchemeOptions } from "./scheme.js";
 
 class TestEncryptor implements EncryptorLike {
   constructor(private readonly map: Record<string, string>) {}
@@ -151,7 +152,7 @@ describe("ActiveRecord::Encryption::EncryptionSchemesTest", () => {
 
 describe("global previous schemes wiring — config.previous → EncryptableRecord.encrypts", () => {
   let savedSupportUnencryptedData: boolean;
-  let savedPreviousSchemes: unknown[];
+  let savedPreviousSchemes: typeof Configurable.config.previousSchemes;
 
   beforeEach(() => {
     savedSupportUnencryptedData = Configurable.config.supportUnencryptedData;
@@ -160,14 +161,14 @@ describe("global previous schemes wiring — config.previous → EncryptableReco
 
   afterEach(() => {
     Configurable.config.supportUnencryptedData = savedSupportUnencryptedData;
-    Configurable.config.previousSchemes = savedPreviousSchemes as any;
+    Configurable.config.previousSchemes = savedPreviousSchemes;
   });
 
   it("config.previous schemes are merged into the attribute type's previousTypes", () => {
     Configurable.config.supportUnencryptedData = false;
     Configurable.config.previous = [
-      { encryptor: new TestEncryptor({ legacy1: "legacy_cipher_1" }) },
-      { encryptor: new TestEncryptor({ legacy2: "legacy_cipher_2" }) },
+      { encryptor: new TestEncryptor({ legacy1: "legacy_cipher_1" }) } as SchemeOptions,
+      { encryptor: new TestEncryptor({ legacy2: "legacy_cipher_2" }) } as SchemeOptions,
     ];
 
     const modelClass = { _attributeDefinitions: new Map() };
@@ -190,8 +191,11 @@ describe("global previous schemes wiring — config.previous → EncryptableReco
   it("only compatible global previous schemes are applied (matching deterministic nature)", () => {
     Configurable.config.supportUnencryptedData = false;
     Configurable.config.previous = [
-      { encryptor: new TestEncryptor({ legacy_det: "cipher_det" }), deterministic: true },
-      { encryptor: new TestEncryptor({ legacy_non: "cipher_non" }), deterministic: false },
+      {
+        encryptor: new TestEncryptor({ legacy_det: "cipher_det" }),
+        deterministic: true,
+      } as SchemeOptions,
+      { encryptor: new TestEncryptor({ legacy_non: "cipher_non" }) } as SchemeOptions,
     ];
 
     const modelClass = { _attributeDefinitions: new Map() };

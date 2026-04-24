@@ -137,7 +137,7 @@ function buildScheme(options: EncryptsOptions): Scheme {
 
   const base = new Scheme(coreOpts);
   const globalPrevious = globalPreviousSchemesFor(base);
-  const allPrevious = [...globalPrevious, ...localPrevious.map((o) => new Scheme(o))];
+  const allPrevious = [...globalPrevious, ...localPrevious];
   return allPrevious.length > 0 ? new Scheme({ ...coreOpts, previousSchemes: allPrevious }) : base;
 }
 

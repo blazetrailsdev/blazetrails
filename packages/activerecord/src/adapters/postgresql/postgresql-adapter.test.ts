@@ -649,12 +649,18 @@ describeIfPg("PostgreSQLAdapter", () => {
 
     it("extensions includes non current schema name", async () => {
       const wasEnabled = await adapter.extensionEnabled("hstore");
-      if (!wasEnabled) await adapter.enableExtension("hstore");
+      const currentSchemaRows = await adapter.execute(
+        `SELECT quote_ident(current_schema()) AS quoted_current_schema`,
+      );
+      const quotedCurrentSchema = currentSchemaRows[0].quoted_current_schema as string;
+      if (wasEnabled) await adapter.disableExtension("hstore");
       try {
+        await adapter.exec(`CREATE EXTENSION hstore SCHEMA ${quotedCurrentSchema}`);
         const exts = await adapter.extensions();
         expect(exts).toContain("hstore");
       } finally {
-        if (!wasEnabled) await adapter.disableExtension("hstore");
+        await adapter.exec(`DROP EXTENSION IF EXISTS hstore`);
+        if (wasEnabled) await adapter.enableExtension("hstore");
       }
     });
     it.skip("ignores warnings when behaviour ignore", async () => {});

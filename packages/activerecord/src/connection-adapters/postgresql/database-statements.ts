@@ -16,9 +16,10 @@ import type { Result } from "../../result.js";
 // Rails does not perform deep CTE analysis — data-modifying CTEs starting
 // with WITH are treated as read-only, the same as pure-read CTEs. This
 // mirrors DEFAULT_READ_QUERY + PG additions from build_read_query_regexp.
-// Leading whitespace and block/line comments are also allowed before the keyword.
+// Leading whitespace, block/line comments, and opening parentheses are
+// allowed before the keyword in any order.
 export const READ_QUERY =
-  /^(?:\s|\/\*.*?\*\/|--[^\n]*\n)*(?:\([\s(]*)*(?:begin|close|commit|declare|explain|fetch|move|release|rollback|savepoint|select|set|show|with)\b/is;
+  /^(?:\s|\/\*.*?\*\/|--[^\n]*(?:\n|$)|\()*(?:begin|close|commit|declare|explain|fetch|move|release|rollback|savepoint|select|set|show|with)\b/is;
 
 export interface DatabaseStatements {
   execQuery(sql: string, name?: string | null, binds?: unknown[]): Promise<Result>;

@@ -6,9 +6,10 @@
  * duplicating the logic.
  */
 
-// Mirrors Rails PG adapter READ_QUERY which adds :close, :declare, :fetch,
-// :move, :set, :show to the default list. CLOSE/DECLARE/FETCH/MOVE are
-// PostgreSQL cursor operations that read or manage cursors — not data writes.
+// Shared read-only statement allowlist used for cross-adapter SQL
+// classification, including adapter-specific additions such as PostgreSQL
+// cursor operations. CLOSE/DECLARE/FETCH/MOVE read or manage cursors — not
+// data writes.
 const READ_ONLY_STATEMENTS =
   /^(SELECT|EXPLAIN|PRAGMA|SHOW|SET|RESET|BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE|DESCRIBE|DESC|USE|KILL|CLOSE|DECLARE|FETCH|MOVE)$/;
 

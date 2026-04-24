@@ -141,10 +141,9 @@ describeIfPg("PostgreSQLAdapter", () => {
 
   describe("PostgreSQLTimestampMigrationTest", () => {
     it("adds column as timestamp", async () => {
-      await adapter.exec(
-        `CREATE TABLE IF NOT EXISTS postgresql_timestamp_with_zones (id serial primary key)`,
-      );
+      await adapter.exec(`DROP TABLE IF EXISTS postgresql_timestamp_with_zones CASCADE`);
       try {
+        await adapter.exec(`CREATE TABLE postgresql_timestamp_with_zones (id serial primary key)`);
         await adapter.addColumn("postgresql_timestamp_with_zones", "times", "datetime");
         const rows = await adapter.execute(
           `SELECT data_type FROM information_schema.columns
@@ -161,10 +160,11 @@ describeIfPg("PostgreSQLAdapter", () => {
         static override datetimeType: "timestamp" | "timestamptz" = "timestamptz";
       }
       const tzAdapter = new TimestamptzAdapter(PG_TEST_URL);
-      await tzAdapter.exec(
-        `CREATE TABLE IF NOT EXISTS postgresql_timestamp_with_zones (id serial primary key)`,
-      );
       try {
+        await tzAdapter.exec(`DROP TABLE IF EXISTS postgresql_timestamp_with_zones CASCADE`);
+        await tzAdapter.exec(
+          `CREATE TABLE postgresql_timestamp_with_zones (id serial primary key)`,
+        );
         await tzAdapter.addColumn("postgresql_timestamp_with_zones", "times", "datetime");
         const rows = await tzAdapter.execute(
           `SELECT data_type FROM information_schema.columns

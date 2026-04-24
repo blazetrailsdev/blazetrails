@@ -21,7 +21,7 @@ export class DateType extends ValueType<Date> {
    * Skip `Date.parse` for the ISO-8601 date fast case, matching Rails'
    * `type/date.rb#fast_string_to_date`.
    */
-  fastStringToDate(value: string): Date | null {
+  protected fastStringToDate(value: string): Date | null {
     const m = ISO_DATE.exec(value);
     if (!m) return null;
     return this.newDate(Number(m[1]), Number(m[2]), Number(m[3]));
@@ -33,7 +33,7 @@ export class DateType extends ValueType<Date> {
    * `Date._parse`). We fall back to the JS `Date` constructor since
    * TS doesn't ship a locale-aware date parser.
    */
-  fallbackStringToDate(value: string): Date | null {
+  protected fallbackStringToDate(value: string): Date | null {
     const d = new Date(value);
     return isNaN(d.getTime()) ? null : d;
   }
@@ -42,7 +42,7 @@ export class DateType extends ValueType<Date> {
    * Mirrors `type/date.rb#new_date`: rejects year 0 / missing year
    * rather than returning a bogus Date.
    */
-  newDate(year: number, month: number, day: number): Date | null {
+  protected newDate(year: number, month: number, day: number): Date | null {
     if (!year || year === 0) return null;
     // `Date.UTC(y, ...)` interprets 0–99 as 1900–1999; use setUTCFullYear
     // so "0001-01-01" round-trips as literal year 1 instead of 1901.

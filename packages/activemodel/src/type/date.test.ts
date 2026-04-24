@@ -1,6 +1,26 @@
 import { describe, it, expect } from "vitest";
 import { Types } from "../index.js";
 
+/**
+ * Test-only subclass that promotes Rails' private helpers to callable
+ * methods so behavior can be asserted directly (e.g. new_date returns
+ * nil for year 0 in a way `cast` can't reliably surface).
+ */
+class TestableDateType extends Types.DateType {
+  publicFastStringToDate(value: string) {
+    return (this as unknown as { fastStringToDate(v: string): Date | null }).fastStringToDate(
+      value,
+    );
+  }
+  publicNewDate(year: number, month: number, day: number) {
+    return (this as unknown as { newDate(y: number, m: number, d: number): Date | null }).newDate(
+      year,
+      month,
+      day,
+    );
+  }
+}
+
 describe("DateTest", () => {
   it("type cast date", () => {
     const type = new Types.DateType();
@@ -18,27 +38,27 @@ describe("DateTest", () => {
   it("fast_string_to_date matches ISO YYYY-MM-DD only", () => {
     // Rails type/date.rb — ISO_DATE regex, fast path; everything else
     // falls through to fallback_string_to_date.
-    const type = new Types.DateType();
-    expect(type.fastStringToDate("2024-06-01")).not.toBeNull();
-    expect(type.fastStringToDate("2024/06/01")).toBeNull();
-    expect(type.fastStringToDate("2024-06-01T00:00:00")).toBeNull();
+    const type = new TestableDateType();
+    expect(type.publicFastStringToDate("2024-06-01")).not.toBeNull();
+    expect(type.publicFastStringToDate("2024/06/01")).toBeNull();
+    expect(type.publicFastStringToDate("2024-06-01T00:00:00")).toBeNull();
   });
 
   it("new_date preserves literal years 1–99 (not the JS Date.UTC 1900+ hack)", () => {
-    const type = new Types.DateType();
-    expect(type.newDate(1, 1, 1)!.getUTCFullYear()).toBe(1);
+    const type = new TestableDateType();
+    expect(type.publicNewDate(1, 1, 1)!.getUTCFullYear()).toBe(1);
     expect(type.cast("0001-01-01")!.getUTCFullYear()).toBe(1);
-    expect(type.newDate(99, 12, 31)!.getUTCFullYear()).toBe(99);
+    expect(type.publicNewDate(99, 12, 31)!.getUTCFullYear()).toBe(99);
   });
 
   it("new_date rejects year 0 and day/month overflow", () => {
     // Mirrors Rails new_date, which returns nil when year is 0 or when
     // Date.new raises ArgumentError.
-    const type = new Types.DateType();
-    expect(type.newDate(0, 1, 1)).toBeNull();
-    expect(type.newDate(2024, 13, 1)).toBeNull();
-    expect(type.newDate(2024, 2, 31)).toBeNull();
-    const d = type.newDate(2024, 6, 15);
+    const type = new TestableDateType();
+    expect(type.publicNewDate(0, 1, 1)).toBeNull();
+    expect(type.publicNewDate(2024, 13, 1)).toBeNull();
+    expect(type.publicNewDate(2024, 2, 31)).toBeNull();
+    const d = type.publicNewDate(2024, 6, 15);
     expect(d!.getUTCFullYear()).toBe(2024);
     expect(d!.getUTCMonth()).toBe(5);
     expect(d!.getUTCDate()).toBe(15);

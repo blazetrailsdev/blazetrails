@@ -23,7 +23,7 @@ export class DecimalType extends ValueType<string> {
    * Mirrors: ActiveModel::Type::Decimal#apply_scale
    * (activemodel/lib/active_model/type/decimal.rb).
    */
-  applyScale(value: string | null): string | null {
+  protected applyScale(value: string | null): string | null {
     if (value === null) return null;
     if (this.scale === undefined) return value;
     // Ruby `BigDecimal#round(n)` only accepts an Integer argument; a
@@ -129,19 +129,26 @@ function roundHalfUpToScale(raw: string, scale: number): string {
     return scale > 0 ? `${sign}${intPart}.${keep}` : `${sign}${intPart}`;
   }
   // Carry: half-away-from-zero bumps magnitude by 1 ulp at position `scale`.
-  const digits = (intPart + keep).split("");
-  for (let i = digits.length - 1; i >= 0; i--) {
-    if (digits[i] === "9") {
-      digits[i] = "0";
-      if (i === 0) digits.unshift("1");
-    } else {
-      digits[i] = String(digits[i].charCodeAt(0) - 48 + 1);
-      break;
-    }
-  }
-  const out = digits.join("");
+  const out = incrementDecimalDigits(intPart + keep);
   const newIntLen = out.length - scale;
   const newInt = out.slice(0, newIntLen);
   const newFrac = out.slice(newIntLen);
   return scale > 0 ? `${sign}${newInt}.${newFrac}` : `${sign}${newInt}`;
+}
+
+/**
+ * Increment a run of ASCII digits by 1 with carry, returning a new
+ * string. Uses no intermediate arrays so a multi-million-digit input
+ * doesn't blow up memory.
+ */
+function incrementDecimalDigits(digits: string): string {
+  let i = digits.length - 1;
+  while (i >= 0 && digits.charCodeAt(i) === 57 /* "9" */) {
+    i -= 1;
+  }
+  if (i < 0) {
+    return `1${"0".repeat(digits.length)}`;
+  }
+  const incremented = String.fromCharCode(digits.charCodeAt(i) + 1);
+  return `${digits.slice(0, i)}${incremented}${"0".repeat(digits.length - i - 1)}`;
 }

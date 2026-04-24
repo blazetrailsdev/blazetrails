@@ -93,13 +93,10 @@ export class EncryptedUniquenessValidator {
     const encryptedType = getAttributeType(klass, attribute);
     if (!(encryptedType instanceof EncryptedAttributeType)) return;
 
-    for (const prevType of encryptedType.previousTypes) {
-      // Stop early if a :taken error was already added — additional calls would
-      // only add duplicate errors and issue redundant DB round-trips.
-      if (record.errors.added(attribute, "taken")) break;
-      const encryptedValue = prevType.serialize(value);
+    const prevCiphertexts = encryptedType.previousTypes.map((pt) => pt.serialize(value));
+    if (prevCiphertexts.length > 0) {
       withoutEncryption(() => {
-        originalValidateEach(record, attribute, encryptedValue);
+        originalValidateEach(record, attribute, prevCiphertexts);
       });
     }
   }

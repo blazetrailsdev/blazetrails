@@ -34,7 +34,7 @@ describe("ActiveRecord::Encryption::ExtendedDeterministicUniquenessValidatorTest
       _encryptedAttributes: new Set(["email"]),
       _attributeDefinitions: new Map([["email", { type }]]),
     };
-    const record = { constructor: klass, errors: { added: () => false } };
+    const record = { constructor: klass };
 
     const calls: Array<{ attribute: string; value: unknown; encryptionDisabled: boolean }> = [];
     const originalValidateEach = (_record: any, attribute: string, value: unknown) => {
@@ -52,9 +52,9 @@ describe("ActiveRecord::Encryption::ExtendedDeterministicUniquenessValidatorTest
     expect(calls[0].value).toBe("user@example.com");
     expect(calls[0].encryptionDisabled).toBe(false);
 
-    // Second call: previous scheme ciphertext (encryption disabled)
+    // Second call: all previous-scheme ciphertexts as an array (single IN query, encryption disabled)
     expect(calls[1]).toBeDefined();
-    expect(calls[1].value).toBe(type.previousTypes[0].serialize("user@example.com"));
+    expect(calls[1].value).toEqual([type.previousTypes[0].serialize("user@example.com")]);
     expect(calls[1].encryptionDisabled).toBe(true);
   });
 

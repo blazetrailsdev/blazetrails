@@ -50,6 +50,9 @@ function parseArgs(argv: string[]): {
       }
       frozenAt = val;
       i += 2;
+    } else if (argv[i].startsWith("--")) {
+      process.stderr.write(`unknown flag: ${argv[i]}\n`);
+      usage();
     } else if (fixtureDir === null) {
       fixtureDir = argv[i++];
     } else if (outPath === null) {
@@ -63,8 +66,20 @@ function parseArgs(argv: string[]): {
   return { fixtureDir, outPath, frozenAt };
 }
 
-const ISO_UTC_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
+// Shape check: ISO 8601 UTC with trailing Z, fractional seconds capped at 3 digits
+// (JS Date resolves to ms — more precision would silently round on round-trip).
+const ISO_UTC_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
 const DEFAULT_FROZEN_AT = "2000-01-01T00:00:00.000Z";
+
+// Primitive-safe name for error/debug output. Handles null/undefined/strings/numbers
+// without throwing (Object.getPrototypeOf(null) throws TypeError; primitives don't
+// always carry a meaningful constructor).
+function describe(v: unknown): string {
+  if (v === null) return "null";
+  if (v === undefined) return "undefined";
+  const name = (v as { constructor?: { name?: string } }).constructor?.name;
+  return name ?? typeof v;
+}
 
 function assertArelBuilt(): void {
   // @blazetrails/arel resolves via package "main" → packages/arel/dist/index.js.
@@ -88,11 +103,19 @@ async function main(): Promise<void> {
     frozenAt,
   } = parseArgs(process.argv.slice(2));
 
-  if (frozenAt !== null && !ISO_UTC_RE.test(frozenAt)) {
-    process.stderr.write(
-      "--frozen-at must be ISO 8601 UTC with trailing Z (e.g. 2026-01-01T00:00:00.000Z)\n",
-    );
-    process.exit(1);
+  if (frozenAt !== null) {
+    if (!ISO_UTC_RE.test(frozenAt)) {
+      process.stderr.write(
+        "--frozen-at must be ISO 8601 UTC with trailing Z (e.g. 2026-01-01T00:00:00.000Z)\n",
+      );
+      process.exit(1);
+    }
+    // Shape alone accepts things like 2026-99-99T25:70:70Z — verify the actual
+    // Date is valid before we install FakeTimers with NaN.
+    if (!Number.isFinite(Date.parse(frozenAt))) {
+      process.stderr.write(`--frozen-at is not a valid date: ${frozenAt}\n`);
+      process.exit(1);
+    }
   }
 
   assertArelBuilt();
@@ -131,7 +154,7 @@ async function main(): Promise<void> {
       throw new Error(`[${fixtureName}] query.ts default export is ${result}`);
     }
     if (typeof (result as { toSql?: unknown }).toSql !== "function") {
-      const ctor = Object.getPrototypeOf(result as object)?.constructor?.name ?? typeof result;
+      const ctor = describe(result);
       throw new Error(
         `[${fixtureName}] query.ts default export is ${ctor}: expected an Arel node or manager with .toSql()`,
       );
@@ -156,7 +179,7 @@ async function main(): Promise<void> {
     mkdirSync(dirname(outPathAbs), { recursive: true });
     writeFileSync(outPathAbs, JSON.stringify(canonical, null, 2) + "\n", "utf8");
 
-    const ctor = Object.getPrototypeOf(result as object)?.constructor?.name ?? typeof result;
+    const ctor = describe(result);
     process.stdout.write(`[trails] ${fixtureName}\n`);
     process.stdout.write(`  result type : ${ctor}\n`);
     process.stdout.write(`  sql         : ${sqlStr}\n`);

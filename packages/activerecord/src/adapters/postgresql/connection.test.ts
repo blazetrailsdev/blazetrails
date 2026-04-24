@@ -1,7 +1,7 @@
 /**
  * Mirrors Rails activerecord/test/cases/adapters/postgresql/connection_test.rb
  */
-import { it, expect, beforeEach, afterEach } from "vitest";
+import { it, expect, describe, beforeEach, afterEach } from "vitest";
 import { describeIfPg, PostgreSQLAdapter, PG_TEST_URL } from "./test-helper.js";
 
 describeIfPg("PostgresqlConnectionTest", () => {
@@ -179,5 +179,54 @@ describeIfPg("PostgresqlConnectionTest", () => {
     const fakeLockId = 29400750;
     const result = await adapter.releaseAdvisoryLock(fakeLockId);
     expect(result).toBe(false);
+  });
+
+  it("non-default minMessages is applied to connection", async () => {
+    const a = new PostgreSQLAdapter({ connectionString: PG_TEST_URL, minMessages: "notice" });
+    try {
+      const level = await a.clientMinMessages();
+      expect(level).toBe("notice");
+    } finally {
+      await a.close();
+    }
+  });
+});
+
+describe("PostgreSQLAdapter constructor validation", () => {
+  it("rejects invalid variable key", () => {
+    expect(
+      () =>
+        new PostgreSQLAdapter({ connectionString: PG_TEST_URL, variables: { "bad;key": "val" } }),
+    ).toThrow("Invalid PostgreSQL session variable name");
+  });
+
+  it("rejects undefined variable value", () => {
+    expect(
+      () =>
+        new PostgreSQLAdapter({
+          connectionString: PG_TEST_URL,
+          variables: { debug_print_plan: undefined as unknown as null },
+        }),
+    ).toThrow("must be string | boolean | null");
+  });
+
+  it("rejects object variable value", () => {
+    expect(
+      () =>
+        new PostgreSQLAdapter({
+          connectionString: PG_TEST_URL,
+          variables: { debug_print_plan: {} as unknown as string },
+        }),
+    ).toThrow("must be string | boolean | null");
+  });
+
+  it("rejects non-plain-object variables", () => {
+    expect(
+      () =>
+        new PostgreSQLAdapter({
+          connectionString: PG_TEST_URL,
+          variables: new Map() as unknown as Record<string, string>,
+        }),
+    ).toThrow("variables must be a plain object");
   });
 });

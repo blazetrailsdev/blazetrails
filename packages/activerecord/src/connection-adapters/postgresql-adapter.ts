@@ -264,6 +264,16 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
       if (variablesPrototype !== Object.prototype && variablesPrototype !== null) {
         throw new TypeError("variables must be a plain object");
       }
+      for (const [key, val] of Object.entries(variables)) {
+        if (!/^[a-zA-Z_][a-zA-Z0-9_.]*$/.test(key)) {
+          throw new Error(`Invalid PostgreSQL session variable name: ${JSON.stringify(key)}`);
+        }
+        if (val !== null && typeof val !== "string" && typeof val !== "boolean") {
+          throw new TypeError(
+            `variables[${JSON.stringify(key)}] must be string | boolean | null, got ${typeof val}`,
+          );
+        }
+      }
     }
     this._minMessages = minMessages ?? "warning";
     this._sessionVariables = variables ?? {};
@@ -288,10 +298,6 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     await client.query(`SET client_min_messages TO ${this.quoteLiteral(this._minMessages)}`);
     for (const [key, val] of Object.entries(this._sessionVariables)) {
       if (val === null) continue;
-      // Validate key against legal GUC name characters before interpolating.
-      if (!/^[a-zA-Z_][a-zA-Z0-9_.]*$/.test(key)) {
-        throw new Error(`Invalid PostgreSQL session variable name: ${JSON.stringify(key)}`);
-      }
       if (val === "default") {
         await client.query(`SET SESSION ${key} TO DEFAULT`);
       } else {

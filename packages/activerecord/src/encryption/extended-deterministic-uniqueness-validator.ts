@@ -41,11 +41,10 @@ export class ExtendedDeterministicUniquenessValidator {
     this._originalValidateEach = original;
     this._installed = true;
 
-    // Note: when ExtendedDeterministicQueries is also installed, it already
-    // expands uniqueness WHERE clauses to cover all previous-scheme ciphertexts.
-    // EncryptedUniquenessValidator adds the same coverage via repeated calls,
-    // but guards each call with errors.added(:taken) so duplicate errors and
-    // extra DB round-trips are avoided once a match is found.
+    // When ExtendedDeterministicQueries is also installed it already expands
+    // WHERE clauses to cover all previous-scheme ciphertexts, so
+    // EncryptedUniquenessValidator skips the extra previous-scheme query in
+    // that case to avoid duplicate errors and redundant DB round-trips.
     const validator = new EUV();
     UniquenessValidator.prototype.validateEach = function (
       this: unknown,

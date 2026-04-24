@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from "vitest";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,6 +48,35 @@ function applySchema(dbPath: string, sql: string): void {
     db.close();
   }
 }
+
+// The CLI imports from @blazetrails/activesupport (via getFsAsync) and
+// transitively from @blazetrails/arel / activemodel. pnpm workspace
+// resolution points those imports at each package's dist/index.js. The
+// unit-test CI job doesn't build workspace packages first, so when any
+// expected dist/ is missing we build the three the CLI depends on in
+// dependency order (activesupport → activemodel → arel). Building them
+// in a single `--filter a --filter b --filter c` call races — pnpm may
+// start activemodel/arel before activesupport's dist lands, causing
+// "Cannot find module @blazetrails/activesupport". Serial invocation
+// is predictable and still fast when already built (tsc incremental).
+beforeAll(() => {
+  const packagesRoot = resolve(REPO_ROOT, "packages");
+  const depsInOrder = ["activesupport", "activemodel", "arel"];
+  const anyMissing = depsInOrder.some(
+    (p) => !existsSync(join(packagesRoot, p, "dist", "index.js")),
+  );
+  if (!anyMissing) return;
+  for (const pkg of depsInOrder) {
+    const res = spawnSync("pnpm", ["--filter", `@blazetrails/${pkg}`, "build"], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+      stdio: "inherit",
+    });
+    if (res.status !== 0) {
+      throw new Error(`failed to build @blazetrails/${pkg} for the test fixture`);
+    }
+  }
+}, 180_000);
 
 describe("trails-models-dump CLI", () => {
   let tmp: string;

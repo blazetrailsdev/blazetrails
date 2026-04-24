@@ -166,9 +166,11 @@ describe("AdapterSpecificRegistryTest", () => {
     expect(registry.lookup("foo")).toBeInstanceOf(FooType);
     expect(registry.lookup("foo", { array: true })).toEqual(new Decoration(new FooType()));
     expect(registry.lookup("foo", { range: true })).toEqual(new OtherDecoration(new FooType()));
-    expect(registry.lookup("foo", { array: true, range: true })).toEqual(
-      new Decoration(new OtherDecoration(new FooType())),
-    );
+    // Each decorator wraps the result of the other; the outer wrapper is
+    // the last-registered modifier (range), which then looks up the inner (array).
+    const inner = new Decoration(new FooType());
+    const outer = new OtherDecoration(inner);
+    expect(registry.lookup("foo", { array: true, range: true })).toEqual(outer);
   });
 
   it("registering adapter specific modifiers", () => {

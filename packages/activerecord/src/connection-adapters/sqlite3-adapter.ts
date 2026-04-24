@@ -12,6 +12,7 @@ import {
   ValueTooLong,
   NoDatabaseError,
   DatabaseConnectionError,
+  TransactionIsolationError,
 } from "../errors.js";
 import { TypeMap } from "../type/type-map.js";
 import { Date as DateType } from "../type/date.js";
@@ -107,9 +108,10 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
 
   constructor(
     filename: string | ":memory:" = ":memory:",
-    options: TrailsAdapterOptions & { readonly?: boolean } = {},
+    options: TrailsAdapterOptions & { readonly?: boolean; flags?: number } = {},
   ) {
     super();
+    this._config = { ...options };
     this._filename = filename;
     this._memoryDatabase = SQLite3Adapter._isMemoryFilename(filename);
     this._readonly = options.readonly ?? false;
@@ -260,8 +262,38 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   /**
    * Begin a transaction.
    */
+  private _previousReadUncommitted: unknown = null;
+
   async beginDeferredTransaction(): Promise<void> {
     return this.beginDbTransaction();
+  }
+
+  // Mirrors: SQLite3::DatabaseStatements#begin_isolated_db_transaction
+  async beginIsolatedDbTransaction(isolation: string): Promise<void> {
+    if (isolation !== "read_uncommitted") {
+      throw new TransactionIsolationError(
+        "SQLite3 only supports the `read_uncommitted` transaction isolation level",
+      );
+    }
+    if (!this.isSharedCache()) {
+      throw new Error(
+        "You need to enable the shared-cache mode in SQLite mode before attempting to change the transaction isolation level",
+      );
+    }
+    const row = this.db.prepare("PRAGMA read_uncommitted").get() as
+      | { read_uncommitted: number }
+      | undefined;
+    this._previousReadUncommitted = row?.read_uncommitted ?? 0;
+    this.db.exec("PRAGMA read_uncommitted=ON");
+    await this.beginDbTransaction();
+  }
+
+  // Mirrors: SQLite3::DatabaseStatements#reset_isolation_level
+  resetIsolationLevel(): void {
+    if (this._previousReadUncommitted !== null) {
+      this.db.exec(`PRAGMA read_uncommitted=${this._previousReadUncommitted}`);
+      this._previousReadUncommitted = null;
+    }
   }
 
   async beginDbTransaction(): Promise<void> {
@@ -698,13 +730,39 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
     await this.executeMutation(`DROP INDEX IF EXISTS ${quoteColumnName(indexName)}`);
   }
 
-  async virtualTables(): Promise<string[]> {
-    const rows = await this.execute(
-      "SELECT name FROM sqlite_master WHERE type = 'table' AND sql LIKE '%VIRTUAL%'",
+  // Mirrors: ActiveRecord::ConnectionAdapters::SQLite3::SchemaStatements#virtual_table_exists?
+  async virtualTableExists(tableName: string): Promise<boolean> {
+    try {
+      const rows = await this.execute(
+        `SELECT name FROM pragma_table_list WHERE schema <> 'temp' AND type = 'virtual' AND name = ?`,
+        [tableName],
+        "SCHEMA",
+      );
+      return rows.length > 0;
+    } catch {
+      const rows = await this.execute(
+        `SELECT name FROM sqlite_master WHERE type='table' AND sql LIKE '%VIRTUAL%' AND name = ?`,
+        [tableName],
+        "SCHEMA",
+      );
+      return rows.length > 0;
+    }
+  }
+
+  // Mirrors: ActiveRecord::ConnectionAdapters::SQLite3Adapter#virtual_tables
+  // Returns { tableName => [moduleName, argsString] }
+  async virtualTables(): Promise<Record<string, [string, string]>> {
+    const rows = (await this.execute(
+      "SELECT name, sql FROM sqlite_master WHERE type = 'table' AND sql LIKE '%VIRTUAL%'",
       [],
       "SCHEMA",
-    );
-    return rows.map((r) => String(r.name));
+    )) as Array<{ name: string; sql: string }>;
+    const result: Record<string, [string, string]> = {};
+    for (const r of rows) {
+      const m = /USING\s+(\w+)\s*\((.*)\)\s*$/is.exec(r.sql);
+      if (m) result[r.name] = [m[1], m[2]];
+    }
+    return result;
   }
 
   override async createVirtualTable(
@@ -1077,11 +1135,23 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
    * matches Rails' SQLite3::SchemaStatements#tables filter.
    */
   async tables(): Promise<string[]> {
-    const rows = (await this.execute(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
-      [],
-      "SCHEMA",
-    )) as Array<{ name: string }>;
+    // Uses pragma_table_list (SQLite 3.37+) to match Rails' data_source_sql.
+    // type='table' excludes shadow tables (FTS5 etc.) and virtual tables.
+    // Falls back to sqlite_master for older SQLite versions.
+    let rows: Array<{ name: string }>;
+    try {
+      rows = (await this.execute(
+        "SELECT name FROM pragma_table_list WHERE schema <> 'temp' AND type = 'table' AND name NOT IN ('sqlite_sequence', 'sqlite_schema') ORDER BY name",
+        [],
+        "SCHEMA",
+      )) as Array<{ name: string }>;
+    } catch {
+      rows = (await this.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+        [],
+        "SCHEMA",
+      )) as Array<{ name: string }>;
+    }
     return rows.map((r) => r.name);
   }
 

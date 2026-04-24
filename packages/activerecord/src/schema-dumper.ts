@@ -409,13 +409,35 @@ export class SchemaDumper {
     this.header(lines);
     const result = this.dumpTables(lines);
     if (result instanceof Promise) {
-      return result.then(() => {
+      return result.then(async () => {
+        await this.dumpVirtualTables(lines);
         this.trailer(lines);
         return lines.join("\n");
       });
     }
     this.trailer(lines);
     return lines.join("\n");
+  }
+
+  // Mirrors: SQLite3::SchemaDumper#virtual_tables — emits createVirtualTable
+  // calls for any virtual tables found via the adapter.
+  protected async dumpVirtualTables(lines: string[]): Promise<void> {
+    const adapter = (this._source as any)?._adapter;
+    if (!adapter || typeof adapter.virtualTables !== "function") return;
+    const tables: Record<string, [string, string]> = await adapter.virtualTables();
+    const names = Object.keys(tables).sort();
+    if (names.length === 0) return;
+    lines.push("");
+    // Split on commas that are NOT inside single quotes
+    const splitArgs = (s: string): string[] =>
+      s.split(/,(?=(?:[^']*'[^']*')*[^']*$)/).map((a) => a.trim());
+    for (const name of names) {
+      const [moduleName, argsStr] = tables[name];
+      const args = splitArgs(argsStr);
+      lines.push(
+        `  await ctx.createVirtualTable(${JSON.stringify(name)}, ${JSON.stringify(moduleName)}, ${JSON.stringify(args)});`,
+      );
+    }
   }
 
   private header(lines: string[]): void {

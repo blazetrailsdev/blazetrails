@@ -25,7 +25,10 @@ import {
   clearQueryCache as clearQueryCacheMixin,
   type QueryCacheHost,
 } from "./abstract/query-cache.js";
-import { DatabaseStatements } from "./abstract/database-statements.js";
+import {
+  DatabaseStatements,
+  transaction as dbStatementsTransaction,
+} from "./abstract/database-statements.js";
 import { quote as abstractQuote, typeCast as abstractTypeCast } from "./abstract/quoting.js";
 import { include } from "@blazetrails/activesupport";
 import type { Result } from "../result.js";
@@ -560,6 +563,28 @@ export class AbstractAdapter {
     fn: (tx?: unknown) => Promise<T> | T,
   ): Promise<T> {
     return this._transactionManager.withinNewTransaction(opts, fn as any);
+  }
+
+  /**
+   * Run a block inside a database transaction.
+   *
+   * Mirrors: ActiveRecord::ConnectionAdapters::DatabaseStatements#transaction
+   */
+  async transaction<T>(
+    fnOrOpts?:
+      | ((tx?: unknown) => Promise<T> | T)
+      | { requiresNew?: boolean; isolation?: string; joinable?: boolean },
+    fn?: (tx?: unknown) => Promise<T> | T,
+  ): Promise<T | undefined> {
+    let opts: { requiresNew?: boolean; isolation?: string; joinable?: boolean } = {};
+    let block: (tx?: unknown) => Promise<T> | T;
+    if (typeof fnOrOpts === "function") {
+      block = fnOrOpts;
+    } else {
+      opts = fnOrOpts ?? {};
+      block = fn!;
+    }
+    return dbStatementsTransaction.call(this as any, block, opts) as Promise<T | undefined>;
   }
 
   close(): void {

@@ -796,7 +796,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         const box = await this._djarForCount();
         if (!box) return 0;
         const djar = (box as { djar: unknown }).djar as {
-          count: () => Promise<number | bigint | Record<string, number | bigint>>;
+          count: () => Promise<number | Record<string, number>>;
         };
         const c = await djar.count();
         if (typeof c !== "number") {
@@ -825,7 +825,7 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
     // `COUNT(*)` Rails would.
     const countFn = (
       Relation.prototype as unknown as {
-        count: (this: unknown) => Promise<number | bigint | Record<string, number | bigint>>;
+        count: (this: unknown) => Promise<number | Record<string, number>>;
       }
     ).count;
     const counted = this._relationStateDiverged()

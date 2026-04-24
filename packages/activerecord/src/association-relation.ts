@@ -192,11 +192,11 @@ export class AssociationRelation<T extends Base> extends Relation<T> {
 
   // @ts-expect-error — Relation defines `count` as a property; override
   //   as a method so we can gate strict-loading before dispatching.
-  async count(column?: string): Promise<number | bigint | Record<string, number | bigint>> {
+  async count(column?: string): Promise<number | Record<string, number>> {
     this._checkStrictLoading();
     return (
       Relation.prototype as unknown as {
-        count: (col?: string) => Promise<number | bigint | Record<string, number | bigint>>;
+        count: (col?: string) => Promise<number | Record<string, number>>;
       }
     ).count.call(this, column);
   }
@@ -256,13 +256,13 @@ export class AssociationRelation<T extends Base> extends Relation<T> {
   override async calculate(
     operation: "count" | "sum" | "average" | "minimum" | "maximum",
     column?: string,
-  ): Promise<number | bigint | Record<string, number | bigint>> {
+  ): Promise<number | Record<string, number>> {
     this._checkStrictLoading();
     return (
       super.calculate as unknown as (
         op: string,
         col?: string,
-      ) => Promise<number | bigint | Record<string, number | bigint>>
+      ) => Promise<number | Record<string, number>>
     ).call(this, operation, column);
   }
 

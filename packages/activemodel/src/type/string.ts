@@ -5,6 +5,11 @@ export class StringType extends ImmutableStringType {
 
   cast(value: unknown): string | null {
     if (value === null || value === undefined) return null;
+    // StringType inherits the boolean-literal casting from
+    // ImmutableStringType (type/string.rb subclasses immutable_string.rb):
+    // `true` -> "t", `false` -> "f".
+    if (value === true) return "t";
+    if (value === false) return "f";
     return String(value);
   }
 

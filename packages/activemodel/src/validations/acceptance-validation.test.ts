@@ -94,9 +94,15 @@ describe("AcceptanceValidationTest", () => {
   });
 
   it("validates acceptance of true", () => {
+    // Rails' Topic uses `attr_accessor :terms_of_service`, preserving the
+    // assigned value without casting; its tests rely on `true` matching the
+    // default accept list `["1", true]`. Our Model requires a declared
+    // attribute, so use `boolean` here — `true` round-trips through cast.
+    // A `string`-typed attribute would cast `true` to "t" (per
+    // type/immutable_string.rb) and rightly not match the default list.
     class Terms extends Model {
       static {
-        this.attribute("terms", "string");
+        this.attribute("terms", "boolean");
         this.validates("terms", { acceptance: true });
       }
     }

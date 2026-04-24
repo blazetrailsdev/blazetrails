@@ -34,7 +34,9 @@ export class AcceptanceValidator extends EachValidator {
   validateEach(record: AnyRecord, attribute: string, value: unknown): void {
     const allowNil = this.options.allowNil ?? true;
     if (allowNil && (value === null || value === undefined)) return;
-    const accepted = (this.options.accept as unknown[]) ?? ["1", "true", true];
+    // Rails activemodel/lib/active_model/validations/acceptance.rb initializer:
+    //   super({ allow_nil: true, accept: ["1", true] }.merge!(options))
+    const accepted = (this.options.accept as unknown[]) ?? ["1", true];
     if (!accepted.includes(value)) {
       record.errors.add(attribute, "accepted", { message: this.options.message });
     }

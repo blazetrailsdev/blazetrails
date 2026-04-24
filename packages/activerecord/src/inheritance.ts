@@ -238,6 +238,11 @@ export function isFinderNeedsTypeCondition(modelClass: typeof Base): boolean {
 
 let _applicationRecordClass: typeof Base | null = null;
 
+/** Test-only: reset the primary abstract class singleton. */
+export function __resetPrimaryAbstractClass(): void {
+  _applicationRecordClass = null;
+}
+
 /**
  * Declare this class as the top-level application record base class and mark
  * it abstract.  Only one class per application may be designated as the

@@ -2,7 +2,7 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { Base, registerModel, enableSti, registerSubclass, SubclassNotFound } from "./index.js";
 import { getStiBase, isStiSubclass } from "./inheritance.js";
 
@@ -1802,9 +1802,36 @@ describe("Base.inheritanceColumn", () => {
 // InheritanceTest — targets inheritance_test.rb (continued)
 // ==========================================================================
 
-import { isFinderNeedsTypeCondition, stiClassFor, polymorphicClassFor } from "./inheritance.js";
+import {
+  isFinderNeedsTypeCondition,
+  primaryAbstractClass,
+  stiClassFor,
+  polymorphicClassFor,
+  __resetPrimaryAbstractClass,
+} from "./inheritance.js";
 
 describe("InheritanceTest — new parity methods", () => {
+  afterEach(() => __resetPrimaryAbstractClass());
+
+  it("primary_abstract_class marks the class abstract", () => {
+    class AppRecord extends Base {}
+    primaryAbstractClass(AppRecord);
+    expect(AppRecord.abstractClass).toBe(true);
+  });
+
+  it("primary_abstract_class raises if a different class is already set", () => {
+    class AppRecord extends Base {}
+    class Other extends Base {}
+    primaryAbstractClass(AppRecord);
+    expect(() => primaryAbstractClass(Other)).toThrow(/primary_abstract_class.*already set/);
+  });
+
+  it("primary_abstract_class allows re-setting the same class by reference", () => {
+    class AppRecord extends Base {}
+    primaryAbstractClass(AppRecord);
+    expect(() => primaryAbstractClass(AppRecord)).not.toThrow();
+  });
+
   it("finder_needs_type_condition? returns false for base class", () => {
     class M extends Base {
       static {

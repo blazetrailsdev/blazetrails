@@ -71,6 +71,7 @@ export {
 } from "./log-subscriber.js";
 export { ExplainSubscriber } from "./explain-subscriber.js";
 export { ExplainRegistry } from "./explain-registry.js";
+export { collectingQueriesForExplain, execExplain } from "./explain.js";
 
 // Wire LogSubscriber's Base resolver so it can delegate logger/filter
 // to ActiveRecord::Base without circular imports.

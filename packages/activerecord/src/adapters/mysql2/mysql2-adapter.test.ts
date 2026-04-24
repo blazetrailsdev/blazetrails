@@ -114,16 +114,16 @@ describeIfMysql("Mysql2Adapter", () => {
         await adapter.executeMutation("DROP TABLE IF EXISTS `cars`");
         await adapter.executeMutation("DROP TABLE IF EXISTS `subscribers`");
         await adapter.executeMutation(
-          "CREATE TABLE `old_cars` (`id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY)",
+          "CREATE TABLE `old_cars` (`id` INT NOT NULL AUTO_INCREMENT PRIMARY KEY) ENGINE=InnoDB",
         );
         await adapter.executeMutation(
-          "CREATE TABLE `cars` (`id` BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY)",
+          "CREATE TABLE `cars` (`id` BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY) ENGINE=InnoDB",
         );
         await adapter.executeMutation(
-          "CREATE TABLE `subscribers` (`nick` VARCHAR(255) NOT NULL PRIMARY KEY)",
+          "CREATE TABLE `subscribers` (`nick` VARCHAR(255) NOT NULL PRIMARY KEY) ENGINE=InnoDB",
         );
         await adapter.executeMutation(
-          "CREATE TABLE `engines` (`id` BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, `old_car_id` BIGINT)",
+          "CREATE TABLE `engines` (`id` BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, `old_car_id` BIGINT) ENGINE=InnoDB",
         );
       });
 
@@ -191,7 +191,7 @@ describeIfMysql("Mysql2Adapter", () => {
               \`old_car_id\` BIGINT,
               INDEX \`idx_old_car_id\` (\`old_car_id\`),
               CONSTRAINT \`fk_foos_old_car\` FOREIGN KEY (\`old_car_id\`) REFERENCES \`old_cars\` (\`id\`)
-            )
+            ) ENGINE=InnoDB
           `,
           )
           .then(() => null)
@@ -218,7 +218,7 @@ describeIfMysql("Mysql2Adapter", () => {
               \`car_id\` INT,
               INDEX \`idx_car_id\` (\`car_id\`),
               CONSTRAINT \`fk_foos_car\` FOREIGN KEY (\`car_id\`) REFERENCES \`cars\` (\`id\`)
-            )
+            ) ENGINE=InnoDB
           `,
           )
           .then(() => null)
@@ -245,7 +245,7 @@ describeIfMysql("Mysql2Adapter", () => {
               \`subscriber_id\` BIGINT,
               INDEX \`idx_subscriber_id\` (\`subscriber_id\`),
               CONSTRAINT \`fk_foos_subscriber\` FOREIGN KEY (\`subscriber_id\`) REFERENCES \`subscribers\` (\`nick\`)
-            )
+            ) ENGINE=InnoDB
           `,
           )
           .then(() => null)

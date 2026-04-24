@@ -11,7 +11,7 @@
 import { inspectExplainOption } from "../adapter.js";
 import type { ExplainOption } from "../adapter.js";
 import { AbstractAdapter, Version } from "./abstract-adapter.js";
-import { Column } from "./column.js";
+import type { Column } from "./column.js";
 import {
   InvalidForeignKey,
   MismatchedForeignKey,
@@ -85,8 +85,11 @@ const ER_QUERY_INTERRUPTED = 1317;
 const ER_QUERY_TIMEOUT = 3024;
 const ER_TABLE_EXISTS = 1050;
 
-export class AbstractMysqlAdapter extends AbstractAdapter {
+export abstract class AbstractMysqlAdapter extends AbstractAdapter {
   static readonly Version = Version;
+
+  /** Implemented by concrete adapters (Mysql2Adapter, TrilogyAdapter). */
+  abstract columns(tableName: string): Promise<Column[]>;
 
   protected _mariadb = false;
   protected _databaseVersion: Version | null = null;
@@ -753,11 +756,6 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
   }
 
   /**
-   * Map MySQL/MariaDB driver errors to ActiveRecord exception classes by
-   * errno. Matches Rails'
-   * `ConnectionAdapters::AbstractMysqlAdapter#translate_exception`.
-   */
-  /**
    * Build a MismatchedForeignKey from a MySQL FK constraint error.
    * Parses the FK SQL to identify the mismatched columns, then looks up
    * the referenced column's type to produce a helpful suggestion.
@@ -826,8 +824,7 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     if (!targetTable || !primaryKey || err.fkDetails.primaryKeySqlType) return err;
 
     try {
-      const adapter = this as unknown as { columns(t: string): Promise<Column[]> };
-      const cols = await adapter.columns(targetTable);
+      const cols = await this.columns(targetTable);
       const col = cols.find((c) => c.name === primaryKey);
       if (!col) return err;
 
@@ -857,6 +854,11 @@ export class AbstractMysqlAdapter extends AbstractAdapter {
     }
   }
 
+  /**
+   * Map MySQL/MariaDB driver errors to ActiveRecord exception classes by
+   * errno. Matches Rails'
+   * `ConnectionAdapters::AbstractMysqlAdapter#translate_exception`.
+   */
   protected _translateException(e: unknown, sql: string, binds: unknown[]): Error {
     if (!(e instanceof Error)) return new StatementInvalid(String(e), { sql, binds, cause: e });
     const errno = (e as { errno?: number }).errno;

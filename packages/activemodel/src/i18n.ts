@@ -70,7 +70,7 @@ function dig(obj: TranslationTree, path: string[]): TranslationValue | undefined
 
 function interpolate(str: string, options: Record<string, unknown>): string {
   return str.replace(/%\{(\w+)\}/g, (_, key) => {
-    if (!(key in options) || options[key] === undefined) {
+    if (!Object.prototype.hasOwnProperty.call(options, key) || options[key] === undefined) {
       throw new MissingInterpolationArgument(key, str);
     }
     return String(options[key]);
@@ -206,9 +206,6 @@ class I18nService {
     for (const [k, v] of Object.entries(options)) {
       if (!RESERVED_KEYS.has(k)) out[k] = v;
     }
-    // `count` is reserved as a lookup driver but Rails still makes it
-    // available as a `%{count}` interpolation (see I18n::Base#interpolate).
-    if (options.count !== undefined) out.count = options.count;
     return out;
   }
 

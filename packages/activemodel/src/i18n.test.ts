@@ -26,12 +26,17 @@ describe("I18n", () => {
       expect(I18n.t("apples", { count: 3 })).toBe("3 apples");
     });
 
+    it("raises on %{toString} — inherited Object keys do not satisfy a placeholder", () => {
+      I18n.storeTranslations("en", { hi: "hi %{toString}" });
+      expect(() => I18n.t("hi")).toThrow(MissingInterpolationArgument);
+    });
+
     it("does not pass I18n control keys (scope/default/locale) into interpolation", () => {
       I18n.storeTranslations("en", { hi: "hi %{name}" });
       // `locale` and `defaults` are reserved — they must not be mistakenly
       // forwarded to %{locale} etc., and must not swallow errors from
       // genuinely-missing interpolations like %{name}.
-      expect(() => I18n.t("hi", { locale: "en", defaults: [{ key: "missing" }] } as never)).toThrow(
+      expect(() => I18n.t("hi", { locale: "en", defaults: [{ key: "missing" }] })).toThrow(
         MissingInterpolationArgument,
       );
     });

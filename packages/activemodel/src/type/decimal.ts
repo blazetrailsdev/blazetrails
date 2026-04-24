@@ -65,10 +65,8 @@ export class DecimalType extends ValueType<string> {
   }
 }
 
-/**
- * Normalize a decimal-string representation (including scientific notation
- * as emitted by JS `String(1e-7)`) into `sign` + integer + fractional parts.
- */
+const MAX_EXPONENT_EXPANSION = 4000;
+
 /**
  * Normalize a decimal-string representation (including scientific notation
  * as emitted by JS `String(1e-7)`) into `sign` + integer + fractional
@@ -77,7 +75,6 @@ export class DecimalType extends ValueType<string> {
  * into allocating multi-gigabyte strings; over the cap we return null and
  * callers leave the raw form alone.
  */
-const MAX_EXPONENT_EXPANSION = 4000;
 
 function splitDecimal(raw: string): { sign: "" | "-"; intPart: string; fracPart: string } | null {
   let s = raw;

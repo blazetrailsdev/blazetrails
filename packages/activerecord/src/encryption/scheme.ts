@@ -45,10 +45,14 @@ function getOrCreateDefaultKeyProvider(
   return _defaultKeyProviderEntry;
 }
 
-function clearDefaultKeyProviderCache(): void {
+export function clearDefaultKeyProviderCache(): void {
   _defaultKeyProviderEntry = undefined;
   _defaultKeyProviderSig = undefined;
 }
+
+// Register eager cache invalidation so key material is released whenever
+// Configurable.configure() is called (key rotation, test teardown, etc.).
+Configurable.onConfigure(clearDefaultKeyProviderCache);
 
 export interface SchemeOptions {
   keyProvider?: unknown;

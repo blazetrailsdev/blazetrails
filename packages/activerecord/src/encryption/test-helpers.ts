@@ -11,6 +11,7 @@ import type { DatabaseAdapter } from "../adapter.js";
 import { Configurable } from "./configurable.js";
 import { Contexts } from "./contexts.js";
 import { DerivedSecretKeyProvider } from "./derived-secret-key-provider.js";
+import { clearDefaultKeyProviderCache } from "./scheme.js";
 import { withEncryptionContext, withoutEncryption } from "./context.js";
 import { DecryptionError } from "./errors.js";
 
@@ -54,6 +55,10 @@ export function restoreEncryptionConfig(snapshot: ConfigSnapshot): void {
   c.supportUnencryptedData = snapshot.supportUnencryptedData;
   c.previousSchemes = snapshot.previousSchemes;
   Contexts.resetDefaultContext();
+  // Eagerly clear so the previous test's key material doesn't linger in
+  // memory after config reset — the lazy clear on next keyProvider access
+  // isn't sufficient when no subsequent access occurs.
+  clearDefaultKeyProviderCache();
 }
 
 export function configureEncryption(

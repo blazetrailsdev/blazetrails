@@ -25,10 +25,9 @@ function stableKeySignature(
   keyDerivationSalt: string | undefined,
   hashDigestClass: string,
 ): string {
-  // Stable serialisation so equivalent string[] values always hit the same cache
-  // entry regardless of array instance identity.
-  const pk = Array.isArray(primaryKey) ? primaryKey.slice().sort().join(",") : primaryKey;
-  return `${pk}|${keyDerivationSalt ?? ""}|${hashDigestClass}`;
+  // JSON.stringify preserves array order (key rotation order is semantically
+  // meaningful) and is unambiguous — no comma-collision risk from key strings.
+  return JSON.stringify([primaryKey, keyDerivationSalt ?? "", hashDigestClass]);
 }
 
 function getOrCreateDefaultKeyProvider(

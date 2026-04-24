@@ -12,10 +12,12 @@ import { withoutEncryption } from "./context.js";
  */
 export class ExtendedDeterministicUniquenessValidator {
   private static _installed = false;
+  private static _originalValidateEach: Function | undefined;
 
   /**
    * Wraps UniquenessValidator#validateEach so uniqueness checks also cover
-   * values encrypted with previous schemes.
+   * values encrypted with previous schemes. Validates the target is callable
+   * before patching and saves the original for restoration via resetSupport().
    *
    * Mirrors: Rails' ExtendedDeterministicUniquenessValidator.install_support which
    * prepends EncryptedUniquenessValidator into ActiveRecord::Validations::UniquenessValidator.
@@ -28,9 +30,17 @@ export class ExtendedDeterministicUniquenessValidator {
     EncryptedUniquenessValidator: typeof EncryptedUniquenessValidator;
   }): void {
     if (this._installed) return;
-    this._installed = true;
 
     const original = UniquenessValidator.prototype.validateEach;
+    if (typeof original !== "function") {
+      throw new Error(
+        "ExtendedDeterministicUniquenessValidator: UniquenessValidator.prototype.validateEach is not callable",
+      );
+    }
+
+    this._originalValidateEach = original;
+    this._installed = true;
+
     const validator = new EUV();
     UniquenessValidator.prototype.validateEach = function (
       this: unknown,
@@ -40,6 +50,14 @@ export class ExtendedDeterministicUniquenessValidator {
     ) {
       validator.validateEach(original.bind(this), record, attribute, value);
     };
+  }
+
+  /** Restores the original validateEach — for use in test teardown. */
+  static resetSupport(UniquenessValidator: { prototype: { validateEach: Function } }): void {
+    if (!this._installed || !this._originalValidateEach) return;
+    UniquenessValidator.prototype.validateEach = this._originalValidateEach;
+    this._installed = false;
+    this._originalValidateEach = undefined;
   }
 
   static get installed(): boolean {

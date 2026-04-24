@@ -8,13 +8,17 @@ import {
   makeFreshModel,
 } from "./test-helpers.js";
 import { Configurable } from "./configurable.js";
-import { installExtendedQueriesIfConfigured } from "../encryption/install.js";
+import { installExtendedQueriesIfConfigured } from "./install.js";
+import { ExtendedDeterministicUniquenessValidator } from "./extended-deterministic-uniqueness-validator.js";
+import { UniquenessValidator } from "../validations.js";
 
 describe("ActiveRecord::Encryption::UniquenessValidationsTest", () => {
   let configSnapshot: ReturnType<typeof snapshotEncryptionConfig>;
+  let savedExtendQueries: boolean;
 
   beforeEach(() => {
     configSnapshot = snapshotEncryptionConfig();
+    savedExtendQueries = Configurable.config.extendQueries;
     Configurable.config.previousSchemes = [];
     configureEncryption();
     // Install extended uniqueness validator so previous-scheme ciphertexts
@@ -25,6 +29,10 @@ describe("ActiveRecord::Encryption::UniquenessValidationsTest", () => {
 
   afterEach(() => {
     restoreEncryptionConfig(configSnapshot);
+    Configurable.config.extendQueries = savedExtendQueries;
+    // Restore the original UniquenessValidator#validateEach to prevent
+    // cross-test pollution in shared Vitest workers.
+    ExtendedDeterministicUniquenessValidator.resetSupport(UniquenessValidator);
   });
 
   it("uniqueness validations work", async () => {

@@ -22,10 +22,12 @@ import {
  * and `ActiveRecord::Encryption::ExtendedDeterministicUniquenessValidator.install_support`
  * when `config.active_record.encryption.extend_queries` is set.
  *
- * Safe to call multiple times — `installSupport` is idempotent. Returns
- * the effective install state: `true` when the patches are active after
- * this call (whether installed now or in a prior call), `false` when
- * disabled and nothing has been installed yet.
+ * Safe to call multiple times — both installers are idempotent. Returns
+ * `true` when `ExtendedDeterministicQueries` patches are active after this
+ * call (whether installed now or in a prior call), `false` when disabled.
+ * Note: `ExtendedDeterministicUniquenessValidator` is installed at the same
+ * time; call `ExtendedDeterministicUniquenessValidator.resetSupport()` in
+ * test teardown to undo the `UniquenessValidator#validateEach` patch.
  */
 export function installExtendedQueriesIfConfigured(): boolean {
   if (!Configurable.config.extendQueries) return ExtendedDeterministicQueries.installed;

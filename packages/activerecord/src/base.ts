@@ -36,6 +36,7 @@ import {
   defaultValidationContext,
   _setSuperIsValid,
   _setSuperValidates,
+  type ValidationContextArg,
 } from "./validations.js";
 import * as _Validations from "./validations.js";
 import {
@@ -2596,7 +2597,7 @@ export class Base extends Model {
    * Delegates to validations module for context resolution, then runs
    * autosave association validations.
    */
-  override isValid(context?: string | string[] | null): boolean {
+  override isValid(context?: ValidationContextArg): boolean {
     const effectiveContext =
       context ?? this._validationContext ?? defaultValidationContext.call(this);
     const result = validationsIsValid.call(this, effectiveContext);
@@ -2641,7 +2642,7 @@ export interface Base extends Included<typeof AutosaveAssociation> {
   loadBelongsTo(name: string): Promise<Base | null>;
   loadHasOne(name: string): Promise<Base | null>;
   readAttributeForValidation(attribute: string): unknown;
-  validate(context?: string | string[] | null): boolean;
+  validate(context?: ValidationContextArg): boolean;
   customValidationContext(): boolean;
   increment(attribute: string, by?: number): this;
   decrement(attribute: string, by?: number): this;

@@ -477,14 +477,16 @@ export class Model {
           const origErrors = record.errors;
           const tempErrors = new Errors(record);
           record.errors = tempErrors;
+          let validateResult: unknown;
           try {
-            validator.validate(record);
+            validateResult = validator.validate(record);
           } finally {
             record.errors = origErrors;
           }
           if (tempErrors.any) {
             throw new StrictValidationFailed(tempErrors.fullMessages.join(", "));
           }
+          return validateResult as void;
         };
       } else {
         callbackFn = (record: AnyRecord) => validator.validate(record) as unknown as void;

@@ -638,6 +638,22 @@ describe("unified sync/async runner", () => {
     );
   });
 
+  it("async validator registered via validatesWith is caught at runtime", () => {
+    class AsyncValidator {
+      async validate(_record: unknown): Promise<void> {
+        await Promise.resolve();
+      }
+    }
+    class Person extends Model {
+      static {
+        this.attribute("name", "string");
+        this.validatesWith(AsyncValidator);
+      }
+    }
+    const p = new Person({ name: "test" });
+    expect(() => p.isValid()).toThrow(/Async callback registered on sync event 'validate'/);
+  });
+
   it("strict: 'sync' allows fully-sync chains", () => {
     const chain = new CallbackChain();
     const log: string[] = [];

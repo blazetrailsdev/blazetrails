@@ -14,6 +14,18 @@ import { ActiveRecordError } from "./errors.js";
  * Mirrors: ActiveRecord::ReadonlyAttributeError (defined alongside
  * HasReadonlyAttributes in Rails' readonly_attributes.rb).
  */
+/**
+ * When false, assigning to a readonly attribute silently skips the write
+ * instead of raising ReadonlyAttributeError.
+ *
+ * Mirrors: ActiveRecord.raise_on_assign_to_attr_readonly
+ */
+export let raiseOnAssignToAttrReadonly = true;
+
+export function setRaiseOnAssignToAttrReadonly(value: boolean): void {
+  raiseOnAssignToAttrReadonly = value;
+}
+
 export class ReadonlyAttributeError extends ActiveRecordError {
   readonly attribute: string;
   constructor(attribute: string) {
@@ -93,7 +105,10 @@ export function writeAttribute(this: Base, name: string, value: unknown): void {
   }
   const ctor = this.constructor as typeof Base;
   if (this._newRecord === false && ctor.readonlyAttributeQ(String(name))) {
-    throw new ReadonlyAttributeError(String(name));
+    if (raiseOnAssignToAttrReadonly) {
+      throw new ReadonlyAttributeError(String(name));
+    }
+    return; // silently skip — mirrors Rails' non-raising mode
   }
   // `super` — route through Model's writeAttribute (the next ancestor with
   // a writeAttribute impl, matching Rails' `super` in HasReadonlyAttributes).
@@ -108,7 +123,10 @@ export function writeAttribute(this: Base, name: string, value: unknown): void {
 export function _writeAttribute(this: Base, name: string, value: unknown): void {
   const ctor = this.constructor as typeof Base;
   if (this._newRecord === false && ctor.readonlyAttributeQ(String(name))) {
-    throw new ReadonlyAttributeError(String(name));
+    if (raiseOnAssignToAttrReadonly) {
+      throw new ReadonlyAttributeError(String(name));
+    }
+    return;
   }
   Model.prototype.writeAttribute.call(this, name, value);
 }

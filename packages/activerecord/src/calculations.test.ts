@@ -7491,6 +7491,29 @@ describe("bigint aggregates (big_integer columns)", () => {
     expect(typeof result).toBe("number");
     expect(result).toBe(10);
   });
+
+  it("grouped sum of big_integer column returns bigint per group", async () => {
+    const Score = makeBigModel();
+    await Score.create({ value: BIG, category: "a" });
+    await Score.create({ value: 1n, category: "a" });
+    await Score.create({ value: 2n, category: "b" });
+    const result = (await Score.group("category").sum("value")) as Record<string, bigint>;
+    expect(typeof result["a"]).toBe("bigint");
+    expect(result["a"]).toBe(BIG + 1n);
+    expect(typeof result["b"]).toBe("bigint");
+    expect(result["b"]).toBe(2n);
+  });
+
+  it("average of big_integer column returns number (Rails BigDecimal → JS number)", async () => {
+    // Rails returns BigDecimal for average on integer columns; we return number.
+    // This is a documented limitation — average is never a bigint in our impl.
+    const Score = makeBigModel();
+    await Score.create({ value: 10n, category: "a" });
+    await Score.create({ value: 20n, category: "a" });
+    const result = await Score.average("value");
+    expect(typeof result).toBe("number");
+    expect(result).toBe(15);
+  });
 });
 
 // ==========================================================================

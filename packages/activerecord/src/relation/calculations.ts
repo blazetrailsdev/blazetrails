@@ -115,6 +115,15 @@ function wrapBigintAgg(innerSql: string, grouped = false): string {
   return `SELECT CAST(val AS TEXT) AS val FROM (${innerSql}) AS _bigint_agg`;
 }
 
+function isBigintColumn(rel: CalculationRelation, fn: AggFn, column: string): boolean {
+  return (
+    fn !== "count" &&
+    fn !== "average" &&
+    column !== "*" &&
+    rel._modelClass.arelTable.typeForAttribute(column) instanceof BigIntegerType
+  );
+}
+
 async function singleAggregate(
   rel: CalculationRelation,
   fn: AggFn,
@@ -128,14 +137,8 @@ async function singleAggregate(
   rel._applyJoinsToManager(manager);
   rel._applyWheresToManager(manager, table);
 
-  const isBigint =
-    fn !== "count" &&
-    fn !== "average" &&
-    column !== "*" &&
-    rel._modelClass.arelTable.typeForAttribute(column) instanceof BigIntegerType;
-
   const innerSql = manager.toSql();
-  const sql = isBigint ? wrapBigintAgg(innerSql) : innerSql;
+  const sql = isBigintColumn(rel, fn, column) ? wrapBigintAgg(innerSql) : innerSql;
   const rows = await rel._modelClass.adapter.execute(sql);
   const val = rows[0]?.val;
   if (val === undefined || val === null) {
@@ -161,14 +164,8 @@ async function groupedAggregate(
   if (rel._limitValue !== null) manager.take(rel._limitValue);
   if (rel._offsetValue !== null) manager.skip(rel._offsetValue);
 
-  const isBigint =
-    fn !== "count" &&
-    fn !== "average" &&
-    column !== "*" &&
-    rel._modelClass.arelTable.typeForAttribute(column) instanceof BigIntegerType;
-
   const innerSql = manager.toSql();
-  const sql = isBigint ? wrapBigintAgg(innerSql, true) : innerSql;
+  const sql = isBigintColumn(rel, fn, column) ? wrapBigintAgg(innerSql, true) : innerSql;
   const rows = await rel._modelClass.adapter.execute(sql);
 
   const result: Record<string, unknown> = {};

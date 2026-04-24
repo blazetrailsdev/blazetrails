@@ -128,25 +128,74 @@ export function serializableHash(
  *   (matches Rails' `respond_to?(:as_json)` protocol)
  * - Everything else → pass through (numbers, strings, booleans, null)
  */
-export function coerceForJson(value: unknown, seen: WeakSet<object> = new WeakSet()): unknown {
+export function coerceForJson(
+  value: unknown,
+  seen: WeakMap<object, unknown> = new WeakMap(),
+  inProgress: WeakSet<object> = new WeakSet(),
+): unknown {
   if (value === null || value === undefined) return value;
   if (typeof value === "bigint") return value.toString();
   if (value instanceof Date) return value.toISOString();
   if (Array.isArray(value)) {
-    return value.map((v) => coerceForJson(v, seen));
+    // True cycle: short-circuit to null (Rails' JSON encoder raises, but
+    // `null` is less hostile for accidental self-refs and JSON.stringify
+    // would also fail).
+    if (inProgress.has(value)) return null;
+    // Previously coerced: return the same coerced result so shared
+    // references preserve object identity in the output (avoids silent
+    // data loss on `{ a: obj, b: obj }`-shaped hashes).
+    if (seen.has(value)) return seen.get(value);
+    const out: unknown[] = [];
+    seen.set(value, out);
+    inProgress.add(value);
+    try {
+      for (const entry of value) {
+        out.push(coerceForJson(entry, seen, inProgress));
+      }
+    } finally {
+      inProgress.delete(value);
+    }
+    return out;
   }
   if (typeof value === "object") {
-    if (seen.has(value)) return null; // break cycles
-    seen.add(value);
+    if (inProgress.has(value)) return null;
+    if (seen.has(value)) return seen.get(value);
     const v = value as Record<string, unknown> & {
       asJson?: () => unknown;
       toJSON?: () => unknown;
     };
-    if (typeof v.asJson === "function") return coerceForJson(v.asJson(), seen);
-    if (typeof v.toJSON === "function") return coerceForJson(v.toJSON(), seen);
+    // `asJson` / `toJSON` delegation: enter the same in-progress/seen
+    // bookkeeping so the dispatched value still contributes to cycle
+    // detection and shared-ref memoization.
+    if (typeof v.asJson === "function") {
+      inProgress.add(value);
+      try {
+        const out = coerceForJson(v.asJson(), seen, inProgress);
+        seen.set(value, out);
+        return out;
+      } finally {
+        inProgress.delete(value);
+      }
+    }
+    if (typeof v.toJSON === "function") {
+      inProgress.add(value);
+      try {
+        const out = coerceForJson(v.toJSON(), seen, inProgress);
+        seen.set(value, out);
+        return out;
+      } finally {
+        inProgress.delete(value);
+      }
+    }
     const out: Record<string, unknown> = {};
-    for (const [k, val] of Object.entries(v)) {
-      out[k] = coerceForJson(val, seen);
+    seen.set(value, out);
+    inProgress.add(value);
+    try {
+      for (const [k, val] of Object.entries(v)) {
+        out[k] = coerceForJson(val, seen, inProgress);
+      }
+    } finally {
+      inProgress.delete(value);
     }
     return out;
   }

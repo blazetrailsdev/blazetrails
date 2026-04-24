@@ -317,6 +317,44 @@ describe("SerializationTest", () => {
       expect(parsed).toEqual({ id: "42", name: "row-1" });
     });
 
+    it("coerceForJson preserves shared references (no silent data loss)", async () => {
+      // `{ a: obj, b: obj }` — same object twice. Must not be treated
+      // as a cycle. Previously the WeakSet-based cycle guard would
+      // return null on the second occurrence; the in-progress/seen
+      // split now returns the memoized coerced result and preserves
+      // identity in the output.
+      const { coerceForJson } = await import("./serialization.js");
+      const shared = { kind: "tag", count: 5 };
+      const root = { a: shared, b: shared };
+      const out = coerceForJson(root) as { a: unknown; b: unknown };
+      expect(out.a).toEqual({ kind: "tag", count: 5 });
+      expect(out.b).toEqual({ kind: "tag", count: 5 });
+      expect(out.a).toBe(out.b); // same coerced reference
+    });
+
+    it("coerceForJson breaks true cycles (self-referential object → null)", async () => {
+      const { coerceForJson } = await import("./serialization.js");
+      const a: Record<string, unknown> = { name: "a" };
+      a.self = a; // cycle
+      const out = coerceForJson(a) as { name: string; self: unknown };
+      expect(out.name).toBe("a");
+      // Inner self-reference collapses to null so the result stays
+      // JSON.stringify-safe.
+      expect(out.self).toBe(null);
+      expect(() => JSON.stringify(out)).not.toThrow();
+    });
+
+    it("coerceForJson breaks true cycles in arrays (self-containing)", async () => {
+      const { coerceForJson } = await import("./serialization.js");
+      const arr: unknown[] = [1, 2];
+      arr.push(arr); // cycle
+      const out = coerceForJson(arr) as unknown[];
+      expect(out[0]).toBe(1);
+      expect(out[1]).toBe(2);
+      expect(out[2]).toBe(null);
+      expect(() => JSON.stringify(out)).not.toThrow();
+    });
+
     it("asJson is idempotent on JSON-safe values", () => {
       class Person extends Model {
         static {

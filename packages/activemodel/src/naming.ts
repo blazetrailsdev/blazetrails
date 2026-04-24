@@ -327,10 +327,13 @@ export class ModelName {
 
   /**
    * Mirrors Rails `@name.as_json` — `String#as_json` just returns the
-   * string, so we return `this.name` as-is. Lets `JSON.stringify(mn)`
-   * emit the plain class name rather than `{}` / the object form.
+   * string (and accepts an ignored `options` Hash). Returns `this.name`
+   * as-is; accepts (but ignores) an options argument so callers match
+   * Rails' signature and the rest of this codebase's `asJson(options?)`
+   * conventions. Lets `JSON.stringify(mn)` emit the plain class name
+   * rather than `{}` / the object form.
    */
-  asJson(): string {
+  asJson(_options?: unknown): string {
     return this.name;
   }
 

@@ -12,6 +12,8 @@ export interface Dirty {
   readonly changedAttributes: string[];
   readonly changes: Record<string, [unknown, unknown]>;
   readonly previousChanges: Record<string, [unknown, unknown]>;
+  readonly mutationsFromDatabase: Record<string, [unknown, unknown]>;
+  readonly mutationsBeforeLastSave: Record<string, [unknown, unknown]>;
   attributeChanged(name: string, options?: { from?: unknown; to?: unknown }): boolean;
   attributeWas(name: string): unknown;
   attributePreviouslyChanged(name: string, options?: { from?: unknown; to?: unknown }): boolean;
@@ -21,6 +23,8 @@ export interface Dirty {
   clearChangesInformation(): void;
   clearAttributeChanges(attributes: string[]): void;
   attributeChangedInPlace(name: string): boolean;
+  forgetAttributeAssignments(): void;
+  clearAttributeChange(name: string): void;
 }
 
 function resolveValue(value: unknown): unknown {
@@ -156,24 +160,50 @@ export class DirtyTracker {
   }
 
   /**
-   * Drop all pending assignment tracking without reverting values. Used
-   * by transactional rollback: the in-memory values stay, but the record
-   * no longer reports them as changed.
+   * Drop all pending assignment tracking and reset the baseline to the
+   * current in-memory values. Subsequent writes diff from the new baseline.
+   *
+   * Rails' `forget_attribute_assignments` replaces `@attributes` with
+   * `@attributes.map(&:forgotten_change)`, which rebinds each Attribute's
+   * `@original_attribute` to its current cast value. Mirror that by
+   * re-snapshotting (while preserving `_previousChanges` from the last save).
    *
    * Mirrors: ActiveModel::Dirty#forget_attribute_assignments
    */
-  forgetAttributeAssignments(): void {
+  forgetAttributeAssignments(
+    attributes: Map<string, unknown> | { snapshotValues(): Map<string, unknown> },
+  ): void {
+    if (attributes instanceof Map) {
+      this._originalAttributes = new Map(attributes);
+      this._originalHas = new Set(attributes.keys());
+    } else {
+      this._originalAttributes = attributes.snapshotValues();
+      this._originalHas = new Set(this._originalAttributes.keys());
+    }
     this._changedAttributes.clear();
   }
 
   /**
-   * Drop a single attribute's pending change without reverting its value.
+   * Drop a single attribute's pending change and rebind its baseline to
+   * the current value, so a later write reports `[current, next]` instead
+   * of `[originalFromFirstSnapshot, next]`.
    *
    * Mirrors: ActiveModel::Dirty#clear_attribute_change
-   * (-> mutation_tracker.forget_change(name)).
+   * -> `mutation_tracker.forget_change(name)`.
    */
-  clearAttributeChange(name: string): void {
+  clearAttributeChange(
+    attributes: Map<string, unknown> | { snapshotValues(): Map<string, unknown> },
+    name: string,
+  ): void {
     this._changedAttributes.delete(name);
+    const snap = attributes instanceof Map ? attributes : attributes.snapshotValues();
+    if (snap.has(name)) {
+      this._originalAttributes.set(name, snap.get(name));
+      this._originalHas.add(name);
+    } else {
+      this._originalAttributes.delete(name);
+      this._originalHas.delete(name);
+    }
   }
 
   initAttributes(

@@ -1665,7 +1665,7 @@ export class Model {
    * Mirrors: ActiveModel::Dirty#forget_attribute_assignments
    */
   forgetAttributeAssignments(): void {
-    this._dirty.forgetAttributeAssignments();
+    this._dirty.forgetAttributeAssignments(this._attributes);
   }
 
   /**
@@ -1674,7 +1674,7 @@ export class Model {
    * Mirrors: ActiveModel::Dirty#clear_attribute_change
    */
   clearAttributeChange(name: string): void {
-    this._dirty.clearAttributeChange(name);
+    this._dirty.clearAttributeChange(this._attributes, name);
   }
 
   // -- Serialization --

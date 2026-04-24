@@ -14,7 +14,7 @@ import {
   CallbackConditions,
   defineModelCallbacks,
 } from "./callbacks.js";
-import { serializableHash, SerializeOptions } from "./serialization.js";
+import { serializableHash, SerializeOptions, coerceForJson } from "./serialization.js";
 import { BlockValidator, EachValidator, Validator as ValidatorBase } from "./validator.js";
 
 /**
@@ -1504,7 +1504,7 @@ export class Model {
   }
 
   asJson(options?: SerializeOptions): Record<string, unknown> {
-    const hash = this.serializableHash(options);
+    const hash = coerceForJson(this.serializableHash(options)) as Record<string, unknown>;
     const ctor = this.constructor as typeof Model;
     if (ctor.includeRootInJson) {
       const root =

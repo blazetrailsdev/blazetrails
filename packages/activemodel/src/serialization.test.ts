@@ -234,4 +234,81 @@ describe("SerializationTest", () => {
     const result = p.serializableHash();
     expect(result.name).toBe("Alice");
   });
+
+  describe("asJson type coercion (Rails ActiveSupport::JSON parity)", () => {
+    // Rails' JSON encoder routes every value through `as_json` — BigDecimal
+    // → string, Time/Date → ISO8601, Symbol → string. Our helper ports
+    // the subset that actually occurs in JS: BigInt → string, Date →
+    // ISO8601 (so the hash form already contains strings, not Date
+    // objects), recurse into arrays/objects, call `asJson()`/`toJSON()`
+    // on nested values.
+    it("asJson coerces bigint attributes to string (JSON.stringify-safe)", () => {
+      class Row extends Model {
+        static {
+          this.attribute("id", "big_integer");
+          this.attribute("name", "string");
+        }
+      }
+      const r = new Row({ id: "99999999999999999999", name: "row-1" });
+      const json = r.asJson();
+      // Before this PR: `id` was a BigInt → JSON.stringify would throw.
+      expect(json["id"]).toBe("99999999999999999999");
+      expect(json["name"]).toBe("row-1");
+      // JSON.stringify now round-trips without throwing.
+      expect(() => JSON.stringify(json)).not.toThrow();
+    });
+
+    it("asJson coerces Date attributes to ISO 8601 strings", () => {
+      class Event extends Model {
+        static {
+          this.attribute("startsAt", "datetime");
+        }
+      }
+      const e = new Event({ startsAt: new Date("2026-04-24T10:00:00Z") });
+      const json = e.asJson();
+      expect(json["startsAt"]).toBe("2026-04-24T10:00:00.000Z");
+    });
+
+    it("asJson recurses into include: arrays and nested objects", () => {
+      class Post extends Model {
+        static {
+          this.attribute("id", "big_integer");
+          this.attribute("title", "string");
+        }
+      }
+      class Blog extends Model {
+        static {
+          this.attribute("name", "string");
+        }
+      }
+      const b = new Blog({ name: "b" });
+      (b as unknown as { _cachedAssociations: Map<string, unknown> })._cachedAssociations = new Map(
+        [
+          [
+            "posts",
+            [
+              new Post({ id: "1000000000000", title: "p1" }),
+              new Post({ id: "2000000000000", title: "p2" }),
+            ],
+          ],
+        ],
+      );
+      const json = b.asJson({ include: "posts" });
+      expect(Array.isArray(json.posts)).toBe(true);
+      // Each post's BigInt id is coerced to a string.
+      expect((json.posts as Array<{ id: string }>)[0].id).toBe("1000000000000");
+      expect(() => JSON.stringify(json)).not.toThrow();
+    });
+
+    it("asJson is idempotent on JSON-safe values", () => {
+      class Person extends Model {
+        static {
+          this.attribute("name", "string");
+          this.attribute("age", "integer");
+        }
+      }
+      const p = new Person({ name: "Alice", age: 30 });
+      expect(p.asJson()).toEqual({ name: "Alice", age: 30 });
+    });
+  });
 });

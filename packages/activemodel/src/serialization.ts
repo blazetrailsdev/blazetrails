@@ -106,6 +106,53 @@ export function serializableHash(
   return result;
 }
 
+/**
+ * Coerce a value into a JSON-safe shape, mirroring Rails'
+ * `ActiveSupport::JSON.encode` → `Object#as_json` dispatch.
+ *
+ * Native `JSON.stringify` handles most primitives + Date
+ * (`Date.prototype.toJSON()` → ISO 8601), but throws on `BigInt` and
+ * emits nothing useful for non-enumerable types. Rails' encoder:
+ *
+ * - BigDecimal → string (to preserve precision)
+ * - Time / Date / DateTime → ISO 8601 string
+ * - Symbol → string
+ *
+ * We cover the JS analog:
+ * - `bigint` → string (JSON.stringify throws otherwise)
+ * - `Date` → ISO 8601 string (pre-serialize so downstream equality
+ *   checks on the hash form see the coerced value, not a Date
+ *   instance that JSON.stringify would handle separately)
+ * - Plain arrays / objects → recurse
+ * - Anything with its own `asJson()` or `toJSON()` → call it and recurse
+ *   (matches Rails' `respond_to?(:as_json)` protocol)
+ * - Everything else → pass through (numbers, strings, booleans, null)
+ */
+export function coerceForJson(value: unknown, seen: WeakSet<object> = new WeakSet()): unknown {
+  if (value === null || value === undefined) return value;
+  if (typeof value === "bigint") return value.toString();
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) {
+    return value.map((v) => coerceForJson(v, seen));
+  }
+  if (typeof value === "object") {
+    if (seen.has(value)) return null; // break cycles
+    seen.add(value);
+    const v = value as Record<string, unknown> & {
+      asJson?: () => unknown;
+      toJSON?: () => unknown;
+    };
+    if (typeof v.asJson === "function") return coerceForJson(v.asJson(), seen);
+    if (typeof v.toJSON === "function") return coerceForJson(v.toJSON(), seen);
+    const out: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(v)) {
+      out[k] = coerceForJson(val, seen);
+    }
+    return out;
+  }
+  return value;
+}
+
 function normalizeIncludes(
   include: Record<string, SerializeOptions> | string[] | string,
 ): Record<string, SerializeOptions> {

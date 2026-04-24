@@ -33,9 +33,7 @@ describeIfPg("PostgreSQLAdapter", () => {
       await adapter.exec(`DROP TABLE IF EXISTS "pg_integers"`);
     });
 
-    it("integer types", async () => {
-      // Verify that int2, int4, and int8 columns all come back through
-      // the pg driver as strings (int8) or numbers (int2/int4) as expected.
+    beforeEach(async () => {
       await adapter.exec(`DROP TABLE IF EXISTS "pg_int_types"`);
       await adapter.exec(`
         CREATE TABLE "pg_int_types" (
@@ -44,6 +42,15 @@ describeIfPg("PostgreSQLAdapter", () => {
           "big"    BIGINT   DEFAULT 9007199254740993
         )
       `);
+    });
+
+    afterEach(async () => {
+      await adapter.exec(`DROP TABLE IF EXISTS "pg_int_types"`);
+    });
+
+    it("integer types", async () => {
+      // Verify that int2, int4, and int8 columns all come back through
+      // the pg driver as strings (int8) or numbers (int2/int4) as expected.
       await adapter.executeMutation(`INSERT INTO "pg_int_types" DEFAULT VALUES`);
       const rows = await adapter.execute(`SELECT * FROM "pg_int_types"`);
       expect(typeof rows[0].small).toBe("number");
@@ -51,7 +58,6 @@ describeIfPg("PostgreSQLAdapter", () => {
       // pg-types returns int8 as string to avoid precision loss
       expect(typeof rows[0].big).toBe("string");
       expect(BigInt(rows[0].big as string)).toBe(9007199254740993n);
-      await adapter.exec(`DROP TABLE IF EXISTS "pg_int_types"`);
     });
 
     it("schema properly respects bigint ranges", async () => {

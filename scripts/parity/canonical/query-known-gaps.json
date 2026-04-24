@@ -45,7 +45,7 @@
   },
   "ar-01": {
     "side": "diff",
-    "reason": "Book.joins(:reviews): trails Relation#joins(string) only accepts raw SQL join clauses (_rawJoins), not Rails-style symbol/string association names. Fixture falls back to emitting 'FROM \"books\" reviews' (SQL fragment appended) rather than an INNER JOIN on the FK. Real trails-missing feature: association-name joins."
+    "reason": "Book.joins(:reviews): with models registered via registerModel() in the fixture's models.ts, trails Relation#joins(name) does resolve the association and emit an INNER JOIN on the FK. The remaining diff is table-name quoting — trails emits 'INNER JOIN reviews ON ...' where Rails emits 'INNER JOIN \"reviews\" ON ...'. Column references on both sides are quoted identically; only the table identifier after INNER JOIN is bare on trails."
   },
   "ar-09": {
     "side": "diff",

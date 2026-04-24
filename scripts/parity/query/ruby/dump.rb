@@ -7,7 +7,8 @@
 #     [--frozen-at ISO8601_UTC]
 #
 # Applies <fixture-dir>/schema.sql to a fresh SQLite database, evaluates
-# <fixture-dir>/query.rb, calls to_sql on the result, and writes a
+# <fixture-dir>/query.rb, extracts SQL and binds (via to_sql_and_binds
+# with fallback to to_sql), and writes a
 # CanonicalQuery JSON to <out.json>.
 #
 # --frozen-at <iso> freezes time via ActiveSupport::Testing::TimeHelpers for
@@ -25,7 +26,7 @@ require "fileutils"
 require "time"
 
 def usage
-  warn "Usage: bundle exec ruby dump.rb <fixture-dir> <out.json> [--frozen-at ISO]"
+  warn "Usage: bundle exec --gemfile scripts/parity/schema/ruby/Gemfile ruby scripts/parity/query/ruby/dump.rb <fixture-dir> <out.json> [--frozen-at ISO8601_UTC]"
   exit 1
 end
 
@@ -119,22 +120,23 @@ Dir.mktmpdir("parity-query-ruby-") do |tmpdir|
     #    Try conn.to_sql_and_binds first (works for managers and SQL strings, extracts
     #    binds Rails-style). Plain nodes may only support direct SQL rendering via to_sql;
     #    fall back to that path if to_sql_and_binds raises.
-    sql_str, binds = begin
-      raw_sql, raw_binds = conn.to_sql_and_binds(result)
-      coerced = Array(raw_binds).map do |b|
-        if b.respond_to?(:value_before_type_cast)
-          b.value_before_type_cast.to_s
-        elsif b.respond_to?(:value)
-          b.value.to_s
-        else
-          b.to_s
-        end
-      end
-      [raw_sql.strip, coerced]
+    raw_sql, raw_binds = begin
+      conn.to_sql_and_binds(result)
     rescue TypeError, ArgumentError, NoMethodError
       # Plain node — Arel::Nodes::Node#to_sql (arel/nodes/node.rb:148)
       [result.to_sql.strip, []]
     end
+
+    binds = Array(raw_binds).map do |b|
+      if b.respond_to?(:value_before_type_cast)
+        b.value_before_type_cast.to_s
+      elsif b.respond_to?(:value)
+        b.value.to_s
+      else
+        b.to_s
+      end
+    end
+    sql_str = raw_sql.strip
 
     # 6. Write CanonicalQuery JSON
     canonical = {

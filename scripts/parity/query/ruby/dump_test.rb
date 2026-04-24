@@ -3,12 +3,11 @@
 require "bundler/setup"
 require "minitest/autorun"
 require "json"
-require "tmpdir"
 require "tempfile"
 require "open3"
 
 # Integration tests for dump.rb — runs the script against real fixtures.
-# Must be run from the repo root.
+# Must be run under Bundler with scripts/parity/schema/ruby/Gemfile.
 
 GEMFILE     = File.expand_path("../../schema/ruby/Gemfile", __dir__)
 DUMP_SCRIPT = File.expand_path("dump.rb", __dir__)

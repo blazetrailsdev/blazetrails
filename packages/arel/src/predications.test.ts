@@ -45,12 +45,12 @@ describe("PredicationsMixin", () => {
   describe("edge cases (via the mixin, not Attribute's inline predications)", () => {
     const bn = new Nodes.BitwiseNot(users.get("flags"));
 
-    it("eqAny([]) does not crash and renders as a false-ish predicate", () => {
+    it("eqAny([]) does not crash and renders as NULL (Rails 3-valued logic)", () => {
       // Rails' `Or.inject` on [] returns nil and the visitor renders
-      // NULL (falsy). We produce an explicit NOT(TRUE) for the same
-      // effect without a TypeError from Array#reduce without an initial.
+      // NULL — we preserve that, since NULL is not the same as FALSE
+      // under SQL three-valued logic.
       const sql = new Visitors.ToSql().compile(bn.eqAny([]));
-      expect(sql).toContain("NOT");
+      expect(sql).toBe("(NULL)");
     });
 
     it("eqAll([]) does not crash and renders as a true-ish predicate", () => {

@@ -33,17 +33,18 @@ export interface PredicationHost {
 }
 
 function groupedAny(nodes: Node[]): Grouping {
-  // Empty `*_any([])` = false; Rails' `Or.inject` on [] returns nil and
-  // the visitor renders `NULL`, which falsifies the predicate anyway —
-  // be explicit about it here so callers get deterministic SQL instead
-  // of a TypeError from `Array#reduce` without an initial value.
-  if (nodes.length === 0) return new Grouping(new Not(new True()));
+  // Rails' `Or.inject` on [] returns nil; the visitor renders that as
+  // `NULL`. Preserve three-valued semantics (NULL is *not* the same as
+  // FALSE under SQL: `NULL OR FALSE` is NULL, `FALSE OR FALSE` is FALSE)
+  // while still guarding against the `Array#reduce` TypeError on empty.
+  if (nodes.length === 0) return new Grouping(new Quoted(null));
   return new Grouping(nodes.reduce((acc, n) => new Or(acc, n)));
 }
 
 function groupedAll(nodes: Node[]): Grouping {
-  // Empty `*_all([])` = true, matching SQL's vacuous-AND semantics and
-  // Rails' empty-Ands short-circuit.
+  // Rails wraps an empty And in a Grouping; the visitor renders it as
+  // `()`. We emit an explicit TRUE so the predicate is at least valid
+  // SQL — empty `_all` = vacuously true.
   if (nodes.length === 0) return new Grouping(new True());
   return new Grouping(new And(nodes));
 }

@@ -1,4 +1,4 @@
-import { Node } from "./nodes/node.js";
+import type { Node } from "./nodes/node.js";
 import {
   Addition,
   Subtraction,

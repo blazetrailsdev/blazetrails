@@ -8,16 +8,10 @@ import { Types } from "../index.js";
  */
 class TestableDateType extends Types.DateType {
   publicFastStringToDate(value: string) {
-    return (this as unknown as { fastStringToDate(v: string): Date | null }).fastStringToDate(
-      value,
-    );
+    return this.fastStringToDate(value);
   }
   publicNewDate(year: number, month: number, day: number) {
-    return (this as unknown as { newDate(y: number, m: number, d: number): Date | null }).newDate(
-      year,
-      month,
-      day,
-    );
+    return this.newDate(year, month, day);
   }
 }
 

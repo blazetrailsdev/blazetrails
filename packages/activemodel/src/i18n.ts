@@ -1,7 +1,12 @@
 import { deepDup, deepMergeInPlace } from "@blazetrails/activesupport";
 import { raiseOnMissingTranslations } from "./translation.js";
 
-type TranslationValue = string | { one?: string; other?: string } | TranslationTree;
+type TranslationLambda = (key: string, options: Record<string, unknown>) => TranslationValue;
+type TranslationValue =
+  | string
+  | { one?: string; other?: string }
+  | TranslationTree
+  | TranslationLambda;
 interface TranslationTree {
   [key: string]: TranslationValue;
 }
@@ -11,13 +16,53 @@ interface TranslateOptions {
   count?: number;
   defaults?: Array<{ key: string } | { message: string }>;
   defaultValue?: string;
+  locale?: string;
   [key: string]: unknown;
 }
+
+/**
+ * Raised when a `%{key}` appears in a translation string but the caller
+ * supplied no matching interpolation option.
+ *
+ * Mirrors: I18n::MissingInterpolationArgument
+ */
+export class MissingInterpolationArgument extends globalThis.Error {
+  readonly key: string;
+  readonly string: string;
+  constructor(key: string, string: string) {
+    super(`missing interpolation argument :${key} in ${JSON.stringify(string)}`);
+    this.name = "MissingInterpolationArgument";
+    this.key = key;
+    this.string = string;
+  }
+}
+
+/**
+ * Keys the I18n gem reserves (not forwarded as `%{}` interpolations).
+ * See i18n/lib/i18n.rb RESERVED_KEYS.
+ */
+const RESERVED_KEYS = new Set([
+  "scope",
+  "default",
+  "defaults",
+  "defaultValue",
+  "separator",
+  "resolve",
+  "object",
+  "fallback",
+  "format",
+  "cascade",
+  "throw",
+  "raise",
+  "deep_interpolation",
+  "locale",
+]);
 
 function dig(obj: TranslationTree, path: string[]): TranslationValue | undefined {
   let current: TranslationValue = obj;
   for (const segment of path) {
     if (current === null || current === undefined || typeof current !== "object") return undefined;
+    if (Array.isArray(current)) return undefined;
     current = (current as TranslationTree)[segment];
   }
   return current;
@@ -25,13 +70,24 @@ function dig(obj: TranslationTree, path: string[]): TranslationValue | undefined
 
 function interpolate(str: string, options: Record<string, unknown>): string {
   return str.replace(/%\{(\w+)\}/g, (_, key) => {
-    return options[key] !== undefined ? String(options[key]) : `%{${key}}`;
+    if (!(key in options) || options[key] === undefined) {
+      throw new MissingInterpolationArgument(key, str);
+    }
+    return String(options[key]);
   });
 }
 
 class I18nService {
   private _locale: string = "en";
+  private _defaultLocale: string = "en";
   private _translations: Translations = {};
+  /**
+   * Per-locale fallback chain. `fallbacks["en-US"] = ["en-US", "en"]`
+   * makes a lookup against "en-US" try "en-US" then "en". The entry
+   * should include the locale itself as the first element (Rails
+   * I18n::Fallbacks semantics — see i18n/lib/i18n/locale/fallbacks.rb).
+   */
+  private _fallbacks: Record<string, string[]> = {};
 
   get locale(): string {
     return this._locale;
@@ -41,29 +97,42 @@ class I18nService {
     this._locale = value;
   }
 
+  get defaultLocale(): string {
+    return this._defaultLocale;
+  }
+
+  set defaultLocale(value: string) {
+    this._defaultLocale = value;
+  }
+
   constructor() {
     this._storeTranslations("en", defaultEnTranslations);
   }
 
   t(key: string, options?: TranslateOptions): string {
-    const result = this.lookup(key);
+    const locale = options?.locale ?? this._locale;
+    const result = this.lookup(key, locale);
     if (result !== undefined) {
-      return this.resolve(result, options);
+      const resolved = this.resolve(result, key, options);
+      if (resolved !== undefined) return resolved;
     }
 
     if (options?.defaults) {
       for (const entry of options.defaults) {
         if ("key" in entry) {
-          const val = this.lookup(entry.key);
-          if (val !== undefined) return this.resolve(val, options);
+          const val = this.lookup(entry.key, locale);
+          if (val !== undefined) {
+            const resolved = this.resolve(val, entry.key, options);
+            if (resolved !== undefined) return resolved;
+          }
         } else if ("message" in entry) {
-          return interpolate(entry.message, options ?? {});
+          return interpolate(entry.message, this._interpolationOptions(options));
         }
       }
     }
 
     if (options?.defaultValue !== undefined) {
-      return interpolate(options.defaultValue, options ?? {});
+      return interpolate(options.defaultValue, this._interpolationOptions(options));
     }
 
     if (raiseOnMissingTranslations()) {
@@ -74,6 +143,20 @@ class I18nService {
 
   storeTranslations(locale: string, data: TranslationTree): void {
     this._storeTranslations(locale, data);
+  }
+
+  /**
+   * Configure the fallback chain. Pass an object mapping locale → chain,
+   * or an array treated as a shared chain for every locale. Each chain
+   * should include the originating locale as its first element, matching
+   * Rails I18n::Fallbacks (i18n/lib/i18n/locale/fallbacks.rb).
+   */
+  setFallbacks(config: Record<string, string[]> | string[]): void {
+    if (Array.isArray(config)) {
+      this._fallbacks = { __shared__: config };
+    } else {
+      this._fallbacks = { ...config };
+    }
   }
 
   private _storeTranslations(locale: string, data: TranslationTree): void {
@@ -89,28 +172,73 @@ class I18nService {
   reset(): void {
     this._translations = {};
     this._locale = "en";
+    this._defaultLocale = "en";
+    this._fallbacks = {};
     this._storeTranslations("en", defaultEnTranslations);
   }
 
-  private lookup(key: string): TranslationValue | undefined {
-    const localeData = this._translations[this._locale];
-    if (!localeData) return undefined;
-    return dig(localeData, key.split("."));
+  private _fallbackChain(locale: string): string[] {
+    const explicit = this._fallbacks[locale] ?? this._fallbacks["__shared__"];
+    if (explicit && explicit.length > 0) {
+      return explicit[0] === locale ? explicit : [locale, ...explicit];
+    }
+    // Default chain: requested locale → default locale (Rails ships this
+    // as the `I18n::Backend::Fallbacks` default when no fallbacks are set
+    // and `:default_locale` differs from the active one).
+    if (locale !== this._defaultLocale) return [locale, this._defaultLocale];
+    return [locale];
   }
 
-  private resolve(value: TranslationValue, options?: TranslateOptions): string {
+  private lookup(key: string, locale: string): TranslationValue | undefined {
+    const path = key.split(".");
+    for (const candidate of this._fallbackChain(locale)) {
+      const localeData = this._translations[candidate];
+      if (!localeData) continue;
+      const hit = dig(localeData, path);
+      if (hit !== undefined) return hit;
+    }
+    return undefined;
+  }
+
+  private _interpolationOptions(options?: TranslateOptions): Record<string, unknown> {
+    if (!options) return {};
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(options)) {
+      if (!RESERVED_KEYS.has(k)) out[k] = v;
+    }
+    // `count` is reserved as a lookup driver but Rails still makes it
+    // available as a `%{count}` interpolation (see I18n::Base#interpolate).
+    if (options.count !== undefined) out.count = options.count;
+    return out;
+  }
+
+  private resolve(
+    value: TranslationValue,
+    key: string,
+    options?: TranslateOptions,
+  ): string | undefined {
+    // Rails allows Procs as translation values; they're invoked with the
+    // lookup key + options hash (i18n/lib/i18n/backend/base.rb `resolve`).
+    if (typeof value === "function") {
+      return this.resolve(
+        (value as TranslationLambda)(key, (options ?? {}) as Record<string, unknown>),
+        key,
+        options,
+      );
+    }
+    const opts = this._interpolationOptions(options);
     if (typeof value === "string") {
-      return interpolate(value, options ?? {});
+      return interpolate(value, opts);
     }
     if (value && typeof value === "object" && options?.count !== undefined) {
       const plural = value as { one?: string; other?: string };
       const form = options.count === 1 ? "one" : "other";
       const str = plural[form] ?? plural["other"];
       if (typeof str === "string") {
-        return interpolate(str, options);
+        return interpolate(str, opts);
       }
     }
-    return "";
+    return undefined;
   }
 }
 

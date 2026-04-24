@@ -25,7 +25,9 @@ import Ajv from "ajv/dist/2020.js";
 import { createTwoFilesPatch } from "diff";
 
 const SCHEMA_PATH = "scripts/parity/canonical/query.schema.json";
-const KNOWN_GAPS_PATH = "scripts/parity/canonical/query-known-gaps.json";
+// Tests override via PARITY_KNOWN_GAPS_PATH so they don't clobber the committed list.
+const KNOWN_GAPS_PATH =
+  process.env.PARITY_KNOWN_GAPS_PATH || "scripts/parity/canonical/query-known-gaps.json";
 
 interface KnownGap {
   /** Human-readable explanation and (if applicable) tracking link. */

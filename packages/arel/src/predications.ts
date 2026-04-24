@@ -123,8 +123,12 @@ export const Predications = {
         other.map((v) => this.quotedNode(v)),
       );
     }
+    // SelectManager/TreeManager-shaped object: only forward `.ast` when
+    // it's actually a Node — anything else falls through to quotedNode
+    // so we don't construct a malformed In with a stray non-Node ast.
     if (other && typeof other === "object" && !(other instanceof Node) && "ast" in other) {
-      return new In(this as unknown as Node, (other as { ast: Node }).ast);
+      const ast = (other as { ast: unknown }).ast;
+      if (ast instanceof Node) return new In(this as unknown as Node, ast);
     }
     return new In(this as unknown as Node, this.quotedNode(other));
   },
@@ -136,7 +140,8 @@ export const Predications = {
       );
     }
     if (other && typeof other === "object" && !(other instanceof Node) && "ast" in other) {
-      return new NotIn(this as unknown as Node, (other as { ast: Node }).ast);
+      const ast = (other as { ast: unknown }).ast;
+      if (ast instanceof Node) return new NotIn(this as unknown as Node, ast);
     }
     return new NotIn(this as unknown as Node, this.quotedNode(other));
   },

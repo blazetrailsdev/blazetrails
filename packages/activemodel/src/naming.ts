@@ -265,11 +265,26 @@ export class ModelName {
   }
 
   /**
-   * Mirrors Rails `@name.match?(regexp)` / `=~`. Returns whether the
-   * class name matches the given regex.
+   * Mirrors Rails `@name.match?(regexp)`. Returns whether the class
+   * name matches the given regex (boolean — this is `match?` semantic,
+   * not the integer position that Ruby `=~` returns).
    */
   match(pattern: RegExp): boolean {
     return pattern.test(this.name);
+  }
+
+  /**
+   * Mirrors Rails `@name.as_json` — `String#as_json` just returns the
+   * string, so we return `this.name` as-is. Lets `JSON.stringify(mn)`
+   * emit the plain class name rather than `{}` / the object form.
+   */
+  asJson(): string {
+    return this.name;
+  }
+
+  /** JSON.stringify hook — delegates to `asJson`. */
+  toJSON(): string {
+    return this.asJson();
   }
 
   get human(): string {

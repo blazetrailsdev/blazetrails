@@ -463,6 +463,27 @@ describe("ModelName is string-ish (Rails String-inheritance analog)", () => {
     expect(mn.match(/Post/)).toBe(true);
     expect(mn.match(/\d/)).toBe(false);
   });
+
+  it("== operator coerces via Symbol.toPrimitive to the class name", () => {
+    // Rails `model_name == "Post"` is true because Name < String.
+    // JS `==` between object and string triggers primitive coercion,
+    // which Symbol.toPrimitive steers at the class name — so the
+    // Rails-shaped comparison works verbatim.
+    const mn: unknown = new ModelName("Post");
+
+    expect(mn == "Post").toBe(true);
+
+    expect(mn == "Other").toBe(false);
+  });
+
+  it("asJson / JSON.stringify emits the plain class name", () => {
+    // Rails `String#as_json` returns the string; `Name.new(BlogPost).to_json`
+    // emits '"BlogPost"', not a hash form.
+    const mn = new ModelName("BlogPost");
+    expect(mn.asJson()).toBe("BlogPost");
+    expect(JSON.stringify(mn)).toBe('"BlogPost"');
+    expect(JSON.stringify({ model: mn })).toBe('{"model":"BlogPost"}');
+  });
 });
 
 describe("OverridingAccessorsTest", () => {

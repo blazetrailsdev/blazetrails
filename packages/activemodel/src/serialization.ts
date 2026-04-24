@@ -123,9 +123,18 @@ export function serializableHash(
  * - `Date` → ISO 8601 string, or `null` for invalid dates (matches
  *   `Date.prototype.toJSON`)
  * - Plain arrays / objects → recurse
- * - Anything with its own `asJson()` or `toJSON()` → call it and recurse
- *   (matches Rails' `respond_to?(:as_json)` protocol)
  * - Everything else → pass through (numbers, strings, booleans, null)
+ *
+ * Does NOT delegate to nested `asJson()` / `toJSON()` methods. Rails'
+ * `Object#as_json` dispatch is recursive from a single encoder, so
+ * cycle tracking threads through every call. In our JS port
+ * `Model#asJson` starts a fresh coerceForJson with new cycle state,
+ * so re-entering through a Model's `asJson` would reset the guards
+ * and stack-overflow on model-model cycles. Instead, Model instances
+ * reach coerceForJson already pre-flattened by `serializableHash`
+ * (via its include path at serialization.ts:88-104 for associations
+ * and via the usual attribute read for scalars), so no delegation is
+ * needed.
  *
  * Note on JS Symbols: we intentionally do NOT coerce. Ruby symbols
  * are interned-string identifiers (Rails' `:active ≈ "active"`). JS
@@ -178,33 +187,7 @@ export function coerceForJson(
   if (typeof value === "object") {
     if (inProgress.has(value)) return null;
     if (seen.has(value)) return seen.get(value);
-    const v = value as Record<string, unknown> & {
-      asJson?: () => unknown;
-      toJSON?: () => unknown;
-    };
-    // `asJson` / `toJSON` delegation: enter the same in-progress/seen
-    // bookkeeping so the dispatched value still contributes to cycle
-    // detection and shared-ref memoization.
-    if (typeof v.asJson === "function") {
-      inProgress.add(value);
-      try {
-        const out = coerceForJson(v.asJson(), seen, inProgress);
-        seen.set(value, out);
-        return out;
-      } finally {
-        inProgress.delete(value);
-      }
-    }
-    if (typeof v.toJSON === "function") {
-      inProgress.add(value);
-      try {
-        const out = coerceForJson(v.toJSON(), seen, inProgress);
-        seen.set(value, out);
-        return out;
-      } finally {
-        inProgress.delete(value);
-      }
-    }
+    const v = value as Record<string, unknown>;
     const out: Record<string, unknown> = {};
     seen.set(value, out);
     inProgress.add(value);

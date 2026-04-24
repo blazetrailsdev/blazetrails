@@ -352,6 +352,33 @@ describe("SerializationTest", () => {
       expect(() => JSON.stringify(out)).not.toThrow();
     });
 
+    it("asJson terminates on model-through-model cycles (no stack overflow)", () => {
+      // A cycle modelA.ref → modelB → modelA would blow the stack if
+      // coerceForJson delegated to each Model's own asJson (each call
+      // resetting cycle state). Nested models arrive pre-flattened by
+      // serializableHash, so coerceForJson walks plain objects with
+      // shared cycle state.
+      class Node extends Model {
+        static {
+          this.attribute("name", "string");
+        }
+      }
+      const a = new Node({ name: "a" });
+      const b = new Node({ name: "b" });
+      (a as unknown as { _cachedAssociations: Map<string, unknown> })._cachedAssociations = new Map(
+        [["next", b]],
+      );
+      (b as unknown as { _cachedAssociations: Map<string, unknown> })._cachedAssociations = new Map(
+        [["next", a]],
+      );
+      // serializableHash is non-recursive through associations — the
+      // include option must be passed explicitly, and each level is
+      // flattened once. So asJson won't loop; it emits a single level.
+      expect(() => a.asJson({ include: ["next"] })).not.toThrow();
+      const json = a.asJson({ include: ["next"] }) as { next: { name: string } };
+      expect(json.next.name).toBe("b");
+    });
+
     it("coerceForJson breaks true cycles in arrays (self-containing)", async () => {
       const { coerceForJson } = await import("./serialization.js");
       const arr: unknown[] = [1, 2];

@@ -56,16 +56,13 @@ const SQL_FN_NAMES: Record<AggFn, string> = {
  * Other types fall back to Number() or raw value. Extend castAggValue
  * when additional types need precision-preserving deserialize dispatch.
  */
-function castAggValue(
-  val: unknown,
-  fn: AggFn,
-  column: string,
-  rel: CalculationRelation,
-  coerceNumeric: boolean,
-): unknown {
+function resolveColType(rel: CalculationRelation, column: string): unknown {
+  if (column === "*") return null;
   const table = rel._modelClass.arelTable as { typeForAttribute?(c: string): unknown };
-  const colType = column !== "*" ? table.typeForAttribute?.(column) : null;
+  return table.typeForAttribute?.(column) ?? null;
+}
 
+function castAggValue(val: unknown, fn: AggFn, colType: unknown, coerceNumeric: boolean): unknown {
   if (!coerceNumeric) {
     // minimum/maximum: route through column type so big_integer columns
     // return bigint rather than the raw driver string/number.
@@ -157,15 +154,16 @@ async function singleAggregate(
   rel._applyJoinsToManager(manager);
   rel._applyWheresToManager(manager, table);
 
+  const colType = resolveColType(rel, column);
   const innerSql = manager.toSql();
   const sql =
     isBigintColumn(rel, fn, column) && needsBigintCast(rel) ? wrapBigintAgg(innerSql) : innerSql;
   const rows = await rel._modelClass.adapter.execute(sql);
   const val = rows[0]?.val;
   if (val === undefined || val === null) {
-    return fn === "sum" ? castAggValue(null, fn, column, rel, coerceNumeric) : null;
+    return fn === "sum" ? castAggValue(null, fn, colType, coerceNumeric) : null;
   }
-  return castAggValue(val, fn, column, rel, coerceNumeric);
+  return castAggValue(val, fn, colType, coerceNumeric);
 }
 
 async function groupedAggregate(
@@ -185,6 +183,7 @@ async function groupedAggregate(
   if (rel._limitValue !== null) manager.take(rel._limitValue);
   if (rel._offsetValue !== null) manager.skip(rel._offsetValue);
 
+  const colType = resolveColType(rel, column);
   const innerSql = manager.toSql();
   const sql =
     isBigintColumn(rel, fn, column) && needsBigintCast(rel)
@@ -197,9 +196,9 @@ async function groupedAggregate(
     const key = String(row.group_key ?? "null");
     const val = row.val;
     if (val === undefined || val === null) {
-      result[key] = fn === "sum" ? castAggValue(null, fn, column, rel, coerceNumeric) : null;
+      result[key] = fn === "sum" ? castAggValue(null, fn, colType, coerceNumeric) : null;
     } else {
-      result[key] = castAggValue(val, fn, column, rel, coerceNumeric);
+      result[key] = castAggValue(val, fn, colType, coerceNumeric);
     }
   }
   return result;
@@ -270,10 +269,7 @@ export async function performSum(
 ): Promise<number | bigint | Record<string, number | bigint>> {
   if (this._isNone) {
     if (this._groupColumns.length > 0) return {};
-    const zeroType = column
-      ? (this._modelClass.arelTable as any)?.typeForAttribute?.(column)
-      : null;
-    return zeroType instanceof BigIntegerType ? 0n : 0;
+    return column && resolveColType(this, column) instanceof BigIntegerType ? 0n : 0;
   }
   if (!column) return 0;
   if (this._groupColumns.length > 0) {

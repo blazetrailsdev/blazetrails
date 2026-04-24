@@ -253,19 +253,6 @@ export class AssociationRelation<T extends Base> extends Relation<T> {
     return super.pick(...columns);
   }
 
-  override async calculate(
-    operation: "count" | "sum" | "average" | "minimum" | "maximum",
-    column?: string,
-  ): Promise<number | Record<string, number>> {
-    this._checkStrictLoading();
-    return (
-      super.calculate as unknown as (
-        op: string,
-        col?: string,
-      ) => Promise<number | Record<string, number>>
-    ).call(this, operation, column);
-  }
-
   override updateAll(updates: Record<string, unknown>): Promise<number> {
     this._checkStrictLoading();
     return super.updateAll(updates);

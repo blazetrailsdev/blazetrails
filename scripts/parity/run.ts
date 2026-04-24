@@ -3,10 +3,15 @@
  *          [--type=schema|query]     default: schema
  *          [--side=rails|trails|diff|all]  default: all
  *
- * Orchestrates the schema or query parity pipeline:
- *   rails  — run ruby dump.rb over every fixture → .out/<type>/rails/
- *   trails — run node dump.ts over every fixture → .out/<type>/trails/
- *   diff   — run diff.ts over .out/<type>/rails/ vs .out/<type>/trails/
+ * Orchestrates the schema or query parity pipeline. Output paths:
+ *   schema:  scripts/parity/.out/{rails,trails}/         (legacy location — CI
+ *            artifacts and schema-parity scripts depend on these exact paths)
+ *   query:   scripts/parity/.out/query/{rails,trails}/
+ *
+ * Modes:
+ *   rails  — run ruby dump.rb over every fixture → <rails out dir>
+ *   trails — run node dump.ts over every fixture → <trails out dir>
+ *   diff   — run diff.ts over the configured rails/trails output dirs
  *   all    — rails + trails in parallel, then diff (default)
  *
  * For --type=query, time is frozen on both sides. PARITY_FROZEN_AT (an

@@ -25,9 +25,12 @@ import Ajv from "ajv/dist/2020.js";
 import { createTwoFilesPatch } from "diff";
 
 const SCHEMA_PATH = "scripts/parity/canonical/query.schema.json";
-// Tests override via PARITY_KNOWN_GAPS_PATH so they don't clobber the committed list.
+// Tests override via PARITY_KNOWN_GAPS_PATH / PARITY_FIXTURES_DIR so they don't
+// clobber the committed list or require the real fixtures dir.
 const KNOWN_GAPS_PATH =
   process.env.PARITY_KNOWN_GAPS_PATH || "scripts/parity/canonical/query-known-gaps.json";
+const FIXTURES_DIR = process.env.PARITY_FIXTURES_DIR || "scripts/parity/fixtures";
+const FIXTURE_PATTERN = /^arel-/;
 
 interface KnownGap {
   /** Human-readable explanation and (if applicable) tracking link. */
@@ -113,13 +116,23 @@ async function main(): Promise<void> {
   const railsFiles = new Set(listJsonFiles(railsDir));
   const trailsFiles = new Set(listJsonFiles(trailsDir));
   const allFixtures = new Set<string>();
+  // Seed from the fixture directory so a fixture that failed on BOTH sides
+  // (and so has no JSON in either output dir) is still classified. Without
+  // this, an unlisted both-fail fixture would be silently skipped and the
+  // diff would exit 0.
+  if (existsSync(FIXTURES_DIR)) {
+    for (const e of readdirSync(FIXTURES_DIR, { withFileTypes: true })) {
+      if (e.isDirectory() && FIXTURE_PATTERN.test(e.name)) allFixtures.add(e.name);
+    }
+  }
   for (const f of railsFiles) allFixtures.add(basename(f, ".json"));
   for (const f of trailsFiles) allFixtures.add(basename(f, ".json"));
-  // Known gaps may reference fixtures that are both-fail on both sides.
+  // Known gaps may reference fixtures that have been removed from the fixture
+  // tree — still classify them so the list itself stays honest.
   for (const name of Object.keys(knownGaps)) allFixtures.add(name);
 
   if (allFixtures.size === 0) {
-    process.stderr.write("parity query diff: no fixture JSON files found\n");
+    process.stderr.write("parity query diff: no fixtures found\n");
     process.exit(1);
   }
 

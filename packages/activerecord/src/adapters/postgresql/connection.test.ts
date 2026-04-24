@@ -207,7 +207,7 @@ describe("PostgreSQLAdapter constructor validation", () => {
           connectionString: PG_TEST_URL,
           variables: { debug_print_plan: undefined as unknown as null },
         }),
-    ).toThrow("must be string | boolean | null");
+    ).toThrow("must be string | number | boolean | null");
   });
 
   it("rejects object variable value", () => {
@@ -217,7 +217,17 @@ describe("PostgreSQLAdapter constructor validation", () => {
           connectionString: PG_TEST_URL,
           variables: { debug_print_plan: {} as unknown as string },
         }),
-    ).toThrow("must be string | boolean | null");
+    ).toThrow("must be string | number | boolean | null");
+  });
+
+  it("accepts numeric variable value (e.g. statement_timeout: 5000)", () => {
+    expect(
+      () =>
+        new PostgreSQLAdapter({
+          connectionString: PG_TEST_URL,
+          variables: { statement_timeout: 5000 },
+        }),
+    ).not.toThrow();
   });
 
   it("rejects non-plain-object variables", () => {

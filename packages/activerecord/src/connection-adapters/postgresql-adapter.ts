@@ -154,7 +154,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
   private _maxIdentifierLength: number | null = null;
   private _useInsertReturning = true;
   private _minMessages = "warning";
-  private _sessionVariables: Record<string, string | boolean | null | "default"> = {};
+  private _sessionVariables: Record<string, string | number | boolean | null | "default"> = {};
   private _configuredClients = new WeakSet<pg.PoolClient>();
   // Per-pg.Client statement pool. PG's prepared statements are
   // session-scoped, so each physical client gets its own pool with
@@ -268,15 +268,22 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         if (!/^[a-zA-Z_][a-zA-Z0-9_.]*$/.test(key)) {
           throw new Error(`Invalid PostgreSQL session variable name: ${JSON.stringify(key)}`);
         }
-        if (val !== null && typeof val !== "string" && typeof val !== "boolean") {
+        if (
+          val !== null &&
+          typeof val !== "string" &&
+          typeof val !== "boolean" &&
+          typeof val !== "number"
+        ) {
           throw new TypeError(
-            `variables[${JSON.stringify(key)}] must be string | boolean | null, got ${typeof val}`,
+            `variables[${JSON.stringify(key)}] must be string | number | boolean | null, got ${typeof val}`,
           );
         }
       }
     }
     this._minMessages = minMessages ?? "warning";
-    this._sessionVariables = variables ?? {};
+    // Freeze a shallow copy so post-construction mutation can't bypass the
+    // key/value validation above and introduce un-sanitized SQL fragments.
+    this._sessionVariables = Object.freeze({ ...(variables ?? {}) });
     this._driverPool = new pg.Pool(pgConfig);
   }
 

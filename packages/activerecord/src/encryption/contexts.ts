@@ -11,7 +11,7 @@ import {
 
 /**
  * Class-based API for managing encryption contexts. Delegates to the
- * existing AsyncLocalStorage-based context system in context.ts.
+ * manual-stack context system in context.ts (Promise-aware push/pop).
  *
  * Mirrors: ActiveRecord::Encryption::Contexts
  */

@@ -61,7 +61,9 @@ describe("ActiveRecord::Encryption::ConfigurableTest", () => {
     expect(config.primaryKey).toBe("the primary key");
     expect(config.deterministicKey).toBe("the deterministic key");
     expect(config.keyDerivationSalt).toBe("the salt");
-    expect(config.previousSchemes[0]).toMatchObject({ keyProvider: previousKeyProvider });
+    expect(config.previousSchemes[config.previousSchemes.length - 1]).toMatchObject({
+      keyProvider: previousKeyProvider,
+    });
   });
 
   it("can add listeners that will get invoked when declaring encrypted attributes", () => {

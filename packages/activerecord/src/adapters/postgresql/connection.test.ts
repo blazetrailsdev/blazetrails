@@ -220,14 +220,18 @@ describe("PostgreSQLAdapter constructor validation", () => {
     ).toThrow("must be string | number | boolean | null");
   });
 
-  it("accepts numeric variable value (e.g. statement_timeout: 5000)", () => {
-    expect(
-      () =>
-        new PostgreSQLAdapter({
+  it("accepts numeric variable value (e.g. statement_timeout: 5000)", async () => {
+    let a: PostgreSQLAdapter | undefined;
+    try {
+      expect(() => {
+        a = new PostgreSQLAdapter({
           connectionString: PG_TEST_URL,
           variables: { statement_timeout: 5000 },
-        }),
-    ).not.toThrow();
+        });
+      }).not.toThrow();
+    } finally {
+      await a?.close();
+    }
   });
 
   it("rejects non-plain-object variables", () => {

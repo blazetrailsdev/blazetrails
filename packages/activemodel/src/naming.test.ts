@@ -505,7 +505,8 @@ describe("ModelName is string-ish (Rails String-inheritance analog)", () => {
     expect(blogPost.equals(adminPost)).toBe(false);
     expect(blogPost.equals(blogPost2)).toBe(true);
     expect(blogPost.equals(barePost)).toBe(false);
-    // Admin < Blog lexicographically on the namespace segment.
+    // `compare` compares the full qualified path ("Admin/Post" vs
+    // "Blog/Post"), so Admin < Blog.
     expect(blogPost.compare(adminPost)).toBe(1);
     expect(adminPost.compare(blogPost)).toBe(-1);
     expect(blogPost.compare(blogPost2)).toBe(0);
@@ -516,6 +517,24 @@ describe("ModelName is string-ish (Rails String-inheritance analog)", () => {
     expect(String(blogPost)).toBe("Post");
     expect(String(adminPost)).toBe("Post");
     expect(blogPost.equals("Post")).toBe(true);
+  });
+
+  it("compare sorts by full qualified path, not bare name first", () => {
+    // Covers the Rails `String#<=>` parity: ordering is determined by
+    // the full namespace+name path as a single string — so a model
+    // under an earlier-sorting namespace outranks a later-sorting
+    // namespace even when its bare name comes later alphabetically.
+    const adminOther = new ModelName("Other", { namespace: "Admin" });
+    const blogPost = new ModelName("Post", { namespace: "Blog" });
+    // "Admin/Other" < "Blog/Post"
+    expect(adminOther.compare(blogPost)).toBe(-1);
+    expect(blogPost.compare(adminOther)).toBe(1);
+    // Bare name ("Post") > a qualified name starting with earlier letters
+    // ("Admin/Other")? No — bare comparison uses the raw qualified path,
+    // so "Admin/Other" < "Post".
+    const barePost = new ModelName("Post");
+    expect(adminOther.compare(barePost)).toBe(-1);
+    expect(barePost.compare(adminOther)).toBe(1);
   });
 
   it("== operator coerces via Symbol.toPrimitive to the class name", () => {

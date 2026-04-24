@@ -284,10 +284,13 @@ export class ModelName {
    */
   compare(other: unknown): -1 | 0 | 1 {
     if (other instanceof ModelName) {
-      if (this.name !== other.name) return this.name < other.name ? -1 : 1;
-      if (sameSegments(this.namespace, other.namespace)) return 0;
-      const l = (this.namespace ?? []).join("/");
-      const r = (other.namespace ?? []).join("/");
+      // Single string compare over the full constant path — matches
+      // Rails' `String#<=>` on `@name` (e.g. "Admin::Other" < "Blog::Post"
+      // by first segment, regardless of bare-name ordering). We join
+      // with `/` (not `::`) to keep Ruby syntax out of TS code.
+      const l = ModelName._qualified(this);
+      const r = ModelName._qualified(other);
+      if (l === r) return 0;
       return l < r ? -1 : 1;
     }
     if (typeof other === "string") {
@@ -295,6 +298,10 @@ export class ModelName {
       return this.name < other ? -1 : 1;
     }
     throw new ArgumentError("comparison of ModelName with non-string failed");
+  }
+
+  private static _qualified(mn: ModelName): string {
+    return [...(mn.namespace ?? []), mn.name].join("/");
   }
 
   /**

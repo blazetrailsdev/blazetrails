@@ -59,7 +59,7 @@ describe("ActiveRecord::Encryption::UniquenessValidationsTest", () => {
 
   it("uniqueness validations work when using old encryption schemes", async () => {
     Configurable.config.supportUnencryptedData = false;
-    Configurable.config.previous = [{ downcase: true, deterministic: true } as any];
+    Configurable.config.previous = [{ downcase: true, deterministic: true }];
 
     const OldBook = makeFreshModel(freshAdapter(), { id: "integer", name: "string" });
     OldBook.validatesUniqueness("name");

@@ -2183,8 +2183,10 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#ids
    *
-   * Single-column PKs: returns flat array (string | number | bigint).
-   * big_integer PKs return JS bigint after driver normalization.
+   * Single-column PKs: returns a flat array of scalar values. The JS
+   * type depends on the adapter — SQLite returns JS bigint for big_integer
+   * PKs (safeIntegers); PG returns decimal string for int8; MySQL returns
+   * string for large BIGINT values and number for small ones.
    * Composite PKs: returns an array of tuples (unknown[][]).
    */
   async ids(): Promise<unknown[]> {

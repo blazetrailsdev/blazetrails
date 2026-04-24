@@ -107,7 +107,19 @@ export function attribute(
   // and all known subclasses so they recompute on next _defaultAttributes() call.
   resetDefaultAttributes(this);
 
-  if (!Object.prototype.hasOwnProperty.call(this.prototype, name)) {
+  // Don't install an accessor if `name` resolves anywhere on the prototype
+  // chain (Model.prototype or any ancestor). Otherwise an attribute named
+  // e.g. `toJSON` / `asJson` / `freeze` / `attributes` would shadow the
+  // framework method on this subclass — JSON.stringify would hit the
+  // attribute getter instead of `Model#toJSON`, serialization callers
+  // would get the raw value instead of the mixin, etc. The framework
+  // writes through `_attributes` directly via `writeAttribute`, so
+  // skipping the accessor doesn't lose attribute functionality; users
+  // just have to read the value via `readAttribute(name)` instead of
+  // `instance[name]`.
+  const alreadyDefined =
+    name in this.prototype && !Object.prototype.hasOwnProperty.call(this.prototype, name);
+  if (!Object.prototype.hasOwnProperty.call(this.prototype, name) && !alreadyDefined) {
     Object.defineProperty(this.prototype, name, {
       get(this: { readAttribute(n: string): unknown }) {
         return this.readAttribute(name);

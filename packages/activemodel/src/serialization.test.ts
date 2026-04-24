@@ -299,6 +299,25 @@ describe("SerializationTest", () => {
       expect(() => JSON.stringify(json)).not.toThrow();
     });
 
+    it("attribute named toJSON does not shadow Model#toJSON", () => {
+      // `attribute("toJSON", ...)` must NOT install an accessor on the
+      // subclass prototype if `toJSON` is already resolvable up the
+      // chain — otherwise JSON.stringify would hit the attribute
+      // getter instead of our asJson-backed hook.
+      class Weird extends Model {
+        static {
+          this.attribute("toJSON", "string");
+          this.attribute("name", "string");
+        }
+      }
+      const w = new Weird({ toJSON: "raw-value", name: "w" });
+      // Direct stringify still routes through Model's toJSON.
+      expect(JSON.parse(JSON.stringify(w))).toEqual({ toJSON: "raw-value", name: "w" });
+      // The attribute still roundtrips via `readAttribute`, just not via
+      // `instance.toJSON` (which now stays a framework method).
+      expect(w.readAttribute("toJSON")).toBe("raw-value");
+    });
+
     it("JSON.stringify(model) delegates to asJson via toJSON()", () => {
       // Direct `JSON.stringify(model)` should match `model.toJson()` —
       // without the hook, the default walker would enumerate

@@ -38,8 +38,12 @@ export class AcceptanceValidator extends EachValidator {
     // `acceptable_option?` calls `Array(options[:accept]).include?(value)`,
     // so a scalar `accept:` still works. Normalize here with the same shape.
     const rawAccept = this.options.accept;
-    const accepted: unknown[] =
-      rawAccept === undefined ? ["1", true] : Array.isArray(rawAccept) ? rawAccept : [rawAccept];
+    let accepted: unknown[];
+    if (rawAccept === undefined) accepted = ["1", true];
+    else if (rawAccept === null)
+      accepted = []; // Rails `Array(nil) #=> []`
+    else if (Array.isArray(rawAccept)) accepted = rawAccept;
+    else accepted = [rawAccept];
     if (!accepted.includes(value)) {
       record.errors.add(attribute, "accepted", { message: this.options.message });
     }

@@ -58,6 +58,14 @@ describe("I18n", () => {
       expect(I18n.locale).toBe("en");
     });
 
+    it("appends default_locale to explicit fallback chains", () => {
+      // Matches I18n::Locale::Fallbacks#compute (i18n/lib/i18n/locale/fallbacks.rb),
+      // which always pushes the default_locale onto the chain.
+      I18n.storeTranslations("en", { hi: "hello" });
+      I18n.setFallbacks({ fr: ["fr", "de"] });
+      expect(I18n.t("hi", { locale: "fr" })).toBe("hello");
+    });
+
     it("still returns defaultValue when no locale in the chain has the key", () => {
       I18n.setFallbacks({ "en-US": ["en-US", "en"] });
       expect(I18n.t("nope", { locale: "en-US", defaultValue: "fallback %{x}", x: 1 })).toBe(

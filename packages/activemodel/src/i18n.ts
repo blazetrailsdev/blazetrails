@@ -179,14 +179,14 @@ class I18nService {
 
   private _fallbackChain(locale: string): string[] {
     const explicit = this._fallbacks[locale] ?? this._fallbacks["__shared__"];
-    if (explicit && explicit.length > 0) {
-      return explicit[0] === locale ? explicit : [locale, ...explicit];
-    }
-    // Default chain: requested locale → default locale (Rails ships this
-    // as the `I18n::Backend::Fallbacks` default when no fallbacks are set
-    // and `:default_locale` differs from the active one).
-    if (locale !== this._defaultLocale) return [locale, this._defaultLocale];
-    return [locale];
+    const base = explicit && explicit.length > 0 ? [...explicit] : [];
+    if (base[0] !== locale) base.unshift(locale);
+    // I18n::Locale::Fallbacks#compute always pushes `defaults` onto every
+    // chain (i18n/lib/i18n/locale/fallbacks.rb). Mirror that so a missing
+    // key still falls through to `default_locale` even when an explicit
+    // chain was configured.
+    if (!base.includes(this._defaultLocale)) base.push(this._defaultLocale);
+    return base;
   }
 
   private lookup(key: string, locale: string): TranslationValue | undefined {

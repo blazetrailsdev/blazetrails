@@ -415,22 +415,39 @@ export class SchemaDumper {
         return lines.join("\n");
       });
     }
+    const vtResult = this.dumpVirtualTables(lines);
+    if (vtResult instanceof Promise) {
+      return vtResult.then(() => {
+        this.trailer(lines);
+        return lines.join("\n");
+      });
+    }
     this.trailer(lines);
     return lines.join("\n");
   }
 
   // Mirrors: SQLite3::SchemaDumper#virtual_tables — emits createVirtualTable
   // calls for any virtual tables found via the adapter.
-  protected async dumpVirtualTables(lines: string[]): Promise<void> {
+  protected dumpVirtualTables(lines: string[]): void | Promise<void> {
     const adapter = (this._source as any)?._adapter;
     if (!adapter || typeof adapter.virtualTables !== "function") return;
+    return this._dumpVirtualTablesAsync(lines);
+  }
+
+  private async _dumpVirtualTablesAsync(lines: string[]): Promise<void> {
+    const adapter = (this._source as any)?._adapter;
     const tables: Record<string, [string, string]> = await adapter.virtualTables();
     const names = Object.keys(tables).sort();
     if (names.length === 0) return;
     lines.push("");
-    // Split on commas that are NOT inside single quotes
-    const splitArgs = (s: string): string[] =>
-      s.split(/,(?=(?:[^']*'[^']*')*[^']*$)/).map((a) => a.trim());
+    // Split on commas that are NOT inside single quotes; filter empty segments
+    const splitArgs = (s: string): string[] => {
+      if (s.trim() === "") return [];
+      return s
+        .split(/,(?=(?:[^']*'[^']*')*[^']*$)/)
+        .map((a) => a.trim())
+        .filter((a) => a.length > 0);
+    };
     for (const name of names) {
       const [moduleName, argsStr] = tables[name];
       const args = splitArgs(argsStr);

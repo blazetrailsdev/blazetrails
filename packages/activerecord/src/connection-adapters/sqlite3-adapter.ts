@@ -107,7 +107,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
 
   constructor(
     filename: string | ":memory:" = ":memory:",
-    options: TrailsAdapterOptions & { readonly?: boolean; flags?: number } = {},
+    options: TrailsAdapterOptions & { readonly?: boolean } = {},
   ) {
     super();
     this._config = { ...options };
@@ -636,11 +636,6 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   }
 
   isSharedCache(): boolean {
-    const SQLITE_OPEN_SHAREDCACHE = 0x00020000;
-    const flags = this._config.flags;
-    if (typeof flags === "number") {
-      return (flags & SQLITE_OPEN_SHAREDCACHE) !== 0;
-    }
     const qIdx = this._filename.indexOf("?");
     if (qIdx === -1) return false;
     return this._filename.slice(qIdx).includes("cache=shared");

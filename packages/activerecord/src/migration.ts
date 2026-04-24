@@ -1126,10 +1126,9 @@ export class MigrationContext {
   async createVirtualTable(name: string, moduleName: string, args: string[]): Promise<void> {
     if (typeof (this.adapter as any).createVirtualTable === "function") {
       await (this.adapter as any).createVirtualTable(name, moduleName, args);
-    } else {
-      // Fallback for non-SQLite adapters: no-op (virtual tables are SQLite-specific)
+      this._tables.add(name);
     }
-    this._tables.add(name);
+    // Non-SQLite adapters: no-op; virtual tables are SQLite-specific.
   }
 
   private _mapType(type: string): string {

@@ -1,7 +1,5 @@
 import { Node } from "./node.js";
 import type { Included } from "@blazetrails/activesupport";
-import type { Predications } from "../predications.js";
-import type { Math as MathMixin } from "../math.js";
 
 /**
  * NodeExpression — common base for Arel nodes that behave as expressions
@@ -20,9 +18,12 @@ import type { Math as MathMixin } from "../math.js";
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export abstract class NodeExpression extends Node {
   /**
-   * Wrap a raw value into a Node for use inside predicates. No
-   * type-casting here — Attribute overrides this to route through
-   * `buildCasted` so the attribute's SQL type drives value coercion.
+   * Wrap a raw value into a Node for use inside predicates. Delegates to
+   * the `buildQuoted` registered by casted.ts, passing the current node
+   * as context so subclasses with type-casting semantics can coerce on
+   * that basis. (Attribute — which extends Node directly, not this class
+   * — implements its own predication methods with explicit type-casting
+   * and therefore never reaches this default.)
    *
    * Mirrors: Arel::Predications#quoted_node (private), which calls
    * Nodes.build_quoted(other, self).
@@ -43,5 +44,12 @@ export function registerBuildQuoted(fn: (other: unknown, ctx: unknown) => Node):
   _buildQuoted = fn;
 }
 
+// Using `typeof import(...)` inline avoids pulling the mixin modules into
+// this file's static import graph (they transitively depend on node
+// classes that extend NodeExpression), while still giving TypeScript the
+// method-surface signatures via declaration merging.
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
-export interface NodeExpression extends Included<typeof Predications>, Included<typeof MathMixin> {}
+export interface NodeExpression
+  extends
+    Included<typeof import("../predications.js").Predications>,
+    Included<typeof import("../math.js").Math> {}

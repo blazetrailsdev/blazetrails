@@ -6,8 +6,6 @@ import { buildQuoted } from "./casted.js";
 import { Ascending } from "./ascending.js";
 import { Descending } from "./descending.js";
 import type { Included } from "@blazetrails/activesupport";
-import type { Predications } from "../predications.js";
-import type { Math as MathMixin } from "../math.js";
 
 /**
  * Represents a custom infix operation: left OP right.
@@ -137,5 +135,11 @@ export class Overlaps extends InfixOperation {
 // the Predications + Math method surfaces mixed in from index.ts via
 // `include()`. The runtime wiring lives there to avoid a circular module
 // cycle between infix-operation.ts and math.ts.
+// Inline `typeof import(...)` keeps the mixin modules out of this file's
+// static import graph (math.ts imports InfixOperation for its class
+// references; a static reverse import would cycle).
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
-export interface InfixOperation extends Included<typeof Predications>, Included<typeof MathMixin> {}
+export interface InfixOperation
+  extends
+    Included<typeof import("../predications.js").Predications>,
+    Included<typeof import("../math.js").Math> {}

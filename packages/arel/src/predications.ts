@@ -14,7 +14,7 @@ import { Equality } from "./nodes/equality.js";
 import { Matches, DoesNotMatch } from "./nodes/matches.js";
 import { In } from "./nodes/in.js";
 import { Regexp as RegexpNode, NotRegexp } from "./nodes/regexp.js";
-import { Quoted, buildQuoted } from "./nodes/casted.js";
+import { Quoted } from "./nodes/casted.js";
 import { And } from "./nodes/and.js";
 import { Or } from "./nodes/or.js";
 import { Not } from "./nodes/unary.js";
@@ -103,9 +103,12 @@ export const Predications = {
     if (!Array.isArray(values) && values && typeof values === "object" && "ast" in values) {
       return new In(this as unknown as Node, (values as { ast: Node }).ast);
     }
+    // Route each element through the host's quotedNode so type-casting
+    // subclasses (Attribute, ...) get a chance to coerce per-value.
+    // Mirrors: Predications#quoted_array → quoted_node(v).
     return new In(
       this as unknown as Node,
-      (values as unknown[]).map(buildQuoted) as unknown as Node,
+      (values as unknown[]).map((v) => this.quotedNode(v)) as unknown as Node,
     );
   },
   notIn(this: PredicationHost, values: unknown[] | { ast: Node }): NotIn {
@@ -114,7 +117,7 @@ export const Predications = {
     }
     return new NotIn(
       this as unknown as Node,
-      (values as unknown[]).map(buildQuoted) as unknown as Node,
+      (values as unknown[]).map((v) => this.quotedNode(v)) as unknown as Node,
     );
   },
 
@@ -145,14 +148,14 @@ export const Predications = {
     }
     if (beginVal === -Infinity && endVal === Infinity) return new True();
     if (beginVal === -Infinity) {
-      return new LessThanOrEqual(this as unknown as Node, buildQuoted(endVal));
+      return new LessThanOrEqual(this as unknown as Node, this.quotedNode(endVal));
     }
     if (endVal === Infinity) {
-      return new GreaterThanOrEqual(this as unknown as Node, buildQuoted(beginVal));
+      return new GreaterThanOrEqual(this as unknown as Node, this.quotedNode(beginVal));
     }
     return new Between(
       this as unknown as Node,
-      new And([buildQuoted(beginVal), buildQuoted(endVal)]),
+      new And([this.quotedNode(beginVal), this.quotedNode(endVal)]),
     );
   },
   notBetween(this: PredicationHost, beginOrRange: unknown, end?: unknown): Not {

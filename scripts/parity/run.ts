@@ -136,29 +136,47 @@ function run(cmd: string, args: string[], env?: NodeJS.ProcessEnv): Promise<void
   });
 }
 
+// Bound concurrency so we don't fork 53 bundler or tsx processes at once.
+// Default 4 — safe for Ruby bundler memory and reasonable on 2-core CI runners.
+// Override with PARITY_CONCURRENCY for local tuning.
+const CONCURRENCY = Math.max(1, Number(process.env.PARITY_CONCURRENCY) || 4);
+
+async function runPool<T>(items: T[], worker: (item: T) => Promise<void>): Promise<void> {
+  const queue = [...items];
+  const workers = Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
+    for (;;) {
+      const item = queue.shift();
+      if (item === undefined) return;
+      await worker(item);
+    }
+  });
+  await Promise.all(workers);
+}
+
+function dumpOne(cfg: TypeConfig, label: "rails" | "trails", fixture: string): Promise<void> {
+  const fixtureDir = join(FIXTURES_DIR, fixture);
+  const outDir = label === "rails" ? cfg.outRails : cfg.outTrails;
+  const outFile = join(outDir, `${fixture}.json`);
+  if (label === "rails") {
+    return run(
+      "bundle",
+      ["exec", "ruby", cfg.rubyDump, fixtureDir, outFile, ...cfg.extraDumpArgs],
+      { BUNDLE_GEMFILE: GEMFILE },
+    );
+  }
+  return run("pnpm", ["exec", "tsx", cfg.nodeDump, fixtureDir, outFile, ...cfg.extraDumpArgs]);
+}
+
 async function runRails(cfg: TypeConfig): Promise<void> {
   rmSync(cfg.outRails, { recursive: true, force: true });
   mkdirSync(cfg.outRails, { recursive: true });
-  const bundleEnv = { BUNDLE_GEMFILE: GEMFILE };
-  for (const fixture of fixtures(cfg)) {
-    const fixtureDir = join(FIXTURES_DIR, fixture);
-    const outFile = join(cfg.outRails, `${fixture}.json`);
-    await run(
-      "bundle",
-      ["exec", "ruby", cfg.rubyDump, fixtureDir, outFile, ...cfg.extraDumpArgs],
-      bundleEnv,
-    );
-  }
+  await runPool(fixtures(cfg), (fixture) => dumpOne(cfg, "rails", fixture));
 }
 
 async function runTrails(cfg: TypeConfig): Promise<void> {
   rmSync(cfg.outTrails, { recursive: true, force: true });
   mkdirSync(cfg.outTrails, { recursive: true });
-  for (const fixture of fixtures(cfg)) {
-    const fixtureDir = join(FIXTURES_DIR, fixture);
-    const outFile = join(cfg.outTrails, `${fixture}.json`);
-    await run("pnpm", ["exec", "tsx", cfg.nodeDump, fixtureDir, outFile, ...cfg.extraDumpArgs]);
-  }
+  await runPool(fixtures(cfg), (fixture) => dumpOne(cfg, "trails", fixture));
 }
 
 async function runDiff(cfg: TypeConfig): Promise<void> {
@@ -188,27 +206,16 @@ async function runAllFixturesBestEffort(cfg: TypeConfig, label: "rails" | "trail
   const outDir = label === "rails" ? cfg.outRails : cfg.outTrails;
   rmSync(outDir, { recursive: true, force: true });
   mkdirSync(outDir, { recursive: true });
-  const bundleEnv = { BUNDLE_GEMFILE: GEMFILE };
-  for (const fixture of fixtures(cfg)) {
-    const fixtureDir = join(FIXTURES_DIR, fixture);
-    const outFile = join(outDir, `${fixture}.json`);
+  await runPool(fixtures(cfg), async (fixture) => {
     try {
-      if (label === "rails") {
-        await run(
-          "bundle",
-          ["exec", "ruby", cfg.rubyDump, fixtureDir, outFile, ...cfg.extraDumpArgs],
-          bundleEnv,
-        );
-      } else {
-        await run("pnpm", ["exec", "tsx", cfg.nodeDump, fixtureDir, outFile, ...cfg.extraDumpArgs]);
-      }
+      await dumpOne(cfg, label, fixture);
     } catch (err) {
       process.stdout.write(
         `parity run: [${label}/${fixture}] dump failed — diff step will classify as gap/fail\n`,
       );
       process.stdout.write(`  ${err instanceof Error ? err.message : String(err)}\n`);
     }
-  }
+  });
 }
 
 async function main(): Promise<void> {

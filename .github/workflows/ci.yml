@@ -11,7 +11,7 @@ on:
     types: [opened, synchronize, reopened, labeled]
   schedule:
     # Weekly post-merge sweep so slow regressions can't hide between
-    # parity-relevant PRs. Monday 06:00 UTC is off-peak on a ubuntu runner.
+    # parity-relevant PRs. Monday 06:00 UTC is off-peak on an Ubuntu runner.
     - cron: "0 6 * * 1"
   workflow_dispatch:
 
@@ -83,7 +83,11 @@ jobs:
               echo "parity_relevant=true" >> "$GITHUB_OUTPUT"
               ;;
             pull_request)
-              if echo "$PR_LABELS" | jq -e '.[].name == "run-parity"' >/dev/null; then
+              # `any(.[]; ...)` rather than `.[].name == "..."` because the
+              # latter emits one boolean per label and `jq -e`'s exit status
+              # reflects only the last element — so a PR with labels
+              # ["run-parity", "bug"] would miss.
+              if echo "$PR_LABELS" | jq -e 'any(.[]; .name == "run-parity")' >/dev/null; then
                 echo "parity_relevant=true" >> "$GITHUB_OUTPUT"
               else
                 echo "parity_relevant=false" >> "$GITHUB_OUTPUT"

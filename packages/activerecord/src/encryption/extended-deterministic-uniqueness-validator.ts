@@ -43,10 +43,9 @@ export class ExtendedDeterministicUniquenessValidator {
 
     // Note: when ExtendedDeterministicQueries is also installed, it already
     // expands uniqueness WHERE clauses to cover all previous-scheme ciphertexts.
-    // EncryptedUniquenessValidator adds the same coverage via repeated calls.
-    // Rails installs both together and relies on UniquenessValidator's own
-    // deduplication (the second duplicate error is only added if a matching
-    // row exists, which won't happen once the first call already adds it).
+    // EncryptedUniquenessValidator adds the same coverage via repeated calls,
+    // but guards each call with errors.added(:taken) so duplicate errors and
+    // extra DB round-trips are avoided once a match is found.
     const validator = new EUV();
     UniquenessValidator.prototype.validateEach = function (
       this: unknown,
@@ -95,6 +94,9 @@ export class EncryptedUniquenessValidator {
     if (!(encryptedType instanceof EncryptedAttributeType)) return;
 
     for (const prevType of encryptedType.previousTypes) {
+      // Stop early if a :taken error was already added — additional calls would
+      // only add duplicate errors and issue redundant DB round-trips.
+      if (record.errors.added(attribute, "taken")) break;
       const encryptedValue = prevType.serialize(value);
       withoutEncryption(() => {
         originalValidateEach(record, attribute, encryptedValue);

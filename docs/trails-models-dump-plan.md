@@ -42,15 +42,15 @@ What's missing is the `schema-introspection.ts` wrapper that current dump script
 import type { ForeignKeyDefinition } from "./connection-adapters/abstract/schema-definitions.js";
 
 export async function introspectForeignKeys(
-  adapter: AbstractAdapter,
-  tableName: string,
+  adapter: DatabaseAdapter,
+  table: string,
 ): Promise<ForeignKeyDefinition[]> {
-  if (typeof adapter.foreignKeys !== "function") return [];
-  return await adapter.foreignKeys(tableName);
+  if (hasForeignKeys(adapter)) return adapter.foreignKeys(table);
+  return schemaStatementsFor(adapter).foreignKeys(table);
 }
 ```
 
-Same fallback-to-`[]` pattern as `introspectIndexes` so adapters that haven't wired FK introspection yet degrade gracefully.
+Follows the same prefer-adapter / fallback-to-SchemaStatements pattern (with per-adapter memoized `SchemaStatements`) as its siblings. `SchemaStatements.foreignKeys()` itself degrades to `[]` when the adapter lacks `.foreignKeys()`, so adapters that haven't wired FK introspection yet degrade gracefully rather than crashing.
 
 ### 2b. `ForeignKeyDefinition` — exact shape
 
@@ -237,26 +237,26 @@ For each `ForeignKeyDefinition { fromTable, toTable, column, primaryKey, name }`
 
 Each row: detection signal + v1 behaviour. **v1** = implemented now; items without that marker ship a TODO/NOTE comment but no machinery.
 
-| Edge case                                           | Detection signal                                                   | Behaviour                                                                                                                                                                                                       |
-| --------------------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Composite FK**                                    | `column.includes(",")`                                             | **v1**: comment `// TODO composite FK ${name}` inside fromTable's static block. No association. No crash.                                                                                                       |
-| **Composite PK**                                    | `introspectPrimaryKey` returns array length ≥ 2                    | **v1**: `this._primaryKey = ["<a>", "<b>"]`. Single-column FKs on the table still emit associations normally.                                                                                                   |
-| **Non-default single PK**                           | `introspectPrimaryKey` returns string ≠ `"id"`                     | **v1**: `this._primaryKey = "<col>"`.                                                                                                                                                                           |
-| **No PK (view)**                                    | `introspectPrimaryKey` returns `null`                              | **v1**: skip the entire table. Log `// SKIPPED <name>: no primary key (likely a view)` in the header tally.                                                                                                     |
-| **Self-referential FK**                             | `fromTable === toTable`                                            | **v1**: Name belongsTo by the column (`parent_id → belongsTo("parent")`). hasMany inverse named by the table (likely wrong — user will rename to `children`).                                                   |
-| **Irregular / uncountable table**                   | `tableize(classify(t)) !== t`                                      | **v1**: emit explicit `this._tableName = "<t>"`. Covered by the round-trip rule (§4).                                                                                                                           |
-| **Acronym-like table** (`oauth_tokens`, `api_keys`) | Inflector lacks acronym registration                               | **v1**: emit `OauthToken`, `ApiKey` — matches current trails inflection. Users who want `OAuthToken` register an acronym in app init; generator does not.                                                       |
-| **Polymorphic `belongs_to`**                        | Table has `<x>_id` (no FK constraint) + `<x>_type` (string column) | v2: emit `// TODO polymorphic: this.belongsTo("<x>", { polymorphic: true })`. No regular belongsTo, no has_many inverse. Requires inspecting column list — IntrospectedTable includes `columns` for this check. |
-| **STI**                                             | `type` column with string type, at least one inbound FK            | v2: treat as regular column. Emit `// NOTE: 'type' column present — if this is STI, declare subclasses manually`.                                                                                               |
-| **`has_many :through` / HABTM**                     | Table has exactly 2 FKs, all other columns are PK / timestamps     | v2: emit regular belongsTo on the join model + hasMany on each side. Add `// NOTE: join table — consider has_many :through or hasAndBelongsToMany` on the join class.                                           |
-| **Schema prefix/suffix**                            | No DB signal                                                       | **v1**: `--strip-prefix` / `--strip-suffix` flags. `_tableName` always preserves the original; classify runs on the stripped form.                                                                              |
-| **Adapter returns no FKs**                          | `introspectForeignKeys` returns `[]`                               | **v1**: class emitted without associations. Add `// WARNING: no foreign keys found for <table>` comment inside the class.                                                                                       |
-| **Adapter lacks `.foreignKeys`**                    | `typeof adapter.foreignKeys !== "function"`                        | **v1**: wrapper returns `[]` (see §2a). Top-level header notes `no FK introspection available for this adapter; associations omitted`.                                                                          |
-| **`--only` + `--ignore` both passed**               | Arg conflict                                                       | **v1**: exit 1 with `trails-models-dump: --only and --ignore are mutually exclusive\n`.                                                                                                                         |
-| **`--out` path's directory doesn't exist**          | `ENOENT` on write                                                  | **v1**: `mkdirSync(dirname(out), { recursive: true })` before write. Matches `trails-schema-dump` behaviour.                                                                                                    |
-| **`--format` without prettier available**           | `import("prettier")` rejects                                       | **v1**: fall back to raw output + `trails-models-dump: warning: --format requested but prettier not installed; writing unformatted\n` on stderr. Exit 0.                                                        |
-| **Zero tables after filtering**                     | `--only`/`--ignore` filters everything                             | **v1**: exit 1 with `trails-models-dump: no tables to generate (check --only/--ignore)\n`.                                                                                                                      |
-| **Connection failure**                              | `Base.establishConnection` rejects                                 | **v1**: exit 1 with `trails-models-dump: failed to connect: <msg>\n`.                                                                                                                                           |
+| Edge case                                           | Detection signal                                                                                       | Behaviour                                                                                                                                                                                                       |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Composite FK**                                    | `column.includes(",")`                                                                                 | **v1**: comment `// TODO composite FK ${name}` inside fromTable's static block. No association. No crash.                                                                                                       |
+| **Composite PK**                                    | `introspectPrimaryKey` returns array length ≥ 2                                                        | **v1**: `this._primaryKey = ["<a>", "<b>"]`. Single-column FKs on the table still emit associations normally.                                                                                                   |
+| **Non-default single PK**                           | `introspectPrimaryKey` returns string ≠ `"id"`                                                         | **v1**: `this._primaryKey = "<col>"`.                                                                                                                                                                           |
+| **No PK (view)**                                    | `introspectPrimaryKey` returns `[]` (empty array — the helper normalizes adapter-level `null` to `[]`) | **v1**: skip the entire table. Log `// SKIPPED <name>: no primary key (likely a view)` in the header tally.                                                                                                     |
+| **Self-referential FK**                             | `fromTable === toTable`                                                                                | **v1**: Name belongsTo by the column (`parent_id → belongsTo("parent")`). hasMany inverse named by the table (likely wrong — user will rename to `children`).                                                   |
+| **Irregular / uncountable table**                   | `tableize(classify(t)) !== t`                                                                          | **v1**: emit explicit `this._tableName = "<t>"`. Covered by the round-trip rule (§4).                                                                                                                           |
+| **Acronym-like table** (`oauth_tokens`, `api_keys`) | Inflector lacks acronym registration                                                                   | **v1**: emit `OauthToken`, `ApiKey` — matches current trails inflection. Users who want `OAuthToken` register an acronym in app init; generator does not.                                                       |
+| **Polymorphic `belongs_to`**                        | Table has `<x>_id` (no FK constraint) + `<x>_type` (string column)                                     | v2: emit `// TODO polymorphic: this.belongsTo("<x>", { polymorphic: true })`. No regular belongsTo, no has_many inverse. Requires inspecting column list — IntrospectedTable includes `columns` for this check. |
+| **STI**                                             | `type` column with string type, at least one inbound FK                                                | v2: treat as regular column. Emit `// NOTE: 'type' column present — if this is STI, declare subclasses manually`.                                                                                               |
+| **`has_many :through` / HABTM**                     | Table has exactly 2 FKs, all other columns are PK / timestamps                                         | v2: emit regular belongsTo on the join model + hasMany on each side. Add `// NOTE: join table — consider has_many :through or hasAndBelongsToMany` on the join class.                                           |
+| **Schema prefix/suffix**                            | No DB signal                                                                                           | **v1**: `--strip-prefix` / `--strip-suffix` flags. `_tableName` always preserves the original; classify runs on the stripped form.                                                                              |
+| **Adapter returns no FKs**                          | `introspectForeignKeys` returns `[]`                                                                   | **v1**: class emitted without associations. Add `// WARNING: no foreign keys found for <table>` comment inside the class.                                                                                       |
+| **Adapter lacks `.foreignKeys`**                    | `typeof adapter.foreignKeys !== "function"`                                                            | **v1**: wrapper returns `[]` (see §2a). Top-level header notes `no FK introspection available for this adapter; associations omitted`.                                                                          |
+| **`--only` + `--ignore` both passed**               | Arg conflict                                                                                           | **v1**: exit 1 with `trails-models-dump: --only and --ignore are mutually exclusive\n`.                                                                                                                         |
+| **`--out` path's directory doesn't exist**          | `ENOENT` on write                                                                                      | **v1**: `mkdirSync(dirname(out), { recursive: true })` before write. Matches `trails-schema-dump` behaviour.                                                                                                    |
+| **`--format` without prettier available**           | `import("prettier")` rejects                                                                           | **v1**: fall back to raw output + `trails-models-dump: warning: --format requested but prettier not installed; writing unformatted\n` on stderr. Exit 0.                                                        |
+| **Zero tables after filtering**                     | `--only`/`--ignore` filters everything                                                                 | **v1**: exit 1 with `trails-models-dump: no tables to generate (check --only/--ignore)\n`.                                                                                                                      |
+| **Connection failure**                              | `Base.establishConnection` rejects                                                                     | **v1**: exit 1 with `trails-models-dump: failed to connect: <msg>\n`.                                                                                                                                           |
 
 ---
 
@@ -269,7 +269,12 @@ import type { ForeignKeyDefinition } from "./connection-adapters/abstract/schema
 
 export interface IntrospectedTable {
   name: string;
-  /** null when the table has no PK (view). Skipped entirely. */
+  /**
+   * PK column name(s) in PK-position order. Empty array means the table has
+   * no primary key (likely a view) — skipped entirely. `null` is also
+   * accepted for callers that want to construct IntrospectedTable from
+   * lower-level sources that distinguish null-vs-empty.
+   */
   primaryKey: string | string[] | null;
   foreignKeys: ForeignKeyDefinition[];
   /** Drives polymorphic + STI detection. */

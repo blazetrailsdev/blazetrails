@@ -134,9 +134,9 @@ export async function introspectPrimaryKey(
  * Return foreign-key definitions for `table`. Uses `adapter.foreignKeys()`
  * when implemented (SQLite / PostgreSQL / MySQL2 all do), else falls back
  * to `SchemaStatements.foreignKeys()` — which itself degrades to an empty
- * array when the adapter can't surface constraint metadata. No fallback
- * parses `information_schema` / `pragma_foreign_key_list` portably, so
- * `[]` is the honest answer for unsupported adapters.
+ * array when the adapter can't surface constraint metadata. No portable
+ * fallback parses `information_schema` / `PRAGMA foreign_key_list(...)`,
+ * so `[]` is the honest answer for unsupported adapters.
  *
  * Note: `ForeignKeyDefinition.column` and `.primaryKey` are comma-separated
  * strings for composite foreign keys (e.g. "a_id,b_id"), not arrays.

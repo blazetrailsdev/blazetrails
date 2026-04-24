@@ -1203,7 +1203,9 @@ export class ToSql implements NodeVisitor<SQLString> {
   // -- UnaryOperation --
 
   private visitUnaryOperation(node: Nodes.UnaryOperation): SQLString {
-    this.collector.append(node.operator);
+    // Rails emits ` ${operator} ` — space on both sides — so the operator
+    // sits free of surrounding tokens wherever it lands in an expression.
+    this.collector.append(` ${node.operator} `);
     this.visit(node.operand);
     return this.collector;
   }

@@ -480,7 +480,9 @@ describe("the to_sql visitor", () => {
 
     it("should handle arbitrary operators", () => {
       const node = new Nodes.UnaryOperation("-", new Nodes.Quoted(1));
-      expect(new Visitors.ToSql().compile(node)).toContain("-1");
+      // Rails' visit_Arel_Nodes_UnaryOperation emits `" #{operator} "` —
+      // space on both sides of the operator.
+      expect(new Visitors.ToSql().compile(node)).toContain("- 1");
     });
   });
 

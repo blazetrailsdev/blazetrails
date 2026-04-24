@@ -638,6 +638,33 @@ describe("unified sync/async runner", () => {
     );
   });
 
+  it("async validator function registered via Model.validate is caught at runtime", () => {
+    class Person extends Model {
+      static {
+        this.attribute("name", "string");
+        this.validate(async (_r: any) => {
+          await Promise.resolve();
+        });
+      }
+    }
+    const p = new Person({ name: "test" });
+    expect(() => p.isValid()).toThrow(/Async callback registered on sync event 'validate'/);
+  });
+
+  it("async validator method registered via Model.validate is caught at runtime", () => {
+    class Person extends Model {
+      static {
+        this.attribute("name", "string");
+        this.validate("checkRemote");
+      }
+      async checkRemote() {
+        await Promise.resolve();
+      }
+    }
+    const p = new Person({ name: "test" });
+    expect(() => p.isValid()).toThrow(/Async callback registered on sync event 'validate'/);
+  });
+
   it("async validator registered via validatesWith is caught at runtime", () => {
     class AsyncValidator {
       async validate(_record: unknown): Promise<void> {

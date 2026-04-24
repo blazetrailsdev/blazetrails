@@ -387,14 +387,17 @@ export class Model {
   }
 
   static validate(
-    methodOrFn: string | ((record: AnyRecord) => void),
+    methodOrFn: string | ((record: AnyRecord) => unknown),
     options: ConditionalOptions = {},
   ): void {
     const fn: CallbackFn = (record: AnyRecord) => {
+      // Return the underlying result so an `async` validator's Promise flows
+      // into the callback runner, where strict-sync mode (on the `validate`
+      // event) will throw instead of dropping it as an unhandled rejection.
       if (typeof methodOrFn === "function") {
-        methodOrFn(record);
+        return methodOrFn(record) as void;
       } else if (typeof record[methodOrFn] === "function") {
-        record[methodOrFn]();
+        return record[methodOrFn]() as void;
       }
     };
     this._ensureOwnCallbacks();

@@ -92,12 +92,16 @@ describe("generateModels", () => {
   });
 
   it("handles self-referential FK without crashing", () => {
+    // parent_id → users.id. belongsTo("parent") would by convention look
+    // for class Parent; the real class is User, so className is emitted.
+    // Similarly hasMany("users") would conventionally point at class User
+    // (which matches), so no className there — but the foreign key from
+    // the user's POV is "parent_id", not "user_id", so foreignKey is
+    // emitted on the hasMany side.
     const tables = [table("users", { foreignKeys: [fk("users", "users", "parent_id")] })];
     const out = generateModels(tables, { noHeader: true, now: NOW });
-    expect(out).toContain('this.belongsTo("parent");');
-    // Self-ref: hasMany on same class, named after the source table (user
-    // will likely rename to "children"). Emitted on the same class.
-    expect(out).toContain('this.hasMany("users"');
+    expect(out).toContain('this.belongsTo("parent", { className: "User" });');
+    expect(out).toContain('this.hasMany("users", { foreignKey: "parent_id" });');
   });
 
   it("emits TODO comment for composite FK, no association", () => {
@@ -186,6 +190,40 @@ describe("generateModels", () => {
     const a = generateModels(tables, { noHeader: true, now: NOW });
     const b = generateModels(tables, { noHeader: true, now: NOW });
     expect(a).toBe(b);
+  });
+
+  it("emits className option when --strip-prefix makes association name mismatch class name", () => {
+    // Without stripPrefix, `blog_post_id → blog_posts` infers belongsTo("blog_post")
+    // and className "BlogPost" — matches. With stripPrefix "blog_", the class
+    // becomes `Post`, so belongsTo("blog_post") no longer auto-resolves to
+    // the target class: we emit `className: "Post"`. On the hasMany side,
+    // the target class is `Post` but the FK column still has the blog_ prefix,
+    // so foreignKey is emitted.
+    const tables = [
+      table("blog_posts"),
+      table("comments", {
+        foreignKeys: [fk("comments", "blog_posts", "blog_post_id")],
+      }),
+    ];
+    const out = generateModels(tables, {
+      stripPrefix: "blog_",
+      noHeader: true,
+      now: NOW,
+    });
+    expect(out).toContain('this.belongsTo("blog_post", { className: "Post" });');
+    expect(out).toContain('this.hasMany("comments", { foreignKey: "blog_post_id" });');
+  });
+
+  it("throws on class-name collision from strip-prefix", () => {
+    // `posts` → class Post. `blog_posts` with stripPrefix "blog_" → class Post.
+    // Both would emit `export class Post`, producing invalid TS.
+    expect(() =>
+      generateModels([table("posts"), table("blog_posts")], {
+        stripPrefix: "blog_",
+        noHeader: true,
+        now: NOW,
+      }),
+    ).toThrow(/class name collision.*(posts|blog_posts).*(posts|blog_posts).*class Post/);
   });
 
   it("renders a full three-table example exactly", () => {

@@ -104,8 +104,21 @@ export function generateModels(
 
   const classNameForTable = (tableName: string): string => classify(strip(tableName));
   const classes = new Map<string, PlannedClass>();
+  // Track collisions so we fail fast rather than emit two `export class X`
+  // declarations (invalid TS). Two tables strip/classify to the same name
+  // most commonly when --strip-prefix uncovers a second copy of an existing
+  // table (e.g. `posts` + `blog_posts` both → `Post`).
+  const nameToTable = new Map<string, string>();
   for (const t of kept) {
     const className = classNameForTable(t.name);
+    const existing = nameToTable.get(className);
+    if (existing !== undefined) {
+      throw new Error(
+        `trails-models-dump: class name collision: both "${existing}" and "${t.name}" would generate \`class ${className}\`. ` +
+          `Adjust --strip-prefix/--strip-suffix, --ignore one of them, or rename a table.`,
+      );
+    }
+    nameToTable.set(className, t.name);
     classes.set(t.name, {
       name: className,
       tableName: t.name,
@@ -142,33 +155,44 @@ export function generateModels(
       const toCls = classes.get(fk.toTable);
       if (!toCls) continue;
 
-      // belongsTo name: strip _id if present, otherwise fall back to
-      // camelize(singularize(toTable)).
+      // belongsTo name: strip _id if present, otherwise fall back to the
+      // underscored singular of the target table name — matching Rails'
+      // convention so callers of Model.some_fk see the right association.
       const belongsToName =
         fk.column.endsWith("_id") && fk.column !== "_id"
           ? fk.column.slice(0, -3)
           : underscore(singularize(strip(fk.toTable)));
 
+      // Rails convention for belongsTo(name) infers:
+      //   foreignKey = "${name}_id"
+      //   className  = classify(name)
+      // Emit those options only when the actual FK column / target class
+      // differs from what Rails would pick by default given `belongsToName`.
       const expectedForeignKey = `${underscore(belongsToName)}_id`;
-      const expectedClassName = classify(strip(fk.toTable));
+      const conventionalClassName = classify(belongsToName);
       const belongsToOpts: Record<string, string> = {};
       if (fk.column !== expectedForeignKey) belongsToOpts.foreignKey = fk.column;
-      if (toCls.name !== expectedClassName) belongsToOpts.className = toCls.name;
+      if (toCls.name !== conventionalClassName) belongsToOpts.className = toCls.name;
 
       fromCls.body.push(formatAssoc("belongsTo", belongsToName, belongsToOpts));
 
-      // hasMany on the target side. Self-referential: we still add it,
-      // though the name is just the source table's pluralized form and
-      // the user likely wants to rename (e.g. "users" → "children").
-      const hasManyName =
-        fk.column.endsWith("_id") && fk.column !== "_id"
-          ? pluralize(strip(fk.fromTable))
-          : pluralize(strip(fk.fromTable));
-      const hmExpectedForeignKey = `${underscore(belongsToName)}_id`;
-      const hmExpectedClassName = classify(strip(fk.fromTable));
+      // hasMany on the target side. The association name is always the
+      // source table's pluralised (stripped) form — no _id branch matters
+      // here, unlike belongsTo. Self-referential case still lands here and
+      // the user likely renames to "children"; generator emits the
+      // table-derived default.
+      const hasManyName = pluralize(strip(fk.fromTable));
+
+      // Rails convention for hasMany(name) infers:
+      //   foreignKey = "${underscore(singularize(current_class_name))}_id"
+      //   className  = classify(singularize(name))
+      // Generator compares against that so stripped-prefix cases
+      // (e.g. blog_posts → Post) correctly emit `className`.
+      const hmConventionalClassName = classify(singularize(hasManyName));
+      const hmConventionalForeignKey = `${underscore(singularize(toCls.name))}_id`;
       const hmOpts: Record<string, string> = {};
-      if (fk.column !== hmExpectedForeignKey) hmOpts.foreignKey = fk.column;
-      if (fromCls.name !== hmExpectedClassName) hmOpts.className = fromCls.name;
+      if (fk.column !== hmConventionalForeignKey) hmOpts.foreignKey = fk.column;
+      if (fromCls.name !== hmConventionalClassName) hmOpts.className = fromCls.name;
 
       const pending = hasManyByTable.get(fk.toTable) ?? [];
       pending.push({ toTable: fk.toTable, name: hasManyName, opts: hmOpts });

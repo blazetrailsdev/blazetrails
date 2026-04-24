@@ -119,9 +119,7 @@ export function attribute(
   // (`instance[name]`) or assignment (`instance[name] = value`). Direct
   // assignment would create an own property on the instance and shadow
   // the framework method per-instance.
-  const alreadyDefined =
-    name in this.prototype && !Object.prototype.hasOwnProperty.call(this.prototype, name);
-  if (!Object.prototype.hasOwnProperty.call(this.prototype, name) && !alreadyDefined) {
+  if (!(name in this.prototype)) {
     Object.defineProperty(this.prototype, name, {
       get(this: { readAttribute(n: string): unknown }) {
         return this.readAttribute(name);

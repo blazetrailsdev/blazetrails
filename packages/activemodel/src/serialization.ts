@@ -143,10 +143,20 @@ export function serializableHash(
  * properties per spec, which correctly signals "this doesn't
  * serialize".
  */
-export function coerceForJson(
+export function coerceForJson(value: unknown): unknown {
+  return _coerceForJson(value, new WeakMap(), new WeakSet());
+}
+
+/**
+ * Internal recursion for `coerceForJson`. Threaded with shared cycle
+ * state (`seen` for memoization, `inProgress` for self-recursion
+ * detection) so the top-level entry point can keep a narrow public
+ * signature.
+ */
+function _coerceForJson(
   value: unknown,
-  seen: WeakMap<object, unknown> = new WeakMap(),
-  inProgress: WeakSet<object> = new WeakSet(),
+  seen: WeakMap<object, unknown>,
+  inProgress: WeakSet<object>,
 ): unknown {
   // `null` is valid JSON. `undefined` is not — `JSON.stringify` silently
   // drops object properties whose value is `undefined`, so an attribute
@@ -182,7 +192,7 @@ export function coerceForJson(
     inProgress.add(value);
     try {
       for (const entry of value) {
-        out.push(coerceForJson(entry, seen, inProgress));
+        out.push(_coerceForJson(entry, seen, inProgress));
       }
     } finally {
       inProgress.delete(value);
@@ -213,7 +223,7 @@ export function coerceForJson(
         // invoking `Object.prototype.__proto__`'s setter and polluting
         // the output's prototype.
         Object.defineProperty(out, k, {
-          value: coerceForJson(val, seen, inProgress),
+          value: _coerceForJson(val, seen, inProgress),
           writable: true,
           enumerable: true,
           configurable: true,

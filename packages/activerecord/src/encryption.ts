@@ -241,6 +241,16 @@ export function applyPendingEncryptions(klass: any): void {
       (_attrName: string, castType: Type) => new EncryptedAttributeType({ scheme, castType }),
     );
   }
+
+  // Re-run column-size validation after schema reflection so limits learned
+  // from the DB (not declared via attribute()) are also picked up. Idempotent:
+  // adding the same maximum validator twice is harmless, and in the common
+  // case where validateColumnSize ran at encrypts() time this is a no-op.
+  if (Configurable.config.validateColumnSize) {
+    for (const { name } of pending) {
+      EncryptableRecord.validateColumnSize(klass, name);
+    }
+  }
 }
 
 /**

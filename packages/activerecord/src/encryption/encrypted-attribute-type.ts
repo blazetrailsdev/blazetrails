@@ -11,6 +11,31 @@ import {
 } from "./errors.js";
 import { NullEncryptor } from "./null-encryptor.js";
 
+function _normalizeEncoding(encoding: string): "utf8" | "ascii" | "latin1" | null {
+  switch (encoding.toLowerCase().replace(/[^a-z0-9]/g, "")) {
+    case "utf8":
+      return "utf8";
+    case "ascii":
+    case "usascii":
+      return "ascii";
+    case "latin1":
+    case "iso88591":
+    case "binary":
+      return "latin1";
+    default:
+      return null;
+  }
+}
+
+function _replaceUnencodable(value: string, maxCodePoint: number): string {
+  let out = "";
+  for (const char of value) {
+    const cp = char.codePointAt(0)!;
+    out += cp > maxCodePoint || (cp >= 0xd800 && cp <= 0xdfff) ? "?" : char;
+  }
+  return out;
+}
+
 /**
  * An ActiveModel type that encrypts/decrypts attribute values. This is
  * the central piece connecting the encryption system with `encrypts`
@@ -189,18 +214,9 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
   private _applyForcedEncoding(value: string): string {
     const forced = Configurable.config.forcedEncodingForDeterministicEncryption;
     if (!forced) return value;
-    // JS strings are always valid Unicode (UTF-16 internally). Normalize by
-    // encoding to a Buffer with the target encoding (replacing unencodable chars)
-    // then decoding back to a JS string. Mirrors Rails' String#encode with
-    // invalid: :replace, undef: :replace. For UTF-8 (the default) this is a
-    // no-op since all JS strings are valid Unicode.
-    const enc = forced.toLowerCase().replace(/[^a-z0-9]/g, "") as BufferEncoding;
-    try {
-      const buf = Buffer.from(value, enc);
-      return buf.toString(enc);
-    } catch {
-      return value;
-    }
+    const enc = _normalizeEncoding(forced);
+    if (enc === "utf8") return value;
+    return _replaceUnencodable(value, enc === "ascii" ? 0x7f : 0xff);
   }
 
   private encrypt(value: string): string {

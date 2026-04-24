@@ -155,7 +155,13 @@ export class EncryptableRecord {
     const limit =
       (modelClass._attributeDefinitions?.get(attribute) as any)?.limit ??
       modelClass.columnsHash?.()[attribute]?.limit;
-    if (limit != null) {
+    if (limit == null) return;
+    // Guard against double registration (called at encrypts() time and again
+    // after schema reflection). Check whether a LengthValidator with this
+    // exact maximum already exists for the attribute.
+    const existing: unknown[] = modelClass._validators?.get(attribute) ?? [];
+    const alreadyRegistered = existing.some((v: any) => v?.options?.maximum === limit);
+    if (!alreadyRegistered) {
       modelClass.validatesLengthOf(attribute, { maximum: limit });
     }
   }

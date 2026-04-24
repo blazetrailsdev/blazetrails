@@ -313,6 +313,8 @@ describe("ActiveRecord::Encryption::EncryptableRecordTest", () => {
   });
 
   it("forces UTF-8 encoding for deterministic attributes by default", async () => {
+    // UTF-8 is the default — JS strings are always valid Unicode so this is
+    // a no-op, but the feature must not break normal round-trips.
     const Book = makeEncryptedBook(freshAdapter());
     new Book();
     const book = await Book.create({ name: "Dune" });
@@ -321,29 +323,41 @@ describe("ActiveRecord::Encryption::EncryptableRecordTest", () => {
   });
 
   it("forces encoding for deterministic attributes based on the configured option", async () => {
+    // ASCII encoding: non-ASCII chars (> 0x7F) are replaced with "?" so two
+    // strings that differ only in non-ASCII content produce the same ciphertext.
     Configurable.config.forcedEncodingForDeterministicEncryption = "ASCII";
-    const Book = makeEncryptedBook(freshAdapter());
+    const adp = freshAdapter();
+    const Book = makeEncryptedBook(adp);
     new Book();
-    const book = await Book.create({ name: "Dune" });
+    const book = await Book.create({ name: "Helló" });
+    const normalized = await Book.create({ name: "Hell?" });
+    expect(ciphertextFor(book, "name")).toBe(ciphertextFor(normalized, "name"));
     const reloaded = await Book.find(book.id);
-    expect(reloaded.name).toBe("Dune");
+    expect(reloaded.name).toBe("Hell?");
   });
 
   it("forced encoding for deterministic attributes will replace invalid characters", async () => {
+    // ASCII encoding replaces chars > 0x7F with "?".
+    Configurable.config.forcedEncodingForDeterministicEncryption = "ASCII";
     const Book = makeEncryptedBook(freshAdapter());
     new Book();
-    const book = await Book.create({ name: "Hello ú" });
+    const book = await Book.create({ name: "Hello üñ" });
     const reloaded = await Book.find(book.id);
-    expect(typeof reloaded.name).toBe("string");
+    expect(reloaded.name).toBe("Hello ??");
   });
 
   it("forced encoding for deterministic attributes can be disabled", async () => {
+    // With forced encoding disabled (""), non-ASCII chars are preserved as-is.
     Configurable.config.forcedEncodingForDeterministicEncryption = "";
-    const Book = makeEncryptedBook(freshAdapter());
+    const adp = freshAdapter();
+    const Book = makeEncryptedBook(adp);
     new Book();
-    const book = await Book.create({ name: "Dune" });
+    const book = await Book.create({ name: "Helló" });
+    const unrelated = await Book.create({ name: "Hell?" });
+    // Different values -> different ciphertexts (no normalization flattens them).
+    expect(ciphertextFor(book, "name")).not.toBe(ciphertextFor(unrelated, "name"));
     const reloaded = await Book.find(book.id);
-    expect(reloaded.name).toBe("Dune");
+    expect(reloaded.name).toBe("Helló");
   });
 
   it("support encrypted attributes defined on columns with default values", async () => {

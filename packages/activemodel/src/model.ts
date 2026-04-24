@@ -933,12 +933,18 @@ export class Model {
 
   /**
    * Remove a previously-registered callback. Mirrors Rails
-   * `skip_callback(event, timing, filter, options)`
+   * `skip_callback(event, timing, filter)`
    * (activesupport/lib/active_support/callbacks.rb:786-808). Identity
    * comparison on `fn` — callers pass the same reference they registered.
    * Returns `true` if a matching entry was removed; Rails raises when no
    * match unless `raise: false`, we return boolean so the caller can
    * decide.
+   *
+   * Note: Rails also lets `skip_callback(..., if: cond)` *conditionally*
+   * skip at run time (it rewrites the chain entry rather than deleting
+   * it). Ours only supports unconditional removal; for conditional
+   * skipping, re-`setCallback` the same filter wrapped in your own
+   * condition check.
    */
   static skipCallback<T extends typeof Model>(
     this: T,

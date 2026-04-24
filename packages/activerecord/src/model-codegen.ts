@@ -225,9 +225,27 @@ export function generateModels(
       // already-singular source class name, then pluralise — pluralising
       // the table name directly would mangle irregular already-plural
       // tables (e.g. `children` → `childrens`, `people` → `peoples`).
-      // Self-referential case still lands here and the user likely
-      // renames to "children"; generator emits the class-derived default.
-      const hasManyName = pluralize(underscore(fromCls.name));
+      const hasManyBaseName = pluralize(underscore(fromCls.name));
+
+      // Disambiguate when multiple FKs from the same source table point at
+      // the same target (posts.author_id + posts.editor_id → users). Without
+      // this, both would emit `this.hasMany("posts")` on User — duplicate
+      // declarations, second one silently wins. Role is derived from the
+      // belongsTo name (column minus `_id`), giving natural inverse names
+      // like "authored_posts" / "edited_posts" with className + foreignKey
+      // options auto-emitted below since the disambiguated name won't
+      // match Rails' convention for the target class.
+      const existingHms = hasManyByTable.get(toTableUnqual) ?? [];
+      let hasManyName = hasManyBaseName;
+      if (existingHms.some((h) => h.name === hasManyName)) {
+        const rolePrefix = `${underscore(belongsToName)}_`;
+        hasManyName = `${rolePrefix}${hasManyBaseName}`;
+        let suffix = 2;
+        while (existingHms.some((h) => h.name === hasManyName)) {
+          hasManyName = `${rolePrefix}${hasManyBaseName}_${suffix}`;
+          suffix += 1;
+        }
+      }
 
       // Rails convention for hasMany(name) infers:
       //   foreignKey = "${underscore(current_class_name)}_id"
@@ -241,9 +259,8 @@ export function generateModels(
       if (fk.column !== hmConventionalForeignKey) hmOpts.foreignKey = fk.column;
       if (fromCls.name !== hmConventionalClassName) hmOpts.className = fromCls.name;
 
-      const pending = hasManyByTable.get(toTableUnqual) ?? [];
-      pending.push({ toTable: toTableUnqual, name: hasManyName, opts: hmOpts });
-      hasManyByTable.set(toTableUnqual, pending);
+      existingHms.push({ toTable: toTableUnqual, name: hasManyName, opts: hmOpts });
+      hasManyByTable.set(toTableUnqual, existingHms);
     }
   }
 

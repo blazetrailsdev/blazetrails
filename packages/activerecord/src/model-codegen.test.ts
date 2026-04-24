@@ -252,6 +252,31 @@ describe("generateModels", () => {
     ).toThrow(/class name collision.*"blog_posts".*"posts".*classify to `Post`/);
   });
 
+  it("disambiguates inverse hasMany when multiple FKs point at the same target", () => {
+    // posts.author_id and posts.editor_id both → users.id. Both inverses
+    // on User would be hasMany("posts") without disambiguation. Generator
+    // keeps the first as "posts" (convention) and names later ones with a
+    // role prefix derived from the belongsTo name.
+    const tables = [
+      table("users"),
+      table("posts", {
+        foreignKeys: [fk("posts", "users", "author_id"), fk("posts", "users", "editor_id")],
+      }),
+    ];
+    const out = generateModels(tables, { noHeader: true, now: NOW });
+    // Post gets two distinct belongsTo (author / editor), each with a
+    // className option since neither matches classify(name) === User.
+    expect(out).toContain('this.belongsTo("author", { className: "User" });');
+    expect(out).toContain('this.belongsTo("editor", { className: "User" });');
+    // User gets "posts" first (column-alphabetical: author_id first),
+    // then "editor_posts" disambiguated with className + foreignKey
+    // because the non-conventional name no longer matches Post.
+    expect(out).toContain('this.hasMany("posts", { foreignKey: "author_id" });');
+    expect(out).toContain(
+      'this.hasMany("editor_posts", { className: "Post", foreignKey: "editor_id" });',
+    );
+  });
+
   it("resolves schema-qualified FK targets from the PG adapter", () => {
     // PostgreSQL's FK introspection renders the target via `regclass::text`,
     // which returns "schema.table" for tables in a non-default schema.

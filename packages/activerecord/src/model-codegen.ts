@@ -25,9 +25,12 @@ import { classify, pluralize, singularize, tableize, underscore } from "@blazetr
 export interface IntrospectedTable {
   name: string;
   /**
-   * Primary-key column name(s) in PK-position order, or null when the
-   * table has no primary key (views). Tables with `null` are skipped
-   * entirely by the generator.
+   * Primary-key column name(s) in PK-position order, or `null` / `[]`
+   * when the table has no primary key (likely a view). Both no-PK forms
+   * are skipped entirely by the generator. introspectPrimaryKey() in
+   * schema-introspection.ts normalises adapter-level null to [], so the
+   * documented pipeline feeds []; `null` remains accepted for callers
+   * that distinguish null-vs-empty at a lower level.
    */
   primaryKey: string | string[] | null;
   foreignKeys: ForeignKeyDefinition[];
@@ -249,10 +252,30 @@ export function generateModels(
       // follow Rails convention off the real table. A FK to blog_posts
       // via a non-convention column should still emit belongsTo("blog_post"),
       // never belongsTo("post").
-      const belongsToName =
+      const belongsToBase =
         fk.column.endsWith("_id") && fk.column !== "_id"
           ? fk.column.slice(0, -3)
           : underscore(singularize(toTableUnqual));
+
+      // Disambiguate when two non-_id FKs from the same source table
+      // would derive the same belongsTo name (e.g. books.written_by +
+      // books.edited_by → authors both fall back to belongsTo("author")).
+      // First wins the conventional name; subsequent ones use the FK
+      // column directly as the association name, which is always unique
+      // per-class since it's the column name. className + foreignKey
+      // options auto-emit below because the column-derived name won't
+      // match Rails' convention for the target class.
+      let belongsToName = belongsToBase;
+      if (fromCls.associations.some((a) => a.kind === "belongsTo" && a.name === belongsToName)) {
+        belongsToName = underscore(fk.column);
+        let suffix = 2;
+        while (
+          fromCls.associations.some((a) => a.kind === "belongsTo" && a.name === belongsToName)
+        ) {
+          belongsToName = `${underscore(fk.column)}_${suffix}`;
+          suffix += 1;
+        }
+      }
 
       // Rails convention for belongsTo(name) infers:
       //   foreignKey = "${name}_id"

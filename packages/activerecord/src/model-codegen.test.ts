@@ -279,6 +279,28 @@ describe("generateModels", () => {
     ).toThrow(/class name collision.*"blog_posts".*"posts".*classify to `Post`/);
   });
 
+  it("disambiguates belongsTo when multiple non-_id FKs derive the same name", () => {
+    // books.written_by + books.edited_by both → authors.id. Neither
+    // column ends with _id, so both fall back to belongsTo("author")
+    // (singularized target table). Without disambiguation, two identical
+    // belongsTo declarations would be emitted on Book. Generator keeps
+    // the first with the convention name and switches later ones to the
+    // FK column itself, which is always unique within a class.
+    const tables = [
+      table("authors"),
+      table("books", {
+        foreignKeys: [fk("books", "authors", "written_by"), fk("books", "authors", "edited_by")],
+      }),
+    ];
+    const out = generateModels(tables, { noHeader: true, now: NOW });
+    // FK sort is alphabetical by column: edited_by first, written_by second.
+    // First one gets the conventional name; second is disambiguated.
+    expect(out).toContain('this.belongsTo("author", { foreignKey: "edited_by" });');
+    expect(out).toContain(
+      'this.belongsTo("written_by", { className: "Author", foreignKey: "written_by" });',
+    );
+  });
+
   it("disambiguates inverse hasMany when multiple FKs point at the same target", () => {
     // posts.author_id and posts.editor_id both → users.id. Both inverses
     // on User would be hasMany("posts") without disambiguation. Generator

@@ -57,8 +57,8 @@ export interface Validations {
    * AM's alias `validate → valid?`
    * (activemodel/lib/active_model/validations.rb:370).
    */
-  validate(context?: string | string[]): boolean;
-  isValid(context?: string | string[]): boolean;
+  validate(context?: string | string[] | null): boolean;
+  isValid(context?: string | string[] | null): boolean;
 }
 
 /**
@@ -76,10 +76,10 @@ export interface ValidationsClassMethods {
 
 // Reference to the parent class's isValid (Model.prototype.isValid).
 // Set by Base at module load via _setSuperIsValid to avoid circular imports.
-let _superIsValid: ((context?: string | string[]) => boolean) | null = null;
+let _superIsValid: ((context?: string | string[] | null) => boolean) | null = null;
 
 /** @internal Called by Base to register the super isValid for delegation. */
-export function _setSuperIsValid(fn: (context?: string | string[]) => boolean): void {
+export function _setSuperIsValid(fn: (context?: string | string[] | null) => boolean): void {
   _superIsValid = fn;
 }
 

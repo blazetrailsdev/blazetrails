@@ -1222,12 +1222,10 @@ export class Model {
     const ctor = this.constructor as typeof Model;
     // Rails `valid?(context = nil)` (validations.rb:361-368) always
     // assigns `context_for_validation.context = context` on entry,
-    // restoring in `ensure`. So an explicit `null` is a clear, not a
-    // no-op. We distinguish `undefined` (argument omitted — Rails'
-    // default → nil) from `null` (explicit clear — also nil) by
-    // collapsing both to `null`. For `ValidationContext` / Array we
-    // deep-copy to prevent caller-side mutation from leaking into
-    // our frame.
+    // restoring in `ensure`. An omitted argument and an explicit
+    // `null` both map to Rails' `nil` — so we collapse both to
+    // `null` here. For `ValidationContext` / Array we deep-copy to
+    // prevent caller-side mutation from leaking into our frame.
     let normalized: string | string[] | null;
     if (context === undefined || context === null) {
       normalized = null;
@@ -1264,7 +1262,7 @@ export class Model {
    * Mirrors Rails `alias_method :validate, :valid?`
    * (activemodel/lib/active_model/validations.rb:370).
    */
-  validate(context?: string | string[] | ValidationContext): boolean {
+  validate(context?: string | string[] | ValidationContext | null): boolean {
     return this.isValid(context);
   }
 
@@ -1274,7 +1272,7 @@ export class Model {
    * Mirrors Rails `def invalid?(context = nil); !valid?(context); end`
    * (activemodel/lib/active_model/validations.rb:408-410).
    */
-  isInvalid(context?: string | string[] | ValidationContext): boolean {
+  isInvalid(context?: string | string[] | ValidationContext | null): boolean {
     return !this.isValid(context);
   }
 
@@ -1704,7 +1702,7 @@ export class Model {
    * Mirrors Rails `def validate!(context = nil); valid?(context) || raise_validation_error; end`
    * (activemodel/lib/active_model/validations.rb:417-419).
    */
-  validateBang(context?: string | string[] | ValidationContext): true {
+  validateBang(context?: string | string[] | ValidationContext | null): true {
     if (!this.isValid(context)) {
       throw new ValidationError(this);
     }

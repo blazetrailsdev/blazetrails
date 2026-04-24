@@ -104,13 +104,25 @@ export const {
  * as MiniTest's `include ActiveModel::Lint::Tests` (lint.rb).
  */
 export const lintTests: ReadonlyArray<{ name: string; run(model: unknown): void }> = [
-  { name: "to_key", run: (m) => Tests.testToKey(m as never) },
-  { name: "to_param", run: (m) => Tests.testToParam(m as never) },
-  { name: "to_partial_path", run: (m) => Tests.testToPartialPath(m as never) },
-  { name: "persisted?", run: (m) => Tests.testPersisted(m as never) },
-  { name: "model_naming", run: (m) => Tests.testModelNaming(m as never) },
-  { name: "errors_aref", run: (m) => Tests.testErrorsAref(m as never) },
-  { name: "errors", run: (m) => Tests.testErrors(m as never) },
+  { name: "to_key", run: (m) => Tests.testToKey(m as Parameters<typeof Tests.testToKey>[0]) },
+  { name: "to_param", run: (m) => Tests.testToParam(m as Parameters<typeof Tests.testToParam>[0]) },
+  {
+    name: "to_partial_path",
+    run: (m) => Tests.testToPartialPath(m as Parameters<typeof Tests.testToPartialPath>[0]),
+  },
+  {
+    name: "persisted?",
+    run: (m) => Tests.testPersisted(m as Parameters<typeof Tests.testPersisted>[0]),
+  },
+  {
+    name: "model_naming",
+    run: (m) => Tests.testModelNaming(m as Parameters<typeof Tests.testModelNaming>[0]),
+  },
+  {
+    name: "errors_aref",
+    run: (m) => Tests.testErrorsAref(m as Parameters<typeof Tests.testErrorsAref>[0]),
+  },
+  { name: "errors", run: (m) => Tests.testErrors(m as Parameters<typeof Tests.testErrors>[0]) },
 ];
 
 interface MinimalDescribe {

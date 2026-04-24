@@ -157,21 +157,23 @@ describeIfPg("PostgreSQLAdapter", () => {
     });
 
     it("adds column as timestamptz if datetime type changed", async () => {
-      await adapter.exec(
+      class TimestamptzAdapter extends PostgreSQLAdapter {
+        static override datetimeType: "timestamp" | "timestamptz" = "timestamptz";
+      }
+      const tzAdapter = new TimestamptzAdapter(PG_TEST_URL);
+      await tzAdapter.exec(
         `CREATE TABLE IF NOT EXISTS postgresql_timestamp_with_zones (id serial primary key)`,
       );
-      const original = (PostgreSQLAdapter as unknown as { datetimeType: string }).datetimeType;
       try {
-        (PostgreSQLAdapter as unknown as { datetimeType: string }).datetimeType = "timestamptz";
-        await adapter.addColumn("postgresql_timestamp_with_zones", "times", "datetime");
-        const rows = await adapter.execute(
+        await tzAdapter.addColumn("postgresql_timestamp_with_zones", "times", "datetime");
+        const rows = await tzAdapter.execute(
           `SELECT data_type FROM information_schema.columns
            WHERE table_name = 'postgresql_timestamp_with_zones' AND column_name = 'times'`,
         );
         expect(rows[0]?.data_type).toBe("timestamp with time zone");
       } finally {
-        (PostgreSQLAdapter as unknown as { datetimeType: string }).datetimeType = original;
-        await adapter.exec(`DROP TABLE IF EXISTS postgresql_timestamp_with_zones CASCADE`);
+        await tzAdapter.exec(`DROP TABLE IF EXISTS postgresql_timestamp_with_zones CASCADE`);
+        await tzAdapter.close();
       }
     });
 

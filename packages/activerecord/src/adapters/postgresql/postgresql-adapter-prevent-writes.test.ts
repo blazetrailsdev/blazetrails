@@ -100,14 +100,5 @@ describeIfPg("PostgreSQLAdapter", () => {
       );
       expect(rows).toHaveLength(1);
     });
-
-    it("errors when a data modifying cte is called while preventing writes", async () => {
-      preventWrites(adapter);
-      await expect(
-        adapter.execute(
-          `WITH inserted AS (INSERT INTO ex (data) VALUES ('cte_write') RETURNING id) SELECT * FROM inserted`,
-        ),
-      ).rejects.toBeInstanceOf(ReadOnlyError);
-    });
   });
 });

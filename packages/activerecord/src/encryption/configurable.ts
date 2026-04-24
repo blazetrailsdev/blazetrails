@@ -1,4 +1,5 @@
 import { Config } from "./config.js";
+import { Contexts } from "./contexts.js";
 
 let _sharedConfig: Config | null = null;
 const _listeners: Array<(klass: any, name: string) => void> = [];
@@ -17,10 +18,16 @@ export class Configurable {
     return _sharedConfig;
   }
 
+  // Mirrors Rails' delegation of Context::PROPERTIES to context.
+  static get keyProvider(): unknown {
+    return Contexts.context.keyProvider;
+  }
+
   static configure(options: {
     primaryKey?: string | string[];
     deterministicKey?: string;
     keyDerivationSalt?: string;
+    previous?: Config["previousSchemes"];
     [key: string]: unknown;
   }): void {
     const config = this.config;
@@ -37,6 +44,10 @@ export class Configurable {
         (config as any)[key] = value;
       }
     }
+
+    // Mirror Rails: reset_default_context after setting config so context
+    // properties derived from config (e.g. key_provider) are re-evaluated.
+    Contexts.resetDefaultContext();
   }
 
   static onEncryptedAttributeDeclared(callback: (klass: any, name: string) => void): void {

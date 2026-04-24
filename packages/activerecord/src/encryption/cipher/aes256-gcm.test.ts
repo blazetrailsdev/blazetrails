@@ -77,7 +77,10 @@ describe("ActiveRecord::Encryption::Aes256GcmTest", () => {
     expect(r1.iv).not.toBe(r2.iv);
   });
 
-  it.skip("inspect_does not show secrets", () => {
-    /* needs custom inspect/toString */
+  it("inspect_does not show secrets", () => {
+    const secret = generateKey();
+    const cipher = new Cipher(secret);
+    const inspected = String(cipher);
+    expect(inspected).not.toContain(secret);
   });
 });

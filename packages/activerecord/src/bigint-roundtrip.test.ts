@@ -12,7 +12,7 @@ import type { DatabaseAdapter } from "./adapter.js";
 
 const BIG = 2n ** 62n; // 4611686018427387904 — above Number.MAX_SAFE_INTEGER
 
-describe("SQLite3 bigint model round-trip", () => {
+describe("bigint model round-trip (all adapters)", () => {
   let adapter: DatabaseAdapter;
 
   beforeEach(() => {
@@ -80,5 +80,17 @@ describe("SQLite3 bigint model round-trip", () => {
     const results = await Metric.where({ score: BIG }).toArray();
     expect(results).toHaveLength(1);
     expect(results[0].label).toBe("target");
+  });
+
+  it("queryAttribute returns false for 0n, true for non-zero bigint", async () => {
+    // Mirrors Rails query_attribute which uses value.zero? for numeric types.
+    // Mirrors activerecord/lib/active_record/attribute_methods/query.rb
+    const Metric = makeModel();
+    const zero = await Metric.create({ score: 0n, label: "zero" });
+    const nonzero = await Metric.create({ score: BIG, label: "nonzero" });
+    const foundZero = await Metric.find(zero.id);
+    const foundNonzero = await Metric.find(nonzero.id);
+    expect(foundZero.queryAttribute("score")).toBe(false);
+    expect(foundNonzero.queryAttribute("score")).toBe(true);
   });
 });

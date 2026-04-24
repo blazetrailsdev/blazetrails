@@ -96,4 +96,18 @@ describe("ar_dump.ts", () => {
     expect(res.status).toBe(1);
     expect(res.stderr).toMatch(/--frozen-at must be ISO 8601 UTC/);
   });
+
+  it("exits non-zero on an unknown fixture directory", () => {
+    // Typo'd or missing fixture dir — the most common operator error.
+    // We want it to fail fast with a readable errno, not deep inside AR.
+    const outDir = mkdtempSync(join(tmpdir(), "parity-ar-test-"));
+    const outPath = join(outDir, "out.json");
+    const res = spawnSync(TSX_BIN, [AR_DUMP, join(FIXTURES, "ar-does-not-exist"), outPath], {
+      encoding: "utf8",
+      cwd: REPO_ROOT,
+    });
+    rmSync(outDir, { recursive: true, force: true });
+    expect(res.status).not.toBe(0);
+    expect(res.stderr).toMatch(/ENOENT|no such file/i);
+  });
 });

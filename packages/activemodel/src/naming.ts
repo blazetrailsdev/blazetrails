@@ -234,8 +234,8 @@ export class ModelName {
   // hook JS does have: `Symbol.toPrimitive`. That covers IMPLICIT string
   // coercion only — `String(modelName)`, template literals, `modelName +
   // ""`, and loose `==` against a string. It does NOT trigger on strict
-  // `===` / `Object.is` / Jest's `toBe` (those compare identity without
-  // coercion); for those, callers use `mn.name` or `mn.equals(other)`.
+  // `===` / `Object.is` / matchers that use strict identity without
+  // coercion; for those, callers use `mn.name` or `mn.equals(other)`.
   // ---------------------------------------------------------------------------
 
   /**

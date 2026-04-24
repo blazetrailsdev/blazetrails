@@ -47,7 +47,10 @@ describeIfMysql("Mysql2Adapter", () => {
     });
 
     it("INT column in same row is unaffected by bigNumberStrings", async () => {
-      await adapter.executeMutation(`INSERT INTO \`bigint_rt\` (\`score\`, \`count\`) VALUES (?, ?)`, [BIG, 42]);
+      await adapter.executeMutation(
+        `INSERT INTO \`bigint_rt\` (\`score\`, \`count\`) VALUES (?, ?)`,
+        [BIG, 42],
+      );
       const rows = await adapter.execute(`SELECT \`score\`, \`count\` FROM \`bigint_rt\``);
       // INT columns are not affected by supportBigNumbers — they return number
       expect(typeof rows[0].count).toBe("number");

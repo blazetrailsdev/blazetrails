@@ -114,24 +114,30 @@ describeIfPg("PostgresqlConnectionTest", () => {
   });
 
   it("set session variable nil", async () => {
+    // null means skip SET — value stays at server default, same as a connection with no variables config.
+    const baseline = await adapter.execQuery("SHOW DEBUG_PRINT_PLAN");
     const a = new PostgreSQLAdapter({
       connectionString: PG_TEST_URL,
       variables: { debug_print_plan: null },
     });
     try {
-      await expect(a.execQuery("SHOW DEBUG_PRINT_PLAN")).resolves.toBeTruthy();
+      const rows = await a.execQuery("SHOW DEBUG_PRINT_PLAN");
+      expect(rows.rows).toEqual(baseline.rows);
     } finally {
       await a.close();
     }
   });
 
   it("set session variable default", async () => {
+    // "default" issues SET SESSION key TO DEFAULT — resets to compile default, same as no config.
+    const baseline = await adapter.execQuery("SHOW DEBUG_PRINT_PLAN");
     const a = new PostgreSQLAdapter({
       connectionString: PG_TEST_URL,
       variables: { debug_print_plan: "default" },
     });
     try {
-      await expect(a.execQuery("SHOW DEBUG_PRINT_PLAN")).resolves.toBeTruthy();
+      const rows = await a.execQuery("SHOW DEBUG_PRINT_PLAN");
+      expect(rows.rows).toEqual(baseline.rows);
     } finally {
       await a.close();
     }

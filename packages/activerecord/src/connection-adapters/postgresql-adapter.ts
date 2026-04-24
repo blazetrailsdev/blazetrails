@@ -256,12 +256,14 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     if (minMessages !== undefined && typeof minMessages !== "string") {
       throw new TypeError(`minMessages must be a string, got ${typeof minMessages}`);
     }
-    if (
-      variables !== null &&
-      variables !== undefined &&
-      (typeof variables !== "object" || Array.isArray(variables))
-    ) {
-      throw new TypeError("variables must be a plain object");
+    if (variables !== null && variables !== undefined) {
+      if (typeof variables !== "object" || Array.isArray(variables)) {
+        throw new TypeError("variables must be a plain object");
+      }
+      const variablesPrototype = Object.getPrototypeOf(variables);
+      if (variablesPrototype !== Object.prototype && variablesPrototype !== null) {
+        throw new TypeError("variables must be a plain object");
+      }
     }
     this._minMessages = minMessages ?? "warning";
     this._sessionVariables = variables ?? {};

@@ -333,3 +333,128 @@ describe("Dirty Tracking", () => {
     expect(s.changed).toBe(true);
   });
 });
+describe("attributeBeforeTypeCast", () => {
+  it("returns the raw value before type casting", () => {
+    class Price extends Model {
+      static {
+        this.attribute("amount", "integer");
+      }
+    }
+
+    const price = new Price({ amount: "42" });
+    expect(price.readAttribute("amount")).toBe(42); // cast to integer
+    expect(price.readAttributeBeforeTypeCast("amount")).toBe("42"); // raw string
+  });
+
+  it("tracks raw values on writeAttribute", () => {
+    class Price extends Model {
+      static {
+        this.attribute("amount", "integer");
+      }
+    }
+
+    const price = new Price({ amount: 10 });
+    price.writeAttribute("amount", "99");
+    expect(price.readAttribute("amount")).toBe(99);
+    expect(price.readAttributeBeforeTypeCast("amount")).toBe("99");
+  });
+});
+
+describe("willSaveChangeToAttribute", () => {
+  it("returns true when attribute has been changed", () => {
+    class Widget extends Model {
+      static {
+        this.attribute("name", "string");
+        this.attribute("size", "integer");
+      }
+    }
+
+    const w = new Widget({ name: "Test", size: 5 });
+    w.changesApplied();
+    w.writeAttribute("name", "Changed");
+    expect(w.willSaveChangeToAttribute("name")).toBe(true);
+    expect(w.willSaveChangeToAttribute("size")).toBe(false);
+  });
+
+  it("willSaveChangeToAttributeValues returns [old, new]", () => {
+    class Widget extends Model {
+      static {
+        this.attribute("name", "string");
+      }
+    }
+
+    const w = new Widget({ name: "Test" });
+    w.changesApplied();
+    w.writeAttribute("name", "Changed");
+    expect(w.willSaveChangeToAttributeValues("name")).toEqual(["Test", "Changed"]);
+  });
+});
+
+describe("attributeInDatabase / attributeBeforeLastSave / changedAttributeNamesToSave", () => {
+  it("attributeInDatabase returns the pre-change value", () => {
+    class Widget extends Model {
+      static {
+        this.attribute("name", "string");
+      }
+    }
+
+    const w = new Widget({ name: "Test" });
+    w.changesApplied();
+    w.writeAttribute("name", "Changed");
+    expect(w.attributeInDatabase("name")).toBe("Test");
+  });
+
+  it("attributeBeforeLastSave returns old value after save", () => {
+    class Widget extends Model {
+      static {
+        this.attribute("name", "string");
+      }
+    }
+
+    const w = new Widget({ name: "Original" });
+    w.changesApplied();
+    w.writeAttribute("name", "Updated");
+    w.changesApplied();
+    expect(w.attributeBeforeLastSave("name")).toBe("Original");
+  });
+
+  it("changedAttributeNamesToSave lists pending changes", () => {
+    class Widget extends Model {
+      static {
+        this.attribute("name", "string");
+        this.attribute("size", "integer");
+      }
+    }
+
+    const w = new Widget({ name: "Test", size: 5 });
+    w.changesApplied();
+    w.writeAttribute("name", "Changed");
+    expect(w.changedAttributeNamesToSave).toContain("name");
+    expect(w.changedAttributeNamesToSave).not.toContain("size");
+  });
+});
+
+describe("clearChangesInformation", () => {
+  it("clear_changes_information should reset all changes", () => {
+    class Person extends Model {
+      static {
+        this.attribute("name", "string");
+        this.attribute("age", "integer");
+      }
+    }
+
+    const p = new Person({ name: "Alice", age: 30 });
+    p.changesApplied(); // snapshot as clean
+    p.writeAttribute("name", "Bob");
+    p.changesApplied(); // this makes name change a "previous change"
+    expect(Object.keys(p.previousChanges).length).toBeGreaterThan(0);
+
+    // Now make another current change
+    p.writeAttribute("age", 31);
+    expect(p.changed).toBe(true);
+
+    p.clearChangesInformation();
+    expect(p.changed).toBe(false);
+    expect(Object.keys(p.previousChanges).length).toBe(0);
+  });
+});

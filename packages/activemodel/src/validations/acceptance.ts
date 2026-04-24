@@ -37,13 +37,19 @@ export class AcceptanceValidator extends EachValidator {
     // Rails activemodel/lib/active_model/validations/acceptance.rb
     // `acceptable_option?` calls `Array(options[:accept]).include?(value)`,
     // so a scalar `accept:` still works. Normalize here with the same shape.
-    const rawAccept = this.options.accept;
+    // Rails checks key presence via `options.key?(:accept)`, so an explicit
+    // `accept: nil` is treated as `Array(nil) #=> []` (rejects everything)
+    // rather than falling back to the default. Mirror that with a hasOwn
+    // check on this.options.
+    const hasAccept = Object.prototype.hasOwnProperty.call(this.options, "accept");
     let accepted: unknown[];
-    if (rawAccept === undefined) accepted = ["1", true];
-    else if (rawAccept === null)
-      accepted = []; // Rails `Array(nil) #=> []`
-    else if (Array.isArray(rawAccept)) accepted = rawAccept;
-    else accepted = [rawAccept];
+    if (!hasAccept) accepted = ["1", true];
+    else {
+      const rawAccept = this.options.accept;
+      if (rawAccept === null || rawAccept === undefined) accepted = [];
+      else if (Array.isArray(rawAccept)) accepted = rawAccept;
+      else accepted = [rawAccept];
+    }
     if (!accepted.includes(value)) {
       record.errors.add(attribute, "accepted", { message: this.options.message });
     }

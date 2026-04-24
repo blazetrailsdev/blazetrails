@@ -87,7 +87,9 @@ export class DatabaseConfigurations {
     if (Array.isArray(configurations)) {
       this._configurations = configurations;
     } else {
-      this._configurations = this._buildConfigs(configurations);
+      // Mirrors Rails: DatabaseConfigurations#initialize calls build_configs which
+      // merges DATABASE_URL via environment_url_config + merge_db_environment_variables.
+      this._configurations = this._buildConfigs(this._mergeDatabaseUrl(configurations));
     }
     // Register this instance as the current one for HashConfig.isPrimary lookup
     _currentConfigurations = this;
@@ -98,9 +100,10 @@ export class DatabaseConfigurations {
    * Mirrors Rails' DatabaseConfigurations.new which auto-merges DATABASE_URL.
    * Use this when you want Rails-compatible behavior (constructor + URL merge).
    */
+  // fromRaw: build with explicit defaultEnv (not NODE_ENV) for test isolation.
+  // Used by merge-and-resolve tests that set DatabaseConfigurations.defaultEnv.
   static fromRaw(configurations: RawConfigurations = {}): DatabaseConfigurations {
     const instance = new DatabaseConfigurations([]);
-    // Use static defaultEnv (not NODE_ENV) — mirrors Rails' DatabaseConfigurations.new
     instance._configurations = instance._buildConfigs(
       instance._mergeDatabaseUrl(configurations, DatabaseConfigurations._defaultEnv),
     );

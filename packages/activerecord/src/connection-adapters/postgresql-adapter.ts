@@ -253,6 +253,16 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     if (statementLimit !== undefined) this.statementLimit = statementLimit;
     if (preparedStatements !== undefined) this.preparedStatements = preparedStatements;
     if (insertReturning !== undefined) this._useInsertReturning = insertReturning;
+    if (minMessages !== undefined && typeof minMessages !== "string") {
+      throw new TypeError(`minMessages must be a string, got ${typeof minMessages}`);
+    }
+    if (
+      variables !== null &&
+      variables !== undefined &&
+      (typeof variables !== "object" || Array.isArray(variables))
+    ) {
+      throw new TypeError("variables must be a plain object");
+    }
     this._minMessages = minMessages ?? "warning";
     this._sessionVariables = variables ?? {};
     this._driverPool = new pg.Pool(pgConfig);
@@ -267,7 +277,8 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
    */
   private async _maybeConfigureConnection(client: pg.PoolClient): Promise<void> {
     if (this._configuredClients.has(client)) return;
-    this._configuredClients.add(client);
+    // Mark only after all queries succeed so a partial failure doesn't
+    // leave the client flagged as configured on its next checkout.
     // Mirrors: set_standard_conforming_strings — required for correct quoting behaviour.
     await client.query("SET standard_conforming_strings = on");
     // Mirrors: SET intervalstyle — ISO 8601 so intervals parse cleanly.
@@ -275,6 +286,10 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     await client.query(`SET client_min_messages TO ${this.quoteLiteral(this._minMessages)}`);
     for (const [key, val] of Object.entries(this._sessionVariables)) {
       if (val === null) continue;
+      // Validate key against legal GUC name characters before interpolating.
+      if (!/^[a-zA-Z_][a-zA-Z0-9_.]*$/.test(key)) {
+        throw new Error(`Invalid PostgreSQL session variable name: ${JSON.stringify(key)}`);
+      }
       if (val === "default") {
         await client.query(`SET SESSION ${key} TO DEFAULT`);
       } else {
@@ -282,6 +297,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
         await client.query(`SET SESSION ${key} TO ${this.quoteLiteral(pgVal)}`);
       }
     }
+    this._configuredClients.add(client);
   }
 
   /**

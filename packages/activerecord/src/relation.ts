@@ -2184,6 +2184,9 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#ids
    */
   async ids(): Promise<unknown[]> {
+    // Runtime values are string | number | bigint for single-column PKs,
+    // or unknown[] (tuple) for composite PKs. bigint PKs (big_integer
+    // columns) return JS bigint after driver normalization (PR #783).
     return this.pluck(this._modelClass.primaryKey as string);
   }
 

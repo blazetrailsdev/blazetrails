@@ -27,9 +27,21 @@ describe("DecimalTest", () => {
   });
 
   it("scale is applied before precision to prevent rounding errors", () => {
-    const decimalType = new Types.DecimalType();
-    const result = decimalType.cast("1.23");
-    expect(result).toBe("1.23");
+    // Rails decimal_test.rb: Type::Decimal.new(precision: 5, scale: 3).cast(1.2346)
+    // rounds to BigDecimal("1.235") via apply_scale before storage.
+    const type = new Types.DecimalType({ precision: 5, scale: 3 });
+    expect(type.cast(1.2346)).toBe("1.235");
+    expect(type.cast("1.2346")).toBe("1.235");
+    expect(type.cast("1.23")).toBe("1.230");
+  });
+
+  it("apply_scale rounds half away from zero", () => {
+    // Ruby BigDecimal#round default is ROUND_HALF_UP (away from zero).
+    const type = new Types.DecimalType({ scale: 2 });
+    expect(type.cast("1.005")).toBe("1.01");
+    expect(type.cast("-1.005")).toBe("-1.01");
+    expect(type.cast("9.999")).toBe("10.00");
+    expect(type.cast("-9.999")).toBe("-10.00");
   });
 
   it("type cast decimal", () => {

@@ -11,6 +11,25 @@ export class DecimalType extends ValueType<string> {
   // We mirror the same shape, returning the string form rather than a
   // BigDecimal wrapper.
   cast(value: unknown): string | null {
+    const casted = this._castWithoutScale(value);
+    return this.applyScale(casted);
+  }
+
+  /**
+   * Apply Rails' `scale:` option to a decimal string, rounding to the
+   * configured number of fractional digits using Ruby's default
+   * `BigDecimal#round` mode (`ROUND_HALF_UP` — half away from zero).
+   *
+   * Mirrors: ActiveModel::Type::Decimal#apply_scale
+   * (activemodel/lib/active_model/type/decimal.rb).
+   */
+  applyScale(value: string | null): string | null {
+    if (value === null) return null;
+    if (this.scale === undefined) return value;
+    return roundHalfUpToScale(value, this.scale);
+  }
+
+  private _castWithoutScale(value: unknown): string | null {
     if (value === null || value === undefined) return null;
     if (typeof value === "bigint") return value.toString();
     if (typeof value === "number") {
@@ -39,4 +58,75 @@ export class DecimalType extends ValueType<string> {
   typeCastForSchema(value: unknown): string {
     return JSON.stringify(value) ?? String(value);
   }
+}
+
+/**
+ * Normalize a decimal-string representation (including scientific notation
+ * as emitted by JS `String(1e-7)`) into `sign` + integer + fractional parts.
+ */
+function splitDecimal(raw: string): { sign: "" | "-"; intPart: string; fracPart: string } | null {
+  let s = raw;
+  let sign: "" | "-" = "";
+  if (s.startsWith("-")) {
+    sign = "-";
+    s = s.slice(1);
+  } else if (s.startsWith("+")) {
+    s = s.slice(1);
+  }
+  // Expand scientific notation into plain digits.
+  const m = s.match(/^(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/);
+  if (!m) return null;
+  let intPart = m[1];
+  let fracPart = m[2] ?? "";
+  const exp = m[3] ? Number(m[3]) : 0;
+  if (exp > 0) {
+    if (fracPart.length >= exp) {
+      intPart += fracPart.slice(0, exp);
+      fracPart = fracPart.slice(exp);
+    } else {
+      intPart += fracPart.padEnd(exp, "0");
+      fracPart = "";
+    }
+  } else if (exp < 0) {
+    const shift = -exp;
+    if (intPart.length > shift) {
+      fracPart = intPart.slice(intPart.length - shift) + fracPart;
+      intPart = intPart.slice(0, intPart.length - shift);
+    } else {
+      fracPart = intPart.padStart(shift, "0") + fracPart;
+      intPart = "0";
+    }
+  }
+  return { sign, intPart: intPart.replace(/^0+(?=\d)/, "") || "0", fracPart };
+}
+
+function roundHalfUpToScale(raw: string, scale: number): string {
+  const parts = splitDecimal(raw);
+  if (!parts) return raw;
+  const { sign, intPart, fracPart } = parts;
+  if (fracPart.length <= scale) {
+    const padded = scale > 0 ? `.${fracPart.padEnd(scale, "0")}` : "";
+    return `${sign}${intPart}${padded}`;
+  }
+  const keep = fracPart.slice(0, scale);
+  const roundDigit = fracPart.charCodeAt(scale) - 48; // '0' → 0
+  if (roundDigit < 5) {
+    return scale > 0 ? `${sign}${intPart}.${keep}` : `${sign}${intPart}`;
+  }
+  // Carry: half-away-from-zero bumps magnitude by 1 ulp at position `scale`.
+  const digits = (intPart + keep).split("");
+  for (let i = digits.length - 1; i >= 0; i--) {
+    if (digits[i] === "9") {
+      digits[i] = "0";
+      if (i === 0) digits.unshift("1");
+    } else {
+      digits[i] = String(digits[i].charCodeAt(0) - 48 + 1);
+      break;
+    }
+  }
+  const out = digits.join("");
+  const newIntLen = out.length - scale;
+  const newInt = out.slice(0, newIntLen);
+  const newFrac = out.slice(newIntLen);
+  return scale > 0 ? `${sign}${newInt}.${newFrac}` : `${sign}${newInt}`;
 }

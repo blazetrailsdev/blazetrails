@@ -14,4 +14,33 @@ describe("DateTest", () => {
     const result = type.cast("2024-01-15");
     expect(result!.getUTCFullYear()).toBe(2024);
   });
+
+  it("fast_string_to_date matches ISO YYYY-MM-DD only", () => {
+    // Rails type/date.rb — ISO_DATE regex, fast path; everything else
+    // falls through to fallback_string_to_date.
+    const type = new Types.DateType();
+    expect(type.fastStringToDate("2024-06-01")).not.toBeNull();
+    expect(type.fastStringToDate("2024/06/01")).toBeNull();
+    expect(type.fastStringToDate("2024-06-01T00:00:00")).toBeNull();
+  });
+
+  it("new_date rejects year 0 and day/month overflow", () => {
+    // Mirrors Rails new_date, which returns nil when year is 0 or when
+    // Date.new raises ArgumentError.
+    const type = new Types.DateType();
+    expect(type.newDate(0, 1, 1)).toBeNull();
+    expect(type.newDate(2024, 13, 1)).toBeNull();
+    expect(type.newDate(2024, 2, 31)).toBeNull();
+    const d = type.newDate(2024, 6, 15);
+    expect(d!.getUTCFullYear()).toBe(2024);
+    expect(d!.getUTCMonth()).toBe(5);
+    expect(d!.getUTCDate()).toBe(15);
+  });
+
+  it("cast falls through to fallback parser for non-ISO strings", () => {
+    const type = new Types.DateType();
+    const d = type.cast("June 1, 2024");
+    expect(d).toBeInstanceOf(Date);
+    expect(d!.getFullYear()).toBe(2024);
+  });
 });

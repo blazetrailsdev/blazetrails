@@ -70,9 +70,10 @@ frozen_time = if frozen_at
   end
   Time.iso8601(frozen_at).utc
 else
-  # Fixed default so runs are reproducible without --frozen-at.
-  # The orchestrator (run.ts) always passes --frozen-at; this is only for
-  # direct invocation during development.
+  # Fixed default so direct invocations (e.g. during development) are still
+  # reproducible. The query parity orchestrator (added in PR5 of
+  # docs/query-parity-verification.md) always passes --frozen-at explicitly
+  # so both sides use the same timestamp in a parity run.
   Time.utc(2000, 1, 1)
 end
 frozen_ts = frozen_time.iso8601(3)  # e.g. "2026-04-24T00:00:00.000Z"

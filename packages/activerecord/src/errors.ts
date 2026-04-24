@@ -237,6 +237,76 @@ export class InvalidForeignKey extends WrappedDatabaseException {
   }
 }
 
+export interface MismatchedForeignKeyOptions {
+  message?: string;
+  sql?: string;
+  binds?: unknown[];
+  connectionPool?: unknown;
+  cause?: unknown;
+  table?: string;
+  foreignKey?: string;
+  targetTable?: string;
+  primaryKey?: string;
+  primaryKeySqlType?: string;
+  primaryKeyType?: string;
+}
+
+/**
+ * Raised when a FK column type doesn't match the referenced PK column type.
+ *
+ * Mirrors: ActiveRecord::MismatchedForeignKey (errors.rb:238)
+ *
+ * Provides a human-readable message describing the mismatch and suggesting
+ * the correct column type to use.
+ */
+export class MismatchedForeignKey extends StatementInvalid {
+  /** Parsed FK details for async enrichment after construction. */
+  readonly fkDetails: Omit<
+    MismatchedForeignKeyOptions,
+    "message" | "sql" | "binds" | "connectionPool" | "cause"
+  >;
+
+  constructor(options: MismatchedForeignKeyOptions = {}) {
+    const {
+      message: originalMessage,
+      table,
+      foreignKey,
+      targetTable,
+      primaryKey,
+      primaryKeySqlType,
+      primaryKeyType,
+      ...rest
+    } = options;
+
+    let msg: string;
+    if (table && foreignKey && targetTable && primaryKey && primaryKeySqlType) {
+      const type = primaryKeyType ?? primaryKeySqlType.split("(")[0].toLowerCase();
+      msg = [
+        `Column \`${foreignKey}\` on table \`${table}\` does not match column \`${primaryKey}\` on \`${targetTable}\`,`,
+        `which has type \`${primaryKeySqlType}\`.`,
+        `To resolve this issue, change the type of the \`${foreignKey}\` column on \`${table}\` to be :${type}.`,
+        `(For example \`t.${type} :${foreignKey}\`).`,
+      ].join(" ");
+    } else {
+      msg =
+        "There is a mismatch between the foreign key and primary key column types. " +
+        "Verify that the foreign key column type and the primary key of the associated table match types.";
+    }
+    if (originalMessage) msg += `\nOriginal message: ${originalMessage}`;
+
+    super(msg, rest);
+    this.name = "MismatchedForeignKey";
+    this.fkDetails = {
+      table,
+      foreignKey,
+      targetTable,
+      primaryKey,
+      primaryKeySqlType,
+      primaryKeyType,
+    };
+  }
+}
+
 export class NotNullViolation extends StatementInvalid {
   constructor(
     message?: string,

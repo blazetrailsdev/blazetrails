@@ -6,6 +6,7 @@ import {
   StatementPool as MysqlStatementPool,
   type MysqlPreparedStatement,
 } from "./abstract-mysql-adapter.js";
+import { MismatchedForeignKey } from "../errors.js";
 import { ForeignKeyDefinition } from "./abstract/schema-definitions.js";
 import { quoteString as mysqlQuoteString } from "./mysql/quoting.js";
 import { Column } from "./column.js";
@@ -285,7 +286,10 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
         // acquisition failures as `payload.exception` too. Query-level
         // driver errors (ER_DUP_ENTRY etc.) are translated to Rails'
         // typed exception classes via _translateException.
-        const translated = this._translateException(e, driverSql, driverBinds);
+        let translated = this._translateException(e, driverSql, driverBinds);
+        if (translated instanceof MismatchedForeignKey) {
+          translated = await this._enrichMismatchedForeignKey(translated);
+        }
         payload.exception = translated;
         payload.exception_object = translated;
         throw translated;
@@ -339,7 +343,10 @@ export class Mysql2Adapter extends AbstractMysqlAdapter implements DatabaseAdapt
         // closed) so subscribers still see `payload.exception`. Driver
         // errors (ER_DUP_ENTRY etc.) are translated to Rails' typed
         // exception classes via _translateException.
-        const translated = this._translateException(e, driverSql, driverBinds);
+        let translated = this._translateException(e, driverSql, driverBinds);
+        if (translated instanceof MismatchedForeignKey) {
+          translated = await this._enrichMismatchedForeignKey(translated);
+        }
         payload.exception = translated;
         payload.exception_object = translated;
         throw translated;

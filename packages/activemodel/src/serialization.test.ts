@@ -317,6 +317,19 @@ describe("SerializationTest", () => {
       expect(parsed).toEqual({ id: "42", name: "row-1" });
     });
 
+    it("coerceForJson maps symbol values to their description (Rails Symbol#as_json)", async () => {
+      // JSON.stringify silently drops props whose value is a Symbol.
+      // Rails `Symbol#as_json` returns the symbol's name as a string.
+      const { coerceForJson } = await import("./serialization.js");
+      const out = coerceForJson({ state: Symbol("active"), count: 3 }) as {
+        state: unknown;
+        count: unknown;
+      };
+      expect(out.state).toBe("active");
+      expect(out.count).toBe(3);
+      expect(() => JSON.stringify(out)).not.toThrow();
+    });
+
     it("coerceForJson preserves shared references (no silent data loss)", async () => {
       // `{ a: obj, b: obj }` — same object twice. Must not be treated
       // as a cycle. Previously the WeakSet-based cycle guard would

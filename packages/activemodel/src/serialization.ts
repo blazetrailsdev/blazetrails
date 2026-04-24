@@ -135,6 +135,13 @@ export function coerceForJson(
 ): unknown {
   if (value === null || value === undefined) return value;
   if (typeof value === "bigint") return value.toString();
+  if (typeof value === "symbol") {
+    // Rails `Symbol#as_json` returns the symbol's name as a string.
+    // JSON.stringify silently drops object properties whose value is a
+    // Symbol, so without this we'd emit `{}` for a symbol attribute —
+    // contradicting the "JSON-safe" contract of asJson.
+    return value.description ?? "";
+  }
   if (value instanceof Date) return value.toISOString();
   if (Array.isArray(value)) {
     // True cycle: short-circuit to null (Rails' JSON encoder raises, but

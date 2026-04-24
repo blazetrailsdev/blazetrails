@@ -152,12 +152,12 @@ describeIfMysql("Mysql2Adapter", () => {
         expect(error.message).toMatch(
           /To resolve this issue, change the type of the `old_car_id` column on `engines` to be :integer/,
         );
-        expect(error.cause).not.toBeNull();
+        expect(error.cause).toBeInstanceOf(Error);
       });
 
       it("errors for multiple fks on mismatched types for pk table in alter table", async () => {
         // MariaDB does not include mismatched FK details in error message
-        const isMariaDb = ((adapter as any)._mariadb as boolean | undefined) ?? false;
+        const isMariaDb = adapter.isMariadb();
         if (isMariaDb) return;
 
         // Add matching FK first (cars.id is BIGINT, engines.id is BIGINT — OK)
@@ -178,7 +178,7 @@ describeIfMysql("Mysql2Adapter", () => {
           /Column `old_car_id` on table `engines` does not match column `id` on `old_cars`/,
         );
         expect(error.message).toMatch(/which has type `int/i);
-        expect(error.cause).not.toBeNull();
+        expect(error.cause).toBeInstanceOf(Error);
       });
 
       it("errors for bigint fks on integer pk table in create table", async () => {
@@ -205,7 +205,7 @@ describeIfMysql("Mysql2Adapter", () => {
         expect(error.message).toMatch(
           /To resolve this issue, change the type of the `old_car_id` column on `foos` to be :integer/,
         );
-        expect(error.cause).not.toBeNull();
+        expect(error.cause).toBeInstanceOf(Error);
       });
 
       it("errors for integer fks on bigint pk table in create table", async () => {
@@ -232,7 +232,7 @@ describeIfMysql("Mysql2Adapter", () => {
         expect(error.message).toMatch(
           /To resolve this issue, change the type of the `car_id` column on `foos` to be :bigint/,
         );
-        expect(error.cause).not.toBeNull();
+        expect(error.cause).toBeInstanceOf(Error);
       });
 
       it("errors for bigint fks on string pk table in create table", async () => {
@@ -259,7 +259,7 @@ describeIfMysql("Mysql2Adapter", () => {
         expect(error.message).toMatch(
           /To resolve this issue, change the type of the `subscriber_id` column on `foos` to be :string/,
         );
-        expect(error.cause).not.toBeNull();
+        expect(error.cause).toBeInstanceOf(Error);
       });
     });
 

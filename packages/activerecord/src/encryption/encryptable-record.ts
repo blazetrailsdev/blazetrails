@@ -1,4 +1,5 @@
 import { Scheme, type SchemeOptions } from "./scheme.js";
+import { LengthValidator } from "@blazetrails/activemodel";
 import { EncryptedAttributeType } from "./encrypted-attribute-type.js";
 import { Configurable } from "./configurable.js";
 import { KeyGenerator } from "./key-generator.js";
@@ -159,7 +160,7 @@ export class EncryptableRecord {
     // exact maximum already exists for the attribute.
     const existing: unknown[] = modelClass._validators?.get(attribute) ?? [];
     const alreadyRegistered = existing.some(
-      (v: any) => v?.constructor?.name === "LengthValidator" && v?.options?.maximum === limit,
+      (v: unknown) => v instanceof LengthValidator && (v as any).options?.maximum === limit,
     );
     if (!alreadyRegistered) {
       modelClass.validatesLengthOf(attribute, { maximum: limit });

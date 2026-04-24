@@ -25,14 +25,17 @@ def run_dump(fixture, frozen_at: nil)
 end
 
 class DumpTest < Minitest::Test
+  DEFAULT_FROZEN_AT = "2000-01-01T00:00:00.000Z"
+
   def test_arel_01_table_object
     code, stdout, stderr, out_path = run_dump("arel-01")
     assert_equal 0, code, "dump failed\nstdout: #{stdout}\nstderr: #{stderr}"
     result = JSON.parse(File.read(out_path))
-    assert_equal 1,         result["version"]
-    assert_equal "arel-01", result["fixture"]
-    assert_match(/"users"/i, result["sql"])
-    assert_equal [],        result["binds"]
+    assert_equal 1,                result["version"]
+    assert_equal "arel-01",        result["fixture"]
+    assert_equal DEFAULT_FROZEN_AT, result["frozenAt"]
+    assert_match(/"users"/i,       result["sql"])
+    assert_equal [],               result["binds"]
   ensure
     File.delete(out_path) if File.exist?(out_path)
   end

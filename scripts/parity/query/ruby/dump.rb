@@ -4,15 +4,15 @@
 # Usage (from repo root):
 #   bundle exec --gemfile scripts/parity/schema/ruby/Gemfile \
 #     ruby scripts/parity/query/ruby/dump.rb <fixture-dir> <out.json> \
-#     [--frozen-at ISO8601_UTC]
+#     [--frozen-at ISO8601_UTC_Z]
 #
 # Applies <fixture-dir>/schema.sql to a fresh SQLite database, evaluates
 # <fixture-dir>/query.rb, extracts SQL and binds (via to_sql_and_binds
-# with fallback to to_sql), and writes a
-# CanonicalQuery JSON to <out.json>.
+# with fallback to to_sql), and writes a CanonicalQuery JSON to <out.json>.
 #
-# --frozen-at <iso> freezes time via ActiveSupport::Testing::TimeHelpers for
-# deterministic time-dependent queries (e.g. 1.week.ago).
+# Time is always frozen for deterministic query evaluation. --frozen-at
+# pins the timestamp to a specific ISO 8601 UTC value (trailing Z required,
+# e.g. 2026-01-01T00:00:00.000Z); omitting it uses 2000-01-01T00:00:00.000Z.
 
 require "bundler/setup"
 require "active_record"
@@ -26,7 +26,7 @@ require "fileutils"
 require "time"
 
 def usage
-  warn "Usage: bundle exec --gemfile scripts/parity/schema/ruby/Gemfile ruby scripts/parity/query/ruby/dump.rb <fixture-dir> <out.json> [--frozen-at ISO8601_UTC]"
+  warn "Usage: bundle exec --gemfile scripts/parity/schema/ruby/Gemfile ruby scripts/parity/query/ruby/dump.rb <fixture-dir> <out.json> [--frozen-at ISO8601_UTC_Z]"
   exit 1
 end
 
@@ -76,7 +76,7 @@ else
   # so both sides use the same timestamp in a parity run.
   Time.utc(2000, 1, 1)
 end
-frozen_ts = frozen_time.iso8601(3)  # e.g. "2026-04-24T00:00:00.000Z"
+frozen_ts = frozen_at || frozen_time.iso8601(3)  # e.g. "2026-04-24T00:00:00.000Z"
 
 # TimeHelper mixin — provides travel_to / travel_back
 module TimeHelper
@@ -118,9 +118,9 @@ Dir.mktmpdir("parity-query-ruby-") do |tmpdir|
     end
 
     # 5. Get SQL and binds.
-    #    Try conn.to_sql_and_binds first (works for managers, extracts binds Rails-style).
-    #    Plain nodes (no .ast) may only support direct SQL rendering via to_sql;
-    #    fall back to that path if to_sql_and_binds raises.
+    #    conn.to_sql_and_binds accepts a SelectManager directly — it calls .ast internally
+    #    (DatabaseStatements#to_sql_and_binds in AR 8). Plain nodes raise TypeError/
+    #    ArgumentError/NoMethodError; fall back to direct to_sql for those.
     raw_sql, raw_binds = begin
       conn.to_sql_and_binds(result)
     rescue TypeError, ArgumentError, NoMethodError

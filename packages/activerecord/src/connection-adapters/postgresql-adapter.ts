@@ -831,6 +831,7 @@ export class PostgreSQLAdapter extends AbstractAdapter implements DatabaseAdapte
     binds: unknown[] = [],
     name: string = "SQL",
   ): Promise<Record<string, unknown>[]> {
+    this.checkIfWriteQuery(sql);
     await this.materializeTransactions();
     const rewritten = this.rewriteBinds(sql, binds);
     // payload.sql is the rewritten SQL (`$1` not `?`) so ExplainSubscriber

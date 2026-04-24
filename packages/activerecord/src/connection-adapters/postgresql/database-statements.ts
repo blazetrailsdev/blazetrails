@@ -9,8 +9,12 @@ import type { ExplainOption } from "../../adapter.js";
 import type { Result } from "../../result.js";
 
 // Mirrors: PostgreSQL::DatabaseStatements::READ_QUERY (database_statements.rb:19-21)
-// SQL statements that do not modify data — write_query? returns false for these.
-export const READ_QUERY = /^[\s]*(?:close|declare|fetch|move|set|show)\b/i;
+// Mirrors Rails' build_read_query_regexp which combines the default read list
+// (begin, commit, explain, release, rollback, savepoint, select, with) with
+// the PG-specific additions (close, declare, fetch, move, set, show).
+// Leading whitespace and block/line comments are also allowed before the keyword.
+export const READ_QUERY =
+  /^(?:\s|\/\*.*?\*\/|--[^\n]*\n)*(?:\([\s(]*)*(?:begin|close|commit|declare|explain|fetch|move|release|rollback|savepoint|select|set|show|with)\b/is;
 
 export interface DatabaseStatements {
   execQuery(sql: string, name?: string | null, binds?: unknown[]): Promise<Result>;

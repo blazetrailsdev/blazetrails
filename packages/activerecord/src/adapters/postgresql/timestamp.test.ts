@@ -140,8 +140,43 @@ describeIfPg("PostgreSQLAdapter", () => {
   });
 
   describe("PostgreSQLTimestampMigrationTest", () => {
-    it.skip("adds column as timestamp", () => {});
-    it.skip("adds column as timestamptz if datetime type changed", () => {});
-    it.skip("adds column as custom type", () => {});
+    it("adds column as timestamp", async () => {
+      await adapter.exec(
+        `CREATE TABLE IF NOT EXISTS postgresql_timestamp_with_zones (id serial primary key)`,
+      );
+      try {
+        await adapter.addColumn("postgresql_timestamp_with_zones", "times", "datetime");
+        const rows = await adapter.execute(
+          `SELECT data_type FROM information_schema.columns
+           WHERE table_name = 'postgresql_timestamp_with_zones' AND column_name = 'times'`,
+        );
+        expect(rows[0]?.data_type).toBe("timestamp without time zone");
+      } finally {
+        await adapter.exec(`DROP TABLE IF EXISTS postgresql_timestamp_with_zones CASCADE`);
+      }
+    });
+
+    it("adds column as timestamptz if datetime type changed", async () => {
+      await adapter.exec(
+        `CREATE TABLE IF NOT EXISTS postgresql_timestamp_with_zones (id serial primary key)`,
+      );
+      const original = (PostgreSQLAdapter as unknown as { datetimeType: string }).datetimeType;
+      try {
+        (PostgreSQLAdapter as unknown as { datetimeType: string }).datetimeType = "timestamptz";
+        await adapter.addColumn("postgresql_timestamp_with_zones", "times", "datetime");
+        const rows = await adapter.execute(
+          `SELECT data_type FROM information_schema.columns
+           WHERE table_name = 'postgresql_timestamp_with_zones' AND column_name = 'times'`,
+        );
+        expect(rows[0]?.data_type).toBe("timestamp with time zone");
+      } finally {
+        (PostgreSQLAdapter as unknown as { datetimeType: string }).datetimeType = original;
+        await adapter.exec(`DROP TABLE IF EXISTS postgresql_timestamp_with_zones CASCADE`);
+      }
+    });
+
+    it.skip("adds column as custom type", async () => {
+      // Requires creating a custom enum type and patching NATIVE_DATABASE_TYPES
+    });
   });
 });

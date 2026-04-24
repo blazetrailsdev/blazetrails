@@ -194,6 +194,12 @@ export function quote(value: unknown): string {
   if (value instanceof Range) {
     return quoteString(encodeRange(value));
   }
+  // Mirrors: PostgreSQL::Quoting#quote raises IntegerOutOf64BitRange for
+  // integers exceeding the 64-bit signed range (e.g. BigInt values).
+  if (typeof value === "bigint") {
+    checkIntegerRange(value);
+    return String(value);
+  }
   return abstractQuote(value);
 }
 

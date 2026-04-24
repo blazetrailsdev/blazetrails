@@ -364,7 +364,7 @@ describe("ActiveRecord::Encryption::EncryptableRecordTest", () => {
     const Book = makeEncryptedBook(freshAdapter());
     new Book();
     const book = await Book.create({});
-    await assertEncryptedAttribute(book, "name", "<untitled>");
+    assertEncryptedAttribute(book, "name", "<untitled>");
   });
 
   it.skip("loading records with encrypted attributes defined on columns with default values", () => {

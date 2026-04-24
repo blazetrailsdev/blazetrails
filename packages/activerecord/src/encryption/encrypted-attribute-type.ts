@@ -21,6 +21,7 @@ function _normalizeEncoding(encoding: string): "utf8" | "ascii" | "latin1" | nul
     case "latin1":
     case "iso88591":
     case "binary":
+    case "ascii8bit":
       return "latin1";
     default:
       return null;

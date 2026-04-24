@@ -91,6 +91,10 @@ export function getEncryptionContext(): EncryptionContext {
   return currentContext();
 }
 
+export function getCurrentCustomContext(): EncryptionContext | null {
+  return contextStack.length > 0 ? contextStack[contextStack.length - 1] : null;
+}
+
 export function isEncryptionDisabled(): boolean {
   return currentContext().encryptionDisabled === true;
 }

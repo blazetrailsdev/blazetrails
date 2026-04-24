@@ -4,6 +4,7 @@ import {
   protectingEncryptedData as _protecting,
   getEncryptionContext,
   getDefaultContext,
+  getCurrentCustomContext,
   resetDefaultContext as _resetDefaultContext,
   type EncryptionContext,
 } from "./context.js";
@@ -32,8 +33,7 @@ export class Contexts {
   }
 
   static get currentCustomContext(): EncryptionContext | null {
-    const ctx = getEncryptionContext();
-    return ctx ?? null;
+    return getCurrentCustomContext();
   }
 
   static get defaultContext(): EncryptionContext {

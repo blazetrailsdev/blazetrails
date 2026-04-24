@@ -4,7 +4,11 @@ import type { EncryptorLike } from "./encryptor.js";
 import type { WrappedType } from "./wrapped-type.js";
 import { isEncryptionDisabled, isProtectedMode } from "./context.js";
 import { Configurable } from "./configurable.js";
-import { Encryption as EncryptionError, Decryption as DecryptionError } from "./errors.js";
+import {
+  Encryption as EncryptionError,
+  Decryption as DecryptionError,
+  Base as BaseEncryptionError,
+} from "./errors.js";
 import { NullEncryptor } from "./null-encryptor.js";
 
 /**
@@ -150,8 +154,8 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
     try {
       return this._encryptor.decrypt(String(value), this.decryptionOptions());
     } catch (error) {
-      const prevWithoutCleanText = this.previousTypes.filter((t) => !t._isCleanTextType());
-      if (prevWithoutCleanText.length === 0) {
+      if (!(error instanceof BaseEncryptionError)) throw error;
+      if (this.scheme.previousSchemes.length === 0) {
         return this._handleDeserializeError(error, value);
       }
       return this._tryPreviousTypes(value);
@@ -164,6 +168,7 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
       try {
         return prev[i].deserialize(value);
       } catch (error) {
+        if (!(error instanceof BaseEncryptionError)) throw error;
         if (i === prev.length - 1) {
           return this._handleDeserializeError(error, value);
         }
@@ -172,15 +177,11 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
     return value;
   }
 
-  private _handleDeserializeError(error: unknown, value: unknown): unknown {
+  private _handleDeserializeError(error: BaseEncryptionError, value: unknown): unknown {
     if (error instanceof DecryptionError && this.supportUnencryptedData) {
       return value;
     }
     throw error;
-  }
-
-  private _isCleanTextType(): boolean {
-    return this._encryptor instanceof NullEncryptor;
   }
 
   private encrypt(value: string): string {

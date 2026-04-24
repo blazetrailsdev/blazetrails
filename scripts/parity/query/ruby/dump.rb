@@ -118,8 +118,8 @@ Dir.mktmpdir("parity-query-ruby-") do |tmpdir|
     end
 
     # 5. Get SQL and binds.
-    #    Try conn.to_sql_and_binds first (works for managers and SQL strings, extracts
-    #    binds Rails-style). Plain nodes may only support direct SQL rendering via to_sql;
+    #    Try conn.to_sql_and_binds first (works for managers, extracts binds Rails-style).
+    #    Plain nodes (no .ast) may only support direct SQL rendering via to_sql;
     #    fall back to that path if to_sql_and_binds raises.
     raw_sql, raw_binds = begin
       conn.to_sql_and_binds(result)

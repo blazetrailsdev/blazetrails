@@ -7413,5 +7413,86 @@ describe("CalculationsTest", () => {
 });
 
 // ==========================================================================
+// bigint aggregate tests — type_cast_calculated_value for big_integer columns
+// Mirrors Rails calculations.rb#type_cast_calculated_value (line 627):
+//   sum    → type.deserialize(value || 0)
+//   min/max → type.deserialize(value)
+//   count  → always integer (not through type)
+// ==========================================================================
+describe("bigint aggregates (big_integer columns)", () => {
+  function makeBigModel() {
+    const adapter = freshAdapter();
+    class Score extends Base {
+      static {
+        this.attribute("value", "big_integer");
+        this.attribute("category", "string");
+        this.adapter = adapter;
+      }
+    }
+    return Score;
+  }
+
+  const BIG = 2n ** 62n; // above Number.MAX_SAFE_INTEGER
+
+  it("sum of big_integer column returns bigint", async () => {
+    const Score = makeBigModel();
+    await Score.create({ value: BIG, category: "a" });
+    await Score.create({ value: 1n, category: "a" });
+    const result = await Score.sum("value");
+    expect(typeof result).toBe("bigint");
+    expect(result).toBe(BIG + 1n);
+  });
+
+  it("sum with no rows returns 0n for big_integer column", async () => {
+    const Score = makeBigModel();
+    const result = await Score.where({ category: "missing" }).sum("value");
+    expect(typeof result).toBe("bigint");
+    expect(result).toBe(0n);
+  });
+
+  it("maximum of big_integer column returns bigint", async () => {
+    const Score = makeBigModel();
+    await Score.create({ value: BIG, category: "a" });
+    await Score.create({ value: 1n, category: "a" });
+    const result = await Score.maximum("value");
+    expect(typeof result).toBe("bigint");
+    expect(result).toBe(BIG);
+  });
+
+  it("minimum of big_integer column returns bigint", async () => {
+    const Score = makeBigModel();
+    await Score.create({ value: BIG, category: "a" });
+    await Score.create({ value: 1n, category: "a" });
+    const result = await Score.minimum("value");
+    expect(typeof result).toBe("bigint");
+    expect(result).toBe(1n);
+  });
+
+  it("count is always a number regardless of column type", async () => {
+    const Score = makeBigModel();
+    await Score.create({ value: BIG, category: "a" });
+    await Score.create({ value: BIG + 1n, category: "a" });
+    const result = await Score.count();
+    expect(typeof result).toBe("number");
+    expect(result).toBe(2);
+  });
+
+  it("sum of integer column still returns number", async () => {
+    const adapter = freshAdapter();
+    class Item extends Base {
+      static {
+        this.attribute("qty", "integer");
+        this.adapter = adapter;
+      }
+    }
+    await Item.create({ qty: 3 });
+    await Item.create({ qty: 7 });
+    const result = await Item.sum("qty");
+    expect(typeof result).toBe("number");
+    expect(result).toBe(10);
+  });
+});
+
+// ==========================================================================
 // CalculationsTest — targets calculations_test.rb (continued)
 // ==========================================================================

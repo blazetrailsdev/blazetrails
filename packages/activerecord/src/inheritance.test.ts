@@ -1801,3 +1801,77 @@ describe("Base.inheritanceColumn", () => {
 // ==========================================================================
 // InheritanceTest — targets inheritance_test.rb (continued)
 // ==========================================================================
+
+import {
+  isFinderNeedsTypeCondition,
+  primaryAbstractClass,
+  stiClassFor,
+  polymorphicClassFor,
+} from "./inheritance.js";
+import { registerModel } from "./associations.js";
+import { SubclassNotFound } from "./errors.js";
+
+describe("InheritanceTest — new parity methods", () => {
+  it("finder_needs_type_condition? returns false for base class", () => {
+    class M extends Base {
+      static {
+        this.attribute("type", "string");
+      }
+    }
+    expect(isFinderNeedsTypeCondition(M)).toBe(false);
+  });
+
+  it("finder_needs_type_condition? returns true for STI subclass", () => {
+    class Animal extends Base {
+      static {
+        this.attribute("type", "string");
+      }
+    }
+    enableSti(Animal);
+    class Dog extends Animal {}
+    expect(isFinderNeedsTypeCondition(Dog)).toBe(true);
+  });
+
+  it("finder_needs_type_condition? memoizes per own class, not inherited", () => {
+    class Shape extends Base {
+      static {
+        this.attribute("type", "string");
+      }
+    }
+    enableSti(Shape);
+    class Circle extends Shape {}
+    isFinderNeedsTypeCondition(Shape); // cache false on Shape
+    // Circle is an STI subclass — must compute its own value (true)
+    expect(isFinderNeedsTypeCondition(Circle)).toBe(true);
+    expect(isFinderNeedsTypeCondition(Shape)).toBe(false);
+  });
+
+  it("sti_class_for raises SubclassNotFound for unknown type", () => {
+    class Animal extends Base {
+      static {
+        this.attribute("type", "string");
+      }
+    }
+    expect(() => stiClassFor(Animal, "NonExistent")).toThrow(SubclassNotFound);
+  });
+
+  it("sti_class_for returns registered subclass", () => {
+    class Vehicle extends Base {
+      static {
+        this.attribute("type", "string");
+      }
+    }
+    class Car extends Vehicle {}
+    registerModel(Car);
+    expect(stiClassFor(Vehicle, "Car")).toBe(Car);
+  });
+
+  it("polymorphic_class_for resolves any registered model", () => {
+    class Post extends Base {}
+    class Comment extends Base {}
+    registerModel(Post);
+    registerModel(Comment);
+    // polymorphicClassFor resolves without STI constraint
+    expect(polymorphicClassFor(Post, "Comment")).toBe(Comment);
+  });
+});

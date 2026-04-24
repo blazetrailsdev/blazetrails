@@ -228,8 +228,9 @@ export function instantiateSti(baseClass: typeof Base, row: Record<string, unkno
  * Mirrors: ActiveRecord::Inheritance::ClassMethods#finder_needs_type_condition?
  */
 export function isFinderNeedsTypeCondition(modelClass: typeof Base): boolean {
-  const cached = (modelClass as any)._finderNeedsTypeCondition;
-  if (cached !== undefined) return cached === true;
+  if (Object.prototype.hasOwnProperty.call(modelClass, "_finderNeedsTypeCondition")) {
+    return (modelClass as any)._finderNeedsTypeCondition === true;
+  }
   const result = !isDescendsFromActiveRecord(modelClass);
   (modelClass as any)._finderNeedsTypeCondition = result;
   return result;
@@ -245,7 +246,7 @@ let _applicationRecordClass: typeof Base | null = null;
  * Mirrors: ActiveRecord::Inheritance::ClassMethods#primary_abstract_class
  */
 export function primaryAbstractClass(modelClass: typeof Base): void {
-  if (_applicationRecordClass && _applicationRecordClass.name !== modelClass.name) {
+  if (_applicationRecordClass && _applicationRecordClass !== modelClass) {
     throw new Error(
       `The \`primary_abstract_class\` is already set to ${_applicationRecordClass.name}. ` +
         "There can only be one `primary_abstract_class` in an application.",
@@ -264,10 +265,11 @@ export function primaryAbstractClass(modelClass: typeof Base): void {
 export function stiClassFor(modelClass: typeof Base, typeName: string): typeof Base {
   try {
     return findStiClass(modelClass, typeName);
-  } catch {
-    throw new Error(
+  } catch (cause) {
+    throw new SubclassNotFound(
       `The single-table inheritance mechanism failed to locate the subclass: '${typeName}'. ` +
         `This error is raised because the column '${getInheritanceColumn(modelClass) ?? "type"}' is reserved for storing the class in case of inheritance.`,
+      { cause },
     );
   }
 }
@@ -277,6 +279,10 @@ export function stiClassFor(modelClass: typeof Base, typeName: string): typeof B
  *
  * Mirrors: ActiveRecord::Inheritance::ClassMethods#polymorphic_class_for
  */
-export function polymorphicClassFor(modelClass: typeof Base, name: string): typeof Base {
-  return computeType(modelClass, name);
+export function polymorphicClassFor(_modelClass: typeof Base, name: string): typeof Base {
+  // Mirrors Rails' polymorphic_class_for — resolves any registered class,
+  // not limited to STI subclasses (polymorphic targets are unrelated models).
+  const klass = modelRegistry.get(name);
+  if (!klass) throw new NameError(`uninitialized constant ${name}`);
+  return klass;
 }

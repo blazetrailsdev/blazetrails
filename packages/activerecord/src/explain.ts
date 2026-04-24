@@ -24,6 +24,9 @@ export async function collectingQueriesForExplain<T>(
  * Run EXPLAIN against each captured [sql, binds] pair and return a
  * formatted string ready to be logged.
  *
+ * Delegates to the model's Relation for bind rendering so output is
+ * consistent with Relation#explain — including typeCast and binary handling.
+ *
  * Mirrors: ActiveRecord::Explain#exec_explain
  */
 export async function execExplain(
@@ -31,20 +34,8 @@ export async function execExplain(
   queries: [string, unknown[]][],
   options: ExplainOption[] = [],
 ): Promise<string> {
-  const adapter = modelClass.adapter as any;
-  if (typeof adapter?.explain !== "function") return "EXPLAIN not supported by this adapter";
-
-  const clause =
-    typeof adapter.buildExplainClause === "function"
-      ? adapter.buildExplainClause(options)
-      : "EXPLAIN for:";
-
-  const parts: string[] = [];
-  for (const [sql, binds] of queries) {
-    let msg = `${clause} ${sql}`;
-    if (binds.length > 0) msg += ` ${JSON.stringify(binds)}`;
-    const plan = await adapter.explain(sql, binds, options);
-    parts.push(`${msg}\n${plan}`);
-  }
-  return parts.join("\n\n");
+  // Delegate to Relation#_execExplain which handles typeCast, binary binds,
+  // and adapter-specific buildExplainClause — reusing that logic avoids
+  // duplicating the JSON.stringify / typeCast edge cases.
+  return (modelClass as any).all()._execExplain(queries, options);
 }

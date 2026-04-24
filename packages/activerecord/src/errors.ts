@@ -239,17 +239,30 @@ export class InvalidForeignKey extends WrappedDatabaseException {
 
 /**
  * Normalize a MySQL SQL column type to its Rails migration type keyword.
- * E.g. `int(11)` → `integer`, `bigint(20)` → `bigint`, `varchar(255)` → `string`.
+ * E.g. `int(11)` → `integer`, `bigint(20)` → `bigint`, `varchar(255)` → `string`,
+ * `text` → `text`, `tinyint(1)` → `boolean`.
  *
  * Used by both MismatchedForeignKey (error construction) and
  * _enrichMismatchedForeignKey (adapter enrichment) to keep suggestion
  * messages consistent.
  */
 export function sqlTypeToMigrationKeyword(sqlType: string): string {
-  if (/bigint/i.test(sqlType)) return "bigint";
-  if (/int/i.test(sqlType)) return "integer";
-  if (/varchar|char|text/i.test(sqlType)) return "string";
-  return sqlType.split("(")[0].toLowerCase();
+  const normalized = sqlType.trim().toLowerCase();
+
+  if (/^tinyint\s*\(\s*1\s*\)$/.test(normalized)) return "boolean";
+
+  // Strip size/precision (e.g. `int(11)`, `varchar(255)`) and modifiers
+  // (e.g. `int unsigned`) to get the bare base type.
+  const base = normalized.split("(")[0].trim().split(/\s+/)[0];
+
+  if (base === "bigint") return "bigint";
+  if (base.endsWith("int")) return "integer"; // int, tinyint, smallint, mediumint
+  if (base === "varchar" || base === "char") return "string";
+  if (base === "text" || base === "tinytext" || base === "mediumtext" || base === "longtext") {
+    return "text";
+  }
+
+  return base;
 }
 
 export interface MismatchedForeignKeyOptions {

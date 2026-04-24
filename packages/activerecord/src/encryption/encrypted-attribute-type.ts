@@ -184,6 +184,10 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
     throw error;
   }
 
+  private _isCleanTextType(): boolean {
+    return this._encryptor instanceof NullEncryptor;
+  }
+
   private encrypt(value: string): string {
     return this._encryptor.encrypt(value, this.encryptionOptions());
   }

@@ -316,9 +316,11 @@ export async function encryptRecord(record: any): Promise<void> {
 
   await record.updateColumns(assignments);
 
-  // Restore plaintext in-memory so record.attr still reads as plaintext.
+  // Restore plaintext as the in-memory cast value so record.attr still reads
+  // as plaintext, while preserving the ciphertext as valueBeforeTypeCast
+  // (used by encryptedAttribute? / ciphertextFor on this instance).
   for (const [attr, plaintext] of Object.entries(plaintextValues)) {
-    record._attributes.set(attr, plaintext);
+    record._attributes.writeCastValue(attr, plaintext);
   }
 }
 

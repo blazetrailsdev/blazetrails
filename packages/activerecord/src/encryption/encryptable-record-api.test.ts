@@ -6,11 +6,13 @@ import {
   restoreEncryptionConfig,
   makeEncryptedPost,
   makeEncryptedBook,
-  makeEncryptedAuthor,
+  makeFreshModel,
+  makeKeyProvider,
   assertEncryptedAttribute,
   withoutEncryption,
   Base,
 } from "./test-helpers.js";
+import { Scheme } from "./scheme.js";
 import { Configurable } from "./configurable.js";
 
 describe("ActiveRecord::Encryption::EncryptableRecordApiTest", () => {
@@ -173,22 +175,34 @@ describe("ActiveRecord::Encryption::EncryptableRecordApiTest", () => {
   });
 
   it("encrypt attributes encrypted with a previous encryption scheme", async () => {
-    const Author = makeEncryptedAuthor(freshAdapter());
+    // Build a previous scheme with a different key provider so oldCiphertext
+    // is real ciphertext produced by a different key — mirrors the Rails test
+    // which uses EncryptedAuthor with a previous scheme configured.
+    const prevKeyProvider = makeKeyProvider("prev-key-for-encryption-test-32b!!");
+    const prevScheme = new Scheme({ keyProvider: prevKeyProvider });
+
+    const Author = makeFreshModel(freshAdapter(), { id: "integer", name: "string" });
+    Author.encrypts("name", { previousSchemes: [prevScheme] });
+
     const author = await Author.create({ name: "david" });
 
-    // Store a value encrypted with a previous type scheme
+    // Encrypt "dhh" using the previous scheme to simulate an old row.
     const type = (Author as any)._attributeDefinitions?.get("name")?.type;
+    expect(type.previousTypes.length).toBeGreaterThan(0);
     const prevType = type.previousTypes[0];
-    const oldCiphertext = prevType ? prevType.serialize("dhh") : null;
+    const oldCiphertext = prevType.serialize("dhh") as string;
+    expect(typeof oldCiphertext).toBe("string");
 
-    if (oldCiphertext) {
-      await withoutEncryption(() => author.updateColumns({ name: oldCiphertext }));
-      await author.encrypt();
-      const reloaded = await Author.find(author.id);
-      expect(reloaded.name).toBe("dhh");
-      // Verify the DB row was re-encrypted with the current scheme.
-      expect(reloaded.readAttributeBeforeTypeCast("name")).not.toBe(oldCiphertext);
-    }
+    await withoutEncryption(() => author.updateColumns({ name: oldCiphertext }));
+    // Reload so the in-memory attribute reflects the DB state (old ciphertext)
+    // rather than the raw ciphertext string set by updateColumns.
+    const authorWithOldCiphertext = await Author.find(author.id);
+    await authorWithOldCiphertext.encrypt();
+
+    const reloaded = await Author.find(authorWithOldCiphertext.id);
+    expect(reloaded.name).toBe("dhh");
+    // Verify the DB row was re-encrypted with the current scheme (different ciphertext).
+    expect(reloaded.readAttributeBeforeTypeCast("name")).not.toBe(oldCiphertext);
   });
 
   it.skip("encrypt won't change the encoding of strings even when compression is used", () => {});

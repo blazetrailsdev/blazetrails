@@ -118,9 +118,10 @@ export const Predications = {
     //   Enumerable    → In(self, quoted_array(other))
     //   else          → In(self, quoted_node(other))
     if (Array.isArray(other)) {
+      // Node[] is valid NodeOrValue for In/NotIn — no cast needed.
       return new In(
         this as unknown as Node,
-        other.map((v) => this.quotedNode(v)) as unknown as Node,
+        other.map((v) => this.quotedNode(v)),
       );
     }
     if (other && typeof other === "object" && !(other instanceof Node) && "ast" in other) {
@@ -132,7 +133,7 @@ export const Predications = {
     if (Array.isArray(other)) {
       return new NotIn(
         this as unknown as Node,
-        other.map((v) => this.quotedNode(v)) as unknown as Node,
+        other.map((v) => this.quotedNode(v)),
       );
     }
     if (other && typeof other === "object" && !(other instanceof Node) && "ast" in other) {

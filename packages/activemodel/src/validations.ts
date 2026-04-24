@@ -12,25 +12,34 @@ import { I18n } from "./i18n.js";
  */
 export interface Validations {
   errors: Errors;
-  isValid(context?: string | ValidationContext): boolean;
+  isValid(context?: string | string[] | ValidationContext): boolean;
   /**
    * Run validations and return whether the record is valid.
    * Mirrors Rails `alias_method :validate, :valid?`
-   * (activemodel/lib/active_model/validations.rb:370).
+   * (activemodel/lib/active_model/validations.rb:370). Context may be a
+   * single symbol or an array — Rails supports e.g.
+   * `valid?([:create, :publish])` so a validator with `on: :publish`
+   * fires alongside the usual `:create` context.
    */
-  validate(context?: string | ValidationContext): boolean;
+  validate(context?: string | string[] | ValidationContext): boolean;
   /**
    * Opposite of `isValid`. Mirrors Rails `def invalid?(context = nil)`
    * (activemodel/lib/active_model/validations.rb:408-410).
    */
-  isInvalid(context?: string | ValidationContext): boolean;
+  isInvalid(context?: string | string[] | ValidationContext): boolean;
   /**
    * Run validations; return `true` or raise `ValidationError`. Mirrors Rails
    * `def validate!(context = nil); valid?(context) || raise_validation_error; end`
    * (activemodel/lib/active_model/validations.rb:417-419) — never returns false.
    */
-  validateBang(context?: string | ValidationContext): true;
-  readonly validationContext: string | ValidationContext | null;
+  validateBang(context?: string | string[] | ValidationContext): true;
+  /**
+   * The active validation context — a single symbol, an array of
+   * symbols, or `null`. Mirrors Rails `validations.rb:454-456` where
+   * `validation_context` surfaces `context_for_validation.context`
+   * directly (Symbol or Array of Symbols).
+   */
+  readonly validationContext: string | string[] | ValidationContext | null;
 }
 
 /**
@@ -90,18 +99,31 @@ export class ValidationError extends globalThis.Error {
 }
 
 /**
- * Represents a named validation context (e.g., :create, :update).
+ * Holds the active validation context for a model. Mirrors Rails
+ * `class ValidationContext; attr_accessor :context; end`
+ * (activemodel/lib/active_model/validations.rb:503-505) — a thin
+ * mutable holder whose `context` can be a single symbol or an Array
+ * of symbols (see `predicate_for_validation_context`, :294-306).
  *
- * Mirrors: ActiveModel::ValidationContext
+ * Kept backward-compatible: the old `new ValidationContext("create")`
+ * still works and `.name` + `.toString()` continue to return the first
+ * segment as a string. `.context` is now `string | string[] | null`.
  */
 export class ValidationContext {
   readonly name: string;
-  constructor(name: string) {
-    this.name = name;
+  private _context: string | string[] | null;
+
+  constructor(context: string | string[] | null = null) {
+    this._context = context;
+    this.name = Array.isArray(context) ? (context[0] ?? "") : (context ?? "");
   }
 
-  get context(): string {
-    return this.name;
+  get context(): string | string[] | null {
+    return this._context;
+  }
+
+  set context(value: string | string[] | null) {
+    this._context = value;
   }
 
   toString(): string {

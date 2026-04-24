@@ -4,6 +4,36 @@ import { Configurable } from "./configurable.js";
 import { KeyGenerator } from "./key-generator.js";
 import { DerivedSecretKeyProvider } from "./derived-secret-key-provider.js";
 
+// Memoized SHA1 key provider: PBKDF2 is expensive (65536 iterations), so
+// reuse the same provider as long as primaryKey and keyDerivationSalt haven't
+// changed. Keyed on the tuple so config rotation invalidates the cache.
+let _sha1ProviderCache:
+  | {
+      primaryKey: string | string[];
+      keyDerivationSalt: string | undefined;
+      provider: DerivedSecretKeyProvider;
+    }
+  | undefined;
+
+function getSha1KeyProvider(
+  primaryKey: string | string[],
+  keyDerivationSalt: string | undefined,
+): DerivedSecretKeyProvider {
+  const cacheKey = JSON.stringify(primaryKey);
+  if (
+    _sha1ProviderCache &&
+    JSON.stringify(_sha1ProviderCache.primaryKey) === cacheKey &&
+    _sha1ProviderCache.keyDerivationSalt === keyDerivationSalt
+  ) {
+    return _sha1ProviderCache.provider;
+  }
+  const provider = new DerivedSecretKeyProvider(primaryKey, {
+    keyGenerator: new KeyGenerator("SHA1"),
+  });
+  _sha1ProviderCache = { primaryKey, keyDerivationSalt, provider };
+  return provider;
+}
+
 /**
  * Mirrors Rails' EncryptableRecord#global_previous_schemes_for.
  * Exported so encryption.ts (Base.encrypts path) can use the same logic.
@@ -19,10 +49,9 @@ export function globalPreviousSchemesFor(scheme: Scheme): Scheme[] {
   // builds the SHA1 DerivedSecretKeyProvider lazily here (not in Config) to
   // avoid a config → key-generator → configurable → config circular import.
   if (config.supportSha1ForNonDeterministicEncryption && config.primaryKey) {
-    const sha1KeyProvider = new DerivedSecretKeyProvider(config.primaryKey, {
-      keyGenerator: new KeyGenerator("SHA1"),
+    allSchemeOptions.push({
+      keyProvider: getSha1KeyProvider(config.primaryKey, config.keyDerivationSalt),
     });
-    allSchemeOptions.push({ keyProvider: sha1KeyProvider });
   }
 
   return allSchemeOptions

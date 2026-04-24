@@ -40,6 +40,7 @@ export class Configurable {
       if (key === "primaryKey" || key === "deterministicKey" || key === "keyDerivationSalt") {
         continue;
       }
+      if (value === undefined) continue;
       if (key in config) {
         (config as any)[key] = value;
       }
@@ -59,7 +60,7 @@ export class Configurable {
   }
 
   static encryptedAttributeWasDeclared(klass: any, name: string): void {
-    for (const listener of _listeners) {
+    for (const listener of [..._listeners]) {
       listener(klass, name);
     }
   }

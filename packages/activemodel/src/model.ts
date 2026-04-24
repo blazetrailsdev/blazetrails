@@ -30,6 +30,7 @@ import {
   attributeMethodSuffix,
   attributeMethodAffix,
   aliasAttribute,
+  resolveAliasName,
   undefineAttributeMethods,
 } from "./attribute-methods.js";
 import {
@@ -1106,10 +1107,20 @@ export class Model {
   // -- Attribute access --
 
   readAttribute(name: string): unknown {
+    // Rails resolves alias_attribute names in `read_attribute`
+    // (attribute_aliases[name] || name); `_read_attribute` skips it.
+    const resolved = resolveAliasName(this.constructor as typeof Model, name);
+    if (!this._attributes.has(resolved)) {
+      return this.attributeMissing(resolved);
+    }
+    this._accessedFields.add(resolved);
+    return this._attributes.fetchValue(resolved) ?? null;
+  }
+
+  _readAttribute(name: string): unknown {
     if (!this._attributes.has(name)) {
       return this.attributeMissing(name);
     }
-    this._accessedFields.add(name);
     return this._attributes.fetchValue(name) ?? null;
   }
 
@@ -1124,10 +1135,16 @@ export class Model {
   }
 
   writeAttribute(name: string, value: unknown): void {
+    // Alias-resolve on the public write path; aliased writes land on the
+    // canonical attribute's dirty state (Rails `write_attribute`).
+    const resolved = resolveAliasName(this.constructor as typeof Model, name);
+    this._writeAttribute(resolved, value);
+  }
+
+  _writeAttribute(name: string, value: unknown): void {
     const ctor = this.constructor as typeof Model;
     const oldValue = this._attributes.has(name) ? this._attributes.fetchValue(name) : undefined;
     this._attributes.writeFromUser(name, value);
-    // Apply normalization and nullify blanks on the cast value
     let newValue = this._attributes.fetchValue(name);
     newValue = ctor._applyNormalization(name, newValue);
     newValue = this._applyNullifyBlanks(name, newValue);

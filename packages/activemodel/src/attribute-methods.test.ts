@@ -255,6 +255,40 @@ describe("AttributeMethodsTest", () => {
     expect(p.readAttribute("nonexistent")).toBe("missing:nonexistent");
   });
 
+  it("readAttribute / writeAttribute resolve alias_attribute names transparently", () => {
+    // Rails `read_attribute(name)` does `attribute_aliases[name] || name`
+    // (activemodel attribute_methods.rb) so callers can pass either the
+    // aliased or canonical name and hit the same underlying attribute.
+    class Person extends Model {
+      static {
+        this.attribute("name", "string");
+        this.aliasAttribute("nickname", "name");
+      }
+    }
+    const p = new Person({ name: "Alice" });
+    expect(p.readAttribute("nickname")).toBe("Alice");
+    p.writeAttribute("nickname", "Ally");
+    expect(p.readAttribute("name")).toBe("Ally");
+    expect(p.readAttribute("nickname")).toBe("Ally");
+  });
+
+  it("aliased writes propagate to dirty tracking on the canonical name", () => {
+    // The alias write must register a change on the ORIGINAL attribute's
+    // dirty state, not a separate entry — otherwise changedAttributes /
+    // changes would report under the aliased name.
+    class Person extends Model {
+      static {
+        this.attribute("name", "string");
+        this.aliasAttribute("nickname", "name");
+      }
+    }
+    const p = new Person({ name: "Alice" });
+    p.changesApplied();
+    p.writeAttribute("nickname", "Ally");
+    expect(p.changedAttributes).toEqual(["name"]);
+    expect(p.changes).toEqual({ name: ["Alice", "Ally"] });
+  });
+
   it("name clashes are handled", () => {
     // Attributes with the same name as existing methods should still work via readAttribute
     class Person extends Model {

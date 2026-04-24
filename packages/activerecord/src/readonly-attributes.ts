@@ -132,7 +132,9 @@ export function _writeAttribute(this: Base, name: string, value: unknown): void 
     }
     return;
   }
-  Model.prototype.writeAttribute.call(this, name, value);
+  // Mirrors Rails `_write_attribute`: skip alias resolution, unlike the
+  // public `write_attribute` path above.
+  Model.prototype._writeAttribute.call(this, name, value);
 }
 
 /**

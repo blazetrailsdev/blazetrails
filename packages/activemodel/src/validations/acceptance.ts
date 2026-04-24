@@ -28,6 +28,16 @@ export class LazilyDefineAttributes {
   }
 }
 
+/**
+ * Ruby `Array()` coerces any object with `to_a`/`to_ary` (Set, Enumerator,
+ * Hash, etc.) into an array, but leaves strings wrapped as `[str]`. Match
+ * that: if the value is iterable but not a string, spread it.
+ */
+function isNonStringIterable(value: unknown): value is Iterable<unknown> {
+  if (typeof value !== "object" || value === null) return false;
+  return typeof (value as { [Symbol.iterator]?: unknown })[Symbol.iterator] === "function";
+}
+
 export class AcceptanceValidator extends EachValidator {
   static readonly lazilyDefineAttributes = new LazilyDefineAttributes([]);
 
@@ -48,6 +58,7 @@ export class AcceptanceValidator extends EachValidator {
       const rawAccept = this.options.accept;
       if (rawAccept === null || rawAccept === undefined) accepted = [];
       else if (Array.isArray(rawAccept)) accepted = rawAccept;
+      else if (isNonStringIterable(rawAccept)) accepted = Array.from(rawAccept);
       else accepted = [rawAccept];
     }
     if (!accepted.includes(value)) {

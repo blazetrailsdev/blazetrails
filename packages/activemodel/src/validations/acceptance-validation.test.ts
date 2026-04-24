@@ -132,6 +132,20 @@ describe("AcceptanceValidationTest", () => {
     expect(new Terms({ terms: "y" }).isValid()).toBe(false);
   });
 
+  it("validates acceptance with an iterable (Set) accept option", () => {
+    // Rails' `Array(options[:accept])` coerces via `to_a`, so a Set/Enumerator
+    // should be spread into the list of accepted values.
+    class Terms extends Model {
+      static {
+        this.attribute("terms", "string");
+        this.validates("terms", { acceptance: { accept: new Set(["yes", "ok"]) } });
+      }
+    }
+    expect(new Terms({ terms: "yes" }).isValid()).toBe(true);
+    expect(new Terms({ terms: "ok" }).isValid()).toBe(true);
+    expect(new Terms({ terms: "no" }).isValid()).toBe(false);
+  });
+
   it("setup! auto-defines attribute when not explicitly declared", () => {
     class Agreement extends Model {
       static {

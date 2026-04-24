@@ -158,7 +158,9 @@ export class EncryptableRecord {
     // after schema reflection). Check whether a LengthValidator with this
     // exact maximum already exists for the attribute.
     const existing: unknown[] = modelClass._validators?.get(attribute) ?? [];
-    const alreadyRegistered = existing.some((v: any) => v?.options?.maximum === limit);
+    const alreadyRegistered = existing.some(
+      (v: any) => v?.constructor?.name === "LengthValidator" && v?.options?.maximum === limit,
+    );
     if (!alreadyRegistered) {
       modelClass.validatesLengthOf(attribute, { maximum: limit });
     }

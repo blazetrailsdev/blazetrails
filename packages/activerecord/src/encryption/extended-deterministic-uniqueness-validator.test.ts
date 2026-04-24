@@ -34,7 +34,7 @@ describe("ActiveRecord::Encryption::ExtendedDeterministicUniquenessValidatorTest
       _encryptedAttributes: new Set(["email"]),
       _attributeDefinitions: new Map([["email", { type }]]),
     };
-    const record = { constructor: klass };
+    const record = { constructor: klass, errors: { added: () => false } };
 
     const calls: Array<{ attribute: string; value: unknown; encryptionDisabled: boolean }> = [];
     const originalValidateEach = (_record: any, attribute: string, value: unknown) => {

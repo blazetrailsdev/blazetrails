@@ -239,7 +239,11 @@ export class CallbackChain {
     // `_shouldRun` below, which only applies `on` for commit/rollback).
     // Reject at register-time so the error surfaces immediately rather
     // than at run-time when the callback silently doesn't fire.
-    if (conditions?.on !== undefined && event !== "commit" && event !== "rollback") {
+    // Key-presence check (not value check) so `{ on: undefined }` also
+    // rejects — matches `_rejectOnOption`'s `"on" in conditions` and
+    // Rails' "unknown key" semantics. An explicit `on` (even undefined)
+    // signals caller intent that doesn't apply here.
+    if (conditions && "on" in conditions && event !== "commit" && event !== "rollback") {
       throw new ArgumentError(
         `Unknown key: :on. The :on option is only supported for :commit and :rollback callbacks (got :${event})`,
       );

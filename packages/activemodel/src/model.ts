@@ -986,6 +986,20 @@ export class Model {
   static skipCallback<T extends typeof Model>(
     this: T,
     event: string,
+    timing: "before" | "after",
+    fn: ((record: InstanceType<T>) => void | boolean | Promise<void | boolean>) | CallbackObject,
+  ): boolean;
+  static skipCallback<T extends typeof Model>(
+    this: T,
+    event: string,
+    timing: "around",
+    fn:
+      | ((record: InstanceType<T>, proceed: () => void | Promise<void>) => void | Promise<void>)
+      | CallbackObject,
+  ): boolean;
+  static skipCallback<T extends typeof Model>(
+    this: T,
+    event: string,
     timing: "before" | "after" | "around",
     fn: CallbackFn | AroundCallbackFn | CallbackObject,
   ): boolean {

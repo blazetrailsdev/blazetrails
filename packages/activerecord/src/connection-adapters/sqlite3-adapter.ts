@@ -740,7 +740,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   ): Promise<void> {
     const sqlType = this.typeToSql(type, options);
     let sql = `ALTER TABLE ${quoteTableName(tableName)} ADD COLUMN ${quoteColumnName(columnName)} ${sqlType}`;
-    if (options?.collation) sql += ` COLLATE "${options.collation}"`;
+    if (options?.collation) sql += ` COLLATE ${quoteColumnName(String(options.collation))}`;
     if (options?.null === false) sql += " NOT NULL";
     if (options?.default !== undefined) {
       sql += ` DEFAULT ${this.quoteDefault(options.default)}`;
@@ -1195,17 +1195,11 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   // Mirrors: SQLite3Adapter#table_structure_with_collation
   private _parseCollationsFromTableSql(tableName: string): Map<string, string> {
     const result = new Map<string, string>();
-    const row = this.db
-      .prepare(
-        `SELECT sql FROM (SELECT * FROM sqlite_master UNION ALL SELECT * FROM sqlite_temp_master) WHERE type='table' AND name=?`,
-      )
-      .get(tableName) as { sql: string } | undefined;
-    if (!row?.sql) return result;
+    const createSql = this._getCreateTableSql(tableName);
+    if (!createSql) return result;
 
-    // Split CREATE TABLE (...) into per-column/constraint strings
     const COLLATE_REGEX = /.*"(\w+)".*\bCOLLATE\s+"(\w+)".*/i;
-    const body = row.sql.replace(/\);*\s*$/, "").replace(/^[^(]*\(/, "");
-    // Split on commas not inside parentheses and not inside quotes
+    const body = createSql.replace(/\);*\s*$/, "").replace(/^[^(]*\(/, "");
     const parts = body.split(/,(?=\s*(?:"|\bCONSTRAINT\b))/i);
     for (const part of parts) {
       const m = COLLATE_REGEX.exec(part);
@@ -1459,7 +1453,7 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
       const col = columns[name];
       let def = `${quoteColumnName(name)} ${col.type ?? "TEXT"}`;
       const collation = col.collation ?? existingCollations.get(name);
-      if (collation) def += ` COLLATE "${collation}"`;
+      if (collation) def += ` COLLATE ${quoteColumnName(String(collation))}`;
       if (!compositePk && col.pk) def += " PRIMARY KEY";
       if (col.notnull) def += " NOT NULL";
       if (col.dflt_value !== null && col.dflt_value !== undefined) {

@@ -805,8 +805,8 @@ export class TableDefinition {
         parts.push("PRIMARY KEY");
       }
 
-      if (col.options.collation) {
-        parts.push(`COLLATE "${col.options.collation}"`);
+      if (col.options.collation && this._adapterName === "sqlite") {
+        parts.push(`COLLATE ${quoteIdentifier(col.options.collation, this._adapterName)}`);
       }
 
       if (col.options.array && col.type !== "primary_key") {

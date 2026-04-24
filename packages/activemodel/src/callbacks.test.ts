@@ -446,6 +446,41 @@ describe("Generic Model.setCallback / skipCallback / resetCallbacks (Rails fidel
     expect(log).toEqual(["parent-block", "child", "child-block"]);
   });
 
+  it("skipCallback miss does NOT isolate subclass from future parent callbacks", () => {
+    // A miss must preserve copy-on-first-write inheritance so a
+    // subclass that later has callbacks added to its parent still sees
+    // them via the prototype chain.
+    const log: string[] = [];
+    class Parent extends Model {}
+    class Child extends Parent {}
+    expect(Child.skipCallback("save", "before", () => undefined)).toBe(false);
+    // Now register on Parent — Child should still see it.
+    Parent.setCallback("save", "before", () => log.push("from-parent"));
+    new Child().runCallbacks("save", () => log.push("child-block"));
+    expect(log).toEqual(["from-parent", "child-block"]);
+  });
+
+  it("skipCallback removes a CallbackObject registered by reference", () => {
+    // Rails `set_callback(:save, :before, CallbackObject.new)` looks up
+    // `before_save` (or our camelCase `beforeSave`) on the object. The
+    // same reference must identify it for `skip_callback` — even though
+    // `register` internally resolves to a bound method, `skip` must
+    // match the original object reference.
+    const log: string[] = [];
+    class Thing extends Model {}
+    const obj = {
+      beforeSave() {
+        log.push("obj-before");
+      },
+    };
+    Thing.setCallback("save", "before", obj);
+    Thing.setCallback("save", "before", () => log.push("fn-kept"));
+
+    expect(Thing.skipCallback("save", "before", obj)).toBe(true);
+    new Thing().runCallbacks("save", () => log.push("block"));
+    expect(log).toEqual(["fn-kept", "block"]);
+  });
+
   it("setCallback respects prepend: true (runs before earlier-registered)", () => {
     const log: string[] = [];
     class Thing extends Model {}

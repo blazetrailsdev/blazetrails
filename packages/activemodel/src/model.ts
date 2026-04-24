@@ -925,10 +925,29 @@ export class Model {
     event: string,
     timing: "before" | "after" | "around",
     fn: CallbackFn | AroundCallbackFn | CallbackObject,
-    options?: CallbackConditions,
+    options?: CallbackConditions<InstanceType<T>>,
   ): void {
+    // Apply the same `on:`-validation rules the per-event helpers do so
+    // a call that targets (say) `"save"` with `on: :create` surfaces
+    // the same error rather than silently registering a callback that
+    // can never fire. `on:` is only meaningful for transactional
+    // events (commit/rollback); everything else rejects.
+    if (options) {
+      if (event === "commit" || event === "rollback") {
+        if (options.on !== undefined) {
+          _validateOnCondition(options.on);
+        }
+      } else {
+        _rejectOnOption(options);
+      }
+    }
     this._ensureOwnCallbacks();
-    this._callbackChain.register(timing, event, fn, options);
+    this._callbackChain.register(
+      timing,
+      event,
+      fn as CallbackFn | AroundCallbackFn | CallbackObject,
+      options as CallbackConditions | undefined,
+    );
   }
 
   /**
@@ -952,6 +971,12 @@ export class Model {
     timing: "before" | "after" | "around",
     fn: CallbackFn | AroundCallbackFn | CallbackObject,
   ): boolean {
+    // Don't force copy-on-first-write on a miss — if there's nothing
+    // matching, we shouldn't clone and trap the subclass in a snapshot
+    // that will never see future parent registrations. Check via the
+    // inherited chain first; only clone when we're actually going to
+    // mutate (match found).
+    if (!this._callbackChain.has(event, timing, fn)) return false;
     this._ensureOwnCallbacks();
     return this._callbackChain.skip(event, timing, fn);
   }

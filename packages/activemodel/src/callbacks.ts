@@ -194,7 +194,16 @@ export interface CallbackConditions<TRecord = AnyRecord> {
 interface CallbackEntry {
   timing: CallbackTiming;
   event: CallbackEvent;
+  /** Resolved callable used at run time. */
   fn: CallbackFn | AroundCallbackFn;
+  /**
+   * Original filter the caller passed — may be a function (same as `fn`
+   * after resolution) or a `CallbackObject` (before resolution via
+   * `resolveCallback`). `skip(event, timing, filter)` matches on this so
+   * removing a `CallbackObject` works with the same reference the caller
+   * registered.
+   */
+  filter: CallbackFn | AroundCallbackFn | CallbackObject;
   conditions?: CallbackConditions;
 }
 
@@ -222,7 +231,7 @@ export class CallbackChain {
       typeof fn === "function"
         ? (fn as CallbackFn | AroundCallbackFn)
         : resolveCallback(fn, timing, event);
-    const entry = { timing, event, fn: resolved, conditions };
+    const entry: CallbackEntry = { timing, event, fn: resolved, filter: fn, conditions };
     if (conditions?.prepend) {
       this.callbacks.unshift(entry);
     } else {
@@ -261,14 +270,28 @@ export class CallbackChain {
   skip(
     event: CallbackEvent,
     timing: CallbackTiming,
-    fn: CallbackFn | AroundCallbackFn | CallbackObject,
+    filter: CallbackFn | AroundCallbackFn | CallbackObject,
   ): boolean {
+    // Identity-match on the original filter the caller registered with
+    // (not the resolved `fn`), so `CallbackObject` removals work with
+    // the same reference that was passed to `register`.
     const idx = this.callbacks.findIndex(
-      (c) => c.event === event && c.timing === timing && c.fn === fn,
+      (c) => c.event === event && c.timing === timing && c.filter === filter,
     );
     if (idx === -1) return false;
     this.callbacks.splice(idx, 1);
     return true;
+  }
+
+  /** Does this chain contain a matching entry? Non-mutating. */
+  has(
+    event: CallbackEvent,
+    timing: CallbackTiming,
+    filter: CallbackFn | AroundCallbackFn | CallbackObject,
+  ): boolean {
+    return this.callbacks.some(
+      (c) => c.event === event && c.timing === timing && c.filter === filter,
+    );
   }
 
   clone(): CallbackChain {

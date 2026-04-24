@@ -70,10 +70,13 @@ function dig(obj: TranslationTree, path: string[]): TranslationValue | undefined
 
 function interpolate(str: string, options: Record<string, unknown>): string {
   return str.replace(/%\{(\w+)\}/g, (_, key) => {
-    if (!Object.prototype.hasOwnProperty.call(options, key) || options[key] === undefined) {
+    // Match Rails i18n (i18n/lib/i18n/interpolate/ruby.rb): raise only when
+    // the key is absent. `nil` values are allowed and interpolate to "".
+    if (!Object.prototype.hasOwnProperty.call(options, key)) {
       throw new MissingInterpolationArgument(key, str);
     }
-    return String(options[key]);
+    const value = options[key];
+    return value == null ? "" : String(value);
   });
 }
 
@@ -88,6 +91,7 @@ class I18nService {
    * I18n::Fallbacks semantics — see i18n/lib/i18n/locale/fallbacks.rb).
    */
   private _fallbacks: Record<string, string[]> = {};
+  private _sharedFallbacks: string[] | undefined;
 
   get locale(): string {
     return this._locale;
@@ -152,10 +156,16 @@ class I18nService {
    * Rails I18n::Fallbacks (i18n/lib/i18n/locale/fallbacks.rb).
    */
   setFallbacks(config: Record<string, string[]> | string[]): void {
+    // Defensive copies: callers can mutate their input arrays without
+    // affecting the configured chains.
     if (Array.isArray(config)) {
-      this._fallbacks = { __shared__: config };
+      this._sharedFallbacks = [...config];
+      this._fallbacks = {};
     } else {
-      this._fallbacks = { ...config };
+      this._sharedFallbacks = undefined;
+      this._fallbacks = Object.fromEntries(
+        Object.entries(config).map(([locale, chain]) => [locale, [...chain]]),
+      );
     }
   }
 
@@ -174,11 +184,12 @@ class I18nService {
     this._locale = "en";
     this._defaultLocale = "en";
     this._fallbacks = {};
+    this._sharedFallbacks = undefined;
     this._storeTranslations("en", defaultEnTranslations);
   }
 
   private _fallbackChain(locale: string): string[] {
-    const explicit = this._fallbacks[locale] ?? this._fallbacks["__shared__"];
+    const explicit = this._fallbacks[locale] ?? this._sharedFallbacks;
     const base = explicit && explicit.length > 0 ? [...explicit] : [];
     if (base[0] !== locale) base.unshift(locale);
     // I18n::Locale::Fallbacks#compute always pushes `defaults` onto every

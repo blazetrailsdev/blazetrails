@@ -26,6 +26,13 @@ describe("I18n", () => {
       expect(I18n.t("apples", { count: 3 })).toBe("3 apples");
     });
 
+    it("interpolates null/undefined option values as empty strings (Rails i18n semantics)", () => {
+      // i18n/lib/i18n/interpolate/ruby.rb raises only when the key is
+      // absent; a present-but-nil value is coerced to "" via to_s.
+      I18n.storeTranslations("en", { row: "[%{a}] [%{b}]" });
+      expect(I18n.t("row", { a: null, b: undefined })).toBe("[] []");
+    });
+
     it("raises on %{toString} — inherited Object keys do not satisfy a placeholder", () => {
       I18n.storeTranslations("en", { hi: "hi %{toString}" });
       expect(() => I18n.t("hi")).toThrow(MissingInterpolationArgument);
@@ -61,6 +68,14 @@ describe("I18n", () => {
       I18n.storeTranslations("es", { hi: "hola" });
       expect(I18n.t("hi", { locale: "es" })).toBe("hola");
       expect(I18n.locale).toBe("en");
+    });
+
+    it("does not mutate caller-supplied fallback chain arrays", () => {
+      I18n.storeTranslations("en-GB", { hi: "hullo" });
+      const chain = ["en-US", "en-GB"];
+      I18n.setFallbacks({ "en-US": chain });
+      chain.length = 0;
+      expect(I18n.t("hi", { locale: "en-US" })).toBe("hullo");
     });
 
     it("appends default_locale to explicit fallback chains", () => {

@@ -229,3 +229,107 @@ describe("DirtyTest", () => {
     expect(p.attributeWas("name")).toBe("Alice");
   });
 });
+describe("Dirty Tracking", () => {
+  class Person extends Model {
+    static {
+      this.attribute("name", "string");
+      this.attribute("age", "integer");
+    }
+  }
+
+  it("not changed initially", () => {
+    const p = new Person({ name: "dean", age: 30 });
+    expect(p.changed).toBe(false);
+    expect(p.changedAttributes).toEqual([]);
+  });
+
+  it("setting attribute will result in change", () => {
+    const p = new Person({ name: "dean" });
+    p.writeAttribute("name", "sam");
+    expect(p.changed).toBe(true);
+    expect(p.changedAttributes).toContain("name");
+  });
+
+  it("attributeWas returns original value", () => {
+    const p = new Person({ name: "dean" });
+    p.writeAttribute("name", "sam");
+    expect(p.attributeWas("name")).toBe("dean");
+  });
+
+  it("changes to attribute values", () => {
+    const p = new Person({ name: "dean" });
+    p.writeAttribute("name", "sam");
+    expect(p.attributeChange("name")).toEqual(["dean", "sam"]);
+  });
+
+  it("list of changed attribute keys", () => {
+    const p = new Person({ name: "dean", age: 30 });
+    p.writeAttribute("name", "sam");
+    p.writeAttribute("age", 31);
+    expect(p.changes).toEqual({
+      name: ["dean", "sam"],
+      age: [30, 31],
+    });
+  });
+
+  it("setting color to same value should not result in change being recorded", () => {
+    const p = new Person({ name: "dean" });
+    p.writeAttribute("name", "dean");
+    expect(p.changed).toBe(false);
+  });
+
+  it("resetting attribute", () => {
+    const p = new Person({ name: "dean" });
+    p.writeAttribute("name", "sam");
+    expect(p.changed).toBe(true);
+    p.writeAttribute("name", "dean");
+    expect(p.changed).toBe(false);
+  });
+
+  it("changing the same attribute multiple times retains the correct original value", () => {
+    const p = new Person({ name: "dean" });
+    p.writeAttribute("name", "sam");
+    p.writeAttribute("name", "bob");
+    expect(p.attributeChange("name")).toEqual(["dean", "bob"]);
+  });
+
+  it("restore_attributes should restore all previous data", () => {
+    const p = new Person({ name: "dean", age: 30 });
+    p.writeAttribute("name", "sam");
+    p.writeAttribute("age", 99);
+    p.restoreAttributes();
+    expect(p.readAttribute("name")).toBe("dean");
+    expect(p.readAttribute("age")).toBe(30);
+    expect(p.changed).toBe(false);
+  });
+
+  it("saving should preserve previous changes", () => {
+    const p = new Person({ name: "dean" });
+    p.writeAttribute("name", "sam");
+    p.changesApplied();
+    expect(p.changed).toBe(false);
+    expect(p.previousChanges).toEqual({ name: ["dean", "sam"] });
+  });
+
+  it("setting new attributes should not affect previous changes", () => {
+    const p = new Person({ name: "dean" });
+    p.writeAttribute("name", "sam");
+    p.changesApplied();
+    p.writeAttribute("name", "bob");
+    expect(p.previousChanges).toEqual({ name: ["dean", "sam"] });
+    expect(p.changes).toEqual({ name: ["sam", "bob"] });
+  });
+
+  it("cast-value-aware: same cast value = no change", () => {
+    class Sized extends Model {
+      static {
+        this.attribute("size", "integer");
+      }
+    }
+    const s = new Sized({ size: "2" }); // cast to 2
+    s.writeAttribute("size", "2.3"); // cast to 2
+    expect(s.changed).toBe(false);
+    s.writeAttribute("size", "5.1"); // cast to 5
+    expect(s.changed).toBe(true);
+  });
+});

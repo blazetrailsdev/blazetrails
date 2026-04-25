@@ -39,15 +39,28 @@ describe("HashLookupTypeMapTest", () => {
     expect(mapping.lookup(4)).toBeInstanceOf(ValueType);
   });
 
+  it("isKey returns true for registered keys and false otherwise", () => {
+    const mapping = new HashLookupTypeMap();
+    mapping.registerType("foo", { name: "foo" } as any);
+
+    expect(mapping.isKey("foo")).toBe(true);
+    expect(mapping.isKey("bar")).toBe(false);
+  });
+
   it("fetch memoizes on args", () => {
     const mapping = new HashLookupTypeMap();
-    mapping.registerType(
-      "foo",
-      (type: string | number, ...args: unknown[]) => [type, ...args].join("-") as any,
-    );
+    let callCount = 0;
+    mapping.registerType("foo", (type: string | number, ...args: unknown[]) => {
+      callCount++;
+      return [type, ...args].join("-") as any;
+    });
 
     expect(mapping.fetch("foo", 1, 2, 3, () => [].join("-"))).toBe("foo-1-2-3");
+    expect(mapping.fetch("foo", 1, 2, 3, () => [].join("-"))).toBe("foo-1-2-3");
+    expect(callCount).toBe(1);
+
     expect(mapping.fetch("foo", 2, 3, 4, () => [].join("-"))).toBe("foo-2-3-4");
+    expect(callCount).toBe(2);
   });
 
   it("fetch yields args", () => {

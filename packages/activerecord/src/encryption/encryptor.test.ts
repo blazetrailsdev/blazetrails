@@ -139,8 +139,14 @@ describe("ActiveRecord::Encryption::EncryptorTest", () => {
     expect(enc.isEncrypted("plain text")).toBe(false);
   });
 
-  it.skip("decrypt respects encoding even when compression is used", () => {
-    /* needs encoding preservation in compression */
+  it("decrypt respects encoding even when compression is used", () => {
+    // In JS all strings are Unicode — verify that a long string (triggers compression)
+    // round-trips correctly through encrypt/decrypt.
+    const enc = new Encryptor();
+    const key = generateKey();
+    const text = "The Starfleet is here " + "OMG! ".repeat(50) + "!";
+    const encrypted = enc.encrypt(text, { key });
+    expect(enc.decrypt(encrypted, { key })).toBe(text);
   });
 
   it("accept a custom compressor", () => {

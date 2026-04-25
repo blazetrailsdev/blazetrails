@@ -188,6 +188,25 @@ export function makeEncryptedAuthor(adapter: DatabaseAdapter) {
   } as any;
 }
 
+export function makeEncryptedBookWithCustomCompressor(adapter: DatabaseAdapter) {
+  const customCompressor = {
+    deflate(data: string): Buffer {
+      return Buffer.from(`[compressed]${data}`, "utf-8");
+    },
+    inflate(data: Buffer): string {
+      return data.toString("utf-8").replace(/^\[compressed\]/, "");
+    },
+  };
+  return class EncryptedBookWithCustomCompressor extends Base {
+    static {
+      this.attribute("id", "integer");
+      this.attribute("name", "string");
+      this.adapter = adapter;
+      this.encrypts("name", { compressor: customCompressor } as any);
+    }
+  } as any;
+}
+
 const _failingEncryptor: Encryptor = {
   encrypt(_value: string): string {
     throw new EncryptionError("deliberate encryption failure");

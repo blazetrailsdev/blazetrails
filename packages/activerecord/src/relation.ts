@@ -2910,7 +2910,14 @@ export class Relation<T extends Base> {
         }
       } else {
         const [col, dir] = clause;
-        manager.order(dir === "desc" ? table.get(col).desc() : table.get(col).asc());
+        // Mirrors Rails' arel_column: unknown columns (e.g. subquery aliases
+        // from .from()) get a bare quoted name, not a table-qualified attribute.
+        if (this._modelClass._attributeDefinitions.has(col)) {
+          manager.order(dir === "desc" ? table.get(col).desc() : table.get(col).asc());
+        } else {
+          const lit = new Nodes.SqlLiteral(`"${col}"`);
+          manager.order(dir === "desc" ? new Nodes.Descending(lit) : new Nodes.Ascending(lit));
+        }
       }
     }
   }

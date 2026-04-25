@@ -106,6 +106,32 @@ describe("RelationTest", () => {
     expect(post.isPersisted()).toBe(true);
   });
 
+  it("order by unknown column (subquery alias) uses bare quoted name", () => {
+    class Developer extends Base {
+      static _tableName = "developers";
+      static {
+        this.attribute("commits", "integer");
+        this.adapter = adapter;
+      }
+    }
+    const RANKED = "(SELECT id, commits AS hotness FROM developers) developers";
+    const sql = Developer.from(RANKED).order({ hotness: "desc" }).limit(10).toSql();
+    expect(sql).toContain('"hotness" DESC');
+    expect(sql).not.toContain('"developers"."hotness"');
+  });
+
+  it("order by known column uses table-qualified attribute", () => {
+    class Developer extends Base {
+      static _tableName = "developers";
+      static {
+        this.attribute("commits", "integer");
+        this.adapter = adapter;
+      }
+    }
+    const sql = Developer.order({ commits: "desc" }).toSql();
+    expect(sql).toContain('"developers"."commits" DESC');
+  });
+
   it("group by bare column name qualifies via table", () => {
     class Order extends Base {
       static _tableName = "orders";

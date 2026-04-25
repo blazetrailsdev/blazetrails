@@ -167,13 +167,16 @@ Dir.mktmpdir("parity-ar-ruby-") do |tmpdir|
       end
     end
 
-    # Fall back to bound_attributes when Arel collector found no datetime binds
-    # (e.g. for expressions not backed by an AR relation).
+    # Fallback via bound_attributes when the Arel collector produced no datetime binds.
+    # Only apply when the fallback binds sync with param_sql's placeholder count so
+    # paramSql and binds never diverge (param_sql defaults to sql_str which has no ?).
     if binds.empty? && result.respond_to?(:bound_attributes)
-      binds = result.bound_attributes.filter_map do |ba|
+      fallback_binds = result.bound_attributes.filter_map do |ba|
         val = ba.value_for_database
         val.utc.iso8601(3) if val.respond_to?(:utc)
       end
+      placeholder_count = param_sql.count("?")
+      binds = fallback_binds if fallback_binds.any? && placeholder_count == fallback_binds.length
     end
 
     # 6. Write CanonicalQuery JSON

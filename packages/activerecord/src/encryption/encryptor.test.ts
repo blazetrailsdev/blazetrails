@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Encryptor } from "./encryptor.js";
 import { DecryptionError, ForbiddenClass } from "./errors.js";
 import { MessageSerializer } from "./message-serializer.js";
+import { defaultCompressor } from "./config.js";
 import * as crypto from "crypto";
 
 function generateKey(): string {
@@ -140,13 +141,27 @@ describe("ActiveRecord::Encryption::EncryptorTest", () => {
   });
 
   it("decrypt respects encoding even when compression is used", () => {
-    // In JS all strings are Unicode — verify that a long string (triggers compression)
-    // round-trips correctly through encrypt/decrypt.
-    const enc = new Encryptor();
+    // Use a spy compressor so we can assert deflate/inflate were actually called.
+    // The input is non-ASCII (Unicode) to exercise the UTF-8 round-trip path.
+    let deflated = false;
+    let inflated = false;
+    const spyCompressor = {
+      deflate(data: string) {
+        deflated = true;
+        return defaultCompressor.deflate(data);
+      },
+      inflate(data: Buffer) {
+        inflated = true;
+        return defaultCompressor.inflate(data);
+      },
+    };
+    const enc = new Encryptor({ compress: true, compressor: spyCompressor });
     const key = generateKey();
-    const text = "The Starfleet is here " + "OMG! ".repeat(50) + "!";
+    const text = ("The Starfleet is here — こんにちは 🌍 ¡Hola! Привет! " + "終わり！").repeat(40);
     const encrypted = enc.encrypt(text, { key });
     expect(enc.decrypt(encrypted, { key })).toBe(text);
+    expect(deflated).toBe(true);
+    expect(inflated).toBe(true);
   });
 
   it("accept a custom compressor", () => {

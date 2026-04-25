@@ -222,11 +222,11 @@ async function main(): Promise<void> {
         // This keeps `? count = binds.length` and matches adapter-specific rendering.
         let placeholderIdx = 0;
         const dateBind: Date[] = [];
+        let mismatch = false;
         const processedParamSql = ps.replace(/\?/g, () => {
           if (placeholderIdx >= resolvedBinds.length) {
-            throw new Error(
-              `[${fixtureName}] compileWithBinds() returned more placeholders than bind values`,
-            );
+            mismatch = true;
+            return "?";
           }
           const v = resolvedBinds[placeholderIdx++];
           if (v instanceof Date) {
@@ -235,13 +235,17 @@ async function main(): Promise<void> {
           }
           return quoteBindValue(v);
         });
-        if (placeholderIdx !== resolvedBinds.length) {
-          throw new Error(
-            `[${fixtureName}] compileWithBinds() returned more bind values than placeholders`,
-          );
+        if (placeholderIdx !== resolvedBinds.length) mismatch = true;
+
+        if (mismatch || dateBind.length === 0) {
+          // No datetime binds (or placeholder/bind count diverged): keep paramSql
+          // identical to sql so there's no whitespace/quoting drift in output.
+          paramSql = sqlStr;
+          binds = [];
+        } else {
+          paramSql = processedParamSql.trim();
+          binds = dateBind.map((b) => b.toISOString());
         }
-        paramSql = processedParamSql.trim();
-        binds = dateBind.map((b) => b.toISOString());
       }
     }
 

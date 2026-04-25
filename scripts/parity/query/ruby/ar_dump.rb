@@ -130,7 +130,7 @@ Dir.mktmpdir("parity-ar-ruby-") do |tmpdir|
     #       Collectors::Bind pass so paramSql and binds stay in sync.
     #       Only datetime values become ? placeholders; other scalars are
     #       re-inlined so ? count = binds.length (mirrors trails' approach).
-    #       Falls back to bound_attributes if the Arel collector finds no binds.
+    #       Falls back to sql / empty binds if the collector raises or counts diverge.
     sql_str = result.to_sql.strip
     binds = []
     param_sql = sql_str
@@ -183,8 +183,7 @@ Dir.mktmpdir("parity-ar-ruby-") do |tmpdir|
         # binds = [] and param_sql = sql_str — the defaults set above.
       rescue NoMethodError
         # Arel collectors don't implement all collector methods in every
-        # Rails version (e.g. preparable= in Rails 8.0). Fall back to
-        # bound_attributes below.
+        # Rails version (e.g. preparable= in Rails 8.0). Leave defaults.
         binds = []
         param_sql = sql_str
       end

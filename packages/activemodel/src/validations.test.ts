@@ -1947,9 +1947,8 @@ describe("errors.ofKind()", () => {
     u.isValid();
     expect(u.errors.ofKind("name", "blank")).toBe(true);
     expect(u.errors.ofKind("name", "invalid")).toBe(false);
-    // Default kind is :invalid (Rails Errors#of_kind? default); the error
-    // here is :blank so the default lookup returns false.
-    expect(u.errors.ofKind("name")).toBe(false);
+    // Without a type arg, ofKind checks for any error on the attribute.
+    expect(u.errors.ofKind("name")).toBe(true);
     expect(u.errors.ofKind("other")).toBe(false);
   });
 });

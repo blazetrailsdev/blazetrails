@@ -1,14 +1,29 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { Railtie, registerRailtie } from "./railtie.js";
 
 describe("Railtie", () => {
+  // Snapshot and restore global singletons so these tests don't interfere
+  // with other test files (e.g. ActiveModel::Railtie expects to remain
+  // registered in BaseRailtie.subclasses after module init).
+  let savedSubclasses: (typeof Railtie)[];
+  let savedConfig: Record<string, unknown>;
+
   beforeEach(() => {
-    // Reset shared static state between tests.
+    savedSubclasses = [...Railtie.subclasses];
+    savedConfig = { ...Railtie.config };
     (Railtie.subclasses as (typeof Railtie)[]).length = 0;
-    // Clear the base config so mutations from one test don't leak into others.
     for (const key of Object.keys(Railtie.config)) {
       delete (Railtie.config as Record<string, unknown>)[key];
     }
+  });
+
+  afterEach(() => {
+    (Railtie.subclasses as (typeof Railtie)[]).length = 0;
+    (Railtie.subclasses as (typeof Railtie)[]).push(...savedSubclasses);
+    for (const key of Object.keys(Railtie.config)) {
+      delete (Railtie.config as Record<string, unknown>)[key];
+    }
+    Object.assign(Railtie.config, savedConfig);
   });
 
   it("initializer registers a named block", () => {

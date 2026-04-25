@@ -1,13 +1,23 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { Railtie } from "./railtie.js";
 import { Railtie as BaseRailtie } from "@blazetrails/activesupport";
 import { SecurePassword } from "./secure-password.js";
 import { Error as ActiveModelError } from "./error.js";
 
 describe("RailtieTest", () => {
+  // Snapshot the global subclasses list so activesupport tests that
+  // truncate it can't make this suite order-dependent.
+  let savedSubclasses: (typeof BaseRailtie)[];
+
+  beforeEach(() => {
+    savedSubclasses = [...BaseRailtie.subclasses];
+  });
+
   afterEach(() => {
     SecurePassword.minCost = false;
     ActiveModelError.i18nCustomizeFullMessage = false;
+    (BaseRailtie.subclasses as (typeof BaseRailtie)[]).length = 0;
+    (BaseRailtie.subclasses as (typeof BaseRailtie)[]).push(...savedSubclasses);
   });
 
   it("secure password min_cost is false in the development environment", () => {

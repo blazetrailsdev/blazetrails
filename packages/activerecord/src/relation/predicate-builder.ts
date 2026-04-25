@@ -28,6 +28,7 @@ export class PredicateBuilder {
   private relationHandler: RelationHandler;
   private associationMap: Map<string, AssociationMapping> = new Map();
   private handlers: Array<[any, { call(attr: Nodes.Attribute, value: any): Nodes.Node }]> = [];
+  private _tableContext: any = null;
 
   constructor(table: Table) {
     this.table = table;
@@ -90,10 +91,9 @@ export class PredicateBuilder {
           }
         }
       } else if (isPlainObject(value)) {
-        const context: any = (this as any)._context;
         const assocMeta =
-          context && typeof context.associatedTable === "function"
-            ? context.associatedTable(key)
+          this._tableContext && typeof this._tableContext.associatedTable === "function"
+            ? this._tableContext.associatedTable(key)
             : null;
         if (assocMeta) {
           const assocPb: PredicateBuilder = assocMeta.predicateBuilder;
@@ -355,7 +355,7 @@ export class PredicateBuilder {
     const builder = new PredicateBuilder(this.table);
     builder.setAssociationMap(this.associationMap);
     builder.handlers = [...this.handlers];
-    (builder as any)._context = context;
+    builder._tableContext = context;
     return builder;
   }
 

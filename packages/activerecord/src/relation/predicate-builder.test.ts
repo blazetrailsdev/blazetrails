@@ -177,5 +177,15 @@ describe("PredicateBuilderTest", () => {
       expect(sql).toContain("Rails");
       expect(sql).not.toContain('"posts"."authors"');
     });
+
+    it("negated form expands whereNot({authors: {name: 'Rails'}}) to NOT \"authors\".\"name\" = 'Rails'", () => {
+      const meta = new TableMetadata(Post as any, new Table("posts"));
+      const builder = meta.predicateBuilder;
+      const nodes = builder.buildNegatedFromHash({ authors: { name: "Rails" } });
+      const sql = nodes.map((n) => new Visitors.ToSql().compile(n)).join(" AND ");
+      expect(sql).toContain('"authors"."name"');
+      expect(sql).toContain("Rails");
+      expect(sql).not.toContain('"posts"."authors"');
+    });
   });
 });

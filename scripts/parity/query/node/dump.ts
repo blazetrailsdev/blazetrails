@@ -146,7 +146,18 @@ async function main(): Promise<void> {
       db.close();
     }
 
-    // 2. Import query.ts. Fixtures end with `export default <expr>` — see
+    // 2. Wire the SQLite visitor as the default `Node#toSql()` /
+    //    `TreeManager#toSql()` implementation. Mirrors the Rails side's
+    //    `establish_connection adapter: "sqlite3"` so dialect-specific
+    //    rendering (e.g. `IS NOT` for IS DISTINCT FROM) goes through the
+    //    same SQL surface on both sides.
+    const arel = (await import("@blazetrails/arel")) as {
+      Visitors: { SQLite: new () => { compile(node: unknown): string } };
+      setToSqlVisitor(v: new () => { compile(node: unknown): string }): void;
+    };
+    arel.setToSqlVisitor(arel.Visitors.SQLite);
+
+    // 3. Import query.ts. Fixtures end with `export default <expr>` — see
     //    scripts/parity/translate/arel.ts (generateTs).
     const queryUrl = pathToFileURL(join(fixtureDirAbs, "query.ts")).href;
     const mod = (await import(queryUrl)) as { default: unknown };

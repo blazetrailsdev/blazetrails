@@ -1064,7 +1064,16 @@ export class ToSql implements NodeVisitor<SQLString> {
 
   private visitTableAlias(node: Nodes.TableAlias): SQLString {
     this.visit(node.relation);
-    this.collector.append(` "${node.name}"`);
+    // Mirrors Rails: `quote_table_name` returns the name bare when it's a
+    // SqlLiteral (which is what `SelectManager#as` produces — see
+    // alias_predication.rb). Subquery aliases reach here with the
+    // relation wrapped in a Grouping; regular `Table#alias("foo")`
+    // doesn't, so we keep the standard quoted-identifier form for those.
+    if (node.relation instanceof Nodes.Grouping) {
+      this.collector.append(` ${node.name}`);
+    } else {
+      this.collector.append(` "${node.name}"`);
+    }
     return this.collector;
   }
 

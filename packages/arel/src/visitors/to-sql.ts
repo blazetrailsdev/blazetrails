@@ -1291,7 +1291,18 @@ export class ToSql implements NodeVisitor<SQLString> {
   }
 
   private visitQuoted(node: Nodes.Quoted): SQLString {
-    this.collector.append(this.quote(node.value));
+    if (
+      this._extractBinds &&
+      node.value !== null &&
+      node.value !== undefined &&
+      typeof node.value === "object" &&
+      "toISOString" in node.value &&
+      typeof (node.value as { toISOString: unknown }).toISOString === "function"
+    ) {
+      this.collector.addBind(node.value);
+    } else {
+      this.collector.append(this.quote(node.value));
+    }
     return this.collector;
   }
 
@@ -1355,7 +1366,11 @@ export class ToSql implements NodeVisitor<SQLString> {
       "toISOString" in v &&
       typeof (v as { toISOString: unknown }).toISOString === "function"
     ) {
-      this.collector.append(this.quotedDate(v as { toISOString(): string }));
+      if (this._extractBinds) {
+        this.collector.addBind(v);
+      } else {
+        this.collector.append(this.quotedDate(v as { toISOString(): string }));
+      }
     } else {
       this.collector.append(String(v));
     }

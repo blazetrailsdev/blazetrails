@@ -1383,7 +1383,7 @@ export class ToSql implements NodeVisitor<SQLString> {
   protected quotedDate(d: { toISOString(): string }): string {
     // Parse "YYYY-MM-DDTHH:MM:SS.mmmZ" or "YYYY-MM-DDTHH:MM:SSZ" (no fractional part).
     const match = d.toISOString().match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(?:\.(\d+))?Z?$/);
-    if (!match) return `'${d.toISOString()}'`;
+    if (!match) return `'${d.toISOString().replace(/'/g, "''")}'`;
     const [, date, time, frac] = match;
     // Normalise to exactly 6 digits: pad short fractions, truncate long ones.
     // "729" → "729000" (μs), "7" → "700000", "1234" → "123400", "729000" → "729000".

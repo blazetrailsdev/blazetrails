@@ -267,12 +267,13 @@ function orderBang(
         const interpolated = rest.length > 0 ? sanitizeSqlArray(rawSql, ...rest) : rawSql;
         if (interpolated.trim() !== "") this._rawOrderClauses.push(interpolated);
       } else {
-        // Plain string array: validate each element immediately.
+        // Plain string array: all elements must be strings; validate each immediately.
+        if (!(arg as unknown[]).every((e) => typeof e === "string")) {
+          throw argumentError("Order arguments passed as an array must contain only strings");
+        }
         disallowRawSqlBang(arg as string[], resolveOrderMatcher(this));
         for (const elem of arg as string[]) {
-          if (typeof elem === "string" && elem.trim() !== "") {
-            this._orderClauses.push(elem);
-          }
+          if (elem.trim() !== "") this._orderClauses.push(elem);
         }
       }
     } else if (arg instanceof Nodes.Node) {
@@ -299,7 +300,7 @@ function orderBang(
       for (const [col, dir] of Object.entries(arg)) {
         disallowRawSqlBang([col], resolveOrderMatcher(this));
         if (!/^(asc|desc)$/i.test(String(dir))) {
-          throw new Error(`Direction "${dir}" is invalid. Valid directions are: asc, desc`);
+          throw argumentError(`Direction "${dir}" is invalid. Valid directions are: asc, desc`);
         }
         this._orderClauses.push([col, (dir as string).toLowerCase() as "asc" | "desc"]);
       }
@@ -327,9 +328,12 @@ function reorderBang(
         const interpolated = rest.length > 0 ? sanitizeSqlArray(rawSql, ...rest) : rawSql;
         if (interpolated.trim() !== "") this._rawOrderClauses.push(interpolated);
       } else {
+        if (!(arg as unknown[]).every((e) => typeof e === "string")) {
+          throw argumentError("Order arguments passed as an array must contain only strings");
+        }
         disallowRawSqlBang(arg as string[], resolveOrderMatcher(this));
         for (const elem of arg as string[]) {
-          if (typeof elem === "string" && elem.trim() !== "") this._orderClauses.push(elem);
+          if (elem.trim() !== "") this._orderClauses.push(elem);
         }
       }
     } else if (arg instanceof Nodes.Node) {
@@ -353,7 +357,7 @@ function reorderBang(
       for (const [col, dir] of Object.entries(arg as Record<string, string>)) {
         disallowRawSqlBang([col], resolveOrderMatcher(this));
         if (!/^(asc|desc)$/i.test(String(dir))) {
-          throw new Error(`Direction "${dir}" is invalid. Valid directions are: asc, desc`);
+          throw argumentError(`Direction "${dir}" is invalid. Valid directions are: asc, desc`);
         }
         this._orderClauses.push([col, (dir as string).toLowerCase() as "asc" | "desc"]);
       }

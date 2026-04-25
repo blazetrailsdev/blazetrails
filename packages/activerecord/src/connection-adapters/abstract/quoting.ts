@@ -288,7 +288,8 @@ export function columnNameMatcher(): RegExp {
  * (SQLite3 adapter variant — used by the default in-memory test adapter)
  */
 export function columnNameWithOrderMatcher(): RegExp {
-  // Same atom as column_name_matcher but with COLLATE, ASC/DESC, NULLS modifiers.
+  // Same atom as column_name_matcher but with COLLATE and ASC/DESC modifiers.
+  // Note: NULLS FIRST/LAST is a PostgreSQL extension not included in the SQLite3 variant.
   const col = String.raw`(?:\w+|"\w+")`;
   const prefix = String.raw`(?:\w+\.|"\w+"\.)`;
   const innerArg = String.raw`(?:${prefix}?${col}|\w+\((?:|${prefix}?${col})\))`;

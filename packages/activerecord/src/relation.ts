@@ -2201,10 +2201,14 @@ export class Relation<T extends Base> {
     const table = this._modelClass.arelTable;
     const projections = columns.map((c) => {
       if (typeof c !== "string") return c;
-      // Table-qualified ("table.col"), quoted ('"table"."col"'), or function expressions
-      // must pass through as raw SQL rather than being wrapped in a table attribute node.
+      // Table-qualified ("table.col"), quoted ('"table"."col"'), function expressions,
+      // or comma-separated lists must pass through as raw SQL.
       const isComplex =
-        c.includes(".") || c.includes("(") || c.includes('"') || /\s+AS\s+/i.test(c);
+        c.includes(".") ||
+        c.includes("(") ||
+        c.includes('"') ||
+        c.includes(",") ||
+        /\s+AS\s+/i.test(c);
       return isComplex ? new Nodes.SqlLiteral(c) : table.get(c);
     });
     // Extract column names for result mapping

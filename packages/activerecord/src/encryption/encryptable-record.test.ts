@@ -443,7 +443,7 @@ describe("ActiveRecord::Encryption::EncryptableRecordTest", () => {
     await Book.create({ name: "Dune" });
     const found = await Book.findBy({ name: "dune" });
     expect(found).not.toBeNull();
-    const overridingInstance = Object.assign(Object.create(OverridingBook.prototype), found);
+    const overridingInstance = found!.becomes(OverridingBook);
     expect(overridingInstance.name).toBe("Dune-overridden");
   });
   it.skip("binary data can be encrypted", () => {});

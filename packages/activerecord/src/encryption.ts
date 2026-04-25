@@ -250,32 +250,28 @@ function _preserveOriginalEncrypted(klass: any, name: string, options: EncryptsO
         : [];
       if (!isNew && !changed.includes(name)) return;
       const plaintext = record.readAttribute(name);
-      if (plaintext != null) {
-        record.writeAttribute(originalAttrName, plaintext);
-      }
+      record.writeAttribute(originalAttrName, plaintext);
     });
   }
 
-  // Override the reader on the prototype. Mirrors Rails:
-  //   return original_name if attribute is encrypted or support_unencrypted_data is false
-  //   return name (raw value) when not encrypted and support_unencrypted_data is true
+  // Override the accessor on the prototype. Mirrors Rails'
+  // override_accessors_to_preserve_original:
+  //   - getter returns original_name when present, falls back to name for
+  //     legacy rows that predate the original_name column
+  //   - setter writes both name (for downcased query) and original_name
+  //     (for case-preserving reads) immediately, so in-memory reads see
+  //     the new value before the record is saved
   Object.defineProperty(klass.prototype, name, {
     configurable: true,
-    enumerable: true,
     get(this: any) {
-      const rawValue = this.readAttribute(name);
-      if (Configurable.config.supportUnencryptedData) {
-        const type = klass._attributeDefinitions?.get(name)?.type;
-        const isEncrypted =
-          typeof type?.isEncrypted === "function"
-            ? type.isEncrypted(this._attributes?.get?.(name)?.valueBeforeTypeCast ?? rawValue)
-            : true;
-        if (!isEncrypted) return rawValue;
-      }
-      return this.readAttribute(originalAttrName);
+      const originalValue = this.readAttribute(originalAttrName);
+      if (originalValue != null) return originalValue;
+      // Fallback for legacy rows where original_name is absent.
+      return this.readAttribute(name);
     },
     set(this: any, value: unknown) {
       this.writeAttribute(name, value);
+      this.writeAttribute(originalAttrName, value);
     },
   });
 }

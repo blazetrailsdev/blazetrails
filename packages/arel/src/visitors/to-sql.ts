@@ -1064,11 +1064,17 @@ export class ToSql implements NodeVisitor<SQLString> {
 
   private visitTableAlias(node: Nodes.TableAlias): SQLString {
     this.visit(node.relation);
-    // Mirrors Rails: `quote_table_name` returns the name bare when it's a
-    // SqlLiteral (which is what `SelectManager#as` produces — see
-    // alias_predication.rb). Subquery aliases reach here with the
-    // relation wrapped in a Grouping; regular `Table#alias("foo")`
-    // doesn't, so we keep the standard quoted-identifier form for those.
+    // Rails: `SelectManager#as` wraps the alias name in a SqlLiteral,
+    // and `AbstractAdapter#quote_table_name` returns SqlLiterals
+    // unchanged — so subquery aliases render bare. We approximate the
+    // same outcome at the visitor layer by checking whether the
+    // relation is a Grouping (the shape `SelectManager#as` produces);
+    // plain `Table#alias("foo")` keeps `"foo"`. Caveat: callers that
+    // construct a TableAlias on a Table with a SqlLiteral name
+    // wouldn't get the bare form here — Rails would. The runtime
+    // signature of `TableAlias.name` is `string`, so that path isn't
+    // currently reachable, but it's a Rails-fidelity divergence to
+    // revisit if the type widens.
     if (node.relation instanceof Nodes.Grouping) {
       this.collector.append(` ${node.name}`);
     } else {

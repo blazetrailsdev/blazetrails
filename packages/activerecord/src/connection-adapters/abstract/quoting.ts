@@ -267,16 +267,16 @@ export function sanitizeAsSqlComment(value: unknown): string {
  * Mirrors: ActiveRecord::ConnectionAdapters::Quoting::ClassMethods#column_name_matcher
  */
 export function columnNameMatcher(): RegExp {
-  // Mirrors Rails' column_name_matcher — allows:
-  //   word, "word", table.col, "table"."col", func(word), func(func(word)),
-  //   with optional AS alias.
-  // Requires balanced double-quoted identifiers and restricts function
-  // arguments to identifiers/dotted-identifiers/nested functions (no operators).
-  const quotedWord = String.raw`(?:"\w+"|'\w+'|\w+)`;
-  const innerArg = String.raw`(?:(?:${quotedWord}\.)?${quotedWord}|\w+\((?:${quotedWord}\.)?${quotedWord}\))`;
-  const atom = String.raw`(?:(?:${quotedWord}\.)?${quotedWord}|\w+\((?:|${innerArg})\))`;
+  // Mirrors Rails' SQLite3 adapter column_name_matcher:
+  //   ((?:\w+\.|"\w+"\.)?(?:\w+|"\w+") | \w+\((?:|\g<2>)\))
+  // JS lacks recursive backreferences, so function-arg nesting is approximated
+  // at 2 levels (covers length(trim(col)) and similar real-world cases).
+  const col = String.raw`(?:\w+|"\w+")`;
+  const prefix = String.raw`(?:\w+\.|"\w+"\.)`;
+  const innerArg = String.raw`(?:${prefix}?${col}|\w+\((?:|${prefix}?${col})\))`;
+  const atom = String.raw`(?:${prefix}?${col}|\w+\((?:|${innerArg})\))`;
   return new RegExp(
-    `^(${atom}(?:(?:\\s+AS)?\\s+\\w+)?)(?:\\s*,\\s*${atom}(?:(?:\\s+AS)?\\s+\\w+)?)*$`,
+    `^(${atom}(?:(?:\\s+AS)?\\s+(?:\\w+|"\\w+"))?)(?:\\s*,\\s*${atom}(?:(?:\\s+AS)?\\s+(?:\\w+|"\\w+"))?)*$`,
     "i",
   );
 }
@@ -285,14 +285,16 @@ export function columnNameMatcher(): RegExp {
  * Regexp for column names with order.
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::Quoting::ClassMethods#column_name_with_order_matcher
+ * (SQLite3 adapter variant — used by the default in-memory test adapter)
  */
 export function columnNameWithOrderMatcher(): RegExp {
-  // Like column_name_matcher but with optional ASC/DESC/NULLS modifiers.
-  const quotedWord = String.raw`(?:"\w+"|'\w+'|\w+)`;
-  const innerArg = String.raw`(?:(?:${quotedWord}\.)?${quotedWord}|\w+\((?:${quotedWord}\.)?${quotedWord}\))`;
-  const atom = String.raw`(?:(?:${quotedWord}\.)?${quotedWord}|\w+\((?:|${innerArg})\))`;
+  // Same atom as column_name_matcher but with COLLATE, ASC/DESC, NULLS modifiers.
+  const col = String.raw`(?:\w+|"\w+")`;
+  const prefix = String.raw`(?:\w+\.|"\w+"\.)`;
+  const innerArg = String.raw`(?:${prefix}?${col}|\w+\((?:|${prefix}?${col})\))`;
+  const atom = String.raw`(?:${prefix}?${col}|\w+\((?:|${innerArg})\))`;
   return new RegExp(
-    `^(${atom}(?:\\s+ASC|\\s+DESC)?(?:\\s+NULLS\\s+(?:FIRST|LAST))?)(?:\\s*,\\s*${atom}(?:\\s+ASC|\\s+DESC)?(?:\\s+NULLS\\s+(?:FIRST|LAST))?)*$`,
+    `^(${atom}(?:\\s+COLLATE\\s+(?:\\w+|"\\w+"))?(?:\\s+ASC|\\s+DESC)?)(?:\\s*,\\s*${atom}(?:\\s+COLLATE\\s+(?:\\w+|"\\w+"))?(?:\\s+ASC|\\s+DESC)?)*$`,
     "i",
   );
 }

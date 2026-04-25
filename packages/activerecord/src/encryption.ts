@@ -255,11 +255,19 @@ export function applyPendingEncryptions(klass: any): void {
   // Register the frozen-encryption validator once per class, mirroring:
   // validate :cant_modify_encrypted_attributes_when_frozen,
   //   if: -> { has_encrypted_attributes? && context.frozen_encryption? }
-  if (!klass._frozenEncryptionValidatorInstalled && typeof klass.validate === "function") {
+  // Own-property guard mirrors the pattern used for _encryptedAttributes and
+  // _pendingEncryptions so inheritance doesn't re-use a parent's registration.
+  if (
+    !Object.prototype.hasOwnProperty.call(klass, "_frozenEncryptionValidatorInstalled") &&
+    typeof klass.validate === "function"
+  ) {
     klass._frozenEncryptionValidatorInstalled = true;
     klass.validate((record: any) => {
       if (!getEncryptionContext().frozenEncryption) return;
-      const encryptedAttrs: Set<string> = klass._encryptedAttributes ?? new Set();
+      // Use record.constructor so STI subclasses consult their own
+      // encrypted_attributes list — mirrors Rails' self.class.encrypted_attributes.
+      const encryptedAttrs: Set<string> =
+        (record.constructor as any)._encryptedAttributes ?? new Set();
       const changed: string[] = Array.isArray(record.changedAttributes)
         ? record.changedAttributes
         : [];

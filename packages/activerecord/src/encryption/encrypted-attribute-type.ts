@@ -244,10 +244,6 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
     return opts;
   }
 
-  private encryptionOptions(): Record<string, unknown> {
-    return this._encryptionOptionsFor(this.scheme);
-  }
-
   private decryptionOptions(): Record<string, unknown> {
     const opts: Record<string, unknown> = {};
     const kp = this.scheme.keyProvider;

@@ -484,9 +484,9 @@ describe("ActiveRecord::Encryption::EncryptableRecordTest", () => {
     // In Rails, encrypted attribute columns are always text in the schema.
     const adp = freshAdapter();
     const BookDate = makeFreshModel(adp, { id: "integer", name: "string" });
-    BookDate.attribute("name", "date"); // override cast type to date
+    new BookDate(); // create the TEXT column before changing the cast type
+    BookDate.attribute("name", "date"); // override cast type to date (DB stays text)
     BookDate.encrypts("name");
-    new BookDate();
     const book = await BookDate.create({ name: "2024-01-01" });
     assertEncryptedAttribute(book, "name", new Date("2024-01-01"));
   });

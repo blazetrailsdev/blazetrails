@@ -131,8 +131,7 @@ export function select<T extends typeof Base>(
   this: T,
   ...columns: (string | import("@blazetrails/arel").Nodes.Node)[]
 ): Relation<InstanceType<T>> {
-  const rel = this.all();
-  return rel.select(...(columns as Parameters<typeof rel.select>));
+  return this.all().select(...columns);
 }
 
 /** Mirrors: ActiveRecord::Querying#order */

@@ -798,25 +798,39 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#in_order_of
    */
-  inOrderOf(column: string, values: unknown[]): Relation<T> {
+  inOrderOf(column: string, values: unknown[], filter = true): Relation<T> {
+    if (values.length === 0) return this.none();
+
+    // Qualify the column with the model table, mirroring Rails' order_column.
+    const tableName = (this._modelClass as any).tableName as string;
+    const arelCol = new Table(tableName).get(column);
+
+    // Build CASE WHEN col = v1 THEN 1 ... END ASC (searched form, 1-indexed).
+    // Mirrors Rails' build_case_for_value_position: Arel::Nodes::Case.new (no operand)
+    // with column.eq(value) predicates. No ELSE when filter=true (the default).
+    const caseNode = new Nodes.Case();
+    values.forEach((v, i) => {
+      caseNode.when(arelCol.eq(new Nodes.Quoted(v)), new Nodes.Quoted(i + 1));
+    });
+    if (!filter) {
+      caseNode.else(new Nodes.Quoted(values.length + 1));
+    }
+    const orderNode = new Nodes.Ascending(caseNode);
+
     const rel = this._clone();
-    // Generate a CASE WHEN ... expression for ordering
-    const cases = values
-      .map((v, i) => {
-        const quoted =
-          v === null
-            ? "NULL"
-            : typeof v === "number"
-              ? String(v)
-              : `'${String(v).replace(/'/g, "''")}'`;
-        return `WHEN "${column}" = ${quoted} THEN ${i}`;
-      })
-      .join(" ");
-    const caseExpr = `CASE ${cases} ELSE ${values.length} END`;
-    // Use raw SQL order — push as a string that the order manager treats as raw
     rel._orderClauses = [];
-    rel._rawOrderClauses = rel._rawOrderClauses ?? [];
-    rel._rawOrderClauses.push(caseExpr);
+    rel._rawOrderClauses = [];
+    rel._rawOrderClauses.push(new Visitors.ToSql().compile(orderNode));
+
+    // Add WHERE col IN (values) to restrict to the named set (filter=true default).
+    if (filter) {
+      const hasNull = values.includes(null) || values.includes(undefined);
+      const nonNull = values.filter((v) => v !== null && v !== undefined);
+      let whereNode: Nodes.Node = arelCol.in(nonNull);
+      if (hasNull) whereNode = new Nodes.Grouping(new Nodes.Or(whereNode, arelCol.eq(null)));
+      rel._whereClause.predicates.push(whereNode);
+    }
+
     return rel;
   }
 

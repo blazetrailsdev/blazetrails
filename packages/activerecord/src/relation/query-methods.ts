@@ -174,17 +174,30 @@ function _selectBang(this: QueryMethodsHost, ...columns: any[]): any {
     return String(c);
   });
   if (this._selectColumns === null) this._selectColumns = [];
-  const keyOf = (c: unknown) => {
-    if (typeof c === "string") return c;
-    if (c instanceof Nodes.Node) return c.toSql();
-    return (c as { value: string }).value;
-  };
-  const seen = new Set(this._selectColumns.map(keyOf));
+  const seenStrings = new Set<string>();
+  const seenNodes = new WeakSet<object>();
+  for (const existing of this._selectColumns) {
+    if (typeof existing === "string") seenStrings.add(existing);
+    else if (existing instanceof Nodes.Node) seenNodes.add(existing);
+    else seenStrings.add((existing as { value: string }).value);
+  }
   for (const col of normalized) {
-    const key = keyOf(col);
-    if (!seen.has(key)) {
-      this._selectColumns.push(col);
-      seen.add(key);
+    if (typeof col === "string") {
+      if (!seenStrings.has(col)) {
+        this._selectColumns.push(col);
+        seenStrings.add(col);
+      }
+    } else if (col instanceof Nodes.Node) {
+      if (!seenNodes.has(col)) {
+        this._selectColumns.push(col);
+        seenNodes.add(col);
+      }
+    } else {
+      const key = (col as { value: string }).value;
+      if (!seenStrings.has(key)) {
+        this._selectColumns.push(col);
+        seenStrings.add(key);
+      }
     }
   }
   return this;

@@ -118,6 +118,18 @@ describe("RelationTest", () => {
     expect(sql).toContain("body");
   });
 
+  it("select with arel node emits SQL alias", () => {
+    class Book extends Base {
+      static {
+        this.attribute("title", "string");
+        this.adapter = adapter;
+      }
+    }
+    const sql = Book.select(Book.arelTable.get("title").as("t")).toSql();
+    expect(sql).toContain('"title" AS t');
+    expect(sql).not.toContain("[object Object]");
+  });
+
   it("find_by with hash conditions returns the first matching record", async () => {
     class Post extends Base {
       static {

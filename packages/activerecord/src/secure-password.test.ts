@@ -223,7 +223,8 @@ describe("password reset token", () => {
   it("token is invalidated when password changes", async () => {
     // Rails embeds BCrypt::Password#version so the token becomes stale when
     // the digest changes (secure_password.rb generator block). Our impl
-    // embeds the first 8 chars of password_digest as the version.
+    // embeds a SHA-256 hash of the digest (first 16 hex chars) as the version
+    // — it changes whenever the digest changes without leaking digest bytes.
     class User extends Base {
       static {
         this._tableName = "users";

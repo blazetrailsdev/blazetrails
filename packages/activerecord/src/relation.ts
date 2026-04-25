@@ -567,11 +567,7 @@ export class Relation<T extends Base> {
     if (args.length === 1 && typeof args[0] === "function") {
       return this.toArray().then((records) => records.filter(args[0]));
     }
-    const columns = args.map((a: any) => {
-      if (a instanceof Nodes.Node) return a;
-      if (a instanceof Nodes.SqlLiteral) return a;
-      return String(a);
-    });
+    const columns = args.map((a: any) => (a instanceof Nodes.Node ? a : String(a)));
     return this._clone()._selectBang(...columns);
   }
 

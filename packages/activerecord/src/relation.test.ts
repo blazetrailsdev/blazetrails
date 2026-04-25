@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { Base, Relation, IrreversibleOrderError } from "./index.js";
+import { Associations, registerModel } from "./associations.js";
 
 import { createTestAdapter } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
@@ -363,6 +364,31 @@ describe("RelationTest", () => {
     }
     const sql = Post.all().annotate("counting").toSql();
     expect(sql).toContain("counting");
+  });
+
+  it("association join quotes the table name", () => {
+    const adp = freshAdapter();
+    class Comment extends Base {
+      static _tableName = "comments";
+      static {
+        this.attribute("post_id", "integer");
+        this.adapter = adp;
+      }
+    }
+    class Post extends Base {
+      static _tableName = "posts";
+      static {
+        this.attribute("title", "string");
+        this.adapter = adp;
+        Associations.hasMany.call(this, "comments", {
+          className: "Comment",
+          foreignKey: "post_id",
+        });
+      }
+    }
+    registerModel("Comment", Comment);
+    const sql = Post.joins("comments").toSql();
+    expect(sql).toContain('INNER JOIN "comments"');
   });
 
   it("joins with string array", () => {

@@ -211,6 +211,11 @@ export function _setOnAdapterSetHook(hook: ((modelClass: any) => void) | null): 
   _onAdapterSet = hook;
 }
 
+// Mirrors Rails' AbstractAdapter#arel_visitor — routes Node#toSql() through the
+// dialect-specific visitor (e.g. SQLite booleans as 1/0, no FOR UPDATE, etc.).
+// This is process-global: the last-assigned adapter's visitor wins, matching
+// Rails' single-connection-per-process assumption. Multi-adapter processes must
+// manage visitor selection themselves.
 function _wireArelVisitor(adapter: DatabaseAdapter): void {
   const visitor = (adapter as { arelVisitor?: object }).arelVisitor;
   if (visitor) {

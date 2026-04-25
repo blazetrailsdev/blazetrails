@@ -238,13 +238,11 @@ async function main(): Promise<void> {
       //     paramSql has ? placeholders.
       // This structural asymmetry means cross-side bind comparison would always fail for
       // datetime fixtures regardless of semantic correctness. Both fields remain in the
-      // output for introspection and future use if the Rails runner is updated.
+      // output JSON for introspection and future use if the Rails runner is updated.
       //
-      // Match excludes both paramSql and binds: Rails SQLite always has empty binds
-      // (datetime values inlined) while trails extracts them, so including binds in
-      // match would always fail for datetime fixtures regardless of sql correctness.
-      // The patch uses a less-stripped view (keeps binds, drops only paramSql) so
-      // datetime bind differences remain visible in failure output.
+      // Match excludes both paramSql and binds (informational-only fields).
+      // Patch also excludes paramSql (per-side asymmetric, noisy in diffs) but
+      // keeps binds so datetime bind values remain visible in failure output.
       const forMatch = (doc: Record<string, unknown>) =>
         stableJson({ ...doc, paramSql: undefined, binds: undefined });
       const forPatch = (doc: Record<string, unknown>) =>

@@ -140,27 +140,44 @@ Dir.mktmpdir("parity-ar-ruby-") do |tmpdir|
         arel_obj = result.arel
         conn = ActiveRecord::Base.connection
         visitor = conn.visitor
-        collector = Arel::Collectors::Bind.new
+
+        # Composite gives us the full placeholder SQL string (SQLString) and
+        # the raw bind list (Bind) in one pass. Using Bind alone doesn't
+        # accumulate SQL fragments, so parts.join would not produce usable SQL.
+        sql_collector  = Arel::Collectors::SQLString.new
+        bind_collector = Arel::Collectors::Bind.new
+        collector = Arel::Collectors::Composite.new(sql_collector, bind_collector)
         visitor.accept(arel_obj.ast, collector)
 
-        parts = collector.value.map do |part|
-          if part.is_a?(Arel::Nodes::BindParam)
-            val = part.value.respond_to?(:value_for_database) ? part.value.value_for_database : part.value
-            if val.respond_to?(:utc)
-              binds << val.utc.iso8601(3)
-              "?"
+        placeholder_sql = sql_collector.value.to_s.strip
+        bind_values     = bind_collector.value
+        bind_index      = 0
+
+        rebuilt_sql = placeholder_sql.gsub("?") do
+          bind = bind_values[bind_index]
+          bind_index += 1
+
+          val =
+            if bind.respond_to?(:value_for_database)
+              bind.value_for_database
+            elsif bind.respond_to?(:value)
+              bind.value.respond_to?(:value_for_database) ? bind.value.value_for_database : bind.value
             else
-              conn.quote(val)
+              bind
             end
+
+          if val.respond_to?(:utc)
+            binds << val.utc.iso8601(3)
+            "?"
           else
-            part
+            conn.quote(val)
           end
         end
 
-        param_sql = binds.any? ? parts.join.strip : sql_str
+        param_sql = binds.any? ? rebuilt_sql : sql_str
       rescue NoMethodError
-        # Arel::Collectors::Bind doesn't implement all collector methods in
-        # every Rails version (e.g. preparable= in Rails 8.0). Fall back to
+        # Arel collectors don't implement all collector methods in every
+        # Rails version (e.g. preparable= in Rails 8.0). Fall back to
         # bound_attributes below.
         binds = []
         param_sql = sql_str

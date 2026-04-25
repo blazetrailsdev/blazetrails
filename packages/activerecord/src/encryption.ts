@@ -206,11 +206,56 @@ export function encrypts(klass: any, ...args: Array<string | EncryptsOptions>): 
     if (Configurable.config.validateColumnSize) {
       EncryptableRecord.validateColumnSize(klass, name);
     }
+    if (options.ignoreCase) {
+      _preserveOriginalEncrypted(klass, name, options);
+    }
   }
 
   if (klass._attributeDefinitions?.size > 0) {
     applyPendingEncryptions(klass);
   }
+}
+
+/**
+ * Mirrors Rails' EncryptableRecord::ClassMethods#preserve_original_encrypted.
+ * When ignore_case: true, stores the original-cased value in an additional
+ * `original_<name>` encrypted attribute, and overrides the reader so reads
+ * return the original-cased value rather than the downcased one.
+ */
+function _preserveOriginalEncrypted(klass: any, name: string, options: EncryptsOptions): void {
+  const originalAttrName = `original_${name}`;
+
+  // Register the original-case column as encrypted (without ignoreCase/downcase).
+  const { ignoreCase: _ic, downcase: _dc, ...originalOptions } = options;
+  encrypts(klass, originalAttrName, originalOptions);
+
+  // Before each save, copy the in-memory value of `name` (original case, since
+  // attribute values are stored as plaintext in memory before serialization)
+  // into `original_name`. Using `readAttribute` bypasses the prototype getter so
+  // we read directly from the attribute store, not from `original_name`.
+  // Mirrors Rails' name= setter which calls `self.original_name = value`.
+  if (typeof klass.beforeSave === "function") {
+    klass.beforeSave((record: any) => {
+      const plaintext = record.readAttribute(name);
+      if (plaintext != null) {
+        record.writeAttribute(originalAttrName, plaintext);
+      }
+    });
+  }
+
+  // Override the reader on the prototype so `record.name` returns the
+  // original-cased value from `original_name`.
+  // Mirrors Rails' `define_method(name) { send(original_attribute_name) }`.
+  Object.defineProperty(klass.prototype, name, {
+    configurable: true,
+    enumerable: true,
+    get(this: any) {
+      return this.readAttribute(originalAttrName);
+    },
+    set(this: any, value: unknown) {
+      this.writeAttribute(name, value);
+    },
+  });
 }
 
 /**

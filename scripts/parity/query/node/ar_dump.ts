@@ -224,7 +224,9 @@ async function main(): Promise<void> {
         const dateBind: Date[] = [];
         const processedParamSql = ps.replace(/\?/g, () => {
           if (placeholderIdx >= resolvedBinds.length) {
-            throw new Error("compileWithBinds() returned more placeholders than bind values");
+            throw new Error(
+              `[${fixtureName}] compileWithBinds() returned more placeholders than bind values`,
+            );
           }
           const v = resolvedBinds[placeholderIdx++];
           if (v instanceof Date) {
@@ -234,7 +236,9 @@ async function main(): Promise<void> {
           return quoteBindValue(v);
         });
         if (placeholderIdx !== resolvedBinds.length) {
-          throw new Error("compileWithBinds() returned more bind values than placeholders");
+          throw new Error(
+            `[${fixtureName}] compileWithBinds() returned more bind values than placeholders`,
+          );
         }
         paramSql = processedParamSql.trim();
         binds = dateBind.map((b) => b.toISOString());

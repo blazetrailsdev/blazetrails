@@ -149,32 +149,38 @@ Dir.mktmpdir("parity-ar-ruby-") do |tmpdir|
         collector = Arel::Collectors::Composite.new(sql_collector, bind_collector)
         visitor.accept(arel_obj.ast, collector)
 
-        placeholder_sql = sql_collector.value.to_s.strip
-        bind_values     = bind_collector.value
-        bind_index      = 0
+        placeholder_sql   = sql_collector.value.to_s.strip
+        bind_values       = bind_collector.value
+        placeholder_count = placeholder_sql.count("?")
 
-        rebuilt_sql = placeholder_sql.gsub("?") do
-          bind = bind_values[bind_index]
-          bind_index += 1
+        if placeholder_count == bind_values.length
+          bind_index = 0
 
-          val =
-            if bind.respond_to?(:value_for_database)
-              bind.value_for_database
-            elsif bind.respond_to?(:value)
-              bind.value.respond_to?(:value_for_database) ? bind.value.value_for_database : bind.value
+          rebuilt_sql = placeholder_sql.gsub("?") do
+            bind = bind_values[bind_index]
+            bind_index += 1
+
+            val =
+              if bind.respond_to?(:value_for_database)
+                bind.value_for_database
+              elsif bind.respond_to?(:value)
+                bind.value.respond_to?(:value_for_database) ? bind.value.value_for_database : bind.value
+              else
+                bind
+              end
+
+            if val.respond_to?(:utc)
+              binds << val.utc.iso8601(3)
+              "?"
             else
-              bind
+              conn.quote(val)
             end
-
-          if val.respond_to?(:utc)
-            binds << val.utc.iso8601(3)
-            "?"
-          else
-            conn.quote(val)
           end
-        end
 
-        param_sql = binds.any? ? rebuilt_sql : sql_str
+          param_sql = binds.any? ? rebuilt_sql : sql_str
+        end
+        # If counts diverge (literal ? in SQL, or collector mismatch) leave
+        # binds = [] and param_sql = sql_str — the defaults set above.
       rescue NoMethodError
         # Arel collectors don't implement all collector methods in every
         # Rails version (e.g. preparable= in Rails 8.0). Fall back to
@@ -182,18 +188,6 @@ Dir.mktmpdir("parity-ar-ruby-") do |tmpdir|
         binds = []
         param_sql = sql_str
       end
-    end
-
-    # Fallback via bound_attributes when the Arel collector produced no datetime binds.
-    # Only apply when the fallback binds sync with param_sql's placeholder count so
-    # paramSql and binds never diverge (param_sql defaults to sql_str which has no ?).
-    if binds.empty? && result.respond_to?(:bound_attributes)
-      fallback_binds = result.bound_attributes.filter_map do |ba|
-        val = ba.value_for_database
-        val.utc.iso8601(3) if val.respond_to?(:utc)
-      end
-      placeholder_count = param_sql.count("?")
-      binds = fallback_binds if fallback_binds.any? && placeholder_count == fallback_binds.length
     end
 
     # 6. Write CanonicalQuery JSON

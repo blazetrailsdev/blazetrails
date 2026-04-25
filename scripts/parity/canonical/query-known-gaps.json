@@ -5,11 +5,11 @@
   },
   "ar-52": {
     "side": "diff",
-    "reason": "Datetime precision in WHERE BETWEEN: trails emits '2026-04-18 17:53:16.175000' (microseconds) when the frozen clock has non-zero ms; Rails truncates to '2026-04-18 17:53:16'. Root cause: Rails uses bind params for Date values so the DB driver handles precision natively; trails inlines dates as SQL literals. Truncating to seconds fixes parity but breaks DB timestamp precision (cache-key, touch tests). Will be fully resolved once INSERT/UPDATE uses bind params."
+    "reason": "Datetime precision in WHERE BETWEEN: trails inlines dates as SQL literals via toSql(), emitting '2026-04-18 17:53:16.175000' (microseconds) when frozen-at has non-zero ms; Rails' quoted_date truncates to seconds. INSERT/UPDATE already uses bind params (PR #845), but the parity runner calls toSql() which still inlines. Will close once the parity runner or WHERE predicates also use bind params (matching Rails' BindParam-first architecture)."
   },
   "ar-65": {
     "side": "diff",
-    "reason": "Datetime precision in WHERE = (single value): same root cause as ar-52 — microseconds in inline literal vs Rails' seconds-only format. Manifests when frozen-at has non-zero milliseconds."
+    "reason": "Datetime precision in WHERE = (single value): same root cause as ar-52 — toSql() inline literal includes microseconds when frozen-at ms > 0, while Rails emits bare seconds via quoted_date."
   },
   "ar-16": {
     "side": "diff",

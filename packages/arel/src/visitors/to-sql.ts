@@ -960,6 +960,12 @@ export class ToSql implements NodeVisitor<SQLString> {
 
   // -- BindParam --
 
+  // Overridable hook for date bind insertion so PostgreSQLWithBinds can
+  // emit $N placeholders instead of ?.
+  protected addDateBind(value: unknown): void {
+    this.collector.addBind(value);
+  }
+
   protected visitBindParam(node: Nodes.BindParam): SQLString {
     if (this._extractBinds) {
       this.collector.addBind(node.value !== undefined ? node.value : node);
@@ -1306,7 +1312,7 @@ export class ToSql implements NodeVisitor<SQLString> {
         node.value instanceof Date
           ? node.value
           : this.quotedDate(node.value as { toISOString(): string }).slice(1, -1);
-      this.collector.addBind(bind);
+      this.addDateBind(bind);
     } else {
       this.collector.append(this.quote(node.value));
     }
@@ -1376,7 +1382,7 @@ export class ToSql implements NodeVisitor<SQLString> {
       if (this._extractBinds) {
         const bind =
           v instanceof Date ? v : this.quotedDate(v as { toISOString(): string }).slice(1, -1);
-        this.collector.addBind(bind);
+        this.addDateBind(bind);
       } else {
         this.collector.append(this.quotedDate(v as { toISOString(): string }));
       }

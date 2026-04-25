@@ -135,7 +135,7 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
   }
 
   override type(): string {
-    return (this.castType as any).name ?? "string";
+    return this.castType.type();
   }
 
   get previousTypes(): EncryptedAttributeType[] {

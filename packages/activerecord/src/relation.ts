@@ -443,12 +443,15 @@ export class Relation<T extends Base> {
       const foreignKey = assocDef.options.as
         ? (assocDef.options.foreignKey ?? `${_toUnderscore(assocDef.options.as)}_id`)
         : (assocDef.options.foreignKey ?? `${_toUnderscore(modelClass.name)}_id`);
-      const onParts = [`"${targetTable}"."${foreignKey}" = "${sourceTable}"."${sourcePk}"`];
+      const tgt = new Table(targetTable);
+      const src = new Table(sourceTable);
+      const onPredicates: Nodes.Node[] = [tgt.get(foreignKey).eq(src.get(sourcePk))];
       if (assocDef.options.as) {
         const typeCol = `${_toUnderscore(assocDef.options.as)}_type`;
-        onParts.push(`"${targetTable}"."${typeCol}" = '${modelClass.name}'`);
+        onPredicates.push(tgt.get(typeCol).eq(modelClass.name));
       }
-      const on = onParts.join(" AND ");
+      const onNode = onPredicates.length === 1 ? onPredicates[0] : new Nodes.And(onPredicates);
+      const on = new Visitors.ToSql().compile(onNode);
       return { joins: [{ table: targetTable, on }], table: targetTable, pks: ["id"] };
     }
     return null;

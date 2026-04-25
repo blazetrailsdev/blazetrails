@@ -100,18 +100,18 @@ export class TableMetadata {
   }
 
   get predicateBuilder(): PredicateBuilder {
+    let pb: PredicateBuilder | null = null;
     if (this._klass) {
       const klass = this._klass as any;
-      const pb =
+      pb =
         klass._predicateBuilder ??
-        (typeof klass.predicateBuilder === "function"
-          ? klass.predicateBuilder()
-          : klass.predicateBuilder);
-      if (pb && typeof pb.with === "function") {
-        return pb.with(this);
-      }
+        (typeof klass.predicateBuilder === "function" ? klass.predicateBuilder() : null) ??
+        null;
     }
-    return new PredicateBuilder(this._arelTable);
+    if (!pb) {
+      pb = new PredicateBuilder(this._arelTable);
+    }
+    return pb.with(this);
   }
 
   get arelTable(): Table | any {

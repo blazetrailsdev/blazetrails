@@ -3,6 +3,8 @@ import { Table, Visitors, Nodes } from "@blazetrails/arel";
 import { PredicateBuilder } from "./predicate-builder.js";
 import { Substitute } from "../statement-cache.js";
 import { Range } from "../connection-adapters/postgresql/oid/range.js";
+import { TableMetadata } from "../table-metadata.js";
+import { Base, registerModel } from "../index.js";
 
 describe("PredicateBuilderTest", () => {
   it.skip("registering new handlers", () => {});
@@ -148,6 +150,32 @@ describe("PredicateBuilderTest", () => {
       const sql = visitor.compile(node);
       expect(sql).toContain('"users"."name"');
       expect(sql).toContain("alice");
+    });
+  });
+
+  describe("nested table-keyed hash expansion", () => {
+    class Author extends Base {
+      static {
+        this.tableName = "authors";
+        registerModel(this);
+      }
+    }
+    class Post extends Base {
+      static {
+        this.tableName = "posts";
+        this.belongsTo("author");
+        registerModel(this);
+      }
+    }
+
+    it("expands where({authors: {name: 'Rails'}}) to \"authors\".\"name\" = 'Rails'", () => {
+      const meta = new TableMetadata(Post as any, new Table("posts"));
+      const builder = meta.predicateBuilder;
+      const nodes = builder.buildFromHash({ authors: { name: "Rails" } });
+      const sql = nodes.map((n) => new Visitors.ToSql().compile(n)).join(" AND ");
+      expect(sql).toContain('"authors"."name"');
+      expect(sql).toContain("Rails");
+      expect(sql).not.toContain('"posts"."authors"');
     });
   });
 });

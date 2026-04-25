@@ -5,11 +5,11 @@
   },
   "ar-09": {
     "side": "diff",
-    "reason": "Boolean literal serialization: trails emits TRUE/FALSE in WHERE; Rails on SQLite emits 1/0. The #833 fix (setToSqlVisitor via adapter.arelVisitor) works in unit tests but not in the parity runner (tsx loads package modules in a separate module instance, so the global visitor set in ar_dump.ts does not affect the fixture's arel visitor)."
+    "reason": "Boolean literal serialization: trails emits TRUE/FALSE in WHERE; Rails on SQLite emits 1/0. Semantically equivalent but lexically differ."
   },
   "ar-11": {
     "side": "diff",
-    "reason": "Boolean literal serialization in WHERE with array + nil: trails emits 'tall = FALSE OR tall IS NULL'; Rails emits 'tall = 0 OR tall IS NULL'. Same root cause as ar-09 (parity runner module isolation)."
+    "reason": "Boolean literal serialization in WHERE with array + nil: trails emits 'tall = FALSE OR tall IS NULL'; Rails emits 'tall = 0 OR tall IS NULL'. Same root cause as ar-09."
   },
   "ar-16": {
     "side": "diff",
@@ -17,7 +17,7 @@
   },
   "ar-19": {
     "side": "diff",
-    "reason": "Boolean literal in WHERE: trails emits 'active = TRUE', Rails on SQLite emits 'active = 1'. Same root cause as ar-09 (parity runner module isolation)."
+    "reason": "Boolean literal in WHERE: trails emits 'active = TRUE', Rails on SQLite emits 'active = 1'. Same root cause as ar-09."
   },
   "ar-23": {
     "side": "diff",
@@ -41,7 +41,7 @@
   },
   "ar-38": {
     "side": "diff",
-    "reason": "Boolean literal in subquery WHERE: trails emits 'approved = TRUE', Rails on SQLite emits 'approved = 1'. Same root cause as ar-09 (parity runner module isolation)."
+    "reason": "Boolean literal in subquery WHERE: trails emits 'approved = TRUE', Rails on SQLite emits 'approved = 1'. Same boolean literal serialization gap as ar-09, but occurring inside a subquery WHERE clause."
   },
   "ar-52": {
     "side": "diff",

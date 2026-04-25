@@ -2900,27 +2900,27 @@ export class Relation<T extends Base> {
           if (match) {
             const rawCol = match[1];
             const dir = match[2].toUpperCase();
-            // Dotted string (e.g. "comments.body") with an unknown column: keep
-            // as raw SQL to avoid silently dropping the qualifier.
-            if (rawCol.includes(".") && !this._modelClass._attributeDefinitions.has(rawCol)) {
-              manager.order(new Nodes.SqlLiteral(`${clause}`));
+            // Dotted identifiers (e.g. "comments.body ASC") pass through as raw
+            // SQL — Rails treats all string-form orders as Arel::Nodes::SqlLiteral
+            // and never strips or re-qualifies a cross-table prefix.
+            if (rawCol.includes(".")) {
+              manager.order(new Nodes.SqlLiteral(clause));
             } else {
-              const col = rawCol.includes(".") ? rawCol.split(".").pop()! : rawCol;
-              const node = this._modelClass._attributeDefinitions.has(col)
-                ? table.get(col)
-                : new Nodes.SqlLiteral(quoteColumnName(col));
+              const node = this._modelClass._attributeDefinitions.has(rawCol)
+                ? table.get(rawCol)
+                : new Nodes.SqlLiteral(quoteColumnName(rawCol));
               manager.order(
                 dir === "DESC" ? new Nodes.Descending(node) : new Nodes.Ascending(node),
               );
             }
           } else {
-            if (clause.includes(".") && !this._modelClass._attributeDefinitions.has(clause)) {
+            // Dotted bare clause (no direction) → raw SQL passthrough.
+            if (clause.includes(".")) {
               manager.order(new Nodes.SqlLiteral(clause));
             } else {
-              const col = clause.includes(".") ? clause.split(".").pop()! : clause;
-              const node = this._modelClass._attributeDefinitions.has(col)
-                ? table.get(col)
-                : new Nodes.SqlLiteral(quoteColumnName(col));
+              const node = this._modelClass._attributeDefinitions.has(clause)
+                ? table.get(clause)
+                : new Nodes.SqlLiteral(quoteColumnName(clause));
               manager.order(new Nodes.Ascending(node));
             }
           }

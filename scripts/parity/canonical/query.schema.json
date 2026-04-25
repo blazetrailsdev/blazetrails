@@ -30,7 +30,7 @@
     },
     "binds": {
       "type": "array",
-      "description": "Ordered bind parameter values, all stringified. Empty array when the expression has no bind parameters.",
+      "description": "Datetime-valued bind params only, as ISO 8601 UTC strings. Non-datetime scalars are re-inlined into paramSql; other scalar types (strings, numbers) use BindParam nodes on the trails side but are inlined by Rails, so they are excluded to avoid structural asymmetry. Empty when no datetime binds. Informational only — not compared cross-side.",
       "items": { "type": "string" }
     }
   }

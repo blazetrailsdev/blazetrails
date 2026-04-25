@@ -231,29 +231,22 @@ async function main(): Promise<void> {
         continue;
       }
 
-      // Compare sql, frozenAt, and version.
-      // paramSql and binds are intentionally NOT compared cross-side:
-      //   - Rails SQLite inlines all values in to_sql() → bound_attributes is empty
+      // paramSql and binds are informational-only — excluded from cross-side comparison:
+      //   - Rails SQLite inlines datetime values in to_sql() → bound_attributes is empty
       //     → binds = [], paramSql = sql.
       //   - trails extracts datetime values via compileWithBinds → binds is non-empty,
       //     paramSql has ? placeholders.
-      // This structural asymmetry makes cross-side comparison always fail for datetime
-      // fixtures regardless of correctness. Both fields remain in the output for
-      // introspection and future use if the Rails runner is updated to extract binds.
-      const sqlMatch = (railsRaw as { sql: string }).sql === (trailsRaw as { sql: string }).sql;
-      // frozenAt and version must agree — a frozen-time mismatch changes
-      // generated SQL and would produce a false-positive PASS.
-      const metaMatch =
-        (railsRaw as { version: number }).version === (trailsRaw as { version: number }).version &&
-        (railsRaw as { frozenAt: string }).frozenAt ===
-          (trailsRaw as { frozenAt: string }).frozenAt;
-      const match = sqlMatch && metaMatch;
-
-      // For diff output exclude paramSql and binds (not compared) to keep the patch readable.
+      // This structural asymmetry means cross-side bind comparison would always fail for
+      // datetime fixtures regardless of semantic correctness. Both fields remain in the
+      // output for introspection and future use if the Rails runner is updated.
+      //
+      // `match` is derived from `toComparable` equality so all schema fields (sql,
+      // frozenAt, version, fixture) are covered — nothing is silently ignored.
       const toComparable = (doc: Record<string, unknown>) =>
         stableJson({ ...doc, paramSql: undefined, binds: undefined });
       const railsNorm = toComparable(railsRaw as Record<string, unknown>);
       const trailsNorm = toComparable(trailsRaw as Record<string, unknown>);
+      const match = railsNorm === trailsNorm;
 
       if (match) {
         if (gap) {

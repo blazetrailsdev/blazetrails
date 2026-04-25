@@ -3787,7 +3787,9 @@ describe("EagerAssociationTest", () => {
     expect(directDevContracts).toHaveLength(1);
     expect(mentorDevContracts![0].id).toBe(contract.id);
     expect(directDevContracts![0].id).toBe(contract.id);
-    // Same contract record — both paths should surface the same data
+    // Rails: projects.last.mentor.developers.first.contracts ==
+    //        projects.last.developers.last.contracts  (same objects)
+    expect(mentorDevContracts![0]).toBe(directDevContracts![0]);
     expect(mentorDevContracts![0].elmar_developer_id).toBe(
       directDevContracts![0].elmar_developer_id,
     );
@@ -4577,6 +4579,8 @@ describe("EagerAssociationTest", () => {
     // author.dpPosts should be preloaded
     const preloadedAuthor = p._preloadedAssociations.get("dpAuthor");
     expect(preloadedAuthor).toBeDefined();
+    expect(preloadedAuthor).not.toBeNull();
+    expect((preloadedAuthor as any).name).toBe("Alice");
     expect((preloadedAuthor as any)._preloadedAssociations.has("dpPosts")).toBe(true);
     // comment.dpPost should be preloaded
     const preloadedComments = p._preloadedAssociations.get("dpComments");
@@ -4634,6 +4638,8 @@ describe("EagerAssociationTest", () => {
     const m = members[0] as any;
     const membership = m._preloadedAssociations.get("pstaCurrentMembership");
     expect(membership).toBeDefined();
+    expect(membership).not.toBeNull();
+    expect((membership as any).psta_club_id).toBe(club.id);
   });
 });
 

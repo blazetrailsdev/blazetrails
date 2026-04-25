@@ -1388,15 +1388,18 @@ export class ToSql implements NodeVisitor<SQLString> {
   // AbstractAdapter#quoted_date: 'YYYY-MM-DD HH:MM:SS[.microseconds]'.
   // When ms > 0 the fractional part is emitted as 6-digit microseconds,
   // matching AR quoting.ts and preserving sub-second DB precision. When ms = 0
-  // the bare seconds form is used — matching Rails' default output for midnight/
-  // whole-second values and closing ar-52/ar-65.
+  // the bare seconds form is used — matching Rails' default output for
+  // whole-second values.
   //
-  // Always UTC: JS Date#toISOString() is UTC-only and the Arel layer has no
-  // access to AR's defaultTimezone. Adapter-level quoting in
+  // UTC handling: JS Date#toISOString() always appends Z; the regex also
+  // accepts strings without a trailing Z (treating absent timezone as UTC),
+  // which covers non-standard date-like objects. The Arel layer has no access
+  // to AR's defaultTimezone — adapter-level quoting in
   // packages/activerecord/src/connection-adapters/abstract/quoting.ts is the
   // authoritative path for timezone-aware bound values.
   protected quotedDate(d: { toISOString(): string }): string {
-    // Parse "YYYY-MM-DDTHH:MM:SS.mmmZ" or "YYYY-MM-DDTHH:MM:SSZ" (no fractional part).
+    // Matches "YYYY-MM-DDTHH:MM:SS.mmmZ", "YYYY-MM-DDTHH:MM:SSZ", or
+    // the same without trailing Z (treated as UTC).
     const match = d.toISOString().match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(?:\.(\d+))?Z?$/);
     if (!match) return `'${d.toISOString().replace(/'/g, "''")}'`;
     const [, date, time, frac] = match;

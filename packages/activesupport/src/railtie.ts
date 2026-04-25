@@ -30,12 +30,19 @@ export class Railtie {
     const host = this as any;
     if (!Object.prototype.hasOwnProperty.call(host, "_config")) {
       const parent = Object.getPrototypeOf(host)._config ?? {};
-      // Deep-clone so nested objects/arrays are isolated per subclass
-      // (structuredClone is available in Node 17+ and modern browsers).
-      host._config =
-        typeof structuredClone === "function"
-          ? structuredClone(parent)
-          : JSON.parse(JSON.stringify(parent));
+      // Best-effort deep-clone so nested objects/arrays are isolated per
+      // subclass. Falls through to a shallow copy when the config contains
+      // values that aren't clone-safe (functions, class instances, cycles,
+      // BigInt) — config is expected to hold plain scalar/object settings
+      // in normal Rails-style usage.
+      try {
+        host._config =
+          typeof structuredClone === "function"
+            ? structuredClone(parent)
+            : JSON.parse(JSON.stringify(parent));
+      } catch {
+        host._config = { ...parent };
+      }
     }
     return host._config as Record<string, unknown>;
   }

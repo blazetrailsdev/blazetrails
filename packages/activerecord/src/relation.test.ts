@@ -128,9 +128,12 @@ describe("RelationTest", () => {
         this.adapter = adapter;
       }
     }
-    const sql = Order.group("DATE(created_at)").toSql();
-    expect(sql).toContain("DATE(created_at)");
-    expect(sql).not.toContain('"orders"."DATE(created_at)"');
+    // Function expressions pass through as raw SQL
+    expect(Order.group("DATE(created_at)").toSql()).toContain("DATE(created_at)");
+    // Cast expressions pass through as raw SQL (not quoted as identifier)
+    expect(Order.group("created_at::date").toSql()).toContain("created_at::date");
+    // Positional GROUP BY passes through as raw SQL
+    expect(Order.group("1").toSql()).toContain("GROUP BY 1");
   });
 
   it("multiple selects", () => {

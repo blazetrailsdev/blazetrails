@@ -229,13 +229,26 @@ function _preserveOriginalEncrypted(klass: any, name: string, options: EncryptsO
   const { ignoreCase: _ic, downcase: _dc, ...originalOptions } = options;
   encrypts(klass, originalAttrName, originalOptions);
 
-  // Before each save, copy the in-memory value of `name` (original case, since
-  // attribute values are stored as plaintext in memory before serialization)
-  // into `original_name`. Using `readAttribute` bypasses the prototype getter so
-  // we read directly from the attribute store, not from `original_name`.
-  // Mirrors Rails' name= setter which calls `self.original_name = value`.
+  // Before each save, copy the in-memory value of `name` into `original_name`
+  // when `name` has been written (is dirty). Using `readAttribute` bypasses
+  // the prototype getter so we read directly from the attribute store, not from
+  // `original_name`. Only syncing when dirty prevents a freshly-loaded record
+  // whose `readAttribute(name)` would return the decrypted downcased value from
+  // overwriting the original-cased `original_name` on an unrelated save.
+  // Mirrors Rails' `name= { self.original_name = value; super(value) }`.
   if (typeof klass.beforeSave === "function") {
     klass.beforeSave((record: any) => {
+      // For new records, always sync — changedAttributes is empty because attrs
+      // were assigned before the dirty snapshot in the constructor.
+      // For persisted records, only sync when `name` was actually written to
+      // avoid overwriting original_name with the downcased decrypted value on
+      // unrelated saves.
+      const isNew =
+        typeof record.isNewRecord === "function" ? record.isNewRecord() : !record.isPersisted?.();
+      const changed: string[] = Array.isArray(record.changedAttributes)
+        ? record.changedAttributes
+        : [];
+      if (!isNew && !changed.includes(name)) return;
       const plaintext = record.readAttribute(name);
       if (plaintext != null) {
         record.writeAttribute(originalAttrName, plaintext);
@@ -243,13 +256,22 @@ function _preserveOriginalEncrypted(klass: any, name: string, options: EncryptsO
     });
   }
 
-  // Override the reader on the prototype so `record.name` returns the
-  // original-cased value from `original_name`.
-  // Mirrors Rails' `define_method(name) { send(original_attribute_name) }`.
+  // Override the reader on the prototype. Mirrors Rails:
+  //   return original_name if attribute is encrypted or support_unencrypted_data is false
+  //   return name (raw value) when not encrypted and support_unencrypted_data is true
   Object.defineProperty(klass.prototype, name, {
     configurable: true,
     enumerable: true,
     get(this: any) {
+      const rawValue = this.readAttribute(name);
+      if (Configurable.config.supportUnencryptedData) {
+        const type = klass._attributeDefinitions?.get(name)?.type;
+        const isEncrypted =
+          typeof type?.isEncrypted === "function"
+            ? type.isEncrypted(this._attributes?.get?.(name)?.valueBeforeTypeCast ?? rawValue)
+            : true;
+        if (!isEncrypted) return rawValue;
+      }
       return this.readAttribute(originalAttrName);
     },
     set(this: any, value: unknown) {

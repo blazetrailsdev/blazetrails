@@ -243,85 +243,93 @@ export class Relation<T extends Base> {
   }
 
   /**
-   * Filter for records WHERE the association IS present (non-null FK).
+   * Filter for records WHERE the association IS present.
    *
-   * Mirrors: ActiveRecord::Relation#where.associated
+   * Mirrors: ActiveRecord::QueryMethods::WhereChain#associated — emits an
+   * INNER JOIN on the association then WHERE assoc_pk IS NOT NULL.
    */
   whereAssociated(...assocNames: string[]): Relation<T> {
     let rel: Relation<T> = this;
     for (const assocName of assocNames) {
-      const modelClass = rel._modelClass as any;
-      const associations: any[] = modelClass._associations ?? [];
-      const assocDef = associations.find((a: any) => a.name === assocName);
-
-      if (!assocDef) {
+      const target = rel._resolveAssociationTarget(assocName);
+      if (!target) {
         throw new Error(
-          `Association named '${assocName}' was not found on ${modelClass.name}; perhaps you misspelled it?`,
+          `Association named '${assocName}' was not found on ${(rel._modelClass as any).name}; perhaps you misspelled it?`,
         );
       }
-
-      if (assocDef.type === "belongsTo") {
-        const foreignKey = assocDef.options.foreignKey ?? `${_toUnderscore(assocName)}_id`;
-        rel = rel.whereNot({ [foreignKey]: null });
-      } else if (assocDef.type === "hasMany" || assocDef.type === "hasOne") {
-        const { targetTable, foreignKey, typeNodes } = this._resolveHasManySubquery(
-          modelClass,
-          assocDef,
-          assocName,
-        );
-        const sourceTable = modelClass.tableName;
-        const pk = (assocDef.options.primaryKey ?? modelClass.primaryKey) as string;
-        const srcTable = new Table(sourceTable);
-        const tgtTable = new Table(targetTable);
-        const subquery = tgtTable.project(tgtTable.get(foreignKey));
-        for (const node of typeNodes) subquery.where(node);
-        const cloned = rel._clone();
-        cloned._whereClause.predicates.push(srcTable.get(pk).in(subquery));
-        rel = cloned;
+      const cloned = rel._clone();
+      if (!cloned._joinClauses.some((j) => j.table === target.table && j.on === target.on)) {
+        cloned._joinClauses.push({
+          type: "inner",
+          table: target.table,
+          on: target.on,
+          quoted: true,
+        });
       }
+      cloned._whereClause.predicates.push(new Table(target.table).get(target.pk).notEq(null));
+      rel = cloned;
     }
     return rel;
   }
 
   /**
-   * Filter for records WHERE the association IS missing (null FK).
+   * Filter for records WHERE the association IS missing.
    *
-   * Mirrors: ActiveRecord::Relation#where.missing
+   * Mirrors: ActiveRecord::QueryMethods::WhereChain#missing — emits a
+   * LEFT OUTER JOIN on the association then WHERE assoc_pk IS NULL.
    */
   whereMissing(...assocNames: string[]): Relation<T> {
     let rel: Relation<T> = this;
     for (const assocName of assocNames) {
-      const modelClass = rel._modelClass as any;
-      const associations: any[] = modelClass._associations ?? [];
-      const assocDef = associations.find((a: any) => a.name === assocName);
-
-      if (!assocDef) {
+      const target = rel._resolveAssociationTarget(assocName);
+      if (!target) {
         throw new Error(
-          `Association named '${assocName}' was not found on ${modelClass.name}; perhaps you misspelled it?`,
+          `Association named '${assocName}' was not found on ${(rel._modelClass as any).name}; perhaps you misspelled it?`,
         );
       }
-
-      if (assocDef.type === "belongsTo") {
-        const foreignKey = assocDef.options.foreignKey ?? `${_toUnderscore(assocName)}_id`;
-        rel = rel.where({ [foreignKey]: null });
-      } else if (assocDef.type === "hasMany" || assocDef.type === "hasOne") {
-        const { targetTable, foreignKey, typeNodes } = this._resolveHasManySubquery(
-          modelClass,
-          assocDef,
-          assocName,
-        );
-        const sourceTable = modelClass.tableName;
-        const pk = (assocDef.options.primaryKey ?? modelClass.primaryKey) as string;
-        const srcTable = new Table(sourceTable);
-        const tgtTable = new Table(targetTable);
-        const subquery = tgtTable.project(tgtTable.get(foreignKey));
-        for (const node of typeNodes) subquery.where(node);
-        const cloned = rel._clone();
-        cloned._whereClause.predicates.push(srcTable.get(pk).notIn(subquery));
-        rel = cloned;
-      }
+      const cloned = rel._clone();
+      cloned._joinClauses.push({ type: "left", table: target.table, on: target.on, quoted: true });
+      cloned._whereClause.predicates.push(new Table(target.table).get(target.pk).eq(null));
+      rel = cloned;
     }
     return rel;
+  }
+
+  /**
+   * Resolve the target table, join ON clause, and association primary key for
+   * a named association — the shared building block for whereMissing /
+   * whereAssociated.
+   */
+  private _resolveAssociationTarget(
+    assocName: string,
+  ): { table: string; on: string; pk: string } | null {
+    const modelClass = this._modelClass as any;
+    const associations: any[] = modelClass._associations ?? [];
+    const assocDef = associations.find((a: any) => a.name === assocName);
+    if (!assocDef) return null;
+
+    const resolved = this._resolveAssociationJoin(assocName);
+    if (!resolved) return null;
+    // _resolveAssociationJoin can return an array for through associations;
+    // use the last join's table as the final target.
+    const joinEntry = Array.isArray(resolved) ? resolved[resolved.length - 1] : resolved;
+
+    let pk = "id";
+    if (assocDef.type === "belongsTo") {
+      const className = assocDef.options.className ?? _camelize(assocName);
+      const targetModel = modelRegistry.get(className);
+      const rawPk = assocDef.options.primaryKey ?? targetModel?.primaryKey ?? "id";
+      pk = Array.isArray(rawPk) ? rawPk[0] : rawPk;
+    } else {
+      const className =
+        assocDef.options.className ??
+        _camelize(assocDef.type === "hasMany" ? _singularize(assocName) : assocName);
+      const targetModel = modelRegistry.get(className);
+      const rawPk = targetModel?.primaryKey ?? "id";
+      pk = Array.isArray(rawPk) ? rawPk[0] : rawPk;
+    }
+
+    return { table: joinEntry.table, on: joinEntry.on, pk };
   }
 
   private _resolveHasManySubquery(

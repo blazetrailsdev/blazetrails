@@ -235,6 +235,58 @@ describe("RelationTest", () => {
     expect(multiKeySql).toContain('"users"."id" DESC');
   });
 
+  it("whereMissing emits LEFT OUTER JOIN + assoc_pk IS NULL", () => {
+    class WmAuthor extends Base {
+      static {
+        this.tableName = "authors";
+        registerModel("Author", this);
+      }
+    }
+    class WmBook extends Base {
+      static {
+        this.tableName = "books";
+        this.belongsTo("author");
+        registerModel("Book", this);
+      }
+    }
+    try {
+      const sql = WmBook.all().whereMissing("author").toSql();
+      expect(sql).toContain("LEFT OUTER JOIN");
+      expect(sql).toContain('"authors"');
+      expect(sql).toContain('"authors"."id" IS NULL');
+      expect(sql).not.toContain('"books"."author_id" IS NULL');
+    } finally {
+      modelRegistry.delete("Author");
+      modelRegistry.delete("Book");
+    }
+  });
+
+  it("whereAssociated emits INNER JOIN + assoc_pk IS NOT NULL", () => {
+    class WaAuthor extends Base {
+      static {
+        this.tableName = "authors";
+        registerModel("Author", this);
+      }
+    }
+    class WaBook extends Base {
+      static {
+        this.tableName = "books";
+        this.belongsTo("author");
+        registerModel("Book", this);
+      }
+    }
+    try {
+      const sql = WaBook.all().whereAssociated("author").toSql();
+      expect(sql).toContain("INNER JOIN");
+      expect(sql).toContain('"authors"');
+      expect(sql).toContain('"authors"."id" IS NOT NULL');
+      expect(sql).not.toContain('"books"."author_id" IS NOT NULL');
+    } finally {
+      modelRegistry.delete("Author");
+      modelRegistry.delete("Book");
+    }
+  });
+
   it("multiple selects", () => {
     class Post extends Base {
       static {

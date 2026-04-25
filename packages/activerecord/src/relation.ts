@@ -1602,10 +1602,15 @@ export class Relation<T extends Base> {
     const hasUnjoined = refs.some((ref) => !joinedTables.has(ref));
     if (!hasUnjoined) return [];
 
+    // Rails promotes ALL includes to eager_load when references points to an
+    // unjoined table. We promote flat string includes here; nested hash specs
+    // are left to the preloader because our JoinDependency does not yet
+    // support recursively joining nested association specs. Promoting hash
+    // top-level keys without also recursively joining their sub-associations
+    // would leave sub-associations unloaded. See: references_eager_loaded_tables?
     const alreadyEagerLoaded = new Set(this._eagerLoadAssociations);
-    // Only promote flat string associations — nested hash objects fall back to preload.
     return this._includesAssociations.filter(
-      (name) => typeof name === "string" && !alreadyEagerLoaded.has(name),
+      (name): name is string => typeof name === "string" && !alreadyEagerLoaded.has(name),
     );
   }
 

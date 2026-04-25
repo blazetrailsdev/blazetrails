@@ -30,5 +30,9 @@
   "ar-57": {
     "side": "diff",
     "reason": "includes + references + string where: Rails promotes includes(:author) to a LEFT OUTER JOIN + column-aliased SELECT when references(:author) is combined with a string WHERE touching that table (same mechanism as eagerLoad). trails emits a plain SELECT with the WHERE clause but no JOIN. Same root cause as ar-16 — eagerLoad JOIN + column-projection behaviour is not implemented."
+  },
+  "ar-66": {
+    "side": "diff",
+    "reason": "GROUP BY qualification on a cross-join column: trails emits 'GROUP BY authors.name' (bare dotted form); Rails qualifies to 'GROUP BY \"authors\".\"name\"'. Same root cause as ar-17 / ar-42 / ar-51."
   }
 }

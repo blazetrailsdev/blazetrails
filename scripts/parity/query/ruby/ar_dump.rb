@@ -150,12 +150,33 @@ Dir.mktmpdir("parity-ar-ruby-") do |tmpdir|
       end
     end
 
-    # paramSql: for Rails, to_sql inlines everything so the "parameterized"
-    # template is the same as sql when there are no extractable binds.
-    # When bound_attributes is non-empty the sql already has the values
-    # inlined; we emit sql_str as paramSql since Rails has no direct
-    # public API to get the ? template from a relation.
-    param_sql = sql_str
+    # paramSql: build a parameterized SQL template with ? placeholders using
+    # Arel's Bind collector. This mirrors what trails' compileWithBinds produces,
+    # so both sides can be directly compared (template + binds, not inlined SQL).
+    # Only datetime values become ? — strings/numbers are inlined as on the
+    # trails side too.
+    param_sql = if result.respond_to?(:arel) && binds.any?
+      arel_obj = result.arel
+      conn = ActiveRecord::Base.connection
+      visitor = conn.visitor
+      # Arel::Collectors::Bind collects [String | BindParam, ...]; join strings
+      # and replace BindParam slots with ? for date values.
+      collector = Arel::Collectors::Bind.new
+      visitor.accept(arel_obj.ast, collector)
+      # Walk the collected parts: strings pass through, BindParam objects where
+      # the underlying value is a Time/DateTime become ?; others are inlined.
+      parts = collector.value.map do |part|
+        if part.is_a?(Arel::Nodes::BindParam)
+          val = part.value.respond_to?(:value_for_database) ? part.value.value_for_database : part.value
+          val.respond_to?(:utc) ? "?" : conn.quote(val)
+        else
+          part
+        end
+      end
+      parts.join.strip
+    else
+      sql_str
+    end
 
     # 6. Write CanonicalQuery JSON
     canonical = {

@@ -763,10 +763,17 @@ describe("the to_sql visitor", () => {
     expect(sql).toBe("'2020-01-02 03:04:05'");
   });
 
-  it("should visit_Date with fractional seconds strips to whole seconds", () => {
+  it("should visit_Date with fractional seconds retains microseconds", () => {
     const d = new Date("2026-04-18T13:00:41.729Z");
     const sql = new Visitors.ToSql().compile(new Nodes.Quoted(d));
-    expect(sql).toBe("'2026-04-18 13:00:41'");
+    // ms=729 → 729000 microseconds
+    expect(sql).toBe("'2026-04-18 13:00:41.729000'");
+  });
+
+  it("should visit_Date with zero ms emits bare seconds (Rails quoted_date format)", () => {
+    const d = new Date("2000-01-01T00:00:00.000Z");
+    const sql = new Visitors.ToSql().compile(new Nodes.Quoted(d));
+    expect(sql).toBe("'2000-01-01 00:00:00'");
   });
 
   it("should visit_Float", () => {

@@ -13,10 +13,6 @@ import { _setRelationCtor, _setScopeProxyWrapper, quoteSqlValue } from "./base.j
 import { RecordNotSaved, RecordNotUnique } from "./errors.js";
 import { disallowRawSqlBang } from "./sanitization.js";
 import { columnNameMatcher as abstractColumnNameMatcher } from "./connection-adapters/abstract/quoting.js";
-
-function resolveColumnNameMatcher(adapter: any): RegExp {
-  return adapter?.constructor?.columnNameMatcher?.() ?? abstractColumnNameMatcher();
-}
 import { modelRegistry } from "./associations.js";
 import { applyThenable, stripThenable } from "./relation/thenable.js";
 import { getInheritanceColumn, isStiSubclass } from "./inheritance.js";
@@ -102,6 +98,19 @@ function validateExplainOptions(options: ExplainOption[]): void {
  *
  * Mirrors: ActiveRecord::Relation
  */
+
+function resolveColumnNameMatcher(adapter: any): RegExp {
+  // Walk adapter → inner (SchemaAdapter wraps the real adapter) to find a
+  // static columnNameMatcher on the concrete adapter class.
+  let a = adapter;
+  while (a) {
+    const matcher = (a.constructor as any)?.columnNameMatcher?.();
+    if (matcher) return matcher;
+    a = a.inner;
+  }
+  return abstractColumnNameMatcher();
+}
+
 // eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class Relation<T extends Base> {
   private _modelClass: typeof Base;

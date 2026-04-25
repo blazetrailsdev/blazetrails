@@ -1,5 +1,4 @@
 import Database from "better-sqlite3";
-import { columnNameMatcher, columnNameWithOrderMatcher } from "./abstract/quoting.js";
 import { Visitors } from "@blazetrails/arel";
 import type { DatabaseAdapter, ExplainOption, TrailsAdapterOptions } from "../adapter.js";
 import { AbstractAdapter, Version } from "./abstract-adapter.js";
@@ -60,11 +59,16 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   }
 
   static columnNameMatcher(): RegExp {
-    return columnNameMatcher();
+    // Rails: SQLite3 adapter column_name_matcher — adds "word" double-quote support.
+    // ((?:\w+\.|"\w+"\.)?(?:\w+|"\w+") | \w+\((?:|\g<2>)\)) with optional AS alias
+    return /^((?:(?:(?:\w+|"\w+")\.)?(?:\w+|"\w+")|\w+\((?:|(?:(?:(?:\w+|"\w+")\.)?(?:\w+|"\w+")|\w+\((?:|(?:(?:\w+|"\w+")\.)?(?:\w+|"\w+"))\)))\))(?:(?:\s+AS)?\s+(?:\w+|"\w+"))?)(?:\s*,\s*(?:(?:(?:\w+|"\w+")\.)?(?:\w+|"\w+")|\w+\((?:|(?:(?:(?:\w+|"\w+")\.)?(?:\w+|"\w+")|\w+\((?:|(?:(?:\w+|"\w+")\.)?(?:\w+|"\w+"))\)))\))(?:(?:\s+AS)?\s+(?:\w+|"\w+"))?)*$/i;
   }
 
   static columnNameWithOrderMatcher(): RegExp {
-    return columnNameWithOrderMatcher();
+    // Rails: SQLite3 adapter column_name_with_order_matcher — double-quote support + COLLATE.
+    // SQLite supports NULLS FIRST/LAST (3.30.0+) even though Rails SQLite3 matcher omits it;
+    // we include it here for reverseOrder() compatibility.
+    return /^((?:(?:(?:\w+|"\w+")\.)?(?:\w+|"\w+")|\w+\((?:|(?:(?:(?:\w+|"\w+")\.)?(?:\w+|"\w+")|\w+\((?:|(?:(?:\w+|"\w+")\.)?(?:\w+|"\w+"))\)))\))(?:\s+COLLATE\s+(?:\w+|"\w+"))?(?:\s+ASC|\s+DESC)?(?:\s+NULLS\s+(?:FIRST|LAST))?)(?:\s*,\s*(?:(?:(?:\w+|"\w+")\.)?(?:\w+|"\w+")|\w+\((?:|(?:(?:(?:\w+|"\w+")\.)?(?:\w+|"\w+")|\w+\((?:|(?:(?:\w+|"\w+")\.)?(?:\w+|"\w+"))\)))\))(?:\s+COLLATE\s+(?:\w+|"\w+"))?(?:\s+ASC|\s+DESC)?(?:\s+NULLS\s+(?:FIRST|LAST))?)*$/i;
   }
 
   override get arelVisitor(): Visitors.ToSql {

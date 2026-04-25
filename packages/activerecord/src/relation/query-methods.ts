@@ -120,10 +120,21 @@ interface QueryMethodsHost {
 // ---------------------------------------------------------------------------
 
 function resolveOrderMatcher(host: QueryMethodsHost): RegExp {
-  return (
-    (host._modelClass?.adapter?.constructor as any)?.columnNameWithOrderMatcher?.() ??
-    abstractOrderMatcher()
-  );
+  // Walk adapter → inner (SchemaAdapter wraps the real adapter) to find a
+  // static columnNameWithOrderMatcher on the concrete adapter class.
+  // Use _connection/_adapter private fields to avoid triggering connection-pool lookup.
+  try {
+    let adapter = (host._modelClass as any)?._adapter;
+    if (!adapter) return abstractOrderMatcher();
+    while (adapter) {
+      const matcher = (adapter.constructor as any)?.columnNameWithOrderMatcher?.();
+      if (matcher) return matcher;
+      adapter = (adapter as any).inner;
+    }
+  } catch {
+    // No adapter set — fall back to abstract pattern.
+  }
+  return abstractOrderMatcher();
 }
 
 // ---------------------------------------------------------------------------
@@ -265,7 +276,7 @@ function orderBang(
         // Bind array: [Arel.sql("col = ?"), bind1, ...] — Arel bypasses check
         const rawSql = (first as any).value ?? (first as Nodes.Node).toSql();
         const interpolated = rest.length > 0 ? sanitizeSqlArray(rawSql, ...rest) : rawSql;
-        if (interpolated.trim() !== "") this._rawOrderClauses.push(interpolated);
+        if (interpolated.trim() !== "") this._orderClauses.push(interpolated);
       } else {
         // Plain string array: all elements must be strings; validate each immediately.
         if (!(arg as unknown[]).every((e) => typeof e === "string")) {
@@ -279,7 +290,7 @@ function orderBang(
     } else if (arg instanceof Nodes.Node) {
       // Arel node (e.g. Arel.sql("title")) — store raw SQL directly.
       const rawSql = (arg as any).value ?? (arg as Nodes.Node).toSql();
-      if (rawSql && rawSql.trim() !== "") this._rawOrderClauses.push(rawSql);
+      if (rawSql && rawSql.trim() !== "") this._orderClauses.push(rawSql);
     } else if (typeof arg === "string") {
       if (arg.trim() === "") {
         const next = args[i + 1];
@@ -326,7 +337,7 @@ function reorderBang(
       if (first instanceof Nodes.Node) {
         const rawSql = (first as any).value ?? (first as Nodes.Node).toSql();
         const interpolated = rest.length > 0 ? sanitizeSqlArray(rawSql, ...rest) : rawSql;
-        if (interpolated.trim() !== "") this._rawOrderClauses.push(interpolated);
+        if (interpolated.trim() !== "") this._orderClauses.push(interpolated);
       } else {
         if (!(arg as unknown[]).every((e) => typeof e === "string")) {
           throw argumentError("Order arguments passed as an array must contain only strings");
@@ -338,7 +349,7 @@ function reorderBang(
       }
     } else if (arg instanceof Nodes.Node) {
       const rawSql = (arg as any).value ?? (arg as Nodes.Node).toSql();
-      if (rawSql && rawSql.trim() !== "") this._rawOrderClauses.push(rawSql);
+      if (rawSql && rawSql.trim() !== "") this._orderClauses.push(rawSql);
     } else if (typeof arg === "string") {
       if (arg.trim() === "") {
         const next = args[i + 1];

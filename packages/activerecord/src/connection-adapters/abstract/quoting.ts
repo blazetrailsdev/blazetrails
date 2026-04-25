@@ -267,37 +267,29 @@ export function sanitizeAsSqlComment(value: unknown): string {
  * Mirrors: ActiveRecord::ConnectionAdapters::Quoting::ClassMethods#column_name_matcher
  */
 export function columnNameMatcher(): RegExp {
-  // Mirrors Rails' SQLite3 adapter column_name_matcher:
-  //   ((?:\w+\.|"\w+"\.)?(?:\w+|"\w+") | \w+\((?:|\g<2>)\))
-  // JS lacks recursive backreferences, so function-arg nesting is approximated
-  // at 2 levels (covers length(trim(col)) and similar real-world cases).
-  const col = String.raw`(?:\w+|"\w+")`;
-  const prefix = String.raw`(?:\w+\.|"\w+"\.)`;
-  const innerArg = String.raw`(?:${prefix}?${col}|\w+\((?:|${prefix}?${col})\))`;
-  const atom = String.raw`(?:${prefix}?${col}|\w+\((?:|${innerArg})\))`;
-  return new RegExp(
-    `^(${atom}(?:(?:\\s+AS)?\\s+(?:\\w+|"\\w+"))?)(?:\\s*,\\s*${atom}(?:(?:\\s+AS)?\\s+(?:\\w+|"\\w+"))?)*$`,
-    "i",
-  );
+  // Direct JS translation of Rails' abstract adapter column_name_matcher.
+  // Ruby source uses \g<2> for recursion; JS approximates at 2 levels
+  // (handles length(trim(col)) and similar real-world cases).
+  //
+  // Rails Ruby:
+  //   /((?:\w+\.)?\w+ | \w+\((?:|\g<2>)\)) (?:(?:\s+AS)?\s+\w+)?
+  //   (?:\s*,\s*\g<1>)*/ix
+  return /^((?:(?:\w+\.)?\w+|\w+\((?:|(?:(?:\w+\.)?\w+|\w+\((?:|(?:\w+\.)?\w+)\)))\))(?:(?:\s+AS)?\s+\w+)?)(?:\s*,\s*(?:(?:\w+\.)?\w+|\w+\((?:|(?:(?:\w+\.)?\w+|\w+\((?:|(?:\w+\.)?\w+)\)))\))(?:(?:\s+AS)?\s+\w+)?)*$/i;
 }
 
 /**
  * Regexp for column names with order.
  *
  * Mirrors: ActiveRecord::ConnectionAdapters::Quoting::ClassMethods#column_name_with_order_matcher
- * (SQLite3 adapter variant — used by the default in-memory test adapter)
  */
 export function columnNameWithOrderMatcher(): RegExp {
-  // Same atom as column_name_matcher but with COLLATE and ASC/DESC modifiers.
-  // Note: NULLS FIRST/LAST is a PostgreSQL extension not included in the SQLite3 variant.
-  const col = String.raw`(?:\w+|"\w+")`;
-  const prefix = String.raw`(?:\w+\.|"\w+"\.)`;
-  const innerArg = String.raw`(?:${prefix}?${col}|\w+\((?:|${prefix}?${col})\))`;
-  const atom = String.raw`(?:${prefix}?${col}|\w+\((?:|${innerArg})\))`;
-  return new RegExp(
-    `^(${atom}(?:\\s+COLLATE\\s+(?:\\w+|"\\w+"))?(?:\\s+ASC|\\s+DESC)?)(?:\\s*,\\s*${atom}(?:\\s+COLLATE\\s+(?:\\w+|"\\w+"))?(?:\\s+ASC|\\s+DESC)?)*$`,
-    "i",
-  );
+  // Direct JS translation of Rails' abstract adapter column_name_with_order_matcher.
+  // No COLLATE (abstract has none); NULLS FIRST/LAST included per Rails abstract pattern.
+  //
+  // Rails Ruby:
+  //   /((?:\w+\.)?\w+ | \w+\((?:|\g<2>)\)) (?:\s+ASC|\s+DESC)?
+  //   (?:\s+NULLS\s+(?:FIRST|LAST))? (?:\s*,\s*\g<1>)*/ix
+  return /^((?:(?:\w+\.)?\w+|\w+\((?:|(?:(?:\w+\.)?\w+|\w+\((?:|(?:\w+\.)?\w+)\)))\))(?:\s+ASC|\s+DESC)?(?:\s+NULLS\s+(?:FIRST|LAST))?)(?:\s*,\s*(?:(?:\w+\.)?\w+|\w+\((?:|(?:(?:\w+\.)?\w+|\w+\((?:|(?:\w+\.)?\w+)\)))\))(?:\s+ASC|\s+DESC)?(?:\s+NULLS\s+(?:FIRST|LAST))?)*$/i;
 }
 
 function isSqlLiteral(value: unknown): value is { value: string } {

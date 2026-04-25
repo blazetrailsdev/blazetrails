@@ -240,12 +240,17 @@ async function main(): Promise<void> {
       // datetime fixtures regardless of semantic correctness. Both fields remain in the
       // output for introspection and future use if the Rails runner is updated.
       //
-      // `match` is derived from `toComparable` equality so all schema fields (sql,
-      // frozenAt, version, fixture) are covered — nothing is silently ignored.
-      const toComparable = (doc: Record<string, unknown>) =>
+      // Match excludes both paramSql and binds: Rails SQLite always has empty binds
+      // (datetime values inlined) while trails extracts them, so including binds in
+      // match would always fail for datetime fixtures regardless of sql correctness.
+      // The patch uses a less-stripped view (keeps binds, drops only paramSql) so
+      // datetime bind differences remain visible in failure output.
+      const forMatch = (doc: Record<string, unknown>) =>
         stableJson({ ...doc, paramSql: undefined, binds: undefined });
-      const railsNorm = toComparable(railsRaw as Record<string, unknown>);
-      const trailsNorm = toComparable(trailsRaw as Record<string, unknown>);
+      const forPatch = (doc: Record<string, unknown>) =>
+        stableJson({ ...doc, paramSql: undefined });
+      const railsNorm = forMatch(railsRaw as Record<string, unknown>);
+      const trailsNorm = forMatch(trailsRaw as Record<string, unknown>);
       const match = railsNorm === trailsNorm;
 
       if (match) {
@@ -276,8 +281,8 @@ async function main(): Promise<void> {
           const patch = createTwoFilesPatch(
             `rails/${file}`,
             `trails/${file}`,
-            railsNorm,
-            trailsNorm,
+            forPatch(railsRaw as Record<string, unknown>),
+            forPatch(trailsRaw as Record<string, unknown>),
             "",
             "",
             { context: 4 },

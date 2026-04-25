@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Encryptor } from "./encryptor.js";
 import { DecryptionError, ForbiddenClass } from "./errors.js";
 import { MessageSerializer } from "./message-serializer.js";
+import { Message } from "./message.js";
 import { defaultCompressor } from "./config.js";
 import * as crypto from "crypto";
 
@@ -121,7 +122,7 @@ describe("ActiveRecord::Encryption::EncryptorTest", () => {
 
   it("store custom metadata with the encrypted data, accessible by the key provider", () => {
     const secret = generateKey();
-    let receivedMessage: unknown = null;
+    let receivedMessage: Message | null = null;
 
     // Key provider that stores publicTags in the message headers and reads them back
     // during decryption. Mirrors Rails: key_provider.encryption_key.public_tags are
@@ -130,7 +131,7 @@ describe("ActiveRecord::Encryption::EncryptorTest", () => {
       encryptionKey() {
         return { secret, publicTags: { model: "User", attr: "email" } };
       },
-      decryptionKeys(message: unknown) {
+      decryptionKeys(message: Message) {
         receivedMessage = message;
         return [{ secret }];
       },
@@ -148,10 +149,10 @@ describe("ActiveRecord::Encryption::EncryptorTest", () => {
     expect(message.headers.get("model")).toBe("User");
     expect(message.headers.get("attr")).toBe("email");
 
-    // Verify the key provider received a message with the custom metadata headers during decryption.
-    const received = receivedMessage as typeof message;
-    expect(received.headers.get("model")).toBe("User");
-    expect(received.headers.get("attr")).toBe("email");
+    // Verify the key provider received a Message with the custom metadata headers during decryption.
+    expect(receivedMessage).not.toBeNull();
+    expect(receivedMessage!.headers.get("model")).toBe("User");
+    expect(receivedMessage!.headers.get("attr")).toBe("email");
   });
 
   it("compress? returns the compress setting", () => {

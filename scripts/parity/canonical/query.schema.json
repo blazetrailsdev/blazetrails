@@ -4,7 +4,7 @@
   "title": "CanonicalQuery",
   "description": "Version 1 canonical query output — SQL string and bind params for one Arel / AR expression.",
   "type": "object",
-  "required": ["version", "fixture", "frozenAt", "sql", "binds"],
+  "required": ["version", "fixture", "frozenAt", "sql", "paramSql", "binds"],
   "additionalProperties": false,
   "properties": {
     "version": {
@@ -26,7 +26,7 @@
     },
     "paramSql": {
       "type": "string",
-      "description": "Optional. Parameterized SQL template with ? placeholders for datetime bind values only. On the trails side, compileWithBinds extracts Date values as ? and re-inlines non-Date scalars so ? count = binds.length. On the Rails side, built via Arel::Collectors::Bind; equals sql when no datetime binds. Not compared cross-side (informational only)."
+      "description": "Parameterized SQL template with ? placeholders for datetime bind values only. Equals sql when no datetime binds. On the trails side, compileWithBinds extracts Date values as ? and re-inlines non-Date scalars so ? count = binds.length. On the Rails side, built via Arel::Collectors::Composite; falls back to sql on any collector error. Not compared cross-side (informational only)."
     },
     "binds": {
       "type": "array",

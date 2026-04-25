@@ -13,16 +13,16 @@ export interface RailtieConfig {
  * Mirrors: ActiveModel::Railtie < ::Rails::Railtie
  * (activemodel/lib/active_model/railtie.rb)
  *
- * Extends the trailties base Railtie (matching the Rails inheritance) and
- * registers itself so it participates in the global initialization pipeline.
+ * Extends the base Railtie exported from `@blazetrails/activesupport`,
+ * matching the Rails inheritance pattern, and registers itself so it
+ * participates in the global initialization pipeline.
  */
 export class Railtie extends BaseRailtie {
   static {
     registerRailtie(this);
 
     this.initializer("active_model.secure_password", () => {
-      const env = (typeof process !== "undefined" && process.env?.NODE_ENV) || "development";
-      SecurePassword.minCost = env === "test";
+      SecurePassword.minCost = Railtie.detectEnv() === "test";
     });
   }
 

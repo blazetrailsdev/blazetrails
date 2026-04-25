@@ -3,8 +3,12 @@ import { Railtie, registerRailtie } from "./railtie.js";
 
 describe("Railtie", () => {
   beforeEach(() => {
-    // Reset the subclasses list and test stubs between tests.
+    // Reset shared static state between tests.
     (Railtie.subclasses as (typeof Railtie)[]).length = 0;
+    // Clear the base config so mutations from one test don't leak into others.
+    for (const key of Object.keys(Railtie.config)) {
+      delete (Railtie.config as Record<string, unknown>)[key];
+    }
   });
 
   it("initializer registers a named block", () => {
@@ -58,8 +62,7 @@ describe("Railtie", () => {
     A.initializer("a", () => log.push("A"));
     B.initializer("b", () => log.push("B"));
     Railtie.runAllInitializers();
-    expect(log).toContain("A");
-    expect(log).toContain("B");
+    expect(log).toEqual(["A", "B"]);
   });
 
   it("config is isolated per subclass (copy-on-first-write)", () => {

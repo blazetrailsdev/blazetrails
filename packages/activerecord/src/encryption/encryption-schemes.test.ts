@@ -121,6 +121,7 @@ describe("ActiveRecord::Encryption::EncryptionSchemesTest", () => {
     expect(author.name).toBe("2");
     const found = await EncryptedAuthor2.findBy({ name: "2" });
     expect(found).not.toBeNull();
+    // Reload to verify DB ciphertext — encryptedAttribute checks the raw DB value.
     const authorReloaded = await EncryptedAuthor2.find(author.id);
     expect(authorReloaded.encryptedAttribute("name")).toBe(true);
     // Write plaintext directly to DB (simulates an unencrypted legacy row).
@@ -131,6 +132,10 @@ describe("ActiveRecord::Encryption::EncryptionSchemesTest", () => {
     await rawRecord.update({ name: "1" });
     const reloaded = await EncryptedAuthor2.find(author.id);
     expect(reloaded.name).toBe("1");
+    // findBy plaintext also works because TestEncryptor.encrypt("1") returns "1"
+    // (not in map), so the WHERE clause matches the raw value.
+    const foundByPlaintext = await EncryptedAuthor2.findBy({ name: "1" });
+    expect(foundByPlaintext).not.toBeNull();
     expect(reloaded.encryptedAttribute("name")).toBe(false);
   });
 

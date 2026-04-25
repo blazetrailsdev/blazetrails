@@ -151,6 +151,10 @@ async function main(): Promise<void> {
     //    Base.adapter itself, producing incorrect boolean/date literals.
     await Base.establishConnection(dbPath);
     void Base.adapter; // trigger _wireArelVisitor so the correct Arel visitor is active
+    // Regression coverage: fixtures ar-09/ar-11/ar-19/ar-29 each produce a
+    // distinct wrong literal under the generic visitor (TRUE/FALSE, FOR UPDATE)
+    // vs the correct SQLite literal (1/0, empty lock). Their PASS status in CI
+    // acts as the integration test for this visitor-wiring invariant.
 
     // 3. Import query.ts. Fixtures end with `export default <relation>`
     //    and typically `import { Book } from "./models.js"` (ESM convention

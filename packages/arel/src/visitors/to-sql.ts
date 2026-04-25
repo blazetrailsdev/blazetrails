@@ -1369,11 +1369,16 @@ export class ToSql implements NodeVisitor<SQLString> {
     }
   }
 
-  // Mirrors Rails' AbstractAdapter#quoted_date — 'YYYY-MM-DD HH:MM:SS'
-  // (space separator, seconds precision, no T, no fractional seconds, no Z).
-  // JS Date#toISOString() always returns UTC so the UTC form is authoritative.
+  // Formats a date-like value as a SQL datetime string: 'YYYY-MM-DD HH:MM:SS'.
+  // Mirrors Rails' AbstractAdapter#quoted_date (space separator, seconds precision).
+  //
+  // This visitor always uses UTC because JS Date#toISOString() is UTC-only and
+  // the Arel layer has no access to AR's defaultTimezone setting. Adapter-level
+  // quoting (packages/activerecord/src/connection-adapters/abstract/quoting.ts)
+  // honours defaultTimezone and is the authoritative path for bound values —
+  // this method covers Arel-inlined literals (Quoted/Casted nodes).
   protected quotedDate(d: { toISOString(): string }): string {
-    const iso = d.toISOString(); // "YYYY-MM-DDTHH:MM:SS.mmmZ"
+    const iso = d.toISOString(); // always "YYYY-MM-DDTHH:MM:SS.mmmZ"
     return `'${iso
       .replace("T", " ")
       .replace(/\.\d+Z$/, "")

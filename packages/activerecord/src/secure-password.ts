@@ -97,6 +97,11 @@ export function hasSecurePassword(
     if (rawPassword != null) {
       const digest = hashPassword(rawPassword);
       record.writeAttribute(digestAttr, digest);
+      // Clear the raw password after hashing so subsequent saves don't
+      // rehash with a new random salt (changing the digest on every save
+      // would invalidate outstanding password-reset tokens).
+      (record as any)[passwordKey] = null;
+      (record as any)[confirmationKey] = null;
     }
   });
 

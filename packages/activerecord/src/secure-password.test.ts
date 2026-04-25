@@ -249,6 +249,33 @@ describe("password reset token", () => {
     expect(found).toBeNull();
   });
 
+  it("findByPasswordResetToken still resolves after saving without changing password", async () => {
+    // A no-op save (no password= setter called) must not rehash the digest with
+    // a new salt — doing so would invalidate outstanding reset tokens.
+    class User extends Base {
+      static {
+        this._tableName = "users";
+        this.attribute("id", "integer");
+        this.attribute("password_digest", "string");
+        this.adapter = adapter;
+      }
+    }
+    hasSecurePassword(User);
+
+    const user = new User({});
+    (user as any).password = "securepassword";
+    await user.save();
+
+    const token = (user as any).passwordResetToken;
+
+    // Save again without touching password — digest must be unchanged.
+    await user.save();
+
+    const found = await (User as any).findByPasswordResetToken(token);
+    expect(found).not.toBeNull();
+    expect(found.id).toBe(user.id);
+  });
+
   it("resetToken: false suppresses token generation", () => {
     class User extends Base {
       static {

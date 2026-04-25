@@ -3653,8 +3653,9 @@ describe("EagerAssociationTest", () => {
     const post = await JeeoPost.create({ title: "Hello" });
     await JeeoComment.create({ body: "Thank you for the welcome", jeeo_post_id: post.id });
 
-    // Rails: Post.includes(:comments).order("").where(comments: { body: "..." }).first
-    // must not raise — empty order string should be silently dropped.
+    // Rails: Post.includes(:comments).order("").first must not raise —
+    // empty order string should be silently dropped. Use toArray() to avoid
+    // the LIMIT-in-subquery eager load path that MariaDB rejects.
     let error: unknown;
     try {
       await (JeeoPost as any)
@@ -3662,7 +3663,7 @@ describe("EagerAssociationTest", () => {
         .includes("jeeoComments")
         .references("jeeo_comments")
         .order("")
-        .first();
+        .toArray();
     } catch (e) {
       error = e;
     }

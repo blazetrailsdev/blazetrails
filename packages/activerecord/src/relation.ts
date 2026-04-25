@@ -66,6 +66,34 @@ export type LoadedRelation<R> = Omit<R, "then">;
  * `EXPLAIN FORMAT=X ANALYZE` is invalid) from receiving orderings they
  * can't render.
  */
+/**
+ * Add a join clause to `clauses` for whereMissing/whereAssociated.
+ * - Skip if an identical (type + table + on) entry already exists.
+ * - Throw if a different join to the same table exists — that would require
+ *   aliasing which we don't support, and silently skipping would apply the
+ *   WHERE predicate against the wrong join.
+ */
+function _addAssocJoin(
+  clauses: Array<{ type: "inner" | "left"; table: string; on: string; quoted?: boolean }>,
+  type: "inner" | "left",
+  join: { table: string; on: string },
+  assocName: string,
+  modelClass: any,
+): void {
+  const equivalent = clauses.some(
+    (j) => j.type === type && j.table === join.table && j.on === join.on,
+  );
+  if (equivalent) return;
+  const conflicting = clauses.some((j) => j.table === join.table);
+  if (conflicting) {
+    throw new Error(
+      `where${type === "inner" ? "Associated" : "Missing"}: cannot add ${type.toUpperCase()} JOIN for '${assocName}' on ${modelClass.name} ` +
+        `— a different join to '${join.table}' already exists and cannot be represented without aliasing.`,
+    );
+  }
+  clauses.push({ type, table: join.table, on: join.on, quoted: true });
+}
+
 function validateExplainOptions(options: ExplainOption[]): void {
   let seenHash = false;
   for (let i = 0; i < options.length; i++) {
@@ -263,11 +291,7 @@ export class Relation<T extends Base> {
       }
       const cloned = rel._clone();
       for (const join of target.joins) {
-        // Dedup by table name: skip if a join to this table already exists
-        // (regardless of ON clause) to avoid invalid duplicate-table SQL.
-        if (!cloned._joinClauses.some((j) => j.table === join.table)) {
-          cloned._joinClauses.push({ type: "inner", table: join.table, on: join.on, quoted: true });
-        }
+        _addAssocJoin(cloned._joinClauses, "inner", join, assocName, rel._modelClass as any);
       }
       const tgtTable = new Table(target.table);
       for (const pk of target.pks) {
@@ -297,11 +321,7 @@ export class Relation<T extends Base> {
       }
       const cloned = rel._clone();
       for (const join of target.joins) {
-        // Dedup by table name to avoid duplicate-table SQL if the same
-        // association is applied twice or already joined via leftOuterJoins.
-        if (!cloned._joinClauses.some((j) => j.table === join.table)) {
-          cloned._joinClauses.push({ type: "left", table: join.table, on: join.on, quoted: true });
-        }
+        _addAssocJoin(cloned._joinClauses, "left", join, assocName, rel._modelClass as any);
       }
       const tgtTable = new Table(target.table);
       for (const pk of target.pks) {
@@ -367,16 +387,28 @@ export class Relation<T extends Base> {
         const targetModel = modelRegistry.get(className);
         rawPk = targetModel?.primaryKey ?? "id";
       }
+      // Composite PKs are supported at the WHERE level (one IS NULL per column)
+      // but the JOIN ON clause from _resolveAssociationJoin uses a single string;
+      // if the association itself has a composite FK that would stringify to "a,b",
+      // throw a clear error rather than emitting broken SQL.
+      if (Array.isArray(assocDef.options.foreignKey)) {
+        throw new Error(
+          `whereMissing/whereAssociated: composite foreignKey on '${assocName}' is not yet supported.`,
+        );
+      }
       const pks = Array.isArray(rawPk) ? rawPk : [rawPk];
       return { joins, table: lastJoin.table, pks };
     }
 
     // Fallback: target model not in registry — derive JOIN from options.
+    // NOTE: for belongsTo, the target table name is not reliably inferrable
+    // without a registered model (the actual tableName may differ from the
+    // class-name convention). We fall back to a source-table FK predicate
+    // (WHERE source.fk IS NULL) which is data-correct for belongs_to but
+    // does not match Rails' JOIN form. Register the model to get the JOIN form.
     const sourceTable = modelClass.tableName;
     if (assocDef.type === "belongsTo") {
       const foreignKey = assocDef.options.foreignKey ?? `${_toUnderscore(assocName)}_id`;
-      // No JOIN needed: emit WHERE source_table.fk IS NULL instead.
-      // Data-correct for belongs_to even though it differs from Rails' JOIN form.
       return { joins: [], table: sourceTable, pks: [foreignKey] };
     }
     if (assocDef.type === "hasOne" || assocDef.type === "hasMany") {

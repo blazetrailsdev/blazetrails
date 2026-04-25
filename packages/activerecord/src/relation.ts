@@ -312,8 +312,11 @@ export class Relation<T extends Base> {
 
   /**
    * Resolve all join steps and target PK columns for a named association.
-   * Mirrors Rails' reflection.association_primary_key (Array form for composite
-   * PKs) and left_outer_joins expansion for through associations.
+   * The `pks` array mirrors Rails' `Array(reflection.association_primary_key)`
+   * — multiple entries for composite-PK models. Note: the JOIN ON clauses from
+   * `_resolveAssociationJoin` interpolate PK values as strings, so composite
+   * PKs are handled at the WHERE-predicate level (one IS NULL per PK column)
+   * but not yet in the ON clause itself.
    *
    * When the target model isn't in the registry (e.g. test helpers that set up
    * associations without registering models), the table name is inferred from

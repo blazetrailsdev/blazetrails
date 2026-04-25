@@ -82,9 +82,9 @@ function _addAssocJoin(
   assocName: string,
   modelClass: any,
 ): void {
-  const sameTableOn = clauses.find((j) => j.table === join.table);
-  if (sameTableOn) {
-    if (sameTableOn.on === join.on) return; // compatible existing join — skip
+  const sameTableJoins = clauses.filter((j) => j.table === join.table);
+  if (sameTableJoins.length > 0) {
+    if (sameTableJoins.every((j) => j.on === join.on)) return; // all compatible — skip
     throw new Error(
       `where${type === "inner" ? "Associated" : "Missing"}: cannot add ${type.toUpperCase()} JOIN for '${assocName}' on ${modelClass.name} ` +
         `— a different join to '${join.table}' already exists and cannot be represented without aliasing.`,

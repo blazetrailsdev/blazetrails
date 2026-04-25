@@ -80,7 +80,7 @@ export function hasSecurePassword(
   // authenticate method
   Object.defineProperty(modelClass.prototype, "authenticate", {
     value: function (this: Base, password: string): Base | false {
-      const digest = this._readAttribute("password_digest");
+      const digest = this._readAttribute(digestAttr);
       if (!digest) return false;
       return verifyPassword(password, digest as string) ? this : false;
     },
@@ -96,7 +96,7 @@ export function hasSecurePassword(
     const rawPassword = (record as any)[passwordKey];
     if (rawPassword != null) {
       const digest = hashPassword(rawPassword);
-      record.writeAttribute("password_digest", digest);
+      record.writeAttribute(digestAttr, digest);
     }
   });
 
@@ -105,7 +105,7 @@ export function hasSecurePassword(
     modelClass.validate(function (record: any) {
       const rawPassword = record[passwordKey];
       const isNew = record.isNewRecord();
-      const digestChanged = record.attributeChanged("password_digest");
+      const digestChanged = record.attributeChanged(digestAttr);
 
       // Password must be present on create or when explicitly set
       if (isNew && (rawPassword === null || rawPassword === undefined || rawPassword === "")) {

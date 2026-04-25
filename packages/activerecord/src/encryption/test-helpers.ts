@@ -250,12 +250,7 @@ export function assertEncryptedAttribute(
         ? (type as any).castType.serialize(expectedValue)
         : null;
     // Normalize to string for comparison (EncryptedAttributeType calls String() before encrypting).
-    const serializedPlaintext =
-      rawSerialized != null
-        ? rawSerialized instanceof Date
-          ? rawSerialized.toISOString().split("T")[0] // date → "YYYY-MM-DD"
-          : String(rawSerialized)
-        : null;
+    const serializedPlaintext = rawSerialized != null ? String(rawSerialized) : null;
     if (
       dbValue === expectedValue ||
       (serializedPlaintext != null && dbValue === serializedPlaintext)

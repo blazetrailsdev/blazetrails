@@ -275,7 +275,9 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::QueryMethods::WhereChain#associated — emits an
    * INNER JOIN on the association then WHERE assoc_pk IS NOT NULL.
    * Skips if an identical (type+table+ON) join already exists; throws if a
-   * different join to the same table is present (aliasing not supported).
+   * Skips if an identical (table+ON) join already exists, regardless of join
+   * type; throws if a different join to the same table is present (aliasing
+   * not supported).
    */
   whereAssociated(...assocNames: string[]): Relation<T> {
     let rel: Relation<T> = this;
@@ -284,8 +286,9 @@ export class Relation<T extends Base> {
       const target = rel._resolveAssociationTarget(assocName);
       if (!target) {
         throw new Error(
-          `whereAssociated: cannot resolve join for '${assocName}' on ${(rel._modelClass as any).name} — ` +
-            `through/HABTM associations require the intermediate model to be registered.`,
+          `whereAssociated: association resolution failed for '${assocName}' on ${(rel._modelClass as any).name} — ` +
+            `through/HABTM associations may require a registered intermediate model, ` +
+            `and some join shapes (such as composite primary/foreign keys) are not supported.`,
         );
       }
       const cloned = rel._clone();
@@ -314,8 +317,9 @@ export class Relation<T extends Base> {
       const target = rel._resolveAssociationTarget(assocName);
       if (!target) {
         throw new Error(
-          `whereMissing: cannot resolve join for '${assocName}' on ${(rel._modelClass as any).name} — ` +
-            `through/HABTM associations require the intermediate model to be registered.`,
+          `whereMissing: association resolution failed for '${assocName}' on ${(rel._modelClass as any).name} — ` +
+            `through/HABTM associations may require a registered intermediate model, ` +
+            `and some join shapes (such as composite primary/foreign keys) are not supported.`,
         );
       }
       const cloned = rel._clone();
@@ -410,15 +414,16 @@ export class Relation<T extends Base> {
     // class-name convention). We fall back to a source-table FK null/non-null
     // predicate, which is data-correct but not the Rails JOIN form. **Register
     // the model** to get the JOIN form.
+    const sourceTable = modelClass.tableName;
+    if (assocDef.type === "belongsTo") {
+      const foreignKey = assocDef.options.foreignKey ?? `${_toUnderscore(assocName)}_id`;
+      const pks = Array.isArray(foreignKey) ? foreignKey : [foreignKey];
+      return { joins: [], table: sourceTable, pks };
+    }
     if (Array.isArray(assocDef.options.foreignKey)) {
       throw new Error(
         `whereMissing/whereAssociated: composite foreignKey on '${assocName}' is not yet supported in fallback path.`,
       );
-    }
-    const sourceTable = modelClass.tableName;
-    if (assocDef.type === "belongsTo") {
-      const foreignKey = assocDef.options.foreignKey ?? `${_toUnderscore(assocName)}_id`;
-      return { joins: [], table: sourceTable, pks: [foreignKey] };
     }
     if (assocDef.type === "hasOne" || assocDef.type === "hasMany") {
       const className =

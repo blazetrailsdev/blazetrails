@@ -41,7 +41,17 @@ function setPassword(
 export function hasSecurePassword(
   modelClass: typeof Model,
   attribute: string = "password",
-  options: { validations?: boolean } = {},
+  options: {
+    validations?: boolean;
+    /**
+     * When true (default), wire up a password-reset token via
+     * `generates_token_for` (ActiveRecord only — no-op in plain
+     * ActiveModel).
+     *
+     * Mirrors: ActiveModel::SecurePassword has_secure_password :reset_token
+     */
+    resetToken?: boolean;
+  } = {},
 ) {
   const digestAttr = `${attribute}_digest`;
   const confirmationAttr = `${attribute}Confirmation`;

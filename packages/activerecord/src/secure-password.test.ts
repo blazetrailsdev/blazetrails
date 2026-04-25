@@ -163,3 +163,70 @@ describe("SecurePassword (Rails-guided)", () => {
     expect(user.errors.fullMessages.some((m: string) => m.includes("doesn't match"))).toBe(true);
   });
 });
+
+describe("password reset token", () => {
+  let adapter: DatabaseAdapter;
+
+  beforeEach(() => {
+    adapter = createTestAdapter();
+  });
+
+  it("generates a password_reset_token on the instance", async () => {
+    // Mirrors Rails secure_password.rb:162-178 — generates_token_for
+    // :"password_reset", expires_in: 15.minutes, plus instance accessor.
+    process.env.BLAZETRAILS_SECRET_KEY_BASE = "test-secret-for-token";
+    class User extends Base {
+      static {
+        this._tableName = "users";
+        this.attribute("id", "integer");
+        this.attribute("password_digest", "string");
+        this.adapter = adapter;
+      }
+    }
+    hasSecurePassword(User);
+
+    const user = new User({});
+    (user as any).password = "securepassword";
+    await user.save();
+
+    const token = (user as any).passwordResetToken;
+    expect(typeof token).toBe("string");
+    expect(token.length).toBeGreaterThan(0);
+  });
+
+  it("findByPasswordResetToken resolves a valid token", async () => {
+    process.env.BLAZETRAILS_SECRET_KEY_BASE = "test-secret-for-token";
+    class User extends Base {
+      static {
+        this._tableName = "users";
+        this.attribute("id", "integer");
+        this.attribute("password_digest", "string");
+        this.adapter = adapter;
+      }
+    }
+    hasSecurePassword(User);
+
+    const user = new User({});
+    (user as any).password = "securepassword";
+    await user.save();
+
+    const token = (user as any).passwordResetToken;
+    const found = await (User as any).findByPasswordResetToken(token);
+    expect(found).not.toBeNull();
+    expect(found.id).toBe(user.id);
+  });
+
+  it("resetToken: false suppresses token generation", () => {
+    class User extends Base {
+      static {
+        this._tableName = "users";
+        this.attribute("id", "integer");
+        this.attribute("password_digest", "string");
+        this.adapter = adapter;
+      }
+    }
+    hasSecurePassword(User, { resetToken: false });
+    const user = new User({});
+    expect((user as any).passwordResetToken).toBeUndefined();
+  });
+});

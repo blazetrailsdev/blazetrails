@@ -3653,7 +3653,8 @@ describe("EagerAssociationTest", () => {
     const post = await JeeoPost.create({ title: "Hello" });
     await JeeoComment.create({ body: "Thank you for the welcome", jeeo_post_id: post.id });
 
-    // empty string order must not raise
+    // Rails: Post.includes(:comments).order("").where(comments: { body: "..." }).first
+    // must not raise — empty order string should be silently dropped.
     let error: unknown;
     try {
       await (JeeoPost as any).all().includes("jeeoComments").order("").first();
@@ -3661,6 +3662,10 @@ describe("EagerAssociationTest", () => {
       error = e;
     }
     expect(error).toBeUndefined();
+    // Also verify the result has the preloaded comments
+    const result = await (JeeoPost as any).all().includes("jeeoComments").order("").toArray();
+    expect(result).toHaveLength(1);
+    expect(result[0]._preloadedAssociations.get("jeeoComments")).toHaveLength(1);
   });
   it.skip("deep including through habtm", () => {});
   it("eager load multiple associations with references", async () => {
@@ -3753,6 +3758,7 @@ describe("EagerAssociationTest", () => {
       })
       .toArray();
 
+    // Rails: projects.last.mentor.developers.first.contracts == projects.last.developers.last.contracts
     const p = projects[0] as any;
     const mentorDevContracts = p._preloadedAssociations
       .get("elmarMentor")
@@ -3762,10 +3768,14 @@ describe("EagerAssociationTest", () => {
       .get("elmarDevelopers")?.[0]
       ?._preloadedAssociations?.get("elmarContracts");
 
-    expect(mentorDevContracts).toBeDefined();
-    expect(directDevContracts).toBeDefined();
+    expect(mentorDevContracts).toHaveLength(1);
+    expect(directDevContracts).toHaveLength(1);
     expect(mentorDevContracts![0].id).toBe(contract.id);
     expect(directDevContracts![0].id).toBe(contract.id);
+    // Same contract record — both paths should surface the same data
+    expect(mentorDevContracts![0].elmar_developer_id).toBe(
+      directDevContracts![0].elmar_developer_id,
+    );
   });
   it("preloading has many through with custom scope", async () => {
     class PcsProject extends Base {

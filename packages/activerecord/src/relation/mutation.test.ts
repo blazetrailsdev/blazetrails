@@ -152,4 +152,16 @@ describe("RelationMutationTest", () => {
     const sql = Post.distinct().toSql();
     expect(sql).toContain("DISTINCT");
   });
+
+  it("order! with empty string does not emit ORDER BY", () => {
+    const { Post } = makeModel();
+    const sql = Post.order("").toSql();
+    expect(sql).not.toContain("ORDER BY");
+  });
+
+  it("#!", () => {
+    const { Post } = makeModel();
+    const sql = Post.order("title").toSql();
+    expect(sql).toContain("ORDER BY");
+  });
 });

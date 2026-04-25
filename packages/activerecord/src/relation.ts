@@ -247,6 +247,8 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::QueryMethods::WhereChain#associated — emits an
    * INNER JOIN on the association then WHERE assoc_pk IS NOT NULL.
+   * Skips the join if an equivalent join is already present (mirrors Rails'
+   * joins_values dedup guard).
    */
   whereAssociated(...assocNames: string[]): Relation<T> {
     let rel: Relation<T> = this;
@@ -258,15 +260,15 @@ export class Relation<T extends Base> {
         );
       }
       const cloned = rel._clone();
-      if (!cloned._joinClauses.some((j) => j.table === target.table && j.on === target.on)) {
-        cloned._joinClauses.push({
-          type: "inner",
-          table: target.table,
-          on: target.on,
-          quoted: true,
-        });
+      for (const join of target.joins) {
+        if (!cloned._joinClauses.some((j) => j.table === join.table && j.on === join.on)) {
+          cloned._joinClauses.push({ type: "inner", table: join.table, on: join.on, quoted: true });
+        }
       }
-      cloned._whereClause.predicates.push(new Table(target.table).get(target.pk).notEq(null));
+      const tgtTable = new Table(target.table);
+      for (const pk of target.pks) {
+        cloned._whereClause.predicates.push(tgtTable.get(pk).notEq(null));
+      }
       rel = cloned;
     }
     return rel;
@@ -288,21 +290,26 @@ export class Relation<T extends Base> {
         );
       }
       const cloned = rel._clone();
-      cloned._joinClauses.push({ type: "left", table: target.table, on: target.on, quoted: true });
-      cloned._whereClause.predicates.push(new Table(target.table).get(target.pk).eq(null));
+      for (const join of target.joins) {
+        cloned._joinClauses.push({ type: "left", table: join.table, on: join.on, quoted: true });
+      }
+      const tgtTable = new Table(target.table);
+      for (const pk of target.pks) {
+        cloned._whereClause.predicates.push(tgtTable.get(pk).eq(null));
+      }
       rel = cloned;
     }
     return rel;
   }
 
   /**
-   * Resolve the target table, join ON clause, and association primary key for
-   * a named association — the shared building block for whereMissing /
-   * whereAssociated.
+   * Resolve all join steps and target PK columns for a named association.
+   * Mirrors Rails' reflection.association_primary_key (Array form for composite
+   * PKs) and left_outer_joins expansion for through associations.
    */
   private _resolveAssociationTarget(
     assocName: string,
-  ): { table: string; on: string; pk: string } | null {
+  ): { joins: Array<{ table: string; on: string }>; table: string; pks: string[] } | null {
     const modelClass = this._modelClass as any;
     const associations: any[] = modelClass._associations ?? [];
     const assocDef = associations.find((a: any) => a.name === assocName);
@@ -310,26 +317,24 @@ export class Relation<T extends Base> {
 
     const resolved = this._resolveAssociationJoin(assocName);
     if (!resolved) return null;
-    // _resolveAssociationJoin can return an array for through associations;
-    // use the last join's table as the final target.
-    const joinEntry = Array.isArray(resolved) ? resolved[resolved.length - 1] : resolved;
+    const joins = Array.isArray(resolved) ? resolved : [resolved];
+    const lastJoin = joins[joins.length - 1];
 
-    let pk = "id";
+    let rawPk: string | string[] = "id";
     if (assocDef.type === "belongsTo") {
       const className = assocDef.options.className ?? _camelize(assocName);
       const targetModel = modelRegistry.get(className);
-      const rawPk = assocDef.options.primaryKey ?? targetModel?.primaryKey ?? "id";
-      pk = Array.isArray(rawPk) ? rawPk[0] : rawPk;
+      rawPk = assocDef.options.primaryKey ?? targetModel?.primaryKey ?? "id";
     } else {
       const className =
         assocDef.options.className ??
         _camelize(assocDef.type === "hasMany" ? _singularize(assocName) : assocName);
       const targetModel = modelRegistry.get(className);
-      const rawPk = targetModel?.primaryKey ?? "id";
-      pk = Array.isArray(rawPk) ? rawPk[0] : rawPk;
+      rawPk = targetModel?.primaryKey ?? "id";
     }
+    const pks = Array.isArray(rawPk) ? rawPk : [rawPk];
 
-    return { table: joinEntry.table, on: joinEntry.on, pk };
+    return { joins, table: lastJoin.table, pks };
   }
 
   private _resolveHasManySubquery(

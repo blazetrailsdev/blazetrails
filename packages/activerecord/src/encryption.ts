@@ -252,11 +252,13 @@ export function applyPendingEncryptions(klass: any): void {
     }
   }
 
-  // Register the frozen-encryption validator once per class, mirroring:
-  // validate :cant_modify_encrypted_attributes_when_frozen,
-  //   if: -> { has_encrypted_attributes? && context.frozen_encryption? }
-  // Own-property guard mirrors the pattern used for _encryptedAttributes and
-  // _pendingEncryptions so inheritance doesn't re-use a parent's registration.
+  // Register the frozen-encryption validator once per inheritance chain, mirroring
+  // Rails' `validate :cant_modify_encrypted_attributes_when_frozen` registered
+  // via the `included` hook (runs once for the root encrypted class; subclasses
+  // inherit the callback). The `in` check intentionally walks the prototype
+  // chain so subclasses don't register a duplicate — the validator already reads
+  // `record.constructor._encryptedAttributes` at call time, so it correctly
+  // handles STI subclasses with different encrypted attribute sets.
   if (!("_frozenEncryptionValidatorInstalled" in klass) && typeof klass.validate === "function") {
     klass._frozenEncryptionValidatorInstalled = true;
     klass.validate((record: any) => {

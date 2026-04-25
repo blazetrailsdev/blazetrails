@@ -322,18 +322,24 @@ describe("ActiveRecord::Encryption::EncryptableRecordTest", () => {
   });
 
   it("can only save unencrypted attributes when frozen encryption is true", async () => {
-    const Book = makeEncryptedBook(freshAdapter());
-    new Book();
-    const book = await Book.create({ name: "Dune" });
-    // Updating a non-encrypted attribute succeeds even when frozen.
+    // Build a model with one encrypted (name) and one non-encrypted (notes) attribute.
+    const adp = freshAdapter();
+    const Article = makeFreshModel(adp, { id: "integer", name: "string", notes: "string" });
+    Article.encrypts("name");
+    new Article();
+    const article = await Article.create({ name: "Dune", notes: "original" });
+    // Updating a non-encrypted attribute via save succeeds even when frozen.
     await withEncryptionContext({ frozenEncryption: true }, async () => {
-      await book.updateColumns({ id: book.id });
+      article.notes = "updated";
+      await article.save();
     });
+    const reloaded = await Article.find(article.id);
+    expect(reloaded.notes).toBe("updated");
     // Updating an encrypted attribute fails validation when frozen.
     withEncryptionContext({ frozenEncryption: true }, () => {
-      book.name = "New title";
-      expect(book.isValid()).toBe(false);
-      expect(book.errors.added("name", "can't be modified because it is encrypted")).toBe(true);
+      article.name = "New title";
+      expect(article.isValid()).toBe(false);
+      expect(article.errors.added("name", "can't be modified because it is encrypted")).toBe(true);
     });
   });
   it("validate column sizes", async () => {

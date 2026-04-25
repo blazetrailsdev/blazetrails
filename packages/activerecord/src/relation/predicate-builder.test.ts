@@ -1,4 +1,4 @@
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Table, Visitors, Nodes } from "@blazetrails/arel";
 import { PredicateBuilder } from "./predicate-builder.js";
 import { Substitute } from "../statement-cache.js";
@@ -157,16 +157,19 @@ describe("PredicateBuilderTest", () => {
     class PbTestAuthor extends Base {
       static {
         this.tableName = "authors";
-        registerModel("Author", this);
       }
     }
     class PbTestPost extends Base {
       static {
         this.tableName = "posts";
         this.belongsTo("author");
-        registerModel("Post", this);
       }
     }
+
+    beforeAll(() => {
+      registerModel("Author", PbTestAuthor);
+      registerModel("Post", PbTestPost);
+    });
 
     afterAll(() => {
       modelRegistry.delete("Author");

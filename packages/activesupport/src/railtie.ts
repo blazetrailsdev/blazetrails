@@ -35,11 +35,14 @@ export class Railtie {
       // values that aren't clone-safe (functions, class instances, cycles,
       // BigInt) — config is expected to hold plain scalar/object settings
       // in normal Rails-style usage.
+      // subclass when the runtime supports it. Falls back to a shallow copy
+      // when structuredClone is unavailable or the config contains values
+      // that aren't clone-safe (functions, class instances, cycles, BigInt)
+      // — config is expected to hold plain scalar/object settings in normal
+      // Rails-style usage.
       try {
         host._config =
-          typeof structuredClone === "function"
-            ? structuredClone(parent)
-            : JSON.parse(JSON.stringify(parent));
+          typeof structuredClone === "function" ? structuredClone(parent) : { ...parent };
       } catch {
         host._config = { ...parent };
       }

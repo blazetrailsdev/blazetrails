@@ -235,6 +235,10 @@ function orderBang(
   while (i < args.length) {
     const arg = args[i];
     if (typeof arg === "string") {
+      if (arg.trim() === "") {
+        i++;
+        continue;
+      }
       const next = args[i + 1];
       if (typeof next === "string" && /^(asc|desc)$/i.test(next)) {
         this._orderClauses.push([arg, next.toLowerCase() as "asc" | "desc"]);
@@ -259,6 +263,7 @@ function reorderBang(
   this._orderClauses = [];
   for (const arg of args) {
     if (typeof arg === "string") {
+      if (arg.trim() === "") continue;
       this._orderClauses.push(arg);
     } else {
       for (const [col, dir] of Object.entries(arg)) {

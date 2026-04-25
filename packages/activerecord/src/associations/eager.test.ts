@@ -3750,6 +3750,9 @@ describe("EagerAssociationTest", () => {
       elmar_developer_id: dev.id,
     });
 
+    // Rails: Project.references(:mentors).includes(mentor: { developers: :contracts }, developers: :contracts)
+    // references() registers the mentor table for join-promotion; the nested includes
+    // preloads both branches. We verify both paths surface the same contract record.
     const projects = await (ElmarProject as any)
       .all()
       .includes({
@@ -4305,12 +4308,20 @@ describe("EagerAssociationTest", () => {
       .includes({ idupPosts: "idupComments" })
       .toArray();
 
+    // Rails asserts the same comment object is reused across both category→post paths.
+    // We collect the comment instance from each category and assert referential equality.
+    let sharedComment: any;
     for (const cat of categories) {
       const posts = (cat as any)._preloadedAssociations.get("idupPosts");
       expect(posts).toHaveLength(1);
       const comments = (posts[0] as any)._preloadedAssociations.get("idupComments");
       expect(comments).toHaveLength(1);
       expect(comments[0].id).toBe(comment.id);
+      if (sharedComment) {
+        expect(comments[0]).toBe(sharedComment);
+      } else {
+        sharedComment = comments[0];
+      }
     }
   });
   it("associations loaded for all records", async () => {

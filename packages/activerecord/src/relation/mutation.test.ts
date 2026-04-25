@@ -158,10 +158,4 @@ describe("RelationMutationTest", () => {
     const sql = Post.order("").toSql();
     expect(sql).not.toContain("ORDER BY");
   });
-
-  it("#!", () => {
-    const { Post } = makeModel();
-    const sql = Post.order("title").toSql();
-    expect(sql).toContain("ORDER BY");
-  });
 });

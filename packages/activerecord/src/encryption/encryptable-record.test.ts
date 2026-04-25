@@ -480,9 +480,11 @@ describe("ActiveRecord::Encryption::EncryptableRecordTest", () => {
   });
 
   it("encrypts attribute data", async () => {
-    // Encrypted attribute backed by a date cast type.
+    // The DB column stores ciphertext (text), while the cast type is date.
+    // In Rails, encrypted attribute columns are always text in the schema.
     const adp = freshAdapter();
-    const BookDate = makeFreshModel(adp, { id: "integer", name: "date" });
+    const BookDate = makeFreshModel(adp, { id: "integer", name: "string" });
+    BookDate.attribute("name", "date"); // override cast type to date
     BookDate.encrypts("name");
     new BookDate();
     const book = await BookDate.create({ name: "2024-01-01" });

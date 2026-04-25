@@ -102,12 +102,15 @@ export function registerNodeDeps(deps: {
 }
 
 /**
- * Override the visitor used by `Node#toSql()` / `TreeManager#toSql()`.
+ * Override the visitor used by `Node#toSql()`. `TreeManager#toSql()` and
+ * `SelectManager#whereSql()` delegate to the underlying AST node's
+ * `toSql()`, so they pick up the override transparently.
  *
  * Used by the parity runner so trails-side fixture output goes through
  * the SQLite visitor (matching the Ruby side's `ActiveRecord::Base
  * .establish_connection adapter: "sqlite3"`). Call once at process
- * startup, before importing fixtures.
+ * startup, before importing fixtures. The override is process-global —
+ * tests should restore the default in a `finally` block.
  */
 export function setToSqlVisitor(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

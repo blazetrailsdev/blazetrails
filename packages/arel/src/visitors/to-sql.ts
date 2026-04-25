@@ -126,9 +126,8 @@ export class ToSql implements NodeVisitor<SQLString> {
     if (node instanceof Nodes.Between) return this.visitBetween(node);
     if (node instanceof Nodes.Regexp) return this.visitRegexp(node);
     if (node instanceof Nodes.NotRegexp) return this.visitNotRegexp(node);
-    if (node instanceof Nodes.IsDistinctFrom) return this.visitBinaryOp(node, "IS DISTINCT FROM");
-    if (node instanceof Nodes.IsNotDistinctFrom)
-      return this.visitBinaryOp(node, "IS NOT DISTINCT FROM");
+    if (node instanceof Nodes.IsDistinctFrom) return this.visitIsDistinctFrom(node);
+    if (node instanceof Nodes.IsNotDistinctFrom) return this.visitIsNotDistinctFrom(node);
     if (node instanceof Nodes.Assignment) return this.visitAssignment(node);
     if (node instanceof Nodes.As) return this.visitAs(node);
 
@@ -597,6 +596,14 @@ export class ToSql implements NodeVisitor<SQLString> {
     this.collector.append(` ${op} `);
     this.visitNodeOrValue(node.right);
     return this.collector;
+  }
+
+  protected visitIsDistinctFrom(node: Nodes.IsDistinctFrom): SQLString {
+    return this.visitBinaryOp(node, "IS DISTINCT FROM");
+  }
+
+  protected visitIsNotDistinctFrom(node: Nodes.IsNotDistinctFrom): SQLString {
+    return this.visitBinaryOp(node, "IS NOT DISTINCT FROM");
   }
 
   private visitIn(node: Nodes.In): SQLString {

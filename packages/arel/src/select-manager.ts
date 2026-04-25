@@ -1,6 +1,5 @@
 import { Node } from "./nodes/node.js";
 import { TreeManager } from "./tree-manager.js";
-import { ToSql } from "./visitors/to-sql.js";
 import { SelectStatement } from "./nodes/select-statement.js";
 import { SelectCore } from "./nodes/select-core.js";
 import { SqlLiteral } from "./nodes/sql-literal.js";
@@ -425,8 +424,8 @@ export class SelectManager extends TreeManager {
    */
   whereSql(): string | null {
     if (this.core.wheres.length === 0) return null;
-    const visitor = new ToSql();
-    const parts = this.core.wheres.map((w) => visitor.compile(w));
+    // Route through Node#toSql so a `setToSqlVisitor()` override applies.
+    const parts = this.core.wheres.map((w) => w.toSql());
     return `WHERE ${parts.join(" AND ")}`;
   }
 

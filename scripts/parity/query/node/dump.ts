@@ -146,15 +146,21 @@ async function main(): Promise<void> {
       db.close();
     }
 
-    // 2. Wire the SQLite visitor as the default `Node#toSql()` /
-    //    `TreeManager#toSql()` implementation. Mirrors the Rails side's
-    //    `establish_connection adapter: "sqlite3"` so dialect-specific
-    //    rendering (e.g. `IS NOT` for IS DISTINCT FROM) goes through the
-    //    same SQL surface on both sides.
-    const arel = (await import("@blazetrails/arel")) as {
-      Visitors: { SQLite: new () => { compile(node: unknown): string } };
-      setToSqlVisitor(v: new () => { compile(node: unknown): string }): void;
-    };
+    // 2. Wire the SQLite visitor through the package registry so both
+    //    `Node#toSql()` and `TreeManager#toSql()` route through it
+    //    (TreeManager.toSql delegates to the AST node's toSql, which
+    //    uses _registry.ToSql). Mirrors the Rails side's
+    //    `establish_connection adapter: "sqlite3"` — for example,
+    //    `IS DISTINCT FROM` now emits as `IS NOT` because
+    //    Visitors.SQLite#visitIsDistinctFrom overrides it.
+    //
+    //    Imported as `@blazetrails/arel` (not via dist path) because
+    //    scripts/parity is itself a workspace package — see
+    //    scripts/parity/package.json. That ensures Node ESM dedupes
+    //    this import with the fixture's `@blazetrails/arel` import to a
+    //    single module instance, so the registry override is visible
+    //    to the fixture's nodes.
+    const arel = await import("@blazetrails/arel");
     arel.setToSqlVisitor(arel.Visitors.SQLite);
 
     // 3. Import query.ts. Fixtures end with `export default <expr>` — see

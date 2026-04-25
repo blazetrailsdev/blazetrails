@@ -1,0 +1,95 @@
+/**
+ * Base Railtie class — mirrors Rails::Railtie.
+ *
+ * Each engine/component (ActiveModel, ActionController, etc.) subclasses
+ * Railtie to register named initializer blocks and a shared configuration
+ * object. The application runner calls `Railtie.runAllInitializers()` to
+ * fire them in registration order.
+ *
+ * Mirrors: Rails::Railtie (railties/lib/rails/railtie.rb)
+ */
+export class Railtie {
+  /**
+   * All registered subclasses — tracked so the application can enumerate
+   * all railties at boot.
+   *
+   * Mirrors: Rails::Railtie.subclasses
+   */
+  static readonly subclasses: Array<typeof Railtie> = [];
+
+  private static _config: Record<string, unknown> = {};
+
+  /**
+   * Per-class config object. Each subclass gets its own copy on first
+   * access (copy-on-first-write so parent defaults propagate).
+   *
+   * Mirrors: Rails::Railtie.config
+   */
+  static get config(): Record<string, unknown> {
+    const host = this as any;
+    if (!Object.prototype.hasOwnProperty.call(host, "_config")) {
+      host._config = { ...Object.getPrototypeOf(host)._config };
+    }
+    return host._config as Record<string, unknown>;
+  }
+
+  private static _initializers: Array<{ name: string; block: () => void }> = [];
+
+  /**
+   * Register a named initializer block.
+   *
+   * Mirrors: Rails::Railtie.initializer
+   */
+  static initializer(name: string, block: () => void): void {
+    const host = this as any;
+    if (!Object.prototype.hasOwnProperty.call(host, "_initializers")) {
+      host._initializers = [];
+    }
+    host._initializers.push({ name, block });
+  }
+
+  /**
+   * Run all initializers registered on this class (in registration order).
+   *
+   * Mirrors: Rails::Railtie#run_initializers
+   */
+  static runInitializers(): void {
+    const host = this as any;
+    const own: Array<{ name: string; block: () => void }> = Object.prototype.hasOwnProperty.call(
+      host,
+      "_initializers",
+    )
+      ? host._initializers
+      : [];
+    for (const { block } of own) {
+      block();
+    }
+  }
+
+  /**
+   * Run initializers for every registered subclass.
+   *
+   * Mirrors: Rails application initialization pipeline.
+   */
+  static runAllInitializers(): void {
+    for (const sub of Railtie.subclasses) {
+      sub.runInitializers();
+    }
+  }
+}
+
+/**
+ * Register `subclass` with the Railtie registry.
+ *
+ * Call this in each subclass's static init block:
+ *   static { registerRailtie(this); }
+ *
+ * Mirrors: Rails::Railtie.inherited (called automatically by Ruby when
+ * a class subclasses Railtie; we replicate it with an explicit call since
+ * JavaScript has no `inherited` hook).
+ */
+export function registerRailtie(subclass: typeof Railtie): void {
+  if (!Railtie.subclasses.includes(subclass)) {
+    Railtie.subclasses.push(subclass);
+  }
+}

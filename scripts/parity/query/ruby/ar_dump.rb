@@ -181,9 +181,10 @@ Dir.mktmpdir("parity-ar-ruby-") do |tmpdir|
         end
         # If counts diverge (literal ? in SQL, or collector mismatch) leave
         # binds = [] and param_sql = sql_str — the defaults set above.
-      rescue NoMethodError
-        # Arel collectors don't implement all collector methods in every
-        # Rails version (e.g. preparable= in Rails 8.0). Leave defaults.
+      rescue StandardError
+        # paramSql/binds are informational-only; any collector/visitor error
+        # (e.g. NoMethodError for preparable= in Rails 8.0, NameError, etc.)
+        # falls back to sql_str / empty binds so the runner stays resilient.
         binds = []
         param_sql = sql_str
       end

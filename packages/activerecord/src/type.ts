@@ -71,10 +71,19 @@ _registry.register("string", StringType, { override: false });
 _registry.register("text", Text, { override: false });
 _registry.register("time", Time, { override: false });
 
+/** Mirrors Rails' `ActiveRecord::Type.registry` (attr_accessor getter). */
 export function registry(): AdapterSpecificRegistry {
   return _registry;
 }
 
+/**
+ * Mirrors Rails' `ActiveRecord::Type.registry=` (attr_accessor setter).
+ *
+ * Replaces the active registry wholesale. Callers are responsible for
+ * re-registering any types they need — this is intentional: Rails' own
+ * TypeTest swaps in a blank AdapterSpecificRegistry per test and restores
+ * the original in teardown, so a pre-populated registry is not the default.
+ */
 export function setRegistry(r: AdapterSpecificRegistry): void {
   _registry = r;
   _defaultValue = undefined;

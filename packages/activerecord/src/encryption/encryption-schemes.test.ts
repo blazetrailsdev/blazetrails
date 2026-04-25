@@ -6,6 +6,10 @@ import { Decryption as DecryptionError } from "./errors.js";
 import type { EncryptorLike } from "./encryptor.js";
 import { EncryptableRecord } from "./encryptable-record.js";
 import type { SchemeOptions } from "./scheme.js";
+import { installExtendedQueriesIfConfigured } from "./install.js";
+import { ExtendedDeterministicQueries } from "./extended-deterministic-queries.js";
+import { Relation } from "../relation.js";
+import { Base } from "../index.js";
 import {
   freshAdapter,
   configureEncryption,
@@ -293,7 +297,18 @@ describe("ActiveRecord::Encryption::EncryptionSchemesTest", () => {
   it("use global previous schemes when performing queries", async () => {
     Configurable.config.supportUnencryptedData = false;
     const savedExtendQueries = Configurable.config.extendQueries;
+
+    // Snapshot prototype methods before installing query patches (mirrors uniqueness-validations.test.ts).
+    const savedMethods = {
+      where: Relation.prototype.where,
+      exists: (Relation.prototype as any).exists,
+      scopeForCreate: (Relation.prototype as any).scopeForCreate,
+      findBy: (Base as any).findBy,
+      serialize: EncryptedAttributeType.prototype.serialize,
+    };
+
     Configurable.config.extendQueries = true;
+    installExtendedQueriesIfConfigured();
     try {
       const prevEncryptor = new TestEncryptor({ alice: "alice_prev_cipher" });
       const currentEncryptor = new TestEncryptor({ alice: "alice_cur_cipher" });
@@ -318,6 +333,13 @@ describe("ActiveRecord::Encryption::EncryptionSchemesTest", () => {
       expect(found).not.toBeNull();
       expect(found!.name).toBe("alice");
     } finally {
+      Relation.prototype.where = savedMethods.where as typeof Relation.prototype.where;
+      (Relation.prototype as any).exists = savedMethods.exists;
+      (Relation.prototype as any).scopeForCreate = savedMethods.scopeForCreate;
+      (Base as any).findBy = savedMethods.findBy;
+      EncryptedAttributeType.prototype.serialize =
+        savedMethods.serialize as typeof EncryptedAttributeType.prototype.serialize;
+      (ExtendedDeterministicQueries as any)._installed = false;
       Configurable.config.extendQueries = savedExtendQueries;
     }
   });

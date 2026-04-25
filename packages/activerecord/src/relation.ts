@@ -275,8 +275,8 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::QueryMethods::WhereChain#associated — emits an
    * INNER JOIN on the association then WHERE assoc_pk IS NOT NULL.
-   * Skips the join if an equivalent join is already present (mirrors Rails'
-   * joins_values dedup guard).
+   * Skips if an identical (type+table+ON) join already exists; throws if a
+   * different join to the same table is present (aliasing not supported).
    */
   whereAssociated(...assocNames: string[]): Relation<T> {
     let rel: Relation<T> = this;
@@ -344,20 +344,25 @@ export class Relation<T extends Base> {
 
   /**
    * Resolve all join steps and target PK columns for a named association.
-   * The `pks` array mirrors Rails' `Array(reflection.association_primary_key)`
-   * — multiple entries for composite-PK models. Note: the JOIN ON clauses from
-   * `_resolveAssociationJoin` interpolate PK values as strings, so composite
-   * PKs are handled at the WHERE-predicate level (one IS NULL per PK column)
-   * but not yet in the ON clause itself.
    *
-   * When the target model isn't in the modelRegistry, falls back to deriving
-   * the JOIN from association options alone. For `belongsTo` the FK is known,
-   * so the fallback emits a source-table FK predicate (no JOIN) which is
-   * data-correct. For `hasOne`/`hasMany` the target table name is inferred
-   * from the className/association name and a JOIN ON is built from options.
+   * `pks` mirrors Rails' `Array(reflection.association_primary_key)` — one
+   * entry per PK column so callers emit one IS NULL/NOT NULL predicate each.
+   * The ON clause produced by `_resolveAssociationJoin` is a column-to-column
+   * expression (e.g. `"authors"."id" = "books"."author_id"`); if an array FK
+   * were used it would stringify to `"a,b"` — an invalid column reference.
+   * We guard against that before returning (see composite-FK check below).
    *
-   * Returns null only when the association type is unsupported in the fallback
-   * path (e.g. through/HABTM without a registered model).
+   * When the target model is not in `modelRegistry` the fallback behavior
+   * differs by association type:
+   * - `belongsTo`: target table name is not safe to infer — Rails always has
+   *   a registered model class, so `tableName` is always available; without
+   *   registration the inferred name (e.g. "authors") may differ from the real
+   *   table (e.g. "wm_authors"). Falls back to WHERE source.fk IS NULL which
+   *   is data-correct but not the Rails JOIN form. **Register the model** to
+   *   get the JOIN form.
+   * - `hasOne`/`hasMany`: target table is inferred from className + pluralise,
+   *   and a JOIN ON is built from association options.
+   * - through/HABTM: returns null (caller throws).
    */
   private _resolveAssociationTarget(
     assocName: string,

@@ -185,13 +185,13 @@ export function makeEncryptedAuthor(adapter: DatabaseAdapter) {
 }
 
 const _failingEncryptor: Encryptor = {
-  encrypt() {
+  encrypt(_value: string): string {
     throw new EncryptionError("deliberate encryption failure");
   },
-  decrypt(v) {
-    return v;
+  decrypt(ciphertext: string): string {
+    return ciphertext;
   },
-  isEncrypted() {
+  isEncrypted(_text: string): boolean {
     return false;
   },
 };

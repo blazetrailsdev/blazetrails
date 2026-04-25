@@ -105,7 +105,6 @@ export function hasSecurePassword(
     modelClass.validate(function (record: any) {
       const rawPassword = record[passwordKey];
       const isNew = record.isNewRecord();
-      const digestChanged = record.attributeChanged(digestAttr);
 
       // Password must be present on create or when explicitly set
       if (isNew && (rawPassword === null || rawPassword === undefined || rawPassword === "")) {
@@ -139,7 +138,16 @@ export function hasSecurePassword(
       expiresIn: FIFTEEN_MINUTES,
       generator: (record: Base) => {
         const digest = record._readAttribute(digestAttr);
-        return typeof digest === "string" ? digest.slice(0, 8) : "";
+        if (typeof digest !== "string" || !digest) return "";
+        // Derive a version from the digest without embedding raw digest
+        // bytes in the token (MessageVerifier is signed, not encrypted, so
+        // the payload is readable). A short hash of the digest changes
+        // whenever the digest changes (password updated → old tokens stale)
+        // but doesn't expose the digest itself.
+        // Mirrors Rails' BCrypt::Password#version which returns the bcrypt
+        // version string — not the raw digest — for the same purpose.
+        const buf = getCrypto().createHash("sha256").update(digest).digest();
+        return buf.toString("hex").slice(0, 16);
       },
     });
 

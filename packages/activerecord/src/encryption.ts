@@ -25,7 +25,7 @@ import type { EncryptorLike } from "./encryption/encryptor.js";
 import { Cipher } from "./encryption/cipher/aes256-gcm.js";
 import { globalPreviousSchemesFor, EncryptableRecord } from "./encryption/encryptable-record.js";
 import { Configurable } from "./encryption/configurable.js";
-import { withoutEncryption } from "./encryption/context.js";
+import { withoutEncryption, getEncryptionContext } from "./encryption/context.js";
 
 /**
  * The simple encryptor surface `Base.encrypts({ encryptor })` accepts.
@@ -250,6 +250,25 @@ export function applyPendingEncryptions(klass: any): void {
     for (const { name } of pending) {
       EncryptableRecord.validateColumnSize(klass, name);
     }
+  }
+
+  // Register the frozen-encryption validator once per class, mirroring:
+  // validate :cant_modify_encrypted_attributes_when_frozen,
+  //   if: -> { has_encrypted_attributes? && context.frozen_encryption? }
+  if (!klass._frozenEncryptionValidatorInstalled && typeof klass.validate === "function") {
+    klass._frozenEncryptionValidatorInstalled = true;
+    klass.validate((record: any) => {
+      if (!getEncryptionContext().frozenEncryption) return;
+      const encryptedAttrs: Set<string> = klass._encryptedAttributes ?? new Set();
+      const changed: string[] = Array.isArray(record.changedAttributes)
+        ? record.changedAttributes
+        : [];
+      for (const attr of changed) {
+        if (encryptedAttrs.has(attr)) {
+          record.errors.add(attr, "can't be modified because it is encrypted");
+        }
+      }
+    });
   }
 }
 

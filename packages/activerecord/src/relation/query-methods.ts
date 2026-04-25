@@ -243,7 +243,27 @@ function orderBang(
   let i = 0;
   while (i < args.length) {
     const arg = args[i];
-    if (typeof arg === "string") {
+    if (Array.isArray(arg)) {
+      const [first, ...rest] = arg as unknown[];
+      if (first instanceof Nodes.Node) {
+        // Bind array: [Arel.sql("col = ?"), bind1, ...] — Arel bypasses check
+        const rawSql = (first as any).value ?? first.toString();
+        const interpolated = rest.length > 0 ? sanitizeSqlArray(rawSql, ...rest) : rawSql;
+        if (interpolated.trim() !== "") this._rawOrderClauses.push(interpolated);
+      } else {
+        // Plain string array: each element is a separate ORDER BY term.
+        // Join and store in _orderClauses for later validation at execution time.
+        for (const elem of arg as string[]) {
+          if (typeof elem === "string" && elem.trim() !== "") {
+            this._orderClauses.push(elem);
+          }
+        }
+      }
+    } else if (arg instanceof Nodes.Node) {
+      // Arel node (e.g. Arel.sql("title")) — store raw SQL directly.
+      const rawSql = (arg as any).value ?? arg.toString();
+      if (rawSql && rawSql.trim() !== "") this._rawOrderClauses.push(rawSql);
+    } else if (typeof arg === "string") {
       if (arg.trim() === "") {
         const next = args[i + 1];
         i += typeof next === "string" && /^(asc|desc)$/i.test(next) ? 2 : 1;
@@ -256,7 +276,8 @@ function orderBang(
         continue;
       }
       this._orderClauses.push(arg);
-    } else {
+    } else if (arg !== null && typeof arg === "object") {
+      // Hash form { col: "asc"|"desc" } — direction validation deferred to execution
       for (const [col, dir] of Object.entries(arg)) {
         this._orderClauses.push([col, dir]);
       }
@@ -271,10 +292,14 @@ function reorderBang(
   ...args: Array<string | Record<string, "asc" | "desc">>
 ): any {
   this._orderClauses = [];
+  this._rawOrderClauses = [];
   let i = 0;
   while (i < args.length) {
     const arg = args[i];
-    if (typeof arg === "string") {
+    if (arg instanceof Nodes.Node) {
+      const rawSql = (arg as any).value ?? arg.toString();
+      if (rawSql && rawSql.trim() !== "") this._rawOrderClauses.push(rawSql);
+    } else if (typeof arg === "string") {
       if (arg.trim() === "") {
         const next = args[i + 1];
         i += typeof next === "string" && /^(asc|desc)$/i.test(next) ? 2 : 1;

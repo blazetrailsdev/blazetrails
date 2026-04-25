@@ -267,7 +267,16 @@ export function sanitizeAsSqlComment(value: unknown): string {
  * Mirrors: ActiveRecord::ConnectionAdapters::Quoting::ClassMethods#column_name_matcher
  */
 export function columnNameMatcher(): RegExp {
-  return /^((?:(?:\w+\.)?\w+|\w+\((?:|\w+)\))(?:(?:\s+AS)?\s+\w+)?)(?:\s*,\s*(?:(?:\w+\.)?\w+|\w+\((?:|\w+)\))(?:(?:\s+AS)?\s+\w+)?)*$/i;
+  // Mirrors Rails' column_name_matcher — allows:
+  //   word, "word", table.col, "table"."col", func(word), func(func(word)),
+  //   with optional AS alias.
+  // Approximation of Rails' recursive \g<2> pattern using 2-level nesting.
+  const quotedWord = String.raw`(?:"?\w+"?)`;
+  const atom = String.raw`(?:(?:${quotedWord}\.)?${quotedWord}|\w+\((?:[^,()]*|\w+\([^,()]*\))*\))`;
+  return new RegExp(
+    `^(${atom}(?:(?:\\s+AS)?\\s+\\w+)?)(?:\\s*,\\s*${atom}(?:(?:\\s+AS)?\\s+\\w+)?)*$`,
+    "i",
+  );
 }
 
 /**
@@ -276,7 +285,13 @@ export function columnNameMatcher(): RegExp {
  * Mirrors: ActiveRecord::ConnectionAdapters::Quoting::ClassMethods#column_name_with_order_matcher
  */
 export function columnNameWithOrderMatcher(): RegExp {
-  return /^((?:(?:\w+\.)?\w+|\w+\((?:|\w+)\))(?:\s+ASC|\s+DESC)?(?:\s+NULLS\s+(?:FIRST|LAST))?)(?:\s*,\s*(?:(?:\w+\.)?\w+|\w+\((?:|\w+)\))(?:\s+ASC|\s+DESC)?(?:\s+NULLS\s+(?:FIRST|LAST))?)*$/i;
+  // Like column_name_matcher but with optional ASC/DESC/NULLS modifiers.
+  const quotedWord = String.raw`(?:"?\w+"?)`;
+  const atom = String.raw`(?:(?:${quotedWord}\.)?${quotedWord}|\w+\((?:[^,()]*|\w+\([^,()]*\))*\))`;
+  return new RegExp(
+    `^(${atom}(?:\\s+ASC|\\s+DESC)?(?:\\s+NULLS\\s+(?:FIRST|LAST))?)(?:\\s*,\\s*${atom}(?:\\s+ASC|\\s+DESC)?(?:\\s+NULLS\\s+(?:FIRST|LAST))?)*$`,
+    "i",
+  );
 }
 
 function isSqlLiteral(value: unknown): value is { value: string } {

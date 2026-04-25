@@ -13,7 +13,10 @@ export class SecurePassword {
 // eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace SecurePassword {
   export interface ClassMethods {
-    hasSecurePassword(attribute?: string, options?: { validations?: boolean }): void;
+    hasSecurePassword(
+      attribute?: string,
+      options?: { validations?: boolean; resetToken?: boolean },
+    ): void;
   }
 }
 

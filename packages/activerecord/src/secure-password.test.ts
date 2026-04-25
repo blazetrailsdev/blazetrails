@@ -220,6 +220,34 @@ describe("password reset token", () => {
     expect(found.id).toBe(user.id);
   });
 
+  it("token is invalidated when password changes", async () => {
+    // Rails embeds BCrypt::Password#version so the token becomes stale when
+    // the digest changes (secure_password.rb generator block). Our impl
+    // embeds the first 8 chars of password_digest as the version.
+    class User extends Base {
+      static {
+        this._tableName = "users";
+        this.attribute("id", "integer");
+        this.attribute("password_digest", "string");
+        this.adapter = adapter;
+      }
+    }
+    hasSecurePassword(User);
+
+    const user = new User({});
+    (user as any).password = "originalpassword";
+    await user.save();
+
+    const oldToken = (user as any).passwordResetToken;
+
+    // Change the password — digest changes, token version becomes stale.
+    (user as any).password = "newpassword";
+    await user.save();
+
+    const found = await (User as any).findByPasswordResetToken(oldToken);
+    expect(found).toBeNull();
+  });
+
   it("resetToken: false suppresses token generation", () => {
     class User extends Base {
       static {

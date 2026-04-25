@@ -88,12 +88,15 @@ export function hasSecurePassword(
     configurable: true,
   });
 
-  // Hook into save to hash the password
+  // Hook into save to hash the password. Use writeAttribute (not
+  // _attributes.set) so the dirty tracker marks the column changed and
+  // an UPDATE SQL includes the new digest — required for token
+  // invalidation to round-trip through the DB.
   modelClass.beforeSave(function (record: Base) {
     const rawPassword = (record as any)[passwordKey];
     if (rawPassword != null) {
       const digest = hashPassword(rawPassword);
-      record._attributes.set("password_digest", digest);
+      record.writeAttribute("password_digest", digest);
     }
   });
 

@@ -2924,14 +2924,16 @@ export class Relation<T extends Base> {
               );
             }
           } else {
-            // Dotted simple identifier (no direction) → raw SQL passthrough.
-            if (/^[\w$]+\.[\w$]+$/.test(clause)) {
-              manager.order(new Nodes.SqlLiteral(clause));
-            } else {
+            // Not "col DIR" form. Pass through as raw SQL unless it's a plain
+            // single identifier — multi-column strings, NULLS FIRST, commas, etc.
+            // must not be wrapped in an Arel node.
+            if (/^[\w$]+$/.test(clause)) {
               const node = this._isKnownColumn(clause)
                 ? table.get(clause)
                 : new Nodes.UnqualifiedColumn(table.get(clause));
               manager.order(new Nodes.Ascending(node));
+            } else {
+              manager.order(new Nodes.SqlLiteral(clause));
             }
           }
         }
@@ -2939,7 +2941,11 @@ export class Relation<T extends Base> {
         const [col, dir] = clause;
         // Mirrors Rails' arel_column: unknown columns (e.g. subquery aliases
         // from .from()) get a bare quoted name, not a table-qualified attribute.
-        if (this._isKnownColumn(col)) {
+        // Dotted keys (e.g. "comments.body") pass through as raw SQL with direction.
+        if (/^[\w$]+\.[\w$]+$/.test(col)) {
+          const lit = new Nodes.SqlLiteral(col);
+          manager.order(dir === "desc" ? new Nodes.Descending(lit) : new Nodes.Ascending(lit));
+        } else if (this._isKnownColumn(col)) {
           manager.order(dir === "desc" ? table.get(col).desc() : table.get(col).asc());
         } else {
           const unqual = new Nodes.UnqualifiedColumn(table.get(col));

@@ -209,7 +209,9 @@ describe("ActiveRecord::Encryption::EncryptableRecordApiTest", () => {
   it("encrypt won't change the encoding of strings even when compression is used", async () => {
     // JS strings have no explicit encoding — verify value round-trips unchanged.
     const Post = makeEncryptedPost(freshAdapter());
-    const title = "The Starfleet is here  OMG👌👌👌!";
+    // String must exceed THRESHOLD_TO_JUSTIFY_COMPRESSION (140 bytes) to exercise
+    // the compressed payload path in Encryptor.
+    const title = `The Starfleet is here! ${"OMG👌".repeat(30)}`;
     const post = await withoutEncryption(() => Post.create({ title, body: "some body" }));
     await post.encrypt();
     const reloaded = await Post.find(post.id);

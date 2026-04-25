@@ -163,7 +163,7 @@ async function main(): Promise<void> {
     const arel = await import("@blazetrails/arel");
     arel.setToSqlVisitor(arel.Visitors.SQLite);
 
-    // 3. Import query.ts. Fixtures end with `export default <expr>` — see
+    // 4. Import query.ts. Fixtures end with `export default <expr>` — see
     //    scripts/parity/translate/arel.ts (generateTs).
     const queryUrl = pathToFileURL(join(fixtureDirAbs, "query.ts")).href;
     const mod = (await import(queryUrl)) as { default: unknown };
@@ -179,14 +179,14 @@ async function main(): Promise<void> {
       );
     }
 
-    // 3. Extract SQL. Arel node/manager both expose .toSql():
+    // 5. Extract SQL. Arel node/manager both expose .toSql():
     //    Node#toSql()         packages/arel/src/nodes/node.ts
     //    TreeManager#toSql()  packages/arel/src/tree-manager.ts
     //    Arel inlines bind values into the SQL string — no separate bind array.
     const sqlStr = (result as { toSql(): string }).toSql().trim();
     const binds: string[] = [];
 
-    // 4. Write CanonicalQuery JSON
+    // 6. Write CanonicalQuery JSON
     const canonical: CanonicalQuery = {
       version: 1,
       fixture: fixtureName,

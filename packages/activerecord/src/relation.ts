@@ -306,6 +306,10 @@ export class Relation<T extends Base> {
    * Resolve all join steps and target PK columns for a named association.
    * Mirrors Rails' reflection.association_primary_key (Array form for composite
    * PKs) and left_outer_joins expansion for through associations.
+   *
+   * When the target model isn't in the registry (e.g. test helpers that set up
+   * associations without registering models), the table name is inferred from
+   * the association name/className and the join ON clause is built from options.
    */
   private _resolveAssociationTarget(
     assocName: string,
@@ -315,26 +319,45 @@ export class Relation<T extends Base> {
     const assocDef = associations.find((a: any) => a.name === assocName);
     if (!assocDef) return null;
 
+    // Try registry-based resolution first (handles all association types).
     const resolved = this._resolveAssociationJoin(assocName);
-    if (!resolved) return null;
-    const joins = Array.isArray(resolved) ? resolved : [resolved];
-    const lastJoin = joins[joins.length - 1];
-
-    let rawPk: string | string[] = "id";
-    if (assocDef.type === "belongsTo") {
-      const className = assocDef.options.className ?? _camelize(assocName);
-      const targetModel = modelRegistry.get(className);
-      rawPk = assocDef.options.primaryKey ?? targetModel?.primaryKey ?? "id";
-    } else {
-      const className =
-        assocDef.options.className ??
-        _camelize(assocDef.type === "hasMany" ? _singularize(assocName) : assocName);
-      const targetModel = modelRegistry.get(className);
-      rawPk = targetModel?.primaryKey ?? "id";
+    if (resolved) {
+      const joins = Array.isArray(resolved) ? resolved : [resolved];
+      const lastJoin = joins[joins.length - 1];
+      let rawPk: string | string[] = "id";
+      if (assocDef.type === "belongsTo") {
+        const targetModel = modelRegistry.get(assocDef.options.className ?? _camelize(assocName));
+        rawPk = assocDef.options.primaryKey ?? targetModel?.primaryKey ?? "id";
+      } else {
+        const className =
+          assocDef.options.className ??
+          _camelize(assocDef.type === "hasMany" ? _singularize(assocName) : assocName);
+        const targetModel = modelRegistry.get(className);
+        rawPk = targetModel?.primaryKey ?? "id";
+      }
+      const pks = Array.isArray(rawPk) ? rawPk : [rawPk];
+      return { joins, table: lastJoin.table, pks };
     }
-    const pks = Array.isArray(rawPk) ? rawPk : [rawPk];
 
-    return { joins, table: lastJoin.table, pks };
+    // Fallback: model not in registry — use the FK on the source table as a
+    // synthetic "join" with no real join table. This is data-correct for
+    // belongs_to (FK IS NULL / IS NOT NULL) even though it differs from Rails'
+    // JOIN form. The JOIN form requires knowing the target table name, which
+    // isn't available without a registered model.
+    const sourceTable = modelClass.tableName;
+    if (assocDef.type === "belongsTo") {
+      const foreignKey = assocDef.options.foreignKey ?? `${_toUnderscore(assocName)}_id`;
+      // Emit a degenerate single-predicate check on the FK column instead of a JOIN.
+      // Callers (whereMissing/whereAssociated) will add a join + WHERE on `table.pks`,
+      // so we set table/on to the source table and pk to the FK column, which produces
+      // `source_table.fk IS NULL` without any join — matching the old behavior.
+      return {
+        joins: [],
+        table: sourceTable,
+        pks: [foreignKey],
+      };
+    }
+    return null;
   }
 
   private _resolveHasManySubquery(

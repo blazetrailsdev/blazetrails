@@ -8,8 +8,10 @@ import { EncryptableRecord } from "./encryptable-record.js";
 import type { SchemeOptions } from "./scheme.js";
 import { installExtendedQueriesIfConfigured } from "./install.js";
 import { ExtendedDeterministicQueries } from "./extended-deterministic-queries.js";
+import { ExtendedDeterministicUniquenessValidator } from "./extended-deterministic-uniqueness-validator.js";
 import { Relation } from "../relation.js";
 import { Base } from "../index.js";
+import { UniquenessValidator } from "../validations.js";
 import {
   freshAdapter,
   configureEncryption,
@@ -346,6 +348,7 @@ describe("ActiveRecord::Encryption::EncryptionSchemesTest", () => {
       EncryptedAttributeType.prototype.serialize =
         savedMethods.serialize as typeof EncryptedAttributeType.prototype.serialize;
       (ExtendedDeterministicQueries as any)._installed = false;
+      ExtendedDeterministicUniquenessValidator.resetSupport(UniquenessValidator);
       Configurable.config.extendQueries = savedExtendQueries;
     }
   });

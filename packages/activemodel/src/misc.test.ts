@@ -565,13 +565,7 @@ describe("ActiveModel", () => {
     });
   });
 
-  // =========================================================================
-  // Phase 1100 — Errors
-  // =========================================================================
-
-  // =========================================================================
-  // Phase 1200/1250 — Callbacks and Dirty Tracking
-  // =========================================================================
+  // Errors / Callbacks / Dirty Tracking suites moved to dedicated files.
 
   describe("Types", () => {
     describe("DateType", () => {
@@ -842,9 +836,6 @@ describe("ActiveModel", () => {
     });
   });
 
-  // =========================================================================
-  // Callbacks — after_validation
-  // =========================================================================
   describe("clearAttributeChanges", () => {
     it("clears changes for specific attributes only", () => {
       class Person extends Model {

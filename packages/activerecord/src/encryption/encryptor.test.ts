@@ -119,8 +119,39 @@ describe("ActiveRecord::Encryption::EncryptorTest", () => {
     expect(() => enc.encrypt({} as any, { key: generateKey() })).toThrow(ForbiddenClass);
   });
 
-  it.skip("store custom metadata with the encrypted data, accessible by the key provider", () => {
-    /* needs key provider integration with metadata */
+  it("store custom metadata with the encrypted data, accessible by the key provider", () => {
+    const secret = generateKey();
+    let receivedMessage: unknown = null;
+
+    // Key provider that stores publicTags in the message headers and reads them back
+    // during decryption. Mirrors Rails: key_provider.encryption_key.public_tags are
+    // serialized into the message, and decryption_keys receives the full Message.
+    const keyProvider = {
+      encryptionKey() {
+        return { secret, publicTags: { model: "User", attr: "email" } };
+      },
+      decryptionKeys(message: unknown) {
+        receivedMessage = message;
+        return [{ secret }];
+      },
+    };
+
+    const enc = new Encryptor();
+    const encrypted = enc.encrypt("test@example.com", { keyProvider });
+    const decrypted = enc.decrypt(encrypted, { keyProvider });
+
+    expect(decrypted).toBe("test@example.com");
+
+    // Verify the custom metadata was stored in the message headers.
+    const serializer = new MessageSerializer();
+    const message = serializer.load(encrypted);
+    expect(message.headers.get("model")).toBe("User");
+    expect(message.headers.get("attr")).toBe("email");
+
+    // Verify the key provider received a message with the custom metadata headers during decryption.
+    const received = receivedMessage as typeof message;
+    expect(received.headers.get("model")).toBe("User");
+    expect(received.headers.get("attr")).toBe("email");
   });
 
   it("compress? returns the compress setting", () => {

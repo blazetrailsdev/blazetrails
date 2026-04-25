@@ -766,8 +766,15 @@ describe("the to_sql visitor", () => {
   it("should visit_Date with fractional seconds retains microseconds", () => {
     const d = new Date("2026-04-18T13:00:41.729Z");
     const sql = new Visitors.ToSql().compile(new Nodes.Quoted(d));
-    // ms=729 → 729000 microseconds
+    // "729" → padded to "729000" microseconds
     expect(sql).toBe("'2026-04-18 13:00:41.729000'");
+  });
+
+  it("should visit_Date-like with 1-digit fraction normalises to microseconds", () => {
+    // "7" → "700000" μs (not "007000" which the old ms*1000 approach produced)
+    const obj = { toISOString: () => "2020-01-02T03:04:05.7Z" };
+    const sql = new Visitors.ToSql().compile(new Nodes.Quoted(obj as unknown as Date));
+    expect(sql).toBe("'2020-01-02 03:04:05.700000'");
   });
 
   it("should visit_Date with zero ms emits bare seconds (Rails quoted_date format)", () => {

@@ -1385,8 +1385,12 @@ export class ToSql implements NodeVisitor<SQLString> {
     const match = d.toISOString().match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(?:\.(\d+))?Z?$/);
     if (!match) return `'${d.toISOString()}'`;
     const [, date, time, frac] = match;
-    const ms = frac ? parseInt(frac.slice(0, 3).padEnd(3, "0"), 10) : 0;
-    return ms > 0 ? `'${date} ${time}.${String(ms * 1000).padStart(6, "0")}'` : `'${date} ${time}'`;
+    // Normalise to exactly 6 digits: pad short fractions, truncate long ones.
+    // "729" → "729000" (μs), "7" → "700000", "1234" → "123400", "729000" → "729000".
+    const micros = frac ? parseInt((frac + "000000").slice(0, 6), 10) : 0;
+    return micros > 0
+      ? `'${date} ${time}.${String(micros).padStart(6, "0")}'`
+      : `'${date} ${time}'`;
   }
 
   protected quote(value: unknown): string {

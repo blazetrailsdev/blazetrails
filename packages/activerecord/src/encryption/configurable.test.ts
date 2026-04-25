@@ -122,8 +122,8 @@ describe("ActiveRecord::Encryption::ConfigurableTest", () => {
     });
 
     try {
-      // Anonymous class (no .name): filter key is just the attribute name
-      const modelClass = { name: "", _attributeDefinitions: new Map() };
+      // Truly anonymous class (empty .name): filter key is just the attribute name
+      const modelClass = Object.assign(class {}, { _attributeDefinitions: new Map() });
       EncryptableRecord.encrypts(modelClass, "secret");
 
       expect(filterParameters).toContain("secret");
@@ -151,6 +151,31 @@ describe("ActiveRecord::Encryption::ConfigurableTest", () => {
 
       // addToFilterParameters = false → nothing is added
       expect(filterParameters).toHaveLength(0);
+    } finally {
+      dispose();
+    }
+  });
+
+  it("excludeFromFilterParameters excludes specific attributes while others are still filtered", () => {
+    Configurable.config.excludeFromFilterParameters = ["secret_token"];
+
+    const filterParameters: string[] = [];
+    const autoFilteredParameters = new AutoFilteredParameters(filterParameters);
+    autoFilteredParameters.enable();
+
+    const dispose = Configurable.onEncryptedAttributeDeclared((klass, name) => {
+      autoFilteredParameters.attributeWasDeclared(klass, name);
+    });
+
+    try {
+      class PaymentModel {}
+      const modelClass = Object.assign(PaymentModel, { _attributeDefinitions: new Map() });
+      EncryptableRecord.encrypts(modelClass, "card_number");
+      EncryptableRecord.encrypts(modelClass, "secret_token");
+
+      // "card_number" is added; "secret_token" is excluded
+      expect(filterParameters).toContain("payment_model.card_number");
+      expect(filterParameters).not.toContain("payment_model.secret_token");
     } finally {
       dispose();
     }

@@ -183,8 +183,13 @@ export class EncryptedAttributeType extends ValueType implements WrappedType {
     if (value === null || value === undefined) return value;
     if (this._default !== undefined && this._default === value) return value;
 
+    // Adapters that use JSON/JSONB columns (e.g. PostgreSQL) return the stored value
+    // as a parsed JS object rather than a raw string. Re-stringify so the encryptor
+    // always receives the JSON string that was originally stored.
+    const ciphertext = typeof value === "string" ? value : JSON.stringify(value);
+
     try {
-      return this._encryptor.decrypt(String(value), this.decryptionOptions());
+      return this._encryptor.decrypt(ciphertext, this.decryptionOptions());
     } catch (error) {
       if (!(error instanceof BaseEncryptionError)) throw error;
       if (this.scheme.previousSchemes.length === 0) {

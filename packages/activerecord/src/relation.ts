@@ -357,9 +357,13 @@ export class Relation<T extends Base> {
         const targetModel = modelRegistry.get(assocDef.options.className ?? _camelize(assocName));
         rawPk = assocDef.options.primaryKey ?? targetModel?.primaryKey ?? "id";
       } else {
+        // Singularize for all plural collection association types.
+        const isPlural =
+          assocDef.type === "hasMany" ||
+          assocDef.type === "hasAndBelongsToMany" ||
+          (assocDef.type as string) === "hasManyThrough";
         const className =
-          assocDef.options.className ??
-          _camelize(assocDef.type === "hasMany" ? _singularize(assocName) : assocName);
+          assocDef.options.className ?? _camelize(isPlural ? _singularize(assocName) : assocName);
         const targetModel = modelRegistry.get(className);
         rawPk = targetModel?.primaryKey ?? "id";
       }

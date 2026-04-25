@@ -11,7 +11,12 @@ export interface CallbackOptions {
 }
 
 export interface DefineCallbacksOptions {
-  terminator?: boolean;
+  /**
+   * Mirrors Rails' :terminator option. Pass a function `(target, fn) => boolean` (returns true
+   * to halt) or `false` to disable halting entirely. Defaults to halting when a before callback
+   * returns `false`.
+   */
+  terminator?: ((target: AnyRecord, fn: () => unknown) => boolean) | false;
   skipAfterCallbacksIfTerminated?: boolean;
   scope?: string[];
 }
@@ -226,18 +231,19 @@ export class Before {
   constructor(
     userCallback: (target: AnyRecord, value: AnyRecord) => unknown,
     userConditions: Array<(target: AnyRecord, value: AnyRecord) => boolean>,
-    chainConfig: { terminator?: (target: AnyRecord, fn: () => unknown) => boolean },
+    chainConfig: { terminator?: ((target: AnyRecord, fn: () => unknown) => boolean) | false },
     filter: AnyCallback | string | symbol = "",
     name: string = "",
   ) {
     this.userCallback = userCallback;
     this.userConditions = userConditions;
     this.haltedLambda =
-      chainConfig.terminator ??
-      ((_t, fn) => {
-        fn();
-        return false;
-      });
+      chainConfig.terminator === false
+        ? (_t: AnyRecord, fn: () => unknown) => {
+            fn();
+            return false;
+          }
+        : (chainConfig.terminator ?? ((_t: AnyRecord, fn: () => unknown) => fn() === false));
     this.filter = filter;
     this.name = name;
   }
@@ -259,11 +265,13 @@ export class Before {
     callback: Callback,
     options: DefineCallbacksOptions,
   ): (target: AnyRecord) => boolean {
-    const terminator = options.terminator !== false;
+    const terminatorFn = options.terminator;
     return (target: AnyRecord) => {
       if (!Value.check(callback.options, target)) return true;
-      const result = (callback.filter as BeforeCallback)(target);
-      return !(terminator && result === false);
+      const cb = callback.filter as BeforeCallback;
+      if (terminatorFn === false) return true; // never halt
+      if (terminatorFn) return !terminatorFn(target, () => cb(target));
+      return cb(target) !== false;
     };
   }
 }
@@ -426,7 +434,7 @@ export class Callback {
       this._compiled = new Before(
         callTemplate.makeLambda(),
         userConditions,
-        {},
+        this.chainConfig,
         this.filter,
         this.name,
       );
@@ -501,7 +509,9 @@ export class CallbackSequence {
     callTemplate: CallTemplate,
     userConditions: Array<(target: AnyRecord, value: AnyRecord) => boolean>,
   ): CallbackSequence {
-    return new CallbackSequence(this, callTemplate, userConditions);
+    const sequence = new CallbackSequence(this, callTemplate, userConditions);
+    sequence._callbackChain = this._callbackChain;
+    return sequence;
   }
 
   isSkip(env: FilterEnvironment): boolean {
@@ -550,7 +560,11 @@ export class CallbackChain {
 
   constructor(name: string, config: DefineCallbacksOptions = {}) {
     this.name = name;
-    this.config = { terminator: true, ...config };
+    this.config = {
+      // Default terminator: halt if before-callback returns false
+      terminator: (_target: AnyRecord, fn: () => unknown) => fn() === false,
+      ...config,
+    };
     this.chain = [];
   }
 
@@ -602,7 +616,7 @@ export class CallbackChain {
   }
 
   _invokeSequence(seq: CallbackSequence, target: AnyRecord, block?: () => void): boolean {
-    const terminator = this.config.terminator !== false;
+    const terminatorFn = this.config.terminator;
     const entries = this.chain;
 
     const befores = entries.filter((e) => e.kind === "before");
@@ -611,8 +625,14 @@ export class CallbackChain {
 
     for (const entry of befores) {
       if (!Value.check(entry.options, target)) continue;
-      const result = (entry.filter as BeforeCallback)(target);
-      if (terminator && result === false) return false;
+      const cb = entry.filter as BeforeCallback;
+      if (terminatorFn === false) {
+        cb(target); // no halting
+      } else if (terminatorFn) {
+        if (terminatorFn(target, () => cb(target))) return false;
+      } else {
+        if (cb(target) === false) return false;
+      }
     }
 
     let core = () => {
@@ -687,6 +707,7 @@ export function __updateCallbacks(
     const dup = new CallbackChain(chain.name, chain.config);
     chain.entries.forEach((e) => dup.append(e));
     fn(target, dup);
+    target.setCallbacks(name, dup);
   });
 }
 
@@ -739,7 +760,9 @@ function getCallbackChains(target: AnyRecord): Map<string, CallbackChain> {
       for (const [name, chain] of parent) {
         const newChain = new CallbackChain(chain.name, chain.config);
         for (const entry of chain.entries) {
-          newChain.append(new Callback(entry.name, entry.filter, entry.kind, entry.options));
+          newChain.append(
+            new Callback(entry.name, entry.filter, entry.kind, entry.options, entry.chainConfig),
+          );
         }
         own.set(name, newChain);
       }

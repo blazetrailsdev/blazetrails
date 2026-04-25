@@ -229,6 +229,10 @@ describe("RelationTest", () => {
     }
     const sql = User.order({ created_at: "desc" }).limit(10).toSql();
     expect(sql).toContain('"users"."created_at" DESC');
+
+    const multiKeySql = User.order({ title: "asc", id: "desc" }).limit(10).toSql();
+    expect(multiKeySql).toContain('"users"."title" ASC');
+    expect(multiKeySql).toContain('"users"."id" DESC');
   });
 
   it("multiple selects", () => {

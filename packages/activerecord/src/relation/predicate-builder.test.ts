@@ -191,6 +191,7 @@ describe("PredicateBuilderTest", () => {
       expect(sql).toContain('"authors"."name"');
       expect(sql).toContain("Rails");
       expect(sql).not.toContain('"posts"."authors"');
+      expect(sql).toMatch(/NOT\b|!=|<>/);
     });
 
     it("does not expand when key is a known column on the current table (mirrors Rails !table.has_column? guard)", () => {

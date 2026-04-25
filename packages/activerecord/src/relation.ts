@@ -254,7 +254,13 @@ export class Relation<T extends Base> {
     let rel: Relation<T> = this;
     for (const assocName of assocNames) {
       this._requireAssociation(assocName);
-      const target = rel._resolveAssociationTarget(assocName)!;
+      const target = rel._resolveAssociationTarget(assocName);
+      if (!target) {
+        throw new Error(
+          `whereAssociated: cannot resolve join for '${assocName}' on ${(rel._modelClass as any).name} — ` +
+            `through/HABTM associations require the intermediate model to be registered.`,
+        );
+      }
       const cloned = rel._clone();
       for (const join of target.joins) {
         // Dedup by table name: skip if a join to this table already exists
@@ -282,7 +288,13 @@ export class Relation<T extends Base> {
     let rel: Relation<T> = this;
     for (const assocName of assocNames) {
       this._requireAssociation(assocName);
-      const target = rel._resolveAssociationTarget(assocName)!;
+      const target = rel._resolveAssociationTarget(assocName);
+      if (!target) {
+        throw new Error(
+          `whereMissing: cannot resolve join for '${assocName}' on ${(rel._modelClass as any).name} — ` +
+            `through/HABTM associations require the intermediate model to be registered.`,
+        );
+      }
       const cloned = rel._clone();
       for (const join of target.joins) {
         // Dedup by table name to avoid duplicate-table SQL if the same
@@ -318,9 +330,14 @@ export class Relation<T extends Base> {
    * PKs are handled at the WHERE-predicate level (one IS NULL per PK column)
    * but not yet in the ON clause itself.
    *
-   * When the target model isn't in the registry (e.g. test helpers that set up
-   * associations without registering models), the table name is inferred from
-   * the association name/className and the join ON clause is built from options.
+   * When the target model isn't in the modelRegistry, falls back to deriving
+   * the JOIN from association options alone. For `belongsTo` the FK is known,
+   * so the fallback emits a source-table FK predicate (no JOIN) which is
+   * data-correct. For `hasOne`/`hasMany` the target table name is inferred
+   * from the className/association name and a JOIN ON is built from options.
+   *
+   * Returns null only when the association type is unsupported in the fallback
+   * path (e.g. through/HABTM without a registered model).
    */
   private _resolveAssociationTarget(
     assocName: string,
@@ -330,7 +347,7 @@ export class Relation<T extends Base> {
     const assocDef = associations.find((a: any) => a.name === assocName);
     if (!assocDef) return null;
 
-    // Try registry-based resolution first (handles all association types).
+    // Primary path: registry-based resolution handles all association types.
     const resolved = this._resolveAssociationJoin(assocName);
     if (resolved) {
       const joins = Array.isArray(resolved) ? resolved : [resolved];
@@ -350,23 +367,23 @@ export class Relation<T extends Base> {
       return { joins, table: lastJoin.table, pks };
     }
 
-    // Fallback: model not in registry — use the FK on the source table as a
-    // synthetic "join" with no real join table. This is data-correct for
-    // belongs_to (FK IS NULL / IS NOT NULL) even though it differs from Rails'
-    // JOIN form. The JOIN form requires knowing the target table name, which
-    // isn't available without a registered model.
+    // Fallback: target model not in registry — derive JOIN from options.
     const sourceTable = modelClass.tableName;
     if (assocDef.type === "belongsTo") {
       const foreignKey = assocDef.options.foreignKey ?? `${_toUnderscore(assocName)}_id`;
-      // Emit a degenerate single-predicate check on the FK column instead of a JOIN.
-      // Callers (whereMissing/whereAssociated) will add a join + WHERE on `table.pks`,
-      // so we set table/on to the source table and pk to the FK column, which produces
-      // `source_table.fk IS NULL` without any join — matching the old behavior.
-      return {
-        joins: [],
-        table: sourceTable,
-        pks: [foreignKey],
-      };
+      // No JOIN needed: emit WHERE source_table.fk IS NULL instead.
+      // Data-correct for belongs_to even though it differs from Rails' JOIN form.
+      return { joins: [], table: sourceTable, pks: [foreignKey] };
+    }
+    if (assocDef.type === "hasOne" || assocDef.type === "hasMany") {
+      const className =
+        assocDef.options.className ??
+        _camelize(assocDef.type === "hasMany" ? _singularize(assocName) : assocName);
+      const targetTable = assocDef.options.tableName ?? _pluralize(_toUnderscore(className));
+      const sourcePk = assocDef.options.primaryKey ?? modelClass.primaryKey ?? "id";
+      const foreignKey = assocDef.options.foreignKey ?? `${_toUnderscore(modelClass.name)}_id`;
+      const on = `"${targetTable}"."${foreignKey}" = "${sourceTable}"."${sourcePk}"`;
+      return { joins: [{ table: targetTable, on }], table: targetTable, pks: ["id"] };
     }
     return null;
   }

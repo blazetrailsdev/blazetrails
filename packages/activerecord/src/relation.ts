@@ -2905,15 +2905,12 @@ export class Relation<T extends Base> {
           manager.order(new Nodes.SqlLiteral(clause));
         } else {
           // Parse "column ASC/DESC" or "table.column ASC/DESC" strings
-          const match = clause.match(/^([\w.]+)\s+(ASC|DESC)$/i);
+          const match = clause.match(/^([A-Za-z_$][\w$.]*)\s+(ASC|DESC)$/i);
           if (match) {
             const rawCol = match[1];
             const dir = match[2].toUpperCase();
-            // Dotted simple identifiers (table.column) pass through as raw SQL —
-            // Rails treats string-form orders as SqlLiteral and never re-qualifies
-            // cross-table references. Restrict to safe identifier patterns to avoid
-            // bypassing sanitization for arbitrary dotted strings.
-            if (/^[\w$]+\.[\w$]+$/.test(rawCol)) {
+            // Any dotted identifier (one or more dots) passes through as raw SQL.
+            if (rawCol.includes(".")) {
               manager.order(new Nodes.SqlLiteral(clause));
             } else {
               const node = this._isKnownColumn(rawCol)
@@ -2924,10 +2921,9 @@ export class Relation<T extends Base> {
               );
             }
           } else {
-            // Not "col DIR" form. Pass through as raw SQL unless it's a plain
-            // single identifier — multi-column strings, NULLS FIRST, commas, etc.
-            // must not be wrapped in an Arel node.
-            if (/^[\w$]+$/.test(clause)) {
+            // Not "col DIR" form. Only wrap plain letter-start identifiers;
+            // everything else (positional "1", NULLS FIRST, commas, etc.) is raw SQL.
+            if (/^[A-Za-z_$][\w$]*$/.test(clause)) {
               const node = this._isKnownColumn(clause)
                 ? table.get(clause)
                 : new Nodes.UnqualifiedColumn(table.get(clause));
@@ -2942,7 +2938,7 @@ export class Relation<T extends Base> {
         // Mirrors Rails' arel_column: unknown columns (e.g. subquery aliases
         // from .from()) get a bare quoted name, not a table-qualified attribute.
         // Dotted keys (e.g. "comments.body") pass through as raw SQL with direction.
-        if (/^[\w$]+\.[\w$]+$/.test(col)) {
+        if (/^[\w$]+(\.[\w$]+)+$/.test(col)) {
           const lit = new Nodes.SqlLiteral(col);
           manager.order(dir === "desc" ? new Nodes.Descending(lit) : new Nodes.Ascending(lit));
         } else if (this._isKnownColumn(col)) {

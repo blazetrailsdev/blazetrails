@@ -2901,6 +2901,7 @@ export class Relation<T extends Base> {
     for (const clause of this._orderClauses) {
       if (typeof clause === "string") {
         const trimmed = clause.trim();
+        if (trimmed === "") continue;
         // Detect SQL expressions (functions, parens, operators) and pass as raw SQL
         if (trimmed.includes("(") || /\bcase\b/i.test(trimmed) || trimmed.includes("||")) {
           manager.order(new Nodes.SqlLiteral(trimmed));

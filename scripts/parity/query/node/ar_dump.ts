@@ -28,6 +28,7 @@ import { join, resolve, dirname, basename } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { CanonicalQuery } from "../../canonical/query-types.js";
 import { Base } from "@blazetrails/activerecord";
+import { Visitors } from "@blazetrails/arel";
 
 function usage(): never {
   process.stderr.write(
@@ -175,10 +176,34 @@ async function main(): Promise<void> {
       );
     }
 
-    // 4. Extract SQL. AR Relation.toSql() renders SQL with literals inlined;
-    //    binds[] is always empty, same contract as the arel runner.
+    // 4. Extract SQL — two forms:
+    //    a) Inlined: toSql() with all values embedded as literals.
+    //    b) Parameterized: compileWithBinds extracts date values as bind
+    //       params (? placeholders), matching the execution path Rails uses
+    //       for INSERT/UPDATE and how AR actually passes values to the driver.
     const sqlStr = (result as { toSql(): string }).toSql().trim();
-    const binds: string[] = [];
+
+    const rel = result as { arel?(): { ast: unknown } };
+    let paramSql = sqlStr;
+    let binds: string[] = [];
+    if (typeof rel.arel === "function") {
+      const manager = rel.arel();
+      if (manager && typeof (manager as { ast: unknown }).ast !== "undefined") {
+        const visitor = new Visitors.ToSql();
+        const [ps, bs] = (
+          visitor as unknown as { compileWithBinds(node: unknown): [string, unknown[]] }
+        ).compileWithBinds((manager as { ast: unknown }).ast);
+        paramSql = ps.trim();
+        // Only include Date-valued binds. String/number bind params exist because trails
+        // uses BindParam nodes for scalar equality predicates while Rails inlines those
+        // literals directly in to_sql. Comparing all binds cross-side would surface that
+        // architectural difference rather than real SQL gaps. Dates are the only type
+        // where format differences matter (microseconds, ISO-8601 vs SQL datetime).
+        binds = (bs as unknown[])
+          .filter((b): b is Date => b instanceof Date)
+          .map((b) => b.toISOString());
+      }
+    }
 
     // 5. Write CanonicalQuery JSON
     const canonical: CanonicalQuery = {
@@ -186,6 +211,7 @@ async function main(): Promise<void> {
       fixture: fixtureName,
       frozenAt: frozenTs,
       sql: sqlStr,
+      paramSql,
       binds,
     };
 

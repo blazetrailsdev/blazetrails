@@ -124,11 +124,38 @@ Dir.mktmpdir("parity-ar-ruby-") do |tmpdir|
       raise "[#{fixture_name}] query.rb returned #{result.class}: expected an AR relation / Arel manager responding to #to_sql"
     end
 
-    # 5. Extract SQL. For AR relations, Relation#to_sql renders the SQL
-    #    with literal values inlined (binds pre-substituted), so binds is
-    #    always []. Same contract as the arel runner.
+    # 5. Extract SQL — two forms:
+    #    a) Inlined (sql): to_sql() with all values embedded as literals.
+    #    b) Parameterized (paramSql + binds): bound_attributes gives the bind
+    #       values Rails passes to the DB driver. Bind values are serialized
+    #       as ISO 8601 UTC so they're directly comparable to trails' output
+    #       from compileWithBinds (which emits Date.toISOString() values).
     sql_str = result.to_sql.strip
-    binds = []
+
+    # bound_attributes: ordered array of ActiveModel::Attribute objects.
+    # For datetime attributes, value_for_database is a Time object; we
+    # serialize to ISO 8601 with millisecond precision to match
+    # Date.toISOString() on the trails side.
+    # Only collect Date/Time-valued binds. String/number bind params in
+    # Rails SQLite are inlined directly in to_sql; trails uses BindParam nodes
+    # for those same scalars. Comparing all binds cross-side would surface that
+    # architectural difference. Dates are the only type where format matters.
+    raw_binds = result.respond_to?(:bound_attributes) ? result.bound_attributes : []
+    binds = raw_binds.filter_map do |ba|
+      val = ba.value_for_database
+      if val.respond_to?(:utc)
+        # Time/DateTime → ISO 8601 UTC with ms precision to match
+        # JavaScript Date.toISOString() format.
+        val.utc.iso8601(3)
+      end
+    end
+
+    # paramSql: for Rails, to_sql inlines everything so the "parameterized"
+    # template is the same as sql when there are no extractable binds.
+    # When bound_attributes is non-empty the sql already has the values
+    # inlined; we emit sql_str as paramSql since Rails has no direct
+    # public API to get the ? template from a relation.
+    param_sql = sql_str
 
     # 6. Write CanonicalQuery JSON
     canonical = {
@@ -136,6 +163,7 @@ Dir.mktmpdir("parity-ar-ruby-") do |tmpdir|
       "fixture"  => fixture_name,
       "frozenAt" => frozen_ts,
       "sql"      => sql_str,
+      "paramSql" => param_sql,
       "binds"    => binds,
     }
 

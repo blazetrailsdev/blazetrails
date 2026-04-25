@@ -1989,7 +1989,14 @@ export class Relation<T extends Base> {
 
   private _applyJoinsToManager(manager: SelectManager): void {
     for (const join of this._joinClauses) {
-      const tableNode = join.quoted ? new Table(join.table) : join.table;
+      const tableNode = join.quoted
+        ? new Nodes.SqlLiteral(
+            join.table
+              .split(".")
+              .map((p) => `"${p}"`)
+              .join("."),
+          )
+        : join.table;
       const onNode = new Nodes.SqlLiteral(join.on);
       if (join.type === "inner") {
         manager.join(tableNode, onNode);

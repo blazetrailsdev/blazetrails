@@ -80,7 +80,7 @@ describe("Railtie", () => {
     expect(log).toEqual(["A", "B"]);
   });
 
-  it("config is isolated per subclass (copy-on-first-write)", () => {
+  it("config is isolated per subclass (copy-on-first-access)", () => {
     class Child extends Railtie {}
     Railtie.config["shared"] = "base";
     Child.config["own"] = "child";

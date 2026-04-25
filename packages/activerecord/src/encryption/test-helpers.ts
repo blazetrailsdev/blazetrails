@@ -244,10 +244,17 @@ export function assertEncryptedAttribute(
   if (expectedValue !== null && expectedValue !== undefined) {
     const dbValues = model._attributes.valuesForDatabase();
     const dbValue = dbValues[attrName];
-    const type = model._attributes?.get?.(attrName)?.type;
-    const serializedPlaintext =
+    const type = model._attributes?.getAttribute?.(attrName)?.type;
+    const rawSerialized =
       type && typeof (type as any).castType?.serialize === "function"
         ? (type as any).castType.serialize(expectedValue)
+        : null;
+    // Normalize to string for comparison (EncryptedAttributeType calls String() before encrypting).
+    const serializedPlaintext =
+      rawSerialized != null
+        ? rawSerialized instanceof Date
+          ? rawSerialized.toISOString().split("T")[0] // date → "YYYY-MM-DD"
+          : String(rawSerialized)
         : null;
     if (
       dbValue === expectedValue ||

@@ -287,6 +287,58 @@ describe("RelationTest", () => {
     }
   });
 
+  it("whereMissing with hasMany emits LEFT OUTER JOIN + target_pk IS NULL", () => {
+    class WmhAuthor extends Base {
+      static {
+        this.tableName = "authors";
+        this.hasMany("books");
+        registerModel("Author", this);
+      }
+    }
+    class WmhBook extends Base {
+      static {
+        this.tableName = "books";
+        registerModel("Book", this);
+      }
+    }
+    try {
+      const sql = WmhAuthor.all().whereMissing("books").toSql();
+      expect(sql).toContain("LEFT OUTER JOIN");
+      expect(sql).toContain('"books"');
+      expect(sql).toContain('"books"."id" IS NULL');
+      expect(sql).not.toContain('"authors"."id" IS NULL');
+    } finally {
+      modelRegistry.delete("Author");
+      modelRegistry.delete("Book");
+    }
+  });
+
+  it("whereAssociated with hasMany emits INNER JOIN + target_pk IS NOT NULL", () => {
+    class WahAuthor extends Base {
+      static {
+        this.tableName = "authors";
+        this.hasMany("books");
+        registerModel("Author", this);
+      }
+    }
+    class WahBook extends Base {
+      static {
+        this.tableName = "books";
+        registerModel("Book", this);
+      }
+    }
+    try {
+      const sql = WahAuthor.all().whereAssociated("books").toSql();
+      expect(sql).toContain("INNER JOIN");
+      expect(sql).toContain('"books"');
+      expect(sql).toContain('"books"."id" IS NOT NULL');
+      expect(sql).not.toContain('"authors"."id" IS NOT NULL');
+    } finally {
+      modelRegistry.delete("Author");
+      modelRegistry.delete("Book");
+    }
+  });
+
   it("multiple selects", () => {
     class Post extends Base {
       static {

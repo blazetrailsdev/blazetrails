@@ -2887,7 +2887,7 @@ export class Relation<T extends Base> {
   // table; pass SQL expressions (containing parens, spaces, dots, etc.) through
   // as raw SqlLiteral, matching ActiveRecord::Relation#build_group behaviour.
   private _groupColumnToArel(col: string, table: Table): Nodes.Node {
-    if (/[(\s*]/.test(col) || col.includes(".")) return new Nodes.SqlLiteral(col);
+    if (/[(\s]/.test(col) || col.includes(".")) return new Nodes.SqlLiteral(col);
     return table.get(col);
   }
 

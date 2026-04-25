@@ -106,6 +106,33 @@ describe("RelationTest", () => {
     expect(post.isPersisted()).toBe(true);
   });
 
+  it("group by bare column name qualifies via table", () => {
+    class Order extends Base {
+      static _tableName = "orders";
+      static {
+        this.attribute("created_at", "string");
+        this.attribute("total", "integer");
+        this.adapter = adapter;
+      }
+    }
+    const sql = Order.group("created_at").toSql();
+    expect(sql).toContain('"orders"."created_at"');
+    expect(sql).not.toMatch(/GROUP BY created_at[^"]/);
+  });
+
+  it("group by SQL expression passes through unqualified", () => {
+    class Order extends Base {
+      static _tableName = "orders";
+      static {
+        this.attribute("created_at", "string");
+        this.adapter = adapter;
+      }
+    }
+    const sql = Order.group("DATE(created_at)").toSql();
+    expect(sql).toContain("DATE(created_at)");
+    expect(sql).not.toContain('"orders"."DATE(created_at)"');
+  });
+
   it("multiple selects", () => {
     class Post extends Base {
       static {

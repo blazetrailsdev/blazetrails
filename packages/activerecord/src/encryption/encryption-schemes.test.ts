@@ -258,6 +258,7 @@ describe("ActiveRecord::Encryption::EncryptionSchemesTest", () => {
 
   it("don't use global previous schemes with a different deterministic nature", () => {
     Configurable.config.supportUnencryptedData = false;
+    Configurable.config.previousSchemes = [];
     Configurable.config.previous = [
       { encryptor: new TestEncryptor({ det: "cipher_det" }), deterministic: true } as SchemeOptions,
       { encryptor: new TestEncryptor({ nondet: "cipher_nondet" }) } as SchemeOptions,
@@ -313,22 +314,27 @@ describe("ActiveRecord::Encryption::EncryptionSchemesTest", () => {
       const prevEncryptor = new TestEncryptor({ alice: "alice_prev_cipher" });
       const currentEncryptor = new TestEncryptor({ alice: "alice_cur_cipher" });
 
+      // fixed: false so the attribute stores with the current cipher ("alice_cur_cipher").
+      // The raw row uses the prev cipher ("alice_prev_cipher"), which is only findable
+      // if query expansion includes the global previous scheme — proving the expansion works.
+      Configurable.config.previousSchemes = [];
       Configurable.config.previous = [
         { encryptor: prevEncryptor, deterministic: true } as SchemeOptions,
       ];
 
       const adp = freshAdapter();
       const Author = makeFreshModel(adp, { id: "integer", name: "string" });
-      Author.encrypts("name", { encryptor: currentEncryptor, deterministic: true });
+      Author.encrypts("name", { encryptor: currentEncryptor, deterministic: true, fixed: false });
       new Author();
 
-      // Insert a row encrypted with the previous scheme directly.
+      // Insert a row encrypted with the previous scheme directly (legacy row).
       const Raw = makeFreshModel(adp, { id: "integer", name: "string" });
       Raw._tableName = Author._tableName;
       new Raw();
       await Raw.create({ name: "alice_prev_cipher" });
 
-      // findBy should expand the query to include the prev-scheme ciphertext.
+      // Without query expansion, findBy would only search for "alice_cur_cipher" and miss
+      // the row. With expansion, the prev-scheme ciphertext is also included → found.
       const found = await Author.findBy({ name: "alice" });
       expect(found).not.toBeNull();
       expect(found!.name).toBe("alice");
@@ -346,6 +352,7 @@ describe("ActiveRecord::Encryption::EncryptionSchemesTest", () => {
 
   it("don't use global previous schemes with a different deterministic nature when performing queries", () => {
     Configurable.config.supportUnencryptedData = false;
+    Configurable.config.previousSchemes = [];
     Configurable.config.previous = [
       { encryptor: new TestEncryptor({ det: "cipher_det" }), deterministic: true } as SchemeOptions,
       { encryptor: new TestEncryptor({ nondet: "cipher_nondet" }) } as SchemeOptions,

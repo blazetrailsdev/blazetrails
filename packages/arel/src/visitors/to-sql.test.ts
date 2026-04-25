@@ -791,6 +791,18 @@ describe("the to_sql visitor", () => {
     expect(sql).not.toContain("Z");
   });
 
+  it("should extract Date as bind param in compileWithBinds", () => {
+    const users = new Table("users");
+    const d = new Date("2020-01-02T12:00:00.000Z");
+    const node = users.get("created_at").eq(new Nodes.Quoted(d));
+    const [sql, binds] = new Visitors.ToSql().compileWithBinds(node);
+    // Placeholder in SQL, actual Date in binds array.
+    expect(sql).toContain("?");
+    expect(sql).not.toContain("2020-01-02");
+    expect(binds).toHaveLength(1);
+    expect(binds[0]).toBe(d);
+  });
+
   it("should visit_Float", () => {
     const sql = new Visitors.ToSql().compile(new Nodes.Quoted(1.5));
     expect(sql).toBe("1.5");

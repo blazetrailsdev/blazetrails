@@ -1299,7 +1299,14 @@ export class ToSql implements NodeVisitor<SQLString> {
       "toISOString" in node.value &&
       typeof (node.value as { toISOString: unknown }).toISOString === "function"
     ) {
-      this.collector.addBind(node.value);
+      // Bind real Date instances directly (drivers handle them natively).
+      // For non-Date date-like objects, bind the formatted string so drivers
+      // don't receive an unsupported object type.
+      const bind =
+        node.value instanceof Date
+          ? node.value
+          : this.quotedDate(node.value as { toISOString(): string }).slice(1, -1);
+      this.collector.addBind(bind);
     } else {
       this.collector.append(this.quote(node.value));
     }
@@ -1367,7 +1374,9 @@ export class ToSql implements NodeVisitor<SQLString> {
       typeof (v as { toISOString: unknown }).toISOString === "function"
     ) {
       if (this._extractBinds) {
-        this.collector.addBind(v);
+        const bind =
+          v instanceof Date ? v : this.quotedDate(v as { toISOString(): string }).slice(1, -1);
+        this.collector.addBind(bind);
       } else {
         this.collector.append(this.quotedDate(v as { toISOString(): string }));
       }

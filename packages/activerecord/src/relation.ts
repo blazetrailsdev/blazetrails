@@ -1602,7 +1602,10 @@ export class Relation<T extends Base> {
     if (!hasUnjoined) return [];
 
     const alreadyEagerLoaded = new Set(this._eagerLoadAssociations);
-    return this._includesAssociations.filter((name) => !alreadyEagerLoaded.has(name));
+    // Only promote flat string associations — nested hash objects fall back to preload.
+    return this._includesAssociations.filter(
+      (name) => typeof name === "string" && !alreadyEagerLoaded.has(name),
+    );
   }
 
   private async _executeEagerLoad(eagerAssocs?: string[]): Promise<void> {

@@ -3657,13 +3657,23 @@ describe("EagerAssociationTest", () => {
     // must not raise — empty order string should be silently dropped.
     let error: unknown;
     try {
-      await (JeeoPost as any).all().includes("jeeoComments").order("").first();
+      await (JeeoPost as any)
+        .all()
+        .includes("jeeoComments")
+        .references("jeeo_comments")
+        .order("")
+        .first();
     } catch (e) {
       error = e;
     }
     expect(error).toBeUndefined();
     // Also verify the result has the preloaded comments
-    const result = await (JeeoPost as any).all().includes("jeeoComments").order("").toArray();
+    const result = await (JeeoPost as any)
+      .all()
+      .includes("jeeoComments")
+      .references("jeeo_comments")
+      .order("")
+      .toArray();
     expect(result).toHaveLength(1);
     expect(result[0]._preloadedAssociations.get("jeeoComments")).toHaveLength(1);
   });
@@ -3751,10 +3761,11 @@ describe("EagerAssociationTest", () => {
     });
 
     // Rails: Project.references(:mentors).includes(mentor: { developers: :contracts }, developers: :contracts)
-    // references() registers the mentor table for join-promotion; the nested includes
-    // preloads both branches. We verify both paths surface the same contract record.
+    // references("elmar_mentors") registers the mentor table; nested hash includes preload
+    // both branches. Rails asserts the same contracts object is reused across both paths.
     const projects = await (ElmarProject as any)
       .all()
+      .references("elmar_mentors")
       .includes({
         elmarMentor: { elmarDevelopers: "elmarContracts" },
         elmarDevelopers: "elmarContracts",

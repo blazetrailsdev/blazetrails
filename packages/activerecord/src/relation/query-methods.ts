@@ -236,7 +236,8 @@ function orderBang(
     const arg = args[i];
     if (typeof arg === "string") {
       if (arg.trim() === "") {
-        i++;
+        const next = args[i + 1];
+        i += typeof next === "string" && /^(asc|desc)$/i.test(next) ? 2 : 1;
         continue;
       }
       const next = args[i + 1];

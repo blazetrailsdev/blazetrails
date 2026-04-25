@@ -10,6 +10,7 @@ import {
 } from "@blazetrails/arel";
 import type { Base } from "./base.js";
 import { _setRelationCtor, _setScopeProxyWrapper, quoteSqlValue } from "./base.js";
+import { quoteColumnName } from "./connection-adapters/abstract/quoting.js";
 import { RecordNotSaved, RecordNotUnique } from "./errors.js";
 import { modelRegistry } from "./associations.js";
 import { applyThenable, stripThenable } from "./relation/thenable.js";
@@ -2898,18 +2899,30 @@ export class Relation<T extends Base> {
           const match = clause.match(/^([\w.]+)\s+(ASC|DESC)$/i);
           if (match) {
             const rawCol = match[1];
-            const col = rawCol.includes(".") ? rawCol.split(".").pop()! : rawCol;
             const dir = match[2].toUpperCase();
-            const node = this._modelClass._attributeDefinitions.has(col)
-              ? table.get(col)
-              : new Nodes.SqlLiteral(`"${col}"`);
-            manager.order(dir === "DESC" ? new Nodes.Descending(node) : new Nodes.Ascending(node));
+            // Dotted string (e.g. "comments.body") with an unknown column: keep
+            // as raw SQL to avoid silently dropping the qualifier.
+            if (rawCol.includes(".") && !this._modelClass._attributeDefinitions.has(rawCol)) {
+              manager.order(new Nodes.SqlLiteral(`${clause}`));
+            } else {
+              const col = rawCol.includes(".") ? rawCol.split(".").pop()! : rawCol;
+              const node = this._modelClass._attributeDefinitions.has(col)
+                ? table.get(col)
+                : new Nodes.SqlLiteral(quoteColumnName(col));
+              manager.order(
+                dir === "DESC" ? new Nodes.Descending(node) : new Nodes.Ascending(node),
+              );
+            }
           } else {
-            const col = clause.includes(".") ? clause.split(".").pop()! : clause;
-            const node = this._modelClass._attributeDefinitions.has(col)
-              ? table.get(col)
-              : new Nodes.SqlLiteral(`"${col}"`);
-            manager.order(new Nodes.Ascending(node));
+            if (clause.includes(".") && !this._modelClass._attributeDefinitions.has(clause)) {
+              manager.order(new Nodes.SqlLiteral(clause));
+            } else {
+              const col = clause.includes(".") ? clause.split(".").pop()! : clause;
+              const node = this._modelClass._attributeDefinitions.has(col)
+                ? table.get(col)
+                : new Nodes.SqlLiteral(quoteColumnName(col));
+              manager.order(new Nodes.Ascending(node));
+            }
           }
         }
       } else {
@@ -2919,7 +2932,7 @@ export class Relation<T extends Base> {
         if (this._modelClass._attributeDefinitions.has(col)) {
           manager.order(dir === "desc" ? table.get(col).desc() : table.get(col).asc());
         } else {
-          const lit = new Nodes.SqlLiteral(`"${col}"`);
+          const lit = new Nodes.SqlLiteral(quoteColumnName(col));
           manager.order(dir === "desc" ? new Nodes.Descending(lit) : new Nodes.Ascending(lit));
         }
       }

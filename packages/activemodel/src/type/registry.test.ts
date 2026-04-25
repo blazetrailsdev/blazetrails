@@ -43,8 +43,11 @@ describe("TypeRegistry", () => {
   });
 
   it("a class can be registered for a symbol", () => {
-    Types.typeRegistry.register("custom", () => new Types.StringType());
-    const t = Types.typeRegistry.lookup("custom");
+    // Use a uniquely-scoped name — the type registry is a global singleton,
+    // so generic names ("custom", "mytype") risk colliding as the test set
+    // grows.
+    Types.typeRegistry.register("type_registry_test_custom", () => new Types.StringType());
+    const t = Types.typeRegistry.lookup("type_registry_test_custom");
     expect(t).toBeInstanceOf(Types.StringType);
   });
 });

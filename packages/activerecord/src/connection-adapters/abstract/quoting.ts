@@ -270,9 +270,11 @@ export function columnNameMatcher(): RegExp {
   // Mirrors Rails' column_name_matcher — allows:
   //   word, "word", table.col, "table"."col", func(word), func(func(word)),
   //   with optional AS alias.
-  // Approximation of Rails' recursive \g<2> pattern using 2-level nesting.
-  const quotedWord = String.raw`(?:"?\w+"?)`;
-  const atom = String.raw`(?:(?:${quotedWord}\.)?${quotedWord}|\w+\((?:[^,()]*|\w+\([^,()]*\))*\))`;
+  // Requires balanced double-quoted identifiers and restricts function
+  // arguments to identifiers/dotted-identifiers/nested functions (no operators).
+  const quotedWord = String.raw`(?:"\w+"|'\w+'|\w+)`;
+  const innerArg = String.raw`(?:(?:${quotedWord}\.)?${quotedWord}|\w+\((?:${quotedWord}\.)?${quotedWord}\))`;
+  const atom = String.raw`(?:(?:${quotedWord}\.)?${quotedWord}|\w+\((?:|${innerArg})\))`;
   return new RegExp(
     `^(${atom}(?:(?:\\s+AS)?\\s+\\w+)?)(?:\\s*,\\s*${atom}(?:(?:\\s+AS)?\\s+\\w+)?)*$`,
     "i",
@@ -286,8 +288,9 @@ export function columnNameMatcher(): RegExp {
  */
 export function columnNameWithOrderMatcher(): RegExp {
   // Like column_name_matcher but with optional ASC/DESC/NULLS modifiers.
-  const quotedWord = String.raw`(?:"?\w+"?)`;
-  const atom = String.raw`(?:(?:${quotedWord}\.)?${quotedWord}|\w+\((?:[^,()]*|\w+\([^,()]*\))*\))`;
+  const quotedWord = String.raw`(?:"\w+"|'\w+'|\w+)`;
+  const innerArg = String.raw`(?:(?:${quotedWord}\.)?${quotedWord}|\w+\((?:${quotedWord}\.)?${quotedWord}\))`;
+  const atom = String.raw`(?:(?:${quotedWord}\.)?${quotedWord}|\w+\((?:|${innerArg})\))`;
   return new RegExp(
     `^(${atom}(?:\\s+ASC|\\s+DESC)?(?:\\s+NULLS\\s+(?:FIRST|LAST))?)(?:\\s*,\\s*${atom}(?:\\s+ASC|\\s+DESC)?(?:\\s+NULLS\\s+(?:FIRST|LAST))?)*$`,
     "i",

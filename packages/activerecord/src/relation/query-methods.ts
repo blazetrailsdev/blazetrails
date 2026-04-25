@@ -8,8 +8,8 @@ import { Nodes } from "@blazetrails/arel";
 import { FromClause } from "./from-clause.js";
 import { WhereClause } from "./where-clause.js";
 import { IrreversibleOrderError } from "../errors.js";
-import { sanitizeSqlArray } from "../sanitization.js";
-import { quote } from "../connection-adapters/abstract/quoting.js";
+import { sanitizeSqlArray, disallowRawSqlBang } from "../sanitization.js";
+import { quote, columnNameWithOrderMatcher } from "../connection-adapters/abstract/quoting.js";
 import { JoinDependency } from "../associations/join-dependency.js";
 
 /**
@@ -238,7 +238,7 @@ function regroupBang(this: QueryMethodsHost, ...columns: string[]): any {
 
 function orderBang(
   this: QueryMethodsHost,
-  ...args: Array<string | Record<string, "asc" | "desc">>
+  ...args: Array<string | Record<string, "asc" | "desc"> | Nodes.Node | unknown[]>
 ): any {
   let i = 0;
   while (i < args.length) {
@@ -251,8 +251,8 @@ function orderBang(
         const interpolated = rest.length > 0 ? sanitizeSqlArray(rawSql, ...rest) : rawSql;
         if (interpolated.trim() !== "") this._rawOrderClauses.push(interpolated);
       } else {
-        // Plain string array: each element is a separate ORDER BY term.
-        // Join and store in _orderClauses for later validation at execution time.
+        // Plain string array: validate each element immediately.
+        disallowRawSqlBang(arg as string[], columnNameWithOrderMatcher());
         for (const elem of arg as string[]) {
           if (typeof elem === "string" && elem.trim() !== "") {
             this._orderClauses.push(elem);
@@ -269,6 +269,8 @@ function orderBang(
         i += typeof next === "string" && /^(asc|desc)$/i.test(next) ? 2 : 1;
         continue;
       }
+      // Validate immediately — mirrors Rails raising on order("invalid") at call time.
+      disallowRawSqlBang([arg], columnNameWithOrderMatcher());
       const next = args[i + 1];
       if (typeof next === "string" && /^(asc|desc)$/i.test(next)) {
         this._orderClauses.push([arg, next.toLowerCase() as "asc" | "desc"]);
@@ -277,9 +279,13 @@ function orderBang(
       }
       this._orderClauses.push(arg);
     } else if (arg !== null && typeof arg === "object") {
-      // Hash form { col: "asc"|"desc" } — direction validation deferred to execution
+      // Hash form { col: "asc"|"desc" } — validate column and direction immediately.
       for (const [col, dir] of Object.entries(arg)) {
-        this._orderClauses.push([col, dir]);
+        disallowRawSqlBang([col], columnNameWithOrderMatcher());
+        if (!/^(asc|desc)$/i.test(String(dir))) {
+          throw new Error(`Direction "${dir}" is invalid. Valid directions are: asc, desc`);
+        }
+        this._orderClauses.push([col, (dir as string).toLowerCase() as "asc" | "desc"]);
       }
     }
     i++;
@@ -289,14 +295,26 @@ function orderBang(
 
 function reorderBang(
   this: QueryMethodsHost,
-  ...args: Array<string | Record<string, "asc" | "desc">>
+  ...args: Array<string | Record<string, "asc" | "desc"> | Nodes.Node | unknown[]>
 ): any {
   this._orderClauses = [];
   this._rawOrderClauses = [];
   let i = 0;
   while (i < args.length) {
     const arg = args[i];
-    if (arg instanceof Nodes.Node) {
+    if (Array.isArray(arg)) {
+      const [first, ...rest] = arg as unknown[];
+      if (first instanceof Nodes.Node) {
+        const rawSql = (first as any).value ?? first.toString();
+        const interpolated = rest.length > 0 ? sanitizeSqlArray(rawSql, ...rest) : rawSql;
+        if (interpolated.trim() !== "") this._rawOrderClauses.push(interpolated);
+      } else {
+        disallowRawSqlBang(arg as string[], columnNameWithOrderMatcher());
+        for (const elem of arg as string[]) {
+          if (typeof elem === "string" && elem.trim() !== "") this._orderClauses.push(elem);
+        }
+      }
+    } else if (arg instanceof Nodes.Node) {
       const rawSql = (arg as any).value ?? arg.toString();
       if (rawSql && rawSql.trim() !== "") this._rawOrderClauses.push(rawSql);
     } else if (typeof arg === "string") {
@@ -305,6 +323,7 @@ function reorderBang(
         i += typeof next === "string" && /^(asc|desc)$/i.test(next) ? 2 : 1;
         continue;
       }
+      disallowRawSqlBang([arg], columnNameWithOrderMatcher());
       const next = args[i + 1];
       if (typeof next === "string" && /^(asc|desc)$/i.test(next)) {
         this._orderClauses.push([arg, next.toLowerCase() as "asc" | "desc"]);
@@ -312,9 +331,13 @@ function reorderBang(
         continue;
       }
       this._orderClauses.push(arg);
-    } else {
-      for (const [col, dir] of Object.entries(arg)) {
-        this._orderClauses.push([col, dir]);
+    } else if (arg !== null && typeof arg === "object") {
+      for (const [col, dir] of Object.entries(arg as Record<string, string>)) {
+        disallowRawSqlBang([col], columnNameWithOrderMatcher());
+        if (!/^(asc|desc)$/i.test(String(dir))) {
+          throw new Error(`Direction "${dir}" is invalid. Valid directions are: asc, desc`);
+        }
+        this._orderClauses.push([col, (dir as string).toLowerCase() as "asc" | "desc"]);
       }
     }
     i++;

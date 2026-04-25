@@ -109,19 +109,22 @@ describe("UnsafeRawSqlTest", () => {
   });
 
   it("order: disallows invalid column name", async () => {
-    await expect(
-      (Post as any).order("REPLACE(title, 'misc', 'zzzz') asc").pluck("id"),
-    ).rejects.toBeInstanceOf(UnknownAttributeReference);
+    // order() raises immediately (Rails-faithful); wrap in async fn so .rejects works.
+    await expect(async () => {
+      await (Post as any).order("REPLACE(title, 'misc', 'zzzz') asc").pluck("id");
+    }).rejects.toBeInstanceOf(UnknownAttributeReference);
   });
 
   it("order: disallows invalid direction", async () => {
-    await expect((Post as any).order({ title: "foo" }).pluck("id")).rejects.toThrow();
+    await expect(async () => {
+      await (Post as any).order({ title: "foo" }).pluck("id");
+    }).rejects.toThrow();
   });
 
   it("order: disallows invalid column with direction", async () => {
-    await expect(
-      (Post as any).order({ "REPLACE(title, 'misc', 'zzzz')": "asc" }).pluck("id"),
-    ).rejects.toBeInstanceOf(UnknownAttributeReference);
+    await expect(async () => {
+      await (Post as any).order({ "REPLACE(title, 'misc', 'zzzz')": "asc" }).pluck("id");
+    }).rejects.toBeInstanceOf(UnknownAttributeReference);
   });
 
   it("order: always allows Arel", async () => {
@@ -140,15 +143,15 @@ describe("UnsafeRawSqlTest", () => {
   });
 
   it("order: disallows invalid bind statement", async () => {
-    await expect(
-      (Post as any).order(["REPLACE(title, ?, ?), id", "misc", "zzzz"]).pluck("id"),
-    ).rejects.toBeInstanceOf(UnknownAttributeReference);
+    await expect(async () => {
+      await (Post as any).order(["REPLACE(title, ?, ?), id", "misc", "zzzz"]).pluck("id");
+    }).rejects.toBeInstanceOf(UnknownAttributeReference);
   });
 
   it("order: disallows invalid Array arguments", async () => {
-    await expect(
-      (Post as any).order(["author_id", "REPLACE(title, 'misc', 'zzzz')"]).pluck("id"),
-    ).rejects.toBeInstanceOf(UnknownAttributeReference);
+    await expect(async () => {
+      await (Post as any).order(["author_id", "REPLACE(title, 'misc', 'zzzz')"]).pluck("id");
+    }).rejects.toBeInstanceOf(UnknownAttributeReference);
   });
 
   it("order: allows valid Array arguments", async () => {

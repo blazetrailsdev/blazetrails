@@ -12,10 +12,7 @@ import type { Base } from "./base.js";
 import { _setRelationCtor, _setScopeProxyWrapper, quoteSqlValue } from "./base.js";
 import { RecordNotSaved, RecordNotUnique } from "./errors.js";
 import { disallowRawSqlBang } from "./sanitization.js";
-import {
-  columnNameMatcher,
-  columnNameWithOrderMatcher,
-} from "./connection-adapters/abstract/quoting.js";
+import { columnNameMatcher } from "./connection-adapters/abstract/quoting.js";
 import { modelRegistry } from "./associations.js";
 import { applyThenable, stripThenable } from "./relation/thenable.js";
 import { getInheritanceColumn, isStiSubclass } from "./inheritance.js";
@@ -535,8 +532,10 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#order
    */
-  order(...args: Array<string | Record<string, "asc" | "desc">>): Relation<T> {
-    return this._clone().orderBang(...args);
+  order(
+    ...args: Array<string | Record<string, "asc" | "desc"> | Nodes.Node | unknown[]>
+  ): Relation<T> {
+    return this._clone().orderBang(...(args as any));
   }
 
   /**
@@ -646,8 +645,10 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#reorder
    */
-  reorder(...args: Array<string | Record<string, "asc" | "desc">>): Relation<T> {
-    return this._clone().reorderBang(...args);
+  reorder(
+    ...args: Array<string | Record<string, "asc" | "desc"> | Nodes.Node | unknown[]>
+  ): Relation<T> {
+    return this._clone().reorderBang(...(args as any));
   }
 
   /**
@@ -2943,9 +2944,6 @@ export class Relation<T extends Base> {
     for (const clause of this._orderClauses) {
       if (typeof clause === "string") {
         const trimmed = clause.trim();
-        // Validate plain string clauses against column_name_with_order_matcher.
-        // This is called inside async execution methods so exceptions become rejected promises.
-        disallowRawSqlBang([trimmed], columnNameWithOrderMatcher());
         // Detect SQL expressions (functions, parens, operators) and pass as raw SQL
         if (trimmed.includes("(") || /\bcase\b/i.test(trimmed) || trimmed.includes("||")) {
           manager.order(new Nodes.SqlLiteral(trimmed));
@@ -2981,11 +2979,6 @@ export class Relation<T extends Base> {
         }
       } else {
         const [col, dir] = clause;
-        // Validate column name and direction for hash-style { col: dir } clauses.
-        disallowRawSqlBang([col], columnNameWithOrderMatcher());
-        if (!/^(asc|desc)$/i.test(String(dir))) {
-          throw new Error(`Direction "${dir}" is invalid. Valid directions are: asc, desc`);
-        }
         // Mirrors Rails' arel_column: unknown columns (e.g. subquery aliases
         // from .from()) get a bare quoted name, not a table-qualified attribute.
         // Dotted keys (e.g. "comments.body") pass through as raw SQL with direction.

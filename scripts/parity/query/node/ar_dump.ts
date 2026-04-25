@@ -189,17 +189,29 @@ async function main(): Promise<void> {
     if (typeof rel.arel === "function") {
       const manager = rel.arel();
       if (manager && typeof (manager as { ast: unknown }).ast !== "undefined") {
-        const visitor = new Visitors.ToSql();
+        // Use the adapter-wired dialect visitor (e.g. Visitors.SQLite for SQLite)
+        // so boolean literals, DISTINCT, etc. match the actual execution dialect.
+        const adapterVisitor = (Base.adapter as { arelVisitor?: unknown }).arelVisitor;
+        const visitorCtor =
+          adapterVisitor != null ? (adapterVisitor as object).constructor : Visitors.ToSql;
+        const visitor = new (visitorCtor as new () => InstanceType<typeof Visitors.ToSql>)();
         const [ps, bs] = (
           visitor as unknown as { compileWithBinds(node: unknown): [string, unknown[]] }
         ).compileWithBinds((manager as { ast: unknown }).ast);
         paramSql = ps.trim();
-        // Only include Date-valued binds. String/number bind params exist because trails
-        // uses BindParam nodes for scalar equality predicates while Rails inlines those
-        // literals directly in to_sql. Comparing all binds cross-side would surface that
-        // architectural difference rather than real SQL gaps. Dates are the only type
-        // where format differences matter (microseconds, ISO-8601 vs SQL datetime).
+        // Resolve QueryAttribute/BindParam wrappers to their DB value before
+        // filtering for Date instances. Only Date-valued binds are captured:
+        // string/number scalars are inlined differently on each side (Rails
+        // inlines in sql; trails uses BindParam) so comparing them cross-side
+        // would surface an architectural difference, not a semantic SQL gap.
         binds = (bs as unknown[])
+          .map((b) => {
+            if (b != null && typeof b === "object" && "valueForDatabase" in b) {
+              const vfd = (b as { valueForDatabase?: unknown }).valueForDatabase;
+              return typeof vfd === "function" ? (vfd as () => unknown).call(b) : vfd;
+            }
+            return b;
+          })
           .filter((b): b is Date => b instanceof Date)
           .map((b) => b.toISOString());
       }

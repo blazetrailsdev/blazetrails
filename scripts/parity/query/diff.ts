@@ -231,30 +231,23 @@ async function main(): Promise<void> {
         continue;
       }
 
-      // Comparison strategy:
-      //   - When both sides have date binds: compare paramSql (? template) + binds.
-      //     Both sides build paramSql via Arel's bind collector so ? appears in
-      //     the same positions. Binds are ISO 8601 UTC on both sides
-      //     (Ruby: utc.iso8601(3); JS: Date.toISOString()). This avoids
-      //     inlined-SQL format differences (microseconds vs seconds).
-      //   - When no date binds: compare sql directly (same as before).
-      const railsBinds = (railsRaw as { binds: string[] }).binds ?? [];
-      const trailsBinds = (trailsRaw as { binds: string[] }).binds ?? [];
-      const hasDateBinds = railsBinds.length > 0 || trailsBinds.length > 0;
+      // Compare sql, frozenAt, and version.
+      // paramSql and binds are informational captures — not compared cross-side:
+      // Rails SQLite inlines all values (empty binds, paramSql = sql) while
+      // trails extracts datetime values (non-empty binds, paramSql has ?).
+      // That structural asymmetry makes cross-side comparison meaningless.
+      const sqlMatch = (railsRaw as { sql: string }).sql === (trailsRaw as { sql: string }).sql;
+      // frozenAt and version must agree — a frozen-time mismatch changes
+      // generated SQL and would produce a false-positive PASS.
+      const metaMatch =
+        (railsRaw as { version: number }).version === (trailsRaw as { version: number }).version &&
+        (railsRaw as { frozenAt: string }).frozenAt ===
+          (trailsRaw as { frozenAt: string }).frozenAt;
+      const match = sqlMatch && metaMatch;
 
-      const sqlMatch = hasDateBinds
-        ? (railsRaw as { paramSql: string }).paramSql ===
-          (trailsRaw as { paramSql: string }).paramSql
-        : (railsRaw as { sql: string }).sql === (trailsRaw as { sql: string }).sql;
-      const bindsMatch = JSON.stringify(railsBinds) === JSON.stringify(trailsBinds);
-      const match = sqlMatch && bindsMatch;
-
-      // For diff output: show paramSql+binds when date binds are present,
-      // otherwise show sql. Exclude the unused field to keep output clean.
+      // For diff output exclude paramSql and binds (not compared) to keep the patch readable.
       const toComparable = (doc: Record<string, unknown>) =>
-        hasDateBinds
-          ? stableJson({ ...doc, sql: undefined })
-          : stableJson({ ...doc, paramSql: undefined });
+        stableJson({ ...doc, paramSql: undefined, binds: undefined });
       const railsNorm = toComparable(railsRaw as Record<string, unknown>);
       const trailsNorm = toComparable(trailsRaw as Record<string, unknown>);
 

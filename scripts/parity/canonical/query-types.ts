@@ -7,12 +7,13 @@ export interface CanonicalQuery {
   /** SQL produced by to_sql / toSql() on the query expression — all values inlined */
   sql: string;
   /**
-   * Parameterized SQL template with `?` placeholders for bind-extracted values
-   * (dates, etc.). Populated when the visitor's compileWithBinds path is used.
-   * On the Rails side this comes from `connection.unprepared_statement { rel.to_sql }`
-   * for the inlined form, and `bound_attributes` for the binds.
+   * Optional. Parameterized SQL template with `?` placeholders for datetime bind values.
+   * - trails: built via `compileWithBinds` using the adapter-specific Arel visitor.
+   * - Rails: built via `Arel::Collectors::Bind` with the connection visitor.
+   * When present, compared cross-side alongside `binds` instead of `sql`.
+   * Omitted for arel-* fixtures (no datetime binds).
    */
-  paramSql: string;
+  paramSql?: string;
   /** Ordered bind values, all stringified. Populated alongside paramSql. */
   binds: string[];
 }

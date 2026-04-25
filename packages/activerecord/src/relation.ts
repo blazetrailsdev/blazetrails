@@ -93,6 +93,12 @@ function _addAssocJoin(
   clauses.push({ type, table: join.table, on: join.on, quoted: true });
 }
 
+/** Compile one or more Arel predicate nodes to the ON string used in _joinClauses. */
+function _buildOnString(...predicates: Nodes.Node[]): string {
+  const node = predicates.length === 1 ? predicates[0] : new Nodes.And(predicates);
+  return new Visitors.ToSql().compile(node);
+}
+
 function validateExplainOptions(options: ExplainOption[]): void {
   let seenHash = false;
   for (let i = 0; i < options.length; i++) {
@@ -1139,7 +1145,9 @@ export class Relation<T extends Base> {
       if (!targetModel) return null;
       const targetTable = targetModel.tableName;
       const targetPk = assocDef.options.primaryKey ?? targetModel.primaryKey ?? "id";
-      let onClause = `"${targetTable}"."${targetPk}" = "${sourceTable}"."${foreignKey}"`;
+      const tgt = new Table(targetTable);
+      const src = new Table(sourceTable);
+      const predicates: Nodes.Node[] = [tgt.get(targetPk).eq(src.get(foreignKey))];
 
       // STI type condition on target
       const inheritanceCol = getInheritanceColumn(targetModel);
@@ -1148,11 +1156,10 @@ export class Relation<T extends Base> {
           targetModel.name,
           ...(targetModel.descendants ?? []).map((d: any) => d.name),
         ];
-        const inList = stiNames.map((n: string) => `'${n}'`).join(", ");
-        onClause += ` AND "${targetTable}"."${inheritanceCol}" IN (${inList})`;
+        predicates.push(tgt.get(inheritanceCol).in(stiNames));
       }
 
-      return { table: targetTable, on: onClause };
+      return { table: targetTable, on: _buildOnString(...predicates) };
     }
 
     if (assocDef.type === "hasOne" || assocDef.type === "hasMany") {
@@ -1169,12 +1176,14 @@ export class Relation<T extends Base> {
       const targetTable = targetModel.tableName;
       const primaryKey = assocDef.options.primaryKey ?? sourcePk;
       const foreignKey = assocDef.options.foreignKey ?? `${_toUnderscore(modelClass.name)}_id`;
-      let onClause = `"${targetTable}"."${foreignKey}" = "${sourceTable}"."${primaryKey}"`;
+      const tgt = new Table(targetTable);
+      const src = new Table(sourceTable);
+      const predicates: Nodes.Node[] = [tgt.get(foreignKey).eq(src.get(primaryKey))];
 
       // Polymorphic type condition
       if (assocDef.options.as) {
         const typeCol = `${_toUnderscore(assocDef.options.as)}_type`;
-        onClause += ` AND "${targetTable}"."${typeCol}" = '${modelClass.name}'`;
+        predicates.push(tgt.get(typeCol).eq(modelClass.name));
       }
 
       // STI type condition on target
@@ -1184,11 +1193,10 @@ export class Relation<T extends Base> {
           targetModel.name,
           ...(targetModel.descendants ?? []).map((d: any) => d.name),
         ];
-        const inList = stiNames.map((n: string) => `'${n}'`).join(", ");
-        onClause += ` AND "${targetTable}"."${inheritanceCol}" IN (${inList})`;
+        predicates.push(tgt.get(inheritanceCol).in(stiNames));
       }
 
-      return { table: targetTable, on: onClause };
+      return { table: targetTable, on: _buildOnString(...predicates) };
     }
 
     // hasManyThrough (test-data style where type is literally "hasManyThrough")
@@ -1231,23 +1239,25 @@ export class Relation<T extends Base> {
     const throughTable = (throughModel as any).tableName;
 
     // Build the first JOIN: source -> through
-    let throughOn: string;
+    const srcTable = new Table(sourceTable);
+    const thrTable = new Table(throughTable);
+    const throughPredicates: Nodes.Node[] = [];
 
     if (throughAssocDef.type === "belongsTo") {
       const throughFk = throughAssocDef.options.foreignKey ?? `${_toUnderscore(throughName)}_id`;
       const throughTargetPk = throughAssocDef.options.primaryKey ?? throughModel.primaryKey ?? "id";
-      throughOn = `"${throughTable}"."${throughTargetPk}" = "${sourceTable}"."${throughFk}"`;
+      throughPredicates.push(thrTable.get(throughTargetPk).eq(srcTable.get(throughFk)));
     } else {
-      // hasMany or hasOne
       const throughPk = throughAssocDef.options.primaryKey ?? sourcePk;
       const throughAsName = throughAssocDef.options.as;
       const throughFk = throughAsName
         ? (throughAssocDef.options.foreignKey ?? `${_toUnderscore(throughAsName)}_id`)
         : (throughAssocDef.options.foreignKey ?? `${_toUnderscore(modelClass.name)}_id`);
-      throughOn = `"${throughTable}"."${throughFk}" = "${sourceTable}"."${throughPk}"`;
+      throughPredicates.push(thrTable.get(throughFk).eq(srcTable.get(throughPk)));
       if (throughAsName) {
-        const typeCol = `${_toUnderscore(throughAsName)}_type`;
-        throughOn += ` AND "${throughTable}"."${typeCol}" = '${modelClass.name}'`;
+        throughPredicates.push(
+          thrTable.get(`${_toUnderscore(throughAsName)}_type`).eq(modelClass.name),
+        );
       }
     }
 
@@ -1262,31 +1272,33 @@ export class Relation<T extends Base> {
     const targetModel = modelRegistry.get(targetClassName);
     if (!targetModel) return null;
     const targetTable = (targetModel as any).tableName;
+    const tgtTable = new Table(targetTable);
 
     const sourceType = sourceAssocDef?.type ?? "belongsTo";
-    let targetOn: string;
+    const targetPredicates: Nodes.Node[] = [];
 
     if (sourceType === "belongsTo") {
       const targetFk = sourceAssocDef?.options?.foreignKey ?? `${_toUnderscore(sourceName)}_id`;
       const targetPk = sourceAssocDef?.options?.primaryKey ?? targetModel.primaryKey ?? "id";
-      targetOn = `"${targetTable}"."${targetPk}" = "${throughTable}"."${targetFk}"`;
+      targetPredicates.push(tgtTable.get(targetPk).eq(thrTable.get(targetFk)));
     } else {
-      // hasMany or hasOne: target has FK pointing to through
       const sourceAsName = sourceAssocDef?.options?.as;
       const sourceFk = sourceAsName
         ? (sourceAssocDef?.options?.foreignKey ?? `${_toUnderscore(sourceAsName)}_id`)
         : (sourceAssocDef?.options?.foreignKey ?? `${_toUnderscore(throughClassName)}_id`);
-      const throughPkCol = throughModel.primaryKey ?? "id";
-      targetOn = `"${targetTable}"."${sourceFk}" = "${throughTable}"."${throughPkCol}"`;
+      const rawThroughPk = throughModel.primaryKey ?? "id";
+      const throughPkCol = Array.isArray(rawThroughPk) ? rawThroughPk[0] : rawThroughPk;
+      targetPredicates.push(tgtTable.get(sourceFk).eq(thrTable.get(throughPkCol)));
       if (sourceAsName) {
-        const typeCol = `${_toUnderscore(sourceAsName)}_type`;
-        targetOn += ` AND "${targetTable}"."${typeCol}" = '${throughClassName}'`;
+        targetPredicates.push(
+          tgtTable.get(`${_toUnderscore(sourceAsName)}_type`).eq(throughClassName),
+        );
       }
     }
 
     return [
-      { table: throughTable, on: throughOn },
-      { table: targetTable, on: targetOn },
+      { table: throughTable, on: _buildOnString(...throughPredicates) },
+      { table: targetTable, on: _buildOnString(...targetPredicates) },
     ];
   }
 
@@ -1322,14 +1334,14 @@ export class Relation<T extends Base> {
     const ownerFk: string = fkOption ?? `${_toUnderscore(modelClass.name)}_id`;
     const targetFk = `${_toUnderscore(_singularize(assocDef.name))}_id`;
 
+    const srcT = new Table(sourceTable);
+    const joinT = new Table(joinTable);
+    const tgtT = new Table(targetTable);
     return [
-      {
-        table: joinTable,
-        on: `"${joinTable}"."${ownerFk}" = "${sourceTable}"."${sourcePk}"`,
-      },
+      { table: joinTable, on: _buildOnString(joinT.get(ownerFk).eq(srcT.get(sourcePk))) },
       {
         table: targetTable,
-        on: `"${targetTable}"."${targetPk}" = "${joinTable}"."${targetFk}"`,
+        on: _buildOnString(tgtT.get(targetPk as string).eq(joinT.get(targetFk))),
       },
     ];
   }

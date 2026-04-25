@@ -152,9 +152,11 @@ function withRecursiveBang(this: QueryMethodsHost, ...ctes: Array<Record<string,
 }
 
 function reselectBang(this: QueryMethodsHost, ...columns: any[]): any {
-  this._selectColumns = columns.map((c: any) =>
-    typeof c === "object" && c !== null && "value" in c ? c : String(c),
-  );
+  this._selectColumns = columns.map((c: any) => {
+    if (c instanceof Nodes.Node) return c;
+    if (typeof c === "object" && c !== null && "value" in c) return c;
+    return String(c);
+  });
   return this;
 }
 
@@ -166,11 +168,17 @@ function reselectBang(this: QueryMethodsHost, ...columns: any[]): any {
  */
 function _selectBang(this: QueryMethodsHost, ...columns: any[]): any {
   const flat = columns.flat(Infinity);
-  const normalized = flat.map((c: any) =>
-    typeof c === "object" && c !== null && "value" in c ? c : String(c),
-  );
+  const normalized = flat.map((c: any) => {
+    if (c instanceof Nodes.Node) return c;
+    if (typeof c === "object" && c !== null && "value" in c) return c;
+    return String(c);
+  });
   if (this._selectColumns === null) this._selectColumns = [];
-  const keyOf = (c: unknown) => (typeof c === "string" ? c : (c as { value: string }).value);
+  const keyOf = (c: unknown) => {
+    if (typeof c === "string") return c;
+    if (c instanceof Nodes.Node) return c.toSql();
+    return (c as { value: string }).value;
+  };
   const seen = new Set(this._selectColumns.map(keyOf));
   for (const col of normalized) {
     const key = keyOf(col);

@@ -104,7 +104,7 @@ export class Relation<T extends Base> {
   private _rawOrderClauses: string[] = [];
   private _limitValue: number | null = null;
   private _offsetValue: number | null = null;
-  private _selectColumns: (string | Nodes.SqlLiteral)[] | null = null;
+  private _selectColumns: (string | Nodes.Node)[] | null = null;
   private _isDistinct = false;
   private _distinctOnColumns: string[] = [];
   private _groupColumns: string[] = [];
@@ -708,7 +708,11 @@ export class Relation<T extends Base> {
     }
     if (this._selectColumns !== null) {
       const cols = this._selectColumns.map((c) =>
-        c instanceof Nodes.SqlLiteral ? `sql(${JSON.stringify(c.value)})` : JSON.stringify(c),
+        c instanceof Nodes.SqlLiteral
+          ? `sql(${JSON.stringify(c.value)})`
+          : c instanceof Nodes.Node
+            ? `sql(${JSON.stringify(c.toSql())})`
+            : JSON.stringify(c),
       );
       parts.push(`.select(${cols.join(", ")})`);
     }
@@ -1970,11 +1974,12 @@ export class Relation<T extends Base> {
 
   private _applyJoinsToManager(manager: SelectManager): void {
     for (const join of this._joinClauses) {
+      const tableNode = new Table(join.table);
       const onNode = new Nodes.SqlLiteral(join.on);
       if (join.type === "inner") {
-        manager.join(join.table, onNode);
+        manager.join(tableNode, onNode);
       } else {
-        manager.outerJoin(join.table, onNode);
+        manager.outerJoin(tableNode, onNode);
       }
     }
     for (const rawJoin of this._rawJoins) {
@@ -2475,7 +2480,7 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#select_values
    */
-  get selectValues(): (string | Nodes.SqlLiteral)[] {
+  get selectValues(): (string | Nodes.Node)[] {
     return this._selectColumns ?? [];
   }
 
@@ -2694,7 +2699,7 @@ export class Relation<T extends Base> {
   private _buildProjections(table: Table): any[] {
     if (this._selectColumns) {
       return this._selectColumns.map((c) => {
-        if (c instanceof Nodes.SqlLiteral) return c;
+        if (c instanceof Nodes.Node) return c;
         if (/[(*\s]/.test(c)) return new Nodes.SqlLiteral(c);
         return table.get(c);
       });

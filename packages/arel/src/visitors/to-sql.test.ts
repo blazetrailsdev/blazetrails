@@ -753,13 +753,20 @@ describe("the to_sql visitor", () => {
   it("should visit_Date", () => {
     const d = new Date("2020-01-02T12:00:00.000Z");
     const sql = new Visitors.ToSql().compile(new Nodes.Quoted(d));
-    expect(sql).toBe("'2020-01-02T12:00:00.000Z'");
+    // Mirrors Rails' AbstractAdapter#quoted_date: space separator, seconds precision.
+    expect(sql).toBe("'2020-01-02 12:00:00'");
   });
 
   it("should visit_DateTime", () => {
     const dt = { toISOString: () => "2020-01-02T03:04:05.000Z" };
     const sql = new Visitors.ToSql().compile(new Nodes.Quoted(dt));
-    expect(sql).toBe("'2020-01-02T03:04:05.000Z'");
+    expect(sql).toBe("'2020-01-02 03:04:05'");
+  });
+
+  it("should visit_Date with fractional seconds strips to whole seconds", () => {
+    const d = new Date("2026-04-18T13:00:41.729Z");
+    const sql = new Visitors.ToSql().compile(new Nodes.Quoted(d));
+    expect(sql).toBe("'2026-04-18 13:00:41'");
   });
 
   it("should visit_Float", () => {

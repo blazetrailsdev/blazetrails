@@ -1369,13 +1369,15 @@ export class ToSql implements NodeVisitor<SQLString> {
     }
   }
 
-  // Mirrors Rails' AbstractAdapter#quoted_date: 'YYYY-MM-DD HH:MM:SS'
-  // (space separator, no T, no milliseconds, no Z).
+  // Mirrors Rails' AbstractAdapter#quoted_date — 'YYYY-MM-DD HH:MM:SS'
+  // (space separator, seconds precision, no T, no fractional seconds, no Z).
+  // JS Date#toISOString() always returns UTC so the UTC form is authoritative.
   protected quotedDate(d: { toISOString(): string }): string {
-    return `'${d
-      .toISOString()
+    const iso = d.toISOString(); // "YYYY-MM-DDTHH:MM:SS.mmmZ"
+    return `'${iso
       .replace("T", " ")
-      .replace(/\.\d+Z$/, "")}'`;
+      .replace(/\.\d+Z$/, "")
+      .replace(/Z$/, "")}'`;
   }
 
   protected quote(value: unknown): string {

@@ -499,10 +499,10 @@ describe("ActiveRecord::Encryption::EncryptableRecordTest", () => {
     const name = "a".repeat(141);
     const book = await Book.create({ name });
     const reloaded = await Book.find(book.id);
-    expect(reloaded.name).toBe(name);
-    // Verify the custom compressor was actually called: the ciphertext payload
-    // decrypts to the original value, confirming compress+decompress round-trip.
-    assertEncryptedAttribute(reloaded, "name", name);
+    // inflate adds "[compressed] " prefix, verifying the custom compressor path
+    // was exercised — mirrors Rails' EncryptedBookWithCustomCompressor assertion.
+    expect(reloaded.name).toMatch(/^\[compressed\] /);
+    expect(reloaded.name).toBe("[compressed] " + name);
   });
   it("type method returns cast type", () => {
     const Book = makeEncryptedBook(freshAdapter());

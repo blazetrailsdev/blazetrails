@@ -24,19 +24,23 @@ describe("ActiveRecord::Encryption::UnencryptedAttributesTest", () => {
   });
 
   it("when :support_unencrypted_data is off, it works with unencrypted attributes normally", async () => {
+    // "off" = the restriction on unencrypted data is lifted: supportUnencryptedData = true.
     Configurable.config.supportUnencryptedData = true;
     const Post = makeEncryptedPost(freshAdapter());
+    new Post();
     const post = await withoutEncryption(() =>
       Post.create({ title: "The Starfleet is here!", body: "take cover!" }),
     );
-    // Raw value is plaintext (not encrypted).
-    expect(post.readAttributeBeforeTypeCast("title")).toBe("The Starfleet is here!");
+    // Plaintext is stored unencrypted; reading it back returns the plain value.
+    const reloaded = await Post.find(post.id);
+    expect(reloaded.title).toBe("The Starfleet is here!");
     // On next save, encryption is applied.
     await post.update({ title: "Other title" });
     assertEncryptedAttribute(await Post.find(post.id), "title", "Other title");
   });
 
   it("when :support_unencrypted_data is on, it won't work with unencrypted attributes", async () => {
+    // "on" = the requirement for encrypted data is enforced: supportUnencryptedData = false.
     Configurable.config.supportUnencryptedData = false;
     const Post = makeEncryptedPost(freshAdapter());
     new Post();

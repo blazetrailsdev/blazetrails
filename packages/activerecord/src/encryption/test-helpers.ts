@@ -11,6 +11,7 @@ import type { DatabaseAdapter } from "../adapter.js";
 
 export { Base };
 import { Configurable } from "./configurable.js";
+import { defaultCompressor } from "./config.js";
 import { Contexts } from "./contexts.js";
 import { DerivedSecretKeyProvider } from "./derived-secret-key-provider.js";
 import { clearDefaultKeyProviderCache } from "./scheme.js";
@@ -189,12 +190,16 @@ export function makeEncryptedAuthor(adapter: DatabaseAdapter) {
 }
 
 export function makeEncryptedBookWithCustomCompressor(adapter: DatabaseAdapter) {
+  // Delegates actual compression to defaultCompressor (zlib) so the compressed
+  // output IS smaller and the path is exercised. inflate adds "[compressed] "
+  // prefix so tests can assert the custom compressor was actually called —
+  // mirrors Rails' EncryptedBookWithCustomCompressor fixture.
   const customCompressor = {
-    deflate(data: string): Buffer {
-      return Buffer.from(`[compressed]${data}`, "utf-8");
+    deflate(data: string): Buffer | Uint8Array {
+      return defaultCompressor.deflate(data);
     },
-    inflate(data: Buffer): string {
-      return data.toString("utf-8").replace(/^\[compressed\]/, "");
+    inflate(data: Buffer | Uint8Array): string {
+      return "[compressed] " + defaultCompressor.inflate(data);
     },
   };
   return class EncryptedBookWithCustomCompressor extends Base {

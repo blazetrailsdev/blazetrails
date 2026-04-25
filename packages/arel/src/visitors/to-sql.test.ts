@@ -776,6 +776,14 @@ describe("the to_sql visitor", () => {
     expect(sql).toBe("'2000-01-01 00:00:00'");
   });
 
+  it("should visit_Date-like with no fractional part (no trailing Z artifact)", () => {
+    // Handles objects whose toISOString() omits the fractional part, e.g. "...T00:00:00Z".
+    const obj = { toISOString: () => "2026-01-01T00:00:00Z" };
+    const sql = new Visitors.ToSql().compile(new Nodes.Quoted(obj as unknown as Date));
+    expect(sql).toBe("'2026-01-01 00:00:00'");
+    expect(sql).not.toContain("Z");
+  });
+
   it("should visit_Float", () => {
     const sql = new Visitors.ToSql().compile(new Nodes.Quoted(1.5));
     expect(sql).toBe("1.5");

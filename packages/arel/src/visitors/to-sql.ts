@@ -1381,11 +1381,12 @@ export class ToSql implements NodeVisitor<SQLString> {
   // packages/activerecord/src/connection-adapters/abstract/quoting.ts is the
   // authoritative path for timezone-aware bound values.
   protected quotedDate(d: { toISOString(): string }): string {
-    const iso = d.toISOString(); // "YYYY-MM-DDTHH:MM:SS.mmmZ"
-    const [base, fracZ] = iso.split(".");
-    const ms = parseInt(fracZ ?? "0", 10);
-    const datetime = base.replace("T", " ");
-    return ms > 0 ? `'${datetime}.${String(ms * 1000).padStart(6, "0")}'` : `'${datetime}'`;
+    // Parse "YYYY-MM-DDTHH:MM:SS.mmmZ" or "YYYY-MM-DDTHH:MM:SSZ" (no fractional part).
+    const match = d.toISOString().match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(?:\.(\d+))?Z?$/);
+    if (!match) return `'${d.toISOString()}'`;
+    const [, date, time, frac] = match;
+    const ms = frac ? parseInt(frac.slice(0, 3).padEnd(3, "0"), 10) : 0;
+    return ms > 0 ? `'${date} ${time}.${String(ms * 1000).padStart(6, "0")}'` : `'${date} ${time}'`;
   }
 
   protected quote(value: unknown): string {

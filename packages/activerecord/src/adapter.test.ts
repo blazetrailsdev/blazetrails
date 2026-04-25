@@ -30,6 +30,7 @@ describe("AdapterTest", () => {
   it.skip("select methods passing a association relation", () => {});
   it.skip("select methods passing a relation", () => {});
   it.skip("type_to_sql returns a String for unmapped types", () => {});
+  it.skip("current database", () => {});
 });
 
 describe("AdapterForeignKeyTest", () => {

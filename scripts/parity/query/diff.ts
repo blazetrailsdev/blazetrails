@@ -232,10 +232,14 @@ async function main(): Promise<void> {
       }
 
       // Compare sql, frozenAt, and version.
-      // paramSql and binds are informational captures — not compared cross-side:
-      // Rails SQLite inlines all values (empty binds, paramSql = sql) while
-      // trails extracts datetime values (non-empty binds, paramSql has ?).
-      // That structural asymmetry makes cross-side comparison meaningless.
+      // paramSql and binds are intentionally NOT compared cross-side:
+      //   - Rails SQLite inlines all values in to_sql() → bound_attributes is empty
+      //     → binds = [], paramSql = sql.
+      //   - trails extracts datetime values via compileWithBinds → binds is non-empty,
+      //     paramSql has ? placeholders.
+      // This structural asymmetry makes cross-side comparison always fail for datetime
+      // fixtures regardless of correctness. Both fields remain in the output for
+      // introspection and future use if the Rails runner is updated to extract binds.
       const sqlMatch = (railsRaw as { sql: string }).sql === (trailsRaw as { sql: string }).sql;
       // frozenAt and version must agree — a frozen-time mismatch changes
       // generated SQL and would produce a false-positive PASS.

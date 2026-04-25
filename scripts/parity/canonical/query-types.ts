@@ -7,14 +7,14 @@ export interface CanonicalQuery {
   /** SQL produced by to_sql / toSql() on the query expression — all values inlined */
   sql: string;
   /**
-   * Optional. Parameterized SQL template with `?` placeholders for datetime bind values.
-   * - trails: built by calling `compileWithBinds` on the adapter-specific Arel visitor,
-   *   then re-inlining non-Date binds so `?` count = `binds.length`.
-   * - Rails: built via `Arel::Collectors::Bind` + the connection visitor when
-   *   `bound_attributes` contains datetime values; equals `sql` otherwise.
-   * Not compared cross-side (informational only). Omitted for arel-* fixtures.
+   * Optional. Parameterized SQL with `?` only for datetime values; non-datetime
+   * scalars are re-inlined so `?` count equals `binds.length`. May equal `sql`
+   * when no datetime binds are present. Currently not compared cross-side
+   * (informational only) — Rails SQLite inlines datetime values in `to_sql`
+   * so `bound_attributes` is empty there, making cross-side bind comparison
+   * structurally asymmetric.
    */
   paramSql?: string;
-  /** Ordered bind values, all stringified. Populated alongside paramSql. */
+  /** Ordered datetime bind values as ISO 8601 UTC strings. Currently informational only. */
   binds: string[];
 }

@@ -207,26 +207,35 @@ async function main(): Promise<void> {
           return b;
         });
 
+        // Use the visitor's own quoting for re-inlining non-Date scalars so the
+        // SQL literal style (e.g. boolean 1/0 on SQLite) matches the dialect.
+        const quotingVisitor = visitor as unknown as { quote?: (v: unknown) => string };
+        const quoteBindValue = (v: unknown): string => {
+          if (typeof quotingVisitor.quote === "function") return quotingVisitor.quote(v);
+          if (typeof v === "string") return `'${v.replace(/'/g, "''")}'`;
+          if (v == null) return "NULL";
+          return String(v);
+        };
+
         // Build a consistent paramSql where ONLY Date values become `?`; all
-        // other bind values (strings, numbers) are re-inlined. This ensures the
-        // `?` count in paramSql exactly matches the length of `binds`, and avoids
-        // a mismatch with Rails' side which inlines non-date scalars in to_sql().
-        // Walk the placeholder positions in ps and substitute non-Date values back.
+        // other bind values are re-inlined using the visitor's quoting rules.
+        // This keeps `? count = binds.length` and matches adapter-specific rendering.
         let placeholderIdx = 0;
-        let processedParamSql = ps;
         const dateBind: Date[] = [];
-        // Replace each ? with either the inlined scalar or keep ? for Date binds.
-        processedParamSql = ps.replace(/\?/g, () => {
+        const processedParamSql = ps.replace(/\?/g, () => {
+          if (placeholderIdx >= resolvedBinds.length) {
+            throw new Error("compileWithBinds() returned more placeholders than bind values");
+          }
           const v = resolvedBinds[placeholderIdx++];
           if (v instanceof Date) {
             dateBind.push(v);
             return "?";
           }
-          // Re-inline: quote strings, pass numbers through.
-          if (typeof v === "string") return `'${v.replace(/'/g, "''")}'`;
-          if (v == null) return "NULL";
-          return String(v);
+          return quoteBindValue(v);
         });
+        if (placeholderIdx !== resolvedBinds.length) {
+          throw new Error("compileWithBinds() returned more bind values than placeholders");
+        }
         paramSql = processedParamSql.trim();
         binds = dateBind.map((b) => b.toISOString());
       }

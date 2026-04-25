@@ -424,9 +424,9 @@ export class SelectManager extends TreeManager {
    */
   whereSql(): string | null {
     if (this.core.wheres.length === 0) return null;
-    // Route through Node#toSql so a `setToSqlVisitor()` override applies.
-    const parts = this.core.wheres.map((w) => w.toSql());
-    return `WHERE ${parts.join(" AND ")}`;
+    const predicate =
+      this.core.wheres.length === 1 ? this.core.wheres[0] : new And(this.core.wheres);
+    return `WHERE ${predicate.toSql()}`;
   }
 
   /**

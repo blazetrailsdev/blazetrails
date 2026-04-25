@@ -112,10 +112,7 @@ export function registerNodeDeps(deps: {
  * startup, before importing fixtures. The override is process-global —
  * tests should restore the default in a `finally` block.
  */
-export function setToSqlVisitor(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  visitor: new (...args: any[]) => { compile(node: Node): string },
-): void {
+export function setToSqlVisitor(visitor: new () => { compile(node: Node): string }): void {
   _registry.ToSql = visitor;
 }
 

@@ -226,7 +226,12 @@ export function assertEncryptedAttribute(
 ): void {
   // Verify the attribute reads back as the expected plaintext.
   const readValue = model[attrName];
-  if (readValue !== expectedValue) {
+  const valuesEqual =
+    readValue === expectedValue ||
+    (readValue instanceof Date &&
+      expectedValue instanceof Date &&
+      readValue.getTime() === expectedValue.getTime());
+  if (!valuesEqual) {
     throw new Error(
       `assertEncryptedAttribute: expected ${attrName} to equal ` +
         `${JSON.stringify(expectedValue)}, got ${JSON.stringify(readValue)}`,

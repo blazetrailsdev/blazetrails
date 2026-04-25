@@ -31,15 +31,10 @@ export class Railtie {
     if (!Object.prototype.hasOwnProperty.call(host, "_config")) {
       const parent = Object.getPrototypeOf(host)._config ?? {};
       // Best-effort deep-clone so nested objects/arrays are isolated per
-      // subclass. Falls through to a shallow copy when the config contains
-      // values that aren't clone-safe (functions, class instances, cycles,
-      // BigInt) — config is expected to hold plain scalar/object settings
-      // in normal Rails-style usage.
-      // subclass when the runtime supports it. Falls back to a shallow copy
-      // when structuredClone is unavailable or the config contains values
-      // that aren't clone-safe (functions, class instances, cycles, BigInt)
-      // — config is expected to hold plain scalar/object settings in normal
-      // Rails-style usage.
+      // subclass. Falls back to a shallow copy when structuredClone is
+      // unavailable or the config contains non-clone-safe values (functions,
+      // class instances, cycles, BigInt) — config is expected to hold plain
+      // scalar/object settings in normal Rails-style usage.
       try {
         host._config =
           typeof structuredClone === "function" ? structuredClone(parent) : { ...parent };

@@ -1,7 +1,7 @@
 import { Book } from "./models.js";
 
 const Pagination = {
-  perPage(n: number) {
+  per_page(n: number) {
     return (this as any).limit(n);
   },
 };

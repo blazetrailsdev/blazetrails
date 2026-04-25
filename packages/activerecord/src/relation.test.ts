@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { Base, Relation, IrreversibleOrderError } from "./index.js";
-import { Associations, registerModel } from "./associations.js";
+import { Associations, registerModel, modelRegistry } from "./associations.js";
 
 import { createTestAdapter } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
@@ -387,8 +387,12 @@ describe("RelationTest", () => {
       }
     }
     registerModel("Comment", Comment);
-    const sql = Post.joins("comments").toSql();
-    expect(sql).toContain('INNER JOIN "comments"');
+    try {
+      const sql = Post.joins("comments").toSql();
+      expect(sql).toContain('INNER JOIN "comments"');
+    } finally {
+      modelRegistry.delete("Comment");
+    }
   });
 
   it("joins with string array", () => {

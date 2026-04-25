@@ -154,7 +154,8 @@ function withRecursiveBang(this: QueryMethodsHost, ...ctes: Array<Record<string,
 function reselectBang(this: QueryMethodsHost, ...columns: any[]): any {
   this._selectColumns = columns.map((c: any) => {
     if (c instanceof Nodes.Node) return c;
-    if (typeof c === "object" && c !== null && "value" in c) return c;
+    if (typeof c === "object" && c !== null && "value" in c)
+      return new Nodes.SqlLiteral((c as { value: string }).value);
     return String(c);
   });
   return this;
@@ -170,7 +171,8 @@ function _selectBang(this: QueryMethodsHost, ...columns: any[]): any {
   const flat = columns.flat(Infinity);
   const normalized = flat.map((c: any) => {
     if (c instanceof Nodes.Node) return c;
-    if (typeof c === "object" && c !== null && "value" in c) return c;
+    if (typeof c === "object" && c !== null && "value" in c)
+      return new Nodes.SqlLiteral((c as { value: string }).value);
     return String(c);
   });
   if (this._selectColumns === null) this._selectColumns = [];

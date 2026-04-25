@@ -348,11 +348,17 @@ export class PredicateBuilder {
   }
 
   with(context: any): PredicateBuilder {
-    const builder = new PredicateBuilder(this.table);
+    const table = context?.arelTable ?? this.table;
+    const builder = new PredicateBuilder(table);
     builder.setAssociationMap(this.associationMap);
     builder.handlers = [...this.handlers];
     builder._tableContext = context;
     return builder;
+  }
+
+  /** Set context without cloning — use only when constructing a fresh builder. */
+  setTableContext(context: any): void {
+    this._tableContext = context;
   }
 
   static references(conditions: Record<string, unknown>): Nodes.SqlLiteral[] {

@@ -1568,7 +1568,9 @@ export class Relation<T extends Base> {
     // Preload associations via separate queries (includes + preload minus
     // any includes we already eager-loaded above)
     const preloadAssocs = [
-      ...this._includesAssociations.filter((n) => !promotedIncludes.includes(n)),
+      ...this._includesAssociations.filter(
+        (n) => typeof n !== "string" || !promotedIncludes.includes(n),
+      ),
       ...this._preloadAssociations,
     ];
     if (preloadAssocs.length > 0 && this._records.length > 0) {
@@ -1585,7 +1587,7 @@ export class Relation<T extends Base> {
    * promoted to eager_load. See `references_eager_loaded_tables?`
    * in Rails relation.rb — the check is boolean, not per-association.
    */
-  private _includesToPromoteFromReferences(): AssociationSpec[] {
+  private _includesToPromoteFromReferences(): string[] {
     if (this._referencesValues.length === 0) return [];
     if (this._includesAssociations.length === 0) return [];
 

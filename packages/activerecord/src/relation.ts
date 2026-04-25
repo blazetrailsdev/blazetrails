@@ -12,7 +12,11 @@ import type { Base } from "./base.js";
 import { _setRelationCtor, _setScopeProxyWrapper, quoteSqlValue } from "./base.js";
 import { RecordNotSaved, RecordNotUnique } from "./errors.js";
 import { disallowRawSqlBang } from "./sanitization.js";
-import { columnNameMatcher } from "./connection-adapters/abstract/quoting.js";
+import { columnNameMatcher as abstractColumnNameMatcher } from "./connection-adapters/abstract/quoting.js";
+
+function resolveColumnNameMatcher(adapter: any): RegExp {
+  return adapter?.constructor?.columnNameMatcher?.() ?? abstractColumnNameMatcher();
+}
 import { modelRegistry } from "./associations.js";
 import { applyThenable, stripThenable } from "./relation/thenable.js";
 import { getInheritanceColumn, isStiSubclass } from "./inheritance.js";
@@ -533,7 +537,9 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#order
    */
   order(
-    ...args: Array<string | Record<string, "asc" | "desc"> | Nodes.Node | unknown[]>
+    ...args: Array<
+      string | Record<string, "asc" | "desc"> | Nodes.Node | string[] | [Nodes.Node, ...unknown[]]
+    >
   ): Relation<T> {
     return this._clone().orderBang(...(args as any));
   }
@@ -646,7 +652,9 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#reorder
    */
   reorder(
-    ...args: Array<string | Record<string, "asc" | "desc"> | Nodes.Node | unknown[]>
+    ...args: Array<
+      string | Record<string, "asc" | "desc"> | Nodes.Node | string[] | [Nodes.Node, ...unknown[]]
+    >
   ): Relation<T> {
     return this._clone().reorderBang(...(args as any));
   }
@@ -2187,7 +2195,7 @@ export class Relation<T extends Base> {
     // rather than column_name_with_order_matcher (which is stricter, for order).
     const stringColumns = columns.filter((c): c is string => typeof c === "string");
     if (stringColumns.length > 0) {
-      disallowRawSqlBang(stringColumns, columnNameMatcher());
+      disallowRawSqlBang(stringColumns, resolveColumnNameMatcher(this._modelClass.adapter));
     }
 
     const table = this._modelClass.arelTable;

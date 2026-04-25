@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { columnNameMatcher, columnNameWithOrderMatcher } from "./abstract/quoting.js";
 import { Visitors } from "@blazetrails/arel";
 import type { DatabaseAdapter, ExplainOption, TrailsAdapterOptions } from "../adapter.js";
 import { AbstractAdapter, Version } from "./abstract-adapter.js";
@@ -56,6 +57,14 @@ import { SqlTypeMetadata } from "./sql-type-metadata.js";
 export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   override get adapterName(): string {
     return "SQLite";
+  }
+
+  static columnNameMatcher(): RegExp {
+    return columnNameMatcher();
+  }
+
+  static columnNameWithOrderMatcher(): RegExp {
+    return columnNameWithOrderMatcher();
   }
 
   override get arelVisitor(): Visitors.ToSql {

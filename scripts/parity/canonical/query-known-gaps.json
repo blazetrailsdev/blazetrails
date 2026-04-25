@@ -22,5 +22,17 @@
   "ar-57": {
     "side": "diff",
     "reason": "includes + references + string where: Rails promotes includes(:author) to a LEFT OUTER JOIN + column-aliased SELECT when references(:author) is combined with a string WHERE touching that table (same mechanism as eagerLoad). trails emits a plain SELECT with the WHERE clause but no JOIN. Same root cause as ar-16 — eagerLoad JOIN + column-projection behaviour is not implemented."
+  },
+  "ar-79": {
+    "side": "trails-missing",
+    "reason": "Book.where(active: true).unscoped.order(:title): unscoped() is implemented as a class method but not as an instance method on Relation. Rails allows chaining unscoped() to discard previously applied scopes; trails does not yet support this chainable form."
+  },
+  "ar-80": {
+    "side": "diff",
+    "reason": "Book.where(active: true).merge(Book.order(:title)): merge() is not implemented on Relation. Rails SQL: 'SELECT \"books\".* FROM \"books\" WHERE \"books\".\"active\" = 1 ORDER BY \"books\".\"title\" ASC'; trails does not support merge() to combine query clauses from another relation."
+  },
+  "ar-82": {
+    "side": "trails-missing",
+    "reason": "Book.optimizer_hints(\"SeqScan(books)\").where(active: true): optimizer_hints() is implemented as an instance method on Relation but not as a class method delegating to the default relation. Rails allows starting a query with optimizer_hints() on the class; trails requires it to be called on an existing relation."
   }
 }

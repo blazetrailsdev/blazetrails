@@ -192,5 +192,25 @@ describe("PredicateBuilderTest", () => {
       expect(sql).toContain("Rails");
       expect(sql).not.toContain('"posts"."authors"');
     });
+
+    it("does not expand when key is a known column on the current table (mirrors Rails !table.has_column? guard)", () => {
+      class Product extends Base {
+        static {
+          this.tableName = "products";
+          this.attribute("metadata", "string");
+          registerModel(this);
+        }
+      }
+      try {
+        const meta = new TableMetadata(Product as any, new Table("products"));
+        const builder = meta.predicateBuilder;
+        const nodes = builder.buildFromHash({ metadata: { foo: "bar" } });
+        const sql = nodes.map((n) => new Visitors.ToSql().compile(n)).join(" AND ");
+        expect(sql).toContain('"products"."metadata"');
+        expect(sql).not.toContain('"metadata"."foo"');
+      } finally {
+        modelRegistry.delete("Product");
+      }
+    });
   });
 });

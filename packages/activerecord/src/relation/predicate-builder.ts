@@ -90,21 +90,17 @@ export class PredicateBuilder {
             nodes.push(new Nodes.Not(new Nodes.Grouping(g)));
           }
         }
-      } else if (isPlainObject(value)) {
-        const assocMeta =
-          this._tableContext && typeof this._tableContext.associatedTable === "function"
-            ? this._tableContext.associatedTable(key)
-            : null;
-        if (assocMeta) {
-          const assocPb: PredicateBuilder = assocMeta.predicateBuilder;
-          const innerNodes = negated
-            ? assocPb.buildNegatedFromHash(value as Record<string, unknown>)
-            : assocPb.buildFromHash(value as Record<string, unknown>);
-          nodes.push(...innerNodes);
-        } else {
-          const attr = this.resolveColumn(key);
-          nodes.push(negated ? this.buildNegated(attr, value) : this.build(attr, value));
-        }
+      } else if (
+        isPlainObject(value) &&
+        this._tableContext &&
+        typeof this._tableContext.associatedTable === "function" &&
+        !this._tableContext.hasColumn?.(key)
+      ) {
+        const assocPb: PredicateBuilder = this._tableContext.associatedTable(key).predicateBuilder;
+        const innerNodes = negated
+          ? assocPb.buildNegatedFromHash(value as Record<string, unknown>)
+          : assocPb.buildFromHash(value as Record<string, unknown>);
+        nodes.push(...innerNodes);
       } else {
         const attr = this.resolveColumn(key);
         nodes.push(negated ? this.buildNegated(attr, value) : this.build(attr, value));

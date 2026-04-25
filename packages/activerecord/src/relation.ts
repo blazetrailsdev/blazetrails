@@ -68,10 +68,12 @@ export type LoadedRelation<R> = Omit<R, "then">;
  */
 /**
  * Add a join clause to `clauses` for whereMissing/whereAssociated.
- * - Skip if an identical (type + table + on) entry already exists.
- * - Throw if a different join to the same table exists — that would require
- *   aliasing which we don't support, and silently skipping would apply the
- *   WHERE predicate against the wrong join.
+ * - Skip if a join with the same table+ON already exists regardless of type
+ *   (e.g. leftJoins(:assoc).whereAssociated(:assoc) is valid — the existing
+ *   LEFT OUTER JOIN already covers the table; the IS NOT NULL predicate
+ *   provides the restriction).
+ * - Throw if a join to the same table with a *different* ON clause exists —
+ *   that would require aliasing which is not supported.
  */
 function _addAssocJoin(
   clauses: Array<{ type: "inner" | "left"; table: string; on: string; quoted?: boolean }>,
@@ -80,12 +82,9 @@ function _addAssocJoin(
   assocName: string,
   modelClass: any,
 ): void {
-  const equivalent = clauses.some(
-    (j) => j.type === type && j.table === join.table && j.on === join.on,
-  );
-  if (equivalent) return;
-  const conflicting = clauses.some((j) => j.table === join.table);
-  if (conflicting) {
+  const sameTableOn = clauses.find((j) => j.table === join.table);
+  if (sameTableOn) {
+    if (sameTableOn.on === join.on) return; // compatible existing join — skip
     throw new Error(
       `where${type === "inner" ? "Associated" : "Missing"}: cannot add ${type.toUpperCase()} JOIN for '${assocName}' on ${modelClass.name} ` +
         `— a different join to '${join.table}' already exists and cannot be represented without aliasing.`,
@@ -281,7 +280,7 @@ export class Relation<T extends Base> {
   whereAssociated(...assocNames: string[]): Relation<T> {
     let rel: Relation<T> = this;
     for (const assocName of assocNames) {
-      this._requireAssociation(assocName);
+      rel._requireAssociation(assocName);
       const target = rel._resolveAssociationTarget(assocName);
       if (!target) {
         throw new Error(
@@ -311,7 +310,7 @@ export class Relation<T extends Base> {
   whereMissing(...assocNames: string[]): Relation<T> {
     let rel: Relation<T> = this;
     for (const assocName of assocNames) {
-      this._requireAssociation(assocName);
+      rel._requireAssociation(assocName);
       const target = rel._resolveAssociationTarget(assocName);
       if (!target) {
         throw new Error(

@@ -128,10 +128,14 @@ describe("RelationTest", () => {
         this.adapter = adapter;
       }
     }
-    // Function expressions pass through as raw SQL
-    expect(Order.group("DATE(created_at)").toSql()).toContain("DATE(created_at)");
+    // Function expressions pass through as raw SQL (not quoted as identifier)
+    const fnSql = Order.group("DATE(created_at)").toSql();
+    expect(fnSql).toContain("GROUP BY DATE(created_at)");
+    expect(fnSql).not.toContain('"orders"."DATE(created_at)"');
     // Cast expressions pass through as raw SQL (not quoted as identifier)
-    expect(Order.group("created_at::date").toSql()).toContain("created_at::date");
+    const castSql = Order.group("created_at::date").toSql();
+    expect(castSql).toContain("GROUP BY created_at::date");
+    expect(castSql).not.toContain('"orders"."created_at::date"');
     // Positional GROUP BY passes through as raw SQL
     expect(Order.group("1").toSql()).toContain("GROUP BY 1");
   });

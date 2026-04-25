@@ -106,6 +106,18 @@ describe("RelationTest", () => {
     expect(post.isPersisted()).toBe(true);
   });
 
+  it("order by primary key stays table-qualified even before schema reflection", () => {
+    // The PK (`id`) may not be in _attributeDefinitions before schema loads,
+    // but must remain table-qualified to avoid ambiguous-column errors on JOINs.
+    class Post extends Base {
+      static _tableName = "posts";
+      static {
+        this.adapter = adapter;
+      }
+    }
+    expect(Post.order({ id: "desc" }).toSql()).toContain('"posts"."id" DESC');
+  });
+
   it("order by unknown column (subquery alias) uses bare quoted name", () => {
     class Developer extends Base {
       static _tableName = "developers";

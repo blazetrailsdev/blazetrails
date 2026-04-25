@@ -2884,6 +2884,16 @@ export class Relation<T extends Base> {
     return new Visitors.ToSql().compile(node);
   }
 
+  // Returns true when `col` is a known schema attribute OR is (part of) the
+  // model's primary key. The PK check is needed because `_attributeDefinitions`
+  // may not yet contain `id` (before schema reflection), but it must still be
+  // table-qualified to avoid ambiguous-column errors on joined relations.
+  private _isKnownColumn(col: string): boolean {
+    if (this._modelClass._attributeDefinitions.has(col)) return true;
+    const pk = this._modelClass.primaryKey;
+    return Array.isArray(pk) ? pk.includes(col) : pk === col;
+  }
+
   private _applyOrderToManager(manager: SelectManager, table: Table): void {
     // Raw order clauses (from inOrderOf)
     for (const rawClause of this._rawOrderClauses) {
@@ -2906,7 +2916,7 @@ export class Relation<T extends Base> {
             if (rawCol.includes(".")) {
               manager.order(new Nodes.SqlLiteral(clause));
             } else {
-              const node = this._modelClass._attributeDefinitions.has(rawCol)
+              const node = this._isKnownColumn(rawCol)
                 ? table.get(rawCol)
                 : new Nodes.SqlLiteral(quoteColumnName(rawCol));
               manager.order(
@@ -2918,7 +2928,7 @@ export class Relation<T extends Base> {
             if (clause.includes(".")) {
               manager.order(new Nodes.SqlLiteral(clause));
             } else {
-              const node = this._modelClass._attributeDefinitions.has(clause)
+              const node = this._isKnownColumn(clause)
                 ? table.get(clause)
                 : new Nodes.SqlLiteral(quoteColumnName(clause));
               manager.order(new Nodes.Ascending(node));
@@ -2929,7 +2939,7 @@ export class Relation<T extends Base> {
         const [col, dir] = clause;
         // Mirrors Rails' arel_column: unknown columns (e.g. subquery aliases
         // from .from()) get a bare quoted name, not a table-qualified attribute.
-        if (this._modelClass._attributeDefinitions.has(col)) {
+        if (this._isKnownColumn(col)) {
           manager.order(dir === "desc" ? table.get(col).desc() : table.get(col).asc());
         } else {
           const lit = new Nodes.SqlLiteral(quoteColumnName(col));

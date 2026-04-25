@@ -53,24 +53,30 @@ export const ImmutableString = ImmutableStringType;
 export const String = StringType;
 export const Value = ValueType;
 
-const _registry = new AdapterSpecificRegistry();
+let _registry = new AdapterSpecificRegistry();
+let _defaultValue: Type | undefined;
 
-_registry.register("big_integer", BigIntegerType);
-_registry.register("binary", BinaryType);
-_registry.register("boolean", BooleanType);
-_registry.register("date", Date);
-_registry.register("datetime", DateTime);
-_registry.register("decimal", DecimalType);
-_registry.register("float", FloatType);
-_registry.register("integer", IntegerType);
-_registry.register("immutable_string", ImmutableStringType);
-_registry.register("json", Json);
-_registry.register("string", StringType);
-_registry.register("text", Text);
-_registry.register("time", Time);
+_registry.register("big_integer", BigIntegerType, { override: false });
+_registry.register("binary", BinaryType, { override: false });
+_registry.register("boolean", BooleanType, { override: false });
+_registry.register("date", Date, { override: false });
+_registry.register("datetime", DateTime, { override: false });
+_registry.register("decimal", DecimalType, { override: false });
+_registry.register("float", FloatType, { override: false });
+_registry.register("integer", IntegerType, { override: false });
+_registry.register("immutable_string", ImmutableStringType, { override: false });
+_registry.register("json", Json, { override: false });
+_registry.register("string", StringType, { override: false });
+_registry.register("text", Text, { override: false });
+_registry.register("time", Time, { override: false });
 
 export function registry(): AdapterSpecificRegistry {
   return _registry;
+}
+
+export function setRegistry(r: AdapterSpecificRegistry): void {
+  _registry = r;
+  _defaultValue = undefined;
 }
 
 export function register(
@@ -88,7 +94,7 @@ export function lookup(symbol: string, options?: { adapter?: string }): Type {
 }
 
 export function defaultValue(): Type {
-  return new ValueType();
+  return (_defaultValue ??= new ValueType());
 }
 
 /**

@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { register, lookup, registry, AdapterSpecificRegistry } from "./type.js";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { register, lookup, registry, setRegistry, AdapterSpecificRegistry } from "./type.js";
 import { Type } from "@blazetrails/activemodel";
 
 class ArgType extends Type<unknown> {
@@ -24,25 +24,34 @@ class PgArgType extends ArgType {
 }
 
 describe("TypeTest", () => {
+  let oldRegistry: AdapterSpecificRegistry;
+
+  beforeEach(() => {
+    oldRegistry = registry();
+    setRegistry(new AdapterSpecificRegistry());
+  });
+
+  afterEach(() => {
+    setRegistry(oldRegistry);
+  });
+
   it("registering a new type", () => {
-    register("__type_test_register__", ArgType);
-    expect(lookup("__type_test_register__")).toBeInstanceOf(ArgType);
+    register("foo", ArgType);
+    expect(lookup("foo")).toBeInstanceOf(ArgType);
   });
 
   it("looking up a type for a specific adapter", () => {
-    register("__type_test_adapter__", ArgType, { override: false });
-    register("__type_test_adapter__", PgArgType, { adapter: "postgresql" });
+    register("foo", ArgType, { override: false });
+    register("foo", PgArgType, { adapter: "postgresql" });
 
-    expect(lookup("__type_test_adapter__", { adapter: "sqlite3" })).toBeInstanceOf(ArgType);
-    expect(lookup("__type_test_adapter__", { adapter: "postgresql" })).toBeInstanceOf(PgArgType);
+    expect(lookup("foo", { adapter: "sqlite3" })).toBeInstanceOf(ArgType);
+    expect(lookup("foo", { adapter: "postgresql" })).toBeInstanceOf(PgArgType);
   });
 
   it("lookup defaults to the current adapter", () => {
-    register("__type_test_default__", ArgType, { override: false });
-    register("__type_test_default__", PgArgType, { adapter: "sqlite" });
+    register("foo", ArgType, { override: false });
+    register("foo", PgArgType, { adapter: "sqlite" });
 
-    // registry() returns the shared AdapterSpecificRegistry
-    expect(registry()).toBeInstanceOf(AdapterSpecificRegistry);
-    expect(lookup("__type_test_default__")).toBeInstanceOf(PgArgType);
+    expect(lookup("foo")).toBeInstanceOf(PgArgType);
   });
 });

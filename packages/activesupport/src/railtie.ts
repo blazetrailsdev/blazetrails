@@ -20,9 +20,10 @@ export class Railtie {
   private static _config: Record<string, unknown> = {};
 
   /**
-   * Per-class config object. Each subclass gets its own deep-cloned copy
-   * on first access, so parent defaults propagate until the subclass
-   * config is read (copy-on-first-access).
+   * Per-class config object. Each subclass gets its own copy on first
+   * access — deep-cloned when possible, otherwise shallow-copied — so
+   * parent defaults propagate until the subclass config is read
+   * (copy-on-first-access).
    *
    * Mirrors: Rails::Railtie.config
    */

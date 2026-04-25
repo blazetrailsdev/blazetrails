@@ -4,7 +4,7 @@ import { Railtie, registerRailtie } from "./railtie.js";
 describe("Railtie", () => {
   // Snapshot and restore global singletons so these tests don't interfere
   // with other test files (e.g. ActiveModel::Railtie expects to remain
-  // registered in BaseRailtie.subclasses after module init).
+  // registered in Railtie.subclasses after module init).
   let savedSubclasses: (typeof Railtie)[];
   let savedConfig: Record<string, unknown>;
 

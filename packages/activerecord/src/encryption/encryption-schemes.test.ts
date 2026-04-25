@@ -13,6 +13,7 @@ import {
   restoreEncryptionConfig,
   makeEncryptedAuthor,
   makeFreshModel,
+  makeKeyProvider,
   withoutEncryption,
 } from "./test-helpers.js";
 
@@ -68,18 +69,21 @@ describe("ActiveRecord::Encryption::EncryptionSchemesTest", () => {
 
   it("can decrypt encrypted_value encrypted with a different encryption scheme", async () => {
     Configurable.config.supportUnencryptedData = false;
-    // Configure a previous scheme so the author type has previousTypes.
-    Configurable.config.previous = [{ deterministic: false }] as SchemeOptions[];
+    // Use a distinct key for the previous scheme so current-scheme decryption
+    // fails and the fallback path is actually exercised.
+    const prevKeyProvider = makeKeyProvider("prev-key-for-schemes-test-32bytes!!");
+    Configurable.config.previous = [{ keyProvider: prevKeyProvider }] as SchemeOptions[];
     const Author = makeEncryptedAuthor(freshAdapter());
     new Author();
     const author = await Author.create({ name: "david" });
     const currentType = (Author as any).typeForAttribute("name") as EncryptedAttributeType;
     const prevType = currentType.previousTypes[0];
     expect(prevType).toBeDefined();
-    // Overwrite the DB row with a ciphertext produced by the previous scheme.
+    // Write the ciphertext produced by the previous scheme directly — bypass
+    // validations (length validator) with updateColumns.
     const oldCiphertext = prevType.serialize("dhh") as string;
     await withoutEncryption(async () => {
-      await author.update({ name: oldCiphertext });
+      await author.updateColumns({ name: oldCiphertext });
     });
     const reloaded = await Author.find(author.id);
     expect(reloaded.name).toBe("dhh");
@@ -88,6 +92,11 @@ describe("ActiveRecord::Encryption::EncryptionSchemesTest", () => {
 
   it("when defining previous encryption schemes, you still get Decryption errors when using invalid clear values", async () => {
     Configurable.config.supportUnencryptedData = false;
+    // Configure a previous scheme — the test verifies that even with previous
+    // schemes, an unencrypted plaintext raises DecryptionError.
+    Configurable.config.previous = [
+      { keyProvider: makeKeyProvider("prev-key-for-decryption-error-32b!") },
+    ] as SchemeOptions[];
     const Author = makeEncryptedAuthor(freshAdapter());
     new Author();
     const author = await withoutEncryption(() => Author.create({ name: "unencrypted author" }));
@@ -114,7 +123,7 @@ describe("ActiveRecord::Encryption::EncryptionSchemesTest", () => {
     const EncryptedAuthor2 = makeFreshModel(adp, { id: "integer", name: "string" });
     EncryptedAuthor2.encrypts("name", {
       encryptor: new TestEncryptor({ "2": "3" }),
-      previous: [{ encryptor: new TestEncryptor({ "1": "2" }) }] as any,
+      previousSchemes: [new Scheme({ encryptor: new TestEncryptor({ "1": "2" }) })],
     });
     new EncryptedAuthor2();
     const author = await EncryptedAuthor2.create({ name: "2" });

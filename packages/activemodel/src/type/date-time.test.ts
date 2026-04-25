@@ -48,7 +48,7 @@ describe("DateTimeType", () => {
   });
 
   it("casts Date to Date", () => {
-    const d = new Date();
+    const d = new Date("2024-01-15T10:30:00Z");
     expect(type.cast(d)).toBe(d);
   });
 });

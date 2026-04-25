@@ -407,9 +407,14 @@ export class Relation<T extends Base> {
     // Fallback: target model not in registry — derive JOIN from options.
     // NOTE: for belongsTo, the target table name is not reliably inferrable
     // without a registered model (the actual tableName may differ from the
-    // class-name convention). We fall back to a source-table FK predicate
-    // (WHERE source.fk IS NULL) which is data-correct for belongs_to but
-    // does not match Rails' JOIN form. Register the model to get the JOIN form.
+    // class-name convention). We fall back to a source-table FK null/non-null
+    // predicate, which is data-correct but not the Rails JOIN form. **Register
+    // the model** to get the JOIN form.
+    if (Array.isArray(assocDef.options.foreignKey)) {
+      throw new Error(
+        `whereMissing/whereAssociated: composite foreignKey on '${assocName}' is not yet supported in fallback path.`,
+      );
+    }
     const sourceTable = modelClass.tableName;
     if (assocDef.type === "belongsTo") {
       const foreignKey = assocDef.options.foreignKey ?? `${_toUnderscore(assocName)}_id`;
@@ -421,8 +426,15 @@ export class Relation<T extends Base> {
         _camelize(assocDef.type === "hasMany" ? _singularize(assocName) : assocName);
       const targetTable = assocDef.options.tableName ?? _pluralize(_toUnderscore(className));
       const sourcePk = assocDef.options.primaryKey ?? modelClass.primaryKey ?? "id";
-      const foreignKey = assocDef.options.foreignKey ?? `${_toUnderscore(modelClass.name)}_id`;
-      const on = `"${targetTable}"."${foreignKey}" = "${sourceTable}"."${sourcePk}"`;
+      const foreignKey = assocDef.options.as
+        ? (assocDef.options.foreignKey ?? `${_toUnderscore(assocDef.options.as)}_id`)
+        : (assocDef.options.foreignKey ?? `${_toUnderscore(modelClass.name)}_id`);
+      const onParts = [`"${targetTable}"."${foreignKey}" = "${sourceTable}"."${sourcePk}"`];
+      if (assocDef.options.as) {
+        const typeCol = `${_toUnderscore(assocDef.options.as)}_type`;
+        onParts.push(`"${targetTable}"."${typeCol}" = '${modelClass.name}'`);
+      }
+      const on = onParts.join(" AND ");
       return { joins: [{ table: targetTable, on }], table: targetTable, pks: ["id"] };
     }
     return null;

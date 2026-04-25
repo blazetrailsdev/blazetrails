@@ -3,5 +3,5 @@
 
 CREATE TABLE orders (
   id INTEGER PRIMARY KEY,
-  created_at TEXT
+  created_at DATETIME
 );

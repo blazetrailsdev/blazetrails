@@ -220,11 +220,15 @@ export class Before {
   readonly userCallback: (target: AnyRecord, value: AnyRecord) => unknown;
   readonly userConditions: Array<(target: AnyRecord, value: AnyRecord) => boolean>;
   readonly haltedLambda: (target: AnyRecord, fn: () => unknown) => boolean;
+  readonly filter: AnyCallback | string | symbol;
+  readonly name: string;
 
   constructor(
     userCallback: (target: AnyRecord, value: AnyRecord) => unknown,
     userConditions: Array<(target: AnyRecord, value: AnyRecord) => boolean>,
     chainConfig: { terminator?: (target: AnyRecord, fn: () => unknown) => boolean },
+    filter: AnyCallback | string | symbol = "",
+    name: string = "",
   ) {
     this.userCallback = userCallback;
     this.userConditions = userConditions;
@@ -234,6 +238,8 @@ export class Before {
         fn();
         return false;
       });
+    this.filter = filter;
+    this.name = name;
   }
 
   call(env: FilterEnvironment): FilterEnvironment {
@@ -417,7 +423,13 @@ export class Callback {
         : new MethodCall(String(this.filter));
 
     if (this.kind === "before") {
-      this._compiled = new Before(callTemplate.makeLambda(), userConditions, {});
+      this._compiled = new Before(
+        callTemplate.makeLambda(),
+        userConditions,
+        {},
+        this.filter,
+        this.name,
+      );
     } else if (this.kind === "after") {
       this._compiled = new After(callTemplate.makeLambda(), userConditions, {
         skipAfterCallbacksIfTerminated: this.chainConfig.skipAfterCallbacksIfTerminated,

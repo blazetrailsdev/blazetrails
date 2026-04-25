@@ -16,7 +16,7 @@ import { DerivedSecretKeyProvider } from "./derived-secret-key-provider.js";
 import { clearDefaultKeyProviderCache } from "./scheme.js";
 import { withEncryptionContext, withoutEncryption } from "./context.js";
 import { DecryptionError, EncryptionError } from "./errors.js";
-import type { EncryptorLike } from "./encryptor.js";
+import type { Encryptor } from "../encryption.js";
 
 export { withEncryptionContext, withoutEncryption, DecryptionError, EncryptionError };
 
@@ -184,7 +184,7 @@ export function makeEncryptedAuthor(adapter: DatabaseAdapter) {
   } as any;
 }
 
-const _failingEncryptor: EncryptorLike = {
+const _failingEncryptor: Encryptor = {
   encrypt() {
     throw new EncryptionError("deliberate encryption failure");
   },
@@ -192,9 +192,6 @@ const _failingEncryptor: EncryptorLike = {
     return v;
   },
   isEncrypted() {
-    return false;
-  },
-  isBinary() {
     return false;
   },
 };
@@ -205,7 +202,7 @@ export function makeBookThatWillFailToEncryptName(adapter: DatabaseAdapter) {
       this.attribute("id", "integer");
       this.attribute("name", "string");
       this.adapter = adapter;
-      this.encrypts("name", { encryptor: _failingEncryptor } as any);
+      this.encrypts("name", { encryptor: _failingEncryptor });
     }
   } as any;
 }

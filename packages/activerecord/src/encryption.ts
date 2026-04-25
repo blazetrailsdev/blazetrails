@@ -257,10 +257,7 @@ export function applyPendingEncryptions(klass: any): void {
   //   if: -> { has_encrypted_attributes? && context.frozen_encryption? }
   // Own-property guard mirrors the pattern used for _encryptedAttributes and
   // _pendingEncryptions so inheritance doesn't re-use a parent's registration.
-  if (
-    !Object.prototype.hasOwnProperty.call(klass, "_frozenEncryptionValidatorInstalled") &&
-    typeof klass.validate === "function"
-  ) {
+  if (!("_frozenEncryptionValidatorInstalled" in klass) && typeof klass.validate === "function") {
     klass._frozenEncryptionValidatorInstalled = true;
     klass.validate((record: any) => {
       if (!getEncryptionContext().frozenEncryption) return;

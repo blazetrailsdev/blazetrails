@@ -53,23 +53,25 @@ export const ImmutableString = ImmutableStringType;
 export const String = StringType;
 export const Value = ValueType;
 
-const registry = new AdapterSpecificRegistry();
+const _registry = new AdapterSpecificRegistry();
 
-registry.register("big_integer", BigIntegerType);
-registry.register("binary", BinaryType);
-registry.register("boolean", BooleanType);
-registry.register("date", Date);
-registry.register("datetime", DateTime);
-registry.register("decimal", DecimalType);
-registry.register("float", FloatType);
-registry.register("integer", IntegerType);
-registry.register("immutable_string", ImmutableStringType);
-registry.register("json", Json);
-registry.register("string", StringType);
-registry.register("text", Text);
-registry.register("time", Time);
+_registry.register("big_integer", BigIntegerType);
+_registry.register("binary", BinaryType);
+_registry.register("boolean", BooleanType);
+_registry.register("date", Date);
+_registry.register("datetime", DateTime);
+_registry.register("decimal", DecimalType);
+_registry.register("float", FloatType);
+_registry.register("integer", IntegerType);
+_registry.register("immutable_string", ImmutableStringType);
+_registry.register("json", Json);
+_registry.register("string", StringType);
+_registry.register("text", Text);
+_registry.register("time", Time);
 
-export { registry };
+export function registry(): AdapterSpecificRegistry {
+  return _registry;
+}
 
 export function register(
   typeName: string,
@@ -77,11 +79,12 @@ export function register(
   options?: { adapter?: string; override?: boolean },
   block?: (...args: unknown[]) => Type,
 ): void {
-  registry.register(typeName, klass, options, block);
+  _registry.register(typeName, klass, options, block);
 }
 
 export function lookup(symbol: string, options?: { adapter?: string }): Type {
-  return registry.lookup(symbol, options);
+  const adapter = options?.adapter ?? currentAdapterName();
+  return _registry.lookup(symbol, { ...options, adapter });
 }
 
 export function defaultValue(): Type {

@@ -422,6 +422,12 @@ describe("ActiveRecord::Encryption::EncryptableRecordTest", () => {
     const book = await Book.create({ name: "Dune" });
     assertEncryptedAttribute(book, "name", "Dune");
     assertEncryptedAttribute(book, "original_name", "Dune");
+    // In-memory read before save reflects the assigned value immediately.
+    const unsaved = new Book({ name: "Arrakis" });
+    expect(unsaved.name).toBe("Arrakis");
+    // Null-clearing: assigning null clears original_name and returns null.
+    unsaved.name = null;
+    expect(unsaved.name).toBeNull();
   });
 
   it("when ignore_case: true, it returns the actual value when not encrypted", async () => {

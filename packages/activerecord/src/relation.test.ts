@@ -106,6 +106,19 @@ describe("RelationTest", () => {
     expect(post.isPersisted()).toBe(true);
   });
 
+  it("dotted string order passes through as raw SQL (Rails treats all string orders as SqlLiteral)", () => {
+    class Post extends Base {
+      static _tableName = "posts";
+      static {
+        this.attribute("id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    // Rails never strips or re-qualifies cross-table references in string form.
+    expect(Post.order("comments.body ASC").toSql()).toContain("ORDER BY comments.body ASC");
+    expect(Post.order("posts.id DESC").toSql()).toContain("ORDER BY posts.id DESC");
+  });
+
   it("order by primary key stays table-qualified even before schema reflection", () => {
     // The PK (`id`) may not be in _attributeDefinitions before schema loads,
     // but must remain table-qualified to avoid ambiguous-column errors on JOINs.

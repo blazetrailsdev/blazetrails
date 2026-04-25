@@ -1,4 +1,12 @@
 {
+  "ar-09": {
+    "side": "diff",
+    "reason": "Boolean literal serialization: trails' ToSql renders JS booleans as the TRUE/FALSE keywords; Rails on SQLite writes 1/0 (SQLite's BOOLEAN maps to INTEGER, so Rails serialises to the integer form). Semantically equivalent but lexically differ."
+  },
+  "ar-11": {
+    "side": "diff",
+    "reason": "Boolean literal serialization in WHERE with array + nil: trails emits 'tall = FALSE OR tall IS NULL'; Rails emits 'tall = 0 OR tall IS NULL'. Same root cause as ar-09."
+  },
   "ar-16": {
     "side": "diff",
     "reason": "Book.all().eagerLoad(\"author\").limit(10): trails eagerLoad pushes the association into _eagerLoadAssociations but doesn't emit the LEFT OUTER JOIN + column-aliased SELECT that Rails produces. Rails emits 'SELECT \"books\".\"id\" AS t0_r0, ... FROM \"books\" LEFT OUTER JOIN \"authors\" ON ... LIMIT 10'; trails emits the bare 'SELECT \"books\".* FROM \"books\" LIMIT 10'. Real trails-missing feature: eagerLoad's JOIN + column-projection behaviour."
@@ -19,8 +27,28 @@
     "side": "diff",
     "reason": "where.associated(:assoc): Rails emits INNER JOIN \"authors\" ON ... WHERE \"authors\".\"id\" IS NOT NULL. trails shortcuts a belongs_to to WHERE \"books\".\"author_id\" IS NOT NULL. Same shape gap as ar-36 — whereAssociated should emit the INNER JOIN + assoc-side IS NOT NULL form."
   },
+  "ar-38": {
+    "side": "diff",
+    "reason": "Boolean literal in subquery WHERE: trails emits 'approved = TRUE', Rails on SQLite emits 'approved = 1'. Same root cause as ar-09 / ar-11 / ar-19 — boolean serialization is type-system-driven, not adapter-aware."
+  },
+  "ar-42": {
+    "side": "diff",
+    "reason": "Multi-column GROUP BY qualification: trails emits 'GROUP BY author_id, published_year' (bare); Rails qualifies each to '\"books\".\"author_id\", \"books\".\"published_year\"'. Same root cause as ar-17 (single-column form)."
+  },
+  "ar-51": {
+    "side": "diff",
+    "reason": "GROUP BY qualification in string-having query: trails emits 'GROUP BY status' (bare); Rails qualifies to 'GROUP BY \"orders\".\"status\"'. Same root cause as ar-17 / ar-42."
+  },
   "ar-52": {
     "side": "diff",
     "reason": "Datetime serialization in WHERE BETWEEN: trails formats Date as ISO 8601 ('1999-12-25T00:00:00.000Z'); Rails formats as SQL datetime ('1999-12-25 00:00:00'). The T separator, milliseconds, and Z suffix are wrong for standard SQL datetime literals."
+  },
+  "ar-55": {
+    "side": "diff",
+    "reason": "Nested table-keyed where hash: where({authors: {name: 'Rails'}}) — Rails expands nested hashes into table-qualified predicates ('\"authors\".\"name\" = \\'Rails\\''); trails serializes the inner object as a JSON string ('\"books\".\"authors\" = \\'{\"name\":\"Rails\"}\\'). trails-missing: PredicateBuilder should handle nested table→column hash form."
+  },
+  "ar-57": {
+    "side": "diff",
+    "reason": "includes + references + string where: Rails promotes includes(:author) to a LEFT OUTER JOIN + column-aliased SELECT when references(:author) is combined with a string WHERE touching that table (same mechanism as eagerLoad). trails emits a plain SELECT with the WHERE clause but no JOIN. Same root cause as ar-16 — eagerLoad JOIN + column-projection behaviour is not implemented."
   }
 }

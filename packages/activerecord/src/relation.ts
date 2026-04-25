@@ -2897,15 +2897,19 @@ export class Relation<T extends Base> {
           // Parse "column ASC/DESC" or "table.column ASC/DESC" strings
           const match = clause.match(/^([\w.]+)\s+(ASC|DESC)$/i);
           if (match) {
-            // Strip table prefix if present (e.g. "posts.score" → "score")
             const rawCol = match[1];
             const col = rawCol.includes(".") ? rawCol.split(".").pop()! : rawCol;
             const dir = match[2].toUpperCase();
-            manager.order(dir === "DESC" ? table.get(col).desc() : table.get(col).asc());
+            const node = this._modelClass._attributeDefinitions.has(col)
+              ? table.get(col)
+              : new Nodes.SqlLiteral(`"${col}"`);
+            manager.order(dir === "DESC" ? new Nodes.Descending(node) : new Nodes.Ascending(node));
           } else {
-            // Strip table prefix if present
             const col = clause.includes(".") ? clause.split(".").pop()! : clause;
-            manager.order(table.get(col).asc());
+            const node = this._modelClass._attributeDefinitions.has(col)
+              ? table.get(col)
+              : new Nodes.SqlLiteral(`"${col}"`);
+            manager.order(new Nodes.Ascending(node));
           }
         }
       } else {

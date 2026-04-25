@@ -2900,18 +2900,19 @@ export class Relation<T extends Base> {
     }
     for (const clause of this._orderClauses) {
       if (typeof clause === "string") {
+        const trimmed = clause.trim();
         // Detect SQL expressions (functions, parens, operators) and pass as raw SQL
-        if (clause.includes("(") || /\bcase\b/i.test(clause) || clause.includes("||")) {
-          manager.order(new Nodes.SqlLiteral(clause));
+        if (trimmed.includes("(") || /\bcase\b/i.test(trimmed) || trimmed.includes("||")) {
+          manager.order(new Nodes.SqlLiteral(trimmed));
         } else {
           // Parse "column ASC/DESC" or "table.column ASC/DESC" strings
-          const match = clause.match(/^([A-Za-z_$][\w$.]*)\s+(ASC|DESC)$/i);
+          const match = trimmed.match(/^([A-Za-z_$][\w$.]*)\s+(ASC|DESC)$/i);
           if (match) {
             const rawCol = match[1];
             const dir = match[2].toUpperCase();
             // Any dotted identifier (one or more dots) passes through as raw SQL.
             if (rawCol.includes(".")) {
-              manager.order(new Nodes.SqlLiteral(clause));
+              manager.order(new Nodes.SqlLiteral(trimmed));
             } else {
               const node = this._isKnownColumn(rawCol)
                 ? table.get(rawCol)
@@ -2923,13 +2924,13 @@ export class Relation<T extends Base> {
           } else {
             // Not "col DIR" form. Only wrap plain letter-start identifiers;
             // everything else (positional "1", NULLS FIRST, commas, etc.) is raw SQL.
-            if (/^[A-Za-z_$][\w$]*$/.test(clause)) {
-              const node = this._isKnownColumn(clause)
-                ? table.get(clause)
-                : new Nodes.UnqualifiedColumn(table.get(clause));
+            if (/^[A-Za-z_$][\w$]*$/.test(trimmed)) {
+              const node = this._isKnownColumn(trimmed)
+                ? table.get(trimmed)
+                : new Nodes.UnqualifiedColumn(table.get(trimmed));
               manager.order(new Nodes.Ascending(node));
             } else {
-              manager.order(new Nodes.SqlLiteral(clause));
+              manager.order(new Nodes.SqlLiteral(trimmed));
             }
           }
         }

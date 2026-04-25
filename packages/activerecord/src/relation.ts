@@ -253,15 +253,13 @@ export class Relation<T extends Base> {
   whereAssociated(...assocNames: string[]): Relation<T> {
     let rel: Relation<T> = this;
     for (const assocName of assocNames) {
-      const target = rel._resolveAssociationTarget(assocName);
-      if (!target) {
-        throw new Error(
-          `Association named '${assocName}' was not found on ${(rel._modelClass as any).name}; perhaps you misspelled it?`,
-        );
-      }
+      this._requireAssociation(assocName);
+      const target = rel._resolveAssociationTarget(assocName)!;
       const cloned = rel._clone();
       for (const join of target.joins) {
-        if (!cloned._joinClauses.some((j) => j.table === join.table && j.on === join.on)) {
+        // Dedup by table name: skip if a join to this table already exists
+        // (regardless of ON clause) to avoid invalid duplicate-table SQL.
+        if (!cloned._joinClauses.some((j) => j.table === join.table)) {
           cloned._joinClauses.push({ type: "inner", table: join.table, on: join.on, quoted: true });
         }
       }
@@ -283,15 +281,15 @@ export class Relation<T extends Base> {
   whereMissing(...assocNames: string[]): Relation<T> {
     let rel: Relation<T> = this;
     for (const assocName of assocNames) {
-      const target = rel._resolveAssociationTarget(assocName);
-      if (!target) {
-        throw new Error(
-          `Association named '${assocName}' was not found on ${(rel._modelClass as any).name}; perhaps you misspelled it?`,
-        );
-      }
+      this._requireAssociation(assocName);
+      const target = rel._resolveAssociationTarget(assocName)!;
       const cloned = rel._clone();
       for (const join of target.joins) {
-        cloned._joinClauses.push({ type: "left", table: join.table, on: join.on, quoted: true });
+        // Dedup by table name to avoid duplicate-table SQL if the same
+        // association is applied twice or already joined via leftOuterJoins.
+        if (!cloned._joinClauses.some((j) => j.table === join.table)) {
+          cloned._joinClauses.push({ type: "left", table: join.table, on: join.on, quoted: true });
+        }
       }
       const tgtTable = new Table(target.table);
       for (const pk of target.pks) {
@@ -300,6 +298,16 @@ export class Relation<T extends Base> {
       rel = cloned;
     }
     return rel;
+  }
+
+  private _requireAssociation(assocName: string): void {
+    const modelClass = this._modelClass as any;
+    const associations: any[] = modelClass._associations ?? [];
+    if (!associations.some((a: any) => a.name === assocName)) {
+      throw new Error(
+        `Association named '${assocName}' was not found on ${modelClass.name}; perhaps you misspelled it?`,
+      );
+    }
   }
 
   /**

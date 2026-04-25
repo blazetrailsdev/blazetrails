@@ -8,7 +8,7 @@ import { Nodes } from "@blazetrails/arel";
 import { FromClause } from "./from-clause.js";
 import { WhereClause } from "./where-clause.js";
 import { IrreversibleOrderError } from "../errors.js";
-import { sanitizeSqlArray, disallowRawSqlBang } from "../sanitization.js";
+import { sanitizeSqlArray } from "../sanitization.js";
 import { quote } from "../connection-adapters/abstract/quoting.js";
 import { JoinDependency } from "../associations/join-dependency.js";
 
@@ -235,7 +235,6 @@ function orderBang(
   while (i < args.length) {
     const arg = args[i];
     if (typeof arg === "string") {
-      disallowRawSqlBang([arg]);
       const next = args[i + 1];
       if (typeof next === "string" && /^(asc|desc)$/i.test(next)) {
         this._orderClauses.push([arg, next.toLowerCase() as "asc" | "desc"]);

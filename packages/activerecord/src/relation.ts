@@ -1140,11 +1140,14 @@ export class Relation<T extends Base> {
 
     if (assocDef.type === "belongsTo") {
       const foreignKey = assocDef.options.foreignKey ?? `${_toUnderscore(name)}_id`;
+      if (Array.isArray(foreignKey)) return null;
       const className = assocDef.options.className ?? _camelize(name);
       const targetModel = modelRegistry.get(className);
       if (!targetModel) return null;
       const targetTable = targetModel.tableName;
-      const targetPk = assocDef.options.primaryKey ?? targetModel.primaryKey ?? "id";
+      const rawTargetPk = assocDef.options.primaryKey ?? targetModel.primaryKey ?? "id";
+      if (Array.isArray(rawTargetPk)) return null;
+      const targetPk = rawTargetPk;
       const tgt = new Table(targetTable);
       const src = new Table(sourceTable);
       const predicates: Nodes.Node[] = [tgt.get(targetPk).eq(src.get(foreignKey))];
@@ -1174,8 +1177,11 @@ export class Relation<T extends Base> {
       const targetModel = modelRegistry.get(className);
       if (!targetModel) return null;
       const targetTable = targetModel.tableName;
-      const primaryKey = assocDef.options.primaryKey ?? sourcePk;
+      const rawPk = assocDef.options.primaryKey ?? sourcePk;
+      if (Array.isArray(rawPk)) return null;
+      const primaryKey = rawPk;
       const foreignKey = assocDef.options.foreignKey ?? `${_toUnderscore(modelClass.name)}_id`;
+      if (Array.isArray(foreignKey)) return null;
       const tgt = new Table(targetTable);
       const src = new Table(sourceTable);
       const predicates: Nodes.Node[] = [tgt.get(foreignKey).eq(src.get(primaryKey))];
@@ -1287,7 +1293,18 @@ export class Relation<T extends Base> {
         ? (sourceAssocDef?.options?.foreignKey ?? `${_toUnderscore(sourceAsName)}_id`)
         : (sourceAssocDef?.options?.foreignKey ?? `${_toUnderscore(throughClassName)}_id`);
       const rawThroughPk = throughModel.primaryKey ?? "id";
-      const throughPkCol = Array.isArray(rawThroughPk) ? rawThroughPk[0] : rawThroughPk;
+      let throughPkCol: string;
+      if (Array.isArray(rawThroughPk)) {
+        if (rawThroughPk.includes("id")) {
+          throughPkCol = "id";
+        } else if (rawThroughPk.length === 1) {
+          throughPkCol = rawThroughPk[0];
+        } else {
+          return null;
+        }
+      } else {
+        throughPkCol = rawThroughPk;
+      }
       targetPredicates.push(tgtTable.get(sourceFk).eq(thrTable.get(throughPkCol)));
       if (sourceAsName) {
         targetPredicates.push(

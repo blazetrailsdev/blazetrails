@@ -3357,7 +3357,8 @@ export class Relation<T extends Base> {
     if (modelPb && typeof modelPb.with === "function") {
       pb = modelPb.with(metadata);
     } else {
-      pb = new PredicateBuilder(this.table).with(metadata);
+      pb = new PredicateBuilder(this.table);
+      pb.setTableContext(metadata);
     }
     this._predicateBuilder = pb;
     return pb;

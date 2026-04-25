@@ -102,11 +102,12 @@ export class TableMetadata {
   get predicateBuilder(): PredicateBuilder {
     if (this._klass) {
       const klass = this._klass as any;
-      const modelPb: PredicateBuilder | null =
+      const accessor = klass.predicateBuilder;
+      const modelPb =
         klass._predicateBuilder ??
-        (typeof klass.predicateBuilder === "function" ? klass.predicateBuilder() : null) ??
+        (typeof accessor === "function" ? accessor.call(klass) : accessor) ??
         null;
-      if (modelPb) return modelPb.with(this);
+      if (modelPb && typeof modelPb.with === "function") return modelPb.with(this);
     }
     const pb = new PredicateBuilder(this._arelTable);
     pb.setTableContext(this);

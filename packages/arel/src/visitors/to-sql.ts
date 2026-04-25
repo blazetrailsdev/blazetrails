@@ -1355,7 +1355,7 @@ export class ToSql implements NodeVisitor<SQLString> {
       "toISOString" in v &&
       typeof (v as { toISOString: unknown }).toISOString === "function"
     ) {
-      this.collector.append(`'${(v as { toISOString: () => string }).toISOString()}'`);
+      this.collector.append(this.quotedDate(v as { toISOString(): string }));
     } else {
       this.collector.append(String(v));
     }
@@ -1369,6 +1369,15 @@ export class ToSql implements NodeVisitor<SQLString> {
     }
   }
 
+  // Mirrors Rails' AbstractAdapter#quoted_date: 'YYYY-MM-DD HH:MM:SS'
+  // (space separator, no T, no milliseconds, no Z).
+  protected quotedDate(d: { toISOString(): string }): string {
+    return `'${d
+      .toISOString()
+      .replace("T", " ")
+      .replace(/\.\d+Z$/, "")}'`;
+  }
+
   protected quote(value: unknown): string {
     if (value === null || value === undefined) return "NULL";
     if (typeof value === "number") return String(value);
@@ -1380,7 +1389,7 @@ export class ToSql implements NodeVisitor<SQLString> {
       "toISOString" in value &&
       typeof (value as { toISOString: unknown }).toISOString === "function"
     ) {
-      return `'${(value as { toISOString: () => string }).toISOString()}'`;
+      return this.quotedDate(value as { toISOString(): string });
     }
     if (typeof value === "object" && value !== null) {
       const proto = Object.getPrototypeOf(value);

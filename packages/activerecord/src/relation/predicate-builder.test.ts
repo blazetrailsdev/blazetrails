@@ -1,10 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import { Table, Visitors, Nodes } from "@blazetrails/arel";
 import { PredicateBuilder } from "./predicate-builder.js";
 import { Substitute } from "../statement-cache.js";
 import { Range } from "../connection-adapters/postgresql/oid/range.js";
 import { TableMetadata } from "../table-metadata.js";
-import { Base, registerModel } from "../index.js";
+import { Base, registerModel, modelRegistry } from "../index.js";
 
 describe("PredicateBuilderTest", () => {
   it.skip("registering new handlers", () => {});
@@ -167,6 +167,11 @@ describe("PredicateBuilderTest", () => {
         registerModel(this);
       }
     }
+
+    afterAll(() => {
+      modelRegistry.delete("Author");
+      modelRegistry.delete("Post");
+    });
 
     it("expands where({authors: {name: 'Rails'}}) to \"authors\".\"name\" = 'Rails'", () => {
       const meta = new TableMetadata(Post as any, new Table("posts"));

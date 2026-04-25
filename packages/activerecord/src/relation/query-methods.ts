@@ -175,10 +175,22 @@ function _selectBang(this: QueryMethodsHost, ...columns: any[]): any {
   });
   if (this._selectColumns === null) this._selectColumns = [];
   const seenStrings = new Set<string>();
-  const seenNodes = new WeakSet<object>();
+  const seenNodeHashes = new Map<number, Nodes.Node[]>();
+  const nodeIsDuplicate = (node: Nodes.Node): boolean => {
+    const h = node.hash();
+    const bucket = seenNodeHashes.get(h);
+    if (!bucket) return false;
+    return bucket.some((n) => n.eql(node));
+  };
+  const addNodeToSeen = (node: Nodes.Node): void => {
+    const h = node.hash();
+    const bucket = seenNodeHashes.get(h);
+    if (bucket) bucket.push(node);
+    else seenNodeHashes.set(h, [node]);
+  };
   for (const existing of this._selectColumns) {
     if (typeof existing === "string") seenStrings.add(existing);
-    else if (existing instanceof Nodes.Node) seenNodes.add(existing);
+    else if (existing instanceof Nodes.Node) addNodeToSeen(existing);
     else seenStrings.add((existing as { value: string }).value);
   }
   for (const col of normalized) {
@@ -188,9 +200,9 @@ function _selectBang(this: QueryMethodsHost, ...columns: any[]): any {
         seenStrings.add(col);
       }
     } else if (col instanceof Nodes.Node) {
-      if (!seenNodes.has(col)) {
+      if (!nodeIsDuplicate(col)) {
         this._selectColumns.push(col);
-        seenNodes.add(col);
+        addNodeToSeen(col);
       }
     } else {
       const key = (col as { value: string }).value;

@@ -116,7 +116,12 @@ export class Relation<T extends Base> {
     type: "union" | "unionAll" | "intersect" | "except";
     other: Relation<T>;
   } | null = null;
-  private _joinClauses: Array<{ type: "inner" | "left"; table: string; on: string }> = [];
+  private _joinClauses: Array<{
+    type: "inner" | "left";
+    table: string;
+    on: string;
+    quoted?: boolean;
+  }> = [];
   private _rawJoins: string[] = [];
   private _includesAssociations: string[] = [];
   private _preloadAssociations: string[] = [];
@@ -921,10 +926,15 @@ export class Relation<T extends Base> {
       if (resolved) {
         if (Array.isArray(resolved)) {
           for (const join of resolved) {
-            rel._joinClauses.push({ type: "inner", table: join.table, on: join.on });
+            rel._joinClauses.push({ type: "inner", table: join.table, on: join.on, quoted: true });
           }
         } else {
-          rel._joinClauses.push({ type: "inner", table: resolved.table, on: resolved.on });
+          rel._joinClauses.push({
+            type: "inner",
+            table: resolved.table,
+            on: resolved.on,
+            quoted: true,
+          });
         }
       } else {
         rel._rawJoins.push(tableOrSql);
@@ -948,10 +958,15 @@ export class Relation<T extends Base> {
       if (resolved) {
         if (Array.isArray(resolved)) {
           for (const join of resolved) {
-            rel._joinClauses.push({ type: "left", table: join.table, on: join.on });
+            rel._joinClauses.push({ type: "left", table: join.table, on: join.on, quoted: true });
           }
         } else {
-          rel._joinClauses.push({ type: "left", table: resolved.table, on: resolved.on });
+          rel._joinClauses.push({
+            type: "left",
+            table: resolved.table,
+            on: resolved.on,
+            quoted: true,
+          });
         }
       } else {
         rel._joinClauses.push({ type: "left", table, on: "1=1" });
@@ -1978,7 +1993,7 @@ export class Relation<T extends Base> {
 
   private _applyJoinsToManager(manager: SelectManager): void {
     for (const join of this._joinClauses) {
-      const tableNode = new Table(join.table);
+      const tableNode = join.quoted ? new Table(join.table) : join.table;
       const onNode = new Nodes.SqlLiteral(join.on);
       if (join.type === "inner") {
         manager.join(tableNode, onNode);

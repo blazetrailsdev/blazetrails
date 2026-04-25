@@ -10,7 +10,6 @@ import {
 } from "@blazetrails/arel";
 import type { Base } from "./base.js";
 import { _setRelationCtor, _setScopeProxyWrapper, quoteSqlValue } from "./base.js";
-import { quoteColumnName } from "./connection-adapters/abstract/quoting.js";
 import { RecordNotSaved, RecordNotUnique } from "./errors.js";
 import { modelRegistry } from "./associations.js";
 import { applyThenable, stripThenable } from "./relation/thenable.js";
@@ -2910,27 +2909,28 @@ export class Relation<T extends Base> {
           if (match) {
             const rawCol = match[1];
             const dir = match[2].toUpperCase();
-            // Dotted identifiers (e.g. "comments.body ASC") pass through as raw
-            // SQL — Rails treats all string-form orders as Arel::Nodes::SqlLiteral
-            // and never strips or re-qualifies a cross-table prefix.
-            if (rawCol.includes(".")) {
+            // Dotted simple identifiers (table.column) pass through as raw SQL —
+            // Rails treats string-form orders as SqlLiteral and never re-qualifies
+            // cross-table references. Restrict to safe identifier patterns to avoid
+            // bypassing sanitization for arbitrary dotted strings.
+            if (/^[\w$]+\.[\w$]+$/.test(rawCol)) {
               manager.order(new Nodes.SqlLiteral(clause));
             } else {
               const node = this._isKnownColumn(rawCol)
                 ? table.get(rawCol)
-                : new Nodes.SqlLiteral(quoteColumnName(rawCol));
+                : new Nodes.UnqualifiedColumn(table.get(rawCol));
               manager.order(
                 dir === "DESC" ? new Nodes.Descending(node) : new Nodes.Ascending(node),
               );
             }
           } else {
-            // Dotted bare clause (no direction) → raw SQL passthrough.
-            if (clause.includes(".")) {
+            // Dotted simple identifier (no direction) → raw SQL passthrough.
+            if (/^[\w$]+\.[\w$]+$/.test(clause)) {
               manager.order(new Nodes.SqlLiteral(clause));
             } else {
               const node = this._isKnownColumn(clause)
                 ? table.get(clause)
-                : new Nodes.SqlLiteral(quoteColumnName(clause));
+                : new Nodes.UnqualifiedColumn(table.get(clause));
               manager.order(new Nodes.Ascending(node));
             }
           }
@@ -2942,8 +2942,10 @@ export class Relation<T extends Base> {
         if (this._isKnownColumn(col)) {
           manager.order(dir === "desc" ? table.get(col).desc() : table.get(col).asc());
         } else {
-          const lit = new Nodes.SqlLiteral(quoteColumnName(col));
-          manager.order(dir === "desc" ? new Nodes.Descending(lit) : new Nodes.Ascending(lit));
+          const unqual = new Nodes.UnqualifiedColumn(table.get(col));
+          manager.order(
+            dir === "desc" ? new Nodes.Descending(unqual) : new Nodes.Ascending(unqual),
+          );
         }
       }
     }

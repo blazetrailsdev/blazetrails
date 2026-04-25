@@ -94,7 +94,10 @@ export function hasSecurePassword(
   // invalidation to round-trip through the DB.
   modelClass.beforeSave(function (record: Base) {
     const rawPassword = (record as any)[passwordKey];
-    if (rawPassword != null) {
+    // Rails `password=` setter skips hashing for empty strings
+    // (active_model/secure_password.rb) — an empty password is not a
+    // valid password, so we leave the existing digest untouched.
+    if (rawPassword != null && rawPassword !== "") {
       const digest = hashPassword(rawPassword);
       record.writeAttribute(digestAttr, digest);
       // Clear the raw password after hashing so subsequent saves don't

@@ -1947,7 +1947,9 @@ describe("errors.ofKind()", () => {
     u.isValid();
     expect(u.errors.ofKind("name", "blank")).toBe(true);
     expect(u.errors.ofKind("name", "invalid")).toBe(false);
-    expect(u.errors.ofKind("name")).toBe(true);
+    // Default kind is :invalid (Rails Errors#of_kind? default); the error
+    // here is :blank so the default lookup returns false.
+    expect(u.errors.ofKind("name")).toBe(false);
     expect(u.errors.ofKind("other")).toBe(false);
   });
 });

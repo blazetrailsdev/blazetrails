@@ -126,56 +126,54 @@ Dir.mktmpdir("parity-ar-ruby-") do |tmpdir|
 
     # 5. Extract SQL — two forms:
     #    a) Inlined (sql): to_sql() with all values embedded as literals.
-    #    b) Parameterized (paramSql + binds): bound_attributes gives the bind
-    #       values Rails passes to the DB driver. Bind values are serialized
-    #       as ISO 8601 UTC so they're directly comparable to trails' output
-    #       from compileWithBinds (which emits Date.toISOString() values).
+    #    b) Parameterized (paramSql + binds): build both from the same Arel
+    #       Collectors::Bind pass so paramSql and binds stay in sync.
+    #       Only datetime values become ? placeholders; other scalars are
+    #       re-inlined so ? count = binds.length (mirrors trails' approach).
+    #       Falls back to bound_attributes if the Arel collector finds no binds.
     sql_str = result.to_sql.strip
+    binds = []
+    param_sql = sql_str
 
-    # bound_attributes: ordered array of ActiveModel::Attribute objects.
-    # For datetime attributes, value_for_database is a Time object; we
-    # serialize to ISO 8601 with millisecond precision to match
-    # Date.toISOString() on the trails side.
-    # Only collect Date/Time-valued binds. String/number bind params in
-    # Rails SQLite are inlined directly in to_sql; trails uses BindParam nodes
-    # for those same scalars. Comparing all binds cross-side would surface that
-    # architectural difference. Dates are the only type where format matters.
-    raw_binds = result.respond_to?(:bound_attributes) ? result.bound_attributes : []
-    binds = raw_binds.filter_map do |ba|
-      val = ba.value_for_database
-      if val.respond_to?(:utc)
-        # Time/DateTime → ISO 8601 UTC with ms precision to match
-        # JavaScript Date.toISOString() format.
-        val.utc.iso8601(3)
+    if result.respond_to?(:arel)
+      begin
+        arel_obj = result.arel
+        conn = ActiveRecord::Base.connection
+        visitor = conn.visitor
+        collector = Arel::Collectors::Bind.new
+        visitor.accept(arel_obj.ast, collector)
+
+        parts = collector.value.map do |part|
+          if part.is_a?(Arel::Nodes::BindParam)
+            val = part.value.respond_to?(:value_for_database) ? part.value.value_for_database : part.value
+            if val.respond_to?(:utc)
+              binds << val.utc.iso8601(3)
+              "?"
+            else
+              conn.quote(val)
+            end
+          else
+            part
+          end
+        end
+
+        param_sql = binds.any? ? parts.join.strip : sql_str
+      rescue NoMethodError
+        # Arel::Collectors::Bind doesn't implement all collector methods in
+        # every Rails version (e.g. preparable= in Rails 8.0). Fall back to
+        # bound_attributes below.
+        binds = []
+        param_sql = sql_str
       end
     end
 
-    # paramSql: build a parameterized SQL template with ? placeholders using
-    # Arel's Bind collector. This mirrors what trails' compileWithBinds produces,
-    # so both sides can be directly compared (template + binds, not inlined SQL).
-    # Only datetime values become ? — strings/numbers are inlined as on the
-    # trails side too.
-    param_sql = if result.respond_to?(:arel) && binds.any?
-      arel_obj = result.arel
-      conn = ActiveRecord::Base.connection
-      visitor = conn.visitor
-      # Arel::Collectors::Bind collects [String | BindParam, ...]; join strings
-      # and replace BindParam slots with ? for date values.
-      collector = Arel::Collectors::Bind.new
-      visitor.accept(arel_obj.ast, collector)
-      # Walk the collected parts: strings pass through, BindParam objects where
-      # the underlying value is a Time/DateTime become ?; others are inlined.
-      parts = collector.value.map do |part|
-        if part.is_a?(Arel::Nodes::BindParam)
-          val = part.value.respond_to?(:value_for_database) ? part.value.value_for_database : part.value
-          val.respond_to?(:utc) ? "?" : conn.quote(val)
-        else
-          part
-        end
+    # Fall back to bound_attributes when Arel collector found no datetime binds
+    # (e.g. for expressions not backed by an AR relation).
+    if binds.empty? && result.respond_to?(:bound_attributes)
+      binds = result.bound_attributes.filter_map do |ba|
+        val = ba.value_for_database
+        val.utc.iso8601(3) if val.respond_to?(:utc)
       end
-      parts.join.strip
-    else
-      sql_str
     end
 
     # 6. Write CanonicalQuery JSON

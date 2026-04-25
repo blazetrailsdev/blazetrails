@@ -120,6 +120,22 @@ describe("RelationTest", () => {
     expect(sql).not.toMatch(/GROUP BY created_at[^"]/);
   });
 
+  it("group by multiple bare columns qualifies each via table", () => {
+    class Book extends Base {
+      static _tableName = "books";
+      static {
+        this.attribute("author_id", "integer");
+        this.attribute("published_year", "integer");
+        this.adapter = adapter;
+      }
+    }
+    const sql = Book.group("author_id", "published_year").toSql();
+    expect(sql).toContain('"books"."author_id"');
+    expect(sql).toContain('"books"."published_year"');
+    expect(sql).not.toMatch(/GROUP BY author_id[^"]/);
+    expect(sql).not.toMatch(/,\s*published_year[^"]/);
+  });
+
   it("group by SQL expression passes through unqualified", () => {
     class Order extends Base {
       static _tableName = "orders";

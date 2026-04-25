@@ -105,7 +105,7 @@ export class HashLookupTypeMap {
   }
 
   isKey(key: string | number): boolean {
-    return this._mapping.has(key);
+    return this.has(key);
   }
 
   has(key: string | number): boolean {

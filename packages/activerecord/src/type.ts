@@ -55,6 +55,7 @@ export const Value = ValueType;
 
 let _registry = new AdapterSpecificRegistry();
 let _defaultValue: Type | undefined;
+let _currentAdapterResolver: (() => string) | undefined;
 
 _registry.register("big_integer", BigIntegerType, { override: false });
 _registry.register("binary", BinaryType, { override: false });
@@ -77,6 +78,11 @@ export function registry(): AdapterSpecificRegistry {
 export function setRegistry(r: AdapterSpecificRegistry): void {
   _registry = r;
   _defaultValue = undefined;
+}
+
+// Called by Base to wire the real connection adapter into type lookups.
+export function setCurrentAdapterResolver(resolver: () => string): void {
+  _currentAdapterResolver = resolver;
 }
 
 export function register(
@@ -108,8 +114,10 @@ export function adapterNameFrom(model: { adapter?: unknown }): string {
 }
 
 // currentAdapterName is private in Rails — exposed here for api:compare parity only.
+// When Base wires setCurrentAdapterResolver(), it reads the real connection adapter.
 export function currentAdapterName(getBase?: () => { adapter?: unknown }): string {
-  return getBase ? adapterNameFrom(getBase()) : "sqlite";
+  if (getBase) return adapterNameFrom(getBase());
+  return _currentAdapterResolver?.() ?? "sqlite";
 }
 
 // Override ActiveModel's type registry with AR-specific types so that

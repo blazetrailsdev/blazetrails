@@ -24,9 +24,11 @@ describe("ActiveRecord::Encryption::UnencryptedAttributesTest", () => {
   });
 
   it("when :support_unencrypted_data is off, it works with unencrypted attributes normally", async () => {
-    // Rails names this "off" because the strict-encryption restriction is disabled —
-    // the system accepts plaintext alongside ciphertext. This maps to
-    // supportUnencryptedData = true (tolerant / backwards-compat mode).
+    // Mirrors Rails source exactly:
+    //   ActiveRecord::Encryption.config.support_unencrypted_data = true
+    // The test name means "the restriction ON unencrypted data is off" (i.e.,
+    // the system IS tolerant of plaintext). supportUnencryptedData = true
+    // enables the plaintext-fallback path.
     Configurable.config.supportUnencryptedData = true;
     const Post = makeEncryptedPost(freshAdapter());
     new Post();
@@ -42,9 +44,11 @@ describe("ActiveRecord::Encryption::UnencryptedAttributesTest", () => {
   });
 
   it("when :support_unencrypted_data is on, it won't work with unencrypted attributes", async () => {
-    // Rails names this "on" because the strict-encryption requirement is active —
-    // plaintext in an encrypted column is rejected with DecryptionError. This maps
-    // to supportUnencryptedData = false (strict mode, no plaintext fallback).
+    // Mirrors Rails source exactly:
+    //   ActiveRecord::Encryption.config.support_unencrypted_data = false
+    // The test name means "the restriction ON unencrypted data is on" (strict mode).
+    // supportUnencryptedData = false disables the plaintext fallback, so reading
+    // an unencrypted column raises DecryptionError.
     Configurable.config.supportUnencryptedData = false;
     const Post = makeEncryptedPost(freshAdapter());
     new Post();

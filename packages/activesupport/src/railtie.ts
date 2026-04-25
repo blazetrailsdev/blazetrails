@@ -28,7 +28,13 @@ export class Railtie {
   static get config(): Record<string, unknown> {
     const host = this as any;
     if (!Object.prototype.hasOwnProperty.call(host, "_config")) {
-      host._config = { ...Object.getPrototypeOf(host)._config };
+      const parent = Object.getPrototypeOf(host)._config ?? {};
+      // Deep-clone so nested objects/arrays are isolated per subclass
+      // (structuredClone is available in Node 17+ and modern browsers).
+      host._config =
+        typeof structuredClone === "function"
+          ? structuredClone(parent)
+          : JSON.parse(JSON.stringify(parent));
     }
     return host._config as Record<string, unknown>;
   }

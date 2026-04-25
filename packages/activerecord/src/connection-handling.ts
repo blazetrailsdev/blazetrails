@@ -2,7 +2,6 @@ import type { Base } from "./base.js";
 import type { DatabaseAdapter } from "./adapter.js";
 import type { ConnectionPool } from "./connection-adapters/abstract/connection-pool.js";
 import { getFsAsync, getPathAsync } from "@blazetrails/activesupport";
-import { setToSqlVisitor, Visitors } from "@blazetrails/arel";
 import { DatabaseConfigurations } from "./database-configurations.js";
 import { HashConfig } from "./database-configurations/hash-config.js";
 import { UrlConfig } from "./database-configurations/url-config.js";
@@ -443,14 +442,6 @@ async function establishWithConfig(
   // like register("mysql2", ...) aren't shadowed by normalization.
   // `normalized` is only used below for adapter-arg construction.
   const AdapterClass = await _loadAdapter(adapterName);
-
-  if (normalized === "sqlite") {
-    setToSqlVisitor(Visitors.SQLite);
-  } else if (normalized === "postgresql") {
-    setToSqlVisitor(Visitors.PostgreSQL);
-  } else {
-    setToSqlVisitor(Visitors.ToSql);
-  }
 
   let adapterArg: unknown;
   if (normalized === "sqlite") {

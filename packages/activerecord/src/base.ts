@@ -8,6 +8,7 @@ import {
   DeleteManager,
   Nodes,
   sql as arelSql,
+  setToSqlVisitor,
 } from "@blazetrails/arel";
 import type { DatabaseAdapter } from "./adapter.js";
 import type { Relation } from "./relation.js";
@@ -644,6 +645,12 @@ export class Base extends Model {
       return;
     }
     this._adapter = adapter;
+    const visitor = (adapter as { arelVisitor?: object }).arelVisitor;
+    if (visitor) {
+      setToSqlVisitor(
+        (visitor as object).constructor as new () => { compile(node: Nodes.Node): string },
+      );
+    }
     if (_onAdapterSet) _onAdapterSet(this);
 
     // Full schema reset on adapter swap: drops schema-sourced defs and

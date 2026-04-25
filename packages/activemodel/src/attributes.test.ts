@@ -278,3 +278,144 @@ describe("AttributesTest", () => {
     }).toThrow();
   });
 });
+describe("normalizes", () => {
+  it("applies normalization on write", () => {
+    class User extends Model {
+      static {
+        this.attribute("email", "string");
+        this.normalizes("email", (v: unknown) =>
+          typeof v === "string" ? v.trim().toLowerCase() : v,
+        );
+      }
+    }
+
+    const u = new User({ email: "  Alice@Example.COM  " });
+    expect(u.readAttribute("email")).toBe("alice@example.com");
+  });
+
+  it("applies normalization on subsequent writeAttribute", () => {
+    class User extends Model {
+      static {
+        this.attribute("name", "string");
+        this.normalizes("name", (v: unknown) => (typeof v === "string" ? v.trim() : v));
+      }
+    }
+
+    const u = new User({ name: "Alice" });
+    u.writeAttribute("name", "  Bob  ");
+    expect(u.readAttribute("name")).toBe("Bob");
+  });
+
+  it("supports multiple attributes", () => {
+    class User extends Model {
+      static {
+        this.attribute("first_name", "string");
+        this.attribute("last_name", "string");
+        this.normalizes("first_name", "last_name", (v: unknown) =>
+          typeof v === "string" ? v.toUpperCase() : v,
+        );
+      }
+    }
+
+    const u = new User({ first_name: "alice", last_name: "smith" });
+    expect(u.readAttribute("first_name")).toBe("ALICE");
+    expect(u.readAttribute("last_name")).toBe("SMITH");
+  });
+});
+
+describe("attributesBeforeTypeCast", () => {
+  it("returns all raw attribute values", () => {
+    class User extends Model {
+      static {
+        this.attribute("name", "string");
+        this.attribute("age", "integer");
+      }
+    }
+    const u = new User({ name: "Alice", age: "25" });
+    const raw = u.attributesBeforeTypeCast;
+    expect(raw.name).toBe("Alice");
+    expect(raw.age).toBe("25"); // raw, not cast to integer
+    expect(u.readAttribute("age")).toBe(25); // cast version
+  });
+});
+
+describe("columnForAttribute()", () => {
+  it("returns type info for defined attribute", () => {
+    class User extends Model {
+      static {
+        this.attribute("name", "string");
+        this.attribute("age", "integer");
+      }
+    }
+    const u = new User({ name: "Alice", age: 25 });
+    const col = u.columnForAttribute("name");
+    expect(col).not.toBeNull();
+    expect(col!.name).toBe("name");
+
+    const ageCol = u.columnForAttribute("age");
+    expect(ageCol).not.toBeNull();
+    expect(ageCol!.name).toBe("age");
+  });
+
+  it("returns null for unknown attribute", () => {
+    class User extends Model {
+      static {
+        this.attribute("name", "string");
+      }
+    }
+    const u = new User({ name: "Alice" });
+    expect(u.columnForAttribute("nonexistent")).toBeNull();
+  });
+});
+
+describe("typeForAttribute", () => {
+  it(".type_for_attribute returns the default type when an unregistered attribute is specified", () => {
+    class User extends Model {
+      static {
+        this.attribute("name", "string");
+      }
+    }
+    const u = new User({ name: "Alice" });
+    expect(u.typeForAttribute("unknown")).toBeNull();
+  });
+});
+
+describe("nullifyBlanks()", () => {
+  it("converts blank strings to null for specified attributes", () => {
+    class User extends Model {
+      static {
+        this.attribute("name", "string");
+        this.attribute("bio", "string");
+        this.nullifyBlanks("name");
+      }
+    }
+    const u = new User({ name: "  ", bio: "  " });
+    expect(u.readAttribute("name")).toBeNull();
+    expect(u.readAttribute("bio")).toBe("  "); // not nullified
+  });
+
+  it("nullifies all string attrs when called with no arguments", () => {
+    class User extends Model {
+      static {
+        this.attribute("name", "string");
+        this.attribute("email", "string");
+        this.nullifyBlanks();
+      }
+    }
+    const u = new User({ name: "", email: "" });
+    expect(u.readAttribute("name")).toBeNull();
+    expect(u.readAttribute("email")).toBeNull();
+  });
+
+  it("nullifies on writeAttribute too", () => {
+    class User extends Model {
+      static {
+        this.attribute("name", "string");
+        this.nullifyBlanks("name");
+      }
+    }
+    const u = new User({ name: "Alice" });
+    u.writeAttribute("name", "");
+    expect(u.readAttribute("name")).toBeNull();
+  });
+});

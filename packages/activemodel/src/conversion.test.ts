@@ -188,3 +188,18 @@ describe("ConversionTest", () => {
     expect(new Contact({}).toParam()).toBeNull();
   });
 });
+describe("toModel", () => {
+  it("to_model default implementation returns self", () => {
+    class User extends Model {
+      static {
+        this.attribute("name", "string");
+      }
+    }
+    const u = new User({ name: "Alice" });
+    expect(u.toModel()).toBe(u);
+  });
+});
+
+// ===========================================================================
+// i18nScope
+// ===========================================================================

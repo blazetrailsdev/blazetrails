@@ -140,3 +140,44 @@ describe("ConfirmationValidationTest", () => {
     expect(Person._attributeDefinitions.has("emailConfirmation")).toBe(true);
   });
 });
+describe("ConfirmationValidator caseSensitive", () => {
+  it("title confirmation with case sensitive option true", () => {
+    class User extends Model {
+      static {
+        this.attribute("email", "string");
+        this.validates("email", { confirmation: true });
+      }
+    }
+    const u = new User({ email: "Alice@example.com" });
+    u._attributes.set("emailConfirmation", "alice@example.com");
+    expect(u.isValid()).toBe(false);
+  });
+
+  it("title confirmation with case sensitive option false", () => {
+    class User extends Model {
+      static {
+        this.attribute("email", "string");
+        this.validates("email", { confirmation: { caseSensitive: false } });
+      }
+    }
+    const u = new User({ email: "Alice@example.com" });
+    u._attributes.set("emailConfirmation", "alice@example.com");
+    expect(u.isValid()).toBe(true);
+  });
+
+  it("still fails when values differ with caseSensitive: false", () => {
+    class User extends Model {
+      static {
+        this.attribute("email", "string");
+        this.validates("email", { confirmation: { caseSensitive: false } });
+      }
+    }
+    const u = new User({ email: "alice@example.com" });
+    u._attributes.set("emailConfirmation", "bob@example.com");
+    expect(u.isValid()).toBe(false);
+  });
+});
+
+// ===========================================================================
+// toModel (ActiveModel::Conversion)
+// ===========================================================================

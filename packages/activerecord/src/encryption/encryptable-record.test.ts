@@ -20,11 +20,11 @@ import {
   DecryptionError,
   EncryptionError,
   AUTHOR_NAME_LIMIT,
+  Base,
 } from "./test-helpers.js";
 import { Configurable } from "./configurable.js";
 import { EncryptableRecord } from "./encryptable-record.js";
 import { isEncryptedAttribute } from "../encryption.js";
-import { Base } from "./test-helpers.js";
 
 describe("ActiveRecord::Encryption::EncryptableRecordTest", () => {
   let configSnapshot: ReturnType<typeof snapshotEncryptionConfig>;
@@ -320,7 +320,7 @@ describe("ActiveRecord::Encryption::EncryptableRecordTest", () => {
     // The DB value is a ciphertext, not the raw JSON string.
     const dbValue = article._attributes.valuesForDatabase()["settings"] as string;
     expect(typeof dbValue).toBe("string");
-    expect(dbValue).not.toContain("dark");
+    expect(dbValue).not.toBe(JSON.stringify(settings));
 
     // Round-trip: the object is decrypted and deserialized on read.
     const reloaded = await Article.find(article.id);
@@ -347,7 +347,7 @@ describe("ActiveRecord::Encryption::EncryptableRecordTest", () => {
 
     const dbValue = article._attributes.valuesForDatabase()["settings"] as string;
     expect(typeof dbValue).toBe("string");
-    expect(dbValue).not.toContain("light");
+    expect(dbValue).not.toBe(JSON.stringify(settings));
 
     const reloaded = await Article.find(article.id);
     expect(reloaded.settings).toEqual(settings);

@@ -154,17 +154,17 @@ describe("PredicateBuilderTest", () => {
   });
 
   describe("nested table-keyed hash expansion", () => {
-    class Author extends Base {
+    class PbTestAuthor extends Base {
       static {
         this.tableName = "authors";
-        registerModel(this);
+        registerModel("Author", this);
       }
     }
-    class Post extends Base {
+    class PbTestPost extends Base {
       static {
         this.tableName = "posts";
         this.belongsTo("author");
-        registerModel(this);
+        registerModel("Post", this);
       }
     }
 
@@ -174,7 +174,7 @@ describe("PredicateBuilderTest", () => {
     });
 
     it("expands where({authors: {name: 'Rails'}}) to \"authors\".\"name\" = 'Rails'", () => {
-      const meta = new TableMetadata(Post as any, new Table("posts"));
+      const meta = new TableMetadata(PbTestPost as any, new Table("posts"));
       const builder = meta.predicateBuilder;
       const nodes = builder.buildFromHash({ authors: { name: "Rails" } });
       const sql = nodes.map((n) => new Visitors.ToSql().compile(n)).join(" AND ");
@@ -184,7 +184,7 @@ describe("PredicateBuilderTest", () => {
     });
 
     it("negated form expands whereNot({authors: {name: 'Rails'}}) to NOT \"authors\".\"name\" = 'Rails'", () => {
-      const meta = new TableMetadata(Post as any, new Table("posts"));
+      const meta = new TableMetadata(PbTestPost as any, new Table("posts"));
       const builder = meta.predicateBuilder;
       const nodes = builder.buildNegatedFromHash({ authors: { name: "Rails" } });
       const sql = nodes.map((n) => new Visitors.ToSql().compile(n)).join(" AND ");

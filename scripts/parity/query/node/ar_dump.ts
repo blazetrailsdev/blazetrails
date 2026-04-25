@@ -198,22 +198,37 @@ async function main(): Promise<void> {
         const [ps, bs] = (
           visitor as unknown as { compileWithBinds(node: unknown): [string, unknown[]] }
         ).compileWithBinds((manager as { ast: unknown }).ast);
-        paramSql = ps.trim();
-        // Resolve QueryAttribute/BindParam wrappers to their DB value before
-        // filtering for Date instances. Only Date-valued binds are captured:
-        // string/number scalars are inlined differently on each side (Rails
-        // inlines in sql; trails uses BindParam) so comparing them cross-side
-        // would surface an architectural difference, not a semantic SQL gap.
-        binds = (bs as unknown[])
-          .map((b) => {
-            if (b != null && typeof b === "object" && "valueForDatabase" in b) {
-              const vfd = (b as { valueForDatabase?: unknown }).valueForDatabase;
-              return typeof vfd === "function" ? (vfd as () => unknown).call(b) : vfd;
-            }
-            return b;
-          })
-          .filter((b): b is Date => b instanceof Date)
-          .map((b) => b.toISOString());
+        // Resolve QueryAttribute/BindParam wrappers to their DB value first.
+        const resolvedBinds = (bs as unknown[]).map((b) => {
+          if (b != null && typeof b === "object" && "valueForDatabase" in b) {
+            const vfd = (b as { valueForDatabase?: unknown }).valueForDatabase;
+            return typeof vfd === "function" ? (vfd as () => unknown).call(b) : vfd;
+          }
+          return b;
+        });
+
+        // Build a consistent paramSql where ONLY Date values become `?`; all
+        // other bind values (strings, numbers) are re-inlined. This ensures the
+        // `?` count in paramSql exactly matches the length of `binds`, and avoids
+        // a mismatch with Rails' side which inlines non-date scalars in to_sql().
+        // Walk the placeholder positions in ps and substitute non-Date values back.
+        let placeholderIdx = 0;
+        let processedParamSql = ps;
+        const dateBind: Date[] = [];
+        // Replace each ? with either the inlined scalar or keep ? for Date binds.
+        processedParamSql = ps.replace(/\?/g, () => {
+          const v = resolvedBinds[placeholderIdx++];
+          if (v instanceof Date) {
+            dateBind.push(v);
+            return "?";
+          }
+          // Re-inline: quote strings, pass numbers through.
+          if (typeof v === "string") return `'${v.replace(/'/g, "''")}'`;
+          if (v == null) return "NULL";
+          return String(v);
+        });
+        paramSql = processedParamSql.trim();
+        binds = dateBind.map((b) => b.toISOString());
       }
     }
 

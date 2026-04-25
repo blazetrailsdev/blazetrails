@@ -274,7 +274,6 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::QueryMethods::WhereChain#associated — emits an
    * INNER JOIN on the association then WHERE assoc_pk IS NOT NULL.
-   * Skips if an identical (type+table+ON) join already exists; throws if a
    * Skips if an identical (table+ON) join already exists, regardless of join
    * type; throws if a different join to the same table is present (aliasing
    * not supported).
@@ -396,12 +395,16 @@ export class Relation<T extends Base> {
         rawPk = targetModel?.primaryKey ?? "id";
       }
       // Composite PKs are supported at the WHERE level (one IS NULL per column)
-      // but the JOIN ON clause from _resolveAssociationJoin uses a single string;
-      // if the association itself has a composite FK that would stringify to "a,b",
-      // throw a clear error rather than emitting broken SQL.
+      // but the JOIN ON clause from _resolveAssociationJoin is a raw SQL string;
+      // composite FK or PK options would stringify to "a,b" → invalid SQL.
       if (Array.isArray(assocDef.options.foreignKey)) {
         throw new Error(
           `whereMissing/whereAssociated: composite foreignKey on '${assocName}' is not yet supported.`,
+        );
+      }
+      if (Array.isArray(assocDef.options.primaryKey)) {
+        throw new Error(
+          `whereMissing/whereAssociated: composite primaryKey on '${assocName}' is not yet supported.`,
         );
       }
       const pks = Array.isArray(rawPk) ? rawPk : [rawPk];
@@ -430,7 +433,13 @@ export class Relation<T extends Base> {
         assocDef.options.className ??
         _camelize(assocDef.type === "hasMany" ? _singularize(assocName) : assocName);
       const targetTable = assocDef.options.tableName ?? _pluralize(_toUnderscore(className));
-      const sourcePk = assocDef.options.primaryKey ?? modelClass.primaryKey ?? "id";
+      const rawSourcePk = assocDef.options.primaryKey ?? modelClass.primaryKey ?? "id";
+      if (Array.isArray(rawSourcePk)) {
+        throw new Error(
+          `whereMissing/whereAssociated: composite primaryKey on '${assocName}' is not yet supported in fallback path.`,
+        );
+      }
+      const sourcePk = rawSourcePk;
       const foreignKey = assocDef.options.as
         ? (assocDef.options.foreignKey ?? `${_toUnderscore(assocDef.options.as)}_id`)
         : (assocDef.options.foreignKey ?? `${_toUnderscore(modelClass.name)}_id`);

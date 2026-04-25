@@ -207,3 +207,24 @@ describe("InclusionValidationTest", () => {
     expect(new Person({ role: "guest" }).isValid()).toBe(false);
   });
 });
+describe("inclusion allowNil", () => {
+  it("validates inclusion of with allow nil", () => {
+    class WithNil extends Model {
+      static {
+        this.attribute("status", "string");
+        this.validates("status", { inclusion: { in: ["a", "b"] } });
+      }
+    }
+    expect(new WithNil({}).isValid()).toBe(true);
+  });
+
+  it("validates nil when allowNil is false", () => {
+    class NoNil extends Model {
+      static {
+        this.attribute("status", "string");
+        this.validates("status", { inclusion: { in: ["a", "b"], allowNil: false } });
+      }
+    }
+    expect(new NoNil({}).isValid()).toBe(false);
+  });
+});

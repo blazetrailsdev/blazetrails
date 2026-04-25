@@ -45,10 +45,10 @@ function verifyPassword(password: string, digest: string): boolean {
  */
 export function hasSecurePassword(
   modelClass: typeof Base,
-  options: { validations?: boolean; resetToken?: boolean; attribute?: string } = {},
+  options: { validations?: boolean; resetToken?: boolean } = {},
 ): void {
   const runValidations = options.validations !== false;
-  const attribute = options.attribute ?? "password";
+  const attribute = "password";
   const digestAttr = `${attribute}_digest`;
 
   // Store the raw password temporarily for hashing during save

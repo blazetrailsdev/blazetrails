@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { Base } from "./index.js";
 import { hasSecurePassword } from "./secure-password.js";
+import { setTokenForSecret } from "./generates-token-for.js";
 import { createTestAdapter } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
 
@@ -169,12 +170,16 @@ describe("password reset token", () => {
 
   beforeEach(() => {
     adapter = createTestAdapter();
+    setTokenForSecret("test-reset-token-secret");
+  });
+
+  afterEach(() => {
+    setTokenForSecret(null);
   });
 
   it("generates a password_reset_token on the instance", async () => {
     // Mirrors Rails secure_password.rb:162-178 — generates_token_for
     // :"password_reset", expires_in: 15.minutes, plus instance accessor.
-    process.env.BLAZETRAILS_SECRET_KEY_BASE = "test-secret-for-token";
     class User extends Base {
       static {
         this._tableName = "users";
@@ -195,7 +200,6 @@ describe("password reset token", () => {
   });
 
   it("findByPasswordResetToken resolves a valid token", async () => {
-    process.env.BLAZETRAILS_SECRET_KEY_BASE = "test-secret-for-token";
     class User extends Base {
       static {
         this._tableName = "users";

@@ -144,36 +144,36 @@ describe("ConfirmationValidator caseSensitive", () => {
   it("title confirmation with case sensitive option true", () => {
     class User extends Model {
       static {
-        this.attribute("email", "string");
-        this.validates("email", { confirmation: true });
+        this.attribute("title", "string");
+        this.validates("title", { confirmation: true });
       }
     }
-    const u = new User({ email: "Alice@example.com" });
-    u._attributes.set("emailConfirmation", "alice@example.com");
+    const u = new User({ title: "Alice" });
+    u._attributes.set("titleConfirmation", "alice");
     expect(u.isValid()).toBe(false);
   });
 
   it("title confirmation with case sensitive option false", () => {
     class User extends Model {
       static {
-        this.attribute("email", "string");
-        this.validates("email", { confirmation: { caseSensitive: false } });
+        this.attribute("title", "string");
+        this.validates("title", { confirmation: { caseSensitive: false } });
       }
     }
-    const u = new User({ email: "Alice@example.com" });
-    u._attributes.set("emailConfirmation", "alice@example.com");
+    const u = new User({ title: "Alice" });
+    u._attributes.set("titleConfirmation", "alice");
     expect(u.isValid()).toBe(true);
   });
 
   it("still fails when values differ with caseSensitive: false", () => {
     class User extends Model {
       static {
-        this.attribute("email", "string");
-        this.validates("email", { confirmation: { caseSensitive: false } });
+        this.attribute("title", "string");
+        this.validates("title", { confirmation: { caseSensitive: false } });
       }
     }
-    const u = new User({ email: "alice@example.com" });
-    u._attributes.set("emailConfirmation", "bob@example.com");
+    const u = new User({ title: "alice" });
+    u._attributes.set("titleConfirmation", "bob");
     expect(u.isValid()).toBe(false);
   });
 });

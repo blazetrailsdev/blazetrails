@@ -570,9 +570,6 @@ describe("Serialization", () => {
   });
 });
 
-// =========================================================================
-// Types — Date, DateTime, Decimal
-// =========================================================================
 describe("toXml()", () => {
   it("serializes model to XML", () => {
     class User extends Model {

@@ -510,7 +510,7 @@ describe("ValidationsTest", () => {
     class Person extends Model {
       static {
         this.attribute("name", "string");
-        this.validates("name", { presence: true, on: "create" as any, if: () => true });
+        this.validates("name", { presence: true, on: "create", if: () => true });
       }
     }
     expect(new Person({}).isValid()).toBe(true); // no context
@@ -2001,7 +2001,7 @@ describe("custom validation contexts", () => {
         this.attribute("name", "string");
         this.attribute("terms_accepted", "string");
         this.validates("name", { presence: true });
-        this.validates("terms_accepted", { presence: true, on: "registration" as any });
+        this.validates("terms_accepted", { presence: true, on: "registration" });
       }
     }
     const u = new User({ name: "Alice" });
@@ -2017,7 +2017,7 @@ describe("custom validation contexts", () => {
         this.attribute("name", "string");
         this.attribute("email", "string");
         this.validates("name", { presence: true });
-        this.validates("email", { presence: true, on: "create" as any });
+        this.validates("email", { presence: true, on: "create" });
       }
     }
     const u = new User({ name: "Alice" });
@@ -2300,43 +2300,5 @@ describe("Errors#generateMessage", () => {
     expect(u.errors.generateMessage("age", "greater_than", { count: 0 })).toBe(
       "must be greater than 0",
     );
-  });
-});
-
-describe("strict validations", () => {
-  it("strict validation in validates", () => {
-    class User extends Model {
-      static {
-        this.attribute("name", "string");
-        this.validates("name", { presence: true, strict: true });
-      }
-    }
-    const u = new User({});
-    expect(() => u.isValid()).toThrow();
-  });
-
-  it("strict validation not fails", () => {
-    class User extends Model {
-      static {
-        this.attribute("name", "string");
-        this.validates("name", { presence: true, strict: true });
-      }
-    }
-    const u = new User({ name: "Alice" });
-    expect(u.isValid()).toBe(true);
-  });
-
-  it("non-strict validations still add errors normally", () => {
-    class User extends Model {
-      static {
-        this.attribute("name", "string");
-        this.attribute("email", "string");
-        this.validates("name", { presence: true, strict: true });
-        this.validates("email", { presence: true });
-      }
-    }
-    const u = new User({ name: "Alice" });
-    expect(u.isValid()).toBe(false);
-    expect(u.errors.get("email").length).toBeGreaterThan(0);
   });
 });

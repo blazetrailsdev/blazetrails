@@ -475,9 +475,7 @@ describe("AssociationCallbacksTest", () => {
     const all = await (Comment as any).all().toArray();
     expect(all.length).toBe(0);
   });
-});
 
-describe("AssociationCallbacksTest", () => {
   it.skip("has many callbacks halt execution when abort is trown when adding to association", () => {});
   it.skip("has many callbacks halt execution when abort is trown when removing from association", () => {});
   it.skip("has many callbacks with create!", () => {});

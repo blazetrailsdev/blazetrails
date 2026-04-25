@@ -103,5 +103,12 @@ describe("InstrumentationTest", () => {
   it.skip("no instantiation notification when no records", () => {});
 });
 
-it.skip("payload without an open transaction", () => {});
-it.skip("payload with an open transaction", () => {});
+describe("TransactionInSqlActiveRecordPayloadTest", () => {
+  it.skip("payload without an open transaction", () => {});
+  it.skip("payload with an open transaction", () => {});
+});
+
+describe("TransactionInSqlActiveRecordPayloadNonTransactionalTest", () => {
+  it.skip("payload without an open transaction", () => {});
+  it.skip("payload with an open transaction", () => {});
+});

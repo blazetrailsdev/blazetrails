@@ -52,7 +52,7 @@ describe("CallbacksTest", () => {
     expect(p.isValid()).toBe(true);
   });
 
-  it("after_create callbacks with both callbacks declared in different lines", async () => {
+  it("after_create callbacks with both callbacks declared in different lines", () => {
     const log: string[] = [];
     class Person extends Model {
       static {
@@ -956,7 +956,7 @@ describe("defineModelCallbacks()", () => {
 });
 
 describe("callbacks with prepend option", () => {
-  it("prepend: true puts callback first in the chain", async () => {
+  it("prepend: true puts callback first in the chain", () => {
     class User extends Model {
       static {
         this.attribute("name", "string");

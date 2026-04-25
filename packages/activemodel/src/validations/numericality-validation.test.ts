@@ -523,12 +523,11 @@ describe("numericality comparison operators", () => {
 describe("numericality with in: range", () => {
   it("validates value is within range", () => {
     class User extends Model {
-      constructor(attrs: Record<string, unknown> = {}) {
-        super(attrs);
+      static {
+        this.attribute("age", "integer");
+        this.validates("age", { numericality: { in: [18, 65] } });
       }
     }
-    User.attribute("age", "integer");
-    User.validates("age", { numericality: { in: [18, 65] } });
 
     const u1 = new User({ age: 25 });
     expect(u1.isValid()).toBe(true);
@@ -543,12 +542,11 @@ describe("numericality with in: range", () => {
 
   it("accepts boundary values", () => {
     class User extends Model {
-      constructor(attrs: Record<string, unknown> = {}) {
-        super(attrs);
+      static {
+        this.attribute("score", "integer");
+        this.validates("score", { numericality: { in: [0, 100] } });
       }
     }
-    User.attribute("score", "integer");
-    User.validates("score", { numericality: { in: [0, 100] } });
 
     const u1 = new User({ score: 0 });
     expect(u1.isValid()).toBe(true);

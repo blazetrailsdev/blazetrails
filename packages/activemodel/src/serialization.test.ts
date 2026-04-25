@@ -665,7 +665,3 @@ describe("fromJson", () => {
     expect(u.changedAttributes).toContain("name");
   });
 });
-
-// ===========================================================================
-// ConfirmationValidator caseSensitive option
-// ===========================================================================

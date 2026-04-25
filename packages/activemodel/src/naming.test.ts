@@ -610,7 +610,3 @@ describe("i18nScope", () => {
     expect(User.i18nScope).toBe("activemodel");
   });
 });
-
-// ===========================================================================
-// attributePreviouslyChanged / attributePreviouslyWas
-// ===========================================================================

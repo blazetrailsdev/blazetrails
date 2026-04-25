@@ -611,9 +611,6 @@ describe("attributePreviouslyChanged / attributePreviouslyWas", () => {
   });
 });
 
-// ===========================================================================
-// attributeMethodPrefix / attributeMethodSuffix / attributeMethodAffix
-// ===========================================================================
 describe("changesToSave", () => {
   it("returns the changes hash for unsaved attributes", () => {
     class User extends Model {

@@ -177,7 +177,3 @@ describe("ConfirmationValidator caseSensitive", () => {
     expect(u.isValid()).toBe(false);
   });
 });
-
-// ===========================================================================
-// toModel (ActiveModel::Conversion)
-// ===========================================================================

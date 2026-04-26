@@ -122,31 +122,50 @@ export function castBoundValue(value: unknown): unknown {
   return value;
 }
 
-// Mirrors Rails' MySQL::Quoting.column_name_matcher. JS can't replicate Ruby's
-// recursive \g<n> back-references, so we limit function arguments to plain
-// identifiers and column references (no nested expressions), which is stricter
-// than Rails but prevents injection via function call arguments.
+// Mirrors Rails' MySQL::Quoting.column_name_matcher.
+// Rails uses recursive \g<n> back-references; JS approximates with 2-level
+// function call unrolling (handles length(trim(col)) and similar).
+// Rails MySQL COLUMN_NAME supports: integers, `backtick`, "double-quoted", \w identifiers,
+// with up to 2 qualifier prefixes (schema.table.col) and recursive function args.
 export function columnNameMatcher(): RegExp {
-  const id = String.raw`(?:\w+|` + "`" + String.raw`\w+` + "`" + String.raw`)`;
-  const col = String.raw`(?:${id}\.)?${id}`;
-  const fnArg = String.raw`(?:\*|${col})`;
-  const fnCall = String.raw`\w+\(\s*(?:${fnArg}(?:\s*,\s*${fnArg})*)?\s*\)`;
-  const expr = String.raw`(?:${col}|${fnCall})`;
+  // id: integer literal, backtick-quoted, double-quoted, or plain \w identifier
+  const id =
+    String.raw`(?:\d+|` +
+    "`" +
+    String.raw`[^` +
+    "`" +
+    String.raw`]*` +
+    "`" +
+    String.raw`|"[^"]*"|\w+)`;
+  const col = String.raw`(?:(?:${id}\.){0,2})${id}`;
+  // fnCall2: function with plain col/star args (deepest level)
+  const fnCall2 = String.raw`\w+\(\s*(?:\*|${col})(?:\s*,\s*(?:\*|${col}))*\s*\)|\w+\(\s*\)`;
+  // fnCall1: function whose args can themselves be functions (level 1)
+  const fnCall1 = String.raw`\w+\(\s*(?:\*|${col}|${fnCall2})(?:\s*,\s*(?:\*|${col}|${fnCall2}))*\s*\)|\w+\(\s*\)`;
+  const expr = String.raw`(?:${col}|${fnCall1})`;
   const aliased = String.raw`${expr}(?:(?:\s+AS)?\s+${id})?`;
   return new RegExp(`^${aliased}(?:\\s*,\\s*${aliased})*$`, "i");
 }
 
 // Mirrors Rails' MySQL::Quoting.column_name_with_order_matcher — like
-// columnNameMatcher but also allows COLLATE and ASC/DESC suffixes.
+// columnNameMatcher but also allows COLLATE and ASC/DESC/NULLS suffixes.
 export function columnNameWithOrderMatcher(): RegExp {
-  const id = String.raw`(?:\w+|` + "`" + String.raw`\w+` + "`" + String.raw`)`;
-  const col = String.raw`(?:${id}\.)?${id}`;
-  const fnArg = String.raw`(?:\*|${col})`;
-  const fnCall = String.raw`\w+\(\s*(?:${fnArg}(?:\s*,\s*${fnArg})*)?\s*\)`;
-  const expr = String.raw`(?:${col}|${fnCall})`;
-  const collate = String.raw`(?:\s+COLLATE\s+(?:\w+|"\w+"))?`;
+  const id =
+    String.raw`(?:\d+|` +
+    "`" +
+    String.raw`[^` +
+    "`" +
+    String.raw`]*` +
+    "`" +
+    String.raw`|"[^"]*"|\w+)`;
+  const col = String.raw`(?:(?:${id}\.){0,2})${id}`;
+  const fnCall2 = String.raw`\w+\(\s*(?:\*|${col})(?:\s*,\s*(?:\*|${col}))*\s*\)|\w+\(\s*\)`;
+  const fnCall1 = String.raw`\w+\(\s*(?:\*|${col}|${fnCall2})(?:\s*,\s*(?:\*|${col}|${fnCall2}))*\s*\)|\w+\(\s*\)`;
+  const expr = String.raw`(?:${col}|${fnCall1})`;
+  const collate = String.raw`(?:\s+COLLATE\s+\S+)?`;
   const dir = String.raw`(?:\s+ASC|\s+DESC)?`;
-  const ordered = String.raw`${expr}${collate}${dir}`;
+  const nulls = String.raw`(?:\s+NULLS\s+(?:FIRST|LAST))?`;
+  const ordered = String.raw`${expr}${collate}${dir}${nulls}`;
   return new RegExp(`^${ordered}(?:\\s*,\\s*${ordered})*$`, "i");
 }
 

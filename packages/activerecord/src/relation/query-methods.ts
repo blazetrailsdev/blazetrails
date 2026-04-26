@@ -1573,7 +1573,9 @@ function isTableNameMatches(this: QueryMethodsHost, from: unknown): boolean {
   const name = escapeRegex(table.name);
   const quotedTableName = safeQuoteTableName(modelClass, table.name);
   const quoted = escapeRegex(quotedTableName);
-  return new RegExp(`(?:^|(?<!FROM)\\s)(?:\\b${name}\\b|${quoted})(?!\\.)`, "i").test(String(from));
+  // Mirror Rails: from.to_sql if from.respond_to?(:to_sql)
+  const fromStr = typeof (from as any)?.toSql === "function" ? (from as any).toSql() : String(from);
+  return new RegExp(`(?:^|(?<!FROM)\\s)(?:\\b${name}\\b|${quoted})(?!\\.)`, "i").test(fromStr);
 }
 
 function arelColumn(

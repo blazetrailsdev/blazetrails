@@ -1123,9 +1123,11 @@ function createOrUpdate(this: any): Promise<boolean> {
   const attrNames: string[] = Object.keys((this as any)._attributes?.toObject?.() ?? {});
   const ctor = this.constructor as any;
   const colNames: string[] = ctor.columnNames ?? attrNames;
+  const counterCacheCols: Set<string> = ctor._counterCacheColumns ?? new Set();
   const filteredNames = attrNames.filter((n: string) => {
     if (!colNames.includes(n)) return false;
     if (ctor.readonlyAttributeQ?.(n)) return false;
+    if (counterCacheCols.has(n)) return false;
     return true;
   });
   if (filteredNames.length === 0) {

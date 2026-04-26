@@ -1209,8 +1209,8 @@ function buildSubquery(
   subqueryAlias: string,
   selectValue: unknown,
 ): SelectManager {
-  // Rails: except(:optimizer_hints).arel.as(alias) → new SelectManager(subquery).project(selectValue)
-  const relation = (this as any).except?.("optimizerHints") ?? this;
+  // Rails: except(:optimizer_hints).arel.as(alias) — use unscope (our except is SQL EXCEPT, not query-part removal)
+  const relation = (this as any).unscope?.("optimizerHints") ?? this;
   const aliasedSubquery = (relation as any).toArel?.().as(subqueryAlias);
   const sm = new SelectManager();
   if (aliasedSubquery) (sm as any).from(aliasedSubquery);
@@ -1312,9 +1312,7 @@ function flattenedOrderKeysForRawSqlCheck(orderArgs: unknown[]): string[] {
 }
 
 function preprocessOrderArgs(this: QueryMethodsHost, orderArgs: unknown[]): void {
-  const model = (this as any)._modelClass;
-  const permit = model?.adapterClass?.columnNameWithOrderMatcher?.();
-  if (permit) disallowRawSqlBang(flattenedOrderKeysForRawSqlCheck(orderArgs), permit);
+  disallowRawSqlBang(flattenedOrderKeysForRawSqlCheck(orderArgs), resolveOrderMatcher(this));
   validateOrderArgs.call(this, orderArgs);
   const refs = columnReferences(orderArgs);
   if (refs.length > 0)

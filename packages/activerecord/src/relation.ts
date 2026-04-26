@@ -1888,14 +1888,19 @@ export class Relation<T extends Base> {
     if (this._referencesValues.length === 0) return false;
     if (this._includesAssociations.length === 0) return false;
 
-    // Rails checks Arel::Nodes::StringJoin to identify raw SQL join fragments.
-    // Mirror that: construct StringJoin nodes for _rawJoins (the equivalent),
-    // then extract table identifiers from each node's SQL text.
+    // _rawJoins are the string-form equivalent of Rails' Arel::Nodes::StringJoin.
+    // Rails' references_eager_loaded_tables? extracts table names from StringJoin
+    // nodes via tables_in_string; mirror that by passing each raw SQL string
+    // directly to tablesInString (wrapping as StringJoin for type-level parity).
     const joinedTables = new Set<string>([
       ...this._joinClauses.map((j) => j.table.toLowerCase()),
-      ...this._rawJoins
-        .map((s) => new Nodes.StringJoin(new Nodes.SqlLiteral(s)))
-        .flatMap((j) => this.tablesInString((j.left as unknown as { value: string }).value)),
+      ...this._rawJoins.flatMap((s) => {
+        // Wrap as StringJoin (Rails' Arel::Nodes::StringJoin equivalent) and
+        // read back via instanceof to stay type-safe with no unsafe cast.
+        const join = new Nodes.StringJoin(new Nodes.SqlLiteral(s));
+        const sqlText = join.left instanceof Nodes.SqlLiteral ? join.left.value : s;
+        return this.tablesInString(sqlText);
+      }),
       String((this._modelClass as unknown as { tableName?: string }).tableName ?? "").toLowerCase(),
     ]);
 
@@ -1907,13 +1912,13 @@ export class Relation<T extends Base> {
    *
    * Mirrors: ActiveRecord::Relation#tables_in_string
    */
-  private tablesInString(string: string): string[] {
-    if (!string) return [];
+  private tablesInString(sql: string): string[] {
+    if (!sql) return [];
     // Mirrors Rails' tables_in_string regex: /[a-zA-Z_][.\w]+(?=.?\.)/
     // The `.?` lookahead allows one non-dot char (e.g. a closing `"`) between
     // the identifier and the qualifying dot, so `"posts"."col"` correctly
     // yields `posts`. Downcase to match Rails' Oracle compat comment.
-    const matches = string.match(/[a-zA-Z_][\w.]+(?=.?\.)/g) ?? [];
+    const matches = sql.match(/[a-zA-Z_][\w.]+(?=.?\.)/g) ?? [];
     return matches.map((s) => s.toLowerCase()).filter((s) => s !== "raw_sql_");
   }
 

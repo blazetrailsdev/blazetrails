@@ -204,8 +204,11 @@ export class JoinDependency {
     // (AliasTracker: aliases[table_name] == 0 → use real name). Mirror that:
     // use the real table name in SQL when there's no collision, otherwise fall
     // back to the sequential tN alias.
+    // Track real table names only — collision check is against the real name.
+    // effectiveName is the tN alias when there IS a collision, but we still
+    // record targetTable so future joins against the same real table also alias.
     const effectiveName = this._usedTableNames.has(targetTable!) ? tableAlias : targetTable!;
-    this._usedTableNames.add(effectiveName);
+    this._usedTableNames.add(targetTable!);
 
     // Substitute the PLACEHOLDER with the effective SQL name
     joinOn = joinOn.replace(/PLACEHOLDER/g, `"${effectiveName}"`);

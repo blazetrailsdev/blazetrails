@@ -1745,7 +1745,8 @@ function buildWithExpressionFromValue(this: QueryMethodsHost, value: unknown): u
     return (value as any).toArel().ast;
   }
   if (Array.isArray(value)) {
-    if (value.length === 0) throw argumentError("Empty array passed to buildWithExpressionFromValue");
+    if (value.length === 0)
+      throw argumentError("Empty array passed to buildWithExpressionFromValue");
     if (value.length === 1) return buildWithExpressionFromValue.call(this, value[0]);
     const parts = value.map((q) => buildWithExpressionFromValue.call(this, q));
     return parts.reduce(

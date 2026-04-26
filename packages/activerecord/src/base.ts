@@ -405,7 +405,7 @@ export class Base extends Model {
   static automaticallyInvertPluralAssociations = false;
   static paramDelimiter = "_";
   static cacheVersioning = false;
-  static cacheTimestampFormat = "usec";
+  static cacheTimestampFormat: "usec" | "number" = "usec";
   static _tableNamePrefix = "";
   static _tableNameSuffix = "";
   static _protectedEnvironments: string[] = ["production"];

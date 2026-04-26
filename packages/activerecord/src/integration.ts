@@ -42,8 +42,16 @@ function toFsNumber(date: Date): string {
   return `${y}${mo}${d}${h}${mi}${s}`;
 }
 
-function formatTimestamp(date: Date, format: string): string {
-  return format === "number" ? toFsNumber(date) : toFsUsec(date);
+type CacheTimestampFormat = "usec" | "number";
+
+function formatTimestamp(date: Date, format: CacheTimestampFormat | string): string {
+  if (format === "number") return toFsNumber(date);
+  if (format !== "usec") {
+    throw new Error(
+      `Unknown cache_timestamp_format: ${JSON.stringify(format)}. Supported values: "usec", "number".`,
+    );
+  }
+  return toFsUsec(date);
 }
 
 // ──────────────────────────────────────────────

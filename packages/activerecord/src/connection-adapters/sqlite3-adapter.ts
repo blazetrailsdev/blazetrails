@@ -47,10 +47,6 @@ import {
 import { Column } from "./column.js";
 import { Column as Sqlite3Column } from "./sqlite3/column.js";
 import { SqlTypeMetadata } from "./sql-type-metadata.js";
-import {
-  columnNameMatcher as sqlite3ColumnNameMatcher,
-  columnNameWithOrderMatcher as sqlite3ColumnNameWithOrderMatcher,
-} from "./sqlite3/quoting.js";
 
 /**
  * SQLite adapter — connects ActiveRecord to a real SQLite database.
@@ -63,11 +59,28 @@ export class SQLite3Adapter extends AbstractAdapter implements DatabaseAdapter {
   }
 
   static columnNameMatcher(): RegExp {
-    return sqlite3ColumnNameMatcher();
+    // Mirrors Rails SQLite3 column_name_matcher. Uses "..." quoted identifiers
+    // (SQLite-style, supports escaped "" inside). Strict 0-or-1 function arg
+    // matching Rails \w+\((?:|\g<2>)\) — multi-arg functions are rejected.
+    const id = String.raw`(?:\w+|"[^"]*")`;
+    const col = String.raw`(?:${id}\.)?${id}`;
+    const fn2 = String.raw`\w+\(\s*(?:\*|${col})?\s*\)`;
+    const fn1 = String.raw`\w+\(\s*(?:\*|${col}|${fn2})?\s*\)`;
+    const expr = String.raw`(?:${col}|${fn1})`;
+    const aliased = String.raw`${expr}(?:(?:\s+AS)?\s+${id})?`;
+    return new RegExp(`^${aliased}(?:\\s*,\\s*${aliased})*$`, "i");
   }
 
   static columnNameWithOrderMatcher(): RegExp {
-    return sqlite3ColumnNameWithOrderMatcher();
+    // Mirrors Rails SQLite3 column_name_with_order_matcher. Adds COLLATE and
+    // ASC/DESC; includes NULLS FIRST/LAST for reverseOrder() compatibility.
+    const id = String.raw`(?:\w+|"[^"]*")`;
+    const col = String.raw`(?:${id}\.)?${id}`;
+    const fn2 = String.raw`\w+\(\s*(?:\*|${col})?\s*\)`;
+    const fn1 = String.raw`\w+\(\s*(?:\*|${col}|${fn2})?\s*\)`;
+    const expr = String.raw`(?:${col}|${fn1})`;
+    const ordered = String.raw`${expr}(?:\s+COLLATE\s+\w+)?(?:\s+ASC|\s+DESC)?(?:\s+NULLS\s+(?:FIRST|LAST))?`;
+    return new RegExp(`^${ordered}(?:\\s*,\\s*${ordered})*$`, "i");
   }
 
   override get arelVisitor(): Visitors.ToSql {

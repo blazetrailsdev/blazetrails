@@ -99,6 +99,16 @@ function validateExplainOptions(options: ExplainOption[]): void {
  * Mirrors: ActiveRecord::Relation
  */
 
+function hasTopLevelComma(s: string): boolean {
+  let depth = 0;
+  for (const ch of s) {
+    if (ch === "(") depth++;
+    else if (ch === ")") depth--;
+    else if (ch === "," && depth === 0) return true;
+  }
+  return false;
+}
+
 function resolveColumnNameMatcher(adapter: any): RegExp {
   // Walk adapter → inner (SchemaAdapter wraps the real adapter) to find a
   // static columnNameMatcher on the concrete adapter class.
@@ -2214,7 +2224,7 @@ export class Relation<T extends Base> {
       // or comma-separated lists must pass through as raw SQL.
       // Comma-separated lists are not allowed in a single pluck argument —
       // each column must be passed as a separate argument for correct result mapping.
-      if (c.includes(",")) {
+      if (hasTopLevelComma(c)) {
         throw argumentError(
           `pluck does not allow comma-separated column lists in a single argument. ` +
             `Pass each column as a separate argument: pluck("col1", "col2")`,

@@ -584,11 +584,9 @@ function hasTransactionalCallbacks(record: Base): boolean {
   const ctor = record.constructor as any;
   const chain = ctor._callbackChain;
   if (!chain) return false;
-  return (
-    chain.hasCallbacks?.("rollback") ||
-    chain.hasCallbacks?.("commit") ||
-    chain.hasCallbacks?.("before_commit") ||
-    false
+  const entries: Array<{ event: string }> = (chain as any).callbacks ?? [];
+  return entries.some(
+    (e) => e.event === "rollback" || e.event === "commit" || e.event === "before_commit",
   );
 }
 
@@ -597,9 +595,7 @@ function hasTransactionalCallbacks(record: Base): boolean {
 // ---------------------------------------------------------------------------
 
 // Mirrors: ActiveRecord::Transactions::ClassMethods#prepend_option
-// Rails uses this to order after_commit/rollback callbacks by definition order.
-// The TS callback system always runs in definition order, so we return {}.
-function prependOption(this: unknown): Record<string, never> {
+function prependOption(this: unknown): Record<string, unknown> {
   return {};
 }
 

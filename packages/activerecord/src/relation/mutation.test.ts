@@ -32,14 +32,9 @@ describe("RelationMutationTest", () => {
 
   it("#!", () => {
     const { Post } = makeModel();
-    const sql = Post.where({ title: "x" }).toSql();
-    expect(sql).toContain("WHERE");
-  });
-
-  it("#!", () => {
-    const { Post } = makeModel();
-    const sql = Post.group("title").toSql();
-    expect(sql).toContain("GROUP");
+    // multi-value method (where) and single-value method (group) both mutate in place
+    expect(Post.where({ title: "x" }).toSql()).toContain("WHERE");
+    expect(Post.group("title").toSql()).toContain("GROUP");
   });
 
   it("#_select!", () => {

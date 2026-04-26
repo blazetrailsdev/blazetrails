@@ -370,7 +370,7 @@ export class QueryCacheAdapter implements DatabaseAdapter {
         return Result.fromRowHashes(cached.map((row) => ({ ...row })));
       }
     }
-    const rows = await this.execute(sql, binds);
+    const rows = await this.execute(sql, binds, name ?? undefined);
     return Result.fromRowHashes(rows);
   }
 
@@ -405,21 +405,21 @@ export class QueryCacheAdapter implements DatabaseAdapter {
     return rows.map((row) => keys.map((key) => row[key]));
   }
 
-  async execQuery(sql: string, _name?: string | null, binds?: unknown[]): Promise<Result> {
-    const rows = await this.execute(sql, binds);
+  async execQuery(sql: string, name?: string | null, binds?: unknown[]): Promise<Result> {
+    const rows = await this.execute(sql, binds, name ?? undefined);
     return Result.fromRowHashes(rows);
   }
 
-  async execInsert(sql: string, _name?: string | null, binds?: unknown[]): Promise<number> {
-    return this.executeMutation(sql, binds);
+  async execInsert(sql: string, name?: string | null, binds?: unknown[]): Promise<number> {
+    return this.executeMutation(sql, binds, name ?? undefined);
   }
 
-  async execDelete(sql: string, _name?: string | null, binds?: unknown[]): Promise<number> {
-    return this.executeMutation(sql, binds);
+  async execDelete(sql: string, name?: string | null, binds?: unknown[]): Promise<number> {
+    return this.executeMutation(sql, binds, name ?? undefined);
   }
 
-  async execUpdate(sql: string, _name?: string | null, binds?: unknown[]): Promise<number> {
-    return this.executeMutation(sql, binds);
+  async execUpdate(sql: string, name?: string | null, binds?: unknown[]): Promise<number> {
+    return this.executeMutation(sql, binds, name ?? undefined);
   }
 
   isWriteQuery(sql: string): boolean {

@@ -1023,10 +1023,9 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
         !fireAssocCallbacks(this._assocDef.options.beforeAdd, this._record, record)
       )
         continue;
-      // Save the target record if it's new
+      // Save the target record if it's new — mirrors Rails which calls save! (raises on invalid)
       if (record.isNewRecord()) {
-        const saved = await record.save();
-        if (!saved) continue;
+        await (record as any).saveBang();
       }
       // Create the join record
       const joinAttrs: Record<string, unknown> = {

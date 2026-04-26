@@ -2,7 +2,7 @@
  * Mirrors Rails activerecord/test/cases/associations/has_many_through_associations_test.rb
  */
 import { describe, it, expect, beforeEach } from "vitest";
-import { Base, registerModel, enableSti, registerSubclass } from "../index.js";
+import { Base, registerModel, enableSti, registerSubclass, RecordInvalid } from "../index.js";
 import { createTestAdapter } from "../test-adapter.js";
 import type { DatabaseAdapter } from "../adapter.js";
 import {
@@ -2559,9 +2559,55 @@ describe("HasManyThroughAssociationsTest", () => {
     expect(join.hmt_bang_val_owner_id).toBe(owner.id);
     expect(join.hmt_bang_val_item_id).toBe(item.id);
   });
-  it.skip("push with invalid record", () => {});
+  it("push with invalid record", async () => {
+    // Rails: firm.developers << Developer.new(name: "0") raises RecordInvalid
+    // because Developer validates name is not "0"
+    class PwirJoin extends Base {
+      static {
+        this.attribute("pwir_owner_id", "integer");
+        this.attribute("pwir_item_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class PwirItem extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+        this.validates("name", { exclusion: { in: ["0"] } });
+      }
+    }
+    class PwirOwner extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("PwirJoin", PwirJoin);
+    registerModel("PwirItem", PwirItem);
+    registerModel("PwirOwner", PwirOwner);
+    Associations.belongsTo.call(PwirJoin, "pwir_item", {
+      className: "PwirItem",
+      foreignKey: "pwir_item_id",
+    });
+    Associations.hasMany.call(PwirOwner, "pwir_joins", {
+      className: "PwirJoin",
+      foreignKey: "pwir_owner_id",
+    });
+    Associations.hasMany.call(PwirOwner, "pwir_items", {
+      className: "PwirItem",
+      through: "pwir_joins",
+      source: "pwir_item",
+    });
 
-  it.skip("push with invalid join record", () => {});
+    const owner = await PwirOwner.create({ name: "Firm" });
+    const invalid = new PwirItem({ name: "0" });
+    await expect((owner as any).pwir_items.append(invalid)).rejects.toThrow(RecordInvalid);
+  });
+
+  it.skip("push with invalid join record", () => {
+    // Requires repair_validations helper to temporarily add validations to the
+    // join model mid-test — not available in TS test infrastructure
+  });
   it("clear associations", async () => {
     class HmtClrOwner extends Base {
       static {
@@ -4457,7 +4503,56 @@ describe("HasManyThroughAssociationsTest", () => {
     expect(ids).toEqual([p1.id]);
   });
 
-  it.skip("count has many through with named scope", () => {});
+  it("count has many through with named scope", async () => {
+    // Rails: authors(:mary).categories.count == 2; .general.count == 1
+    class CntCat extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+        this.scope("general", (rel: any) => rel.where({ name: "General" }));
+      }
+    }
+    class CntCateg extends Base {
+      static {
+        this.attribute("cnt_author_id", "integer");
+        this.attribute("cnt_cat_id", "integer");
+        this.adapter = adapter;
+      }
+    }
+    class CntAuthor extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("CntCat", CntCat);
+    registerModel("CntCateg", CntCateg);
+    registerModel("CntAuthor", CntAuthor);
+    Associations.belongsTo.call(CntCateg, "cnt_cat", {
+      className: "CntCat",
+      foreignKey: "cnt_cat_id",
+    });
+    Associations.hasMany.call(CntAuthor, "cnt_categs", {
+      className: "CntCateg",
+      foreignKey: "cnt_author_id",
+    });
+    Associations.hasMany.call(CntAuthor, "cnt_cats", {
+      className: "CntCat",
+      through: "cnt_categs",
+      source: "cnt_cat",
+    });
+
+    const author = await CntAuthor.create({ name: "Mary" });
+    const cat1 = await CntCat.create({ name: "General" });
+    const cat2 = await CntCat.create({ name: "Tech" });
+    await CntCateg.create({ cnt_author_id: author.id, cnt_cat_id: cat1.id });
+    await CntCateg.create({ cnt_author_id: author.id, cnt_cat_id: cat2.id });
+
+    const total = await (author as any).cnt_cats.count();
+    expect(total).toBe(2);
+    const generalCount = await (author as any).cnt_cats.general().count();
+    expect(generalCount).toBe(1);
+  });
   it("has many through belongs to should update when the through foreign key changes", async () => {
     class HmtFkOwner extends Base {
       static {

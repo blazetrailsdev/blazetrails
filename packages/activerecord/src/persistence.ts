@@ -1027,12 +1027,12 @@ function strictLoadedAssociations(this: any): string[] {
 
 function _findRecord(
   this: PersistencePrivateHost & { constructor: any },
-  options?: { lock?: boolean | string; allQueries?: boolean },
+  options?: { lock?: boolean | string },
 ): Promise<unknown> {
   const ctor = this.constructor as any;
-  const allQueries = options?.allQueries ?? null;
   const preloads = strictLoadedAssociations.call(this);
-  let scope = ctor.all({ allQueries }).preload(preloads);
+  let scope = ctor.all();
+  if (preloads.length > 0) scope = scope.preload(...preloads);
   const constraints = _inMemoryQueryConstraintsHash.call(this);
   if (options?.lock) scope = scope.lock(options.lock);
   // Rails uses find_by! — raises RecordNotFound when not found.

@@ -2068,30 +2068,22 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       return;
     }
     // Non-through: push() assigns the FK and calls save() for each record.
-    // After push(), raise RecordInvalid if any record that needed saving is still unsaved
-    // or has pending changes (save() returned false due to validation failure).
+    // After push(), raise RecordInvalid for any record that is still new (save failed)
+    // or still has dirty changes (save returned false without retry — bang raises on
+    // the initial failure rather than attempting a second save).
     await this.push(...records);
 
     for (const record of records) {
-      const needsPersistence =
-        record.isNewRecord() ||
-        (typeof (record as any).hasChangesToSave === "function" &&
-          (record as any).hasChangesToSave());
-
-      if (!needsPersistence) continue;
-
       if (record.isNewRecord()) {
         // New record still unsaved — push()'s save() returned false
         throw new RecordInvalid(record as unknown as object);
       }
-
       if (
         typeof (record as any).hasChangesToSave === "function" &&
         (record as any).hasChangesToSave()
       ) {
-        // Persisted record with dirty changes that weren't saved
-        const saved = await record.save();
-        if (!saved) throw new RecordInvalid(record as unknown as object);
+        // Persisted record still has unsaved changes after push() — raise without retrying
+        throw new RecordInvalid(record as unknown as object);
       }
     }
     return;
@@ -2102,12 +2094,15 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
    *
    * Mirrors: ActiveRecord::Associations::CollectionProxy#transaction
    */
-  async transaction<R>(fn: () => Promise<R>): Promise<R | undefined> {
+  async transaction<R>(
+    fn: (tx: unknown) => Promise<R>,
+    options?: { isolation?: string; requiresNew?: boolean; joinable?: boolean },
+  ): Promise<R | undefined> {
     const klass = this.model;
     if (typeof klass.transaction === "function") {
-      return klass.transaction(fn);
+      return klass.transaction(fn as any, options);
     }
-    return fn();
+    return fn(undefined);
   }
 
   /**

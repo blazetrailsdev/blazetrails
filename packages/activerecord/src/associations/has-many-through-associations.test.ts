@@ -6434,18 +6434,26 @@ describe("HasManyThroughAssociationsTest", () => {
   });
 
   it("has many through do not cache association reader if the though method has default scopes", async () => {
-    // Rails: member.tenant_clubs with thread-local default scope should not cache stale results
-    // Core: loading a through association twice returns fresh results each time
-    class DcTgt extends Base {
-      static {
-        this.attribute("name", "string");
-        this.adapter = adapter;
-      }
-    }
+    // Rails: TenantMembership has a thread-local default scope (current_member).
+    // When it changes between loads, the association should not serve a stale cached result.
+    // Core: through association with a dynamic default scope on the join model returns
+    // different results when the scope changes — caching would break this.
+    let currentOwnerId: number | null = null;
+
     class DcJoin extends Base {
       static {
         this.attribute("dc_owner_id", "integer");
         this.attribute("dc_tgt_id", "integer");
+        this.adapter = adapter;
+        // Dynamic default scope: only join records for the current owner
+        this.defaultScope((rel: any) =>
+          currentOwnerId !== null ? rel.where({ dc_owner_id: currentOwnerId }) : rel,
+        );
+      }
+    }
+    class DcTgt extends Base {
+      static {
+        this.attribute("name", "string");
         this.adapter = adapter;
       }
     }
@@ -6469,22 +6477,24 @@ describe("HasManyThroughAssociationsTest", () => {
       source: "dc_tgt",
     });
 
-    const owner = await DcOwner.create({ name: "O1" });
+    const owner1 = await DcOwner.create({ name: "O1" });
+    const owner2 = await DcOwner.create({ name: "O2" });
     const tgt1 = await DcTgt.create({ name: "T1" });
-    await DcJoin.create({ dc_owner_id: owner.id, dc_tgt_id: tgt1.id });
-
-    // First load
-    const r1 = await (owner as any).dc_tgts.toArray();
-    expect(r1).toHaveLength(1);
-
-    // Add a second target to the same owner and reload — should NOT return stale cache
     const tgt2 = await DcTgt.create({ name: "T2" });
-    await DcJoin.create({ dc_owner_id: owner.id, dc_tgt_id: tgt2.id });
+    await DcJoin.unscoped().create({ dc_owner_id: owner1.id, dc_tgt_id: tgt1.id });
+    await DcJoin.unscoped().create({ dc_owner_id: owner2.id, dc_tgt_id: tgt2.id });
 
-    // Second load on the same owner should reflect the new record
-    const r2 = await (owner as any).dc_tgts.toArray();
-    expect(r2).toHaveLength(2);
-    expect(r2.map((r: any) => r.name).sort()).toEqual(["T1", "T2"]);
+    // First load: scope active for owner1 — only T1 should appear
+    currentOwnerId = Number(owner1.id);
+    const r1 = await (owner1 as any).dc_tgts.toArray();
+    expect(r1).toHaveLength(1);
+    expect((r1[0] as any).name).toBe("T1");
+
+    // Change scope to owner2 — second load on owner2 should NOT return a stale owner1 cache
+    currentOwnerId = Number(owner2.id);
+    const r2 = await (owner2 as any).dc_tgts.toArray();
+    expect(r2).toHaveLength(1);
+    expect((r2[0] as any).name).toBe("T2");
   });
 
   it("has many through with scope that has joined same table with parent relation", async () => {

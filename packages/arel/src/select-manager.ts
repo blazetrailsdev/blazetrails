@@ -587,8 +587,8 @@ export class SelectManager extends TreeManager {
    * (relation.joins!(join_dependency) calls join_constraints which pushes
    * StringJoin nodes onto the Arel manager's join_sources).
    */
-  appendStringJoin(sql: string | Node): this {
-    this.core.source.right.push(this.createStringJoin(sql));
+  appendStringJoin(sql: string): this {
+    this.core.source.right.push(new StringJoin(new SqlLiteral(sql), null));
     return this;
   }
 

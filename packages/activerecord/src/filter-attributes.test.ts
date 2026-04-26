@@ -160,6 +160,6 @@ describe("FilterAttributesTest", () => {
     const user = new User({ token: "[FILTERED]", auth_token: "[FILTERED]" });
     const output = user.inspect();
     expect(output).toContain("auth_token: [FILTERED]");
-    expect(output).toContain("token: [FILTERED]");
+    expect(output).toContain('token: "[FILTERED]"');
   });
 });

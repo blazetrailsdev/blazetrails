@@ -35,15 +35,19 @@ export class ParameterFilter {
   }
 
   private filterValue(value: unknown): unknown {
-    if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    if (Array.isArray(value)) {
+      return value.map((v) => this.filterValue(v));
+    }
+    if (
+      value !== null &&
+      typeof value === "object" &&
+      Object.getPrototypeOf(value) === Object.prototype
+    ) {
       const result: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
         result[String(k)] = this.processKeyValue(String(k), v);
       }
       return result;
-    }
-    if (Array.isArray(value)) {
-      return value.map((v) => this.filterValue(v));
     }
     return value;
   }

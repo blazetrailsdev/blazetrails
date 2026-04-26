@@ -2,7 +2,7 @@
  * Tests to increase Rails test coverage matching.
  * Test names are chosen to match Ruby test names from the Rails test suite.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import {
   Base,
   RecordNotFound,
@@ -16,6 +16,7 @@ import { Associations } from "./associations.js";
 import { createTestAdapter } from "./test-adapter.js";
 import type { DatabaseAdapter } from "./adapter.js";
 import { markForDestruction, isMarkedForDestruction } from "./autosave-association.js";
+import { Notifications } from "@blazetrails/activesupport";
 
 // -- Helpers --
 function freshAdapter(): DatabaseAdapter {
@@ -2559,6 +2560,10 @@ describe("TestHasOneAutosaveAssociationWhichItselfHasAutosaveAssociations", () =
     adapter = freshAdapter();
   });
 
+  afterEach(() => {
+    Notifications.unsubscribeAll();
+  });
+
   function cacheAssoc(record: Base, name: string, value: unknown) {
     if (!(record as any)._cachedAssociations) (record as any)._cachedAssociations = new Map();
     (record as any)._cachedAssociations.set(name, value);
@@ -2756,11 +2761,10 @@ describe("TestHasOneAutosaveAssociationWhichItselfHasAutosaveAssociations", () =
     // Create extra parts in the DB that are NOT loaded into memory
     await Part.create({ name: "Mast", ship_id: ship.id });
     await Part.create({ name: "Stern", ship_id: ship.id });
-    // Nothing is cached on ship — parts association is NOT loaded
-    expect((ship as any)._cachedAssociations?.has("parts")).toBeFalsy();
-    // Counting queries: isValid() should not trigger a load of the parts association
+    // Nothing is cached on ship — part association is NOT loaded (hasOne)
+    expect((ship as any)._cachedAssociations?.has("part")).toBeFalsy();
+    // Counting queries: isValid() should not trigger a load of the part association
     let queryCount = 0;
-    const { Notifications } = await import("@blazetrails/activesupport");
     const sub = Notifications.subscribe("sql.active_record", () => {
       queryCount++;
     });

@@ -20,7 +20,7 @@ import { registerModel } from "./associations.js";
 import { connectedToStack } from "./core.js";
 import type { DatabaseAdapter } from "./adapter.js";
 import { Range as ArRange } from "./connection-adapters/postgresql/oid/range.js";
-import { Notifications } from "@blazetrails/activesupport";
+import { Notifications, Logger } from "@blazetrails/activesupport";
 
 // -- Helpers --
 function freshAdapter(): DatabaseAdapter {
@@ -2293,37 +2293,19 @@ describe("BasicsTest", () => {
   it("benchmark with use silence", async () => {
     const log: string[] = [];
     const savedLogger = Base.logger;
-    // Logger with a silence() method that suppresses all output from inside the block
-    const silenceableLogger = {
-      debug: (msg: string) => log.push(msg),
-      info: (msg: string) => log.push(msg),
-      _silenced: false,
-      silence<T>(fn: () => Promise<T>): Promise<T> {
-        const prev = this._silenced;
-        this._silenced = true;
-        return Promise.resolve(fn()).finally(() => {
-          this._silenced = prev;
-        });
-      },
-    };
-    // Wrap debug to respect _silenced flag
-    const wrappedLogger = {
-      debug: (msg: string) => {
-        if (!silenceableLogger._silenced) log.push(msg);
-      },
-      info: (msg: string) => log.push(msg),
-      silence: silenceableLogger.silence.bind(silenceableLogger),
-    };
-    Base.logger = wrappedLogger;
+    // Use the real Logger with its silence(tempLevel, fn) API
+    const logger = new Logger({ write: (s: string) => log.push(s) });
+    logger.level = Logger.DEBUG;
+    Base.logger = logger as any;
     try {
-      // silence: false — inner log should appear
-      await Base.benchmark("Logging", { level: "debug", silence: false }, async () => {
+      // silence: false — inner synchronous log should appear
+      await Base.benchmark("Logging", { level: "debug", silence: false }, () => {
         Base.logger?.debug?.("Quiet");
       });
       expect(log.some((m) => m.includes("Quiet"))).toBe(true);
       log.length = 0;
-      // silence: true — inner log should be suppressed
-      await Base.benchmark("Logging2", { level: "debug", silence: true }, async () => {
+      // silence: true — inner synchronous log should be suppressed by Logger#silence
+      await Base.benchmark("Logging2", { level: "debug", silence: true }, () => {
         Base.logger?.debug?.("Suppressed");
       });
       expect(log.some((m) => m.includes("Suppressed"))).toBe(false);

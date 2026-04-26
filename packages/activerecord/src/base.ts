@@ -90,7 +90,7 @@ import * as LockingPessimistic from "./locking/pessimistic.js";
 import * as Translation from "./translation.js";
 import * as Sanitization from "./sanitization.js";
 import * as Querying from "./querying.js";
-import { include, extend, type Included } from "@blazetrails/activesupport";
+import { include, extend, type Included, type ParameterFilter } from "@blazetrails/activesupport";
 import {
   hasAttribute as _hasAttribute,
   attributePresent as _attributePresent,
@@ -122,8 +122,8 @@ import {
   isEqual as _isEqual,
   isPresent as _isPresent,
   isBlank as _isBlank,
-  filterAttributes as _filterAttributes,
-  inspectionFilter as _inspectionFilter,
+  filterAttributes as _coreFilterAttributes,
+  inspectionFilter as _coreInspectionFilter,
 } from "./core.js";
 import * as _Core from "./core.js";
 import * as _Persistence from "./persistence.js";
@@ -408,17 +408,17 @@ export class Base extends Model {
   static _filterAttributes: (string | RegExp | ((key: string, value: unknown) => unknown))[] = [];
 
   static get filterAttributes(): (string | RegExp | ((key: string, value: unknown) => unknown))[] {
-    return _filterAttributes.call(this);
+    return _coreFilterAttributes.call(this);
   }
 
   static set filterAttributes(
     value: (string | RegExp | ((key: string, value: unknown) => unknown))[],
   ) {
-    _filterAttributes.call(this, value);
+    _coreFilterAttributes.call(this, value);
   }
 
-  static inspectionFilter() {
-    return _inspectionFilter.call(this);
+  static inspectionFilter(): ParameterFilter {
+    return _coreInspectionFilter.call(this);
   }
 
   static _adapter: DatabaseAdapter | null = null;

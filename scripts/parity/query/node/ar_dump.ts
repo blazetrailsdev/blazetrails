@@ -126,11 +126,6 @@ async function main(): Promise<void> {
   assertBuilt();
 
   const frozenTs = frozenAt ?? DEFAULT_FROZEN_AT;
-  // Truncate to whole seconds: Rails serializes unscaled DATETIME columns
-  // without fractional seconds, so a sub-second frozen-at would produce a
-  // ms-padded literal on trails but a whole-second literal on Rails.
-  // Math.trunc (not Math.floor) is correct for pre-1970 timestamps where
-  // Math.floor would round away from zero and shift by up to 1 second.
   const frozenMs = new Date(frozenTs).getTime();
   const fixtureDirAbs = resolve(fixtureDirRaw);
   const outPathAbs = resolve(outPathRaw);

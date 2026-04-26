@@ -25,6 +25,7 @@ import { clearAutosaveState } from "./autosave-association.js";
 import { getStiBase, getInheritanceColumn, isStiSubclass } from "./inheritance.js";
 import { withTransactionReturningStatus } from "./transactions.js";
 import { RecordInvalid, performValidations } from "./validations.js";
+import { ReadonlyAttributeError } from "./readonly-attributes.js";
 
 interface PersistenceHost {
   new (attrs?: Record<string, unknown>): any;
@@ -1000,12 +1001,7 @@ interface PersistencePrivateHost {
       values: Record<string, unknown>,
       constraints: Record<string, unknown>,
     ): Promise<number>;
-    _insertRecord(
-      connection: unknown,
-      values: Record<string, unknown>,
-      returningColumns?: string[],
-    ): Promise<unknown[]>;
-    _returningColumnsForInsert?(connection: unknown): string[];
+    _insertRecord(connection: unknown, values: Record<string, unknown>): Promise<number>;
     withConnection?(fn: (conn: unknown) => Promise<void>): Promise<void>;
     defaultScopes?(opts: { allQueries?: boolean }): boolean;
     defaultScoped?(opts: { allQueries?: boolean }): {
@@ -1161,18 +1157,11 @@ async function _createRecord(this: any): Promise<unknown> {
   }
 
   const doInsert = async (connection: unknown) => {
-    const returningColumns: string[] = ctor._returningColumnsForInsert?.(connection) ?? [];
-    const returningValues = await ctor._insertRecord(connection, values, returningColumns);
-    if (returningValues) {
-      for (let i = 0; i < returningColumns.length; i++) {
-        const col = returningColumns[i];
-        if (!this._readAttribute(col)) {
-          // Deserialize through the column's type before writing back.
-          const type = ctor.typeForAttribute?.(col);
-          const deserialized = type ? type.deserialize(returningValues[i]) : returningValues[i];
-          this._writeAttribute(col, deserialized);
-        }
-      }
+    // _insertRecord returns the inserted row id (a number). Align with the existing
+    // class method contract — no returning-columns array; adapter sets PK via execInsert.
+    const insertedId = await ctor._insertRecord(connection, values);
+    if (!Array.isArray(ctor.primaryKey) && this._readAttribute(ctor.primaryKey) == null) {
+      this._writeAttribute(ctor.primaryKey, insertedId);
     }
   };
 
@@ -1189,7 +1178,7 @@ async function _createRecord(this: any): Promise<unknown> {
 
 function verifyReadonlyAttribute(this: PersistencePrivateHost, name: string): void {
   if ((this.constructor as any).readonlyAttributeQ?.(name)) {
-    throw new ActiveRecordError(`${name} is marked as readonly`);
+    throw new ReadonlyAttributeError(name);
   }
 }
 

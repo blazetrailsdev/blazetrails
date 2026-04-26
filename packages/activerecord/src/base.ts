@@ -138,6 +138,11 @@ import {
 } from "./scoping/default.js";
 import * as NamedScoping from "./scoping/named.js";
 import { Associations as _Associations, updateCounterCaches } from "./associations.js";
+import {
+  hasMultiparameterKeys,
+  extractMultiparameterCallstack,
+  executeMultiparameterAssignment,
+} from "./multiparameter-attribute-assignment.js";
 
 /** @internal */
 export function quoteSqlValue(v: unknown, asArray = false): string {
@@ -1993,7 +1998,17 @@ export class Base extends Model {
 
   constructor(attrs: Record<string, unknown> = {}) {
     (new.target as typeof Base | undefined)?._requireConcreteClass();
-    super(attrs);
+    if (hasMultiparameterKeys(attrs)) {
+      // Mirrors Rails: Base#initialize calls assign_attributes which handles
+      // multiparameter keys. We separate them: regular attrs go through the
+      // Model constructor (default attr setup + dirty snapshot + callbacks),
+      // then multiparameter attrs are assembled and written after.
+      const { multiparams, regular } = extractMultiparameterCallstack(attrs);
+      super(regular);
+      executeMultiparameterAssignment(this as any, multiparams);
+    } else {
+      super(attrs);
+    }
   }
 
   // --- Persistence instance predicates (wired via include() after class body) ---
@@ -2857,3 +2872,20 @@ include(Base, {
 // and on validates (AR's validates routes remaining rules through Model.validates).
 _setSuperIsValid(Model.prototype.isValid);
 _setSuperValidates(Model.validates);
+
+// Add attributes= setter (Rails: alias for assign_attributes) while preserving
+// the existing Model getter. Can't go through include() since object-literal
+// setters lose their descriptor; defineProperty merges both halves cleanly.
+{
+  const modelGetter = Object.getOwnPropertyDescriptor(Model.prototype, "attributes")?.get;
+  if (modelGetter) {
+    Object.defineProperty(Base.prototype, "attributes", {
+      get: modelGetter,
+      set(this: Base, attrs: Record<string, unknown>) {
+        this.assignAttributes(attrs);
+      },
+      configurable: true,
+      enumerable: false,
+    });
+  }
+}

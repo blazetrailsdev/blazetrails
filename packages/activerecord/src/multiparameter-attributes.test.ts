@@ -374,13 +374,14 @@ describe("MultiParameterAttributeTest", () => {
       }
     }
     const topic = new Topic();
-    topic.assignAttributes({
+    // Rails: topic.attributes = {...} calls assign_attributes
+    (topic as any).attributes = {
       "written_on(4i)": "13",
       "written_on(5i)": "30",
       "written_on(1i)": "2004",
       "written_on(2i)": "1",
       "written_on(3i)": "1",
-    });
+    };
     const dt = (topic as any).written_on as Date;
     expect(dt.getFullYear()).toBe(2004);
     expect(dt.getHours()).toBe(13);
@@ -417,11 +418,11 @@ describe("MultiParameterAttributeTest", () => {
       }
     }
     const topic = new Topic();
-    topic.assignAttributes({
+    (topic as any).attributes = {
       "last_read(1i)": "2004",
       "last_read(2i)": "6",
       "last_read(3i)": "24",
-    });
+    };
     const d = (topic as any).last_read as Date;
     expect(d.getFullYear()).toBe(2004);
     expect(d.getMonth()).toBe(5);
@@ -436,8 +437,9 @@ describe("MultiParameterAttributeTest", () => {
         this.adapter = adapter;
       }
     }
-    const topic = new Topic({ title: "test" });
-    topic.assignAttributes({
+    // Rails: Topic.new(attrs) calls assign_attributes internally
+    const topic = new Topic({
+      title: "test",
       "last_read(1i)": "2004",
       "last_read(2i)": "6",
       "last_read(3i)": "24",
@@ -482,8 +484,8 @@ describe("MultiParameterAttributeTest", () => {
         this.adapter = adapter;
       }
     }
-    const topic = new Topic({ title: "test" });
-    topic.assignAttributes({
+    const topic = new Topic({
+      title: "test",
       "written_on(1i)": "2004",
       "written_on(2i)": "6",
       "written_on(3i)": "24",

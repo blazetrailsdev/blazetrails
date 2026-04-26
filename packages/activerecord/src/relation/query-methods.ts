@@ -4,7 +4,9 @@
  *
  * Mirrors: ActiveRecord::QueryMethods
  */
-import { Nodes } from "@blazetrails/arel";
+import { Nodes, SelectManager, Table, sql as arelSql } from "@blazetrails/arel";
+import { ArgumentError } from "@blazetrails/activemodel";
+import { PreparedStatementInvalid } from "../errors.js";
 import { FromClause } from "./from-clause.js";
 import { WhereClause } from "./where-clause.js";
 import { IrreversibleOrderError } from "../errors.js";
@@ -1080,6 +1082,260 @@ function constructJoinDependency(
     }
   }
   return jd;
+}
+
+// ---------------------------------------------------------------------------
+// Private helpers — mirrors ActiveRecord::QueryMethods private block.
+// Non-exported so the extractor marks them internal: true.
+// ---------------------------------------------------------------------------
+
+function asyncBang(this: QueryMethodsHost): QueryMethodsHost {
+  (this as any)._async = true;
+  return this;
+}
+
+function async(this: QueryMethodsHost): QueryMethodsHost {
+  return (this as any).spawn().asyncBang();
+}
+
+function assertModifiableBang(this: QueryMethodsHost): void {
+  if ((this as any)._loaded || (this as any)._arel) {
+    throw new Error("UnmodifiableRelation");
+  }
+}
+
+function checkIfMethodHasArgumentsBang(
+  this: QueryMethodsHost,
+  methodName: string,
+  args: unknown[],
+  message?: string,
+): void {
+  if (!args || args.length === 0) {
+    throw new ArgumentError(message ?? `The method .${methodName}() must contain arguments.`);
+  }
+  const flat = flattenedArgs(args);
+  args.length = 0;
+  for (const a of flat) {
+    if (a !== null && a !== undefined && a !== "") args.push(a);
+  }
+}
+
+function flattenedArgs(args: unknown[]): unknown[] {
+  return args.flatMap((e) =>
+    e !== null && typeof e === "object" && !Array.isArray(e)
+      ? flattenedArgs(Object.entries(e as object).flat())
+      : Array.isArray(e)
+        ? flattenedArgs(e)
+        : e,
+  );
+}
+
+const VALID_DIRECTIONS = new Set(["asc", "desc", "ASC", "DESC"]);
+
+function validateOrderArgs(this: QueryMethodsHost, args: unknown[]): void {
+  for (const arg of args) {
+    if (arg !== null && typeof arg === "object" && !Array.isArray(arg)) {
+      for (const [, value] of Object.entries(arg as Record<string, unknown>)) {
+        if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+          validateOrderArgs.call(this, [value]);
+        } else if (!VALID_DIRECTIONS.has(value as string)) {
+          throw new ArgumentError(
+            `Direction "${value}" is invalid. Valid directions are: ${[...VALID_DIRECTIONS].join(", ")}`,
+          );
+        }
+      }
+    }
+  }
+}
+
+function processWithArgs(this: QueryMethodsHost, args: unknown[]): Record<string, unknown>[] {
+  return args.flatMap((arg) => {
+    if (arg === null || typeof arg !== "object" || Array.isArray(arg)) {
+      throw new ArgumentError(`Unsupported argument type: ${String(arg)} ${typeof arg}`);
+    }
+    return Object.entries(arg as Record<string, unknown>).map(([k, v]) => ({ [k]: v }));
+  });
+}
+
+function buildCastValue(name: string, value: unknown): unknown {
+  // Wraps a bound SQL parameter in an ActiveModel::Attribute-like shape.
+  // The adapter reads .value_for_database from the result.
+  return { name, value, valueForDatabase: () => value };
+}
+
+function buildNamedBoundSqlLiteral(
+  this: QueryMethodsHost,
+  statement: string,
+  values: Record<string, unknown>,
+): Nodes.Node {
+  const boundValues: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== null && typeof value === "object" && typeof (value as any).toSql === "function") {
+      boundValues[key] = arelSql((value as any).toSql());
+    } else {
+      boundValues[key] = value;
+    }
+  }
+  try {
+    return new (Nodes as any).BoundSqlLiteral(`(${statement})`, null, boundValues);
+  } catch (e: any) {
+    throw new PreparedStatementInvalid(e?.message ?? String(e));
+  }
+}
+
+function buildBoundSqlLiteral(
+  this: QueryMethodsHost,
+  statement: string,
+  values: unknown[],
+): Nodes.Node {
+  const boundValues = values.map((value) => {
+    if (value !== null && typeof value === "object" && typeof (value as any).toSql === "function") {
+      return arelSql((value as any).toSql());
+    }
+    return value;
+  });
+  try {
+    return new (Nodes as any).BoundSqlLiteral(`(${statement})`, boundValues, null);
+  } catch (e: any) {
+    throw new PreparedStatementInvalid(e?.message ?? String(e));
+  }
+}
+
+function buildSubquery(
+  this: QueryMethodsHost,
+  subqueryAlias: string,
+  selectValue: unknown,
+): SelectManager {
+  const relation = (this as any).except?.("optimizerHints") ?? this;
+  const subquery = (relation as any).toArel?.().as(subqueryAlias);
+  const sm = new SelectManager(new Table(subqueryAlias));
+  if (subquery) sm.from(subquery);
+  sm.project(selectValue as any);
+  const hints: string[] = (this as any)._optimizerHints ?? [];
+  if (hints.length > 0) (sm as any).optimizerHints?.(...hints);
+  return sm;
+}
+
+function isDoesNotSupportReverse(order: string): boolean {
+  const plain = String(order);
+  if (
+    plain.includes(",") &&
+    plain.split(",").some((s) => s.split("(").length !== s.split(")").length)
+  ) {
+    return true;
+  }
+  return /\bnulls\s+(?:first|last)\b/i.test(plain);
+}
+
+function reverseSqlOrder(this: QueryMethodsHost, orderQuery: unknown[]): unknown[] {
+  if (orderQuery.length === 0) {
+    const pk = (this as any)._modelClass?.primaryKey;
+    if (pk) {
+      const table: any = (this as any)._modelClass?.arelTable;
+      return [table ? table.get(pk).desc() : arelSql(`${pk} DESC`)];
+    }
+    throw new IrreversibleOrderError(
+      "Relation has no current order and table has no primary key to be used as default order",
+    );
+  }
+  return orderQuery.flatMap((o) => {
+    if (o !== null && typeof o === "object") {
+      const node = o as any;
+      if (typeof node.desc === "function") return [node.desc()];
+      if (typeof node.reverse === "function") return [node.reverse()];
+    }
+    if (typeof o === "string") {
+      if (isDoesNotSupportReverse(o)) {
+        throw new IrreversibleOrderError(`Order ${JSON.stringify(o)} cannot be reversed automatically`);
+      }
+      return o.split(",").map((s) => {
+        s = s.trim();
+        return s.replace(/\sasc$/i, " DESC").replace(/\sdesc$/i, " ASC") || s + " DESC";
+      });
+    }
+    return [o];
+  });
+}
+
+function extractTableNameFrom(string: string): string | null {
+  const match = string.match(/^\W?(\w+)\W?\./);
+  return match ? match[1] : null;
+}
+
+function columnReferences(orderArgs: unknown[]): string[] {
+  const refs: string[] = [];
+  for (const arg of orderArgs) {
+    if (typeof arg === "string" || typeof arg === "symbol") {
+      const t = extractTableNameFrom(String(arg));
+      if (t) refs.push(t);
+    } else if (arg !== null && typeof arg === "object" && !Array.isArray(arg)) {
+      for (const [key] of Object.entries(arg as Record<string, unknown>)) {
+        const t = extractTableNameFrom(String(key));
+        if (t) refs.push(t);
+      }
+    } else if (arg !== null && typeof arg === "object" && typeof (arg as any).relation === "object") {
+      refs.push((arg as any).relation.name);
+    }
+  }
+  return refs;
+}
+
+function sanitizeOrderArguments(this: QueryMethodsHost, orderArgs: unknown[]): unknown[] {
+  return orderArgs.map((arg) => (this as any)._modelClass?.sanitizeSqlForOrder?.(arg) ?? arg);
+}
+
+function preprocessOrderArgs(this: QueryMethodsHost, orderArgs: unknown[]): void {
+  const model = (this as any)._modelClass;
+  const permit = model?.adapterClass?.columnNameWithOrderMatcher?.();
+  if (permit) disallowRawSqlBang(flattenedArgs(orderArgs) as string[], permit);
+  validateOrderArgs.call(this, orderArgs);
+  const refs = columnReferences(orderArgs);
+  if (refs.length > 0) (this as any)._referencesValues = [...((this as any)._referencesValues ?? []), ...refs];
+}
+
+function buildOrder(this: QueryMethodsHost, arel: any): void {
+  const orders: unknown[] = ((this as any)._orderClauses ?? []).filter(
+    (o: unknown) => o !== null && o !== undefined && o !== "",
+  );
+  if (orders.length > 0) arel.order?.(...orders);
+}
+
+function buildCaseForValuePosition(
+  this: QueryMethodsHost,
+  column: unknown,
+  values: unknown[],
+  options: { filter?: boolean } = {},
+): unknown {
+  const filter = options.filter !== false;
+  const node: any = new (Nodes as any).Case();
+  values.forEach((value, i) => {
+    node.when((column as any).eq(value)).then(i + 1);
+  });
+  if (!filter) node.else(values.length + 1);
+  return new (Nodes as any).Ascending(node);
+}
+
+function resolveArelAttributes(this: QueryMethodsHost, attrs: unknown[]): unknown[] {
+  const builder = (this as any).predicateBuilder;
+  return attrs.flatMap((attr) => {
+    if (attr !== null && typeof attr === "object" && typeof (attr as any).eq === "function") {
+      return [attr];
+    }
+    if (attr !== null && typeof attr === "object" && !Array.isArray(attr)) {
+      return Object.entries(attr as Record<string, unknown>).flatMap(([table, columns]) => {
+        const tableName = String(table);
+        return (Array.isArray(columns) ? columns : [columns]).map((col) =>
+          builder?.resolveArelAttribute?.(tableName, String(col)) ?? arelSql(`${tableName}.${String(col)}`),
+        );
+      });
+    }
+    const s = String(attr);
+    if (s.includes(".")) {
+      const [table, col] = s.split(".", 2);
+      return [builder?.resolveArelAttribute?.(table, col) ?? arelSql(s)];
+    }
+    return [s];
+  });
 }
 
 // ---------------------------------------------------------------------------

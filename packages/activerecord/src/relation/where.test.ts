@@ -753,12 +753,13 @@ describe("WhereTest", () => {
     class CpkPost extends Base {
       static {
         this.attribute("shop_id", "integer");
-        this.primaryKey = ["shop_id"];
+        this.attribute("number", "integer");
+        this.primaryKey = ["shop_id", "number"];
         this.adapter = adapter;
       }
     }
-    // Missing second argument (tuples array) should raise ArgumentError
-    expect(() => (CpkPost as any).where(["shop_id"], "not-an-array")).toThrow();
+    // Tuple inner length (1) doesn't match column count (2) — must raise with arity/column info
+    expect(() => (CpkPost as any).where(["shop_id", "number"], [[1]])).toThrow(/arity|column/i);
   });
 
   it("where with tuple syntax and regular syntax combined", async () => {

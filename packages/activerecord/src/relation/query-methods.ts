@@ -1669,12 +1669,8 @@ function arelColumnAliasesFromHash(
     if (isPlainObject(columnsAliases)) {
       return Reflect.ownKeys(columnsAliases as object).map((col) => {
         const alias = (columnsAliases as any)[col];
-        // col may be a Nodes.SqlLiteral (pre-quoted identifier) or plain string/symbol
-        const attr =
-          col instanceof Nodes.SqlLiteral
-            ? col
-            : arelColumnWithTable.call(this, tableName, col as any);
-        return nodeAs(attr, quoteAlias(alias));
+        const attr = arelColumnWithTable.call(this, tableName, col as any);
+        return nodeAs(attr instanceof Nodes.Node ? attr : arelSql(String(col)), quoteAlias(alias));
       });
     }
     if (Array.isArray(columnsAliases)) {

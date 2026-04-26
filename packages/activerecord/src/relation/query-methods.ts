@@ -1537,24 +1537,32 @@ function escapeRegex(s: string): string {
 }
 
 function safeQuoteTableName(modelClass: any, name: string): string {
+  let adapter: any;
   try {
-    return (
-      modelClass?.adapter?.quoteTableName?.(name) ??
-      quoteTable(name, detectAdapterName(modelClass?.adapter))
-    );
+    adapter = modelClass?.adapter;
   } catch {
-    return quoteTable(name, detectAdapterName(modelClass?.adapter));
+    /* adapter getter threw — no connection */
+  }
+  const dialect = detectAdapterName(adapter);
+  try {
+    return adapter?.quoteTableName?.(name) ?? quoteTable(name, dialect);
+  } catch {
+    return quoteTable(name, dialect);
   }
 }
 
 function safeQuoteColumnName(modelClass: any, name: string): string {
+  let adapter: any;
   try {
-    return (
-      modelClass?.adapter?.quoteColumnName?.(name) ??
-      quoteCol(name, detectAdapterName(modelClass?.adapter))
-    );
+    adapter = modelClass?.adapter;
   } catch {
-    return quoteCol(name, detectAdapterName(modelClass?.adapter));
+    /* adapter getter threw — no connection */
+  }
+  const dialect = detectAdapterName(adapter);
+  try {
+    return adapter?.quoteColumnName?.(name) ?? quoteCol(name, dialect);
+  } catch {
+    return quoteCol(name, dialect);
   }
 }
 
@@ -1737,6 +1745,7 @@ function buildWithExpressionFromValue(this: QueryMethodsHost, value: unknown): u
     return (value as any).toArel().ast;
   }
   if (Array.isArray(value)) {
+    if (value.length === 0) throw argumentError("Empty array passed to buildWithExpressionFromValue");
     if (value.length === 1) return buildWithExpressionFromValue.call(this, value[0]);
     const parts = value.map((q) => buildWithExpressionFromValue.call(this, q));
     return parts.reduce(
@@ -1747,13 +1756,14 @@ function buildWithExpressionFromValue(this: QueryMethodsHost, value: unknown): u
 }
 
 function buildWithValueFromHash(this: QueryMethodsHost, hash: Record<string, unknown>): unknown[] {
-  return Object.entries(hash).map(([name, value]) => {
+  return Reflect.ownKeys(hash).map((key) => {
+    const name = typeof key === "symbol" ? symbolToName(key) : key;
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
       throw argumentError(
         `Invalid CTE name "${name}": must be a valid SQL identifier (letters, digits, underscores, not starting with a digit).`,
       );
     }
-    const expr = buildWithExpressionFromValue.call(this, value);
+    const expr = buildWithExpressionFromValue.call(this, (hash as any)[key]);
     return new Nodes.Cte(name, expr as any);
   });
 }

@@ -1534,12 +1534,28 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function safeQuoteTableName(modelClass: any, name: string): string {
+  try {
+    return modelClass?.adapter?.quoteTableName?.(name) ?? `"${name}"`;
+  } catch {
+    return `"${name}"`;
+  }
+}
+
+function safeQuoteColumnName(modelClass: any, name: string): string {
+  try {
+    return modelClass?.adapter?.quoteColumnName?.(name) ?? quoteCol(name);
+  } catch {
+    return quoteCol(name);
+  }
+}
+
 function isTableNameMatches(this: QueryMethodsHost, from: unknown): boolean {
   const table: any = (this as any)._modelClass?.arelTable;
   if (!table) return false;
   const modelClass: any = (this as any)._modelClass;
   const name = escapeRegex(table.name);
-  const quotedTableName = modelClass?.adapter?.quoteTableName?.(table.name) ?? `"${table.name}"`;
+  const quotedTableName = safeQuoteTableName(modelClass, table.name);
   const quoted = escapeRegex(quotedTableName);
   return new RegExp(`(?:^|(?<!FROM)\\s)(?:\\b${name}\\b|${quoted})(?!\\.)`, "i").test(String(from));
 }
@@ -1566,9 +1582,7 @@ function arelColumn(
     return arelColumnWithTable.call(this, dotMatch.groups!.tbl, dotMatch.groups!.col);
   }
   if (fallback) return fallback(fieldStr);
-  const quoted = isSymbol
-    ? (modelClass?.adapter?.quoteColumnName?.(fieldStr) ?? quoteCol(fieldStr))
-    : fieldStr;
+  const quoted = isSymbol ? safeQuoteColumnName(modelClass, fieldStr) : fieldStr;
   return arelSql(quoted);
 }
 
@@ -1598,7 +1612,7 @@ function arelColumnWithTable(
     );
   }
   const modelClass: any = (this as any)._modelClass;
-  const quotedTable = modelClass?.adapter?.quoteTableName?.(tableName) ?? `"${tableName}"`;
+  const quotedTable = safeQuoteTableName(modelClass, tableName);
   return arelSql(`${quotedTable}.${colStr}`);
 }
 
@@ -1623,7 +1637,7 @@ function orderColumn(this: QueryMethodsHost, field: string): unknown {
     if (attrName === "count" && ((this as any)._groupColumns ?? []).length > 0) {
       return table?.get(attrName) ?? arelSql(attrName);
     }
-    const quoted = modelClass?.adapter?.quoteColumnName?.(attrName) ?? quoteCol(attrName);
+    const quoted = safeQuoteColumnName(modelClass, attrName);
     return arelSql(quoted);
   });
 }
@@ -1647,11 +1661,10 @@ function arelColumnAliasesFromHash(
   fields: Record<string | symbol, unknown>,
 ): unknown[] {
   return Reflect.ownKeys(fields).flatMap((key) => {
-    const columnsAliases = fields[key as string];
+    const columnsAliases = fields[key as any];
     const tableName = typeof key === "symbol" ? symbolToName(key) : key;
     const modelClass: any = (this as any)._modelClass;
-    const quoteAlias = (a: unknown): string =>
-      modelClass?.adapter?.quoteColumnName?.(String(a)) ?? quoteCol(String(a));
+    const quoteAlias = (a: unknown): string => safeQuoteColumnName(modelClass, String(a));
     if (isPlainObject(columnsAliases)) {
       return Object.entries(columnsAliases as Record<string, unknown>).map(([col, alias]) =>
         nodeAs(arelColumnWithTable.call(this, tableName, col), quoteAlias(alias)),

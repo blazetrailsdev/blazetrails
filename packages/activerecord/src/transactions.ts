@@ -103,8 +103,8 @@ export function currentTransactionPublic() {
  */
 export function afterAllTransactionsCommit(fn: () => void | Promise<void>): void {
   const tx = currentTransaction();
-  if (!tx || !tx.open) {
-    void Promise.resolve().then(fn);
+  if (!tx) {
+    void fn();
   } else {
     tx.afterCommit(fn);
   }

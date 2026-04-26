@@ -789,11 +789,10 @@ describe("TransactionTest", () => {
     }
     let called = 0;
 
-    // Outside transaction — runs immediately (async)
+    // Outside transaction — runs immediately (synchronous, mirrors Rails' yield)
     afterAllTransactionsCommit(() => {
       called += 1;
     });
-    await new Promise((r) => setTimeout(r, 0));
     expect(called).toBe(1);
 
     // Inside committed transaction — runs after commit

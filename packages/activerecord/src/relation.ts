@@ -206,7 +206,8 @@ export class Relation<T extends Base> {
   private _modelClass: typeof Base;
   /** @internal */
   _whereClause: WhereClause = WhereClause.empty();
-  private _orderClauses: Array<string | [string, "asc" | "desc"] | { raw: string }> = [];
+  private _orderClauses: Array<string | [string, "asc" | "desc"] | { raw: string } | Nodes.Node> =
+    [];
   private _rawOrderClauses: string[] = [];
   private _limitValue: number | null = null;
   private _offsetValue: number | null = null;
@@ -2859,11 +2860,12 @@ export class Relation<T extends Base> {
    * Mirrors: ActiveRecord::Relation#order_values
    */
   get orderValues(): Array<string | [string, "asc" | "desc"] | Nodes.Node> {
-    return this._orderClauses.map((clause) =>
-      typeof clause === "object" && !Array.isArray(clause) && "raw" in clause
-        ? new Nodes.SqlLiteral((clause as { raw: string }).raw)
-        : clause,
-    );
+    return this._orderClauses.map((clause) => {
+      if (clause instanceof Nodes.Node) return clause;
+      if (typeof clause === "object" && !Array.isArray(clause) && "raw" in clause)
+        return new Nodes.SqlLiteral((clause as { raw: string }).raw);
+      return clause;
+    });
   }
 
   /**
@@ -3362,6 +3364,10 @@ export class Relation<T extends Base> {
       manager.order(new Nodes.SqlLiteral(rawClause));
     }
     for (const clause of this._orderClauses) {
+      if (clause instanceof Nodes.Node) {
+        manager.order(clause);
+        continue;
+      }
       if (typeof clause === "object" && !Array.isArray(clause) && "raw" in clause) {
         manager.order(new Nodes.SqlLiteral((clause as { raw: string }).raw));
         continue;

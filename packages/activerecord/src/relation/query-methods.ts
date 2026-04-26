@@ -84,7 +84,7 @@ export type AssociationSpec = string | { [assoc: string]: AssociationSpec | Asso
 // ---------------------------------------------------------------------------
 interface QueryMethodsHost {
   _whereClause: WhereClause;
-  _orderClauses: Array<string | [string, "asc" | "desc"] | { raw: string }>;
+  _orderClauses: Array<string | [string, "asc" | "desc"] | { raw: string } | Nodes.Node>;
   _rawOrderClauses: string[];
   _limitValue: number | null;
   _offsetValue: number | null;
@@ -362,12 +362,9 @@ function orderBang(
         }
       }
     } else if (arg instanceof Nodes.Node) {
-      const rawSql = (arg as any).value ?? (arg as Nodes.Node).toSql();
-      if (rawSql && rawSql.trim() !== "") {
-        // All Arel nodes (SqlLiteral, Ascending, Descending, …) have fully-formed
-        // SQL — store as { raw } to bypass column qualification in _applyOrderToManager.
-        this._orderClauses.push({ raw: rawSql });
-      }
+      // Store Arel nodes directly — mirrors Rails, which keeps live Arel::Node
+      // objects in order_values without pre-rendering.
+      this._orderClauses.push(arg);
     } else if (typeof arg === "string") {
       if (arg.trim() === "") {
         const next = args[i + 1];
@@ -428,10 +425,9 @@ function reorderBang(
         }
       }
     } else if (arg instanceof Nodes.Node) {
-      const rawSql = (arg as any).value ?? (arg as Nodes.Node).toSql();
-      if (rawSql && rawSql.trim() !== "") {
-        this._orderClauses.push({ raw: rawSql });
-      }
+      // Store Arel nodes directly — mirrors Rails, which keeps live Arel::Node
+      // objects in order_values without pre-rendering.
+      this._orderClauses.push(arg);
     } else if (typeof arg === "string") {
       if (arg.trim() === "") {
         const next = args[i + 1];
@@ -1018,6 +1014,11 @@ function optimizerHintsBang(this: QueryMethodsHost, ...hints: string[]): any {
 
 function reverseOrderBang(this: QueryMethodsHost): any {
   this._orderClauses = this._orderClauses.map((clause) => {
+    if (clause instanceof Nodes.Node) {
+      throw new IrreversibleOrderError(
+        `Relation has a non-reversible order and cannot be reversed: ${(clause as any).toSql?.() ?? clause}`,
+      );
+    }
     if (typeof clause === "object" && !Array.isArray(clause) && "raw" in clause) {
       const raw = (clause as { raw: string }).raw.trim();
       const match = raw.match(/^([A-Za-z_$][\w$.]*)\s+(ASC|DESC)$/i);

@@ -1257,10 +1257,12 @@ function reverseSqlOrder(this: QueryMethodsHost, orderQuery: unknown[]): unknown
     );
   }
   return orderQuery.flatMap((o) => {
-    if (o !== null && typeof o === "object") {
-      const node = o as any;
-      if (typeof node.desc === "function") return [node.desc()];
-      if (typeof node.reverse === "function") return [node.reverse()];
+    // Match Rails: Arel::Attribute → .desc, Arel::Nodes::Ordering → .reverse,
+    // other Arel nodes → .desc. Skip arrays (Array#reverse would mutate them).
+    if (o instanceof Nodes.Ordering) return [(o as any).reverse()];
+    if (o instanceof Nodes.Attribute) return [o.desc()];
+    if (o instanceof Nodes.Node && typeof (o as any).desc === "function") {
+      return [(o as any).desc()];
     }
     if (typeof o === "string") {
       if (isDoesNotSupportReverse(o)) {
@@ -1314,13 +1316,13 @@ function sanitizeOrderArguments(this: QueryMethodsHost, orderArgs: unknown[]): u
   return orderArgs.map((arg) => (this as any)._modelClass?.sanitizeSqlForOrder?.(arg) ?? arg);
 }
 
-function flattenedOrderKeysForRawSqlCheck(orderArgs: unknown[]): string[] {
-  const result: string[] = [];
+function flattenedOrderKeysForRawSqlCheck(orderArgs: unknown[]): (string | symbol)[] {
+  const result: (string | symbol)[] = [];
   for (const arg of orderArgs) {
     if (Array.isArray(arg)) {
       result.push(...flattenedOrderKeysForRawSqlCheck(arg));
     } else if (typeof arg === "string" || typeof arg === "symbol") {
-      result.push(typeof arg === "symbol" ? symbolToName(arg) : arg);
+      result.push(arg);
     } else if (arg instanceof Nodes.Node) {
       // Arel nodes (SqlLiteral, Attribute, Ordering, …) are pre-sanitized; skip them.
     } else if (isPlainObject(arg)) {

@@ -242,8 +242,9 @@ describe("RelationTest", () => {
         this.adapter = adapter;
       }
     }
-    const sql = Post.where({ active: true }).unscoped().order("title").toSql();
+    const sql = Post.where({ active: true }).order("created_at").unscoped().order("title").toSql();
     expect(sql).not.toContain("active");
+    expect(sql).not.toContain('"posts"."created_at"');
     expect(sql).toContain('"posts"."title"');
   });
 
@@ -289,7 +290,7 @@ describe("RelationTest", () => {
       }
     }
     const RANKED = "SELECT id, commits AS hotness FROM developers";
-    const sql = Developer.from(RANKED).order({ hotness: "desc" }).limit(10).toSql();
+    const sql = Developer.from(RANKED).order("hotness desc").limit(10).toSql();
     expect(sql).toContain('"hotness" DESC');
     expect(sql).not.toContain('"developers"."hotness"');
   });

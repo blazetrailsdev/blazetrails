@@ -85,10 +85,12 @@ export function parsePostgresDate(
 /**
  * Parse a Postgres `time` wire string to `Temporal.PlainTime`.
  *
- * Wire format: `'HH:MM:SS[.ffffff]'`.
+ * Wire format: `'HH:MM:SS[.ffffff]'`. Postgres allows `24:00:00` as a valid
+ * end-of-day sentinel; Temporal rejects hour 24, so we normalize it to
+ * `00:00:00` (midnight), matching Ruby Time's rollover behavior.
  */
 export function parsePostgresTime(text: string): Temporal.PlainTime {
-  return Temporal.PlainTime.from(text.trim());
+  return Temporal.PlainTime.from(normalizeTime24(text.trim()));
 }
 
 /**
@@ -97,6 +99,7 @@ export function parsePostgresTime(text: string): Temporal.PlainTime {
  * Wire format: `'HH:MM:SS[.ffffff]+HH'` or `'HH:MM:SS[.ffffff]±HH:MM'`.
  * Returns the time and offset separately — Temporal.PlainTime has no
  * timezone, so we preserve the offset as a sibling string.
+ * `24:00:00` is normalized to `00:00:00` (see `parsePostgresTime`).
  */
 export function parsePostgresTimeTz(text: string): TimeTzValue {
   // Split on first +/- that appears after the seconds portion
@@ -106,7 +109,7 @@ export function parsePostgresTimeTz(text: string): TimeTzValue {
   }
   const [, timeStr, rawOffset] = match;
   return {
-    time: Temporal.PlainTime.from(timeStr),
+    time: Temporal.PlainTime.from(normalizeTime24(timeStr)),
     offset: expandOffset(rawOffset),
   };
 }
@@ -286,6 +289,16 @@ function parseFraction(frac: string | undefined): {
  */
 function expandOffset(offset: string): string {
   return offset.replace(/^([-+]\d{2})$/, "$1:00");
+}
+
+/**
+ * Normalize Postgres `24:00:00[.fraction]` (end-of-day sentinel) to
+ * `00:00:00[.fraction]`. Temporal.PlainTime rejects hour 24; Ruby Time
+ * rolls it over to midnight, which is the semantically equivalent value
+ * when there is no date context.
+ */
+function normalizeTime24(timeStr: string): string {
+  return timeStr.startsWith("24:") ? "00:" + timeStr.slice(3) : timeStr;
 }
 
 function isZeroDate(text: string): boolean {

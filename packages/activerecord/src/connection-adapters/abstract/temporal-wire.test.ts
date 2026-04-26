@@ -145,6 +145,14 @@ describe("parsePostgresTime", () => {
     const result = parsePostgresTime("00:00:00");
     expect(result.toString()).toBe("00:00:00");
   });
+
+  it("normalizes 24:00:00 (PG end-of-day sentinel) to 00:00:00", () => {
+    expect(parsePostgresTime("24:00:00").toString()).toBe("00:00:00");
+  });
+
+  it("normalizes 24:00:00 with fractional seconds", () => {
+    expect(parsePostgresTime("24:00:00.000000").toString()).toBe("00:00:00");
+  });
 });
 
 describe("parsePostgresTimeTz", () => {
@@ -164,6 +172,12 @@ describe("parsePostgresTimeTz", () => {
     const { time, offset } = parsePostgresTimeTz("08:00:00.000001-08");
     expect(time.toString()).toBe("08:00:00.000001");
     expect(offset).toBe("-08:00");
+  });
+
+  it("normalizes 24:00:00 timetz to 00:00:00", () => {
+    const { time, offset } = parsePostgresTimeTz("24:00:00+00");
+    expect(time.toString()).toBe("00:00:00");
+    expect(offset).toBe("+00:00");
   });
 
   it("throws on unparseable input", () => {

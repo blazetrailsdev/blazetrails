@@ -1365,25 +1365,29 @@ function preprocessOrderArgs(this: QueryMethodsHost, orderArgs: unknown[]): void
   const mapped: unknown[] = [];
   for (const arg of orderArgs) {
     if (typeof arg === "symbol") {
-      mapped.push(new Nodes.Ascending(arelSql(symbolToName(arg))));
+      const name = symbolToName(arg);
+      const attr = this.predicateBuilder?.resolveArelAttribute?.(name, name) ?? arelSql(name);
+      mapped.push(new Nodes.Ascending(attr));
     } else if (isPlainObject(arg)) {
       for (const [key, value] of Object.entries(arg)) {
         if (isPlainObject(value)) {
-          // Nested hash: { table: { col: dir } } → table.col DESC/ASC
+          // Nested hash: { table: { col: dir } } → table.col DESC/ASC (quoted via ArelTable)
           for (const [field, dir] of Object.entries(value)) {
-            const expr = arelSql(`${key}.${field}`);
+            const attr = new ArelTable(key).get(field);
             mapped.push(
               String(dir).toLowerCase() === "desc"
-                ? new Nodes.Descending(expr)
-                : new Nodes.Ascending(expr),
+                ? new Nodes.Descending(attr)
+                : new Nodes.Ascending(attr),
             );
           }
         } else {
-          const expr: Nodes.Node = arelSql(key);
+          // Flat hash: { col: dir } — resolve via predicate builder for quoting
+          const attr =
+            this.predicateBuilder?.resolveArelAttribute?.(key, key) ?? new ArelTable(key).get(key);
           mapped.push(
             String(value).toLowerCase() === "desc"
-              ? new Nodes.Descending(expr)
-              : new Nodes.Ascending(expr),
+              ? new Nodes.Descending(attr)
+              : new Nodes.Ascending(attr),
           );
         }
       }
@@ -1398,14 +1402,23 @@ function preprocessOrderArgs(this: QueryMethodsHost, orderArgs: unknown[]): void
 function buildOrderNode(clause: unknown): unknown {
   if (clause instanceof Nodes.Node) return clause;
   if (typeof clause === "string") return new Nodes.SqlLiteral(clause);
+  if (typeof clause === "symbol") return new Nodes.SqlLiteral(symbolToName(clause));
   if (Array.isArray(clause) && clause.length === 2) {
     const [col, dir] = clause;
-    const expr = col instanceof Nodes.Node ? col : new Nodes.SqlLiteral(String(col));
-    return String(dir).toLowerCase() === "desc"
-      ? new Nodes.Descending(expr)
-      : new Nodes.Ascending(expr);
+    if (col instanceof Nodes.Node) {
+      return String(dir).toLowerCase() === "desc"
+        ? new Nodes.Descending(col)
+        : new Nodes.Ascending(col);
+    }
+    if (typeof col === "string" || typeof col === "symbol") {
+      const expr = new Nodes.SqlLiteral(typeof col === "symbol" ? symbolToName(col) : col);
+      return String(dir).toLowerCase() === "desc"
+        ? new Nodes.Descending(expr)
+        : new Nodes.Ascending(expr);
+    }
+    throw argumentError(`Unsupported order column type: ${Object.prototype.toString.call(col)}`);
   }
-  return new Nodes.SqlLiteral(String(clause));
+  throw argumentError(`Unsupported order clause type: ${Object.prototype.toString.call(clause)}`);
 }
 
 function buildOrder(this: QueryMethodsHost, arel: any): void {

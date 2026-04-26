@@ -2000,12 +2000,26 @@ export class Base extends Model {
     (new.target as typeof Base | undefined)?._requireConcreteClass();
     if (hasMultiparameterKeys(attrs)) {
       // Mirrors Rails: Base#initialize calls assign_attributes which handles
-      // multiparameter keys. We separate them: regular attrs go through the
-      // Model constructor (default attr setup + dirty snapshot + callbacks),
-      // then multiparameter attrs are assembled and written after.
+      // multiparameter keys. We split: regular attrs go through the Model
+      // constructor for setup, mp attrs are assembled after.
+      //
+      // Suppress after_initialize so it fires after ALL attrs are present
+      // (not just the regular subset), and re-snapshot dirty state so mp
+      // attrs appear clean (part of initial construction, not changes).
+      const ctor = new.target as typeof Base;
+      const suppressor = ctor as typeof ctor & { _suppressInitializeCallback?: boolean };
+      const wasSupressed = suppressor._suppressInitializeCallback;
+      suppressor._suppressInitializeCallback = true;
       const { multiparams, regular } = extractMultiparameterCallstack(attrs);
       super(regular);
+      suppressor._suppressInitializeCallback = wasSupressed;
       executeMultiparameterAssignment(this as any, multiparams);
+      // Re-snapshot so mp attrs are part of the initial clean state.
+      (this as any)._dirty.snapshot((this as any)._attributes);
+      // Now fire after_initialize with all attrs assembled.
+      if (!wasSupressed) {
+        ctor._callbackChain.runAfter("initialize", this, { strict: "sync" } as any);
+      }
     } else {
       super(attrs);
     }

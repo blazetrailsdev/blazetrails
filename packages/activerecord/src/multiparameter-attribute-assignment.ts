@@ -27,8 +27,10 @@ export function extractMultiparameterCallstack(attrs: Record<string, unknown>): 
   multiparams: Record<string, Record<number, unknown>>;
   regular: Record<string, unknown>;
 } {
-  const multiparams: Record<string, Record<number, unknown>> = {};
-  const regular: Record<string, unknown> = {};
+  // Use null-prototype objects to prevent prototype pollution from user-supplied
+  // keys like "__proto__", "constructor", or "prototype".
+  const multiparams: Record<string, Record<number, unknown>> = Object.create(null);
+  const regular: Record<string, unknown> = Object.create(null);
 
   for (const [key, value] of Object.entries(attrs)) {
     const match = key.match(MULTIPARAMETER_ATTRIBUTE_PATTERN);
@@ -44,7 +46,8 @@ export function extractMultiparameterCallstack(attrs: Record<string, unknown>): 
       } else {
         castValue = isBlank(value) ? null : value;
       }
-      (multiparams[name] ??= {})[pos] = castValue;
+      if (!(name in multiparams)) multiparams[name] = Object.create(null);
+      multiparams[name][pos] = castValue;
     } else {
       regular[key] = value;
     }
@@ -133,48 +136,86 @@ function assignDateTimeAttribute(
   instance.writeAttribute(name, assembled);
 }
 
+function parseIntStrict(s: string | null, fieldName: string): number | null {
+  if (s === null) return null;
+  const n = parseInt(s, 10);
+  if (isNaN(n)) throw new Error(`Invalid ${fieldName} value: ${JSON.stringify(s)}`);
+  return n;
+}
+
+function buildDate(year: number, month: number, day: number): Date {
+  // Use local-time constructor to avoid UTC-midnight parse issues.
+  // setFullYear preserves years 0-99 (JS maps them to 1900+1900 otherwise).
+  const d = new Date(year, month - 1, day);
+  d.setFullYear(year);
+  // Validate round-trip: JS normalises out-of-range values (e.g. month 13 → Jan+1).
+  if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) {
+    throw new Error(`Invalid date: ${year}-${month}-${day}`);
+  }
+  return d;
+}
+
+function buildDateTime(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  min: number,
+  sec: number,
+): Date {
+  const d = new Date(year, month - 1, day, hour, min, sec);
+  d.setFullYear(year);
+  if (
+    d.getFullYear() !== year ||
+    d.getMonth() !== month - 1 ||
+    d.getDate() !== day ||
+    d.getHours() !== hour ||
+    d.getMinutes() !== min ||
+    d.getSeconds() !== sec
+  ) {
+    throw new Error(`Invalid datetime: ${year}-${month}-${day} ${hour}:${min}:${sec}`);
+  }
+  return d;
+}
+
 function assembleValue(parts: unknown[], typeName: string): unknown {
   const str = (v: unknown): string | null =>
     v === null || v === undefined || String(v).trim() === "" ? null : String(v).trim();
 
   if (typeName === "date") {
-    const [y, m, d] = parts.map(str);
-    if (!y || !m || !d) return null;
-    const year = parseInt(y, 10),
-      month = parseInt(m, 10),
-      day = parseInt(d, 10);
-    if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
-    // Use local-time Date constructor to avoid UTC-midnight parse issues
-    // (ISO string "YYYY-MM-DD" parses as UTC, causing off-by-one in non-UTC zones).
-    const date = new Date(year, month - 1, day);
-    date.setFullYear(year); // preserve 2-digit years like 0001
-    return date;
+    const [ys, ms, ds] = parts.map(str);
+    if (!ys || !ms || !ds) return null;
+    const year = parseIntStrict(ys, "year"),
+      month = parseIntStrict(ms, "month"),
+      day = parseIntStrict(ds, "day");
+    if (year === null || month === null || day === null) return null;
+    return buildDate(year, month, day);
   }
 
   if (typeName === "datetime" || typeName === "timestamp") {
-    const [y, mo, d, h, mi, s] = parts.map(str);
-    if (!y && !mo && !d) return null;
-    const year = parseInt(y ?? "0", 10),
-      month = parseInt(mo ?? "1", 10),
-      day = parseInt(d ?? "1", 10),
-      hour = parseInt(h ?? "0", 10) || 0,
-      min = parseInt(mi ?? "0", 10) || 0,
-      sec = parseInt(s ?? "0", 10) || 0;
-    if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
-    return new Date(year, month - 1, day, hour, min, sec);
+    const [ys, mos, ds, hs, mis, ss] = parts.map(str);
+    if (!ys && !mos && !ds) return null;
+    const year = parseIntStrict(ys, "year"),
+      month = parseIntStrict(mos, "month"),
+      day = parseIntStrict(ds, "day");
+    if (year === null || month === null || day === null) return null;
+    const hour = hs !== null ? (parseIntStrict(hs, "hour") ?? 0) : 0;
+    const min = mis !== null ? (parseIntStrict(mis, "minute") ?? 0) : 0;
+    const sec = ss !== null ? (parseIntStrict(ss, "second") ?? 0) : 0;
+    return buildDateTime(year, month, day, hour, min, sec);
   }
 
   if (typeName === "time") {
-    const [y, mo, d, h, mi, s] = parts.map(str);
-    const hour = parseInt(h ?? "0", 10) || 0,
-      min = parseInt(mi ?? "0", 10) || 0,
-      sec = parseInt(s ?? "0", 10) || 0;
-    if (y && mo && d) {
-      const year = parseInt(y, 10),
-        month = parseInt(mo, 10),
-        day = parseInt(d, 10);
-      if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
-      return new Date(year, month - 1, day, hour, min, sec);
+    const [ys, mos, ds, hs, mis, ss] = parts.map(str);
+    const hour = hs !== null ? (parseIntStrict(hs, "hour") ?? 0) : 0;
+    const min = mis !== null ? (parseIntStrict(mis, "minute") ?? 0) : 0;
+    const sec = ss !== null ? (parseIntStrict(ss, "second") ?? 0) : 0;
+    if (ys && mos && ds) {
+      const year = parseIntStrict(ys, "year"),
+        month = parseIntStrict(mos, "month"),
+        day = parseIntStrict(ds, "day");
+      if (year === null || month === null || day === null) return null;
+      return buildDateTime(year, month, day, hour, min, sec);
     }
     // Only time parts: use dummy date 2000-01-01 (Rails convention)
     return new Date(2000, 0, 1, hour, min, sec);

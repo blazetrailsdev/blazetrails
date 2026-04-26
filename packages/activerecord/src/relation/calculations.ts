@@ -257,13 +257,16 @@ export async function performCount(
     let innerManager: ReturnType<typeof innerTable.project>;
     if (this._isDistinct) {
       // DISTINCT relation: project the PK with DISTINCT applied so the inner
-      // query deduplicates rows before counting (mirrors Rails: when distinct
-      // is true, select_values are preserved rather than replaced with 1 AS one).
+      // query deduplicates before counting. Use table.get(col) for each column
+      // so PK references are qualified (table.col) and unambiguous when joins
+      // are present. Mirrors Rails: composite-PK DISTINCT count uses separate
+      // Attribute nodes for each key column.
       const pk = (this._modelClass as any).primaryKey ?? "id";
-      const pkAttr = Array.isArray(pk)
-        ? new Nodes.SqlLiteral(pk.map((c: string) => `"${c}"`).join(", "))
-        : innerTable.get(pk);
-      innerManager = innerTable.project(pkAttr as any);
+      if (Array.isArray(pk)) {
+        innerManager = innerTable.project(...pk.map((c: string) => innerTable.get(c)));
+      } else {
+        innerManager = innerTable.project(innerTable.get(pk));
+      }
       innerManager.distinct();
     } else {
       innerManager = innerTable.project(new Nodes.SqlLiteral("1 AS one"));
@@ -272,11 +275,18 @@ export async function performCount(
     this._applyWheresToManager(innerManager, innerTable);
     if (this._limitValue !== null) innerManager.take(this._limitValue);
     if (this._offsetValue !== null) innerManager.skip(this._offsetValue);
-    // Build outer COUNT via Arel (outerManager.from(subquery)) so adapter-specific
-    // quoting behavior is applied consistently.
+    // Build outer COUNT using Arel AST: wrap the inner SelectManager in a
+    // Grouping node (parentheses) with a TableAlias ("subquery_for_count"),
+    // then project COUNT(*) with that node as the FROM source.
+    // Mirrors Rails: build_count_subquery uses Arel::Nodes::TableAlias.new(
+    //   Arel::Nodes::Grouping.new(inner_arel), alias_name)
+    const subqueryNode = new Nodes.TableAlias(
+      new Nodes.Grouping(innerManager.ast),
+      "subquery_for_count",
+    );
     const countAll = new Nodes.NamedFunction("COUNT", [new Nodes.SqlLiteral("*")]);
     const outerManager = innerTable.project(countAll.as("count"));
-    outerManager.from(new Nodes.SqlLiteral(`(${innerManager.toSql()}) subquery_for_count`));
+    outerManager.from(subqueryNode);
     const result = await this._modelClass.adapter.selectAll(
       outerManager.toSql(),
       `${this._modelClass.name} Count`,

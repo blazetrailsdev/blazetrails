@@ -5,7 +5,7 @@
  * Mirrors: ActiveRecord::QueryMethods
  */
 import { Nodes, SelectManager, Table as ArelTable, sql as arelSql } from "@blazetrails/arel";
-import { ArgumentError, Attribute, ValueType } from "@blazetrails/activemodel";
+import { Attribute, ValueType } from "@blazetrails/activemodel";
 import { ActiveRecordError, IrreversibleOrderError, PreparedStatementInvalid } from "../errors.js";
 import { FromClause } from "./from-clause.js";
 import { WhereClause } from "./where-clause.js";

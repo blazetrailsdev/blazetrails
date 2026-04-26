@@ -198,7 +198,12 @@ export function joins<T extends typeof Base>(
 ): Relation<InstanceType<T>> {
   const relation = this.all();
   // Flatten string array passed as single argument: joins(["a", "b"])
-  if (args.length === 1 && Array.isArray(args[0])) {
+  // Gate on all-string to avoid misrouting mixed or non-string arrays.
+  if (
+    args.length === 1 &&
+    Array.isArray(args[0]) &&
+    (args[0] as unknown[]).every((x) => typeof x === "string")
+  ) {
     return relation.joins(args[0] as string[]);
   }
   if (args.length === 0 || typeof args[0] === "string" || args[0] === undefined) {

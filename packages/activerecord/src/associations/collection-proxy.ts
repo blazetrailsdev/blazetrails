@@ -2068,16 +2068,30 @@ export class CollectionProxy<T extends Base = Base> extends Relation<T> {
       return;
     }
     // Non-through: push() assigns the FK and calls save() for each record.
-    // Track which were new before the push so we can raise if push()'s save() failed.
-    // push() already handles persisted records (assigns FK + saves), so no second save needed.
-    const newRecords = records.filter((r) => r.isNewRecord());
-
+    // After push(), raise RecordInvalid if any record that needed saving is still unsaved
+    // or has pending changes (save() returned false due to validation failure).
     await this.push(...records);
 
-    for (const record of newRecords) {
+    for (const record of records) {
+      const needsPersistence =
+        record.isNewRecord() ||
+        (typeof (record as any).hasChangesToSave === "function" &&
+          (record as any).hasChangesToSave());
+
+      if (!needsPersistence) continue;
+
       if (record.isNewRecord()) {
-        // push() called save() which returned false — raise as Rails' << does
+        // New record still unsaved — push()'s save() returned false
         throw new RecordInvalid(record as unknown as object);
+      }
+
+      if (
+        typeof (record as any).hasChangesToSave === "function" &&
+        (record as any).hasChangesToSave()
+      ) {
+        // Persisted record with dirty changes that weren't saved
+        const saved = await record.save();
+        if (!saved) throw new RecordInvalid(record as unknown as object);
       }
     }
     return;

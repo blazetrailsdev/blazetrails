@@ -124,18 +124,20 @@ export function connectedTo<T>(
 
 export function connectedToMany<T>(
   this: typeof Base,
-  classes: (typeof Base)[],
+  classes: typeof Base | (typeof Base)[],
   options: { role: string; shard?: string; preventWrites?: boolean },
   fn: () => T,
 ): T {
-  if (!isBaseClass(this) || classes.some((klass) => isBaseClass(klass))) {
+  const normalized = (Array.isArray(classes) ? classes : [classes]).flat();
+
+  if (!isBaseClass(this) || normalized.some((klass) => isBaseClass(klass))) {
     throw new NotImplementedError("connected_to_many can only be called on ActiveRecord::Base.");
   }
 
   const { role, shard } = options;
   const preventWrites = role === "reading" || !!options.preventWrites;
 
-  const klasses = new Set(classes.map((klass) => klass.connectionClassForSelf()));
+  const klasses = new Set(normalized.map((klass) => klass.connectionClassForSelf()));
   const entry = { role, shard, preventWrites, klasses };
   appendToConnectedToStack(entry);
 

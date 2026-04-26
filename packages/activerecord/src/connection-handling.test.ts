@@ -84,6 +84,14 @@ describe("ConnectionHandlingTest", () => {
     expect(currentRole.call(Base)).toBe("writing");
   });
 
+  it("connected_to with reading role automatically prevents writes", () => {
+    expect(currentPreventingWrites.call(Base)).toBe(false);
+    Base.connectedTo({ role: "reading" }, () => {
+      expect(currentPreventingWrites.call(Base)).toBe(true);
+    });
+    expect(currentPreventingWrites.call(Base)).toBe(false);
+  });
+
   it("connected_to switches shard for block", () => {
     expect(currentShard.call(Base)).toBe("default");
     Base.connectedTo({ role: "writing", shard: "shard_one" }, () => {

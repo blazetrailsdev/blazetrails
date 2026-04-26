@@ -122,12 +122,12 @@ export function connectedToMany<T>(
   options: { role: string; shard?: string; preventWrites?: boolean },
   fn: () => T,
 ): T {
-  if (!this.primaryClassQ() || classes.some((klass) => klass.primaryClassQ())) {
+  if (!isPrimaryClass.call(this) || classes.some((klass) => isPrimaryClass.call(klass))) {
     throw new NotImplementedError("connected_to_many can only be called on ActiveRecord::Base.");
   }
 
   const { role, shard } = options;
-  const preventWrites = options.preventWrites ?? role === "reading";
+  const preventWrites = role === "reading" || !!options.preventWrites;
 
   const klasses = new Set(classes.map((klass) => klass.connectionClassForSelf()));
   const entry = { role, shard, preventWrites, klasses };
@@ -187,7 +187,7 @@ export function connectingTo(
   options: { role?: string; shard?: string; preventWrites?: boolean },
 ): void {
   const { role = "writing", shard = "default" } = options;
-  const preventWrites = options.preventWrites ?? role === "reading";
+  const preventWrites = role === "reading" || !!options.preventWrites;
   appendToConnectedToStack({
     role,
     shard,
@@ -375,11 +375,12 @@ function withRoleAndShard<T>(
   preventWrites: boolean,
   fn: () => T,
 ): T {
+  const resolvedPreventWrites = role === "reading" || preventWrites;
   const connectionClass = this.connectionClassForSelf();
   const entry = {
     role,
     shard,
-    preventWrites,
+    preventWrites: resolvedPreventWrites,
     klasses: new Set([connectionClass]),
   };
   appendToConnectedToStack(entry);

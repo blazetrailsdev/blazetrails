@@ -56,7 +56,7 @@ export function parsePostgresPlainDateTime(
   if (trimmed === "-infinity") return DateNegativeInfinity;
   const { iso, bc } = extractBcSuffix(trimmed);
   if (bc) return parseBcTimestampAsPlainDateTime(iso);
-  return Temporal.PlainDateTime.from(iso.replace(" ", "T"));
+  return Temporal.PlainDateTime.from(clampFraction(iso.replace(" ", "T")));
 }
 
 /**
@@ -127,7 +127,7 @@ export function parsePostgresTimeTz(text: string): TimeTzValue {
  */
 export function parseMysqlInstant(text: string): Temporal.Instant {
   // Treat as UTC by appending Z after normalising the separator.
-  const iso = text.trim().replace(" ", "T") + "Z";
+  const iso = clampFraction(text.trim().replace(" ", "T") + "Z");
   return Temporal.Instant.from(iso);
 }
 
@@ -140,7 +140,7 @@ export function parseMysqlInstant(text: string): Temporal.Instant {
 export function parseMysqlPlainDateTime(text: string): Temporal.PlainDateTime | null {
   const trimmed = text.trim();
   if (isZeroDatetime(trimmed)) return null;
-  return Temporal.PlainDateTime.from(trimmed.replace(" ", "T"));
+  return Temporal.PlainDateTime.from(clampFraction(trimmed.replace(" ", "T")));
 }
 
 /**
@@ -175,7 +175,16 @@ export function parseMysqlTime(text: string): Temporal.PlainTime {
  *   `'2026-04-26 14:23:55.123456+00'` → `'2026-04-26T14:23:55.123456+00:00'`
  */
 function normalizeTimestampTz(text: string): string {
-  return text.replace(" ", "T").replace(/([-+]\d{2})$/, "$1:00");
+  return clampFraction(text.replace(" ", "T").replace(/([-+]\d{2})$/, "$1:00"));
+}
+
+/**
+ * Clamp fractional-seconds digits in an ISO datetime string to 9 (nanosecond
+ * precision). Temporal parsers reject strings with more than 9 fractional
+ * digits, and no database emits sub-nanosecond precision.
+ */
+function clampFraction(iso: string): string {
+  return iso.replace(/(\.\d{9})\d+/, "$1");
 }
 
 /** Strip a trailing " BC" suffix and return both parts. */
@@ -249,9 +258,10 @@ function parseBcTimestampAsPlainDateTime(withoutBc: string): Temporal.PlainDateT
 }
 
 /**
- * Convert a fractional-seconds string (up to 9 digits) to the three
- * Temporal sub-second components, each in the 0–999 range.
+ * Convert a fractional-seconds string to the three Temporal sub-second
+ * components, each in the 0–999 range.
  * "123456" → { millisecond: 123, microsecond: 456, nanosecond: 0 }.
+ * Digits beyond 9 (sub-nanosecond) are truncated; no database emits them.
  */
 function parseFraction(frac: string | undefined): {
   millisecond: number;
@@ -259,11 +269,14 @@ function parseFraction(frac: string | undefined): {
   nanosecond: number;
 } {
   if (!frac) return { millisecond: 0, microsecond: 0, nanosecond: 0 };
-  const padded = frac.padEnd(9, "0");
+  // Clamp to 9 digits before padding so extra digits don't silently corrupt
+  // the slice boundaries (e.g. a 10-digit input would shift microsecond into
+  // the nanosecond slot without this guard).
+  const clamped = frac.slice(0, 9).padEnd(9, "0");
   return {
-    millisecond: Number(padded.slice(0, 3)),
-    microsecond: Number(padded.slice(3, 6)),
-    nanosecond: Number(padded.slice(6, 9)),
+    millisecond: Number(clamped.slice(0, 3)),
+    microsecond: Number(clamped.slice(3, 6)),
+    nanosecond: Number(clamped.slice(6, 9)),
   };
 }
 

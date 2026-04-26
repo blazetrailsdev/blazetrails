@@ -25,6 +25,16 @@ describe("parsePostgresInstant", () => {
     expect(result.toString()).toBe("2024-01-15T09:00:00.000001Z");
   });
 
+  it("truncates sub-nanosecond digits beyond 9", () => {
+    // No DB emits >9 fractional digits, but guard against corrupt input
+    // shifting the slice boundaries. "1234567899" → treat as "123456789".
+    const result = parsePostgresInstant("2026-04-26 14:23:55.1234567899+00") as Temporal.Instant;
+    const zdt = result.toZonedDateTimeISO("UTC");
+    expect(zdt.millisecond).toBe(123);
+    expect(zdt.microsecond).toBe(456);
+    expect(zdt.nanosecond).toBe(789);
+  });
+
   it("handles a positive offset", () => {
     const result = parsePostgresInstant("2026-04-26 14:23:55+02");
     expect(result.toString()).toBe("2026-04-26T12:23:55Z");

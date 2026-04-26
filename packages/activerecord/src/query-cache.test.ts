@@ -506,9 +506,9 @@ describe("QuerySerializedParamTest", () => {
     await cached.withCache(async () => {
       cached.resetCounters();
       const sql = 'SELECT * FROM "tasks" WHERE title = ?';
-      // Two independent string instances with the same value must share a cache key.
+      // Two separately constructed string values with the same content must share a cache key.
       const bind1 = "str_serial";
-      const bind2 = `${"str"}_serial`; // different reference, same value
+      const bind2 = `${"str"}_serial`; // constructed separately, same value
       const r1 = await cached.execute(sql, [bind1]);
       expect(r1).toHaveLength(1);
       const hitsAfterFirst = cached.cacheHits;

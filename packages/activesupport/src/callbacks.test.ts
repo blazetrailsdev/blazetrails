@@ -1508,6 +1508,17 @@ describe("custom terminator function", () => {
 });
 
 describe("skipAfterCallbacksIfTerminated", () => {
+  it("after callbacks run by default even when halted", () => {
+    const log: string[] = [];
+    const target = { log };
+    defineCallbacks(target, "save"); // no skipAfterCallbacksIfTerminated
+    setCallback(target, "save", "before", () => false);
+    setCallback(target, "save", "after", (t: any) => t.log.push("after"));
+    const result = runCallbacks(target, "save");
+    expect(result).toBe(false); // halted
+    expect(log).toContain("after"); // after callbacks still run
+  });
+
   it("skips after callbacks when halted and option is set", () => {
     const log: string[] = [];
     const target = { log };

@@ -620,46 +620,60 @@ export class CallbackChain {
 
   _invoke(target: AnyRecord, block?: () => void): boolean {
     const terminatorFn = this.config.terminator;
+    const skipAfterIfTerminated = this.config.skipAfterCallbacksIfTerminated ?? false;
     const entries = this.chain;
 
     const befores = entries.filter((e) => e.kind === "before");
     const afters = entries.filter((e) => e.kind === "after");
     const arounds = entries.filter((e) => e.kind === "around");
 
+    // Run before callbacks; track whether the chain was halted.
+    let halted = false;
     for (const entry of befores) {
       if (!Value.check(entry.options, target)) continue;
       const cb = entry.filter as BeforeCallback;
       if (terminatorFn === false) {
-        cb(target); // no halting
+        cb(target); // terminator disabled — never halt
       } else if (terminatorFn) {
-        if (terminatorFn(target, () => cb(target))) return false;
+        if (terminatorFn(target, () => cb(target))) {
+          halted = true;
+          break;
+        }
       } else {
-        if (cb(target) === false) return false;
+        if (cb(target) === false) {
+          halted = true;
+          break;
+        }
       }
     }
 
-    let core = () => {
-      block?.();
-    };
-
-    for (let i = arounds.length - 1; i >= 0; i--) {
-      const entry = arounds[i];
-      const inner = core;
-      if (!Value.check(entry.options, target)) continue;
-      core = () => {
-        (entry.filter as AroundCallback)(target, inner);
+    // Run around+block only when not halted (mirrors Rails CallbackSequence#skip?).
+    if (!halted) {
+      let core = () => {
+        block?.();
       };
+      for (let i = arounds.length - 1; i >= 0; i--) {
+        const entry = arounds[i];
+        const inner = core;
+        if (!Value.check(entry.options, target)) continue;
+        core = () => {
+          (entry.filter as AroundCallback)(target, inner);
+        };
+      }
+      core();
     }
 
-    core();
-
-    for (let i = afters.length - 1; i >= 0; i--) {
-      const entry = afters[i];
-      if (!Value.check(entry.options, target)) continue;
-      (entry.filter as AfterCallback)(target);
+    // After callbacks run even when halted unless skipAfterCallbacksIfTerminated is true.
+    // Mirrors: Filters::After#call — `(!halted || !@halting)`
+    if (!halted || !skipAfterIfTerminated) {
+      for (let i = afters.length - 1; i >= 0; i--) {
+        const entry = afters[i];
+        if (!Value.check(entry.options, target)) continue;
+        (entry.filter as AfterCallback)(target);
+      }
     }
 
-    return true;
+    return !halted;
   }
 }
 

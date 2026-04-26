@@ -805,12 +805,14 @@ export class Relation<T extends Base> {
     // mirroring Rails' order_column which resolves through the model's arel_table.
     const arelCol = this._modelClass.arelTable.get(column);
 
+    // Normalize undefined → null so eq(null) emits IS NULL (not the invalid = NULL).
+    const normalized = values.map((v) => (v === undefined ? null : v));
+
     // Build CASE WHEN col = v1 THEN 1 ... END ASC (searched form, 1-indexed).
     // Mirrors Rails' build_case_for_value_position: Arel::Nodes::Case.new (no operand)
     // with column.eq(value) predicates. No ELSE when filter=true (the default).
     const caseNode = new Nodes.Case();
-    values.forEach((v, i) => {
-      // Use arelCol.eq(v) so Arel handles casting and NULL → IS NULL semantics.
+    normalized.forEach((v, i) => {
       caseNode.when(arelCol.eq(v), new Nodes.Quoted(i + 1));
     });
     if (!filter) {
@@ -830,8 +832,8 @@ export class Relation<T extends Base> {
     // arelTable (not a bare Table), it carries the column type context. For typed columns
     // requiring serialization, callers should pre-cast values before calling inOrderOf.
     if (filter) {
-      const hasNull = values.includes(null) || values.includes(undefined);
-      const nonNull = values.filter((v) => v !== null && v !== undefined);
+      const hasNull = normalized.includes(null);
+      const nonNull = normalized.filter((v) => v !== null);
       let whereNode: Nodes.Node = arelCol.in(nonNull);
       if (hasNull) whereNode = new Nodes.Or(whereNode, arelCol.eq(null));
       rel._whereClause.predicates.push(hasNull ? new Nodes.Grouping(whereNode) : whereNode);

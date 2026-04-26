@@ -994,23 +994,11 @@ interface PersistencePrivateHost {
   constructor: {
     name: string;
     primaryKey: string | string[];
-    columnNames?: string[];
-    queryConstraintsList(): string[] | null;
-    _deleteRecord(constraints: Record<string, unknown>): Promise<number>;
-    _updateRecord(
-      values: Record<string, unknown>,
-      constraints: Record<string, unknown>,
-    ): Promise<number>;
-    _insertRecord(connection: unknown, values: Record<string, unknown>): Promise<number>;
-    withConnection?(fn: (conn: unknown) => Promise<void>): Promise<void>;
-    defaultScopes?(opts: { allQueries?: boolean }): boolean;
-    defaultScoped?(opts: { allQueries?: boolean }): {
-      whereClause: { isEmpty(): boolean; ast: unknown };
-    };
-    globalCurrentScope?: unknown;
+    _defaultScope?: unknown;
+    currentScope?: unknown | (() => unknown);
+    defaultScoped(): { whereClause: { isEmpty(): boolean; ast: unknown } };
     readonlyAttributeQ?(name: string): boolean;
-    arelTable: InstanceType<typeof ArelTable>;
-    _buildPkWhereNode(id: unknown): unknown;
+    withConnection?(fn: (conn: unknown) => Promise<void>): Promise<void>;
     adapter: { execDelete(sql: string, name: string): Promise<number> };
   };
 }
@@ -1052,7 +1040,7 @@ function _findRecord(
 }
 
 function _inMemoryQueryConstraintsHash(this: PersistencePrivateHost): Record<string, unknown> {
-  const constraintsList = this.constructor.queryConstraintsList();
+  const constraintsList = queryConstraintsList.call(this.constructor as any);
   if (!constraintsList) {
     const pk = this.constructor.primaryKey as string;
     return { [pk]: this.id };
@@ -1063,11 +1051,13 @@ function _inMemoryQueryConstraintsHash(this: PersistencePrivateHost): Record<str
 function isApplyScoping(this: PersistencePrivateHost, options?: { unscoped?: boolean }): boolean {
   if (options?.unscoped) return false;
   const ctor = this.constructor as any;
-  return !!(ctor.defaultScopes?.({ allQueries: true }) || ctor.globalCurrentScope);
+  const hasDefaultScope = !!ctor._defaultScope;
+  const current = typeof ctor.currentScope === "function" ? ctor.currentScope() : ctor.currentScope;
+  return !!(hasDefaultScope || current);
 }
 
 function _queryConstraintsHash(this: any): Record<string, unknown> {
-  const constraintsList = this.constructor.queryConstraintsList();
+  const constraintsList = queryConstraintsList.call(this.constructor as any);
   if (!constraintsList) {
     const pk = this.constructor.primaryKey as string;
     return { [pk]: this.idInDatabase?.() ?? this.id };
@@ -1087,7 +1077,7 @@ function destroyRow(this: PersistencePrivateHost): Promise<number> {
 }
 
 function _deleteRow(this: PersistencePrivateHost): Promise<number> {
-  return this.constructor._deleteRecord(_queryConstraintsHash.call(this));
+  return _deleteRecord.call(this.constructor as any, _queryConstraintsHash.call(this));
 }
 
 function _touchRow(this: any, attributeNames: string[], time?: Date | null): Promise<number> {
@@ -1107,7 +1097,7 @@ function _updateRow(
   for (const name of attributeNames) {
     values[name] = this.readAttribute(name);
   }
-  return this.constructor._updateRecord(values, _queryConstraintsHash.call(this));
+  return _updateRecord.call(this.constructor as any, values, _queryConstraintsHash.call(this));
 }
 
 function createOrUpdate(this: any): Promise<boolean> {
@@ -1116,9 +1106,9 @@ function createOrUpdate(this: any): Promise<boolean> {
   if (this._newRecord) {
     return _createRecord.call(this).then(() => true);
   }
-  const attrNames: string[] = Object.keys((this as any)._attributes?.toObject?.() ?? {});
+  const attrNames: string[] = Array.from((this as any)._attributes?.keys?.() ?? []);
   const ctor = this.constructor as any;
-  const colNames: string[] = ctor.columnNames ?? attrNames;
+  const colNames: string[] = ctor.columnNames?.() ?? attrNames;
   const counterCacheCols: Set<string> = ctor._counterCacheColumns ?? new Set();
   const filteredNames = attrNames.filter((n: string) => {
     if (!colNames.includes(n)) return false;
@@ -1140,8 +1130,8 @@ function createOrUpdate(this: any): Promise<boolean> {
 
 async function _createRecord(this: any): Promise<unknown> {
   const ctor = this.constructor as any;
-  const allNames: string[] = Object.keys(this._attributes?.toObject?.() ?? {});
-  const colNames: string[] = ctor.columnNames ?? allNames;
+  const allNames: string[] = Array.from(this._attributes?.keys?.() ?? []);
+  const colNames: string[] = ctor.columnNames?.() ?? allNames;
   // Mirrors attributes_for_create: exclude PK columns whose value is nil.
   const pk = ctor.primaryKey;
   const pkCols: string[] = Array.isArray(pk) ? pk : [pk];
@@ -1159,7 +1149,7 @@ async function _createRecord(this: any): Promise<unknown> {
   const doInsert = async (connection: unknown) => {
     // _insertRecord returns the inserted row id (a number). Align with the existing
     // class method contract — no returning-columns array; adapter sets PK via execInsert.
-    const insertedId = await ctor._insertRecord(connection, values);
+    const insertedId = await _insertRecord.call(ctor, connection as any, values);
     if (!Array.isArray(ctor.primaryKey) && this._readAttribute(ctor.primaryKey) == null) {
       this._writeAttribute(ctor.primaryKey, insertedId);
     }
@@ -1227,12 +1217,10 @@ function discriminateClassForRecord<T>(klass: T, _record: Record<string, unknown
 }
 
 function buildDefaultConstraint(this: {
-  defaultScopes?(opts: { allQueries?: boolean }): boolean;
-  defaultScoped(opts: { allQueries?: boolean }): {
-    whereClause: { isEmpty(): boolean; ast: unknown };
-  };
+  _defaultScope?: unknown;
+  defaultScoped(): { whereClause: { isEmpty(): boolean; ast: unknown } };
 }): unknown {
-  if (!this.defaultScopes?.({ allQueries: true })) return undefined;
-  const defaultWhereClause = this.defaultScoped({ allQueries: true }).whereClause;
+  if (!this._defaultScope) return undefined;
+  const defaultWhereClause = this.defaultScoped().whereClause;
   return defaultWhereClause.isEmpty() ? undefined : defaultWhereClause.ast;
 }

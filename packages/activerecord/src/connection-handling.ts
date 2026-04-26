@@ -133,9 +133,10 @@ export function connectedToMany<T>(
   fn: () => T,
 ): T;
 // Variadic form: connectedToMany(A, options, fn) or connectedToMany(A, B, options, fn) etc.
+// At least one class is required before options+fn.
 export function connectedToMany<T>(
   this: typeof Base,
-  ...args: [...(typeof Base)[], ConnectedToManyOptions, () => T]
+  ...args: [typeof Base, ...(typeof Base)[], ConnectedToManyOptions, () => T]
 ): T;
 export function connectedToMany<T>(this: typeof Base, ...args: unknown[]): T {
   const fn = args[args.length - 1] as () => T;
@@ -143,6 +144,10 @@ export function connectedToMany<T>(this: typeof Base, ...args: unknown[]): T {
   // Everything before options+fn: may be a single class, an array, or N positional classes.
   const classArgs = args.slice(0, args.length - 2);
   const normalized = classArgs.flat() as (typeof Base)[];
+
+  if (normalized.length === 0) {
+    throw new ArgumentError("must provide at least one class.");
+  }
 
   if (!options?.role) {
     throw new ArgumentError("must provide a `role`.");

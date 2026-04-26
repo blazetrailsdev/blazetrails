@@ -367,12 +367,13 @@ describe("RelationTest", () => {
       }
     }
     const sql = Book.whereNot({ status: "draft", active: false }).toSql();
-    // Rails: WHERE NOT ("books"."status" = 'draft' AND "books"."active" = 0)
-    expect(sql).toContain("NOT (");
-    expect(sql).toContain('"books"."status"');
-    expect(sql).toContain('"books"."active"');
-    // Must NOT be individual != predicates (wrong semantics)
-    expect(sql).not.toContain("!= 'draft' AND");
+    // Exact Rails form: WHERE NOT ("books"."status" = 'draft' AND "books"."active" = 0)
+    // — a single NOT wrapping one AND containing both predicates.
+    expect(sql).toMatch(/NOT \(.*"books"\."status".*AND.*"books"\."active".*\)/);
+    // Must be exactly one NOT ( occurrence — not per-column NOTs
+    expect(sql.match(/NOT \(/g)?.length).toBe(1);
+    // Must use = (positive predicates inside NOT), not !=
+    expect(sql).not.toContain("!=");
   });
 
   it("inOrderOf emits WHERE IN filter + CASE WHEN ... ASC (Rails form)", () => {

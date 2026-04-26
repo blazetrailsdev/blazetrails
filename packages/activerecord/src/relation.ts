@@ -820,17 +820,20 @@ export class Relation<T extends Base> {
 
     // Push to _orderClauses (not _rawOrderClauses) so the CASE expression is
     // appended in call-order relative to any existing order clauses.
-    // _applyOrderToManager detects CASE via the "(" heuristic and emits as SqlLiteral.
+    // _applyOrderToManager detects CASE-style SQL via the "(" heuristic and
+    // a /\bcase\b/i check, then emits it as SqlLiteral.
     const rel = this._clone();
     rel._orderClauses.push(new Visitors.ToSql().compile(orderNode));
 
-    // Add WHERE col IN (values) to restrict to the named set (filter=true default).
+    // Add WHERE col IN (values) filter — mirrors Rails' arel_column.in(values.compact).
+    // Values go through attribute-aware casting via the model's arelTable type-caster
+    // (arelCol is from arelTable.get(column), not a bare Table).
     if (filter) {
       const hasNull = values.includes(null) || values.includes(undefined);
       const nonNull = values.filter((v) => v !== null && v !== undefined);
       let whereNode: Nodes.Node = arelCol.in(nonNull);
-      if (hasNull) whereNode = new Nodes.Grouping(new Nodes.Or(whereNode, arelCol.eq(null)));
-      rel._whereClause.predicates.push(whereNode);
+      if (hasNull) whereNode = new Nodes.Or(whereNode, arelCol.eq(null));
+      rel._whereClause.predicates.push(hasNull ? new Nodes.Grouping(whereNode) : whereNode);
     }
 
     return rel;

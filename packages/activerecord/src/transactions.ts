@@ -558,11 +558,13 @@ function isTransactionIncludeAnyAction(record: Base, actions: string[]): boolean
   return actions.some((action) => {
     switch (action) {
       case "create":
-        return record.isPersisted() && r._newRecordBeforeLastCommit;
+        return record.isPersisted() && !!r._newRecordBeforeLastCommit;
       case "update":
-        return !(r._newRecordBeforeLastCommit || record.isDestroyed()) && r._triggerUpdateCallback;
+        return (
+          !(r._newRecordBeforeLastCommit || record.isDestroyed()) && !!r._triggerUpdateCallback
+        );
       case "destroy":
-        return r._triggerDestroyCallback;
+        return !!r._triggerDestroyCallback;
       default:
         return false;
     }
@@ -617,8 +619,9 @@ function setOptionsForCallbacksBang(
   if (options.on) {
     const fireOn = (Array.isArray(options.on) ? options.on : [options.on]) as string[];
     assertValidTransactionAction(fireOn);
-    const existing = Array.isArray(options.if) ? options.if : options.if ? [options.if] : [];
-    options.if = [(record: Base) => isTransactionIncludeAnyAction(record, fireOn), ...existing];
+    const existingIf = options.if as ((record: Base) => boolean) | undefined;
+    options.if = (record: Base) =>
+      isTransactionIncludeAnyAction(record, fireOn) && (existingIf ? existingIf(record) : true);
   }
 }
 

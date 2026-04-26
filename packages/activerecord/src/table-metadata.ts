@@ -29,7 +29,7 @@ export class TableMetadata {
   }
 
   type(columnName: string): any {
-    return this._arelTable.typeForAttribute(columnName);
+    return this.typeForAttribute(columnName);
   }
 
   typeForAttribute(columnName: string): any {

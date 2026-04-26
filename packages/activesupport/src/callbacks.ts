@@ -68,7 +68,7 @@ export interface CallTemplate {
 
 /** Mirrors: ActiveSupport::Callbacks::CallTemplate::MethodCall */
 export class MethodCall implements CallTemplate {
-  constructor(readonly methodName: string) {}
+  constructor(readonly methodName: PropertyKey) {}
 
   expand(target: AnyRecord, _value: AnyRecord, block: (() => unknown) | null): unknown[] {
     return [target, block, this.methodName];
@@ -113,7 +113,8 @@ export class ObjectCall implements CallTemplate {
   }
 
   make(instance: AnyRecord, _value: AnyRecord): AnyRecord {
-    return this.target[this.methodName]?.call(this.target, instance);
+    const t = this.target ?? instance;
+    return t[this.methodName]?.call(t, instance);
   }
 }
 
@@ -431,7 +432,7 @@ export class Callback {
     const callTemplate =
       typeof this.filter === "function"
         ? new ProcCall(this.filter)
-        : new MethodCall(String(this.filter));
+        : new MethodCall(this.filter as PropertyKey);
 
     if (this.kind === "before") {
       this._compiled = new Before(
@@ -723,7 +724,7 @@ export function __updateCallbacks(
     const chain = target.getCallbacks(name);
     const dup = new CallbackChain(chain.name, chain.config);
     chain.entries.forEach((e) =>
-      dup.append(new Callback(e.name, e.filter, e.kind, { ...e.options }, e.chainConfig)),
+      dup.append(new Callback(e.name, e.filter, e.kind, { ...e.options }, dup.config)),
     );
     fn(target, dup);
     target.setCallbacks(name, dup);
@@ -780,7 +781,7 @@ function getCallbackChains(target: AnyRecord): Map<string, CallbackChain> {
         const newChain = new CallbackChain(chain.name, chain.config);
         for (const entry of chain.entries) {
           newChain.append(
-            new Callback(entry.name, entry.filter, entry.kind, entry.options, entry.chainConfig),
+            new Callback(entry.name, entry.filter, entry.kind, entry.options, newChain.config),
           );
         }
         own.set(name, newChain);

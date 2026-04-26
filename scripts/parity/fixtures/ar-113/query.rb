@@ -1,1 +1,1 @@
-Book.where(active: true).order(:title).except(:order)
+Book.where(active: true).order(:title).unscope(:order)

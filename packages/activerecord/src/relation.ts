@@ -810,16 +810,19 @@ export class Relation<T extends Base> {
     // with column.eq(value) predicates. No ELSE when filter=true (the default).
     const caseNode = new Nodes.Case();
     values.forEach((v, i) => {
-      caseNode.when(arelCol.eq(new Nodes.Quoted(v)), new Nodes.Quoted(i + 1));
+      // Use arelCol.eq(v) so Arel handles casting and NULL → IS NULL semantics.
+      caseNode.when(arelCol.eq(v), new Nodes.Quoted(i + 1));
     });
     if (!filter) {
       caseNode.else(new Nodes.Quoted(values.length + 1));
     }
     const orderNode = new Nodes.Ascending(caseNode);
 
-    // Mirrors Rails' spawn.order!(...) — appends to existing order, doesn't replace.
+    // Push to _orderClauses (not _rawOrderClauses) so the CASE expression is
+    // appended in call-order relative to any existing order clauses.
+    // _applyOrderToManager detects CASE via the "(" heuristic and emits as SqlLiteral.
     const rel = this._clone();
-    rel._rawOrderClauses.push(new Visitors.ToSql().compile(orderNode));
+    rel._orderClauses.push(new Visitors.ToSql().compile(orderNode));
 
     // Add WHERE col IN (values) to restrict to the named set (filter=true default).
     if (filter) {

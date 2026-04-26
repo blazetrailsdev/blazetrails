@@ -317,7 +317,8 @@ function orderBang(
         this._orderClauses.push([col, (dir as string).toLowerCase() as "asc" | "desc"]);
       }
     } else {
-      throw argumentError(`Unsupported order argument: ${typeof arg}`);
+      const argType = arg === null ? "null" : typeof arg;
+      throw argumentError(`Unsupported order argument: ${argType}`);
     }
     i++;
   }
@@ -376,7 +377,8 @@ function reorderBang(
         this._orderClauses.push([col, (dir as string).toLowerCase() as "asc" | "desc"]);
       }
     } else {
-      throw argumentError(`Unsupported order argument: ${typeof arg}`);
+      const argType = arg === null ? "null" : typeof arg;
+      throw argumentError(`Unsupported order argument: ${argType}`);
     }
     i++;
   }

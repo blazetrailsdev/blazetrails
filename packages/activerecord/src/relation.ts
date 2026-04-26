@@ -2262,6 +2262,7 @@ export class Relation<T extends Base> {
         c.includes("(") ||
         c.includes('"') ||
         c.includes("`") ||
+        c.includes("::") ||
         /\s+AS\s+/i.test(c);
       return isComplex ? new Nodes.SqlLiteral(c) : table.get(c);
     });
@@ -3049,7 +3050,7 @@ export class Relation<T extends Base> {
         const [col, dir] = clause;
         // Function expressions, quoted identifiers, and dotted names must be
         // emitted as raw SQL — table.get() would double-quote them incorrectly.
-        if (/[()"`]/.test(col) || /^[\w$]+(\.[\w$]+)+$/.test(col)) {
+        if (/[()"`]|::/.test(col) || /^[\w$]+(\.[\w$]+)+$/.test(col)) {
           const lit = new Nodes.SqlLiteral(col);
           manager.order(dir === "desc" ? new Nodes.Descending(lit) : new Nodes.Ascending(lit));
         } else if (!this._fromClause.isEmpty() && !this._isKnownColumn(col)) {

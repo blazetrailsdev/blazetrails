@@ -26,6 +26,7 @@ function makeTopic() {
 describe("TransactionInstrumentationTest", () => {
   afterEach(() => {
     Notifications.unsubscribeAll();
+    vi.restoreAllMocks();
     for (const adapter of openAdapters.splice(0)) {
       adapter.close();
     }

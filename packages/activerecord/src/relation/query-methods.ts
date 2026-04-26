@@ -1105,6 +1105,14 @@ function assertModifiableBang(this: QueryMethodsHost): void {
   }
 }
 
+function isBlankArgument(value: unknown): boolean {
+  if (value === null || value === undefined || value === false) return true;
+  if (typeof value === "string") return value.trim() === "";
+  if (Array.isArray(value)) return value.length === 0;
+  if (isPlainObject(value)) return Object.keys(value).length === 0;
+  return false;
+}
+
 function checkIfMethodHasArgumentsBang(
   this: QueryMethodsHost,
   methodName: string,
@@ -1117,9 +1125,7 @@ function checkIfMethodHasArgumentsBang(
   const flat = flattenedArgs(args);
   args.length = 0;
   for (const a of flat) {
-    if (a === null || a === undefined) continue;
-    if (typeof a === "string" && a.trim() === "") continue;
-    args.push(a);
+    if (!isBlankArgument(a)) args.push(a);
   }
 }
 

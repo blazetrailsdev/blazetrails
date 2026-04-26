@@ -474,6 +474,58 @@ export class JoinDependency {
     return { parents: [...parentMap.values()], associations: assocMap };
   }
 
+  /**
+   * Mirrors: ActiveRecord::Associations::JoinDependency#join_root_alias
+   * (protected in Rails — the alias used for the root table in the query)
+   */
+  protected get joinRootAlias(): string {
+    return this._baseAlias;
+  }
+
+  /**
+   * Builds and returns an Aliases object covering all tables in this dependency.
+   *
+   * Mirrors: ActiveRecord::Associations::JoinDependency#aliases
+   */
+  private aliases(): Aliases {
+    const baseAliasMap: AliasMap[] = this._aliases.filter(
+      (a) => a.tableIndex === this._baseTableIndex,
+    );
+    const tables: Array<{ node: JoinNode | null; columns: AliasMap[] }> = [
+      { node: null, columns: baseAliasMap },
+    ];
+    for (const node of this._nodes) {
+      const nodeCols = this._aliases.filter((a) => a.tableIndex === node.tableIndex);
+      tables.push({ node, columns: nodeCols });
+    }
+    return new Aliases(tables);
+  }
+
+  /**
+   * Constructs AR model instances from a flat result row set, assigning
+   * associations. Entry point for the eager-load instantiation phase.
+   *
+   * Mirrors: ActiveRecord::Associations::JoinDependency#construct
+   */
+  private construct(resultSet: Record<string, unknown>[], _strictLoadingValue?: boolean): any[] {
+    return this.instantiateFromRows(resultSet).parents;
+  }
+
+  /**
+   * Instantiates a single model record from aliased row data and caches it
+   * in the model cache to deduplicate repeated parent rows.
+   *
+   * Mirrors: ActiveRecord::Associations::JoinDependency#construct_model
+   */
+  private constructModel(
+    attrs: Record<string, unknown>,
+    node: JoinNode | null,
+    _modelCache?: Map<unknown, unknown>,
+  ): any {
+    const modelClass = node ? node.modelClass : this._baseModel;
+    return (modelClass as any)._instantiate(attrs);
+  }
+
   private _buildBaseAliases(): void {
     const columns = getModelColumns(this._baseModel);
     for (let i = 0; i < columns.length; i++) {

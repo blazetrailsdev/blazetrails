@@ -1866,36 +1866,58 @@ export class Relation<T extends Base> {
   /**
    * Rails all-or-nothing promotion: if ANY references_values entry
    * refers to a table that is NOT already joined, ALL includes get
-   * promoted to eager_load. See `references_eager_loaded_tables?`
-   * in Rails relation.rb — the check is boolean, not per-association.
+   * promoted to eager_load.
    */
   private _includesToPromoteFromReferences(): AssociationSpec[] {
-    if (this._referencesValues.length === 0) return [];
-    if (this._includesAssociations.length === 0) return [];
-
-    const joinedTables = new Set(
-      this._joinClauses
-        .map((j) => j.table.toLowerCase())
-        .concat([
-          String(
-            (this._modelClass as unknown as { tableName?: string }).tableName ?? "",
-          ).toLowerCase(),
-        ]),
-    );
-    const refs = this._referencesValues.map((t) => t.toLowerCase());
-    const hasUnjoined = refs.some((ref) => !joinedTables.has(ref));
-    if (!hasUnjoined) return [];
-
+    if (!this.referencesEagerLoadedTables()) return [];
+    const alreadyEagerLoaded = new Set(this._eagerLoadAssociations);
     // Rails promotes ALL includes to eager_load when references points to an
     // unjoined table. We promote flat string includes here; nested hash specs
     // are left to the preloader because our JoinDependency does not yet
-    // support recursively joining nested association specs. Promoting hash
-    // top-level keys without also recursively joining their sub-associations
-    // would leave sub-associations unloaded. See: references_eager_loaded_tables?
-    const alreadyEagerLoaded = new Set(this._eagerLoadAssociations);
+    // support recursively joining nested association specs.
     return this._includesAssociations.filter(
       (name): name is string => typeof name === "string" && !alreadyEagerLoaded.has(name),
     );
+  }
+
+  /**
+   * Returns true when any references_values entry points to a table that is
+   * not already joined — triggers promoting includes to eager_load.
+   *
+   * Mirrors: ActiveRecord::Relation#references_eager_loaded_tables?
+   */
+  private referencesEagerLoadedTables(): boolean {
+    if (this._referencesValues.length === 0) return false;
+    if (this._includesAssociations.length === 0) return false;
+
+    const joinedTables = new Set<string>([
+      ...this._joinClauses.map((j) => j.table.toLowerCase()),
+      // Raw SQL join strings may reference table names inline
+      ...this._rawJoins.flatMap((s) => this.tablesInString(s)),
+      String((this._modelClass as unknown as { tableName?: string }).tableName ?? "").toLowerCase(),
+    ]);
+
+    return this._referencesValues.some((ref) => !joinedTables.has(ref.toLowerCase()));
+  }
+
+  /**
+   * Extracts table-like identifiers from a raw SQL string (e.g. a JOIN fragment).
+   *
+   * Mirrors: ActiveRecord::Relation#tables_in_string
+   */
+  private tablesInString(string: string): string[] {
+    if (!string) return [];
+    // Match word.word patterns (table.column), downcase to match Rails' Oracle compat.
+    const matches = string.match(/[a-zA-Z_][\w.]+(?=\.)/g) ?? [];
+    return matches.map((s) => s.toLowerCase()).filter((s) => s !== "raw_sql_");
+  }
+
+  /**
+   * Mirrors: ActiveRecord::Relation#limited_count
+   */
+  private limitedCount(): Promise<number> {
+    if (this._limitValue != null) return this.count() as Promise<number>;
+    return this.limit(2).count() as Promise<number>;
   }
 
   private async _executeEagerLoad(eagerAssocs?: AssociationSpec[]): Promise<void> {

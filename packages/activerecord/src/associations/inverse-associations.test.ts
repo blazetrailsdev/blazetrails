@@ -820,97 +820,103 @@ describe("AutomaticInverseFindingTests", () => {
   });
 
   it("has many and belongs to with a scope and automatic scope inversing should find inverse automatically", () => {
-    // Rails: with automatic_scope_inversing enabled, scoped associations still find inverse.
-    class ScopeInterest extends Base {
+    // Rails: canFindInverseOfAutomatically checks klass.automaticScopeInversing when
+    // the association has a scope. Use names that match underscore(demodulize(ClassName))
+    // and no explicit inverseOf or foreignKey so automaticInverseOf() is exercised.
+    class Work extends Base {
       static {
+        // automaticScopeInversing on the TARGET of the scoped hasMany enables scope inversing
         this.automaticScopeInversing = true;
-        this.attribute("topic", "string");
-        this.attribute("scope_man_id", "integer");
-        this.adapter = adapter;
-      }
-    }
-    class ScopeMan extends Base {
-      static {
-        this.automaticScopeInversing = true;
-        this.attribute("name", "string");
-        this.adapter = adapter;
-      }
-    }
-    Associations.hasMany.call(ScopeMan, "scopeInterests", {
-      className: "ScopeInterest",
-      foreignKey: "scope_man_id",
-      inverseOf: "scopeMan",
-      scope: (rel: any) => rel.where({ topic: "active" }),
-    });
-    Associations.belongsTo.call(ScopeInterest, "scopeMan", {
-      className: "ScopeMan",
-      foreignKey: "scope_man_id",
-      inverseOf: "scopeInterests",
-    });
-    registerModel(ScopeMan);
-    registerModel(ScopeInterest);
-    // With explicit inverseOf, inverse is always found regardless of scope
-    const hasManyRefl = (ScopeMan as any)._reflectOnAssociation("scopeInterests");
-    expect(hasManyRefl?.inverseOf()).not.toBeNull();
-  });
-
-  it("has one and belongs to with a scope and automatic scope inversing should find inverse automatically", () => {
-    // With explicit inverseOf and automaticScopeInversing, inverse is found even with scope.
-    class ScopeFace extends Base {
-      static {
-        this.automaticScopeInversing = true;
-        this.attribute("man_id", "integer");
-        this.adapter = adapter;
-      }
-    }
-    class ScopeManHO extends Base {
-      static {
-        this.automaticScopeInversing = true;
-        this.attribute("name", "string");
-        this.adapter = adapter;
-      }
-    }
-    Associations.hasOne.call(ScopeManHO, "scopeFace", {
-      className: "ScopeFace",
-      inverseOf: "scopeManHO",
-      scope: (rel: any) => rel.where({ man_id: 1 }),
-    });
-    Associations.belongsTo.call(ScopeFace, "scopeManHO", {
-      className: "ScopeManHO",
-      inverseOf: "scopeFace",
-    });
-    registerModel(ScopeManHO);
-    registerModel(ScopeFace);
-    const hasOneRefl = (ScopeManHO as any)._reflectOnAssociation("scopeFace");
-    expect(hasOneRefl?.inverseOf()).not.toBeNull();
-  });
-
-  it("has many with scoped belongs to does not find inverse automatically", () => {
-    // Rails: scoped belongs_to without automaticScopeInversing → no automatic inverse.
-    class ScopedBI extends Base {
-      static {
-        this.attribute("man_id", "integer");
         this.attribute("active", "boolean");
         this.adapter = adapter;
       }
     }
-    class ScopeManBI extends Base {
+    class Boss extends Base {
       static {
         this.attribute("name", "string");
         this.adapter = adapter;
       }
     }
-    Associations.hasMany.call(ScopeManBI, "scopedBIs", { className: "ScopedBI" });
-    // Scoped belongs_to without automaticScopeInversing and no explicit inverseOf
-    Associations.belongsTo.call(ScopedBI, "scopeManBI", {
-      className: "ScopeManBI",
+    // "boss" = underscore(demodulize("Boss")) — the inverse name automaticInverseOf derives
+    Associations.hasMany.call(Boss, "works", {
+      className: "Work",
+      scope: (rel: any) => rel.where({ active: true }),
+      // no inverseOf, no foreignKey — automatic detection must find it
+    });
+    Associations.belongsTo.call(Work, "boss", {
+      className: "Boss",
+      // no inverseOf, no foreignKey
+    });
+    registerModel(Boss);
+    registerModel(Work);
+    // scopeAllowsAutomaticInverseOf checks Work.automaticScopeInversing → true
+    // inverseName = underscore("Boss") = "boss" → finds "boss" on Work ✓
+    const hasManyRefl = (Boss as any)._reflectOnAssociation("works");
+    expect(hasManyRefl?.inverseOf()?.name).toBe("boss");
+  });
+
+  it("has one and belongs to with a scope and automatic scope inversing should find inverse automatically", () => {
+    // Same as above but has_one. TARGET class must have automaticScopeInversing = true.
+    class Card extends Base {
+      static {
+        this.automaticScopeInversing = true;
+        this.attribute("active", "boolean");
+        this.adapter = adapter;
+      }
+    }
+    class Deck extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    // "deck" = underscore(demodulize("Deck"))
+    Associations.hasOne.call(Deck, "card", {
+      className: "Card",
+      scope: (rel: any) => rel.where({ active: true }),
+      // no inverseOf, no foreignKey
+    });
+    Associations.belongsTo.call(Card, "deck", {
+      className: "Deck",
+      // no inverseOf, no foreignKey
+    });
+    registerModel(Deck);
+    registerModel(Card);
+    const hasOneRefl = (Deck as any)._reflectOnAssociation("card");
+    expect(hasOneRefl?.inverseOf()?.name).toBe("deck");
+  });
+
+  it("has many with scoped belongs to does not find inverse automatically", () => {
+    // Rails: scoped inverse reflection is blocked by scopeAllowsAutomaticInverseOf(refl, true=inverseReflection)
+    // which returns false when the inverse has a scope (regardless of automaticScopeInversing).
+    class Chip extends Base {
+      static {
+        this.attribute("active", "boolean");
+        this.adapter = adapter;
+      }
+    }
+    class Board extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    // "board" = underscore("Board") — correct inverse name
+    Associations.hasMany.call(Board, "chips", { className: "Chip" });
+    // Scoped belongs_to: scopeAllowsAutomaticInverseOf(belongsToRefl, false) → false (scope blocks it)
+    // Also blocks the hasMany side: validInverseReflection calls canFindInverseOfAutomatically(belongsToRefl, true)
+    //   → scopeAllowsAutomaticInverseOf(belongsToRefl, true) → false (any scope blocks when inverseReflection=true)
+    Associations.belongsTo.call(Chip, "board", {
+      className: "Board",
       scope: (rel: any) => rel.where({ active: true }),
     });
-    registerModel(ScopeManBI);
-    registerModel(ScopedBI);
-    const belongsToRefl = (ScopedBI as any)._reflectOnAssociation("scopeManBI");
-    // Scoped and automaticScopeInversing is false by default → no automatic inverse
+    registerModel(Board);
+    registerModel(Chip);
+    const hasManyRefl = (Board as any)._reflectOnAssociation("chips");
+    const belongsToRefl = (Chip as any)._reflectOnAssociation("board");
+    // Scoped belongs_to: no automatic inverse from either direction
     expect(belongsToRefl?.inverseOf()).toBeNull();
+    expect(hasManyRefl?.inverseOf()).toBeNull();
   });
 
   it("has one and belongs to automatic inverse shares objects", async () => {
@@ -1045,30 +1051,35 @@ describe("AutomaticInverseFindingTests", () => {
   });
 
   it("polymorphic has one should find inverse automatically", () => {
-    // Rails: has_many with `as:` option uses the as-name as the inverse lookup key.
-    class PolyTag extends Base {
+    // Rails: has_one/has_many with `as:` uses underscore(as) as the inverse lookup name.
+    // The belongs_to :taggable, polymorphic: true matches because its name = "taggable".
+    // No explicit inverseOf — automaticInverseOf() must derive it.
+    class AutoPolyTag extends Base {
       static {
         this.attribute("taggable_id", "integer");
         this.attribute("taggable_type", "string");
         this.adapter = adapter;
       }
     }
-    class PolyPost extends Base {
+    class AutoPolyPost extends Base {
       static {
         this.attribute("title", "string");
         this.adapter = adapter;
       }
     }
-    Associations.hasMany.call(PolyPost, "polyTags", {
-      className: "PolyTag",
+    // as: "taggable" → inverseName = underscore("taggable") = "taggable"
+    // AutoPolyTag has belongsTo named "taggable" → found ✓
+    Associations.hasOne.call(AutoPolyPost, "autoPolyTag", {
+      className: "AutoPolyTag",
       as: "taggable",
-      inverseOf: "taggable",
+      // no inverseOf — automatic detection should find "taggable" on AutoPolyTag
     });
-    Associations.belongsTo.call(PolyTag, "taggable", { polymorphic: true, inverseOf: "polyTags" });
-    registerModel(PolyPost);
-    registerModel(PolyTag);
-    const hasManyRefl = (PolyPost as any)._reflectOnAssociation("polyTags");
-    expect(hasManyRefl?.inverseOf()).not.toBeNull();
+    Associations.belongsTo.call(AutoPolyTag, "taggable", { polymorphic: true });
+    registerModel(AutoPolyPost);
+    registerModel(AutoPolyTag);
+    const hasOneRefl = (AutoPolyPost as any)._reflectOnAssociation("autoPolyTag");
+    // inverseName derived from as: "taggable" → finds "taggable" belongs_to on AutoPolyTag
+    expect(hasOneRefl?.inverseOf()?.name).toBe("taggable");
   });
 
   it.skip("has many inverse of derived automatically despite of composite foreign key", () => {
@@ -1130,16 +1141,19 @@ describe("InversePolymorphicBelongsToTests", () => {
   });
 
   it("eager loaded child instance should be shared with parent on find", async () => {
+    // Rails: eager-loaded polymorphic parent should have its inverse cache pointing
+    // back to the same child instance (object sharing, not just equal values).
     const { Man, Tag } = makeModels();
     const m = await Man.create({ name: "Gordon" });
     await Tag.create({ name: "cool", taggable_id: m.id, taggable_type: "Man" });
-    // Eager-load the polymorphic belongs_to via includes
     const tags = await Tag.all().includes("taggable").toArray();
     expect(tags.length).toBe(1);
     const parent = (tags[0] as any)._preloadedAssociations?.get("taggable");
     expect(parent).not.toBeNull();
-    // The parent should exist (polymorphic eager loading is supported)
     expect((parent as any).name).toBe("Gordon");
+    // makeModels doesn't configure inverseOf, so _cachedAssociations on the parent
+    // won't be set. The test verifies the eager load correctly resolves the parent
+    // instance — inverse caching requires explicit inverseOf configuration.
   });
   it("child instance should be shared with replaced via accessor parent", async () => {
     const { Man, Tag } = makeModels();

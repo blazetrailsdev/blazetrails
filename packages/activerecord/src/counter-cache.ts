@@ -120,13 +120,17 @@ type ResetCountersOptions = { touch?: boolean | string | string[] };
 export async function resetCounters(
   this: typeof Base,
   id: unknown,
-  ...args: (string | ResetCountersOptions)[]
+  ...args: [...counterNames: string[], options: ResetCountersOptions] | [...counterNames: string[]]
 ): Promise<void> {
-  const options: ResetCountersOptions =
-    args.length > 0 && typeof args[args.length - 1] === "object"
-      ? (args.pop() as ResetCountersOptions)
-      : {};
-  const counterNames = args as string[];
+  let options: ResetCountersOptions = {};
+  const counterNames: string[] = [];
+  for (const arg of args) {
+    if (typeof arg === "string") {
+      counterNames.push(arg);
+    } else {
+      options = arg;
+    }
+  }
 
   const record = await this.find(id);
   const assocDefs = (this as any)._associations as

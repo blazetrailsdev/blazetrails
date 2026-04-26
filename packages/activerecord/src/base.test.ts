@@ -2778,7 +2778,7 @@ describe("BasicsTest", () => {
     }
     const log: string[] = [];
     const savedLogger = Base.logger;
-    // Logger level = WARN — only warn and error should appear
+    // Logger stub has no debug/info handlers — benchmark should no-op for those levels
     Base.logger = {
       debug: undefined,
       info: undefined,

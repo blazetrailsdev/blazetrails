@@ -33,15 +33,22 @@ export class PredicateBuilder {
   constructor(table: Table) {
     this.table = table;
     this.arrayHandler = new ArrayHandler(this);
-    this.rangeHandler = new RangeHandler((colName, v) => {
-      // Use the model class's typeForAttribute if available (resolves declared attr types)
+    this.rangeHandler = new RangeHandler((attribute, v) => {
+      // Prefer the attribute's own relation typeCaster (covers joined/aliased tables)
+      const attrRelation = (attribute as unknown as { relation?: unknown }).relation;
+      const attrType = (
+        attrRelation as
+          | { typeForAttribute?(n: string): { cast?(x: unknown): unknown } | null }
+          | undefined
+      )?.typeForAttribute?.(attribute.name);
+      if (attrType?.cast) return attrType.cast(v);
+      // Fall back to the predicate builder's table/model context
       const ctx = this._tableContext as {
         typeForAttribute?(n: string): { cast?(x: unknown): unknown } | null;
       } | null;
-      const type = ctx?.typeForAttribute?.(colName);
-      if (type?.cast) return type.cast(v);
-      // Fall back to the Arel table's type caster
-      const arelType = this.table.typeForAttribute(colName) as
+      const ctxType = ctx?.typeForAttribute?.(attribute.name);
+      if (ctxType?.cast) return ctxType.cast(v);
+      const arelType = this.table.typeForAttribute(attribute.name) as
         | { cast?(x: unknown): unknown }
         | undefined;
       return arelType?.cast ? arelType.cast(v) : v;

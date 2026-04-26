@@ -1912,10 +1912,15 @@ describe("BasicsTest", () => {
     const car = await Car.create({});
     await Bulb.create({ car_id: car.id });
 
-    const relationResults = await Bulb.where({ car_id: car.id }).toArray();
-    // AssociationRelation (includes-chain off collection proxy) should produce same rows
-    const assocResults = await (car as any).bulbs.toArray();
-    expect(assocResults.map((r: any) => r.id)).toEqual(relationResults.map((r: any) => r.id));
+    const bulbsOfCar = Bulb.where({ car_id: car.id });
+    // Rails: assert_equal bulbs_of_car, car.bulbs.includes(:car)
+    // AssociationRelation (includes chain off proxy) returns same rows as plain Relation
+    const assocRelation = (car as any).bulbs.includes("car");
+    const relationResults = await bulbsOfCar.toArray();
+    const assocResults = await assocRelation.toArray();
+    expect(assocResults.map((r: any) => r.id).sort()).toEqual(
+      relationResults.map((r: any) => r.id).sort(),
+    );
   });
 
   it("equality of collection proxy and association relation", async () => {
@@ -1936,10 +1941,13 @@ describe("BasicsTest", () => {
     const car = await Car.create({});
     await Bulb.create({ car_id: car.id });
 
-    // CollectionProxy and the same query scoped via hasMany should return same rows
-    const proxy1 = await (car as any).bulbs.toArray();
-    const proxy2 = await (car as any).bulbs.toArray();
-    expect(proxy1.map((r: any) => r.id)).toEqual(proxy2.map((r: any) => r.id));
+    // Rails: assert_equal car.bulbs, car.bulbs.includes(:car)
+    // CollectionProxy and includes-chain produce the same underlying rows
+    const proxyResults = await (car as any).bulbs.toArray();
+    const assocRelResults = await (car as any).bulbs.includes("car").toArray();
+    expect(proxyResults.map((r: any) => r.id).sort()).toEqual(
+      assocRelResults.map((r: any) => r.id).sort(),
+    );
   });
   it("readonly attributes on a new record", () => {
     class User extends Base {

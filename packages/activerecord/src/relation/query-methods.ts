@@ -1622,13 +1622,21 @@ function arelColumnWithTable(
   const existing = (this as any)._referencesValues ?? [];
   if (!existing.includes(tableName)) (this as any)._referencesValues = [...existing, tableName];
   const colStr = typeof columnName === "symbol" ? symbolToName(columnName) : columnName;
+  const modelClass: any = (this as any)._modelClass;
+  // Schema-qualified table names (e.g. "schema.table") must not be passed to
+  // ArelTable — the visitor quotes the whole string as one identifier, producing
+  // "schema.table"."col" instead of "schema"."table"."col".
+  if (tableName.includes(".")) {
+    const quotedTable = safeQuoteTableName(modelClass, tableName);
+    const quotedCol = safeQuoteColumnName(modelClass, colStr);
+    return arelSql(`${quotedTable}.${quotedCol}`);
+  }
   if (typeof columnName === "symbol" || !/\W/.test(colStr)) {
     const builder = (this as any).predicateBuilder;
     return (
       builder?.resolveArelAttribute?.(tableName, colStr) ?? new ArelTable(tableName).get(colStr)
     );
   }
-  const modelClass: any = (this as any)._modelClass;
   const quotedTable = safeQuoteTableName(modelClass, tableName);
   return arelSql(`${quotedTable}.${colStr}`);
 }
@@ -1681,7 +1689,8 @@ function arelColumnAliasesFromHash(
     const columnsAliases = fields[key as any];
     const tableName = typeof key === "symbol" ? symbolToName(key) : key;
     const modelClass: any = (this as any)._modelClass;
-    const quoteAlias = (a: unknown): string => safeQuoteColumnName(modelClass, String(a));
+    const quoteAlias = (a: unknown): string =>
+      safeQuoteColumnName(modelClass, typeof a === "symbol" ? symbolToName(a) : String(a));
     if (isPlainObject(columnsAliases)) {
       return Reflect.ownKeys(columnsAliases as object).map((col) => {
         const alias = (columnsAliases as any)[col];
@@ -1690,7 +1699,7 @@ function arelColumnAliasesFromHash(
       });
     }
     if (Array.isArray(columnsAliases)) {
-      return (columnsAliases as string[]).map((col) =>
+      return (columnsAliases as (string | symbol)[]).map((col) =>
         arelColumnWithTable.call(this, tableName, col),
       );
     }

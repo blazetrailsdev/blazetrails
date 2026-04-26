@@ -2601,7 +2601,8 @@ describe("HasManyThroughAssociationsTest", () => {
 
     const owner = await PwirOwner.create({ name: "Firm" });
     const invalid = new PwirItem({ name: "0" });
-    await expect((owner as any).pwir_items.append(invalid)).rejects.toThrow(RecordInvalid);
+    // appendBang uses save! on the target record — raises RecordInvalid when invalid
+    await expect((owner as any).pwir_items.appendBang(invalid)).rejects.toThrow(RecordInvalid);
   });
 
   it.skip("push with invalid join record", () => {
@@ -4809,11 +4810,107 @@ describe("HasManyThroughAssociationsTest", () => {
     const labels = items.map((i: any) => i.label).sort();
     expect(labels).toEqual(["I1", "I2", "I3"]);
   });
-  it.skip("create bang should raise exception when join record has errors", () => {});
+  it("create bang should raise exception when join record has errors", async () => {
+    // Rails: Categorization.validate { errors.add(:base, ...) }
+    //   Category.create!(name: "Fishing", authors: [Author.first]) raises RecordInvalid
+    // Join model with always-failing validation — appending raises via saveBang in _pushThrough
+    class CbangJoin extends Base {
+      static {
+        this.attribute("cbang_owner_id", "integer");
+        this.attribute("cbang_item_id", "integer");
+        this.adapter = adapter;
+        this.validate((r: any) => {
+          r.errors.add("base", "Invalid Join");
+        });
+      }
+    }
+    class CbangItem extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class CbangOwner extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("CbangJoin", CbangJoin);
+    registerModel("CbangItem", CbangItem);
+    registerModel("CbangOwner", CbangOwner);
+    Associations.belongsTo.call(CbangJoin, "cbang_item", {
+      className: "CbangItem",
+      foreignKey: "cbang_item_id",
+    });
+    Associations.hasMany.call(CbangOwner, "cbang_joins", {
+      className: "CbangJoin",
+      foreignKey: "cbang_owner_id",
+    });
+    Associations.hasMany.call(CbangOwner, "cbang_items", {
+      className: "CbangItem",
+      through: "cbang_joins",
+      source: "cbang_item",
+    });
 
-  it.skip("save bang should raise exception when join record has errors", () => {});
+    const owner = await CbangOwner.create({ name: "O" });
+    const item = await CbangItem.create({ name: "A" });
+    // append calls _pushThrough which calls saveBang on join record — raises because join is invalid
+    await expect((owner as any).cbang_items.appendBang(item)).rejects.toThrow(RecordInvalid);
+  });
 
-  it.skip("save returns falsy when join record has errors", () => {});
+  it("save bang should raise exception when join record has errors", async () => {
+    // Rails: c.save! raises RecordInvalid when the join Categorization is invalid
+    class SbangJoin extends Base {
+      static {
+        this.attribute("sbang_owner_id", "integer");
+        this.attribute("sbang_item_id", "integer");
+        this.adapter = adapter;
+        this.validate((r: any) => {
+          r.errors.add("base", "Invalid Join");
+        });
+      }
+    }
+    class SbangItem extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    class SbangOwner extends Base {
+      static {
+        this.attribute("name", "string");
+        this.adapter = adapter;
+      }
+    }
+    registerModel("SbangJoin", SbangJoin);
+    registerModel("SbangItem", SbangItem);
+    registerModel("SbangOwner", SbangOwner);
+    Associations.belongsTo.call(SbangJoin, "sbang_item", {
+      className: "SbangItem",
+      foreignKey: "sbang_item_id",
+    });
+    Associations.hasMany.call(SbangOwner, "sbang_joins", {
+      className: "SbangJoin",
+      foreignKey: "sbang_owner_id",
+    });
+    Associations.hasMany.call(SbangOwner, "sbang_items", {
+      className: "SbangItem",
+      through: "sbang_joins",
+      source: "sbang_item",
+    });
+
+    const owner = await SbangOwner.create({ name: "O" });
+    const item = await SbangItem.create({ name: "A" });
+    await expect((owner as any).sbang_items.appendBang(item)).rejects.toThrow(RecordInvalid);
+  });
+
+  it.skip("save returns falsy when join record has errors", () => {
+    // Rails: c = Category.new(name: "Fishing", authors: [Author.first]); assert_not c.save
+    // Requires autosave-through support: saving a new record with pre-set through
+    // associations must attempt join record creation and propagate failures to the
+    // parent save() returning false — not yet implemented
+  });
   it("preloading empty through association via joins", async () => {
     class HmtEmptyThrOwner extends Base {
       static {

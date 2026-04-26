@@ -180,13 +180,21 @@ export function joins<T extends typeof Base>(
 ): Relation<InstanceType<T>>;
 export function joins<T extends typeof Base>(
   this: T,
+  stringArray: string[],
+): Relation<InstanceType<T>>;
+export function joins<T extends typeof Base>(
+  this: T,
   ...args: Array<string | import("@blazetrails/arel").Nodes.Join>
 ): Relation<InstanceType<T>>;
 export function joins<T extends typeof Base>(
   this: T,
-  ...args: Array<string | import("@blazetrails/arel").Nodes.Join | undefined>
+  ...args: Array<string | string[] | import("@blazetrails/arel").Nodes.Join | undefined>
 ): Relation<InstanceType<T>> {
   const relation = this.all();
+  // Flatten string array passed as single argument: joins(["a", "b"])
+  if (args.length === 1 && Array.isArray(args[0])) {
+    return relation.joins(args[0] as string[]);
+  }
   if (args.length === 0 || typeof args[0] === "string" || args[0] === undefined) {
     const [tableOrSql, on] = args as [string?, string?];
     return relation.joins(tableOrSql, on);
